@@ -18,19 +18,19 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.agent import tools as agent_tools
-from trid3nt_server.agent.tools import get_registered_tools
+from trid3nt_server import data as agent_tools
+from trid3nt_server.data import get_registered_tools
 
 # Force-import modules that are NOT in the __init__.py eager-import list but
 # whose tools are in scope for annotation coverage. These are loaded by the
 # agent service at startup via server.py / main.py but not by the package
 # __init__.py. Import them here so the live registry is fully populated.
-import trid3nt_server.agent.tools.search.fetch_from_catalog.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
-import trid3nt_server.agent.tools.search.search_data_catalog.search_data_catalog  # noqa: F401 — registers search_data_catalog
-import trid3nt_server.agent.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
-import trid3nt_server.agent.tools.publish_layer.publish_layer  # noqa: F401 — registers publish_layer
-import trid3nt_server.agent.tools.simulation.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
-import trid3nt_server.agent.tools.search.qgis_discovery.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
+import trid3nt_server.data.search.fetch_from_catalog.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
+import trid3nt_server.data.search.search_data_catalog.search_data_catalog  # noqa: F401 — registers search_data_catalog
+import trid3nt_server.data  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
+import trid3nt_server.data.publish_layer.publish_layer  # noqa: F401 — registers publish_layer
+import trid3nt_server.data.simulation.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
+import trid3nt_server.data.search.qgis_discovery.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +295,7 @@ def test_atomic_tool_metadata_annotation_defaults():
 
 def test_register_tool_annotation_kwargs_override_defaults(empty_registry):
     """Annotation kwargs passed at decorator time override schema defaults."""
-    from trid3nt_server.agent.tools import register_tool
+    from trid3nt_server.data import register_tool
 
     md = AtomicToolMetadata(
         name="test_write_tool",

@@ -24,10 +24,10 @@ import rasterio
 from rasterio.transform import from_origin
 
 from trid3nt_contracts.execution import TopobathyResult
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.fetchers._fetch_common import FetchError
-from trid3nt_server.agent.tools.fetchers._router.hooks import topobathy as tb
-from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.fetchers._fetch_common import FetchError
+from trid3nt_server.data.fetchers._router.hooks import topobathy as tb
+from trid3nt_server.data.fetchers._router.hooks.topobathy import (
     ETOPO_GLOBAL_ROOT,
     TARGET_CRS,
     TopobathyDatumError,

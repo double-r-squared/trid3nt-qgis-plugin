@@ -174,7 +174,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 #      fetched topobathy the same way the flood DEM path does).
 # ===========================================================================
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.agent.tools.publish_layer.publish_layer.publish_layer"
+    "trid3nt_server.data.publish_layer.publish_layer.publish_layer"
 )
 
 
@@ -224,7 +224,7 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
     """A publish_layer PublishLayerError is swallowed (best-effort): returns
     False, surfaces nothing, NEVER raises -- a failed input can never fail the
     solve."""
-    from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+    from trid3nt_server.data.publish_layer.publish_layer import (
         PublishLayerError,
     )
 
@@ -266,8 +266,8 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 # ===========================================================================
 # (2) OpenQuake fault serialization + composer wiring.
 # ===========================================================================
-import trid3nt_server.agent.workflows.openquake.psha.psha as seismic  # noqa: E402
-from trid3nt_server.agent.workflows.openquake.psha.psha import (  # noqa: E402
+import trid3nt_server.workflows.openquake.psha.psha as seismic  # noqa: E402
+from trid3nt_server.workflows.openquake.psha.psha import (  # noqa: E402
     FAULT_LINE_STYLE_PRESET,
     fault_records_to_feature_collection,
     make_fault_sources_layer_uri,
@@ -320,7 +320,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
         def put_object(self, **kw):
             puts.append(kw)
 
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
+    import trid3nt_server.data.simulation.solver.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
@@ -340,7 +340,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
 
 def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
     """No drawable traces => None (best-effort, no upload)."""
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
+    import trid3nt_server.data.simulation.solver.solver as solver_mod
 
     called = {"put": False}
 
@@ -361,7 +361,7 @@ def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
 def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
     """An S3 put failure returns None (the fault input is simply absent), NEVER
     raises."""
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
+    import trid3nt_server.data.simulation.solver.solver as solver_mod
 
     class _BoomS3:
         def put_object(self, **kw):
@@ -380,7 +380,7 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
 # telemac_metrics.json; the composer rides that object through
 # publish_raster_input_cog as a role=context input.
 # ===========================================================================
-import trid3nt_server.agent.workflows.telemac.river_dye.river_dye as river_dye  # noqa: E402
+import trid3nt_server.workflows.telemac.river_dye.river_dye as river_dye  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -388,7 +388,7 @@ async def test_river_dye_surfaces_in_worker_bed_bathymetry_as_context(monkeypatc
     """The bed COG the worker recorded in the result envelope reaches the emitter
     as a role="context" continuous_dem raster with a provenance name (cannot
     silently drop the in-worker bed NATE asked to visualize)."""
-    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+    from trid3nt_server.data.simulation.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
     emitter = _emitter()
@@ -438,7 +438,7 @@ async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
 # ride that object through the shared surface_in_worker_bed_input helper. The
 # router seam cannot cover it (never touches route()), so it is allowlisted.
 # ===========================================================================
-from trid3nt_server.agent.workflows.telemac._bed_input import (  # noqa: E402
+from trid3nt_server.workflows.telemac._bed_input import (  # noqa: E402
     surface_in_worker_bed_input,
 )
 
@@ -449,7 +449,7 @@ async def test_surface_in_worker_bed_input_surfaces_lake_bed_as_context(monkeypa
     continuous_dem raster carrying the caller's provenance name, riding the
     EXISTING s3 object (no re-upload) -- the in-worker lake bed cannot silently
     drop."""
-    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+    from trid3nt_server.data.simulation.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
     emitter = _emitter()
@@ -495,10 +495,10 @@ async def test_surface_in_worker_bed_input_absent_key_and_none_emitter_noop():
 async def test_surface_in_worker_bed_input_publish_failure_non_fatal(monkeypatch):
     """A publish_layer failure is swallowed (best-effort): the emitter-drop cannot
     be silent-crashing -- returns False, surfaces nothing, NEVER raises."""
-    from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+    from trid3nt_server.data.publish_layer.publish_layer import (
         PublishLayerError,
     )
-    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+    from trid3nt_server.data.simulation.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
 
@@ -546,7 +546,7 @@ import re  # noqa: E402
 
 _WORKFLOWS_DIR = (
     pathlib.Path(__file__).resolve().parents[1]
-    / "trid3nt_server" / "agent" / "workflows"
+    / "trid3nt_server" / "workflows"
 )
 
 # relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only

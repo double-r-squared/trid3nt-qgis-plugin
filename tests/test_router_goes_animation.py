@@ -21,15 +21,15 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.fetchers._router import registration as reg
-from trid3nt_server.agent.tools.fetchers._router.errors import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.fetchers._router import registration as reg
+from trid3nt_server.data.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
 )
-from trid3nt_server.agent.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.agent.tools.fetchers._router.hooks import goes_animation as GA
-from trid3nt_server.agent.tools.fetchers.imagery._satellite_slider import (
+from trid3nt_server.data.fetchers._router.executors import animation_frames as EX
+from trid3nt_server.data.fetchers._router.hooks import goes_animation as GA
+from trid3nt_server.data.fetchers.imagery._satellite_slider import (
     FIRE_BLEND_RED_FLOOR,
     SliderEmptyError,
     blend_geocolor_fire_temperature,
@@ -38,7 +38,7 @@ from trid3nt_server.agent.tools.fetchers.imagery._satellite_slider import (
     ts_int_to_datetime,
     ts_int_to_iso,
 )
-from trid3nt_server.agent.tools.fetchers.imagery._goes_common import (
+from trid3nt_server.data.fetchers.imagery._goes_common import (
     GOESInputError,
 )
 
@@ -362,7 +362,7 @@ def test_blend_frame_bytes_composites_both_products(monkeypatch):
     """frame_bytes for the blend product fetches BOTH co-temporal single products
     (cache-mediated) and returns a real blended RGB COG."""
     import numpy as np
-    from trid3nt_server.agent.tools.fetchers._router.hooks import FramePlan
+    from trid3nt_server.data.fetchers._router.hooks import FramePlan
 
     bbox = (-112.0, 39.0, -111.9, 39.08)
     products_fetched: list[str] = []
@@ -379,7 +379,7 @@ def test_blend_frame_bytes_composites_both_products(monkeypatch):
 
     monkeypatch.setattr(GA, "stitch_slider_mosaic", _fake_stitch)
     # _single_product_frame_bytes lazily imports read_through from cache; stub it.
-    import trid3nt_server.agent.tools.cache as cache
+    import trid3nt_server.data.cache as cache
 
     def _fake_rt(metadata, params, ext, fetch_fn):
         return _R(uri="s3://x", data=fetch_fn())

@@ -21,13 +21,13 @@ import pathlib
 import re
 from types import SimpleNamespace
 
-from trid3nt_server.agent.tools.fetchers._router.emit_on_fetch import (
+from trid3nt_server.data.fetchers._router.emit_on_fetch import (
     input_layer_name,
 )
 
 _WORKFLOWS = (
     pathlib.Path(__file__).resolve().parents[1]
-    / "trid3nt_server" / "agent" / "workflows"
+    / "trid3nt_server" / "workflows"
 )
 
 

@@ -12,7 +12,7 @@ import math
 
 import pytest
 
-from trid3nt_server.agent.workflows.telemac.rain_on_grid.cn_infiltration import (
+from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
     CNInfiltrationError,
     amc_convert_cn,
     huang_steep_slope_cn,

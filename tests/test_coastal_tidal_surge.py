@@ -12,7 +12,7 @@ import asyncio
 
 
 def test_coastal_tidal_surge_registered_as_engine_template():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
     entry = TOOL_REGISTRY.get("coastal_tidal_surge")
     assert entry is not None, "coastal_tidal_surge must be registered"
     m = entry.metadata
@@ -24,7 +24,7 @@ def test_coastal_tidal_surge_registered_as_engine_template():
 
 
 def test_coastal_solver_registered():
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data.simulation.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -33,7 +33,7 @@ def test_coastal_solver_registered():
 
 
 def test_tool_rejects_invalid_bbox():
-    from trid3nt_server.agent.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
         coastal_tidal_surge,
     )
     out = asyncio.run(coastal_tidal_surge(bbox=[1.0, 2.0]))  # too few numbers
@@ -42,7 +42,7 @@ def test_tool_rejects_invalid_bbox():
 
 
 def test_series_type_classification_from_prompt():
-    from trid3nt_server.agent.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
         _classify_series_type,
     )
     assert _classify_series_type("the astronomical tide prediction", None) == "prediction"

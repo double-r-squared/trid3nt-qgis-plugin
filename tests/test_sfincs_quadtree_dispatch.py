@@ -23,7 +23,7 @@ for p in (REPO, REPO / "contracts"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from trid3nt_server.agent.workflows.sfincs.flood.quadtree_dispatch import (  # noqa: E402
+from trid3nt_server.workflows.sfincs.flood.quadtree_dispatch import (  # noqa: E402
     SFINCS_QUADTREE_SOLVER_NAME,
     compose_quadtree_build_spec,
     sfincs_quadtree_local_spec,
@@ -73,7 +73,7 @@ def test_compose_build_spec_omits_coast_band_when_none():
 
 
 def test_solver_registered():
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data.simulation.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )

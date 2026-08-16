@@ -36,12 +36,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Force the template module to register before we inspect TOOL_REGISTRY.
-import trid3nt_server.agent.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.workflows.pelicun.damage_assessment import (
+import trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.workflows.pelicun.damage_assessment import (
     damage_assessment as _pelicun_mod,
 )
-from trid3nt_server.agent.workflows.pelicun.damage_assessment.damage_assessment import (
+from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
     pelicun_damage_assessment,
 )
 from trid3nt_contracts.execution import LayerURI

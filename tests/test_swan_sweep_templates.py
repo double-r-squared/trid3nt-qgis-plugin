@@ -15,13 +15,13 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.agent.workflows.swan._sweep_common import PHYSICS_AXES, SwanSweepError
-from trid3nt_server.agent.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (
+from trid3nt_server.workflows.swan._sweep_common import PHYSICS_AXES, SwanSweepError
+from trid3nt_server.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (
     build_sweep_chart_spec,
     resolve_axis_values,
     swan_physics_sensitivity_sweep,
 )
-from trid3nt_server.agent.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import (
+from trid3nt_server.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import (
     build_snapshot_chart_spec,
     resolve_snapshots,
     swan_stationary_snapshot_batch,
@@ -128,8 +128,8 @@ def test_build_snapshot_chart_spec_two_series():
 # ===========================================================================
 # Async orchestration (DEM fetch + solve mocked).
 # ===========================================================================
-_SWEEP_MOD = "trid3nt_server.agent.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep"
-_BATCH_MOD = "trid3nt_server.agent.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch"
+_SWEEP_MOD = "trid3nt_server.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep"
+_BATCH_MOD = "trid3nt_server.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch"
 
 
 @pytest.mark.asyncio

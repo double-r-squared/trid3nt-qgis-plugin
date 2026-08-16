@@ -32,7 +32,7 @@ import rasterio
 
 from trid3nt_contracts.modflow_contracts import ASRLayerURI, BudgetPartitionLayerURI
 
-from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.workflows.modflow import postprocess_modflow as pp
 
 _GEO = {
     "xorigin": 500_000.0,

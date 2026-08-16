@@ -30,7 +30,7 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(HERE))
 
-from trid3nt_server.agent.workflows.telemac.rain_on_grid import mesh_acquisition as MA  # noqa: E402
+from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as MA  # noqa: E402
 
 COARSE_RUNDIR = Path(os.environ.get("ROG_RUNDIR", "/tmp/rog_ballcreek"))
 FINE_RUNDIR = Path("/home/nate/rog_ballcreek_fine")

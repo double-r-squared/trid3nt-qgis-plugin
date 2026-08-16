@@ -14,8 +14,8 @@ import json
 
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import hooks, registration
-from trid3nt_server.agent.tools.fetchers._router.executors import http_json
+from trid3nt_server.data.fetchers._router import hooks, registration
+from trid3nt_server.data.fetchers._router.executors import http_json
 
 
 @pytest.fixture(scope="module")
@@ -64,7 +64,7 @@ _SITE_RDB = (
 
 
 def test_nwis_registered_and_spec_served(spec):
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     assert "fetch_usgs_nwis_gauges" in TOOL_REGISTRY
     assert "_promoted" in TOOL_REGISTRY["fetch_usgs_nwis_gauges"].module

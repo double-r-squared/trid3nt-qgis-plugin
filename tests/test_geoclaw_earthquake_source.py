@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.agent.workflows.geoclaw import earthquake_source as es
+from trid3nt_server.workflows.geoclaw import earthquake_source as es
 
 
 def _feat(mag, depth, lon, lat, eid="x", place="P"):
@@ -68,7 +68,7 @@ class _Layer:
 
 def test_resolve_happy_path(monkeypatch):
     monkeypatch.setattr(es, "_region_bbox", lambda region: (-162.0, 54.0, -155.0, 57.0))
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     class _Tool:
         def __init__(self, fn):
@@ -86,7 +86,7 @@ def test_resolve_happy_path(monkeypatch):
 
 def test_resolve_empty_catalog_raises(monkeypatch):
     monkeypatch.setattr(es, "_region_bbox", lambda region: (-162.0, 54.0, -155.0, 57.0))
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     class _Tool:
         def __init__(self, fn):
@@ -103,7 +103,7 @@ def test_resolve_empty_catalog_raises(monkeypatch):
 
 def test_resolve_fetch_failure_is_typed(monkeypatch):
     monkeypatch.setattr(es, "_region_bbox", lambda region: (-162.0, 54.0, -155.0, 57.0))
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     class _Tool:
         def __init__(self, fn):

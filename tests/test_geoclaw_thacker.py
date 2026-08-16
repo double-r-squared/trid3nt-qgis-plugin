@@ -21,7 +21,7 @@ from trid3nt_contracts.geoclaw_thacker import (
     thacker_eta,
     thacker_reference,
 )
-from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
     build_thacker_validation_chart_spec,
     compute_thacker_vandv,
 )
@@ -98,7 +98,7 @@ def test_thacker_reference_matches_recipe_period_formula():
 
 
 def test_thacker_vandv_missing_center_gauge_raises(tmp_path):
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         PostprocessGeoClawError,
     )
     (tmp_path / "_output").mkdir()

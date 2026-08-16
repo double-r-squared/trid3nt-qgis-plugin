@@ -43,7 +43,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 def _registry_fetch_buildings_patch(mock):
     """fetch_buildings folded to the router (ADR 0084): the consumer resolves it via
     ``TOOL_REGISTRY['fetch_buildings'].fn``, so swap that entry's ``fn`` with ``mock``."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_buildings"]
     return patch.dict(
@@ -52,12 +52,12 @@ def _registry_fetch_buildings_patch(mock):
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
-from trid3nt_server.agent.workflows.sfincs.flood.flood import (
+from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.workflows.sfincs.flood.flood import (
     model_flood_scenario,
     sfincs_flood,
 )
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     ModelSetup,
@@ -161,7 +161,7 @@ async def test_wrapper_forwards_building_obstacles_to_workflow() -> None:
     """sfincs_flood(building_obstacles=True) forwards into the call."""
     fake_envelope = _empty_envelope_stub()
     with patch(
-        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
+        "trid3nt_server.workflows.sfincs.flood.flood.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
         await sfincs_flood(
@@ -185,7 +185,7 @@ async def test_wrapper_default_off_forwards_false() -> None:
     """Default (no building_obstacles kwarg) forwards building_obstacles=False."""
     fake_envelope = _empty_envelope_stub()
     with patch(
-        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
+        "trid3nt_server.workflows.sfincs.flood.flood.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
         await sfincs_flood(bbox=_INLAND_BBOX)
@@ -200,7 +200,7 @@ async def test_wrapper_forwards_string_obstacle_uri() -> None:
     fake_envelope = _empty_envelope_stub()
     uri = "gs://my-bucket/prior_buildings.fgb"
     with patch(
-        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
+        "trid3nt_server.workflows.sfincs.flood.flood.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
         await sfincs_flood(bbox=_INLAND_BBOX, building_obstacles=uri)
@@ -275,7 +275,7 @@ def _inland_chain_patches(build_sfincs_mock):  # noqa: ANN001, ANN201 — test h
     async def _wfc(_handle):  # noqa: ANN001
         return run_result_ok
 
-    mod = "trid3nt_server.agent.workflows.sfincs.flood.flood"
+    mod = "trid3nt_server.workflows.sfincs.flood.flood"
     return [
         patch(f"{mod}.fetch_dem", return_value=_mock_layer_uri("dem")),
         patch(f"{mod}.fetch_landcover", return_value=landcover_result),

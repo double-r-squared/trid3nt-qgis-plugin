@@ -29,7 +29,7 @@ from scipy.interpolate import griddata
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..",
                                 "src"))
-from trid3nt_server.agent.workflows.telemac.postprocess_telemac import read_selafin  # noqa: E402
+from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin  # noqa: E402
 
 TILE = ("https://server.arcgisonline.com/ArcGIS/rest/services/"
         "World_Imagery/MapServer/tile/{z}/{y}/{x}")

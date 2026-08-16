@@ -21,16 +21,16 @@ from typing import Any
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.agent.tools.fetchers._router.executors import vector_fgb
-from trid3nt_server.agent.tools.fetchers._router.hooks import lehd_jobs as LH
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
-from trid3nt_server.agent.tools.fetchers._router.transforms import join
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt_server.data.fetchers._router.executors import vector_fgb
+from trid3nt_server.data.fetchers._router.hooks import lehd_jobs as LH
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router.transforms import join
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_lehd_jobs/source.yaml"
+    / "trid3nt_server/data/fetchers/socioeconomic/fetch_lehd_jobs/source.yaml"
 )
 
 _HOUSTON = (-95.45, 29.65, -95.25, 29.85)
@@ -82,7 +82,7 @@ def test_executor_is_join_transform():
 
 
 def test_promoted_signature_matches_twin():
-    from trid3nt_server.agent.tools.fetchers._router import registration
+    from trid3nt_server.data.fetchers._router import registration
     sig, _ = registration.promoted_signature(SPEC)
     assert list(sig.parameters) == ["bbox", "segment", "year", "_extra_ignored"]
     assert sig.parameters["segment"].default == "total"

@@ -21,8 +21,8 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent import tools as agent_tools
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server import data as agent_tools
+from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
     SYSTEM_PROMPT,
     TextDeltaEvent,
@@ -42,8 +42,8 @@ def test_sfincs_flood_template_in_registry():
     no alias)."""
     # The workflow module is imported eagerly by main._import_tools_registry();
     # in tests we trigger the same import chain via the inflight job-0042 path.
-    from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
-    import trid3nt_server.agent.tools  # noqa: F401 -- template registration side-effect
+    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+    import trid3nt_server.data  # noqa: F401 -- template registration side-effect
     assert "sfincs_flood" in agent_tools.TOOL_REGISTRY, "the sfincs_flood template must be registered"
     assert "run_sfincs" not in agent_tools.TOOL_REGISTRY, (
         "the run_sfincs door was dissolved (ADR 0094); the template stands alone"
@@ -61,8 +61,8 @@ def test_sfincs_flood_template_in_registry():
 def test_build_tool_declarations_includes_flood_template():
     """Tool declaration list must include the sfincs_flood template (the
     retrievable flood entry; door dissolution, ADR 0094 -- no concierge)."""
-    from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
-    import trid3nt_server.agent.tools  # noqa: F401 -- template registration side-effect
+    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+    import trid3nt_server.data  # noqa: F401 -- template registration side-effect
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
@@ -152,8 +152,8 @@ def test_system_prompt_mentions_flood_routing():
 
 def test_sfincs_flood_docstring_covers_user_intent():
     """Docstring must mention '100-year' to match the failing demo prompt."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
 
     entry = TOOL_REGISTRY.get("sfincs_flood")
     assert entry is not None

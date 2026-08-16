@@ -31,7 +31,7 @@ pytest.importorskip("xarray")
 pytest.importorskip("scipy")
 pytest.importorskip("pyproj")
 
-from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (  # noqa: E402
+from trid3nt_server.workflows.sfincs.postprocess_sfincs import (  # noqa: E402
     NODATA_DEPTH_M,
     PostprocessError,
     _is_quadtree_output,
@@ -393,7 +393,7 @@ def _make_real_schema_quadtree_ds(
 def test_read_crs_from_real_schema_variable_value() -> None:
     """The cht crs var stores the bare int EPSG as its VALUE (attrs={'EPSG':'-'});
     the reader must return EPSG:32616, NOT the EPSG:3857 fallback."""
-    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _read_crs_from_dataset
+    from trid3nt_server.workflows.sfincs.postprocess_sfincs import _read_crs_from_dataset
 
     ds, _ = _make_real_schema_quadtree_ds(side=8)
     assert _read_crs_from_dataset(ds) == "EPSG:32616"
@@ -466,7 +466,7 @@ def test_write_verified_cog_depth_on_real_schema(tmp_path: Path) -> None:
 def test_native_mesh_source_uri_s3_prefix_and_file() -> None:
     """The mesh row's uri mirrors ``_resolve_run_output_to_local``'s prefix/.nc
     resolution for s3, and hands a local drive its netcdf path straight through."""
-    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+    from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
         _native_mesh_source_uri,
     )
 
@@ -488,7 +488,7 @@ def test_native_mesh_source_uri_s3_prefix_and_file() -> None:
 def test_maybe_native_mesh_layer_quadtree(tmp_path: Path) -> None:
     """A quadtree UGRID netcdf yields a layer_type='mesh' row carrying the deck's
     projected CRS in crs_authid + the face count in the name + role='context'."""
-    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+    from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
         _maybe_native_mesh_layer,
     )
 
@@ -511,7 +511,7 @@ def test_maybe_native_mesh_layer_none_for_regular_grid(tmp_path: Path) -> None:
     regular-grid publish path)."""
     import xarray as xr
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+    from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
         _maybe_native_mesh_layer,
     )
 
@@ -530,7 +530,7 @@ def test_maybe_native_mesh_layer_none_for_regular_grid(tmp_path: Path) -> None:
 def test_maybe_native_mesh_layer_unreadable_returns_none(tmp_path: Path) -> None:
     """A missing / unreadable netcdf degrades to None (never raises -- the depth
     answer stands, the mesh preview is best-effort)."""
-    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+    from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
         _maybe_native_mesh_layer,
     )
 

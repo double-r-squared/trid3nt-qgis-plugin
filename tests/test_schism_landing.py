@@ -128,7 +128,7 @@ def _square_mesh(nx=6, ny=6, x0=-95.0, y0=29.0, dx=0.02):
 
 
 def test_bathymetry_sampling_and_gr3_bridge(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
     import rasterio
     from rasterio.transform import from_bounds
 
@@ -162,7 +162,7 @@ def test_bathymetry_sampling_and_gr3_bridge(tmp_path: Path):
 # 4. Deck-authoring determinism
 # --------------------------------------------------------------------------- #
 def test_author_coastal_tin_deck_deterministic(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     pts, cells = _square_mesh()
     depths = np.full(pts.shape[0], 8.0)
@@ -190,7 +190,7 @@ def test_author_coastal_tin_deck_supplied_mesh(tmp_path: Path):
     """ADR 0212 precondition gate: a supplied (points, tris, depths_down) mesh
     REPLACES the internal TIN and the tidal deck (open boundary + bctides) is
     authored on THOSE nodes -- no points/cells/depths needed."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     pts, cells = _square_mesh(nx=8, ny=8)
     depths_down = np.full(pts.shape[0], 8.0)
@@ -212,7 +212,7 @@ def test_author_coastal_tin_deck_supplied_mesh(tmp_path: Path):
 
 def test_author_coastal_tin_deck_needs_geometry(tmp_path: Path):
     """Neither points/cells/depths nor supplied_mesh -> a typed honest error."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     with pytest.raises(D.SchismDeckError):
         D.author_coastal_tin_deck(
@@ -222,7 +222,7 @@ def test_author_coastal_tin_deck_needs_geometry(tmp_path: Path):
 
 def _schism_mesh_artifact(*, compatible: bool):
     """A MeshArtifact that is SCHISM-compatible (open boundary) or not (closed)."""
-    from trid3nt_server.agent.workflows.mesh.artifact import MeshArtifact
+    from trid3nt_server.workflows.mesh.artifact import MeshArtifact
 
     obi = ({"open_boundary_side": "south", "open_node_count": 12}
            if compatible else {})
@@ -239,7 +239,7 @@ def _schism_mesh_artifact(*, compatible: bool):
 @pytest.mark.asyncio
 async def test_tidal_gate_decision_compatible_auto(monkeypatch):
     """A SCHISM-compatible case mesh -> gate accepts in AUTO (headless) mode."""
-    from trid3nt_server.agent.workflows.mesh import precondition_gate as G
+    from trid3nt_server.workflows.mesh import precondition_gate as G
 
     art = _schism_mesh_artifact(compatible=True)
     monkeypatch.setattr(G, "find_case_mesh_artifacts", lambda **k: [art])
@@ -254,7 +254,7 @@ async def test_tidal_gate_decision_compatible_auto(monkeypatch):
 @pytest.mark.asyncio
 async def test_tidal_gate_decision_incompatible_loud_skip(monkeypatch):
     """A case mesh with no open boundary -> NOT gated; loud-skip note, author fresh."""
-    from trid3nt_server.agent.workflows.mesh import precondition_gate as G
+    from trid3nt_server.workflows.mesh import precondition_gate as G
 
     art = _schism_mesh_artifact(compatible=False)
     monkeypatch.setattr(G, "find_case_mesh_artifacts", lambda **k: [art])
@@ -269,7 +269,7 @@ async def test_tidal_gate_decision_incompatible_loud_skip(monkeypatch):
 @pytest.mark.asyncio
 async def test_tidal_gate_decision_absent(monkeypatch):
     """No case mesh -> None decision (author the internal TIN as before)."""
-    from trid3nt_server.agent.workflows.mesh import precondition_gate as G
+    from trid3nt_server.workflows.mesh import precondition_gate as G
 
     monkeypatch.setattr(G, "find_case_mesh_artifacts", lambda **k: [])
     decision = await G.gate_supplied_mesh(
@@ -282,8 +282,8 @@ async def test_tidal_gate_decision_absent(monkeypatch):
 
 def test_tidal_parse_hgrid_roundtrip(tmp_path: Path):
     """The composer's gr3 parser round-trips tin_to_hgrid nodes/cells/depths."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
-    from trid3nt_server.agent.workflows.schism.tidal_hydro.tidal_hydro import (
+    from trid3nt_server.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism.tidal_hydro.tidal_hydro import (
         _parse_hgrid_nodes_cells,
     )
 
@@ -298,14 +298,14 @@ def test_tidal_parse_hgrid_roundtrip(tmp_path: Path):
 
 
 def test_bctides_no_open_boundary_raises():
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     with pytest.raises(D.SchismDeckError):
         D._author_bctides(0, ["M2"], 0.5)
 
 
 def test_param_nml_substitution_one_stack():
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     qa = D.quarterannulus_fixture_dir()
     text = D._substitute_param_nml((qa / "param.nml").read_text(), sim_days=3.0, dt_s=120.0)
@@ -319,7 +319,7 @@ def test_param_nml_substitution_one_stack():
 # 5. Postprocess: read a synthetic out2d UGRID
 # --------------------------------------------------------------------------- #
 def test_read_out2d_elevation_geographic(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
     from netCDF4 import Dataset
 
     nc = tmp_path / "out2d_1.nc"
@@ -344,7 +344,7 @@ def test_read_out2d_elevation_geographic(tmp_path: Path):
 
 
 def test_read_out2d_empty_raises(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
     from netCDF4 import Dataset
 
     nc = tmp_path / "bad.nc"
@@ -356,7 +356,7 @@ def test_read_out2d_empty_raises(tmp_path: Path):
 
 
 def test_verify_against_analytical(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
 
     # staout: time[s], elev[m] -- a 5-day M2-ish signal; analytical = near-identical
     t = np.linspace(0, 5 * 86400, 400)
@@ -375,7 +375,7 @@ def test_verify_against_analytical(tmp_path: Path):
 # 6. run_schism local-solver spec + classify_exit
 # --------------------------------------------------------------------------- #
 def test_schism_local_spec_and_classify_exit(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism.run_schism import (
+    from trid3nt_server.workflows.schism.run_schism import (
         schism_local_spec, _classify_exit, SCHISM_SOLVER_NAME,
     )
 
@@ -400,9 +400,9 @@ def test_schism_local_spec_and_classify_exit(tmp_path: Path):
 # 7. Registration pins
 # --------------------------------------------------------------------------- #
 def test_registered_and_solver_wired():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    import trid3nt_server.agent.workflows  # noqa: F401 -- trigger solver reg
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data import TOOL_REGISTRY
+    import trid3nt_server.workflows  # noqa: F401 -- trigger solver reg
+    from trid3nt_server.data.simulation.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY, LOCAL_SOLVER_SPEC_REGISTRY,
     )
 

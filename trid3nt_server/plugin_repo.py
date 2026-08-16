@@ -639,7 +639,7 @@ def build_version_payload() -> dict[str, Any]:
     head = _git_head_sha(repo_root)
     git_sha = head[:7] if head != "unknown" else "unknown"
     try:
-        from .agent.adapters.bedrock_adapter import model_provider
+        from .adapters.bedrock_adapter import model_provider
 
         provider = model_provider()
     except Exception:  # noqa: BLE001 -- provider lookup is best-effort here

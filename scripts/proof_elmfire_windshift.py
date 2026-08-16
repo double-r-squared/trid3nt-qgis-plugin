@@ -63,15 +63,15 @@ from rasterio.transform import Affine
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 
 from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
-from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
+from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
     discover_elmfire_rasters, read_fire_raster,
 )
-from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import _cleanup_dir
-from trid3nt_server.agent.workflows.elmfire.run_elmfire import fetch_elmfire_inputs
-from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import _cleanup_dir
+from trid3nt_server.workflows.elmfire.run_elmfire import fetch_elmfire_inputs
+from trid3nt_server.workflows.elmfire.spotting.spotting import (
     _RealCase, _solve_real_case, _spotting_namelist, _read_fbfm_grid,
 )
-from trid3nt_server.agent.workflows.elmfire.sensitivity._sensitivity_common import (
+from trid3nt_server.workflows.elmfire.sensitivity._sensitivity_common import (
     publish_primary_from_out_dir,
 )
 

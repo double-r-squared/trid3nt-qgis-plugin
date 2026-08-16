@@ -15,7 +15,7 @@ import re
 
 import pytest
 
-from trid3nt_server.agent.mesh.swmm_deck_runner import (
+from trid3nt_server.mesh.swmm_deck_runner import (
     PUBLISHED_DECKS,
     SWMMDeckError,
     apply_rain_scale,

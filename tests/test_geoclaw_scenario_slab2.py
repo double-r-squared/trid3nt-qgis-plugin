@@ -24,8 +24,8 @@ import os
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.geoclaw import scenario_slab2 as s2
-from trid3nt_server.agent.workflows.geoclaw.scenario_slab2 import (
+from trid3nt_server.workflows.geoclaw import scenario_slab2 as s2
+from trid3nt_server.workflows.geoclaw.scenario_slab2 import (
     RIGIDITY_PA,
     ScenarioSlab2Error,
     fetch_slab2_grids,

@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     SFINCSSetupError,

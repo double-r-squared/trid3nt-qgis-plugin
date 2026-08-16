@@ -1,7 +1,7 @@
 """Unit tests for the shared drawn-geometry role vocabulary (ADR 0099, mesh M2).
 
 Covers the generalized 7-role parser in
-``trid3nt_server.agent.mesh.spatial_roles`` -- the canonical DOMAIN stage every
+``trid3nt_server.mesh.spatial_roles`` -- the canonical DOMAIN stage every
 engine consumes. Legacy-compat (aoi/barrier/point/line) is covered by
 ``test_spatial_input_barriers.py`` / ``test_spatial_input_neutral_line.py``
 through the adapter; here we exercise the NEW roles + the alias + honesty floor.
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.agent.mesh.spatial_roles import (
+from trid3nt_server.mesh.spatial_roles import (
     CANONICAL_ROLES,
     ROLE_ALIASES,
     SpatialRoleError,

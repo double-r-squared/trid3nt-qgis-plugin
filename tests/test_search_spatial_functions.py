@@ -22,8 +22,8 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.search.search_spatial_functions import search_spatial_functions as ssf
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.search.search_spatial_functions import search_spatial_functions as ssf
 
 
 @pytest.fixture()
@@ -87,7 +87,7 @@ def test_exact_function_name_resolves_without_bm25(fresh_index, monkeypatch):
 
 
 def test_corpus_has_search_spatial_functions_entry():
-    from trid3nt_server.agent.tools.search.search_tools.search_tools import _load_corpus
+    from trid3nt_server.data.search.search_tools.search_tools import _load_corpus
 
     corpus = _load_corpus()
     assert "search_spatial_functions" in corpus

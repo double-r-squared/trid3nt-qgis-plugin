@@ -30,7 +30,7 @@ import inspect
 # 1. Each composer has the register-only branch in front of the on-box fallback.
 # --------------------------------------------------------------------------- #
 def test_geoclaw_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.geoclaw.inundation.inundation as m
+    import trid3nt_server.workflows.geoclaw.inundation.inundation as m
 
     body = inspect.getsource(m.model_geoclaw_inundation)
     # register-only trigger
@@ -43,7 +43,7 @@ def test_geoclaw_composer_register_only_branch_and_fallback():
 
 
 def test_openquake_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.openquake.psha.psha as m
+    import trid3nt_server.workflows.openquake.psha.psha as m
 
     body = inspect.getsource(m.model_openquake_psha)
     assert "read_publish_manifest" in body
@@ -55,7 +55,7 @@ def test_openquake_composer_register_only_branch_and_fallback():
 
 
 def test_swmm_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as m
+    import trid3nt_server.workflows.swmm.urban_flood.urban_flood as m
 
     body = inspect.getsource(m.model_swmm_urban_flood)
     assert "read_publish_manifest" in body
@@ -67,7 +67,7 @@ def test_swmm_composer_register_only_branch_and_fallback():
 
 
 def test_landlab_composer_register_only_branch_and_fallback():
-    import trid3nt_server.agent.workflows.landlab.susceptibility.susceptibility as m
+    import trid3nt_server.workflows.landlab.susceptibility.susceptibility as m
 
     body = inspect.getsource(m.model_landlab_susceptibility)
     assert "read_publish_manifest" in body
@@ -86,8 +86,8 @@ def test_read_publish_manifest_absent_pointer_returns_none(monkeypatch):
     """A completion.json with no ``publish_manifest_uri`` (pre-rebuild worker /
     gate default-off) -> read_publish_manifest returns None -> composer falls
     through to the legacy on-box postprocess."""
-    import trid3nt_server.agent.workflows.shared.register_published_manifest as rpm
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver
+    import trid3nt_server.workflows.shared.register_published_manifest as rpm
+    import trid3nt_server.data.simulation.solver.solver as solver
 
     monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bkt")
     monkeypatch.setattr(
@@ -101,7 +101,7 @@ def test_read_publish_manifest_absent_pointer_returns_none(monkeypatch):
 
 
 def test_read_publish_manifest_no_run_id_returns_none():
-    import trid3nt_server.agent.workflows.shared.register_published_manifest as rpm
+    import trid3nt_server.workflows.shared.register_published_manifest as rpm
 
     class _RR:
         run_id = None

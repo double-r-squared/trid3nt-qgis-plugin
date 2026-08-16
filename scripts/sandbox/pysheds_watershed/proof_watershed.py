@@ -68,8 +68,8 @@ def fetch_3dep_4326() -> Path:
     if dem4326.exists() and dem4326.stat().st_size > 0:
         log.info("cached %s", dem4326)
         return dem4326
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.cache import read_object_bytes_s3
 
     layer = TOOL_REGISTRY["fetch_dem"].fn(bbox=BBOX, source="3dep", resolution_m=10)
     log.info("fetch_dem 3dep -> %s", layer.uri)
@@ -256,10 +256,10 @@ def main() -> int:
     pg = pysheds_playground(dem4326)
     outlet = pg["outlet"]
 
-    from trid3nt_server.agent.tools.processing.delineate_watershed.delineate_watershed import (
+    from trid3nt_server.data.processing.delineate_watershed.delineate_watershed import (
         delineate_watershed,
     )
-    from trid3nt_server.agent.tools.processing.extract_stream_network.extract_stream_network import (
+    from trid3nt_server.data.processing.extract_stream_network.extract_stream_network import (
         extract_stream_network,
     )
 

@@ -50,7 +50,7 @@ SIM_DURATION_S = 900
 OUTPUT_FRAMES = 5
 AMR_LEVELS = 3
 
-from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import geoclaw_inundation
+from trid3nt_server.workflows.geoclaw.inundation.inundation import geoclaw_inundation
 
 
 def _prefixes() -> set[str]:

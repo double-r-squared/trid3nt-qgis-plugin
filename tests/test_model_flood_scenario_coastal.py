@@ -29,10 +29,10 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_contracts.execution import TopobathyResult
-from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import (
+from trid3nt_server.data.fetchers._router.hooks.topobathy import (
     TopobathyUpstreamError,
 )
-from trid3nt_server.agent.workflows.sfincs.flood.flood import (
+from trid3nt_server.workflows.sfincs.flood.flood import (
     model_flood_scenario,
     sfincs_flood,
 )
@@ -237,12 +237,12 @@ def _patched_chain(
     async def _wfc(_h):  # noqa: ANN001
         return _run_result_ok(run_id, handle.handle_id)
 
-    from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
 
     # data-router fold: fetch_noaa_coops_tides is a promoted spec-driven tool
     # resolved by the auto-wire via TOOL_REGISTRY[name].fn (not a twin module
     # import). Stub it OFFLINE by swapping the registry entry for a raising one.
-    from trid3nt_server.agent.tools import RegisteredTool, TOOL_REGISTRY as _TR
+    from trid3nt_server.data import RegisteredTool, TOOL_REGISTRY as _TR
 
     def _coops_offline(**_kw):  # noqa: ANN003
         raise RuntimeError("offline test - no live CO-OPS")
@@ -277,38 +277,38 @@ def _patched_chain(
     )
 
     return (
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", dem_mock),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", dem_mock),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_topobathy",
+            "trid3nt_server.workflows.sfincs.flood.flood.fetch_topobathy",
             topobathy_mock,
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover",
+            "trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover",
             return_value=_landcover_result(),
         ),
         patch.dict(_TR, {"fetch_river_geometry": _river_geometry_stub}),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period",
+            "trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period",
             return_value=_precip_result(),
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model",
+            "trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model",
             side_effect=_capture_build,
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver",
+            "trid3nt_server.workflows.sfincs.flood.flood.run_solver",
             return_value=handle,
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.wait_for_completion",
+            "trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion",
             side_effect=_wfc,
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.postprocess_flood",
+            "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.publish_layer",
+            "trid3nt_server.workflows.sfincs.flood.flood.publish_layer",
             side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test"),
         ),
         # OFFLINE: the coastal auto-wire's live surge fetchers (CO-OPS/GTSM)
@@ -606,7 +606,7 @@ async def test_run_wrapper_forwards_coastal_flag() -> None:
         return _empty_envelope(_COASTAL_BBOX)
 
     with patch(
-        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
+        "trid3nt_server.workflows.sfincs.flood.flood.model_flood_scenario",
         side_effect=_fake_inner,
     ):
         await sfincs_flood(bbox=_COASTAL_BBOX, coastal=True)
@@ -625,7 +625,7 @@ async def test_run_wrapper_coastal_defaults_false() -> None:
         return _empty_envelope(_INLAND_BBOX)
 
     with patch(
-        "trid3nt_server.agent.workflows.sfincs.flood.flood.model_flood_scenario",
+        "trid3nt_server.workflows.sfincs.flood.flood.model_flood_scenario",
         side_effect=_fake_inner,
     ):
         await sfincs_flood(bbox=_INLAND_BBOX)

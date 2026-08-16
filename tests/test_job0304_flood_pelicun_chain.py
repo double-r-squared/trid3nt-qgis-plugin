@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import inspect
 
-from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value, normalize_args
+from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value, normalize_args
 from trid3nt_server.emission.uri_registry import SessionUriRegistry, _is_tile_template
 
 

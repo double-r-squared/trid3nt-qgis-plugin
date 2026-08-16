@@ -32,7 +32,7 @@ FORCING_DIR = Path("/tmp/rog_ballcreek/forcing")
 
 
 def _metrics(key: str, tag: str):
-    from trid3nt_server.agent.tools.processing.compute_skill_metrics.compute_skill_metrics import (
+    from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
         nash_sutcliffe_efficiency as NSE, pearson_r2 as R2)
     f = json.loads((FORCING_DIR / f"{key}.json").read_text())
     h = json.loads((LIVE.RUNDIR / f"solve_{tag}" / "rog_outlet_hydrograph.json").read_text())

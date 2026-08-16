@@ -17,7 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.agent.workflows.swmm.rdii_rtk.rdii_rtk import (
+from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import (
     rtk_unit_hydrograph, rdii_hydrograph, build_rtk_rdii_inp,
     _solve_swmm_node_rdii, _rdii_volume_cf, _rtk_expected_volume_cf,
     EPA_TABLE_7_1_RAINFALL_IN_PER_HR, EPA_TABLE_7_1_PUBLISHED_RDII_CFS,

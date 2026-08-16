@@ -11,7 +11,7 @@ import pytest
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.agent.workflows.modflow._input_review import (
+from trid3nt_server.workflows.modflow._input_review import (
     aquifer_k_basis,
     aquifer_k_review_entry,
     gate_and_stamp_modflow_inputs,

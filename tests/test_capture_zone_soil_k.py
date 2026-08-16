@@ -21,11 +21,11 @@ from trid3nt_contracts.modflow_contracts import (
     DEFAULT_AQUIFER_K_MS,
     CaptureZoneLayerURI,
 )
-from trid3nt_server.agent.workflows.modflow.capture_zone import capture_zone as cz_mod
-from trid3nt_server.agent.workflows.modflow.capture_zone.capture_zone import (
+from trid3nt_server.workflows.modflow.capture_zone import capture_zone as cz_mod
+from trid3nt_server.workflows.modflow.capture_zone.capture_zone import (
     model_capture_zone_scenario,
 )
-from trid3nt_server.agent.workflows.shared.soil_hydraulics import ksat_from_texture
+from trid3nt_server.workflows.shared.soil_hydraulics import ksat_from_texture
 
 LAT0, LON0 = 40.86, -98.40
 
@@ -60,7 +60,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, *, sand: float | None, clay: float |
         captured["run_args"] = run_args
         return _fake_layer()
 
-    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
     uris: dict[str, str] = {}

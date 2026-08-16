@@ -1,7 +1,7 @@
 """Tests for the shared mesh preview/approve gate (ADR 0099, mesh M2)."""
 from __future__ import annotations
 
-from trid3nt_server.agent.mesh.preview_gate import (
+from trid3nt_server.mesh.preview_gate import (
     MeshGateStats,
     build_mesh_gate_envelope,
     default_gate_mode,

@@ -55,7 +55,7 @@ def test_baroclinic_layer_uri_shape():
 # 2. Deck authoring: 3D vgrid + baroclinic param + gradient IC + river source
 # --------------------------------------------------------------------------- #
 def test_author_baroclinic_estuary_deck(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     deck = D.author_baroclinic_estuary_deck(
         tmp_path / "e", bbox=(-75.55, 38.85, -75.05, 39.45),
@@ -103,7 +103,7 @@ def test_author_baroclinic_deck_supplied_mesh(tmp_path: Path):
     gradient + river source) is authored on THOSE nodes (ADR 0208)."""
     from scipy.spatial import Delaunay
 
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     # a real-ish coastal lon/lat rectangle, triangulated, depths positive-DOWN.
     xs = np.linspace(-70.60, -70.40, 9)
@@ -135,7 +135,7 @@ def test_author_baroclinic_deck_supplied_mesh(tmp_path: Path):
 def test_build_estuary_mesh_shoreline_clip():
     """A water mask clips the lattice to the wet body: NO triangle centroid lands
     on 'land', and no surviving node is outside the water region."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     bbox = (-75.55, 38.85, -75.05, 39.45)
     # synthetic coastline: WATER only west of lon=-75.25 (a connected sub-body)
@@ -163,7 +163,7 @@ def test_build_estuary_mesh_shoreline_clip():
 def test_build_estuary_mesh_unclipped_fallback():
     """Too little water -> the full rectangle is kept (clipped=False), never a
     sliver, so the caller can loudly note the coastline clip was unavailable."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     bbox = (-75.55, 38.85, -75.05, 39.45)
     pts, tris, depths, clipped = D._build_estuary_mesh(
@@ -178,7 +178,7 @@ def test_build_estuary_mesh_unclipped_fallback():
 def test_author_baroclinic_deck_shoreline_clip_no_land(tmp_path: Path):
     """With a coastline mask, salt.ic carries NO node on the 'land' side -- the
     deliverable cannot paint salinity over land."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     deck = D.author_baroclinic_estuary_deck(
         tmp_path / "clip", bbox=(-75.55, 38.85, -75.05, 39.45),
@@ -197,7 +197,7 @@ def test_author_baroclinic_deck_shoreline_clip_no_land(tmp_path: Path):
 
 
 def test_sz_vgrid_layer_ordering():
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     v = D._author_sz_vgrid(6)
     body = v.splitlines()[6:]
@@ -233,7 +233,7 @@ def _write_synthetic_salinity(path: Path, *, n=60, nlayer=8, ntime=3) -> None:
 
 
 def test_read_salinity_stratification(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
 
     p = tmp_path / "salinity_1.nc"
     _write_synthetic_salinity(p)
@@ -246,8 +246,8 @@ def test_read_salinity_stratification(tmp_path: Path):
 
 
 def test_postprocess_baroclinic_metrics(tmp_path: Path, monkeypatch):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
-    from trid3nt_server.agent.workflows.shared import cog_io
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.shared import cog_io
 
     # stub the COG write/upload so the test stays offline (no MinIO)
     monkeypatch.setattr(cog_io, "write_cog_4326_from_grid",
@@ -273,6 +273,6 @@ def test_postprocess_baroclinic_metrics(tmp_path: Path, monkeypatch):
 # 4. Registration pin
 # --------------------------------------------------------------------------- #
 def test_baroclinic_tool_registered():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     assert "schism_baroclinic_circulation" in TOOL_REGISTRY

@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.data import TOOL_REGISTRY
 
 OUT = "/home/nate/Documents/trid3nt-local/docs/proof/templates"
 STEM = "pelicun_hazus_lifeline_seismic_dl_run"

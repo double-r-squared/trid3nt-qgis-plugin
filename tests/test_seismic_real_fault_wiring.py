@@ -32,13 +32,13 @@ from trid3nt_contracts.openquake_contracts import (
     SeismicHazardLayerURI,
 )
 
-import trid3nt_server.agent.workflows.openquake.psha.psha as comp
-from trid3nt_server.agent.workflows.openquake.psha.psha import (
+import trid3nt_server.workflows.openquake.psha.psha as comp
+from trid3nt_server.workflows.openquake.psha.psha import (
     REAL_FAULT_SITE_GRID_SPACING_KM,
     assemble_build_spec,
     resolve_fault_sources,
 )
-from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (
+from trid3nt_server.workflows.openquake.postprocess_openquake import (
     SEISMIC_HAZARD_STYLE_PRESET,
 )
 
@@ -83,7 +83,7 @@ def _patch_fetch(*, return_value=None, side_effect=None):
 
     from unittest.mock import MagicMock, patch
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     mock = MagicMock(return_value=return_value, side_effect=side_effect)
     entry = dataclasses.replace(TOOL_REGISTRY["fetch_fault_sources"], fn=mock)
@@ -93,7 +93,7 @@ def _patch_fetch(*, return_value=None, side_effect=None):
 def _fault_upstream_error(msg="boom"):
     """A router FetchError the consumer catches (the twin's FaultSourcesUpstreamError
     A.6 surface, now stamped by the shared router factory)."""
-    from trid3nt_server.agent.tools.fetchers._router.errors import router_upstream_error
+    from trid3nt_server.data.fetchers._router.errors import router_upstream_error
 
     return router_upstream_error("FAULT_SOURCES", msg)
 
@@ -236,7 +236,7 @@ def _wire_common_mocks(monkeypatch, staged_capture):
     def _fake_run_solver(*, solver, model_setup_uri, compute_class):
         return _Handle()
 
-    import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
+    import trid3nt_server.data.simulation.solver.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "run_solver", _fake_run_solver, raising=False)
     monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)

@@ -32,7 +32,7 @@ import inspect
 import time
 from pathlib import Path
 
-import trid3nt_server.agent.workflows.sfincs.flood.flood as mfs
+import trid3nt_server.workflows.sfincs.flood.flood as mfs
 
 
 # --------------------------------------------------------------------------- #

@@ -596,7 +596,7 @@ class MockWebSocket:
 def _dummy_uri_tool():
     """Register two dummy tools: a producer (returns LayerURI) + a consumer."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
 
     captured: dict[str, Any] = {}
 
@@ -659,7 +659,7 @@ def test_invoke_seam_registers_then_resolves(_dummy_uri_tool) -> None:
 def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
     """The remaining branch-4 raise (display-face URL, no recoverable data
     URI) propagates as a typed retryable error the loop summarizes."""
-    from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+    from trid3nt_server.adapters.adapter import summarize_tool_result
     from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
 
     from trid3nt_contracts.common import new_ulid

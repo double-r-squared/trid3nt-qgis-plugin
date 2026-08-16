@@ -23,7 +23,7 @@ from trid3nt_contracts.openquake_contracts import (
     SecondaryPerilLayerURI,
 )
 
-from trid3nt_server.agent.workflows.openquake.scenario_gmf.scenario_gmf import (
+from trid3nt_server.workflows.openquake.scenario_gmf.scenario_gmf import (
     ScenarioRupture,
     _parse_avg_gmf_csv,
     render_scenario_job_ini,
@@ -31,7 +31,7 @@ from trid3nt_server.agent.workflows.openquake.scenario_gmf.scenario_gmf import (
     resolve_scenario_rupture,
     run_scenario_gmf,
 )
-from trid3nt_server.agent.workflows.openquake.secondary_perils.secondary_perils import (
+from trid3nt_server.workflows.openquake.secondary_perils.secondary_perils import (
     _landslide_probability,
     _liquefaction_probability,
     compute_site_covariates,
@@ -124,7 +124,7 @@ def _patch_no_fault(monkeypatch) -> None:
     """Force the GEM fault fetch to return no intersecting faults (offline)."""
     import types as _t
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     monkeypatch.setitem(
         TOOL_REGISTRY, "fetch_fault_sources",
@@ -135,7 +135,7 @@ def _patch_no_fault(monkeypatch) -> None:
 def test_resolve_scenario_rupture_no_fault_without_optin_raises(monkeypatch):
     """ADR 0223: no real fault + no caller trace + demo NOT opted in -> typed error,
     never a silently fabricated fault (R1)."""
-    from trid3nt_server.agent.workflows.openquake.scenario_gmf.scenario_gmf import (
+    from trid3nt_server.workflows.openquake.scenario_gmf.scenario_gmf import (
         SCENARIO_NO_REAL_FAULT,
         ScenarioGmfError,
     )
@@ -237,7 +237,7 @@ def test_templates_registered_engine_openquake():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     for name in ("openquake_scenario_gmf", "openquake_secondary_perils"):
         e = TOOL_REGISTRY[name]

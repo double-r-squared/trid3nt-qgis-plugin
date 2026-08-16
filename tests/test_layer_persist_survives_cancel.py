@@ -26,10 +26,10 @@ import asyncio
 import pytest
 
 import trid3nt_server.server as server
-from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server import data as agent_tools
 from trid3nt_server.emission.pipeline_emitter import current_emitter
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.data import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI

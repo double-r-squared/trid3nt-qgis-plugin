@@ -24,14 +24,14 @@ import pytest
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.agent.tools import (
+from trid3nt_server.data import (
     RegisteredTool,
     TOOL_REGISTRY,
     clear_registry_for_tests,
 )
-from trid3nt_server.agent.tools.fetchers._router import registration, router
-from trid3nt_server.agent.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.agent.tools.fetchers._router.executors import raster_cog
+from trid3nt_server.data.fetchers._router import registration, router
+from trid3nt_server.data.fetchers._router.errors import RouterInputError
+from trid3nt_server.data.fetchers._router.executors import raster_cog
 
 _PINNED_NOW = datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -222,7 +222,7 @@ def test_route_end_to_end_writes_cache_and_emits_layeruri(fake_s3, monkeypatch):
 
 
 def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
-    from trid3nt_server.agent.tools.fetchers._router.executors import vector_fgb
+    from trid3nt_server.data.fetchers._router.executors import vector_fgb
 
     spec = SourceSpec.model_validate({
         "name": "fetch_demo_vector", "source_class": "demo_vector", "shape": "vector-fgb",
@@ -299,7 +299,7 @@ def test_promoted_signature_synthesized_from_spec(registered_spec):
 
 def test_promoted_tool_in_default_pool(registered_spec):
     """tier=general -> the pool producer (_build_index) INCLUDES it by name."""
-    from trid3nt_server.agent.tools.search.search_tools import search_tools as st
+    from trid3nt_server.data.search.search_tools import search_tools as st
 
     spec, name = registered_spec
     index = st._build_index(registry_snapshot={name: TOOL_REGISTRY[name]})

@@ -26,7 +26,7 @@ import pytest
 # (1) Closed-form Cruz active-crown ROS -- exact equation + ELMFIRE conversion.
 # ===========================================================================
 def test_cruz_closed_form_matches_published_equation():
-    from trid3nt_server.agent.workflows.elmfire.cruz_crown_fire import (
+    from trid3nt_server.workflows.elmfire.cruz_crown_fire import (
         MPH_20FT_TO_KMPH_10M,
         cruz_active_crown_ros_m_min,
     )
@@ -46,7 +46,7 @@ def test_cruz_closed_form_matches_published_equation():
 
 
 def test_cruz_monotonic_in_wind_and_moisture():
-    from trid3nt_server.agent.workflows.elmfire.cruz_crown_fire import (
+    from trid3nt_server.workflows.elmfire.cruz_crown_fire import (
         cruz_active_crown_ros_m_min,
     )
 
@@ -62,7 +62,7 @@ def test_cruz_monotonic_in_wind_and_moisture():
 
 
 def test_cruz_adj_scales_linearly():
-    from trid3nt_server.agent.workflows.elmfire.cruz_crown_fire import (
+    from trid3nt_server.workflows.elmfire.cruz_crown_fire import (
         cruz_active_crown_ros_m_min,
     )
 

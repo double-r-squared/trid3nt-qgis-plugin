@@ -16,12 +16,12 @@ import pytest
 import rasterio
 from PIL import Image
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.fetchers._router import registration as R
-from trid3nt_server.agent.tools.fetchers._router import router as router_mod
-from trid3nt_server.agent.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.agent.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.agent.tools.fetchers._router.transport import TransportUpstreamError
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.fetchers._router import registration as R
+from trid3nt_server.data.fetchers._router import router as router_mod
+from trid3nt_server.data.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt_server.data.fetchers._router.executors import raster_cog
+from trid3nt_server.data.fetchers._router.transport import TransportUpstreamError
 
 _BBOX = (-82.2, 26.2, -81.5, 26.9)  # coastal Lee County FL
 _NAMES = ("fetch_noaa_slr_confidence", "fetch_noaa_slr_marsh")
@@ -47,7 +47,7 @@ def _run(monkeypatch, name, slr_ft, res_deg=0.02, png=None, transport_exc=None):
             raise transport_exc
         return (png if png is not None else _png_bytes(), "image/png", "http://x")
 
-    import trid3nt_server.agent.tools.fetchers._router.transport as T
+    import trid3nt_server.data.fetchers._router.transport as T
     monkeypatch.setattr(T, "get_bytes", fake_get_bytes)
     return raster_cog.execute(spec, params)
 
@@ -68,7 +68,7 @@ def test_registered_spec_driven(name, source):
 
 
 def test_corpus_present():
-    from trid3nt_server.agent.tools.search.search_tools.search_tools import _load_corpus
+    from trid3nt_server.data.search.search_tools.search_tools import _load_corpus
 
     corpus = _load_corpus()
     for n in _NAMES:
@@ -152,7 +152,7 @@ def test_service_resolution_and_query(monkeypatch):
         seen["params"] = params
         return (_png_bytes(), "image/png", url)
 
-    import trid3nt_server.agent.tools.fetchers._router.transport as T
+    import trid3nt_server.data.fetchers._router.transport as T
     monkeypatch.setattr(T, "get_bytes", cap_get_bytes)
     spec = R.get_spec("fetch_noaa_slr_marsh")
     params = router_mod.validate_params(spec, {"bbox": list(_BBOX), "slr_ft": 3.0, "res_deg": 0.02})

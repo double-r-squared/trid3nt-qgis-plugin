@@ -19,8 +19,8 @@ import pytest
 
 from trid3nt_contracts.swmm_contracts import SWMMComparisonResult
 
-from trid3nt_server.agent.mesh import swmm_mechanism_compare as core
-from trid3nt_server.agent.workflows.swmm.mechanism_compare.mechanism_compare import (
+from trid3nt_server.mesh import swmm_mechanism_compare as core
+from trid3nt_server.workflows.swmm.mechanism_compare.mechanism_compare import (
     run_mechanism_comparison,
 )
 

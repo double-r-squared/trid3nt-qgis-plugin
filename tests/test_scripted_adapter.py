@@ -15,13 +15,13 @@ import json
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
     stream_events_with_contents,
 )
-from trid3nt_server.agent.adapters import scripted_adapter as sa
+from trid3nt_server.adapters import scripted_adapter as sa
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +174,7 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("prov", ["vertex", "gemini", "GEMINI", "googlegenai", "gpt"])
 def test_removed_and_unknown_providers_raise_unsupported(monkeypatch, prov):
-    from trid3nt_server.agent.adapters.adapter import UnsupportedModelProviderError
+    from trid3nt_server.adapters.adapter import UnsupportedModelProviderError
 
     monkeypatch.setenv("MODEL_PROVIDER", prov)
     with pytest.raises(UnsupportedModelProviderError):

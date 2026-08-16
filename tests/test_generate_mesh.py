@@ -17,8 +17,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.workflows.mesh.artifact import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,
     mesh_compatible_with_engine,
@@ -26,12 +26,12 @@ from trid3nt_server.agent.workflows.mesh.artifact import (
     stash_mesh_artifact,
     stashed_mesh_artifacts,
 )
-from trid3nt_server.agent.workflows.mesh.generate_mesh.generate_mesh import (
+from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import (
     _infer_mode,
     _write_2dm,
 )
-from trid3nt_server.agent.workflows.mesh.precondition_gate import gate_supplied_mesh
-from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+from trid3nt_server.workflows.mesh.precondition_gate import gate_supplied_mesh
+from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
     read_2dm_mesh,
 )
 
@@ -105,7 +105,7 @@ def test_read_2dm_rejects_empty():
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
         MeshAcquisitionError,
     )
 
@@ -241,7 +241,7 @@ def test_gate_auto_default_off_declines():
 # --------------------------------------------------------------------------- #
 # HEC-RAS RoG channel-refined mesh (ADR 0211): mode, artifact bundle, compat, gate.
 # --------------------------------------------------------------------------- #
-from trid3nt_server.agent.workflows.mesh.artifact import (  # noqa: E402
+from trid3nt_server.workflows.mesh.artifact import (  # noqa: E402
     HECRAS_INPUT_KEYS, materialize_hecras_mesh_inputs,
 )
 

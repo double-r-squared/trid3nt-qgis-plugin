@@ -75,7 +75,7 @@ def _fetch_basemap(w, s, e, n, zoom):
 
 
 async def _run():
-    from trid3nt_server.agent.workflows.elmfire.verification.crown_ros import (
+    from trid3nt_server.workflows.elmfire.verification.crown_ros import (
         model_elmfire_crown_ros_verification,
     )
     return await model_elmfire_crown_ros_verification(
@@ -88,7 +88,7 @@ res = asyncio.run(_run())
 print(f"numerical={res.numerical_ros_m_min:.2f} cruz={res.cruz_ros_m_min:.2f} "
       f"rel_err={res.rel_error*100:.2f}% passed={res.passed} uri={res.uri}")
 
-from trid3nt_server.agent.tools.cache import read_object_bytes_s3  # noqa: E402
+from trid3nt_server.data.cache import read_object_bytes_s3  # noqa: E402
 
 with MemoryFile(read_object_bytes_s3(res.uri)) as mf, mf.open() as src:
     arr = src.read(1).astype("float64")

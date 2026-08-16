@@ -17,11 +17,11 @@ import tempfile
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt_server.data.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.agent.tools.fetchers._router.hooks import movebank_tracks as mbh
-from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.data.fetchers._router.hooks import movebank_tracks as mbh
+from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
 _CSV = (
     "individual_local_identifier,timestamp,location_lat,location_long,sensor_type_id\n"

@@ -19,18 +19,18 @@ import pytest
 from affine import Affine
 from rasterio.crs import CRS
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import (
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.agent.tools.fetchers._router.executors import library_delegate, raster_cog
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router.executors import library_delegate, raster_cog
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
 
 STATSGO_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/agent/tools/fetchers/soil/fetch_statsgo_soils/source.yaml"
+    / "trid3nt_server/data/fetchers/soil/fetch_statsgo_soils/source.yaml"
 )
 
 _KANSAS = (-95.30, 39.00, -95.20, 39.10)  # small in-CONUS AOI
@@ -63,7 +63,7 @@ def _patch_statsgo_read(monkeypatch, values: Any, nodata: Any = None):
 
 
 def test_statsgo_promoted_as_library_delegate_spec():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_statsgo_soils"]
     assert entry.metadata.source_class == "statsgo_soils"
@@ -76,7 +76,7 @@ def test_statsgo_promoted_as_library_delegate_spec():
 
 
 def test_statsgo_docstring_carried_verbatim():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     doc = TOOL_REGISTRY["fetch_statsgo_soils"].fn.__doc__ or ""
     assert "STATSGO" in doc and "K-factor" in doc

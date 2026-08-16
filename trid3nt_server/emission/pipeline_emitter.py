@@ -82,7 +82,7 @@ from trid3nt_contracts.ws import (
     ToolIoPayload,
 )
 
-from trid3nt_server.agent.gates.context_budget import COMPACTING_LABEL, compaction_complete_label
+from trid3nt_server.gates.context_budget import COMPACTING_LABEL, compaction_complete_label
 from .layer_uri_emit import emit_layer_uri
 
 __all__ = [
@@ -267,7 +267,7 @@ async def emit_chart_payloads(payloads: Any) -> None:
     chart:
 
         from trid3nt_server.emission.pipeline_emitter import emit_chart_payloads
-        from trid3nt_server.agent.tools.processing.charts_common import build_budget_partition_chart
+        from trid3nt_server.data.processing.charts_common import build_budget_partition_chart
         chart = build_budget_partition_chart(budget_partition_m3_day=part)
         await emit_chart_payloads(chart)
 
@@ -832,7 +832,7 @@ def _densify_off_loop(geojson_obj: Any, uri: str) -> Any:
             and geojson_obj.get("type") == "FeatureCollection"):
         return geojson_obj
     try:
-        from trid3nt_server.agent.tools.vector_tiles import densify_if_needed
+        from trid3nt_server.data.vector_tiles import densify_if_needed
 
         geojson_obj, _density_meta = densify_if_needed(geojson_obj, layer_id=uri)
         if _density_meta is not None:
@@ -893,7 +893,7 @@ def _densified_cache_key(uri: str) -> str:
     differently-simplified FeatureCollection on a stale key.
     """
     try:
-        from trid3nt_server.agent.tools.vector_tiles import (
+        from trid3nt_server.data.vector_tiles import (
             DENSE_VECTOR_THRESHOLD,
             MAX_INLINE_FEATURES,
         )
@@ -932,7 +932,7 @@ def _legend_for_layer_uri(uri: str | None) -> Any:
     if not uri:
         return None
     try:
-        from trid3nt_server.agent.tools.publish_layer.publish_layer import pop_legend_for_uri
+        from trid3nt_server.data.publish_layer.publish_layer import pop_legend_for_uri
 
         return pop_legend_for_uri(uri)
     except Exception:  # noqa: BLE001 - legend lift is best-effort, never fatal

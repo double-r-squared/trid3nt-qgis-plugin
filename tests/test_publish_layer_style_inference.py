@@ -1,6 +1,6 @@
 """job-0269b: family-aware default style preset for publish_layer."""
 
-from trid3nt_server.agent.tools.publish_layer.publish_layer import _infer_style_preset
+from trid3nt_server.data.publish_layer.publish_layer import _infer_style_preset
 
 
 def test_terrain_families_get_no_preset():

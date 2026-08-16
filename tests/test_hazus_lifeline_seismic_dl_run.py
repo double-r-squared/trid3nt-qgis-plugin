@@ -13,8 +13,8 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.workflows.pelicun.hazus_lifeline_seismic_dl_run.hazus_lifeline_seismic_dl_run import (  # noqa: E501
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.workflows.pelicun.hazus_lifeline_seismic_dl_run.hazus_lifeline_seismic_dl_run import (  # noqa: E501
     build_lifeline_aim,
     build_lifeline_demand_csv,
 )

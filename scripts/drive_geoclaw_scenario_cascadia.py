@@ -56,7 +56,7 @@ async def _main():
     if os.environ.get("TRID3NT_SLAB2_LIVE") != "1":
         _seed_slab2_cache()
 
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import (
         geoclaw_inundation,
     )
     res = await geoclaw_inundation(

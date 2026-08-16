@@ -62,9 +62,9 @@ async def _forensic_one_model_turn(contents, decls, adapter):
     from openai import AsyncOpenAI
     import openai as _openai
 
-    from trid3nt_server.agent.adapters.adapter import FunctionCallEvent  # noqa: F401
-    from trid3nt_server.agent.adapters import openai_adapter as oa
-    from trid3nt_server.agent.gates.context_budget import openai_max_output_tokens
+    from trid3nt_server.adapters.adapter import FunctionCallEvent  # noqa: F401
+    from trid3nt_server.adapters import openai_adapter as oa
+    from trid3nt_server.gates.context_budget import openai_max_output_tokens
 
     messages = oa.contents_to_openai_messages(
         list(contents), system_prompt=adapter.SYSTEM_PROMPT, show_thinking=False
@@ -215,17 +215,17 @@ run._one_model_turn = _forensic_one_model_turn  # monkeypatch the signed driver
 
 
 async def _drive_forensic(arm, records, out_jsonl):
-    import trid3nt_server.agent.adapters.adapter as adapter
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.fetchers._router import registration as reg
-    from trid3nt_server.agent.tools.search.search_tools import search_tools as st
-    from trid3nt_server.agent.tools.search.tool_retrieval import MAX_K, retrieve_visible_tools
+    import trid3nt_server.adapters.adapter as adapter
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.fetchers._router import registration as reg
+    from trid3nt_server.data.search.search_tools import search_tools as st
+    from trid3nt_server.data.search.tool_retrieval import MAX_K, retrieve_visible_tools
     import trid3nt_server.server as srv
 
     st._reset_index_for_tests()
     st._get_index()
     if arm == 3:
-        from trid3nt_server.agent.tools.fetchers._router import stratified as strat
+        from trid3nt_server.data.fetchers._router import stratified as strat
         strat.reset_source_stratum_index_for_tests()
         strat.source_stratum_index()
     declarable_floor = set(srv._default_declarable_registry())
@@ -281,8 +281,8 @@ def main() -> int:
         os.environ[run.ARM_ENV] = str(arm)
 
     run._load_stack()
-    from trid3nt_server.agent.tools.fetchers._router import registration as reg
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data.fetchers._router import registration as reg
+    from trid3nt_server.data import TOOL_REGISTRY
     import trid3nt_server.server as srv
 
     assert reg.catalog_arm() == (None if arm == 0 else str(arm)), "arm env not seen"

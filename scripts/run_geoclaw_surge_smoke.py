@@ -178,7 +178,7 @@ def _download_outputs(run_id: str, dest: Path) -> None:
 # Surge extraction from fort.q (h + analytic B -> eta) + the coastal gauge.
 # --------------------------------------------------------------------------- #
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (  # noqa: E402
+from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (  # noqa: E402
     parse_fort_q_frame,
     _frame_time_from_t_header,
 )

@@ -30,10 +30,10 @@ OUT = Path("/tmp/claude-1000/-home-nate-Documents-GRACE-2/"
 
 
 async def _main() -> int:
-    from trid3nt_server.agent.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (
+    from trid3nt_server.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (
         swan_physics_sensitivity_sweep,
     )
-    from trid3nt_server.agent.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import (
+    from trid3nt_server.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import (
         swan_stationary_snapshot_batch,
     )
 

@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.mesh import raster_cell_mesh as mb
+from trid3nt_server.mesh import raster_cell_mesh as mb
 
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")

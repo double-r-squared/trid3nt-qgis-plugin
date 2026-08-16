@@ -104,7 +104,7 @@ def test_suggest_matches_build_inline_autoscale(dem_path: str) -> None:
     """The standalone suggestion uses the EXACT same DEM read + active-cell count
     + autoscale arithmetic the build uses, so the suggested resolution + active
     estimate the card shows is what the build would compute."""
-    from trid3nt_server.agent.mesh import raster_cell_mesh as mb
+    from trid3nt_server.mesh import raster_cell_mesh as mb
 
     requested = 10.0
     # Reproduce build_swmm_mesh's inline prelude (~839-858) directly.
@@ -138,7 +138,7 @@ def test_suggest_empty_dem_raises(tmp_path: Path) -> None:
     from rasterio.crs import CRS
     from rasterio.transform import from_origin
 
-    from trid3nt_server.agent.mesh.raster_cell_mesh import (
+    from trid3nt_server.mesh.raster_cell_mesh import (
         SWMMMeshError,
         suggest_swmm_resolution,
     )
@@ -161,7 +161,7 @@ def test_suggest_empty_dem_raises(tmp_path: Path) -> None:
 # imports it from model_swmm_urban_flood inside the helper).
 # --------------------------------------------------------------------------- #
 def _patch_dem_fetch(monkeypatch, dem_path: str) -> None:
-    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as mu
+    import trid3nt_server.workflows.swmm.urban_flood.urban_flood as mu
 
     monkeypatch.setattr(
         mu, "_fetch_dem_for_urban", lambda bbox, uri_sink=None: (dem_path, "synthetic")
@@ -232,7 +232,7 @@ async def test_gate_emits_granularity_block(monkeypatch, dem_path: str) -> None:
 @pytest.mark.asyncio
 async def test_proceed_pins_suggested_resolution(monkeypatch, dem_path: str) -> None:
     from trid3nt_server import server
-    from trid3nt_server.agent.mesh.raster_cell_mesh import suggest_swmm_resolution
+    from trid3nt_server.mesh.raster_cell_mesh import suggest_swmm_resolution
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -256,7 +256,7 @@ async def test_proceed_pins_suggested_resolution(monkeypatch, dem_path: str) -> 
 @pytest.mark.asyncio
 async def test_narrow_scope_finer_is_clamped(monkeypatch, dem_path: str) -> None:
     from trid3nt_server import server
-    from trid3nt_server.agent.mesh.raster_cell_mesh import suggest_swmm_resolution
+    from trid3nt_server.mesh.raster_cell_mesh import suggest_swmm_resolution
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -363,7 +363,7 @@ async def test_timeout_fails_closed(monkeypatch, dem_path: str) -> None:
 @pytest.mark.asyncio
 async def test_suggestion_exception_fails_open(monkeypatch) -> None:
     from trid3nt_server import server
-    import trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood as mu
+    import trid3nt_server.workflows.swmm.urban_flood.urban_flood as mu
 
     def _boom(bbox, uri_sink=None):
         raise RuntimeError("DEM fetch exploded")
@@ -468,7 +468,7 @@ def test_swmm_tool_in_confirm_set() -> None:
 
 def test_clamp_helper_honours_coarser_and_clamps_finer() -> None:
     from trid3nt_server import server
-    from trid3nt_server.agent.mesh.raster_cell_mesh import SWMMAutoscaleResult
+    from trid3nt_server.mesh.raster_cell_mesh import SWMMAutoscaleResult
 
     auto = SWMMAutoscaleResult(
         resolution_m=20.0,
@@ -511,7 +511,7 @@ def test_clamp_helper_honours_coarser_and_clamps_finer() -> None:
 def _real_active_cells_at(dem_path: str, res_m: float, representation: str = "drop") -> int:
     """Build the deck at ``res_m`` and return the REAL active-cell count the
     build counts (the authoritative number the solve uses)."""
-    from trid3nt_server.agent.mesh.raster_cell_mesh import build_swmm_mesh
+    from trid3nt_server.mesh.raster_cell_mesh import build_swmm_mesh
 
     import tempfile
 
@@ -536,7 +536,7 @@ def test_old_area_model_clamp_would_overshoot_real_cap(dem_path: str) -> None:
     area model is taught the real grid), the real-cap test below still guards the
     invariant; this one just keeps the breach visible."""
     from trid3nt_server import server
-    from trid3nt_server.agent.mesh.raster_cell_mesh import suggest_swmm_resolution
+    from trid3nt_server.mesh.raster_cell_mesh import suggest_swmm_resolution
 
     auto = suggest_swmm_resolution(dem_path, 10.0)
     # Drive the OLD area-model clamp directly with a 1 m (over-fine) override.
@@ -553,7 +553,7 @@ def test_old_area_model_clamp_would_overshoot_real_cap(dem_path: str) -> None:
 def test_real_cap_clamp_keeps_build_under_cap(dem_path: str) -> None:
     """The real-grid clamp's resolution yields a REAL build count AT or UNDER the
     cap on the same fully-active square AOI (the breach is closed)."""
-    from trid3nt_server.agent.mesh.raster_cell_mesh import (
+    from trid3nt_server.mesh.raster_cell_mesh import (
         clamp_swmm_resolution_to_real_cap,
         suggest_swmm_resolution,
     )
@@ -586,7 +586,7 @@ async def test_narrow_scope_override_real_build_under_cap(
     against the old area-model clamp (real ~289 > cap ~273) and PASSES after the
     real-grid clamp."""
     from trid3nt_server import server
-    from trid3nt_server.agent.mesh.raster_cell_mesh import suggest_swmm_resolution
+    from trid3nt_server.mesh.raster_cell_mesh import suggest_swmm_resolution
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()

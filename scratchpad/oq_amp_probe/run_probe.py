@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO = Path("/home/nate/Documents/trid3nt-local")
 sys.path.insert(0, str(REPO / "server" / "src"))
-from trid3nt_server.agent.workflows.openquake._local_oq import (  # noqa: E402
+from trid3nt_server.workflows.openquake._local_oq import (  # noqa: E402
     DEFAULT_IMLS_G,
     aoi_centroid,
     imls_list_str,
@@ -23,7 +23,7 @@ from trid3nt_server.agent.workflows.openquake._local_oq import (  # noqa: E402
     render_trivial_gmpe_logic_tree_xml,
     render_trivial_source_logic_tree_xml,
 )
-from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (  # noqa: E402
+from trid3nt_server.workflows.openquake.postprocess_openquake import (  # noqa: E402
     parse_hazard_curve_csv,
 )
 

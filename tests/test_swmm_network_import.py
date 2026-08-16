@@ -14,7 +14,7 @@ import tempfile
 
 import pytest
 
-from trid3nt_server.agent.mesh.swmm_network import (
+from trid3nt_server.mesh.swmm_network import (
     SWMMNetworkError,
     build_network_inp,
     network_to_geojson_4326,
@@ -175,7 +175,7 @@ def test_explicit_topology_attrs_no_snap():
 
 
 def test_composer_input_helpers():
-    from trid3nt_server.agent.workflows.swmm.network_import.network_import import (
+    from trid3nt_server.workflows.swmm.network_import.network_import import (
         _bbox_from_fc,
         _source_label,
         _split_by_geometry,
@@ -227,8 +227,8 @@ def test_dual_drainage_coupling_solves_and_exchanges_flow(tmp_path):
     from rasterio.transform import from_origin, xy
     from rasterio.warp import transform as warp_transform
 
-    from trid3nt_server.agent.mesh.raster_cell_mesh import build_swmm_mesh, run_swmm_deck
-    from trid3nt_server.agent.mesh.swmm_network import (
+    from trid3nt_server.mesh.raster_cell_mesh import build_swmm_mesh, run_swmm_deck
+    from trid3nt_server.mesh.swmm_network import (
         build_dual_drainage_inp,
         dual_drainage_network_to_geojson_4326,
         read_network_response,

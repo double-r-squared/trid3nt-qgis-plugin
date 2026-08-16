@@ -18,15 +18,15 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import RouterUpstreamError
-from trid3nt_server.agent.tools.fetchers._router.executors import http_json
-from trid3nt_server.agent.tools.fetchers._router.hooks import slider_timestamps as sth
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import RouterUpstreamError
+from trid3nt_server.data.fetchers._router.executors import http_json
+from trid3nt_server.data.fetchers._router.hooks import slider_timestamps as sth
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
 
 SLIDER_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/agent/tools/fetchers/imagery/fetch_slider_timestamps/source.yaml"
+    / "trid3nt_server/data/fetchers/imagery/fetch_slider_timestamps/source.yaml"
 )
 
 
@@ -36,7 +36,7 @@ def _body(payload: dict[str, Any]) -> bytes:
 
 def _inject_read_through(monkeypatch):
     """Live-no-cache short-circuit: read_through returns fetch_fn() bytes, no bucket."""
-    from trid3nt_server.agent.tools.cache import ReadThroughResult, is_cacheable
+    from trid3nt_server.data.cache import ReadThroughResult, is_cacheable
 
     def patched(metadata, params, ext, fetch_fn, **kw):
         assert not is_cacheable(metadata), "slider is live-no-cache; must short-circuit"
@@ -51,7 +51,7 @@ def _inject_read_through(monkeypatch):
 
 
 def test_slider_promoted_uncacheable_record():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_slider_timestamps"]
     assert entry.metadata.source_class == "slider_timestamps"

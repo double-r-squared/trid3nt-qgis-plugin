@@ -28,7 +28,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.agent.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day import (
+from trid3nt_server.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day import (
     build_snowmelt_inp, solve_snowmelt_deck, _total_melt_in, _peak,
 )
 
@@ -45,8 +45,8 @@ DIVIDE_F = 32.0
 def fetch_real_kbuf_temperature() -> tuple[list[tuple[str, float]], list[float], list[float]]:
     """REAL hourly KBUF ASOS temperature resampled to a regular hourly grid.
     Returns (temperature_series [(clock, degF)], hours[], temp_f[])."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.cache import read_object_bytes_s3
     import fiona
 
     r = TOOL_REGISTRY["fetch_asos_metar"].fn(

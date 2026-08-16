@@ -22,8 +22,8 @@ import pytest
 import yaml
 
 import trid3nt_server.main as _main
-from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
-from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
+from trid3nt_server.data.search.search_tools import search_tools as dd
+from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools
 
 # The registered engine templates (12 engines; MODFLOW ships 11, HEC-RAS #11 ships
 # 2, SCHISM #12 ships 2 -- tidal_hydro + coupled_waves).
@@ -142,7 +142,7 @@ DELETED_DOORS = {
 
 def _full_registry():
     _main._import_tools_registry()
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     return TOOL_REGISTRY
 
@@ -188,7 +188,7 @@ def warm_index():
 
 def _template_corpus() -> dict[str, list[str]]:
     """Load each template's co-located workflows/**/corpus.yaml queries."""
-    import trid3nt_server.agent.tools as t
+    import trid3nt_server.data as t
 
     workflows = Path(t.__file__).resolve().parents[1] / "workflows"
     out: dict[str, list[str]] = {}

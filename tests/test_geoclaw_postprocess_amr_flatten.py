@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.geoclaw import postprocess_geoclaw as PP
+from trid3nt_server.workflows.geoclaw import postprocess_geoclaw as PP
 
 
 def _write_fort_q(path: Path, patches: list[dict]) -> None:
@@ -149,7 +149,7 @@ def test_finest_wins_and_overland_mask_not_uniform(tmp_path, _no_io):
 def test_mesh_geojson_structure_levels_and_decimation():
     """The AMR grid-line mesh: per-level patches present, honest decimation flag,
     correct CRS, and a valid LineString FeatureCollection."""
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         build_geoclaw_mesh_geojson,
     )
 
@@ -197,7 +197,7 @@ def test_build_geoclaw_mesh_layer_from_fort_q(tmp_path, monkeypatch):
     """End-to-end: parse a synthetic multi-patch fort.q frame, build + 'upload'
     the mesh, assert the emitted LayerURI envelope (vector / mesh_grid / context /
     crs_authid) mirrors the hecras mesh row."""
-    from trid3nt_server.agent.workflows.geoclaw import postprocess_geoclaw as PPmod
+    from trid3nt_server.workflows.geoclaw import postprocess_geoclaw as PPmod
 
     out = tmp_path / "_output"
     out.mkdir()
@@ -225,11 +225,11 @@ def test_build_geoclaw_mesh_layer_from_fort_q(tmp_path, monkeypatch):
             captured.update(kw)
 
     monkeypatch.setattr(
-        "trid3nt_server.agent.tools.simulation.solver.solver._get_s3_client",
+        "trid3nt_server.data.simulation.solver.solver._get_s3_client",
         lambda: _FakeS3(),
     )
     monkeypatch.setattr(
-        "trid3nt_server.agent.tools.simulation.solver.solver._get_runs_bucket",
+        "trid3nt_server.data.simulation.solver.solver._get_runs_bucket",
         lambda: "trid3nt-runs",
     )
 
@@ -257,7 +257,7 @@ def test_build_geoclaw_mesh_layer_from_fort_q(tmp_path, monkeypatch):
 def test_rasterize_finer_dry_erases_coarse_wet():
     """Pure rasterize: a finer DRY patch cell erases the coarser WET value beneath
     it (no coarse-cell smear), and the field is not uniform."""
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         rasterize_frame_to_grid,
     )
 

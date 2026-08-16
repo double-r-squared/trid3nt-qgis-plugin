@@ -112,7 +112,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import (
         model_geoclaw_inundation,
     )
     from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs

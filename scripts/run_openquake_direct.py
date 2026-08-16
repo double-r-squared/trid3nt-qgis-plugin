@@ -109,7 +109,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.openquake.psha.psha import model_openquake_psha
+    from trid3nt_server.workflows.openquake.psha.psha import model_openquake_psha
     from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)

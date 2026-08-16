@@ -20,8 +20,8 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.agent import tools as agent_tools
-from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server import data as agent_tools
+from trid3nt_server.data import RegisteredTool
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 

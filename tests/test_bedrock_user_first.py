@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.bedrock_adapter import (
+from trid3nt_server.adapters.bedrock_adapter import (
     _ensure_messages_start_with_user,
     _build_converse_kwargs,
 )

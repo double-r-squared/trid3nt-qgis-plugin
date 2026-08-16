@@ -103,7 +103,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.agent.workflows.landlab.susceptibility.susceptibility import model_landlab_susceptibility
+    from trid3nt_server.workflows.landlab.susceptibility.susceptibility import model_landlab_susceptibility
     from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)

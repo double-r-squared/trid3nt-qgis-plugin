@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.agent.workflows.swmm.rdii_rtk.rdii_rtk import (
+from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import (
     build_rtk_rdii_inp,
     rtk_unit_hydrograph,
     rdii_hydrograph,
@@ -99,7 +99,7 @@ async def test_epa_table_7_1_replication():
     """The EPA SWMM 5 Ch.7 Table 7-1 worked example (10 ac, R sum 0.36, the
     published hourly rainfall): a representative RTK set reproduces the native
     SWMM RDII exactly and the published Figure 7-10 peak (~1.02 cfs) closely."""
-    from trid3nt_server.agent.workflows.swmm.rdii_rtk.rdii_rtk import (
+    from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import (
         EPA_TABLE_7_1_RAINFALL_IN_PER_HR, EPA_TABLE_7_1_PUBLISHED_RDII_CFS,
         EPA_TABLE_7_1_SUM_R,
     )
@@ -119,5 +119,5 @@ async def test_epa_table_7_1_replication():
 
 
 def test_registered():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
     assert "swmm_rdii_rtk_unit_hydrograph" in TOOL_REGISTRY

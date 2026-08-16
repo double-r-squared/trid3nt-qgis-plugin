@@ -4,7 +4,7 @@ Run the WebSocket server.
 
 Startup-time tool-registry wiring:
 
-Importing ``trid3nt_server.agent.tools`` populates the module-level ``TOOL_REGISTRY``
+Importing ``trid3nt_server.data`` populates the module-level ``TOOL_REGISTRY``
 via the import-time ``@register_tool`` decorators in the package's
 submodules (``passthroughs``, ``fetchers``, etc.). The
 ``--startup-only`` flag below verifies the registry is
@@ -40,7 +40,7 @@ MAX_TURNS_PER_SESSION: int = int(os.environ.get("TRID3NT_MAX_TURNS_PER_SESSION",
 
 
 def _import_tools_registry() -> int:
-    """Import ``trid3nt_server.agent.tools`` to populate ``TOOL_REGISTRY``.
+    """Import ``trid3nt_server.data`` to populate ``TOOL_REGISTRY``.
 
     Returns the number of registered tools. Surfaced at startup so an empty
     registry (typically a packaging mistake) is visible in the logs rather
@@ -70,41 +70,41 @@ def _import_tools_registry() -> int:
     is deterministic Python; the wrapper exists so the
     LLM sees a single invocable tool that triggers the whole chain.
     """
-    from .agent import tools  # noqa: F401 -- side-effect: registers atomic tools
+    from . import data as tools  # noqa: F401 -- side-effect: registers atomic tools
     # register the 4 data-fetch atomic tools (FROZEN __init__.py).
-    from .agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
+    from .data.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     # fetch_river_geometry, fetch_buildings, fetch_population: spec-driven,
     # auto-registered by the router spec tree walk; no eager twin import.
-    from .agent.tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
+    from .data.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
     # fetch_dem, fetch_landcover: spec-driven, promoted by
     # register_specs_from_tree at agent.tools import; no eager twin import.
     # register the 2 QGIS discovery atomic tools.
-    from .agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401
+    from .data.search.qgis_discovery import qgis_discovery  # noqa: F401
     # register run_solver + wait_for_completion (solver-dispatch substrate).
-    from .agent.tools.simulation.solver import solver  # noqa: F401
+    from .data.simulation.solver import solver  # noqa: F401
     # register sfincs_flood (capstone workflow wrapper; engine template).
-    from .agent.workflows.sfincs.flood.flood import sfincs_flood  # noqa: F401
+    from .workflows.sfincs.flood.flood import sfincs_flood  # noqa: F401
     # register search_data_catalog + fetch_from_catalog (catalog search substrate).
-    from .agent.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401
-    from .agent.tools.search.search_data_catalog import search_data_catalog  # noqa: F401
+    from .data.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401
+    from .data.search.search_data_catalog import search_data_catalog  # noqa: F401
     # register publish_layer (COG → QGIS Server WMS bridge; side-effect tool).
-    from .agent.tools.publish_layer import publish_layer  # noqa: F401
+    from .data.publish_layer import publish_layer  # noqa: F401
     # register compute_colored_relief (gdaldem color-relief; 4 ramp presets).
-    from .agent.tools.processing.compute_colored_relief import compute_colored_relief  # noqa: F401
+    from .data.processing.compute_colored_relief import compute_colored_relief  # noqa: F401
     # register compute_slope (gdaldem slope; degrees + percent units; Horn + ZevenbergenThorne).
-    from .agent.tools.processing.compute_slope import compute_slope  # noqa: F401
+    from .data.processing.compute_slope import compute_slope  # noqa: F401
     # register compute_aspect (gdaldem aspect; Horn + ZevenbergenThorne; zero_for_flat flag).
-    from .agent.tools.processing.compute_aspect import compute_aspect  # noqa: F401
+    from .data.processing.compute_aspect import compute_aspect  # noqa: F401
     # register clip_raster_to_polygon (rasterio.mask; polygon OR bbox clip; folds
     # in clip_raster_to_bbox). compute_zonal_statistics demoted to the code_exec
     # playground (docs/playbooks/zonal-statistics-recipe.md).
-    from .agent.tools.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
+    from .data.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
     # fetch_administrative_boundaries: spec-driven (zip_vector extract executor +
     # FIPS planner), registered via register_specs_from_tree (agent.tools import above).
     # register compute_hillshade (gdaldem hillshade; 5 style presets; swiss_double multiply-blend).
-    from .agent.tools.processing.compute_hillshade import compute_hillshade  # noqa: F401
+    from .data.processing.compute_hillshade import compute_hillshade  # noqa: F401
     # register web_fetch (generic web-page ingest with 4 extraction modes).
-    from .agent.tools.search.web_fetch import web_fetch  # noqa: F401
+    from .data.search.web_fetch import web_fetch  # noqa: F401
     # fetch_inaturalist_observations + fetch_gbif_occurrences: spec-driven
     # (resolve-then-fetch hooks), registered via register_specs_from_tree.
     # fetch_storm_events_db: spec-driven (directory-index resolve -> bulk
@@ -117,19 +117,19 @@ def _import_tools_registry() -> int:
     # tool; model_groundwater imports its private extractors. News ingest rides
     # web_fetch / fetch_nws_event / fetch_storm_events_db.
     # register compute_impervious_surface (NLCD impervious-fraction raster).
-    from .agent.tools.processing.compute_impervious_surface import compute_impervious_surface  # noqa: F401
+    from .data.processing.compute_impervious_surface import compute_impervious_surface  # noqa: F401
     # register extract_landcover_class (NLCD binary-mask extractor for zone_input).
-    from .agent.tools.processing.extract_landcover_class import extract_landcover_class  # noqa: F401
+    from .data.processing.extract_landcover_class import extract_landcover_class  # noqa: F401
     # register compute_building_density (MS Global ML Building Footprints density raster).
-    from .agent.tools.processing.compute_building_density import compute_building_density  # noqa: F401
+    from .data.processing.compute_building_density import compute_building_density  # noqa: F401
     # fetch_roads_osm + fetch_overpass_pois: spec-driven (source.yaml +
     # overpass hooks), auto-registered by the router spec tree walk; no eager
     # twin import here.
     # the pelicun_damage_assessment TEMPLATE lives under
     # workflows/pelicun/damage_assessment/; import it so it registers at daemon startup.
-    from .agent.workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
+    from .workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
     # register show_nexrad_radar (display tool: composes an Iowa Mesonet NEXRAD WMS URL).
-    from .agent.tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
+    from .data.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
     # fetch_goes_satellite: spec-driven, auto-registered by
     # register_specs_from_tree (goes_satellite library-delegate raster hooks); no eager import.
     # fetch_mrms_qpe: spec-driven (S3-listed key resolve -> grib_object
@@ -320,7 +320,7 @@ def _bind_worker_submitter() -> None:
             "worker submitter not bound (qgis_process unavailable): %s", exc
         )
         return
-    from .agent.tools.meta.passthroughs.passthroughs import set_worker_submitter
+    from .data.meta.passthroughs.passthroughs import set_worker_submitter
 
     set_worker_submitter(submitter)
 
@@ -482,7 +482,7 @@ def run(argv: list[str] | None = None) -> int:
     # Populate TOOL_REGISTRY by importing the tools package. Any import-time
     # registration error (duplicate name, bad metadata) surfaces here.
     n_tools = _import_tools_registry()
-    from .agent import tools
+    from . import data as tools
 
     tool_names = sorted(tools.TOOL_REGISTRY.keys())
     logger.info("tool registry loaded: %d tool(s): %s", n_tools, tool_names)

@@ -1595,7 +1595,7 @@ class TestCompactionCard:
         """The running card is role="tool" (NEVER "compute" -- there is no
         Batch job bound to a local compaction pass), tool_name
         "context:compact", state running, labeled COMPACTING_LABEL."""
-        from trid3nt_server.agent.gates.context_budget import COMPACTING_LABEL
+        from trid3nt_server.gates.context_budget import COMPACTING_LABEL
         from trid3nt_server.emission.pipeline_emitter import mint_compaction_card
 
         step_id = await mint_compaction_card(emitter=emitter)
@@ -1615,7 +1615,7 @@ class TestCompactionCard:
     async def test_complete_compaction_card_renames_and_completes(
         self, emitter: PipelineEmitter, sink: _CapturingSink
     ) -> None:
-        from trid3nt_server.agent.gates.context_budget import compaction_complete_label
+        from trid3nt_server.gates.context_budget import compaction_complete_label
         from trid3nt_server.emission.pipeline_emitter import (
             complete_compaction_card,
             mint_compaction_card,
@@ -1659,7 +1659,7 @@ class TestCompactionCard:
         emitter.rename_step("does-not-exist", name="whatever")
 
     def test_compaction_complete_label_rounds_and_floors_at_1k(self) -> None:
-        from trid3nt_server.agent.gates.context_budget import compaction_complete_label
+        from trid3nt_server.gates.context_budget import compaction_complete_label
 
         assert compaction_complete_label(12800, 3900) == "Conversation compacted (13k -> 4k tokens)"
         assert compaction_complete_label(400, 100) == "Conversation compacted (1k -> 1k tokens)"
@@ -1719,7 +1719,7 @@ async def test_dense_vector_is_densified_via_off_loop_read(
         _LAST_DENSITY_META_BY_URI,
         _read_vector_uri_as_geojson,
     )
-    from trid3nt_server.agent.tools.vector_tiles import (
+    from trid3nt_server.data.vector_tiles import (
         DENSE_VECTOR_THRESHOLD,
         MAX_INLINE_FEATURES,
     )
@@ -1759,7 +1759,7 @@ async def test_small_vector_is_not_densified_off_loop(tmp_path: Any) -> None:
         _LAST_DENSITY_META_BY_URI,
         _read_vector_uri_as_geojson,
     )
-    from trid3nt_server.agent.tools.vector_tiles import DENSE_VECTOR_THRESHOLD
+    from trid3nt_server.data.vector_tiles import DENSE_VECTOR_THRESHOLD
 
     n = max(1, DENSE_VECTOR_THRESHOLD // 2)
     fc = _make_dense_fc(n)
@@ -1789,7 +1789,7 @@ async def test_densify_runs_in_executor_not_on_loop(tmp_path: Any) -> None:
     import time
 
     from trid3nt_server.emission import pipeline_emitter as pe
-    from trid3nt_server.agent.tools.vector_tiles import MAX_INLINE_FEATURES
+    from trid3nt_server.data.vector_tiles import MAX_INLINE_FEATURES
 
     fc = _make_dense_fc(MAX_INLINE_FEATURES + 200)
     path = tmp_path / "blocking.geojson"
@@ -1797,7 +1797,7 @@ async def test_densify_runs_in_executor_not_on_loop(tmp_path: Any) -> None:
     uri = str(path)
     pe._LAST_DENSITY_META_BY_URI.pop(uri, None)
 
-    from trid3nt_server.agent.tools import vector_tiles as vt
+    from trid3nt_server.data import vector_tiles as vt
 
     real = vt.densify_if_needed
     started = asyncio.Event()
@@ -1850,8 +1850,8 @@ async def test_densified_result_is_cached_across_reads(tmp_path: Any) -> None:
     box and fed the reconnect storm. The cache makes the repeat read an O(1) hit.
     """
     from trid3nt_server.emission import pipeline_emitter as pe
-    from trid3nt_server.agent.tools import vector_tiles as vt
-    from trid3nt_server.agent.tools.vector_tiles import MAX_INLINE_FEATURES
+    from trid3nt_server.data import vector_tiles as vt
+    from trid3nt_server.data.vector_tiles import MAX_INLINE_FEATURES
 
     fc = _make_dense_fc(MAX_INLINE_FEATURES + 800)
     path = tmp_path / "cached.geojson"
@@ -1963,7 +1963,7 @@ async def test_legend_lifted_from_publish_stash_by_uri(
     """The atomic publish_layer wrap-site rebuilds a LayerURI WITHOUT a legend; the
     emitter lifts the legend publish_layer stashed by display uri onto the
     summary (the continuous-raster path)."""
-    from trid3nt_server.agent.tools.publish_layer.publish_layer import _stash_legend_for_uri
+    from trid3nt_server.data.publish_layer.publish_layer import _stash_legend_for_uri
     from trid3nt_contracts.execution import LegendKey
 
     tile_uri = "https://cf.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2Fx.tif&rescale=0,3&colormap_name=ylgnbu"

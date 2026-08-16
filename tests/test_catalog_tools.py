@@ -21,13 +21,13 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.search import catalog_common as catalog_mod
-from trid3nt_server.agent.tools.search import ogc_adapter as ogc_mod
-from trid3nt_server.agent.tools.search.catalog_common import CatalogNotFoundError, load_catalog
-from trid3nt_server.agent.tools.search.fetch_from_catalog.fetch_from_catalog import fetch_from_catalog
-from trid3nt_server.agent.tools.search.search_data_catalog.search_data_catalog import search_data_catalog
-from trid3nt_server.agent.tools.search.ogc_adapter import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.search import catalog_common as catalog_mod
+from trid3nt_server.data.search import ogc_adapter as ogc_mod
+from trid3nt_server.data.search.catalog_common import CatalogNotFoundError, load_catalog
+from trid3nt_server.data.search.fetch_from_catalog.fetch_from_catalog import fetch_from_catalog
+from trid3nt_server.data.search.search_data_catalog.search_data_catalog import search_data_catalog
+from trid3nt_server.data.search.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
     fetch_ogc_layer,
@@ -93,7 +93,7 @@ def fake_storage_patched(monkeypatch):
     ``s3://`` URIs and reads/writes ``fake.store`` (keyed by object KEY), so the
     cache hit/miss/write assertions hold without touching the network.
     """
-    from trid3nt_server.agent.tools.cache import (
+    from trid3nt_server.data.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -120,8 +120,8 @@ def fake_storage_patched(monkeypatch):
 
     # ``read_through`` is bound per-module at import time, so patch it in BOTH
     # split tool modules (catalog_common itself never calls it).
-    from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog as _cf_mod
-    from trid3nt_server.agent.tools.search.search_data_catalog import search_data_catalog as _cs_mod
+    from trid3nt_server.data.search.fetch_from_catalog import fetch_from_catalog as _cf_mod
+    from trid3nt_server.data.search.search_data_catalog import search_data_catalog as _cs_mod
 
     monkeypatch.setattr(_cs_mod, "read_through", _patched)
     monkeypatch.setattr(_cf_mod, "read_through", _patched)
@@ -377,7 +377,7 @@ def test_fetch_from_catalog_tier3_https_dispatch(fake_storage_patched, monkeypat
             content_type="text/plain",
         )
 
-    from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog as _cf_mod
+    from trid3nt_server.data.search.fetch_from_catalog import fetch_from_catalog as _cf_mod
 
     monkeypatch.setattr(_cf_mod, "_tier3_https_fetch",
                         lambda entry, params: (
@@ -744,8 +744,8 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
     import rasterio
     from rasterio.io import MemoryFile
 
-    from trid3nt_server.agent.tools.fetchers._router import router as _router
-    from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt_server.data.fetchers._router import router as _router
+    from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
     spec = compose_specs_from_tree()["fetch_landcover"]
     captured: dict = {}
@@ -769,7 +769,7 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
 
     monkeypatch.setattr(ogc_mod, "fetch_ogc_layer", _fake_fetch_ogc_layer)
 
-    from trid3nt_server.agent.tools.cache import ReadThroughResult
+    from trid3nt_server.data.cache import ReadThroughResult
     monkeypatch.setattr(_router, "read_through",
                         lambda metadata, params, ext, fetch_fn, **kw: ReadThroughResult(
                             uri="s3://fake/landcover.tif", data=fetch_fn(), hit=False))

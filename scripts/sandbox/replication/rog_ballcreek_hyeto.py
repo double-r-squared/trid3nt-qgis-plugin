@@ -105,7 +105,7 @@ def solve_hyeto(key: str, *, cn, amc: int, manning_scale: float,
 
 def grade(key, solve_dir, b, metrics, *, cn, amc, manning_scale, tag) -> dict:
     """Align computed outlet hydrograph to observed; NSE/R2/peak/timing lag."""
-    from trid3nt_server.agent.tools.processing.compute_skill_metrics.compute_skill_metrics import (
+    from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
         nash_sutcliffe_efficiency, pearson_r2)
 
     hyd = json.loads((solve_dir / "rog_outlet_hydrograph.json").read_text())

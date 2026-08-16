@@ -23,7 +23,7 @@ _GAUGE = (-159.30, 55.30)  # nearshore shelf point in the AOI (~ -180 m)
 
 
 async def _main():
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import (
         geoclaw_inundation,
     )
     res = await geoclaw_inundation(

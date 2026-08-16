@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server.adapters.adapter import (
     ModelSettings,
     UpstreamProviderError,
     classify_provider_error_class,
@@ -78,7 +78,7 @@ class TestOpenAIProviderDiscipline:
     async def test_transient_retry_then_success(self, monkeypatch):
         """transient -> retry -> success (the happy retry path)."""
         import openai
-        import trid3nt_server.agent.adapters.openai_adapter as oa
+        import trid3nt_server.adapters.openai_adapter as oa
 
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         exc = openai.APIStatusError(
@@ -97,7 +97,7 @@ class TestOpenAIProviderDiscipline:
         """Exhaustion -> UpstreamProviderError (typed, provider named,
         VERBATIM provider detail, honest attempt count)."""
         import openai
-        import trid3nt_server.agent.adapters.openai_adapter as oa
+        import trid3nt_server.adapters.openai_adapter as oa
 
         monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "1")
         monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
@@ -122,7 +122,7 @@ class TestOpenAIProviderDiscipline:
     async def test_retry_after_header_honored(self, monkeypatch):
         """A 429 with Retry-After waits exactly that long (mock clock)."""
         import openai
-        import trid3nt_server.agent.adapters.openai_adapter as oa
+        import trid3nt_server.adapters.openai_adapter as oa
 
         waits: list[float] = []
 
@@ -145,7 +145,7 @@ class TestOpenAIProviderDiscipline:
     async def test_backoff_schedule_used_without_retry_after(self, monkeypatch):
         """No Retry-After -> the exponential schedule drives the waits."""
         import openai
-        import trid3nt_server.agent.adapters.openai_adapter as oa
+        import trid3nt_server.adapters.openai_adapter as oa
 
         monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "2")
         monkeypatch.setenv("TRID3NT_PROVIDER_BACKOFF_S", "2")
@@ -168,7 +168,7 @@ class TestOpenAIProviderDiscipline:
     async def test_connection_error_is_transient(self, monkeypatch):
         """A connection drop / timeout retries (upstream, not internal)."""
         import openai
-        import trid3nt_server.agent.adapters.openai_adapter as oa
+        import trid3nt_server.adapters.openai_adapter as oa
 
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         exc = openai.APIConnectionError(request=self._req())
@@ -182,7 +182,7 @@ class TestOpenAIProviderDiscipline:
     async def test_non_transient_fails_fast_unchanged(self, monkeypatch):
         """Auth / bad-request errors propagate unchanged with ZERO retries."""
         import openai
-        import trid3nt_server.agent.adapters.openai_adapter as oa
+        import trid3nt_server.adapters.openai_adapter as oa
 
         monkeypatch.setattr(oa.asyncio, "sleep", AsyncMock())
         exc = openai.AuthenticationError(
@@ -240,7 +240,7 @@ def _client_error(code: str, status: int = 400):
 class TestBedrockProviderDiscipline:
     def test_transient_classification(self):
         from botocore.exceptions import ReadTimeoutError
-        from trid3nt_server.agent.adapters.bedrock_adapter import _is_transient_bedrock_error
+        from trid3nt_server.adapters.bedrock_adapter import _is_transient_bedrock_error
 
         assert _is_transient_bedrock_error(_client_error("ThrottlingException", 429))
         assert _is_transient_bedrock_error(
@@ -259,7 +259,7 @@ class TestBedrockProviderDiscipline:
         )
 
     def test_transient_retry_then_success(self, monkeypatch):
-        from trid3nt_server.agent.adapters.bedrock_adapter import _converse_stream_with_retry
+        from trid3nt_server.adapters.bedrock_adapter import _converse_stream_with_retry
 
         monkeypatch.setattr(time, "sleep", lambda _s: None)
         sentinel = {"stream": []}
@@ -272,7 +272,7 @@ class TestBedrockProviderDiscipline:
         assert client.converse_stream.call_count == 2
 
     def test_exhaustion_raises_typed_upstream_error(self, monkeypatch):
-        from trid3nt_server.agent.adapters.bedrock_adapter import _converse_stream_with_retry
+        from trid3nt_server.adapters.bedrock_adapter import _converse_stream_with_retry
 
         monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "1")
         monkeypatch.setattr(time, "sleep", lambda _s: None)
@@ -289,7 +289,7 @@ class TestBedrockProviderDiscipline:
 
     def test_non_transient_fails_fast_unchanged(self, monkeypatch):
         from botocore.exceptions import ClientError
-        from trid3nt_server.agent.adapters.bedrock_adapter import _converse_stream_with_retry
+        from trid3nt_server.adapters.bedrock_adapter import _converse_stream_with_retry
 
         monkeypatch.setattr(time, "sleep", lambda _s: None)
         client = MagicMock()

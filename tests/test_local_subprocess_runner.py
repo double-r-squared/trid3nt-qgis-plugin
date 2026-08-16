@@ -27,8 +27,8 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.agent.tools.simulation.solver.solver as solver_mod
-from trid3nt_server.agent.tools.simulation.solver.solver import (
+import trid3nt_server.data.simulation.solver.solver as solver_mod
+from trid3nt_server.data.simulation.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     set_emitter_binding,
     set_runs_bucket,
@@ -139,7 +139,7 @@ def _wait_completion(
 def test_swmm_registered_in_local_spec_registry() -> None:
     """run_swmm.register_swmm_solver() must populate LOCAL_SOLVER_SPEC_REGISTRY."""
     # Force the registration by importing the module (idempotent).
-    import trid3nt_server.agent.workflows.swmm.run_swmm as _swmm_mod  # noqa: F401
+    import trid3nt_server.workflows.swmm.run_swmm as _swmm_mod  # noqa: F401
     del _swmm_mod
 
     assert "swmm" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -149,7 +149,7 @@ def test_swmm_registered_in_local_spec_registry() -> None:
 
 
 def test_landlab_registered_in_local_spec_registry() -> None:
-    import trid3nt_server.agent.workflows.landlab.run_landlab as _ll_mod
+    import trid3nt_server.workflows.landlab.run_landlab as _ll_mod
     del _ll_mod
 
     assert "landlab" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -158,7 +158,7 @@ def test_landlab_registered_in_local_spec_registry() -> None:
 
 
 def test_openquake_registered_in_local_spec_registry() -> None:
-    import trid3nt_server.agent.workflows.openquake.psha.psha as _oq_mod
+    import trid3nt_server.workflows.openquake.psha.psha as _oq_mod
     del _oq_mod
 
     assert "openquake" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -172,7 +172,7 @@ def test_openquake_registered_in_local_spec_registry() -> None:
 
 
 def test_swmm_build_argv_calls_run_inp_py() -> None:
-    from trid3nt_server.agent.workflows.swmm.run_swmm import swmm_local_spec
+    from trid3nt_server.workflows.swmm.run_swmm import swmm_local_spec
 
     spec = swmm_local_spec()
     run_id = "TEST-001"
@@ -188,7 +188,7 @@ def test_swmm_build_argv_calls_run_inp_py() -> None:
 
 
 def test_landlab_build_argv_calls_run_chain_py() -> None:
-    from trid3nt_server.agent.workflows.landlab.run_landlab import landlab_local_spec
+    from trid3nt_server.workflows.landlab.run_landlab import landlab_local_spec
 
     spec = landlab_local_spec()
     run_id = "TEST-002"
@@ -201,7 +201,7 @@ def test_landlab_build_argv_calls_run_chain_py() -> None:
 
 
 def test_openquake_build_argv_calls_run_oq_py() -> None:
-    from trid3nt_server.agent.workflows.openquake.psha.psha import openquake_local_spec
+    from trid3nt_server.workflows.openquake.psha.psha import openquake_local_spec
 
     spec = openquake_local_spec()
     run_id = "TEST-003"
@@ -219,7 +219,7 @@ def test_openquake_build_argv_calls_run_oq_py() -> None:
 
 
 def test_swmm_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.agent.workflows.swmm.run_swmm import swmm_local_spec
+    from trid3nt_server.workflows.swmm.run_swmm import swmm_local_spec
 
     spec = swmm_local_spec()
     assert spec.env_overrides is not None, "swmm spec must set env_overrides"
@@ -232,7 +232,7 @@ def test_swmm_spec_has_pythonpath_override() -> None:
 
 
 def test_landlab_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.agent.workflows.landlab.run_landlab import landlab_local_spec
+    from trid3nt_server.workflows.landlab.run_landlab import landlab_local_spec
 
     spec = landlab_local_spec()
     assert spec.env_overrides is not None
@@ -242,7 +242,7 @@ def test_landlab_spec_has_pythonpath_override() -> None:
 
 
 def test_openquake_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.agent.workflows.openquake.psha.psha import openquake_local_spec
+    from trid3nt_server.workflows.openquake.psha.psha import openquake_local_spec
 
     spec = openquake_local_spec()
     assert spec.env_overrides is not None
@@ -263,7 +263,7 @@ def test_launch_writes_manifest_to_rundir(
 ) -> None:
     """launch_local_solver must write manifest.json to the rundir so the shim
     can read it via the ``--manifest manifest.json`` flag."""
-    from trid3nt_server.agent.tools.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -328,7 +328,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
 ) -> None:
     """With a real subprocess that exits 0, the supervisor must write
     completion.json with status='ok' and upload it to the runs bucket."""
-    from trid3nt_server.agent.tools.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -381,7 +381,7 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
 ) -> None:
     """A subprocess that exits non-zero must produce status='error' in
     completion.json."""
-    from trid3nt_server.agent.tools.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -429,7 +429,7 @@ def test_env_overrides_set_in_subprocess_environment(
     """env_overrides must appear in the subprocess environment.
     We verify by having the subprocess write os.environ['TRID3NT_TEST_PYPATH']
     to a file and checking the file contents."""
-    from trid3nt_server.agent.tools.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)

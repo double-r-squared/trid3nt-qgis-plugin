@@ -44,19 +44,19 @@ import numpy as np
 import rasterio
 
 from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
     discover_elmfire_rasters, read_fire_raster,
 )
-from trid3nt_server.agent.workflows.elmfire.fire_spread.fire_spread import (
+from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import (
     _cleanup_dir, _publish_primary_layer,
 )
-from trid3nt_server.agent.workflows.elmfire.run_elmfire import fetch_elmfire_inputs
-from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+from trid3nt_server.workflows.elmfire.run_elmfire import fetch_elmfire_inputs
+from trid3nt_server.workflows.elmfire.spotting.spotting import (
     _RealCase, _solve_real_case, _spotting_namelist,
     check_river_separates_domain, measure_river_split, river_barrier_captions,
 )
-from trid3nt_server.agent.workflows.elmfire.sensitivity._sensitivity_common import (
+from trid3nt_server.workflows.elmfire.sensitivity._sensitivity_common import (
     publish_primary_from_out_dir,
 )
 

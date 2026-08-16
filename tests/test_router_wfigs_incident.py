@@ -18,18 +18,18 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import (
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
 )
-from trid3nt_server.agent.tools.fetchers._router.executors import http_json
-from trid3nt_server.agent.tools.fetchers._router.hooks import wfigs_incident as wfh
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router.executors import http_json
+from trid3nt_server.data.fetchers._router.hooks import wfigs_incident as wfh
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
 
 WFIGS_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/agent/tools/fetchers/hazard/fetch_wfigs_incident/source.yaml"
+    / "trid3nt_server/data/fetchers/hazard/fetch_wfigs_incident/source.yaml"
 )
 _CURRENT = WFIGS_SPEC.endpoints["current"].url
 _YTD = WFIGS_SPEC.endpoints["year_to_date"].url
@@ -41,7 +41,7 @@ def _body(payload: dict[str, Any]) -> bytes:
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):
-    from trid3nt_server.agent.tools.cache import (
+    from trid3nt_server.data.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key, is_cacheable,
     )
 
@@ -108,7 +108,7 @@ _SANTA_ROSA_YTD_RESPONSE = {
 
 
 def test_wfigs_promoted_as_router_spec():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_wfigs_incident"]
     assert entry.metadata.source_class == "wfigs_incident"

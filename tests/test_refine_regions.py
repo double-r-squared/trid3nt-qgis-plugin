@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.agent.mesh.refine_regions import (
+from trid3nt_server.mesh.refine_regions import (
     MeshSizingSpec,
     mesh_sizing_from_refine_regions,
     refine_level_for,

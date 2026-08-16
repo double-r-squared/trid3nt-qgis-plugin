@@ -51,7 +51,7 @@ def _bounds_inside(uri: str, aoi: tuple, pad: float = 0.05) -> tuple:
 
 
 async def _drive_tomawac() -> int:
-    from trid3nt_server.agent.workflows.telemac.wave_field.wave_field import (
+    from trid3nt_server.workflows.telemac.wave_field.wave_field import (
         model_tomawac_wave_field,
     )
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_capture_sink)
@@ -79,7 +79,7 @@ async def _drive_tomawac() -> int:
 
 
 async def _drive_artemis() -> int:
-    from trid3nt_server.agent.workflows.telemac.agitation.agitation import (
+    from trid3nt_server.workflows.telemac.agitation.agitation import (
         model_artemis_harbor_agitation,
     )
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_capture_sink)

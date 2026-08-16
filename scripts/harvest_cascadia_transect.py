@@ -18,7 +18,7 @@ from proof_geoclaw_chignik_runup import _get, _list, _sample_patch, _read_fgout_
 from proof_geoclaw_scenario_cascadia import (
     RUPTURE_CENTROID, TRANSECT, _haversine_km, _render_transect,
 )
-from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import parse_fort_q_frame
+from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import parse_fort_q_frame
 
 RUNS = "trid3nt-runs"
 DOCKER = "01KZW4N9RDHKECRF8C1JHP9T3C"

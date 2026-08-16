@@ -13,7 +13,7 @@ import struct
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.telemac import postprocess_telemac as P
+from trid3nt_server.workflows.telemac import postprocess_telemac as P
 
 
 def _rec(payload: bytes) -> bytes:

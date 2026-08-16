@@ -29,7 +29,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     _CURRENT_EMITTER,
     PipelineEmitter,
 )
-from trid3nt_server.agent.workflows.modflow.sustainable_yield.sustainable_yield import (
+from trid3nt_server.workflows.modflow.sustainable_yield.sustainable_yield import (
     _run_archetype,
 )
 
@@ -69,7 +69,7 @@ async def test_run_archetype_loads_headline_layer():
     token = _CURRENT_EMITTER.set(emitter)
     try:
         with patch(
-            "trid3nt_server.agent.tools.simulation.modflow."
+            "trid3nt_server.data.simulation.modflow."
             "run_modflow_archetype_tool.run_modflow_archetype_job",
             _fake_job,
         ):
@@ -103,7 +103,7 @@ async def test_run_archetype_raises_and_loads_nothing_on_error_dict():
     token = _CURRENT_EMITTER.set(emitter)
     try:
         with patch(
-            "trid3nt_server.agent.tools.simulation.modflow."
+            "trid3nt_server.data.simulation.modflow."
             "run_modflow_archetype_tool.run_modflow_archetype_job",
             _fake_job,
         ):

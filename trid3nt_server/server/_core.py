@@ -100,7 +100,7 @@ _VALID_ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 
 from ..main import MAX_TURNS_PER_SESSION
 
-from ..agent.gates.runaway_guard import (
+from ..gates.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
     ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
@@ -110,7 +110,7 @@ from ..agent.gates.runaway_guard import (
     step_cap_for_model,
 )
 
-from ..agent.adapters.adapter import (
+from ..adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     FunctionCallEvent,
@@ -144,8 +144,8 @@ from ..credentials.auth_handshake import (
     get_auth_token_timeout_s,
     verify_access_token,
 )
-from ..case_lifecycle import CaseLifecycleError, ensure_case_qgs
-from ..agent.gates.context_budget import (
+from ..persistence.case_lifecycle import CaseLifecycleError, ensure_case_qgs
+from ..gates.context_budget import (
     FABRICATION_CAVEAT,
     ContextWindowExceededError,
     build_context_window_abort_note,
@@ -180,7 +180,7 @@ from ..telemetry import (
     emit_tool_call_event,
     emit_turn_telemetry,
 )
-from ..agent.tool_arg_normalizer import (
+from ..data.tool_arg_normalizer import (
     autofill_missing_bbox,
     coerce_bbox_value,
     normalize_args,
@@ -199,11 +199,11 @@ from ..scenario_reuse import (
     scenario_signature,
     scenario_type_for_tool,
 )
-from ..agent.gates.spatial_input import (
+from ..gates.spatial_input import (
     SpatialInputParseError,
     parse_spatial_input_features,
 )
-from ..agent.gates.cards import (
+from ..gates.cards import (
     _build_credential_request_payload,
     _build_region_choice_request_payload,
     _build_spatial_input_request_payload,
@@ -224,16 +224,16 @@ from ..agent.gates.cards import (
 # The per-engine confirm-card builders + decision-tail clamps (ADR 0273) now live
 # with their tools' declared estimate/pin providers, imported by the generic gate
 # engine off each tool's GateSpec dotted paths -- not statically here.
-from ..agent.gates.cards.estimate import call_provider
-from ..agent.tools import TOOL_REGISTRY
-from ..agent.tools.search.tool_retrieval import CORE_FLOOR
-from ..agent.tools.processing.charts_common import is_chart_emission_result
-from ..agent.tools.meta.code_exec_tool.code_exec_tool import (
+from ..gates.cards.estimate import call_provider
+from ..data import TOOL_REGISTRY
+from ..data.search.tool_retrieval import CORE_FLOOR
+from ..data.processing.charts_common import is_chart_emission_result
+from ..data.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     is_code_exec_result,
 )
-from ..agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
-from ..agent.gates.tool_gating import BenchBlockedError
+from ..gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from ..gates.tool_gating import BenchBlockedError
 
 # Auth-token envelope (connect handshake).
 from trid3nt_contracts.auth import AuthTokenEnvelope
@@ -624,7 +624,7 @@ def __getattr__(name: str):
 # The registry + its accessors live in ``agent.gates.pending`` so
 # an in-tool gate (which cannot import ``server`` at module load) rides the SAME
 # spine; re-imported here so ``server._PENDING_CONFIRMATIONS`` stays that dict.
-from ..agent.gates.pending import (  # noqa: E402
+from ..gates.pending import (  # noqa: E402
     _PENDING_CONFIRMATIONS,
     _pop_pending_confirmation,
     _register_pending_confirmation,
@@ -1026,7 +1026,7 @@ async def _maybe_emit_tool_candidates(
     if mode != "ask" and threshold <= 0.0:
         return None, []
 
-    from ..agent.tools.search.tool_retrieval import retrieve_ranked_tools
+    from ..data.search.tool_retrieval import retrieve_ranked_tools
 
     ranked = retrieve_ranked_tools(user_text, k=8)
     if exclude_tools:
@@ -1286,7 +1286,7 @@ async def _stream_model_reply(
     # (bedrock / openai / scripted) opens its own client at the boundary and
     # ignores ``client``. Provider resolved once here and reused by the cache
     # guard below.
-    from ..agent.adapters.bedrock_adapter import model_provider as _model_provider
+    from ..adapters.bedrock_adapter import model_provider as _model_provider
 
     _provider = _model_provider()
     # #225 per-model telemetry: resolve the EFFECTIVE model that actually
@@ -1299,10 +1299,10 @@ async def _stream_model_reply(
     # the turn, so fall back to the raw selection.
     try:
         if _provider == "openai":
-            from ..agent.adapters import openai_adapter as _oa  # noqa: WPS433
+            from ..adapters import openai_adapter as _oa  # noqa: WPS433
             _effective_model = _oa.openai_model(model_id)
         elif _provider == "bedrock":
-            from ..agent.adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
+            from ..adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
             _effective_model = model_id or _bmid()
         else:
             _effective_model = model_id
@@ -1330,7 +1330,7 @@ async def _stream_model_reply(
     # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
     try:
-        from ..agent.tools.search.tool_retrieval import retrieve_visible_tools
+        from ..data.search.tool_retrieval import retrieve_visible_tools
 
         _retrieval_k = _tool_retrieval_k()
         _visible = retrieve_visible_tools(
@@ -1410,14 +1410,14 @@ async def _stream_model_reply(
     # cold index / empty ranking / any fault.
     if _provider == "openai":
         try:
-            from ..agent.gates.tool_gating import (
+            from ..gates.tool_gating import (
                 WIDEN_K,
                 gate_tool_registry,
                 gating_topk,
                 gating_widen_threshold,
                 should_widen_for_poor_fit,
             )
-            from ..agent.tools.search.tool_retrieval import retrieve_ranked_tools
+            from ..data.search.tool_retrieval import retrieve_ranked_tools
 
             _gate_k = gating_topk()
             if _gate_k > 0:
@@ -6973,7 +6973,7 @@ async def _invoke_tool_via_emitter(
     # still surfaces as a (failed) pipeline step while ``entry.fn`` is never
     # reached -- airtight before any fetch.
     if state.bench_block_config is not None:
-        from ..agent.gates.tool_gating import BenchBlockedError, bench_block_decision
+        from ..gates.tool_gating import BenchBlockedError, bench_block_decision
 
         _bench_class = bench_block_decision(state.bench_block_config, tool_name)
         if _bench_class is not None:
@@ -7308,7 +7308,7 @@ async def _invoke_tool_via_emitter(
     if tool_name == "publish_layer" and not params.get("layer_id"):
         _pl_uri = params.get("layer_uri")
         if isinstance(_pl_uri, str) and _pl_uri:
-            from ..agent.tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
+            from ..data.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
 
             params = dict(params)
             params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
@@ -7746,7 +7746,7 @@ async def _invoke_tool_via_emitter(
                     # name (params carries it even though publish_layer's own
                     # signature only uses it for logging), else the resolved
                     # style_preset, else the published URI's path segment.
-                    from ..agent.tools.publish_layer.publish_layer import derive_readable_layer_name
+                    from ..data.publish_layer.publish_layer import derive_readable_layer_name
 
                     _layer_name = derive_readable_layer_name(
                         params.get("name"),
@@ -9354,7 +9354,7 @@ def _make_handler(settings: ModelSettings):
                         # log; the turn then runs on the default rather than
                         # crashing.
                         if um.model_id is not None:
-                            from ..agent.adapters.bedrock_adapter import (
+                            from ..adapters.bedrock_adapter import (
                                 resolve_selected_model as _resolve_selected_model,
                             )
 
@@ -9751,7 +9751,7 @@ def _make_handler(settings: ModelSettings):
                             # dict=arm, null/false=disarm). Bench-only -- a
                             # normal client never sends this key.
                             if "bench_tool_block" in payload_dict:
-                                from ..agent.gates.tool_gating import parse_bench_block_config
+                                from ..gates.tool_gating import parse_bench_block_config
 
                                 _bench_cfg = parse_bench_block_config(payload_dict)
                                 state.bench_block_config = _bench_cfg
@@ -9901,14 +9901,14 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # default. Under MODEL_PROVIDER=openai this prints the OpenAI model; under
     # bedrock the Bedrock model id; scripted/replay/fake fall back to the
     # settings model.
-    from ..agent.adapters.bedrock_adapter import (
+    from ..adapters.bedrock_adapter import (
         model_provider as _active_model_provider,
         bedrock_model_id as _active_default_model_id,
     )
 
     _active_provider = _active_model_provider()
     if _active_provider == "openai":
-        from ..agent.adapters import openai_adapter as _active_oa
+        from ..adapters import openai_adapter as _active_oa
         _active_model = _active_oa.openai_model(None)
     elif _active_provider == "bedrock":
         _active_model = _active_default_model_id()
@@ -9942,7 +9942,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # delays serving.
     async def _warm_discover_index() -> None:
         try:
-            from ..agent.tools.search.search_tools import search_tools as _dd_warm
+            from ..data.search.search_tools import search_tools as _dd_warm
             await asyncio.to_thread(_dd_warm._get_index)
             logger.info("tool_retrieval: discover index warmed at startup")
         except Exception:  # noqa: BLE001 -- warm is best-effort

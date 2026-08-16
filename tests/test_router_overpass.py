@@ -20,26 +20,26 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import (
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.agent.tools.fetchers._router.executors import http_json
-from trid3nt_server.agent.tools.fetchers._router.executors.vector_fgb import (
+from trid3nt_server.data.fetchers._router.executors import http_json
+from trid3nt_server.data.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.agent.tools.fetchers._router.hooks import RequestPlan, overpass
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
-from trid3nt_server.agent.tools.fetchers._router.transport import (
+from trid3nt_server.data.fetchers._router.hooks import RequestPlan, overpass
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router.transport import (
     TransportNotFound,
     TransportUpstreamError,
 )
 
 _SPEC_BASE = (
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/agent/tools/fetchers/socioeconomic"
+    / "trid3nt_server/data/fetchers/socioeconomic"
 )
 ROADS_SPEC = load_spec_from_path(_SPEC_BASE / "fetch_roads_osm/source.yaml")
 POIS_SPEC = load_spec_from_path(_SPEC_BASE / "fetch_overpass_pois/source.yaml")
@@ -82,7 +82,7 @@ def _fgb_gdf(fgb: bytes):
 
 
 def test_both_promoted_as_router_specs():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     for name, src in (("fetch_roads_osm", "osm_roads"), ("fetch_overpass_pois", "overpass_pois")):
         entry = TOOL_REGISTRY[name]
@@ -328,7 +328,7 @@ def test_fallback_4xx_short_circuits(monkeypatch):
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):
-    from trid3nt_server.agent.tools.cache import (
+    from trid3nt_server.data.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key, is_cacheable,
     )
 

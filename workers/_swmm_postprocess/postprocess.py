@@ -1,6 +1,6 @@
 """Worker-side SWMM .out binary -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``trid3nt_server.agent.workflows.swmm.postprocess_swmm``. Runs inside
+Byte-faithful port of ``trid3nt_server.workflows.swmm.postprocess_swmm``. Runs inside
 the Batch worker AFTER pyswmm completes, reads the ``.out`` binary via the
 pyswmm ``Output`` API, scatters per-timestep node depths onto the mesh-cell
 grid (``S_i_j`` convention), reprojects to EPSG:4326, and builds the typed

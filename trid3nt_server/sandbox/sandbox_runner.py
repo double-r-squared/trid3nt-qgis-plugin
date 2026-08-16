@@ -208,7 +208,7 @@ def _stage_one_uri(uri: str, staged_dir: str, label: str, idx: int | None = None
     returned unchanged (it never needed staging)."""
     if not _needs_staging(uri):
         return uri
-    from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.data.cache import read_object_bytes_s3
 
     base = uri.rstrip("/").rsplit("/", 1)[-1] or f"{label}.bin"
     # Sanitize + de-collide the on-disk name (frames share a stem).

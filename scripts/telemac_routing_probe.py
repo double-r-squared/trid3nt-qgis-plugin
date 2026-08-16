@@ -8,7 +8,7 @@ user prompt, reproducing the LIVE agent's per-turn assembly EXACTLY:
     index subsets the registry to the visible set (CORE_FLOOR UNION top-K
     retrieved). run_telemac / the seepage tools are
     NOT in the hot set, so retrieval is the gatekeeper.
-  * SYSTEM_PROMPT (+ lessons appendix when TRID3NT_LESSONS=on)
+  * SYSTEM_PROMPT
   * TRID3NT_OPENAI_EXTRA_SYSTEM + baked tool-discipline line (added inside the
     openai adapter, same as live)
   * temperature 0.7, single model round -- NO geocode, NO solve. We capture the
@@ -57,16 +57,15 @@ import trid3nt_server.main as _main  # noqa: E402
 
 _main._import_tools_registry()
 
-from trid3nt_server.agent.adapters.adapter import (  # noqa: E402
+from trid3nt_server.adapters.adapter import (  # noqa: E402
     SYSTEM_PROMPT,
     build_contents_from_history,
     build_tool_declarations,
 )
-from trid3nt_server.agent.lessons import lessons_appendix, lessons_enabled  # noqa: E402
-from trid3nt_server.agent.adapters.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
-from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.agent.tools.search.search_tools import search_tools as _dd  # noqa: E402
-from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools  # noqa: E402
+from trid3nt_server.adapters.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
+from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.data.search.search_tools import search_tools as _dd  # noqa: E402
+from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools  # noqa: E402
 
 RETRIEVAL_K = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 
@@ -128,13 +127,6 @@ async def first_tool(prompt: str) -> tuple[str | None, float, int]:
     subset = {n: e for n, e in TOOL_REGISTRY.items() if n in visible}
     decls = build_tool_declarations(subset)
     system = SYSTEM_PROMPT
-    if lessons_enabled():
-        try:
-            appx = lessons_appendix(prompt)
-            if appx:
-                system = SYSTEM_PROMPT + "\n\n" + appx
-        except Exception:
-            pass
     contents = build_contents_from_history(prompt, [])
     t0 = time.time()
     chosen: str | None = None

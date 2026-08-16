@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
+from trid3nt_server.workflows.modflow.postprocess_modflow import (
     CSUB_ZDISP_TEXT_TAG,
     _read_csub_zdisplacement,
     compute_subsidence_metrics,

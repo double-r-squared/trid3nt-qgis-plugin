@@ -31,8 +31,8 @@ from contextlib import asynccontextmanager
 import pytest
 
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
-from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError
-from trid3nt_server.agent.workflows.swmm.urban_flood import urban_flood as M
+from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+from trid3nt_server.workflows.swmm.urban_flood import urban_flood as M
 
 
 # --------------------------------------------------------------------------- #
@@ -345,7 +345,7 @@ def test_completion_log_surfaces_n_buildings_dropped(monkeypatch, caplog):
 
     fake = _FakeEmitter()
     token = pe._CURRENT_EMITTER.set(fake)
-    caplog.set_level(logging.INFO, logger="trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood")
+    caplog.set_level(logging.INFO, logger="trid3nt_server.workflows.swmm.urban_flood.urban_flood")
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         asyncio.run(
@@ -415,7 +415,7 @@ def test_returned_peak_name_unchanged_when_no_obstacles(monkeypatch):
         def emit(self, record):  # noqa: ANN001
             caplog_msgs.append(record.getMessage())
 
-    lg = logging.getLogger("trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood")
+    lg = logging.getLogger("trid3nt_server.workflows.swmm.urban_flood.urban_flood")
     handler = _H()
     lg.addHandler(handler)
     prev_level = lg.level

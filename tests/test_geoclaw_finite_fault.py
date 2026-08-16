@@ -19,7 +19,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.agent.workflows.geoclaw import finite_fault as ff
+from trid3nt_server.workflows.geoclaw import finite_fault as ff
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "finite_fault" / "chignik_ak0219neiszm_1.fsp"
 
@@ -129,7 +129,7 @@ def test_fetch_finite_fault_detail_unreachable_degrades():
 # Composer fallback ladder labels (geoclaw_inundation).
 # --------------------------------------------------------------------------- #
 def _fake_event():
-    from trid3nt_server.agent.workflows.geoclaw.earthquake_source import ResolvedEarthquake
+    from trid3nt_server.workflows.geoclaw.earthquake_source import ResolvedEarthquake
     return ResolvedEarthquake(
         lon=-157.9, lat=55.4, magnitude=8.2, depth_km=32.0,
         event_id="ak0219neiszm", place="Alaska Peninsula",
@@ -149,7 +149,7 @@ def _fake_model(n=396):
 def _install_composer_stubs(monkeypatch, *, model):
     """Stub the composer's I/O so geoclaw_inundation runs to the model dispatch and
     we can capture the assembled run_args + provenance labels offline."""
-    from trid3nt_server.agent.workflows.geoclaw.inundation import inundation as comp
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as comp
 
     monkeypatch.setattr(comp, "resolve_earthquake_source", lambda *a, **k: _fake_event())
     monkeypatch.setattr(comp, "fetch_finite_fault_model", lambda eid: model)
@@ -177,7 +177,7 @@ def _install_composer_stubs(monkeypatch, *, model):
 
 @pytest.mark.asyncio
 async def test_composer_finite_fault_present_measured_label(monkeypatch):
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import geoclaw_inundation
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import geoclaw_inundation
     captured = _install_composer_stubs(monkeypatch, model=_fake_model())
     await geoclaw_inundation(
         bbox=(-159.8, 55.0, -158.8, 55.6), earthquake_source="Alaska Peninsula")
@@ -192,7 +192,7 @@ async def test_composer_finite_fault_present_measured_label(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_composer_finite_fault_absent_derived_label(monkeypatch):
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import geoclaw_inundation
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import geoclaw_inundation
     captured = _install_composer_stubs(monkeypatch, model=None)
     await geoclaw_inundation(
         bbox=(-159.8, 55.0, -158.8, 55.6), earthquake_source="Alaska Peninsula")

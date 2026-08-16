@@ -70,7 +70,7 @@ def test_guarded_build_fast_fails_degenerate_without_forking():
 def test_server_maps_reach_degenerate_metrics_to_typed_gate():
     """The worker's TELEMAC_REACH_DEGENERATE metrics surface as the typed,
     retryable server error with .suggestions."""
-    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (  # noqa: E501
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import (  # noqa: E501
         TelemacReachDegenerateError,
         _raise_if_reach_degenerate,
     )
@@ -92,7 +92,7 @@ def test_server_maps_reach_degenerate_metrics_to_typed_gate():
 # Bug 2/3 -- SWMM subprocess isolation (deadline + dead lock)
 # ===================================================================== #
 def test_swmm_solve_timeout_seconds_override_and_clamp(monkeypatch):
-    from trid3nt_server.agent.mesh import raster_cell_mesh as R
+    from trid3nt_server.mesh import raster_cell_mesh as R
 
     monkeypatch.setenv("SWMM_SOLVE_TIMEOUT_S", "42")
     assert R._swmm_solve_timeout_s(1000) == 42.0
@@ -105,7 +105,7 @@ def test_swmm_solve_timeout_seconds_override_and_clamp(monkeypatch):
 def test_swmm_solve_subprocess_times_out_and_kills():
     """A tiny deadline forces the child to be SIGKILLed -> typed
     SWMM_SOLVE_TIMEOUT (the runaway backstop; a C busy-loop cannot swallow it)."""
-    from trid3nt_server.agent.mesh.raster_cell_mesh import (
+    from trid3nt_server.mesh.raster_cell_mesh import (
         SWMMMeshError,
         _solve_swmm_in_subprocess,
     )
@@ -122,7 +122,7 @@ def test_swmm_solve_subprocess_times_out_and_kills():
 # Bug 4 -- stale positional signatures + LOUD fallback labels
 # ===================================================================== #
 def test_urban_envelope_suffix_labels():
-    from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
+    from trid3nt_server.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
         _urban_envelope_suffix,
     )
 
@@ -143,8 +143,8 @@ def test_fetch_buildings_uses_keyword_bbox(monkeypatch):
     """_fetch_buildings_for_urban must call the registry closure with a KEYWORD
     bbox (the post-fold closure is keyword-only; a positional arg TypeErrored and
     was swallowed -> zero footprints)."""
-    import trid3nt_server.agent.tools as T
-    from trid3nt_server.agent.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
+    import trid3nt_server.data as T
+    from trid3nt_server.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
         _fetch_buildings_for_urban,
     )
 
@@ -169,7 +169,7 @@ def test_fetch_buildings_uses_keyword_bbox(monkeypatch):
 # Bug 6 -- oil-slick upload-before-register (no dangling handle)
 # ===================================================================== #
 def test_s3_object_exists_guard():
-    from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import (  # noqa: E501
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import (  # noqa: E501
         _s3_object_exists,
     )
 
@@ -196,7 +196,7 @@ from swmm_api import SwmmInput  # noqa: E402
 from swmm_api.input_file.section_labels import OPTIONS  # noqa: E402
 
 from trid3nt_contracts.swmm_contracts import SWMMRunArgs  # noqa: E402
-from trid3nt_server.agent.workflows.swmm.run_swmm import (  # noqa: E402
+from trid3nt_server.workflows.swmm.run_swmm import (  # noqa: E402
     build_and_stage_swmm_deck,
     run_swmm_local,
 )

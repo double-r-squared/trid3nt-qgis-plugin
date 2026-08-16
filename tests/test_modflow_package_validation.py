@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from trid3nt_server.agent.mesh import modflow_package_validation as core
+from trid3nt_server.mesh import modflow_package_validation as core
 
 _HAS_MF6 = core.resolve_mf6_binary() is not None
 _needs_mf6 = pytest.mark.skipif(not _HAS_MF6, reason="no mf6 binary resolvable")

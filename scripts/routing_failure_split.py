@@ -31,19 +31,19 @@ OUT = REPO / "docs" / "reports" / "tool-routing-failure-split.md"
 
 def main() -> None:
     import importlib, pkgutil
-    import trid3nt_server.agent.tools as pkg
+    import trid3nt_server.data as pkg
     for m in pkgutil.iter_modules(pkg.__path__):
-        importlib.import_module(f"trid3nt_server.agent.tools.{m.name}")
+        importlib.import_module(f"trid3nt_server.data.{m.name}")
     try:
-        import trid3nt_server.agent.workflows as wpkg
+        import trid3nt_server.workflows as wpkg
         for m in pkgutil.iter_modules(wpkg.__path__):
             try:
-                importlib.import_module(f"trid3nt_server.agent.workflows.{m.name}")
+                importlib.import_module(f"trid3nt_server.workflows.{m.name}")
             except Exception:
                 pass
     except ImportError:
         pass
-    from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
+    from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools
 
     k = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 

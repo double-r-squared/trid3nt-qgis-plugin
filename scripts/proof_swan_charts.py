@@ -23,10 +23,10 @@ BATCH_JSON = SCR + "swan_sweep_smoke.json"  # snapshot batch (Huntington Beach)
 
 sys.path.insert(0, REPO)
 sys.path.insert(0, REPO + "/contracts")
-from trid3nt_server.agent.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (  # noqa: E402
+from trid3nt_server.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (  # noqa: E402
     build_sweep_chart_spec,
 )
-from trid3nt_server.agent.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import (  # noqa: E402
+from trid3nt_server.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import (  # noqa: E402
     build_snapshot_chart_spec,
 )
 

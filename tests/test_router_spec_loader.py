@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.agent.tools.fetchers._router.spec import (
+from trid3nt_server.data.fetchers._router.spec import (
     SpecLoadError,
     compose_specs_from_tree,
     load_spec,

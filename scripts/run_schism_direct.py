@@ -81,7 +81,7 @@ def list_run_prefixes() -> set[str]:
 pre = list_run_prefixes()
 
 try:
-    from trid3nt_server.agent.workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro
+    from trid3nt_server.workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro
 except ImportError as exc:
     log.error("import failed -- PYTHONPATH? %s", exc)
     sys.exit(1)

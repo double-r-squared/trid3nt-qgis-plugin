@@ -12,8 +12,8 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.agent.tools import cache as cache_mod
-from trid3nt_server.agent.tools.cache import (
+from trid3nt_server.data import cache as cache_mod
+from trid3nt_server.data.cache import (
     ProvenanceRecorder,
     read_through,
     record_provenance,
@@ -90,7 +90,7 @@ def test_legacy_object_without_sidecar_replays_none(fake_s3: Any) -> None:
     """An object cached BEFORE the channel (no sidecar) -> provenance None on hit,
     so the envelope hook falls back to its declared defaults (no regression)."""
     md = _md()
-    from trid3nt_server.agent.tools.cache import cache_path, compute_cache_key
+    from trid3nt_server.data.cache import cache_path, compute_cache_key
     key = compute_cache_key(md.source_class, {"k": 9}, md.ttl_class)
     path = cache_path(md.source_class, md.ttl_class, key, "tif")
     fake_s3.store[path] = b"LEGACY"  # artifact present, NO sidecar

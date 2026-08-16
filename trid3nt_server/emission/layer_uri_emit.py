@@ -206,7 +206,7 @@ async def publish_raster_input_cog(
         # Late import: keep this emission module free of a load-time dependency
         # on the heavy publish_layer tool (rasterio / TiTiler), mirroring how the
         # composers import it inline.
-        from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+        from trid3nt_server.data.publish_layer.publish_layer import (
             PublishLayerError,
             publish_layer,
         )

@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.processing.query_point_hazard import query_point_hazard as mod
-from trid3nt_server.agent.tools.processing.query_point_hazard.query_point_hazard import (
+from trid3nt_server.data.processing.query_point_hazard import query_point_hazard as mod
+from trid3nt_server.data.processing.query_point_hazard.query_point_hazard import (
     NoCaseBoundError,
     NoCaseLayersError,
     PointHazardInputError,
@@ -277,7 +277,7 @@ async def test_geocode_failure_typed_error(monkeypatch, depth_layer) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("query_point_hazard")
     assert entry is not None

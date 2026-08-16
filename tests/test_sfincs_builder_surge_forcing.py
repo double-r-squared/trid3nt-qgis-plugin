@@ -38,7 +38,7 @@ from datetime import timedelta
 import pytest
 import yaml
 
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     _PANDAS_GUARD_OK,
     BuildOptions,
     DischargeForcing,
@@ -427,7 +427,7 @@ def test_wind_drag_curve_and_flat_wind_drag_conflict() -> None:
     a stale pre-reload class reference would fail the ``isinstance`` check
     inside ``pytest.raises`` even though the RIGHT error was raised.
     """
-    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs.sfincs_builder import (
         SFINCSSetupError as _CurrentSFINCSSetupError,
     )
 
@@ -601,7 +601,7 @@ def test_tsunami_ldn_synth_leads_with_depression(tmp_path) -> None:
     series LEADS with a depression (a trough precedes the crest)."""
     import csv as _csv
 
-    from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import synthesize_tsunami_bzs
+    from trid3nt_server.workflows.sfincs.sfincs_forcing_adapter import synthesize_tsunami_bzs
 
     out = synthesize_tsunami_bzs(
         _MEXICO_BEACH_BBOX,
@@ -635,7 +635,7 @@ def test_tsunami_solitary_synth_is_single_crest(tmp_path) -> None:
     leading trough (the series minimum is ~0, not a deep withdrawal)."""
     import csv as _csv
 
-    from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import synthesize_tsunami_bzs
+    from trid3nt_server.workflows.sfincs.sfincs_forcing_adapter import synthesize_tsunami_bzs
 
     out = synthesize_tsunami_bzs(
         _MEXICO_BEACH_BBOX,
@@ -656,7 +656,7 @@ def test_tsunami_synth_feeds_waterlevel_deck(tmp_path) -> None:
     """The tsunami synth dict flows through a WaterlevelForcing -> the deck emits
     setup_waterlevel_forcing + setup_mask_bounds(btype waterlevel) so the bzs is
     not inert."""
-    from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import synthesize_tsunami_bzs
+    from trid3nt_server.workflows.sfincs.sfincs_forcing_adapter import synthesize_tsunami_bzs
 
     out = synthesize_tsunami_bzs(
         _MEXICO_BEACH_BBOX,

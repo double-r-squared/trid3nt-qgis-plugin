@@ -26,9 +26,9 @@ import pytest
 
 from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 
-from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
-from trid3nt_server.agent.workflows.modflow.capture_zone import capture_zone as cz_mod
-from trid3nt_server.agent.workflows.modflow.capture_zone.capture_zone import (
+from trid3nt_server.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.workflows.modflow.capture_zone import capture_zone as cz_mod
+from trid3nt_server.workflows.modflow.capture_zone.capture_zone import (
     FT_TO_M,
     GRADIENT_MAX_MM,
     NGVD29_TO_NAVD88_M,
@@ -328,7 +328,7 @@ def _patch_dem(
         captured["run_args"] = run_args
         return _fake_layer(layer_source)
 
-    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
     monkeypatch.setattr(
@@ -570,7 +570,7 @@ def _patch_measured(
         # The adapter would label a supplied vector "dem"; the composer relabels it.
         return _fake_layer("dem")
 
-    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
     monkeypatch.setattr(

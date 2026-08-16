@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 import pytest
 from unittest.mock import patch
 
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server.adapters.adapter import (
     FunctionCallEvent,
     ModelSettings,
     TextDeltaEvent,

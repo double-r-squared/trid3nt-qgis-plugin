@@ -18,12 +18,12 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import RouterInputError, RouterError
-from trid3nt_server.agent.tools.fetchers._router.hooks import hrrr as H
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import RouterInputError, RouterError
+from trid3nt_server.data.fetchers._router.hooks import hrrr as H
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
 
-_ROOT = Path(__file__).resolve().parents[1] / "trid3nt_server/agent/tools/fetchers/weather"
+_ROOT = Path(__file__).resolve().parents[1] / "trid3nt_server/data/fetchers/weather"
 SPEC_FC = load_spec_from_path(_ROOT / "fetch_hrrr_forecast/source.yaml")
 SPEC_SM = load_spec_from_path(_ROOT / "fetch_hrrr_smoke/source.yaml")
 

@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, ".")
-from trid3nt_server.agent.workflows.schism.deck_authoring import (  # noqa: E402
+from trid3nt_server.workflows.schism.deck_authoring import (  # noqa: E402
     author_baroclinic_estuary_deck,
 )
 

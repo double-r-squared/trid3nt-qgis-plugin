@@ -10,14 +10,14 @@
   "note_do_not_run": "This file assembles the ROUTING-PARITY experiment inputs only. Per standing methodology (NATE-first, sign-off on inputs before any run), the experiment itself (baseline arm vs fold arm through retrieve_ranked_tools/retrieve_visible_tools, scored per DESIGN.md) MUST NOT be executed until NATE signs this file. status flips to NATE_SIGNED (or similar) at that point.",
   "surfacing_design_note": "acceptable_baseline and acceptable_fold are IDENTICAL per pilot by design, not oversight. router-pilot-contract.md sec 3.2/3.3 pins the LEADING (and only currently-implemented) fold-arm mechanism as per-source virtual surfaces registered under an internal alias (fetch_X__spec, tier=template) which the env-gated pool substitution (registration.py:_relabel_virtual, verified in-tree) RELABELS to the twin's own name with tier=general when TRID3NT_FETCHER_FOLD_ARM is set -- so in BOTH arms the visible registry name a phrasing must hit is the twin name itself; only the underlying callable differs (hand-written fn vs router.route(spec, ...)). The consumption-pair alternate surface (search_data_catalog + fetch_from_catalog, contract sec 3.2 candidate B / open decision #3) is NOT implemented as a fold-arm toggle in the current tree (no code path surfaces pilots through it as an arm) and is therefore excluded from acceptable_fold here; flag to NATE if arm B should be added before sign-off.",
   "validation": {
-    "method": "Every acceptable_baseline / acceptable_fold / control expected_tool name below was checked against the LIVE TOOL_REGISTRY (server/src/trid3nt_server/agent/tools, full surface import incl. workflows/solver/search, matching test_tool_retrieval.py's import set) in this session. All 5 pilot twin names and all 12 control expected names resolved True. The corresponding fetch_X__spec virtual aliases are NOT yet present in TOOL_REGISTRY at plain import time (register_specs_from_tree() is opt-in, called explicitly by the fold-arm harness/tests, not at server import) -- expected per _router/__init__.py; the routing-parity run script must call register_specs_from_tree() before flipping TRID3NT_FETCHER_FOLD_ARM=1 for the fold arm.",
+    "method": "Every acceptable_baseline / acceptable_fold / control expected_tool name below was checked against the LIVE TOOL_REGISTRY (server/src/trid3nt_server/data, full surface import incl. workflows/solver/search, matching test_tool_retrieval.py's import set) in this session. All 5 pilot twin names and all 12 control expected names resolved True. The corresponding fetch_X__spec virtual aliases are NOT yet present in TOOL_REGISTRY at plain import time (register_specs_from_tree() is opt-in, called explicitly by the fold-arm harness/tests, not at server import) -- expected per _router/__init__.py; the routing-parity run script must call register_specs_from_tree() before flipping TRID3NT_FETCHER_FOLD_ARM=1 for the fold arm.",
     "registry_size_at_check": 200
   },
   "pilots": [
     {
       "source": "fetch_gridmet",
-      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/climate/fetch_gridmet/source.yaml",
-      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/climate/fetch_gridmet/corpus.yaml",
+      "source_yaml": "server/src/trid3nt_server/data/fetchers/climate/fetch_gridmet/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/data/fetchers/climate/fetch_gridmet/corpus.yaml",
       "acceptable_baseline": ["fetch_gridmet"],
       "acceptable_fold": ["fetch_gridmet"],
       "phrasings": [
@@ -37,8 +37,8 @@
     },
     {
       "source": "fetch_hifld_critical_infrastructure",
-      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_hifld_critical_infrastructure/source.yaml",
-      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_hifld_critical_infrastructure/corpus.yaml",
+      "source_yaml": "server/src/trid3nt_server/data/fetchers/hazard/fetch_hifld_critical_infrastructure/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/data/fetchers/hazard/fetch_hifld_critical_infrastructure/corpus.yaml",
       "acceptable_baseline": ["fetch_hifld_critical_infrastructure"],
       "acceptable_fold": ["fetch_hifld_critical_infrastructure"],
       "phrasings": [
@@ -58,8 +58,8 @@
     },
     {
       "source": "fetch_noaa_coops_tides",
-      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/ocean/fetch_noaa_coops_tides/source.yaml",
-      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/ocean/fetch_noaa_coops_tides/corpus.yaml",
+      "source_yaml": "server/src/trid3nt_server/data/fetchers/ocean/fetch_noaa_coops_tides/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/data/fetchers/ocean/fetch_noaa_coops_tides/corpus.yaml",
       "acceptable_baseline": ["fetch_noaa_coops_tides"],
       "acceptable_fold": ["fetch_noaa_coops_tides"],
       "phrasings": [
@@ -78,8 +78,8 @@
     },
     {
       "source": "fetch_esri_landcover_10m",
-      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/terrain/fetch_esri_landcover_10m/source.yaml",
-      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/terrain/fetch_esri_landcover_10m/corpus.yaml",
+      "source_yaml": "server/src/trid3nt_server/data/fetchers/terrain/fetch_esri_landcover_10m/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/data/fetchers/terrain/fetch_esri_landcover_10m/corpus.yaml",
       "acceptable_baseline": ["fetch_esri_landcover_10m"],
       "acceptable_fold": ["fetch_esri_landcover_10m"],
       "phrasings": [
@@ -99,8 +99,8 @@
     },
     {
       "source": "fetch_census_acs",
-      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_census_acs/source.yaml",
-      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_census_acs/corpus.yaml",
+      "source_yaml": "server/src/trid3nt_server/data/fetchers/socioeconomic/fetch_census_acs/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/data/fetchers/socioeconomic/fetch_census_acs/corpus.yaml",
       "acceptable_baseline": ["fetch_census_acs"],
       "acceptable_fold": ["fetch_census_acs"],
       "phrasings": [

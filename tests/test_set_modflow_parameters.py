@@ -38,12 +38,12 @@ import pytest
 
 flopy = pytest.importorskip("flopy")
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.agent.tools.simulation._setter_envelope import (  # noqa: E402
+from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.data.simulation._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )
-from trid3nt_server.agent.tools.simulation.modflow.set_modflow_parameters.set_modflow_parameters import (  # noqa: E402
+from trid3nt_server.data.simulation.modflow.set_modflow_parameters.set_modflow_parameters import (  # noqa: E402
     set_modflow_parameters,
 )
 

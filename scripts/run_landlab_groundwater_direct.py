@@ -60,10 +60,10 @@ for b in {runs_bucket, os.environ.get("TRID3NT_CACHE_BUCKET", "trid3nt-cache")}:
             log.warning("create_bucket(%s): %s", b, exc)
 
 from trid3nt_contracts.landlab_contracts import LandlabRunArgs  # noqa: E402
-from trid3nt_server.agent.workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import (  # noqa: E402
+from trid3nt_server.workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import (  # noqa: E402
     model_landlab_groundwater_storm_recession,
 )
-from trid3nt_server.agent.workflows.landlab.groundwater_water_table.groundwater_water_table import (  # noqa: E402
+from trid3nt_server.workflows.landlab.groundwater_water_table.groundwater_water_table import (  # noqa: E402
     model_landlab_groundwater_water_table,
 )
 

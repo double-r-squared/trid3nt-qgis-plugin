@@ -42,7 +42,7 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
 
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     _MASK_FALLBACK_ZMAX,
     _MASK_FALLBACK_ZMIN,
     BuildOptions,
@@ -299,7 +299,7 @@ def test_mask_bounds_provenance_labels_wide_fallback() -> None:
     """ADR 0223: the mask-bounds provenance threaded onto ModelSetup.parameters
     (build_sfincs_model) LABELS the wide-fallback degrade -- adaptive False carries
     a populated note; the adaptive path carries no note (silent-degrade fix)."""
-    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs.sfincs_builder import (
         _mask_bounds_provenance,
     )
 

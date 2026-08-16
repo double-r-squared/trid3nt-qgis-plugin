@@ -17,10 +17,10 @@ import os
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.simulation.solver import solver
-from trid3nt_server.agent.tools.simulation import diagnostics as _diag
-from trid3nt_server.agent.tools.simulation.diagnostics import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.simulation.solver import solver
+from trid3nt_server.data.simulation import diagnostics as _diag
+from trid3nt_server.data.simulation.diagnostics import (
     DiagnosticsArtifactMissing,
     DiagnosticsEngineUnknown,
     DiagnosticsParseError,

@@ -60,7 +60,7 @@ WELL_LON = FRESNO_LON
 
 log.info("importing gwt_adapter (flopy) ...")
 try:
-    from trid3nt_server.agent.workflows.modflow.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.modflow.run_modflow import build_modflow_deck
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)
@@ -118,7 +118,7 @@ from unittest.mock import patch
 # We need boto3 pointing at MinIO.  The env vars set:
 #   AWS_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TRID3NT_RUNS_BUCKET
 # boto3 honors AWS_ENDPOINT_URL natively -- no patching needed.
-from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.workflows.modflow import postprocess_modflow as pp
 
 # For MinIO we need the bucket to exist; create it via boto3 if missing.
 runs_bucket = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")

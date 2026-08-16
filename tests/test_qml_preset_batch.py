@@ -14,7 +14,7 @@ ASCII only.
 
 from __future__ import annotations
 
-from trid3nt_server.agent.tools.publish_layer.publish_layer import (
+from trid3nt_server.data.publish_layer.publish_layer import (
     _QGIS_STYLE_REGISTRY,
     _infer_style_preset,
     _is_terrain_token_preset,

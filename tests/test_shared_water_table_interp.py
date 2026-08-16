@@ -11,7 +11,7 @@ import math
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.shared.water_table_interp import (
+from trid3nt_server.workflows.shared.water_table_interp import (
     KRIGE_MIN_WELLS,
     TREND_MIN_WELLS,
     WaterTableSurface,

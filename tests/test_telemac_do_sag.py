@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.telemac.streeter_phelps import (
+from trid3nt_server.workflows.telemac.streeter_phelps import (
     sp_critical_point,
     sp_do_profile,
 )
@@ -68,14 +68,14 @@ def test_waqtel_o2_reproduces_streeter_phelps():
 
 # --- tool arg handling (no dispatch) ---------------------------------------- #
 def test_do_saturation_temperature_relation():
-    from trid3nt_server.agent.workflows.telemac.do_sag.do_sag import _do_saturation_mgl
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import _do_saturation_mgl
     assert _do_saturation_mgl(20.0) == pytest.approx(9.0, abs=0.2)   # ~9 mg/L at 20C
     assert _do_saturation_mgl(5.0) > _do_saturation_mgl(25.0)        # colder holds more
 
 
 @pytest.mark.asyncio
 async def test_do_sag_requires_location_or_bbox():
-    from trid3nt_server.agent.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
     out = await telemac_do_sag()
     assert isinstance(out, dict) and out["status"] == "error"
     assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"

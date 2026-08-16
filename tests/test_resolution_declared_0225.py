@@ -23,8 +23,8 @@ import re
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.resolution_declared import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.resolution_declared import (
     ResolutionOutOfRangeError,
     enforce_resolution,
     resolution_review_note,
@@ -157,7 +157,7 @@ def _run(coro):
 
 
 def test_hecras_out_of_range_resolution_quotes_back():
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d
     r = _run(hecras_flood_2d(bbox=[-86.2, 40.15, -86.1, 40.25], resolution_m=5))
     assert r["status"] == "error"
     assert r["error_code"] == "HECRAS_INPUT_INVALID"
@@ -169,7 +169,7 @@ def test_hecras_out_of_range_resolution_quotes_back():
 def test_hecras_resolution_resolve_in_range_unchanged():
     # ADR 0232: flood_2d resolves through the shared resolve_resolution seam. A small
     # AOI + in-range 60 m -> basis user, no autoscale note.
-    from trid3nt_server.agent.workflows.hecras.flood_2d import flood_2d
+    from trid3nt_server.workflows.hecras.flood_2d import flood_2d
     bbox = [-86.2, 40.20, -86.18, 40.22]
     r = resolve_resolution(
         60.0, spec=flood_2d._RES_SPEC,
@@ -179,7 +179,7 @@ def test_hecras_resolution_resolve_in_range_unchanged():
 
 
 def test_hecras_resolution_resolve_out_of_range_raises():
-    from trid3nt_server.agent.workflows.hecras.flood_2d import flood_2d
+    from trid3nt_server.workflows.hecras.flood_2d import flood_2d
     bbox = [-86.2, 40.15, -86.1, 40.25]
     for bad in (5.0, 500.0):
         with pytest.raises(ResolutionOutOfRangeError):
@@ -190,7 +190,7 @@ def test_hecras_resolution_resolve_out_of_range_raises():
 
 
 def test_surge_out_of_range_resolution_quotes_back():
-    from trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge import schism_pahm_surge
+    from trid3nt_server.workflows.schism.pahm_surge.pahm_surge import schism_pahm_surge
     r = _run(schism_pahm_surge(bbox=[-95.05, 29.2, -94.6, 29.65], resolution_m=5, sim_days=1.0))
     assert isinstance(r, dict) and r.get("status") == "error"
     assert r["error_code"] == "SCHISM_INPUT_INVALID"
@@ -198,13 +198,13 @@ def test_surge_out_of_range_resolution_quotes_back():
 
 
 def test_surge_spec_bounds():
-    from trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge import _SURGE_RES_SPEC
+    from trid3nt_server.workflows.schism.pahm_surge.pahm_surge import _SURGE_RES_SPEC
     assert _SURGE_RES_SPEC.contains(25) and _SURGE_RES_SPEC.contains(1000)
     assert not _SURGE_RES_SPEC.contains(24) and not _SURGE_RES_SPEC.contains(1001)
 
 
 def test_sfincs_quadtree_floor_enforced():
-    from trid3nt_server.agent.workflows.sfincs.flood.flood import _SFINCS_QUADTREE_RES_SPEC
+    from trid3nt_server.workflows.sfincs.flood.flood import _SFINCS_QUADTREE_RES_SPEC
     enforce_resolution(_SFINCS_QUADTREE_RES_SPEC, 400)  # in range
     with pytest.raises(ResolutionOutOfRangeError):
         enforce_resolution(_SFINCS_QUADTREE_RES_SPEC, 5)  # sub-floor
@@ -218,7 +218,7 @@ def test_fetcher_data_native_declarations_present():
 
 
 def test_schism_render_cap_is_overridable_output_artifact():
-    from trid3nt_server.agent.workflows.schism.postprocess_schism import (
+    from trid3nt_server.workflows.schism.postprocess_schism import (
         OUTPUT_RASTER_CAP_SPEC,
         _adaptive_grid,
     )
@@ -342,7 +342,7 @@ def test_no_workflow_defines_its_own_resolution_resolve_helper():
     resolve_resolution. A template that re-hand-rolls it FAILS here."""
     workflows_dir = (
         pathlib.Path(__file__).resolve().parents[1]
-        / "trid3nt_server" / "agent" / "workflows"
+        / "trid3nt_server" / "workflows"
     )
     offenders = [
         str(py.relative_to(workflows_dir))

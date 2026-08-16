@@ -433,3 +433,17 @@ consumed data = re-hiding a layer (sweep-test policeable). The
 purpose= label arg (composer contributes a word, not a pathway)
 stays from the earlier discussion. This is pipeline-library brick
 2 (load() = fetch + declared-emit).
+
+## 2026-08-16 - BMI coupling + the digital-twin loop (NATE direction)
+BMI (init/update/get_value/set_value) as the composition rung below
+ESMF: persistent model instances stepped in time, exchanging state -
+cross-engine feedback without tight coupling. Real anchors in our
+images today: MODFLOW6 XMI (libmf6 already baked), SFINCS ships a BMI,
+landlab is BMI-native, pywatershed queued. The digital-twin loop rides
+it: a living Case bound to an AOI; new observations (CO-OPS/NWM/
+gridMET/USGS series) trigger -> series library disaggregates/aligns
+forcing (the melodist verb) -> model advances incrementally -> computed
+vs observed -> correct. Two tiers: re-run twin (cheap engines re-solve
+the window; buildable with today's machinery) vs BMI twin (state
+carried, assimilation possible). Natural sequence: series library ->
+single-engine BMI pilot -> twin loop -> cross-engine exchange.

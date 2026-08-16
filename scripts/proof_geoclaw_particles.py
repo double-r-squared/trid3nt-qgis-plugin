@@ -202,7 +202,7 @@ def _load_charts():
 
 def render_chart(fc: dict):
     # rebuild the tracks list shape build_particle_track_chart_spec expects.
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         build_particle_track_chart_spec,
     )
     tracks = []

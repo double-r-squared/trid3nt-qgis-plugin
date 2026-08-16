@@ -21,21 +21,21 @@ from trid3nt_contracts.execution import (
     LayerURI,
 )
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.agent.tools.fetchers._router import registration as reg
-from trid3nt_server.agent.tools.fetchers._router import router as _router_mod
-from trid3nt_server.agent.tools.fetchers._router.errors import (
+from trid3nt_server.data.fetchers._router import registration as reg
+from trid3nt_server.data.fetchers._router import router as _router_mod
+from trid3nt_server.data.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.agent.tools.fetchers._router.executors import vector_fgb
-from trid3nt_server.agent.tools.fetchers._router.hooks import (
+from trid3nt_server.data.fetchers._router.executors import vector_fgb
+from trid3nt_server.data.fetchers._router.hooks import (
     HookResolutionError,
     RequestPlan,
     has_hook,
     resolve_hook,
 )
-from trid3nt_server.agent.tools.fetchers._router.hooks import usgs_stn_hwm as hwm
-from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.data.fetchers._router.hooks import usgs_stn_hwm as hwm
+from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
 _SPECS = compose_specs_from_tree()
 _HWM = _SPECS["fetch_high_water_marks"]
@@ -139,7 +139,7 @@ def test_validate_rejects_unknown_envelope_hook():
 def test_apply_envelope_strips_protected_keys():
     """A hook that tries to re-point uri / flip layer_type cannot: the router
     drops those keys before constructing the result model (honesty floor)."""
-    from trid3nt_server.agent.tools.fetchers._router.hooks import register_hook
+    from trid3nt_server.data.fetchers._router.hooks import register_hook
 
     @register_hook("test_envelope.evil")
     def _evil(spec, params, layer, data):  # noqa: ANN001

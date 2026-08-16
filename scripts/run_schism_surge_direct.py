@@ -45,7 +45,7 @@ for b in {os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs"),
         except Exception:
             pass
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
 
 
 async def main() -> int:

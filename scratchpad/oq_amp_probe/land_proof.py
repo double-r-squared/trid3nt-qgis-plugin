@@ -12,13 +12,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 REPO = Path("/home/nate/Documents/trid3nt-local")
 sys.path.insert(0, str(REPO / "server" / "src"))
-from trid3nt_server.agent.workflows.openquake._local_oq import (  # noqa: E402
+from trid3nt_server.workflows.openquake._local_oq import (  # noqa: E402
     NEHRP_FPGA, NEHRP_VS30, aoi_centroid, render_amplification_csv,
     render_area_source_model_xml, render_classical_amp_job_ini,
     render_site_model_csv, render_trivial_gmpe_logic_tree_xml,
     render_trivial_source_logic_tree_xml, run_oq_local,
 )
-from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (  # noqa: E402
+from trid3nt_server.workflows.openquake.postprocess_openquake import (  # noqa: E402
     parse_hazard_curve_csv,
 )
 

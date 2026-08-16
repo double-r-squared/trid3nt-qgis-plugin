@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import ModelSettings, TextDeltaEvent
-from trid3nt_server.agent.gates.tool_gating import (
+from trid3nt_server.adapters.adapter import ModelSettings, TextDeltaEvent
+from trid3nt_server.gates.tool_gating import (
     WIDEN_K,
     WIDEN_THRESHOLD_DEFAULT,
     gating_widen_threshold,
@@ -115,7 +115,7 @@ async def _drive_and_record_ks(top_score: float, monkeypatch) -> list[int]:
     ), patch.object(
         agent_server, "stream_events_with_contents", _fake_stream
     ), patch(
-        "trid3nt_server.agent.tools.search.tool_retrieval.retrieve_ranked_tools",
+        "trid3nt_server.data.search.tool_retrieval.retrieve_ranked_tools",
         _fake_ranked,
     ):
         await agent_server._stream_model_reply(

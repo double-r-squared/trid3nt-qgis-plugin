@@ -1,7 +1,7 @@
 """Shared pytest fixtures for the agent-service test suite.
 
 The agent-service tests are import-light: every test that needs the tool
-registry imports ``trid3nt_server.agent.tools`` directly. The registry is a
+registry imports ``trid3nt_server.data`` directly. The registry is a
 module-level singleton, so tests that mutate it use the
 ``clear_registry_for_tests`` helper inside a fixture rather than relying on
 import ordering.
@@ -13,13 +13,13 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server import data as agent_tools
 
 
 # ---------------------------------------------------------------------------
 # Shared in-memory S3 double (GCP decommissioned — cache shim is S3-only).
 #
-# The cache read-through (``trid3nt_server.agent.tools.cache``) and every tool
+# The cache read-through (``trid3nt_server.data.cache``) and every tool
 # download-helper build their boto3 S3 client lazily via ``boto3.client``.
 # Tests that exercise the cache miss/hit/write paths monkeypatch that factory
 # to this in-memory double so no AWS credentials / network are needed and the
@@ -79,7 +79,7 @@ def make_read_through_s3_injector(store: dict[str, bytes]):
     ``live-no-cache`` exactly like the real shim. ``store`` is the same dict the
     test inspects after the call (``next(iter(store.values()))`` etc.).
     """
-    from trid3nt_server.agent.tools.cache import (
+    from trid3nt_server.data.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -150,7 +150,7 @@ def _reset_fake_llm_harness():
     Prevents an installed fake-turn source (``fake_llm``) from leaking across
     tests. Cheap no-op when the harness was never installed.
     """
-    from trid3nt_server.agent.adapters import scripted_adapter as _sa
+    from trid3nt_server.adapters import scripted_adapter as _sa
 
     _sa.reset_harness()
     yield
@@ -177,7 +177,7 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch):
         thought_signature=...)``, ``.parallel(call, call, ...)``, ``.raise_(exc)``
         (or author the turn dicts inline -- see ``scripted_adapter``).
     """
-    from trid3nt_server.agent.adapters import scripted_adapter as sa
+    from trid3nt_server.adapters import scripted_adapter as sa
 
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     sa.reset_harness()

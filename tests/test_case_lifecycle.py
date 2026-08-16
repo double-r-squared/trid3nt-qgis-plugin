@@ -1,4 +1,4 @@
-"""Unit tests for ``trid3nt_server.case_lifecycle`` (job-0121).
+"""Unit tests for ``trid3nt_server.persistence.case_lifecycle`` (job-0121).
 
 Coverage:
 - ``test_ensure_case_qgs_returns_persisted_uri`` — a Case with
@@ -20,7 +20,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.case_lifecycle import CaseLifecycleError, ensure_case_qgs
+from trid3nt_server.persistence.case_lifecycle import CaseLifecycleError, ensure_case_qgs
 from trid3nt_server.persistence import Persistence
 from trid3nt_contracts.common import new_ulid
 

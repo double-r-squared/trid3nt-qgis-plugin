@@ -11,7 +11,7 @@ import asyncio
 
 
 def test_artemis_harbor_agitation_registered_as_engine_template():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
     entry = TOOL_REGISTRY.get("artemis_harbor_agitation")
     assert entry is not None, "artemis_harbor_agitation must be registered"
     m = entry.metadata
@@ -22,7 +22,7 @@ def test_artemis_harbor_agitation_registered_as_engine_template():
 
 
 def test_artemis_solver_registered():
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data.simulation.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -31,21 +31,21 @@ def test_artemis_solver_registered():
 
 
 def test_tool_rejects_neither_location_nor_bbox():
-    from trid3nt_server.agent.workflows.telemac.agitation.agitation import artemis_harbor_agitation
+    from trid3nt_server.workflows.telemac.agitation.agitation import artemis_harbor_agitation
     out = asyncio.run(artemis_harbor_agitation())
     assert isinstance(out, dict) and out["status"] == "error"
     assert out["error_code"] == "ARTEMIS_PARAMS_INCOMPLETE"
 
 
 def test_tool_rejects_invalid_bbox():
-    from trid3nt_server.agent.workflows.telemac.agitation.agitation import artemis_harbor_agitation
+    from trid3nt_server.workflows.telemac.agitation.agitation import artemis_harbor_agitation
     out = asyncio.run(artemis_harbor_agitation(bbox=[1.0, 2.0]))  # too few numbers
     assert isinstance(out, dict) and out["status"] == "error"
     assert out["error_code"] == "ARTEMIS_PARAMS_INVALID"
 
 
 def test_mode_classification_from_prompt():
-    from trid3nt_server.agent.workflows.telemac.agitation.agitation import _classify_mode
+    from trid3nt_server.workflows.telemac.agitation.agitation import _classify_mode
     assert _classify_mode("harbour resonance and seiche amplification", None) == "resonance"
     assert _classify_mode("reef shoal focusing offshore", None) == "shoal"
     assert _classify_mode("does the breakwater shelter the berths", None) == "diffraction"

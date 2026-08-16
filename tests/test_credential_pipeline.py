@@ -28,7 +28,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.agent.gates.cards.credential import (
+from trid3nt_server.gates.cards.credential import (
     _build_credential_request_payload,
 )
 from trid3nt_server.server import (
@@ -39,7 +39,7 @@ from trid3nt_server.server import (
 )
 from trid3nt_server.credentials import credential_registry as cr
 from trid3nt_server.credentials import resolver as cred_resolver
-from trid3nt_server.agent.tools import (
+from trid3nt_server.data import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,

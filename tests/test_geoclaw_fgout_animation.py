@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.geoclaw import postprocess_geoclaw as PP
+from trid3nt_server.workflows.geoclaw import postprocess_geoclaw as PP
 
 
 def _write_frame(path: Path, level: int, xlow: float, ylow: float,

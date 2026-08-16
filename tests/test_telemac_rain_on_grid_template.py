@@ -12,7 +12,7 @@ import pytest
 
 
 def test_registered_as_telemac_template():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     assert "telemac_rain_on_grid" in TOOL_REGISTRY
     md = TOOL_REGISTRY["telemac_rain_on_grid"].metadata
@@ -24,7 +24,7 @@ def test_registered_as_telemac_template():
 
 
 def test_docstring_carries_the_godara_envelope():
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
 
@@ -38,8 +38,8 @@ def test_docstring_carries_the_godara_envelope():
 def test_fetch_hyetograph_blocks_builds_hourly_blocks(monkeypatch):
     """ADR 0206: an MRMS/AORC window -> one 3600-s gross-mm block per hour, and
     the sim length is at least the hyetograph span."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid import rain_on_grid as ROG
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.workflows.telemac.rain_on_grid import rain_on_grid as ROG
 
     class _Stub:
         fn = staticmethod(lambda **kw: {
@@ -55,8 +55,8 @@ def test_fetch_hyetograph_blocks_builds_hourly_blocks(monkeypatch):
 
 
 def test_fetch_hyetograph_blocks_rejects_bad_window(monkeypatch):
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid import rain_on_grid as ROG
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid import rain_on_grid as ROG
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         TelemacRainOnGridError,
     )
     with pytest.raises(TelemacRainOnGridError):
@@ -66,8 +66,8 @@ def test_fetch_hyetograph_blocks_rejects_bad_window(monkeypatch):
 def test_spin_up_soil_v0_fills_from_antecedent(monkeypatch):
     """ADR 0213: the soil-store V0 is spun up from the antecedent AORC series; a
     wetter antecedent -> a higher V0, and V0 never exceeds the capacity S."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid import rain_on_grid as ROG
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.workflows.telemac.rain_on_grid import rain_on_grid as ROG
 
     def _stub(precip):
         class _S:
@@ -87,7 +87,7 @@ def test_soil_store_requires_capacity_and_window():
     """soil_store without a capacity, or without an mrms_window, raises loudly."""
     import asyncio
 
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         TelemacRainOnGridError, model_telemac_rain_on_grid,
     )
     with pytest.raises(TelemacRainOnGridError, match="mrms_window"):
@@ -101,14 +101,14 @@ def test_soil_store_requires_capacity_and_window():
 
 
 def test_amc_word_maps_to_scs_condition():
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import _AMC
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import _AMC
 
     assert _AMC["dry"] == 1 and _AMC["normal"] == 2 and _AMC["wet"] == 3
     assert _AMC["i"] == 1 and _AMC["iii"] == 3
 
 
 def test_utm_epsg_from_coweeta_pour_point():
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         _guess_utm_epsg,
     )
 
@@ -119,7 +119,7 @@ def test_utm_epsg_from_coweeta_pour_point():
 def test_corpus_yaml_present_and_routes():
     import yaml
     from pathlib import Path
-    import trid3nt_server.agent.workflows.telemac.rain_on_grid as pkg
+    import trid3nt_server.workflows.telemac.rain_on_grid as pkg
 
     corpus = Path(pkg.__file__).parent / "corpus.yaml"
     assert corpus.exists()
@@ -131,7 +131,7 @@ def test_corpus_yaml_present_and_routes():
 def test_aoi_from_pour_point_buffers_the_outlet():
     """The pour-point AOI is a generous buffer around the OUTLET, kept under the
     0.3-deg watershed-primitive D8 clamp (bug 1: a town bbox clips the basin)."""
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         _aoi_from_pour_point,
         _ROG_POUR_BUFFER_DEG,
     )
@@ -152,11 +152,11 @@ def test_pour_point_supplied_derives_aoi_from_it_not_geocode(monkeypatch):
     geocode_location must not even be consulted on this path."""
     import asyncio
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid import (
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.workflows.telemac.rain_on_grid import (
         mesh_acquisition as MA,
     )
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         _aoi_from_pour_point,
         model_telemac_rain_on_grid,
     )
@@ -202,8 +202,8 @@ def test_location_only_dispatch_matches_geocode_location_signature(monkeypatch):
     call site."""
     import inspect
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import (
         geocode_location as real_geocode_location,
     )
 
@@ -228,13 +228,13 @@ def test_location_only_dispatch_matches_geocode_location_signature(monkeypatch):
     stub_entry = dataclasses.replace(real_entry, fn=stub_geocode_location)
     monkeypatch.setitem(TOOL_REGISTRY, "geocode_location", stub_entry)
 
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid import (
         mesh_acquisition as MA,
     )
     monkeypatch.setattr(
         MA, "acquire_watershed_mesh", stub_mesh_acquisition, raising=True)
 
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         model_telemac_rain_on_grid,
     )
 

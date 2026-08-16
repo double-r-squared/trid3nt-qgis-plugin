@@ -10,18 +10,18 @@ from __future__ import annotations
 import asyncio
 
 import trid3nt_server.main as _main
-from trid3nt_server.agent.workflows.openquake._local_oq import (
+from trid3nt_server.workflows.openquake._local_oq import (
     render_area_source_model_xml,
     render_classical_point_job_ini,
     render_trivial_gmpe_logic_tree_xml,
     render_trivial_source_logic_tree_xml,
 )
-from trid3nt_server.agent.workflows.openquake.disaggregation.disaggregation import (
+from trid3nt_server.workflows.openquake.disaggregation.disaggregation import (
     openquake_disaggregation,
     parse_mag_dist_eps_csv,
     render_disaggregation_job_ini,
 )
-from trid3nt_server.agent.workflows.openquake.event_based.event_based import (
+from trid3nt_server.workflows.openquake.event_based.event_based import (
     _consistency,
     openquake_event_based,
     render_event_based_job_ini,
@@ -139,7 +139,7 @@ def test_consistency_median_verdict():
 # --------------------------------------------------------------------------- #
 def test_new_tools_registered():
     _main._import_tools_registry()
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     for n in ("openquake_disaggregation", "openquake_event_based"):
         e = TOOL_REGISTRY[n]

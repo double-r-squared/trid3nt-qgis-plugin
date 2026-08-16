@@ -43,8 +43,8 @@ import numpy as np
 import pytest
 from shapely.geometry import Point
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.compute_skill_metrics.compute_skill_metrics import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
     SkillMetricsDependencyMissingError,
     SkillMetricsInputError,
     SkillMetricsNoDataError,

@@ -32,23 +32,23 @@ from typing import Any
 import pytest
 import requests
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.data import TOOL_REGISTRY
 # fetch_dem twin DELETED (ADR 0097 library_delegate fold); its value-bearing
 # tests migrated to test_router_dem.py.
 # fetch_buildings twin DELETED (ADR 0084 buildings sidecar-write fold); its value-bearing
 # tests migrated to test_router_buildings.py.
-from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location import geocode_location as geo_mod
+from trid3nt_server.data.fetchers.socioeconomic.geocode_location import geocode_location as geo_mod
 # fetch_population twin DELETED (ADR 0092 WorldPop library_delegate fold; the half-built
 # ACS leg dropped); its value-bearing WorldPop tests migrated to test_router_population.py.
 # fetch_river_geometry twin DELETED (ADR 0074 river fold); its value-bearing tests
 # migrated to test_router_river.py.
-from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as pfd_mod
-from trid3nt_server.agent.tools.fetchers._fetch_common import (
+from trid3nt_server.data.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as pfd_mod
+from trid3nt_server.data.fetchers._fetch_common import (
     BboxInvalidError,
     UpstreamAPIError,
     round_bbox_to_resolution,
 )
-from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
+from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import (
     GeocodeNoMatchError,
     geocode_location,
 )
@@ -249,7 +249,7 @@ def test_round_bbox_to_resolution_rejects_out_of_range_lat():
 
 def test_geocode_location_happy_path(monkeypatch):
     fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
+    from trid3nt_server.data import cache as cache_mod
     import json as _json
 
     fake_payload = {
@@ -299,7 +299,7 @@ def test_geocode_location_rejects_empty_query():
 def _bind_geocode_cache(monkeypatch):
     """Wire read_through to a fresh fake-storage client (shared test plumbing)."""
     fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
+    from trid3nt_server.data import cache as cache_mod
 
     _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
@@ -1132,7 +1132,7 @@ def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
 # ---------------------------------------------------------------------------
 
 
-from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import (  # noqa: E402 — after main test surface
+from trid3nt_server.data.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import (  # noqa: E402 — after main test surface
     lookup_precip_return_period,
 )
 # fetch_landcover FOLDED to a spec-driven surface (ADR 0082): the twin + its
@@ -1218,7 +1218,7 @@ Date/time (GMT):  Sun Jun  7 07:54:20 2026
 def test_lookup_precip_return_period_happy_path_returns_structured_dict(monkeypatch):
     """100-year 24-hour at Fort Myers center: parsed from the fixture."""
     fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
+    from trid3nt_server.data import cache as cache_mod
 
     monkeypatch.setattr(
         pfd_mod,
@@ -1251,7 +1251,7 @@ def test_lookup_precip_return_period_quantizes_location_to_atlas14_grid(monkeypa
     Two callers within the same Atlas 14 grid cell hit the same cache entry.
     """
     fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
+    from trid3nt_server.data import cache as cache_mod
 
     fetch_calls: list[tuple[float, float]] = []
 
@@ -1297,7 +1297,7 @@ def test_lookup_precip_return_period_rejects_unsupported_duration():
 def test_lookup_precip_return_period_writes_csv_through_cache(monkeypatch):
     """FR-CE-8: the PFDS CSV is cached under cache/static-30d/precip_return_period/."""
     fake_storage = FakeStorageClient()
-    from trid3nt_server.agent.tools import cache as cache_mod
+    from trid3nt_server.data import cache as cache_mod
 
     monkeypatch.setattr(
         pfd_mod,

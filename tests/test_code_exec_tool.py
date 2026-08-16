@@ -26,7 +26,7 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.sandbox_contracts import CodeExecResultPayload
 
 from trid3nt_server.sandbox.sandbox_runner import run_sandbox_local
-from trid3nt_server.agent.tools.meta.code_exec_tool.code_exec_tool import (
+from trid3nt_server.data.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     CodeExecConfirmationRequired,
     build_code_exec_result_payload,
@@ -406,7 +406,7 @@ def test_summary_carries_full_payload_under_private_key() -> None:
 def test_adapter_strips_full_payload_from_function_response() -> None:
     """``summarize_tool_result`` must strip ``_code_exec_result`` so Gemini sees
     only the compact summary, not the larger wire payload."""
-    from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+    from trid3nt_server.adapters.adapter import summarize_tool_result
 
     payload = CodeExecResultPayload(
         code_exec_id=new_ulid(),

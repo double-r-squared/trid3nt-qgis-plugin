@@ -77,7 +77,7 @@ def _synthetic_elliptical_toa(a0, b0, cx0, wind_from, n=160, cell=30.0):
 
 
 def test_verifier_recovers_ellipse_and_passes():
-    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
+    from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
         verify_elliptical_replication,
     )
 
@@ -95,7 +95,7 @@ def test_verifier_recovers_ellipse_and_passes():
 
 
 def test_verifier_degenerate_burn_returns_insufficient():
-    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
+    from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
         verify_elliptical_replication,
     )
 
@@ -113,7 +113,7 @@ def test_verifier_degenerate_burn_returns_insufficient():
 # ===========================================================================
 def test_ellipse_overlay_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.elmfire.postprocess_elmfire import (
+    from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
         build_ellipse_overlay_chart_spec,
     )
 
@@ -133,7 +133,7 @@ def test_ellipse_overlay_chart_spec():
 def test_constant_verification_deck(tmp_path):
     rasterio = pytest.importorskip("rasterio")
     from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
-    from trid3nt_server.agent.workflows.elmfire.run_elmfire import (
+    from trid3nt_server.workflows.elmfire.run_elmfire import (
         build_constant_verification_deck,
     )
 

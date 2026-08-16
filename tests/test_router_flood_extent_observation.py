@@ -17,10 +17,10 @@ import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_contracts.execution import FloodExtentObservationResult
-from trid3nt_server.agent.tools.fetchers._router import router as _router
-from trid3nt_server.agent.tools.fetchers._router import transport as _transport
-from trid3nt_server.agent.tools.fetchers._router.hooks import flood_extent_observation as feh
-from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.data.fetchers._router import router as _router
+from trid3nt_server.data.fetchers._router import transport as _transport
+from trid3nt_server.data.fetchers._router.hooks import flood_extent_observation as feh
+from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
 _NODATA = 255
 _BBOX = [-85.5, 29.5, -85.0, 30.0]  # inside MCDWD tile (h=9, v=6)
@@ -60,7 +60,7 @@ def _classified_tile(h: int, v: int) -> bytes:
 
 def _install(monkeypatch, store, tile_fn):
     """Patch the router cache (in-memory) + the transport GET (synthetic MCDWD tiles)."""
-    from trid3nt_server.agent.tools.cache import (
+    from trid3nt_server.data.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key as ck, is_cacheable,
     )
 

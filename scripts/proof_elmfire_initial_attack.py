@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.agent.workflows.elmfire.initial_attack.initial_attack import (
+from trid3nt_server.workflows.elmfire.initial_attack.initial_attack import (
     hirsch_poc, poc_vs_delay, _critical_delay_min,
 )
 

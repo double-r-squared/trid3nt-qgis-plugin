@@ -26,7 +26,7 @@ from typing import Any
 
 from trid3nt_contracts.execution import LayerURI
 
-from ..agent.tools import TOOL_REGISTRY
+from ..data import TOOL_REGISTRY
 
 logger = logging.getLogger("trid3nt_server.server")
 
@@ -134,7 +134,7 @@ def _tool_search_tool_names() -> frozenset[str]:
     """
     names: set[str] = set()
     try:
-        from ..agent.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
+        from ..data.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
 
         if getattr(_SEARCH_TOOLS_METADATA, "name", None):
             names.add(_SEARCH_TOOLS_METADATA.name)

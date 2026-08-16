@@ -16,12 +16,12 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, Polygon
 
-from trid3nt_server.agent.workflows.telemac.rain_on_grid.cn_infiltration import (
+from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
     CNInfiltrationError,
     RunoffPathDecision,
     select_runoff_path,
 )
-from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
     MeshAcquisitionError,
     assemble_node_fields,
     build_mesh_config,
@@ -200,7 +200,7 @@ def test_use_supplied_mesh_ok(tmp_path):
 # node-field sampler works (populated points_lonlat), pointing the solve at .slf.
 # --------------------------------------------------------------------------- #
 def test_use_supplied_mesh_2dm_populates_nodes(tmp_path):
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
         use_supplied_mesh_2dm,
     )
 
@@ -280,7 +280,7 @@ def test_resolve_bare_earth_dem_pins_3dep(tmp_path, monkeypatch):
     Copernicus DSM (canopy inflates node elevations under tree cover)."""
     import types
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     src_dem = tmp_path / "src_dem.tif"
     src_dem.write_bytes(b"GTIFF-bare-earth")
@@ -309,7 +309,7 @@ def test_resolve_bare_earth_dem_loud_fallback(tmp_path, monkeypatch, caplog):
     import logging
     import types
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     cop_dem = tmp_path / "cop_dem.tif"
     cop_dem.write_bytes(b"GTIFF-copernicus-dsm")
@@ -355,7 +355,7 @@ def test_delineate_catchment_index_space_on_synthetic_dem(tmp_path):
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid.mesh_acquisition import (
+    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
         _delineate_catchment,
     )
 
@@ -390,7 +390,7 @@ def test_acquire_mesh_guards_degenerate_catchment(tmp_path, monkeypatch):
     delineated catchment is a degenerate sliver (the ADR 0196 live failure)."""
     from shapely.geometry import Point
 
-    from trid3nt_server.agent.workflows.telemac.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.rain_on_grid import (
         mesh_acquisition as MA,
     )
 

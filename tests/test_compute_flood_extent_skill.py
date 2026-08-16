@@ -36,8 +36,8 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import box
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.compute_flood_extent_skill.compute_flood_extent_skill import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.compute_flood_extent_skill.compute_flood_extent_skill import (
     FloodExtentSkillInputError,
     FloodExtentSkillNoOverlapError,
     compute_flood_extent_skill,

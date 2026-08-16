@@ -74,8 +74,8 @@ def fetch_dem_4326(aoi_bbox, rundir: Path) -> Path:
     from rasterio.crs import CRS
     from rasterio.warp import Resampling, calculate_default_transform, reproject
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.cache import read_object_bytes_s3
 
     layer = TOOL_REGISTRY["fetch_dem"].fn(bbox=aoi_bbox, source="3dep", resolution_m=10)
     raw = rundir / "dem_5070.tif"
@@ -97,7 +97,7 @@ def fetch_dem_4326(aoi_bbox, rundir: Path) -> Path:
 
 
 def delineate(cfg, dem_path: Path, rundir: Path):
-    from trid3nt_server.agent.tools.processing.delineate_watershed.delineate_watershed import (
+    from trid3nt_server.data.processing.delineate_watershed.delineate_watershed import (
         delineate_watershed,
     )
     ws = delineate_watershed(
@@ -115,8 +115,8 @@ def delineate(cfg, dem_path: Path, rundir: Path):
 
 
 def fetch_flowlines(aoi_bbox, rundir: Path):
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.cache import read_object_bytes_s3
 
     rv = TOOL_REGISTRY["fetch_river_geometry"].fn(bbox=tuple(aoi_bbox), source="nhdplus_hr")
     p = rundir / "flowlines.fgb"

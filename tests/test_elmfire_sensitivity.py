@@ -65,7 +65,7 @@ def test_namelist_extras_inject_into_correct_groups():
 
 
 def _sweep_common():
-    import trid3nt_server.agent.workflows.elmfire.sensitivity._sensitivity_common as m
+    import trid3nt_server.workflows.elmfire.sensitivity._sensitivity_common as m
     return m
 
 
@@ -116,7 +116,7 @@ def test_templates_registered(name):
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY[name]
     assert callable(entry.fn)

@@ -41,7 +41,7 @@ sys.path.insert(0, REPO + "/contracts")
 os.environ.setdefault("DOCKER_HOST", f"unix:///run/user/{os.getuid()}/docker.sock")
 
 from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs  # noqa: E402
-from trid3nt_server.agent.workflows.elmfire.run_elmfire import (  # noqa: E402
+from trid3nt_server.workflows.elmfire.run_elmfire import (  # noqa: E402
     build_constant_flat_deck,
 )
 

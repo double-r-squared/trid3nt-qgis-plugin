@@ -10,7 +10,7 @@ import math
 
 import pytest
 
-from trid3nt_server.agent.workflows.elmfire.initial_attack.initial_attack import (
+from trid3nt_server.workflows.elmfire.initial_attack.initial_attack import (
     byram_head_ros_m_per_min,
     build_poc_chart_spec,
     elmfire_initial_attack_containment_probability,
@@ -121,5 +121,5 @@ def test_chart_spec_shape():
 
 
 def test_registered():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
     assert "elmfire_initial_attack_containment_probability" in TOOL_REGISTRY

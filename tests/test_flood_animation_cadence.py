@@ -26,16 +26,16 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.agent.workflows.sfincs.flood.flood import (
+from trid3nt_server.workflows.sfincs.flood.flood import (
     _COASTAL_OUTPUT_INTERVAL_MIN_DEFAULT,
     _estimate_frame_count,
     _resolve_output_interval_min,
 )
-from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
+from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
     MAX_FLOOD_FRAMES,
     _select_frame_time_indices,
 )
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     _generate_hydromt_yaml_config,
@@ -121,7 +121,7 @@ def test_postprocess_subsamples_and_logs_when_over_cap(caplog) -> None:
     """A run that STILL exceeds the cap is subsampled EVENLY (never silently)."""
     import logging
 
-    with caplog.at_level(logging.INFO, logger="trid3nt_server.agent.workflows.sfincs.postprocess_flood"):
+    with caplog.at_level(logging.INFO, logger="trid3nt_server.workflows.sfincs.postprocess_flood"):
         idx = _select_frame_time_indices(MAX_FLOOD_FRAMES * 3)
     assert len(idx) <= MAX_FLOOD_FRAMES
     assert idx[0] == 0 and idx[-1] == MAX_FLOOD_FRAMES * 3 - 1  # endpoints kept

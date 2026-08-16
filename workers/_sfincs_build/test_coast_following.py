@@ -101,7 +101,7 @@ def test_crs_stamp_roundtrip(tmp_path):
 
     _stamp_sfincs_map_crs(nc, 32616)
 
-    from trid3nt_server.agent.workflows.shared.cog_io import _read_crs_from_dataset
+    from trid3nt_server.workflows.shared.cog_io import _read_crs_from_dataset
     import xarray as xr
 
     dsr = xr.open_dataset(str(nc))

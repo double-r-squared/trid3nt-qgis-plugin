@@ -54,7 +54,7 @@ def test_wave_layer_uri_shape():
 # 2. Deck staging: determinism + the ADR 0126 transforms
 # --------------------------------------------------------------------------- #
 def test_stage_wwm_duck_deck_deterministic_and_transformed(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     d1 = tmp_path / "r1"
     d2 = tmp_path / "r2"
@@ -88,7 +88,7 @@ def test_stage_wwm_duck_deck_deterministic_and_transformed(tmp_path: Path):
 
 
 def test_stage_wwm_duck_deck_sim_window(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     files, _, _ = D.stage_wwm_duck_deck(tmp_path, sim_hours=1.0)
     param = (tmp_path / "param.nml").read_text()
@@ -97,7 +97,7 @@ def test_stage_wwm_duck_deck_sim_window(tmp_path: Path):
 
 
 def test_fixture_sha_pins_present():
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     fx = D.wwm_duck_fixture_dir()
     sums = (fx / "SHA256SUMS").read_text()
@@ -161,7 +161,7 @@ def _write_synth_wave_out2d(nc: Path, N: int = 40, T: int = 5) -> np.ndarray:
 
 
 def test_read_out2d_waves(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
 
     nc = tmp_path / "out2d_1.nc"
     hs = _write_synth_wave_out2d(nc)
@@ -173,7 +173,7 @@ def test_read_out2d_waves(tmp_path: Path):
 
 
 def test_read_out2d_waves_empty_raises(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
     from netCDF4 import Dataset
 
     nc = tmp_path / "bad.nc"
@@ -188,7 +188,7 @@ def test_verify_cross_shore_waves(tmp_path: Path):
     """Model transect vs a synthetic gauge .mat -> RMSE/bias/corr the composer cites."""
     from scipy.io import savemat
 
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
 
     nc = tmp_path / "out2d_1.nc"
     _write_synth_wave_out2d(nc, N=60)
@@ -219,9 +219,9 @@ def test_verify_cross_shore_waves(tmp_path: Path):
 # 5. Registration pins + corpus retrieval seed
 # --------------------------------------------------------------------------- #
 def test_coupled_waves_registered_and_solver_wired():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    import trid3nt_server.agent.workflows  # noqa: F401 -- trigger solver reg
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data import TOOL_REGISTRY
+    import trid3nt_server.workflows  # noqa: F401 -- trigger solver reg
+    from trid3nt_server.data.simulation.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY, LOCAL_SOLVER_SPEC_REGISTRY,
     )
 
@@ -235,7 +235,7 @@ def test_coupled_waves_registered_and_solver_wired():
 def test_coupled_waves_corpus_seed_present():
     here = Path(__file__).resolve()
     for parent in here.parents:
-        cand = (parent / "trid3nt_server" / "agent" / "workflows"
+        cand = (parent / "trid3nt_server" / "workflows"
                 / "schism" / "coupled_waves" / "corpus.yaml")
         if cand.exists():
             text = cand.read_text()
@@ -250,7 +250,7 @@ def test_coupled_waves_corpus_seed_present():
 # --------------------------------------------------------------------------- #
 def test_parametric_wwm_transform_toggles_and_values():
     """The &BOUC block flips to a parametric JONSWAP boundary with the knob values."""
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     src = (D.wwm_duck_fixture_dir() / "wwminput.nml").read_text(encoding="utf-8")
     out = D._transform_wwm_input_parametric(
@@ -278,7 +278,7 @@ def test_parametric_wwm_transform_toggles_and_values():
 
 
 def test_stage_wwm_duck_deck_parametric_rewrites_wwminput(tmp_path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as D
+    from trid3nt_server.workflows.schism import deck_authoring as D
 
     files, nc, ns = D.stage_wwm_duck_deck(
         tmp_path / "p", sim_hours=1.0,
@@ -292,7 +292,7 @@ def test_stage_wwm_duck_deck_parametric_rewrites_wwminput(tmp_path):
 
 
 def test_resolve_wave_forcing_defaults_and_validation():
-    from trid3nt_server.agent.workflows.schism.coupled_waves.coupled_waves import (
+    from trid3nt_server.workflows.schism.coupled_waves.coupled_waves import (
         _resolve_wave_forcing,
     )
 
@@ -310,7 +310,7 @@ def test_resolve_wave_forcing_defaults_and_validation():
 def test_wave_setup_reader_on_synthetic_out2d(tmp_path):
     """read_wave_setup_from_out2d returns a positive setup for a shoaling elevation field."""
     from netCDF4 import Dataset
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as PP
+    from trid3nt_server.workflows.schism import postprocess_schism as PP
 
     p = tmp_path / "out2d_1.nc"
     n = 40

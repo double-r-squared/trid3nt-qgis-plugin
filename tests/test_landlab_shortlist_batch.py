@@ -32,7 +32,7 @@ from trid3nt_contracts.landlab_contracts import (
 # (1) build_spec arg-assembly.
 # --------------------------------------------------------------------------- #
 def test_build_spec_carries_channel_incision_and_chi_knobs():
-    from trid3nt_server.agent.workflows.landlab.run_landlab import (
+    from trid3nt_server.workflows.landlab.run_landlab import (
         build_landlab_build_spec,
     )
 
@@ -74,7 +74,7 @@ def test_analysis_synonyms_normalize():
 # (2) Pure chart builders.
 # --------------------------------------------------------------------------- #
 def test_slope_area_chart_builds_and_degrades():
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_slope_area_chart_spec,
     )
 
@@ -94,7 +94,7 @@ def test_slope_area_chart_builds_and_degrades():
 
 
 def test_chi_elevation_chart_builds_and_degrades():
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_chi_elevation_chart_spec,
     )
 
@@ -105,7 +105,7 @@ def test_chi_elevation_chart_builds_and_degrades():
 
 
 def test_storm_chart_builders():
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_storm_sequence_chart_spec,
         build_storm_statistics_chart_spec,
     )
@@ -255,7 +255,7 @@ def test_channel_incision_higher_uplift_steepens_channels():
 # --------------------------------------------------------------------------- #
 def test_storm_sequence_generator_deterministic_and_statistics():
     pytest.importorskip("landlab")
-    from trid3nt_server.agent.workflows.landlab.storm_sequence.storm_sequence import (
+    from trid3nt_server.workflows.landlab.storm_sequence.storm_sequence import (
         generate_storm_sequence,
     )
 

@@ -165,7 +165,7 @@ def stage_case(case_dir: Path, cas_name: str, friction_k: float) -> dict[str, An
     ``malpasset_transformers.fgb`` / ``malpasset_gauges.fgb`` there, and writes a
     bundled-deck ``manifest.json``. Nothing is solved here.
     """
-    from trid3nt_server.agent.cases.malpasset_obs import build_malpasset_obs_layers
+    from trid3nt_server.cases.malpasset_obs import build_malpasset_obs_layers
 
     run_tag = f"{CASE_TAG}-stage-{uuid.uuid4().hex[:6]}"
     MINTED_RUN_IDS.append(run_tag)
@@ -314,12 +314,12 @@ def resolve_result(stage: dict[str, Any], *, run_solves: bool, run_tag: str) -> 
 
 
 def step_wse(result_slf: Path, run_id: str, out_dir: Path) -> Any:
-    from trid3nt_server.agent.cases.malpasset_obs import (
+    from trid3nt_server.cases.malpasset_obs import (
         MALPASSET_MESH_EPSG,
         MALPASSET_VERTICAL_DATUM,
         MALPASSET_CRS_CAVEAT,
     )
-    from trid3nt_server.agent.workflows.telemac.postprocess_telemac import postprocess_telemac_wse
+    from trid3nt_server.workflows.telemac.postprocess_telemac import postprocess_telemac_wse
 
     layers, metrics = postprocess_telemac_wse(
         result_slf,
@@ -343,7 +343,7 @@ def step_wse(result_slf: Path, run_id: str, out_dir: Path) -> Any:
 def step_diagnostics(run_handle: str) -> dict[str, Any] | None:
     """Read TELEMAC run diagnostics -- only meaningful after a REAL solve (a
     completion.json exists). Returns None (with an honest record) offline."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["read_run_diagnostics"].fn
     try:
@@ -366,7 +366,7 @@ def step_diagnostics(run_handle: str) -> dict[str, Any] | None:
 
 def step_pairing(model_uri: str, obs_path: str, model_datum: str,
                  out_dir: str | None = None) -> Any:
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["extract_model_at_observations"].fn
     paired = fn(
@@ -397,7 +397,7 @@ def step_pairing(model_uri: str, obs_path: str, model_datum: str,
 
 
 def step_skill(paired_table_uri: str) -> dict[str, Any]:
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["compute_skill_metrics"].fn
     m = fn(paired_table_uri=paired_table_uri, variable="head")
@@ -422,7 +422,7 @@ def _read_paired_pairs(paired_table_uri: str) -> dict[str, tuple[float, float]]:
         # boto3 read (GDAL /vsis3/ does not use the boto3 MinIO env) -> temp file.
         import tempfile
 
-        from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+        from trid3nt_server.data.cache import read_object_bytes_s3
 
         data = read_object_bytes_s3(paired_table_uri)
         tf = tempfile.NamedTemporaryFile(suffix=".fgb", delete=False)
@@ -540,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
         step_diagnostics(base_run_id if is_real else base_run_id)
 
         # 4. PAIR vs police points.
-        from trid3nt_server.agent.cases.malpasset_obs import MALPASSET_VERTICAL_DATUM
+        from trid3nt_server.cases.malpasset_obs import MALPASSET_VERTICAL_DATUM
 
         paired = step_pairing(wse.uri, stage["obs"]["police_fgb"],
                               MALPASSET_VERTICAL_DATUM, str(out_dir))

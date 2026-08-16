@@ -1,6 +1,6 @@
 """Worker-side SWAN mat -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``trid3nt_server.agent.workflows.swan.postprocess_swan``. Runs inside
+Byte-faithful port of ``trid3nt_server.workflows.swan.postprocess_swan``. Runs inside
 the Batch worker AFTER ``swan.exe`` has written ``swan_out.mat``; rasterizes the
 Hs (significant wave height) field onto a regular EPSG:4326 COG and builds the
 typed ``publish_manifest.json`` dict. Handles stationary (single-frame) and

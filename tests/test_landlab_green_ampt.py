@@ -94,7 +94,7 @@ def test_initial_soil_moisture_must_be_lt_1():
 # (2) build_spec arg-assembly.
 # ===========================================================================
 def test_build_spec_merges_green_ampt_knobs():
-    from trid3nt_server.agent.workflows.landlab.run_landlab import build_landlab_build_spec
+    from trid3nt_server.workflows.landlab.run_landlab import build_landlab_build_spec
 
     ra = LandlabRunArgs(
         bbox=(-105.37, 39.998, -105.33, 40.032),
@@ -118,7 +118,7 @@ def test_build_spec_merges_green_ampt_knobs():
 # ===========================================================================
 def test_partition_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_infiltration_partition_chart_spec,
     )
 
@@ -138,7 +138,7 @@ def test_infiltration_cog_reprojects_to_4326(tmp_path):
     import numpy as np
     from rasterio.transform import from_origin
 
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         _reproject_field_cog_4326,
     )
 
@@ -169,7 +169,7 @@ def test_infiltration_cog_reprojects_to_4326(tmp_path):
 # (5) Tool bbox gate.
 # ===========================================================================
 def test_tool_missing_bbox_returns_typed_error():
-    from trid3nt_server.agent.workflows.landlab.green_ampt.green_ampt import (
+    from trid3nt_server.workflows.landlab.green_ampt.green_ampt import (
         landlab_green_ampt_overland_flow,
     )
 

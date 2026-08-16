@@ -24,8 +24,8 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
-from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
-from trid3nt_server.agent.workflows.sfincs.flood.flood import sfincs_flood
+from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.workflows.sfincs.flood.flood import sfincs_flood
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
 
@@ -147,15 +147,15 @@ async def main() -> None:
         return run_result_ok
 
     with (
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_layer("dem")),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_layer("dem")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
         _river_geometry_patch(),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.run_solver", return_value=handle),
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.postprocess_flood",
+            "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([flood_layer], depth_metrics),
         ),
     ):

@@ -20,7 +20,7 @@ visible to reviewers.
 
 from __future__ import annotations
 
-from trid3nt_server.agent.adapters.adapter import SYSTEM_PROMPT
+from trid3nt_server.adapters.adapter import SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------

@@ -123,7 +123,7 @@ def test_depth_layer_uri_dry_levee_held_is_valid():
 @pytest.mark.skipif(not _FIXTURE.exists(), reason="solved fixture absent")
 def test_postprocess_depth_and_mesh(fake_s3, monkeypatch):
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs")
-    from trid3nt_server.agent.workflows.hecras.postprocess_hecras import postprocess_hecras
+    from trid3nt_server.workflows.hecras.postprocess_hecras import postprocess_hecras
 
     layers, metrics = postprocess_hecras(
         _FIXTURE,
@@ -191,7 +191,7 @@ def _write_dry_2d_hdf(path) -> None:
 def test_read_depth_per_cell_allow_dry_valid_success(tmp_path):
     """0 wet cells raises HECRAS_OUTPUT_EMPTY by default, but is a valid dry
     success under allow_dry (the levee-holds case -- ADR 0125)."""
-    from trid3nt_server.agent.workflows.hecras.postprocess_hecras import (
+    from trid3nt_server.workflows.hecras.postprocess_hecras import (
         PostprocessHecrasError,
         _read_depth_per_cell,
     )
@@ -218,7 +218,7 @@ def test_postprocess_scaled_flow_deepens_and_widens(fake_s3, monkeypatch):
     threads through to a proportionally scaled inflow series + peak (the physics
     delta itself is proven by the live canary's two solves)."""
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs")
-    from trid3nt_server.agent.workflows.hecras.postprocess_hecras import postprocess_hecras
+    from trid3nt_server.workflows.hecras.postprocess_hecras import postprocess_hecras
 
     _, m10 = postprocess_hecras(_FIXTURE, run_id="s10", flow_scale=1.0, peak_inflow_cfs=21000.0)
     _, m13 = postprocess_hecras(_FIXTURE, run_id="s13", flow_scale=1.3, peak_inflow_cfs=27300.0)
@@ -231,7 +231,7 @@ def test_postprocess_scaled_flow_deepens_and_widens(fake_s3, monkeypatch):
 # Dispatch: the Finished-sentinel / correct_end classify_exit gate
 # --------------------------------------------------------------------------- #
 def test_classify_exit_ok_on_correct_end(tmp_path):
-    from trid3nt_server.agent.workflows.hecras.run_hecras import _classify_exit
+    from trid3nt_server.workflows.hecras.run_hecras import _classify_exit
 
     (tmp_path / "hecras_metrics.json").write_text(
         '{"correct_end": true, "flow_scale": 1.3, "peak_inflow_cfs": 27300.0, '
@@ -246,7 +246,7 @@ def test_classify_exit_ok_on_correct_end(tmp_path):
 def test_classify_exit_error_when_sentinel_missing(tmp_path):
     """A clean process exit but NO correct_end (no Finished sentinel / Results) is
     an honest failure, not an empty success."""
-    from trid3nt_server.agent.workflows.hecras.run_hecras import _classify_exit
+    from trid3nt_server.workflows.hecras.run_hecras import _classify_exit
 
     (tmp_path / "hecras_metrics.json").write_text('{"correct_end": false}')
     status, code, err, _ = _classify_exit(tmp_path, 0)
@@ -254,18 +254,18 @@ def test_classify_exit_error_when_sentinel_missing(tmp_path):
 
 
 def test_classify_exit_error_on_nonzero_exit(tmp_path):
-    from trid3nt_server.agent.workflows.hecras.run_hecras import _classify_exit
+    from trid3nt_server.workflows.hecras.run_hecras import _classify_exit
 
     status, code, err, _ = _classify_exit(tmp_path, 1)
     assert status == "error" and code == 1 and err
 
 
 def test_solver_registered():
-    from trid3nt_server.agent.workflows.hecras.run_hecras import (
+    from trid3nt_server.workflows.hecras.run_hecras import (
         HECRAS_SOLVER_NAME,
         HECRAS_LEVEE_BREACH_SOLVER_NAME,
     )
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data.simulation.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY,
         LOCAL_SOLVER_SPEC_REGISTRY,
     )

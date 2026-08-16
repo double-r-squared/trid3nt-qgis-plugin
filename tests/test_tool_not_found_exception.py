@@ -35,7 +35,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server.adapters.adapter import (
     ModelSettings,
     summarize_tool_result,
     _classify_error,

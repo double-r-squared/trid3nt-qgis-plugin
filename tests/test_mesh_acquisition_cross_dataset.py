@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.agent.workflows.telemac.rain_on_grid import mesh_acquisition as mod
+from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as mod
 
 
 def _patch_3dep_unavailable(monkeypatch, tmp_path: Path) -> Path:
@@ -29,7 +29,7 @@ def _patch_3dep_unavailable(monkeypatch, tmp_path: Path) -> Path:
         "fetch_dem": types.SimpleNamespace(fn=staticmethod(_boom_3dep)),
         "fetch_copernicus_dem": types.SimpleNamespace(fn=staticmethod(_fake_copernicus)),
     }
-    import trid3nt_server.agent.tools as _tools
+    import trid3nt_server.data as _tools
     monkeypatch.setattr(_tools, "TOOL_REGISTRY", fake_registry)
     return cop_tif
 

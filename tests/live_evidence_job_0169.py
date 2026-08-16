@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from unittest.mock import patch
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters import scripted_adapter as sa
-from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.adapters import scripted_adapter as sa
+from trid3nt_server.adapters.adapter import ModelSettings
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 

@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from ..agent.gates.circuit_breaker import ToolCircuitBreaker
+from ..gates.circuit_breaker import ToolCircuitBreaker
 
 if TYPE_CHECKING:
     import asyncio

@@ -11,7 +11,7 @@ import asyncio
 
 
 def test_telemac3d_registered_as_engine_template():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
     entry = TOOL_REGISTRY.get("telemac3d_stratified_flow")
     assert entry is not None, "telemac3d_stratified_flow must be registered"
     m = entry.metadata
@@ -22,7 +22,7 @@ def test_telemac3d_registered_as_engine_template():
 
 
 def test_telemac3d_solver_registered():
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data.simulation.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -31,7 +31,7 @@ def test_telemac3d_solver_registered():
 
 
 def test_tool_rejects_neither_location_nor_bbox_for_lake_modes():
-    from trid3nt_server.agent.workflows.telemac.stratified_flow.stratified_flow import (
+    from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import (
         telemac3d_stratified_flow,
     )
     out = asyncio.run(telemac3d_stratified_flow(flow_mode="stratification"))
@@ -40,7 +40,7 @@ def test_tool_rejects_neither_location_nor_bbox_for_lake_modes():
 
 
 def test_tool_rejects_invalid_bbox():
-    from trid3nt_server.agent.workflows.telemac.stratified_flow.stratified_flow import (
+    from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import (
         telemac3d_stratified_flow,
     )
     out = asyncio.run(telemac3d_stratified_flow(bbox=[1.0, 2.0]))  # too few numbers
@@ -49,7 +49,7 @@ def test_tool_rejects_invalid_bbox():
 
 
 def test_mode_classification_from_prompt():
-    from trid3nt_server.agent.workflows.telemac.stratified_flow.stratified_flow import (
+    from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import (
         _classify_mode,
     )
     assert _classify_mode("does this lake stratify and turn over", None) == "stratification"

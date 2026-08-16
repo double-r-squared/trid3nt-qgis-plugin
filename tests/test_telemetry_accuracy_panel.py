@@ -22,7 +22,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from trid3nt_server.agent.adapters.adapter import classify_result_usable, summarize_tool_result
+from trid3nt_server.adapters.adapter import classify_result_usable, summarize_tool_result
 from trid3nt_server.telemetry import (
     build_live_solve_progress,
     build_solve_telemetry_record,

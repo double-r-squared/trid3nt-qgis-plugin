@@ -20,17 +20,17 @@ from unittest.mock import patch
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.executors import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.executors import (
     chained_resolution as cr,
 )
-from trid3nt_server.agent.tools.fetchers._router.executors import http_json
-from trid3nt_server.agent.tools.fetchers._router.registration import _SPEC_REGISTRY
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router.executors import http_json
+from trid3nt_server.data.fetchers._router.registration import _SPEC_REGISTRY
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
 from trid3nt_server.credentials.credential_registry import is_credential_shaped_error
 
-_FETCHERS = Path("trid3nt_server/agent/tools/fetchers")
+_FETCHERS = Path("trid3nt_server/data/fetchers")
 _SPECS = {
     "fetch_asos_metar": _FETCHERS / "weather/fetch_asos_metar/source.yaml",
     "fetch_raws_weather": _FETCHERS / "weather/fetch_raws_weather/source.yaml",
@@ -135,7 +135,7 @@ def test_raws_enrich_expands_and_best_effort_survives():
         if "obhistory" in plan.url:
             # 2024-09-01 succeeds; 2024-09-02 raises (best-effort skip)
             if plan.params.get("date") == "2024-09-02":
-                from trid3nt_server.agent.tools.fetchers._router.errors import router_upstream_error
+                from trid3nt_server.data.fetchers._router.errors import router_upstream_error
                 raise router_upstream_error(spec.error_code_prefix, "boom")
             return day
         return geo
@@ -204,7 +204,7 @@ def test_snotel_merge_and_degrade_to_locations():
     def fail_data(spec_, plan):
         if plan.url.endswith("/stations") or "/stations?" in plan.url:
             return _snotel_catalog()
-        from trid3nt_server.agent.tools.fetchers._router.errors import router_upstream_error
+        from trid3nt_server.data.fetchers._router.errors import router_upstream_error
         raise router_upstream_error(spec.error_code_prefix, "data down")
 
     with patch.object(cr, "_get", fail_data):

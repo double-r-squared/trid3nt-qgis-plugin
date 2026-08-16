@@ -29,9 +29,9 @@ from pathlib import Path
 import boto3
 import numpy as np
 
-from trid3nt_server.agent.workflows.telemac import run_telemac as _rt  # noqa: F401
-from trid3nt_server.agent.tools.simulation.solver.solver import run_solver, wait_for_completion
-from trid3nt_server.agent.workflows.telemac.postprocess_telemac import read_selafin
+from trid3nt_server.workflows.telemac import run_telemac as _rt  # noqa: F401
+from trid3nt_server.data.simulation.solver.solver import run_solver, wait_for_completion
+from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
 
 
 def _s3():

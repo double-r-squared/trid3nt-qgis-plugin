@@ -118,7 +118,7 @@ def test_groundwater_layer_uris_are_layer_subtypes():
 # (2) build_spec arg-assembly.
 # ===========================================================================
 def test_build_spec_merges_groundwater_knobs():
-    from trid3nt_server.agent.workflows.landlab.run_landlab import (
+    from trid3nt_server.workflows.landlab.run_landlab import (
         build_landlab_build_spec,
     )
 
@@ -151,7 +151,7 @@ def test_baseflow_partition_chart_spec():
     from trid3nt_contracts.chart_contracts import (
         is_structurally_valid_vega_lite_spec,
     )
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_baseflow_partition_chart_spec,
     )
 
@@ -167,7 +167,7 @@ def test_baseflow_hydrograph_chart_spec():
     from trid3nt_contracts.chart_contracts import (
         is_structurally_valid_vega_lite_spec,
     )
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_baseflow_hydrograph_chart_spec,
     )
 
@@ -191,7 +191,7 @@ def test_depth_to_water_cog_reprojects_to_4326(tmp_path):
     import numpy as np
     from rasterio.transform import from_origin
 
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         _reproject_field_cog_4326,
     )
 
@@ -222,7 +222,7 @@ def test_depth_to_water_cog_reprojects_to_4326(tmp_path):
 # (5) Tool bbox gate.
 # ===========================================================================
 def test_water_table_tool_missing_bbox_returns_typed_error():
-    from trid3nt_server.agent.workflows.landlab.groundwater_water_table.groundwater_water_table import (
+    from trid3nt_server.workflows.landlab.groundwater_water_table.groundwater_water_table import (
         landlab_groundwater_water_table,
     )
 
@@ -233,7 +233,7 @@ def test_water_table_tool_missing_bbox_returns_typed_error():
 
 
 def test_storm_recession_tool_missing_bbox_returns_typed_error():
-    from trid3nt_server.agent.workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import (
+    from trid3nt_server.workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import (
         landlab_groundwater_storm_recession,
     )
 
@@ -250,7 +250,7 @@ def test_groundwater_templates_registered_as_landlab_templates():
     import trid3nt_server.main as m
 
     m._import_tools_registry()
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     for name in (
         "landlab_groundwater_water_table",

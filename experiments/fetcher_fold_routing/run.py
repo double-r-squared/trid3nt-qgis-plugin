@@ -111,10 +111,10 @@ def main() -> int:
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-    from trid3nt_server.agent.tools.fetchers._router import registration
-    from trid3nt_server.agent.tools.search.search_tools import search_tools as st
-    from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_ranked_tools
+    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.data.fetchers._router import registration
+    from trid3nt_server.data.search.search_tools import search_tools as st
+    from trid3nt_server.data.search.tool_retrieval import retrieve_ranked_tools
 
     catalog_size = len(TOOL_REGISTRY)
 

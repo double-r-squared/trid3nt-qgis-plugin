@@ -47,18 +47,18 @@ import pytest
 hydromt_sfincs = pytest.importorskip("hydromt_sfincs")
 pytest.importorskip("rasterio")
 
-import trid3nt_server.agent.workflows.sfincs.sfincs_builder as _builder  # noqa: E402
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (  # noqa: E402
+import trid3nt_server.workflows.sfincs.sfincs_builder as _builder  # noqa: E402
+from trid3nt_server.workflows.sfincs.sfincs_builder import (  # noqa: E402
     BuildOptions,
     ForcingSpec,
     build_sfincs_model,
 )
-from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.agent.tools.simulation._setter_envelope import (  # noqa: E402
+from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.data.simulation._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )
-from trid3nt_server.agent.tools.simulation.sfincs.set_sfincs_parameters.set_sfincs_parameters import (  # noqa: E402
+from trid3nt_server.data.simulation.sfincs.set_sfincs_parameters.set_sfincs_parameters import (  # noqa: E402
     set_sfincs_parameters,
 )
 

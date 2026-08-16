@@ -38,8 +38,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.extract_landcover_class.extract_landcover_class import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.extract_landcover_class.extract_landcover_class import (
     LandcoverClassError,
     extract_landcover_class,
 )
@@ -405,7 +405,7 @@ def test_cache_miss_hit_skips_recompute():
         call_count = [0]
 
         # Wrap the inner extractor to count invocations.
-        from trid3nt_server.agent.tools.processing.extract_landcover_class import extract_landcover_class as mod
+        from trid3nt_server.data.processing.extract_landcover_class import extract_landcover_class as mod
 
         real_extract = mod._extract_mask_bytes
 
@@ -515,7 +515,7 @@ def test_returns_layer_uri_fields():
 
 def test_cache_keys_vary_across_params():
     """Same uri but different classes / bbox produce distinct cache keys."""
-    from trid3nt_server.agent.tools.cache import compute_cache_key
+    from trid3nt_server.data.cache import compute_cache_key
 
     base_uri = "gs://bucket/landcover.tif"
     combos = [
@@ -571,7 +571,7 @@ def test_live_fortmyers_water_mask(tmp_path):
     # Source counts: read class-11 pixel count directly from the NLCD COG.
     from rasterio.io import MemoryFile
 
-    from trid3nt_server.agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.data.cache import read_object_bytes_s3
 
     with MemoryFile(read_object_bytes_s3(nlcd_uri)) as _mf, _mf.open() as src:
         src_arr = src.read(1)

@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 from scipy.spatial import Delaunay
 
-from trid3nt_server.agent.workflows.schism import deck_authoring as D
-from trid3nt_server.agent.workflows.schism import holland_sflux as H
-from trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge import (
+from trid3nt_server.workflows.schism import deck_authoring as D
+from trid3nt_server.workflows.schism import holland_sflux as H
+from trid3nt_server.workflows.schism.pahm_surge.pahm_surge import (
     _emit_track_overlay,
 )
 
@@ -142,7 +142,7 @@ def test_emit_track_overlay_layer_uri_validates(monkeypatch):
     end (S3 upload stubbed) and asserts the overlay actually reaches the
     emitter, fully validated, instead of raising loudly here if the
     construction ever breaks again."""
-    from trid3nt_server.agent.tools.simulation.solver import solver as _solver
+    from trid3nt_server.data.simulation.solver import solver as _solver
 
     monkeypatch.setattr(_solver, "_get_runs_bucket", lambda: "test-runs-bucket")
 
@@ -180,7 +180,7 @@ def _entries_by_param(entries):
 def test_bathy_fetch_failure_raises_typed_error_by_default(monkeypatch):
     """A real-bathymetry fetch failure with allow_synthetic_domain unset (default
     False) stops the run honestly instead of substituting a synthetic shelf."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
     from trid3nt_contracts.schism_contracts import SCHISM_BATHYMETRY_UNAVAILABLE
 
     async def _boom(*a, **kw):
@@ -203,7 +203,7 @@ def test_bathy_fetch_failure_with_allow_synthetic_domain_runs_declared_synthetic
     """allow_synthetic_domain=True opts into the idealized-shelf mechanism-demo
     mode on a fetch failure -- reaches the input-review gate with a LOUD
     synthetic domain_provenance entry rather than raising."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     async def _boom(*a, **kw):
         raise RuntimeError("fetch_topobathy/fetch_dem both unreachable")
@@ -234,7 +234,7 @@ def test_bathy_fetch_failure_with_allow_synthetic_domain_runs_declared_synthetic
 def test_bathy_fetch_ok_real_path_unchanged(monkeypatch):
     """When the fetch succeeds, the knob is irrelevant and the domain provenance
     is stamped REAL, traced to the fetched source -- unchanged behaviour."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     async def _ok(*a, **kw):
         return ("/tmp/fake_bathy.tif", "topobathy")
@@ -278,7 +278,7 @@ def test_autoscale_surge_domain_small_medium_large_aoi():
     domain, coarser for a large one, both clamped to fetch_topobathy's own [25,
     1000] m resolution_m bounds); the TIN node grid scales the same direction and
     stays within its sane per-axis budget."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     small = P._autoscale_surge_domain((-95.05, 29.20, -94.95, 29.30))   # ~10 km
     medium = P._autoscale_surge_domain(P._IKE_BBOX)                      # ~150 km (showcase)
@@ -305,7 +305,7 @@ def test_autoscale_surge_domain_small_medium_large_aoi():
 def test_autoscale_surge_domain_is_pure_no_network():
     """The autoscaler never touches the network/filesystem -- safe to call
     unconditionally before any fetch (it derives everything from the bbox)."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     r1 = P._autoscale_surge_domain(P._IKE_BBOX)
     r2 = P._autoscale_surge_domain(P._IKE_BBOX)
@@ -317,7 +317,7 @@ def test_explicit_resolution_m_is_declared_coarsening(monkeypatch):
     declaration, forwarded verbatim to the bathymetry fetch as the ``resolution_m``
     grid cell and recorded basis='user' -- oversized requests are the user's right
     (no silent resolution ceiling)."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     captured: dict = {}
 
@@ -360,7 +360,7 @@ def test_explicit_resolution_m_drives_dense_mesh_not_the_floor(monkeypatch):
     the native autoscale floors the TIN at 8x8=64 nodes; a 30 m ask must instead build
     thousands of nodes (up to the declared budget) and the resolution entry must LABEL
     the node-budget clamp when it binds."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     bolivar = (-95.05, 29.2, -94.6, 29.65)  # the AOI NATE re-drove
 
@@ -403,7 +403,7 @@ def test_resolution_m_native_default_when_not_supplied(monkeypatch):
     NATIVE (resolution_m=None forwarded, so CUDEM is read at its native cell) and the
     envelope records the native default (basis='derived', value names native) -- the
     autoscale value is only the coarsening HINT, never the silent fetch resolution."""
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     captured: dict = {}
 
@@ -445,8 +445,8 @@ def test_estimate_payload_mb_native_default_and_coarsening(monkeypatch):
     sampled model. With sampling unavailable it falls back to the analytic model
     (labeled), which stays resolution-aware: a smaller AOI or an explicit COARSER
     resolution both LOWER the estimate below the native default."""
-    import trid3nt_server.agent.tools.fetchers._router.hooks.topobathy as tbh
-    import trid3nt_server.agent.workflows.schism.pahm_surge.pahm_surge as P
+    import trid3nt_server.data.fetchers._router.hooks.topobathy as tbh
+    import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     monkeypatch.setattr(tbh, "_sample_topobathy_density", lambda b: None)  # analytic path
 

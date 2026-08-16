@@ -35,8 +35,8 @@ import pandas as pd
 import pytest
 from shapely.geometry import LineString, Point
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.compute_movement_trajectory.compute_movement_trajectory import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.compute_movement_trajectory.compute_movement_trajectory import (
     MovementTrajectoryError,
     _normalize_turn_angle,
     compute_movement_trajectory,

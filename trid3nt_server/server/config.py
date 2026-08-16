@@ -21,7 +21,7 @@ def _tool_retrieval_k() -> int:
     """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
     any parse error. Read per-call so a test can override via the env without a
     module reload."""
-    from ..agent.tools.search.tool_retrieval import DEFAULT_K
+    from ..data.search.tool_retrieval import DEFAULT_K
 
     raw = os.environ.get("TRID3NT_TOOL_RETRIEVAL_K")
     if raw is None:

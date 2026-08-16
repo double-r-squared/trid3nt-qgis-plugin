@@ -445,7 +445,7 @@ def test_prefetch_rewrites_s3_uri_to_local_path(monkeypatch, tmp_path) -> None:
         return b"COG-BYTES-FOR-" + uri.encode()
 
     # Patch the shared boto3 reader the staging path imports.
-    monkeypatch.setattr("trid3nt_server.agent.tools.cache.read_object_bytes_s3", _fake_read)
+    monkeypatch.setattr("trid3nt_server.data.cache.read_object_bytes_s3", _fake_read)
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -503,7 +503,7 @@ def test_staged_frames_open_under_jail_end_to_end(tmp_path, monkeypatch) -> None
     def _fake_read(uri: str) -> bytes:
         return _tif_bytes(fills[uri])
 
-    monkeypatch.setattr("trid3nt_server.agent.tools.cache.read_object_bytes_s3", _fake_read)
+    monkeypatch.setattr("trid3nt_server.data.cache.read_object_bytes_s3", _fake_read)
 
     code = (
         "import rasterio\n"
@@ -538,7 +538,7 @@ def test_prefetch_degrades_on_fetch_failure(monkeypatch, tmp_path) -> None:
     def _boom(uri: str) -> bytes:
         raise RuntimeError("simulated S3 outage")
 
-    monkeypatch.setattr("trid3nt_server.agent.tools.cache.read_object_bytes_s3", _boom)
+    monkeypatch.setattr("trid3nt_server.data.cache.read_object_bytes_s3", _boom)
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)

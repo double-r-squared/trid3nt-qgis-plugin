@@ -39,7 +39,7 @@ TO_4326 = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
 
 import os
 os.environ.setdefault("DOCKER_HOST", f"unix:///run/user/{os.getuid()}/docker.sock")
-from trid3nt_server.agent.tools.cache import read_object_bytes_s3  # noqa: E402
+from trid3nt_server.data.cache import read_object_bytes_s3  # noqa: E402
 
 
 def _tile_xy(lon, lat, z):

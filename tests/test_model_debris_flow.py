@@ -35,8 +35,8 @@ from rasterio.transform import from_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.simulation.model_debris_flow.model_debris_flow import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.simulation.model_debris_flow.model_debris_flow import (
     AoiTooLargeError,
     DebrisFlowInputError,
     DebrisFlowLayerURI,

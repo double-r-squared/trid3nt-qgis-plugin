@@ -11,10 +11,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.processing.charts_common import (
+from trid3nt_server.data.processing.charts_common import (
     build_hydrograph_overlay_chart,
 )
-from trid3nt_server.agent.tools.processing.compute_skill_metrics.compute_skill_metrics import (
+from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
     SkillMetricsInputError,
     nash_sutcliffe_efficiency,
     pearson_r2,

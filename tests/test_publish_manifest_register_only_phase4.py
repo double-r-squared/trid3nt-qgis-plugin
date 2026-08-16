@@ -27,13 +27,13 @@ import json
 
 import pytest
 
-from trid3nt_server.agent.tools.publish_layer import publish_layer as pl
+from trid3nt_server.data.publish_layer import publish_layer as pl
 from trid3nt_server.emission.uri_registry import (
     SessionUriRegistry,
     activate_registry,
     deactivate_registry,
 )
-from trid3nt_server.agent.workflows.shared import register_published_manifest as rpm
+from trid3nt_server.workflows.shared import register_published_manifest as rpm
 from trid3nt_contracts.publish_manifest import (
     MANIFEST_SCHEMA_VERSION,
     PublishManifest,
@@ -328,7 +328,7 @@ class _RR:
 
 
 def _patch_solver(monkeypatch, *, completion, manifest_bytes=None):
-    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
+    from trid3nt_server.data.simulation.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
     monkeypatch.setattr(
@@ -393,7 +393,7 @@ def test_read_publish_manifest_unknown_schema_returns_none(monkeypatch):
 def test_flood_scenario_branch_is_clean_if_else():
     """The register-only vs on-box fallback split is a clean if/else gated on a
     present manifest, and the heavy on-box steps sit under ``if not register_only``."""
-    import trid3nt_server.agent.workflows.sfincs.flood.flood as mfs
+    import trid3nt_server.workflows.sfincs.flood.flood as mfs
 
     body = inspect.getsource(mfs.model_flood_scenario)
     # The branch trigger.
@@ -409,7 +409,7 @@ def test_flood_scenario_branch_is_clean_if_else():
 def test_wave_scenario_branch_is_clean_if_else():
     """model_swan_wave_field gains the same present-manifest register-only branch
     in front of the on-box download + postprocess_swan fallback."""
-    import trid3nt_server.agent.workflows.swan.wave_field.wave_field as mws
+    import trid3nt_server.workflows.swan.wave_field.wave_field as mws
 
     body = inspect.getsource(mws.model_swan_wave_field)
     assert "manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body

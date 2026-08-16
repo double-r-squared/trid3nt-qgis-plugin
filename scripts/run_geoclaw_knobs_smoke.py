@@ -46,10 +46,10 @@ BBOX = (-124.24, 41.73, -124.16, 41.78)
 SIM_DURATION_S = 900
 OUTPUT_FRAMES = 5
 
-from trid3nt_server.agent.workflows.geoclaw.amr_regions.amr_regions import (
+from trid3nt_server.workflows.geoclaw.amr_regions.amr_regions import (
     geoclaw_amr_refinement_regions,
 )
-from trid3nt_server.agent.workflows.geoclaw.regional_manning.regional_manning import (
+from trid3nt_server.workflows.geoclaw.regional_manning.regional_manning import (
     geoclaw_regional_manning_friction,
 )
 

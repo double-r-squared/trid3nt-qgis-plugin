@@ -69,7 +69,7 @@ def test_depth_layer_carries_optional_gauge_scalars():
 # (2) Download-filter widening.
 # ===========================================================================
 def test_output_key_filter_accepts_fort_and_gauge():
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import (
         _is_geoclaw_output_key,
     )
 
@@ -84,7 +84,7 @@ def test_output_key_filter_accepts_fort_and_gauge():
 # (3) Gauge parser (postprocess-vs-fixture).
 # ===========================================================================
 def test_gauge_parser_series_and_scalars(tmp_path):
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         parse_geoclaw_gauge_series,
     )
 
@@ -112,7 +112,7 @@ def test_gauge_parser_series_and_scalars(tmp_path):
 
 
 def test_gauge_parser_no_file_returns_none(tmp_path):
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         parse_geoclaw_gauge_series,
     )
 
@@ -124,7 +124,7 @@ def test_gauge_parser_no_file_returns_none(tmp_path):
 # ===========================================================================
 def test_gauge_timeseries_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         build_gauge_timeseries_chart_spec,
     )
 
@@ -141,7 +141,7 @@ def test_gauge_timeseries_chart_spec():
 # (5) Tool bbox gate.
 # ===========================================================================
 def test_tool_missing_bbox_returns_typed_error():
-    from trid3nt_server.agent.workflows.geoclaw.gauge_timeseries.gauge_timeseries import (
+    from trid3nt_server.workflows.geoclaw.gauge_timeseries.gauge_timeseries import (
         geoclaw_tsunami_gauge_timeseries,
     )
 

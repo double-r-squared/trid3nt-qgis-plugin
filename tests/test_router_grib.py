@@ -23,11 +23,11 @@ from rasterio.crs import CRS
 from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import RouterError
-from trid3nt_server.agent.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.agent.tools.fetchers._router.hooks import mrms_qpe as mq
-from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import RouterError
+from trid3nt_server.data.fetchers._router.executors import raster_cog
+from trid3nt_server.data.fetchers._router.hooks import mrms_qpe as mq
+from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
 _NODATA = -9999.0
 _CONUS = (-130.0, 20.0, -60.0, 55.0)
@@ -57,7 +57,7 @@ def test_spec_is_grib_object_with_resolve_hooks(spec):
 
 
 def test_promoted_tool_registered_under_twin_name():
-    from trid3nt_server.agent import tools as _tools
+    from trid3nt_server import data as _tools
 
     assert "fetch_mrms_qpe" in _tools.TOOL_REGISTRY
     meta = _tools.TOOL_REGISTRY["fetch_mrms_qpe"].metadata
@@ -196,7 +196,7 @@ def _synthetic_mrms_gz(*, sentinels=True, shape=(350, 700)):
 def patch_transport(monkeypatch, spec):
     """Patch the shared transport GET so grib_object receives a synthetic .grib2.gz."""
     def _install(gz_bytes):
-        import trid3nt_server.agent.tools.fetchers._router.transport as tp
+        import trid3nt_server.data.fetchers._router.transport as tp
         monkeypatch.setattr(tp, "get_client", lambda: object())
         monkeypatch.setattr(tp, "get_bytes", lambda *a, **k: (gz_bytes, "application/octet-stream", "u"))
     return _install

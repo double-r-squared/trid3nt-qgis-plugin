@@ -42,7 +42,7 @@ def test_transport_result_contract():
 # 2. Deck authoring: tvd.prop toggle + temperature front + baroclinic param
 # --------------------------------------------------------------------------- #
 def test_stage_transport_scheme_deck_toggle(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as da
+    from trid3nt_server.workflows.schism import deck_authoring as da
 
     for scheme, want_flag in (("tvd", "1"), ("upwind", "0")):
         d = tmp_path / scheme
@@ -64,7 +64,7 @@ def test_stage_transport_scheme_deck_toggle(tmp_path: Path):
 
 
 def test_stage_transport_scheme_deck_rejects_unknown_scheme(tmp_path: Path):
-    from trid3nt_server.agent.workflows.schism import deck_authoring as da
+    from trid3nt_server.workflows.schism import deck_authoring as da
     with pytest.raises(da.SchismDeckError):
         da.stage_transport_scheme_deck(tmp_path / "x", scheme="weno")
 
@@ -85,7 +85,7 @@ def _fake_read(var_start: float, var_end: float, mass_drift_frac: float, n=6):
 
 
 def test_compare_transport_schemes_contrast():
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as pp
+    from trid3nt_server.workflows.schism import postprocess_schism as pp
 
     tvd = _fake_read(20.0, 19.3, -0.004)      # retains ~96.5%
     upwind = _fake_read(20.0, 18.2, -0.007)   # retains ~91%
@@ -97,7 +97,7 @@ def test_compare_transport_schemes_contrast():
 
 
 def test_compare_flags_mass_blowup_as_unvalidated():
-    from trid3nt_server.agent.workflows.schism import postprocess_schism as pp
+    from trid3nt_server.workflows.schism import postprocess_schism as pp
     tvd = _fake_read(20.0, 19.3, -0.004)
     upwind = _fake_read(20.0, 18.2, -0.20)  # 20% mass drift -> fails sanity gate
     c = pp.compare_transport_schemes(tvd, upwind, t_hot=20.0, t_cold=10.0)
@@ -109,7 +109,7 @@ def test_compare_flags_mass_blowup_as_unvalidated():
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_sim_days_out_of_range_returns_typed_error():
-    from trid3nt_server.agent.workflows.schism.transport_validation.transport_validation import (
+    from trid3nt_server.workflows.schism.transport_validation.transport_validation import (
         schism_transport_validation,
     )
     out = await schism_transport_validation(sim_days=99.0)
@@ -118,7 +118,7 @@ async def test_sim_days_out_of_range_returns_typed_error():
 
 
 def test_registered():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     e = TOOL_REGISTRY.get("schism_transport_validation")
     assert e is not None
@@ -126,7 +126,7 @@ def test_registered():
 
 
 def test_corpus_surfaces_the_template():
-    from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools
+    from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools
     visible = retrieve_visible_tools(
         "compare SCHISM transport schemes upwind vs TVD numerical mixing", None, 8
     )

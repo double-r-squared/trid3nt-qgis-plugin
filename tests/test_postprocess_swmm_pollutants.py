@@ -29,7 +29,7 @@ pytest.importorskip("swmm_api")
 pytest.importorskip("pyswmm")
 rasterio = pytest.importorskip("rasterio")
 
-from trid3nt_server.agent.workflows.swmm.postprocess_swmm import (  # noqa: E402
+from trid3nt_server.workflows.swmm.postprocess_swmm import (  # noqa: E402
     postprocess_swmm_pollutants,
     read_outfall_loading,
     read_runoff_quality_built_washed,
@@ -81,7 +81,7 @@ def test_runoff_quality_built_washed_count_conversion():
 def test_postprocess_pollutants_metrics_and_layers():
     run, build = _stub_run_build()
     with patch(
-        "trid3nt_server.agent.workflows.swmm.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.swmm.postprocess_swmm._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
     ):
         layers, series, metrics = postprocess_swmm_pollutants(

@@ -22,7 +22,7 @@ _AK_PENINSULA = (-159.8, 55.0, -158.8, 55.6)
 
 
 async def _main():
-    from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import (
         geoclaw_inundation,
     )
     res = await geoclaw_inundation(

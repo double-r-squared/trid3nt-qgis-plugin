@@ -81,7 +81,7 @@ def _fetch_gauge_from_minio(run_id: str, dest_dir: Path) -> None:
     path postprocesses in-process (never calls the batch downloader), but the
     worker still uploads _output/gauge*.txt to s3://<runs_bucket>/<run_id>/_output/.
     """
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
+    from trid3nt_server.data.simulation.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -98,8 +98,8 @@ def _fetch_gauge_from_minio(run_id: str, dest_dir: Path) -> None:
 
 
 async def _run_leg(leg: str) -> None:
-    import trid3nt_server.agent.workflows.geoclaw.inundation.inundation as inund
-    from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+    import trid3nt_server.workflows.geoclaw.inundation.inundation as inund
+    from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
         parse_geoclaw_gauge_series,
     )
 

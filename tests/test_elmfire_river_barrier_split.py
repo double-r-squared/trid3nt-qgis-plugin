@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+from trid3nt_server.workflows.elmfire.spotting.spotting import (
     _contiguous_band,
     _river_runs,
     check_river_separates_domain,

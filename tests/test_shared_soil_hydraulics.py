@@ -11,7 +11,7 @@ import math
 
 import pytest
 
-from trid3nt_server.agent.workflows.shared.soil_hydraulics import (
+from trid3nt_server.workflows.shared.soil_hydraulics import (
     K_CEIL_M_S,
     K_FLOOR_M_S,
     PedotransferK,

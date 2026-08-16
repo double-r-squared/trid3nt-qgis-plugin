@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.processing.extract_timeseries_at_point.extract_timeseries_at_point import (
+from trid3nt_server.data.processing.extract_timeseries_at_point.extract_timeseries_at_point import (
     NoFrameSequenceError,
     TimeseriesInputError,
     detect_frame_sequences,
@@ -288,7 +288,7 @@ async def test_no_location_typed_error(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("extract_timeseries_at_point")
     assert entry is not None

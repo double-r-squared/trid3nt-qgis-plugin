@@ -21,8 +21,8 @@ import pytest
 
 from trid3nt_contracts.geoclaw_contracts import GeoClawDepthLayerURI
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from trid3nt_server.agent.gates import pending
-from trid3nt_server.agent.workflows.geoclaw.amr_regions import amr_regions as ar
+from trid3nt_server.gates import pending
+from trid3nt_server.workflows.geoclaw.amr_regions import amr_regions as ar
 from trid3nt_server.emission import pipeline_emitter as pe
 
 _AOI = (-124.24, 41.73, -124.16, 41.78)

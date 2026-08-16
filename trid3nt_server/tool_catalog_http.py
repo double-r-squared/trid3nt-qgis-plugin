@@ -23,7 +23,7 @@ WebSocket server in ``server.run_server``, NOT in its own process -- single
 process, single asyncio loop, no thread sharing.
 
 Backed entirely by:
-- ``trid3nt_server.agent.tools.TOOL_REGISTRY`` -- every registered tool's
+- ``trid3nt_server.data.TOOL_REGISTRY`` -- every registered tool's
   docstring (the same text the model sees) + its ``AtomicToolMetadata``
   facets (``engine``, ``tier``, ``source_class``, the MCP annotation hints,
   ``supports_global_query``). No hand-maintained taxonomy: every facet is
@@ -83,7 +83,7 @@ def _default_corpus_path() -> Path:
     if env_path:
         return Path(env_path).expanduser().resolve()
     here = Path(__file__).resolve()
-    return here.parent / "agent" / "data" / "tool_query_corpus.yaml"
+    return here.parent / "data" / "tool_query_corpus.yaml"
 
 
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
@@ -111,11 +111,11 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
     pre-restructure monolith (flat composition, no tiers).
     """
     here = Path(__file__).resolve()
-    tools_dir = here.parent / "agent" / "tools"
+    tools_dir = here.parent / "data"
     composed: dict[str, list[str]] = {}
     for cpath in sorted(tools_dir.rglob("corpus.yaml")):
         composed.update(_read_corpus_yaml(cpath))
-    composed.update(_read_corpus_yaml(here.parent / "agent" / "data" / "tool_query_corpus.yaml"))
+    composed.update(_read_corpus_yaml(here.parent / "data" / "tool_query_corpus.yaml"))
     return composed
 
 
@@ -193,7 +193,7 @@ def build_catalog_payload(
           ]
         }
     """
-    from .agent.tools import TOOL_REGISTRY
+    from .data import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
     if use_cache and _PAYLOAD_CACHE is not None:
@@ -1275,12 +1275,12 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     try:
         import boto3
 
-        from .agent.tools.cache import CACHE_BUCKET, cache_path
+        from .data.cache import CACHE_BUCKET, cache_path
         # fetch_buildings is folded to the router: the sidecar identity
         # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
         # coded twin. Read it from the spec, falling back to the load-bearing literals
         # so a cold spec registry never breaks the enrich read.
-        from .agent.tools.fetchers._router.registration import get_spec
+        from .data.fetchers._router.registration import get_spec
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None
@@ -1434,7 +1434,7 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
     # A same-name model must re-discover its num_ctx (the provider/num_ctx
     # switch invalidates the process-lifetime cache).
     try:
-        from .agent.gates.context_budget import reset_num_ctx_cache
+        from .gates.context_budget import reset_num_ctx_cache
 
         reset_num_ctx_cache()
     except Exception:  # noqa: BLE001 -- cache reset is best-effort, never fatal
@@ -1728,7 +1728,7 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
 def _local_models_route_enabled() -> bool:
     """The route exists only for the OpenAI-compatible (local) provider."""
     try:
-        from .agent.adapters.bedrock_adapter import model_provider
+        from .adapters.bedrock_adapter import model_provider
 
         return model_provider() == "openai"
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1827,7 +1827,7 @@ def _fetch_openrouter_models(base_url: str) -> bytes:
 
     import httpx
 
-    from .agent.adapters.openai_adapter import openai_api_key
+    from .adapters.openai_adapter import openai_api_key
 
     now = time.monotonic()
     cached = _OPENROUTER_MODELS_CACHE.get(base_url)

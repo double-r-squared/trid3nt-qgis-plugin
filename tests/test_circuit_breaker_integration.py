@@ -24,12 +24,12 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server.adapters.adapter import (
     ModelSettings,
     MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
-from trid3nt_server.agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from trid3nt_server.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 

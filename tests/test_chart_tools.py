@@ -29,13 +29,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.processing.charts_common import (
+from trid3nt_server.data.processing.charts_common import (
     ChartToolError,
     _MAX_ROWS,
     build_chart_payload,
     is_chart_emission_result,
 )
-from trid3nt_server.agent.tools.processing.charts.generate_chart.generate_chart import (
+from trid3nt_server.data.processing.charts.generate_chart.generate_chart import (
     generate_chart,
 )
 from trid3nt_contracts.chart_contracts import (
@@ -300,7 +300,7 @@ class TestChartEmissionDiscriminator:
 
 class TestSummarizeChartEmission:
     def test_spec_stripped_for_chart(self):
-        from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+        from trid3nt_server.adapters.adapter import summarize_tool_result
 
         payload = generate_chart(vega_lite_spec=_bar_spec(), title="t", caption="cap",
                                  records=[{"label": "a", "count": 1}, {"label": "b", "count": 2}])
@@ -318,7 +318,7 @@ class TestSummarizeChartEmission:
         assert res["chart_type"] == "bar"
 
     def test_ordinary_dict_preserved(self):
-        from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+        from trid3nt_server.adapters.adapter import summarize_tool_result
 
         ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
         summary = summarize_tool_result("spatial_query", ordinary)
@@ -430,7 +430,7 @@ class TestEmitChart:
 
 
 def test_dispatch_detection_signal(tmp_path):
-    from trid3nt_server.agent.tools.processing.spatial_query.spatial_query import spatial_query
+    from trid3nt_server.data.processing.spatial_query.spatial_query import spatial_query
 
     records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(4)]
     vec_path = _make_geojson_points(tmp_path, records)
@@ -451,12 +451,12 @@ def test_dispatch_detection_signal(tmp_path):
 
 class TestRegistration:
     def test_in_tool_registry(self):
-        from trid3nt_server.agent.tools import TOOL_REGISTRY
+        from trid3nt_server.data import TOOL_REGISTRY
 
         assert "generate_chart" in TOOL_REGISTRY
 
     def test_metadata(self):
-        from trid3nt_server.agent.tools import TOOL_REGISTRY
+        from trid3nt_server.data import TOOL_REGISTRY
 
         m = TOOL_REGISTRY["generate_chart"].metadata
         assert m.ttl_class == "dynamic-1h"
@@ -464,7 +464,7 @@ class TestRegistration:
         assert m.read_only_hint is True
 
     def test_culled_chart_tools_absent(self):
-        from trid3nt_server.agent.tools import TOOL_REGISTRY
+        from trid3nt_server.data import TOOL_REGISTRY
 
         for dead in ("generate_histogram", "generate_choropleth_legend",
                      "generate_time_series", "generate_damage_distribution"):

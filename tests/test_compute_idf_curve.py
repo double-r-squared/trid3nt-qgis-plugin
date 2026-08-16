@@ -28,11 +28,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.compute_idf_curve import compute_idf_curve as idf_mod
-from trid3nt_server.agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as df_mod
-from trid3nt_server.agent.tools.processing.charts_common import is_chart_emission_result
-from trid3nt_server.agent.tools.processing.compute_idf_curve.compute_idf_curve import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.compute_idf_curve import compute_idf_curve as idf_mod
+from trid3nt_server.data.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as df_mod
+from trid3nt_server.data.processing.charts_common import is_chart_emission_result
+from trid3nt_server.data.processing.compute_idf_curve.compute_idf_curve import (
     IdfCurveInputError,
     IdfCurveNoCoverageError,
     IdfCurveUpstreamError,
@@ -213,7 +213,7 @@ def test_bad_y_axis_raises(offline_pfds) -> None:
 
 
 def test_corpus() -> None:
-    from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
+    from trid3nt_server.data.search.search_tools import search_tools as dd
 
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_idf_curve", [])) >= 5

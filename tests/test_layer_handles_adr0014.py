@@ -437,7 +437,7 @@ def _function_response_payloads(contents_per_turn):
 @pytest.mark.asyncio
 async def test_emit_seam_llm_sees_handle_not_uri(fake_llm) -> None:
     from trid3nt_server import server as agent_server
-    from trid3nt_server.agent.adapters.adapter import ModelSettings
+    from trid3nt_server.adapters.adapter import ModelSettings
     from trid3nt_server.main import _import_tools_registry
     from trid3nt_server.server import SessionState
 

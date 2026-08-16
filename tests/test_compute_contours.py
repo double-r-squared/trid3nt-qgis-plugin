@@ -31,8 +31,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.compute_contours.compute_contours import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.compute_contours.compute_contours import (
     ContourComputeError,
     _derive_interval_m,
     _snap_to_nice_interval,
@@ -273,7 +273,7 @@ def test_run_gdal_contour_invocation_args():
         return _Completed()
 
     with patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._get_gdal_contour_bin",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._get_gdal_contour_bin",
         return_value="/usr/bin/gdal_contour",
     ), patch("subprocess.run", side_effect=_fake_run):
         _run_gdal_contour("/tmp/in.tif", "/tmp/out.fgb", interval_m=20.0)
@@ -305,12 +305,12 @@ def test_compute_contours_layer_uri_shape(fake_storage):
             f.write(fake_fgb)
 
     with patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._download_dem_bytes",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._run_gdal_contour",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._run_gdal_contour",
         side_effect=_fake_gdal_contour,
-    ), patch("trid3nt_server.agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.data.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             dem_uri="gs://test-bucket/cache/static-30d/dem/abc123.tif",
             _bucket="test-bucket",
@@ -336,12 +336,12 @@ def test_compute_contours_explicit_interval_in_name(fake_storage):
     fake_fgb = _fake_contour_fgb_bytes()
 
     with patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._download_dem_bytes",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._run_gdal_contour",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._run_gdal_contour",
         side_effect=lambda inp, out, interval_m: open(out, "wb").write(fake_fgb) or None,
-    ), patch("trid3nt_server.agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.data.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             dem_uri="gs://test-bucket/cache/static-30d/dem/abc123.tif",
             interval_m=50.0,
@@ -361,14 +361,14 @@ def test_compute_contours_binary_missing_raises(fake_storage):
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._download_dem_bytes",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._get_gdal_contour_bin",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._get_gdal_contour_bin",
         side_effect=ContourComputeError(
             "GDAL_CONTOUR_UNAVAILABLE", "gdal_contour binary not found"
         ),
-    ), patch("trid3nt_server.agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.data.cache.CACHE_BUCKET", "test-bucket"):
         with pytest.raises(ContourComputeError) as exc_info:
             compute_contours(
                 dem_uri="gs://test-bucket/dem/abc.tif",
@@ -398,8 +398,8 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
     """On cache hit, gdal_contour is NOT invoked; cached bytes are returned."""
     fake_fgb = _fake_contour_fgb_bytes()
 
-    from trid3nt_server.agent.tools.cache import cache_path as make_cache_path
-    from trid3nt_server.agent.tools.cache import compute_cache_key
+    from trid3nt_server.data.cache import cache_path as make_cache_path
+    from trid3nt_server.data.cache import compute_cache_key
 
     dem_uri = "gs://test-bucket/cache/static-30d/dem/abc123.tif"
     params = {"dem_uri": dem_uri, "interval_m": 10.0}
@@ -419,12 +419,12 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
         contour_called.append(args)
 
     with patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._run_gdal_contour",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._run_gdal_contour",
         side_effect=_no_contour,
     ), patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._download_dem_bytes",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._download_dem_bytes",
         return_value=b"",
-    ), patch("trid3nt_server.agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.data.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             dem_uri=dem_uri,
             interval_m=10.0,
@@ -463,15 +463,15 @@ def test_compute_contours_bbox_fetches_dem(fake_storage):
         )
 
     with patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours.fetch_dem",
+        "trid3nt_server.data.processing.compute_contours.compute_contours.fetch_dem",
         side_effect=_fake_fetch_dem,
     ), patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._download_dem_bytes",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.agent.tools.processing.compute_contours.compute_contours._run_gdal_contour",
+        "trid3nt_server.data.processing.compute_contours.compute_contours._run_gdal_contour",
         side_effect=lambda inp, out, interval_m: open(out, "wb").write(fake_fgb) or None,
-    ), patch("trid3nt_server.agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.data.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             bbox=(-100.0, 40.0, -99.9, 40.1),
             _bucket="test-bucket",

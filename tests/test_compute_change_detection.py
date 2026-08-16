@@ -35,8 +35,8 @@ from rasterio.transform import from_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.processing.compute_change_detection.compute_change_detection import (
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.data.processing.compute_change_detection.compute_change_detection import (
     ChangeDetectionAoiTooLargeError,
     ChangeDetectionInputError,
     ChangeDetectionLayerURI,
@@ -248,7 +248,7 @@ def test_ndwi_index_recorded(index_pair, tmp_path) -> None:
 
 
 def test_corpus() -> None:
-    from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
+    from trid3nt_server.data.search.search_tools import search_tools as dd
 
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_change_detection", [])) >= 5

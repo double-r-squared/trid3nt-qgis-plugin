@@ -35,8 +35,8 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.agent import tools as agent_tools
-from trid3nt_server.agent.adapters.adapter import build_layers_present_note
+from trid3nt_server import data as agent_tools
+from trid3nt_server.adapters.adapter import build_layers_present_note
 from trid3nt_server.persistence import Persistence
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.server import (
@@ -46,7 +46,7 @@ from trid3nt_server.server import (
     get_persistence,
     set_persistence,
 )
-from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.data import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid

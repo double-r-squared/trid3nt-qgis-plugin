@@ -35,19 +35,19 @@ from harness import (  # noqa: E402
 # twin's deletion. Import defensively so a run after a twin cut still exercises the
 # remaining (pre-cut) sources rather than hard-failing at import.
 try:
-    from trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_slr_scenarios import (  # noqa: E402
+    from trid3nt_server.data.fetchers.ocean.fetch_noaa_slr_scenarios import (  # noqa: E402
         fetch_noaa_slr_scenarios as slr_mod,
     )
 except ImportError:
     slr_mod = None
 try:
-    from trid3nt_server.agent.tools.fetchers.hazard.fetch_usace_levees import (  # noqa: E402
+    from trid3nt_server.data.fetchers.hazard.fetch_usace_levees import (  # noqa: E402
         fetch_usace_levees as lev_mod,
     )
 except ImportError:
     lev_mod = None
 try:
-    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_epa_ejscreen import (  # noqa: E402
+    from trid3nt_server.data.fetchers.socioeconomic.fetch_epa_ejscreen import (  # noqa: E402
         fetch_epa_ejscreen as ej_mod,
     )
 except ImportError:

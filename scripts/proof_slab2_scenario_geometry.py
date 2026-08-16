@@ -25,7 +25,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from _slab2_fixture import write_cascadia_fixture, cascadia_trench_lon  # noqa: E402
 import proof_geoclaw_chignik_runup as P  # noqa: E402  (basemap helpers)
-from trid3nt_server.agent.workflows.geoclaw.scenario_slab2 import (  # noqa: E402
+from trid3nt_server.workflows.geoclaw.scenario_slab2 import (  # noqa: E402
     parse_slab2_grids,
     resolve_slab2_scenario,
     RIGIDITY_PA,

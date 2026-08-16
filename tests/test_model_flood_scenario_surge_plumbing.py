@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import asyncio
 
-import trid3nt_server.agent.workflows.sfincs.flood.flood as mfs
-import trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter as _sfa
-from trid3nt_server.agent.workflows.sfincs.flood.flood import (
+import trid3nt_server.workflows.sfincs.flood.flood as mfs
+import trid3nt_server.workflows.sfincs.sfincs_forcing_adapter as _sfa
+from trid3nt_server.workflows.sfincs.flood.flood import (
     _build_surge_forcing_members,
     _resolve_building_obstacle_uri,
     _resolve_surge_forcing_from_fetchers,
 )
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     DischargeForcing,
     PressureForcing,
     WaterlevelForcing,
@@ -129,7 +129,7 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
     # TOOL_REGISTRY["fetch_buildings"].fn, so swap that entry's fn.
     import dataclasses
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     def _boom(*_a, **_k):
         raise RuntimeError("overpass down")
@@ -147,7 +147,7 @@ def test_resolve_building_obstacle_true_records_source_on_success(monkeypatch) -
     """A successful OSM footprint fetch returns its URI + records a DataSource."""
     import dataclasses
 
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     class _Layer:
         uri = "s3://cache/buildings.fgb"
@@ -275,7 +275,7 @@ def test_wrapper_surge_forcing_via_tool_registry(monkeypatch) -> None:
     the registered ``sfincs_flood`` accepts + forwards
     ``surge_forcing`` (no TypeError; the kwarg is signature-accepted, not
     swallowed by ``**_extra_ignored``)."""
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     captured = _capture_internal_call(monkeypatch)
     entry = TOOL_REGISTRY["sfincs_flood"]

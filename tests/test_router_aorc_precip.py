@@ -17,18 +17,18 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router.errors import (
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterNotAvailableError,
 )
-from trid3nt_server.agent.tools.fetchers._router.hooks import aorc_precip as ap
-from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.data.fetchers._router.hooks import aorc_precip as ap
+from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
 
 AORC_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/agent/tools/fetchers/weather/fetch_aorc_precip/source.yaml"
+    / "trid3nt_server/data/fetchers/weather/fetch_aorc_precip/source.yaml"
 )
 
 # Coweeta fork bbox (the ADR 0203 proof AOI).
@@ -60,7 +60,7 @@ def _synthetic_year(year: int, ndays: int = 3) -> Any:
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):
-    from trid3nt_server.agent.tools.cache import (
+    from trid3nt_server.data.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key, is_cacheable,
     )
     now = _dt.datetime(2026, 8, 8, 12, 0, 0, tzinfo=_dt.timezone.utc)
@@ -87,7 +87,7 @@ def _inject_read_through(monkeypatch, store: dict[str, bytes]):
 
 
 def test_aorc_promoted_as_record_spec():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_aorc_precip"]
     assert entry.metadata.source_class == "aorc_precip"

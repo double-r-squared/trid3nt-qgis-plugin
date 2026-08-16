@@ -25,12 +25,12 @@ import rasterio
 from rasterio.io import MemoryFile
 from types import SimpleNamespace
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router import transport as _tp
-from trid3nt_server.agent.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.agent.tools.fetchers._router.hooks import jrc_global_surface_water as jrc_hook
-from trid3nt_server.agent.tools.fetchers._router.router import synthesize_metadata
-from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router import transport as _tp
+from trid3nt_server.data.fetchers._router.executors import raster_cog
+from trid3nt_server.data.fetchers._router.hooks import jrc_global_surface_water as jrc_hook
+from trid3nt_server.data.fetchers._router.router import synthesize_metadata
+from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
 # Small AOI well inside the 2.0 deg^2 guardrail (Mississippi floodplain, LA).
 _BBOX = (-91.30, 30.30, -91.00, 30.55)

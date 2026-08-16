@@ -133,7 +133,7 @@ def test_new_layer_uris_are_layer_subtypes():
 # (2) build_spec arg-assembly.
 # ===========================================================================
 def test_build_spec_carries_new_knobs():
-    from trid3nt_server.agent.workflows.landlab.run_landlab import build_landlab_build_spec
+    from trid3nt_server.workflows.landlab.run_landlab import build_landlab_build_spec
 
     ra = LandlabRunArgs(
         bbox=(-105.37, 39.998, -105.33, 40.032),
@@ -155,7 +155,7 @@ def test_build_spec_carries_new_knobs():
 # ===========================================================================
 def test_storm_ensemble_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_storm_ensemble_chart_spec,
     )
 
@@ -171,7 +171,7 @@ def test_storm_ensemble_chart_spec():
 
 def test_overland_hydrograph_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_overland_hydrograph_chart_spec,
     )
 
@@ -189,7 +189,7 @@ def test_overland_hydrograph_chart_spec():
 
 def test_hacks_law_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_hacks_law_chart_spec,
     )
 
@@ -461,7 +461,7 @@ def test_tool_missing_bbox_returns_typed_error(modpath, fn):
     import importlib
 
     mod = importlib.import_module(
-        f"trid3nt_server.agent.workflows.landlab.{modpath}"
+        f"trid3nt_server.workflows.landlab.{modpath}"
     )
     out = asyncio.run(getattr(mod, fn)(bbox=None))
     assert isinstance(out, dict)

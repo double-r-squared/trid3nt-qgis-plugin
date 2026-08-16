@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.agent.gates.circuit_breaker import (
+from trid3nt_server.gates.circuit_breaker import (
     CircuitBreakerError,
     ToolCircuitBreaker,
     is_client_arg_error,
@@ -244,7 +244,7 @@ def test_circuit_breaker_error_is_runtime_error():
 
 def test_circuit_breaker_error_harvested_by_summarize():
     """``summarize_tool_result`` harvests error_code + retryable from CircuitBreakerError."""
-    from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+    from trid3nt_server.adapters.adapter import summarize_tool_result
 
     err = CircuitBreakerError("fetch_stac", 30.0)
     summary = summarize_tool_result("fetch_stac", None, error=err)

@@ -20,7 +20,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.agent.workflows.swmm.aquifer_baseflow.aquifer_baseflow import (
+from trid3nt_server.workflows.swmm.aquifer_baseflow.aquifer_baseflow import (
     build_aquifer_inp, solve_aquifer_deck, default_two_storm_forcing,
     _mean_between, _peak,
 )

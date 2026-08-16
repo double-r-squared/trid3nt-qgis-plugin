@@ -37,14 +37,14 @@ from typing import TYPE_CHECKING, Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import Envelope, ErrorPayload
 
-from ..agent.adapters.adapter import MAX_TURN_ITERATIONS
+from ..adapters.adapter import MAX_TURN_ITERATIONS
 from ..emission.pipeline_emitter import current_turn_case
 from .protocol import _SESSION_WS_CONNECTIONS
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
 
-    from ..agent.adapters.adapter import UsageMetadataEvent
+    from ..adapters.adapter import UsageMetadataEvent
     from .session import SessionState
 
 logger = logging.getLogger("trid3nt_server.server")

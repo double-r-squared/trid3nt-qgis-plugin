@@ -17,13 +17,13 @@ import numpy as np
 import pytest
 import rasterio.transform as _rt
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
-from trid3nt_server.agent.tools.fetchers._fetch_common import (
+from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.data.fetchers._fetch_common import (
     BboxInvalidError,
     UpstreamAPIError,
     round_bbox_to_resolution,
 )
-from trid3nt_server.agent.tools.fetchers._router.hooks import dem_3dep as dem_mod
+from trid3nt_server.data.fetchers._router.hooks import dem_3dep as dem_mod
 from trid3nt_contracts.execution import DemLayerURI, LayerURI
 
 FORT_MYERS_BBOX = (-81.9, 26.55, -81.8, 26.68)

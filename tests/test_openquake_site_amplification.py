@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.agent.workflows.openquake._local_oq import (
+from trid3nt_server.workflows.openquake._local_oq import (
     NEHRP_FPGA,
     NEHRP_VS30,
     aoi_centroid,
@@ -29,10 +29,10 @@ from trid3nt_server.agent.workflows.openquake._local_oq import (
     render_trivial_gmpe_logic_tree_xml,
     render_trivial_source_logic_tree_xml,
 )
-from trid3nt_server.agent.workflows.openquake.postprocess_openquake import (
+from trid3nt_server.workflows.openquake.postprocess_openquake import (
     parse_hazard_curve_csv,
 )
-from trid3nt_server.agent.workflows.openquake.psha import psha as _psha
+from trid3nt_server.workflows.openquake.psha import psha as _psha
 
 BBOX = (-112.02, 40.66, -111.80, 40.85)  # Salt Lake City valley
 

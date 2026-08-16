@@ -33,7 +33,7 @@ import tempfile
 import pytest
 
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
-from trid3nt_server.agent.tools.processing.compute_layer_bounds.compute_layer_bounds import (
+from trid3nt_server.data.processing.compute_layer_bounds.compute_layer_bounds import (
     ComputeLayerBoundsError,
     compute_layer_bounds,
 )
@@ -270,8 +270,8 @@ async def test_unknown_uri_raises_typed_error() -> None:
 def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
     """_resolve_layer_to_local_path extracts the url= COG from a TiTiler
     template and routes it through the s3 branch."""
-    import trid3nt_server.agent.tools.cache as cache_mod
-    import trid3nt_server.agent.tools.processing.compute_layer_bounds.compute_layer_bounds as clb
+    import trid3nt_server.data.cache as cache_mod
+    import trid3nt_server.data.processing.compute_layer_bounds.compute_layer_bounds as clb
 
     real_cog = "s3://trid3nt-runs/01ABC/swmm_depth_frame_01.tif"
     captured: dict[str, str] = {}
@@ -302,7 +302,7 @@ def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
 def test_resolve_titiler_template_without_url_param_raises_typed_error() -> None:
     """A display URL with no recoverable s3 url= param still raises the typed
     UNKNOWN_LAYER_URI (honest, retryable) — it must not fail open silently."""
-    import trid3nt_server.agent.tools.processing.compute_layer_bounds.compute_layer_bounds as clb
+    import trid3nt_server.data.processing.compute_layer_bounds.compute_layer_bounds as clb
 
     bad = "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/3/2/1.png"
     with pytest.raises(ComputeLayerBoundsError) as ei:
@@ -337,8 +337,8 @@ async def test_no_emitter_does_not_crash() -> None:
 
 
 def test_registered_and_in_hot_set() -> None:
-    import trid3nt_server.agent.tools as tools
-    from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
+    import trid3nt_server.data as tools
+    from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
 
     rt = tools.TOOL_REGISTRY.get("compute_layer_bounds")
     assert rt is not None, "compute_layer_bounds not in TOOL_REGISTRY"
@@ -354,7 +354,7 @@ def test_registered_and_in_hot_set() -> None:
 
 
 def test_adapter_steer_present() -> None:
-    from trid3nt_server.agent.adapters.adapter import SYSTEM_PROMPT
+    from trid3nt_server.adapters.adapter import SYSTEM_PROMPT
 
     prompt = SYSTEM_PROMPT.lower()
     assert "compute_layer_bounds" in SYSTEM_PROMPT

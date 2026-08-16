@@ -11,10 +11,10 @@ import inspect
 
 import pytest
 
-from trid3nt_server.agent.workflows.swan.wave_field.wave_field import (
+from trid3nt_server.workflows.swan.wave_field.wave_field import (
     build_storm_hydrograph, swan_wave_field,
 )
-from trid3nt_server.agent.workflows.swan.run_swan import build_swan_build_spec
+from trid3nt_server.workflows.swan.run_swan import build_swan_build_spec
 from trid3nt_contracts.swan_contracts import SwanRunArgs, SwanWaveBoundary
 
 

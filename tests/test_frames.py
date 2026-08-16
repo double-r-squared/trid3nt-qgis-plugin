@@ -17,8 +17,8 @@ import re
 
 import pytest
 
-from trid3nt_server.agent.workflows.shared import frames
-from trid3nt_server.agent.workflows.shared.frames import (
+from trid3nt_server.workflows.shared import frames
+from trid3nt_server.workflows.shared.frames import (
     MAX_FLOOD_FRAMES,
     EmittedFrame,
     emit_timeseries_layers,
@@ -56,7 +56,7 @@ def test_over_cap_subsamples_evenly_endpoints_kept(caplog) -> None:
 
     n = MAX_FLOOD_FRAMES * 3
     with caplog.at_level(
-        logging.INFO, logger="trid3nt_server.agent.workflows.sfincs.postprocess_flood"
+        logging.INFO, logger="trid3nt_server.workflows.sfincs.postprocess_flood"
     ):
         idx = select_frame_time_indices(n)
     assert len(idx) <= MAX_FLOOD_FRAMES

@@ -25,12 +25,12 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.agent.tools.fetchers._router import router
-from trid3nt_server.agent.tools.fetchers._router import transport as _tp
-from trid3nt_server.agent.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.agent.tools.fetchers._router.executors.raster_cog import _VrtSource
-from trid3nt_server.agent.tools.fetchers._router.router import synthesize_metadata
-from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.data.fetchers._router import router
+from trid3nt_server.data.fetchers._router import transport as _tp
+from trid3nt_server.data.fetchers._router.executors import raster_cog
+from trid3nt_server.data.fetchers._router.executors.raster_cog import _VrtSource
+from trid3nt_server.data.fetchers._router.router import synthesize_metadata
+from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
 
 _BBOX = (-91.30, 30.30, -91.25, 30.35)
 
@@ -128,7 +128,7 @@ def test_url_template_fills_property_depth(spec):
         captured["url"] = url
         raise RuntimeError("stop after url capture")
 
-    import trid3nt_server.agent.tools.fetchers._router.transport as tp
+    import trid3nt_server.data.fetchers._router.transport as tp
     orig = tp.get_bytes
     tp.get_bytes = fake_get_bytes
     try:

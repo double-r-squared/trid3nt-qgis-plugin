@@ -11,7 +11,7 @@ import inspect
 
 import pytest
 
-from trid3nt_server.agent.workflows.telemac.river_dye import river_dye as M
+from trid3nt_server.workflows.telemac.river_dye import river_dye as M
 
 _BBOX = (-95.55, 29.70, -95.30, 29.95)  # Buffalo Bayou, Houston
 

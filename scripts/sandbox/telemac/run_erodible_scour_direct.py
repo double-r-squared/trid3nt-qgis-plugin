@@ -13,7 +13,7 @@ Run: venvs/agent/bin/python3 scripts/sandbox/telemac/run_erodible_scour_direct.p
 import asyncio
 import json
 
-from trid3nt_server.agent.workflows.telemac.river_dye.river_dye import telemac_river_dye
+from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
 
 async def main():

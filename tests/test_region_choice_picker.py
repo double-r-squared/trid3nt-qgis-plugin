@@ -33,8 +33,8 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.agent.gates.cards import region_choice
-from trid3nt_server.agent.gates.cards.region_choice import (
+from trid3nt_server.gates.cards import region_choice
+from trid3nt_server.gates.cards.region_choice import (
     _build_region_candidates,
     _build_region_choice_request_payload,
 )
@@ -474,7 +474,7 @@ def _make_tiger_county_fgb_bytes() -> bytes:
 def test_build_region_candidates_from_tiger_features():
     fgb = _make_tiger_county_fgb_bytes()
     with patch(
-        "trid3nt_server.agent.gates.cards.region_choice._admin_boundaries_fgb_bytes",
+        "trid3nt_server.gates.cards.region_choice._admin_boundaries_fgb_bytes",
         return_value=fgb,
     ):
         candidates = _build_region_candidates(
@@ -493,7 +493,7 @@ def test_build_region_candidates_from_tiger_features():
 def test_build_region_candidates_degrades_to_empty_on_fetch_failure():
     """A TIGER fetch failure yields an EMPTY candidate set (honest degrade)."""
     with patch(
-        "trid3nt_server.agent.gates.cards.region_choice._admin_boundaries_fgb_bytes",
+        "trid3nt_server.gates.cards.region_choice._admin_boundaries_fgb_bytes",
         side_effect=RuntimeError("TIGER download failed"),
     ):
         candidates = _build_region_candidates(

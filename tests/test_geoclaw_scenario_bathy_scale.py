@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.workflows.geoclaw.inundation import inundation as I
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.workflows.geoclaw.inundation import inundation as I
 
 
 def _install_capture(monkeypatch) -> dict:

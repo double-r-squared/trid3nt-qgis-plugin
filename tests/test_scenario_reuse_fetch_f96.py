@@ -23,7 +23,7 @@ compute_layer_bounds) instead of re-fetching:
 
 from __future__ import annotations
 
-from trid3nt_server.agent.adapters.adapter import build_layers_present_note
+from trid3nt_server.adapters.adapter import build_layers_present_note
 from trid3nt_server.scenario_reuse import (
     FetchedLayerMatch,
     bbox_encloses,

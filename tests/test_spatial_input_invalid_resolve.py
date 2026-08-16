@@ -28,7 +28,7 @@ import pytest
 from pydantic import ValidationError
 
 from trid3nt_server import server
-from trid3nt_server.agent.gates.cards.spatial_input import (
+from trid3nt_server.gates.cards.spatial_input import (
     _spatial_response_to_result,
 )
 from trid3nt_server.server import (

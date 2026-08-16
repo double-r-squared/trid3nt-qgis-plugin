@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw import (
+from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
     build_geoclaw_particle_track_geojson,
     build_particle_track_chart_spec,
     parse_geoclaw_particle_tracks,

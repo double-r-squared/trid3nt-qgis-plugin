@@ -33,7 +33,7 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.agent.adapters.adapter import (
+from trid3nt_server.adapters.adapter import (
     _layer_uri_is_published,
     _published_scenario_tool_names,
     summarize_tool_result,

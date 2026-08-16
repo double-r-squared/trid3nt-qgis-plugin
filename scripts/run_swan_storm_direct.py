@@ -36,7 +36,7 @@ PEAK_HS = 6.0
 
 
 async def _run():
-    from trid3nt_server.agent.workflows.swan.wave_field.wave_field import (
+    from trid3nt_server.workflows.swan.wave_field.wave_field import (
         model_swan_wave_field, build_storm_hydrograph,
     )
     from trid3nt_contracts.swan_contracts import SwanRunArgs, SwanWaveBoundary

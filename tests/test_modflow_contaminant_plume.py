@@ -37,10 +37,10 @@ from trid3nt_contracts.modflow_contracts import (
     SpeciesSpec,
 )
 
-from trid3nt_server.agent.tools import RegisteredTool, TOOL_REGISTRY
-from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
-from trid3nt_server.agent.workflows.modflow.contaminant_plume import contaminant_plume as ms
-from trid3nt_server.agent.workflows.modflow.contaminant_plume.contaminant_plume import (
+from trid3nt_server.data import RegisteredTool, TOOL_REGISTRY
+from trid3nt_server.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.workflows.modflow.contaminant_plume import contaminant_plume as ms
+from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import (
     ContaminantPlumeInputError,
     ContaminantPlumeResult,
     ContaminantPlumeScenarioError,
@@ -273,7 +273,7 @@ def test_postprocess_multi_species_real_mf6(monkeypatch, tmp_path: Path) -> None
     # The agent re-export inserts the worker dir into sys.path lazily (so flopy is
     # only imported when a MODFLOW tool runs) - use it instead of importing the
     # bare ``gwt_adapter`` module (which is not on the path by default).
-    from trid3nt_server.agent.workflows.modflow.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.modflow.run_modflow import build_modflow_deck
 
     d = build_modflow_deck(
         workdir=tmp_path,
@@ -360,7 +360,7 @@ async def test_composer_single_contaminant_yields_one_plume(
         captured["run_args"] = run_args
         return MultiSpeciesPlumeResult(plumes=[_fake_plume("benzene", area=1.25, conc=12.5)])
 
-    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_multi_species_tool as tool
+    import trid3nt_server.data.simulation.modflow.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
@@ -398,7 +398,7 @@ async def test_composer_full_chain_two_plumes(
             ]
         )
 
-    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_multi_species_tool as tool
+    import trid3nt_server.data.simulation.modflow.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
@@ -432,7 +432,7 @@ async def test_composer_surfaces_run_error_dict(
             "error_message": "no non-trivial plume for any species",
         }
 
-    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_multi_species_tool as tool
+    import trid3nt_server.data.simulation.modflow.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _err_run)
 
@@ -462,7 +462,7 @@ async def test_wrapper_missing_species_returns_user_input_required(
 
 
 def test_template_registered_uncacheable() -> None:
-    import trid3nt_server.agent.tools  # noqa: F401 - fire registration
+    import trid3nt_server.data  # noqa: F401 - fire registration
 
     entry = TOOL_REGISTRY.get("modflow_contaminant_plume")
     assert entry is not None
@@ -473,7 +473,7 @@ def test_template_registered_uncacheable() -> None:
 
 def test_template_tagged_engine_and_tier() -> None:
     """The FOLD template carries engine=modflow, tier=template (door-surfaced)."""
-    import trid3nt_server.agent.tools  # noqa: F401 - fire registration
+    import trid3nt_server.data  # noqa: F401 - fire registration
 
     entry = TOOL_REGISTRY.get("modflow_contaminant_plume")
     assert entry is not None

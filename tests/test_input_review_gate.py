@@ -14,8 +14,8 @@ import pytest
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from trid3nt_server.agent.gates import pending
-from trid3nt_server.agent.gates.input_review import (
+from trid3nt_server.gates import pending
+from trid3nt_server.gates.input_review import (
     ReviewOutcome,
     gate_input_review,
     render_input_review_lines,

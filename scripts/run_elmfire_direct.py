@@ -31,7 +31,7 @@ WHICH = sys.argv[1] if len(sys.argv) > 1 else "ltw"
 
 async def _run():
     if WHICH == "ltw":
-        from trid3nt_server.agent.workflows.elmfire.sensitivity.ltw_ceiling.ltw_ceiling import (
+        from trid3nt_server.workflows.elmfire.sensitivity.ltw_ceiling.ltw_ceiling import (
             elmfire_length_to_width_ceiling_sensitivity as fn,
         )
         return await fn(
@@ -39,7 +39,7 @@ async def _run():
             wind_speed_mph=20.0, duration_hours=0.75, cellsize_m=45.0, domain_km=12.0,
         )
     if WHICH == "wind":
-        from trid3nt_server.agent.workflows.elmfire.sensitivity.wind_fluctuation.wind_fluctuation import (
+        from trid3nt_server.workflows.elmfire.sensitivity.wind_fluctuation.wind_fluctuation import (
             elmfire_wind_fluctuation_randomization as fn,
         )
         return await fn(
@@ -47,7 +47,7 @@ async def _run():
             wind_speed_mph=25.0, duration_hours=0.75, cellsize_m=45.0, domain_km=10.0,
         )
     if WHICH == "moisture":
-        from trid3nt_server.agent.workflows.elmfire.sensitivity.live_moisture.live_moisture import (
+        from trid3nt_server.workflows.elmfire.sensitivity.live_moisture.live_moisture import (
             elmfire_live_fuel_moisture_sensitivity as fn,
         )
         return await fn(
@@ -55,7 +55,7 @@ async def _run():
             wind_speed_mph=20.0, duration_hours=0.75, cellsize_m=45.0, domain_km=10.0,
         )
     if WHICH == "transient_wind":
-        from trid3nt_server.agent.workflows.elmfire.transient.wind_schedule.wind_schedule import (
+        from trid3nt_server.workflows.elmfire.transient.wind_schedule.wind_schedule import (
             elmfire_transient_wind_schedule_spread as fn,
         )
         return await fn(
@@ -64,7 +64,7 @@ async def _run():
             input_mode="auto",
         )
     if WHICH == "dead_fuel_interp":
-        from trid3nt_server.agent.workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import (
+        from trid3nt_server.workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import (
             elmfire_dead_fuel_moisture_interpolation_frequency_control as fn,
         )
         return await fn(
@@ -73,7 +73,7 @@ async def _run():
             duration_hours=1.0, cellsize_m=60.0, domain_km=8.0, input_mode="auto",
         )
     if WHICH == "crown_init":
-        from trid3nt_server.agent.workflows.elmfire.crown.crown_fire import (
+        from trid3nt_server.workflows.elmfire.crown.crown_fire import (
             elmfire_crown_fire_initiation_threshold_sweep as fn,
         )
         return await fn(
@@ -81,7 +81,7 @@ async def _run():
             wind_speed_mph=25.0, duration_hours=0.5, cellsize_m=60.0, domain_km=8.0,
         )
     if WHICH == "crown_ceiling":
-        from trid3nt_server.agent.workflows.elmfire.crown.crown_fire import (
+        from trid3nt_server.workflows.elmfire.crown.crown_fire import (
             elmfire_crown_fire_initiation_threshold_sweep as fn,
         )
         return await fn(
@@ -92,7 +92,7 @@ async def _run():
     if WHICH == "crown_ros":
         # Cruz (2005) active crown-fire ROS exact-solution verification (ADR 0256):
         # uncapped active-crown deck, numerical head ROS vs the Cruz closed form.
-        from trid3nt_server.agent.workflows.elmfire.verification.crown_ros import (
+        from trid3nt_server.workflows.elmfire.verification.crown_ros import (
             elmfire_crown_fire_active_ros_verification as fn,
         )
         return await fn(
@@ -103,7 +103,7 @@ async def _run():
         # REAL-DATA river-barrier demo (mode=real, the canonical entry): a real reach
         # where a real river crosses the E-W wind axis in grass/shrub fire country.
         # AOI finalized from the live LANDFIRE fetch (river renders as the water class).
-        from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+        from trid3nt_server.workflows.elmfire.spotting.spotting import (
             elmfire_spot_fire_barrier_crossing as fn,
         )
         return await fn(
@@ -116,7 +116,7 @@ async def _run():
         )
     if WHICH == "spotting_verify":
         # VERIFICATION (synthetic constant deck) - the physics V&V path.
-        from trid3nt_server.agent.workflows.elmfire.spotting.spotting import (
+        from trid3nt_server.workflows.elmfire.spotting.spotting import (
             elmfire_spot_fire_barrier_crossing as fn,
         )
         return await fn(

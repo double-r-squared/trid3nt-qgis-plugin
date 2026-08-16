@@ -38,14 +38,14 @@ from pyproj import Transformer  # noqa: E402
 os.environ.setdefault("TRID3NT_MODFLOW_LOCAL", "1")
 
 from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs  # noqa: E402
-from trid3nt_server.agent.workflows.modflow.run_modflow import (  # noqa: E402
+from trid3nt_server.workflows.modflow.run_modflow import (  # noqa: E402
     build_and_stage_modflow_deck,
     run_modflow_local,
 )
-from trid3nt_server.agent.workflows.modflow.sustainable_yield.sustainable_yield import (  # noqa: E402
+from trid3nt_server.workflows.modflow.sustainable_yield.sustainable_yield import (  # noqa: E402
     modflow_sustainable_yield,
 )
-from trid3nt_server.agent.workflows.modflow.vadose_transport.vadose_transport import (  # noqa: E402
+from trid3nt_server.workflows.modflow.vadose_transport.vadose_transport import (  # noqa: E402
     modflow_vadose_transport,
 )
 

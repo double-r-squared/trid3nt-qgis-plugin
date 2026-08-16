@@ -37,10 +37,10 @@ from harness import (  # noqa: E402
 )
 
 # Twin modules (present until promotion; this gate runs BEFORE the cut).
-from trid3nt_server.agent.tools.fetchers.hydrology.fetch_usgs_water_quality import (  # noqa: E402
+from trid3nt_server.data.fetchers.hydrology.fetch_usgs_water_quality import (  # noqa: E402
     fetch_usgs_water_quality as wq_mod,
 )
-from trid3nt_server.agent.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import (  # noqa: E402
+from trid3nt_server.data.fetchers.hydrology.fetch_nhdplus_nldi_navigate import (  # noqa: E402
     fetch_nhdplus_nldi_navigate as nldi_mod,
 )
 

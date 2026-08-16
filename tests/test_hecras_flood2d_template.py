@@ -19,7 +19,7 @@ def test_fresh_aoi_archetype_present():
 
 
 def test_template_registered_engine_tier():
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     assert "hecras_flood_2d" in TOOL_REGISTRY
     m = TOOL_REGISTRY["hecras_flood_2d"].metadata
@@ -28,13 +28,13 @@ def test_template_registered_engine_tier():
 
 
 def test_solver_name_registered():
-    from trid3nt_server.agent.workflows.hecras.run_hecras import HECRAS_SOLVER_NAMES
+    from trid3nt_server.workflows.hecras.run_hecras import HECRAS_SOLVER_NAMES
 
     assert "hecras_flood_2d" in HECRAS_SOLVER_NAMES
 
 
 def test_bbox_coercion():
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import _coerce_bbox
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import _coerce_bbox
 
     assert _coerce_bbox([-88.0, 38.0, -87.9, 38.1]) == [-88.0, 38.0, -87.9, 38.1]
     assert _coerce_bbox(None) is None
@@ -43,7 +43,7 @@ def test_bbox_coercion():
 
 
 def test_resolution_autoscale_respects_soft_cap():
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import (
         _autoscale_resolution,
         _estimate_cells,
         _SOFT_CELL_CAP,
@@ -66,11 +66,11 @@ def test_resolution_out_of_range_is_quoted_back_not_clamped():
     silently clamped to an undeclared value. An in-range value stays user-basis; an
     in-range value the AOI autoscale coarsens gets a labeled derived note (within the
     declared range)."""
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import (
         _autoscale_resolution,
         _RES_SPEC,
     )
-    from trid3nt_server.agent.tools.resolution_declared import (
+    from trid3nt_server.data.resolution_declared import (
         ResolutionOutOfRangeError,
         resolve_resolution,
     )
@@ -100,7 +100,7 @@ def test_resolution_out_of_range_is_quoted_back_not_clamped():
 
 
 def test_equation_set_map_covers_choices():
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import (
         _EQUATION_SET_MAP,
         _DEFAULT_EQUATION_SET,
     )
@@ -114,7 +114,7 @@ def test_equation_set_map_covers_choices():
 
 def test_computation_interval_regex_accepts_hec_tokens():
     # ADR 0188: the stability-knob validator accepts int+SEC/MIN/HOUR, rejects prose.
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import (
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import (
         _COMPUTATION_INTERVAL_RE,
     )
 
@@ -126,7 +126,7 @@ def test_computation_interval_regex_accepts_hec_tokens():
 
 @pytest.mark.asyncio
 async def test_bad_bbox_returns_typed_error():
-    from trid3nt_server.agent.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d
+    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d
     from trid3nt_contracts.hecras_contracts import HECRAS_INPUT_INVALID
 
     out = await hecras_flood_2d(bbox=None, location=None)

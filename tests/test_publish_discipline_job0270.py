@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import ModelSettings
+from trid3nt_server.adapters.adapter import ModelSettings
 from trid3nt_contracts import new_ulid
 
 

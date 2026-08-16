@@ -27,7 +27,7 @@ sys.path.insert(0, "scripts")
 from run_geoclaw_surge_smoke import _ike_track  # reuse the published Ike track
 
 from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs, StormTrackPoint
-from trid3nt_server.agent.workflows.geoclaw.inundation.inundation import (
+from trid3nt_server.workflows.geoclaw.inundation.inundation import (
     model_geoclaw_inundation,
 )
 

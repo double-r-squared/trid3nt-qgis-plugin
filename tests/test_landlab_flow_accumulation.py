@@ -90,7 +90,7 @@ def test_channel_threshold_cells_must_be_ge_1():
 # (2) build_spec arg-assembly.
 # ===========================================================================
 def test_build_spec_merges_routing_knobs():
-    from trid3nt_server.agent.workflows.landlab.run_landlab import build_landlab_build_spec
+    from trid3nt_server.workflows.landlab.run_landlab import build_landlab_build_spec
 
     ra = LandlabRunArgs(
         bbox=(-105.37, 39.998, -105.33, 40.032),
@@ -111,7 +111,7 @@ def test_build_spec_merges_routing_knobs():
 # ===========================================================================
 def test_routing_comparison_chart_spec():
     from trid3nt_contracts.chart_contracts import is_structurally_valid_vega_lite_spec
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         build_routing_comparison_chart_spec,
     )
 
@@ -135,7 +135,7 @@ def test_channel_mask_vectorizes_to_4326_geojson(tmp_path):
     import numpy as np
     from rasterio.transform import from_origin
 
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         _vectorize_channel_mask,
     )
 
@@ -165,7 +165,7 @@ def test_channel_vectorization_empty_mask_returns_none(tmp_path):
     import numpy as np
     from rasterio.transform import from_origin
 
-    from trid3nt_server.agent.workflows.landlab.postprocess_landlab import (
+    from trid3nt_server.workflows.landlab.postprocess_landlab import (
         _vectorize_channel_mask,
     )
 
@@ -184,7 +184,7 @@ def test_channel_vectorization_empty_mask_returns_none(tmp_path):
 # (5) Tool bbox gate.
 # ===========================================================================
 def test_tool_missing_bbox_returns_typed_error():
-    from trid3nt_server.agent.workflows.landlab.flow_accumulation.flow_accumulation import (
+    from trid3nt_server.workflows.landlab.flow_accumulation.flow_accumulation import (
         landlab_flow_accumulation,
     )
 
