@@ -11,7 +11,7 @@ containing the main channel.
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  PYTHONPATH=server/src:contracts/src:. venvs/agent/bin/python \
+  PYTHONPATH=src:contracts/src:. venvs/agent/bin/python \
     scripts/run_hecras_rog_coweeta_native_res.py
 """
 from __future__ import annotations

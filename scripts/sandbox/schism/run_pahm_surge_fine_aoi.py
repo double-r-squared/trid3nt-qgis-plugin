@@ -7,7 +7,7 @@ SchismElevationLayerURI-shaped result.
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  env $(grep -v '^#' .env.local | xargs) PYTHONPATH=server/src:contracts/src \
+  env $(grep -v '^#' .env.local | xargs) PYTHONPATH=src:contracts/src \
     venvs/agent/bin/python scripts/sandbox/schism/run_pahm_surge_fine_aoi.py
 """
 from __future__ import annotations

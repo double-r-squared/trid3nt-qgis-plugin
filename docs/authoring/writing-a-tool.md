@@ -15,9 +15,9 @@ render its output on the map, and pass the mandatory acceptance checks.
 Two files are your templates. Read them next to this guide:
 
 - Canonical real example (a self-contained raster fetcher):
-  `server/src/trid3nt_server/tools/fetchers/ocean/fetch_noaa_slr_confidence.py`
+  `src/trid3nt_server/tools/fetchers/ocean/fetch_noaa_slr_confidence.py`
 - Copy-me starter (a trivial, dependency-free compute):
-  `server/src/trid3nt_server/tools/_example_tool_template.py`
+  `src/trid3nt_server/tools/_example_tool_template.py`
 
 Everything below cites real code. Line numbers drift; grep the symbol.
 
@@ -26,7 +26,7 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 ## The seven seams a new tool touches
 
 1. The tool **function** + its **metadata** (`AtomicToolMetadata`) in a new
-   module under `server/src/trid3nt_server/tools/<subpackage>/` -- pick the
+   module under `src/trid3nt_server/tools/<subpackage>/` -- pick the
    folder by what the tool IS: `fetchers/<domain>/` (one file per fetch tool,
    filed by the phenomenon measured: weather / hydrology / ocean / terrain /
    imagery / climate / biodiversity / socioeconomic / hazard / soil),
@@ -35,11 +35,11 @@ Everything below cites real code. Line numbers drift; grep the symbol.
    `discovery/` (catalog + retrieval), or `meta/` (utilities).
    `publish_layer.py` and `cache.py` deliberately stay at `tools/` root.
 2. The **`@register_tool`** decorator (registers it in `TOOL_REGISTRY`).
-3. An **eager import** in `server/src/trid3nt_server/tools/__init__.py`
+3. An **eager import** in `src/trid3nt_server/tools/__init__.py`
    (so the decorator actually fires at startup).
-4. A **category** entry in `server/src/trid3nt_server/categories.py`.
+4. A **category** entry in `src/trid3nt_server/categories.py`.
 5. **Corpus queries** in
-   `server/src/trid3nt_server/data/tool_query_corpus.yaml` (the retrieval
+   `src/trid3nt_server/data/tool_query_corpus.yaml` (the retrieval
    index) + the mandatory `retrieve_visible_tools(prompt, None, 8)` check.
 6. A **test** under `services/agent/tests/`.
 7. Observe the **1000-char docstring rule** (front-load routing).
@@ -205,7 +205,7 @@ tests call it directly via `TOOL_REGISTRY[name].fn(...)`.
 
 `@register_tool` only fires if the module is imported. Add one line to the eager
 import block near the bottom of
-`server/src/trid3nt_server/tools/__init__.py`:
+`src/trid3nt_server/tools/__init__.py`:
 
 ```python
 from .fetchers.ocean import fetch_noaa_slr_confidence  # noqa: E402,F401
@@ -222,7 +222,7 @@ silently never exists.
 ## Step 4 - categories.py
 
 Every registered tool has exactly one **primary category**. Add your tool name to
-`PRIMARY_CATEGORY` in `server/src/trid3nt_server/categories.py`:
+`PRIMARY_CATEGORY` in `src/trid3nt_server/categories.py`:
 
 ```python
 PRIMARY_CATEGORY: dict[str, str] = {
@@ -254,7 +254,7 @@ acceptance.**
 
 The per-turn tool list is trimmed for token cost: instead of showing the LLM all
 ~190 tools every turn, `retrieve_visible_tools`
-(`server/src/trid3nt_server/tools/discovery/tool_retrieval.py`) composes the visible
+(`src/trid3nt_server/tools/discovery/tool_retrieval.py`) composes the visible
 set as:
 
 ```
@@ -355,7 +355,7 @@ cd services/agent && python -m pytest tests/test_<your_tool>.py -q
 ## Step 7 - the 1000-char docstring rule (front-load routing)
 
 The Bedrock adapter **always truncates the tool description to 1000 chars**
-(`server/src/trid3nt_server/bedrock_adapter.py`,
+(`src/trid3nt_server/bedrock_adapter.py`,
 `tool_declarations_to_bedrock_tools`: `(dumped.get("description") or name)[:1000]`;
 `adapter.py` applies the same `doc[:1000]` cap on the docstring-only fallback
 path). Everything past ~1000 chars is invisible to the model.
@@ -378,7 +378,7 @@ summary, then `**What it does:**`, `**When to use:**`, `**When NOT to use:**`,
 
 ## The complete minimal tool, end to end
 
-`server/src/trid3nt_server/tools/_example_tool_template.py` is a full,
+`src/trid3nt_server/tools/_example_tool_template.py` is a full,
 working, copy-me tool: `example_bbox_area`, a dependency-free planar area compute
 that returns a dict. It shows metadata (a `cacheable=False` / `live-no-cache`
 compute), the `**_extra_ignored` signature, a front-loaded routing docstring, the

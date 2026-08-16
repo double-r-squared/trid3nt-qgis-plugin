@@ -27,7 +27,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "server" / "src"))
+sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(HERE))
 
 from trid3nt_server.agent.workflows.telemac.rain_on_grid import mesh_acquisition as MA  # noqa: E402

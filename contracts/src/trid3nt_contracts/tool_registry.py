@@ -290,7 +290,7 @@ class AtomicToolMetadata(GraceModel):
     # --- Wave 1.5 additions (job-0114-schema-20260608) --- #
     #
     # Both fields default to safe / opt-out values so the ~30 existing
-    # ``AtomicToolMetadata(...)`` call sites in server/src/
+    # ``AtomicToolMetadata(...)`` call sites in src/
     # trid3nt_server/tools/*.py keep working untouched. New tools and
     # follow-ups opt in by passing the keyword.
 

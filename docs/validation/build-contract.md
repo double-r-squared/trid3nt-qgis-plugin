@@ -506,8 +506,8 @@ fixture bytes (the `test_solver_local_docker.py` pattern). Either is fine;
 
 The agent venv (`venvs/agent`) has scipy, rasterio, geopandas, netCDF4,
 xarray, pyogrio, shapely, numpy, flopy -- but NOT `spotpy`. Lane B adds
-`spotpy` to `server/pyproject.toml` AND installs it into `venvs/agent`
-(`venvs/agent/bin/pip install -e server` picks it up) so the OFFLINE test
+`spotpy` to `pyproject.toml` AND installs it into `venvs/agent`
+(`uv pip install --python venvs/agent/bin/python -e .` picks it up) so the OFFLINE test
 passes. If a `spotpy` import fails at runtime, raise a typed
 `SKILL_METRICS_DEPENDENCY_MISSING` error -- never silently skip a metric.
 
@@ -523,30 +523,30 @@ set -a; . /home/nate/Documents/trid3nt-local/.env.local; set +a
 
 ## 6. TEST COMMANDS
 
-Interpreter is the agent venv; run from `server/`. There is no pytest config in
-`pyproject.toml`, so pass paths explicitly. `pytest-asyncio` is available (the
+Interpreter is the agent venv; run from the repo root. There is no pytest config
+in `pyproject.toml`, so pass paths explicitly. `pytest-asyncio` is available (the
 new tools are sync; async is unused here).
 
 Per-lane (each lane runs ONLY its own new tests during build):
 
 ```
-cd /home/nate/Documents/trid3nt-local/server
-../venvs/agent/bin/python -m pytest tests/test_read_run_diagnostics.py -q          # lane A
-../venvs/agent/bin/python -m pytest tests/test_compute_skill_metrics.py \
+cd /home/nate/Documents/trid3nt-local
+venvs/agent/bin/python -m pytest tests/test_read_run_diagnostics.py -q          # lane A
+venvs/agent/bin/python -m pytest tests/test_compute_skill_metrics.py \
     tests/test_compute_flood_extent_skill.py -q                                    # lane B
-../venvs/agent/bin/python -m pytest tests/test_extract_model_at_observations.py \
+venvs/agent/bin/python -m pytest tests/test_extract_model_at_observations.py \
     tests/test_fetch_high_water_marks.py tests/test_fetch_flood_extent_observation.py -q   # lane C
-../venvs/agent/bin/python -m pytest tests/test_set_sfincs_parameters.py \
+venvs/agent/bin/python -m pytest tests/test_set_sfincs_parameters.py \
     tests/test_set_swmm_parameters.py tests/test_set_modflow_parameters.py -q       # lane D
 ```
 
 Integration gate (after all lanes land + wiring):
 
 ```
-cd /home/nate/Documents/trid3nt-local/server
-../venvs/agent/bin/python -m pytest tests/ -q            # full suite, ZERO network
+cd /home/nate/Documents/trid3nt-local
+venvs/agent/bin/python -m pytest tests/ -q            # full suite, ZERO network
 # registry sanity: the 9 tools register + import cleanly
-../venvs/agent/bin/python -c "import trid3nt_server.tools as t; \
+venvs/agent/bin/python -c "import trid3nt_server.tools as t; \
   need={'read_run_diagnostics','compute_skill_metrics','compute_flood_extent_skill',\
 'extract_model_at_observations','fetch_high_water_marks','fetch_flood_extent_observation',\
 'set_sfincs_parameters','set_swmm_parameters','set_modflow_parameters'}; \

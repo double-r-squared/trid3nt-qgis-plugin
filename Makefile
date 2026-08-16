@@ -84,9 +84,9 @@ agent: plugin-repo
 venv:
 	@~/.local/bin/uv venv --python 3.12 $(REPO_ROOT)/venvs/agent
 	@~/.local/bin/uv pip install --python $(REPO_ROOT)/venvs/agent/bin/python \
-	  --find-links $(REPO_ROOT)/server/wheels \
+	  --find-links $(REPO_ROOT)/wheels \
 	  -e $(REPO_ROOT)/contracts \
-	  -e $(REPO_ROOT)/server
+	  -e $(REPO_ROOT)
 
 status:
 	@echo "=== TRID3NT Local service status ==="

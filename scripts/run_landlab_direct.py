@@ -12,7 +12,7 @@ Bypasses the LLM/agent chat layer -- calls the deterministic Landlab workflow
 Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=server/src:contracts/src:. \
+    PYTHONPATH=src:contracts/src:. \
     venvs/agent/bin/python scripts/run_landlab_direct.py
 """
 

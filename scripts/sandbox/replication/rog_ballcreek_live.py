@@ -35,7 +35,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "server" / "src"))
+sys.path.insert(0, str(REPO / "src"))
 
 # Ball Creek weir #9 pour point (ADR 0204 delineation): a channel cell +12 up the
 # Ball Creek fork so the mesh 8-cell max-accumulation snap resolves to the fork

@@ -15,7 +15,7 @@ template's constant-vs-transient contrast.
 
 Usage (from the repo root):
   set -a; source .env.local; set +a
-  PYTHONPATH=server/src:contracts/src:. venvs/agent/bin/python scripts/proof_elmfire_windshift.py
+  PYTHONPATH=src:contracts/src:. venvs/agent/bin/python scripts/proof_elmfire_windshift.py
 
 Emits to docs/proof/templates/:
   elmfire_windshift_growth_montage.png   (5-min steps h0-h1, 30-min h1-h6, wind arrow/frame)

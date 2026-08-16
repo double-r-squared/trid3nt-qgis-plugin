@@ -18,7 +18,7 @@ Covers, with an in-memory stubbed ``qgis`` package (the established
   from the COG's embedded GDAL color table, degrading to the gradient path
   when the table is absent.
 * The ``ramps`` colormap table covers EVERY colormap name the server style
-  registry can emit (scans ``server/src/.../publish_layer.py`` so registry
+  registry can emit (scans ``src/.../publish_layer.py`` so registry
   drift fails here instead of rendering grey).
 
 Run via ``make test`` from qgis-plugin/.

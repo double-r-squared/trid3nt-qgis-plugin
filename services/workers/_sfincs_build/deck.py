@@ -9,7 +9,7 @@ Batch worker, alongside the solve + the raster postprocess.
 The pure build functions below (dataclasses, Manning mapping loader + the §4
 NLCD validation gate, the adaptive-grid autoscale, the HydroMT YAML config
 generator + surge/physics emitters) are VENDORED VERBATIM from the agent's
-``server/src/trid3nt_server/workflows/sfincs_builder.py`` — that module
+``src/trid3nt_server/workflows/sfincs_builder.py`` — that module
 remains the source of truth for the build contract (and the agent's legacy
 local-docker build). ``services/workers/`` is NOT on the agent import path
 (mirrors the ``_raster_postprocess`` split), so the worker keeps its own copy;

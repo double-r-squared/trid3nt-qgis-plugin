@@ -12,7 +12,7 @@ sibling geoclaw_depth_peak.tif under the same run_id).
 
 Run (from repo root):
   set -a; source .env.local; set +a
-  PYTHONPATH=server/src:contracts/src venvs/agent/bin/python scripts/proof_geoclaw_particles.py
+  PYTHONPATH=src:contracts/src venvs/agent/bin/python scripts/proof_geoclaw_particles.py
 """
 
 from __future__ import annotations

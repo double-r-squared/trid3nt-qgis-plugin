@@ -35,7 +35,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "server" / "src"))
+sys.path.insert(0, str(REPO / "src"))
 
 POUR_POINT = (-83.40402, 35.05746)
 # bbox covering the Coweeta Creek catchment upstream of the pour point.

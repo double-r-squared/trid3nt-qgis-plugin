@@ -105,10 +105,10 @@ Each binary is version-verified after download.
 Agent venv (installs the contracts + server packages editable):
 
 ```sh
-make venv              # uv venv venvs/agent + uv pip install -e contracts -e server
+make venv              # uv venv venvs/agent + uv pip install -e contracts -e .
 ```
 
-`server/wheels/` carries one PyPI-absent dependency (`pfdf`, for post-fire
+`wheels/` carries one PyPI-absent dependency (`pfdf`, for post-fire
 debris-flow) that `make venv` installs via `--find-links`; do not delete it.
 
 ### 3. Docker images

@@ -8,7 +8,7 @@ outline, plus the cumulative fault-throw footwall raster.
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  env $(grep -v "^#" .env.local | xargs) PYTHONPATH=server/src:contracts/src:. \
+  env $(grep -v "^#" .env.local | xargs) PYTHONPATH=src:contracts/src:. \
     venvs/agent/bin/python scripts/proof_landlab_normal_fault.py
 """
 

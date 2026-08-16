@@ -40,7 +40,7 @@ on receipt).
 See memory: ``feedback_large_payload_chat_warning``. See
 ``contracts/src/trid3nt_contracts/tool_registry.py`` for the
 ``AtomicToolMetadata.payload_mb_estimator_name`` field. See
-``server/src/trid3nt_server/server.py`` for the dispatcher gate.
+``src/trid3nt_server/server.py`` for the dispatcher gate.
 """
 
 from __future__ import annotations

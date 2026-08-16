@@ -21,7 +21,7 @@ Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
   TMPDIR=scripts/sandbox/pysheds_watershed/_work \
-  PYTHONPATH=server/src:contracts/src \
+  PYTHONPATH=src:contracts/src \
     venvs/agent/bin/python scripts/sandbox/pysheds_watershed/proof_watershed.py
 """
 

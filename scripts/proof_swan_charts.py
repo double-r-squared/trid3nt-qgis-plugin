@@ -21,7 +21,7 @@ SCR = ("/tmp/claude-1000/-home-nate-Documents-GRACE-2/"
 SWEEP_JSON = SCR + "sweep_final.json"   # friction sweep on the shallow shelf
 BATCH_JSON = SCR + "swan_sweep_smoke.json"  # snapshot batch (Huntington Beach)
 
-sys.path.insert(0, REPO + "/server/src")
+sys.path.insert(0, REPO + "/src")
 sys.path.insert(0, REPO + "/contracts/src")
 from trid3nt_server.agent.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (  # noqa: E402
     build_sweep_chart_spec,

@@ -38,7 +38,7 @@ and safe to clean up later.
 Run (smoke):
   cd /home/nate/Documents/trid3nt-local
   sg docker -c 'env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=server/src:contracts/src \
+    PYTHONPATH=src:contracts/src \
     venvs/agent/bin/python scripts/run_l2_validation_harness.py'
 
 Run (live -- NATE only, never scripted here):
@@ -610,7 +610,7 @@ async def main_smoke() -> int:
                 record(
                     "7-rerun-child-model", False,
                     "DEFECT in set_sfincs_parameters "
-                    "(server/src/trid3nt_server/tools/simulation/set_sfincs_parameters.py): "
+                    "(src/trid3nt_server/tools/simulation/set_sfincs_parameters.py): "
                     "the child deck's sfincs.inp cannot be solved by the real sfincs binary. "
                     f"run_solver/wait_for_completion status={child_result.status} "
                     f"error_code={child_result.error_code} error_message={child_result.error_message}. "

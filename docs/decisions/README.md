@@ -40,3 +40,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0035 - local solver execution I/O contract](0035-local-solver-io-contract.md)
 - [0051 - observability/retention batch: rotation, telemetry retention, error actionability, shape classifier](0051-observability-retention-batch.md)
 - [0271 - provider-neutral model-dispatch seam](0271-provider-neutral-seam.md)
+- [0272 - repo unnesting: server/src -> src (standard src-layout)](0272-repo-unnesting.md)

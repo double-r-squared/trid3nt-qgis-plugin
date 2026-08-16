@@ -35,7 +35,7 @@ _TRAPZ = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "server" / "src"))
+sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(HERE))
 
 import rog_ballcreek_live as LIVE  # noqa: E402

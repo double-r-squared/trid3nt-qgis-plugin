@@ -13,7 +13,7 @@ dropped both). Rebuild before smoking a worker change:
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  PYTHONPATH=server/src:contracts/src \
+  PYTHONPATH=src:contracts/src \
     venvs/agent/bin/python scripts/run_geoclaw_knobs_smoke.py
 """
 

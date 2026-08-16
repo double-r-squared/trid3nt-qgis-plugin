@@ -34,7 +34,7 @@ Run:
   export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
   export TMPDIR=/home/nate/Documents/trid3nt-local/.tmp_staging
   mkdir -p "$TMPDIR"
-  env PYTHONPATH=server/src:contracts/src venvs/agent/bin/python \
+  env PYTHONPATH=src:contracts/src venvs/agent/bin/python \
     scripts/run_sfincs_surge_only_smoke.py
 """
 
