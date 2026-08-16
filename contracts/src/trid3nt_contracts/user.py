@@ -61,10 +61,10 @@ class User(GraceModel):
     - ``created_at`` — ISO-8601 UTC creation timestamp.
     - ``is_active`` — soft-deactivate flag. Defaults True. When False the
       agent service refuses dispatch on any Case owned by this user.
-    - ``prefs`` — opaque preferences dict (per-user UI prefs, theme, default
-      research mode, etc.). Kept open at v0.1 — the Web specialist owns the
-      enumeration of preference keys; here we just provide the persistence
-      slot.
+    - ``prefs`` — opaque preferences dict (per-user UI prefs, theme, etc.).
+      Kept open — the client owns the enumeration of preference keys; here we
+      just provide the persistence slot. Unknown keys on a persisted row load
+      unchanged (open dict, no per-key validation).
 
     Invariant 9: no cost / quota / spend fields anywhere. Usage tracking
     lives on individual ``SecretRecord``s (``last_used_at`` only).

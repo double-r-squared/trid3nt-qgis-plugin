@@ -1,15 +1,15 @@
-"""LANE S -- user-overlay catalog merge (§F.1.2 Mode 2 offer-to-add, load seam).
+"""LANE S -- user-overlay catalog merge (hand-authored overlay, load seam).
 
-The Mode 2 offer-to-add loop appends user-accepted entries to a SEPARATE
-overlay file (``user_catalog.yaml``); the vendored
-``public_data_source_catalog.yaml`` is never mutated. ``load_catalog`` merges
-the overlay on top of the vendored catalog at load, overlay winning on id
-collision, with one summary log line. A malformed overlay (bad top-level or a
-bad row) degrades honestly -- the vendored catalog still loads.
+A user's hand-authored entries live in a SEPARATE overlay file
+(``user_catalog.yaml``); the vendored ``public_data_source_catalog.yaml`` is
+never mutated. ``load_catalog`` merges the overlay on top of the vendored
+catalog at load, overlay winning on id collision, with one summary log line. A
+malformed overlay (bad top-level or a bad row) degrades honestly -- the
+vendored catalog still loads.
 
 Covered here:
-  * append -> reload finds the new entry (cache reset on append);
-  * vendored file bytes are UNTOUCHED by an append + merge;
+  * an overlay row -> reload finds the new entry (cache reset picks it up);
+  * vendored file bytes are UNTOUCHED by an overlay merge;
   * overlay wins on id collision (merged value is the overlay's);
   * a malformed overlay ROW is a typed skip (good rows still merge);
   * a malformed overlay TOP-LEVEL is skipped (vendored catalog still loads);
@@ -25,12 +25,10 @@ import yaml
 
 from trid3nt_server.agent.tools.search import catalog_common as cc
 from trid3nt_server.agent.tools.search.catalog_common import (
-    append_user_catalog_entry,
     load_catalog,
     reset_catalog_cache,
     user_catalog_path,
 )
-from trid3nt_contracts.catalog import CatalogEntry
 
 
 def _entry_dict(entry_id: str, name: str, **over) -> dict:
@@ -54,12 +52,6 @@ def _entry_dict(entry_id: str, name: str, **over) -> dict:
     return row
 
 
-def _make_entry(entry_id: str, name: str, **over) -> CatalogEntry:
-    row = _entry_dict(entry_id, name, **over)
-    row["last_verified"] = f"{row['last_verified']}T00:00:00+00:00"
-    return CatalogEntry.model_validate(row)
-
-
 @pytest.fixture(autouse=True)
 def _overlay_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Point the overlay at a temp file + reset the catalog cache around each test."""
@@ -77,29 +69,30 @@ def _write_overlay(path: Path, rows: list) -> None:
 
 
 # ---------------------------------------------------------------------------
-# append -> reload finds it; vendored untouched.
+# overlay row -> reload finds it; vendored untouched.
 # ---------------------------------------------------------------------------
 
 
-def test_append_then_reload_finds_new_entry(_overlay_env):
+def test_overlay_entry_merged_on_reload(_overlay_env):
     reset_catalog_cache()
     base_ids = {e.id for e in load_catalog()}
     assert "trid3nt-user-added-xyz" not in base_ids
 
-    append_user_catalog_entry(
-        _make_entry("trid3nt-user-added-xyz", "Trid3nt User Added XYZ")
+    _write_overlay(
+        _overlay_env,
+        [_entry_dict("trid3nt-user-added-xyz", "Trid3nt User Added XYZ")],
     )
-    # append resets the cache -> next load rebuilds with the overlay merged in.
+    reset_catalog_cache()
     merged_ids = {e.id for e in load_catalog()}
     assert "trid3nt-user-added-xyz" in merged_ids
     # every vendored entry survives.
     assert base_ids <= merged_ids
 
 
-def test_append_does_not_mutate_vendored_catalog(_overlay_env):
+def test_overlay_does_not_mutate_vendored_catalog(_overlay_env):
     vendored = cc.CATALOG_YAML_PATH
     before = vendored.read_bytes()
-    append_user_catalog_entry(_make_entry("trid3nt-vendored-guard", "Guard"))
+    _write_overlay(_overlay_env, [_entry_dict("trid3nt-vendored-guard", "Guard")])
     load_catalog()  # forces the merge path
     assert vendored.read_bytes() == before, "vendored catalog must never be mutated"
     # And the overlay file (NOT the vendored file) is where it landed.

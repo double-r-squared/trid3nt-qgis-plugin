@@ -94,7 +94,7 @@ async def test_narration_stays_in_owning_case_on_midstream_switch(
 
     release = asyncio.Event()
 
-    async def slow_stream(websocket, st, settings, user_text, research_mode, bedrock_model=None, **_kwargs):
+    async def slow_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
         st.current_turn_narration = []
         st.current_turn_narration.append("Case A flood narration.")
         await release.wait()
@@ -194,7 +194,7 @@ async def test_new_turn_repin_does_not_steal_old_turn_narration(
     release = asyncio.Event()
     narration_text = "Old turn narration for A."
 
-    async def slow_stream(websocket, st, settings, user_text, research_mode, bedrock_model=None, **_kwargs):
+    async def slow_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
         # Freeze the accumulator contents for the old turn only.
         st.current_turn_narration = [narration_text]
         await release.wait()
@@ -265,7 +265,7 @@ async def test_auto_created_case_receives_full_stream(
         assert auto_case, "auto-create did not bind a Case"
         assert state.current_turn_case_id == auto_case  # pin follows hand-off
 
-        async def fake_stream(websocket, st, settings, user_text, research_mode, bedrock_model=None, **_kwargs):
+        async def fake_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
             st.current_turn_narration = []
             st.current_turn_narration.append("Working. ")
             await server._invoke_tool_via_emitter(websocket, st, name, {})

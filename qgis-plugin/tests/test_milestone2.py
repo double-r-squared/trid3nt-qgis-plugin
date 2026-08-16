@@ -369,16 +369,19 @@ class TestReconnect(unittest.TestCase):
         ][-1]
         self.assertEqual(flushed_msg["payload"]["text"], "queued while offline")
 
-    def test_sticky_anonymous_user_replayed_on_reconnect(self):
+    def test_reconnect_reuses_session_and_sends_token_only_auth(self):
+        """Reconnect reuses the SAME session_id and sends a token-only
+        auth-token: the sticky anonymous_user_id hint was cut (every connection
+        resolves to the one fixed local user server-side)."""
+        first_session = self.client.session_id
         self.client.send_chat("drop-connection")
         self._drain_until_closed()
         self.client.reconnect()
         auth_frames = [e for e in self.server.received if e["type"] == "auth-token"]
         self.assertEqual(len(auth_frames), 2)
-        self.assertIsNone(auth_frames[0]["payload"]["anonymous_user_id"])
-        self.assertEqual(
-            auth_frames[1]["payload"]["anonymous_user_id"], self.client.user_id
-        )
+        for frame in auth_frames:
+            self.assertNotIn("anonymous_user_id", frame["payload"])
+            self.assertEqual(frame["session_id"], first_session)
 
     def test_queue_bounded_50_drops_oldest(self):
         self.client.send_chat("drop-connection")

@@ -478,7 +478,7 @@ async def _drain_after_cancel(ws, label: str, timeout: float = 5.0) -> None:
 # ---------------------------------------------------------------------------
 async def do_handshake(ws, session_id: str) -> None:
     """Auth + session-resume + drain until session-state."""
-    await ws.send(mk("auth-token", session_id, {"token": "", "anonymous_user_id": None}))
+    await ws.send(mk("auth-token", session_id, {"token": ""}))
     ack_raw = await asyncio.wait_for(ws.recv(), timeout=15)
     ack = json.loads(ack_raw)
     assert ack["type"] == "auth-ack", f"expected auth-ack got {ack['type']}"

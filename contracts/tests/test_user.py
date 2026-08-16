@@ -48,7 +48,7 @@ def _fresh_user(
         display_name=display_name,
         created_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
         is_active=True,
-        prefs={"theme": "dark", "default_research_mode": "research"},
+        prefs={"theme": "dark", "map_basemap": "esri"},
     )
 
 
@@ -70,7 +70,7 @@ def test_user_roundtrip_idempotent() -> None:
     assert a["schema_version"] == "v1"
     assert a["is_active"] is True
     assert a["created_at"].endswith("Z")
-    assert a["prefs"] == {"theme": "dark", "default_research_mode": "research"}
+    assert a["prefs"] == {"theme": "dark", "map_basemap": "esri"}
 
 
 # --------------------------------------------------------------------------- #

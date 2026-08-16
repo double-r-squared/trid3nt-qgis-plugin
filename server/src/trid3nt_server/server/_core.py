@@ -18,9 +18,6 @@ NEVER hand-roll JSON. Cancellation is first-class: any
 in-flight model stream is cancelled via asyncio task cancellation; the LLM
 side of the chain completes within 30s.
 
-``research_mode``: pass-through pinned. The field is
-logged and forwarded as-is -- there is no second pipeline strategy yet.
-
 Module of record for the ``trid3nt_server.server`` package. This is
 the monolith body mid-refactor: it shrinks wave by wave as regions extract into
 sibling modules (already done: ``errors``, ``config``). The package ``__init__``
@@ -82,7 +79,6 @@ from trid3nt_contracts.region_choice import (
 from trid3nt_contracts.ws import (
     AgentMessageChunkPayload,
     CancelPayload,
-    CatalogAdditionResponsePayload,
     Envelope,
     AgentThinkingChunkPayload,
     ErrorCode,
@@ -162,10 +158,6 @@ from ..credentials.credential_registry import (
     provider_for_tool,
 )
 from ..emission.layer_uri_emit import emit_layer_uri
-from ..agent.gates.mode2_classifier import (
-    Mode2CandidateEnvelope,
-    classify_for_mode2,
-)
 from ..persistence import Persistence
 from ..emission.pipeline_emitter import (
     _FLOOD_FRAME_NAME_RE,
@@ -268,7 +260,6 @@ from .config import (
     _TOOL_RETRIEVAL_MODE,
     _TOOL_RETRIEVAL_VALID_MODES,
     _ambiguity_margin_threshold,
-    _catalog_offer_ttl_s,
     _code_exec_approval_timeout_s,
     _env_flag,
     _tool_choice_timeout_s,
@@ -288,24 +279,14 @@ from .styles import (
     _resolve_publish_wrap_style_preset,
 )
 from .interactions import (
-    _CATALOG_OFFER_MAX,
-    _PENDING_CATALOG_OFFERS,
     _PENDING_CREDENTIALS,
     _PENDING_TOOL_CHOICES,
-    _complete_catalog_entry,
-    _handle_catalog_addition_response,
-    _pop_pending_catalog_offer,
     _pop_pending_credential,
     _pop_pending_tool_choice,
-    _probe_catalog_endpoint,
-    _probe_catalog_endpoint_sync,
-    _prune_catalog_offers,
-    _register_pending_catalog_offer,
     _register_pending_credential,
     _register_pending_tool_choice,
     _resolve_pending_credential,
     _resolve_pending_tool_choice,
-    _slug,
 )
 from .spatial import (
     _aoi_zoom_to_bbox,
@@ -366,12 +347,7 @@ from .session import (
     _ROOT_STREAM_KEY,
     _SESSION_ACTIVE_CASE,
     _SESSION_ACTIVE_CASE_CAP,
-    _SESSION_ANON_ID,
-    _SESSION_ANON_ID_CAP,
-    _apply_session_anon_hint,
-    _get_session_anon_id,
     _set_session_active_case,
-    _set_session_anon_id,
 )
 from .turn import (
     HEARTBEAT_INTERVAL_SECONDS,
@@ -1229,7 +1205,6 @@ async def _stream_model_reply(
     state: SessionState,
     settings: ModelSettings,
     user_text: str,
-    research_mode: str,
     bedrock_model: str | None = None,
     show_thinking: bool = False,
 ) -> None:
@@ -1255,9 +1230,8 @@ async def _stream_model_reply(
     cancelled ``pipeline-state`` for the outer ``llm_generation`` step.
     """
     logger.info(
-        "user-message session=%s research_mode=%s text=%r",
+        "user-message session=%s text=%r",
         state.session_id,
-        research_mode,
         user_text[:80],
     )
 
@@ -3347,7 +3321,7 @@ async def _handle_auth_token(
     1. Validate the payload through ``AuthTokenEnvelope``.
     2. Call ``authenticate_token`` -> resolves to a ``User`` via Persistence
        (or provisions an anonymous fallback).
-    3. Bind the resolved ``user_id`` + tier + anonymous-flag into the
+    3. Bind the resolved ``user_id`` + anonymous-flag into the
        SessionState -- every subsequent envelope is scoped to this user.
     4. Emit ``auth-ack`` so the client knows its session identity.
     """
@@ -3384,19 +3358,7 @@ async def _handle_auth_token(
         )
         return
 
-    # cases-vanish fix (belt-and-suspenders): if this connection presents NO
-    # usable anonymous hint but a sibling connection of the SAME session already
-    # bound an anon identity this process, replay that recorded id as the hint so
-    # both sockets converge on ONE anon user. Only fills a MISSING hint -- a
-    # client-supplied hint always wins (it is the durable, cross-refresh id).
-    tok = _apply_session_anon_hint(state.session_id, tok)
-
     result = await authenticate_token(tok, get_persistence())
-
-    # cases-vanish fix: record the anon identity so a sibling/reconnecting
-    # socket of the same session converges on it.
-    if result.is_anonymous:
-        _set_session_anon_id(state.session_id, result.user.user_id)
 
     _bind_auth_result(state, result)
     await _touch_session_record(state)  # session heartbeat
@@ -3407,11 +3369,10 @@ async def _handle_auth_token(
     ack = build_auth_ack(result, endpoints=endpoints)
     await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
     logger.info(
-        "auth-ack session=%s user_id=%s anonymous=%s tier=%s endpoints=%s",
+        "auth-ack session=%s user_id=%s anonymous=%s endpoints=%s",
         state.session_id,
         result.user.user_id,
         result.is_anonymous,
-        result.tier,
         endpoints.model_dump(mode="json") if endpoints else None,
     )
 
@@ -3427,7 +3388,6 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
     """
     state.authenticated_user_id = result.user.user_id
     state.is_anonymous = result.is_anonymous
-    state.tier = result.tier
     state.auth_handshake_complete = True
     # Vestigial propagation - state.allowed_tool_set.user_id has no readers
     # since the per-user dynamic hot-set path was cut. Left in place.
@@ -3564,15 +3524,10 @@ async def _ensure_auth_handshake(
             "access token required: connect with a valid token",
         )
         return False
-    # cases-vanish fix: this implicit-anonymous path never saw a client hint
-    # (the connection skipped the auth-token envelope). If a sibling connection
-    # of this session already bound an anon identity this process, reuse it so
-    # both sockets converge on ONE anon user -- otherwise this path would mint a
-    # fresh random ULID and fork the owner-scoped case-list.
-    tok = _apply_session_anon_hint(state.session_id, None)
-    result = await authenticate_token(tok, get_persistence())
-    if result.is_anonymous:
-        _set_session_anon_id(state.session_id, result.user.user_id)
+    # Implicit-anonymous path: the connection skipped the auth-token envelope.
+    # Every connection resolves to the ONE fixed local user, so no client hint
+    # is consulted.
+    result = await authenticate_token(None, get_persistence())
     _bind_auth_result(state, result)
     await _touch_session_record(state)  # session heartbeat
     endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
@@ -8240,13 +8195,6 @@ async def _invoke_tool_via_emitter(
     # the ``finally`` block above so it ALSO fires when the tool (or its
     # post-invoke envelope emission on a dying WebSocket) raised -- the
     # emitter's accumulator already contains the layer at that point.
-
-    # Mode 2 .gov/.edu classifier -- when web_fetch returns a dict
-    # that looks like a structured-data candidate, emit a `mode2-candidate`
-    # envelope and append an audit-log line. Deterministic side-effect; the
-    # web modal renders the offer. See mode2_classifier.py.
-    if tool_name == "web_fetch" and isinstance(result, dict):
-        await _maybe_emit_mode2_candidate(websocket, state, result)
     return result
 
 
@@ -8927,51 +8875,6 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
         )
 
 
-async def _maybe_emit_mode2_candidate(
-    websocket: ServerConnection, state: SessionState, result: dict
-) -> None:
-    """Run ``classify_for_mode2`` and emit ``mode2-candidate`` if it lands.
-
-    Best-effort: a classifier or send failure is logged but never raised -- the
-    caller already returned the tool result and we will not let a side-effect
-    take down a perfectly good ``web_fetch`` invocation (a side-effect isolation boundary).
-    """
-    import json as _json
-
-    try:
-        candidate = classify_for_mode2(result)
-        if candidate is None:
-            return
-        envelope = Mode2CandidateEnvelope(candidate=candidate)
-        await websocket.send(
-            _json.dumps(
-                {
-                    "type": "mode2-candidate",
-                    "session_id": state.session_id,
-                    "payload": envelope.to_wire_dict(),
-                }
-            )
-        )
-        # Mode 2 offer-to-add: stash the candidate keyed by candidate_id (which
-        # the plugin card echoes back as catalog-addition-response.request_id)
-        # so a later positive reply can draft + append the full catalog entry.
-        # Fire-and-forget (never blocks this turn); the registry is bounded.
-        _register_pending_catalog_offer(
-            state.session_id,
-            candidate.candidate_id,
-            envelope.to_wire_dict()["candidate"],
-        )
-        logger.info(
-            "mode2-candidate session=%s url=%s confidence=%.2f patterns=%s",
-            state.session_id,
-            candidate.url,
-            candidate.confidence,
-            candidate.detected_patterns,
-        )
-    except Exception:  # noqa: BLE001 -- side effect, never bubble up
-        logger.exception("mode2-candidate emission failed")
-
-
 def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
     """If ``text`` is an ``/invoke <tool_name> <json-params>`` directive,
     return ``(tool_name, params)``; else return None.
@@ -9012,7 +8915,6 @@ async def _dispatch_model_turn_and_persist(
     state: SessionState,
     settings: ModelSettings,
     user_text: str,
-    research_mode: str,
     bedrock_model: str | None = None,
     show_thinking: bool = False,
 ) -> None:
@@ -9049,7 +8951,7 @@ async def _dispatch_model_turn_and_persist(
     pre_chat_len = len(turn_history)
     try:
         await _stream_model_reply(
-            websocket, state, settings, user_text, research_mode,
+            websocket, state, settings, user_text,
             bedrock_model=bedrock_model,
             show_thinking=show_thinking,
         )
@@ -9887,7 +9789,6 @@ def _make_handler(settings: ModelSettings):
                                     state,
                                     settings,
                                     um.text,
-                                    um.research_mode,
                                     bedrock_model=_turn_bedrock_model,
                                     show_thinking=bool(um.show_thinking),
                                 )
@@ -10223,38 +10124,6 @@ def _make_handler(settings: ModelSettings):
                             payload_dict.get("request_id"),
                             payload_dict.get("tool_name"),
                             bool(payload_dict.get("free_text")),
-                        )
-
-                    elif msg_type == "catalog-addition-response":
-                        # Mode 2 offer-to-add: the user accepted /
-                        # rejected a mode2-candidate. The plugin card echoes the
-                        # candidate_id back as request_id. On accept the server
-                        # drafts + probes + appends the entry to the user-overlay
-                        # catalog; reject / cancel just drops the pending offer.
-                        # Non-blocking + best-effort (never hangs the loop).
-                        try:
-                            car = CatalogAdditionResponsePayload.model_validate(
-                                payload_dict
-                            )
-                        except ValidationError as ve:
-                            await _send_error(
-                                websocket,
-                                state.session_id,
-                                "TOOL_PARAMS_INVALID",
-                                f"catalog-addition-response invalid: "
-                                f"{ve.errors()[0]['msg']}",
-                            )
-                            continue
-                        await _handle_catalog_addition_response(
-                            websocket, state, car
-                        )
-                        logger.info(
-                            "catalog-addition-response accepted session=%s "
-                            "request_id=%s decision=%s cancelled=%s",
-                            state.session_id,
-                            car.request_id,
-                            car.decision,
-                            car.cancelled,
                         )
 
                     elif msg_type == "session-config":

@@ -200,8 +200,8 @@ def search_data_catalog(
         credential_tier, ttl_class, source_class, license, citation,
         vintage, last_verified, status, how_to_use, api_key_secret_ref).
 
-        Empty list when no entries match -- the LLM should escalate to Mode 2
-        (offer-catalog-addition) per §F.1.2 prose.
+        Empty list when no entries match -- the LLM should fall back to the
+        generic fetchers / web research for an uncatalogued source.
 
     Registered with ``ttl_class="semi-static-7d"``,
     ``source_class="search_data_catalog"``, ``cacheable=True``. The cache key

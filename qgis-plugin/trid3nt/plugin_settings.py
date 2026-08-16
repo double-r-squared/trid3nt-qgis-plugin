@@ -7,17 +7,9 @@ product analysis section 5).
 
 from __future__ import annotations
 
-import re
-
 from qgis.PyQt.QtCore import QSettings
 
 GROUP = "trid3nt"
-
-#: Crockford-base32 ULID (26 chars, no I/L/O/U) -- the only shape the server
-#: accepts for ``anonymous_user_id``. Anything else stored here (e.g. a stub
-#: id persisted by a test run against the stub server) would poison every
-#: real handshake with a cryptic payload-validation reject, so reads filter.
-_ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 DEFAULT_LOCAL_URL = "ws://127.0.0.1:8765/ws"
 DEFAULT_MINIO_ENDPOINT = "http://127.0.0.1:9000"
@@ -215,23 +207,6 @@ class PluginSettings:
     @openrouter_api_key.setter
     def openrouter_api_key(self, value: str) -> None:
         self._set("openrouter_api_key", value.strip())
-
-    @property
-    def anonymous_user_id(self) -> str:
-        """Server-assigned anonymous user id, replayed on reconnect so the
-        same local User record re-binds (mirrors the web client).
-
-        Returns "" unless the stored value is a well-formed ULID: replaying a
-        malformed id (test-stub pollution, hand-edited config) makes the
-        server reject the WHOLE auth handshake, which surfaced as an opaque
-        "timed out waiting for auth-ack" dead-end. Fresh-anonymous beats
-        broken-sticky."""
-        value = self._get("anonymous_user_id", "")
-        return value if _ULID_RE.match(value) else ""
-
-    @anonymous_user_id.setter
-    def anonymous_user_id(self, value: str) -> None:
-        self._set("anonymous_user_id", value)
 
     # -- derived --------------------------------------------------------------- #
 

@@ -2,8 +2,8 @@
 
 The local build has NO token verification and no identity provider:
 ``solver_backend()`` is hardwired to ``local-docker``, so EVERY connection --
-any token, any ``anonymous_user_id`` hint -- resolves to the ONE fixed local
-user (``LOCAL_SINGLE_USER_ID``). Coverage:
+any token -- resolves to the ONE fixed local user
+(``LOCAL_SINGLE_USER_ID``). Coverage:
 
 1. ``test_authenticate_token_nonempty_token_resolves_local_user`` -- a
    presented token is ignored -> the fixed local user.
@@ -117,7 +117,6 @@ async def test_authenticate_token_nonempty_token_resolves_local_user(
     )
 
     assert result.is_anonymous is True
-    assert result.tier == "free"
     assert result.user.user_id == LOCAL_SINGLE_USER_ID
     assert result.user.is_active is True
 
@@ -186,12 +185,10 @@ def test_build_auth_ack_shape() -> None:
     result = AuthResult(
         user=user,
         is_anonymous=True,
-        tier="free",
     )
     ack = build_auth_ack(result)
     assert ack.user_id == uid
     assert ack.is_anonymous is True
-    assert ack.tier == "free"
 
     # Critical Decision-F backstop: the ack's wire form must NOT carry the
     # token, the email, or any credential.
@@ -278,7 +275,6 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     # SessionState was bound.
     assert state_a.authenticated_user_id is not None
     assert state_a.is_anonymous is True
-    assert state_a.tier == "free"
     assert state_a.auth_handshake_complete is True
 
     # The wire emitted an auth-ack with the right shape.
@@ -290,7 +286,7 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     assert payload["user_id"] == state_a.authenticated_user_id
     assert "firebase_uid" not in payload
     assert payload["is_anonymous"] is True
-    assert payload["tier"] == "free"
+    assert "tier" not in payload  # tier claim cut (wave 11)
     # Decision F: no raw token on the wire.
     assert "token" not in payload
 
@@ -334,7 +330,6 @@ async def test_connection_context_retains_authenticated_user_id() -> None:
             is_anonymous=True,
         ),
         is_anonymous=True,
-        tier="free",
     )
     _bind_auth_result(state, result)
     assert state.authenticated_user_id == fixed_user_id
@@ -370,7 +365,6 @@ def test_auth_envelope_contracts_round_trip() -> None:
     ack = AuthAckEnvelope(
         user_id=new_ulid(),
         is_anonymous=True,
-        tier="free",
     )
     c = ack.model_dump(mode="json")
     d = AuthAckEnvelope.model_validate(json.loads(json.dumps(c))).model_dump(

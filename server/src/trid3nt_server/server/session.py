@@ -29,8 +29,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from trid3nt_contracts.auth import AuthTokenEnvelope
-
 from ..agent.categories import AllowedToolSet
 from ..agent.gates.circuit_breaker import ToolCircuitBreaker
 
@@ -72,77 +70,6 @@ def _set_session_active_case(session_id: str, case_id: str | None) -> None:
         # Evict oldest (insertion order) -- bounded memory, see note above.
         _SESSION_ACTIVE_CASE.pop(next(iter(_SESSION_ACTIVE_CASE)))
     _SESSION_ACTIVE_CASE[session_id] = case_id
-
-
-# Session-scoped ANON-ID registry: belt-and-suspenders mirror of
-# ``_SESSION_ACTIVE_CASE`` for the dual-socket anon-identity race. The web
-# mounts two WebSocket connections per tab sharing one session_id, each
-# running its own auth handshake; in the rare first-connect window before a
-# client hint is persisted, each connection would otherwise mint a
-# different random anon ULID and fork the owner-scoped case-list. This
-# registry records ``session_id -> anon_user_id`` on first mint/bind so a
-# sibling connection of the same session reuses it instead. Bounded like
-# ``_SESSION_ACTIVE_CASE``; only anonymous ids are recorded here.
-_SESSION_ANON_ID: dict[str, str] = {}
-_SESSION_ANON_ID_CAP = 4096
-
-
-def _get_session_anon_id(session_id: str) -> str | None:
-    """Return the anon ``user_id`` bound to ``session_id`` this process, if any."""
-    return _SESSION_ANON_ID.get(session_id)
-
-
-def _set_session_anon_id(session_id: str, anon_user_id: str) -> None:
-    """Record ``anon_user_id`` as the session's anon identity (idempotent).
-
-    Bounded + insertion-order eviction, mirroring ``_set_session_active_case``.
-    No-op when ``anon_user_id`` is falsy (defensive -- never record an empty id).
-    """
-    if not session_id or not anon_user_id:
-        return
-    if (
-        session_id not in _SESSION_ANON_ID
-        and len(_SESSION_ANON_ID) >= _SESSION_ANON_ID_CAP
-    ):
-        # Evict oldest (insertion order) -- bounded memory, see note above.
-        _SESSION_ANON_ID.pop(next(iter(_SESSION_ANON_ID)))
-    _SESSION_ANON_ID[session_id] = anon_user_id
-
-
-def _apply_session_anon_hint(
-    session_id: str, tok: "AuthTokenEnvelope | None"
-) -> "AuthTokenEnvelope | None":
-    """Fill a MISSING anon hint from the session-scoped registry.
-
-    cases-vanish fix (belt-and-suspenders). When a connection of ``session_id``
-    presents no token AND no ``anonymous_user_id`` hint, but a sibling
-    connection of the same session already bound an anon identity this process,
-    return a copy of the envelope carrying that recorded id as the hint -- so
-    ``authenticate_token`` reuses the SAME anon user instead of minting a fresh
-    random ULID. This collapses the (now rare) first-connect no-hint window
-    where the App + Chat sockets would otherwise fork the owner-scoped
-    case-list.
-
-    Strictly additive / non-clobbering:
-    - A client-supplied hint always wins (it is the durable, cross-refresh id) --
-      we only fill when the hint is absent.
-    - A non-empty ``token`` is left untouched: a presented token resolves via
-      ``authenticate_token``'s own fallback, never diverted to an anon id.
-    - No registry entry -> the envelope is returned unchanged.
-    """
-    recorded = _get_session_anon_id(session_id)
-    if not recorded:
-        return tok
-    # Only fill the anonymous path: a present token means the verify path owns
-    # this connect (authed path unaffected).
-    if tok is not None and (tok.token or "").strip():
-        return tok
-    # A client-supplied hint is the durable id -- never override it.
-    if tok is not None and tok.anonymous_user_id:
-        return tok
-    if tok is None:
-        return AuthTokenEnvelope(token="", anonymous_user_id=recorded)
-    return tok.model_copy(update={"anonymous_user_id": recorded})
 
 
 @dataclass
@@ -274,7 +201,6 @@ class SessionState:
     # handshake completion; never ``None`` after handshake.
     authenticated_user_id: str | None = None
     is_anonymous: bool = True
-    tier: str = "free"
     auth_handshake_complete: bool = False
     # The web's keepalive (ws.ts) sends an empty ``session-resume`` envelope
     # every 25s on the open socket as a proof-of-life ping -- indistinguishable

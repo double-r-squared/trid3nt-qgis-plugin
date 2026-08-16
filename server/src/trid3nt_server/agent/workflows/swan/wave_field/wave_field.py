@@ -686,22 +686,14 @@ async def model_swan_wave_field(
             wind_uri=run_args.wind_uri,
         )
 
-    # --- Auto vertical scaling from the mesh cell count ---------------------
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
-        select_compute_class,
-        solve_progress_vcpus,
-    )
+    # ONE local compute environment: the solve runs on the host CPUs, so the
+    # caller's compute_class flows through unchanged (no auto-scaling).
+    import os as _os
 
     n_active = int(getattr(staging, "n_active_cells", 0) or 0)
-    if n_active > 0:
-        effective_compute_class = select_compute_class(n_active)
-    else:
-        effective_compute_class = compute_class
-    # Deployment-aware CPU count (fingerprint audit A6): local-docker reports
-    # the HOST cpu count; aws-batch keeps the tier lookup byte-identical.
-    _vcpus = solve_progress_vcpus(effective_compute_class)
+    effective_compute_class = compute_class
 
-    # --- Step 3: dispatch to AWS Batch (the generic run_solver seam) --------
+    # --- Step 3: dispatch via the generic run_solver seam -------------------
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         EmitterBinding,
         run_solver,
@@ -732,7 +724,7 @@ async def model_swan_wave_field(
             solver=SWAN_SOLVER_NAME,
             grid_resolution_m=None,
             active_cell_count=n_active or None,
-            vcpus=int(_vcpus) if _vcpus is not None else None,
+            vcpus=_os.cpu_count(),
             eta_seconds=(n_active * _SWAN_SEC_PER_CELL) if n_active else None,
         )
     )

@@ -154,20 +154,3 @@ def _tool_choice_timeout_s() -> float:
     except (TypeError, ValueError):
         return 45.0
     return value if value > 0 else 45.0
-
-
-def _catalog_offer_ttl_s() -> float:
-    """Bounded offer validity (``TRID3NT_CATALOG_OFFER_TTL_S``, default 600s).
-
-    Mirrors the ``offer-catalog-addition`` contract's 10-minute default -- the
-    user is reading + sanity-checking provenance. Malformed / non-positive ->
-    default.
-    """
-    raw = os.environ.get("TRID3NT_CATALOG_OFFER_TTL_S")
-    if raw is None:
-        return 600.0
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 600.0
-    return value if value > 0 else 600.0

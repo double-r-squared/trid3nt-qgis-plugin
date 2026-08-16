@@ -292,12 +292,12 @@ def test_full_chain_uses_supplied_imagery_uri_skips_naip(monkeypatch):
     assert layer.style_preset == "canopy_height_m"
 
 
-def test_full_chain_auto_selects_compute_class(monkeypatch):
+def test_full_chain_uses_default_compute_class(monkeypatch):
     captured: dict = {}
     _patch_chain(monkeypatch, captured=captured)
     asyncio.run(compute_canopy_height(bbox=_AOI))
-    # A small AOI -> the 'small' bucket from select_compute_class.
-    assert captured["compute_class"] in {"small", "standard", "large", "xlarge"}
+    # ONE local compute environment: no auto-scaling, the default class flows.
+    assert captured["compute_class"] == "medium"
 
 
 def test_non_complete_solve_is_typed_error(monkeypatch):

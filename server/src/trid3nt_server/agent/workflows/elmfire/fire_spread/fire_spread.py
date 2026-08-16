@@ -568,24 +568,10 @@ async def model_elmfire_fire_spread(
                 run_id=run_id,
             )
 
-        # --- Vertical auto-scaling from the deck cell count. -----------------
-        from trid3nt_server.agent.tools.simulation.solver.solver import (
-            select_compute_class,
-            solve_progress_vcpus,
-        )
-
+        # ONE local compute environment: the solve runs on the host CPUs, so the
+        # caller's compute_class flows through unchanged (no auto-scaling).
         n_cells = int(staging.n_cells or 0)
-        auto_class = (
-            select_compute_class(n_cells) if n_cells > 0 else compute_class
-        )
-        _CLASS_RANK = {"small": 0, "standard": 1, "large": 2, "xlarge": 3}
-        effective_compute_class = max(
-            auto_class, compute_class, key=lambda c: _CLASS_RANK.get(c, 1)
-        )
-        # Deployment-aware CPU count (fingerprint audit A6): local-docker
-        # reports the HOST cpu count; aws-batch keeps the tier lookup
-        # byte-identical.
-        _vcpus = solve_progress_vcpus(effective_compute_class)
+        effective_compute_class = compute_class
 
         # --- Step 4: dispatch via the generic run_solver seam. ----------------
         from trid3nt_server.agent.tools.simulation.solver.solver import (
@@ -620,7 +606,7 @@ async def model_elmfire_fire_spread(
                 solver=ELMFIRE_SOLVER_NAME,
                 grid_resolution_m=float(run_args.cellsize_m),
                 active_cell_count=n_cells or None,
-                vcpus=int(_vcpus) if _vcpus is not None else None,
+                vcpus=os.cpu_count(),
                 eta_seconds=estimate_elmfire_runtime_s(n_cells, duration_s),
             )
         )

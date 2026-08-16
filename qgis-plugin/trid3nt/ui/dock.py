@@ -87,7 +87,6 @@ from .cards import (
     CodeExecCard,
     CredentialCard,
     GateCard,
-    Mode2CandidateCard,
     RegionChoiceCard,
     SimCard,
     SpatialInputCard,
@@ -1402,14 +1401,12 @@ class Trid3ntDock(QDockWidget):
         # Settings now). Re-enabled by disconnect_agent + the failure paths.
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self._session_case_title = title
-        anon = self.settings.anonymous_user_id or None
         # A2 (NATE 2026-07-20): a fresh case is BBOX-LESS -- never seed the
         # canvas extent on create. The AOI is set explicitly later (the Set-AOI
         # rectangle) or the agent geocodes it; there is no canvas-as-AOI path.
         self.bridge.start(
             url,
             token=self.settings.effective_token(),
-            anonymous_user_id=anon,
             case_title=title,
             case_bbox=None,
             # Live-feedback 2026-07-09: REUSE the resumed / newest existing
@@ -1812,8 +1809,6 @@ class Trid3ntDock(QDockWidget):
         data_base: str = "",
     ) -> None:
         self._connected = True
-        if is_anonymous:
-            self.settings.anonymous_user_id = user_id
         # Remote-daemon (tailnet) endpoint derivation: stash whatever this
         # handshake advertised BEFORE any :8766 call or layer materialize
         # below reads through ``_effective_http_base`` / ``_effective_data_base``.
@@ -2024,17 +2019,6 @@ class Trid3ntDock(QDockWidget):
             # ONE tool-choice envelope. Fail-open: unanswered, the server's
             # timeout_s proceeds and the supersede hook above folds the card.
             self._show_tool_candidates_card(data)
-        elif kind == "mode2-candidate":
-            # Offer-to-add card (LANE P, 2026-07-22): the light fire-and-
-            # forget classifier flag. Fire-and-forget by contract too -- a
-            # malformed/dropped envelope costs nothing but one candidate
-            # never getting a card.
-            self._show_mode2_candidate_card(data, heavy=False)
-        elif kind == "offer-catalog-addition":
-            # The heavier review flow (same card, richer probe findings) --
-            # see gate.py's module docstring. Not yet emitted by the live
-            # server; handled now so the plugin is ready the day it is.
-            self._show_mode2_candidate_card(data, heavy=True)
         elif kind == "region-choice-request":
             # LANE A (2026-07-23): CRITICAL gate-WAIT -- the server snapped a
             # vague geocode to the whole state and PAUSES the turn awaiting a
@@ -2682,55 +2666,6 @@ class Trid3ntDock(QDockWidget):
             )
         except Exception as exc:  # noqa: BLE001
             self._note(f"tool choice send failed: {exc}", error=True)
-
-    # -- offer-to-add card (LANE P, mode2-candidate + offer-catalog-addition,
-    # 2026-07-22) --------------------------------------------------------------- #
-
-    def _show_mode2_candidate_card(self, payload: dict, heavy: bool) -> None:
-        """Render a Mode 2 offer-to-add card -- either the light
-        ``mode2-candidate`` flag (``heavy=False``) or the heavier
-        ``offer-catalog-addition`` review (``heavy=True``); same card class
-        either way (``ui/cards.Mode2CandidateCard``). Mirrors
-        ``_show_gate_card``'s malformed-envelope honesty and the BUG-4/N5
-        close-out discipline (post-decision narration lands in a fresh entry
-        BELOW the card)."""
-        request = (
-            gate.parse_offer_catalog_addition(payload)
-            if heavy
-            else gate.parse_mode2_candidate(payload)
-        )
-        if request is None:
-            self._note(
-                "Received a malformed "
-                + ("offer-catalog-addition" if heavy else "mode2-candidate")
-                + " envelope (no "
-                + ("request_id" if heavy else "candidate_id")
-                + "/url) -- no offer-to-add card shown.",
-                error=True,
-            )
-            return
-        card = Mode2CandidateCard(request, self._on_mode2_decision)
-        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        self._close_pending_for_card()
-        self._scroll_to_bottom()
-
-    def _on_mode2_decision(
-        self, request: gate.Mode2CandidateRequest, add: bool
-    ) -> None:
-        """Send the offer-to-add decision: ONE ``catalog-addition-response``
-        envelope (contract ``ws.CatalogAdditionResponsePayload``) built by
-        the pure ``gate.resolve_mode2_decision`` -- see that function's
-        docstring for the light-candidate ``request_id`` bridge."""
-        wire = gate.resolve_mode2_decision(request, add)
-        try:
-            self.bridge.respond_catalog_addition(
-                wire["request_id"],
-                wire["decision"],
-                edited_catalog_entry=wire["edited_catalog_entry"],
-                reject_reason=wire["reject_reason"],
-            )
-        except Exception as exc:  # noqa: BLE001
-            self._note(f"catalog-addition reply send failed: {exc}", error=True)
 
     def _supersede_open_tool_pickers(self) -> None:
         """Fold every still-open picker card to its "agent proceeded" chip

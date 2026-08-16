@@ -8,10 +8,10 @@ test drivers all share one case list. The canonical owner identity is an
 internal ULID (Decision 10).
 
 On WebSocket connect the client may send an ``auth-token`` envelope (Appendix
-H.5 shape). The ``token`` and ``anonymous_user_id`` fields still ride the wire
-(clients keep their handshake unchanged) but are IGNORED here: there is no
-verifier and no per-client identity. :func:`authenticate_token` resolves the
-one local user; ``server.py`` reads / writes the envelopes.
+H.5 shape). The ``token`` field still rides the wire (clients keep their
+handshake unchanged) but is IGNORED here: there is no verifier and no
+per-client identity. :func:`authenticate_token` resolves the one local user;
+``server.py`` reads / writes the envelopes.
 
 The module is **transport-agnostic** -- it does not touch the WebSocket
 itself; ``server.py`` reads / writes envelopes and calls the functions here
@@ -21,7 +21,7 @@ up a real socket.
 Invariants this module is responsible for:
 
 - **Wire isolation.** No credential ever persists; the ack
-  carries only ``user_id`` / ``is_anonymous`` / ``tier``.
+  carries only ``user_id`` / ``is_anonymous``.
 - **Decision 10 (canonical id).** The owner id is the fixed local-user
   constant.
 - **Canonical persistence.** All user CRUD goes through the ``Persistence``
@@ -39,7 +39,6 @@ from trid3nt_contracts.auth import (
     AdvertisedEndpoints,
     AuthAckEnvelope,
     AuthTokenEnvelope,
-    TierClaim,
 )
 from trid3nt_contracts.common import now_utc
 from trid3nt_contracts.user import User
@@ -164,8 +163,7 @@ def verify_access_token(presented: str | None) -> bool:
 #: (``TRID3NT_SOLVER_BACKEND=local-docker`` / FilePersistence). A constant,
 #: ULID-shaped id ("L0CA1 VSER" in Crockford base32 -- L/O/U are not in the
 #: alphabet, hence 1/0/V) so the desktop browser, phone, QGIS plugin, and
-#: test drivers all land on the SAME case list regardless of the per-client
-#: ``anonymous_user_id`` hint.
+#: test drivers all land on the SAME case list.
 LOCAL_SINGLE_USER_ID = "0110CA1VSERAAAAAAAAAAAAAAA"
 
 
@@ -181,12 +179,10 @@ class AuthResult:
     Fields:
     - ``user`` -- the resolved ``User`` (always populated).
     - ``is_anonymous`` -- True for every locally-resolved user.
-    - ``tier`` -- the H.4 tier capability claim. Default ``"free"``.
     """
 
     user: User
     is_anonymous: bool
-    tier: TierClaim
 
 
 class NonLocalAuthUnsupported(RuntimeError):
@@ -208,10 +204,9 @@ async def authenticate_token(
 
     ``solver_backend()`` is hardwired to ``local-docker``
     (:func:`_is_local_single_user_mode` True), so EVERY connection -- any
-    ``anonymous_user_id`` hint, any token -- resolves to the ONE fixed local
-    user (``LOCAL_SINGLE_USER_ID``). The token and hint fields still ride the
-    wire (clients keep their handshake unchanged) but are ignored: there is no
-    verifier and no per-client identity.
+    token -- resolves to the ONE fixed local user (``LOCAL_SINGLE_USER_ID``).
+    The token field still rides the wire (clients keep their handshake
+    unchanged) but is ignored: there is no verifier and no per-client identity.
 
     Raises :class:`NonLocalAuthUnsupported` when not in local single-user mode
     -- unreachable in the product, made loud so a mis-provisioned backend can
@@ -280,7 +275,7 @@ async def _resolve_local_single_user(
                 logger.warning(
                     "local user upsert failed (continuing in-memory): %s", exc
                 )
-    return AuthResult(user=user, is_anonymous=True, tier="free")
+    return AuthResult(user=user, is_anonymous=True)
 
 
 def build_auth_ack(
@@ -290,8 +285,7 @@ def build_auth_ack(
     """Construct the ``auth-ack`` envelope payload for a resolved AuthResult.
 
     Mirrors only the fields the H.5 ack surfaces -- never any credential
-    (wire isolation). The client uses this to drive its
-    sticky-anonymous logic.
+    (wire isolation). The client reads ``user_id`` for its session identity.
 
     ``endpoints`` (remote-daemon access, 2026-07) is the optional
     server-advertised sibling-endpoint object (see
@@ -301,7 +295,6 @@ def build_auth_ack(
     return AuthAckEnvelope(
         user_id=result.user.user_id,
         is_anonymous=result.is_anonymous,
-        tier=result.tier,
         endpoints=endpoints,
     )
 

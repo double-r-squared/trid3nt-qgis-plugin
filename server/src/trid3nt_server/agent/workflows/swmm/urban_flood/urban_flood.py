@@ -1043,32 +1043,10 @@ async def model_swmm_urban_flood(
                 exc,
             )
 
-        # --- Auto vertical scaling per case ----------------
-        # Size the Batch compute_class from the built mesh's active-cell count
-        # (the adaptive-mesh budget already coarsened the grid to fit a cap;
-        # n_active_cells IS the element count) instead of the caller's blind
-        # default. A big urban AOI grabs more compute (up to the new xlarge
-        # 48-vCPU tier); a small one stays cheap. select_compute_class never
-        # raises - a zero/absent count falls back to the caller's compute_class.
-        from trid3nt_server.agent.tools.simulation.solver.solver import select_compute_class
-
+        # ONE local compute environment: the solve runs on the host CPUs, so the
+        # caller's compute_class flows through unchanged (no auto-scaling).
         n_active = int(getattr(staging.build, "n_active_cells", 0) or 0)
-        if n_active > 0:
-            effective_compute_class = select_compute_class(n_active)
-            logger.info(
-                "model_swmm_urban_flood: auto vertical scaling n_active_cells=%d "
-                "-> compute_class=%s (caller requested %s)",
-                n_active,
-                effective_compute_class,
-                compute_class,
-            )
-        else:
-            effective_compute_class = compute_class
-            logger.info(
-                "model_swmm_urban_flood: no active-cell count; using caller "
-                "compute_class=%s for the dispatch",
-                compute_class,
-            )
+        effective_compute_class = compute_class
 
         # --- Step 5+6: solve + postprocess ----------------------------------
         # is_local_mode() is True by DEFAULT (TRID3NT_SWMM_LOCAL unset): the
@@ -1080,18 +1058,12 @@ async def model_swmm_urban_flood(
         # regression until the env is set.
         #
         # LIVE solve-progress heartbeat: the solve emits
-        # nothing for minutes (off-loop thread OR remote Batch job), so the
-        # running card is a silent spinner. Drive the shared solve-progress
-        # envelope ON the loop (the emitter is loop-bound) alongside the solve -
-        # identical to the proven SFINCS pattern in the composer.
-        # Best-effort: emitter None -> no-op; cancelled + awaited in a finally
-        # regardless of outcome. The heartbeat wraps BOTH lanes.
-        # Deployment-aware CPU count (fingerprint audit A6): local-docker
-        # reports the HOST cpu count (the web renders it with "CPU" wording);
-        # aws-batch keeps the tier lookup byte-identical.
-        from trid3nt_server.agent.tools.simulation.solver.solver import solve_progress_vcpus
-
-        _swmm_vcpus = solve_progress_vcpus(effective_compute_class)
+        # nothing for minutes (off-loop thread), so the running card is a silent
+        # spinner. Drive the shared solve-progress envelope ON the loop (the
+        # emitter is loop-bound) alongside the solve - identical to the proven
+        # SFINCS pattern in the composer. Best-effort: emitter None -> no-op;
+        # cancelled + awaited in a finally regardless of outcome.
+        _swmm_vcpus = os.cpu_count()
         if not is_local_mode():
             # --- Out-of-process lane (TRID3NT_SWMM_LOCAL=0): GENERIC Batch seam.
             # Stage the built deck + a worker-contract manifest to S3, then

@@ -67,7 +67,6 @@ def _make_auth_result(*, anonymous: bool = True) -> AuthResult:
     return AuthResult(
         user=user,
         is_anonymous=anonymous,
-        tier="free",
     )
 
 
@@ -216,8 +215,8 @@ def test_auth_ack_round_trip_with_endpoints() -> None:
 
 
 def test_auth_ack_old_wire_without_endpoints_parses() -> None:
-    """An OLD server's ack (no endpoints key at all) still validates -> None."""
-    old_wire = {"user_id": new_ulid(), "is_anonymous": True, "tier": "free"}
+    """An ack without the optional endpoints key still validates -> None."""
+    old_wire = {"user_id": new_ulid(), "is_anonymous": True}
     back = AuthAckEnvelope.model_validate(old_wire)
     assert back.endpoints is None
 
@@ -304,7 +303,7 @@ async def test_handle_auth_token_advertises_derived_endpoints(
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket(local_address=("100.64.0.1", 8765))
-    await _handle_auth_token(ws, state, {"token": "", "anonymous_user_id": None})
+    await _handle_auth_token(ws, state, {"token": ""})
 
     assert _sent_types(ws) == ["auth-ack"]
     payload = ws.sent[0]["payload"]
@@ -328,7 +327,7 @@ async def test_handle_auth_token_absent_endpoints_for_socket_without_address(
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket(local_address=None)
-    await _handle_auth_token(ws, state, {"token": "", "anonymous_user_id": None})
+    await _handle_auth_token(ws, state, {"token": ""})
 
     assert _sent_types(ws) == ["auth-ack"]
     assert ws.sent[0]["payload"]["endpoints"] is None
@@ -341,7 +340,7 @@ async def test_token_gate_off_is_anonymous_regression(_no_persistence) -> None:
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
-    await _handle_auth_token(ws, state, {"token": "anything", "anonymous_user_id": None})
+    await _handle_auth_token(ws, state, {"token": "anything"})
 
     assert _sent_types(ws) == ["auth-ack"]
     assert ws.closed_with is None
@@ -360,7 +359,7 @@ async def test_token_gate_on_correct_token_accepts(
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
     await _handle_auth_token(
-        ws, state, {"token": "s3cr3t", "anonymous_user_id": None}
+        ws, state, {"token": "s3cr3t"}
     )
 
     assert _sent_types(ws) == ["auth-ack"]
@@ -379,7 +378,7 @@ async def test_token_gate_on_wrong_token_typed_close(
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
     await _handle_auth_token(
-        ws, state, {"token": "wrong", "anonymous_user_id": None}
+        ws, state, {"token": "wrong"}
     )
 
     # A typed error envelope, then a policy-violation (1008) close.
@@ -401,7 +400,7 @@ async def test_token_gate_on_missing_token_typed_close(
 
     state = SessionState(session_id=new_ulid())
     ws = _FakeWebSocket()
-    await _handle_auth_token(ws, state, {"token": "", "anonymous_user_id": None})
+    await _handle_auth_token(ws, state, {"token": ""})
 
     assert _sent_types(ws) == ["error"]
     assert ws.sent[0]["payload"]["error_code"] == "AUTH_FAILED"

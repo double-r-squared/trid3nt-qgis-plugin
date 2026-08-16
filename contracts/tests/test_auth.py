@@ -12,12 +12,13 @@ Coverage:
    out.
 5. ``test_auth_token_oversized_token_rejected`` — 8KB upper bound.
 6. ``test_auth_ack_envelope_roundtrip`` — JSON round-trip stability.
-7. ``test_auth_ack_envelope_anonymous_default_tier_free`` — anonymous
-   fallback ack defaults to ``tier="free"`` and no firebase identity (local single-user).
+7. ``test_auth_ack_envelope_anonymous`` — anonymous fallback ack:
+   anonymous=True and no firebase identity (local single-user).
 8. ``test_auth_ack_message_type_pinned`` — kebab-case ``auth-ack``.
 9. ``test_auth_ack_invariant9_no_cost_fields`` — Invariant 9: no cost /
    spend / quota / billing fields.
-10. ``test_auth_ack_invalid_tier_rejected`` — open-enum-bounded ``tier``.
+10. ``test_auth_ack_tier_field_removed`` — the H.4 tier claim was cut;
+    ``extra="forbid"`` rejects a ``tier`` key.
 11. ``test_auth_ack_invalid_user_id_rejected`` — ULID discipline on
     ``user_id``.
 12. ``test_auth_envelopes_exported_from_package`` — ``trid3nt_contracts.auth``
@@ -44,7 +45,6 @@ def _ack(**overrides) -> AuthAckEnvelope:
     base = {
         "user_id": new_ulid(),
         "is_anonymous": False,
-        "tier": "free",
     }
     base.update(overrides)
     return AuthAckEnvelope(**base)
@@ -100,7 +100,9 @@ def test_auth_token_message_type_pinned() -> None:
 def test_auth_token_rejects_extra_fields() -> None:
     """``extra='forbid'`` catches silent contract drift."""
     base = AuthTokenEnvelope(token="abc").model_dump(mode="json")
-    for forbidden in ("refresh_token", "tier", "user_id", "claims"):
+    # ``anonymous_user_id`` was the sticky anon-id hint, cut in wave 11 -- it is
+    # now just another rejected extra field.
+    for forbidden in ("refresh_token", "tier", "user_id", "claims", "anonymous_user_id"):
         bad = {**base, forbidden: "x"}
         with pytest.raises(ValidationError, match="(?i)extra"):
             AuthTokenEnvelope.model_validate(bad)
@@ -138,15 +140,15 @@ def test_auth_ack_envelope_roundtrip() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_auth_ack_envelope_anonymous_default_tier_free() -> None:
-    """Anonymous-fallback ack: no firebase_uid, anonymous=True, tier=free."""
+def test_auth_ack_envelope_anonymous() -> None:
+    """Anonymous-fallback ack: no firebase_uid, anonymous=True."""
     ack = AuthAckEnvelope(
         user_id=new_ulid(),
         is_anonymous=True,
     )
     assert not hasattr(ack, "firebase_uid")
+    assert not hasattr(ack, "tier")
     assert ack.is_anonymous is True
-    assert ack.tier == "free"
 
 
 # --------------------------------------------------------------------------- #
@@ -181,16 +183,16 @@ def test_auth_ack_invariant9_no_cost_fields() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 10. auth-ack tier open-enum bounds
+# 10. auth-ack tier claim removed
 # --------------------------------------------------------------------------- #
 
 
-def test_auth_ack_invalid_tier_rejected() -> None:
-    """``tier`` is bounded to ``free`` / ``pro`` / ``enterprise``."""
-    with pytest.raises(ValidationError):
+def test_auth_ack_tier_field_removed() -> None:
+    """The H.4 tier claim was cut; ``extra="forbid"`` rejects any ``tier`` key."""
+    with pytest.raises(ValidationError, match="(?i)extra"):
         AuthAckEnvelope(
             user_id=new_ulid(),
-            tier="ultra",  # type: ignore[arg-type]
+            tier="free",  # type: ignore[call-arg]
         )
 
 

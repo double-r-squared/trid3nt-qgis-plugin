@@ -105,7 +105,7 @@ async def test_dispatch_wrapper_binds_turn_case(monkeypatch) -> None:
 
     observed: list[str | None] = []
 
-    async def fake_stream(websocket, st, settings, user_text, research_mode, bedrock_model=None, **_kwargs):
+    async def fake_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
         observed.append(current_turn_case())
 
     monkeypatch.setattr(server, "_stream_model_reply", fake_stream)

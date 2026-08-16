@@ -8,7 +8,6 @@ siblings that share the loaded catalog through this module.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from pathlib import Path
@@ -29,7 +28,6 @@ __all__ = [
     "CATALOG_YAML_PATH",
     "load_catalog",
     "user_catalog_path",
-    "append_user_catalog_entry",
     "reset_catalog_cache",
 ]
 
@@ -223,8 +221,8 @@ def load_catalog(yaml_path: Path | str | None = None) -> list[CatalogEntry]:
 def reset_catalog_cache() -> None:
     """Clear the in-memory catalog cache so the next ``load_catalog`` rebuilds.
 
-    Called after ``append_user_catalog_entry`` so a freshly-added Mode 2 entry
-    is visible to ``search_data_catalog`` on the very next call.
+    Invalidates the cache so a fresh ``user_catalog.yaml`` overlay (hand-authored
+    entries) is picked up on the very next ``search_data_catalog`` call.
     """
     global _CATALOG_CACHE
     _CATALOG_CACHE = None
@@ -233,54 +231,3 @@ def reset_catalog_cache() -> None:
 def _reset_catalog_cache_for_tests() -> None:
     """Back-compat alias: tests force-reload the YAML by clearing the cache."""
     reset_catalog_cache()
-
-
-def append_user_catalog_entry(entry: CatalogEntry) -> None:
-    """Append (or replace-by-id) a Mode 2 entry in the USER-OVERLAY catalog.
-
-    Writes to ``user_catalog_path()`` (NOT the vendored catalog), overlay-wins
-    dedup by id (a re-add of the same id replaces the prior overlay row), then
-    resets the catalog cache so ``search_data_catalog`` finds the entry on the
-    next load. Atomic (tmp + replace) so a crash mid-write can't corrupt the
-    overlay. Synchronous file I/O -- callers on the asyncio loop MUST wrap this
-    in ``asyncio.to_thread`` (server.py does).
-    """
-    path = user_catalog_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    rows: list[dict[str, Any]] = []
-    if path.exists():
-        try:
-            with path.open() as fh:
-                raw = yaml.safe_load(fh)
-            if isinstance(raw, dict):
-                rows = [
-                    r
-                    for r in (raw.get("entries") or [])
-                    if isinstance(r, dict)
-                ]
-        except Exception as exc:  # noqa: BLE001 — corrupt overlay -> start fresh
-            logger.warning(
-                "user-overlay: could not read %s before append — starting "
-                "fresh: %s",
-                path,
-                exc,
-            )
-            rows = []
-
-    # Overlay-wins dedup by id: drop any prior row with this id, then append.
-    rows = [r for r in rows if r.get("id") != entry.id]
-    rows.append(json.loads(entry.model_dump_json()))
-
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w") as fh:
-        yaml.safe_dump({"entries": rows}, fh, sort_keys=False, default_flow_style=False)
-    tmp.replace(path)
-
-    reset_catalog_cache()
-    logger.info(
-        "user-overlay: appended catalog entry id=%s (overlay now %d entries) at %s",
-        entry.id,
-        len(rows),
-        path,
-    )

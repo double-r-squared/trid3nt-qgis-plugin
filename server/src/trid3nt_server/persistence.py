@@ -775,9 +775,8 @@ class Persistence:
     async def get_user_by_id(self, user_id: str) -> User | None:
         """Find a user by ULID. Returns ``None`` if not found.
 
-        Part C: the anonymous-fallback path needs an id-based lookup
-        so a reconnecting client can re-bind to the same User via the
-        ``AuthTokenEnvelope.anonymous_user_id`` hint.
+        The local-single-user resolver looks up the one fixed
+        ``LOCAL_SINGLE_USER_ID`` record by id on every connect.
         """
         raw = await self._mcp.call_tool(
             "find-one",

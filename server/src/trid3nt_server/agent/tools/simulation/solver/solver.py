@@ -187,14 +187,7 @@ __all__ = [
     "set_runs_bucket",
     "set_s3_client",
     "solver_backend",
-    "solve_progress_vcpus",
     "SOLVER_BACKEND_LOCAL_DOCKER",
-    "COMPUTE_CLASS_SIZING",
-    "select_compute_class",
-    "COMPUTE_CLASS_SMALL_MAX_ELEMENTS",
-    "COMPUTE_CLASS_STANDARD_MAX_ELEMENTS",
-    "COMPUTE_CLASS_LARGE_MAX_ELEMENTS",
-    "COMPUTE_CLASS_FALLBACK",
     "LOCAL_DOCKER_WORKFLOW_NAME",
     "LOCAL_EXEC_WORKFLOW_NAME",
     "LocalSolverSpec",
@@ -308,24 +301,6 @@ LOCAL_DOCKER_WORKFLOW_NAME: str = "local-docker"
 #: of a container.
 LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
 
-#: compute_class → {vcpus, mem (MiB), OMP_NUM_THREADS} sizing map (buckets:
-#: 4/8/16/32 vCPU at ~2 GB/vCPU → 8/16/32/64 Gi; OMP threads == vCPU). The
-#: solver-confirm card reads this to show the sized tier. Aliased the same way
-#: ``_COMPUTE_CLASS_ALIAS`` maps names onto the schema literal, so
-#: ``medium`` (== standard) resolves to the 8-vCPU bucket.
-#:
-#: ``xlarge`` is the higher-powered vertical-scale tier (auto vertical scaling
-#: per case so a big AOI/mesh can grab MORE compute); ``gpu`` is a distinct
-#: accelerator bucket (32 vCPU / 64 GiB), not part of the vCPU vertical ladder
-#: ``select_compute_class`` walks.
-COMPUTE_CLASS_SIZING: dict[str, dict[str, int]] = {
-    "small": {"vcpus": 4, "mem_mib": 8192, "omp_threads": 4},
-    "standard": {"vcpus": 8, "mem_mib": 16384, "omp_threads": 8},
-    "large": {"vcpus": 16, "mem_mib": 32768, "omp_threads": 16},
-    "xlarge": {"vcpus": 48, "mem_mib": 98304, "omp_threads": 48},
-    "gpu": {"vcpus": 32, "mem_mib": 65536, "omp_threads": 32},
-}
-
 #: The two local workflow_name sentinels ``wait_for_completion`` accepts.
 _LOCAL_WORKFLOW_NAMES: tuple[str, str] = (
     LOCAL_DOCKER_WORKFLOW_NAME,
@@ -356,25 +331,6 @@ def solver_backend() -> str:
     return SOLVER_BACKEND_LOCAL_DOCKER
 
 
-def solve_progress_vcpus(
-    compute_class: str | None = None,
-    *,
-    cloud_vcpus: int | None = None,
-) -> int | None:
-    """Host CPU count for the LIVE solve-progress readout (A6).
-
-    local-docker is the only solver backend, so the card reports
-    ``os.cpu_count()`` -- the host CPUs actually doing the solve (the
-    web/plugin render it with "CPU" wording, never "vCPU"). ``None`` if the
-    host count is indeterminate, so the card omits the segment entirely (no
-    fabrication). ``compute_class`` / ``cloud_vcpus`` are accepted for
-    call-site signature stability; they do not change the host count.
-
-    Wording/telemetry only -- NEVER consulted for dispatch sizing.
-    """
-    return os.cpu_count()
-
-
 #: Map the kickoff-named compute classes (small/medium/large) onto the
 #: ``ExecutionHandle.ComputeClass`` literal contract
 #: (``Literal["small", "standard", "large", "gpu"]``). This alias map names
@@ -388,122 +344,6 @@ _COMPUTE_CLASS_ALIAS: dict[str, str] = {
     "xlarge": "xlarge",  # higher-powered vertical-scale tier (48 vCPU / 96 GiB)
     "gpu": "gpu",
 }
-
-
-# --------------------------------------------------------------------------- #
-# Auto vertical scaling per case
-# --------------------------------------------------------------------------- #
-#
-# select_compute_class PICKS the right compute_class per case from the
-# AOI/mesh size instead of always defaulting to "standard" (8 vCPU). The mesh
-# builders (sfincs_builder / swmm_mesh_builder) already estimate the active
-# ELEMENT count (cells); ``select_compute_class`` maps that estimate onto the
-# vertical vCPU ladder small → standard → large → xlarge. ``gpu`` is NOT on this
-# ladder (it is a distinct accelerator bucket, not a vCPU step).
-#
-# Thresholds are the element-count boundaries between tiers. They are calibrated
-# against the SFINCS/SWMM perf models' per-vCPU cell caps (the point at which a
-# bigger box buys a meaningfully shorter solve): a small domain stays on the
-# cheap 4-vCPU box; a mid domain on the 8-vCPU standard; a large urban/coastal
-# AOI on 16 vCPU; only a very large mesh reaches for the 48-vCPU xlarge tier.
-# Env-overridable so the ladder re-tunes from logged solve-telemetry without a
-# code change (mirrors the autoscale perf-model constants).
-
-#: Element-count → compute_class boundaries (upper-exclusive). An estimate in
-#: ``[0, SMALL_MAX)`` → small; ``[SMALL_MAX, STANDARD_MAX)`` → standard;
-#: ``[STANDARD_MAX, LARGE_MAX)`` → large; ``>= LARGE_MAX`` → xlarge.
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return default
-    try:
-        return int(float(raw.strip()))
-    except (TypeError, ValueError):
-        logger.warning(
-            "select_compute_class: env %s=%r not an int; using default %s",
-            name,
-            raw,
-            default,
-        )
-        return default
-
-
-#: Upper bound (exclusive) of the SMALL tier -- at/under this many elements a 4
-#: vCPU box solves comfortably. Env: ``TRID3NT_COMPUTE_CLASS_SMALL_MAX``.
-COMPUTE_CLASS_SMALL_MAX_ELEMENTS: int = _env_int(
-    "TRID3NT_COMPUTE_CLASS_SMALL_MAX", 50_000
-)
-#: Upper bound (exclusive) of the STANDARD tier (8 vCPU).
-#: Env: ``TRID3NT_COMPUTE_CLASS_STANDARD_MAX``.
-COMPUTE_CLASS_STANDARD_MAX_ELEMENTS: int = _env_int(
-    "TRID3NT_COMPUTE_CLASS_STANDARD_MAX", 250_000
-)
-#: Upper bound (exclusive) of the LARGE tier (16 vCPU). At/above this the job
-#: reaches for the higher-powered ``xlarge`` (48 vCPU) tier.
-#: Env: ``TRID3NT_COMPUTE_CLASS_LARGE_MAX``.
-COMPUTE_CLASS_LARGE_MAX_ELEMENTS: int = _env_int(
-    "TRID3NT_COMPUTE_CLASS_LARGE_MAX", 1_000_000
-)
-
-#: The class returned when the element estimate is missing / non-positive -- the
-#: 8-vCPU standard bucket (the prior default; never crash, never under-provision
-#: to ``small`` on a blind estimate).
-COMPUTE_CLASS_FALLBACK: str = "standard"
-
-
-def select_compute_class(estimated_elements: int | float | None) -> str:
-    """Pick the per-case ``compute_class`` from the estimated ELEMENT count.
-
-    Auto vertical scaling per case: the mesh builders already
-    estimate the active-cell/element count; this maps that estimate onto the
-    vertical vCPU ladder so a big AOI/mesh grabs more compute and a small one
-    stays cheap. The ladder (low → high) is::
-
-        elements < SMALL_MAX            → "small"     (4 vCPU / 8 GiB)
-        SMALL_MAX <= e < STANDARD_MAX   → "standard"  (8 vCPU / 16 GiB)
-        STANDARD_MAX <= e < LARGE_MAX   → "large"     (16 vCPU / 32 GiB)
-        e >= LARGE_MAX                  → "xlarge"    (48 vCPU / 96 GiB)
-
-    A missing / zero / negative / non-numeric estimate falls back to
-    ``"standard"`` (the prior default) -- this function NEVER raises, so the
-    workflow always has a usable class even when the autoscale provenance is
-    absent. ``gpu`` is intentionally NOT reachable here (it is an accelerator
-    bucket, not a vCPU step -- selected explicitly by a caller, never by size).
-
-    Args:
-        estimated_elements: the estimated active-element count for the run
-            (SFINCS active cells / SWMM active cells). ``None`` / non-positive /
-            non-numeric → the standard fallback.
-
-    Returns:
-        One of ``"small"`` / ``"standard"`` / ``"large"`` / ``"xlarge"`` -- a key
-        present in ``COMPUTE_CLASS_SIZING`` and ``_COMPUTE_CLASS_ALIAS``
-        (the compute-class sizing table + alias map).
-    """
-    try:
-        n = float(estimated_elements)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        n = 0.0
-    if not (n > 0) or n != n:  # non-positive OR NaN
-        return COMPUTE_CLASS_FALLBACK
-    if n < COMPUTE_CLASS_SMALL_MAX_ELEMENTS:
-        chosen = "small"
-    elif n < COMPUTE_CLASS_STANDARD_MAX_ELEMENTS:
-        chosen = "standard"
-    elif n < COMPUTE_CLASS_LARGE_MAX_ELEMENTS:
-        chosen = "large"
-    else:
-        chosen = "xlarge"
-    logger.info(
-        "select_compute_class: estimated_elements=%d → compute_class=%s "
-        "(bounds small<%d standard<%d large<%d)",
-        int(n),
-        chosen,
-        COMPUTE_CLASS_SMALL_MAX_ELEMENTS,
-        COMPUTE_CLASS_STANDARD_MAX_ELEMENTS,
-        COMPUTE_CLASS_LARGE_MAX_ELEMENTS,
-    )
-    return chosen
 
 
 # --------------------------------------------------------------------------- #

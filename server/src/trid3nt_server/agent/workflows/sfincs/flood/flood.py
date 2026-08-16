@@ -141,7 +141,6 @@ from trid3nt_server.agent.tools.fetchers._router.hooks.topobathy import Topobath
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.agent.tools.simulation.solver.solver import (
     run_solver,
-    select_compute_class,
     wait_for_completion,
 )
 from trid3nt_server.agent.workflows.sfincs.flood.quadtree_dispatch import (
@@ -1883,33 +1882,10 @@ async def model_flood_scenario(
     )
 
     # --- Step 6: run_solver (Invariant 9 confirmation seam owned by agent) ---
-    # Auto vertical scaling per case: size the compute_class from the AOI/mesh
-    # element count the adaptive-grid autoscale already estimated
-    # (model_setup.parameters['autoscale']['estimated_active_cells']) instead of
-    # always dispatching at the default "standard" (8 vCPU). A big domain grabs
-    # more compute (up to the xlarge 48-vCPU tier); a small one stays cheap. When
-    # the estimate is unavailable we fall back to the caller's compute_class
-    # (default "medium" == standard) -- select_compute_class never raises, so a
-    # missing/zero estimate can never crash the dispatch.
+    # ONE local compute environment: the solve runs on the host CPUs, so the
+    # caller's compute_class flows through unchanged (no auto vertical scaling).
     handle: ExecutionHandle | None = None
-    _autoscale_for_sizing = _extract_solve_autoscale(model_setup)
-    _estimated_elements = _autoscale_for_sizing.get("estimated_active_cells")
-    if _estimated_elements:
-        effective_compute_class = select_compute_class(_estimated_elements)
-        logger.info(
-            "model_flood_scenario: auto vertical scaling "
-            "estimated_active_cells=%s -> compute_class=%s (caller requested %s)",
-            _estimated_elements,
-            effective_compute_class,
-            compute_class,
-        )
-    else:
-        effective_compute_class = compute_class
-        logger.info(
-            "model_flood_scenario: no element estimate available; using caller "
-            "compute_class=%s for the solve dispatch",
-            compute_class,
-        )
+    effective_compute_class = compute_class
     try:
         # surface the solver DISPATCH (the Batch submit) as a nested
         # child row. This is a fast submit, so the child lands green quickly;
@@ -1989,14 +1965,8 @@ async def model_flood_scenario(
     # returns/raises -- it never affects the outcome.
     _autoscale = _extract_solve_autoscale(model_setup)
     _live_active_cells = _autoscale.get("estimated_active_cells")
-    _live_vcpus = _autoscale.get("vcpus")
     _live_eta = _autoscale.get("estimated_solve_seconds")
-    # Deployment-aware CPU count (fingerprint audit A6): local-docker
-    # reports the HOST cpu count (never the perf model's cloud vCPU
-    # anchor); aws-batch keeps the autoscale-provenance value
-    # byte-identical.
-    from trid3nt_server.agent.tools.simulation.solver.solver import solve_progress_vcpus
-
+    # ONE local compute environment: the solve runs on the host CPUs.
     _progress_task = asyncio.ensure_future(
         _drive_live_solve_progress(
             emitter=emitter,
@@ -2008,11 +1978,7 @@ async def model_flood_scenario(
                 if _live_active_cells is not None
                 else None
             ),
-            vcpus=solve_progress_vcpus(
-                cloud_vcpus=(
-                    int(_live_vcpus) if _live_vcpus is not None else None
-                )
-            ),
+            vcpus=os.cpu_count(),
             eta_seconds=float(_live_eta) if _live_eta is not None else None,
         )
     )

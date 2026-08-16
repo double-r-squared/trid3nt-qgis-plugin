@@ -49,12 +49,8 @@ from trid3nt_contracts.collections import (
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.export_schemas import export
 from trid3nt_contracts.ws import (
-    CatalogAdditionResponsePayload,
-    OfferCatalogAdditionPayload,
-    ProbeFindings,
     RecoveryChoicePayload,
     RecoveryChoiceResponsePayload,
-    SuggestedCatalogEntry,
 )
 
 
@@ -306,99 +302,26 @@ def test_recovery_choice_envelope_roundtrip() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 6. §F.1.2 Mode 2 offer-catalog-addition + catalog-addition-response
-# --------------------------------------------------------------------------- #
-
-
-def test_offer_catalog_addition_envelope_roundtrip() -> None:
-    """§F.1.2 Mode 2 envelopes round-trip; suggested entry permissive shape."""
-    suggested = SuggestedCatalogEntry(
-        id="femanflp-discharge-stations",
-        name="FEMA NFHL discharge stations",
-        description="Discharge stations from the FEMA NFHL WFS feed.",
-        urls=["https://hazards.fema.gov/nfhlv2/services/public/NFHL/MapServer/WFSServer"],
-        access_tier=2,
-        credential_tier=1,
-        ttl_class="semi-static-7d",
-        source_class="flood_zone",
-        license_claim="Public domain (US Federal)",
-        how_to_use="OGC WFS GetFeature; bbox in EPSG:4326; layer NFHL:DischargeStations",
-    )
-    probe = ProbeFindings(
-        tls_cert_org="U.S. Department of Homeland Security",
-        access_tier_inferred=2,
-        supports_range_requests=False,
-        stac_root_found=False,
-        ogc_capabilities_found=True,
-        license_observed="Public domain (US Federal)",
-        content_type="application/xml",
-        last_modified_header="Wed, 01 Jun 2026 12:00:00 GMT",
-    )
-    offer = OfferCatalogAdditionPayload(
-        request_id=new_ulid(),
-        url="https://hazards.fema.gov/nfhlv2/services/public/NFHL/MapServer/WFSServer",
-        discovered_via="user-query",
-        probe_findings=probe,
-        suggested_catalog_entry=suggested,
-        ttl_seconds=600,
-    )
-    a = offer.model_dump(mode="json")
-    text_a = json.dumps(a, sort_keys=True)
-    b = OfferCatalogAdditionPayload.model_validate(json.loads(text_a)).model_dump(mode="json")
-    assert text_a == json.dumps(b, sort_keys=True)
-    assert offer.MESSAGE_TYPE == "offer-catalog-addition"
-
-    # Response: accept with edits
-    edited = SuggestedCatalogEntry(
-        **{**suggested.model_dump(mode="json"), "name": "FEMA NFHL Discharge Stations (curator-edited)"}
-    )
-    resp = CatalogAdditionResponsePayload(
-        request_id=offer.request_id,
-        decision="accept",
-        edited_catalog_entry=edited,
-    )
-    assert resp.MESSAGE_TYPE == "catalog-addition-response"
-    text_r = json.dumps(resp.model_dump(mode="json"), sort_keys=True)
-    restored = CatalogAdditionResponsePayload.model_validate(json.loads(text_r))
-    assert restored.decision == "accept"
-    assert restored.edited_catalog_entry is not None
-    assert restored.edited_catalog_entry.name.endswith("(curator-edited)")
-
-    # Response: reject with reason
-    reject = CatalogAdditionResponsePayload(
-        request_id=offer.request_id,
-        decision="reject",
-        reject_reason="content-type was XML but body returned an HTML press release",
-    )
-    assert reject.decision == "reject"
-
-    # discovered_via closed Literal: unknown value rejected
-    bad_offer = a.copy()
-    bad_offer["discovered_via"] = "arxiv-paper"
-    with pytest.raises(ValidationError):
-        OfferCatalogAdditionPayload.model_validate(bad_offer)
-
-
-# --------------------------------------------------------------------------- #
-# 7. Payload registries
+# 6. Payload registries
 # --------------------------------------------------------------------------- #
 
 
 def test_new_envelopes_in_payload_registries() -> None:
-    """All four new sprint-08 payloads land in ALL_PAYLOADS with correct direction."""
+    """The recovery-choice payloads land in ALL_PAYLOADS with correct direction.
+
+    The §F.1.2 Mode 2 offer-catalog-addition / catalog-addition-response
+    envelopes were cut (endpoint additions are hand-authored; discovery exists).
+    """
     assert "recovery-choice" in ws.AGENT_TO_CLIENT_PAYLOADS
-    assert "offer-catalog-addition" in ws.AGENT_TO_CLIENT_PAYLOADS
     assert "recovery-choice-response" in ws.CLIENT_TO_AGENT_PAYLOADS
-    assert "catalog-addition-response" in ws.CLIENT_TO_AGENT_PAYLOADS
 
     # And aggregated:
-    for t in (
-        "recovery-choice",
-        "recovery-choice-response",
-        "offer-catalog-addition",
-        "catalog-addition-response",
-    ):
+    for t in ("recovery-choice", "recovery-choice-response"):
         assert t in ws.ALL_PAYLOADS, f"{t} missing from ALL_PAYLOADS"
+
+    # The cut Mode 2 envelopes are absent from every registry.
+    for t in ("offer-catalog-addition", "catalog-addition-response"):
+        assert t not in ws.ALL_PAYLOADS, f"{t} should have been cut"
 
 
 # --------------------------------------------------------------------------- #
@@ -415,8 +338,6 @@ def test_json_schema_export_includes_new_contracts_and_is_idempotent(tmp_path: P
         "catalog_audit_log_document.json",
         "ws_recovery_choice.json",
         "ws_recovery_choice_response.json",
-        "ws_offer_catalog_addition.json",
-        "ws_catalog_addition_response.json",
     ]
     for stem in expected:
         assert (tmp_path / stem).exists(), f"missing exported schema: {stem}"

@@ -698,7 +698,7 @@ class Result:
 # WS client core
 # --------------------------------------------------------------------------- #
 async def _handshake(ws, session_id: str) -> None:
-    await ws.send(mk("auth-token", session_id, {"token": "", "anonymous_user_id": None}))
+    await ws.send(mk("auth-token", session_id, {"token": ""}))
     ack = json.loads(await asyncio.wait_for(ws.recv(), timeout=15))
     assert ack["type"] == "auth-ack", f"expected auth-ack, got {ack['type']}"
     await ws.send(mk("session-resume", session_id, {"case_id": None}))

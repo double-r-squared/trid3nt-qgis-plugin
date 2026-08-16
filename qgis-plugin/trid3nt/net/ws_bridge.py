@@ -20,10 +20,10 @@ Milestone 2 reconnect policy (mirrors the web client, ws.ts):
 * AFTER a successful first connect, any transport loss enters the
   capped-jitter reconnect ladder (floor 1.5 s doubling to 5 s, jitter in
   [0.5, 1.0) x base -- ``trid3nt_client.next_backoff``), emitting
-  ``reconnecting`` per attempt. Each re-dial reuses the SAME session_id +
-  sticky anonymous_user_id and sends ``session-resume`` with the current
-  case_id so the server re-binds the Case and replays its layers; queued
-  outbound intent flushes FIFO. ``resumed`` fires when the wire is back.
+  ``reconnecting`` per attempt. Each re-dial reuses the SAME session_id and
+  sends ``session-resume`` with the current case_id so the server re-binds the
+  Case and replays its layers; queued outbound intent flushes FIFO.
+  ``resumed`` fires when the wire is back.
 * ``stop()`` exits the ladder immediately (the backoff sleep polls the stop
   flag).
 
@@ -78,7 +78,6 @@ class AgentWorker(QObject):
         self,
         url: str,
         token: str = "",
-        anonymous_user_id: Optional[str] = None,
         case_title: str = "QGIS session",
         case_bbox: Optional[list] = None,
         reuse_case: bool = False,
@@ -86,7 +85,6 @@ class AgentWorker(QObject):
         super().__init__()
         self._url = url
         self._token = token
-        self._anonymous_user_id = anonymous_user_id or None
         self._case_title = case_title
         self._case_bbox = case_bbox
         self._reuse_case = reuse_case
@@ -98,7 +96,6 @@ class AgentWorker(QObject):
         self.client = AgentClient(
             self._url,
             token=self._token,
-            anonymous_user_id=self._anonymous_user_id,
         )
         # QgsAuthManager credential broker: connect-time push of stored keys +
         # prompt-store. Best-effort -- a locked / unprovisioned auth DB is a
@@ -412,7 +409,6 @@ class AgentBridge(QObject):
         self,
         url: str,
         token: str = "",
-        anonymous_user_id: Optional[str] = None,
         case_title: str = "QGIS session",
         case_bbox: Optional[list] = None,
         reuse_case: bool = False,
@@ -421,7 +417,6 @@ class AgentBridge(QObject):
         self._worker = AgentWorker(
             url,
             token=token,
-            anonymous_user_id=anonymous_user_id,
             case_title=case_title,
             case_bbox=case_bbox,
             reuse_case=reuse_case,

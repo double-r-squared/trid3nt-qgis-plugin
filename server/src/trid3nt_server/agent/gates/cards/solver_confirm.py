@@ -1023,15 +1023,10 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     )
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
     from ...tool_arg_normalizer import coerce_bbox_value
-    from ...tools.simulation.solver.solver import (
-        COMPUTE_CLASS_SIZING,
-        select_compute_class,
-    )
     from ...workflows.swmm.urban_flood.urban_flood import (
         _enforce_min_urban_aoi,
         _fetch_dem_for_urban,
     )
-    from ...workflows.swmm.run_swmm import is_local_mode
     from ...mesh.raster_cell_mesh import (
         SWMM_RES_LADDER,
         estimate_swmm_solve_seconds,
@@ -1070,20 +1065,11 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     rungs = sorted({r for r in SWMM_RES_LADDER if r > 0} | {requested_res})
     resolution_choices = [float(r) for r in rungs if r > 0]
 
-    # Off-box (Batch) lane sizes a Spot compute_class from the active-cell count;
-    # the in-process LOCAL lane has no Spot label. is_local_mode() default = True.
-    local_lane = is_local_mode()
-    if local_lane:
-        compute_class = "local"
-        sizing = {"vcpus": os.cpu_count() or 1}
-        spot_label = None
-    else:
-        compute_class = select_compute_class(auto.estimated_active_cells)
-        sizing = COMPUTE_CLASS_SIZING.get(
-            compute_class, COMPUTE_CLASS_SIZING["standard"]
-        )
-        spot_label = f"Spot-eligible ({compute_class})"
-    vcpus = int(sizing.get("vcpus", 1)) or 1
+    # The in-process LOCAL lane is the only compute environment: the solve runs
+    # on the host CPUs. No instance-class sizing / Spot label.
+    compute_class = "local"
+    spot_label = None
+    vcpus = os.cpu_count() or 1
 
     granularity = GranularitySuggestion(
         engine="swmm",

@@ -1451,27 +1451,14 @@ async def model_geoclaw_inundation(
     except Exception:  # noqa: BLE001 - never break the chain on a proxy update
         pass
 
-    # --- Auto vertical scaling from the base grid cell count ----------------
-    from trid3nt_server.agent.tools.simulation.solver.solver import (
-        select_compute_class,
-        solve_progress_vcpus,
-    )
+    # ONE local compute environment: the solve runs on the host CPUs, so the
+    # caller's compute_class flows through unchanged (no auto-scaling).
+    import os as _os
 
     n_active = int(getattr(staging, "n_active_cells", 0) or 0)
-    auto_class = select_compute_class(n_active) if n_active > 0 else compute_class
-    # Honor an explicit HIGHER compute_class from the caller: take the larger of
-    # the auto-sized tier and the requested tier so vertical auto-scaling still
-    # scales UP for big domains, but a user asking for "large"/"xlarge" (quicker
-    # turnaround) is never silently downgraded to the small/standard auto pick.
-    _CLASS_RANK = {"small": 0, "standard": 1, "large": 2, "xlarge": 3}
-    effective_compute_class = max(
-        auto_class, compute_class, key=lambda c: _CLASS_RANK.get(c, 1)
-    )
-    # Deployment-aware CPU count (fingerprint audit A6): local-docker reports
-    # the HOST cpu count; aws-batch keeps the tier lookup byte-identical.
-    _vcpus = solve_progress_vcpus(effective_compute_class)
+    effective_compute_class = compute_class
 
-    # --- Step 3: dispatch to AWS Batch (the generic run_solver seam) --------
+    # --- Step 3: dispatch via the generic run_solver seam -------------------
     from trid3nt_server.agent.tools.simulation.solver.solver import (
         EmitterBinding,
         run_solver,
@@ -1502,7 +1489,7 @@ async def model_geoclaw_inundation(
             solver=GEOCLAW_SOLVER_NAME,
             grid_resolution_m=None,
             active_cell_count=n_active or None,
-            vcpus=int(_vcpus) if _vcpus is not None else None,
+            vcpus=_os.cpu_count(),
             eta_seconds=(n_active * _GEOCLAW_SEC_PER_CELL) if n_active else None,
         )
     )

@@ -10,9 +10,6 @@ This module defines:
 - The ``map-command`` internal ``command`` discriminator (A.4) with one args
   model per command.
 - ``ErrorCode``: the A.6 SCREAMING_SNAKE_CASE error-code enum.
-- The ``research_mode`` field on ``user-message`` (orchestrator pinned
-  toggle-carrier seam, FR-WC-15) — an Appendix A amendment; see the report's
-  amendment log for the exact proposed SRS diff.
 
 Invariants this module is responsible for:
 - **9. No cost theater.** ``ConfirmationRequestPayload`` carries no cost field.
@@ -40,7 +37,6 @@ __all__ = [
     "Envelope",
     "ErrorCode",
     # client -> agent (A.3)
-    "ResearchMode",
     "DrawnGeometry",
     "UserMessagePayload",
     "CancelPayload",
@@ -75,23 +71,18 @@ __all__ = [
     "DisambiguationRequestPayload",
     "ClarificationOption",
     "ClarificationRequestPayload",
-    # agent -> client (sprint-08 forward-looking) — FR-FR-1 + §F.1.2 Mode 2
+    # agent -> client (sprint-08 forward-looking) — FR-FR-1
     "RecoveryChoiceOption",
     "RecoveryChoicePayload",
-    "ProbeFindings",
-    "SuggestedCatalogEntry",
-    "OfferCatalogAdditionPayload",
     # ADR 0018 auto/ask modes -- tool-selection picker (Stage 3, 2026-07-22)
     "ToolChoiceMode",
     "ToolCandidatesReason",
     "ToolCandidate",
     "ToolCandidatesPayload",
     "ToolChoicePayload",
-    # client -> agent (sprint-08 forward-looking) — FR-FR-1 + §F.1.2 Mode 2
+    # client -> agent (sprint-08 forward-looking) — FR-FR-1
     "RecoveryChoice",
     "RecoveryChoiceResponsePayload",
-    "CatalogAdditionDecision",
-    "CatalogAdditionResponsePayload",
     # map-command args (A.4)
     "LoadLayerArgs",
     "RemoveLayerArgs",
@@ -185,12 +176,6 @@ ErrorCode = Literal[
 # Client -> Agent messages (A.3)
 # =========================================================================== #
 
-# Research-mode toggle carrier (FR-WC-15 / orchestrator pinned seam). v0.1
-# always runs research mode regardless; the carrier is pinned now so nobody
-# invents a second path. "deep_research" selection in v0.1 proceeds in research
-# mode (FR-HEP-4). This is an Appendix A amendment — see report amendment log.
-ResearchMode = Literal["research", "deep_research"]
-
 # ADR 0018 (auto/ask modes, Stage 3 2026-07-22): the ROUTING-VISIBILITY mode
 # for a turn. Governs ONLY whether tool selection is surfaced as a
 # ``tool-candidates`` picker card -- the consent surface (payload warnings,
@@ -244,7 +229,6 @@ class UserMessagePayload(GraceModel):
     MESSAGE_TYPE: ClassVar[str] = "user-message"
 
     text: str
-    research_mode: ResearchMode = "research"  # Appendix A amendment (FR-WC-15)
     # In-chat model selector (NATE 2026-06-17): optional Bedrock model id
     # chosen by the user before submitting.  ``None`` means "use the server
     # default" (``BEDROCK_MODEL_ID`` env / ``bedrock_adapter.bedrock_model_id()``).
@@ -1181,158 +1165,6 @@ class RecoveryChoiceResponsePayload(GraceModel):
 
 
 # =========================================================================== #
-# offer-catalog-addition + catalog-addition-response (sprint-08 — §F.1.2 Mode 2)
-# =========================================================================== #
-# Forward-looking — §F.1.2 Mode 2 bounded-growth-path. Agent encounters a
-# candidate `.gov` / `.edu` URL during research, performs a conformity probe,
-# and surfaces a review modal with the probe findings + a suggested catalog
-# entry shape. User accepts (-> writes to catalog_entries with status
-# `user_proposed_pending_curator_review`), rejects, or edits the suggested
-# entry before accepting.
-#
-# Note: the suggested-entry shape carried in `payload.suggested_catalog_entry`
-# is a `CatalogEntry`-shaped dict (per the SRS §F.1.2 Mode 2 envelope example),
-# NOT a fully-validated nested `CatalogEntry` model. We model it as a
-# permissive sub-model below so the wire shape is documented + introspectable,
-# while keeping the field tolerant of the case where the probe-time draft
-# doesn't yet carry a Secret Manager reference. The agent service round-trips
-# this through the full `CatalogEntry` model before writing to MongoDB.
-
-
-class ProbeFindings(GraceModel):
-    """Conformity-probe results captured by the agent during Mode 2 discovery.
-
-    All fields are optional because a given probe may not be able to determine
-    every axis (the OGC GetCapabilities check may fail while the STAC root
-    check succeeds, etc.). The client renders findings as a structured table
-    in the review modal so the user can sanity-check the agent's classification.
-    """
-
-    tls_cert_org: str | None = None  # e.g., "U.S. Department of …"
-    access_tier_inferred: Literal[1, 2, 3, 4] | None = None  # §F.1.1 tier
-    supports_range_requests: bool | None = None
-    stac_root_found: bool | None = None
-    ogc_capabilities_found: bool | None = None
-    license_observed: str | None = None
-    content_type: str | None = None
-    last_modified_header: str | None = None
-
-
-class SuggestedCatalogEntry(GraceModel):
-    """Agent-drafted catalog entry surfaced inside an ``offer-catalog-addition``.
-
-    Permissive shape: the agent supplies the fields it can infer from the
-    conformity probe; the user may edit any of them in the review modal before
-    accepting. The agent service round-trips an accepted draft through the
-    full ``CatalogEntry`` model (which enforces cross-field rules) before
-    writing to the ``catalog_entries`` collection.
-
-    Mirrors the SRS §F.1.2 Mode 2 envelope example fields:
-    ``id`` / ``name`` / ``description`` / ``urls`` / ``access_tier`` /
-    ``credential_tier`` / ``ttl_class`` / ``source_class`` / ``license_claim``
-    / ``how_to_use``. Probe-time drafts may omit ``description``, ``vintage``,
-    or the conditional ``api_key_secret_ref``; the curator review fills any
-    gaps before flipping ``status`` to ``"active"``.
-
-    Renamed from the SRS sketch: ``license_claim`` here (the SRS prose uses
-    ``license`` inside the suggested-entry block but the outer ``CatalogEntry``
-    also uses ``license``; the ``_claim`` suffix marks that this is the probe's
-    *observation*, not the curator-attested value). Surfaced in Open Questions.
-    """
-
-    id: str | None = None
-    name: str | None = None
-    description: str | None = None
-    urls: list[str] = Field(default_factory=list)
-    access_tier: Literal[1, 2, 3, 4] | None = None
-    credential_tier: Literal[1, 2, 3] | None = None
-    ttl_class: Literal["static-30d", "semi-static-7d", "dynamic-1h", "live-no-cache"] | None = None
-    source_class: str | None = None
-    license_claim: str | None = None
-    how_to_use: str | None = None
-
-
-class OfferCatalogAdditionPayload(GraceModel):
-    """``offer-catalog-addition`` (A.4 — sprint-08 amendment, §F.1.2 Mode 2).
-
-    Agent encountered a candidate `.gov` / `.edu` URL during research, ran a
-    conformity probe, and is offering to add it to the catalog. The client
-    renders a dedicated review modal (mirrors §F.3 secret-form pattern — popup,
-    focus-trapped, separate from chat envelope) showing the URL + probe
-    findings + the suggested catalog entry.
-
-    Fields:
-
-    - ``request_id`` — ULID identifying the offer; the response carries it back.
-    - ``url`` — the candidate URL (must be `.gov` or `.edu` per Mode 2 trust
-      model; the agent service enforces this before emission).
-    - ``discovered_via`` — how the agent encountered the URL (``"user-query"``
-      / ``"web-research"`` / ``"catalog-cross-reference"`` / ``"other"``).
-      Open ``Literal`` so new discovery surfaces can be added without a
-      breaking schema change.
-    - ``probe_findings`` — structured ``ProbeFindings`` block (all sub-fields
-      optional; rendered as a table in the modal).
-    - ``suggested_catalog_entry`` — agent-drafted ``SuggestedCatalogEntry``;
-      the user may edit any field before accepting.
-    - ``ttl_seconds`` — offer validity. Default 600s (10 minutes — review
-      modals get more time than retry gates because the user is reading +
-      sanity-checking provenance).
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "offer-catalog-addition"
-
-    request_id: ULIDStr
-    url: str = Field(min_length=1)
-    discovered_via: Literal[
-        "user-query",
-        "web-research",
-        "catalog-cross-reference",
-        "other",
-    ]
-    probe_findings: ProbeFindings
-    suggested_catalog_entry: SuggestedCatalogEntry
-    ttl_seconds: int = Field(default=600, ge=1)
-
-
-#: User's decision on a Mode 2 offer-catalog-addition review modal.
-CatalogAdditionDecision = Literal["accept", "reject"]
-
-
-class CatalogAdditionResponsePayload(GraceModel):
-    """``catalog-addition-response`` (A.4b — sprint-08 amendment, §F.1.2 Mode 2).
-
-    User has accepted / rejected the offered catalog addition.
-
-    Fields:
-
-    - ``request_id`` — matches the originating ``offer-catalog-addition``.
-    - ``decision`` — ``"accept"`` or ``"reject"`` (or None when ``cancelled``).
-    - ``edited_catalog_entry`` — populated only when ``decision == "accept"``
-      AND the user edited any field in the modal. When None on accept, the
-      agent writes the original ``suggested_catalog_entry`` as-is (modulo
-      cross-field validation). Mirrors the same permissive shape as the
-      offer's ``suggested_catalog_entry`` so the round-trip is field-for-field.
-    - ``reject_reason`` — free-text reason populated only when
-      ``decision == "reject"``. Capped at 512 chars. Optional — the user may
-      decline without explanation.
-    - ``cancelled`` — set when the user dismissed the modal without deciding.
-
-    Decision M (claim provenance): the response is logged to
-    ``catalog_audit_log`` (D.12) with ``event_type: "user_proposed"`` on
-    accept; reject events are also audited (open dict carries the
-    ``reject_reason``).
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "catalog-addition-response"
-
-    request_id: ULIDStr
-    decision: CatalogAdditionDecision | None = None
-    edited_catalog_entry: SuggestedCatalogEntry | None = None
-    reject_reason: str | None = Field(default=None, max_length=512)
-    cancelled: bool = False
-
-
-# =========================================================================== #
 # tool-candidates + tool-choice (ADR 0018 auto/ask modes -- Stage 3, 2026-07-22)
 # =========================================================================== #
 # The tool-selection picker seam. Retrieval/routing ties are a real error
@@ -1451,9 +1283,8 @@ CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SpatialInputResponsePayload.MESSAGE_TYPE: SpatialInputResponsePayload,
     DisambiguationResponsePayload.MESSAGE_TYPE: DisambiguationResponsePayload,
     ClarificationResponsePayload.MESSAGE_TYPE: ClarificationResponsePayload,
-    # sprint-08 — FR-FR-1 + §F.1.2 Mode 2
+    # sprint-08 — FR-FR-1
     RecoveryChoiceResponsePayload.MESSAGE_TYPE: RecoveryChoiceResponsePayload,
-    CatalogAdditionResponsePayload.MESSAGE_TYPE: CatalogAdditionResponsePayload,
     # ADR 0018 auto/ask modes -- the picker reply (Stage 3, 2026-07-22)
     ToolChoicePayload.MESSAGE_TYPE: ToolChoicePayload,
 }
@@ -1501,9 +1332,8 @@ AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SpatialInputRequestPayload.MESSAGE_TYPE: SpatialInputRequestPayload,
     DisambiguationRequestPayload.MESSAGE_TYPE: DisambiguationRequestPayload,
     ClarificationRequestPayload.MESSAGE_TYPE: ClarificationRequestPayload,
-    # sprint-08 — FR-FR-1 + §F.1.2 Mode 2
+    # sprint-08 — FR-FR-1
     RecoveryChoicePayload.MESSAGE_TYPE: RecoveryChoicePayload,
-    OfferCatalogAdditionPayload.MESSAGE_TYPE: OfferCatalogAdditionPayload,
     # ADR 0018 auto/ask modes -- the picker request (Stage 3, 2026-07-22)
     ToolCandidatesPayload.MESSAGE_TYPE: ToolCandidatesPayload,
 }

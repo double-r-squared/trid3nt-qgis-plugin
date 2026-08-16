@@ -84,7 +84,7 @@ async def run_smoke() -> bool:
         # ------------------------------------------------------------------ #
         # HANDSHAKE: send auth-token with empty token -> anonymous fallback   #
         # ------------------------------------------------------------------ #
-        await ws.send(mk("auth-token", session_id, {"token": "", "anonymous_user_id": None}))
+        await ws.send(mk("auth-token", session_id, {"token": ""}))
         log.info("sent auth-token (anonymous)")
 
         # Wait for auth-ack

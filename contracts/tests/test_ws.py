@@ -74,26 +74,18 @@ def _roundtrip_idempotent(envelope: ws.Envelope) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
-def test_user_message_default_research_mode(session_id: str) -> None:
-    """A.3 user-message with the FR-WC-15 research_mode amendment, default value."""
+def test_user_message_roundtrip(session_id: str) -> None:
+    """A.3 user-message minimal shape roundtrips."""
     payload = ws.UserMessagePayload(text="Model the flooding from Hurricane Ian in Fort Myers")
     dumped = _roundtrip_idempotent(_wrap(payload, session_id))
     assert dumped["type"] == "user-message"
-    assert dumped["payload"]["research_mode"] == "research"
+    assert dumped["payload"]["text"].startswith("Model the flooding")
 
 
-def test_user_message_deep_research_mode(session_id: str) -> None:
-    payload = ws.UserMessagePayload(
-        text="Run a deep sweep on the 2024 atmospheric river sequence",
-        research_mode="deep_research",
-    )
-    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
-    assert dumped["payload"]["research_mode"] == "deep_research"
-
-
-def test_user_message_unknown_research_mode_rejected() -> None:
+def test_user_message_research_mode_field_removed() -> None:
+    """The FR-WC-15 research_mode carrier was cut; ``extra="forbid"`` now rejects it."""
     with pytest.raises(ValidationError):
-        ws.UserMessagePayload(text="hi", research_mode="extra_deep")  # type: ignore[arg-type]
+        ws.UserMessagePayload(text="hi", research_mode="research")  # type: ignore[call-arg]
 
 
 def test_user_message_drawn_geometry_roundtrip(session_id: str) -> None:
@@ -1029,16 +1021,6 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         ),
         "recovery-choice-response": lambda: ws.RecoveryChoiceResponsePayload(
             request_id=new_ulid(), choice="retry"
-        ),
-        "offer-catalog-addition": lambda: ws.OfferCatalogAdditionPayload(
-            request_id=new_ulid(),
-            url="https://example.gov/data/foo",
-            discovered_via="user-query",
-            probe_findings=ws.ProbeFindings(),
-            suggested_catalog_entry=ws.SuggestedCatalogEntry(),
-        ),
-        "catalog-addition-response": lambda: ws.CatalogAdditionResponsePayload(
-            request_id=new_ulid(), decision="reject"
         ),
         # job-0115 — §F.3 per-Case secrets envelopes (OQ-0100-WS-REGISTRY-WIRING)
         "secret-add": lambda: ws.SecretAddEnvelopePayload(

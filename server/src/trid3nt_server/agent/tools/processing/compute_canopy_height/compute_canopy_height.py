@@ -19,8 +19,8 @@ see reports/design/spike_canopy_height_tool.md):
      cache bucket (same ``cache.storage_scheme()`` + ``solver._get_s3_client()``
      path the OpenQuake/SWMM/SWAN decks stage to).
   3. Dispatch through the generic ``run_solver('canopy', model_setup_uri=<build
-     spec>, compute_class=select_compute_class(tiles))`` seam onto the
-     local-docker backend. "canopy" is registered in
+     spec>)`` seam onto the local-docker backend (ONE local compute
+     environment -- the inference runs on the host CPUs). "canopy" is registered in
      ``SOLVER_WORKFLOW_REGISTRY`` (a presence gate); it needs its own
      ``LOCAL_SOLVER_SPEC_REGISTRY`` entry (via ``register_local_solver_spec``)
      to dispatch to a real canopy worker -- exactly the SWMM/OpenQuake/SWAN
@@ -33,9 +33,8 @@ see reports/design/spike_canopy_height_tool.md):
      ``add_loaded_layer`` gate fires and the map paints the layer).
 
 AOI CAP (load-bearing): a ViT-huge on CPU is minutes-to-hours, so the bbox is
-capped (the granularity gate's spirit) and ``select_compute_class`` grabs a
-bigger box for a denser AOI. A too-large bbox returns an honest typed error
-BEFORE any compute spend, telling the caller to narrow the AOI.
+capped (the granularity gate's spirit). A too-large bbox returns an honest typed
+error BEFORE any compute spend, telling the caller to narrow the AOI.
 
 Truthfulness floor: a canopy-height raster is a MODEL ESTIMATE (Tolan et al. MAE
 ~2.5 m aerial), not a measurement -- the layer name + result text say "estimated"
@@ -114,7 +113,7 @@ def _max_bbox_deg2() -> float:
 
 
 #: NAIP native resolution (~1 m); used to estimate the 256-px tile count the
-#: model will run (the ViT cost proxy fed to ``select_compute_class``).
+#: model will run (a ViT cost proxy for the AOI-cap check).
 _NAIP_RES_M: float = 1.0
 _TILE_PX: int = 256
 #: deg -> m at the equator (a coarse upper-bound; canopy AOIs are small so the
@@ -162,7 +161,7 @@ def estimate_canopy_tiles(
     """Estimate the number of 256-px inference tiles the model will run.
 
     The ViT+DPT runs per 256x256 tile, so the tile count is the natural cost
-    proxy for ``select_compute_class``. Pure arithmetic (no I/O) -- unit-testable.
+    proxy for the AOI-cap check. Pure arithmetic (no I/O) -- unit-testable.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     width_m = max(0.0, (max_lon - min_lon)) * _DEG_TO_M * math.cos(
@@ -445,7 +444,7 @@ async def _run_canopy_chain(
     """The stage -> dispatch -> wait -> publish chain (cancellable; raises
     ``CanopyHeightError`` on any failure before a layer)."""
     from trid3nt_server.agent.tools.publish_layer.publish_layer import publish_layer
-    from trid3nt_server.agent.tools.simulation.solver.solver import run_solver, select_compute_class, wait_for_completion
+    from trid3nt_server.agent.tools.simulation.solver.solver import run_solver, wait_for_completion
 
     run_id = new_ulid()
 
@@ -479,11 +478,8 @@ async def _run_canopy_chain(
         bbox=bbox,
     )
 
-    # --- Pick the compute class from the tile-count estimate ----------------
-    chosen_class = compute_class
-    if chosen_class is None:
-        tiles = estimate_canopy_tiles(bbox) if bbox is not None else 0
-        chosen_class = select_compute_class(tiles)
+    # --- Compute class: ONE local compute environment (host CPUs) -----------
+    chosen_class = compute_class or "medium"
 
     # --- Dispatch through the generic run_solver / wait_for_completion seam --
     handle = run_solver(
