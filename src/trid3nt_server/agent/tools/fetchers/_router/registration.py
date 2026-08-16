@@ -328,6 +328,9 @@ def register_spec(spec: SourceSpec) -> str:
         # DATA-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,
+        # the declared confirm gate (ADR 0273): a heavy fetcher's resolution gate
+        # rides onto the metadata so the server gate engine reads membership here.
+        gate_spec=router._gate_spec_for_source(spec),
     )
     _tools.register_tool(metadata)(_promoted)
     _SPEC_REGISTRY[name] = spec

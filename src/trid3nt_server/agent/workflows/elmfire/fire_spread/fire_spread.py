@@ -41,7 +41,7 @@ from trid3nt_contracts.elmfire_contracts import (
     ElmfireRunArgs,
     FireSpreadLayerURI,
 )
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
@@ -95,6 +95,12 @@ _ELMFIRE_FIRE_SPREAD_METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     cacheable=False,
     engine="elmfire",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_fire",
+        title="ELMFIRE fire spread",
+        rationale="A consequential ELMFIRE solve: confirm before the run.",
+    ),
     tier="template",
 )
 

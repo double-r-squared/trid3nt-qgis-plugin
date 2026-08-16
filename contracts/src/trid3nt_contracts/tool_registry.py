@@ -36,6 +36,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from .common import GraceModel
+from .gate_spec import GateKind, GateSpec, LeverSpec
 
 __all__ = [
     "TTLClass",
@@ -44,6 +45,9 @@ __all__ = [
     "ResolutionConstraintSource",
     "ResolutionSpec",
     "AtomicToolMetadata",
+    "GateKind",
+    "GateSpec",
+    "LeverSpec",
 ]
 
 
@@ -466,6 +470,24 @@ class AtomicToolMetadata(GraceModel):
             if spec.param == param:
                 return spec
         return None
+
+    # --- Declared confirm gate (ADR 0273, the gate-collapse carrier) --- #
+    #
+    # A consequential solver run or a heavy raster fetch DECLARES its confirm gate
+    # here so the server gate engine reads membership from METADATA, not a hand-wired
+    # SOLVER_CONFIRM_TOOLS / FETCH_CONFIRM_TOOLS name set. Presence of a GateSpec is the
+    # ONE membership signal; the spec names the pure card/pin providers (by dotted import
+    # path) exported from the tool's own module and declares the levers the card offers.
+    # Default None = un-gated (zero impact on every non-gated tool), mirroring the
+    # resolution_specs default-() additive shape.
+    gate_spec: GateSpec | None = Field(
+        default=None,
+        description=(
+            "Declared confirm gate (ADR 0273). Presence is the server gate engine's "
+            "membership signal; names the pure estimate/pin providers + the card's "
+            "levers. None (default) for every un-gated tool."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_cacheable_consistency(self) -> AtomicToolMetadata:

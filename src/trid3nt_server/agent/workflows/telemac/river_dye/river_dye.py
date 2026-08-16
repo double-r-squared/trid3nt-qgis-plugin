@@ -41,7 +41,7 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import TelemacDyeLayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec, GateSpec, LeverSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.gates.input_review import gate_input_review
@@ -143,6 +143,16 @@ _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="telemac",
     tier="template",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_telemac_mesh",
+        pin_provider="trid3nt_server.agent.gates.cards.solver_confirm:pin_telemac_mesh",
+        levers=(
+            LeverSpec(name="mesh resolution", param="mesh_resolution_m", unit="m"),
+        ),
+        title="TELEMAC approve-mesh",
+        rationale="A consequential TELEMAC solve: preview + approve the river mesh before the run.",
+    ),
     resolution_specs=(_TELEMAC_RIVER_DYE_RES_SPEC,),
 )
 

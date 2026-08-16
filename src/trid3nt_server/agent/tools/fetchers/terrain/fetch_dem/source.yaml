@@ -1,5 +1,8 @@
 schema_version: v1
 name: fetch_dem
+# ADR 0273 -- declared confirm gate: the heavy raster fetch gets the canonical
+# fetch-resolution confirm card (user controls resolution before the big fetch).
+confirm_gate: fetch_resolution
 source_class: dem
 shape: raster-cog
 supports_global_query: false

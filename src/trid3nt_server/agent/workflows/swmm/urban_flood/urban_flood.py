@@ -37,7 +37,7 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec, LeverSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.gates.input_review import gate_input_review
@@ -94,6 +94,16 @@ _SWMM_URBAN_FLOOD_METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     cacheable=False,
     engine="swmm",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_swmm_granularity",
+        pin_provider="trid3nt_server.agent.gates.cards.solver_confirm:pin_swmm_granularity",
+        levers=(
+            LeverSpec(name="mesh resolution", param="target_resolution_m", unit="m"),
+        ),
+        title="SWMM urban-flood granularity",
+        rationale="A consequential SWMM solve: pick the mesh resolution before the heavy run.",
+    ),
     tier="template",
 )
 

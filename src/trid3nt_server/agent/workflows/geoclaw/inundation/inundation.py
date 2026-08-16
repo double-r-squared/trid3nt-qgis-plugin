@@ -44,7 +44,7 @@ from trid3nt_contracts.geoclaw_contracts import (
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
 )
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec, GateSpec
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.resolution_declared import enforce_resolution
@@ -187,6 +187,12 @@ _GEOCLAW_INUNDATION_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="geoclaw",
     tier="template",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_geoclaw",
+        title="GeoClaw inundation",
+        rationale="A consequential GeoClaw solve: confirm before the run.",
+    ),
     resolution_specs=(_SCENARIO_TILING_RES_SPEC,),
 )
 

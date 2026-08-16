@@ -50,6 +50,7 @@ from websockets.exceptions import (
 
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.gate_spec import GateSpec
 from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseCommandEnvelopePayload,
@@ -204,26 +205,26 @@ from ..agent.gates.spatial_input import (
 )
 from ..agent.gates.cards import (
     _build_credential_request_payload,
-    _build_fetch_resolution_envelope,
-    _build_fire_confirm_envelope,
-    _build_flood_run_settings_envelope,
-    _build_geoclaw_confirm_envelope,
-    _build_psha_confirm_envelope,
-    _build_scenario_confirm_envelope,
     _build_region_choice_request_payload,
     _build_spatial_input_request_payload,
-    _build_swmm_granularity_envelope,
-    _build_telemac_mesh_envelope,
-    _clamp_fetch_resolution,
-    _clamp_swmm_resolution_to_cap,
     _gate_memory_key,
     _get_hard_cap_mb,
     _get_warning_threshold_mb,
     _local_compute_lane,
     _resolve_payload_estimator,
     _spatial_response_to_result,
-    _LANDCOVER_DEFAULT_RES_M,
+    # pure resolution-clamp helpers (used by the fetch/SWMM pin providers; kept
+    # importable here for the helper-unit tests that reference server._clamp_*).
+    _clamp_fetch_resolution,
+    _clamp_swmm_resolution_to_cap,
+    # the fetch-resolution card builder (wrapped by the estimate provider; kept
+    # importable here for the fetch-gate unit tests that build the card directly).
+    _build_fetch_resolution_envelope,
 )
+# The per-engine confirm-card builders + decision-tail clamps (ADR 0273) now live
+# with their tools' declared estimate/pin providers, imported by the generic gate
+# engine off each tool's GateSpec dotted paths -- not statically here.
+from ..agent.gates.cards.estimate import call_provider
 from ..agent.tools import TOOL_REGISTRY
 from ..agent.tools.processing.charts_common import is_chart_emission_result
 from ..agent.tools.meta.code_exec_tool.code_exec_tool import (
@@ -561,90 +562,59 @@ def _union_pinned_tool(
 # ---------------------------------------------------------------------------
 
 
-# Tools whose dispatch is a consequence (a solver run)
-# and MUST pass a parameter-confirmation gate on the LLM path. The gate runs
-# the composer's PURE extraction to build the confirm card, blocks on the
-# same pending_payload_warnings future seam as payload-warning/code-exec,
-# and injects confirmed=True only after the user approves.
-SOLVER_CONFIRM_TOOLS: set[str] = {
-    # The MODFLOW plume templates were NOT confirm-gated before the fold, so
-    # gating parity is preserved by NOT adding them here.
-    # Flood solvers are gated too: an unrequested SFINCS solve must not run
-    # without confirmation. The card is built from the call args
-    # (location/return period/duration). Keyed on the sfincs_flood template
-    # (the tool that submits the solver).
-    "sfincs_flood",
-    # The granularity gate: the SWMM urban-flood solver joins the confirm
-    # set with an ENRICHED card carrying a GranularitySuggestion (the
-    # autoscaler's pre-run resolution ladder + estimated cells / solve time /
-    # compute class). The user can override the rung before the heavy solve
-    # via the existing tool-payload-confirmation ``narrow_scope`` path. Keyed on
-    # the swmm_urban_flood template (the tool that submits the solver).
-    "swmm_urban_flood",
-    # The OpenQuake classical-PSHA solver joins the confirm set (Invariant 9
-    # -- a consequential long Batch run must be user-confirmed). It dispatches
-    # an area-source PSHA over the whole bbox via run_solver ('openquake'),
-    # so it is a solve like SFINCS/SWMM/MODFLOW, not a fetch. The gate emits
-    # a simple proceed/cancel card (no granularity picker): the area source
-    # spans the whole AOI, so no rupture/incident-area user input is needed
-    # for classical PSHA (that is scenario mode, which is not built). Keyed on
-    # the openquake_psha template (the tool that submits the solver).
-    "openquake_psha",
-    # The OpenQuake scenario-GMF + secondary-perils templates also submit an
-    # OpenQuake engine run (a single-rupture ground-motion field, and the
-    # scenario-GMF-driven liquefaction + Newmark-landslide screens), so both are
-    # confirm-gated (Invariant 9) with an inline proceed/cancel card built by
-    # _build_scenario_confirm_envelope from the call args (scenario magnitude +
-    # AOI area). Keyed on the templates that submit the solver.
-    "openquake_scenario_gmf",
-    "openquake_secondary_perils",
-    # The TELEMAC river-dye solver joins the confirm set with the richest
-    # card yet: the builder runs the fast mesh-only worker (gmsh, no DEM, no
-    # solve, ~10-25 s), emits the actual triangle-wireframe mesh onto the
-    # map as a role="input" vector layer, and the card carries a
-    # GranularitySuggestion (mesh_resolution_m ladder + real node/element
-    # counts + CFL-coupled dt + conservative solve estimate). The user sees
-    # the mesh before approving the expensive solve; narrow_scope re-runs
-    # with a different edge length. Keyed on the telemac_river_dye template
-    # (the tool that submits the solver).
-    "telemac_river_dye",
-    # The ELMFIRE wildfire-spread solver joins the confirm set (Invariant 9
-    # -- a consequential solver run: LANDFIRE fetches + a containerized
-    # level-set solve). The card is built by _build_fire_confirm_envelope
-    # from the call args: approximate grid cell count + a calibrated runtime
-    # estimate + the scenario weather, so the user confirms the actual run
-    # about to dispatch. Simple proceed/cancel (no granularity picker at v1
-    # -- cellsize_m is an explicit tool arg the LLM can restate). Keyed on the
-    # elmfire_fire_spread template (the tool that submits the solver).
-    "elmfire_fire_spread",
-    # The GeoClaw shallow-water inundation solver joins the confirm set
-    # (Invariant 9 -- a consequential solver run: DEM/topobathy fetch + a
-    # containerized Clawpack solve). Mirrors the psha/fire wiring: a simple
-    # proceed/cancel card built inline by _build_geoclaw_confirm_envelope
-    # from the call args (AOI area + scenario + sim window + AMR levels). No
-    # granularity picker at v1 (amr_levels / sim_duration_s are explicit
-    # tool args the LLM can restate). Keyed on the geoclaw_inundation template
-    # (the tool that submits the solver).
-    "geoclaw_inundation",
-    # The GeoClaw tsunami gauge-timeseries template also submits a GeoClaw solve
-    # (a tsunami run recording a coastal gauge), so it is confirm-gated with the
-    # SAME inline card as geoclaw_inundation. Keyed on the template that submits
-    # the solver.
-    "geoclaw_tsunami_gauge_timeseries",
-}
+# Confirm-gate membership is DERIVED from tool metadata (ADR 0273, the
+# gate-collapse): a tool declares a ``GateSpec`` on its ``AtomicToolMetadata``
+# (``gate_spec``) and that PRESENCE is the one membership signal -- the
+# hand-wired SOLVER_CONFIRM_TOOLS / FETCH_CONFIRM_TOOLS name-set literals are
+# gone. ``kind`` on the spec ('solver' | 'fetch') splits the two lanes: a solver
+# strips a model-supplied ``confirmed`` before gating and injects it only on an
+# explicit proceed; a fetch does not (fetchers ignore it). The named sets survive
+# ONLY as registry-derived views (see ``__getattr__`` below) for callers that
+# still read ``server.SOLVER_CONFIRM_TOOLS`` -- the source of truth is the specs.
 
 
-# The granularity gate widened to the two HEAVY raster FETCHERS (DEM +
-# topobathy) so the user controls fetch resolution before a big
-# download/merge -- same confirm machinery, same GranularitySuggestion card.
-# Kept a SEPARATE set from SOLVER_CONFIRM_TOOLS on purpose: a fetch is NOT
-# a solve. The gate-trigger below fires for the UNION; the solver-only
-# confirmed/enable_autoscale injection stays guarded to SOLVER_CONFIRM_TOOLS.
-FETCH_CONFIRM_TOOLS: set[str] = {
-    "fetch_dem",
-    "fetch_topobathy",
-    "fetch_landcover",
-}
+def _gate_spec_for(tool_name: str) -> "GateSpec | None":
+    """The declared :class:`GateSpec` for ``tool_name``, or ``None`` if un-gated.
+
+    The ONE membership check the dispatch site + the gate engine read: a tool is
+    confirm-gated iff its registered metadata carries a ``gate_spec``. Replaces
+    the ``tool_name in SOLVER_CONFIRM_TOOLS | FETCH_CONFIRM_TOOLS`` literal
+    membership test with a metadata lookup.
+    """
+    entry = TOOL_REGISTRY.get(tool_name)
+    if entry is None:
+        return None
+    return entry.metadata.gate_spec
+
+
+def _confirm_tools_by_kind(kind: str) -> "frozenset[str]":
+    """Registry-derived confirm-gate membership for one ``kind`` ('solver'|'fetch').
+
+    Backs the derived ``SOLVER_CONFIRM_TOOLS`` / ``FETCH_CONFIRM_TOOLS`` views.
+    Computed on read (not at import) so it reflects the fully-populated registry
+    regardless of workflow-module import order.
+    """
+    return frozenset(
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if entry.metadata.gate_spec is not None
+        and entry.metadata.gate_spec.kind == kind
+    )
+
+
+def __getattr__(name: str):
+    """Synthesize the legacy confirm-tool name-set views from the registry.
+
+    The hand-wired ``SOLVER_CONFIRM_TOOLS`` / ``FETCH_CONFIRM_TOOLS`` literals
+    are gone (ADR 0273); callers that still read them get the registry-derived
+    set (membership = ``gate_spec`` presence + kind). Lazy so the registry is
+    fully populated by read time. Any other missing name raises normally.
+    """
+    if name == "SOLVER_CONFIRM_TOOLS":
+        return _confirm_tools_by_kind("solver")
+    if name == "FETCH_CONFIRM_TOOLS":
+        return _confirm_tools_by_kind("fetch")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # --------------------------------------------------------------------------- #
@@ -5766,180 +5736,68 @@ def _gate_wait_timeout(default_seconds: float) -> float:
     return effective
 
 
-async def _gate_on_solver_confirm(
+async def _gate_on_confirm(
     websocket: ServerConnection,
     state: SessionState,
     tool_name: str,
     params: dict,
+    gate_spec: GateSpec,
     _warning_id_out: dict[str, str] | None = None,
 ) -> tuple[bool, dict]:
-    """Parameter-confirmation gate for solver composers -- fail-closed.
+    """Generic confirm gate driven by a tool's declared ``GateSpec`` (ADR 0273).
 
-    Mirrors :func:`_gate_on_code_exec`: build the confirm card, emit it as a
-    ``tool-payload-warning`` (the inline card the client already renders),
-    block on the ``pending_payload_warnings`` future seam (``warning_id`` is
-    the correlation key the ``tool-payload-confirmation`` reply carries), and
-    inject ``confirmed=True`` only after an explicit ``proceed``.
+    The ONE gate engine for every solver/fetch confirm card -- the per-engine
+    ``if/elif`` card-building chain, the seven per-engine locals, and the
+    per-engine decision-tail branches are gone. Membership is the caller's
+    ``gate_spec`` presence check (:func:`_gate_spec_for`); the card is built by the
+    spec's declared ESTIMATE provider (exported from the tool's own module); the
+    decision is applied by the spec's declared PIN provider (the SAME per-engine
+    tail arithmetic, relocated to the engine). Both are pure functions named by
+    dotted path and imported lazily (:func:`call_provider`, which awaits async
+    providers -- the TELEMAC mesh preview / SWMM real-cap re-probe).
 
-    The card is built from the composer's PURE extraction (no emitter, no
-    solver) so the user confirms the actual derived forcing before the
-    composer re-runs the (cache-backed) extraction after approval; the
-    confirmed values are deterministic, so card and run cannot diverge.
+    Fail-open semantics preserved EXACTLY: an estimate-provider failure falls
+    through to dispatch (``True``) so the tool raises its own typed param error;
+    an estimate whose envelope is ``None`` (the fetch_landcover no-coarsening
+    skip) dispatches as-is; a headless timeout / explicit cancel fails closed.
 
-    An extraction failure here falls through to dispatch (``True``) so the
-    composer raises its own typed extraction error -- the gate must not mask
-    parameter problems behind a confusing confirm card.
-
-    ``_warning_id_out``: optional out-param -- when given, this function
-    stashes the emitted ``warning_id`` under key ``"warning_id"`` the moment
-    a REAL gate is sent to the client. It stays unset on every fail-open
-    early return (unknown tool, extraction failure, the landcover
-    no-coarsening skip) since no gate was emitted there. The caller uses
-    this to know whether a proceed/narrow_scope decision is worth memoizing
-    into ``state.gate_decisions_this_turn``.
+    ``_warning_id_out``: optional out-param -- stashed the moment a REAL gate is
+    emitted, so the turn-memory wrapper knows a decision is worth memoizing. It
+    stays unset on every fail-open early return (no gate emitted there).
     """
-    # #154: the SWMM autoscale result + the localized DEM path are captured here
-    # so the decision tail can CAP-CLAMP a user-chosen finer resolution on a
-    # narrow_scope override against the REAL build cell count (re-probing the same
-    # DEM). Both None for every non-SWMM gated tool (their tail is the existing
-    # proceed/cancel).
-    swmm_autoscale: Any = None
-    swmm_dem_path: str | None = None
-    # The fetch-resolution gate's suggestion (coarse_default_m /
-    # finest_allowed_m / cap) so the decision tail can pin the suggested rung on
-    # proceed and floor-clamp a finer narrow_scope rung. None for every non-fetch
-    # gated tool (mirrors swmm_autoscale).
-    fetch_suggestion: Any = None
-    # Cadence lever: the resolved flood animation interval (minutes) shown
-    # on the card, pinned into the approved params on ``proceed`` so the run uses
-    # EXACTLY what the user saw. None for the pluvial path (legacy hourly) and
-    # for every non-flood gated tool.
-    flood_output_interval_min: float | None = None
-    flood_cadence_gated: bool = False
-    # The TELEMAC approve-mesh preview stats (real npoin/h/dt from the
-    # mesh-only worker run) so the decision tail can pin the previewed edge
-    # length on proceed / honour a chosen rung on narrow_scope. None for every
-    # non-TELEMAC gated tool.
-    telemac_preview: dict | None = None
-    # Combined run-settings gate: the flood SFINCS resolution
-    # suggestion (bbox-area estimate) so the decision tail can pin the suggested
-    # grid_resolution_m on ``proceed`` or honour the user's chosen rung on a
-    # ``narrow_scope`` override. None for the pluvial-only path (no bbox) and for
-    # every non-flood gated tool.
-    flood_grid_autoscale: Any = None
-    flood_duration_hr: float = 24.0
-    # True only when the flood card actually advertised an override (a
-    # GranularitySuggestion and/or a TimeScaleSuggestion) i.e. ``narrow_scope``
-    # was offered. A pluvial/no-bbox flood card offers ONLY proceed/cancel, so a
-    # narrow_scope reply to it stays fail-closed (the card never offered it).
-    flood_override_offered: bool = False
+    # Build the confirm card via the tool's declared estimate provider. Any
+    # failure fails OPEN -- the gate must never mask a parameter problem behind a
+    # confusing confirm card (the composer then raises its own typed error).
     try:
-        if tool_name == "sfincs_flood":
-            # A SFINCS solve can take ~10-20 min -- show the user what is
-            # about to run before dispatch. The card carries BOTH a
-            # GranularitySuggestion (grid resolution) and a
-            # TimeScaleSuggestion (cadence + window) so the user reviews
-            # both in one interaction, resolved off the loop in the helper.
-            # Coastal/wave gets a fine minute-scale stride + time-scale row;
-            # pluvial degrades to the granularity-only resolution gate.
-            (
-                envelope,
-                flood_grid_autoscale,
-                flood_output_interval_min,
-                flood_duration_hr,
-            ) = await _build_flood_run_settings_envelope(tool_name, params)
-            flood_cadence_gated = True
-            # narrow_scope is offered iff the card carried an override block.
-            flood_override_offered = "narrow_scope" in envelope.options
-        elif tool_name == "telemac_river_dye":
-            # Approve-mesh gate: the builder runs the FAST mesh-only
-            # worker and emits the wireframe preview layer BEFORE the card, so
-            # the user approves a mesh they can SEE (with real node counts +
-            # the CFL-coupled dt on the card). ~10-25 s pre-card.
-            envelope, telemac_preview = await _build_telemac_mesh_envelope(
-                params, emitter=state.emitter
-            )
-        elif tool_name == "swmm_urban_flood":
-            # #154 granularity gate: make mesh resolution a USER
-            # lever (memory: feedback_user_controlled_granularity). The enriched
-            # card carries a GranularitySuggestion the user can override before
-            # the heavy solve. The DEM read + autoscale arithmetic is offloaded
-            # off the event loop inside the helper (no-sync-blocking norm).
-            (
-                envelope,
-                swmm_autoscale,
-                swmm_dem_path,
-            ) = await _build_swmm_granularity_envelope(params)
-        elif tool_name in FETCH_CONFIRM_TOOLS:
-            # Fetch-resolution gate for the heavy raster fetchers
-            # (fetch_dem / fetch_topobathy). The card carries a GranularitySuggestion
-            # (resolution_param="resolution_m") the user can override; the build is
-            # PURE arithmetic (no DEM read) so nothing is offloaded. fetch_suggestion
-            # carries coarse_default_m / finest_allowed_m / cap for the decision tail.
-            (
-                envelope,
-                fetch_suggestion,
-            ) = await _build_fetch_resolution_envelope(tool_name, params)
-            # fetch_landcover-only: skip the card when NO coarsening is needed
-            # (small AOI: the suggested rung IS the native 30 m grid and the
-            # caller did not request finer). NLCD has no finer-than-native knob,
-            # so a confirm on a small bbox would be pure friction; the gate
-            # exists to surface AUTO-COARSENING (state-scale AOIs) for user
-            # override. fetch_dem/fetch_topobathy keep gating every call
-            # (they have real finer/coarser rungs at any AOI size).
-            if (
-                tool_name == "fetch_landcover"
-                and envelope.granularity is not None
-                and envelope.granularity.suggested_resolution_m
-                <= _LANDCOVER_DEFAULT_RES_M + 1e-9
-            ):
-                return True, params
-        elif tool_name == "openquake_psha":
-            # OpenQuake classical-PSHA solver-confirm card: SIMPLE proceed/
-            # cancel (no granularity/resolution picker) since the deck builds
-            # an area source over the whole bbox/AOI. The card summarizes the
-            # PSHA (AOI area, IMT, PoE -> return period) so the user confirms
-            # the heavy Batch run; built inline since no composer extraction
-            # is needed (the run args are the tool args).
-            envelope = _build_psha_confirm_envelope(params)
-        elif tool_name in ("openquake_scenario_gmf", "openquake_secondary_perils"):
-            # OpenQuake scenario-GMF + secondary-perils solver-confirm card:
-            # simple proceed/cancel summarizing the scenario magnitude + AOI area
-            # (the secondary-perils variant names the two ground-failure screens),
-            # built inline from the tool args. A missing bbox falls through to the
-            # tool's typed *_PARAMS_INVALID error after approval.
-            envelope = _build_scenario_confirm_envelope(params, tool_name)
-        elif tool_name == "elmfire_fire_spread":
-            # ELMFIRE fire-spread solver-confirm card: simple proceed/cancel
-            # with the approximate cell count + calibrated runtime estimate +
-            # scenario weather, built inline (pure arithmetic, no fetch/
-            # rasterio). A missing ignition point deliberately falls through
-            # to the tool's typed FIRE_IGNITION_REQUIRED error after approval.
-            envelope = _build_fire_confirm_envelope(params)
-        elif tool_name in ("geoclaw_inundation", "geoclaw_tsunami_gauge_timeseries"):
-            # GeoClaw shallow-water inundation solver-confirm card: simple
-            # proceed/cancel with the approximate AOI area + scenario +
-            # simulated window + AMR levels, built inline (pure arithmetic,
-            # no fetch/rasterio). A missing bbox deliberately falls through
-            # to the tool's typed GEOCLAW_PARAMS_INCOMPLETE error after
-            # approval. The gauge-timeseries template reuses the same card.
-            envelope = _build_geoclaw_confirm_envelope(params)
-        else:  # unknown gated tool: fail open to the tool's own validation
-            return True, params
+        estimate = await call_provider(
+            gate_spec.estimate_provider,
+            params,
+            tool_name=tool_name,
+            # Only the TELEMAC approve-mesh provider reads the emitter (to paint
+            # the preview layer); every other provider ignores it. getattr so a
+            # minimal/headless state without an emitter still gates.
+            emitter=getattr(state, "emitter", None),
+        )
     except Exception:  # noqa: BLE001 -- never mask param errors with a gate
         logger.warning(
-            "solver-confirm gate could not build the confirm card for %s; "
-            "falling through so the tool raises its typed error",
+            "confirm gate could not build the card for %s; falling through so "
+            "the tool raises its typed error",
             tool_name,
             exc_info=True,
         )
         return True, params
 
+    if estimate.envelope is None:
+        # Estimate provider signalled NO gate needed (fetch_landcover
+        # no-coarsening skip): dispatch as-is.
+        return True, params
+
+    envelope = estimate.envelope
     warning_id = envelope.warning_id
     if _warning_id_out is not None:
-        # A real gate is about to be sent - the caller may memoize whatever
-        # decision comes back (proceed/narrow_scope only; a cancel raises
-        # before the caller's write site is reached).
+        # A real gate is about to be sent -- the caller may memoize whatever
+        # decision comes back (proceed/narrow_scope only; a cancel raises before
+        # the caller's write site is reached).
         _warning_id_out["warning_id"] = warning_id
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
@@ -5949,13 +5807,11 @@ async def _gate_on_solver_confirm(
         _new_envelope("tool-payload-warning", state.session_id, envelope)
     )
     logger.info(
-        "solver-confirm gate emitted session=%s tool=%s warning_id=%s "
-        "contaminant=%r location=%r",
+        "confirm gate emitted session=%s tool=%s warning_id=%s kind=%s",
         state.session_id,
         tool_name,
         warning_id,
-        envelope.tool_args.get("contaminant"),
-        envelope.tool_args.get("location_name"),
+        gate_spec.kind,
     )
 
     try:
@@ -5964,7 +5820,7 @@ async def _gate_on_solver_confirm(
         )
     except asyncio.TimeoutError:
         logger.warning(
-            "solver-confirm gate timeout session=%s tool=%s warning_id=%s",
+            "confirm gate timeout session=%s tool=%s warning_id=%s",
             state.session_id,
             tool_name,
             warning_id,
@@ -5981,7 +5837,7 @@ async def _gate_on_solver_confirm(
         _pop_pending_confirmation(warning_id)
 
     logger.info(
-        "solver-confirm decision session=%s tool=%s warning_id=%s decision=%s",
+        "confirm decision session=%s tool=%s warning_id=%s decision=%s",
         state.session_id,
         tool_name,
         warning_id,
@@ -5989,7 +5845,7 @@ async def _gate_on_solver_confirm(
     )
 
     if decision_payload.decision == "cancel":
-        # Explicit cancel: fail-closed (no solve), existing behavior.
+        # Explicit cancel: fail-closed (no run).
         await _send_error(
             websocket,
             state.session_id,
@@ -5999,152 +5855,22 @@ async def _gate_on_solver_confirm(
         )
         return False, params
 
-    if decision_payload.decision == "narrow_scope":
-        # Fetch-resolution override. Honour the chosen
-        # resolution_m, floored UP to finest_allowed_m so a finer rung on a huge
-        # AOI stays bounded (finer = smaller metres). No confirmed/enable_autoscale
-        # injection (fetchers do not read them). Returned BEFORE the SWMM
-        # fail-closed check below so a fetch never falls through to it.
-        if fetch_suggestion is not None:
-            revised = decision_payload.revised_args or {}
-            try:
-                chosen = float(
-                    revised.get("resolution_m", fetch_suggestion.coarse_default_m)
-                )
-            except (TypeError, ValueError):
-                chosen = float(fetch_suggestion.coarse_default_m)
-            clamped = _clamp_fetch_resolution(
-                chosen, fetch_suggestion.finest_allowed_m
-            )
-            approved = dict(params)
-            approved["resolution_m"] = int(clamped)
-            logger.info(
-                "fetch-resolution narrow_scope session=%s warning_id=%s "
-                "tool=%s chosen=%.2f finest_allowed=%.2f applied=%d",
-                state.session_id,
-                warning_id,
-                tool_name,
-                chosen,
-                fetch_suggestion.finest_allowed_m,
-                approved["resolution_m"],
-            )
-            return True, approved
-
-        # The flood gate advertises a GranularitySuggestion (grid_resolution_m)
-        # AND a TimeScaleSuggestion (output_interval_min / duration_hr); the
-        # user can override either (or both) in one revised_args dict, pinning
-        # whatever changed and falling back to the suggested value otherwise.
-        # The flood resolution is a bbox-area ESTIMATE (the real DEM autoscale
-        # re-runs at build time), so the chosen rung is honoured directly
-        # without a re-probe -- distinct from the SWMM real-cap-clamp path
-        # below. Only honoured when an override was actually advertised (a
-        # pluvial/no-bbox flood card offers only proceed/cancel).
-        if flood_cadence_gated and flood_override_offered:
-            revised = decision_payload.revised_args or {}
-            approved = dict(params)
-            approved["confirmed"] = True
-            # Resolution override: honour the chosen grid_resolution_m; pin the
-            # suggested rung when the user left it alone (so the build matches the
-            # card). enable_autoscale=False so the builder honours the explicit
-            # value rather than re-deriving its own.
-            if flood_grid_autoscale is not None:
-                try:
-                    chosen_grid_res = float(
-                        revised.get(
-                            "grid_resolution_m",
-                            flood_grid_autoscale.grid_resolution_m,
-                        )
-                    )
-                except (TypeError, ValueError):
-                    chosen_grid_res = float(flood_grid_autoscale.grid_resolution_m)
-                if chosen_grid_res > 0:
-                    approved["grid_resolution_m"] = chosen_grid_res
-                    approved["enable_autoscale"] = False
-            # Cadence override: honour the chosen output_interval_min (floored at
-            # 1 min, matching the deck floor); pin the resolved cadence the card
-            # showed when the user left it alone (coastal only -- None on pluvial
-            # leaves the legacy hourly default untouched).
-            chosen_interval: float | None = flood_output_interval_min
-            if "output_interval_min" in revised and revised["output_interval_min"] is not None:
-                try:
-                    chosen_interval = max(1.0, float(revised["output_interval_min"]))
-                except (TypeError, ValueError):
-                    chosen_interval = flood_output_interval_min
-            if chosen_interval is not None:
-                approved["output_interval_min"] = float(chosen_interval)
-            # Window/duration override: honour an edited simulation window
-            # (positive hours only); leave params untouched otherwise.
-            if "duration_hr" in revised and revised["duration_hr"] is not None:
-                try:
-                    chosen_duration = float(revised["duration_hr"])
-                    if chosen_duration > 0:
-                        approved["duration_hr"] = chosen_duration
-                except (TypeError, ValueError):
-                    pass
-            logger.info(
-                "flood run-settings narrow_scope session=%s warning_id=%s "
-                "grid_res=%r output_interval_min=%r duration_hr=%r",
-                state.session_id,
-                warning_id,
-                approved.get("grid_resolution_m"),
-                approved.get("output_interval_min"),
-                approved.get("duration_hr"),
-            )
-            return True, approved
-
-        # TELEMAC approve-mesh override: honour the chosen edge length.
-        # The composer's own override path (suggest_mesh_size_m override_m)
-        # budget-clamps a reckless value and suggest_time_step_s re-couples the
-        # CFL dt automatically, so no server-side clamp is needed here.
-        if telemac_preview is not None:
-            revised = decision_payload.revised_args or {}
-            try:
-                chosen_h = float(
-                    revised.get("mesh_resolution_m", telemac_preview["mesh_size_m"])
-                )
-            except (TypeError, ValueError):
-                chosen_h = float(telemac_preview["mesh_size_m"])
-            approved = dict(params)
-            approved["confirmed"] = True
-            approved["mesh_resolution_m"] = chosen_h
-            # Pin whether the ORIGINAL call carried plausible release coords
-            # (the builder recorded it) BEFORE the click override below --
-            # call-provided coords seed the reach (the preview already meshed
-            # from them); a gate-picked click must only move the SOURCE (the
-            # approved solve reproduces the previewed mesh, never relocates it).
-            approved["_release_seeds_reach"] = bool(
-                telemac_preview.get("release_seeds_reach")
-            )
-            # Decouple: the loop below overwrites release_lon/
-            # release_lat with the gate click, so preserve the ORIGINAL call
-            # coords the preview seeded the reach from as separate seed keys -
-            # the approved solve re-seeds from THESE (reproducing the
-            # previewed mesh) while the click only moves the source.
-            _seed_pair = telemac_preview.get("release_seed_pair")
-            if approved["_release_seeds_reach"] and _seed_pair is not None:
-                approved["_seed_release_lon"] = float(_seed_pair[0])
-                approved["_seed_release_lat"] = float(_seed_pair[1])
-            # The user-picked release point rides revised_args.
-            for _rk in ("release_lon", "release_lat"):
-                if revised.get(_rk) is not None:
-                    try:
-                        approved[_rk] = float(revised[_rk])
-                    except (TypeError, ValueError):
-                        pass
-            logger.info(
-                "telemac approve-mesh narrow_scope session=%s warning_id=%s "
-                "previewed_h=%.3g chosen_h=%.3g",
-                state.session_id,
-                warning_id,
-                float(telemac_preview["mesh_size_m"]),
-                chosen_h,
-            )
-            return True, approved
-
-        # #154 granularity override: ONLY meaningful for the SWMM gate (it
-        # advertised a GranularitySuggestion). For any other gated solver a
-        # narrow_scope reply is meaningless -> fail-closed (existing behavior).
-        if swmm_autoscale is None:
+    # proceed / narrow_scope. The declared PIN provider (when present) owns the
+    # approved-params DELTA -- the engine's own tail arithmetic (fetch floor-clamp,
+    # flood dual-lever, TELEMAC seed-decouple, SWMM real-cap re-probe). A pin
+    # provider returning None fails closed (a narrow_scope to a card that never
+    # advertised an override). A gate with NO pin provider is a plain
+    # proceed/cancel: a narrow_scope fails closed; a proceed injects ``confirmed``
+    # for a solver (a fetch reads nothing).
+    if gate_spec.pin_provider is not None:
+        delta = await call_provider(
+            gate_spec.pin_provider,
+            decision_payload.decision,
+            decision_payload.revised_args or {},
+            params,
+            estimate.tail_state,
+        )
+        if delta is None:
             await _send_error(
                 websocket,
                 state.session_id,
@@ -6153,135 +5879,46 @@ async def _gate_on_solver_confirm(
                 f"(decision={decision_payload.decision!r}); the solver did not run",
             )
             return False, params
+        return True, {**params, **delta}
 
-        revised = decision_payload.revised_args or {}
-        requested_res = float(
-            swmm_autoscale.base_resolution_m
+    if decision_payload.decision == "narrow_scope":
+        # A lever-less gate never advertised narrow_scope -> fail-closed.
+        await _send_error(
+            websocket,
+            state.session_id,
+            "USER_INPUT_CANCELLED",
+            f"{tool_name} declined by user "
+            f"(decision={decision_payload.decision!r}); the solver did not run",
         )
-        try:
-            chosen_res = float(
-                revised.get("target_resolution_m", swmm_autoscale.resolution_m)
-            )
-        except (TypeError, ValueError):
-            chosen_res = float(swmm_autoscale.resolution_m)
+        return False, params
 
-        # CAP-CLAMP against the REAL build cell count, not the area model: the
-        # area-model clamp (cells = base_cells*(base/res)**2) undershoots the
-        # real ceil(extent/res) grid count build_swmm_mesh actually counts (it
-        # re-reads the DEM at the clamped resolution with enable_autoscale=False
-        # and does no downstream cap re-check), so an over-fine override could
-        # solve over the cap. clamp_swmm_resolution_to_real_cap re-probes the
-        # same localized DEM at the SWMM ladder rungs and returns the finest
-        # rung whose real active-cell count fits the cap (off the event loop).
-        # If the real probe is unavailable or fails, fall back to the
-        # area-model clamp so the gate never blocks/orphans the override.
-        clamped_res = chosen_res
-        clamped = False
-        used_real_clamp = False
-        if swmm_dem_path:
-            try:
-                from ..agent.mesh.raster_cell_mesh import (
-                    clamp_swmm_resolution_to_real_cap,
-                )
-
-                cap = int(swmm_autoscale.cell_cap)
-                real_clamp = await asyncio.to_thread(
-                    clamp_swmm_resolution_to_real_cap,
-                    swmm_dem_path,
-                    chosen_res,
-                    cell_cap=cap,
-                )
-                clamped_res = float(real_clamp.resolution_m)
-                clamped = bool(real_clamp.clamped)
-                used_real_clamp = True
-                logger.info(
-                    "swmm granularity narrow_scope (REAL-cap) session=%s "
-                    "warning_id=%s chosen_res=%.2f built_res=%.2f real_active=%d "
-                    "clamped=%s cell_cap=%d",
-                    state.session_id,
-                    warning_id,
-                    chosen_res,
-                    clamped_res,
-                    real_clamp.real_active_cells,
-                    clamped,
-                    cap,
-                )
-            except Exception:  # noqa: BLE001 -- never orphan the override on a probe fail
-                logger.warning(
-                    "swmm granularity narrow_scope: REAL-cap clamp probe failed "
-                    "for session=%s; falling back to the area-model clamp",
-                    state.session_id,
-                    exc_info=True,
-                )
-        if not used_real_clamp:
-            clamped_res, clamped = _clamp_swmm_resolution_to_cap(
-                chosen_res, swmm_autoscale, requested_res
-            )
-            logger.info(
-                "swmm granularity narrow_scope (area-model fallback) session=%s "
-                "warning_id=%s chosen_res=%.2f clamped_res=%.2f clamped=%s "
-                "cell_cap=%d",
-                state.session_id,
-                warning_id,
-                chosen_res,
-                clamped_res,
-                clamped,
-                swmm_autoscale.cell_cap,
-            )
-
-        approved = dict(params)
-        approved["confirmed"] = True
-        approved["target_resolution_m"] = clamped_res
-        # The user pinned an EXPLICIT resolution -> disable the autoscaler so the
-        # builder honours the chosen (already-real-cap-clamped) rung exactly.
-        approved["enable_autoscale"] = False
-        if clamped:
-            approved["_granularity_clamped"] = True
-        return True, approved
-
-    # Fetch proceed -- pin the SUGGESTED resolution_m the card
-    # showed so the fetch matches what the user approved. Do NOT inject confirmed
-    # / enable_autoscale (fetchers do not read them). Returned BEFORE the solver
-    # proceed pinning below so a fetch never sets confirmed.
-    if fetch_suggestion is not None:
-        approved = dict(params)
-        approved["resolution_m"] = int(fetch_suggestion.coarse_default_m)
-        return True, approved
-
-    # proceed: pin the SUGGESTED resolution for SWMM (so the build matches the
-    # card the user approved) and inject confirmed. Other solvers just confirm.
     approved = dict(params)
-    approved["confirmed"] = True
-    # Pin the PREVIEWED edge length so the solve mesh is byte-for-byte
-    # the mesh the user saw + approved (same seed via cache-backed geocode/river
-    # fetch + same explicit h -> gmsh reproduces the mesh).
-    if telemac_preview is not None:
-        approved["mesh_resolution_m"] = float(telemac_preview["mesh_size_m"])
-        # On plain proceed the release coords (if any) are still
-        # the call-provided originals - pin the same tri-state the preview
-        # used so the solve re-seeds the reach exactly like the preview did.
-        approved["_release_seeds_reach"] = bool(
-            telemac_preview.get("release_seeds_reach")
-        )
-    if swmm_autoscale is not None:
-        approved["target_resolution_m"] = float(swmm_autoscale.resolution_m)
-        approved["enable_autoscale"] = False
-    # Combined run-settings gate: pin the SUGGESTED SFINCS grid
-    # resolution the card showed so the run matches the card the user approved
-    # (bbox-area estimate; enable_autoscale stays default so the real DEM
-    # autoscale still refines it at build time -- pinning the rung only sets the
-    # ladder start). None when the gate had no bbox.
-    if flood_cadence_gated and flood_grid_autoscale is not None:
-        approved["grid_resolution_m"] = float(
-            flood_grid_autoscale.grid_resolution_m
-        )
-    # #154 cadence lever: pin the resolved flood animation interval the card
-    # showed so the run emits exactly the "N frames every M min" the user
-    # approved (coastal/wave only; None on the pluvial path leaves the legacy
-    # hourly default untouched -> unchanged pluvial behavior).
-    if flood_cadence_gated and flood_output_interval_min is not None:
-        approved["output_interval_min"] = float(flood_output_interval_min)
+    if gate_spec.kind == "solver":
+        approved["confirmed"] = True
     return True, approved
+
+
+async def _gate_on_solver_confirm(
+    websocket: ServerConnection,
+    state: SessionState,
+    tool_name: str,
+    params: dict,
+    _warning_id_out: dict[str, str] | None = None,
+) -> tuple[bool, dict]:
+    """Thin compat entrypoint: resolve the tool's ``GateSpec`` + run the engine.
+
+    Kept as the stable name the gate-behavior suite drives directly. Resolves
+    membership from metadata (:func:`_gate_spec_for`) and delegates to the
+    generic :func:`_gate_on_confirm`; an un-gated tool fails open (the dispatch
+    site never routes one here).
+    """
+    gate_spec = _gate_spec_for(tool_name)
+    if gate_spec is None:
+        return True, params
+    return await _gate_on_confirm(
+        websocket, state, tool_name, params, gate_spec,
+        _warning_id_out=_warning_id_out,
+    )
 
 
 async def _gate_with_turn_memory(
@@ -7668,24 +7305,18 @@ async def _invoke_tool_via_emitter(
         state, case_id=turn_case_id, tool_name=tool_name, params=params
     )
 
-    # Confirmation-before-consequence for solver composers.
-    # The LLM-supplied ``confirmed`` is STRIPPED first -- the gate
-    # is server-owned; only an explicit user "proceed" injects it. SKIPPED on
-    # a reuse short-circuit (``_ReuseEntry``) -- there is no solver to
-    # confirm. The gate also fires for the heavy raster FETCHERS
-    # (FETCH_CONFIRM_TOOLS) via the SAME gate, building a fetch-resolution
-    # card; ``confirmed`` is stripped only for the solver branch (fetchers do
-    # not read it), and ``_gate_on_solver_confirm`` guards the
-    # confirmed/enable_autoscale injection to SOLVER_CONFIRM_TOOLS so a
-    # fetch's approved params carry resolution_m only. Routed through
-    # ``_gate_with_turn_memory`` so a same-tool/same-bbox retry later in this
-    # SAME turn replays the earlier proceed/narrow_scope decision instead of
-    # hanging on an unanswered second gate.
-    if (
-        tool_name in (SOLVER_CONFIRM_TOOLS | FETCH_CONFIRM_TOOLS)
-        and not isinstance(entry, _ReuseEntry)
-    ):
-        if tool_name in SOLVER_CONFIRM_TOOLS:
+    # Confirmation-before-consequence, driven by the tool's declared GateSpec
+    # (ADR 0273). Membership is the ``gate_spec`` presence check -- no name set.
+    # The LLM-supplied ``confirmed`` is STRIPPED first for a SOLVER gate -- the
+    # gate is server-owned; only an explicit user "proceed" (the pin provider)
+    # injects it. A FETCH gate does not strip it (fetchers ignore ``confirmed``).
+    # SKIPPED on a reuse short-circuit (``_ReuseEntry``) -- nothing to confirm.
+    # Routed through ``_gate_with_turn_memory`` so a same-tool/same-bbox retry
+    # later in this SAME turn replays the earlier proceed/narrow_scope decision
+    # instead of hanging on an unanswered second gate.
+    _gate_spec = _gate_spec_for(tool_name)
+    if _gate_spec is not None and not isinstance(entry, _ReuseEntry):
+        if _gate_spec.kind == "solver":
             params.pop("confirmed", None)
         should_run, params = await _gate_with_turn_memory(
             websocket, state, tool_name, params

@@ -14,6 +14,8 @@ from typing import Any
 
 from trid3nt_contracts import new_ulid
 
+from .estimate import CardEstimate
+
 logger = logging.getLogger("trid3nt_server.agent.gates.cards.solver_confirm")
 
 
@@ -1110,3 +1112,289 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         granularity=granularity,
     )
     return envelope, auto, dem_path
+
+
+# --------------------------------------------------------------------------- #
+# Declared gate providers (ADR 0273, the gate-collapse metadata surface)
+# --------------------------------------------------------------------------- #
+#
+# Each gated tool's GateSpec names ONE estimate provider (builds the card +
+# tail state) and, when it offers levers, ONE pin provider (computes the
+# approved-params delta on a decision). These wrap the pure builders above so
+# the card payload is byte-identical to the pre-collapse per-engine path; the
+# pin providers hold the SAME decision-tail arithmetic the server's per-engine
+# branches used to, relocated intact so a proceed / narrow_scope pins exactly
+# what it did before. The generic server engine (``_gate_on_confirm``) imports
+# these by the dotted paths the GateSpec declares -- no name set, no if/elif.
+
+
+async def estimate_fetch_resolution(
+    params: dict, *, tool_name: str, **_: Any
+) -> CardEstimate:
+    """Estimate provider for the heavy raster fetchers (fetch_dem/topobathy/landcover).
+
+    Wraps :func:`_build_fetch_resolution_envelope`. Honours the fetch_landcover
+    no-coarsening skip by returning a ``CardEstimate(envelope=None)`` (dispatch as-is)
+    when the suggested rung IS the native 30 m grid and no finer was requested.
+    """
+    envelope, suggestion = await _build_fetch_resolution_envelope(tool_name, params)
+    if (
+        tool_name == "fetch_landcover"
+        and envelope.granularity is not None
+        and envelope.granularity.suggested_resolution_m
+        <= _LANDCOVER_DEFAULT_RES_M + 1e-9
+    ):
+        return CardEstimate(envelope=None)
+    return CardEstimate(
+        envelope=envelope, tail_state={"fetch_suggestion": suggestion}
+    )
+
+
+def pin_fetch_resolution(
+    decision: str, revised_args: dict | None, params: dict, tail_state: dict
+) -> dict | None:
+    """Pin provider for the fetch-resolution gate. No ``confirmed`` (fetchers ignore it).
+
+    proceed -> pin the SUGGESTED resolution_m the card showed. narrow_scope -> honour the
+    chosen resolution_m floored UP to finest_allowed_m so a fine rung on a huge AOI stays
+    bounded.
+    """
+    suggestion = tail_state["fetch_suggestion"]
+    if decision == "narrow_scope":
+        revised = revised_args or {}
+        try:
+            chosen = float(revised.get("resolution_m", suggestion.coarse_default_m))
+        except (TypeError, ValueError):
+            chosen = float(suggestion.coarse_default_m)
+        clamped = _clamp_fetch_resolution(chosen, suggestion.finest_allowed_m)
+        return {"resolution_m": int(clamped)}
+    return {"resolution_m": int(suggestion.coarse_default_m)}
+
+
+async def estimate_flood_run_settings(
+    params: dict, *, tool_name: str, **_: Any
+) -> CardEstimate:
+    """Estimate provider for the SFINCS flood combined run-settings gate.
+
+    Wraps :func:`_build_flood_run_settings_envelope` and records the autoscale result,
+    resolved cadence, window, and whether an override (narrow_scope) was advertised, so
+    the pin provider can honour a resolution/cadence/window override or fail closed on a
+    pluvial (proceed/cancel-only) card.
+    """
+    envelope, auto, interval, dur = await _build_flood_run_settings_envelope(
+        tool_name, params
+    )
+    return CardEstimate(
+        envelope=envelope,
+        tail_state={
+            "flood_grid_autoscale": auto,
+            "flood_output_interval_min": interval,
+            "flood_duration_hr": dur,
+            "flood_override_offered": "narrow_scope" in envelope.options,
+        },
+    )
+
+
+def pin_flood_run_settings(
+    decision: str, revised_args: dict | None, params: dict, tail_state: dict
+) -> dict | None:
+    """Pin provider for the flood gate (grid resolution + cadence + window levers).
+
+    Returns ``None`` on a narrow_scope to a pluvial card that offered only proceed/cancel
+    (fail-closed). Otherwise pins ``confirmed`` + the SUGGESTED grid_resolution_m /
+    output_interval_min on proceed, or the chosen overrides on narrow_scope.
+    """
+    auto = tail_state["flood_grid_autoscale"]
+    interval = tail_state["flood_output_interval_min"]
+    if decision == "narrow_scope":
+        if not tail_state["flood_override_offered"]:
+            return None
+        revised = revised_args or {}
+        delta: dict[str, Any] = {"confirmed": True}
+        if auto is not None:
+            try:
+                chosen_grid_res = float(
+                    revised.get("grid_resolution_m", auto.grid_resolution_m)
+                )
+            except (TypeError, ValueError):
+                chosen_grid_res = float(auto.grid_resolution_m)
+            if chosen_grid_res > 0:
+                delta["grid_resolution_m"] = chosen_grid_res
+                delta["enable_autoscale"] = False
+        chosen_interval = interval
+        if (
+            "output_interval_min" in revised
+            and revised["output_interval_min"] is not None
+        ):
+            try:
+                chosen_interval = max(1.0, float(revised["output_interval_min"]))
+            except (TypeError, ValueError):
+                chosen_interval = interval
+        if chosen_interval is not None:
+            delta["output_interval_min"] = float(chosen_interval)
+        if "duration_hr" in revised and revised["duration_hr"] is not None:
+            try:
+                chosen_duration = float(revised["duration_hr"])
+                if chosen_duration > 0:
+                    delta["duration_hr"] = chosen_duration
+            except (TypeError, ValueError):
+                pass
+        return delta
+    delta = {"confirmed": True}
+    if auto is not None:
+        delta["grid_resolution_m"] = float(auto.grid_resolution_m)
+    if interval is not None:
+        delta["output_interval_min"] = float(interval)
+    return delta
+
+
+async def estimate_telemac_mesh(
+    params: dict, *, emitter: Any = None, **_: Any
+) -> CardEstimate:
+    """Estimate provider for the TELEMAC approve-mesh gate (async: runs the mesh worker).
+
+    Wraps :func:`_build_telemac_mesh_envelope` (which emits the wireframe preview layer
+    onto the map via ``emitter`` before the card) and records the preview stats the pin
+    provider pins so the solve reproduces the previewed mesh exactly.
+    """
+    envelope, stats = await _build_telemac_mesh_envelope(params, emitter=emitter)
+    return CardEstimate(envelope=envelope, tail_state={"telemac_preview": stats})
+
+
+def pin_telemac_mesh(
+    decision: str, revised_args: dict | None, params: dict, tail_state: dict
+) -> dict | None:
+    """Pin provider for the TELEMAC approve-mesh gate (edge-length lever + release click).
+
+    proceed -> pin ``confirmed`` + the PREVIEWED edge length so the solve mesh is the mesh
+    the user saw. narrow_scope -> honour the chosen edge length + the map-clicked release
+    point, decoupling the reach-seed pair (call-provided coords seed the reach; a click
+    only moves the source).
+    """
+    preview = tail_state["telemac_preview"]
+    if decision == "narrow_scope":
+        revised = revised_args or {}
+        try:
+            chosen_h = float(
+                revised.get("mesh_resolution_m", preview["mesh_size_m"])
+            )
+        except (TypeError, ValueError):
+            chosen_h = float(preview["mesh_size_m"])
+        delta: dict[str, Any] = {
+            "confirmed": True,
+            "mesh_resolution_m": chosen_h,
+            "_release_seeds_reach": bool(preview.get("release_seeds_reach")),
+        }
+        seed_pair = preview.get("release_seed_pair")
+        if delta["_release_seeds_reach"] and seed_pair is not None:
+            delta["_seed_release_lon"] = float(seed_pair[0])
+            delta["_seed_release_lat"] = float(seed_pair[1])
+        for rk in ("release_lon", "release_lat"):
+            if revised.get(rk) is not None:
+                try:
+                    delta[rk] = float(revised[rk])
+                except (TypeError, ValueError):
+                    pass
+        return delta
+    return {
+        "confirmed": True,
+        "mesh_resolution_m": float(preview["mesh_size_m"]),
+        "_release_seeds_reach": bool(preview.get("release_seeds_reach")),
+    }
+
+
+async def estimate_swmm_granularity(params: dict, **_: Any) -> CardEstimate:
+    """Estimate provider for the SWMM urban-flood granularity gate.
+
+    Wraps :func:`_build_swmm_granularity_envelope` and records the autoscale result + the
+    localized DEM path the pin provider re-probes for the REAL-grid cap-clamp on a
+    narrow_scope override.
+    """
+    envelope, auto, dem_path = await _build_swmm_granularity_envelope(params)
+    return CardEstimate(
+        envelope=envelope,
+        tail_state={"swmm_autoscale": auto, "swmm_dem_path": dem_path},
+    )
+
+
+async def pin_swmm_granularity(
+    decision: str, revised_args: dict | None, params: dict, tail_state: dict
+) -> dict | None:
+    """Pin provider for the SWMM granularity gate (async: REAL-grid cap re-probe).
+
+    proceed -> pin ``confirmed`` + the SUGGESTED resolution + ``enable_autoscale=False``.
+    narrow_scope -> honour the chosen resolution CAP-CLAMPED against the REAL build cell
+    count (re-probing the same DEM off the loop), falling back to the area-model clamp if
+    the probe is unavailable.
+    """
+    auto = tail_state["swmm_autoscale"]
+    dem_path = tail_state.get("swmm_dem_path")
+    if decision == "narrow_scope":
+        revised = revised_args or {}
+        requested_res = float(auto.base_resolution_m)
+        try:
+            chosen_res = float(revised.get("target_resolution_m", auto.resolution_m))
+        except (TypeError, ValueError):
+            chosen_res = float(auto.resolution_m)
+        clamped_res = chosen_res
+        clamped = False
+        used_real_clamp = False
+        if dem_path:
+            try:
+                from ...mesh.raster_cell_mesh import (
+                    clamp_swmm_resolution_to_real_cap,
+                )
+
+                cap = int(auto.cell_cap)
+                real_clamp = await asyncio.to_thread(
+                    clamp_swmm_resolution_to_real_cap,
+                    dem_path,
+                    chosen_res,
+                    cell_cap=cap,
+                )
+                clamped_res = float(real_clamp.resolution_m)
+                clamped = bool(real_clamp.clamped)
+                used_real_clamp = True
+            except Exception:  # noqa: BLE001 -- never orphan the override on a probe fail
+                logger.warning(
+                    "swmm granularity narrow_scope: REAL-cap clamp probe failed; "
+                    "falling back to the area-model clamp",
+                    exc_info=True,
+                )
+        if not used_real_clamp:
+            clamped_res, clamped = _clamp_swmm_resolution_to_cap(
+                chosen_res, auto, requested_res
+            )
+        delta: dict[str, Any] = {
+            "confirmed": True,
+            "target_resolution_m": clamped_res,
+            "enable_autoscale": False,
+        }
+        if clamped:
+            delta["_granularity_clamped"] = True
+        return delta
+    return {
+        "confirmed": True,
+        "target_resolution_m": float(auto.resolution_m),
+        "enable_autoscale": False,
+    }
+
+
+def estimate_psha(params: dict, **_: Any) -> CardEstimate:
+    """Estimate provider for the OpenQuake classical-PSHA gate (plain proceed/cancel)."""
+    return CardEstimate(envelope=_build_psha_confirm_envelope(params))
+
+
+def estimate_scenario(params: dict, *, tool_name: str, **_: Any) -> CardEstimate:
+    """Estimate provider for the OpenQuake scenario-GMF / secondary-perils gate."""
+    return CardEstimate(envelope=_build_scenario_confirm_envelope(params, tool_name))
+
+
+def estimate_fire(params: dict, **_: Any) -> CardEstimate:
+    """Estimate provider for the ELMFIRE fire-spread gate (plain proceed/cancel)."""
+    return CardEstimate(envelope=_build_fire_confirm_envelope(params))
+
+
+def estimate_geoclaw(params: dict, **_: Any) -> CardEstimate:
+    """Estimate provider for the GeoClaw inundation / tsunami-gauge gate."""
+    return CardEstimate(envelope=_build_geoclaw_confirm_envelope(params))

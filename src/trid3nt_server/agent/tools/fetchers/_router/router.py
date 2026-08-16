@@ -19,6 +19,32 @@ from typing import Any, Callable
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.gate_spec import GateSpec, LeverSpec
+
+#: The canonical confirm gate for a heavy raster FETCHER (ADR 0273). All three
+#: gated fetchers (fetch_dem/topobathy/landcover) share it -- one resolution_m
+#: lever, the shared estimate/pin providers; kind='fetch' (no ``confirmed``
+#: injection -- fetchers ignore it). A source declares ``confirm_gate:
+#: fetch_resolution`` in its source.yaml to opt in.
+_PROVIDERS = "trid3nt_server.agent.gates.cards.solver_confirm"
+FETCH_RESOLUTION_GATE_SPEC = GateSpec(
+    kind="fetch",
+    estimate_provider=f"{_PROVIDERS}:estimate_fetch_resolution",
+    pin_provider=f"{_PROVIDERS}:pin_fetch_resolution",
+    levers=(LeverSpec(name="fetch resolution", param="resolution_m", unit="m"),),
+    title="Fetch resolution",
+    rationale=(
+        "A heavy raster download/merge: let the user control the resolution "
+        "(and see the px-grid estimate) before the big fetch."
+    ),
+)
+
+
+def _gate_spec_for_source(spec: SourceSpec) -> GateSpec | None:
+    """Map a source's declared ``confirm_gate`` marker to its GateSpec (or None)."""
+    if spec.confirm_gate == "fetch_resolution":
+        return FETCH_RESOLUTION_GATE_SPEC
+    return None
 
 from .._fetch_common import _validate_bbox, round_bbox_to_resolution
 from ...cache import ProvenanceRecorder, read_through
@@ -74,6 +100,9 @@ def synthesize_metadata(spec: SourceSpec) -> AtomicToolMetadata:
         # data-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,
+        # the declared confirm gate (ADR 0273): a heavy fetcher's resolution gate
+        # rides onto the metadata so the server gate engine reads membership here.
+        gate_spec=_gate_spec_for_source(spec),
     )
 
 

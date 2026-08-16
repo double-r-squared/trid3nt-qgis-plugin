@@ -79,7 +79,7 @@ from trid3nt_contracts.envelope import (
     ResultLayer,
 )
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
-from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec, LeverSpec, ResolutionSpec
 
 from trid3nt_server.agent.tools.resolution_declared import enforce_resolution
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
@@ -2479,6 +2479,18 @@ _SFINCS_FLOOD_METADATA = AtomicToolMetadata(
     engine="sfincs",
     tier="template",
     resolution_specs=(_SFINCS_QUADTREE_RES_SPEC,),
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_flood_run_settings",
+        pin_provider="trid3nt_server.agent.gates.cards.solver_confirm:pin_flood_run_settings",
+        levers=(
+            LeverSpec(name="grid resolution", param="grid_resolution_m", unit="m"),
+            LeverSpec(name="animation cadence", param="output_interval_min", unit="min"),
+            LeverSpec(name="simulation window", param="duration_hr", unit="hr", pin_on_proceed=False),
+        ),
+        title="SFINCS flood run settings",
+        rationale="A consequential SFINCS solve: review grid resolution, cadence, and window before the run.",
+    ),
 )
 
 

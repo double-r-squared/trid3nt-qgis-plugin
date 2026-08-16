@@ -39,7 +39,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.openquake_contracts import SecondaryPerilLayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_server.agent.gates.input_review import gate_input_review
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
@@ -127,6 +127,12 @@ _SEP_METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     cacheable=False,
     engine="openquake",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_scenario",
+        title="OpenQuake scenario",
+        rationale="A consequential OpenQuake solve: confirm before the run.",
+    ),
     tier="template",
 )
 

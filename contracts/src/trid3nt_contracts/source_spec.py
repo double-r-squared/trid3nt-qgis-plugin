@@ -725,6 +725,15 @@ class SourceSpec(GraceModel):
     # a source with no granularity-bearing param (the common case).
     resolution_declarations: tuple[ResolutionSpec, ...] = Field(default=())
 
+    # --- declared confirm gate (ADR 0273, the gate-collapse) ---
+    # A HEAVY raster fetcher (fetch_dem/topobathy/landcover) DECLARES its
+    # resolution confirm gate here; the router synthesizes the canonical fetch
+    # GateSpec onto the tool's ``AtomicToolMetadata.gate_spec`` (kind='fetch',
+    # the shared estimate/pin providers). ``None`` (default) = an un-gated fetch.
+    # A named template rather than an inline GateSpec keeps the three fetch
+    # source.yaml decls terse and the provider dotted paths single-sourced.
+    confirm_gate: Literal["fetch_resolution"] | None = None
+
     # --- retrieval phrasings (verbatim from the twin's corpus.yaml) ---
     corpus: list[str] = Field(default_factory=list)
 

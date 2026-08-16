@@ -28,7 +28,7 @@ import logging
 from typing import Any
 
 from trid3nt_contracts.geoclaw_contracts import GeoClawDepthLayerURI, GeoClawRunArgs
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_server.agent.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.agent.tools import register_tool
@@ -71,6 +71,12 @@ _METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     cacheable=False,
     engine="geoclaw",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_geoclaw",
+        title="GeoClaw inundation",
+        rationale="A consequential GeoClaw solve: confirm before the run.",
+    ),
     tier="template",
 )
 

@@ -49,7 +49,7 @@ from trid3nt_contracts.openquake_contracts import (
     OpenQuakeRunArgs,
     SeismicHazardLayerURI,
 )
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_contracts.common import SyntheticInput
 
@@ -124,6 +124,12 @@ _OPENQUAKE_PSHA_METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     cacheable=False,
     engine="openquake",
+    gate_spec=GateSpec(
+        kind="solver",
+        estimate_provider="trid3nt_server.agent.gates.cards.solver_confirm:estimate_psha",
+        title="OpenQuake classical PSHA",
+        rationale="A consequential OpenQuake solve: confirm before the run.",
+    ),
     tier="template",
 )
 

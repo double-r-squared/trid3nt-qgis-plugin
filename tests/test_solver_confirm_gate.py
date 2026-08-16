@@ -101,13 +101,15 @@ async def test_dispatch_path_strips_llm_supplied_confirmed(monkeypatch) -> None:
 
 
 def test_dispatch_source_contains_strip_and_gate() -> None:
-    """Belt-and-braces: the dispatch site strips LLM-supplied ``confirmed`` for
-    SOLVER_CONFIRM_TOOLS before gating (source-level assertion so a refactor
-    that drops the strip line fails loudly)."""
+    """Belt-and-braces: the dispatch site resolves the tool's GateSpec (ADR 0273,
+    the gate-collapse -- membership is metadata, not a name set) and strips an
+    LLM-supplied ``confirmed`` for a SOLVER gate before gating (source-level
+    assertion so a refactor that drops the strip line fails loudly)."""
     import trid3nt_server.server as server_mod
 
     src = inspect.getsource(server_mod._invoke_tool_via_emitter)
-    assert "SOLVER_CONFIRM_TOOLS" in src
+    assert "_gate_spec_for(" in src
+    assert 'kind == "solver"' in src
     assert 'params.pop("confirmed", None)' in src
     assert "SolverConfirmationCancelledError" in src
 
