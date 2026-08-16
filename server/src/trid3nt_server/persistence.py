@@ -9,13 +9,13 @@ Live backend (local-first build): the file-backed twin ``FileMCPClient`` --
 a small JSON-document store that implements the same logical MCP surface with
 Mongo-faithful filter/update semantics. It is bound by
 ``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``.
-A cloud MCP-backed client implementing the same ``MCPClientProtocol`` drops in
-unchanged, but the local stack binds only the file backend.
+Another document-store client implementing the same ``MCPClientProtocol`` drops
+in unchanged, but the local stack binds only the file backend.
 
 Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
 ``CaseChatMessage`` append + ``CaseSessionState`` hydration, and ``User``
-round-trip (``get_user_by_id``/``upsert_user``). API-key credentials no
-longer persist here: the plugin brokers key values over the ``secret-add`` WS
+round-trip (``get_user_by_id``/``upsert_user``). API-key credentials do not
+persist here: the plugin brokers key values over the ``secret-add`` WS
 seam into the in-memory ``credentials.resolver`` session cache, with env vars
 the headless / dev floor.
 
@@ -44,7 +44,8 @@ from trid3nt_contracts.user import User
 logger = logging.getLogger("trid3nt_server.persistence")
 
 # Logical database name for all Case/User/Secret persistence. The file backend
-# uses it as a namespace prefix; a cloud MCP client would use it as the DB name.
+# uses it as a namespace prefix; another document-store client would use it as
+# the DB name.
 # Override via env var ``TRID3NT_MONGO_DB`` for staging / test isolation.
 import os
 
@@ -67,8 +68,8 @@ USERS_COLLECTION = "users"  # Auth/Users track stub
 class MCPClientProtocol(Protocol):
     """Minimal MCP client surface this module depends on.
 
-    Matches ``trid3nt_server.mcp.MCPClient.call_tool`` so the live client (the
-    stdio-launched ``mongodb-mcp-server`` subprocess) drops in without
+    The file-backed ``FileMCPClient`` implements it; another document-store
+    client that speaks the same logical ``call_tool`` surface drops in without
     adaptation. Tests pass a mock implementing this single method.
     """
 
@@ -86,17 +87,17 @@ class MCPClientProtocol(Protocol):
 def _unwrap_mcp_result(raw: dict[str, Any]) -> Any:
     """Extract the structured payload from an MCP ``tools/call`` result.
 
-    The MCP protocol returns results in a ``content`` array. ``mongodb-mcp-server``
-    populates the first entry's ``text`` field with a JSON string for document
-    operations. Best-effort: if the shape doesn't match we surface ``None`` so
-    callers can branch on "no document" vs "raw dict already parsed".
+    An MCP document-store client returns results in a ``content`` array with a
+    JSON string in the first entry's ``text`` field for document operations.
+    Best-effort: if the shape doesn't match we surface ``None`` so callers can
+    branch on "no document" vs "raw dict already parsed".
     """
     if not isinstance(raw, dict):
         return raw
     # Direct dict already -- e.g., when the mock test client returns a dict.
     if "content" not in raw and "document" not in raw and "documents" not in raw:
         return raw
-    # mongodb-mcp-server: content[0].text is a JSON string
+    # MCP document-store: content[0].text is a JSON string
     content = raw.get("content")
     if isinstance(content, list) and content:
         first = content[0]
@@ -119,9 +120,9 @@ class Persistence:
     """Typed wrapper over the persistence MCP surface (``MCPClientProtocol``).
 
     Construct with any object implementing ``MCPClientProtocol`` -- on this
-    stack that is the file-backed ``FileMCPClient``; a cloud MCP client drops
-    in unchanged. All methods are ``async`` (the file backend off-loads its
-    blocking I/O; a cloud client's transport is async).
+    stack that is the file-backed ``FileMCPClient``; another document-store
+    client drops in unchanged. All methods are ``async`` (the file backend
+    off-loads its blocking I/O; a remote client's transport is async).
     """
 
     def __init__(
@@ -138,7 +139,7 @@ class Persistence:
     async def get_case(self, case_id: str) -> CaseSummary | None:
         """Find one Case by id. Returns ``None`` if not found.
 
-        Forward-compat: drops any field the ``ProjectDocument`` schema (D.2)
+        Forward-compat: drops any field the ``ProjectDocument`` schema
         carries that ``CaseSummary`` doesn't denormalize (e.g. ``deleted_at``,
         ``owner_user_id``, etc.). The Case envelope is a UI denormalization
         of the storage shape -- extra storage fields are expected and ignored.
@@ -364,8 +365,8 @@ class Persistence:
     async def delete_case(self, case_id: str) -> None:
         """Soft-delete a Case (sets ``status="deleted"``).
 
-        v0.1 stance: soft-delete only. A future job lands a curator-tooled
-        hard delete; data-retention rules (D.2 ``deleted_at``) point this way
+        v0.1 stance: soft-delete only. A curator-tooled hard delete is a future
+        addition; data-retention rules (the ``deleted_at`` stamp) point this way
         anyway. Status mirrors the ``CaseStatus`` Literal tombstone value.
         """
         await self._mcp.call_tool(
@@ -407,7 +408,7 @@ class Persistence:
     async def upsert_chat_message(self, msg: CaseChatMessage) -> None:
         """Insert-or-replace one chat row keyed by its stable ``message_id``.
 
-        Durable-card lifecycle (NATE "nothing transient"): an off-box SOLVE card
+        Durable-card lifecycle (nothing about a solve is transient): an off-box SOLVE card
         is persisted ``running`` at mint and UPDATED IN PLACE to its terminal
         state. Unlike ``append_chat_message`` (always a fresh row), this upserts
         by the stable ``_id`` so the running -> terminal transition rewrites the
@@ -535,9 +536,9 @@ class Persistence:
             case=case, chat_history=chat, loaded_layers=loaded_layers, charts=charts,
         )
 
-    # ----- Session records (D.6 ``sessions`` collection) ------------------- #
-    # The ``sessions`` document is the TTL-cleaned activity header (D.6 +
-    # ``SESSIONS_TTL``): who/when, which Cases were touched, and the
+    # ----- Session records (``sessions`` collection) ----------------------- #
+    # The ``sessions`` document is the TTL-cleaned activity header
+    # (``SESSIONS_TTL``): who/when, which Cases were touched, and the
     # append-only ``charts`` array that chart-emission ``$push``es onto. Chat
     # content canonically lives in ``case_chat_messages``;
     # ``SessionDocument.chat_history`` stays empty at v0.1 so the two stores
@@ -573,7 +574,7 @@ class Persistence:
     ) -> None:
         """Activity heartbeat for a session -- one upsert round-trip.
 
-        - ``$set`` ``last_active_at`` + ``expires_at`` (TTL driver, D.6) so
+        - ``$set`` ``last_active_at`` + ``expires_at`` (TTL driver) so
           every interaction pushes cleanup 30 days out (``SESSIONS_TTL``).
         - ``$setOnInsert`` the immutable header (``schema_version``,
           ``created_at``) so the first touch creates a well-formed record
@@ -581,7 +582,7 @@ class Persistence:
         - ``$addToSet`` the active Case into ``project_ids`` when given --
           deduped, so per-turn touches stay idempotent.
 
-        Fire-and-forget discipline at call sites (same as telemetry M3 and
+        Fire-and-forget discipline at call sites (same as telemetry and
         chart persistence): callers wrap in ``try/except`` or a
         task; a persistence hiccup never takes down the user's turn.
         """
@@ -657,7 +658,7 @@ class Persistence:
         """Persist the session's active-Case pointer.
 
         Writes a storage-only ``last_active_case_id`` field onto the session
-        record so the active-Case pointer survives an EC2 auto-stop/restart
+        record so the active-Case pointer survives a process restart
         (the in-memory ``_SESSION_ACTIVE_CASE`` dict in server.py is wiped on
         process death). ``SessionDocument`` deliberately does NOT carry this
         field -- it is storage-only, exactly like the ``charts`` array;
@@ -703,7 +704,7 @@ class Persistence:
         ``set_session_active_case``, or ``None`` when the session has no
         record / no persisted pointer (a fresh session, or one that never
         bound a Case). Used by server.py to reload the in-memory pointer when a
-        fresh ``SessionState`` is built after an EC2 restart, so the cold-start
+        fresh ``SessionState`` is built after a process restart, so the cold-start
         cache survives process death. Best-effort: any malformed shape yields
         ``None``.
         """
@@ -975,7 +976,7 @@ class FileMCPClient:
         return True
 
     # ------------------------------------------------------------------ #
-    # Update-operator application (M4)
+    # Update-operator application
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -1111,27 +1112,23 @@ class FileMCPClient:
 
 
 def is_dev_persistence_enabled() -> bool:
-    """Resolve whether the file-backed dev substrate should engage.
+    """Resolve whether the file-backed substrate should engage.
 
     Order:
     - explicit ``TRID3NT_DEV_PERSISTENCE=0`` disables (escape hatch for CI
-      that wants the M1 None-Persistence path even on a dev box);
+      that wants the in-memory, no-persistence path);
     - explicit ``TRID3NT_DEV_PERSISTENCE=1`` enables;
-    - if neither is set AND MongoDB MCP is not provisioned (no
-      ``TRID3NT_MONGO_MCP_STDIO=1`` nor ``TRID3NT_MONGO_MCP_URL``), default ON
-      so a fresh local clone gets working Case persistence with zero config.
+    - unset → default ON so a fresh local clone gets working Case persistence
+      with zero config.
 
-    The MCP-provisioned check is a string read (we don't try to start the
-    sidecar here); ``init_persistence_from_env`` in ``server.py`` is the
-    single place that actually decides between FilePersistence and the live
-    MCP-backed Persistence, and it owns the precedence (real MCP wins).
+    The env read is a string check (nothing is started here);
+    ``main._maybe_bind_dev_persistence`` is the single place that binds the
+    file backend when this returns True.
     """
     raw = _os_for_file.environ.get(DEV_PERSISTENCE_ENABLED_ENV)
     if raw is not None:
         return raw.strip().lower() in {"1", "true", "yes", "on"}
-    mcp_stdio = _os_for_file.environ.get("TRID3NT_MONGO_MCP_STDIO") == "1"
-    mcp_url = bool(_os_for_file.environ.get("TRID3NT_MONGO_MCP_URL"))
-    return not (mcp_stdio or mcp_url)
+    return True
 
 
 def make_file_persistence(base_dir: _Path | None = None) -> Persistence:

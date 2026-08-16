@@ -146,7 +146,8 @@ def get_persistence() -> "Persistence | None":
     time (server.py already imports from telemetry at the top level).
 
     Returns ``None`` if the server module hasn't finished bootstrapping yet
-    (early startup) or if the Persistence singleton is unbound (M1 path).
+    (early startup) or if the Persistence singleton is unbound (the
+    ``TRID3NT_DEV_PERSISTENCE=0`` no-persistence path).
     """
     try:
         from .server import get_persistence as _server_get_persistence

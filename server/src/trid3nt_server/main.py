@@ -1,7 +1,6 @@
 """Entry point for the ``trid3nt-server`` console script.
 
-Run the WebSocket server. Optionally run an MCP smoke pre-flight (gated by
-``TRID3NT_AGENT_SKIP_MCP_SMOKE=1`` to skip).
+Run the WebSocket server.
 
 Startup-time tool-registry wiring:
 
@@ -81,11 +80,11 @@ def _import_tools_registry() -> int:
     # register_specs_from_tree at agent.tools import; no eager twin import.
     # register the 2 QGIS discovery atomic tools.
     from .agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401
-    # register run_solver + wait_for_completion (M5 substrate).
+    # register run_solver + wait_for_completion (solver-dispatch substrate).
     from .agent.tools.simulation.solver import solver  # noqa: F401
-    # register sfincs_flood (M5 capstone workflow wrapper; engine template).
+    # register sfincs_flood (capstone workflow wrapper; engine template).
     from .agent.workflows.sfincs.flood.flood import sfincs_flood  # noqa: F401
-    # register search_data_catalog + fetch_from_catalog (Mode 1 substrate).
+    # register search_data_catalog + fetch_from_catalog (catalog search substrate).
     from .agent.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401
     from .agent.tools.search.search_data_catalog import search_data_catalog  # noqa: F401
     # register publish_layer (COG → QGIS Server WMS bridge; side-effect tool).
@@ -114,9 +113,9 @@ def _import_tools_registry() -> int:
     # registered via register_specs_from_tree.
     # fetch_nws_alerts_conus: spec-driven (single /alerts/active GET +
     # zone-polygon enrichment), registered via register_specs_from_tree.
-    # aggregate_claims_across_sources DEMOTED to an importable library (no longer
-    # an LLM-facing tool); model_groundwater imports its private extractors. News
-    # ingest re-homes onto web_fetch / fetch_nws_event / fetch_storm_events_db.
+    # aggregate_claims_across_sources is an importable library, not an LLM-facing
+    # tool; model_groundwater imports its private extractors. News ingest rides
+    # web_fetch / fetch_nws_event / fetch_storm_events_db.
     # register compute_impervious_surface (NLCD impervious-fraction raster).
     from .agent.tools.processing.compute_impervious_surface import compute_impervious_surface  # noqa: F401
     # register extract_landcover_class (NLCD binary-mask extractor for zone_input).
@@ -166,7 +165,7 @@ def _default_qgis_process_submitter():
     tools and the ``qgis_process`` pass-through call this seam.
 
     The default submitter runs ``qgis_process`` as a local subprocess --
-    suitable for the local environment and the M4 discovery loop.
+    suitable for the local environment and the QGIS-algorithm discovery loop.
 
     Override via ``TRID3NT_QGIS_PROCESS_BIN`` env var; defaults to
     ``qgis_process`` discovered on PATH.
@@ -213,9 +212,9 @@ def _default_qgis_process_submitter():
 
     qgis_bin = _local_bin
     if qgis_bin is None:
-        # Last-resort hint for the user's conda env on this Debian box (per
-        # PROJECT_STATE env-facts). Production agent image will bake the
-        # binary in (or route through the Cloud Run Job submitter).
+        # Last-resort hint for the user's conda env on this box; the
+        # docker-backed submitter above is the other local path when no
+        # qgis_process binary is on PATH.
         candidate = os.path.expanduser("~/miniforge3/envs/grace2/bin/qgis_process")
         if os.path.exists(candidate):
             qgis_bin = candidate
@@ -252,25 +251,18 @@ def _default_qgis_process_submitter():
 
 
 def _maybe_bind_dev_persistence() -> None:
-    """Bind file-backed dev Persistence.
+    """Bind the file-backed Persistence singleton (the default backend).
 
-    Local-dev fallback for when MongoDB MCP is not provisioned (the typical
-    fresh-clone case). Engages a JSON-on-disk substrate so the Case lifecycle
-    (create / select / archive / delete) and chat persistence work without
-    any Atlas / MCP setup.
+    Engages a JSON-on-disk substrate so the Case lifecycle (create / select /
+    archive / delete) and chat persistence work with zero config on a fresh
+    clone.
 
-    Precedence:
+    Precedence (see ``persistence.is_dev_persistence_enabled``):
     - ``TRID3NT_DEV_PERSISTENCE=0`` → never engage (escape hatch for CI that
-      wants the M1 None-Persistence path even on a dev box);
-    - ``TRID3NT_MONGO_MCP_STDIO=1`` OR ``TRID3NT_MONGO_MCP_URL`` set → defer to
-      the real MCP path; ``server.init_persistence_from_env`` constructs the
-      MCP-backed singleton at server startup and we leave this no-op;
-    - otherwise (default on a fresh local clone) → bind a ``FilePersistence``
-      singleton pointing at ``~/.trid3nt/dev_persistence/`` (override via
+      wants the in-memory, no-persistence path);
+    - otherwise (the default) → bind a ``FilePersistence`` singleton pointing at
+      ``~/.trid3nt/dev_persistence/`` (override via
       ``TRID3NT_DEV_PERSISTENCE_DIR``).
-
-    Production agent containers always set ``TRID3NT_MONGO_MCP_STDIO=1`` so
-    this path is bypassed at deploy.
     """
     from .persistence import (
         is_dev_persistence_enabled,
@@ -293,8 +285,7 @@ def _maybe_bind_dev_persistence() -> None:
         backend = resolve_persistence_backend()
         log.info(
             "dev Persistence bound (backend=%s; %s). "
-            "TRID3NT_DEV_PERSISTENCE=0 to disable, "
-            "TRID3NT_MONGO_MCP_STDIO=1 for live MCP.",
+            "TRID3NT_DEV_PERSISTENCE=0 to disable.",
             backend,
             _default_dev_persistence_dir(),
         )
@@ -518,11 +509,9 @@ def run(argv: list[str] | None = None) -> int:
     # to resolve a local qgis_process is informational, not fatal.
     _bind_worker_submitter()
 
-    # pre-bind the file-backed dev Persistence when MongoDB MCP is
-    # not provisioned. ``server.init_persistence_from_env`` (called inside
-    # ``run_server``) preserves a pre-bound singleton, so the dev fallback
-    # survives the regular MCP-not-provisioned branch. Production agents set
-    # ``TRID3NT_MONGO_MCP_STDIO=1`` and this is a no-op.
+    # Bind the file-backed Persistence singleton (the default backend).
+    # ``server.init_persistence_from_env`` (called inside ``run_server``)
+    # preserves a pre-bound singleton, so this binding survives startup.
     _maybe_bind_dev_persistence()
 
     if startup_only:

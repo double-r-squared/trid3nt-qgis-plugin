@@ -1,8 +1,9 @@
 """Unit + integration tests for ``trid3nt_server.persistence`` (job-0115).
 
 The ``Persistence`` wrapper translates between agent-side typed contracts
-(``CaseSummary`` / ``CaseChatMessage`` / ``User``) and the MongoDB Atlas MCP
-server's CRUD tools (``insert-one`` / ``update-one`` / ``find-one`` / ``find``).
+(``CaseSummary`` / ``CaseChatMessage`` / ``User``) and a document-store client's
+CRUD surface (``insert-one`` / ``update-one`` / ``find-one`` / ``find``), driven
+here by an in-memory ``MockMCPClient``.
 
 Coverage:
 - ``test_get_case_returns_none_on_missing`` — find-one with no match.
@@ -13,15 +14,11 @@ Coverage:
 - ``test_append_chat_message_and_hydrate_session`` — chat append +
   ``get_session_state`` re-hydrates.
 - ``test_user_round_trip`` — upsert + get_user_by_id.
-- ``test_live_mcp_write_then_read_or_skip`` — live integration with the
-  MongoDB MCP server when ``TRID3NT_MONGO_MCP_STDIO=1``; else surfaces the
-  OQ-0115-MCP-NOT-PROVISIONED skip.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime, timezone
 
 import pytest
@@ -360,38 +357,3 @@ def test_get_user_by_id_tolerates_stale_firebase_uid_key() -> None:
     assert fetched is not None
     assert fetched.user_id == uid
     assert not hasattr(fetched, "firebase_uid")
-
-
-# --------------------------------------------------------------------------- #
-# Live integration (env-guarded)
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.skipif(
-    os.environ.get("TRID3NT_MONGO_MCP_STDIO") != "1",
-    reason="OQ-0115-MCP-NOT-PROVISIONED: set TRID3NT_MONGO_MCP_STDIO=1 to run",
-)
-def test_live_mcp_write_then_read() -> None:  # pragma: no cover — env-guarded
-    """Live MCP round-trip: upsert a test Case, fetch it back, delete it.
-
-    Only runs when ``TRID3NT_MONGO_MCP_STDIO=1`` and the agent has been launched
-    with credentials sufficient to call the SRV secret. Else surfaces as the
-    OQ-0115-MCP-NOT-PROVISIONED skip.
-    """
-    from trid3nt_server.mcp import MCPClient, fetch_srv_from_secret_manager
-
-    async def _run() -> None:
-        srv = fetch_srv_from_secret_manager()
-        client = await MCPClient.start(srv)
-        try:
-            p = Persistence(client)
-            case = _fresh_case_summary()
-            await p.upsert_case(case)
-            fetched = await p.get_case(case.case_id)
-            assert fetched is not None
-            assert fetched.case_id == case.case_id
-            await p.delete_case(case.case_id)
-        finally:
-            await client.close()
-
-    asyncio.run(_run())

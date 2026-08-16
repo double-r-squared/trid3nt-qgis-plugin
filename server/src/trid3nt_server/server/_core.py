@@ -15,9 +15,8 @@ Wire envelope routing:
 
 Every wire envelope is validated through ``trid3nt_contracts.ws.Envelope`` --
 NEVER hand-roll JSON. Cancellation is first-class: any
-in-flight Gemini stream is cancelled via asyncio task cancellation; the LLM
-side of the chain completes within 30s. Cloud Workflows ``terminate`` is the
-solver-dispatch side of the chain.
+in-flight model stream is cancelled via asyncio task cancellation; the LLM
+side of the chain completes within 30s.
 
 ``research_mode``: pass-through pinned. The field is
 logged and forwarded as-is -- there is no second pipeline strategy yet.
@@ -693,14 +692,12 @@ from ..agent.gates.pending import (  # noqa: E402
 )
 
 
-# App-level Persistence singleton. The MongoDB Atlas MCP server is the
-# LLM-facing DB path; ``Persistence`` wraps it with a
-# typed surface (CaseSummary / User / SecretRecord / CaseChatMessage). Bound
-# at startup if ``TRID3NT_MONGO_MCP_URL`` is set or a stdio MCP config
-# resolves; otherwise stays ``None`` and callers fall back to in-memory
-# state (the M1 path). Module-level (not per-connection): the MCP client is
-# expensive to start, per-session writes only need a typed wrapper not
-# connection isolation, and it resets on process restart for tests.
+# App-level Persistence singleton. ``Persistence`` wraps the file-backed
+# document store with a typed surface (CaseSummary / User / SecretRecord /
+# CaseChatMessage). Bound at startup by ``main._maybe_bind_dev_persistence``;
+# otherwise stays ``None`` and callers fall back to in-memory state.
+# Module-level (not per-connection): per-session writes only need a typed
+# wrapper not connection isolation, and it resets on process restart for tests.
 _PERSISTENCE: Persistence | None = None
 
 
@@ -708,8 +705,8 @@ def get_persistence() -> Persistence | None:
     """Return the app-level ``Persistence`` singleton, or ``None`` if unbound.
 
     Callers (chiefly the message-dispatch path in this module) MUST handle
-    the ``None`` case gracefully -- the M1 in-memory path is still supported
-    when the MCP environment is not provisioned (e.g. CI without Atlas).
+    the ``None`` case gracefully -- the in-memory path is still supported
+    when persistence is not bound (e.g. CI with ``TRID3NT_DEV_PERSISTENCE=0``).
     """
     return _PERSISTENCE
 
@@ -717,9 +714,9 @@ def get_persistence() -> Persistence | None:
 def set_persistence(p: Persistence | None) -> None:
     """Bind or clear the app-level ``Persistence`` singleton.
 
-    The agent service startup path calls this once after launching the MCP
-    client; tests call it directly with a mock-backed ``Persistence`` to
-    exercise the wired-in code paths. API-key credentials no longer resolve
+    The agent service startup path calls this once after binding the file
+    backend; tests call it directly with a mock-backed ``Persistence`` to
+    exercise the wired-in code paths. API-key credentials do not resolve
     through Persistence -- ``credentials.resolver`` (session cache -> env) owns
     that, and keyed tools receive the resolved value as a ``str`` secret_ref.
     """
@@ -728,15 +725,13 @@ def set_persistence(p: Persistence | None) -> None:
 
 
 async def init_persistence_from_env() -> Persistence | None:
-    """Resolve a ``Persistence`` instance from environment configuration.
+    """Resolve the ``Persistence`` singleton for the running server.
 
-    The live MongoDB-MCP (Atlas) bootstrap is GONE (``mcp.py`` deleted). The
-    persistence backend is file-backed, bound by
+    The persistence backend is file-backed, bound by
     ``main._maybe_bind_dev_persistence`` /
-    ``persistence.make_persistence_for_backend`` before this runs.
-
-    This method does NOT clear a pre-bound singleton; it preserves whatever the
-    startup path already bound. Returns the ``Persistence`` instance or ``None``.
+    ``persistence.make_persistence_for_backend`` before this runs. This method
+    does NOT clear a pre-bound singleton; it preserves whatever the startup
+    path already bound. Returns the ``Persistence`` instance or ``None``.
     """
     # This method does NOT clear a pre-bound singleton. The agent
     # startup path (``main._maybe_bind_dev_persistence``)
@@ -1244,7 +1239,7 @@ async def _stream_model_reply(
 
         contents = history + user_text
         for _ in range(MAX_TURN_ITERATIONS):
-            stream Gemini:
+            stream the model:
                 text deltas -> forward as agent-message-chunk
                 function_calls -> collect (this turn)
             if no function_calls this turn:
@@ -1253,7 +1248,7 @@ async def _stream_model_reply(
                 result = await _invoke_tool_via_emitter(...)
                 summary = summarize_tool_result(name, result, error)
                 append model Content (function_call) + function Content (response)
-            # then loop: Gemini now sees the call + result and decides next
+            # then loop: the model now sees the call + result and decides next
             # tool call OR narrates the answer.
 
     Cancellation: ``asyncio.CancelledError`` aborts the whole loop and emits a
@@ -1302,10 +1297,9 @@ async def _stream_model_reply(
     # turn is a fresh request -- a tool that prompted for a key last turn may
     # legitimately prompt again this turn (the key may still be missing).
     state.credential_prompted_tools = set()
-    # fix (bbox-gate-retry-loop, 2026-07-09): reset the per-turn
-    # solver-confirm/fetch-resolution gate-decision memory. A new user turn
-    # is a fresh request - a tool+bbox pair confirmed last turn must gate
-    # again this turn (see ``gate_decisions_this_turn`` docstring above).
+    # Reset the per-turn solver-confirm/fetch-resolution gate-decision memory.
+    # A new user turn is a fresh request - a tool+bbox pair confirmed last turn
+    # must gate again this turn (see ``gate_decisions_this_turn`` docstring above).
     state.gate_decisions_this_turn = {}
     turn_narration = state.current_turn_narration
     turn_history = state.chat_history
@@ -1352,9 +1346,8 @@ async def _stream_model_reply(
 
     # No model client is constructed here -- every live provider adapter
     # (bedrock / openai / scripted) opens its own client at the boundary and
-    # ignores ``client``. The decommissioned Vertex generate path (the only
-    # consumer of a prebuilt google-genai client) is removed. Provider resolved
-    # once here and reused by the cache guard below.
+    # ignores ``client``. Provider resolved once here and reused by the cache
+    # guard below.
     from ..agent.adapters.bedrock_adapter import model_provider as _model_provider
 
     _provider = _model_provider()
@@ -1582,10 +1575,9 @@ async def _stream_model_reply(
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # GCP decommissioned: the agent runs on Bedrock, whose prompt caching is
-    # its own ``cachePoint`` mechanism (bedrock_adapter). The Vertex-only
-    # ``CachedContent`` fast-path (``gemini_cache.py``) is REMOVED, so this is
-    # always ``None``. The field is retained for the ``cache-status`` envelope
+    # Prompt caching is Bedrock's own ``cachePoint`` mechanism
+    # (bedrock_adapter); there is no separate cached-content fast-path, so this
+    # is always ``None``. The field is retained for the ``cache-status`` envelope
     # payload (``_emit_cache_status``) which reports cachePoint hit metrics.
     state.gemini_cache_name = None
 
@@ -1625,14 +1617,7 @@ async def _stream_model_reply(
     for _pin_note in _pin_notes:
         contents.append(build_user_text_content(_pin_note))
 
-    # Wave 4.11 M6 used to refresh a per-user dynamic hot set here before any
-    # Gemini function_call arrived. That feature (Mongo-backed, gated behind
-    # TRID3NT_DYNAMIC_HOT_SET=1, never set in any live config) was cut as
-    # feature-creep; ``as_frozenset_async`` now always resolves the static
-    # HOT_SET_TOOLS synchronously, so the pre-warm call here was a pure
-    # compute-and-discard no-op and has been removed.
-
-    # Per-turn usage metadata harvested from the stream (job-B6).
+    # Per-turn usage metadata harvested from the stream.
     last_usage: UsageMetadataEvent | None = None
 
     # RUNAWAY-AGENT GUARD: three independent per-turn bounds route to a
@@ -1729,7 +1714,7 @@ async def _stream_model_reply(
                 _agent_abort = (ABORT_WALL_CLOCK, abort_message(ABORT_WALL_CLOCK))
                 break
             iterations += 1
-            # Per-turn collectors: text emitted, function-calls Gemini requested.
+            # Per-turn collectors: text emitted, function-calls the model requested.
             turn_text_parts: list[str] = []
             turn_function_calls: list[FunctionCallEvent] = []
             last_usage = None
@@ -1814,7 +1799,7 @@ async def _stream_model_reply(
                     _segment_buf.append(event.delta)
 
                 elif isinstance(event, ThinkingDeltaEvent):
-                    # F8: forward the model's reasoning-channel deltas so the web/QGIS
+                    # Forward the model's reasoning-channel deltas so the web/QGIS
                     # clients render the greyed foldable thinking block. Gated on the
                     # per-turn user toggle -- with it off the /no_think suppressor is armed
                     # and the channel is not generated, but a model that leaks reasoning
@@ -1839,8 +1824,8 @@ async def _stream_model_reply(
                                 ),
                             )
                         )
-                        # Thinking persistence (LANE CORE 2026-07-22):
-                        # accumulate the reasoning text for THIS segment so
+                        # Thinking persistence: accumulate the reasoning text
+                        # for THIS segment so
                         # ``_finalize_segment`` persists it as the ``thinking``
                         # field on the same agent row as the answer.
                         _thinking_buf.append(event.delta)
@@ -1857,12 +1842,12 @@ async def _stream_model_reply(
                     turn_function_calls.append(event)
 
                 elif isinstance(event, UsageMetadataEvent):
-                    # Gemini surfaces aggregate usage on the terminal chunk. Cache the event
+                    # The model surfaces aggregate usage on the terminal chunk. Cache the event
                     # so the post-turn block can pipe cached_content_token_count into
                     # per-tool telemetry and emit a single cache-status envelope for the
                     # live cache hit-rate UI.
                     last_usage = event
-                    # PER-TURN TELEMETRY (LANE CORE 2026-07-22): sum the
+                    # PER-TURN TELEMETRY: sum the
                     # reported counts across the turn's model rounds. A round
                     # that reports None for a figure leaves that accumulator
                     # untouched (null stays null when NO round reports it --
@@ -1924,7 +1909,7 @@ async def _stream_model_reply(
             if last_usage is not None:
                 await _emit_cache_status(websocket, state, last_usage)
 
-            # Turn ended.  If Gemini emitted no function_calls this turn, it
+            # Turn ended.  If the model emitted no function_calls this turn, it
             # is finished -- either narrated the answer or had nothing more to
             # do.  Break out of the loop.
             if not turn_function_calls:
@@ -1959,8 +1944,8 @@ async def _stream_model_reply(
                     contents.append(build_user_text_content(_EMPTY_COMPLETION_NUDGE))
                     # Observability is log-only (above): a retry must not inject
                     # a transient note into the persisted narration segment, and
-                    # inventing a new envelope type is out of scope (NATE is
-                    # live) -- the log.warning is the durable retry witness.
+                    # inventing a new envelope type is out of scope -- the
+                    # log.warning is the durable retry witness.
                     continue
                 # Stage 3 TURN-LOOP INVARIANTS: ONE continuation nudge per turn, shared
                 # budget, injected as user-role content with the round retried:
@@ -2122,18 +2107,18 @@ async def _stream_model_reply(
                 current_message_id = None  # next text opens a fresh segment
 
             # Otherwise: dispatch each call, then append the call + summarized
-            # response back into contents so the next Gemini turn sees them.
+            # response back into contents so the next model turn sees them.
             for call in turn_function_calls:
                 # Dispatch through the registry + emitter (Invariant 2 -- the LLM's
                 # tool choice IS the classification). Routing failures (TOOL_NOT_FOUND,
                 # PAYLOAD_WARNING_CANCELLED) raise typed exceptions so the except-block
                 # below routes them through summarize_tool_result(error=...) -- a
                 # structured {status: "error", error_code: str, retryable: bool}
-                # envelope Gemini can distinguish from "tool ran and returned nothing"
+                # envelope the model can distinguish from "tool ran and returned nothing"
                 # (a typed error).
                 dispatch_error: BaseException | None = None
                 result: Any = None
-                # CRISP-END (NATE 2026-06-29): set True iff THIS call is a
+                # CRISP-END: set True iff THIS call is a
                 # top-level run-a-model composer that produced its deliverable.
                 _call_is_terminal_deliverable = False
                 _tool_start = asyncio.get_running_loop().time()
@@ -2141,17 +2126,17 @@ async def _stream_model_reply(
                     # Per-session circuit breaker: short-circuit before allowed-set
                     # validation and dispatch if the tool has failed repeatedly this
                     # session. Raises CircuitBreakerError, routed by the except-block below
-                    # through summarize_tool_result(error=...) so Gemini reads the
+                    # through summarize_tool_result(error=...) so the model reads the
                     # structured cooldown signal (not retryable).
                     if state.circuit_breaker.is_tripped(call.name):
                         remaining = state.circuit_breaker.cooldown_remaining_s(call.name)
                         raise CircuitBreakerError(call.name, remaining)
-                    # Post-hoc allowed-set validation: per the CachedContent Option A
-                    # architecture, Gemini sees the full catalog but our code enforces the
-                    # per-turn allowed set. A function_call outside the allowed set raises
-                    # OutOfAllowedSetError, routed by the except-block below through
-                    # summarize_tool_result(error=...) as a structured envelope so Gemini
-                    # can retry (typically by first calling list_tools_in_category).
+                    # Post-hoc allowed-set validation: the model sees the full catalog
+                    # but our code enforces the per-turn allowed set. A function_call
+                    # outside the allowed set raises OutOfAllowedSetError, routed by the
+                    # except-block below through summarize_tool_result(error=...) as a
+                    # structured envelope so the model can retry (typically by first
+                    # calling list_tools_in_category).
                     validate_function_call(call.name, state.allowed_tool_set)
                     result = await _invoke_tool_via_emitter(
                         websocket, state, call.name, call.args
@@ -2181,7 +2166,7 @@ async def _stream_model_reply(
                     # (default: counties) on top of the whole-state default. PAUSES the
                     # turn awaiting the region-choice-provided reply; on a "region" pick
                     # this MUTATES result["bbox"] in place so the immediate zoom-to below
-                    # AND the function_response Gemini reads next turn use the narrowed
+                    # AND the function_response the model reads next turn use the narrowed
                     # extent. Fail-open: headless client / timeout / whole-state pick keeps
                     # the state bbox unchanged. MUST run BEFORE the zoom-to so the camera
                     # snaps to the final extent.
@@ -2245,7 +2230,7 @@ async def _stream_model_reply(
                     # standard function_response -- the client gets the full Vega-Lite spec
                     # on the envelope (vega-embed rendering + stacked gallery), and a
                     # COMPACT data summary on the function_response (stripped by
-                    # summarize_tool_result so Gemini narrates from numbers, not inline
+                    # summarize_tool_result so the model narrates from numbers, not inline
                     # rows). Also persists a SessionChartRecord so the chart replays on Case
                     # rehydration.
                     if is_chart_emission_result(result):
@@ -2254,11 +2239,11 @@ async def _stream_model_reply(
                     # a result carrying the full code-exec-result payload (key signal:
                     # _code_exec_result with envelope_type == "code-exec-result"). Fires IN
                     # ADDITION to the standard function_response -- the client gets the full
-                    # result card via the envelope, Gemini gets the COMPACT summary (spec
+                    # result card via the envelope, the model gets the COMPACT summary (spec
                     # stripped by summarize_tool_result).
                     if is_code_exec_result(result):
                         await _maybe_emit_code_exec_result(websocket, state, result)
-                    # job-B8: record success so the consecutive-failure counter
+                    # Record success so the consecutive-failure counter
                     # resets -- a recovered tool should not stay penalised.
                     state.circuit_breaker.record_success(call.name)
                     # Loop-watchdog progress witness: a successful call that PRODUCED a real
@@ -2334,7 +2319,7 @@ async def _stream_model_reply(
                 except asyncio.CancelledError:
                     # Propagate cancel through the loop -- handled below.
                     raise
-                except Exception as exc:  # noqa: BLE001 -- surface to Gemini
+                except Exception as exc:  # noqa: BLE001 -- surface to the model
                     logger.exception(
                         "tool dispatch raised session=%s tool=%s err=%s",
                         state.session_id,
@@ -2409,7 +2394,7 @@ async def _stream_model_reply(
                             call.name,
                             _turn_geocode_bbox,
                         )
-                # Surface the layer handles this dispatch registered so Gemini passes
+                # Surface the layer handles this dispatch registered so the model passes
                 # HANDLES -- never raw storage paths -- into downstream *_uri params.
                 # The announcement maps {layer_id: L<n>}; the server resolves either
                 # form to the exact URIs it recorded (uri_registry.py).
@@ -2421,8 +2406,8 @@ async def _stream_model_reply(
                     }
                     # The note must make the publish step explicit --
                     # a computed/fetched layer is invisible until publish_layer
-                    # adds it to the QGIS project (live finding: Gemini ended
-                    # the colored-relief turn without publishing).
+                    # adds it to the QGIS project (the model can otherwise finish
+                    # a colored-relief turn without publishing).
                     summary["layer_handles_note"] = (
                         "A layer is NOT visible on the user's map until "
                         "publish_layer(layer_uri=<handle>, "
@@ -2511,11 +2496,10 @@ async def _stream_model_reply(
                     _tel_error_code = (
                         str(_summary_code) if _summary_code is not None else None
                     )
-                # job-B6 (Wave 4.10): the adapter now surfaces
-                # ``UsageMetadataEvent`` at the end of each Gemini stream;
-                # ``last_usage`` carries the most recent observation. Pipe
-                # ``cached_content_token_count`` through so the telemetry
-                # record empirically reflects the Vertex 90% discount.
+                # The adapter surfaces ``UsageMetadataEvent`` at the end of each
+                # model stream; ``last_usage`` carries the most recent observation.
+                # Pipe ``cached_content_token_count`` through so the telemetry
+                # record reflects the prompt-cache discount.
                 _tel_cached_tokens = (
                     last_usage.cached_content_token_count
                     if last_usage is not None
@@ -2551,11 +2535,10 @@ async def _stream_model_reply(
                 # same chokepoint the per-tool record is emitted from.
                 _turn_tool_dispatch_count += 1
                 # Pass the thought_signature harvested off the function_call Part
-                # through to the replayed model turn. Gemini 3 requires the same opaque
-                # byte-blob on the replayed function_call Part or
-                # generate_content_stream errors with "thought-signature mismatch".
-                # Gemini 2.5 surfaces None (no signatures), which the helper treats as a
-                # no-op -- forward-compat with no behavior change on the current model.
+                # through to the replayed model turn. A provider that emits an opaque
+                # reasoning signature requires the same byte-blob on the replayed
+                # function_call Part; a provider that emits None is a no-op -- the
+                # helper forwards whatever was harvested with no behavior change.
                 contents.append(
                     build_function_call_content(
                         call.name,
@@ -2648,7 +2631,7 @@ async def _stream_model_reply(
                         _crisp_concluded = True
                         break
 
-            # Loop: re-stream with the appended call + response so Gemini can
+            # Loop: re-stream with the appended call + response so the model can
             # decide its next move (another tool call OR a narrative wrap-up).
         else:
             # Loop fell through the STEP CAP without a clean (no-tool-call) exit. A
@@ -2754,7 +2737,7 @@ async def _stream_model_reply(
             # accumulated turn_narration as chunks, then finalize it terminal
             # (done=True wire frame + persisted role="agent" row that also
             # snapshots the layer/zoom accumulator). Honesty floor: replay EXACTLY
-            # what Gemini accumulated -- never synthesize a success summary. Guarded
+            # what the model accumulated -- never synthesize a success summary. Guarded
             # so an empty-narration turn emits NO bubble.
             _seg_done = 0
             _cur_task = asyncio.current_task()
@@ -2822,10 +2805,10 @@ async def _stream_model_reply(
         )
         # Append to the entry-captured list -- after a mid-stream
         # case switch this turn's text must not leak into the NEW Case's
-        # LLM context (the carryover class, 74fc0d6).
+        # LLM context (the carryover class).
         turn_history.append({"role": "user", "text": user_text})
         # Name an Untitled Case from its first prompt + refresh the left rail.
-        # A3 moved the PRIMARY autoname to a pre-dispatch call; this tail is a
+        # The PRIMARY autoname is a pre-dispatch call; this tail is a
         # guarded no-op fallback that only fires when a mid-stream case switch
         # re-pinned active_case_id to a fresh Untitled case not yet seen by the
         # pre-dispatch call.
@@ -2859,8 +2842,9 @@ async def _stream_model_reply(
             pass
         raise
     except ConnectionClosed as exc:
-        # F2: the CLIENT transport died mid-turn. This is NOT a model failure
-        # -- the LLM stream rides httpx, never websockets, so a
+        # The CLIENT transport died mid-turn. This is NOT a model failure
+        # -- the LLM stream rides the provider transport, never the client
+        # websocket, so a
         # ConnectionClosed reaching this scope can only be a residual raw send
         # to the dead client socket. Every known per-turn send now routes
         # through _session_safe_send (never raises; sibling-socket fallback),
@@ -2950,14 +2934,14 @@ async def _stream_model_reply(
                 state.session_id,
             )
     except UpstreamProviderError as exc:
-        # UPSTREAM-PROVIDER DISCIPLINE (NATE hard rule: never internalize
-        # upstream failure). The adapter already retried the transient provider
+        # UPSTREAM-PROVIDER DISCIPLINE (never internalize upstream failure).
+        # The adapter already retried the transient provider
         # failure with backoff and exhausted its budget -- this turn ends with
         # an HONEST provider-unavailable narration (typed, provider NAMED,
         # verbatim detail), never a silent empty turn and never recorded as an
         # internal error (error_class="upstream_provider" on the per-turn
         # telemetry record). The wire error_code stays the contract-valid
-        # LLM_UNAVAILABLE (retryable) -- the closed A.6 ErrorCode Literal is a
+        # LLM_UNAVAILABLE (retryable) -- the closed ErrorCode Literal is a
         # contracts surface this lane may not widen -- while the free-form
         # failure-card code carries the DISTINCT UPSTREAM_PROVIDER_UNAVAILABLE.
         _turn_error_class = "upstream_provider"
@@ -3102,11 +3086,10 @@ async def _handle_session_resume(
     *,
     client_case_id: str | None = None,
 ) -> None:
-    """Reply with a fresh session-state. M1 in-memory only; Mongo replay
-    lands when the session-records seam is wired.
+    """Reply with a fresh session-state snapshot.
 
     Routes through the emitter so the initial session-state is
-    A.7-snapshot-shaped. Also emits a case-list so the client renders the
+    snapshot-shaped. Also emits a case-list so the client renders the
     left-rail Case list on initial connect; best-effort -- skipped if
     Persistence is unbound.
 
@@ -3135,7 +3118,7 @@ async def _handle_session_resume(
     state.did_first_resume = True
     # Warm the in-memory pointer from the persisted last_active_case_id
     # first (no-op if this session already has a live pointer this
-    # process). After an EC2 auto-stop/restart the _SESSION_ACTIVE_CASE
+    # process). After a process restart the _SESSION_ACTIVE_CASE
     # cache is empty; without this a bare resume from an older client would
     # lose the Case. The client stamp below still overrides this seed on
     # any disagreement.
@@ -3143,7 +3126,7 @@ async def _handle_session_resume(
     # Re-bind the server's active-Case pointer to the client's current Case
     # BEFORE the replay below resolves it -- the client is the authority;
     # the in-memory _SESSION_ACTIVE_CASE pointer is a cache that may be
-    # stale or cold (EC2 restart). Only re-bind on a genuine change to a
+    # stale or cold (process restart). Only re-bind on a genuine change to a
     # non-None Case so an older client's bare resume (no stamp) leaves the
     # pointer alone. The active_case_id setter writes through
     # _set_session_active_case so EVERY connection observes the corrected
@@ -3186,11 +3169,10 @@ async def _handle_session_resume(
             state.session_id,
         )
     # Per-Case layer DURABILITY: a BARE reconnect (no live turn for this
-    # session) must STILL re-render every layer already on the map -- job-
-    # 0355 only rebinds LIVE in-flight turns, so a layer that completed
-    # before the disconnect has no live turn. NATE hard requirement: a
-    # rendered layer survives any WS reconnect without an explicit
-    # case-open.
+    # session) must STILL re-render every layer already on the map -- the
+    # live-turn rebind only covers in-flight turns, so a layer that completed
+    # before the disconnect has no live turn. A rendered layer must survive any
+    # WS reconnect without an explicit case-open.
     #
     # Resolve the session's active Case and seed THIS reconnect's emitter
     # from the Case's persisted loaded_layers BEFORE emitting (the same
@@ -3339,8 +3321,8 @@ async def _reject_auth_handshake(
 ) -> None:
     """Reject a connection at the handshake with a typed AUTH_FAILED close.
 
-    Remote-daemon access (2026-07): the shared-token gate's rejection path.
-    Emits the A.6 ``AUTH_FAILED`` error envelope, then closes the socket with
+    Remote-daemon access: the shared-token gate's rejection path.
+    Emits the ``AUTH_FAILED`` error envelope, then closes the socket with
     the WebSocket policy-violation code (1008) -- the SAME close the client's
     ``is_auth_failure`` classifier recognizes, so the client stops its
     reconnect ladder instead of hammering a token-gated daemon forever. Never
@@ -3487,7 +3469,7 @@ async def _persist_session_active_case(
     """Persist the session's active-Case pointer.
 
     Writes ``last_active_case_id`` onto the ``sessions`` document so the
-    active pointer survives an EC2 auto-stop/restart that wipes the
+    active pointer survives a process restart that wipes the
     in-memory ``_SESSION_ACTIVE_CASE`` dict. The client-stamped ``case_id``
     stays the REAL authority; this is only the cold-start cache. Fired
     whenever the server re-binds the pointer to the client's Case, so a
@@ -3513,7 +3495,7 @@ async def _persist_session_active_case(
 async def _reload_session_active_case(state: SessionState) -> None:
     """Reload the persisted active-Case pointer into the in-memory registry.
 
-    When a fresh SessionState is built after an EC2 restart (or a
+    When a fresh SessionState is built after a process restart (or a
     brand-new process), the session-scoped ``_SESSION_ACTIVE_CASE`` dict is
     empty. This reloads the persisted ``last_active_case_id`` so the
     server's pointer is warm again BEFORE the first replay/turn. The
@@ -3567,7 +3549,7 @@ async def _ensure_auth_handshake(
     """
     if state.auth_handshake_complete:
         return True
-    # REMOTE-DAEMON ACCESS (2026-07): a token-gated daemon must not accept a
+    # REMOTE-DAEMON ACCESS: a token-gated daemon must not accept a
     # connection that skipped the auth-token envelope entirely -- that would be
     # a trivial bypass of the token. This implicit path presents NO token, so
     # reject it with the same typed AUTH_FAILED close when a token is required.
@@ -3863,17 +3845,17 @@ async def _emit_case_open(
     state.case_context_synced_to = case_id
     # A Case switch must reset the per-connection LLM conversation, not just
     # the case state -- otherwise build_contents_from_history keeps feeding
-    # old turns to Gemini and prompts misroute to the previous Case's
+    # old turns to the model and prompts misroute to the previous Case's
     # composer. Clean slate per Case (the replace-not-reconcile rule,
     # applied server-side); the visible chat replay comes from the
     # persisted Case history, not this list. REBIND, never clear() -- see
     # _sync_case_context.
     state.chat_history = []
     state.turn_count = 0
-    await _touch_session_record(state, case_id=case_id)  # D.6 heartbeat (M4)
-    # job-CASE-AUTHORITY: persist the active-Case pointer on explicit
+    await _touch_session_record(state, case_id=case_id)  # session heartbeat
+    # Persist the active-Case pointer on explicit
     # case-open/select so the cold-start cache (``last_active_case_id``) is warm
-    # for a reconnect after an EC2 restart -- even for an older client that
+    # for a reconnect after a process restart -- even for an older client that
     # later resumes with no ``case_id`` stamp.
     await _persist_session_active_case(state, case_id)
     p = get_persistence()
@@ -4009,7 +3991,7 @@ async def _handle_case_command(
             state.session_id,
             "INTERNAL_ERROR",
             "case-command requires Persistence; the agent service was started "
-            "without TRID3NT_MONGO_MCP_STDIO=1 and cannot satisfy Case persistence.",
+            "with TRID3NT_DEV_PERSISTENCE=0 and cannot satisfy Case persistence.",
         )
         return
 
@@ -4076,7 +4058,7 @@ async def _handle_case_command(
         # REBIND, never clear() -- see _sync_case_context.
         state.chat_history = []
         state.turn_count = 0
-        await _touch_session_record(state, case_id=new_case_id)  # D.6 (M4)
+        await _touch_session_record(state, case_id=new_case_id)  # session heartbeat
         # Emit case-open with the empty session state for the fresh Case.
         payload = CaseOpenEnvelopePayload(
             session_state=await p.get_session_state(new_case_id)
@@ -4393,9 +4375,8 @@ async def _maybe_autoname_case(state: SessionState, prompt: str) -> bool:
     if p is None:
         # Persistence unbound is NOT a permanent state -- do NOT mark the case
         # "named" (a later turn, once bound, can still name it from its first
-        # prompt). A3 (2026-07-20): the guard used to be set unconditionally up
-        # front, so ANY early miss (transient error / fresh-case read race)
-        # burned the one-and-only naming attempt for that case forever.
+        # prompt). Marking it here would burn the one-and-only naming attempt on
+        # any early miss (transient error / fresh-case read race).
         return False
     try:
         case = await p.get_case(case_id)
@@ -4441,7 +4422,7 @@ async def _auto_create_case_from_root(
     (``chat_history``) and the ``turn_count`` are left untouched.
 
     Returns the new ``case_id``, or ``None`` when Persistence is unbound or
-    the upsert fails -- the M1 stateless path keeps working either way.
+    the upsert fails -- the stateless path keeps working either way.
     """
     p = get_persistence()
     if p is None:
@@ -4475,7 +4456,7 @@ async def _auto_create_case_from_root(
     # The creating prompt already named the Case -- skip the
     # first-turn rename probe (it would be a wasted get_case round-trip).
     _AUTONAMED_CASES.add(case.case_id)
-    await _touch_session_record(state, case_id=case.case_id)  # D.6 heartbeat
+    await _touch_session_record(state, case_id=case.case_id)  # session heartbeat
     # Fresh Case starts with zero layers -- flush the per-connection
     # accumulator (replace-not-reconcile server-side; mirrors
     # ``case-command(create)``).
@@ -4538,7 +4519,7 @@ async def _emit_auto_case_open(
                 state.session_id,
                 case_id,
             )
-            # NATE 2026-06-26: fall back to a minimal non-null case-open so the
+            # Fall back to a minimal non-null case-open so the
             # client still leaves the Cases root (never a null session_state).
             try:
                 case = await p.get_case(case_id)
@@ -4580,7 +4561,7 @@ async def _prepare_user_turn(
     """Pre-dispatch sequence for one ``user-message``.
 
     Runs, in order, BEFORE the turn task is created (so the dispatched turn --
-    Gemini stream or ``/invoke`` directive -- observes the final Case
+    model stream or ``/invoke`` directive -- observes the final Case
     context):
 
     0. Re-bind the server's active-Case pointer to the client's stamped
@@ -4602,7 +4583,7 @@ async def _prepare_user_turn(
        persist -- see ``_emit_auto_case_open``).
 
     Returns the parsed ``/invoke`` directive (``(tool_name, params)``) or
-    ``None`` for the Gemini path -- the caller branches on it.
+    ``None`` for the model path -- the caller branches on it.
     """
     # The client's stamped Case is the authority for this turn: re-bind the
     # session-scoped pointer to it before any sync/auto-create/pin reads
@@ -5019,8 +5000,7 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
         if not _bbox_overlaps(supplied, pin):
             return params
         # An explicit WIDEN (encloses the pin on all four edges) is REQUIRED
-        # expansion the user asked for -> honor it (NATE: "unless something
-        # requires it to expand").
+        # expansion the user asked for -> honor it.
         if bbox_encloses(supplied, pin, quant=_AOI_DEFAULT_EQ_TOL_DEG):
             return params
     # Bare follow-up OR a drifted / wider same-area box that pokes outside the
@@ -5144,7 +5124,7 @@ async def _persist_chat_turn(
     """Append one ``CaseChatMessage`` to Mongo for the active Case.
 
     Best-effort: a missing Persistence binding OR no active Case context
-    short-circuits (the M1 in-memory chat keeps working). A failed write
+    short-circuits (the in-memory chat keeps working). A failed write
     is logged but not raised -- chat persistence is a side-effect, not the
     happy path of message delivery.
 
@@ -5180,7 +5160,7 @@ async def _persist_chat_turn(
         case_id=target_case,
         role=role,  # type: ignore[arg-type]
         content=content,
-        # Thinking persistence (LANE CORE 2026-07-22): reasoning-channel text
+        # Thinking persistence: reasoning-channel text
         # for the same bubble; None on every non-agent row and on turns with
         # show_thinking off. Display replay ONLY -- never rehydrated into
         # LLM-bound contents (adapter.NEVER_REHYDRATE_FIELDS).
@@ -5210,7 +5190,7 @@ async def _persist_chat_turn(
             await p.upsert_chat_message(msg)
         else:
             await p.append_chat_message(msg)
-        # Per-turn D.6 heartbeat (M4): the chat turn is the
+        # Per-turn session heartbeat: the chat turn is the
         # activity signal that keeps the session record's TTL fresh and
         # the turn's Case registered in ``project_ids``.
         await _touch_session_record(state, case_id=target_case)
@@ -5669,7 +5649,7 @@ async def _gate_on_code_exec(
     - ``(True, params + {confirmed: True, code_exec_id})`` -- user approved
       (``decision="proceed"``). The tool body runs the sandbox.
     - ``(False, params)`` -- user chose ``cancel``. The caller raises
-      :class:`CodeExecConfirmationCancelledError` so Gemini sees a typed,
+      :class:`CodeExecConfirmationCancelledError` so the model sees a typed,
       non-retryable error and narrates the decline honestly.
 
     Raises :class:`CodeExecApprovalTimeoutError` when NO confirmation answers
@@ -5775,14 +5755,11 @@ async def _gate_on_code_exec(
     return True, approved
 
 
-# F6 (live-feedback 2026-07-08): user-decision gates must NOT expire in the
-# TRID3NT local build. The cloud read-decision TTLs (300s payload-warning /
-# code-exec / solver-confirm / credential / region-choice, 60-300s spatial
-# input) exist because a hung turn holds Bedrock-connection economics on the
-# always-on box; locally the user OWNS the machine and the LLM, so a gate card
-# should wait for them indefinitely. "Effectively unbounded" = 24h -- long
-# enough that no human session ever hits it, finite so an abandoned process
-# still unwinds its futures.
+# User-decision gates must NOT expire in the TRID3NT local build: the user
+# OWNS the machine and the LLM, so a gate card should wait for them
+# indefinitely. "Effectively unbounded" = 24h -- long enough that no human
+# session ever hits it, finite so an abandoned process still unwinds its
+# futures.
 _LOCAL_GATE_TIMEOUT_SECONDS: int = 24 * 3600
 
 
@@ -5873,12 +5850,12 @@ async def _gate_on_solver_confirm(
     # proceed/cancel).
     swmm_autoscale: Any = None
     swmm_dem_path: str | None = None
-    # NATE 2026-06-26: the fetch-resolution gate's suggestion (coarse_default_m /
+    # The fetch-resolution gate's suggestion (coarse_default_m /
     # finest_allowed_m / cap) so the decision tail can pin the suggested rung on
     # proceed and floor-clamp a finer narrow_scope rung. None for every non-fetch
     # gated tool (mirrors swmm_autoscale).
     fetch_suggestion: Any = None
-    # #154 cadence lever: the resolved flood animation interval (minutes) shown
+    # Cadence lever: the resolved flood animation interval (minutes) shown
     # on the card, pinned into the approved params on ``proceed`` so the run uses
     # EXACTLY what the user saw. None for the pluvial path (legacy hourly) and
     # for every non-flood gated tool.
@@ -5939,7 +5916,7 @@ async def _gate_on_solver_confirm(
                 swmm_dem_path,
             ) = await _build_swmm_granularity_envelope(params)
         elif tool_name in FETCH_CONFIRM_TOOLS:
-            # NATE 2026-06-26: fetch-resolution gate for the heavy raster fetchers
+            # Fetch-resolution gate for the heavy raster fetchers
             # (fetch_dem / fetch_topobathy). The card carries a GranularitySuggestion
             # (resolution_param="resolution_m") the user can override; the build is
             # PURE arithmetic (no DEM read) so nothing is offloaded. fetch_suggestion
@@ -6068,7 +6045,7 @@ async def _gate_on_solver_confirm(
         return False, params
 
     if decision_payload.decision == "narrow_scope":
-        # NATE 2026-06-26: fetch-resolution override. Honour the chosen
+        # Fetch-resolution override. Honour the chosen
         # resolution_m, floored UP to finest_allowed_m so a finer rung on a huge
         # AOI stays bounded (finer = smaller metres). No confirmed/enable_autoscale
         # injection (fetchers do not read them). Returned BEFORE the SWMM
@@ -6307,7 +6284,7 @@ async def _gate_on_solver_confirm(
             approved["_granularity_clamped"] = True
         return True, approved
 
-    # NATE 2026-06-26: fetch proceed -- pin the SUGGESTED resolution_m the card
+    # Fetch proceed -- pin the SUGGESTED resolution_m the card
     # showed so the fetch matches what the user approved. Do NOT inject confirmed
     # / enable_autoscale (fetchers do not read them). Returned BEFORE the solver
     # proceed pinning below so a fetch never sets confirmed.
@@ -6325,7 +6302,7 @@ async def _gate_on_solver_confirm(
     # fetch + same explicit h -> gmsh reproduces the mesh).
     if telemac_preview is not None:
         approved["mesh_resolution_m"] = float(telemac_preview["mesh_size_m"])
-        # 2026-07-18: on plain proceed the release coords (if any) are still
+        # On plain proceed the release coords (if any) are still
         # the call-provided originals - pin the same tri-state the preview
         # used so the solve re-seeds the reach exactly like the preview did.
         approved["_release_seeds_reach"] = bool(
@@ -6531,8 +6508,8 @@ async def _maybe_handle_credential_error(
        source of real URLs) and, on provided=True, re-resolve the credential
        (the plugin pushed the value into the session cache over ``secret-add``)
        so the retry reads the freshly-supplied key.
-    2. UNREGISTERED tool with a credential-SHAPED error (NATE principle 3,
-       2026-06-18): emit a NAME-ONLY generic card (credential name derived from
+    2. UNREGISTERED tool with a credential-SHAPED error: emit a NAME-ONLY
+       generic card (credential name derived from
        the tool, ``signup_url=None``, just the secret-entry form) so the user
        still gets a card and the agent NEVER narrates a fabricated URL. On
        provided=True we retry once with the original params (the tool reads its
@@ -6558,7 +6535,7 @@ async def _maybe_handle_credential_error(
         return None
 
     if is_generic_credential:
-        # NATE principle 3: NAME-ONLY card for a tool with no registered
+        # NAME-ONLY card for a tool with no registered
         # provider. ``generic_provider_for_tool`` derives a human credential
         # name and pins ``signup_url=None`` (NO fabricated URL). The emit is
         # best-effort: if the generic ``provider_id`` is not yet a valid wire
@@ -6761,7 +6738,7 @@ async def _maybe_handle_region_choice(
        the candidate set -- authoritative over a client-sent bbox; falls
        back to ``selected_bbox`` only when the id is unknown) and stamps
        narrowing provenance so downstream tools + the function_response
-       Gemini reads use the narrowed extent. On ``choice == "whole_state"``
+       the model reads use the narrowed extent. On ``choice == "whole_state"``
        leaves the state bbox unchanged.
 
     Best-effort: any failure leaves the whole-state bbox intact -- the
@@ -6811,7 +6788,7 @@ async def _maybe_handle_region_choice(
             geocode_result["region_choice"] = "whole_state"
             return
         # Mutate the geocode result IN PLACE so the immediate zoom-to AND the
-        # function_response Gemini reads (and any downstream bbox consumer) use
+        # function_response the model reads (and any downstream bbox consumer) use
         # the narrowed extent.
         geocode_result["bbox"] = list(new_bbox)
         # The result is no longer a whole-state snap -- drop the fallback source
@@ -7158,7 +7135,7 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_goes_animation",
         "fetch_goes_blend_animation",
         "fetch_viirs_day_fire",
-        # satellite-animation loop-block (LIVE 2026-06-25): both of these read the
+        # satellite-animation loop-block: both of these read the
         # RAW noaa-goesNN MCMIPC S3 archive and loop over UP TO 144 frames in ONE
         # sync call, each frame = a ~54 MB netCDF download + rasterio reproject +
         # COG write (logged as "fetch_goes_satellite: downloaded ~54MB" +
@@ -7213,7 +7190,7 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # (completion.json -> manifest_uri -> parse) -- sync network I/O. Emit-free
         # (returns the listing dict), so off-load it for the same reason.
         "list_run_frames",
-        # tools-work integration (2026-06-27): the new heavy raster/vector
+        # These heavy raster/vector
         # fetchers do multi-second sync work (STAC sign + windowed /vsicurl warp
         # read + COG/FlatGeobuf write), the SAME shape as compute_ndvi/fetch_naip
         # above. Their bodies are emit-free (the emit_tool_call wrapper emits), so
@@ -7233,7 +7210,7 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_soilgrids",
         "fetch_esri_landcover_10m",
         "fetch_noaa_sst",
-        # quick-win batch (2026-07-07): compute_change_detection reads TWO
+        # compute_change_detection reads TWO
         # Sentinel-2 scenes (SAS sign + windowed /vsicurl warp-read per band)
         # + vectorizes + writes an FGB in ONE sync call -- the same shape as
         # compute_ndvi/digitize_water_body above. Emit-free body (the
@@ -7421,9 +7398,9 @@ async def _invoke_tool_via_emitter(
     if tool_name not in TOOL_REGISTRY:
         # Raises ToolNotFoundError so the existing exception handler routes
         # through summarize_tool_result(error=...), which emits the full
-        # structured envelope (error_code + retryable + message) so Gemini
+        # structured envelope (error_code + retryable + message) so the model
         # can distinguish "tool ran and returned nothing" from "tool name was
-        # never registered". function_response IS the signal Gemini reads
+        # never registered". function_response IS the signal the model reads
         # between turns -- the _send_error side-channel is not needed here.
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
@@ -7518,7 +7495,7 @@ async def _invoke_tool_via_emitter(
         websocket, state, tool_name, params
     )
     if not should_dispatch:
-        # Raises PayloadWarningCancelledError so Gemini sees a structured
+        # Raises PayloadWarningCancelledError so the model sees a structured
         # envelope ({status: "error", error_code:
         # "PAYLOAD_WARNING_CANCELLED", retryable: False}) instead of
         # {"status": "no_result"}, which it cannot interpret. retryable=False
@@ -7534,7 +7511,7 @@ async def _invoke_tool_via_emitter(
     # programmatic call that already carries ``confirmed=True`` (a trusted
     # composer/test) is NOT re-gated, but an LLM-issued call never carries it,
     # so the gate is mandatory on the LLM path. Fail-closed: cancel/timeout
-    # raises a typed, non-retryable error so Gemini narrates the decline and
+    # raises a typed, non-retryable error so the model narrates the decline and
     # does not re-run the same snippet.
     #
     # Invariant 9: STRIP the model-supplied confirmed/code_exec_id BEFORE
@@ -7553,7 +7530,7 @@ async def _invoke_tool_via_emitter(
                 params.get("code_exec_id", "unknown")
             )
 
-    # Centralized kwarg sweep: Gemini routinely invents kwargs that don't
+    # Centralized kwarg sweep: the model routinely invents kwargs that don't
     # exist on our tools (``run_name``, ``scenario_id``,
     # ``return_period_years`` when the tool accepts ``return_period_yr``,
     # etc.). ``normalize_args`` inspects ``entry.fn``'s signature and rewrites
@@ -7727,7 +7704,7 @@ async def _invoke_tool_via_emitter(
                 )
                 entry = _ReuseEntry(entry.metadata, _reused_fetch_layer)
 
-    # job bbox-durability (live-reported, 2026-07): anchor the Case AOI from
+    # bbox-durability: anchor the Case AOI from
     # THIS bbox-carrying fetch's final (already reuse-guard-consulted /
     # AOI-defaulted) params. Runs AFTER both reuse guards above so it never
     # perturbs their read of the PRIOR pin; see _pin_case_aoi_from_tool_bbox
@@ -7767,13 +7744,13 @@ async def _invoke_tool_via_emitter(
     # resolves through the session-scoped registry: known handle -> registered
     # URI; exact known URI -> pass; close mangle -> substitute + WARNING;
     # unknown managed-bucket path -> typed retryable URI_HANDLE_UNRESOLVED
-    # listing the real handles so Gemini self-corrects without inventing. See
+    # listing the real handles so the model self-corrects without inventing. See
     # uri_registry.py.
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
 
-    # 2026-07-08 small-model resilience: local 8B models omit publish_layer's
-    # layer_id entirely (live TypeError). The tool itself now derives one, but
+    # Small-model resilience: local 8B models omit publish_layer's
+    # layer_id entirely. The tool itself now derives one, but
     # the wrap-site emission below keys off params["layer_id"], so inject the
     # SAME derived id here (post-URI-resolution, so a handle-resolved
     # layer_uri maps back to the producing tool's layer_id) - otherwise the
@@ -8014,7 +7991,7 @@ async def _invoke_tool_via_emitter(
         # raises (and never masks the original exception) -- persistence is
         # a side-effect, not the happy path.
         if turn_case_id and state.emitter is not None:
-            # DURABILITY (layer-publish-survives-disconnect, 2026-06-23): run the
+            # DURABILITY (layer-publish-survives-disconnect): run the
             # layer persist UNDER A SHIELD so a cancellation of the (possibly
             # detached) turn cannot interrupt the persistence write of a fully-
             # computed layer. A bare ``await`` here is cancel-fragile: a
@@ -8161,7 +8138,7 @@ async def _invoke_tool_via_emitter(
 
     # When this dispatch was a reuse short-circuit, the emitter has ALREADY
     # re-loaded the existing layer onto the map. What's left is to give
-    # Gemini an UNAMBIGUOUS function_response -- "this is the EXISTING
+    # the model an UNAMBIGUOUS function_response -- "this is the EXISTING
     # result, not re-run" -- so it narrates honestly and does not retry.
     # Returns a compact dict carrying the reuse flag/note + the reused
     # layer's identity, replacing the bare LayerURI return; the map update
@@ -8267,7 +8244,7 @@ async def _invoke_tool_via_emitter(
     # Mode 2 .gov/.edu classifier -- when web_fetch returns a dict
     # that looks like a structured-data candidate, emit a `mode2-candidate`
     # envelope and append an audit-log line. Deterministic side-effect; the
-    # web modal (Wave 2/3) renders the offer. See mode2_classifier.py.
+    # web modal renders the offer. See mode2_classifier.py.
     if tool_name == "web_fetch" and isinstance(result, dict):
         await _maybe_emit_mode2_candidate(websocket, state, result)
     return result
@@ -8283,9 +8260,9 @@ async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
     reaches the detached turn). A bare ``await persist(...)`` in a ``finally``
     is NOT safe under cancellation: the first real suspension point inside the
     persist re-raises the pending ``CancelledError``, so the persistence write is
-    SKIPPED and a fully-computed layer is lost (live 2026-06-23: SFINCS run
-    01KVSTC80F wrote 100+ COGs to S3 but the Case persisted 0 layers after a
-    transient WS drop during the ~9-min solve).
+    SKIPPED and a fully-computed layer is lost -- a transient WS drop mid-solve
+    would otherwise persist 0 layers despite a completed run that already wrote
+    its COGs.
 
     The fix wraps the persist in a real task + ``asyncio.shield`` so a cancel
     of the parent does NOT cancel the write; if a ``CancelledError`` does arrive
@@ -8764,7 +8741,7 @@ async def _maybe_emit_code_exec_result(
 
     - ``code-exec-result`` -> the FULL result payload (status + stdout/stderr
       tails + the structured result descriptor + truncated flag + duration)
-      for the client to render the result card. The function_response Gemini
+      for the client to render the result card. The function_response the model
       reads is the COMPACT summary (stripped by
       ``adapter.summarize_tool_result`` via the ``_code_exec_result`` key) so
       narration sources the structured ``result``, not the raw logs.
@@ -8823,7 +8800,7 @@ async def _maybe_emit_chart(
 
     - ``chart-emission`` -> the FULL Vega-Lite spec for the client to render
       via vega-embed (inline stacked preview + gallery). The function_response
-      Gemini reads is a COMPACT summary with the spec stripped
+      the model reads is a COMPACT summary with the spec stripped
       (``adapter.summarize_tool_result``) so narration sources the numbers,
       not the inline rows.
     - ``SessionChartRecord`` persisted to the ``sessions`` collection so the
@@ -8902,7 +8879,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
     """
     persistence = get_persistence()
     if persistence is None:
-        # M1 in-memory / CI-without-Atlas path: charts live only in-flight.
+        # In-memory / no-persistence path: charts live only in-flight.
         logger.debug(
             "chart persistence skipped (no Persistence bound) session=%s",
             state.session_id,
@@ -8999,10 +8976,10 @@ def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
     """If ``text`` is an ``/invoke <tool_name> <json-params>`` directive,
     return ``(tool_name, params)``; else return None.
 
-    Used by the M4 live-evidence harness to drive real tool invocations
-    end-to-end through the registry + emitter. NOT the LLM tool-call path --
-    that lands when Gemini-side function-calling is wired (M4 follow-up).
-    The directive shape is debug-only; intentionally not part of the wire protocol.
+    Drives real tool invocations end-to-end through the registry + emitter,
+    bypassing the LLM tool-call path (which handles model-issued function calls
+    on its own). The directive shape is debug-only; intentionally not part of
+    the wire protocol.
     """
     if not text.startswith("/invoke "):
         return None
@@ -9212,7 +9189,7 @@ async def _dispatch_tool_and_persist(
     unhandled-task "exception was never retrieved" warning, we catch it here
     and route it through ``_send_error`` so the operator's chat surface
     receives a structured ``error`` envelope (``TOOL_NOT_FOUND`` /
-    ``retryable=False``) -- the same shape Gemini's multi-turn loop produces
+    ``retryable=False``) -- the same shape the model's multi-turn loop produces
     via ``summarize_tool_result``. Other typed routing exceptions
     (``PayloadWarningCancelledError``) are also caught so the manual surface
     sees the cancellation reason explicitly instead of disappearing.
@@ -9719,7 +9696,7 @@ def _make_handler(settings: ModelSettings):
 
                 payload_dict = parsed.get("payload", {})
 
-                # WS-30s TELEMETRY (NATE): log EVERY inbound frame's type BEFORE
+                # Log EVERY inbound frame's type BEFORE
                 # routing so "did the user's prompt arrive?" is directly visible
                 # in the agent journal. The high-frequency keepalive (the client's
                 # ``session-resume`` ping ~every 25s) is logged at DEBUG so it does
@@ -9750,8 +9727,8 @@ def _make_handler(settings: ModelSettings):
                         continue
                     # Implicit anonymous fallback when any other envelope
                     # arrives before the handshake -- keeps the legacy
-                    # no-auth-token clients working. Remote-daemon access
-                    # (2026-07): when a token gate is set, the implicit path
+                    # no-auth-token clients working. Remote-daemon access:
+                    # when a token gate is set, the implicit path
                     # rejects + closes the socket (returns False) so we must
                     # NOT dispatch the pending envelope.
                     if not state.auth_handshake_complete:
@@ -9830,7 +9807,7 @@ def _make_handler(settings: ModelSettings):
                         # chat persist -- all BEFORE the turn task starts so
                         # chat + layer attribution land on the right (possibly
                         # brand-new) Case. Returns the parsed ``/invoke``
-                        # directive; None streams through Gemini.
+                        # directive; None streams through the model.
                         directive = await _prepare_user_turn(
                             websocket, state, um.text, client_case_id=um.case_id
                         )
@@ -9872,14 +9849,13 @@ def _make_handler(settings: ModelSettings):
                         # chosen" (or the env default if never set).
                         #
                         # VALIDATE before use: a stale client (or a removed /
-                        # access-disabled / non-tool-capable id like the old
-                        # malformed `us.anthropic.claude-haiku-4-5` or DeepSeek-R1)
-                        # must NEVER reach ConverseStream -- an invalid id throws a
-                        # raw ValidationException that surfaced to NATE as
-                        # "provided model identifier is invalid". resolve_selected_model
-                        # maps an unknown id to None (use the capable default) and
-                        # returns a notice we log; the turn then runs on the default
-                        # rather than crashing.
+                        # access-disabled / non-tool-capable id) must NEVER reach
+                        # ConverseStream -- an invalid id throws a raw
+                        # ValidationException ("provided model identifier is
+                        # invalid"). resolve_selected_model maps an unknown id to
+                        # None (use the capable default) and returns a notice we
+                        # log; the turn then runs on the default rather than
+                        # crashing.
                         if um.model_id is not None:
                             from ..agent.adapters.bedrock_adapter import (
                                 resolve_selected_model as _resolve_selected_model,
@@ -10250,7 +10226,7 @@ def _make_handler(settings: ModelSettings):
                         )
 
                     elif msg_type == "catalog-addition-response":
-                        # §F.1.2 Mode 2 offer-to-add: the user accepted /
+                        # Mode 2 offer-to-add: the user accepted /
                         # rejected a mode2-candidate. The plugin card echoes the
                         # candidate_id back as request_id. On accept the server
                         # drafts + probes + appends the entry to the user-overlay
@@ -10332,7 +10308,7 @@ def _make_handler(settings: ModelSettings):
                         "disambiguation-response",
                         "clarification-response",
                     ):
-                        # M1: scaffolding only -- no triggers yet. Log and
+                        # Scaffolding only -- no triggers yet. Log and
                         # acknowledge without acting.
                         logger.info("noop M1 message_type=%s", msg_type)
 
@@ -10357,7 +10333,7 @@ def _make_handler(settings: ModelSettings):
             # network blip, StrictMode socket churn) are not crashes - log a
             # quiet one-liner instead of a full traceback.
             #
-            # WS-30s TELEMETRY (NATE): log the close code + reason at INFO so the
+            # Log the close code + reason at INFO so the
             # "why did the socket die?" question is directly answerable from the
             # journal (e.g. a 1006/no-close-frame storm vs a clean 1000/1001 tab
             # close). This is one line per disconnect, not a per-frame flood.
@@ -10442,10 +10418,10 @@ def _make_handler(settings: ModelSettings):
 async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     """Serve forever. Override port via ``TRID3NT_AGENT_PORT``.
 
-    Best-effort inits the ``Persistence`` singleton; without a provisioned
-    MCP environment the agent starts anyway (the M1 in-memory chat/pipeline
-    path keeps working, and any caller requiring persistence raises a clear
-    error). Also mounts the read-only HTTP catalog endpoint at
+    Best-effort inits the ``Persistence`` singleton; if persistence is unbound
+    the agent starts anyway (the in-memory chat/pipeline path keeps working,
+    and any caller requiring persistence raises a clear error). Also mounts the
+    read-only HTTP catalog endpoint at
     ``TRID3NT_AGENT_HTTP_PORT`` (default 8766) as a sibling of the WS server
     (same loop, same process); a failure to start it logs but does not abort
     WS startup.
@@ -10457,10 +10433,10 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # TRID3NT_AGENT_HOST=0.0.0.0. The real public surface is a later increment.
     host = os.environ.get("TRID3NT_AGENT_HOST", host)
     settings = load_settings()
-    # Log the ACTUAL active provider + its real model -- never the dormant
-    # Vertex/Gemini settings defaults. Under MODEL_PROVIDER=openai this prints
-    # the OpenAI model; under bedrock the Bedrock model id; scripted/replay/fake
-    # or the retained-dormant vertex seam fall back to the settings model.
+    # Log the ACTUAL active provider + its real model, never the settings
+    # default. Under MODEL_PROVIDER=openai this prints the OpenAI model; under
+    # bedrock the Bedrock model id; scripted/replay/fake fall back to the
+    # settings model.
     from ..agent.adapters.bedrock_adapter import (
         model_provider as _active_model_provider,
         bedrock_model_id as _active_bedrock_model_id,
@@ -10481,14 +10457,14 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         _active_provider,
         _active_model,
     )
-    # #6 (loop-safety): armed-only emit-free safety gate for the staged
+    # Loop-safety: armed-only emit-free safety gate for the staged
     # sync-tool dispatch off-load. No-op (one log line) under the dark default;
     # raises and aborts startup if TRID3NT_SYNC_TOOL_OFFLOAD is armed for a tool
     # whose body would touch the loop-bound emitter from a worker thread.
     _assert_sync_offload_safe()
     try:
         await init_persistence_from_env()
-    except Exception as exc:  # noqa: BLE001 -- startup must not abort on MCP issues
+    except Exception as exc:  # noqa: BLE001 -- startup must not abort on persistence issues
         logger.warning("Persistence init failed (continuing without MCP): %s", exc)
 
     # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: when retrieval is enabled
@@ -10517,7 +10493,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
 
     handler = _make_handler(settings)
 
-    # Wave 4.10 C1: best-effort mount of the catalog HTTP listener.
+    # Best-effort mount of the catalog HTTP listener.
     http_server = None
     try:
         from ..tool_catalog_http import serve_catalog_http
@@ -10530,9 +10506,9 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         )
 
     try:
-        # A1 FIX 3 (EXPLICIT SERVE KEEPALIVE): the bare ``serve(handler, host,
-        # port)`` left websockets on its defaults, so the server emitted no
-        # protocol-level pings and gave a stalled send the default close grace.
+        # EXPLICIT SERVE KEEPALIVE: a bare ``serve(handler, host, port)`` leaves
+        # websockets on its defaults, so the server emits no protocol-level
+        # pings and gives a stalled send the default close grace.
         # Pin ping_interval/ping_timeout (~20s/20s) so the SERVER actively
         # probes liveness and reaps a truly-dead peer on its own clock (the
         # client's app-level session-resume keepalive is the belt; this is the
@@ -10600,7 +10576,7 @@ __all__ = [
     "_maybe_handle_credential_error",
     "_emit_credential_request_and_wait",
     "_resolve_pending_credential",
-    # job-B8+B9 (Wave 4.10 Stage 3): circuit breaker + loop_exhausted.
+    # circuit breaker + loop_exhausted.
     "_send_loop_exhausted",
     "CircuitBreakerError",
     "ToolCircuitBreaker",

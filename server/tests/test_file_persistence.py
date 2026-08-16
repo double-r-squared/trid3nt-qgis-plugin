@@ -1,10 +1,9 @@
-"""File-backed Persistence tests (job-0161, sprint-12-mega Wave 4.6).
+"""File-backed Persistence tests.
 
-The MongoDB Atlas MCP server is the production LLM-facing DB seam (FR-AS-4);
-for LOCAL DEV without Atlas/MCP, ``FileMCPClient`` satisfies the same
+``FileMCPClient`` is the persistence substrate: it satisfies
 ``MCPClientProtocol`` against per-collection JSON files. These tests exercise
-that substrate through the unmodified ``Persistence`` wrapper to prove the
-file-backed shim is interchangeable with the live MCP path.
+that substrate through the unmodified ``Persistence`` wrapper, proving the
+file-backed shim round-trips every typed contract the wrapper serializes.
 
 Coverage:
 - ``test_file_mcp_round_trip_case`` — Case upsert + get round-trips and
@@ -16,9 +15,8 @@ Coverage:
   rehydrates with ordered chat history.
 - ``test_file_mcp_atomic_writes`` — interrupted write (a synthetic crash
   between tmp-write and rename) does not corrupt the on-disk store.
-- ``test_is_dev_persistence_enabled_defaults`` — default-on semantics:
-  no env vars set + no MCP wired → enabled; ``TRID3NT_DEV_PERSISTENCE=0``
-  disables; ``TRID3NT_MONGO_MCP_STDIO=1`` defers to real MCP.
+- ``test_is_dev_persistence_enabled_*`` — default-on semantics:
+  ``TRID3NT_DEV_PERSISTENCE`` unset → enabled; ``=0`` disables; ``=1`` enables.
 - ``test_init_persistence_from_env_engages_file_fallback`` — server-side
   wiring: ``init_persistence_from_env`` with no MCP env vars + a tmpdir
   override engages FilePersistence and binds the singleton.
@@ -242,45 +240,27 @@ def test_file_mcp_atomic_writes_survive_partial_tmp(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_is_dev_persistence_enabled_default_on_when_mcp_unset(
+def test_is_dev_persistence_enabled_default_on_when_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No env vars + no MCP wired → enabled by default."""
+    """No ``TRID3NT_DEV_PERSISTENCE`` env → enabled by default."""
     monkeypatch.delenv(DEV_PERSISTENCE_ENABLED_ENV, raising=False)
-    monkeypatch.delenv("TRID3NT_MONGO_MCP_STDIO", raising=False)
-    monkeypatch.delenv("TRID3NT_MONGO_MCP_URL", raising=False)
     assert is_dev_persistence_enabled() is True
 
 
 def test_is_dev_persistence_enabled_off_when_explicitly_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``TRID3NT_DEV_PERSISTENCE=0`` disables even without MCP wired."""
+    """``TRID3NT_DEV_PERSISTENCE=0`` disables."""
     monkeypatch.setenv(DEV_PERSISTENCE_ENABLED_ENV, "0")
-    monkeypatch.delenv("TRID3NT_MONGO_MCP_STDIO", raising=False)
     assert is_dev_persistence_enabled() is False
 
 
-def test_is_dev_persistence_enabled_defers_to_real_mcp(
+def test_is_dev_persistence_enabled_on_when_explicitly_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``TRID3NT_MONGO_MCP_STDIO=1`` → defer to real MCP (default off)."""
-    monkeypatch.delenv(DEV_PERSISTENCE_ENABLED_ENV, raising=False)
-    monkeypatch.setenv("TRID3NT_MONGO_MCP_STDIO", "1")
-    assert is_dev_persistence_enabled() is False
-
-
-def test_is_dev_persistence_enabled_explicit_wins_over_mcp(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Explicit ``TRID3NT_DEV_PERSISTENCE=1`` engages even if MCP is also set.
-
-    The server-side init_persistence_from_env still prefers real MCP when
-    TRID3NT_MONGO_MCP_STDIO=1 (because that branch returns first); this test
-    just locks the env-var precedence inside the helper itself.
-    """
+    """``TRID3NT_DEV_PERSISTENCE=1`` engages."""
     monkeypatch.setenv(DEV_PERSISTENCE_ENABLED_ENV, "1")
-    monkeypatch.setenv("TRID3NT_MONGO_MCP_STDIO", "1")
     assert is_dev_persistence_enabled() is True
 
 

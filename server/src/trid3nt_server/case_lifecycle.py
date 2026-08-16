@@ -29,16 +29,7 @@ Lazy-init contract:
 
 2. Out-of-case publishes (no ``active_case_id``): this module is NOT called;
    ``publish_layer`` falls through to its existing single-tenant default.
-   This preserves the M1 demo path verbatim.
-
-History: an earlier revision minted a per-Case ``gs://<bucket>/<case_id>.qgs``
-target URI and copied the template to it via a pluggable ``set_gcs_copy(...)``
-DI seam. That seam was never bound in production (``main.py`` never called
-``set_gcs_copy``), so every lazy-init attempt already failed honestly at the
-"no copier bound" check — the DI plumbing and the gs:// URI minting were
-dead weight around a fail-fast that always fired. Removed outright rather
-than reshimmed: this module now fails fast directly, with no unreachable
-success path to maintain.
+   This preserves the single-tenant default publish path verbatim.
 
 Invariants:
 

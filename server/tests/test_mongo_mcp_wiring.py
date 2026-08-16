@@ -1,31 +1,21 @@
-"""Tests for MongoDB MCP server wiring — job-0200 Wave 4.11 M1.
+"""Tests for the Persistence-singleton startup wiring.
 
 Coverage:
-    1. ``test_no_mcp_falls_back_to_dev_persistence`` — when
-       ``TRID3NT_MONGO_MCP_STDIO`` is unset (the default local-dev case),
-       ``init_persistence_from_env`` does NOT raise and the server starts
-       with file-backed dev Persistence (or None if dev persistence is also
-       disabled).  The agent must never crash on a fresh clone.
+    1. ``test_no_mcp_falls_back_to_dev_persistence`` — ``init_persistence_from_env``
+       preserves a file-backed ``Persistence`` pre-bound by the startup path
+       (``main._maybe_bind_dev_persistence``) and returns it, not ``None``.
+       The agent must never crash on a fresh clone.
 
-    2. ``test_no_mcp_stdio_returns_prebound_or_none`` — with no MCP env vars
-       and ``TRID3NT_DEV_PERSISTENCE=0`` (CI escape hatch), the function
-       returns ``None`` gracefully.
+    2. ``test_no_mcp_stdio_returns_prebound_or_none`` — with
+       ``TRID3NT_DEV_PERSISTENCE=0`` (the no-persistence escape hatch) the
+       function returns ``None`` and the singleton stays unbound; callers
+       handle ``None`` gracefully.
 
-    3. ``test_mcp_stdio_1_attempts_connection`` — when ``TRID3NT_MONGO_MCP_STDIO=1``
-       is set, ``init_persistence_from_env`` calls ``MCPClient.start`` and
-       constructs a ``Persistence`` backed by the live client.  Uses a mocked
-       transport: no real Atlas connection is made.
+    3. ``test_mcp_client_protocol_compatibility`` — a minimal in-memory client
+       satisfies ``MCPClientProtocol`` structurally, confirming the protocol
+       definition is duck-typed correctly.
 
-    4. ``test_mcp_stdio_1_start_failure_does_not_crash_server`` — if
-       ``MCPClient.start`` raises (Node.js missing, Atlas unreachable),
-       ``run_server``'s ``try/except`` around the init call ensures the agent
-       service starts anyway and logs a warning.
-
-    5. ``test_mcp_client_protocol_compatibility`` — the ``MockMCPClient`` used
-       throughout the test suite satisfies ``MCPClientProtocol``, confirming
-       the protocol definition is duck-typed correctly.
-
-    6. ``test_set_get_persistence_singleton`` — ``set_persistence`` /
+    4. ``test_set_get_persistence_singleton`` — ``set_persistence`` /
        ``get_persistence`` round-trips the module-level singleton; ``None``
        clears it.
 """
@@ -77,12 +67,12 @@ def _clean_persistence_singleton():
 
 @pytest.mark.asyncio
 async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
-    """Without MCP env vars, init_persistence_from_env does not raise.
+    """init_persistence_from_env preserves the pre-bound file-backed singleton.
 
     When ``TRID3NT_DEV_PERSISTENCE=1`` (forced on) and
     ``TRID3NT_DEV_PERSISTENCE_DIR`` points at a temp dir, the function returns
-    a file-backed ``Persistence`` and binds the singleton.  The agent service
-    must survive a fresh clone with zero Atlas configuration.
+    the file-backed ``Persistence`` the startup path bound.  The agent service
+    must survive a fresh clone with zero configuration.
     """
     set_persistence(None)
     try:
@@ -95,10 +85,6 @@ async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
             env_overrides,
             clear=False,
         ):
-            # Remove MCP vars so the file-fallback branch is taken.
-            for key in ("TRID3NT_MONGO_MCP_STDIO", "TRID3NT_MONGO_MCP_URL"):
-                os.environ.pop(key, None)
-
             # Pre-bind dev persistence (mirrors what main._maybe_bind_dev_persistence does).
             p = make_file_persistence(tmp_path)
             set_persistence(p)
@@ -114,10 +100,11 @@ async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
 
 @pytest.mark.asyncio
 async def test_no_mcp_stdio_returns_prebound_or_none():
-    """With no MCP env vars and TRID3NT_DEV_PERSISTENCE=0, returns None.
+    """With TRID3NT_DEV_PERSISTENCE=0, returns None.
 
-    This is the CI escape hatch: the M1 in-memory path is preserved and the
-    agent service starts without any persistence.  Callers handle None gracefully.
+    This is the no-persistence escape hatch: the singleton stays unbound and
+    the agent service starts without any persistence.  Callers handle None
+    gracefully.
     """
     set_persistence(None)
     try:
@@ -126,9 +113,6 @@ async def test_no_mcp_stdio_returns_prebound_or_none():
             {"TRID3NT_DEV_PERSISTENCE": "0"},
             clear=False,
         ):
-            for key in ("TRID3NT_MONGO_MCP_STDIO", "TRID3NT_MONGO_MCP_URL"):
-                os.environ.pop(key, None)
-
             result = await init_persistence_from_env()
 
         assert result is None
@@ -137,13 +121,9 @@ async def test_no_mcp_stdio_returns_prebound_or_none():
         set_persistence(None)
 
 
-# GCP decommissioned: the live MongoDB-MCP (Atlas) stdio bootstrap was removed
-# from ``init_persistence_from_env`` along with ``trid3nt_server.mcp`` (it relied
-# on GCP Secret Manager for the SRV). The two tests that exercised the
-# ``TRID3NT_MONGO_MCP_STDIO=1`` -> ``MCPClient.start`` path are gone; prod
-# persistence on AWS is the file / DynamoDB backend bound at startup. The
-# ``MCPClientProtocol`` seam (below) stays as the abstract surface DynamoDB and
-# the file backend implement.
+# ``MCPClientProtocol`` is the abstract document-store surface: the file
+# backend implements it in production and an in-memory mock implements it in
+# tests. The compatibility test below pins that structural contract.
 
 
 def test_mcp_client_protocol_compatibility():

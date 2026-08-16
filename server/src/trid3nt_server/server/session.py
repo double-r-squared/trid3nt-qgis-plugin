@@ -147,15 +147,19 @@ def _apply_session_anon_hint(
 
 @dataclass
 class SessionState:
-    """Per-session in-memory state. M1 keeps everything in-process; Mongo-backed
-    session restore lands when the LLM-facing DB seam is wired.
+    """Per-session in-memory state, held in-process for the life of the session.
+
+    Durable restore is a separate path: ``Persistence.get_session_state``
+    rehydrates chat history, loaded layers, and charts on ``case-open`` /
+    ``case-select``. This dataclass is the live in-process mirror, not the
+    durable store.
 
     Owns the per-session ``PipelineEmitter``, which owns the current
     ``PipelineSnapshot`` + ``loaded_layers`` accumulator and broadcasts real
-    ``pipeline-state`` / ``session-state`` envelopes (replace-not-reconcile
-    replace-not-reconcile). ``current_pipeline_id`` / ``current_pipeline_steps``
-    stay as the M1 mirror for the LLM-streaming reply path (which doesn't go
-    through the emitter -- there are no tool calls there)."""
+    ``pipeline-state`` / ``session-state`` envelopes (replace-not-reconcile).
+    ``current_pipeline_id`` / ``current_pipeline_steps`` mirror the pipeline for
+    the LLM-streaming reply path (which doesn't go through the emitter -- there
+    are no tool calls there)."""
 
     session_id: str
     chat_history: list[dict] = field(default_factory=list)

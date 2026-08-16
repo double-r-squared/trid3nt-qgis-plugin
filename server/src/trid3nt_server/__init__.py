@@ -1,15 +1,13 @@
-"""Agent service (Bedrock / OpenAI-OpenRouter on EC2).
+"""Agent service: the WebSocket LLM-workbench daemon.
 
-Live stack (post GCP->AWS migration; offline-pivot cleanup):
-- Appendix-A WebSocket core (session-resume, user-message, cancel, error).
+- WebSocket core (session-resume, user-message, cancel, error).
 - LLM round-trip via provider dispatch (bedrock_adapter default, openai_adapter
-  for OpenRouter, scripted_adapter for tests) with streamed agent-message-chunk
-  deltas.  The dormant raw google-genai/Vertex Gemini generate path and the ADK
-  seam are decommissioned; ``google.genai.types`` is retained ONLY as the shared
-  Content/Part containment layer the live Bedrock/OpenAI adapters reuse.
+  for OpenRouter and local models, scripted_adapter for tests) with streamed
+  agent-message-chunk deltas. ``google.genai.types`` is the shared Content/Part
+  containment layer the Bedrock/OpenAI adapters reuse.
 - File-backed persistence (``FileMCPClient`` behind the ``MCPClientProtocol``
-  seam; a cloud MCP client drops in unchanged); all wire serialization through
-  trid3nt_contracts.
+  seam; another document-store client drops in unchanged); all wire
+  serialization through trid3nt_contracts.
 """
 
 from __future__ import annotations
