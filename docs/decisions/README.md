@@ -39,3 +39,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0034 - engine-door template registration](0034-engine-door-template-registration.md)
 - [0035 - local solver execution I/O contract](0035-local-solver-io-contract.md)
 - [0051 - observability/retention batch: rotation, telemetry retention, error actionability, shape classifier](0051-observability-retention-batch.md)
+- [0271 - provider-neutral model-dispatch seam](0271-provider-neutral-seam.md)

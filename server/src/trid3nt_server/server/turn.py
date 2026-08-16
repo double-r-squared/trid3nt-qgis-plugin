@@ -392,7 +392,7 @@ async def _emit_cache_status(
             "total_tokens":  int,
             "prompt_tokens": int | null,
             "candidates_tokens": int | null,
-            "cache_name":    str | null   (the cached_content name in use this turn),
+            "model_cache_ref": str | null   (the provider-side cache handle in use this turn),
         }
 
     Intentionally raw-JSON (no contract model): observability surface, not
@@ -408,7 +408,7 @@ async def _emit_cache_status(
             "total_tokens": int(usage.total_token_count or 0),
             "prompt_tokens": usage.prompt_token_count,
             "candidates_tokens": usage.candidates_token_count,
-            "cache_name": state.gemini_cache_name,
+            "model_cache_ref": state.model_cache_ref,
         }
         await _session_safe_send(websocket, state.session_id,
             _json.dumps(

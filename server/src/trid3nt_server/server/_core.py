@@ -1205,7 +1205,7 @@ async def _stream_model_reply(
     state: SessionState,
     settings: ModelSettings,
     user_text: str,
-    bedrock_model: str | None = None,
+    model_id: str | None = None,
     show_thinking: bool = False,
 ) -> None:
     """Stream one user-message reply with multi-turn tool dispatch.
@@ -1306,7 +1306,7 @@ async def _stream_model_reply(
     thinking_step = PipelineStep(
         step_id=step_id,
         name="llm_generation",
-        tool_name="gemini_generate",
+        tool_name="model_generate",
         state="running",
     )
     state.current_pipeline_steps = [thinking_step]
@@ -1336,14 +1336,14 @@ async def _stream_model_reply(
     try:
         if _provider == "openai":
             from ..agent.adapters import openai_adapter as _oa  # noqa: WPS433
-            _effective_model = _oa.openai_model(bedrock_model)
+            _effective_model = _oa.openai_model(model_id)
         elif _provider == "bedrock":
             from ..agent.adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
-            _effective_model = bedrock_model or _bmid()
+            _effective_model = model_id or _bmid()
         else:
-            _effective_model = bedrock_model
+            _effective_model = model_id
     except Exception:  # noqa: BLE001 -- telemetry tag only, never fatal
-        _effective_model = bedrock_model
+        _effective_model = model_id
     # No model client is built here -- the provider adapters ignore ``client``.
     client = None
     first_token_logged = False
@@ -1549,11 +1549,11 @@ async def _stream_model_reply(
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # Prompt caching is Bedrock's own ``cachePoint`` mechanism
-    # (bedrock_adapter); there is no separate cached-content fast-path, so this
-    # is always ``None``. The field is retained for the ``cache-status`` envelope
-    # payload (``_emit_cache_status``) which reports cachePoint hit metrics.
-    state.gemini_cache_name = None
+    # Prompt caching is the adapter's own concern (Bedrock uses ``cachePoint``
+    # markers); there is no separate cached-content fast-path, so this is always
+    # ``None``. The field is retained for the ``cache-status`` envelope payload
+    # (``_emit_cache_status``) which reports cache-hit metrics.
+    state.model_cache_ref = None
 
     # Seed the multi-turn contents list with chat history + this user_text.
     # The entry-captured list -- a mid-stream case switch rebinds
@@ -1606,7 +1606,7 @@ async def _stream_model_reply(
     # ``_agent_abort`` is set to (reason_code, message) the moment a guard
     # fires; the loop breaks and the post-loop block surfaces the honest
     # typed envelope (honesty floor) like the loop_exhausted fail-stop.
-    _step_cap = min(MAX_TURN_ITERATIONS, step_cap_for_model(bedrock_model))
+    _step_cap = min(MAX_TURN_ITERATIONS, step_cap_for_model(model_id))
     _turn_deadline = started_at + max_turn_seconds()
     _watchdog = LoopWatchdog()
     _agent_abort: tuple[str, str] | None = None
@@ -1737,8 +1737,8 @@ async def _stream_model_reply(
                 contents,
                 tool_declarations=tool_decls,
                 system_prompt=SYSTEM_PROMPT,
-                cached_content_name=state.gemini_cache_name,
-                bedrock_model=bedrock_model,
+                model_cache_ref=state.model_cache_ref,
+                model_id=model_id,
                 show_thinking=show_thinking,
             ):
                 if not first_token_logged:
@@ -1806,7 +1806,7 @@ async def _stream_model_reply(
 
                 elif isinstance(event, FunctionCallEvent):
                     logger.info(
-                        "gemini function-call session=%s iter=%d tool=%s call_id=%s args=%r",
+                        "model function-call session=%s iter=%d tool=%s call_id=%s args=%r",
                         state.session_id,
                         iterations,
                         event.name,
@@ -1841,7 +1841,7 @@ async def _stream_model_reply(
                             + event.reasoning_token_count
                         )
                     logger.info(
-                        "gemini usage session=%s iter=%d cached=%s total=%s "
+                        "model usage session=%s iter=%d cached=%s total=%s "
                         "prompt=%s candidates=%s hit=%s",
                         state.session_id,
                         iterations,
@@ -2002,7 +2002,7 @@ async def _stream_model_reply(
                         iterations,
                     )
                 logger.info(
-                    "gemini loop terminal session=%s iter=%d text_chunks=%d",
+                    "model loop terminal session=%s iter=%d text_chunks=%d",
                     state.session_id,
                     iterations,
                     len(turn_text_parts),
@@ -2627,7 +2627,7 @@ async def _stream_model_reply(
                     ABORT_STEP_CAP, abort_message(ABORT_STEP_CAP)
                 )
             logger.warning(
-                "gemini loop hit step cap=%d (full=%d) session=%s — "
+                "model loop hit step cap=%d (full=%d) session=%s -- "
                 "emitting %s envelope",
                 _step_cap,
                 MAX_TURN_ITERATIONS,
@@ -2766,7 +2766,7 @@ async def _stream_model_reply(
         thinking_step = PipelineStep(
             step_id=step_id,
             name="llm_generation",
-            tool_name="gemini_generate",
+            tool_name="model_generate",
             state="complete",
         )
         state.current_pipeline_steps = [thinking_step]
@@ -2800,7 +2800,7 @@ async def _stream_model_reply(
         cancelled_step = PipelineStep(
             step_id=step_id,
             name="llm_generation",
-            tool_name="gemini_generate",
+            tool_name="model_generate",
             state="cancelled",
         )
         state.current_pipeline_steps = [cancelled_step]
@@ -5342,7 +5342,7 @@ async def _persist_terminal_failure_card(
         # card so the replayed failed card lands where the running one was.
         # When the failing operation IS the last live tool step, carry its
         # captured child substeps so the replayed failed card still nests
-        # its sub-step timeline; the synthetic ``gemini_generate`` branch (a
+        # its sub-step timeline; the synthetic ``model_generate`` branch (a
         # pure model-stream failure, no in-flight tool) has no children.
         _children: list | None = None
         if emitter_step is not None and emitter_step.tool_name:
@@ -5358,7 +5358,7 @@ async def _persist_terminal_failure_card(
             if emitter_children:
                 _children = list(emitter_children)
         else:
-            tool_name = "gemini_generate"
+            tool_name = "model_generate"
             label = "llm_generation"
             started_at = now_utc()
             duration_ms = 0
@@ -8915,7 +8915,7 @@ async def _dispatch_model_turn_and_persist(
     state: SessionState,
     settings: ModelSettings,
     user_text: str,
-    bedrock_model: str | None = None,
+    model_id: str | None = None,
     show_thinking: bool = False,
 ) -> None:
     """Stream the model reply, then persist the agent's reply to the active Case.
@@ -8952,7 +8952,7 @@ async def _dispatch_model_turn_and_persist(
     try:
         await _stream_model_reply(
             websocket, state, settings, user_text,
-            bedrock_model=bedrock_model,
+            model_id=model_id,
             show_thinking=show_thinking,
         )
     finally:
@@ -9774,7 +9774,7 @@ def _make_handler(settings: ModelSettings):
                                     state.session_id,
                                 )
                             state.selected_model = _effective_model
-                        _turn_bedrock_model = state.selected_model
+                        _turn_model_id = state.selected_model
                         if directive is not None:
                             tool_name, params = directive
                             task = asyncio.create_task(
@@ -9789,7 +9789,7 @@ def _make_handler(settings: ModelSettings):
                                     state,
                                     settings,
                                     um.text,
-                                    bedrock_model=_turn_bedrock_model,
+                                    model_id=_turn_model_id,
                                     show_thinking=bool(um.show_thinking),
                                 )
                             )
@@ -10308,7 +10308,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # settings model.
     from ..agent.adapters.bedrock_adapter import (
         model_provider as _active_model_provider,
-        bedrock_model_id as _active_bedrock_model_id,
+        bedrock_model_id as _active_default_model_id,
     )
 
     _active_provider = _active_model_provider()
@@ -10316,7 +10316,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         from ..agent.adapters import openai_adapter as _active_oa
         _active_model = _active_oa.openai_model(None)
     elif _active_provider == "bedrock":
-        _active_model = _active_bedrock_model_id()
+        _active_model = _active_default_model_id()
     else:
         _active_model = settings.model
     logger.info(

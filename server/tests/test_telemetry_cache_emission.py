@@ -35,7 +35,7 @@ from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 async def test_cache_status_envelope_shape() -> None:
     """The cache-status envelope carries the expected JSON keys + values."""
     state = SessionState(session_id="01AAAAAAAAAAAAAAAAAAAAAAAA")
-    state.gemini_cache_name = "projects/p/locations/us-central1/cachedContents/x"
+    state.model_cache_ref = "projects/p/locations/us-central1/cachedContents/x"
     usage = UsageMetadataEvent(
         cached_content_token_count=10_500,
         total_token_count=11_200,
@@ -61,7 +61,7 @@ async def test_cache_status_envelope_shape() -> None:
     assert p["total_tokens"] == 11_200
     assert p["prompt_tokens"] == 10_800
     assert p["candidates_tokens"] == 400
-    assert p["cache_name"] == state.gemini_cache_name
+    assert p["model_cache_ref"] == state.model_cache_ref
 
 
 @pytest.mark.asyncio

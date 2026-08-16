@@ -129,7 +129,7 @@ async def test_reselect_after_deselect_reopens_case(file_persistence) -> None:
 
 
 def _gated_stream(release: asyncio.Event, narration: str):
-    async def stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def stream(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
         st.current_turn_narration.append(narration)
         await release.wait()
@@ -229,7 +229,7 @@ async def test_concurrent_turns_keep_narration_isolated(
 
     release_a = asyncio.Event()
 
-    async def stream_a(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def stream_a(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
         narr = st.current_turn_narration
         task = asyncio.current_task()
@@ -250,7 +250,7 @@ async def test_concurrent_turns_keep_narration_isolated(
         ws, state, CaseCommandEnvelopePayload(command="deselect")
     )
 
-    async def stream_b(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def stream_b(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
         st.current_turn_narration.append("narration B")
 

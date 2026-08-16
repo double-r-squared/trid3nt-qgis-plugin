@@ -339,11 +339,11 @@ async def run_anchor(playwright, prompt_spec: dict) -> dict:
     watchdog_s = float(prompt_spec.get("watchdog_seconds", DEFAULT_WATCHDOG_S))
     shot_path = OUT_DIR / f"{prompt_id}.png"
 
-    # ``gemini_generate`` is the bookkeeping LLM-thinking step that always
-    # appears in the pipeline regardless of routing — exclude it when
+    # ``model_generate`` is the bookkeeping LLM-thinking step that always
+    # appears in the pipeline regardless of routing -- exclude it when
     # computing first_tool / full_chain so the routing-correctness measure
-    # reflects ACTUAL tool dispatches, not Gemini's thinking phase.
-    LLM_STEP_TOOL_NAMES = {"gemini_generate"}
+    # reflects ACTUAL tool dispatches, not the model's thinking phase.
+    LLM_STEP_TOOL_NAMES = {"model_generate"}
 
     started = time.monotonic()
     full_chain: list[str] = []

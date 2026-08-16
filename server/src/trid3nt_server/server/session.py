@@ -236,13 +236,12 @@ class SessionState:
     # it starts at the hot set and widens as the LLM opens categories
     # (``list_tools_in_category``) or successfully dispatches tools.
     allowed_tool_set: AllowedToolSet = field(default_factory=AllowedToolSet)
-    # Per-session prompt-cache reference (legacy field name retained for the
-    # ``cache-status`` envelope). GCP is decommissioned: the Vertex-only
-    # CachedContent fast-path (``gemini_cache.py``) is REMOVED, so this is always
-    # ``None``. Bedrock prompt caching is handled by ``bedrock_adapter`` via its
-    # own ``cachePoint`` markers and reported through ``UsageMetadataEvent`` --
-    # there is no per-session cache name to track here.
-    gemini_cache_name: str | None = None
+    # Per-session provider-side prompt-cache handle, reported through the
+    # ``cache-status`` envelope. Provider-neutral: the adapter owns whatever
+    # concrete cache mechanism its provider uses. The Bedrock path caches via
+    # its own ``cachePoint`` markers (reported through ``UsageMetadataEvent``),
+    # so no per-session handle is tracked there and this stays ``None``.
+    model_cache_ref: str | None = None
     # Per-session circuit breaker. Tracks consecutive failures per tool;
     # trips after TRID3NT_CIRCUIT_THRESHOLD (default 3) consecutive failures,
     # enforcing a TRID3NT_CIRCUIT_COOLDOWN_S (default 60s) cooldown.

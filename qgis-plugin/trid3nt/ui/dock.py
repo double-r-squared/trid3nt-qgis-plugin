@@ -134,10 +134,12 @@ from ..render.layers import (
 
 
 
-# LLM bookkeeping step names the web also hides from the tool timeline.
+# LLM bookkeeping step names the dock hides from the tool timeline. The server
+# emits the provider-neutral ``model_generate`` for the model-stream step; the
+# rest are neutral synonyms tolerated across step-naming variation.
 _LLM_STEP_NAMES = {
-    "llm_generation", "gemini_generate", "thinking", "llm",
-    "model_generate", "generate", "bedrock_generate", "ollama_generate",
+    "llm_generation", "thinking", "llm",
+    "model_generate", "generate",
 }
 
 # ADR 0018 picker fail-open (Stage 3, 2026-07-22): event kinds that mean the

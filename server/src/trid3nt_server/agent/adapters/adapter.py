@@ -2746,7 +2746,7 @@ async def stream_events(
     tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
     system_prompt: str | None = None,
     chat_history: list[dict] | None = None,
-    cached_content_name: str | None = None,
+    model_cache_ref: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Stream Gemini's reply as typed ``StreamEvent`` objects.
 
@@ -2782,7 +2782,7 @@ async def stream_events(
         contents,
         tool_declarations=tool_declarations,
         system_prompt=system_prompt,
-        cached_content_name=cached_content_name,
+        model_cache_ref=model_cache_ref,
     ):
         yield event
 
@@ -2798,8 +2798,8 @@ async def stream_events_with_contents(
     contents: list[genai_types.Content],
     tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
     system_prompt: str | None = None,
-    cached_content_name: str | None = None,
-    bedrock_model: str | None = None,
+    model_cache_ref: str | None = None,
+    model_id: str | None = None,
     show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one Gemini turn from a fully-built ``contents`` list.
@@ -2820,7 +2820,7 @@ async def stream_events_with_contents(
     other ``MODEL_PROVIDER`` (including the decommissioned vertex/gemini
     google-genai generate path) raises ``UnsupportedModelProviderError``.
 
-    CachedContent integration: when ``cached_content_name`` is provided, the
+    Provider-side prompt cache: when ``model_cache_ref`` is provided, the
     request is built WITHOUT ``tools[]`` and WITHOUT ``tool_config`` -- the
     cache carries the full catalog + system instruction, and sending either
     field alongside ``cached_content`` is a Vertex 400. ``system_prompt`` and
@@ -2837,7 +2837,7 @@ async def stream_events_with_contents(
     # delegate to the Bedrock Converse adapter -- it converts the genai contents +
     # tool declarations at the boundary and yields the SAME StreamEvent union, so
     # the server.py dispatch loop, validator, emitter, and UI are untouched.
-    # cached_content_name is a Gemini-only fast-path and does not apply here.
+    # model_cache_ref is a Gemini-only fast-path and does not apply here.
     from .bedrock_adapter import model_provider, stream_bedrock
     from .scripted_adapter import model_provider_is_scripted, stream_scripted
 
@@ -2851,7 +2851,7 @@ async def stream_events_with_contents(
             contents=contents,
             tool_declarations=tool_declarations,
             system_prompt=system_prompt,
-            model=bedrock_model,
+            model=model_id,
         ):
             yield _ev
         return
@@ -2861,7 +2861,7 @@ async def stream_events_with_contents(
             contents=contents,
             tool_declarations=tool_declarations,
             system_prompt=system_prompt,
-            model=bedrock_model,
+            model=model_id,
         ):
             yield _ev
         return
@@ -2876,7 +2876,7 @@ async def stream_events_with_contents(
             contents=contents,
             tool_declarations=tool_declarations,
             system_prompt=system_prompt,
-            model=bedrock_model,
+            model=model_id,
             show_thinking=show_thinking,
         ):
             yield _ev

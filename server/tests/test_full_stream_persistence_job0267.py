@@ -139,7 +139,7 @@ async def test_agent_narration_persists_and_replays(file_persistence) -> None:
     case_id = await _create_case(ws, state)
     await server._persist_chat_turn(state, role="user", content="hi agent")
 
-    async def fake_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def fake_stream(websocket, st, settings, user_text, model_id=None, **_kwargs):
         # Mirrors _stream_model_reply: reset, accumulate deltas across
         # iterations, terminal chat_history append on clean completion.
         st.current_turn_narration = []
@@ -172,7 +172,7 @@ async def test_agent_narration_persists_even_when_stream_dies(
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)
 
-    async def dying_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def dying_stream(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
         st.current_turn_narration.append("Partial narration before the crash")
         raise RuntimeError("LLM_UNAVAILABLE")
@@ -202,7 +202,7 @@ async def test_no_agent_row_when_stream_dies_with_nothing_said(
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)
 
-    async def instant_death(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def instant_death(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
         raise RuntimeError("died before the first token")
 
@@ -577,7 +577,7 @@ async def test_e2e_full_turn_replays_complete_stream(
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)
 
-    async def fake_stream(websocket, st, settings, user_text, bedrock_model=None, **_kwargs):
+    async def fake_stream(websocket, st, settings, user_text, model_id=None, **_kwargs):
         st.current_turn_narration = []
         st.current_turn_narration.append("I'm fetching the data now. ")
         await server._invoke_tool_via_emitter(websocket, st, FAKE_TOOL, {})
