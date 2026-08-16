@@ -21,7 +21,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
-for p in (REPO / "src", REPO / "contracts/src"):
+for p in (REPO / "src", REPO / "contracts"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 

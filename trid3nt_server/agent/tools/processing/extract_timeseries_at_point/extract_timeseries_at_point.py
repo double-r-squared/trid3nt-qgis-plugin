@@ -12,7 +12,7 @@ How frame sequences are represented
 Animation frames live in ``CaseSummary.loaded_layer_summaries`` as SIBLING
 raster layers whose NAMES differ only in a monotonic frame token -- the same
 grouping the QGIS plugin's Temporal Controller support detects
-(``qgis-plugin/trid3nt/render/temporal.py`` ``parse_frame_token`` /
+(``plugin/render/temporal.py`` ``parse_frame_token`` /
 ``group_frame_layers``). This module ports that detection: the token patterns
 (``F+03h``, ``hr 6``, ``step 4`` / ``frame 02`` / ``idx 3``, ``t+2``, ``#3``,
 ``day 1``) and the ISO-8601 valid-time label preference are the same, and

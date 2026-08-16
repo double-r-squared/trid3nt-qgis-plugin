@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Package the QGIS plugin into the daemon-served custom repository.
 #
-# Builds qgis-plugin/trid3nt into a versioned zip + regenerates plugins.xml +
+# Builds plugin into a versioned zip + regenerates plugins.xml +
 # manifest.json under the served directory (run/plugin-repo/ by default, or
 # $TRID3NT_PLUGIN_REPO_DIR). Wired into `make agent` so every deploy refreshes
 # the served artifact. The actual packaging logic lives in
@@ -31,7 +31,7 @@ print(
 if info["warned"]:
     print(
         "plugin-repo: WARNING tree changed but version was not bumped -- "
-        "bump version= in qgis-plugin/trid3nt/metadata.txt",
+        "bump version= in plugin/metadata.txt",
         file=sys.stderr,
     )
 PYEOF

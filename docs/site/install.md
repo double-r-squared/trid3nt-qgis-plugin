@@ -5,7 +5,7 @@ There are three install paths, depending on what this machine is for. Pick one:
 | Path | This machine is... | What you do | QGIS needed here? |
 |------|---------------------|--------------|--------------------|
 | [Client-only](#client-only-install) | a laptop that just wants the chat dock | copy one `.zip`, install from ZIP | Yes |
-| [Daemon-only](#daemon-only-install-from-scratch) | a PC / headless box running the server | full from-scratch setup below | No -- `qgis-plugin/` is never loaded |
+| [Daemon-only](#daemon-only-install-from-scratch) | a PC / headless box running the server | full from-scratch setup below | No -- `plugin/` is never loaded |
 | [Both](#both-one-dev-machine) | one dev machine doing everything | daemon-only steps + `make plugin` | Yes |
 
 Everything the daemon-only / both paths install lands inside the repo directory
@@ -23,7 +23,7 @@ and one file.
 
 | Requirement | Why |
 |-------------|-----|
-| QGIS 3.28 or later | plugin's `qgisMinimumVersion` (`qgis-plugin/trid3nt/metadata.txt`) |
+| QGIS 3.28 or later | plugin's `qgisMinimumVersion` (`plugin/metadata.txt`) |
 
 **Steps**
 
@@ -60,7 +60,7 @@ updates on startup" on. Plugin Manager then diffs the served version against
 what's installed and offers Upgrade like any other repository -- no zip, no
 `make plugin-zip`, on every client including a Mac over tailnet.
 
-Full plugin walkthrough (dev install, test suite): [qgis-plugin/README.md](../../qgis-plugin/README.md).
+Full plugin walkthrough (dev install, test suite): [plugin/README.md](../../plugin/README.md).
 
 ---
 
@@ -207,7 +207,7 @@ make plugin
 ```
 
 This runs `scripts/install_plugin.sh`, which `rsync -a --delete`s
-`qgis-plugin/trid3nt/` into `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/`
+`plugin/` into `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/`
 -- QGIS loads that installed profile COPY, never the repo checkout directly, so
 a plugin-side code change needs `make plugin` again to reach QGIS. After
 syncing, reload in QGIS: **Plugins > Plugin Reloader** (or restart QGIS), then

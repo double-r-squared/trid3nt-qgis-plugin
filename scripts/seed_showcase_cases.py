@@ -48,7 +48,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # Product parser lives in the plugin tree; reuse it for the offline round-trip.
-sys.path.insert(0, str(REPO_ROOT / "qgis-plugin"))
+sys.path.insert(0, str(REPO_ROOT))
 
 WS_URL = "ws://127.0.0.1:8765/ws"
 LOG_FILE = Path("/tmp/seed_showcase_cases.log")
@@ -939,7 +939,7 @@ async def run_all(only: str | None) -> list[Result]:
 # Offline dry-run: plan + product-parser round-trip
 # --------------------------------------------------------------------------- #
 def dry_run(only: str | None) -> int:
-    from trid3nt.net.run_invocation import parse_run_invocation
+    from plugin.net.run_invocation import parse_run_invocation
     entries = [s for s in SHOWCASE if (only is None or only in s.tool or only in s.title_suffix)]
     print(f"planned showcase Cases: {len(entries)}\n")
     failures = 0

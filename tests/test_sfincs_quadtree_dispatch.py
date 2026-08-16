@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-for p in (REPO, REPO / "contracts/src"):
+for p in (REPO, REPO / "contracts"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 

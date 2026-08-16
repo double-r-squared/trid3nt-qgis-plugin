@@ -10,7 +10,7 @@ renders. Exits non-zero if any solve failed or the sweep did not vary Hs.
 
 Run (from repo root, full MinIO env):
   set -a; source .env.local; set +a
-  sg docker -c 'PYTHONPATH=.:contracts/src venvs/agent/bin/python scripts/run_swan_sweep_smoke.py'
+  sg docker -c 'PYTHONPATH=.:contracts venvs/agent/bin/python scripts/run_swan_sweep_smoke.py'
 """
 
 from __future__ import annotations

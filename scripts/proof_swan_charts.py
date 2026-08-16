@@ -22,7 +22,7 @@ SWEEP_JSON = SCR + "sweep_final.json"   # friction sweep on the shallow shelf
 BATCH_JSON = SCR + "swan_sweep_smoke.json"  # snapshot batch (Huntington Beach)
 
 sys.path.insert(0, REPO)
-sys.path.insert(0, REPO + "/contracts/src")
+sys.path.insert(0, REPO + "/contracts")
 from trid3nt_server.agent.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import (  # noqa: E402
     build_sweep_chart_spec,
 )
@@ -33,7 +33,7 @@ from trid3nt_server.agent.workflows.swan.stationary_snapshot_batch.stationary_sn
 
 def load_charts():
     spec = importlib.util.spec_from_file_location(
-        "trid3nt_charts", REPO + "/qgis-plugin/trid3nt/ui/charts.py")
+        "trid3nt_charts", REPO + "/plugin/ui/charts.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     if mod.Figure is None:

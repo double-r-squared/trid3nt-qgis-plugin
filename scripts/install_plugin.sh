@@ -3,9 +3,14 @@
 #
 # Why this exists (live-feedback 2026-07-12): QGIS loads a COPY of the
 # plugin from the profile dir below, NOT the repo checkout -- a fix
-# committed under qgis-plugin/trid3nt/ that is never synced there silently
-# never reaches the user (this drift happened live: the profile carried a
-# stale dock.py). This script IS the plugin deploy step.
+# committed under plugin/ that is never synced there silently never reaches
+# the user (this drift happened live: the profile carried a stale dock.py).
+# This script IS the plugin deploy step.
+#
+# The package lives at repo-root plugin/ but installs under the name trid3nt/
+# (its QGIS-loaded name); the co-located tests/, docs/, Makefile, README, and
+# build output NEVER ship -- an explicit exclude list re-roots plugin/ -> the
+# profile's trid3nt/ carrying shipped code + LICENSE only.
 #
 # Usage:
 #   scripts/install_plugin.sh          sync source -> profile (rsync -a --delete)
@@ -17,8 +22,18 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$REPO_ROOT/qgis-plugin/trid3nt/"
+SRC="$REPO_ROOT/plugin/"
 DST="$HOME/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/"
+
+# Shipped surface only: re-root plugin/ -> trid3nt/, dropping the co-located
+# tests/, docs/, Makefile, README, and build output (LICENSE ships). Leading
+# '/' anchors each exclude to the transfer root (SRC).
+SHIP_EXCLUDES=(
+    --exclude '/tests' --exclude '/docs' --exclude '/Makefile'
+    --exclude '/README.md' --exclude '/dist'
+    --exclude '__pycache__' --exclude '*.pyc'
+    --exclude '.git*' --exclude '.pytest_cache'
+)
 
 if [[ ! -d "$SRC" ]]; then
     echo "source plugin dir not found: $SRC" >&2
@@ -36,12 +51,12 @@ fi
 
 if [[ "${1:-}" == "--check" ]]; then
     echo "diff-check (what a sync WOULD change; empty output = in sync):"
-    rsync -a --delete --dry-run --itemize-changes "$SRC" "$DST"
+    rsync -a --delete "${SHIP_EXCLUDES[@]}" --dry-run --itemize-changes "$SRC" "$DST"
     exit 0
 fi
 
 mkdir -p "$DST"
-rsync -a --delete "$SRC" "$DST"
+rsync -a --delete "${SHIP_EXCLUDES[@]}" "$SRC" "$DST"
 echo "synced: $SRC -> $DST"
 
 # Version stamp (install-script provenance): write the source commit this sync

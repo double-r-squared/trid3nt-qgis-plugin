@@ -12,7 +12,7 @@ sibling geoclaw_depth_peak.tif under the same run_id).
 
 Run (from repo root):
   set -a; source .env.local; set +a
-  PYTHONPATH=.:contracts/src venvs/agent/bin/python scripts/proof_geoclaw_particles.py
+  PYTHONPATH=.:contracts venvs/agent/bin/python scripts/proof_geoclaw_particles.py
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def render_map(run_id: str, fc: dict):
 
 def _load_charts():
     spec = importlib.util.spec_from_file_location(
-        "trid3nt_charts", REPO + "/qgis-plugin/trid3nt/ui/charts.py")
+        "trid3nt_charts", REPO + "/plugin/ui/charts.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     if getattr(mod, "Figure", None) is None:

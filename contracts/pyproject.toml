@@ -24,7 +24,8 @@ dev = [
 trid3nt-export-schemas = "trid3nt_contracts.export_schemas:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["trid3nt_contracts*"]
 
 [tool.setuptools.package-data]
 trid3nt_contracts = ["py.typed"]

@@ -25,7 +25,7 @@ setting up:
 
 | Path | Machine | Steps | Needs QGIS? | Needs git/venv/docker? |
 |------|---------|-------|-------------|-------------------------|
-| **Daemon-only** | PC / headless box that runs the server | `git clone` + `make setup && make up` | No -- `qgis-plugin/` is inert, nothing there is ever loaded | Yes |
+| **Daemon-only** | PC / headless box that runs the server | `git clone` + `make setup && make up` | No -- `plugin/` is inert, nothing there is ever loaded | Yes |
 | **Client-only** | laptop that just wants the QGIS dock | `make plugin-zip` on *any* checkout produces `dist/trid3nt-plugin-<version>.zip` -- copy that one file over, then QGIS: **Plugins > Install from ZIP**, then **Settings > Server URL** | Yes | No -- no clone, no venv, no server on this machine |
 | **Both** | one dev machine | `git clone` + `make setup && make up` + `make plugin` (syncs into your QGIS profile; reload in QGIS) | Yes | Yes |
 
@@ -57,7 +57,7 @@ make plugin-zip   # run on any checkout (repo clone not required on the client i
 
 Copy `dist/trid3nt-plugin-<version>.zip` to the client machine, then in QGIS:
 **Plugins > Manage and Install Plugins > Install from ZIP**. Only prerequisite:
-QGIS 3.28+. See [qgis-plugin/README.md](qgis-plugin/README.md) for the full
+QGIS 3.28+. See [plugin/README.md](plugin/README.md) for the full
 client walkthrough (Server URL / token settings, test suite).
 
 ### Remote daemon (tailnet)
@@ -100,8 +100,8 @@ The model can also be switched live from the plugin's Settings (no restart).
 ## Repo layout
 
 ```
-qgis-plugin/trid3nt/   the QGIS plugin (net/ ui/ render/ case/ + plugin.py)
-qgis-plugin/tests/     plugin test harnesses + headless E2E drivers
+plugin/                the QGIS plugin (net/ ui/ render/ case/ + plugin.py; installs as trid3nt/)
+plugin/tests/          plugin test harnesses + headless E2E drivers
 server/                the server (WS + tool dispatch + turn loop + persistence)
 contracts/             shared pydantic contracts (trid3nt-contracts package)
 workers/      engine workers (mf6, telemac, sfincs, ... docker or exec)

@@ -42,7 +42,7 @@ from trid3nt_server.agent.tools.fetchers.imagery._goes_archive_core import _grid
 
 def _load_group_frame_layers():
     spec = importlib.util.spec_from_file_location(
-        "_plugin_temporal_gfl_glm", "qgis-plugin/trid3nt/render/temporal.py"
+        "_plugin_temporal_gfl_glm", "plugin/render/temporal.py"
     )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod

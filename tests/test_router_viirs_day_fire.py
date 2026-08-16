@@ -38,7 +38,7 @@ _W = dict(start_utc="2026-05-15T20:47:00Z", end_utc="2026-05-19T22:01:00Z")
 
 def _load_group_frame_layers():
     spec = importlib.util.spec_from_file_location(
-        "_plugin_temporal_gfl_v", "qgis-plugin/trid3nt/render/temporal.py"
+        "_plugin_temporal_gfl_v", "plugin/render/temporal.py"
     )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod

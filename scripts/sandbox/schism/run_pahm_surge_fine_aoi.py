@@ -7,7 +7,7 @@ SchismElevationLayerURI-shaped result.
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  env $(grep -v '^#' .env.local | xargs) PYTHONPATH=.:contracts/src \
+  env $(grep -v '^#' .env.local | xargs) PYTHONPATH=.:contracts \
     venvs/agent/bin/python scripts/sandbox/schism/run_pahm_surge_fine_aoi.py
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("run_pahm_surge_fine_aoi")
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "qgis-plugin"))
+sys.path.insert(0, str(REPO / "plugin"))
 
 spec = importlib.util.spec_from_file_location("seed_showcase_cases", REPO / "scripts" / "seed_showcase_cases.py")
 seed_mod = importlib.util.module_from_spec(spec)

@@ -8,7 +8,7 @@ Ike 2008 published NHC best track (bal092008) over Galveston/Bolivar, Garratt dr
 Run (repo root, env loaded):
   set -a; source .env.local; set +a
   sg docker -c 'env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=.:contracts/src venvs/agent/bin/python \
+    PYTHONPATH=.:contracts venvs/agent/bin/python \
     scripts/run_geoclaw_surge_composer.py'
 """
 from __future__ import annotations

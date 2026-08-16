@@ -6,7 +6,7 @@ coarse under identical tidal+river forcing).
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  PYTHONPATH=.:contracts/src venvs/agent/bin/python scripts/smoke_schism_sed.py
+  PYTHONPATH=.:contracts venvs/agent/bin/python scripts/smoke_schism_sed.py
 """
 from __future__ import annotations
 

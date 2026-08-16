@@ -15,7 +15,7 @@ Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
   TMPDIR=scripts/sandbox/oceanmesh/_work \
-  PYTHONPATH=.:contracts/src:workers/schism:scripts/sandbox/oceanmesh \
+  PYTHONPATH=.:contracts:workers/schism:scripts/sandbox/oceanmesh \
     venvs/agent/bin/python scripts/sandbox/oceanmesh/build_watershed_mesh.py --case coweeta_river
 """
 

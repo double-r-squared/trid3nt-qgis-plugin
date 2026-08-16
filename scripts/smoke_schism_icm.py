@@ -7,7 +7,7 @@ a physically-sensible discriminating pair: nutrient LOAD vs NO-LOAD river input
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  PYTHONPATH=.:contracts/src venvs/agent/bin/python scripts/smoke_schism_icm.py
+  PYTHONPATH=.:contracts venvs/agent/bin/python scripts/smoke_schism_icm.py
 """
 from __future__ import annotations
 

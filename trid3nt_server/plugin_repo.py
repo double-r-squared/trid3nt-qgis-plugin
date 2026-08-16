@@ -11,7 +11,7 @@ TWO PHASES, one source of truth:
 
 - PACKAGE (deploy time, ``package_plugin_repo`` -- run by
   ``scripts/package_plugin.sh``, wired into ``make agent``). Builds the
-  versioned zip ``trid3nt-<version>.zip`` from ``qgis-plugin/trid3nt`` into the
+  versioned zip ``trid3nt-<version>.zip`` from ``plugin`` into the
   served directory, regenerates ``plugins.xml`` from ``metadata.txt``, and
   writes a ``manifest.json``. The served directory is ``run/plugin-repo/``
   (server-owned, gitignored like the rest of ``run/``; override via
@@ -27,7 +27,7 @@ TWO PHASES, one source of truth:
   ``tool_catalog_http._handle_http`` at the FIXED path
   :data:`FRESH_ZIP_URL_PATH`, ``/plugin-repo/trid3nt.zip``). This is the
   ``download_url`` every ``plugins.xml`` now advertises. It builds straight
-  from ``qgis-plugin/trid3nt/`` on the daemon's OWN checkout -- no prior
+  from ``plugin/`` on the daemon's OWN checkout -- no prior
   ``package_plugin_repo()`` deploy step required -- and mtime-caches the
   result (a cheap stat-only signature over the source tree; a real rebuild
   only happens when a file's size or mtime actually changed), so Install-
@@ -36,7 +36,7 @@ TWO PHASES, one source of truth:
   (``trid3nt/installed_version.txt``, git sha + branch) using the SAME
   two-line format ``scripts/install_plugin.sh`` writes into an rsync-
   installed profile -- today's PACKAGE zip excludes that file entirely (see
-  ``_ZIP_IGNORE``), so a zip install previously had NO provenance a human
+  ``_ZIP_IGNORE_PATTERNS``), so a zip install previously had NO provenance a human
   could eyeball; the fresh-build path fixes that too.
 
 HOST DERIVATION (the bug the stopgap static server had): a hardcoded IP in
@@ -64,7 +64,7 @@ download path does not go through the browser and is unaffected.
 
 VERSION (metadata.txt-driven, no auto-bump): ``<version>`` in ``plugins.xml``
 and the zip's ``metadata.txt`` are the SAME ``version=`` line straight from
-``qgis-plugin/trid3nt/metadata.txt`` -- that agreement is what Plugin Manager
+``plugin/metadata.txt`` -- that agreement is what Plugin Manager
 compares to decide "installed" vs "available". A landing that changes plugin
 code is expected to bump ``version=``; ``package_plugin_repo`` compares the
 packaged tree's content hash against the previous manifest and WARNS (never
@@ -120,12 +120,33 @@ HOST_SENTINEL = "__TRID3NT_DAEMON_HOST__"
 #: module's existing per-branch literal-path convention.
 FRESH_ZIP_URL_PATH = "/plugin-repo/trid3nt.zip"
 
-#: Files/dirs never carried into the zip (caches, hidden files, and the
+#: Basename patterns never carried into the zip (caches, hidden files, and the
 #: dev-loop marker ``install_plugin.sh`` drops into an installed profile).
-_ZIP_IGNORE = shutil.ignore_patterns(
-    "__pycache__", "*.pyc", ".*", "installed_version.txt"
-)
+_ZIP_IGNORE_PATTERNS = ("__pycache__", "*.pyc", ".*", "installed_version.txt")
 _TREE_HASH_EXCLUDE_NAMES = {"installed_version.txt"}
+
+#: Repo-checkout siblings that live beside the plugin package at ``plugin/`` but
+#: must never ship: the plugin's own test suite + build Makefile + docs + any
+#: build output, and the license text (re-added INSIDE the zip separately).
+#: Matched at the plugin-source ROOT only.
+_NON_SHIPPING_TOPLEVEL = frozenset(
+    {"tests", "Makefile", "README.md", "LICENSE", "docs", "dist"}
+)
+
+
+def _staging_ignore(plugin_src: Path):
+    """``copytree`` ignore for :func:`_build_zip`: the base cache/hidden/marker
+    patterns at every level, plus the non-shipping siblings at the source root."""
+    plugin_src = plugin_src.resolve()
+    base = shutil.ignore_patterns(*_ZIP_IGNORE_PATTERNS)
+
+    def _ignore(directory, names):
+        ignored = set(base(directory, names))
+        if Path(directory).resolve() == plugin_src:
+            ignored |= {n for n in names if n in _NON_SHIPPING_TOPLEVEL}
+        return ignored
+
+    return _ignore
 
 
 class PluginRepoBuildError(Exception):
@@ -141,7 +162,7 @@ class PluginRepoBuildError(Exception):
 
 def _repo_root() -> Path:
     """The daemon's OWN checkout root (the directory containing
-    ``qgis-plugin/``). Default: derived from this file's location
+    ``plugin/``). Default: derived from this file's location
     (``trid3nt_server/plugin_repo.py`` -> two parents up).
     Override via ``TRID3NT_REPO_ROOT`` (tests; also covers an installed-package
     layout where the source-tree-relative walk would be wrong).
@@ -153,7 +174,7 @@ def _repo_root() -> Path:
 
 
 def _plugin_src_dir(repo_root: Path) -> Path:
-    return repo_root / "qgis-plugin" / PLUGIN_NAME
+    return repo_root / "plugin"
 
 
 def _served_dir(served_dir: Path | str | None = None) -> Path:
@@ -217,6 +238,8 @@ def _iter_packaged_files(plugin_src: Path):
         if not item.is_file():
             continue
         parts = item.relative_to(plugin_src).parts
+        if parts and parts[0] in _NON_SHIPPING_TOPLEVEL:
+            continue
         if any(p == "__pycache__" or p.startswith(".") for p in parts):
             continue
         if item.suffix == ".pyc" or item.name in _TREE_HASH_EXCLUDE_NAMES:
@@ -260,7 +283,7 @@ def _source_signature(plugin_src: Path) -> tuple[tuple[str, int, int], ...]:
 # ---------------------------------------------------------------------------
 
 
-def _build_zip(repo_root: Path, plugin_src: Path, dest_zip: Path) -> None:
+def _build_zip(plugin_src: Path, dest_zip: Path) -> None:
     if not plugin_src.is_dir():
         raise PluginRepoBuildError(f"plugin source tree not found: {plugin_src}")
 
@@ -269,8 +292,8 @@ def _build_zip(repo_root: Path, plugin_src: Path, dest_zip: Path) -> None:
         shutil.rmtree(staging_root)
     staging_plugin = staging_root / PLUGIN_NAME
     try:
-        shutil.copytree(plugin_src, staging_plugin, ignore=_ZIP_IGNORE)
-        license_src = repo_root / "qgis-plugin" / "LICENSE"
+        shutil.copytree(plugin_src, staging_plugin, ignore=_staging_ignore(plugin_src))
+        license_src = plugin_src / "LICENSE"
         if license_src.is_file():
             shutil.copy2(license_src, staging_plugin / "LICENSE")
 
@@ -298,7 +321,7 @@ def _build_zip_bytes(repo_root: Path, plugin_src: Path) -> bytes:
         for item in _iter_packaged_files(plugin_src):
             arcname = f"{PLUGIN_NAME}/{item.relative_to(plugin_src).as_posix()}"
             zf.write(item, arcname)
-        license_src = repo_root / "qgis-plugin" / "LICENSE"
+        license_src = plugin_src / "LICENSE"
         if license_src.is_file():
             zf.write(license_src, f"{PLUGIN_NAME}/LICENSE")
         sha, branch = _git_provenance(repo_root)
@@ -316,7 +339,7 @@ _fresh_zip_lock = threading.Lock()
 
 def build_fresh_zip(repo_root: Path | None = None) -> tuple[bytes, str, str]:
     """SYNC -- build (or reuse a cached) plugin zip straight from the source
-    tree ``qgis-plugin/trid3nt/``. See the module docstring's FRESH ZIP
+    tree ``plugin/``. See the module docstring's FRESH ZIP
     section. No prior ``package_plugin_repo()`` call is required; every call
     re-stats the source tree (cheap -- ``_source_signature`` never reads file
     bytes) and only re-zips when a file's size or mtime actually changed, so
@@ -492,7 +515,7 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
         logger.warning(
             "plugin-repo: packaged tree changed but version=%s was NOT bumped "
             "-- QGIS Plugin Manager will not offer the update. Bump version= in "
-            "qgis-plugin/trid3nt/metadata.txt.",
+            "plugin/metadata.txt.",
             version,
         )
 
@@ -500,7 +523,7 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
     for stale in dest.glob(f"{PLUGIN_NAME}-*.zip"):
         if stale.name != zip_filename:
             stale.unlink()
-    _build_zip(repo_root, plugin_src, dest / zip_filename)
+    _build_zip(plugin_src, dest / zip_filename)
 
     # download_url points at the FIXED fresh-build endpoint (not this
     # versioned zip_filename -- that artifact is still written to `dest` as a

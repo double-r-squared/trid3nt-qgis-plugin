@@ -7,7 +7,7 @@ wait_for_completion -> read rasters -> postprocess -> publish_layer (COG).
 
 Usage (from the repo root):
   set -a; source .env.local; set +a
-  PYTHONPATH=.:contracts/src:. \
+  PYTHONPATH=.:contracts:. \
     venvs/agent/bin/python scripts/run_elmfire_direct.py <template>
 
   <template> in {ltw, wind, moisture} (default: ltw).

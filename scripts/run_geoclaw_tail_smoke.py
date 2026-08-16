@@ -15,7 +15,7 @@ Cheap: coarse grid, short window.
 Run (from repo root):
   set -a; source .env.local; set +a
   export TMPDIR=/home/nate/.cache/geoclaw_smoke_tmp && mkdir -p "$TMPDIR"
-  PYTHONPATH=.:contracts/src \
+  PYTHONPATH=.:contracts \
     venvs/agent/bin/python scripts/run_geoclaw_tail_smoke.py
 """
 

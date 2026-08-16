@@ -5,7 +5,7 @@ far-side burned area off the ToA grid, and renders the honest pair over ESRI ima
 
 Usage (from the repo root):
   set -a; source .env.local; set +a
-  PYTHONPATH=.:contracts/src:. venvs/agent/bin/python scripts/proof_elmfire_river_barrier.py
+  PYTHONPATH=.:contracts:. venvs/agent/bin/python scripts/proof_elmfire_river_barrier.py
 
 Emits to docs/proof/templates/:
   elmfire_spot_fire_barrier_crossing_river_context.png   (river + ignition on the real land)

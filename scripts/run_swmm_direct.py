@@ -10,7 +10,7 @@ Bypasses the LLM/agent chat layer -- calls the deterministic urban-flood workflo
 Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=.:contracts/src:. \
+    PYTHONPATH=.:contracts:. \
     venvs/agent/bin/python scripts/run_swmm_direct.py
 """
 

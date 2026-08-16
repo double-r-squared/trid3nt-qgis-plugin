@@ -5,7 +5,7 @@ Progress tracking toward web-orphan removal + modular architecture (NATE
 below. LOC = python lines incl. comments/blank (consistent measure - trend
 matters, not the absolute).
 
-    for d in server/src/trid3nt_server server/tests contracts/src \
+    for d in server/src/trid3nt_server server/tests contracts \
       contracts/tests services/workers qgis-plugin/trid3nt scripts; do \
       find $d -name "*.py" -not -path "*__pycache__*" | xargs wc -l \
       | tail -1; done

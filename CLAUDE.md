@@ -18,7 +18,7 @@ product of a deliberate refactor - inherit them; do not improvise.
   rebuilt (absolute -f/context paths, provenance-check, smoke through
   the image).
 - `contracts/` - typed wire + registry contracts.
-- `qgis-plugin/` - the QGIS dock plugin (installs as `trid3nt`).
+- `plugin/` - the QGIS dock plugin (installs as `trid3nt`).
 - `tests/` - the offline suite. `scripts/` - drivers, smokes, image
   builds. `docs/` - decisions (ADRs), design (feature guides),
   validation (the board), proof/templates (NEVER delete anything there).

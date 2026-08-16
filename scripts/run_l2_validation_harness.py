@@ -38,7 +38,7 @@ and safe to clean up later.
 Run (smoke):
   cd /home/nate/Documents/trid3nt-local
   sg docker -c 'env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=.:contracts/src \
+    PYTHONPATH=.:contracts \
     venvs/agent/bin/python scripts/run_l2_validation_harness.py'
 
 Run (live -- NATE only, never scripted here):

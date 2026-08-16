@@ -145,7 +145,7 @@ the primary (the honesty floor).
 
 Declare one `AtomicToolMetadata` at module load (it validates at construction, so
 a misconfiguration fails fast at IMPORT time). Every field, from
-`contracts/src/trid3nt_contracts/tool_registry.py`:
+`contracts/trid3nt_contracts/tool_registry.py`:
 
 | Field | Required? | Meaning |
 | --- | --- | --- |

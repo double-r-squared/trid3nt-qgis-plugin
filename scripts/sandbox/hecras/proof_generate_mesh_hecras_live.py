@@ -26,7 +26,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "scripts"))
-sys.path.insert(0, str(REPO / "qgis-plugin"))
+sys.path.insert(0, str(REPO / "plugin"))
 
 import websockets  # noqa: E402
 

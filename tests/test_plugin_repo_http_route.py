@@ -55,17 +55,20 @@ tracker=https://example.invalid/issues
 
 
 def _make_fake_repo(tmp_path: Path) -> Path:
-    """Build ``<tmp_path>/repo`` with a minimal ``qgis-plugin/trid3nt`` tree
-    (metadata.txt, __init__.py, a nested module, a __pycache__ dir, a hidden
-    file, and an installed_version.txt marker to prove exclusion) plus a
-    top-level LICENSE. No git needed -- the version is metadata-driven now.
+    """Build ``<tmp_path>/repo`` with a minimal flat ``plugin/`` tree: the
+    shipped package (metadata.txt, __init__.py, a nested module, LICENSE) at
+    the plugin ROOT, plus exclusion bait -- a __pycache__ dir, a .pyc, a
+    dotfile, the installed_version.txt marker, AND the co-located non-shipping
+    siblings ``tests/`` + ``Makefile`` that live beside the package in the real
+    checkout. No git needed -- the version is metadata-driven now.
     """
     repo_root = tmp_path / "repo"
-    plugin_dir = repo_root / "qgis-plugin" / "trid3nt"
+    plugin_dir = repo_root / "plugin"
     plugin_dir.mkdir(parents=True)
     (plugin_dir / "metadata.txt").write_text(_METADATA_TXT, encoding="utf-8")
     (plugin_dir / "__init__.py").write_text("# init\n", encoding="utf-8")
     (plugin_dir / "plugin.py").write_text("# plugin code\n", encoding="utf-8")
+    (plugin_dir / "LICENSE").write_text("MIT-ish fixture\n", encoding="utf-8")
     sub = plugin_dir / "net"
     sub.mkdir()
     (sub / "__init__.py").write_text("", encoding="utf-8")
@@ -75,10 +78,11 @@ def _make_fake_repo(tmp_path: Path) -> Path:
     (pycache / "plugin.cpython-312.pyc").write_bytes(b"\x00\x01")
     (plugin_dir / ".hidden").write_text("should be excluded\n", encoding="utf-8")
     (plugin_dir / "installed_version.txt").write_text("dev\n", encoding="utf-8")
-
-    (repo_root / "qgis-plugin" / "LICENSE").write_text(
-        "MIT-ish fixture\n", encoding="utf-8"
-    )
+    # Non-shipping siblings living beside the package at plugin/ root.
+    (plugin_dir / "Makefile").write_text("zip:\n\techo no\n", encoding="utf-8")
+    tests_dir = plugin_dir / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_bait.py").write_text("# never ships\n", encoding="utf-8")
     return repo_root
 
 
@@ -117,6 +121,9 @@ def test_package_builds_versioned_zip_and_index(fake_repo, tmp_path):
         assert not any(n.endswith(".pyc") for n in names)
         assert not any(n.endswith("/.hidden") for n in names)
         assert not any(n.endswith("installed_version.txt") for n in names)
+        # Non-shipping siblings beside the package at plugin/ root never ship.
+        assert not any(n.startswith("trid3nt/tests/") for n in names)
+        assert "trid3nt/Makefile" not in names
         # The in-zip metadata.txt version matches plugins.xml (Plugin Manager
         # compares the two) and is NOT stamped/suffixed.
         meta_text = zf.read("trid3nt/metadata.txt").decode("utf-8")
@@ -141,7 +148,7 @@ def test_package_prunes_stale_version_zips(fake_repo):
 
 
 def test_package_does_not_touch_real_metadata(fake_repo):
-    real_metadata = fake_repo / "qgis-plugin" / "trid3nt" / "metadata.txt"
+    real_metadata = fake_repo / "plugin" / "metadata.txt"
     before = real_metadata.read_text(encoding="utf-8")
     plugin_repo.package_plugin_repo()
     assert real_metadata.read_text(encoding="utf-8") == before
@@ -163,7 +170,7 @@ def test_package_missing_source_tree_raises(tmp_path, monkeypatch):
 
 def test_drift_warns_when_tree_changes_but_version_does_not(fake_repo, caplog):
     plugin_repo.package_plugin_repo()  # first build, no previous manifest
-    plugin_file = fake_repo / "qgis-plugin" / "trid3nt" / "plugin.py"
+    plugin_file = fake_repo / "plugin" / "plugin.py"
     plugin_file.write_text("# changed body, same version\n", encoding="utf-8")
 
     with caplog.at_level(logging.WARNING, logger="trid3nt_server.plugin_repo"):
@@ -174,11 +181,11 @@ def test_drift_warns_when_tree_changes_but_version_does_not(fake_repo, caplog):
 
 def test_no_drift_warning_when_version_bumped(fake_repo, caplog):
     plugin_repo.package_plugin_repo()
-    meta = fake_repo / "qgis-plugin" / "trid3nt" / "metadata.txt"
+    meta = fake_repo / "plugin" / "metadata.txt"
     meta.write_text(
         _METADATA_TXT.replace("version=1.2.3", "version=1.2.4"), encoding="utf-8"
     )
-    (fake_repo / "qgis-plugin" / "trid3nt" / "plugin.py").write_text(
+    (fake_repo / "plugin" / "plugin.py").write_text(
         "# changed\n", encoding="utf-8"
     )
     with caplog.at_level(logging.WARNING, logger="trid3nt_server.plugin_repo"):
@@ -269,6 +276,8 @@ def test_build_fresh_zip_layout_and_version(fake_repo):
         assert not any("__pycache__" in n for n in names)
         assert not any(n.endswith(".pyc") for n in names)
         assert not any(n.endswith("/.hidden") for n in names)
+        assert not any(n.startswith("trid3nt/tests/") for n in names)
+        assert "trid3nt/Makefile" not in names
         meta_text = zf.read("trid3nt/metadata.txt").decode("utf-8")
         assert "version=1.2.3\n" in meta_text
         # Build-time provenance stamp -- present here even though the
@@ -294,7 +303,7 @@ def test_build_fresh_zip_reflects_source_edit_without_repackage(fake_repo):
         before_text = zf.read("trid3nt/plugin.py").decode("utf-8")
     assert before_text == "# plugin code\n"
 
-    plugin_file = fake_repo / "qgis-plugin" / "trid3nt" / "plugin.py"
+    plugin_file = fake_repo / "plugin" / "plugin.py"
     # Different LENGTH (not just content) so the cache-invalidation signature
     # changes on size alone -- independent of filesystem mtime resolution.
     plugin_file.write_text("# edited body -- longer than before\n", encoding="utf-8")

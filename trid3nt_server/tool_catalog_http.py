@@ -2415,7 +2415,7 @@ async def _handle_http(
         # THE zip Plugin Manager / Install-from-ZIP downloads -- every
         # plugins.xml download_url now points here. Fixed name (must match
         # plugin_repo.FRESH_ZIP_URL_PATH), built on demand straight from
-        # qgis-plugin/trid3nt/ and mtime-cached -- see plugin_repo.py's
+        # plugin/ and mtime-cached -- see plugin_repo.py's
         # module docstring (FRESH ZIP section). No deploy-time
         # package_plugin_repo() step required. ?v=<version> (already
         # stripped into proxy_qs above) is a pure cache-busting hint.

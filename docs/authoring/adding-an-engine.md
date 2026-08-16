@@ -29,7 +29,7 @@ An archetype reuses the engine's worker + run plumbing and adds a new deck
 branch + postprocess. The seam list, from the SFR/CSUB precedents:
 
 1. **Contract archetype literal** --
-   `contracts/src/trid3nt_contracts/modflow_contracts.py`: add the
+   `contracts/trid3nt_contracts/modflow_contracts.py`: add the
    literal to `MODFLOWRunArgs.archetype` (the `Literal[...] | None` selector),
    plus any per-archetype input fields and a headline `LayerURI` subclass with
    pinned metrics + sign conventions (e.g. `StreamReachLayerURI`,
@@ -88,7 +88,7 @@ Precedent: the sprint-17 engines wired in `tools/__init__.py` (`run_geoclaw_tool
 Each new engine adds, roughly in order:
 
 1. **Deck / result contract** in
-   `contracts/src/trid3nt_contracts/` (a `<engine>_contracts.py` with the
+   `contracts/trid3nt_contracts/` (a `<engine>_contracts.py` with the
    run args + the headline `LayerURI` subclass), mirroring
    `modflow_contracts.py`.
 

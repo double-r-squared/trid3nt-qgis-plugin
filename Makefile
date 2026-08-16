@@ -52,9 +52,11 @@ down: stop
 plugin-zip:
 	@rm -rf $(REPO_ROOT)/dist/pluginzip && mkdir -p $(REPO_ROOT)/dist/pluginzip
 	@rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude '.*' \
-	  $(REPO_ROOT)/qgis-plugin/trid3nt/ $(REPO_ROOT)/dist/pluginzip/trid3nt/
-	@cp $(REPO_ROOT)/qgis-plugin/LICENSE $(REPO_ROOT)/dist/pluginzip/trid3nt/LICENSE
-	@V=$$(grep '^version=' $(REPO_ROOT)/qgis-plugin/trid3nt/metadata.txt | cut -d= -f2); \
+	  --exclude '/tests' --exclude '/docs' --exclude '/Makefile' \
+	  --exclude '/README.md' --exclude '/LICENSE' --exclude '/dist' \
+	  $(REPO_ROOT)/plugin/ $(REPO_ROOT)/dist/pluginzip/trid3nt/
+	@cp $(REPO_ROOT)/plugin/LICENSE $(REPO_ROOT)/dist/pluginzip/trid3nt/LICENSE
+	@V=$$(grep '^version=' $(REPO_ROOT)/plugin/metadata.txt | cut -d= -f2); \
 	cd $(REPO_ROOT)/dist/pluginzip && zip -qr ../trid3nt-plugin-$$V.zip trid3nt && \
 	echo "wrote dist/trid3nt-plugin-$$V.zip (install via QGIS > Plugins > Install from ZIP, then set the Server URL)"
 	@rm -rf $(REPO_ROOT)/dist/pluginzip

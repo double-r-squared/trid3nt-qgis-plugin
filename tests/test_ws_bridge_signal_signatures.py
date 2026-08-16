@@ -25,8 +25,7 @@ import pytest
 
 _WS_BRIDGE = (
     Path(__file__).resolve().parents[1]
-    / "qgis-plugin"
-    / "trid3nt"
+    / "plugin"
     / "net"
     / "ws_bridge.py"
 )

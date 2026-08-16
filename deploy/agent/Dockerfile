@@ -84,11 +84,12 @@ RUN pip install --upgrade pip setuptools wheel uv
 # here BEFORE the agent so that when ``pip install /build`` resolves
 # its dependency set the trid3nt-contracts requirement is ALREADY satisfied by the
 # locally-built 0.1.0 wheel (pip never reaches PyPI for an already-satisfied pin).
-# Copy ONLY the install inputs (pyproject + README + src) -- NOT the package's
-# .venv / .pytest_cache / egg-info -- so the build context layer stays slim.
+# Copy ONLY the install inputs (pyproject + README + package) -- NOT the
+# package's .venv / .pytest_cache / egg-info -- so the build context layer
+# stays slim.
 COPY contracts/pyproject.toml /build/contracts/pyproject.toml
 COPY contracts/README.md /build/contracts/README.md
-COPY contracts/src /build/contracts/src
+COPY contracts/trid3nt_contracts /build/contracts/trid3nt_contracts
 RUN uv pip install --no-cache /build/contracts
 
 # Copy ONLY the install inputs first (pyproject + the package source) so the
