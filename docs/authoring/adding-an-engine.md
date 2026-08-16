@@ -72,7 +72,6 @@ branch + postprocess. The seam list, from the SFR/CSUB precedents:
    - import the composer in `trid3nt_server/tools/__init__.py`
      (the `from ..workflows import model_<x>_scenario as _model_<x>_scenario`
      pattern) so its `@register_tool` fires at startup;
-   - add `PRIMARY_CATEGORY` (usually `hazard_modeling`) in `categories.py`;
    - add `tool_query_corpus.yaml` queries + run the
      `retrieve_visible_tools(prompt, None, 8)` visibility check;
    - add any chart payloads in `chart_tools.py`;
@@ -107,8 +106,8 @@ Each new engine adds, roughly in order:
    (`run_<engine>_...`), and a thin `tools/run_<engine>_tool.py` bridge that
    imports the composer. Import the bridge in `tools/__init__.py`.
 
-5. **Discovery + wiring**: `categories.py` entry, `tool_query_corpus.yaml`
-   queries + the retrieval-visibility check, tests, and a smoke fixture.
+5. **Discovery + wiring**: `tool_query_corpus.yaml` queries + the
+   retrieval-visibility check, tests, and a smoke fixture.
 
 ---
 
@@ -146,5 +145,5 @@ Before you register the tool:
    wave, not 1e5).
 3. Wire the postprocess -> headline `LayerURI`; render a proof (overlay the mesh
    wireframe in engine proof renders).
-4. Only then promote to the composer + `@register_tool`, add corpus + category,
+4. Only then promote to the composer + `@register_tool`, add corpus,
    run the retrieval-visibility check, and add the smoke fixture + test.

@@ -67,14 +67,6 @@ def test_registered_spec_driven(name, source):
     assert spec.error_code_prefix == "NOAA_SLR_RASTER"
 
 
-def test_categories_preserved():
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
-
-    assert PRIMARY_CATEGORY["fetch_noaa_slr_confidence"] == "coastal"
-    assert PRIMARY_CATEGORY["fetch_noaa_slr_marsh"] == "coastal"
-    assert SECONDARY_CATEGORIES.get("fetch_noaa_slr_marsh") == ("conservation_ecology",)
-
-
 def test_corpus_present():
     from trid3nt_server.agent.tools.search.search_tools.search_tools import _load_corpus
 

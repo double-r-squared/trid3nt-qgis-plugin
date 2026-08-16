@@ -1,21 +1,3 @@
-list_categories:
-- what kinds of tools do you have, list the categories
-- i'm not sure where to start, show me the top-level tool groups
-- what domains can you work in, give me the category list
-- show me all the available tool categories with descriptions
-- which buckets do the tools fall into, list them
-- help me narrow down what's available across the whole catalog
-- what areas of analysis can this workbench cover
-- give me an overview of the tool families you support
-list_tools_in_category:
-- show me all the tools in the hazard modeling category
-- what tools are inside the weather and atmosphere group
-- list the members of the coastal category
-- open the conservation ecology category and show its tools
-- which tools live under terrain and elevation
-- give me the tools in the damage assessment bucket
-- what's available in the geographic primitives category
-- expand the fire category and show every tool in it
 # Door dissolution (ADR 0094): the SFINCS flood phrasings live in the
 # sfincs_flood template corpus (workflows/sfincs/flood/corpus.yaml), now walked
 # into this index directly -- there is no separate door.

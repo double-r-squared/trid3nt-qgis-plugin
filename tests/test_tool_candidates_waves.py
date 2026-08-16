@@ -84,7 +84,6 @@ async def test_ask_mode_emits_stage_labeled_wave_per_round(monkeypatch):
         return {"ok": True}
 
     monkeypatch.setattr(agent_server, "_invoke_tool_via_emitter", _noop_invoke)
-    monkeypatch.setattr(agent_server, "validate_function_call", lambda name, allowed: None)
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
@@ -121,7 +120,6 @@ async def test_auto_mode_emits_no_per_round_waves(monkeypatch):
         return {"ok": True}
 
     monkeypatch.setattr(agent_server, "_invoke_tool_via_emitter", _noop_invoke)
-    monkeypatch.setattr(agent_server, "validate_function_call", lambda name, allowed: None)
 
     sock = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())

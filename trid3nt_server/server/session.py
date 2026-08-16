@@ -29,7 +29,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from ..agent.categories import AllowedToolSet
 from ..agent.gates.circuit_breaker import ToolCircuitBreaker
 
 if TYPE_CHECKING:
@@ -227,15 +226,12 @@ class SessionState:
     # timestamps. Surfaces in tests + post-mortem; persisted to the active
     # Case as part of the chat turn record (best-effort).
     payload_warning_audit_log: list[dict] = field(default_factory=list)
-    # Per-session post-hoc allowed-set tracker. The full tool catalog is
-    # cached in the provider's ``CachedContent.tools[]`` slot at session
-    # start and the ``allowed_function_names`` filter is enforced in our
-    # code, not in the provider request. Every emitted ``function_call`` is
-    # validated against this set via ``categories.validate_function_call``
-    # before dispatch. The set is monotonically growing within a session --
-    # it starts at the hot set and widens as the LLM opens categories
-    # (``list_tools_in_category``) or successfully dispatches tools.
-    allowed_tool_set: AllowedToolSet = field(default_factory=AllowedToolSet)
+    # Per-session monotonic visible-tool accumulator for retrieval-enforce: every
+    # tool once made visible this Case (the turn's retrieved set + dispatched +
+    # discovery-expanded + pinned) stays in it, so a once-visible tool never
+    # leaves mid-task. Seeded empty; the enforce path unions the CORE_FLOOR each
+    # turn. Grows monotonically within a session; a new session starts fresh.
+    visible_tools: set[str] = field(default_factory=set)
     # Per-session provider-side prompt-cache handle, reported through the
     # ``cache-status`` envelope. Provider-neutral: the adapter owns whatever
     # concrete cache mechanism its provider uses. The Bedrock path caches via

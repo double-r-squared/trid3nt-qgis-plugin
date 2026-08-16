@@ -79,9 +79,8 @@ PASS iff:
 `no_tool` records PASS iff zero tools fired.
 
 Engine bookkeeping exclusions (recorded raw, never graded as "fired"): LLM
-generation steps, and the three always-available meta/discovery tools
-(`list_categories`, `list_tools_in_category`, `discover_dataset`) -- they
-are the routing mechanism, not a routing outcome.
+generation steps, and the always-available discovery tools (`search_tools`,
+`discover_dataset`) -- they are the routing mechanism, not a routing outcome.
 
 ## Verdict taxonomy (error taxonomy)
 

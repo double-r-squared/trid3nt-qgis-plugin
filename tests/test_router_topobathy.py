@@ -83,11 +83,6 @@ def test_topobathy_registered_with_expected_metadata() -> None:
     assert getattr(md, "auto_publish", None) is False
 
 
-def test_topobathy_in_coastal_category() -> None:
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, tools_for_category
-
-    assert PRIMARY_CATEGORY.get("fetch_topobathy") == "coastal"
-    assert "fetch_topobathy" in tools_for_category("coastal")
 
 
 # --------------------------------------------------------------------------- #

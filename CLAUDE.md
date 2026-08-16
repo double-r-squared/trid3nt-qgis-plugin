@@ -38,9 +38,9 @@ product of a deliberate refactor - inherit them; do not improvise.
    source-inspection anchors) move WITH it - grep the old path to zero.
 4. Delete, don't disable. Deletions register in docs/DELETION_LEDGER.md
    with trace evidence.
-5. New tools/templates complete the registry checklist: categories,
-   registration import, catalog-surfacing pins, EXPECTED_TEMPLATES,
-   co-located corpus.yaml, retrieval top-8 check.
+5. New tools/templates complete the registry checklist: registration import,
+   catalog-surfacing pins, EXPECTED_TEMPLATES, co-located corpus.yaml,
+   retrieval top-8 check.
 6. Gates on tools are DECLARED (GateSpec metadata + pure estimate/pin
    providers owned by the engine) - never hand-wired in server code.
    Input layers surface via the emit-on-fetch seam (`purpose=` on

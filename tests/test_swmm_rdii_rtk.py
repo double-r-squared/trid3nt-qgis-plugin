@@ -118,8 +118,6 @@ async def test_epa_table_7_1_replication():
     assert res["rdii_peak_cfs"] == pytest.approx(published_peak, rel=0.10)
 
 
-def test_registered_and_categorized():
+def test_registered():
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     assert "swmm_rdii_rtk_unit_hydrograph" in TOOL_REGISTRY
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY
-    assert PRIMARY_CATEGORY["swmm_rdii_rtk_unit_hydrograph"] == "simulation_modeling"

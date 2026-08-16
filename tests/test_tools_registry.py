@@ -178,8 +178,6 @@ def test_global_query_scope_audit():
         "fetch_fault_sources",          # GEM Global Active Faults is one bounded worldwide GeoJSON, bbox-filtered to AOI; no-bbox returns the global fault set (task #199)
         "fetch_storm_events_db",        # national NCEI severe-weather DB; bbox/state-less = legit CONUS-year sweep
         "fetch_tsunami_events",         # NCEI global historical tsunami DB is a bounded event list
-        "list_categories",              # meta-tool, no spatial input
-        "list_tools_in_category",       # meta-tool, no spatial input
     }
 
     # The set of tools actually flagged True must match exactly — this both

@@ -14,36 +14,9 @@ from __future__ import annotations
 import os
 
 # ---------------------------------------------------------------------------
-# Tool-retrieval mode (tool-retrieval kickoff -- orchestrator half).
-#
-# Three modes, read once at import time following the TRID3NT_SYNC_TOOL_OFFLOAD
-# env idiom (NO code change to flip):
-#
-#   off     (DEFAULT) -- the catalog is the FULL flat registry, untouched. This
-#                        is BYTE-IDENTICAL to the pre-feature behavior: no
-#                        retrieval is even computed, no shadow record is logged.
-#   shadow            -- compute the WOULD-BE-visible set via
-#                        retrieve_visible_tools and LOG it as shadow telemetry,
-#                        but STILL build declarations over the FULL registry.
-#                        ZERO behavior change (the model sees all tools); the
-#                        log feeds the recall@k dashboard.
-#   enforce           -- subset TOOL_REGISTRY to the visible set BEFORE building
-#                        declarations (and UNION the visible set into the Case's
-#                        monotonic AllowedToolSet so a once-visible tool never
-#                        leaves within a Case). Locked OFF on cloud until recall@k
-#                        proves >= 0.99/flow.
-#
-# K is the discover top-k for retrieve_visible_tools (default 25; the function
-# clamps to [1, MAX_K]).
-_TOOL_RETRIEVAL_VALID_MODES = frozenset({"off", "shadow", "enforce"})
-_TOOL_RETRIEVAL_MODE = (
-    os.environ.get("TRID3NT_TOOL_RETRIEVAL", "off").strip().lower()
-)
-if _TOOL_RETRIEVAL_MODE not in _TOOL_RETRIEVAL_VALID_MODES:
-    # Unknown value -> fail-safe to the no-op default (never silently enforce).
-    _TOOL_RETRIEVAL_MODE = "off"
-
-
+# Tool-retrieval K (the discover top-k for retrieve_visible_tools). Enforce is
+# the unconditional, built-in surfacing path; K is the only lever (default 25;
+# retrieve_visible_tools clamps to [1, MAX_K]).
 def _tool_retrieval_k() -> int:
     """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
     any parse error. Read per-call so a test can override via the env without a
@@ -57,14 +30,6 @@ def _tool_retrieval_k() -> int:
         return int(raw)
     except (TypeError, ValueError):
         return DEFAULT_K
-
-
-def _tool_retrieval_mode() -> str:
-    """Current tool-retrieval mode. Reads the env LIVE (not the import-time
-    snapshot) so a test / runtime flip is honored; unknown -> 'off' (fail-safe
-    to the no-op default, never silently enforce)."""
-    mode = os.environ.get("TRID3NT_TOOL_RETRIEVAL", "off").strip().lower()
-    return mode if mode in _TOOL_RETRIEVAL_VALID_MODES else "off"
 
 
 # The ``code_exec_request`` confirm gate validity window (seconds). Running

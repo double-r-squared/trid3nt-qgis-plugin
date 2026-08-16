@@ -212,12 +212,8 @@ def test_bad_y_axis_raises(offline_pfds) -> None:
         compute_idf_curve(location=LOCATION, y_axis="volume")
 
 
-def test_category_and_corpus() -> None:
-    import yaml
-
-    from trid3nt_server.agent import categories
+def test_corpus() -> None:
     from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
-    assert categories.PRIMARY_CATEGORY["compute_idf_curve"] == "hydrology"
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_idf_curve", [])) >= 5

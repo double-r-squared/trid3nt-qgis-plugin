@@ -147,8 +147,8 @@ def _check_declaration_schema(
     violations: list[SchemaViolation] = []
 
     if decl.parameters is None:
-        # No schema — acceptable for zero-parameter tools (e.g. list_categories).
-        # Not flagged as a violation; checked separately in the tool_has_schema test.
+        # No schema — acceptable for zero-parameter tools. Not flagged as a
+        # violation; checked separately in the tool_has_schema test.
         return violations
 
     # Serialize via pydantic to a plain dict and walk it.

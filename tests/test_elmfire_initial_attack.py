@@ -120,8 +120,6 @@ def test_chart_spec_shape():
     assert any(r["intensity"] == "1000 kW/m" for r in spec["layer"][0]["data"]["values"])
 
 
-def test_registered_and_categorized():
+def test_registered():
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     assert "elmfire_initial_attack_containment_probability" in TOOL_REGISTRY
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY
-    assert PRIMARY_CATEGORY["elmfire_initial_attack_containment_probability"] == "model_validation"

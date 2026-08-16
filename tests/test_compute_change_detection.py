@@ -247,15 +247,8 @@ def test_ndwi_index_recorded(index_pair, tmp_path) -> None:
     assert result.legend is not None and "NDWI" in (result.legend.label or "")
 
 
-def test_category_and_corpus() -> None:
-    import yaml
-
-    from trid3nt_server.agent import categories
+def test_corpus() -> None:
     from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
-    assert (
-        categories.PRIMARY_CATEGORY["compute_change_detection"]
-        == "land_cover_development"
-    )
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_change_detection", [])) >= 5

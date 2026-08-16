@@ -11,8 +11,8 @@ emission, or the client. The seam is deliberately narrow:
     converts them to the Bedrock Converse shapes at the boundary.
   * It yields the SAME ``StreamEvent`` union (``TextDeltaEvent`` /
     ``FunctionCallEvent`` / ``UsageMetadataEvent``) the Gemini path yields, so
-    ``server.py``'s dispatch loop, ``categories.validate_function_call``, the
-    PipelineEmitter, and the cache-status telemetry all work unchanged.
+    ``server.py``'s dispatch loop, the PipelineEmitter, and the cache-status
+    telemetry all work unchanged.
 
 Provider selection is ``MODEL_PROVIDER`` (``vertex`` default; ``bedrock`` to
 engage this path). ``adapter.stream_events_with_contents`` branches here when

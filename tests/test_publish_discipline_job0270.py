@@ -1,29 +1,19 @@
-"""job-0270 — colored-relief chain-to-pixels fixes, server-level evidence.
+"""colored-relief chain-to-pixels fixes, server-level evidence.
 
-Live failure (third occurrence, /tmp/agent_demo7.log + /tmp/agent_demo8.log):
-"Compute a colored relief map for Boulder, Colorado" fetched the DEM and
-computed the relief, but the chain to visible pixels broke two ways:
+Live failure ("Compute a colored relief map for Boulder, Colorado"): the DEM
+fetched and the relief computed, but after compute_colored_relief succeeded the
+model ended the turn with text only; publish_layer never ran, so the computed
+raster stayed invisible (a layer is not on the map until publish_layer adds it
+to the QGIS Server project).
 
-1. VALIDATOR DETOURS — compute_colored_relief / compute_hillshade /
-   publish_layer are real registered tools outside the hot set, so the
-   post-hoc validator bounced Gemini's correct FIRST call to each
-   (OutOfAllowedSetError) and Gemini burned 2-4 iterations guessing
-   category names ('terrain_analysis', 'raster') before recovering.
-2. PUBLISH OMISSION — after compute_colored_relief succeeded, Gemini ended
-   the turn with text only; publish_layer never ran, so the computed raster
-   stayed invisible (a layer is not on the map until publish_layer adds it
-   to the QGIS Server project).
+These tests drive ``_stream_model_reply`` end-to-end (fake model, fake tool
+dispatch — no live calls) and prove:
 
-These tests drive ``_stream_model_reply`` end-to-end (fake Gemini, fake
-tool dispatch — no live calls) and prove:
-
-- FIX A: a registry-valid, non-hot-set tool dispatches on the FIRST call
-  (auto-widen), with no OUT_OF_ALLOWED_SET envelope and the widened set
-  persisting for the session; a hallucinated name still bounces with the
-  structured error envelope (guard unweakened at the server level).
-- FIX B: the function_response for a layer-producing tool carries the
-  strengthened ``layer_handles_note`` that says the layer is NOT on the
-  map yet and instructs calling publish_layer with the handle.
+- a registry-valid tool dispatches on the FIRST call and sticks in the Case's
+  monotonic visible set for the rest of the session.
+- the function_response for a layer-producing tool carries the strengthened
+  ``layer_handles_note`` that says the layer is NOT on the map yet and
+  instructs calling publish_layer with the handle.
 """
 
 from __future__ import annotations
@@ -119,9 +109,8 @@ async def _drive_loop(fake_llm, turns: list[dict], fake_invoke) -> tuple[list[li
 
 @pytest.mark.asyncio
 async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
-    """Gemini's FIRST call to compute_colored_relief (real tool, outside the
-    hot set) must dispatch — no OUT_OF_ALLOWED_SET bounce, no detour turns.
-    This is the demo7/demo8 failure mode, inverted."""
+    """The FIRST call to compute_colored_relief (a real tool outside the core
+    floor) must dispatch and stick in the Case's monotonic visible set."""
     from trid3nt_server import server as agent_server
 
     dispatch_log: list[str] = []
@@ -164,46 +153,12 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
     assert name == "compute_colored_relief"
     assert payload.get("error_code") != "OUT_OF_ALLOWED_SET"
     assert payload.get("status") == "ok"
-    # The auto-widened set persists for the session (monotonic growth).
-    assert "compute_colored_relief" in state.allowed_tool_set.as_frozenset()
-
-
-@pytest.mark.asyncio
-async def test_hallucinated_tool_still_bounces_at_server_level(fake_llm) -> None:
-    """The hallucination guard is unweakened: a name that exists nowhere in
-    the registry never dispatches and surfaces the structured
-    OUT_OF_ALLOWED_SET envelope to Gemini."""
-    dispatch_log: list[str] = []
-
-    async def _fake_invoke(_ws, _state, name, args):  # pragma: no cover — must not run
-        dispatch_log.append(name)
-        return {"status": "ok"}
-
-    contents_per_turn, _sock, state = await _drive_loop(
-        fake_llm,
-        [
-            _make_fake_chunk_with_function_call(
-                "compute_terrain_relief_v2", {"dem_uri": "gs://x/y.tif"}, "call-fake",
-            ),
-            _make_fake_chunk_with_text("That tool does not exist; let me check the catalog."),
-        ],
-        _fake_invoke,
-    )
-
-    # The hallucinated name never reached dispatch.
-    assert dispatch_log == []
-    payloads = _function_response_payloads(contents_per_turn)
-    assert payloads, "no function_response reached the second Gemini turn"
-    name, payload = payloads[0]
-    assert name == "compute_terrain_relief_v2"
-    assert payload.get("status") == "error"
-    assert payload.get("error_code") == "OUT_OF_ALLOWED_SET"
-    # And the bad name did not pollute the allowed set.
-    assert "compute_terrain_relief_v2" not in state.allowed_tool_set.as_frozenset()
+    # It persists in the Case's monotonic visible set (never hidden mid-task).
+    assert "compute_colored_relief" in state.visible_tools
 
 
 # ---------------------------------------------------------------------------
-# FIX B: strengthened layer_handles_note in the function_response payload
+# Strengthened layer_handles_note in the function_response payload
 # ---------------------------------------------------------------------------
 
 

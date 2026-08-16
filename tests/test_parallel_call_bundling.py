@@ -159,9 +159,8 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn(fake_llm):
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    # Use 3 hot-set tools so ``validate_function_call`` doesn't reject them
-    # before they reach the dispatch step. The goal is the bundling shape,
-    # not the specific tools.
+    # Three registered tools; the goal is the bundling shape, not the
+    # specific tools.
     turn1 = {
         "tool_calls": [
             {"name": "fetch_dem", "args": {"bbox": [0, 0, 1, 1]}, "call_id": "id-dem"},

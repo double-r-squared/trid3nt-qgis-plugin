@@ -937,14 +937,6 @@ from ..workflows.pelicun.hazus_eq_version_comparison.hazus_eq_version_comparison
 from ..workflows.pelicun.hazus_lifeline_seismic_dl_run.hazus_lifeline_seismic_dl_run import pelicun_hazus_lifeline_seismic_dl_run as _pelicun_hazus_lifeline_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake lifeline-network (bridge/pipe/substation) DL_calculation run with auto-populated component
 
 
-# the 12-category registry + the two meta-tools
-# (``list_categories`` + ``list_tools_in_category``) live alongside the rest
-# of the tool surface. Importing the module fires its two ``@register_tool``
-# decorators so the meta-tools are in TOOL_REGISTRY at startup; the hot set,
-# allowed-set tracker, and post-hoc validator are exposed through
-# ``trid3nt_server.agent.categories`` for the server.py dispatch loop.
-from .. import categories as _categories  # noqa: E402,F401
-
 # COPY-ME authoring template (docs/authoring/writing-a-tool.md). Importing the
 # module is always safe: its @register_tool call is gated behind the
 # TRID3NT_ENABLE_EXAMPLE_TOOL env flag, so it registers example_bbox_area ONLY

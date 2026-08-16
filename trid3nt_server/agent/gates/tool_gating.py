@@ -15,11 +15,11 @@ pre-feature behavior).
 The gated set for a turn is::
 
     top-k ranked tools for the user text (retrieve_ranked_tools)
-    UNION the META floor (hot set + search_data_catalog/fetch_from_catalog + web_fetch --
-          the discovery / render / analysis escape hatches that must never
-          be retrieved out; see categories.HOT_SET_TOOLS)
-    UNION every tool already used this case-session (the AllowedToolSet's
-          dispatched + explicit tools -- never hide a tool mid-task)
+    UNION the META floor (CORE_FLOOR + search_data_catalog/fetch_from_catalog +
+          web_fetch -- the discovery / render / analysis escape hatches that must
+          never be retrieved out; see tool_retrieval.CORE_FLOOR)
+    UNION every tool already visible this case-session (the Case's monotonic
+          visible set -- never hide a tool mid-task)
     UNION any tool the user NAMED in the message (exact name or
           space-separated form -- an explicit ask must always be honored)
 
@@ -38,7 +38,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
 
 __all__ = [
     "TOOL_GATING_TOPK_DEFAULT",
@@ -65,12 +65,12 @@ logger = logging.getLogger("trid3nt_server.agent.gates.tool_gating")
 #: Default top-k for the openai-provider tool gate (bench recommendation).
 TOOL_GATING_TOPK_DEFAULT = 24
 
-#: The always-include META floor: the hot set (categories.py conventions --
-#: search_tools, spatial_query, publish_layer, code_exec_request,
-#: geocode_location, zoom/list utilities, ...) plus the catalog discovery
-#: pair and web_fetch, which register outside tools/__init__ and are the
-#: "find anything else" escape hatches a gated model must always hold.
-META_TOOL_FLOOR: frozenset[str] = frozenset(HOT_SET_TOOLS) | frozenset(
+#: The always-include META floor: the CORE_FLOOR (search_tools, spatial_query,
+#: publish_layer, code_exec_request, geocode_location, layer-bounds utilities,
+#: ...) plus the catalog discovery pair and web_fetch, which register outside
+#: tools/__init__ and are the "find anything else" escape hatches a gated model
+#: must always hold.
+META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset(
     {
         "search_data_catalog",
         "fetch_from_catalog",
@@ -137,7 +137,7 @@ def gate_tool_registry(
 
     ``ranked`` is the scored retrieval ranking for the turn's user text
     (``retrieve_ranked_tools``); ``used_tools`` is the case-session's
-    already-used tool names (AllowedToolSet dispatched + explicit). Returns
+    already-visible tool names (the Case's monotonic visible set). Returns
     ``None`` (caller keeps the full registry) when:
 
       * ``k <= 0`` (gate disabled), or

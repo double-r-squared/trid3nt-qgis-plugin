@@ -234,32 +234,31 @@ class _FakeSocket:
 
 @pytest.mark.asyncio
 async def test_stream_model_reply_multi_turn_loop(fake_llm):
-    """Proper recovery flow: geocode → list_tools_in_category → wdpa → narrative.
+    """Proper recovery flow: geocode → search_tools → wdpa → narrative.
 
-    Scenario mirrors the kickoff: "Show me protected areas in Fort Myers".
-    This test exercises the Option-A (Wave 4.10) recovery flow where Gemini
-    must first call ``list_tools_in_category`` to open the conservation_ecology
-    category before ``fetch_wdpa_protected_areas`` is reachable.
+    Scenario mirrors "Show me protected areas in Fort Myers": the model
+    discovers its way to fetch_wdpa_protected_areas via search_tools (the
+    discovery escape hatch), then dispatches it. This test exercises the
+    multi-turn re-stream loop (function_call + function_response bundled between
+    turns), not the routing itself.
 
-    Turn 1: Gemini calls ``geocode_location`` (always in HOT_SET).
-    Turn 2: Gemini calls ``list_tools_in_category("conservation_ecology")``
-            — opens the category and adds fetch_wdpa_protected_areas to the
-            allowed set.
-    Turn 3: Gemini calls ``fetch_wdpa_protected_areas`` with the bbox from
-            the geocode result — now reachable because the category is open.
-    Turn 4: Gemini emits a final narrative text and stops.
+    Turn 1: model calls ``geocode_location`` (always in the core floor).
+    Turn 2: model calls ``search_tools`` — surfaces fetch_wdpa_protected_areas.
+    Turn 3: model calls ``fetch_wdpa_protected_areas`` with the bbox from
+            the geocode result.
+    Turn 4: model emits a final narrative text and stops.
     """
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
-    # Four pre-canned Gemini turns.  Each turn returns one chunk.
+    # Four pre-canned model turns.  Each turn returns one chunk.
     turn1_chunk = _make_fake_chunk_with_function_call(
         "geocode_location", {"query": "Fort Myers, FL"}, "call-geo"
     )
     turn2_chunk = _make_fake_chunk_with_function_call(
-        "list_tools_in_category",
-        {"category_id": "conservation_ecology"},
-        "call-list",
+        "search_tools",
+        {"query": "protected areas"},
+        "call-search",
     )
     turn3_chunk = _make_fake_chunk_with_function_call(
         "fetch_wdpa_protected_areas",
@@ -284,13 +283,12 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
                 "bbox": [-82.0, 26.5, -81.7, 26.8],
                 "precision_class": "precise",
             }
-        if name == "list_tools_in_category":
-            # Return the canonical shape so the server-side open_category
-            # logic fires (server.py:731 checks result.get("category_id")).
+        if name == "search_tools":
+            # Return the search-results shape the discovery-expand gate parses
+            # (server unions the ranked names into the visible gate).
             return {
-                "category_id": args.get("category_id", "conservation_ecology"),
-                "tools": [
-                    {"name": "fetch_wdpa_protected_areas", "description_snippet": "Fetch WDPA areas."},
+                "results": [
+                    {"tool_name": "fetch_wdpa_protected_areas", "score": 0.9},
                 ],
             }
         if name == "fetch_wdpa_protected_areas":
@@ -337,7 +335,7 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
     # All three tools were dispatched in the correct order.
     assert [name for (name, _) in dispatch_log] == [
         "geocode_location",
-        "list_tools_in_category",
+        "search_tools",
         "fetch_wdpa_protected_areas",
     ], f"unexpected dispatch order: {dispatch_log}"
 
@@ -372,7 +370,7 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
         for (kind, name) in parts
         if kind == "function_call"
     ]
-    assert turn3_call_names == ["geocode_location", "list_tools_in_category"], (
+    assert turn3_call_names == ["geocode_location", "search_tools"], (
         f"turn 3 function_call sequence wrong: {turn3_call_names}"
     )
 
@@ -385,7 +383,7 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
     ]
     assert turn4_call_names == [
         "geocode_location",
-        "list_tools_in_category",
+        "search_tools",
         "fetch_wdpa_protected_areas",
     ], f"turn 4 function_call sequence wrong: {turn4_call_names}"
 

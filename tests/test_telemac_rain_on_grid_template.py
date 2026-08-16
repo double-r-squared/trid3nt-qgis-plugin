@@ -128,12 +128,6 @@ def test_corpus_yaml_present_and_routes():
     assert any("runoff" in q.lower() for q in data["telemac_rain_on_grid"])
 
 
-def test_category_mapping():
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY
-
-    assert PRIMARY_CATEGORY.get("telemac_rain_on_grid") == "simulation_modeling"
-
-
 def test_aoi_from_pour_point_buffers_the_outlet():
     """The pour-point AOI is a generous buffer around the OUTLET, kept under the
     0.3-deg watershed-primitive D8 clamp (bug 1: a town bbox clips the basin)."""

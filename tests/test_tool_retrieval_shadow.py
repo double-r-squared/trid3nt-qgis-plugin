@@ -1,22 +1,18 @@
-"""Tool-retrieval SHADOW + recall@k tests (tool-retrieval kickoff, orchestrator half).
+"""Tool-retrieval enforce + recall@k tests (the built-in surfacing path).
 
-Pins the orchestrator half of the tool-retrieval feature:
+Enforce is unconditional now (K is the only lever). These pin:
 
-1. DEFAULT OFF computes no retrieval and logs no shadow row; build_tool_declarations
-   gets the DEFAULT declarable registry (full MINUS the pool-hidden internal/catalog
-   tiers; door dissolution, ADR 0094 -- engine templates are ordinary members now).
-2. SHADOW mode logs the would-be-visible set WITHOUT trimming by retrieval
-   (build_tool_declarations still gets the default declarable registry; the shadow
-   event fires).
-3. FAIL-OPEN: a retrieval error in shadow/enforce never trims the catalog.
-4. ENFORCE mode subsets the registry to the visible set, the CORE FLOOR stays a
-   subset, and the Case's monotonic AllowedToolSet never shrinks across turns.
-5. recall@k computation on a synthetic telemetry fixture (overall + per-flow +
+1. ENFORCE subsets the registry to the visible set, the CORE FLOOR stays a
+   subset, and the Case's monotonic visible set never shrinks across turns.
+2. FAIL-OPEN: a retrieval error or an empty result never trims the catalog --
+   it falls back to the DEFAULT declarable registry (full MINUS the pool-hidden
+   internal/catalog tiers; engine templates are ordinary members).
+3. The per-turn selection event fires (recall@k telemetry) with mode="enforce".
+4. recall@k computation on a synthetic telemetry fixture (overall + per-flow +
    the missed-tool list).
-6. fetch_glm_lightning is in the ALWAYS-OFFLOAD set (#6 escalation).
+5. fetch_glm_lightning is in the ALWAYS-OFFLOAD set.
 
-These cover the shadow=zero-behavior-change + enforce-invariants + recall surfaces
-the kickoff names. ASCII only.
+ASCII only.
 """
 
 from __future__ import annotations
@@ -47,11 +43,6 @@ def _make_text_chunk(text: str):
     return {"text": text}
 
 
-def _make_fc_chunk(name: str, args: dict, call_id: str = "c1"):
-    """A fake turn (scripted-provider dict) emitting ONE function call."""
-    return {"tool_call": {"name": name, "args": args, "call_id": call_id}}
-
-
 def _settings() -> ModelSettings:
     return ModelSettings(
         model="gemini-2.5-pro",
@@ -65,14 +56,12 @@ def _non_template_names() -> set[str]:
     """The names in the DEFAULT declarable registry: the full TOOL_REGISTRY
     MINUS the pool-hidden tiers (tier=internal / tier=catalog).
 
-    Door dissolution (ADR 0094): engine templates (tier=template) ARE in the
-    default declarable set now -- they are ordinary retrieval-pool tools, callable
-    directly. Only tier=internal (an absorbed seam, fetch_copernicus_dem; ADR
-    0059) and tier=catalog (arm-flagged, none in the default config) are withheld.
-    The object passed to build_tool_declarations is a NEW filtered dict
-    (server._default_declarable_registry), not the live registry identity --
-    pre-door these tests asserted ``regs[0] is TOOL_REGISTRY``; that is
-    superseded."""
+    Engine templates (tier=template) ARE in the default declarable set -- they
+    are ordinary retrieval-pool tools, callable directly. Only tier=internal (an
+    absorbed seam, fetch_copernicus_dem) and tier=catalog (arm-flagged, none in
+    the default config) are withheld. The object passed to build_tool_declarations
+    is a NEW filtered dict (server._default_declarable_registry), not the live
+    registry identity."""
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     return {
@@ -84,23 +73,19 @@ def _non_template_names() -> set[str]:
 
 async def _drive_one_turn(
     fake_llm,
-    monkeypatch,
     *,
-    mode: str,
     chunks: list,
     user_text: str = "show me the flood map",
     state=None,
     dispatch=None,
 ):
-    """Drive ONE _stream_model_reply turn with the given retrieval mode.
+    """Drive ONE _stream_model_reply turn (enforce is unconditional).
 
     Returns (state, registries_seen, dispatch_log) where registries_seen is the
     list of objects passed to build_tool_declarations (one per turn iteration).
     """
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-
-    monkeypatch.setenv("TRID3NT_TOOL_RETRIEVAL", mode)
 
     fake_llm.script(chunks)
 
@@ -135,90 +120,32 @@ async def _drive_one_turn(
 
 
 # --------------------------------------------------------------------------- #
-# 1. DEFAULT OFF -- byte-identical to today.
+# 1. The selection event fires with mode="enforce".
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_off_mode_passes_full_registry_no_shadow(fake_llm, monkeypatch):
+async def test_enforce_emits_selection_event(fake_llm):
     from trid3nt_server import server as agent_server
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-    shadow_calls: list = []
-    with patch.object(
-        agent_server, "emit_shadow_selection_event",
-        side_effect=lambda **kw: shadow_calls.append(kw),
-    ):
-        _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="off", chunks=[_make_text_chunk("done")]
-        )
-
-    # OFF computes NO retrieval and logs NO shadow row.
-    assert shadow_calls == []
-    # ENGINE-DOOR: the object passed to build_tool_declarations is the DEFAULT
-    # declarable registry -- the full registry MINUS tier=template templates
-    # (they surface only via a door's gate expansion). Pre-door this asserted
-    # ``regs[0] is TOOL_REGISTRY``.
-    assert len(regs) == 1
-    assert set(regs[0]) == _non_template_names()
-    assert regs[0] is not TOOL_REGISTRY
-
-
-@pytest.mark.asyncio
-async def test_unknown_mode_is_treated_as_off(fake_llm, monkeypatch):
-    from trid3nt_server import server as agent_server
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
-
-    shadow_calls: list = []
-    with patch.object(
-        agent_server, "emit_shadow_selection_event",
-        side_effect=lambda **kw: shadow_calls.append(kw),
-    ):
-        _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="enabled-please", chunks=[_make_text_chunk("done")]
-        )
-    assert shadow_calls == []
-    # ENGINE-DOOR: template-filtered default (see _non_template_names).
-    assert set(regs[0]) == _non_template_names()
-    assert regs[0] is not TOOL_REGISTRY
-
-
-# --------------------------------------------------------------------------- #
-# 2. SHADOW -- logs would-be set, FULL registry still sent.
-# --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_shadow_mode_logs_set_but_sends_full_registry(fake_llm, monkeypatch):
-    from trid3nt_server import server as agent_server
-    from trid3nt_server.agent.tools import TOOL_REGISTRY
     import trid3nt_server.agent.tools.search.tool_retrieval as tr
 
-    fake_visible = {"geocode_location", "fetch_dem", "list_categories"}
+    visible = {"geocode_location", "fetch_dem"}
     shadow_calls: list = []
-
-    with patch.object(tr, "retrieve_visible_tools", return_value=fake_visible), \
+    with patch.object(tr, "retrieve_visible_tools", return_value=visible), \
          patch.object(
              agent_server, "emit_shadow_selection_event",
              side_effect=lambda **kw: shadow_calls.append(kw),
          ):
-        _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="shadow", chunks=[_make_text_chunk("done")]
-        )
+        await _drive_one_turn(fake_llm, chunks=[_make_text_chunk("done")])
 
-    # The shadow event fired with the would-be set + mode=shadow.
     assert len(shadow_calls) == 1
-    assert shadow_calls[0]["visible_tools"] == fake_visible
-    assert shadow_calls[0]["mode"] == "shadow"
-    # SHADOW still does not TRIM by retrieval (the would-be set is only logged),
-    # but the DEFAULT declarable registry is template-filtered (ENGINE-DOOR):
-    # shadow sends the full registry MINUS tier=template templates, never the
-    # raw TOOL_REGISTRY identity.
-    assert set(regs[0]) == _non_template_names()
-    assert regs[0] is not TOOL_REGISTRY
+    assert shadow_calls[0]["visible_tools"] == visible
+    assert shadow_calls[0]["mode"] == "enforce"
 
 
 # --------------------------------------------------------------------------- #
-# 3. FAIL-OPEN on retrieval error / empty result.
+# 2. FAIL-OPEN on retrieval error / empty result.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_shadow_fail_open_on_retrieval_error(fake_llm, monkeypatch):
+async def test_fail_open_on_retrieval_error(fake_llm):
     from trid3nt_server import server as agent_server
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     import trid3nt_server.agent.tools.search.tool_retrieval as tr
@@ -229,16 +156,15 @@ async def test_shadow_fail_open_on_retrieval_error(fake_llm, monkeypatch):
     with patch.object(tr, "retrieve_visible_tools", side_effect=_boom), \
          patch.object(agent_server, "emit_shadow_selection_event"):
         _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="shadow", chunks=[_make_text_chunk("done")]
+            fake_llm, chunks=[_make_text_chunk("done")]
         )
-    # FAIL-OPEN: never trimmed by retrieval -- falls back to the DEFAULT
-    # declarable registry (full MINUS tier=template templates, ENGINE-DOOR).
+    # FAIL-OPEN: never trimmed -- falls back to the DEFAULT declarable registry.
     assert set(regs[0]) == _non_template_names()
     assert regs[0] is not TOOL_REGISTRY
 
 
 @pytest.mark.asyncio
-async def test_enforce_fail_open_on_empty_result(fake_llm, monkeypatch):
+async def test_fail_open_on_empty_result(fake_llm):
     from trid3nt_server import server as agent_server
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     import trid3nt_server.agent.tools.search.tool_retrieval as tr
@@ -247,33 +173,31 @@ async def test_enforce_fail_open_on_empty_result(fake_llm, monkeypatch):
     with patch.object(tr, "retrieve_visible_tools", return_value=set()), \
          patch.object(agent_server, "emit_shadow_selection_event"):
         _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="enforce", chunks=[_make_text_chunk("done")]
+            fake_llm, chunks=[_make_text_chunk("done")]
         )
-    # FAIL-OPEN on empty result: falls back to the DEFAULT declarable registry
-    # (full MINUS tier=template templates, ENGINE-DOOR), never empty/core-only.
     assert set(regs[0]) == _non_template_names()
     assert regs[0] is not TOOL_REGISTRY
 
 
 # --------------------------------------------------------------------------- #
-# 4. ENFORCE -- subsets, core-floor subset, monotonic no-shrink.
+# 3. ENFORCE -- subsets, core-floor subset, monotonic no-shrink.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm, monkeypatch):
+async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
     from trid3nt_server import server as agent_server
-    from trid3nt_server.agent.categories import HOT_SET_TOOLS
+    from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
     from trid3nt_server.agent.tools import TOOL_REGISTRY
     import trid3nt_server.agent.tools.search.tool_retrieval as tr
 
     # Pick a small real subset of registered tools that includes the core floor.
-    floor = {t for t in HOT_SET_TOOLS if t in TOOL_REGISTRY}
+    floor = {t for t in CORE_FLOOR if t in TOOL_REGISTRY}
     visible = set(floor) | {"fetch_dem"}
     visible &= set(TOOL_REGISTRY)
 
     with patch.object(tr, "retrieve_visible_tools", return_value=visible), \
          patch.object(agent_server, "emit_shadow_selection_event"):
         _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="enforce", chunks=[_make_text_chunk("done")]
+            fake_llm, chunks=[_make_text_chunk("done")]
         )
 
     sent = regs[0]
@@ -290,7 +214,7 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_enforce_allowed_set_is_monotonic_across_turns(fake_llm, monkeypatch):
+async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_server.agent.tools import TOOL_REGISTRY
@@ -305,9 +229,9 @@ async def test_enforce_allowed_set_is_monotonic_across_turns(fake_llm, monkeypat
     with patch.object(tr, "retrieve_visible_tools", return_value={real[0]}), \
          patch.object(agent_server, "emit_shadow_selection_event"):
         await _drive_one_turn(
-            fake_llm, monkeypatch, mode="enforce", chunks=[_make_text_chunk("a")], state=state
+            fake_llm, chunks=[_make_text_chunk("a")], state=state
         )
-    after_turn1 = set(state.allowed_tool_set.as_frozenset())
+    after_turn1 = set(state.visible_tools)
     assert real[0] in after_turn1
 
     # Turn 2: retrieval surfaces a DIFFERENT real tool. real[0] must NOT leave.
@@ -315,9 +239,9 @@ async def test_enforce_allowed_set_is_monotonic_across_turns(fake_llm, monkeypat
     with patch.object(tr, "retrieve_visible_tools", return_value={other}), \
          patch.object(agent_server, "emit_shadow_selection_event"):
         _state, regs, _disp = await _drive_one_turn(
-            fake_llm, monkeypatch, mode="enforce", chunks=[_make_text_chunk("b")], state=state
+            fake_llm, chunks=[_make_text_chunk("b")], state=state
         )
-    after_turn2 = set(state.allowed_tool_set.as_frozenset())
+    after_turn2 = set(state.visible_tools)
     # MONOTONIC: the set only grows -- everything from turn 1 is still present.
     assert after_turn1 <= after_turn2
     assert real[0] in after_turn2
@@ -326,7 +250,7 @@ async def test_enforce_allowed_set_is_monotonic_across_turns(fake_llm, monkeypat
 
 
 # --------------------------------------------------------------------------- #
-# 5. recall@k computation on a synthetic fixture.
+# 4. recall@k computation on a synthetic fixture.
 # --------------------------------------------------------------------------- #
 def test_compute_recall_at_k_synthetic():
     from trid3nt_server.tool_catalog_http import compute_recall_at_k
@@ -442,7 +366,7 @@ def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# 6. fetch_glm_lightning is in the ALWAYS-OFFLOAD set (#6).
+# 5. fetch_glm_lightning is in the ALWAYS-OFFLOAD set.
 # --------------------------------------------------------------------------- #
 def test_fetch_glm_lightning_always_offloaded():
     from trid3nt_server import server as agent_server

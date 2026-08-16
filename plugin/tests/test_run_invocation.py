@@ -85,13 +85,13 @@ class TestKwargsForm(unittest.TestCase):
         self.assertEqual(inv.args, {"opts": {"a": [1, 2], "b": "x"}})
 
     def test_bare_name_no_parens(self):
-        inv = parse_run_invocation("!run list_categories")
-        self.assertEqual(inv.name, "list_categories")
+        inv = parse_run_invocation("!run list_qgis_algorithms")
+        self.assertEqual(inv.name, "list_qgis_algorithms")
         self.assertEqual(inv.args, {})
 
     def test_empty_parens(self):
-        inv = parse_run_invocation("!run list_categories()")
-        self.assertEqual(inv.name, "list_categories")
+        inv = parse_run_invocation("!run list_qgis_algorithms()")
+        self.assertEqual(inv.name, "list_qgis_algorithms")
         self.assertEqual(inv.args, {})
 
 

@@ -425,19 +425,9 @@ def test_bad_model_uri_raises(tmp_path) -> None:
         )
 
 
-def test_category_and_corpus() -> None:
-    import yaml
-
-    from trid3nt_server.agent import categories
+def test_corpus() -> None:
     from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
-    assert (
-        categories.PRIMARY_CATEGORY["compute_model_residuals"]
-        == "geographic_primitives"
-    )
-    assert "model_validation" in categories.SECONDARY_CATEGORIES.get(
-        "compute_model_residuals", ()
-    )
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_model_residuals", [])) >= 5
 

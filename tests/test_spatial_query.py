@@ -158,18 +158,13 @@ class TestRegistration:
         assert len(TOOL_REGISTRY) >= 175
 
 
-    def test_primary_category(self):
-        from trid3nt_server.agent.categories import PRIMARY_CATEGORY
-
-        assert PRIMARY_CATEGORY["spatial_query"] == "geographic_primitives"
-
-    def test_hot_set_floor_slot(self):
+    def test_core_floor_slot(self):
         """spatial_query inherits the layer-analysis floor slot the folded
         summarize_layer_statistics held."""
-        from trid3nt_server.agent.categories import HOT_SET_TOOLS
+        from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
 
-        assert "spatial_query" in HOT_SET_TOOLS
-        assert "summarize_layer_statistics" not in HOT_SET_TOOLS
+        assert "spatial_query" in CORE_FLOOR
+        assert "summarize_layer_statistics" not in CORE_FLOOR
 
 
 # ---------------------------------------------------------------------------

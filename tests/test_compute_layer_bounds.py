@@ -337,17 +337,15 @@ async def test_no_emitter_does_not_crash() -> None:
 
 
 def test_registered_and_in_hot_set() -> None:
-    import trid3nt_server.agent.categories as categories
     import trid3nt_server.agent.tools as tools
+    from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
 
     rt = tools.TOOL_REGISTRY.get("compute_layer_bounds")
     assert rt is not None, "compute_layer_bounds not in TOOL_REGISTRY"
     assert rt.metadata.cacheable is False
     assert rt.metadata.ttl_class == "live-no-cache"
-    assert categories.PRIMARY_CATEGORY["compute_layer_bounds"] == "geographic_primitives"
-    assert "compute_layer_bounds" in categories.HOT_SET_TOOLS
-    # And it surfaces in the geographic_primitives member list.
-    assert "compute_layer_bounds" in categories.tools_for_category("geographic_primitives")
+    # It is in the always-visible retrieval floor (never retrieved out).
+    assert "compute_layer_bounds" in CORE_FLOOR
 
 
 # --------------------------------------------------------------------------- #

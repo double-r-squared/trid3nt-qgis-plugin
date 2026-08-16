@@ -1,7 +1,7 @@
-"""Unit tests for ``retrieve_visible_tools`` (tool-retrieval STEP 0 + STEP 1).
+"""Unit tests for ``retrieve_visible_tools`` (the built-in surfacing path).
 
-Asserts the kickoff's invariants: CORE-FLOOR (HOT_SET always a subset),
-NEVER-HIDE-MID-TASK (result always contains the Case's accumulated AllowedToolSet),
+Asserts the invariants: CORE-FLOOR (``CORE_FLOOR`` always a subset),
+NEVER-HIDE-MID-TASK (result always contains the Case's accrued visible set),
 DETERMINISTIC, k-clamp, and FAIL-OPEN (error / cold index / empty ranking -> full
 registry; empty query -> floor only). Plus a recall fixture over covered tools.
 
@@ -16,14 +16,10 @@ import trid3nt_server.agent.tools.search.search_tools.search_tools as dd
 from trid3nt_server.agent.tools import TOOL_REGISTRY
 from trid3nt_server.agent.tools.search import tool_retrieval as trmod
 from trid3nt_server.agent.tools.search.tool_retrieval import (
+    CORE_FLOOR,
     DEFAULT_K,
     MAX_K,
     retrieve_visible_tools,
-)
-from trid3nt_server.agent.categories import (
-    HOT_SET_TOOLS,
-    AllowedToolSet,
-    tools_for_category,
 )
 
 
@@ -34,100 +30,58 @@ def warm_index():
     yield
 
 
-def _allowed(opened=None, dispatched=None, explicit=None) -> AllowedToolSet:
-    a = AllowedToolSet()
-    for c in opened or ():
-        a.open_category(c)
-    for t in dispatched or ():
-        a.record_dispatch(t)
-    if explicit:
-        a.add_tools(explicit)
-    return a
+# ---------------------------------------------------------------------------
+# The core floor covers the render + layer-analysis slots.
+# ---------------------------------------------------------------------------
+def test_core_floor_covers_render_and_analysis_slots():
+    for name in ("publish_layer", "generate_chart", "spatial_query"):
+        assert name in CORE_FLOOR, f"{name} must be in CORE_FLOOR"
 
 
 # ---------------------------------------------------------------------------
-# STEP 0 -- the extended HOT_SET floor.
-# ---------------------------------------------------------------------------
-def test_step0_hot_set_floor_extended():
-    for name in (
-        "publish_layer",
-        # processing-wave cull (2026-07-29): generate_chart is the ONE
-        # interactive-chart floor slot (replaced generate_histogram /
-        # generate_time_series); compute_zonal_statistics demoted to code_exec.
-        "generate_chart",
-        # DuckDB spatial-query fold (Phase B): spatial_query holds the
-        # layer-analysis floor slot summarize_layer_statistics held.
-        "spatial_query",
-    ):
-        assert name in HOT_SET_TOOLS, f"{name} must be in the STEP-0 HOT_SET floor"
-
-
-# ---------------------------------------------------------------------------
-# CORE-FLOOR: HOT_SET_TOOLS is ALWAYS a subset of the result.
+# CORE-FLOOR: CORE_FLOOR is ALWAYS a subset of the result.
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("query", ["model the flood", "", "show me lightning", "asdfqwer", "   "])
-@pytest.mark.parametrize("allowed", [None, "fresh", "opened"])
-def test_core_floor_always_subset(warm_index, query, allowed):
-    a = None if allowed is None else (
-        AllowedToolSet() if allowed == "fresh" else _allowed(opened={"hydrology"})
+@pytest.mark.parametrize("accrued", [None, "fresh", "seeded"])
+def test_core_floor_always_subset(warm_index, query, accrued):
+    a = None if accrued is None else (
+        set() if accrued == "fresh" else {"fetch_usgs_nwis_gauges"}
     )
     res = retrieve_visible_tools(query, a, DEFAULT_K)
-    assert HOT_SET_TOOLS <= res
+    assert CORE_FLOOR <= res
 
 
 # ---------------------------------------------------------------------------
-# NEVER-HIDE-MID-TASK: the result always contains the Case's accumulated set.
+# NEVER-HIDE-MID-TASK: the result always contains the Case's accrued set.
 # ---------------------------------------------------------------------------
 def test_never_hide_mid_task(warm_index):
-    a = _allowed(
-        opened={"hydrology"},
-        dispatched={"swmm_urban_flood"},
-        explicit={"compute_contours"},
-    )
-    # a query about something UNRELATED to the accumulated tools.
-    res = retrieve_visible_tools("show me the lightning over the storm", a, DEFAULT_K)
-    assert set(a.as_frozenset()) <= res
+    accrued = {"swmm_urban_flood", "compute_contours", "fetch_usgs_nwis_gauges"}
+    # a query about something UNRELATED to the accrued tools.
+    res = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
+    assert accrued <= res
     assert "swmm_urban_flood" in res  # dispatched stays
-    assert "compute_contours" in res      # explicit stays
-    assert set(tools_for_category("hydrology")) <= res  # opened-category tools stay
+    assert "compute_contours" in res  # explicit stays
 
 
 def test_monotonic_growth_only_adds(warm_index):
-    a = AllowedToolSet()
-    r1 = retrieve_visible_tools("fetch the elevation DEM", a, DEFAULT_K)
-    # the Case grows: a tool dispatched + a category opened.
-    a.record_dispatch("fetch_dem")
-    a.open_category("hydrology")
-    r2 = retrieve_visible_tools("fetch the elevation DEM", a, DEFAULT_K)
-    # everything in the (grown) allowed set is visible; nothing the Case accrued left.
-    assert set(a.as_frozenset()) <= r2
-    assert set(tools_for_category("hydrology")) <= r2
+    accrued: set[str] = set()
+    r1 = retrieve_visible_tools("fetch the elevation DEM", accrued, DEFAULT_K)
+    # the Case grows: a tool dispatched this session.
+    accrued.add("fetch_dem")
+    accrued.add("fetch_usgs_nwis_gauges")
+    r2 = retrieve_visible_tools("fetch the elevation DEM", accrued, DEFAULT_K)
+    # everything the Case accrued is visible; nothing accrued left the set.
+    assert accrued <= r2
     assert "fetch_dem" in r1 and "fetch_dem" in r2
-
-
-def test_never_hide_survives_invalid_opened_category():
-    """Registry skew: a Case holding a now-unknown category id open must NOT drop
-    its OTHER accrued tools (the per-category-guarded snapshot, 2026-06-23)."""
-    a = AllowedToolSet()
-    a.open_category("hydrology")          # valid
-    a.open_category("no_such_category")   # invalid (e.g. removed/renamed across a deploy)
-    a.record_dispatch("swmm_urban_flood")
-    a.add_tools({"compute_contours"})
-    for query in ("", "fetch radar reflectivity nexrad"):
-        res = retrieve_visible_tools(query, a, DEFAULT_K)
-        assert "swmm_urban_flood" in res, query  # dispatched stays
-        assert "compute_contours" in res, query      # explicit stays
-        assert set(tools_for_category("hydrology")) <= res, query  # valid cat stays
-        assert HOT_SET_TOOLS <= res
 
 
 # ---------------------------------------------------------------------------
 # DETERMINISTIC.
 # ---------------------------------------------------------------------------
 def test_deterministic(warm_index):
-    a = _allowed(dispatched={"fetch_dem"})
-    r1 = retrieve_visible_tools("show me the lightning over the storm", a, DEFAULT_K)
-    r2 = retrieve_visible_tools("show me the lightning over the storm", a, DEFAULT_K)
+    accrued = {"fetch_dem"}
+    r1 = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
+    r2 = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     assert r1 == r2
 
 
@@ -136,14 +90,14 @@ def test_deterministic(warm_index):
 # ---------------------------------------------------------------------------
 def test_k_clamps_high(warm_index):
     res = retrieve_visible_tools("fetch radar reflectivity precipitation", None, 1000)
-    discovered = res - set(HOT_SET_TOOLS)
+    discovered = res - set(CORE_FLOOR)
     assert len(discovered) <= MAX_K
 
 
 def test_k_clamps_low_and_bad(warm_index):
-    assert HOT_SET_TOOLS <= retrieve_visible_tools("fetch radar", None, 0)
-    assert HOT_SET_TOOLS <= retrieve_visible_tools("fetch radar", None, -5)
-    assert HOT_SET_TOOLS <= retrieve_visible_tools("fetch radar", None, "garbage")  # type: ignore[arg-type]
+    assert CORE_FLOOR <= retrieve_visible_tools("fetch radar", None, 0)
+    assert CORE_FLOOR <= retrieve_visible_tools("fetch radar", None, -5)
+    assert CORE_FLOOR <= retrieve_visible_tools("fetch radar", None, "garbage")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -162,11 +116,11 @@ _STARTUP_ONLY = {
 def _pool_hidden_names() -> set[str]:
     """Registered pool-HIDDEN names: tier=internal only.
 
-    Door dissolution (ADR 0094): engine templates (tier=template) are ordinary
-    retrieval-pool members now -- they belong in retrieve_visible_tools, the
-    fail-open dump, and the corpus. Only tier=internal (an absorbed in-process
-    seam, fetch_copernicus_dem; ADR 0059) stays pool-hidden -- never model-facing,
-    carries no corpus, and must NOT appear in the fail-open dump."""
+    Engine templates (tier=template) are ordinary retrieval-pool members -- they
+    belong in retrieve_visible_tools, the fail-open dump, and the corpus. Only
+    tier=internal (an absorbed in-process seam, fetch_copernicus_dem) stays
+    pool-hidden -- never model-facing, carries no corpus, and must NOT appear in
+    the fail-open dump."""
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
@@ -179,9 +133,9 @@ def _pool_hidden_names() -> set[str]:
 
 
 def _assert_full_failopen(res):
-    # Door dissolution (ADR 0094): the fail-open floor filters ONLY tier=internal
-    # (a cold index must not leak the internal seam); engine templates are pool
-    # members and MUST appear. Expect the full registry MINUS the internal seam.
+    # The fail-open floor filters ONLY tier=internal (a cold index must not leak
+    # the internal seam); engine templates are pool members and MUST appear.
+    # Expect the full registry MINUS the internal seam.
     full = _full_registry_names() - _pool_hidden_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
     assert _STARTUP_ONLY <= res, "fail-open omitted the startup-only tools"
@@ -208,17 +162,6 @@ def test_fail_open_on_empty_ranking(warm_index, monkeypatch):
     _assert_full_failopen(retrieve_visible_tools("zzqqxx-nomatch", None, DEFAULT_K))
 
 
-def test_fail_open_on_snapshot_error_returns_full_registry(warm_index, monkeypatch):
-    """If allowed_set.as_frozenset() raises, fail-open to the FULL registry (never
-    HOT_SET-only) so a once-visible accrued tool is not silently hidden."""
-
-    class _Boom:
-        def as_frozenset(self):
-            raise RuntimeError("synthetic snapshot fault")
-
-    _assert_full_failopen(retrieve_visible_tools("model the flood", _Boom(), DEFAULT_K))
-
-
 def test_cold_index_never_builds_on_hot_path(monkeypatch):
     """The hot path must NOT trigger a cold index build (which blocks on a model
     load); a cold _INDEX must fail-open without calling _get_index/_build_index."""
@@ -235,10 +178,10 @@ def test_cold_index_never_builds_on_hot_path(monkeypatch):
 # Empty query -> floor only (does NOT dump the full catalog).
 # ---------------------------------------------------------------------------
 def test_empty_query_returns_floor_only(warm_index):
-    assert retrieve_visible_tools("   ", None, DEFAULT_K) == set(HOT_SET_TOOLS)
-    a = _allowed(dispatched={"fetch_dem"})
-    res = retrieve_visible_tools("", a, DEFAULT_K)
-    assert res == set(a.as_frozenset()) | set(HOT_SET_TOOLS)
+    assert retrieve_visible_tools("   ", None, DEFAULT_K) == set(CORE_FLOOR)
+    accrued = {"fetch_dem"}
+    res = retrieve_visible_tools("", accrued, DEFAULT_K)
+    assert res == accrued | set(CORE_FLOOR)
     assert set(TOOL_REGISTRY) - res  # full registry NOT dumped
 
 
@@ -251,7 +194,6 @@ _RECALL_FIXTURE = [
     ("get the elevation DEM for this area", "fetch_dem"),
     ("geocode this city to a bounding box", "geocode_location"),
     ("show NEXRAD radar reflectivity on the map", "show_nexrad_radar"),
-    # door dissolution (ADR 0094): engine templates recall directly now.
     ("how deep will the water get from this hurricane flood", "sfincs_flood"),
     ("simulate urban street flooding from heavy rain in this city", "swmm_urban_flood"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
@@ -268,13 +210,9 @@ def test_recall_surfaces_expected_tool(warm_index, query, want):
 
 
 # ---------------------------------------------------------------------------
-# STEP 7 -- corpus coverage: every registered tool has routing queries; no dead keys.
+# Corpus coverage: every registered tool has routing queries; no dead keys.
 # ---------------------------------------------------------------------------
 def _load_corpus():
-    import pathlib
-
-    import yaml
-
     # Compose through the module's own loader (per-tool corpus.yaml tree +
     # residual) so the test never hardcodes the package depth or the split.
     return dd._load_corpus()
@@ -295,10 +233,9 @@ def _full_registry_names() -> set[str]:
 
 def test_every_registered_tool_has_corpus_queries():
     corpus = _load_corpus()
-    # Door dissolution (ADR 0094): engine templates ARE required to have corpus
-    # queries now -- their co-located workflows/<engine>/<template>/corpus.yaml is
-    # walked into the composed corpus. Only tier=internal (never model-facing)
-    # carries no corpus.
+    # Engine templates ARE required to have corpus queries -- their co-located
+    # workflows/<engine>/<template>/corpus.yaml is walked into the composed
+    # corpus. Only tier=internal (never model-facing) carries no corpus.
     missing = sorted(_full_registry_names() - _pool_hidden_names() - set(corpus))
     assert not missing, (
         "these registered tools have NO tool_query_corpus.yaml entry -- add 5-8 "

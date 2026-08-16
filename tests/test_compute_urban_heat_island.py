@@ -233,18 +233,8 @@ def test_bad_daynight_raises(split_city, tmp_path) -> None:
         )
 
 
-def test_category_and_corpus() -> None:
-    import yaml
-
-    from trid3nt_server.agent import categories
+def test_corpus() -> None:
     from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
-    assert (
-        categories.PRIMARY_CATEGORY["compute_urban_heat_island"]
-        == "land_cover_development"
-    )
-    assert "weather_atmosphere" in categories.SECONDARY_CATEGORIES[
-        "compute_urban_heat_island"
-    ]
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_urban_heat_island", [])) >= 5

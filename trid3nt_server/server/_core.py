@@ -226,15 +226,11 @@ from ..agent.gates.cards import (
 # engine off each tool's GateSpec dotted paths -- not statically here.
 from ..agent.gates.cards.estimate import call_provider
 from ..agent.tools import TOOL_REGISTRY
+from ..agent.tools.search.tool_retrieval import CORE_FLOOR
 from ..agent.tools.processing.charts_common import is_chart_emission_result
 from ..agent.tools.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     is_code_exec_result,
-)
-from ..agent.categories import (
-    AllowedToolSet,
-    OutOfAllowedSetError,
-    validate_function_call,
 )
 from ..agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from ..agent.gates.tool_gating import BenchBlockedError
@@ -258,14 +254,11 @@ from .errors import (
 from .config import (
     CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S,
     CODE_EXEC_CONFIRM_TIMEOUT_SECONDS,
-    _TOOL_RETRIEVAL_MODE,
-    _TOOL_RETRIEVAL_VALID_MODES,
     _ambiguity_margin_threshold,
     _code_exec_approval_timeout_s,
     _env_flag,
     _tool_choice_timeout_s,
     _tool_retrieval_k,
-    _tool_retrieval_mode,
 )
 
 # Pending-interaction registries, raster-style
@@ -527,17 +520,18 @@ def _union_pinned_tool(
     retrieval_registry: dict,
     state: SessionState,
 ) -> dict:
-    """Union a user-pinned tool into the allowed set + visible registry.
+    """Union a user-pinned tool into the visible set + visible registry.
 
     Shared by the pre-turn tool-candidates gate and the per-round ASK-mode
-    waves: a pinned tool must be BOTH in the allowed set (post-hoc
-    validation) AND in the retrieval-visible registry (so the declaration is
-    built and the model can actually call it). Returns the registry to use --
-    a NEW dict when the pin widened it, else the same object (so callers can
-    skip a needless ``build_tool_declarations`` rebuild via identity check).
+    waves: a pinned tool must be BOTH in the Case's monotonic visible set (so it
+    stays visible next turn) AND in the retrieval-visible registry (so the
+    declaration is built and the model can actually call it). Returns the
+    registry to use -- a NEW dict when the pin widened it, else the same object
+    (so callers can skip a needless ``build_tool_declarations`` rebuild via
+    identity check).
     """
     if pinned and pinned in TOOL_REGISTRY:
-        state.allowed_tool_set.add_tools({pinned})
+        state.visible_tools.add(pinned)
         if pinned not in retrieval_registry:
             retrieval_registry = dict(retrieval_registry)
             retrieval_registry[pinned] = TOOL_REGISTRY[pinned]
@@ -1321,100 +1315,90 @@ async def _stream_model_reply(
 
     # Build tool declarations + system prompt for this request.
     #
-    # Tool-retrieval: default OFF = the full flat registry (no retrieval
-    # computed). In ``shadow`` we compute the WOULD-BE-visible set and LOG it
-    # for recall@k, but still build declarations over the FULL registry (zero
-    # behavior change). In ``enforce`` we subset TOOL_REGISTRY to the visible
-    # set before build_tool_declarations and UNION it into the Case's
-    # monotonic AllowedToolSet so a once-visible tool never leaves within a
-    # Case. Any retrieval error / empty result FAILS OPEN to the full
-    # registry, logged. The cachePoint TAIL is inserted downstream by
-    # bedrock_adapter (after tools), so subsetting the dict here preserves it.
+    # Tool-retrieval is the BUILT-IN surfacing path (unconditional enforce): each
+    # turn we compute the visible set via retrieve_visible_tools, UNION it into
+    # the Case's monotonic visible set so a once-visible tool never leaves within
+    # a Case, and subset TOOL_REGISTRY to the result before build_tool_declarations.
+    # Any retrieval error / empty result FAILS OPEN to the full registry, logged.
+    # The cachePoint TAIL is inserted downstream by bedrock_adapter (after tools),
+    # so subsetting the dict here preserves it. K is the only lever
+    # (TRID3NT_TOOL_RETRIEVAL_K).
     #
     # DEFAULT declarable set: the full registry MINUS tier=catalog/internal
     # (never the raw TOOL_REGISTRY). Engine
     # templates are ordinary members of this default set now -- callable
     # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
-    _retrieval_mode = _tool_retrieval_mode()
-    if _retrieval_mode in ("shadow", "enforce"):
-        try:
-            from ..agent.tools.search.tool_retrieval import retrieve_visible_tools
+    try:
+        from ..agent.tools.search.tool_retrieval import retrieve_visible_tools
 
-            _retrieval_k = _tool_retrieval_k()
-            _visible = retrieve_visible_tools(
-                user_text, state.allowed_tool_set, _retrieval_k
+        _retrieval_k = _tool_retrieval_k()
+        _visible = retrieve_visible_tools(
+            user_text, state.visible_tools, _retrieval_k
+        )
+        if not _visible:
+            # FAIL-OPEN: an empty result must never trim the catalog.
+            raise ValueError("retrieve_visible_tools returned empty")
+        # Selection telemetry (fire-and-forget, never-raise) -- feeds the
+        # recall@k dashboard.
+        try:
+            emit_shadow_selection_event(
+                session_id=state.session_id,
+                turn_id=pipeline_id,
+                user_text=user_text,
+                visible_tools=_visible,
+                mode="enforce",
+                k=_retrieval_k,
+                full_registry_size=len(TOOL_REGISTRY),
+                model_id=_effective_model,
             )
-            if not _visible:
-                # FAIL-OPEN: an empty result must never trim the catalog.
-                raise ValueError("retrieve_visible_tools returned empty")
-            # Shadow telemetry (fire-and-forget, never-raise). Logged in BOTH
-            # shadow and enforce so recall@k can be measured in either mode.
-            try:
-                emit_shadow_selection_event(
-                    session_id=state.session_id,
-                    turn_id=pipeline_id,
-                    user_text=user_text,
-                    visible_tools=_visible,
-                    mode=_retrieval_mode,
-                    k=_retrieval_k,
-                    full_registry_size=len(TOOL_REGISTRY),
-                    model_id=_effective_model,
-                )
-            except Exception:  # noqa: BLE001 -- telemetry must never break dispatch
-                logger.warning(
-                    "tool-retrieval: shadow emit failed", exc_info=True
-                )
-            if _retrieval_mode == "enforce":
-                # UNION the visible set into the Case's monotonic AllowedToolSet
-                # FIRST (so it never shrinks across turns), then subset the
-                # registry to the resulting snapshot. as_frozenset() already
-                # carries the core floor + accrued tools; intersecting with the
-                # registry keeps only real, registered tools.
-                try:
-                    state.allowed_tool_set.add_tools(_visible)
-                    _allowed_snapshot = set(
-                        state.allowed_tool_set.as_frozenset()
-                    )
-                except Exception:  # noqa: BLE001 -- never shrink on a snapshot fault
-                    logger.warning(
-                        "tool-retrieval: allowed-set union failed; "
-                        "FAIL-OPEN to full registry",
-                        exc_info=True,
-                    )
-                    _allowed_snapshot = set(TOOL_REGISTRY)
-                _subset = _allowed_snapshot & set(TOOL_REGISTRY)
-                if _subset:
-                    _retrieval_registry = {
-                        name: entry
-                        for name, entry in TOOL_REGISTRY.items()
-                        if name in _subset
-                    }
-                    logger.info(
-                        "tool-retrieval enforce: %d/%d tools visible "
-                        "(turn=%s session=%s)",
-                        len(_retrieval_registry),
-                        len(TOOL_REGISTRY),
-                        pipeline_id,
-                        state.session_id,
-                    )
-                else:
-                    logger.warning(
-                        "tool-retrieval enforce: empty subset; "
-                        "FAIL-OPEN to full registry"
-                    )
-        except Exception:  # noqa: BLE001 -- any fault FAILS OPEN to the full catalog
+        except Exception:  # noqa: BLE001 -- telemetry must never break dispatch
             logger.warning(
-                "tool-retrieval: selection failed; FAIL-OPEN to full registry "
-                "(mode=%s)",
-                _retrieval_mode,
+                "tool-retrieval: selection emit failed", exc_info=True
+            )
+        # UNION the visible set into the Case's monotonic visible set FIRST
+        # (so it never shrinks across turns), then subset the registry to the
+        # CORE_FLOOR + accrued snapshot intersected with the registry (real,
+        # registered tools only).
+        try:
+            state.visible_tools |= set(_visible)
+            _allowed_snapshot = set(CORE_FLOOR) | set(state.visible_tools)
+        except Exception:  # noqa: BLE001 -- never shrink on a snapshot fault
+            logger.warning(
+                "tool-retrieval: visible-set union failed; "
+                "FAIL-OPEN to full registry",
                 exc_info=True,
             )
-            # FAIL-OPEN to the tier-filtered default (NOT raw TOOL_REGISTRY):
-            # drops only tier=catalog/internal. Engine templates are ordinary
-            # members here. See
-            # _default_declarable_registry.
-            _retrieval_registry = _default_declarable_registry()
+            _allowed_snapshot = set(TOOL_REGISTRY)
+        _subset = _allowed_snapshot & set(TOOL_REGISTRY)
+        if _subset:
+            _retrieval_registry = {
+                name: entry
+                for name, entry in TOOL_REGISTRY.items()
+                if name in _subset
+            }
+            logger.info(
+                "tool-retrieval enforce: %d/%d tools visible "
+                "(turn=%s session=%s)",
+                len(_retrieval_registry),
+                len(TOOL_REGISTRY),
+                pipeline_id,
+                state.session_id,
+            )
+        else:
+            logger.warning(
+                "tool-retrieval enforce: empty subset; "
+                "FAIL-OPEN to full registry"
+            )
+    except Exception:  # noqa: BLE001 -- any fault FAILS OPEN to the full catalog
+        logger.warning(
+            "tool-retrieval: selection failed; FAIL-OPEN to full registry",
+            exc_info=True,
+        )
+        # FAIL-OPEN to the tier-filtered default (NOT raw TOOL_REGISTRY):
+        # drops only tier=catalog/internal. Engine templates are ordinary
+        # members here. See _default_declarable_registry.
+        _retrieval_registry = _default_declarable_registry()
 
     # TOP-K TOOL GATING: the openai adapter path was sending ALL ~190 tool
     # schemas every round. Gate the per-turn tool list to the retrieval
@@ -1460,9 +1444,7 @@ async def _stream_model_reply(
                         pipeline_id,
                         state.session_id,
                     )
-                _used_tools = set(state.allowed_tool_set.dispatched_tools) | set(
-                    state.allowed_tool_set.explicit_tools
-                )
+                _used_tools = set(state.visible_tools)
                 _gated = gate_tool_registry(
                     user_text,
                     _retrieval_registry,
@@ -2067,21 +2049,18 @@ async def _stream_model_reply(
                 _call_is_terminal_deliverable = False
                 _tool_start = asyncio.get_running_loop().time()
                 try:
-                    # Per-session circuit breaker: short-circuit before allowed-set
-                    # validation and dispatch if the tool has failed repeatedly this
-                    # session. Raises CircuitBreakerError, routed by the except-block below
-                    # through summarize_tool_result(error=...) so the model reads the
+                    # Per-session circuit breaker: short-circuit before dispatch
+                    # if the tool has failed repeatedly this session. Raises
+                    # CircuitBreakerError, routed by the except-block below through
+                    # summarize_tool_result(error=...) so the model reads the
                     # structured cooldown signal (not retryable).
                     if state.circuit_breaker.is_tripped(call.name):
                         remaining = state.circuit_breaker.cooldown_remaining_s(call.name)
                         raise CircuitBreakerError(call.name, remaining)
-                    # Post-hoc allowed-set validation: the model sees the full catalog
-                    # but our code enforces the per-turn allowed set. A function_call
-                    # outside the allowed set raises OutOfAllowedSetError, routed by the
-                    # except-block below through summarize_tool_result(error=...) as a
-                    # structured envelope so the model can retry (typically by first
-                    # calling list_tools_in_category).
-                    validate_function_call(call.name, state.allowed_tool_set)
+                    # A hallucinated (non-registered) name is caught at dispatch:
+                    # _invoke_tool_via_emitter raises ToolNotFoundError, routed
+                    # through summarize_tool_result(error=...) as the structured
+                    # envelope the model reads to retry.
                     result = await _invoke_tool_via_emitter(
                         websocket, state, call.name, call.args
                     )
@@ -2209,29 +2188,20 @@ async def _stream_model_reply(
                     if _call_is_terminal_deliverable:
                         _deliverable_done = True
                         _post_deliverable_idle = 0
-                    # On a successful dispatch, mark the tool sticky so the
-                    # LLM can re-issue the same tool on a later turn with
-                    # refined args without re-opening its category.
-                    state.allowed_tool_set.record_dispatch(call.name)
-                    # If the call was ``list_tools_in_category``, open the
-                    # requested category (sticky-after-list) -- every member
-                    # tool of that category is now reachable for the rest of
-                    # the session.
-                    if (
-                        call.name == "list_tools_in_category"
-                        and isinstance(result, dict)
-                    ):
-                        cat_id = result.get("category_id")
-                        if isinstance(cat_id, str) and cat_id:
-                            state.allowed_tool_set.open_category(cat_id)
+                    # On a successful dispatch, keep the tool in the Case's
+                    # monotonic visible set so the LLM can re-issue it on a later
+                    # turn with refined args (never hidden mid-task by the enforce
+                    # subset -- covers the rare fail-open turn where the dispatched
+                    # tool was not in the retrieved set).
+                    state.visible_tools.add(call.name)
                     # DISCOVERY-EXPANDS-GATE: when the tool-search tool returns
                     # candidate tool names, UNION them into this turn's visible gate
-                    # (and the Case allowed-set, so validation lets the model actually
-                    # call them) for SUBSEQUENT rounds, capped at _DISCOVERY_EXPAND_CAP
-                    # (bounds an unbounded ranked tail). Only names that are real,
-                    # registered, and not already visible count toward the cap; the
-                    # rebuild of tool_decls is deferred to once-per-round below.
-                    elif call.name in _gate_expander_tool_names():
+                    # (and the Case visible set, so they stay reachable) for
+                    # SUBSEQUENT rounds, capped at _DISCOVERY_EXPAND_CAP (bounds an
+                    # unbounded ranked tail). Only names that are real, registered,
+                    # and not already visible count toward the cap; the rebuild of
+                    # tool_decls is deferred to once-per-round below.
+                    if call.name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
                         _added_now: list[str] = []
                         for _cand in _hits:
@@ -2248,7 +2218,7 @@ async def _stream_model_reply(
                             _retrieval_registry = dict(_retrieval_registry)
                             for _cand in _added_now:
                                 _retrieval_registry[_cand] = TOOL_REGISTRY[_cand]
-                            state.allowed_tool_set.add_tools(set(_added_now))
+                            state.visible_tools.update(_added_now)
                             _tool_decls_dirty = True
                             logger.info(
                                 "discovery-expand: +%d tool(s) into the gate "
@@ -3351,17 +3321,11 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
     """Copy the resolved auth identity into the SessionState.
 
     Separate from ``_handle_auth_token`` so tests can drive the bind
-    directly without parsing an envelope. Also propagates the resolved
-    ``user_id`` into ``state.allowed_tool_set.user_id``. That field is
-    vestigial now (its sole reader, the per-user dynamic hot-set path, was
-    cut as feature-creep) - left in place, out of scope for that cut.
+    directly without parsing an envelope.
     """
     state.authenticated_user_id = result.user.user_id
     state.is_anonymous = result.is_anonymous
     state.auth_handshake_complete = True
-    # Vestigial propagation - state.allowed_tool_set.user_id has no readers
-    # since the per-user dynamic hot-set path was cut. Left in place.
-    state.allowed_tool_set.user_id = result.user.user_id
 
 
 async def _touch_session_record(
@@ -9967,29 +9931,28 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     except Exception as exc:  # noqa: BLE001 -- startup must not abort on persistence issues
         logger.warning("Persistence init failed (continuing without MCP): %s", exc)
 
-    # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: when retrieval is enabled
-    # (shadow/enforce), build the discover index off-loop NOW instead of
-    # lazily on the first search_tools tool call. Without this every
-    # turn's _discover_topk sees a COLD index and FAIL-OPENS to the full
-    # ~176-tool registry -- harmless for 200k-context cloud models, but a
-    # SMALL-CONTEXT local model (offline build, e.g. 16k Ollama) gets its
-    # request silently truncated, so it cannot see tool schemas and guesses
-    # argument names. Fire-and-forget: a failed warm just leaves the
-    # documented fail-open behavior in place; never delays serving.
-    if _tool_retrieval_mode() != "off":
-        async def _warm_discover_index() -> None:
-            try:
-                from ..agent.tools.search.search_tools import search_tools as _dd_warm
-                await asyncio.to_thread(_dd_warm._get_index)
-                logger.info("tool_retrieval: discover index warmed at startup")
-            except Exception:  # noqa: BLE001 -- warm is best-effort
-                logger.warning(
-                    "tool_retrieval: startup index warm failed; fail-open stays",
-                    exc_info=True,
-                )
-        _warm_task = asyncio.create_task(_warm_discover_index())
-        _BG_TASKS.add(_warm_task)
-        _warm_task.add_done_callback(_BG_TASKS.discard)
+    # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: enforce is the unconditional
+    # surfacing path, so build the discover index off-loop NOW instead of lazily
+    # on the first search_tools tool call. Without this every turn's
+    # _discover_topk sees a COLD index and FAIL-OPENS to the full registry --
+    # harmless for 200k-context cloud models, but a SMALL-CONTEXT local model
+    # (offline build, e.g. 16k Ollama) gets its request silently truncated, so it
+    # cannot see tool schemas and guesses argument names. Fire-and-forget: a
+    # failed warm just leaves the documented fail-open behavior in place; never
+    # delays serving.
+    async def _warm_discover_index() -> None:
+        try:
+            from ..agent.tools.search.search_tools import search_tools as _dd_warm
+            await asyncio.to_thread(_dd_warm._get_index)
+            logger.info("tool_retrieval: discover index warmed at startup")
+        except Exception:  # noqa: BLE001 -- warm is best-effort
+            logger.warning(
+                "tool_retrieval: startup index warm failed; fail-open stays",
+                exc_info=True,
+            )
+    _warm_task = asyncio.create_task(_warm_discover_index())
+    _BG_TASKS.add(_warm_task)
+    _warm_task.add_done_callback(_BG_TASKS.discard)
 
     handler = _make_handler(settings)
 

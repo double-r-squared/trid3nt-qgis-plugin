@@ -87,7 +87,6 @@ def _load_stack():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    import trid3nt_server.agent.categories  # noqa: F401
 
 
 # --------------------------------------------------------------------------- #

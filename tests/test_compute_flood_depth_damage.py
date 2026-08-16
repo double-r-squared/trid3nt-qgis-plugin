@@ -312,15 +312,8 @@ def test_bad_units_raises(depth_and_assets, tmp_path) -> None:
         )
 
 
-def test_category_and_corpus() -> None:
-    import yaml
-
-    from trid3nt_server.agent import categories
+def test_corpus() -> None:
     from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
-    assert (
-        categories.PRIMARY_CATEGORY["compute_flood_depth_damage"]
-        == "damage_assessment"
-    )
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_flood_depth_damage", [])) >= 5

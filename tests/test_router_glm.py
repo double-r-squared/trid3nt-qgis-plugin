@@ -133,12 +133,9 @@ def test_glm_signature_matches_twin():
     assert p["satellite"].default == "goes-19"
 
 
-def test_glm_categorized_and_in_corpus():
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+def test_glm_in_corpus():
     from trid3nt_server.agent.tools.search.search_tools.search_tools import _load_corpus
 
-    assert PRIMARY_CATEGORY.get("fetch_glm_lightning") == "weather_atmosphere"
-    assert SECONDARY_CATEGORIES.get("fetch_glm_lightning") == ("fire",)
     corpus = _load_corpus()
     assert "fetch_glm_lightning" in corpus and len(corpus["fetch_glm_lightning"]) >= 3
 

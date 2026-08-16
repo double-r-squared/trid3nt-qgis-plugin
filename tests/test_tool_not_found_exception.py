@@ -294,13 +294,10 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini(fake_llm):
     assert fn_resp_payload["status"] == "error", (
         f"Expected status='error'; got {fn_resp_payload}"
     )
-    # Wave 4.10 job-B5: the post-hoc allowed-set validator runs BEFORE
-    # _invoke_tool_via_emitter, so an unknown tool name surfaces as
-    # OUT_OF_ALLOWED_SET (it isn't in the hot set and the LLM never opened
-    # any category). The structured-error round-trip the test was originally
-    # verifying still holds — just with a more specific error_code that
-    # tells Gemini to widen its allowed set via list_tools_in_category.
-    assert fn_resp_payload["error_code"] in {"OUT_OF_ALLOWED_SET", "TOOL_NOT_FOUND"}
+    # An unknown tool name is caught at dispatch: _invoke_tool_via_emitter
+    # raises ToolNotFoundError, rendered as the TOOL_NOT_FOUND structured
+    # envelope the model reads to recover.
+    assert fn_resp_payload["error_code"] == "TOOL_NOT_FOUND"
     assert fn_resp_payload["retryable"] is False
 
     # Loop terminated cleanly — narrative reached chat.

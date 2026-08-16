@@ -1,12 +1,14 @@
 """HTTP catalog endpoint.
 
-Exposes two read-only JSON endpoints:
+Exposes read-only endpoints:
 
-- ``GET /api/tool-catalog`` -- the agent's atomic-tool surface.
+- ``GET /api/tool-catalog`` -- the flat tool catalog as JSON (the agent's-eye
+  view: every registered tool with its REAL docstring + metadata facets).
+- ``GET /catalog`` -- a self-contained HTML page rendering that same catalog,
+  with client-side name/text search and metadata-facet filters (no external
+  assets: inline CSS + JS + embedded data).
 - ``GET /api/telemetry/summary`` -- aggregated routing-quality stats over the
-  most recent 30 sessions, backing the routing-quality dashboard (this
-  module is the only HTTP seam -- adding a second endpoint keeps the
-  listener as a single asyncio TCP server).
+  most recent 30 sessions, backing the routing-quality dashboard.
 
 Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
 
@@ -14,9 +16,6 @@ Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
   agent can do. It is not part of the chat envelope contract --
   it does not stream, does not maintain session state, and does not require
   an authenticated user. A plain HTTP GET is the right shape.
-- The catalog payload is small (~71 tools × ~1.5 KB each ≈ 100 KB) and
-  cacheable. Routing it through the WS path would couple a static catalog
-  read to session lifecycle.
 
 The endpoint runs on its own asyncio TCP listener (default port 8766;
 override via ``TRID3NT_AGENT_HTTP_PORT``). It is mounted as a sibling of the
@@ -24,19 +23,16 @@ WebSocket server in ``server.run_server``, NOT in its own process -- single
 process, single asyncio loop, no thread sharing.
 
 Backed entirely by:
-- ``trid3nt_server.agent.categories.CATEGORIES`` / ``PRIMARY_CATEGORY`` /
-  ``SECONDARY_CATEGORIES`` -- the 12 tool categories.
 - ``trid3nt_server.agent.tools.TOOL_REGISTRY`` -- every registered tool's
-  ``AtomicToolMetadata`` carries the MCP annotation hints
-  (``read_only_hint``, ``open_world_hint``, ``destructive_hint``,
-  ``idempotent_hint``) + ``supports_global_query`` +
-  ``payload_mb_estimator_name``.
+  docstring (the same text the model sees) + its ``AtomicToolMetadata``
+  facets (``engine``, ``tier``, ``source_class``, the MCP annotation hints,
+  ``supports_global_query``). No hand-maintained taxonomy: every facet is
+  derived from metadata the tool already carries.
 - ``data/tool_query_corpus.yaml`` -- example sample-queries keyed by tool name.
 
-CORS: ``Access-Control-Allow-Origin: *`` so the Vite dev server (5173) and
-production builds on any origin can hit the endpoint without preflight
-friction. The endpoint is read-only and unauthenticated; permissive CORS is
-the correct posture.
+CORS: ``Access-Control-Allow-Origin: *`` so any origin can hit the endpoint
+without preflight friction. The endpoint is read-only and unauthenticated;
+permissive CORS is the correct posture.
 """
 
 from __future__ import annotations
@@ -45,6 +41,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +51,7 @@ logger = logging.getLogger("trid3nt_server.tool_catalog_http")
 
 __all__ = [
     "build_catalog_payload",
+    "render_catalog_page",
     "load_query_corpus",
     "serve_catalog_http",
     "build_telemetry_summary",
@@ -153,60 +151,48 @@ def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
     return _CORPUS_CACHE
 
 
+def _facet_str(value: Any) -> str | None:
+    """Coerce a metadata facet (enum / str / None) to a plain string or None."""
+    if value is None:
+        return None
+    s = str(value)
+    return s or None
+
+
 def build_catalog_payload(
     *,
     corpus: dict[str, list[str]] | None = None,
     use_cache: bool = True,
 ) -> dict[str, Any]:
-    """Assemble the ``/api/tool-catalog`` JSON payload.
+    """Assemble the flat ``/api/tool-catalog`` payload (the agent's-eye view).
 
-    Shape::
+    A thin reader over ``TOOL_REGISTRY``: every registered tool listed FLAT with
+    its REAL docstring (the exact text the model routes on) and the metadata
+    facets it already carries. No taxonomy, no hand bookkeeping. Shape::
 
         {
-          "categories": [
-            {"id": "...", "name": "...", "description": "...", "tool_count": N},
-            ...12...
-          ],
+          "generated_at": "2026-...Z",
+          "tool_count": N,
           "tools": [
             {
               "name": "fetch_dem",
-              "description": "...",        # first-line/short docstring
-              "description_full": "...",   # full docstring
-              "category_id": "terrain_elevation",
-              "secondary_category_ids": [],
+              "docstring": "...",          # the full, real docstring
+              "engine": null,              # facet: owning engine slug or null
+              "tier": "general",           # facet: retrieval tier
+              "source_class": "dem",       # facet: cache source-class prefix
               "supports_global_query": false,
-              "annotations": {
-                "read_only_hint": true,
-                "open_world_hint": true,
-                "destructive_hint": false,
-                "idempotent_hint": true
-              },
-              "estimate_payload_mb_default": null,
-              "ttl_class": "static-30d",
-              "source_class": "dem",
               "cacheable": true,
-              "sample_queries": ["show me elevation data for the Grand Canyon", ...]
+              "ttl_class": "static-30d",
+              "annotations": {
+                "read_only_hint": true, "open_world_hint": true,
+                "destructive_hint": false, "idempotent_hint": true
+              },
+              "sample_queries": ["show me elevation for the Grand Canyon", ...]
             },
             ...
           ]
         }
-
-    A tool registered without a primary category falls back to
-    ``geographic_primitives`` (the catch-all for platform plumbing). The
-    full description carries the complete docstring so the UI can show a
-    short snippet by default and let the user expand the entry for the
-    full text.
     """
-    # Import here to avoid an import cycle: categories.py imports from
-    # ``tools``, ``tools`` imports submodules that register decorators.
-    # Importing categories at module load time is fine, but we want the
-    # payload to reflect whatever the registry holds AT BUILD TIME, so we
-    # snapshot here.
-    from .agent.categories import (
-        CATEGORIES,
-        PRIMARY_CATEGORY,
-        SECONDARY_CATEGORIES,
-    )
     from .agent.tools import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
@@ -215,97 +201,139 @@ def build_catalog_payload(
 
     corpus_map = corpus if corpus is not None else load_query_corpus()
 
-    # First pass: build the tools list.
     tools_out: list[dict[str, Any]] = []
     for name in sorted(TOOL_REGISTRY.keys()):
         entry = TOOL_REGISTRY[name]
         meta = entry.metadata
         doc_full = (entry.fn.__doc__ or "").strip()
-        description = _first_paragraph(doc_full)
-        primary_cat = PRIMARY_CATEGORY.get(name, "geographic_primitives")
-        secondaries = list(SECONDARY_CATEGORIES.get(name, ()))
-        sample_queries = list(corpus_map.get(name, []))
-        # Cap to 3 sample queries in the payload -- the UI shows 2-3; sending
-        # all 5-10 wastes bandwidth on a discovery surface.
-        sample_queries = sample_queries[:3]
+        # Cap to 3 sample queries -- the page shows 2-3; sending all 5-10 wastes
+        # bandwidth on a discovery surface.
+        sample_queries = list(corpus_map.get(name, []))[:3]
         tools_out.append(
             {
                 "name": name,
-                "description": description,
-                "description_full": doc_full,
-                "category_id": primary_cat,
-                "secondary_category_ids": secondaries,
+                "docstring": doc_full,
+                "engine": _facet_str(getattr(meta, "engine", None)),
+                "tier": _facet_str(getattr(meta, "tier", "general")) or "general",
+                "source_class": _facet_str(meta.source_class),
                 "supports_global_query": bool(meta.supports_global_query),
+                "cacheable": bool(meta.cacheable),
+                "ttl_class": str(meta.ttl_class),
                 "annotations": {
                     "read_only_hint": bool(meta.read_only_hint),
                     "open_world_hint": bool(meta.open_world_hint),
                     "destructive_hint": bool(meta.destructive_hint),
                     "idempotent_hint": bool(meta.idempotent_hint),
                 },
-                "estimate_payload_mb_default": None,
-                "ttl_class": str(meta.ttl_class),
-                "source_class": meta.source_class,
-                "cacheable": bool(meta.cacheable),
                 "sample_queries": sample_queries,
             }
         )
 
-    # Second pass: count tools per category. Counted from PRIMARY_CATEGORY +
-    # SECONDARY_CATEGORIES so a cross-listed tool shows up in both. Tools
-    # without an explicit primary category fall through to
-    # ``geographic_primitives`` -- match the per-tool fallback above.
-    category_counts: dict[str, int] = {c.id: 0 for c in CATEGORIES}
-    for name in TOOL_REGISTRY:
-        primary = PRIMARY_CATEGORY.get(name, "geographic_primitives")
-        if primary in category_counts:
-            category_counts[primary] += 1
-        for sec in SECONDARY_CATEGORIES.get(name, ()):
-            if sec in category_counts:
-                category_counts[sec] += 1
-
-    categories_out = [
-        {
-            "id": c.id,
-            "name": c.name,
-            "description": c.description,
-            "tool_count": category_counts.get(c.id, 0),
-        }
-        for c in CATEGORIES
-    ]
-
-    payload = {"categories": categories_out, "tools": tools_out}
+    payload = {
+        "generated_at": datetime.now(timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "tool_count": len(tools_out),
+        "tools": tools_out,
+    }
     if use_cache:
         _PAYLOAD_CACHE = payload
     return payload
 
 
-def _first_paragraph(doc: str, *, max_chars: int = 400) -> str:
-    """Return a short snippet from a docstring.
+# Self-contained catalog page. Inline CSS + JS + embedded data -- NO external
+# assets (a strict-CSP / offline viewer must render it unchanged). The data is
+# embedded as a JSON <script> block the inline JS reads once; facets and search
+# are derived from it entirely client-side.
+_CATALOG_PAGE_TEMPLATE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRID3NT tool catalog</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1a1a1a;--muted:#666;--card:#f6f7f9;--border:#dcdfe4;--badge:#e6ebf2;--accent:#2d6cdf}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8eb;--muted:#9aa2ad;--card:#1d2027;--border:#2c313a;--badge:#252b36;--accent:#5b8cf0}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);padding:16px 20px;z-index:2}
+h1{margin:0 0 4px;font-size:20px}
+.sub{color:var(--muted);font-size:13px}
+.controls{margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+#q{flex:1 1 260px;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
+select{padding:7px 8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
+main{padding:16px 20px;max-width:1100px;margin:0 auto}
+.tool{border:1px solid var(--border);background:var(--card);border-radius:10px;padding:14px 16px;margin:0 0 12px}
+.tool h2{margin:0;font:600 15px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+.badges{margin:6px 0 8px;display:flex;flex-wrap:wrap;gap:6px}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--badge);color:var(--muted);white-space:nowrap}
+.badge.eng{color:var(--accent)}
+pre.doc{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg)}
+.sq{margin-top:8px;font-size:12px;color:var(--muted)}
+.sq b{color:var(--fg);font-weight:600}
+.empty{color:var(--muted);padding:40px 0;text-align:center}
+</style></head>
+<body>
+<header>
+  <h1>TRID3NT tool catalog</h1>
+  <div class="sub">The agent's-eye view: every registered tool with the exact docstring the model routes on. <span id="count"></span></div>
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search name + docstring..." autocomplete="off">
+    <select id="f-engine"><option value="">engine: all</option></select>
+    <select id="f-tier"><option value="">tier: all</option></select>
+    <select id="f-source"><option value="">source_class: all</option></select>
+  </div>
+</header>
+<main id="list"></main>
+<script id="catalog-data" type="application/json">__DATA__</script>
+<script>
+(function(){
+  var data=JSON.parse(document.getElementById("catalog-data").textContent);
+  var tools=data.tools||[];
+  var list=document.getElementById("list");
+  var q=document.getElementById("q");
+  var fEngine=document.getElementById("f-engine"),fTier=document.getElementById("f-tier"),fSource=document.getElementById("f-source");
+  function opts(sel,vals){vals.forEach(function(v){var o=document.createElement("option");o.value=v;o.textContent=v;sel.appendChild(o);});}
+  function uniq(key){var s={};tools.forEach(function(t){if(t[key])s[t[key]]=1;});return Object.keys(s).sort();}
+  opts(fEngine,uniq("engine"));opts(fTier,uniq("tier"));opts(fSource,uniq("source_class"));
+  function esc(x){return (x==null?"":String(x)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  function badges(t){var b=[];if(t.engine)b.push('<span class="badge eng">'+esc(t.engine)+'</span>');
+    b.push('<span class="badge">tier: '+esc(t.tier)+'</span>');
+    if(t.source_class)b.push('<span class="badge">'+esc(t.source_class)+'</span>');
+    if(t.supports_global_query)b.push('<span class="badge">global</span>');
+    if(t.annotations&&t.annotations.read_only_hint)b.push('<span class="badge">read-only</span>');
+    return b.join("");}
+  function render(){
+    var term=q.value.trim().toLowerCase();
+    var e=fEngine.value,ti=fTier.value,so=fSource.value;
+    var html="",n=0;
+    tools.forEach(function(t){
+      if(e&&t.engine!==e)return;if(ti&&t.tier!==ti)return;if(so&&t.source_class!==so)return;
+      if(term&&(t.name+" "+t.docstring).toLowerCase().indexOf(term)<0)return;
+      n++;
+      var sq=(t.sample_queries&&t.sample_queries.length)?'<div class="sq"><b>e.g.</b> '+t.sample_queries.map(esc).join(" &middot; ")+'</div>':"";
+      html+='<div class="tool"><h2>'+esc(t.name)+'</h2><div class="badges">'+badges(t)+'</div><pre class="doc">'+esc(t.docstring)+'</pre>'+sq+'</div>';
+    });
+    list.innerHTML=n?html:'<div class="empty">No tools match.</div>';
+    document.getElementById("count").textContent=n+" of "+tools.length+" shown";
+  }
+  q.addEventListener("input",render);fEngine.addEventListener("change",render);
+  fTier.addEventListener("change",render);fSource.addEventListener("change",render);
+  render();
+})();
+</script>
+</body></html>"""
 
-    Strategy: take the first non-empty line, then continue until a blank
-    line OR ``max_chars`` is reached. The full docstring is also surfaced
-    on the wire (``description_full``) so the UI can click-to-expand.
+
+def render_catalog_page(payload: dict[str, Any] | None = None) -> bytes:
+    """Render the self-contained HTML catalog page (UTF-8 bytes).
+
+    Embeds ``build_catalog_payload`` as an inline JSON block the page's inline JS
+    reads for client-side search + facet filtering. ``</`` in the JSON is escaped
+    so a docstring containing it cannot break out of the ``<script>`` block.
     """
-    if not doc:
-        return ""
-    lines = doc.splitlines()
-    out: list[str] = []
-    started = False
-    for line in lines:
-        stripped = line.strip()
-        if not started:
-            if not stripped:
-                continue
-            started = True
-        if started and not stripped:
-            break
-        out.append(stripped)
-        if sum(len(s) + 1 for s in out) >= max_chars:
-            break
-    snippet = " ".join(out)
-    if len(snippet) > max_chars:
-        snippet = snippet[: max_chars - 1].rstrip() + "…"
-    return snippet
+    data = payload if payload is not None else build_catalog_payload()
+    raw = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+    safe = raw.replace("</", "<\\/")
+    return _CATALOG_PAGE_TEMPLATE.replace("__DATA__", safe).encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -2272,6 +2300,25 @@ async def _handle_http(
             logger.exception("tool-catalog payload build failed")
             writer.write(
                 _format_response(500, b'{"error":"catalog build failed"}')
+            )
+    elif proxy_path == "/catalog":
+        # Self-contained HTML catalog page (the agent's-eye view). Inline
+        # CSS + JS + embedded data -- no external assets.
+        try:
+            body = render_catalog_page()
+            writer.write(
+                _format_response(
+                    200, body, content_type="text/html; charset=utf-8"
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("catalog page render failed")
+            writer.write(
+                _format_response(
+                    500,
+                    b"<!doctype html><p>catalog render failed</p>",
+                    content_type="text/html; charset=utf-8",
+                )
             )
     elif path == "/api/telemetry/summary":
         try:

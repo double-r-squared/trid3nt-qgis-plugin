@@ -227,7 +227,7 @@ async def test_abort_after_a_real_tool_call_never_adds_fabrication_caveat(
         state = server.SessionState(session_id=new_ulid())
         case_id = await _create_case(ws, state)
         state.current_turn_case_id = case_id
-        state.allowed_tool_set.add_tools(["abort_tool"])
+        state.visible_tools.update(["abort_tool"])
 
         rounds = iter(
             [

@@ -4,9 +4,9 @@
 Measures the LOCAL model's (qwen3:8b-24k) FIRST tool choice for a candidate
 user prompt, reproducing the LIVE agent's per-turn assembly EXACTLY:
 
-  * tool-retrieval enforce, K=8 (TRID3NT_TOOL_RETRIEVAL / TRID3NT_TOOL_RETRIEVAL_K)
-    -- the warm discover index subsets the ~194-tool registry to the visible set
-    (HOT_SET floor UNION top-K retrieved). run_telemac / the seepage tools are
+  * tool-retrieval enforce, K=8 (TRID3NT_TOOL_RETRIEVAL_K) -- the warm discover
+    index subsets the registry to the visible set (CORE_FLOOR UNION top-K
+    retrieved). run_telemac / the seepage tools are
     NOT in the hot set, so retrieval is the gatekeeper.
   * SYSTEM_PROMPT (+ lessons appendix when TRID3NT_LESSONS=on)
   * TRID3NT_OPENAI_EXTRA_SYSTEM + baked tool-discipline line (added inside the
@@ -37,7 +37,6 @@ os.environ.setdefault("MODEL_PROVIDER", "openai")
 os.environ.setdefault("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
 os.environ.setdefault("TRID3NT_OPENAI_API_KEY", "not-needed")
 os.environ.setdefault("TRID3NT_OPENAI_MODEL", "qwen3:8b-24k")
-os.environ.setdefault("TRID3NT_TOOL_RETRIEVAL", "enforce")
 os.environ.setdefault("TRID3NT_TOOL_RETRIEVAL_K", "8")
 os.environ.setdefault("TRID3NT_LESSONS", "on")
 # The live agent's extra-system (verbatim from /proc/<agent>/environ).

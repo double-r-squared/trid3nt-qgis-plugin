@@ -463,11 +463,6 @@ class TestRegistration:
         assert m.source_class == "chart_tools"
         assert m.read_only_hint is True
 
-    def test_category_membership(self):
-        from trid3nt_server.agent.categories import PRIMARY_CATEGORY
-
-        assert PRIMARY_CATEGORY["generate_chart"] == "geographic_primitives"
-
     def test_culled_chart_tools_absent(self):
         from trid3nt_server.agent.tools import TOOL_REGISTRY
 

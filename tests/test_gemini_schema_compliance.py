@@ -71,7 +71,7 @@ def tool_names() -> list[str]:
 
 _FORBIDDEN_KEYWORDS = ("anyOf", "oneOf", "allOf", "$ref")
 
-_ZERO_PARAM_TOOLS = {"list_categories"}  # legitimately have no parameters
+_ZERO_PARAM_TOOLS: set[str] = set()  # no tool legitimately has zero parameters
 
 
 def _walk_schema_for_violations(

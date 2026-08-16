@@ -213,7 +213,7 @@ async def test_segments_already_streamed_no_double_narration(
         state = server.SessionState(session_id=new_ulid())
         case_id = await _create_case(ws, state)
         state.current_turn_case_id = case_id
-        state.allowed_tool_set.add_tools(["bug3_tool"])
+        state.visible_tools.update(["bug3_tool"])
 
         # Round 1: text "Working on it." + tool call (segment finalized ->
         # segments_done == 1). Round 2: tool call only, no trailing text

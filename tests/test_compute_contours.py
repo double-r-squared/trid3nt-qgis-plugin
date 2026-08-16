@@ -6,12 +6,9 @@ no live ``gdal_contour`` binary is required in CI.
 Coverage:
  1. ``test_compute_contours_registered`` — tool in TOOL_REGISTRY with the
     expected metadata (cacheable, static-30d, source_class="contours").
- 2. ``test_compute_contours_terrain_categorized`` — listed under
-    ``terrain_elevation`` in PRIMARY_CATEGORY + appears in that category's
-    member list.
- 3. ``test_derive_interval_*`` — default-interval derivation from DEM relief
+ 2. ``test_derive_interval_*`` — default-interval derivation from DEM relief
     (relief/15 snapped to a nice number; never 0/negative; flat → smallest).
- 4. ``test_run_gdal_contour_invocation_args`` — ``-a elev -i <interval>`` and
+ 3. ``test_run_gdal_contour_invocation_args`` — ``-a elev -i <interval>`` and
     the FlatGeobuf driver appear in the subprocess argv.
  5. ``test_compute_contours_layer_uri_shape`` — vector LayerURI (layer_type
     vector, bbox set, style_preset contours, units m).
@@ -209,19 +206,7 @@ def test_compute_contours_registered():
 
 
 # ---------------------------------------------------------------------------
-# Test 2 — terrain categorization
-# ---------------------------------------------------------------------------
-
-
-def test_compute_contours_terrain_categorized():
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, tools_for_category
-
-    assert PRIMARY_CATEGORY["compute_contours"] == "terrain_elevation"
-    assert "compute_contours" in tools_for_category("terrain_elevation")
-
-
-# ---------------------------------------------------------------------------
-# Test 3 — default-interval derivation from relief
+# Test 2 — default-interval derivation from relief
 # ---------------------------------------------------------------------------
 
 

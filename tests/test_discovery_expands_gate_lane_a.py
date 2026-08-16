@@ -22,7 +22,7 @@ import pytest
 from trid3nt_server import server as agent_server
 from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.agent.adapters.adapter import ModelSettings
-from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
@@ -90,7 +90,7 @@ def _settings() -> ModelSettings:
 
 
 def _discoverable_names(n: int) -> list[str]:
-    """``n`` real registered tool names that are NOT in the hot-set floor.
+    """``n`` real registered tool names that are NOT in the core floor.
 
     These are the candidates a search returns -- they must be OUTSIDE the
     trimmed visible set so the union actually adds them.
@@ -98,7 +98,7 @@ def _discoverable_names(n: int) -> list[str]:
     out = [
         name
         for name in sorted(agent_tools.TOOL_REGISTRY)
-        if name not in HOT_SET_TOOLS and name != "search_tools"
+        if name not in CORE_FLOOR and name != "search_tools"
     ]
     return out[:n]
 
@@ -130,13 +130,12 @@ def _stub_search():
 
 
 async def _drive_with_trimmed_gate(state, monkeypatch, decl_registries, fake_llm):
-    """Drive: enforce mode trims the gate to {hot set + search_tools}; round 1
+    """Drive: retrieval trims the gate to {core floor + search_tools}; round 1
     calls search_tools; capture the registry keys passed to
     ``build_tool_declarations`` on each build so the rebuild is observable."""
-    # Enforce mode so _retrieval_registry is a TRIMMED subset (else every tool
-    # is already visible and the union is a no-op).
-    monkeypatch.setenv("TRID3NT_TOOL_RETRIEVAL", "enforce")
-    visible = set(HOT_SET_TOOLS) | {"search_tools"}
+    # Trim the visible set so the union actually adds (else every tool is
+    # already visible and the union is a no-op).
+    visible = set(CORE_FLOOR) | {"search_tools"}
     monkeypatch.setattr(
         "trid3nt_server.agent.tools.search.tool_retrieval.retrieve_visible_tools",
         lambda *_a, **_k: set(visible),
@@ -189,9 +188,12 @@ async def test_discovery_expand_fires_and_caps_at_8(_stub_search, monkeypatch, c
 
 @pytest.mark.asyncio
 async def test_discovery_expand_noop_when_gate_untrimmed(_stub_search, monkeypatch, fake_llm):
-    """With the FULL registry visible (no enforce), the discovered tools are
-    already present -> no rebuild, no cap consumed (a clean no-op)."""
-    monkeypatch.delenv("TRID3NT_TOOL_RETRIEVAL", raising=False)
+    """With the FULL registry visible (retrieval surfaces everything), the
+    discovered tools are already present -> no rebuild, no cap consumed."""
+    monkeypatch.setattr(
+        "trid3nt_server.agent.tools.search.tool_retrieval.retrieve_visible_tools",
+        lambda *_a, **_k: set(agent_tools.TOOL_REGISTRY),
+    )
     decl_registries: list[set] = []
 
     fake_llm.script([

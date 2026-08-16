@@ -486,8 +486,3 @@ def test_registered_in_tool_registry():
     assert md.idempotent_hint is True
 
 
-def test_in_geographic_primitives_category():
-    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, tools_for_category
-
-    assert PRIMARY_CATEGORY.get("compute_cross_section") == "geographic_primitives"
-    assert "compute_cross_section" in tools_for_category("geographic_primitives")

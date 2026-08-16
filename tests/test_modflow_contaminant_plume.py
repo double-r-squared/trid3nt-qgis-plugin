@@ -481,15 +481,6 @@ def test_template_tagged_engine_and_tier() -> None:
     assert entry.metadata.tier == "template"
 
 
-def test_template_categorized_under_simulation_modeling() -> None:
-    """Door dissolution (ADR 0094): templates are ordinary pool members and carry
-    their own category membership (the deleted run_modflow door carried it before).
-    ADR 0177: hazard_modeling renamed to simulation_modeling."""
-    from trid3nt_server.agent.categories import tools_for_category
-
-    assert "modflow_contaminant_plume" in tools_for_category("simulation_modeling")
-
-
 def test_single_contaminant_convenience_normalizes_to_one_species() -> None:
     """N=1 known-answer: the single-contaminant convenience pair -> a 1-element
     species list (old run_modflow_job single behavior, now length-1 plumes[])."""

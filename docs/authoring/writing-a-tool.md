@@ -37,12 +37,11 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 2. The **`@register_tool`** decorator (registers it in `TOOL_REGISTRY`).
 3. An **eager import** in `trid3nt_server/tools/__init__.py`
    (so the decorator actually fires at startup).
-4. A **category** entry in `trid3nt_server/categories.py`.
-5. **Corpus queries** in
+4. **Corpus queries** in
    `trid3nt_server/data/tool_query_corpus.yaml` (the retrieval
    index) + the mandatory `retrieve_visible_tools(prompt, None, 8)` check.
-6. A **test** under `services/agent/tests/`.
-7. Observe the **1000-char docstring rule** (front-load routing).
+5. A **test** under `services/agent/tests/`.
+6. Observe the **1000-char docstring rule** (front-load routing).
 
 ---
 
@@ -219,32 +218,7 @@ silently never exists.
 
 ---
 
-## Step 4 - categories.py
-
-Every registered tool has exactly one **primary category**. Add your tool name to
-`PRIMARY_CATEGORY` in `trid3nt_server/categories.py`:
-
-```python
-PRIMARY_CATEGORY: dict[str, str] = {
-    ...
-    "fetch_noaa_slr_confidence": "coastal",
-    ...
-}
-```
-
-Optionally cross-list it in `SECONDARY_CATEGORIES` when it materially belongs to a
-second category too. The 12 categories are the `CategorySpec` entries in
-`CATEGORIES`. A tool that is a cross-cutting entry point can also be added to the
-always-on floor `HOT_SET_TOOLS`, but keep that set small -- it is loaded every
-turn.
-
-Note: `validate_function_call` (categories.py) auto-widens the allowed set for
-ANY registry-valid call, so category membership drives `list_tools_in_category`
-and discovery, not hard permission.
-
----
-
-## Step 5 - the corpus + the mandatory retrieval check
+## Step 4 - the corpus + the mandatory retrieval check
 
 This is a HARD rule: **every new tool gets `tool_query_corpus.yaml` queries AND
 must pass the `retrieve_visible_tools(prompt, None, 8)` visibility check before
@@ -252,13 +226,13 @@ acceptance.**
 
 ### Why the corpus exists (the retrieval index)
 
-The per-turn tool list is trimmed for token cost: instead of showing the LLM all
-~190 tools every turn, `retrieve_visible_tools`
+The per-turn tool list is trimmed for token cost: instead of showing the LLM the
+whole registry every turn, `retrieve_visible_tools`
 (`trid3nt_server/tools/discovery/tool_retrieval.py`) composes the visible
 set as:
 
 ```
-HOT_SET_TOOLS  UNION  the Case's accumulated allowed-set  UNION  discover top-k
+CORE_FLOOR  UNION  the Case's accrued visible set  UNION  discover top-k
 ```
 
 The `discover top-k` term ranks tools against the user's text with a BM25 + local
@@ -315,12 +289,12 @@ case so it proves the CORPUS actually routes.
 
 ---
 
-## Step 6 - the test
+## Step 5 - the test
 
 Model your test on `services/agent/tests/test_fetch_noaa_slr_siblings.py`. A
-minimal test asserts four things: registration + metadata, the category mapping,
-the corpus coverage, and the tool's own behavior (called directly via
-`TOOL_REGISTRY[name].fn`, since the decorator returns the undecorated function):
+minimal test asserts three things: registration + metadata, the corpus coverage,
+and the tool's own behavior (called directly via `TOOL_REGISTRY[name].fn`, since
+the decorator returns the undecorated function):
 
 ```python
 from trid3nt_server.tools import TOOL_REGISTRY
@@ -330,10 +304,6 @@ def test_registered():
     m = TOOL_REGISTRY["fetch_noaa_slr_confidence"].metadata
     assert m.source_class == "noaa_slr_confidence"
     assert m.ttl_class == "static-30d" and m.cacheable is True
-
-def test_categories():
-    from trid3nt_server.categories import PRIMARY_CATEGORY
-    assert PRIMARY_CATEGORY["fetch_noaa_slr_confidence"] == "coastal"
 
 def test_corpus():
     import pathlib, yaml
@@ -352,7 +322,7 @@ cd services/agent && python -m pytest tests/test_<your_tool>.py -q
 
 ---
 
-## Step 7 - the 1000-char docstring rule (front-load routing)
+## Step 6 - the 1000-char docstring rule (front-load routing)
 
 The Bedrock adapter **always truncates the tool description to 1000 chars**
 (`trid3nt_server/bedrock_adapter.py`,
@@ -397,6 +367,5 @@ To copy it into your own tool:
    `ttl_class="static-30d"` + a `source_class` + `open_world_hint=True`).
 4. Delete the `TRID3NT_ENABLE_EXAMPLE_TOOL` gate; decorate the function directly
    with `@register_tool(_METADATA, ...)`.
-5. Add the eager import (step 3), the category (step 4), the corpus (step 5), and
-   the test (step 6).
-6. Run the visibility check (step 5) and your test. Ship.
+5. Add the eager import (step 3), the corpus (step 4), and the test (step 5).
+6. Run the visibility check (step 4) and your test. Ship.

@@ -496,11 +496,11 @@ the named tool directly even if geocoding could be a precursor — geocode FIRST
 only if location is needed, then proceed to the named tool. Don't stop at
 geocode.
 
-CRITICAL — DO NOT use list_categories / list_tools_in_category / search_tools
-when the user has already named the tool or source. The mapping above IS the
-discovery layer for these endpoints. Catalog browsing wastes turns and burns
-the per-anchor budget. Examples of WRONG behavior:
-  WRONG: user says "HRRR forecast" → list_categories → list_tools_in_category("weather") → fetch_hrrr_forecast
+CRITICAL — DO NOT use search_tools when the user has already named the tool or
+source. The mapping above IS the discovery layer for these endpoints.
+search_tools wastes turns and burns the per-anchor budget. Examples of WRONG
+behavior:
+  WRONG: user says "HRRR forecast" → search_tools("weather") → fetch_hrrr_forecast
   RIGHT: user says "HRRR forecast" for Fort Myers → geocode_location("Fort Myers") → fetch_hrrr_forecast(bbox=...)
   RIGHT (no location needed): user says "HRRR for bbox -82,26,-81,27" → fetch_hrrr_forecast(bbox=...) directly
 
@@ -1295,12 +1295,11 @@ def load_settings() -> ModelSettings:
 _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 
 # Maximum loop iterations for the multi-turn driver.  Each iteration is one
-# Gemini stream + (optionally) one dispatched tool call. 12 accommodates the
-# chain depth of the widest fetcher categories (STAC, ERDDAP, THREDDS,
-# gridMET, CO-OPS, etc.) plus the allowed-set discovery overhead
-# (list_categories -> list_tools_in_category -> actual fetch -> publish) that
-# category routing introduces. Past 12, that's a runaway and the fail-stop +
-# loop_exhausted envelope is the correct response.
+# model stream + (optionally) one dispatched tool call. 12 accommodates the
+# chain depth of the widest fetcher families (STAC, ERDDAP, THREDDS, gridMET,
+# CO-OPS, etc.) plus the search_tools -> fetch -> publish discovery overhead.
+# Past 12, that's a runaway and the fail-stop + loop_exhausted envelope is the
+# correct response.
 MAX_TURN_ITERATIONS = 12
 
 
@@ -2825,9 +2824,9 @@ async def stream_events_with_contents(
     cache carries the full catalog + system instruction, and sending either
     field alongside ``cached_content`` is a Vertex 400. ``system_prompt`` and
     ``tool_declarations`` are silently ignored in this path. Per-turn
-    allowed-set enforcement happens server-side via
-    ``categories.validate_function_call`` (see ``server.py``); the cache
-    always carries the FULL catalog. A ``UsageMetadataEvent`` is emitted from
+    the per-turn visible tool set is enforced server-side by the
+    retrieval-enforce declaration subset (see ``server.py``). A
+    ``UsageMetadataEvent`` is emitted from
     the final chunk's ``usage_metadata`` so the multi-turn driver can verify
     the cached token discount, emit the ``cache-status`` envelope into the
     PipelineEmitter, and pipe ``cached_content_token_count`` into the

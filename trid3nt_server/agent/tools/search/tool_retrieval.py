@@ -1,26 +1,24 @@
 """``retrieve_visible_tools`` -- case-stable, monotonic-grow tool selection.
 
-The tools-session half of the tool-retrieval feature.
-This is the PURE selection function the orchestrator wraps with
-shadow telemetry + a recall@k dashboard; it decides WHICH subset of the ~122-tool
-catalog is made visible to the model for a turn, so the per-turn tool list (and its
-~41-46k tokens) can be trimmed once recall proves out (target recall@k >= 0.99).
+This is the BUILT-IN surfacing path: it decides WHICH subset of the tool catalog
+the model sees for a turn, so the per-turn tool list (and its ~41-46k tokens) stays
+trimmed to what the ask needs. Enforce is unconditional -- ``K`` is the only lever
+(``TRID3NT_TOOL_RETRIEVAL_K``).
 
-Design (locked by the kickoff):
-  visible(turn) = HOT_SET core floor
-                  UNION the Case's accumulated ``AllowedToolSet`` (opened
-                      categories + dispatched + explicit -- so a tool once
-                      visible NEVER leaves within a Case)
-                  UNION ``search_tools`` top-k RRF for the turn's user_text.
+Design:
+  visible(turn) = ``CORE_FLOOR``
+                  UNION the Case's accumulated visible set (every tool once made
+                      visible this Case -- so a tool never leaves mid-task)
+                  UNION the top-k RRF ranking for the turn's user_text.
 
 Properties (asserted in tests):
-  * DETERMINISTIC -- same (user_text, allowed_set state) -> same result.
+  * DETERMINISTIC -- same (user_text, accrued state) -> same result.
   * NO hot-path I/O beyond the CACHED discover index lookup -- it never builds the
     index (that would block on a cold model load); the orchestrator warms it at
     startup via asyncio.to_thread. If the index is still cold, FAIL-OPEN.
-  * CORE FLOOR -- ``HOT_SET_TOOLS`` is ALWAYS a subset of the result.
-  * NEVER HIDE MID-TASK -- the result always contains everything already in the
-    Case's ``AllowedToolSet``; it composes by UNION, so the visible set only grows.
+  * CORE FLOOR -- ``CORE_FLOOR`` is ALWAYS a subset of the result.
+  * NEVER HIDE MID-TASK -- the result always contains everything in the Case's
+    accrued visible set; it composes by UNION, so the visible set only grows.
   * FAIL-OPEN -- any error, a cold index, or an empty ranking returns the FULL
     registry (logged). Over-inclusion is cheap; dropping a needed tool is a silent
     break, so recall@k is optimized, not precision.
@@ -36,9 +34,8 @@ ASCII only.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from trid3nt_server.agent.categories import HOT_SET_TOOLS
 from trid3nt_server.agent.tools import TOOL_REGISTRY
 from trid3nt_server.agent.tools.search.search_tools import search_tools as _dd
 from trid3nt_server.agent.tools.search.search_tools.search_tools import (
@@ -49,12 +46,10 @@ from trid3nt_server.agent.tools.search.search_tools.search_tools import (
     _tokenize,
 )
 
-if TYPE_CHECKING:  # avoid a hard import cycle at module load
-    from trid3nt_server.agent.categories import AllowedToolSet
-
 __all__ = [
     "retrieve_visible_tools",
     "retrieve_ranked_tools",
+    "CORE_FLOOR",
     "DEFAULT_K",
     "MAX_K",
 ]
@@ -64,6 +59,30 @@ logger = logging.getLogger("trid3nt_server.agent.tools.search.tool_retrieval")
 #: search_tools top-k default + clamp ceiling (kickoff: k default 25, [1, 25]).
 DEFAULT_K = 25
 MAX_K = 25
+
+#: The always-visible floor -- tools that must NEVER be retrieved out, regardless
+#: of the turn's ranking. The top-level flood composer + the "before you can do
+#: anything else" primitives (geocode, DEM, weather alerts CONUS + state-scoped),
+#: the discovery escape hatch (search_tools), and the cross-cutting view/analysis
+#: actions a user reaches for at any point (code exec, layer bounds, spatial
+#: input, publish, chart, spatial query). retrieve_visible_tools and the openai
+#: tool-gating floor both union this set.
+CORE_FLOOR: frozenset[str] = frozenset(
+    {
+        "sfincs_flood",
+        "geocode_location",
+        "fetch_dem",
+        "fetch_nws_alerts_conus",
+        "fetch_nws_event",
+        "search_tools",
+        "code_exec_request",
+        "compute_layer_bounds",
+        "request_spatial_input",
+        "publish_layer",
+        "generate_chart",
+        "spatial_query",
+    }
+)
 
 
 def _build_channel_rankings(
@@ -272,13 +291,13 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
 
 def retrieve_visible_tools(
     user_text: str,
-    allowed_set: "AllowedToolSet | None",
+    accrued: "set[str] | frozenset[str] | None",
     k: int = DEFAULT_K,
 ) -> set[str]:
     """Select the set of tool names to make visible for one turn.
 
-    See the module docstring for the design + invariants. ``allowed_set`` is the
-    Case's monotonic ``AllowedToolSet`` (may be ``None`` on a brand-new turn); ``k``
+    See the module docstring for the design + invariants. ``accrued`` is the
+    Case's monotonic visible set (may be ``None`` on a brand-new turn); ``k``
     is the discover top-k, clamped to ``[1, MAX_K]``.
     """
     try:
@@ -287,24 +306,12 @@ def retrieve_visible_tools(
         k = DEFAULT_K
     k = max(1, min(k, MAX_K))
 
-    # --- Core floor + the Case's accumulated allowed set (ALWAYS included). ---
-    # HOT_SET is unioned EXPLICITLY: as_frozenset() may swap the hot-set slot for a
-    # (possibly smaller) dynamic hot set, so unioning HOT_SET_TOOLS guarantees the
-    # CORE-FLOOR invariant regardless. as_frozenset() carries opened-category tools
-    # + dispatched + explicit -> the NEVER-HIDE-MID-TASK guarantee.
-    floor: set[str] = set(HOT_SET_TOOLS)
-    if allowed_set is not None:
-        try:
-            floor |= set(allowed_set.as_frozenset())
-        except Exception:  # noqa: BLE001 -- never SILENTLY drop the Case's accrued tools
-            # FAIL-OPEN to the full registry (not HOT_SET-only) so a once-visible
-            # dispatched/explicit/opened-category tool is never hidden mid-task
-            # (tool-retrieval verify, 2026-06-23).
-            logger.warning(
-                "tool_retrieval: allowed_set snapshot failed; FAIL-OPEN to full registry",
-                exc_info=True,
-            )
-            return _full_registry_floor(floor)
+    # --- Core floor + the Case's accumulated visible set (ALWAYS included). ---
+    # The accrued set carries every tool once made visible this Case -> the
+    # NEVER-HIDE-MID-TASK guarantee.
+    floor: set[str] = set(CORE_FLOOR)
+    if accrued:
+        floor |= set(accrued)
 
     # --- No query -> floor only (nothing to rank; do NOT dump the full catalog). ---
     if not isinstance(user_text, str) or not user_text.strip():

@@ -62,11 +62,11 @@ LLM_STEP_NAMES = frozenset({
     "model_generate", "generate", "bedrock_generate", "ollama_generate",
 })
 
-# The three always-available meta/discovery tools (categories.AllowedToolSet
-# _META_TOOLS). They are the routing MECHANISM (discovery round-trips), not a
-# routing outcome, so they are excluded from the graded fired sequence --
-# recorded raw, never graded. Documented in experiments/README.md.
-META_TOOLS = frozenset({"list_categories", "list_tools_in_category", "discover_dataset"})
+# The always-available discovery tools. They are the routing MECHANISM
+# (discovery round-trips), not a routing outcome, so they are excluded from the
+# graded fired sequence -- recorded raw, never graded. Documented in
+# experiments/README.md.
+META_TOOLS = frozenset({"search_tools", "discover_dataset"})
 
 # Deterministic string patterns for the two upstream columns (documented in
 # experiments/README.md; grading stays LLM-free).
@@ -132,12 +132,11 @@ def load_live_catalog() -> set[str]:
     ``main._import_tools_registry()`` is the SAME call the daemon makes at
     startup, so the loader validates against exactly the startup-registered
     names (incl. catalog_search / catalog_fetch / list_qgis_algorithms /
-    describe_qgis_algorithm and the categories.py meta-tools).
+    describe_qgis_algorithm).
     """
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    import trid3nt_server.agent.categories  # noqa: F401 -- meta-tool registration
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     return set(TOOL_REGISTRY)

@@ -173,7 +173,7 @@ async def test_ask_mode_emits_card_and_choice_pins_tool(_scripted, monkeypatch):
     assert any(
         "Use the tool 'fetch_dem'" in t for t in texts
     ), texts
-    assert "fetch_dem" in state2.allowed_tool_set.explicit_tools
+    assert "fetch_dem" in state2.visible_tools
 
 
 @pytest.mark.asyncio

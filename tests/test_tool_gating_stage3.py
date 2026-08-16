@@ -25,7 +25,7 @@ import pytest
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
 from trid3nt_server.agent.adapters.adapter import ModelSettings, TextDeltaEvent
-from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.agent.gates.tool_gating import (
     META_TOOL_FLOOR,
     TOOL_GATING_TOPK_DEFAULT,
@@ -130,8 +130,8 @@ def test_gate_keeps_topk_plus_meta_floor():
     # meta floor always present (registered members)
     for name in META_TOOL_FLOOR & set(TOOL_REGISTRY):
         assert name in gated, f"meta-floor tool {name} was gated out"
-    # HOT_SET is a subset of the meta floor
-    assert HOT_SET_TOOLS <= META_TOOL_FLOOR
+    # CORE_FLOOR is a subset of the meta floor
+    assert CORE_FLOOR <= META_TOOL_FLOOR
     # and it actually shrank
     assert len(gated) < len(TOOL_REGISTRY)
 
@@ -199,13 +199,26 @@ async def _fake_stream(*_a, **_k):
     yield TextDeltaEvent(delta="done")
 
 
+def _declarable_names() -> set[str]:
+    """The DEFAULT declarable set (full registry MINUS tier=internal/catalog)."""
+    return {
+        n
+        for n, e in TOOL_REGISTRY.items()
+        if getattr(e.metadata, "tier", "general") not in ("internal", "catalog")
+    }
+
+
 async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
     """Run one no-tool turn and capture the registry handed to
-    build_tool_declarations."""
+    build_tool_declarations. Enforce (the built-in surfacing path) is neutralized
+    to the full declarable set so the openai gate is measured in isolation."""
     from trid3nt_server.agent.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(
         tr, "retrieve_ranked_tools", lambda text, k=25: _ranked(30)[: max(k, 2)]
+    )
+    monkeypatch.setattr(
+        tr, "retrieve_visible_tools", lambda *_a, **_k: _declarable_names()
     )
 
     captured: dict = {}
@@ -267,6 +280,9 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
     from trid3nt_server.agent.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: [])
+    monkeypatch.setattr(
+        tr, "retrieve_visible_tools", lambda *_a, **_k: _declarable_names()
+    )
 
     captured: dict = {}
 

@@ -672,7 +672,7 @@ async def test_segment_rows_interleave_with_tool_rows(file_persistence) -> None:
         # accumulator should attribute to the FINAL narration row only.
         state.current_turn_case_id = case_id
         state.current_turn_layer_ids = ["L-final"]
-        state.allowed_tool_set.add_tools(["job0315_tool_a", "job0315_tool_b"])
+        state.visible_tools.update(["job0315_tool_a", "job0315_tool_b"])
         await server._persist_chat_turn(state, role="user", content="go")
 
         # Round 1: text + call A. Round 2: text + call B. Round 3: text, no call.
@@ -806,7 +806,7 @@ async def test_tool_terminal_turn_persists_zoom_to_accumulator(
         state = server.SessionState(session_id=new_ulid())
         case_id = await _create_case(ws, state)
         state.current_turn_case_id = case_id
-        state.allowed_tool_set.add_tools(["job0315_pub"])
+        state.visible_tools.update(["job0315_pub"])
         await server._persist_chat_turn(state, role="user", content="flood it")
 
         # The turn accumulated a geocode zoom-to (job-0281) + a published layer
@@ -887,7 +887,7 @@ async def test_tool_terminal_turn_without_accumulator_writes_no_phantom(
         state = server.SessionState(session_id=new_ulid())
         case_id = await _create_case(ws, state)
         state.current_turn_case_id = case_id
-        state.allowed_tool_set.add_tools(["job0315_noop"])
+        state.visible_tools.update(["job0315_noop"])
         await server._persist_chat_turn(state, role="user", content="just check")
         # No accumulator populated this turn.
         assert not state.current_turn_layer_ids
