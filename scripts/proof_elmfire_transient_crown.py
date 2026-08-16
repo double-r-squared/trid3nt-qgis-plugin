@@ -36,7 +36,7 @@ from rasterio.warp import (
 )
 
 REPO = "/home/nate/Documents/trid3nt-local"
-sys.path.insert(0, REPO + "/src")
+sys.path.insert(0, REPO)
 sys.path.insert(0, REPO + "/contracts/src")
 os.environ.setdefault("DOCKER_HOST", f"unix:///run/user/{os.getuid()}/docker.sock")
 

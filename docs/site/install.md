@@ -123,8 +123,8 @@ sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'
 Fortran solvers into the image; the build is one-time and cached):
 
 ```sh
-sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f services/workers/geoclaw/Dockerfile .'
-sg docker -c 'docker build -t trid3nt-local/telemac:latest services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
+sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f workers/geoclaw/Dockerfile .'
+sg docker -c 'docker build -t trid3nt-local/telemac:latest workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
 **SWAN** -- builds locally (verified 2026-07-23; the pinned source-tarball
@@ -132,7 +132,7 @@ checksum was a placeholder before that date and the `sha256sum -c` step always
 failed -- now fixed to the real digest of the SWAN 41.51 SourceForge tarball):
 
 ```sh
-sg docker -c 'docker build -t trid3nt-local/swan:latest -f services/workers/swan/Dockerfile .'
+sg docker -c 'docker build -t trid3nt-local/swan:latest -f workers/swan/Dockerfile .'
 ```
 
 These image names are what `.env.local` points at (`TRID3NT_SFINCS_IMAGE`,

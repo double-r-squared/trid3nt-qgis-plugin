@@ -18,7 +18,7 @@ download + ``postprocess_<engine>`` path. These tests assert:
      shared schema gate unchanged.
 
 The worker-side postprocess math + honesty gates are covered by the per-package
-``services/workers/_<engine>_postprocess/test_postprocess_wiring.py`` suites.
+``workers/_<engine>_postprocess/test_postprocess_wiring.py`` suites.
 """
 
 from __future__ import annotations

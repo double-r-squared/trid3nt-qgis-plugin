@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_TELEMAC_WORKER = _REPO_ROOT / "services" / "workers" / "telemac"
+_TELEMAC_WORKER = _REPO_ROOT / "workers" / "telemac"
 if str(_TELEMAC_WORKER) not in sys.path:
     sys.path.insert(0, str(_TELEMAC_WORKER))
 

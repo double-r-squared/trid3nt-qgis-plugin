@@ -34,7 +34,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/terrain/fetch_3dep_extra/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/terrain/fetch_3dep_extra/source.yaml"
 )
 
 _FORT_MYERS = (-82.0, 26.4, -81.7, 26.7)  # small in-US AOI

@@ -3,7 +3,7 @@
 Server-side offline coverage: the storm-hydrograph builder, the storm_peak_hs_m
 knob forcing nonstationary + threading a boundary_timeseries onto the build_spec.
 The worker deck render (ISO times / BLOCK OUTPUT / PROP BSBT / TPAR) is covered
-in services/workers/swan/test_deck_builder.py.
+in workers/swan/test_deck_builder.py.
 """
 from __future__ import annotations
 

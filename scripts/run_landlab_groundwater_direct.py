@@ -14,7 +14,7 @@ groundwater/baseflow/hillslope-hydrology research catchment).
 Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=src:contracts/src:. \
+    PYTHONPATH=.:contracts/src:. \
     venvs/agent/bin/python scripts/run_landlab_groundwater_direct.py [steady|storm|both]
 """
 

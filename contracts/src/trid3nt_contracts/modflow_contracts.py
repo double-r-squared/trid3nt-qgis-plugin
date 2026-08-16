@@ -6,7 +6,7 @@ Two shapes back the Case 2 groundwater-contamination demo path
 
 - ``MODFLOWRunArgs``  - the forcing parameters the agent confirms with the user
   before submitting a MODFLOW run. Consumed by the engine adapter
-  (``services/workers/modflow/gwt_adapter.py``, job-0221) that maps these to
+  (``workers/modflow/gwt_adapter.py``, job-0221) that maps these to
   MF6-GWT input files via ``flopy``, and by the agent-side
   ``run_modflow_job`` tool (job-0227).
 - ``PlumeLayerURI`` - the postprocess output layer. Extends ``LayerURI``
@@ -1755,7 +1755,7 @@ class SubsidenceLayerURI(LayerURI):
     same raster path as ``DrawdownLayerURI``.
 
     SIGN CONVENTION (PINNED by the local mf6 6.5.0 smoke fixture,
-    services/workers/modflow/fixtures/csub_smoke): downward subsidence/compaction
+    workers/modflow/fixtures/csub_smoke): downward subsidence/compaction
     is reported POSITIVE. The CSUB z-displacement grid (HeadFile text tag
     ``CSUB-ZDISPLACE`` -- truncated to 16 chars, NOT ``CSUB-ZDISPLACEMENT``) is
     positive-down at the pumped cell on the real binary; the postprocess owns this

@@ -29,7 +29,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path setup — allow running tests from the services/agent/ directory.
 # ---------------------------------------------------------------------------
-_SRC = Path(__file__).parent.parent / "src"
+_SRC = Path(__file__).parent.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 

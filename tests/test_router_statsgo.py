@@ -30,7 +30,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 STATSGO_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/soil/fetch_statsgo_soils/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/soil/fetch_statsgo_soils/source.yaml"
 )
 
 _KANSAS = (-95.30, 39.00, -95.20, 39.10)  # small in-CONUS AOI

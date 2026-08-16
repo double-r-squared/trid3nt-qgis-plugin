@@ -12,7 +12,7 @@ Deterministic, reuses product code:
 Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v "^#" .env.local | xargs) TRID3NT_MODFLOW_LOCAL=1 \
-    TRID3NT_MF6_BIN=$PWD/bin/mf6 PYTHONPATH=services/workers/modflow \
+    TRID3NT_MF6_BIN=$PWD/bin/mf6 PYTHONPATH=workers/modflow \
     venvs/agent/bin/python scripts/proof_modflow_vadose_and_csub.py
 """
 

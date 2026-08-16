@@ -41,7 +41,7 @@ and printed at the end as the safe-to-clean-up list.
 Run (offline machinery, B2 default):
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  PYTHONPATH=src:contracts/src venvs/agent/bin/python scripts/run_l2_malpasset.py
+  PYTHONPATH=.:contracts/src venvs/agent/bin/python scripts/run_l2_malpasset.py
 
 Run (real solves -- later lane, docker compute):
   ... same env prefix ... scripts/run_l2_malpasset.py --run-solves
@@ -601,6 +601,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, "src")
+    sys.path.insert(0, ".")
     sys.path.insert(0, "contracts/src")
     raise SystemExit(main())

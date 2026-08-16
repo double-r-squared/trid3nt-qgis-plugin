@@ -6,11 +6,11 @@ OBSTRUCTIONS + a SOUND BARRIER with RED walls / GREEN flap gates):
 
 - ``SWMMRunArgs`` — the forcing/structure parameters the agent confirms with the
   user before submitting a quasi-2D SWMM run. Consumed by the engine adapter /
-  worker (``services/workers/swmm/...``) that maps these onto a quasi-2D SWMM
+  worker (``workers/swmm/...``) that maps these onto a quasi-2D SWMM
   deck (one STORAGE node per active cell, 4-connectivity overland CONDUITS, one
   boundary OUTFALL, per-cell rainfall SUBCATCHMENTS fed by a single RAINGAGE +
   the Atlas-14 nested hyetograph TIMESERIES) per the P0 spike
-  (``services/workers/swmm/spike_quasi2d.py``).
+  (``workers/swmm/spike_quasi2d.py``).
 - ``SWMMDepthLayerURI`` — the postprocess output layer. Extends ``LayerURI``
   field-for-field (so it still maps onto ``map-command load-layer`` with no
   translation, like every other layer) and adds the three depth scalars the
@@ -30,7 +30,7 @@ Design notes
 - ``infiltration_method`` selects SCS-CN vs Green-Ampt on the PERVIOUS fraction
   (cross-check improvement). ``"none"`` is the fully-impervious spike default.
 - The Atlas-14 NESTED (alternating-block) hyetograph is built by
-  ``src/trid3nt_server/workflows/swmm_hyetograph.py`` from
+  ``trid3nt_server/workflows/swmm_hyetograph.py`` from
   ``total_rain_depth_mm`` + ``storm_duration_hr`` + ``rain_interval_min``. It is
   NOT flat and NOT SCS-Type-II — these args parameterize the nested builder.
 - ``SWMMDepthLayerURI`` is a structured numeric carrier (invariant 1 / Decision

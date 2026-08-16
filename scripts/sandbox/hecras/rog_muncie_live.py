@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-FT = Path("/home/nate/Documents/trid3nt-local/services/workers/hecras2025/subst/crux/freshtopo")
+FT = Path("/home/nate/Documents/trid3nt-local/workers/hecras2025/subst/crux/freshtopo")
 sys.path.insert(0, str(FT))
 
 from carve_muncie import load_muncie, carve, MUNCIE_PLAN  # noqa: E402

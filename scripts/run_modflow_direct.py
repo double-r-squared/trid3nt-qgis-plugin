@@ -11,7 +11,7 @@ Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v '^#' .env.local | xargs) \
     TRID3NT_MODFLOW_LOCAL=1 \
-    PYTHONPATH=src:contracts/src \
+    PYTHONPATH=.:contracts/src \
     venvs/agent/bin/python scripts/run_modflow_direct.py
 """
 

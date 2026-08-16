@@ -39,7 +39,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 POP_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_population/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_population/source.yaml"
 )
 
 FORT_MYERS_BBOX = (-81.92, 26.55, -81.80, 26.68)  # small in-USA AOI

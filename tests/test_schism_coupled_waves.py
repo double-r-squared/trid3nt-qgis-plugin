@@ -111,7 +111,7 @@ def test_fixture_sha_pins_present():
 def _load_entrypoint():
     here = Path(__file__).resolve()
     for parent in here.parents:
-        cand = parent / "services" / "workers" / "schism" / "entrypoint.py"
+        cand = parent / "workers" / "schism" / "entrypoint.py"
         if cand.exists():
             spec = importlib.util.spec_from_file_location("_schism_entry", cand)
             mod = importlib.util.module_from_spec(spec)
@@ -237,7 +237,7 @@ def test_coupled_waves_registered_and_solver_wired():
 def test_coupled_waves_corpus_seed_present():
     here = Path(__file__).resolve()
     for parent in here.parents:
-        cand = (parent / "src" / "trid3nt_server" / "agent" / "workflows"
+        cand = (parent / "trid3nt_server" / "agent" / "workflows"
                 / "schism" / "coupled_waves" / "corpus.yaml")
         if cand.exists():
             text = cand.read_text()

@@ -30,7 +30,7 @@ from trid3nt_server.agent.tools.fetchers._router.registration import _SPEC_REGIS
 from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 from trid3nt_server.credentials.credential_registry import is_credential_shaped_error
 
-_FETCHERS = Path("src/trid3nt_server/agent/tools/fetchers")
+_FETCHERS = Path("trid3nt_server/agent/tools/fetchers")
 _SPECS = {
     "fetch_asos_metar": _FETCHERS / "weather/fetch_asos_metar/source.yaml",
     "fetch_raws_weather": _FETCHERS / "weather/fetch_raws_weather/source.yaml",

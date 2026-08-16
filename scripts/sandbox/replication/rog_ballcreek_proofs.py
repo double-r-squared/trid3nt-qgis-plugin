@@ -87,7 +87,7 @@ def render(key: str, tag: str, out_name: str, title: str, cause: str,
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(REPO / "src"))
+    sys.path.insert(0, str(REPO))
     # args: key tag out_name "title" "cause" [second_tag second_label computed_label]
     kw = {}
     if len(sys.argv) > 6:

@@ -7,7 +7,7 @@ target_resolution_m is 30 m; this passes the explicit 3DEP-native 10 m value
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  PYTHONPATH=src:contracts/src:. venvs/agent/bin/python \
+  PYTHONPATH=.:contracts/src:. venvs/agent/bin/python \
     scripts/run_landlab_groundwater_native_res.py
 """
 from __future__ import annotations

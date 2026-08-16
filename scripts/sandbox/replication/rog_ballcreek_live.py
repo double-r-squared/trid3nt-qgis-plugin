@@ -35,7 +35,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO))
 
 # Ball Creek weir #9 pour point (ADR 0204 delineation): a channel cell +12 up the
 # Ball Creek fork so the mesh 8-cell max-accumulation snap resolves to the fork
@@ -153,7 +153,7 @@ def phase_solve(*, tag: str, intensity_mm_per_hr: float, rain_duration_hr: float
         "-v", f"{solve_dir}:/data",
         "-e", "TRID3NT_TELEMAC_SOLVE_TIMEOUT=86400",
         "--entrypoint", "/usr/local/bin/_entrypoint.sh", TELEMAC_IMAGE,
-        "python", "/opt/trid3nt/services/workers/telemac/entrypoint.py",
+        "python", "/opt/trid3nt/workers/telemac/entrypoint.py",
         "--data-dir", "/data", "--run-id", f"rog-bc-{tag}",
     ]
     cp = subprocess.run(argv, capture_output=True, text=True, timeout=90000)

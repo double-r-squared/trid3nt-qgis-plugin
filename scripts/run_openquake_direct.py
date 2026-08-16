@@ -15,7 +15,7 @@ result is recorded honestly as a partial run.
 Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=src:contracts/src:. \
+    PYTHONPATH=.:contracts/src:. \
     venvs/agent/bin/python scripts/run_openquake_direct.py
 """
 

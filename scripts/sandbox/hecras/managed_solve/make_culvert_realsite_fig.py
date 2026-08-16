@@ -52,7 +52,7 @@ import matplotlib.pyplot as plt
 from pyproj import Transformer
 
 _HERE = Path(__file__).resolve().parent
-_FRESHTOPO = _HERE.parents[3] / "services/workers/hecras2025/subst/crux/freshtopo"
+_FRESHTOPO = _HERE.parents[3] / "workers/hecras2025/subst/crux/freshtopo"
 _SCRIPTS = _HERE.parents[3] / "scripts"
 sys.path.insert(0, str(_FRESHTOPO))
 sys.path.insert(0, str(_SCRIPTS))

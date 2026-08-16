@@ -8,12 +8,12 @@ and reports, per run: the new MinIO run prefix, the depth-layer scalars, and the
 The banded Manning + the explicit AMR window activate ONLY when the deployed
 image carries the current worker (ADR 0147: a stale baked setrun_builder silently
 dropped both). Rebuild before smoking a worker change:
-  docker build -f services/workers/geoclaw/Dockerfile -t trid3nt-local/geoclaw:latest .
+  docker build -f workers/geoclaw/Dockerfile -t trid3nt-local/geoclaw:latest .
 
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  PYTHONPATH=src:contracts/src \
+  PYTHONPATH=.:contracts/src \
     venvs/agent/bin/python scripts/run_geoclaw_knobs_smoke.py
 """
 

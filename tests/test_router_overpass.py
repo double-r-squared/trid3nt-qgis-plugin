@@ -39,7 +39,7 @@ from trid3nt_server.agent.tools.fetchers._router.transport import (
 
 _SPEC_BASE = (
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/socioeconomic"
+    / "trid3nt_server/agent/tools/fetchers/socioeconomic"
 )
 ROADS_SPEC = load_spec_from_path(_SPEC_BASE / "fetch_roads_osm/source.yaml")
 POIS_SPEC = load_spec_from_path(_SPEC_BASE / "fetch_overpass_pois/source.yaml")

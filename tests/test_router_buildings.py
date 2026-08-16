@@ -29,7 +29,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_buildings/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_buildings/source.yaml"
 )
 
 # An AOI wide enough to contain the synthetic footprints (~26.60-26.63, -81.87..-81.84).

@@ -224,7 +224,7 @@ def test_swmm_spec_has_pythonpath_override() -> None:
     spec = swmm_local_spec()
     assert spec.env_overrides is not None, "swmm spec must set env_overrides"
     assert "PYTHONPATH" in spec.env_overrides, (
-        "swmm spec must inject PYTHONPATH so services.workers.* imports resolve"
+        "swmm spec must inject PYTHONPATH so workers.* imports resolve"
     )
     # The repo root must be the first path element.
     first_path = spec.env_overrides["PYTHONPATH"].split(":")[0]

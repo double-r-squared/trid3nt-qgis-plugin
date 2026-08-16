@@ -7,7 +7,7 @@ path: the OpenQuake hazard becomes Pelicun's ground-motion intensity input).
 
 - ``OpenQuakeRunArgs`` — the hazard-calculation parameters the agent confirms
   with the user before submitting an OpenQuake run. Consumed by the engine
-  composer / worker (``services/workers/openquake/...``) that maps these onto a
+  composer / worker (``workers/openquake/...``) that maps these onto a
   ``job.ini`` + a source-model / GMPE logic tree for a CLASSICAL PSHA over the
   AOI site grid.
 - ``SeismicHazardLayerURI`` — the postprocess output layer. Extends ``LayerURI``
@@ -102,7 +102,7 @@ class OpenQuakeRunArgs(EngineRunArgsMixin):
     ``output_frames`` are inert for OpenQuake (no animation).
 
     Returned/assembled by the seismic composer after agent-confirmed parameter
-    extraction; consumed by the OpenQuake worker (``services/workers/openquake``)
+    extraction; consumed by the OpenQuake worker (``workers/openquake``)
     that templates a ``job.ini`` + source-model / GMPE logic tree and runs
     ``oq engine --run job.ini`` headless. The agent confirms these with the user
     before submission (confirmation-before-consequence, invariant 9).

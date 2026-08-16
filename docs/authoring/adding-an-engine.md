@@ -36,40 +36,40 @@ branch + postprocess. The seam list, from the SFR/CSUB precedents:
    `SubsidenceLayerURI`, `DrawdownLayerURI`).
 
 2. **Worker deck author** --
-   `services/workers/modflow/gwt_adapter.py`: a new branch that builds the
+   `workers/modflow/gwt_adapter.py`: a new branch that builds the
    FloPy/mf6 deck (packages, boundary conditions, OBS) for the archetype. Keep
    every non-target deck byte-identical.
 
 3. **Run-tool threading** --
-   `src/trid3nt_server/workflows/run_modflow.py`: thread the new
+   `trid3nt_server/workflows/run_modflow.py`: thread the new
    fields + obs globs through to the worker.
 
 4. **Postprocess** --
-   `src/trid3nt_server/workflows/postprocess_modflow.py`: a
+   `trid3nt_server/workflows/postprocess_modflow.py`: a
    `postprocess_<archetype>(run_outputs_uri, *, run_id, model_crs, deck_dir)`
    that reads the raw outputs and returns the headline `LayerURI` (+ charts). The
    off-box worker mirror is
-   `services/workers/_modflow_postprocess/postprocess.py` (the
+   `workers/_modflow_postprocess/postprocess.py` (the
    `_ARCHETYPE_POSTPROCESS_RUNNERS` map).
 
 5. **Dispatch registration** --
-   `src/trid3nt_server/tools/run_modflow_archetype_tool.py`: add
+   `trid3nt_server/tools/run_modflow_archetype_tool.py`: add
    `"<archetype>": (postprocess_fn, "headline_attr")` to `ARCHETYPE_POSTPROCESS`.
    Also flag the archetype in `_NON_SCALAR_HEADLINES` (if the headline is a
    series/dict rather than a positive scalar) or `PRT_ARCHETYPES` (if it runs a
    two-simulation particle-tracking sequence) as applicable.
 
 6. **Composer (the LLM-facing surface)** --
-   `src/trid3nt_server/workflows/model_<x>_scenario.py`. This is the
+   `trid3nt_server/workflows/model_<x>_scenario.py`. This is the
    tool the model calls. It carries its OWN `@register_tool` (e.g.
    `run_model_<x>_scenario`), assembles a `MODFLOWRunArgs(archetype="<x>", ...)`,
    and dispatches to `run_modflow_archetype_job`. Model it on
-   `src/trid3nt_server/workflows/model_sustainable_yield_scenario.py`.
+   `trid3nt_server/workflows/model_sustainable_yield_scenario.py`.
    The archetype run-tool itself is NOT `@register_tool`'d -- the composers are
    the surface.
 
 7. **Discovery + wiring** (same as any tool -- see `writing-a-tool.md`):
-   - import the composer in `src/trid3nt_server/tools/__init__.py`
+   - import the composer in `trid3nt_server/tools/__init__.py`
      (the `from ..workflows import model_<x>_scenario as _model_<x>_scenario`
      pattern) so its `@register_tool` fires at startup;
    - add `PRIMARY_CATEGORY` (usually `hazard_modeling`) in `categories.py`;
@@ -77,7 +77,7 @@ branch + postprocess. The seam list, from the SFR/CSUB precedents:
      `retrieve_visible_tools(prompt, None, 8)` visibility check;
    - add any chart payloads in `chart_tools.py`;
    - add a test + an mf6 smoke fixture under
-     `services/workers/modflow/fixtures/<x>_smoke/`.
+     `workers/modflow/fixtures/<x>_smoke/`.
 
 ---
 
@@ -92,14 +92,14 @@ Each new engine adds, roughly in order:
    run args + the headline `LayerURI` subclass), mirroring
    `modflow_contracts.py`.
 
-2. **A worker** under `services/workers/<engine>/`: an `entrypoint.py` plus the
+2. **A worker** under `workers/<engine>/`: an `entrypoint.py` plus the
    deck author. Existing worker dirs to copy the shape from: `modflow/`,
    `geoclaw/`, `openquake/`, `landlab/`, `swan/`, `telemac/`, `swmm/`. The engine
    is dispatched with `run_solver('<engine>')` from the agent side.
 
 3. **A postprocess** that reads the raw solver outputs and returns a headline
    `LayerURI` (raster COG or vector FlatGeobuf), plus an off-box postprocess
-   mirror if the engine offloads (see `services/workers/_geoclaw_postprocess/`,
+   mirror if the engine offloads (see `workers/_geoclaw_postprocess/`,
    `_landlab_postprocess/`, `_swan_postprocess/`).
 
 4. **A composer + bridge tool** on the agent side: a

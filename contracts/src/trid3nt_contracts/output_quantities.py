@@ -17,11 +17,11 @@ the Batch worker, mirroring the ``manifest.py`` (worker plain dict) /
 precedent. The hard constraint is the DEPLOY BOUNDARY:
 
   - the AGENT image ships ONLY ``trid3nt_server`` + ``trid3nt_contracts`` (its
-    pyproject deps); it does NOT ship ``services/workers`` (confirmed in
+    pyproject deps); it does NOT ship ``workers`` (confirmed in
     ``trid3nt_server/qgis_proxy.py``: "this lives in the agent package - not
-    services/workers/ - because the agent must import it at runtime and
-    services/workers/ is not on the agent's import path").
-  - the WORKER images ship ``services/workers/**`` (their CodeBuild context) and
+    workers/ - because the agent must import it at runtime and
+    workers/ is not on the agent's import path").
+  - the WORKER images ship ``workers/**`` (their CodeBuild context) and
     do NOT ship ``contracts``.
 
 So NO single existing location is on BOTH import paths. The manifest precedent
@@ -33,7 +33,7 @@ resolves this with TWO definitions gated on ONE ``schema_version``. We follow it
     typing (NO pydantic, NO rasterio, NO engine deps) so it is trivially
     MIRRORABLE into a worker plain module verbatim.
   * STEP 4 (deferred, gated) adds the worker MIRROR under
-    ``services/workers/_raster_postprocess/output_quantities.py`` gated on the
+    ``workers/_raster_postprocess/output_quantities.py`` gated on the
     SAME ``OUTPUT_REGISTRY_SCHEMA_VERSION`` - the moment the worker executor is
     wired. Until then the worker does not need it (the executor is STEP 4).
 

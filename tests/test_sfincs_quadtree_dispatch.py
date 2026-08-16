@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-for p in (REPO / "src", REPO / "contracts/src"):
+for p in (REPO, REPO / "contracts/src"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
@@ -33,7 +33,7 @@ BBOX = (-85.5522, 29.6983, -85.3976, 29.8517)
 
 
 def test_compose_build_spec_validates_and_carries_knobs():
-    from services.workers._sfincs_build.spec import validate_job_spec
+    from workers._sfincs_build.spec import validate_job_spec
 
     spec = compose_quadtree_build_spec(
         run_id="SPEC01",

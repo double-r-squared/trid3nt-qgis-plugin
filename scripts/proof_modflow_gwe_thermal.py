@@ -1,6 +1,6 @@
 """Proof renders for the MODFLOW GWE heat-transport archetype family (ADR 0235).
 
-Deterministic, reuses the product deck-builder (services/workers/modflow
+Deterministic, reuses the product deck-builder (workers/modflow
 build_modflow_deck) + the LOCAL mf6 6.7.0 binary. Two renders, QGIS-true style
 (ESRI World Imagery basemap, EPSG:3857, mesh wireframe overlaid):
 
@@ -35,7 +35,7 @@ from PIL import Image  # noqa: E402
 from pyproj import Transformer  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent
-                       / "services" / "workers" / "modflow"))
+                       / "workers" / "modflow"))
 import flopy  # noqa: E402
 from gwt_adapter import (  # noqa: E402
     GWE_AMBIENT_TEMPERATURE_C,

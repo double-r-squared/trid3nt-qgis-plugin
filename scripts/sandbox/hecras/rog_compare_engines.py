@@ -40,9 +40,9 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "src"))
-_FRESHTOPO = REPO / "services/workers/hecras2025/subst/crux/freshtopo"
-_HECRAS2025 = REPO / "services/workers/hecras2025"
+sys.path.insert(0, str(REPO))
+_FRESHTOPO = REPO / "workers/hecras2025/subst/crux/freshtopo"
+_HECRAS2025 = REPO / "workers/hecras2025"
 
 POUR_POINT = (-83.40402, 35.05746)
 BBOX = (-83.47, 35.02, -83.36, 35.10)             # Coweeta Creek catchment

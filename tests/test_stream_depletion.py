@@ -30,7 +30,6 @@ from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
 # 300 m south of an 8-reach-scale Boise flowline; converged on bin/mf6 6.5.0).
 FIXTURE = (
     Path(__file__).resolve().parents[1]
-    / "services"
     / "workers"
     / "modflow"
     / "fixtures"

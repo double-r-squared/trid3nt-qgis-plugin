@@ -182,7 +182,7 @@ dependencies = [
     # SWMM5 runner (Simulation/Nodes/Links iteration) and swmm-api is the .inp
     # deck author (Storage/Conduit/Orifice has_flap_gate / Outfall / Timeseries /
     # Raingage / XSection RECT_OPEN) — the exact pins proven by the P0 GO/NO-GO
-    # spike (services/workers/swmm/spike_quasi2d.py): pyswmm 2.1.0 + swmm-api
+    # spike (workers/swmm/spike_quasi2d.py): pyswmm 2.1.0 + swmm-api
     # 0.4.73. BOTH are lazy-imported inside swmm_mesh_builder.py (a top-level
     # import would force every agent process to load SWMM5; the mesh build only
     # happens inside the urban-flood worker path), so the agent service still
@@ -248,7 +248,8 @@ local-engines = [
 trid3nt-server = "trid3nt_server.main:run"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["trid3nt_server*"]
 
 # Ship runtime data files in the wheel. setuptools drops all non-.py files by
 # default, so a non-editable `pip install` (the Docker/agent image build) was

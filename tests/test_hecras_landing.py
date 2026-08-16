@@ -26,7 +26,7 @@ from trid3nt_contracts.hecras_contracts import (
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FIXTURE = (
     _REPO_ROOT
-    / "services" / "workers" / "hecras" / "fixtures" / "muncie_flood_solved"
+    / "workers" / "hecras" / "fixtures" / "muncie_flood_solved"
     / "muncie_p04_solved_min.hdf"
 )
 

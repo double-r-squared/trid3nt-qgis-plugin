@@ -14,7 +14,7 @@ marina with a real breaker ... the way it would be used in real life"):
 
 Invocation (bind-mount a rundir carrying manifest.json):
     docker run --rm -v <rundir>:/data \
-      -v <repo>/services/workers/telemac/artemis_build.py:/opt/trid3nt/services/workers/telemac/artemis_build.py \
+      -v <repo>/workers/telemac/artemis_build.py:/opt/trid3nt/workers/telemac/artemis_build.py \
       -w /data trid3nt-local/telemac:latest \
       python /data/artemis_real_breakwater_sandbox.py
 
@@ -28,7 +28,7 @@ import json
 import os
 import sys
 
-sys.path.insert(0, "/opt/trid3nt/services/workers/telemac")
+sys.path.insert(0, "/opt/trid3nt/workers/telemac")
 
 import artemis_build as A  # noqa: E402
 

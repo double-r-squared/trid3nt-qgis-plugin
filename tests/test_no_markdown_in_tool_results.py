@@ -37,7 +37,7 @@ import ast
 import re
 from pathlib import Path
 
-SRC_ROOT = Path(__file__).resolve().parents[1] / "src" / "trid3nt_server"
+SRC_ROOT = Path(__file__).resolve().parents[1] / "trid3nt_server"
 SCAN_DIRS = ("agent/tools", "agent/workflows")
 
 #: Repo-relative (to SRC_ROOT) files allowed to build markdown strings.

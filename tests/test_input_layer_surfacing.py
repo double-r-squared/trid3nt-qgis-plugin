@@ -546,7 +546,7 @@ import re  # noqa: E402
 
 _WORKFLOWS_DIR = (
     pathlib.Path(__file__).resolve().parents[1]
-    / "src" / "trid3nt_server" / "agent" / "workflows"
+    / "trid3nt_server" / "agent" / "workflows"
 )
 
 # relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only

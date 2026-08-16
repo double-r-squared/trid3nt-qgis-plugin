@@ -160,7 +160,7 @@ def _synthetic_dem(n: int = 45) -> np.ndarray:
 
 def test_channel_incision_reproduces_analytical_slope_area():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     res = 90.0
     r = run_component_chain(
@@ -195,7 +195,7 @@ def test_channel_incision_reproduces_analytical_slope_area():
 
 def test_chi_map_populates_chi_and_ksn():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     res = 90.0
     r = run_component_chain(
@@ -227,7 +227,7 @@ def test_channel_incision_higher_uplift_steepens_channels():
     """Physical monotonicity: at steady state S ~ (U/K)^(1/n), so a higher uplift
     rate yields steeper channels (larger mean ksn)."""
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     res = 90.0
     dem = _synthetic_dem()

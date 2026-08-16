@@ -30,7 +30,7 @@ from trid3nt_server.agent.tools.fetchers._router.transforms import join
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_lehd_jobs/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_lehd_jobs/source.yaml"
 )
 
 _HOUSTON = (-95.45, 29.65, -95.25, 29.85)

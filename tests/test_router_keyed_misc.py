@@ -32,7 +32,7 @@ from trid3nt_server.agent.tools.fetchers._router.registration import _SPEC_REGIS
 from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 from trid3nt_server.credentials.credential_registry import is_credential_shaped_error
 
-_F = Path("src/trid3nt_server/agent/tools/fetchers")
+_F = Path("trid3nt_server/agent/tools/fetchers")
 _SPECS = {
     "fetch_mobi": _F / "biodiversity/fetch_mobi/source.yaml",
     "fetch_climate_normals": _F / "climate/fetch_climate_normals/source.yaml",

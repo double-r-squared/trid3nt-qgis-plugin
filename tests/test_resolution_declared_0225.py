@@ -342,7 +342,7 @@ def test_no_workflow_defines_its_own_resolution_resolve_helper():
     resolve_resolution. A template that re-hand-rolls it FAILS here."""
     workflows_dir = (
         pathlib.Path(__file__).resolve().parents[1]
-        / "src" / "trid3nt_server" / "agent" / "workflows"
+        / "trid3nt_server" / "agent" / "workflows"
     )
     offenders = [
         str(py.relative_to(workflows_dir))

@@ -7,9 +7,9 @@ tilted-plane catchment BEFORE the hours-class Coweeta live run and BEFORE the
 image rebuild -- run with the worker dir mounted over the baked copy:
 
   docker run --rm \
-    -v <repo>/services/workers/telemac:/opt/trid3nt/services/workers/telemac \
+    -v <repo>/workers/telemac:/opt/trid3nt/workers/telemac \
     -v <rundir>:/data --entrypoint python trid3nt-local/telemac:latest \
-    /opt/trid3nt/services/workers/telemac/../../../scripts/sandbox/telemac/rog_offline_smoke.py
+    /opt/trid3nt/workers/telemac/../../../scripts/sandbox/telemac/rog_offline_smoke.py
 
 (the driver below mounts itself; see the sibling runner shell one-liner in the
 build session). ASCII only.
@@ -21,7 +21,7 @@ import json
 import sys
 from pathlib import Path
 
-WORKER = "/opt/trid3nt/services/workers/telemac"
+WORKER = "/opt/trid3nt/workers/telemac"
 sys.path.insert(0, WORKER)
 
 import numpy as np  # noqa: E402

@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO))
 
 # CWTBASIN bounding box (EML) + a margin so the closed catchment is never clipped.
 BASIN_BBOX = (-83.4785, 35.0273, -83.4217, 35.0738)

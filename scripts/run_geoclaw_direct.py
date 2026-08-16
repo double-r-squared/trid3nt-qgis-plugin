@@ -18,7 +18,7 @@ in MinIO under trid3nt-runs/<run_id>/.
 Run:
   cd /home/nate/Documents/trid3nt-local
   sg docker -c 'env $(grep -v "^#" .env.local | xargs) \\
-    PYTHONPATH=src:contracts/src \\
+    PYTHONPATH=.:contracts/src \\
     venvs/agent/bin/python scripts/run_geoclaw_direct.py'
 """
 

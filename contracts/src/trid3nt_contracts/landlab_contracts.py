@@ -12,7 +12,7 @@ component chain -> susceptibility/FoS field -> COG):
 
 - ``LandlabRunArgs``  — the forcing/structure parameters the agent confirms with
   the user before submitting a Landlab run. Consumed by the engine worker
-  (``services/workers/landlab/entrypoint.py``) which builds the grid from the
+  (``workers/landlab/entrypoint.py``) which builds the grid from the
   AOI DEM and runs the documented component chain, and by the agent-side
   ``landlab_susceptibility`` template tool + ``model_landslide_scenario`` composer.
 - ``LandlabSusceptibilityLayerURI`` — the postprocess output layer. Extends

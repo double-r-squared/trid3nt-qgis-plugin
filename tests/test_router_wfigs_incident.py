@@ -29,7 +29,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 WFIGS_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/hazard/fetch_wfigs_incident/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/hazard/fetch_wfigs_incident/source.yaml"
 )
 _CURRENT = WFIGS_SPEC.endpoints["current"].url
 _YTD = WFIGS_SPEC.endpoints["year_to_date"].url

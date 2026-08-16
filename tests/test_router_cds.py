@@ -21,7 +21,7 @@ import pytest
 from trid3nt_server.agent.tools.fetchers._router import hooks
 from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
-_BASE = Path(__file__).resolve().parents[1] / "src/trid3nt_server/agent/tools/fetchers"
+_BASE = Path(__file__).resolve().parents[1] / "trid3nt_server/agent/tools/fetchers"
 
 
 @pytest.fixture(scope="module")

@@ -28,7 +28,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 AORC_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/weather/fetch_aorc_precip/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/weather/fetch_aorc_precip/source.yaml"
 )
 
 # Coweeta fork bbox (the ADR 0203 proof AOI).

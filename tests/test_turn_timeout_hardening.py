@@ -12,7 +12,7 @@ iteration) never returned and never raised, so:
     wedged on that turn, so NO model (even Sonnet) could respond,
   * selecting Haiku/Nova produced NOTHING on the wire -- a silent death.
 
-THE FIX (src/trid3nt_server/bedrock_adapter.py):
+THE FIX (trid3nt_server/bedrock_adapter.py):
 
   1. the ``bedrock-runtime`` client now carries a botocore ``Config`` with a
      bounded ``read_timeout`` / ``connect_timeout`` + a small retry policy, so a

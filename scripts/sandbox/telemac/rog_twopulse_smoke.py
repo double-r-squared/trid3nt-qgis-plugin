@@ -20,7 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-WORKER = "/opt/trid3nt/services/workers/telemac"
+WORKER = "/opt/trid3nt/workers/telemac"
 sys.path.insert(0, WORKER)
 
 import numpy as np  # noqa: E402

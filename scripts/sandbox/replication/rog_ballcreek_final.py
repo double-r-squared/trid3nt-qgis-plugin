@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rog_ballcreek_live as LIVE  # noqa: E402
 

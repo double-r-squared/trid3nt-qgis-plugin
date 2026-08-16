@@ -15,7 +15,7 @@ template's constant-vs-transient contrast.
 
 Usage (from the repo root):
   set -a; source .env.local; set +a
-  PYTHONPATH=src:contracts/src:. venvs/agent/bin/python scripts/proof_elmfire_windshift.py
+  PYTHONPATH=.:contracts/src:. venvs/agent/bin/python scripts/proof_elmfire_windshift.py
 
 Emits to docs/proof/templates/:
   elmfire_windshift_growth_montage.png   (5-min steps h0-h1, 30-min h1-h6, wind arrow/frame)
@@ -46,7 +46,7 @@ ROOT = Path("/home/nate/Documents/trid3nt-local")
 PROOF = ROOT / "docs" / "proof" / "templates"
 PROOF.mkdir(parents=True, exist_ok=True)
 
-_spec = importlib.util.spec_from_file_location("db", ROOT / "services/workers/elmfire/deck_builder.py")
+_spec = importlib.util.spec_from_file_location("db", ROOT / "workers/elmfire/deck_builder.py")
 db = importlib.util.module_from_spec(_spec)
 sys.modules["db"] = db
 _spec.loader.exec_module(db)

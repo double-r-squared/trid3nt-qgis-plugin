@@ -27,7 +27,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import load_spec_from_path
 
 LTER_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "src/trid3nt_server/agent/tools/fetchers/hydrology/fetch_lter_records/source.yaml"
+    / "trid3nt_server/agent/tools/fetchers/hydrology/fetch_lter_records/source.yaml"
 )
 
 # A minimal EML with one dataTable (tab-delimited, 1 header line) carrying a Date,

@@ -223,9 +223,9 @@ def test_stage_swmm_manifest_uploads_inp_and_manifest(tmp_path, monkeypatch):
     manifest_put = next(p for p in puts if p["Key"].endswith("manifest.json"))
     body = manifest_put["Body"]
     manifest = _json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
-    # The exact worker-contract shape (services/workers/swmm/entrypoint.py).
+    # The exact worker-contract shape (workers/swmm/entrypoint.py).
     assert manifest["swmm_args"] == ["mesh.inp"]
-    # services/workers/swmm/entrypoint.py's own manifest-contract docstring
+    # workers/swmm/entrypoint.py's own manifest-contract docstring
     # globs *.tif alongside *.out/*.rpt (worker postprocess COGs).
     assert manifest["outputs"] == ["*.out", "*.rpt", "*.tif"]
     assert len(manifest["inputs"]) == 1

@@ -12,7 +12,7 @@ Two shapes back the GeoClaw demo path:
 
 - ``GeoClawRunArgs`` — the forcing/scenario parameters the agent confirms with
   the user before submitting a GeoClaw run. Consumed by the GeoClaw worker
-  (``services/workers/geoclaw/...``) which maps these onto a Clawpack
+  (``workers/geoclaw/...``) which maps these onto a Clawpack
   ``setrun.py`` over the AOI + a topo COG + a driver SCENARIO (one of
   ``dam_break`` / ``tsunami`` / ``surge``), runs the headless Clawpack solver,
   and rasterizes ``fort.q`` frames -> depth.

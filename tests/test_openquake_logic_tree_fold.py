@@ -23,7 +23,7 @@ from trid3nt_server.agent.workflows.openquake.psha.psha import assemble_build_sp
 from trid3nt_server.agent.tools.processing.charts_common import (
     build_hazard_quantile_band_chart,
 )
-from services.workers.openquake.job_ini import render_openquake_deck
+from workers.openquake.job_ini import render_openquake_deck
 
 BBOX = (-122.30, 37.70, -122.10, 37.90)
 _BASE = {"bbox": list(BBOX), "imt": "PGA", "poe": 0.1, "site_grid_spacing_km": 20.0}

@@ -1,7 +1,7 @@
 """job-0291 (sprint-14-aws) — local-docker solver backend tests.
 
 The SFINCS GCS-IN → sfincs → GCS-OUT envelope from
-``services/workers/sfincs/entrypoint.py`` ported into the agent, with the
+``workers/sfincs/entrypoint.py`` ported into the agent, with the
 container being the plain upstream ``deltares/sfincs-cpu`` image run via
 ``docker run`` on the same instance.
 
@@ -394,7 +394,7 @@ def test_local_manifest_dest_traversal_rejected(
 # --------------------------------------------------------------------------- #
 
 #: The EXACT key set the local supervisor writes. Mirrors
-#: services/workers/sfincs/entrypoint.py PLUS the ``solver`` engine-identity
+#: workers/sfincs/entrypoint.py PLUS the ``solver`` engine-identity
 #: field the V&V wave added (ADR 0021) so read_run_diagnostics can recover the
 #: engine directly instead of inferring it from the stdout field name.
 _ENTRYPOINT_COMPLETION_KEYS = {

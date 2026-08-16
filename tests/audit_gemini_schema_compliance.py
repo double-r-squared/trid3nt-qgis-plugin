@@ -49,7 +49,7 @@ from typing import Any
 # Path setup — allow running from the repo root or services/agent/.
 # ---------------------------------------------------------------------------
 _HERE = Path(__file__).parent
-_SRC = _HERE.parent / "src"
+_SRC = _HERE.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 

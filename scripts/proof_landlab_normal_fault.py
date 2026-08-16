@@ -8,7 +8,7 @@ outline, plus the cumulative fault-throw footwall raster.
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  env $(grep -v "^#" .env.local | xargs) PYTHONPATH=src:contracts/src:. \
+  env $(grep -v "^#" .env.local | xargs) PYTHONPATH=.:contracts/src:. \
     venvs/agent/bin/python scripts/proof_landlab_normal_fault.py
 """
 
@@ -31,8 +31,8 @@ from PIL import Image  # noqa: E402
 from pyproj import Transformer  # noqa: E402
 from rasterio.warp import Resampling, calculate_default_transform, reproject  # noqa: E402
 
-from services.workers.landlab.component_chain import run_component_chain  # noqa: E402
-from services.workers.landlab.entrypoint import _read_dem_for_grid  # noqa: E402
+from workers.landlab.component_chain import run_component_chain  # noqa: E402
+from workers.landlab.entrypoint import _read_dem_for_grid  # noqa: E402
 
 TILE = (
     "https://services.arcgisonline.com/ArcGIS/rest/services/"

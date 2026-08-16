@@ -280,7 +280,7 @@ def _render_depth(cog_path, out_path):
 
 
 def main() -> int:
-    sys.path.insert(0, str(REPO / "src"))
+    sys.path.insert(0, str(REPO))
     sys.path.insert(0, str(REPO / "contracts/src"))
     from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
         _extract_peak_depth_geotiff,

@@ -141,7 +141,7 @@ def test_planar_gradient_flat_returns_none(tmp_path: Path) -> None:
 
 def test_prt_deck_directional_gradient_manifest(tmp_path: Path) -> None:
     """A supplied gradient vector -> gradient_source='dem' + oriented azimuth."""
-    from services.workers.modflow.gwt_adapter import build_modflow_deck
+    from workers.modflow.gwt_adapter import build_modflow_deck
 
     manifest = build_modflow_deck(
         spill_location_latlon=(40.86, -98.40),
@@ -168,7 +168,7 @@ def test_prt_deck_directional_gradient_manifest(tmp_path: Path) -> None:
 
 def test_prt_deck_demo_gradient_manifest(tmp_path: Path) -> None:
     """No gradient vector -> the legacy demo west->east CHD (byte-identical)."""
-    from services.workers.modflow.gwt_adapter import build_modflow_deck
+    from workers.modflow.gwt_adapter import build_modflow_deck
 
     manifest = build_modflow_deck(
         spill_location_latlon=(40.86, -98.40),

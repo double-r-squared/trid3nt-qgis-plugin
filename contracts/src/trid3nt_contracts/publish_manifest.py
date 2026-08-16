@@ -1,7 +1,7 @@
 """Typed AGENT-SIDE mirror of the worker's ``publish_manifest.json`` contract.
 
 The worker writes the manifest as a PLAIN dict (see
-``services/workers/_raster_postprocess/manifest.py``) because the CodeBuild
+``workers/_raster_postprocess/manifest.py``) because the CodeBuild
 worker context does not ship ``contracts``. This module is the AGENT's
 typed READER of that dict - two definitions, ONE ``schema_version`` gate. The
 SFINCS raster postprocess offload (Phase 4) lifts the heavy NetCDF/.mat -> COG
@@ -41,7 +41,7 @@ __all__ = [
 ]
 
 #: The ONE schema_version the agent reader understands. MUST stay in lockstep
-#: with ``services/workers/_raster_postprocess/manifest.MANIFEST_SCHEMA_VERSION``.
+#: with ``workers/_raster_postprocess/manifest.MANIFEST_SCHEMA_VERSION``.
 #: A manifest carrying any other value is treated as "unknown" -> the agent
 #: falls back to the legacy on-box postprocess path (one-release safety).
 MANIFEST_SCHEMA_VERSION: int = 1

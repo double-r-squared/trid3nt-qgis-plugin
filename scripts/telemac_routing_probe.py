@@ -51,7 +51,7 @@ os.environ.setdefault(
     "returns no data, say so and stop.",
 )
 
-AGENT_SRC = Path(__file__).resolve().parent.parent / "src"
+AGENT_SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(AGENT_SRC))
 
 import trid3nt_server.main as _main  # noqa: E402

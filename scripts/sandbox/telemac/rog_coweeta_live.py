@@ -35,14 +35,14 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO))
 
 POUR_POINT = (-83.40402, 35.05746)
 # bbox covering the Coweeta Creek catchment upstream of the pour point.
 BBOX = (-83.47, 35.02, -83.36, 35.10)
 RUNDIR = Path(os.environ.get("ROG_RUNDIR", "/tmp/rog_coweeta"))
 TELEMAC_IMAGE = "trid3nt-local/telemac:latest"
-WORKER_DIR = str(REPO / "services" / "workers" / "telemac")
+WORKER_DIR = str(REPO / "workers" / "telemac")
 
 # a Coweeta flash-flood design storm: ~25 mm/hr sustained (TS-Fred-remnants class
 # total ~150 mm over ~6 h). Constant intensity = the native SCS-CN path input.
@@ -138,7 +138,7 @@ def phase_solve(amc: int, tag: str) -> dict:
         "-v", f"{solve_dir}:/data",
         "-e", "TRID3NT_TELEMAC_SOLVE_TIMEOUT=86400",
         "--entrypoint", "/usr/local/bin/_entrypoint.sh", TELEMAC_IMAGE,
-        "python", "/opt/trid3nt/services/workers/telemac/entrypoint.py",
+        "python", "/opt/trid3nt/workers/telemac/entrypoint.py",
         "--data-dir", "/data", "--run-id", f"rog-coweeta-{tag}",
     ]
     cp = subprocess.run(argv, capture_output=True, text=True, timeout=90000)

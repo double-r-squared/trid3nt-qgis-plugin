@@ -35,7 +35,7 @@ _TRAPZ = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(HERE))
 
 import rog_ballcreek_live as LIVE  # noqa: E402
@@ -106,7 +106,7 @@ def solve_soil(key: str, *, capacity_mm: float, recovery_h: float,
         "docker", "run", "--rm", "-v", f"{d}:/data",
         "-e", "TRID3NT_TELEMAC_SOLVE_TIMEOUT=86400",
         "--entrypoint", "/usr/local/bin/_entrypoint.sh", LIVE.TELEMAC_IMAGE,
-        "python", "/opt/trid3nt/services/workers/telemac/entrypoint.py",
+        "python", "/opt/trid3nt/workers/telemac/entrypoint.py",
         "--data-dir", "/data", "--run-id", f"rog-bc-{tag}",
     ]
     print(f"[soil {tag}] gross={b['total_mm']}mm V0={v0['v0_mm']}mm "

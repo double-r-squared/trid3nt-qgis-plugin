@@ -85,7 +85,7 @@ exported synthetic `Terrains/Terrain.tif` with a reprojected real DEM (local SI 
 TILED + NoData + OVERVIEWS -- else `ras prepare` reports "Missing terrain data at Face"),
 and runs `ras prepare` + `ras solve --solver CPU`. The full host pipeline (reproject ->
 author -> prepare -> solve -> metrics from `DEBUG/CellVolume` + mass-balance outlet Q,
-catchment-restricted) is `services/workers/hecras2025/subst/crux/freshtopo/rog2025_pipeline.py`.
+catchment-restricted) is `workers/hecras2025/subst/crux/freshtopo/rog2025_pipeline.py`.
 Units: in an SI project `ConstantValue` IS the rate in mm/hr (mass-checked). Infiltration:
 ABSENT in the 2025 beta -> rain-only. The BC line must PROTRUDE past the mesh corners or it
 is classed INTERNAL. Live-proven on Muncie (de-risk) + Coweeta Creek NC (25 mm/hr x 6 h,

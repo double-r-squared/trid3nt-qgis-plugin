@@ -13,7 +13,7 @@ Bypasses the LLM/agent chat layer -- calls the REGISTERED template
 
 Run (mesh_source via env SCHISM_MESH_SOURCE, default bundled_quarterannulus):
   cd /home/nate/Documents/trid3nt-local
-  env $(grep -v "^#" .env.local | xargs) PYTHONPATH=src:contracts/src \\
+  env $(grep -v "^#" .env.local | xargs) PYTHONPATH=.:contracts/src \\
     venvs/agent/bin/python scripts/run_schism_direct.py
 """
 

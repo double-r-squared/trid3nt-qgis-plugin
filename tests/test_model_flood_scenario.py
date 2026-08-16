@@ -1338,7 +1338,7 @@ def test_build_sfincs_model_all_setup_steps_match_live_signatures(
 
 # --------------------------------------------------------------------------- #
 # Test 18 — job-0057: build_sfincs_model emits a manifest.json that conforms
-# to the worker contract (services/workers/sfincs/entrypoint.py:9-23).
+# to the worker contract (workers/sfincs/entrypoint.py:9-23).
 #
 # Schema the worker reads:
 #   {

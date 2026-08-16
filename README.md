@@ -13,7 +13,7 @@ one clone = a working end-to-end setup.
 - File-based persistence + local tile rendering -- no cloud account required
 
 The server (`server/`), contracts (`contracts/`) and engine workers
-(`services/workers/`) are first-class code in THIS repo - there is no upstream
+(`workers/`) are first-class code in THIS repo - there is no upstream
 sync.
 To extend the harness (write a tool / add an engine), see
 `docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
@@ -104,7 +104,7 @@ qgis-plugin/trid3nt/   the QGIS plugin (net/ ui/ render/ case/ + plugin.py)
 qgis-plugin/tests/     plugin test harnesses + headless E2E drivers
 server/                the server (WS + tool dispatch + turn loop + persistence)
 contracts/             shared pydantic contracts (trid3nt-contracts package)
-services/workers/      engine workers (mf6, telemac, sfincs, ... docker or exec)
+workers/      engine workers (mf6, telemac, sfincs, ... docker or exec)
 scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
 bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
 ```

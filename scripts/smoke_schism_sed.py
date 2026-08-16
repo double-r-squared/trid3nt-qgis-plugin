@@ -6,7 +6,7 @@ coarse under identical tidal+river forcing).
 
 Run:
   cd /home/nate/Documents/trid3nt-local
-  PYTHONPATH=src:contracts/src venvs/agent/bin/python scripts/smoke_schism_sed.py
+  PYTHONPATH=.:contracts/src venvs/agent/bin/python scripts/smoke_schism_sed.py
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "src")
+sys.path.insert(0, ".")
 from trid3nt_server.agent.workflows.schism.deck_authoring import (  # noqa: E402
     author_baroclinic_estuary_deck,
 )

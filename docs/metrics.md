@@ -20,7 +20,7 @@ matters, not the absolute).
 
 ## Folder-level view (added 2026-07-28, regenerate per milestone)
 
-    cd src/trid3nt_server && for d in */ agent/*/; do \
+    cd trid3nt_server && for d in */ agent/*/; do \
       find "$d" -name "*.py" -not -path "*__pycache__*" | xargs wc -l | tail -1; done
 
 | date | agent/tools | agent/workflows | agent/other | AGENT total | root files | emission | sandbox | credentials | PLATFORM total |

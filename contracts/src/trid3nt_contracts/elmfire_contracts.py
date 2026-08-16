@@ -4,7 +4,7 @@ The ELMFIRE analogue of ``geoclaw_contracts.py`` / ``swmm_contracts.py``.
 ELMFIRE (Eulerian Level set Model of FIRE spread, Lautenberger 2013) is a
 headless Fortran level-set fire-front solver that consumes the LANDFIRE 30 m
 fuels stack + a projected same-grid input deck (FIRE-2 deck builder,
-``services/workers/elmfire/deck_builder.py``) and emits per-run GeoTIFF/BIL
+``workers/elmfire/deck_builder.py``) and emits per-run GeoTIFF/BIL
 rasters: time of arrival, fireline intensity, spread rate, flame length. See
 ``reports/design/elmfire-engine-2026-07-07.md`` + the FIRE-1 container proof
 (``reports/inflight/fire-1-container-proof.md``: image ``trid3nt/elmfire:dev``,

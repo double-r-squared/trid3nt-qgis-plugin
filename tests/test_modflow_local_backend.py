@@ -6,7 +6,7 @@ seam, as an **image-less local-exec** spec over the shared
 (boto3), run the ``mf6`` binary detached (no public MODFLOW image exists —
 the instance carries the SHA-pinned USGS 6.5.0 static binary the GCP
 Dockerfile installs), supervisor uploads outputs + the EXACT
-``services/workers/modflow/entrypoint.py`` completion.json to
+``workers/modflow/entrypoint.py`` completion.json to
 ``s3://$TRID3NT_RUNS_BUCKET/<run_id>/``.
 
 Hard constraints honored here (kickoff): **NO docker / NO real mf6 on this
@@ -380,7 +380,7 @@ def test_local_submit_stages_deck_and_launches_mf6(
 # 3. Supervisor completion.json — EXACT MODFLOW entrypoint schema
 # --------------------------------------------------------------------------- #
 
-#: The EXACT key set services/workers/modflow/entrypoint.py writes.
+#: The EXACT key set workers/modflow/entrypoint.py writes.
 _MODFLOW_COMPLETION_KEYS = {
     "run_id",
     "status",

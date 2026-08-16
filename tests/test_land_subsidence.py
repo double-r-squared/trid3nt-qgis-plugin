@@ -1,7 +1,7 @@
 """Unit tests for the CSUB land-subsidence postprocess math (module wave).
 
 ``compute_subsidence_metrics`` + ``_read_csub_zdisplacement`` run directly on the
-Phase-1 mf6 6.5.0 smoke fixture (services/workers/modflow/fixtures/csub_smoke),
+Phase-1 mf6 6.5.0 smoke fixture (workers/modflow/fixtures/csub_smoke),
 so the SIGN convention + the magnitude metrics + the dz=Ssv*b*dh analytical
 cross-check are pinned on REAL engine output - NO new mf6 run required. The sign
 is the #1 silent-error risk (a wrong sign narrates subsidence as uplift and
@@ -29,7 +29,6 @@ from trid3nt_server.agent.workflows.modflow.postprocess_modflow import (
 # interbeds; 4000 m^3/day well over 10 yearly periods; converged on bin/mf6 6.5.0).
 FIXTURE_DIR = (
     Path(__file__).resolve().parents[1]
-    / "services"
     / "workers"
     / "modflow"
     / "fixtures"

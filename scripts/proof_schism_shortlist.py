@@ -38,7 +38,7 @@ _RIVER_SAL = 0.0
 
 TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 OUT = "/home/nate/Documents/trid3nt-local/docs/proof/templates"
-FIX = "/home/nate/Documents/trid3nt-local/services/workers/schism/fixtures/wwm_duck"
+FIX = "/home/nate/Documents/trid3nt-local/workers/schism/fixtures/wwm_duck"
 TMP = "/tmp/schism_proof"
 os.makedirs(TMP, exist_ok=True)
 TO_3857 = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)

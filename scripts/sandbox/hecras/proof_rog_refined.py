@@ -34,7 +34,7 @@ from shapely.prepared import prep as sprep
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from proof_rog2025 import _basemap, TO3857, OUT  # noqa: E402
 
-FT = Path("/home/nate/Documents/trid3nt-local/services/workers/hecras2025/subst/crux/freshtopo")
+FT = Path("/home/nate/Documents/trid3nt-local/workers/hecras2025/subst/crux/freshtopo")
 sys.path.insert(0, str(FT))
 from rog2025_pipeline import prepare_local_terrain  # noqa: E402
 

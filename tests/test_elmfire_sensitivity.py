@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def _deck_builder():
-    path = REPO / "services" / "workers" / "elmfire" / "deck_builder.py"
+    path = REPO / "workers" / "elmfire" / "deck_builder.py"
     spec = importlib.util.spec_from_file_location("elmfire_db_test", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

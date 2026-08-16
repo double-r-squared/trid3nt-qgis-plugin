@@ -222,7 +222,7 @@ def _synthetic_dem(steep: bool = True):
 
 def test_storm_ensemble_chain_sweeps_recharge():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     cr = run_component_chain(
         _synthetic_dem(steep=True),
@@ -247,7 +247,7 @@ def test_storm_ensemble_chain_sweeps_recharge():
 
 def test_overland_timeseries_chain_emits_frames():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     cr = run_component_chain(
         _synthetic_dem(steep=True),
@@ -271,7 +271,7 @@ def test_overland_conditioning_is_opt_in_and_removes_pit_ponding():
     depression-fills the DEM before routing, so a seeded sink pit no longer ponds
     in the overland peak-depth field."""
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     ny, nx = 40, 40
     _xg, yg = np.meshgrid(np.arange(nx), np.arange(ny))
@@ -307,7 +307,7 @@ def test_lake_mapping_discrimination_drops_noise_pits():
     """Depth + area floors keep the one real basin and drop shallow/tiny pits;
     n_lakes_raw > n_lakes_kept."""
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     ny, nx = 40, 40
     _xg, yg = np.meshgrid(np.arange(nx), np.arange(ny))
@@ -351,7 +351,7 @@ def test_lake_mapping_discrimination_drops_noise_pits():
 
 def test_dem_pit_fill_and_lake_mapping_chains():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     dem = _synthetic_dem(steep=False)
     fill = run_component_chain(
@@ -382,7 +382,7 @@ def test_dem_pit_fill_and_lake_mapping_chains():
 
 def test_hacks_law_chain_fits_exponent():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     cr = run_component_chain(
         _synthetic_dem(steep=True),
@@ -431,7 +431,7 @@ def test_hand_chain_matches_api_doctest_grid():
 
 def test_hand_chain_runs_on_synthetic_dem():
     pytest.importorskip("landlab")
-    from services.workers.landlab.component_chain import run_component_chain
+    from workers.landlab.component_chain import run_component_chain
 
     cr = run_component_chain(
         _synthetic_dem(steep=True),
