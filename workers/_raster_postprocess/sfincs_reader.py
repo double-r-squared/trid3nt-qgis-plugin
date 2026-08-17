@@ -59,6 +59,11 @@ class FieldFrame:
     frame_no: int | None  # None for peak, 1..k for frames
     style_preset: str
     nodata_threshold_m: float
+    # Seconds from run start for this frame (None for the non-temporal peak).
+    # The emit-on-solve outputs.json entry's ``t`` (ADR 0280) -- the seam maps it
+    # to QGIS Temporal-Controller stamps; the reader carries only raw physical
+    # seconds. Absent on the wave path (populated by extract_depth only).
+    t_seconds: float | None = None
     # quadtree
     face_values: Any = None
     # regular grid
@@ -107,6 +112,32 @@ def select_frame_time_indices(n_steps: int) -> list[int]:
         n_steps, MAX_FLOOD_FRAMES, len(kept),
     )
     return kept
+
+
+def _time_seconds_from_start(ds: Any, indices: list[int]) -> dict[int, float | None]:
+    """Map each selected time index -> seconds from run start (outputs.json ``t``).
+
+    Reads the ``time`` coord and returns ``{t_idx: seconds}`` measured from the
+    first timestep. Handles datetime64 (``timedelta / 1s``) and plain numeric
+    time axes. Best-effort: any read failure yields ``None`` per index so the
+    producer degrades to an ordinal-only ``t`` -- the layer stream (id/name/group
+    ordering) is unaffected; only the physical stamp is lost.
+    """
+    import numpy as np  # type: ignore
+
+    out: dict[int, float | None] = {i: None for i in indices}
+    try:
+        tvals = np.asarray(ds["time"].values)
+        base = tvals[0]
+        for i in indices:
+            delta = tvals[i] - base
+            if np.issubdtype(tvals.dtype, np.datetime64):
+                out[i] = float(delta / np.timedelta64(1, "s"))
+            else:
+                out[i] = float(delta)
+    except Exception as exc:  # noqa: BLE001 -- ordinal-only t is an honest degrade
+        LOG.warning("sfincs_reader: time-seconds read failed (%s); t=None per frame", exc)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -241,6 +272,7 @@ def extract_depth(
             if n_steps > 1:
                 zb = ds["zb"]
                 indices = select_frame_time_indices(n_steps)
+                t_seconds_by_idx = _time_seconds_from_start(ds, indices)
                 frame_payloads: list[Any] = []
                 for t_idx in indices:
                     depth_t = (ds["zs"].isel(time=t_idx) - zb).clip(min=0.0)
@@ -249,7 +281,9 @@ def extract_depth(
                     )
                 # A 1-frame group can never form on the web; drop a lone frame.
                 if len(frame_payloads) >= 2:
-                    for frame_no, payload in enumerate(frame_payloads, start=1):
+                    for frame_no, (payload, t_idx) in enumerate(
+                        zip(frame_payloads, indices), start=1
+                    ):
                         frames.append(
                             FieldFrame(
                                 role="context",
@@ -259,6 +293,7 @@ def extract_depth(
                                 frame_no=frame_no,
                                 style_preset=FLOOD_DEPTH_STYLE_PRESET,
                                 nodata_threshold_m=_cog.NODATA_DEPTH_M,
+                                t_seconds=t_seconds_by_idx.get(t_idx),
                                 face_values=payload if is_quadtree else None,
                                 regular_arr=None if is_quadtree else payload,
                             )

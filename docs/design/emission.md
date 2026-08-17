@@ -17,6 +17,19 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   `publish_layer._QGIS_STYLE_REGISTRY`. An unregistered quantity degrades to
   `NEUTRAL_FALLBACK_PRESET` (an honest band-stats neutral ramp) + a WARNING +
   a process fallback counter -- never a silent physically-wrong colormap.
+- `outputs_seam.py` -- the emit-on-SOLVE CONSUMER (ADR 0280 item 4).
+  `read_outputs_manifest(run_result)` reads `outputs.json` from the run prefix
+  (missing/unknown-schema -> `None`, the byte-identical no-op);
+  `build_layers_from_outputs(manifest, run_id, bbox)` turns each entry into the
+  SAME registered, styled, legend-stashed `LayerURI` the register-only
+  `publish_manifest.json` path produced -- raster no-`t` = standalone primary,
+  raster+`t` sharing a `quantity` = a temporal group (frames in `t` order),
+  vector = a vector layer, mesh/scalar = log-only in v1. `layer_id` is
+  deterministic + idempotent from `(quantity, t-ordinal, run_id)`; the legend is
+  STASHED side-band (byte-identical to `register_manifest_layers`). Proven
+  field-for-field byte-equivalent in `tests/test_outputs_seam.py`. Carries the
+  parallel `PublishedFrame` replay meta (`t` / `group_id`) for the item-7
+  persistence stamp. WIRING into the flood composer is the live close-out.
 
 ## emit-on-solve (`outputs.json`) -- FROZEN schema, foundation landed
 
@@ -27,10 +40,15 @@ seam consumer reads them on the existing completion poll and publishes each
 (raster+`t` sharing a `quantity` = a temporal group; raster with no `t` = one
 layer; vector = a vector layer; mesh/scalar = log-only in v1). v1 is AT-EXIT;
 a MISSING manifest is a no-op (legacy engines byte-unchanged). See
-`docs/design/outputs-manifest-schema.md` (frozen schema) + ADR 0280 (the seam,
-the flood proving case, the scaffold reconciliation, the cap fix). The
-consumer WIRING + the SFINCS producer + the `output_quantities` scaffold
-reconciliation are the gated live close-out (ADR 0280).
+`docs/design/outputs-manifest-schema.md` (frozen schema; v1 gained OPTIONAL
+`bbox` + `band_stats` render-hint fields, ADR 0280 EXECUTED) + ADR 0280 (the
+seam, the flood proving case, the scaffold reconciliation, the cap fix). The seam
+consumer (`outputs_seam.py`), the SFINCS worker producer (`outputs.json` written
+alongside `publish_manifest.json`), and the byte-equivalence bar are LANDED (ADR
+0280 EXECUTED). REMAINING as the gated live close-out: wiring the flood composer
+to the seam, the deck-side cadence cap fix (ledger row 20), the worker image
+rebuild + live proving solve, and -- separately, OPTION A -- the per-engine
+`output_quantities` scaffold migration.
 
 ## Composition
 

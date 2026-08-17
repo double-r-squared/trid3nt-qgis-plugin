@@ -1,8 +1,11 @@
 # ADR 0280 -- emit-on-solve: the append-only `outputs.json` seam (wave 1 foundation)
 
-Status: FOUNDATION LANDED (schema + contracts + registry + tests); LIVE
-close-out (flood proving case, cap fix, scaffold reconciliation) SPECIFIED,
-gated on the live loop. Date: 2026-08-16.
+Status: FOUNDATION LANDED (schema + contracts + registry + tests); SEAM +
+WORKER-PRODUCER + BYTE-EQUIVALENCE LANDED (this wave, 2026-08-17 -- see
+"EXECUTED" below); the LIVE close-out (deck-side cadence cap fix + image rebuild
++ live proving solve + row-20 deletion) is staged for the live-testing loop.
+Scaffold reconciliation (item 6) unchanged: OPTION A (scaffold stays, migrates
+per-engine). Date: 2026-08-16 / amended 2026-08-17.
 
 ## Context
 
@@ -150,3 +153,131 @@ replay fields are what the consumer stamps at publish time.
   (the scaffold is live 4-engine, not empty-except-OpenQuake; and the live
   proving case needs a solve + image rebuild). Both are surfaced to NATE rather
   than resolved by executing a destructive or unverifiable step blind.
+
+## EXECUTED (2026-08-17) -- seam + producer + byte-equivalence
+
+Under the OPTION-A scope ruling (the `output_quantities`/`publish_quantities`
+scaffold is NOT deleted this wave -- ledger row 18 stays QUEUED; each engine
+migrates during its own leg). This wave lands the offline-provable, additive,
+fully-revertible foundation for the SFINCS flood leg and PROVES the migration
+bar; the destructive step (ledger row 20 deletion + the deck-side cap fix) stays
+gated on the live proving solve through a rebuilt image (the live-testing loop).
+
+### Landed
+
+1. **Worker writer mirror** (`workers/_raster_postprocess/outputs_manifest.py`):
+   pure-stdlib `build_entry` / `new_manifest` / `append_entries` / `serialize`,
+   gated on `OUTPUTS_MANIFEST_SCHEMA_VERSION = 1`, behaviourally identical to the
+   `trid3nt_contracts` writer half (the deploy-boundary precedent).
+
+2. **The seam consumer** (`trid3nt_server/emission/outputs_seam.py`):
+   `read_outputs_manifest` (the missing/unknown-schema -> `None` no-op) +
+   `build_layers_from_outputs`. Routes per Section 5 (raster no-`t` = standalone
+   primary; raster+`t` sharing a `quantity` = a temporal group ordered by `t`,
+   role context; vector = a vector layer; mesh/scalar = log-only). Style resolves
+   via `quantity_styles.resolve_style_preset`; `layer_id` is deterministic +
+   idempotent from `(quantity, t-ordinal, run_id)` reproducing the register
+   path's stems EXACTLY (`flood_depth` -> `flood-depth-peak` / `flood-depth-frame-NN`).
+   The data-driven legend is STASHED side-band via `_stash_legend_for_uri`
+   (leaving `LayerURI.legend=None`), byte-identical to `register_manifest_layers`
+   -- NOT attached to the LayerURI (the one divergence the capture caught + fixed).
+
+3. **The worker producer** (`workers/_raster_postprocess/postprocess.py`
+   `build_entry` loop + `PostprocessResult.outputs_entries`; reader `t_seconds`):
+   the SAME ordered frames that build `publish_manifest.json` also build the
+   `outputs.json` entries (peak non-temporal; frames carry seconds-from-start).
+   `workers/sfincs/entrypoint.py` writes `outputs.json` ALONGSIDE
+   `publish_manifest.json` (additive; the register path is byte-unchanged -- INERT
+   until the image rebuild). Per-frame `t` = the `time` coord's seconds-from-start.
+
+4. **Replay fields** (`outputs_seam.PublishedFrame`): the parallel `t` / `group_id`
+   / seam-resolved `style_preset` for the persistence stamp (item 7). The
+   live-emitted `LayerURI` is byte-identical to the register path; the replay meta
+   rides ALONGSIDE it (the persistence + reopen wiring is part of the live
+   close-out).
+
+### THE FLAGGED EQUIVALENCE RISK -- resolved WITH a schema amendment
+
+The kickoff flagged that the old register path carried `band_stats` per entry for
+legend/rescale and the frozen schema dropped it. Verified against the code: for a
+REGISTERED quantity (`flood_depth` -> `continuous_flood_depth`, the pinned
+registry preset `0,3` / `ylgnbu`), `style_params_from_band_stats` resolves at the
+registry step and NEVER consults `band_stats` -- so band_stats parity holds for
+flood WITHOUT the field. But the byte-equivalence bar (Section 7.1) ALSO lists
+`bbox` (the per-COG EPSG:4326 extent the worker precomputes) and `band_stats` is
+still needed for the UNREGISTERED-quantity neutral ramp. Rather than force a
+per-COG re-read on the agent (which would regress the register-only-no-COG-read
+fast path) OR ship a bbox-drift render regression, the schema is AMENDED (v1 is
+young; the task authorizes amending WITH the proving case):
+
+> **SCHEMA AMENDMENT (schema_version 1, ADR 0280 EXECUTED):** `OutputEntry`
+> gains two OPTIONAL render-hint fields -- `bbox: [minlon,minlat,maxlon,maxlat]`
+> and `band_stats: {is_categorical, is_rgba, p2, p98}`. The flat
+> `{kind,quantity,name,uri,t?,units?}` core stays the ONLY required shape. A
+> producer that precomputed them (every docker raster worker) writes them so the
+> seam resolves the SAME bbox + rescale WITHOUT a COG re-read; a host-exec engine
+> that omits them degrades to the workflow AOI bbox + a lazy per-COG stats touch
+> (the neutral-ramp fallback). Tolerant-read: an old producer that omits them is
+> byte-unchanged. Landed in BOTH `trid3nt_contracts.outputs_manifest` (writer +
+> reader `OutputBandStats`) and the worker mirror.
+
+### The byte-equivalence capture (verbatim)
+
+`register_manifest_layers` (OLD) vs `outputs.json` + `build_layers_from_outputs`
+(NEW), same worker postprocess on a solved `sfincs_map.nc` (25-timestep pluvial
+run `01KYDRQC...`; also a self-contained synthetic map in
+`tests/test_outputs_seam.py::test_byte_equivalence_seam_vs_register`). Diff over
+`{layer_id (modulo run-id), name, layer_type, style_preset, role, units, bbox,
+resolved &rescale/&colormap, side-band-stashed legend}`:
+
+```
+=== OLD register_manifest_layers stream (26 layers) ===
+flood-depth-peak      name='Peak flood depth'  raster continuous_flood_depth primary meters
+                      bbox=(-95.611266,29.731714,-95.428762,29.793319)
+                      rescale='&rescale=0,3&colormap_name=ylgnbu'
+                      stashed_legend=('continuous','ylgnbu',0.0,3.0,'meters')
+flood-depth-frame-01..25  name='Flood depth step N' raster continuous_flood_depth context meters
+                      (identical bbox / rescale / stashed_legend on every frame)
+=== NEW outputs.json + seam stream (26 layers) ===
+   (byte-identical rows)
+=== FIELD-BY-FIELD DIFF ===
+IDENTICAL: every field of every layer matches (byte-equivalent stream).
+=== NEW-ONLY replay metadata (additive, item 7) ===
+   flood-depth-peak      t=None    group_id=None
+   flood-depth-frame-01  t=0.0     group_id=flood-depth
+   flood-depth-frame-25  t=172800.0 group_id=flood-depth
+```
+
+The ONLY differences are ADDITIVE (the NEW path carries per-frame `t` +
+`group_id` the OLD path never had -- the item-7 replay capability). Every
+render-affecting field is byte-identical. The one divergence the first capture
+caught (the seam attaching `legend` to the LayerURI vs the register path's
+side-band stash) was fixed to match the register transport before this was
+recorded. Tests: `tests/test_outputs_seam.py` (6 cases incl. the equivalence
+regression), `workers/sfincs/test_postprocess_wiring.py` (producer entries).
+
+### NOT done this wave -- the live close-out (gated on the live-testing loop)
+
+Per "worker image staleness gap" (worker code is INERT until rebuild),
+"never half-wired", and "NATE tests live" -- the following are staged, NOT
+applied, so the tree stays fully revertible (all additions; the register path is
+byte-unchanged; nothing consumes `outputs.json` live yet):
+
+1. **Wire the flood composer** (`flood.py`): when `read_outputs_manifest` returns
+   a manifest, publish via the seam (a clean if/else next to the existing
+   register-only vs on-box branches, same one-release-safety pattern). The seam
+   output is proven byte-equivalent, so this is a mechanical swap -- but it must
+   be proven THROUGH a rebuilt image + a live solve, not offline.
+2. **The cap fix** (row-20 deletion): `output_interval_min` resolves
+   `dtout`/`dtmaxout` DECK-SIDE (deck builder), retiring the post-hoc
+   `MAX_FLOOD_FRAMES=144` thinning + wiring the lever on the pluvial path
+   (`run_sfincs.py:_resolve_output_interval_min`, pinned OFF today). Worker/deck
+   code -> needs the image rebuild + a live solve to prove the frame counts.
+3. **IMAGE LAW**: rebuild sfincs (`-f workers/sfincs/Dockerfile`, repo-root
+   context) -> provenance-check the mirror in-image -> live-smoke through it.
+4. **Gates**: daemon restart + `ws_smoke.py all_passed`; the flood canary THROUGH
+   the seam (status=ok + frames via `outputs.json`); the temporal-group reopen
+   check; the NATE QGIS visual.
+5. **Row-20 deletion**: only AFTER (1)-(4) pass -- the ledger row stays QUEUED
+   with its condition PARTIALLY met (producer + seam + byte-equivalence bar =
+   PASS; deck-side cadence + live proving solve = REMAINING).

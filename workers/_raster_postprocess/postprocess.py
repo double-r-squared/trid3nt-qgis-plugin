@@ -36,9 +36,15 @@ from typing import Any
 from . import band_stats as _band_stats
 from . import cog as _cog
 from . import manifest as _manifest
+from . import outputs_manifest as _outputs
 from . import sfincs_reader as _reader
 
 LOG = logging.getLogger("trid3nt.worker.raster_postprocess.postprocess")
+
+#: The physical ``quantity`` (outputs.json entry key + the seam's styling lookup)
+#: for each postprocess field kind. ``flood_depth`` / ``wave_height`` resolve to
+#: the pinned registry presets agent-side (ADR 0280); a NEW kind registers a row.
+_QUANTITY_BY_KIND: dict[str, str] = {"depth": "flood_depth", "waves": "wave_height"}
 
 #: Bounded ProcessPool worker count. Defaults to min(cpu_count, 8) so a c7i box
 #: parallelizes frames without oversubscribing GDAL/BLAS. Override via env for
@@ -66,6 +72,16 @@ class PostprocessResult:
     cog_paths: list[Path]  # local COGs written into the deck dir (for the sweep)
     error_code: str | None = None
     error_message: str | None = None
+    #: The emit-on-solve outputs.json entries (ADR 0280) built from the SAME
+    #: ordered frames as ``manifest.layers`` -- carried alongside the legacy
+    #: publish_manifest so the entrypoint can write BOTH during the migration
+    #: window (the seam consumes outputs.json; the register path consumes the
+    #: publish_manifest). Empty on the error/empty path.
+    outputs_entries: list[dict[str, Any]] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.outputs_entries is None:
+            self.outputs_entries = []
 
 
 # --------------------------------------------------------------------------- #
@@ -304,7 +320,9 @@ def run_postprocess(
             error_message=msg,
         )
 
+    quantity = _QUANTITY_BY_KIND.get(kind, kind)
     layers: list[dict[str, Any]] = []
+    outputs_entries: list[dict[str, Any]] = []
     cog_paths: list[Path] = []
     for fr in ordered:
         cog_path = deck_dir / fr.dest_filename
@@ -314,6 +332,7 @@ def run_postprocess(
         per_layer_metrics = metrics_by_dest.get(fr.dest_filename)
         # Peak carries its metrics; frames carry only band_stats (lighter manifest).
         layer_metrics = per_layer_metrics if fr.role == "primary" else None
+        cog_uri = runs_uri_for(fr.dest_filename)
         layers.append(
             _manifest.build_layer_entry(
                 layer_id_stem=fr.layer_id_stem,
@@ -321,12 +340,28 @@ def run_postprocess(
                 role=fr.role,
                 style_preset=fr.style_preset,
                 units="meters",
-                cog_uri=runs_uri_for(fr.dest_filename),
+                cog_uri=cog_uri,
                 frame_no=fr.frame_no,
                 bbox=bbox_4326,
                 band_stats=stats,
                 metrics=layer_metrics,
                 has_overviews=True,
+            )
+        )
+        # Emit-on-solve outputs.json entry (ADR 0280) from the SAME frame: flat
+        # {kind,quantity,name,uri,t?,units} + the render hints (bbox + band_stats)
+        # so the seam resolves the SAME bbox + rescale WITHOUT a COG re-read. The
+        # peak is non-temporal (t absent); frames carry seconds-from-start.
+        outputs_entries.append(
+            _outputs.build_entry(
+                kind="raster",
+                quantity=quantity,
+                name=fr.name,
+                uri=cog_uri,
+                t=fr.t_seconds if fr.role != "primary" else None,
+                units="meters",
+                bbox=bbox_4326,
+                band_stats=stats,
             )
         )
 
@@ -350,4 +385,5 @@ def run_postprocess(
         manifest=manifest,
         metrics=peak_metrics,
         cog_paths=cog_paths,
+        outputs_entries=outputs_entries,
     )

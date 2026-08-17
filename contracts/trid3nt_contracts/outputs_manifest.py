@@ -42,6 +42,7 @@ __all__ = [
     "append_entries",
     "serialize",
     "OutputEntry",
+    "OutputBandStats",
     "OutputsManifest",
     "parse_outputs_manifest",
 ]
@@ -72,14 +73,27 @@ def build_entry(
     uri: str,
     t: float | None = None,
     units: str | None = None,
+    bbox: list[float] | None = None,
+    band_stats: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build ONE flat manifest entry dict (``{kind, quantity, name, uri, t?,
-    units?}``).
+    units?}`` plus the OPTIONAL render-hint fields ``bbox?`` / ``band_stats?``).
 
     Raises ``ValueError`` on an unrecognized ``kind`` (a typed reject at write
     time, never a silent drop -- Section 6) or a missing required field. ``t`` /
     ``units`` are omitted from the dict (absent, not null) when ``None`` so the
     object stays as small as the schema promises.
+
+    RENDER-HINT AMENDMENT (ADR 0280 EXECUTED, schema_version 1): ``bbox`` (the
+    per-COG EPSG:4326 ``[minlon,minlat,maxlon,maxlat]``) and ``band_stats``
+    (``{is_categorical, is_rgba, p2, p98}``) are OPTIONAL fields a producer that
+    ALREADY computed them (every docker raster worker does) writes so the seam
+    resolves the SAME bbox + rescale the register-only fast path did WITHOUT a
+    COG re-read. Absent (host-exec engines that don't precompute) the seam
+    degrades to the workflow AOI bbox + a lazy per-COG stats touch. They are the
+    minimal set the byte-equivalence bar (Section 7.1 lists bbox + band stats)
+    needs; the flat ``{kind,quantity,name,uri,t,units}`` core is unchanged and
+    still the only REQUIRED shape. Both are omitted from the dict when ``None``.
     """
     if kind not in OUTPUT_KINDS:
         raise ValueError(
@@ -101,6 +115,10 @@ def build_entry(
         entry["t"] = float(t)
     if units:
         entry["units"] = units
+    if bbox is not None:
+        entry["bbox"] = [float(v) for v in bbox]
+    if band_stats is not None:
+        entry["band_stats"] = dict(band_stats)
     return entry
 
 
@@ -167,12 +185,34 @@ class _ReaderModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class OutputBandStats(_ReaderModel):
+    """Optional per-COG render stats a producer precomputed (ADR 0280 amendment).
+
+    Mirrors the register-only path's ``band_stats``: ``is_categorical`` /
+    ``is_rgba`` short-circuit the palette / composite passthroughs and
+    ``p2`` / ``p98`` feed the generic percentile rescale (an UNREGISTERED
+    quantity's neutral ramp) -- so the seam never re-reads the COG when the
+    producer already computed them.
+    """
+
+    is_categorical: bool = False
+    is_rgba: bool = False
+    p2: float | None = None
+    p98: float | None = None
+
+
 class OutputEntry(_ReaderModel):
     """One ``entries[]`` row (Section 1).
 
     ``t`` is seconds-from-run-start (``None`` for a non-temporal artifact). The
     seam maps a bare ``t`` to Temporal-Controller stamps; the entry carries only
     the raw physical time.
+
+    ``bbox`` (per-COG EPSG:4326) and ``band_stats`` are the OPTIONAL render-hint
+    fields (ADR 0280 EXECUTED amendment): present when the producer precomputed
+    them (docker raster workers), absent for host-exec engines (the seam then
+    uses the workflow bbox + a lazy stats touch). Tolerant-read: an old producer
+    that omits them is byte-unchanged.
     """
 
     kind: str
@@ -181,6 +221,8 @@ class OutputEntry(_ReaderModel):
     uri: str
     t: float | None = None
     units: str | None = None
+    bbox: list[float] | None = None
+    band_stats: OutputBandStats | None = None
 
 
 class OutputsManifest(_ReaderModel):

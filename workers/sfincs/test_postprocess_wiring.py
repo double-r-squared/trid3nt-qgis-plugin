@@ -50,7 +50,9 @@ def _write_regular_map(path: Path, *, nx=20, ny=16, n_time=3, flooded=True) -> N
 
 def test_run_raster_postprocess_regular_grid(tmp_path: Path):
     _write_regular_map(tmp_path / "sfincs_map.nc")
-    manifest, status_override, error_code = ep.run_raster_postprocess("RID", tmp_path)
+    manifest, status_override, error_code, outputs_entries = ep.run_raster_postprocess(
+        "RID", tmp_path
+    )
     assert status_override is None and error_code is None
     assert manifest is not None
     assert manifest["engine"] == "sfincs"
@@ -60,19 +62,31 @@ def test_run_raster_postprocess_regular_grid(tmp_path: Path):
     with rasterio.open(tmp_path / "flood_depth_peak.tif") as src:
         assert str(src.crs) == "EPSG:32616"
         assert len(src.overviews(1)) >= 1
+    # ADR 0280: outputs.json entries parallel the manifest layers (peak + frames).
+    assert outputs_entries is not None
+    assert len(outputs_entries) == len(manifest["layers"])
+    assert outputs_entries[0]["quantity"] == "flood_depth"
+    assert "t" not in outputs_entries[0]  # peak is non-temporal
+    assert all("t" in e for e in outputs_entries[1:])  # frames carry seconds
 
 
 def test_run_raster_postprocess_regular_honesty_gate(tmp_path: Path):
     _write_regular_map(tmp_path / "sfincs_map.nc", flooded=False)
-    manifest, status_override, error_code = ep.run_raster_postprocess("RID", tmp_path)
+    manifest, status_override, error_code, outputs_entries = ep.run_raster_postprocess(
+        "RID", tmp_path
+    )
     assert status_override == "error"
     assert error_code == "RUN_OUTPUT_EMPTY"
     assert not (tmp_path / "flood_depth_peak.tif").exists()
+    assert not outputs_entries  # no entries on the honesty-gate error path
 
 
 def test_run_raster_postprocess_no_local_nc_is_skip(tmp_path: Path):
-    manifest, status_override, error_code = ep.run_raster_postprocess("RID", tmp_path)
+    manifest, status_override, error_code, outputs_entries = ep.run_raster_postprocess(
+        "RID", tmp_path
+    )
     assert manifest is None and status_override is None and error_code is None
+    assert outputs_entries is None
 
 
 def test_write_completion_carries_publish_manifest_uri(tmp_path: Path, monkeypatch):

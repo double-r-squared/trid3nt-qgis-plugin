@@ -289,7 +289,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def run_raster_postprocess(
     run_id: str,
     scratch: Path,
-) -> tuple[dict | None, str | None, str | None]:
+) -> tuple[dict | None, str | None, str | None, list[dict] | None]:
     """Run the shared depth postprocess on the LOCAL ``sfincs_map.nc``.
 
     Writes overview-bearing COGs into ``scratch`` (so the entrypoint's ``*.tif``
@@ -299,22 +299,25 @@ def run_raster_postprocess(
     spec bbox needed). The wave pass is skipped (the regular-grid SFINCS worker
     has no SnapWave field).
 
-    Returns ``(manifest_dict | None, status_override | None, error_code | None)``.
-    NEVER raises: any failure logs + returns ``(None, None, None)`` so the raw
-    sfincs_map.nc still uploads and the agent's legacy on-box path can run
-    (transition fallback).
+    Returns ``(manifest_dict | None, status_override | None, error_code | None,
+    outputs_entries | None)``. The fourth element (ADR 0280) is the emit-on-solve
+    ``outputs.json`` entry list built from the SAME frames; the caller writes
+    outputs.json ALONGSIDE the legacy publish_manifest.json during the migration
+    window. NEVER raises: any failure logs + returns ``(None, None, None, None)``
+    so the raw sfincs_map.nc still uploads and the agent's legacy on-box path can
+    run (transition fallback).
     """
     local_nc = scratch / "sfincs_map.nc"
     if not local_nc.exists():
         LOG.warning(
             "raster postprocess: no local sfincs_map.nc in %s — skipping.", scratch
         )
-        return None, None, None
+        return None, None, None, None
     try:
         from workers._raster_postprocess import postprocess as _pp
     except Exception as exc:  # noqa: BLE001 — shared pkg missing -> legacy fallback
         LOG.warning("raster postprocess: shared package import failed (%s)", exc)
-        return None, None, None
+        return None, None, None, None
 
     runs_uri_for = lambda rel: _runs_uri(run_id, rel)  # noqa: E731
     try:
@@ -324,15 +327,15 @@ def run_raster_postprocess(
         )
     except Exception as exc:  # noqa: BLE001 — defensive; legacy fallback
         LOG.exception("raster postprocess: depth pass crashed (%s)", exc)
-        return None, None, None
+        return None, None, None, None
 
     if depth.status == "error":
-        return depth.manifest, "error", depth.error_code
+        return depth.manifest, "error", depth.error_code, None
     LOG.info(
         "raster postprocess: built manifest with %d layer(s) (%d frames)",
         len(depth.manifest.get("layers", [])), depth.manifest.get("frame_count", 0),
     )
-    return depth.manifest, None, None
+    return depth.manifest, None, None, depth.outputs_entries
 
 
 def _build_argv_parser() -> argparse.ArgumentParser:
@@ -444,6 +447,34 @@ def _write_publish_manifest(run_id: str, pp_manifest: dict) -> str:
     return uri
 
 
+def _write_outputs_manifest(run_id: str, entries: list[dict]) -> str:
+    """Write the emit-on-solve ``outputs.json`` (ADR 0280), before completion.
+
+    Uses the pure-stdlib worker mirror (``workers._raster_postprocess.
+    outputs_manifest``) so the object is byte-identical to what the agent reader
+    schema-gates. Written ALONGSIDE publish_manifest.json during the migration
+    window; the agent's emission seam consumes this one, the register path the
+    other. Same write-whole-object atomicity as publish_manifest.json.
+    """
+    from workers._raster_postprocess import outputs_manifest as _om
+
+    body = _om.append_entries(None, engine="sfincs", run_id=run_id, new=list(entries))
+    uri = _runs_uri(run_id, _om.OUTPUTS_MANIFEST_BASENAME)
+    _scheme, _bucket, _key = _split_object_uri(uri)
+    if _scheme == "s3":
+        _s3_client().put_object(
+            Bucket=_bucket, Key=_key,
+            Body=body.encode("utf-8"),
+            ContentType="application/json",
+        )
+    else:
+        _gcs_client().bucket(_bucket).blob(_key).upload_from_string(
+            body, content_type="application/json"
+        )
+    LOG.info("emit-on-solve: wrote %s (%d entries)", uri, len(entries))
+    return uri
+
+
 def _solve_postprocess_sweep(
     run_id: str,
     run_dir: Path,
@@ -481,14 +512,26 @@ def _solve_postprocess_sweep(
     # publish manifest, apply the empty-field honesty gate. Clean solve only.
     output_uris: list[str] = []
     publish_manifest_uri: str | None = None
+    outputs_manifest_uri: str | None = None
     pp_status_override: str | None = None
     pp_error_code: str | None = None
     if rc == 0:
-        pp_manifest, pp_status_override, pp_error_code = run_raster_postprocess(
-            run_id, run_dir
+        pp_manifest, pp_status_override, pp_error_code, pp_outputs_entries = (
+            run_raster_postprocess(run_id, run_dir)
         )
         if pp_manifest is not None:
             publish_manifest_uri = _write_publish_manifest(run_id, pp_manifest)
+        # Emit-on-solve outputs.json (ADR 0280) -- written ALONGSIDE the legacy
+        # publish_manifest during the migration window; the agent's seam consumes
+        # it. Best-effort: a write failure never sinks the run (the register path
+        # still works off publish_manifest.json).
+        if pp_outputs_entries:
+            try:
+                outputs_manifest_uri = _write_outputs_manifest(
+                    run_id, pp_outputs_entries
+                )
+            except Exception as exc:  # noqa: BLE001 -- additive; never fatal
+                LOG.warning("emit-on-solve outputs.json write failed: %s", exc)
 
     for path in _expand_outputs(list(output_globs), run_dir):
         rel = path.relative_to(run_dir).as_posix()
@@ -496,6 +539,8 @@ def _solve_postprocess_sweep(
         output_uris.append(uri)
     if publish_manifest_uri:
         output_uris.append(publish_manifest_uri)
+    if outputs_manifest_uri:
+        output_uris.append(outputs_manifest_uri)
 
     if rc != 0:
         status = "error"

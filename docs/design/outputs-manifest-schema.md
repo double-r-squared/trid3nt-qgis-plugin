@@ -58,11 +58,25 @@ it later (recon gotcha #1); v1 validates + log-only's a `mesh` entry.
 | `t` | number \| null | no | Seconds from run start. `null`/absent for a non-temporal artifact (a peak/final field, a scalar, a static input layer). Present and monotonically non-decreasing across a `quantity`'s own entries when temporal. |
 | `units` | string | no | Free-text unit label (`"meters"`, `"mg/L"`, `"ft/min"`). Absent when not meaningful (`kind="mesh"`, most vectors). |
 
-No `role`, no `style_preset`, no `band_stats`, no `metrics`, no `frame_no`,
-no `bbox` on the entry itself -- those are TODAY's `PublishManifestLayer`
-fields (Section 5 explains where each one's job goes instead). This is the
-deliberate flattening the settled design calls for: the manifest describes
-WHAT WAS WRITTEN AND WHEN, nothing about how to draw it.
+No `role`, no `style_preset`, no `metrics`, no `frame_no` on the entry itself --
+those are TODAY's `PublishManifestLayer` fields (Section 5 explains where each
+one's job goes instead). This is the deliberate flattening the settled design
+calls for: the required core describes WHAT WAS WRITTEN AND WHEN, nothing about
+how to draw it.
+
+**AMENDMENT (schema_version 1, ADR 0280 EXECUTED 2026-08-17):** two OPTIONAL
+render-hint fields REJOIN the entry -- `bbox` (per-COG EPSG:4326
+`[minlon,minlat,maxlon,maxlat]`) and `band_stats`
+(`{is_categorical, is_rgba, p2, p98}`). They are NOT part of the REQUIRED flat
+core (`{kind,quantity,name,uri,t?,units?}`); a producer that ALREADY computed
+them (every docker raster worker) writes them so the seam resolves the SAME bbox
++ rescale the register-only fast path did WITHOUT a per-COG re-read, which the
+byte-equivalence bar (Section 7.1 lists bbox + band stats) requires. Absent
+(host-exec engines that don't precompute), the seam degrades to the workflow AOI
+bbox + a lazy per-COG stats touch (the unregistered-quantity neutral ramp only).
+Tolerant-read: an old producer that omits them is byte-unchanged. This amends the
+original "no `band_stats` / no `bbox` on the entry" line above -- the flat core is
+unchanged; the render hints are optional and additive. See ADR 0280 EXECUTED.
 
 ## 2. Append semantics
 
