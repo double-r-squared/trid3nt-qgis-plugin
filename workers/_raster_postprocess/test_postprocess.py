@@ -204,12 +204,14 @@ def test_write_field_cog_quadtree_metrics(tmp_path: Path):
 # --------------------------------------------------------------------------- #
 
 
-def test_select_frame_time_indices_caps(monkeypatch):
-    monkeypatch.setattr(_reader, "MAX_FLOOD_FRAMES", 5)
+def test_select_frame_time_indices_never_omits():
+    # ADR 0280: the MAX_FLOOD_FRAMES post-hoc thinning is retired -- the reader
+    # publishes EVERY solver-written frame (deck-side dtout is the count control).
+    assert _reader.select_frame_time_indices(0) == []
     assert _reader.select_frame_time_indices(3) == [0, 1, 2]
-    idx = _reader.select_frame_time_indices(100)
-    assert len(idx) <= 5
-    assert idx[0] == 0 and idx[-1] == 99  # endpoints kept
+    idx = _reader.select_frame_time_indices(300)
+    assert idx == list(range(300))  # no subsample, no cap
+    assert idx[0] == 0 and idx[-1] == 299  # endpoints kept
 
 
 def test_extract_depth_regular_peak_only(tmp_path: Path):

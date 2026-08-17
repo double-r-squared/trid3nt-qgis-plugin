@@ -169,22 +169,34 @@ def test_coastal_deck_dtout_reflects_interval(
 # --------------------------------------------------------------------------- #
 
 
-def test_pluvial_resolves_none_interval() -> None:
-    """The pluvial path ALWAYS resolves None (legacy hourly), even if a stray
-    interval was passed -> the pluvial deck is never touched."""
+def test_pluvial_default_interval_is_legacy_none() -> None:
+    """Pluvial with NO explicit cadence resolves None -> the deck's legacy hourly
+    formula (byte-identical to the pre-cap-fix pluvial deck)."""
     assert (
         _resolve_output_interval_min(
             is_coastal=False, output_interval_min=None, duration_hr=24.0
         )
         is None
     )
-    # Even a stray explicit value is ignored for a non-coastal run (regression
-    # guard: pluvial stays byte-identical).
+
+
+def test_pluvial_explicit_interval_is_honored() -> None:
+    """ADR 0280 cap-fix: the cadence lever is UNPINNED on the pluvial path -- an
+    EXPLICIT output_interval_min now flows through to the deck (was silently
+    dropped before), floored at the physical minimum. Deck-side dtout is then the
+    frame-count control; the MAX_FLOOD_FRAMES post-hoc thinning is retired."""
     assert (
         _resolve_output_interval_min(
             is_coastal=False, output_interval_min=5, duration_hr=24.0
         )
-        is None
+        == 5.0
+    )
+    # Floored at the physical minimum (the deck re-floors at 60 s).
+    assert (
+        _resolve_output_interval_min(
+            is_coastal=False, output_interval_min=0.1, duration_hr=24.0
+        )
+        == 1.0
     )
 
 

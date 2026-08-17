@@ -157,6 +157,10 @@ from trid3nt_server.workflows.shared.register_published_manifest import (
     read_publish_manifest,
     register_manifest_layers,
 )
+from trid3nt_server.emission.outputs_seam import (
+    build_layers_from_outputs,
+    read_outputs_manifest,
+)
 from trid3nt_server.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     DischargeForcing,
@@ -2079,9 +2083,72 @@ async def model_flood_scenario(
     # below unchanged (the raw sfincs_map.nc is still uploaded). Clean if/else.
     published_layers: list[LayerURI] = []
     depth_metrics: dict[str, Any] = {}
-    manifest = await asyncio.to_thread(read_publish_manifest, run_result)
-    register_only = manifest is not None
-    if register_only:
+    # EMIT-ON-SOLVE SEAM (ADR 0280 item 4). When the rebuilt worker wrote an
+    # ``outputs.json`` under the run prefix, the SEAM owns ALL publication (peak +
+    # temporal frames + replay stamps) -- proven byte-equivalent to the register
+    # path (tests/test_outputs_seam.py). ``read_outputs_manifest`` -> None
+    # (absent / unknown schema) falls through to the legacy register-only
+    # ``publish_manifest`` path, byte-unchanged (one-release safety). The
+    # ``publish_manifest`` is STILL read for the top-level ``FloodMetrics``
+    # narration scalars (max/mean/p95/flooded_cell_count) -- the flat
+    # ``outputs.json`` entries carry no aggregate metrics, so ``publish_manifest``
+    # remains the metrics carrier ("keeps non-frame entries", the ADR row-20
+    # decision). Reading it for metrics is NOT publication: no layer of it is
+    # registered when the seam owns the run. Clean seam-or-legacy fork, single
+    # publication.
+    outputs_manifest = await asyncio.to_thread(read_outputs_manifest, run_result)
+    publish_manifest = await asyncio.to_thread(read_publish_manifest, run_result)
+    seam_active = outputs_manifest is not None
+    register_only = seam_active or (publish_manifest is not None)
+    if seam_active:
+        logger.info(
+            "model_flood_scenario: SEAM path (outputs.json emit-on-solve) "
+            "run_id=%s engine=%s entries=%d",
+            run_result.run_id, outputs_manifest.engine, len(outputs_manifest.entries),
+        )
+        async with substep(emitter, "publish_layer"):
+            seam = build_layers_from_outputs(
+                outputs_manifest, run_id=run_result.run_id, bbox=resolved_bbox
+            )
+        # Narration scalars from the worker's publish_manifest (the metrics
+        # carrier); {} when absent -> honest zero metrics (never fabricated).
+        depth_metrics = (
+            dict(publish_manifest.metrics) if publish_manifest is not None else {}
+        )
+        # Item-7 replay meta rides alongside (seam.frames: t / group_id /
+        # seam-resolved style_preset). The temporal group also reforms on reopen
+        # from the byte-identical "Flood depth step N" name token
+        # (detectSequentialGroups), so group survival needs no new persistence
+        # field. Primary layers ride the success envelope; context frames emit
+        # OUT-OF-BAND so the web scrubber group forms, exactly as the register
+        # path does.
+        published_layers = [lyr for lyr in seam.layers if lyr.role == "primary"]
+        seam_frames = [lyr for lyr in seam.layers if lyr.role != "primary"]
+        if seam_frames and emitter is not None:
+            emitted = 0
+            for lyr in seam_frames:
+                try:
+                    await emitter.add_loaded_layer(lyr)
+                    emitted += 1
+                except Exception as exc:  # noqa: BLE001 -- never break the solve
+                    logger.warning(
+                        "model_flood_scenario: seam frame emit failed for "
+                        "%s: %s", lyr.layer_id, exc,
+                    )
+            if emitted:
+                logger.info(
+                    "model_flood_scenario: seam emitted %d/%d animation frames "
+                    "as sequential group(s) (run_id=%s)",
+                    emitted, len(seam_frames), run_result.run_id,
+                )
+        elif seam_frames:
+            logger.info(
+                "model_flood_scenario: %d seam animation frames available but no "
+                "emitter bound - frames not emitted.",
+                len(seam_frames),
+            )
+    elif publish_manifest is not None:
+        manifest = publish_manifest
         logger.info(
             "model_flood_scenario: REGISTER-ONLY path (worker postprocess "
             "offload) run_id=%s engine=%s layers=%d",

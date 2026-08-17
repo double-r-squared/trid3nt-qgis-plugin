@@ -15,7 +15,6 @@ regular grid) — NO open dataset crosses a process boundary. The orchestrator
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,10 +28,6 @@ LOG = logging.getLogger("trid3nt.worker.raster_postprocess.sfincs_reader")
 #: rescale/colormap table. Match the agent constants.
 FLOOD_DEPTH_STYLE_PRESET = "continuous_flood_depth"
 WAVE_HEIGHT_STYLE_PRESET = "continuous_wave_height"
-
-#: Upper bound on per-frame COGs (agent ``MAX_FLOOD_FRAMES`` parity). Driven per
-#: run from the WORKER Batch env so the granularity gate still controls it.
-MAX_FLOOD_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 #: SnapWave significant-variable selection order (agent parity).
 WAVE_HEIGHT_VARIABLES: tuple[str, ...] = ("hm0", "hm0ig")
@@ -93,25 +88,18 @@ class ExtractResult:
 
 
 def select_frame_time_indices(n_steps: int) -> list[int]:
-    """Pick up to ``MAX_FLOOD_FRAMES`` evenly-spaced time indices (endpoints kept).
+    """Return EVERY time index the solver wrote (ADR 0280 -- never-omit).
 
-    Lifted from postprocess_flood._select_frame_time_indices — never silently
-    truncates (LOGs the subsample).
+    The MAX_FLOOD_FRAMES post-hoc even-subsample thinning is RETIRED (ledger
+    row 20): cadence now resolves DECK-SIDE (``dtout``/``dtmaxout`` from
+    ``output_interval_min``), so the solver already writes the sane snapshot
+    count and the postprocess publishes ALL of them -- no frame the solver
+    produced is ever silently dropped. The deck-side stride is the SOLE
+    frame-count control.
     """
-    import numpy as np  # type: ignore
-
     if n_steps <= 0:
         return []
-    if n_steps <= MAX_FLOOD_FRAMES:
-        return list(range(n_steps))
-    idx = np.linspace(0, n_steps - 1, MAX_FLOOD_FRAMES).round().astype(int)
-    kept = [int(i) for i in np.unique(idx)]
-    LOG.info(
-        "raster_postprocess: %d raw map snapshots exceed MAX_FLOOD_FRAMES=%d; "
-        "subsampling evenly to %d frames (first+last kept).",
-        n_steps, MAX_FLOOD_FRAMES, len(kept),
-    )
-    return kept
+    return list(range(n_steps))
 
 
 def _time_seconds_from_start(ds: Any, indices: list[int]) -> dict[int, float | None]:

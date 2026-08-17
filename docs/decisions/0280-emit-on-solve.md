@@ -281,3 +281,72 @@ byte-unchanged; nothing consumes `outputs.json` live yet):
 5. **Row-20 deletion**: only AFTER (1)-(4) pass -- the ledger row stays QUEUED
    with its condition PARTIALLY met (producer + seam + byte-equivalence bar =
    PASS; deck-side cadence + live proving solve = REMAINING).
+
+## LIVE CLOSE-OUT EXECUTED (2026-08-17) -- the staged list, all green
+
+The staged NOT-done list above is now EXECUTED under the live-testing loop. All
+changes are additive to the register/on-box paths (legacy engines byte-unchanged;
+a missing `outputs.json` is a no-op fallback).
+
+1. **Flood consumer WIRED to the seam** (`flood/flood.py`): the post-solve
+   publication is now a clean SEAM-or-LEGACY fork. `read_outputs_manifest(run_result)`
+   is consulted FIRST; when it returns a manifest the SEAM
+   (`build_layers_from_outputs`) owns ALL publication -- the peak (role `primary`)
+   rides the success envelope, the temporal frames (role `context`) emit
+   out-of-band, and the item-7 replay meta (`PublishedFrame`: `t` / `group_id` /
+   seam-resolved `style_preset`) rides alongside. `publish_manifest.json` is still
+   read, but ONLY for the top-level `FloodMetrics` narration scalars
+   (`max/mean/p95_depth_m`, `flooded_cell_count`) -- the flat `outputs.json`
+   entries carry no aggregates, so publish_manifest is the METRICS CARRIER, not a
+   second publication (single publication; no layer registered twice). Absent
+   `outputs.json`, the legacy register-only path runs byte-unchanged; absent both,
+   the on-box postprocess fallback runs byte-unchanged.
+
+2. **Cap fix (deck-side cadence, ledger row 20 DELETED)**: the post-hoc
+   `MAX_FLOOD_FRAMES` even-subsample thinning is RETIRED in the worker reader
+   (`workers/_raster_postprocess/sfincs_reader.select_frame_time_indices` now
+   returns every solver-written index -- never-omit; the dead constant + `os`
+   import removed). `_resolve_output_interval_min` UNPINS the pluvial lever: an
+   explicit `output_interval_min` now flows through to the deck `dtout`/`dtmaxout`
+   on BOTH sim types (was silently dropped on pluvial); an UNSPECIFIED pluvial run
+   keeps the legacy hourly deck formula (`None` sentinel -> `max(600, total/24)` s,
+   byte-identical). Deck-side dtout is now the SOLE frame-count control.
+
+3. **IMAGE LAW**: `trid3nt-local/sfincs:latest` rebuilt (`-f
+   workers/sfincs/Dockerfile`, repo-root context). In-image provenance verified:
+   `outputs_manifest` schema 1 present, `select_frame_time_indices` returns
+   `list(range(n_steps))` (cap retired), producer `outputs_entries` wired,
+   `entrypoint._write_outputs_manifest` present. (The prior image was STALE -- the
+   pre-refactor `services/` layout, no producer.)
+
+4. **Live gates (foreground)**: daemon restarted; `ws_smoke.py` `all_passed=True`.
+   The FLOOD CANARY THROUGH THE SEAM was run as a coastal QUADTREE solve
+   (`run_sfincs_quadtree_direct.py`, run `01QT260817055751MEXBEACH`) -- the ONLY
+   local path that runs the WRAPPER image + its producer entrypoint (the pluvial
+   regular-grid path runs the raw `deltares/sfincs-cpu` image + on-box postprocess
+   and writes NO manifests, so it exercises the seam only as a no-op fallback).
+   Evidence: completion `status=ok`; `outputs.json` present (schema 1, 26 entries =
+   1 peak + 25 frames); 25 frames at the deck-side 30-min cadence over the 12 h
+   window (`t=0..43200 s`), ALL 25 published (never-omit, no thinning); each entry
+   carries `bbox` + `band_stats` render hints. The flood seam consumer, run against
+   the real image-produced prefix, registered all 26 layers (seam publish lines,
+   NOT the register path's), one temporal group `flood-depth-<run_id>`, replay
+   stamps (peak `t=None`; `frame-01 t=0.0 group_id=flood-depth-<run_id>`; `frame-25
+   t=43200.0`), and threaded the metrics carrier's `max_depth_m=19.99`,
+   `flooded_cell_count=176473`. Reopen: the temporal group reforms from the
+   byte-identical `"Flood depth step N"` name token (`detectSequentialGroups`,
+   unchanged from the register path) + the carried replay stamps; no new
+   persistence-schema field was needed (name-token grouping already survives
+   reopen -- the item-7 explicit-stamp PERSISTENCE wiring is deferred as the
+   GC'd-uri tolerance enhancement, not a live-gate blocker). The pluvial canary
+   (`run_sfincs_direct.py`) proves the regular path byte-unchanged (seam no-op).
+
+5. **Row-20 DELETED** (ledger). The post-hoc thinning is gone + proven live. The
+   `publish_manifest.json` frame entries the producer dual-writes are SUPERSEDED
+   (the seam ignores them) but RETAINED as the one-release register-only fallback +
+   the metrics carrier -- DECISION: `publish_manifest` "keeps non-frame entries"
+   for SFINCS; its slimming/removal is row-19 (the Section-7.3 collapse, gated on
+   the LAST engine migrating off `publish_manifest.json`), NOT this wave. New tests:
+   `tests/test_flood_seam_fork.py` (fork precedence + metrics-carrier coexistence +
+   replay stamps), `test_select_frame_time_indices_never_omits`, the unpinned
+   pluvial-lever cadence tests.

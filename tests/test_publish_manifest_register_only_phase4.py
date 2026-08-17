@@ -391,17 +391,26 @@ def test_read_publish_manifest_unknown_schema_returns_none(monkeypatch):
 
 
 def test_flood_scenario_branch_is_clean_if_else():
-    """The register-only vs on-box fallback split is a clean if/else gated on a
-    present manifest, and the heavy on-box steps sit under ``if not register_only``."""
+    """ADR 0280: the post-solve publication is a clean SEAM-or-LEGACY fork.
+    ``outputs.json`` present -> the seam owns publication (``build_layers_from_outputs``);
+    else the legacy register-only path; else the on-box fallback. The heavy on-box
+    steps sit under ``if not register_only`` (a present seam OR publish manifest
+    short-circuits them), and there is NO dual publication."""
     import trid3nt_server.workflows.sfincs.flood.flood as mfs
 
     body = inspect.getsource(mfs.model_flood_scenario)
-    # The branch trigger.
-    assert "manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body
-    assert "register_only = manifest is not None" in body
+    # The seam-first fork trigger + the legacy reads.
+    assert "outputs_manifest = await asyncio.to_thread(read_outputs_manifest, run_result)" in body
+    assert "publish_manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body
+    assert "seam_active = outputs_manifest is not None" in body
+    assert "register_only = seam_active or (publish_manifest is not None)" in body
+    # The seam owns publication when active; the legacy register path is the
+    # elif fallback (single publication, no dual publish).
+    assert "build_layers_from_outputs(" in body
+    assert "elif publish_manifest is not None:" in body
     assert "register_manifest_layers(" in body
-    # The on-box postprocess + publish blocks are guarded so a present manifest
-    # short-circuits them (Step 8 + Steps 9/9b/9c).
+    # The on-box postprocess + publish blocks are guarded so a present seam /
+    # manifest short-circuits them (Step 8 + Steps 9/9b/9c).
     assert body.count("if not register_only:") >= 2
     assert "postprocess_flood," in body  # legacy convert still present (fallback)
 

@@ -98,26 +98,37 @@ def _resolve_output_interval_min(
     animation reads as water rolling in, not a filling bathtub) and ``None`` for
     the pluvial path (the legacy hourly cadence, byte-identical).
 
-    Precedence:
-    - PLUVIAL (``is_coastal`` False): ALWAYS ``None``  -  the pluvial deck is never
-      touched (regression-critical), even if a stray ``output_interval_min`` was
-      passed; rain animates fine at hourly stride.
-    - COASTAL with an explicit ``output_interval_min``: honor it, floored at
-      ``_OUTPUT_INTERVAL_MIN_FLOOR`` minutes (the deck re-floors at 60 s).
-    - COASTAL with no explicit value: the
-      ``_COASTAL_OUTPUT_INTERVAL_MIN_DEFAULT`` (LLM-default-by-sim-type).
+    Precedence (ADR 0280 cap-fix -- the pluvial lever is UNPINNED):
+    - AN EXPLICIT ``output_interval_min`` (either path): HONORED, floored at
+      ``_OUTPUT_INTERVAL_MIN_FLOOR`` minutes (the deck re-floors at 60 s). The
+      lever now flows through on PLUVIAL too, so a user/gate cadence choice is no
+      longer silently dropped for a rain run. Cadence resolves DECK-SIDE
+      (``dtout``/``dtmaxout`` from this value) -> the solver writes exactly that
+      many map snapshots and the postprocess publishes every one (never-omit; the
+      MAX_FLOOD_FRAMES post-hoc thinning is retired).
+    - PLUVIAL with NO explicit value: the SANE DEFAULT is ``None`` -- the deck's
+      legacy duration-adaptive HOURLY cadence (``max(600, total/24)`` s,
+      byte-identical to the pre-cap-fix pluvial deck; rain animates fine at
+      hourly stride).
+    - COASTAL with no explicit value: the FINE
+      ``_COASTAL_OUTPUT_INTERVAL_MIN_DEFAULT`` (water-rolling-in default).
 
     ``duration_hr`` is accepted so a future window-narrowing default can ride
-    here; v0.1 keeps the full ``duration_hr`` window and bounds the frame count
-    via ``MAX_FLOOD_FRAMES`` (postprocess) + the deck dtout floor.
+    here; v0.1 keeps the full ``duration_hr`` window and the deck-side dtout is
+    now the SOLE frame-count control (no post-hoc thinning).
     """
-    if not is_coastal:
-        return None
+    # Explicit cadence is honored on BOTH sim types -- the pluvial lever is no
+    # longer pinned off (ADR 0280). The deck-side dtout then bounds the count.
     if output_interval_min is not None:
         try:
             return max(_OUTPUT_INTERVAL_MIN_FLOOR, float(output_interval_min))
         except (TypeError, ValueError):
             pass
+    # No explicit request: pluvial keeps the legacy hourly deck formula (None
+    # sentinel -> deck ``max(600, total/24)``, byte-identical); coastal gets the
+    # fine water-rolling-in default.
+    if not is_coastal:
+        return None
     return max(_OUTPUT_INTERVAL_MIN_FLOOR, _COASTAL_OUTPUT_INTERVAL_MIN_DEFAULT)
 
 
