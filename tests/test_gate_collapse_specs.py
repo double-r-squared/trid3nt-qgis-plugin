@@ -22,7 +22,7 @@ import trid3nt_server  # noqa: F401 -- triggers tool registration
 from trid3nt_server.gates.cards import solver_confirm as sc
 from trid3nt_server.gates.cards.estimate import CardEstimate, resolve_provider
 from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.server import _core
+from trid3nt_server.gates import confirm as _core
 
 
 _EXPECTED_SOLVER = {

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
 
-    from ._core import SessionState
+    from .session.state import SessionState
 
 logger = logging.getLogger("trid3nt_server.server")
 

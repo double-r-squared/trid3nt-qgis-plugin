@@ -5,37 +5,49 @@ per-session state, the model-turn engine, and tool dispatch. It presents a
 single-namespace facade so external importers see one `trid3nt_server.server.X`
 surface. (See also `server-package.md` for the facade mechanism in detail.)
 
-## What lives here
+## Layout (ADR 0278 -- `_core.py` dissolved to zero)
 
-- `_core.py` (~10k LOC) -- the turn ENGINE (`_stream_model_reply`,
-  `_dispatch_model_turn_and_persist`, `_invoke_tool_via_emitter`, the
-  user-decision gate waits + the `_gate_wait_timeout` source-inspection seam)
-  AND the WS connection loop (`_make_handler`, `run_server`, `_LiveTurn` +
-  the detached-turn registry). It imports every extraction sibling below.
-- Extraction siblings (concerns already lifted out of the monolith):
-  `session.py` (SessionState + session-scoped registries), `turn.py` (turn
-  wire plumbing + envelope build), `dispatch.py` (session-free dispatch
-  helpers), `protocol.py` (session-connection registry), `reuse.py`
-  (`_ReuseEntry`), `interactions.py`, `spatial.py`, `styles.py`, `config.py`,
-  `errors.py`.
-- `__init__.py` -- the facade: read-proxy over `_core` + monkeypatch-write
-  propagation to `_EXTRACTION_MODULES`.
+- `session/` -- the bottom layer (imports nothing above it). `state.py`
+  (SessionState + session-scoped registries), `persistence_ref.py` (the
+  Persistence handle + env bootstrap), `case_state.py` (active-case
+  persistence, AOI/geometry payload setters, case-layer records, the
+  `_turn_case_id` / `_turn_case_bbox` readers).
+- `dispatch/` -- tool execution. `emitter.py` (`_invoke_tool_via_emitter` +
+  sync-offload safety + `_dispatch_tool_and_persist`), `results.py`
+  (auto-publish, code-exec/chart emission), `persist.py` (chat/tool-card/chart
+  persistence joins + per-turn narration registries), `aoi.py` (case-AOI
+  pinning + default backfill), `helpers.py`, `reuse.py`.
+- `turn/` -- the turn engine. `stream.py` (`_stream_model_reply` +
+  `_dispatch_model_turn_and_persist`), `engine.py` (candidate emission,
+  routing/stage labels), `cases.py` (case lifecycle over the wire),
+  `live_turn.py` (the detached-turn registry), `wire.py` (envelope build +
+  session-safe send primitives).
+- `protocol/` -- the WS surface. `loop.py` (`_make_handler` + `run_server` +
+  `inflight_turn_count`), `auth.py` (connect handshake + session resume),
+  `handlers.py` (dev-invoke / secret-add / layer-delete + bg-task drain),
+  `connections.py` (session-connection registry).
+- Root leaves: `errors.py`, `config.py`, `styles.py`, `interactions.py`,
+  `spatial.py`, and `__init__.py` (the facade).
 
 ## Composition
 
-`_core` drives `adapters/` for the model round-trip, `data/` for tool
-dispatch, `emission/` for map frames, and `persistence/` for case/chat/session
-storage. External code (`main`, `telemetry`, `tool_catalog_http`,
-`cases.ingest_user_layer`) imports through the facade; imports flow one way
-(turn -> dispatch -> data), never back.
+Imports flow one way -- `protocol -> turn -> dispatch -> gates -> session` --
+with a per-module `logger` leaf below all. The turn driver (`turn/stream`) drives
+`adapters/` for the model round-trip, `data/` for tool dispatch, `emission/` for
+map frames, and `persistence/` for storage. The GateSpec confirm engine + the
+five user-decision gate families are EVICTED to `trid3nt_server.gates.confirm`
+(ADR 0278); the two server callers (`dispatch/emitter`, `turn/stream`) import the
+gate functions function-locally to keep the `server <-> gates` package edge
+acyclic.
 
 ## Invariants / extension points
 
 - The facade keeps a single `trid3nt_server.server.X` namespace across the
-  split; monkeypatch writes propagate to the owning extraction module.
-- Deferred (ADR 0277, inheriting the ADR 0265 blockers): the target
-  `session/ turn/ dispatch/ protocol/` SUBFOLDER split and the extraction of
-  `_core`'s turn-engine + WS-loop bodies into them, plus the GateSpec engine ->
-  `gates/` and `tool_catalog_http` -> `server/protocol/`. These remain blocked
-  by the shared gate-wait seam + the driver<->helper cycle and warrant their
-  own gated wave (ws_smoke + flood canary through a restarted daemon).
+  split: a read resolves to the first leaf that binds the name; a monkeypatch
+  write propagates to every leaf that already defines it.
+  `SOLVER_CONFIRM_TOOLS` / `FETCH_CONFIRM_TOOLS` synthesize from the registry
+  via the gate engine.
+- Behavior-preserving moves only: the `_core` dissolution relocated function
+  bodies verbatim. `turn/stream.py` (2035 LOC) exceeds the 1500-line budget
+  because its `_stream_model_reply` coroutine is 1828 lines -- splitting one
+  function is a body refactor, deferred.

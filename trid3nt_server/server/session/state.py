@@ -29,14 +29,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from ..gates.circuit_breaker import ToolCircuitBreaker
+from trid3nt_server.gates.circuit_breaker import ToolCircuitBreaker
 
 if TYPE_CHECKING:
     import asyncio
 
     from trid3nt_contracts.ws import PipelineStep
 
-    from ..emission.pipeline_emitter import PipelineEmitter
+    from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 
 logger = logging.getLogger("trid3nt_server.server")
 

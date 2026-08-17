@@ -60,7 +60,9 @@ def test_every_gate_wait_site_uses_the_seam():
     """
     import inspect
 
-    src = inspect.getsource(server._core)
+    from trid3nt_server.gates import confirm as _gates_confirm
+
+    src = inspect.getsource(_gates_confirm)
     for bare in (
         "timeout=warning_payload.ttl_seconds",
         "timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS",

@@ -22,8 +22,11 @@ context-budget, and actionability classification.
 
 `cards/*` import (deferred, function-local) from `data/`, `workflows/`, and
 `mesh/` to compute estimates -- absolute cross-package imports since these are
-now peer top-level packages. The GateSpec engine currently lives in
-`server/_core` (its extraction into this folder is deferred, ADR 0277).
+now peer top-level packages. The GateSpec confirm engine + the shared gate-wait
+seam + the five user-decision emit-wait gate families (payload, code-exec,
+solver-confirm, credential, region, spatial) now live in `confirm.py` (ADR 0278,
+evicted from `server/_core`). The server callers import those functions
+function-locally to keep the `server <-> gates` package edge acyclic.
 
 ## Invariants / extension points
 
