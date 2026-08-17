@@ -62,6 +62,10 @@ from trid3nt_server.workflows.shared.register_published_manifest import (
     read_publish_manifest,
     register_swan_wave_layers,
 )
+from trid3nt_server.emission.outputs_seam import (
+    build_layers_from_outputs,
+    read_outputs_manifest,
+)
 from trid3nt_server.workflows.swan.run_swan import (
     SWAN_SOLVER_NAME,
     SwanWorkflowError,
@@ -299,7 +303,11 @@ async def swan_wave_field(
         n_dir/n_freq/freq_low_hz/freq_high_hz: spectral discretization
             (defaults 36/32/0.04/1.0).
         sim_duration_s/time_step_s/output_frames: nonstationary run
-            controls (defaults 10800/600/24).
+            controls (defaults 10800/600/24). ``output_frames`` is the deck-side
+            cadence lever (evenly spaced across the sim window; the universal
+            ``output_interval_min`` vocabulary maps as
+            ``round(sim_duration_min / output_interval_min)``). Every
+            solver-written snapshot is published (never subsampled).
         friction/breaking/triads: physics toggles (all default True).
         gen_formulation/whitecapping/quad_iquad/breaking_gamma/friction_cfjon/
             triad_biphase: explicit physics-scheme knobs (defaults reproduce the
@@ -800,7 +808,77 @@ async def model_swan_wave_field(
     # runs unchanged (the raw swan_out.mat is still uploaded). Clean if/else.
     # (The SWAN worker does NOT emit a manifest yet, so today this always falls
     # back; the branch is forward-ready for when the SWAN worker side lands.)
+    # EMIT-ON-SOLVE SEAM (ADR 0281). When the rebuilt worker wrote an outputs.json
+    # under the run prefix, the SEAM owns ALL publication (peak + animation frames)
+    # -- proven byte-equivalent to the register path
+    # (tests/test_swan_outputs_seam.py). ``publish_manifest`` is STILL read, but
+    # ONLY for the top-level wave narration scalars (the flat outputs.json entries
+    # carry no aggregates -- publish_manifest is the metrics carrier, not a second
+    # publication). Absent outputs.json -> the legacy register-only publish_manifest
+    # path runs byte-unchanged (one-release safety); absent both -> the on-box
+    # swan_out.mat download path runs byte-unchanged. Clean seam-or-legacy fork.
+    outputs_manifest = await asyncio.to_thread(read_outputs_manifest, run_result)
     manifest = await asyncio.to_thread(read_publish_manifest, run_result)
+    if outputs_manifest is not None:
+        logger.info(
+            "model_swan_wave_field: SEAM path (outputs.json emit-on-solve) "
+            "run_id=%s engine=%s entries=%d",
+            staging.run_id, outputs_manifest.engine, len(outputs_manifest.entries),
+        )
+        async with substep(emitter, "publish_layer"):
+            seam = await asyncio.to_thread(
+                build_layers_from_outputs,
+                outputs_manifest, run_id=staging.run_id, bbox=bbox,
+            )
+        if not seam.layers:
+            raise SwanComposerError(
+                "SWAN_NO_LAYERS",
+                "outputs.json seam produced no renderable wave layers "
+                "(honesty floor: cannot narrate an empty solve).",
+            )
+        _m = dict(manifest.metrics) if manifest is not None else {}
+        _prim = next(l for l in seam.layers if l.role == "primary")
+        _frame_seam = [l for l in seam.layers if l.role != "primary"]
+        peak = WaveFieldLayerURI(
+            layer_id=_prim.layer_id, name=_prim.name, layer_type=_prim.layer_type,
+            uri=_prim.uri, style_preset=_prim.style_preset, role=_prim.role,
+            units=_prim.units, bbox=_prim.bbox or bbox,
+            max_hs_m=float(_m.get("max_hs_m", 0.0) or 0.0),
+            mean_tp_s=float(_m.get("mean_tp_s", 0.0) or 0.0),
+            mean_dir_deg=float(_m.get("mean_dir_deg", 0.0) or 0.0),
+            wave_area_km2=float(_m.get("wave_area_km2", 0.0) or 0.0),
+            mean_hs_m=float(_m.get("mean_hs_m", 0.0) or 0.0),
+            mode=run_args.mode,  # type: ignore[arg-type]
+        )
+        # Wrap the seam's context frames into WaveFieldLayerURI (context scalars
+        # 0.0 -- the peak drives narration) so ``_emit_frame_layers``' publish
+        # chokepoint re-wrap has the typed wave fields.
+        frame_layers = [
+            WaveFieldLayerURI(
+                layer_id=l.layer_id, name=l.name, layer_type=l.layer_type,
+                uri=l.uri, style_preset=l.style_preset, role=l.role,
+                units=l.units, bbox=l.bbox or bbox,
+                max_hs_m=0.0, mean_tp_s=0.0, mean_dir_deg=0.0,
+                wave_area_km2=0.0, mean_hs_m=0.0,
+                mode=run_args.mode,  # type: ignore[arg-type]
+            )
+            for l in _frame_seam
+        ]
+        emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)
+        logger.info(
+            "model_swan_wave_field complete (seam) run_id=%s mode=%s max_hs_m=%.4g "
+            "frames_emitted=%d/%d peak_uri=%s",
+            staging.run_id, run_args.mode, peak.max_hs_m,
+            emitted_frames, len(frame_layers), peak.uri,
+        )
+        if emitter is not None:
+            try:
+                await emitter.emit_map_command("zoom-to", {"bbox": list(bbox)})
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "model_swan_wave_field: seam zoom-to failed: %s", exc
+                )
+        return peak
     if manifest is not None:
         logger.info(
             "model_swan_wave_field: REGISTER-ONLY path (worker postprocess offload) "

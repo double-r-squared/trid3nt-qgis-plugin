@@ -80,6 +80,21 @@ def test_run_swan_postprocess_ok(tmp_path: Path, monkeypatch):
     with rasterio.open(cog) as src:
         assert str(src.crs) == "EPSG:4326"
 
+    # Emit-on-solve outputs.json entries (ADR 0281): one per manifest layer, flat
+    # {kind,quantity,name,uri} + render hints. A single Hs frame -> peak only
+    # (non-temporal: no ``t``), physical quantity ``wave_height``.
+    entries = result.outputs_entries
+    assert len(entries) == len(manifest["layers"])
+    peak_e = entries[0]
+    assert peak_e["kind"] == "raster"
+    assert peak_e["quantity"] == "wave_height"
+    assert peak_e["name"] == "Peak wave height"
+    assert peak_e["uri"] == layer["cog_uri"]
+    assert peak_e["units"] == "meters"
+    assert "t" not in peak_e  # peak is non-temporal
+    assert peak_e["bbox"] == layer["bbox"]
+    assert peak_e["band_stats"] == layer["band_stats"]
+
 
 def test_run_swan_postprocess_zero_hs_honesty_gate(tmp_path: Path, monkeypatch):
     (tmp_path / "swan_out.mat").write_bytes(b"stub")

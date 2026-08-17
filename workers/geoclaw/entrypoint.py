@@ -719,6 +719,33 @@ def _write_publish_manifest(run_id: str, pp_manifest: dict) -> str:
     return uri
 
 
+def _write_outputs_manifest(run_id: str, entries: list[dict]) -> str:
+    """Write the emit-on-solve ``outputs.json`` (ADR 0281), before completion.
+
+    Uses the pure-stdlib worker mirror (``workers._raster_postprocess.
+    outputs_manifest``) so the object is byte-identical to what the agent reader
+    schema-gates. Written ALONGSIDE publish_manifest.json during the migration
+    window; the agent's emission seam consumes this one, the register path the
+    other. Same write-whole-object atomicity as publish_manifest.json.
+    """
+    from workers._raster_postprocess import outputs_manifest as _om
+
+    body = _om.append_entries(None, engine="geoclaw", run_id=run_id, new=list(entries))
+    uri = _runs_uri(run_id, _om.OUTPUTS_MANIFEST_BASENAME)
+    _scheme, _bucket, _key = _split_object_uri(uri)
+    if _scheme == "s3":
+        _s3_client().put_object(
+            Bucket=_bucket, Key=_key,
+            Body=body.encode("utf-8"), ContentType="application/json",
+        )
+    else:
+        _gcs_client().bucket(_bucket).blob(_key).upload_from_string(
+            body, content_type="application/json"
+        )
+    LOG.info("emit-on-solve: wrote %s (%d entries)", uri, len(entries))
+    return uri
+
+
 def _write_completion(
     run_id: str,
     status: str,
@@ -891,6 +918,15 @@ def main(argv: list[str] | None = None) -> int:
                 if pp.status == "ok" and pp.manifest is not None:
                     publish_manifest_uri = _write_publish_manifest(run_id, pp.manifest)
                     LOG.info("geoclaw postprocess ok: publish_manifest_uri=%s", publish_manifest_uri)
+                    # Emit-on-solve outputs.json (ADR 0281) -- written ALONGSIDE the
+                    # legacy publish_manifest during the migration window; the agent's
+                    # seam consumes it. Best-effort: a write failure never sinks the
+                    # run (the register path still works off publish_manifest.json).
+                    if pp.outputs_entries:
+                        try:
+                            _write_outputs_manifest(run_id, pp.outputs_entries)
+                        except Exception as _om_exc:  # noqa: BLE001 -- additive; never fatal
+                            LOG.warning("emit-on-solve outputs.json write failed: %s", _om_exc)
                 else:
                     error_code = pp.error_code
                     LOG.warning("geoclaw postprocess honesty gate: %s %s", pp.error_code, pp.error_message)

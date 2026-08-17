@@ -49,10 +49,31 @@ a MISSING manifest is a no-op (legacy engines byte-unchanged). See
 seam, the flood proving case, the scaffold reconciliation, the cap fix). The seam
 consumer (`outputs_seam.py`), the SFINCS worker producer (`outputs.json` written
 alongside `publish_manifest.json`), and the byte-equivalence bar are LANDED (ADR
-0280 EXECUTED). REMAINING as the gated live close-out: wiring the flood composer
-to the seam, the deck-side cadence cap fix (ledger row 20), the worker image
-rebuild + live proving solve, and -- separately, OPTION A -- the per-engine
-`output_quantities` scaffold migration.
+0280 EXECUTED). The SFINCS flood composer is WIRED to the seam and the deck-side
+cadence cap fix landed (ADR 0280 live close-out).
+
+MIGRATED ENGINES (S-class, each: worker producer + composer seam-or-legacy fork +
+byte-equivalence + deck-side cadence + post-hoc thinning deleted + live proof
+through a rebuilt image):
+
+- **SFINCS flood** -- the proving case (ADR 0280).
+- **GeoClaw inundation** (ADR 0281): `quantity="flood_depth"`, per-frame `t` read
+  from the `fort.t` sibling; composer fork in `workflows/geoclaw/inundation`;
+  `publish_manifest` = metrics carrier.
+- **SWAN nonstationary waves** (ADR 0281): `quantity="wave_height"`, evenly-spaced
+  `t` from `sim_duration_s`; composer fork in `workflows/swan/wave_field`. The
+  rebuild also shipped the SWAN postprocess in-image for the first time + fixed a
+  COG-upload ordering gap.
+
+Each seam mints `layer_id` off the PHYSICAL quantity (`flood-depth-*` /
+`wave-height-*`), the one explained non-rendering divergence from the register
+path's engine-prefixed stems; web temporal grouping rides the `name` token,
+unchanged. Cadence stays the count-native `output_frames` lever (aliased to the
+universal `output_interval_min` vocabulary in ADR 0281; no redundant param added).
+
+REMAINING: the other engine legs (M/L-class), the `publish_manifest` collapse
+(ledger row 19, gated on the LAST engine migrating), and -- separately, OPTION A
+-- the per-engine `output_quantities` scaffold migration.
 
 ## Composition
 

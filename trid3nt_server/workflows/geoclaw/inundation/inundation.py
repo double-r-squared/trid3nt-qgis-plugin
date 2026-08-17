@@ -316,7 +316,11 @@ async def geoclaw_inundation(
             default 20000). Declared range >= 5000 m (Slab2 grid ~5 km native);
             a finer ask is quoted back.
         surge_forcing_uri: optional sea-surface hydrograph CSV.
-        output_frames: animation frame count (default 24).
+        output_frames: animation frame count (default 24) -- the deck-side
+            cadence lever (the native GeoClaw ``num_output_times`` count, evenly
+            spaced across the sim window; the universal ``output_interval_min``
+            vocabulary maps as ``round(sim_duration_min / output_interval_min)``).
+            Every solver-written frame is published (never subsampled).
         amr_levels: AMR refinement levels (default 2).
         manning_n: friction coefficient (default 0.025).
         sea_level_m: still-water datum (default 0.0).
@@ -1576,8 +1580,95 @@ async def model_geoclaw_inundation(
         read_publish_manifest,
         register_manifest_layers,
     )
+    from trid3nt_server.emission.outputs_seam import (
+        build_layers_from_outputs,
+        read_outputs_manifest,
+    )
     batch_run_id = getattr(run_result, "run_id", None) or staging.run_id
+    # EMIT-ON-SOLVE SEAM (ADR 0281). When the rebuilt worker wrote an outputs.json
+    # under the run prefix, the SEAM owns ALL publication (peak + animation frames)
+    # -- proven byte-equivalent to the register path
+    # (tests/test_geoclaw_outputs_seam.py). ``publish_manifest`` is STILL read, but
+    # ONLY for the top-level narration metrics (the flat outputs.json entries carry
+    # no aggregates -- publish_manifest is the metrics carrier, not a second
+    # publication). Absent outputs.json -> the legacy register-only publish_manifest
+    # path runs byte-unchanged (one-release safety); absent both -> the on-box
+    # fort.q download path runs byte-unchanged. Clean seam-or-legacy fork.
+    _gc_outputs = await asyncio.to_thread(read_outputs_manifest, run_result)
     _gc_manifest = await asyncio.to_thread(read_publish_manifest, run_result)
+    if _gc_outputs is not None:
+        async with substep(emitter, "postprocess_geoclaw"):
+            _seam = build_layers_from_outputs(
+                _gc_outputs, run_id=batch_run_id, bbox=tuple(bbox)
+            )
+        if not _seam.layers:
+            raise GeoClawComposerError(
+                "GEOCLAW_NO_LAYERS",
+                "outputs.json seam produced no registered depth layers "
+                "(honesty floor: cannot narrate an empty solve)",
+            )
+        _gc_m = dict(_gc_manifest.metrics) if _gc_manifest is not None else {}
+        _gc_prim = next(l for l in _seam.layers if l.role == "primary")
+        _gc_frame_seam = [l for l in _seam.layers if l.role != "primary"]
+        peak = GeoClawDepthLayerURI(
+            uri=_gc_prim.uri,
+            layer_type=_gc_prim.layer_type,
+            layer_id=_gc_prim.layer_id,
+            name=_gc_prim.name,
+            style_preset=_gc_prim.style_preset,
+            bbox=tuple(bbox),
+            role=_gc_prim.role,
+            max_depth_m=float(_gc_m.get("max_depth_m", 0.0)),
+            flooded_area_km2=float(_gc_m.get("flooded_area_km2", 0.0)),
+            max_inundation_m=float(_gc_m.get("max_inundation_m", 0.0)),
+            arrival_time_s=(
+                float(_gc_m["arrival_time_s"])
+                if _gc_m.get("arrival_time_s") is not None
+                else None
+            ),
+            scenario=run_args.scenario,
+            source_note=dam_source_note,
+            synthetic_inputs=list(synthetic_inputs or []),
+        )
+        # Wrap the seam's context frames into GeoClawDepthLayerURI (context metrics
+        # 0.0 -- the peak drives narration) so ``_emit_frame_layers``' publish
+        # chokepoint re-wrap has the typed depth fields.
+        _gc_frame_layers = [
+            GeoClawDepthLayerURI(
+                uri=l.uri,
+                layer_type=l.layer_type,
+                layer_id=l.layer_id,
+                name=l.name,
+                style_preset=l.style_preset,
+                bbox=l.bbox or tuple(bbox),
+                role=l.role,
+                units=l.units,
+                max_depth_m=0.0,
+                flooded_area_km2=0.0,
+                max_inundation_m=0.0,
+                scenario=run_args.scenario,
+            )
+            for l in _gc_frame_seam
+        ]
+        emitted_frames = await _emit_frame_layers(
+            emitter, _gc_frame_layers, batch_run_id
+        )
+        logger.info(
+            "model_geoclaw_inundation (seam path) run_id=%s scenario=%s "
+            "max_depth_m=%.4g flooded_area_km2=%.6g max_inundation_m=%.4g "
+            "arrival_time_s=%s frames_emitted=%d/%d peak_uri=%s",
+            batch_run_id, run_args.scenario, peak.max_depth_m,
+            peak.flooded_area_km2, peak.max_inundation_m, peak.arrival_time_s,
+            emitted_frames, len(_gc_frame_layers), peak.uri,
+        )
+        if emitter is not None:
+            try:
+                await emitter.emit_map_command("zoom-to", {"bbox": list(bbox)})
+            except Exception as _ze:  # noqa: BLE001
+                logger.warning(
+                    "model_geoclaw_inundation: zoom-to (seam path) failed: %s", _ze
+                )
+        return peak
     if _gc_manifest is not None:
         async with substep(emitter, "postprocess_geoclaw"):
             _gc_reg = register_manifest_layers(

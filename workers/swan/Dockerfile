@@ -137,9 +137,14 @@ ENV PATH="$VENV/bin:$PATH"
 
 # COPY the worker package (entrypoint + deck_builder) onto a stable runtime path.
 # Build context is the repo root (mirrors the SFINCS/GeoClaw/SWMM context); paths
-# below are relative to repo root.
+# below are relative to repo root. The postprocess packages (mat -> COG + the
+# publish_manifest + emit-on-solve outputs.json writers) are shipped so the
+# entrypoint runs the postprocess IN-IMAGE -- ``from workers._swan_postprocess
+# import run_swan_postprocess`` (which imports ``workers._raster_postprocess``).
 RUN mkdir -p /opt/trid3nt/workers/swan
 COPY workers/swan/ /opt/trid3nt/workers/swan/
+COPY workers/_swan_postprocess/ /opt/trid3nt/workers/_swan_postprocess/
+COPY workers/_raster_postprocess/ /opt/trid3nt/workers/_raster_postprocess/
 
 # WORKDIR controls where SWAN writes its scratch output (INPUT + swan_out.mat)
 # before the entrypoint uploads it. /opt/trid3nt/work is writable scratch; the
@@ -162,6 +167,9 @@ ENV TRID3NT_OBJECT_STORE=s3 \
 # a .swn from a synthetic build_spec (no SWAN run), AND swan.exe is executable.
 # Catches a path/import/build mistake at build time instead of at Batch exec time.
 RUN python3 -c "from workers.swan.entrypoint import main; print('entrypoint import OK')" \
+    && python3 -c "from workers._swan_postprocess import run_swan_postprocess; \
+from workers._raster_postprocess import outputs_manifest as _om; \
+assert _om.OUTPUTS_MANIFEST_SCHEMA_VERSION == 1; print('swan postprocess + outputs.json writer import OK')" \
     && python3 -c "from workers.swan.deck_builder import render_swn_command_file, parse_build_spec; \
 print('swn render OK len=', len(render_swn_command_file(parse_build_spec({'mode':'stationary','bbox':[-85.75,29.55,-85.25,30.20],'bottom_file':'bottom.bot'}))))" \
     && test -x "$SWAN_HOME/swan.exe" \

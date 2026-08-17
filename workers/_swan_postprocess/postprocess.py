@@ -20,12 +20,12 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from workers._raster_postprocess import manifest as _manifest
+from workers._raster_postprocess import outputs_manifest as _outputs
 from workers._raster_postprocess.band_stats import compute_band_stats
 
 LOG = logging.getLogger("trid3nt.worker.swan_postprocess")
@@ -34,6 +34,12 @@ LOG = logging.getLogger("trid3nt.worker.swan_postprocess")
 NODATA_WAVE_M: float = 0.001
 
 SWAN_WAVE_HEIGHT_STYLE_PRESET: str = "continuous_wave_height"
+
+#: The physical ``quantity`` (outputs.json entry key + the seam's styling lookup).
+#: SWAN Hs IS significant wave height -- the engine-agnostic physical quantity, so
+#: it resolves to the SAME pinned ``continuous_wave_height`` preset SFINCS SnapWave
+#: uses (ADR 0281). The seam mints the layer_id off this quantity (``wave-height-*``).
+SWAN_WAVE_HEIGHT_QUANTITY: str = "wave_height"
 
 _SWAN_EXCEPTION_VALUE: float = -999.0
 
@@ -45,9 +51,6 @@ _COG_MIN_DIM_PX: int = 768
 _HS_PREFIXES: tuple[str, ...] = ("Hsig", "Hsign", "HSIGN", "Hs")
 _TP_PREFIXES: tuple[str, ...] = ("RTp", "RTpeak", "Tps", "Tp", "Period", "TPS", "RTP")
 _DIR_PREFIXES: tuple[str, ...] = ("Dir", "PkDir", "Pdir", "DIR", "Theta")
-
-#: Upper bound on emitted animation frames (mirrors agent frames.MAX_FLOOD_FRAMES).
-MAX_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 _PEAK_COG: str = "swan_wave_height_peak.tif"
 _FRAME_COG_TMPL: str = "swan_wave_height_frame_{n:02d}.tif"
@@ -63,19 +66,22 @@ class SwanPostprocessResult:
     cog_paths: list[Path] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
+    #: The emit-on-solve outputs.json entries (ADR 0281) built from the SAME
+    #: ordered frames as ``manifest.layers`` -- carried alongside the legacy
+    #: publish_manifest so the entrypoint writes BOTH during the migration window
+    #: (the seam consumes outputs.json; the register path the publish_manifest).
+    #: Empty on the error/empty path.
+    outputs_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
 # Frame-index selector (inlined; mirrors frames._select_frame_time_indices).
 # --------------------------------------------------------------------------- #
 def _select_frame_indices(n_steps: int) -> list[int]:
-    if n_steps <= 0:
-        return []
-    if n_steps <= MAX_FRAMES:
-        return list(range(n_steps))
-    import numpy as np  # noqa: PLC0415
-    idx = np.linspace(0, n_steps - 1, MAX_FRAMES).round().astype(int)
-    return [int(i) for i in np.unique(idx)]
+    """Every solver-written frame -- NEVER omit (ADR 0281: the bespoke post-hoc
+    subsample-to-cap thinning is deleted). The deck-side ``output_frames`` lever
+    is the SOLE frame-count control; there is no agent-side subsample."""
+    return list(range(n_steps)) if n_steps > 0 else []
 
 
 # --------------------------------------------------------------------------- #
@@ -333,6 +339,8 @@ def run_swan_postprocess(
     # --- Write COGs to scratch ---
     cog_paths: list[Path] = []
     layers: list[dict[str, Any]] = []
+    #: frame_no -> physical seconds-from-start, for the outputs.json ``t``.
+    frame_t_by_no: dict[int, float | None] = {}
 
     peak_cog_path = scratch / _PEAK_COG
     try:
@@ -366,6 +374,12 @@ def run_swan_postprocess(
 
     # --- Per-frame layers (animation) ---
     n_steps = len(hs_frames)
+    # Nonstationary SWAN writes ``output_frames`` evenly-spaced snapshots across
+    # ``[0, sim_duration_s]``; derive each snapshot's physical seconds-from-start
+    # for the outputs.json ``t`` (ordinal fallback when the duration is absent --
+    # ``t`` is additive replay metadata, so a proxy never breaks the seam).
+    sim_duration_s = float(build_spec.get("sim_duration_s") or 0.0)
+    _dt = sim_duration_s / max(n_steps - 1, 1) if sim_duration_s > 0.0 else 0.0
     if n_steps > 1:
         frame_indices = _select_frame_indices(n_steps)
         for frame_no, t_idx in enumerate(frame_indices, start=1):
@@ -382,6 +396,7 @@ def run_swan_postprocess(
                 layers = layers[:1]
                 break
             cog_paths.append(frame_cog_path)
+            frame_t_by_no[frame_no] = (t_idx * _dt) if _dt > 0.0 else float(frame_no)
             t_idx_tp = tp_frames[t_idx] if t_idx < len(tp_frames) else None
             t_idx_dir = dir_frames[t_idx] if t_idx < len(dir_frames) else None
             fm = _compute_wave_metrics(
@@ -422,15 +437,36 @@ def run_swan_postprocess(
         metrics=metrics,
         layers=layers,
     )
+    # Emit-on-solve outputs.json entries (ADR 0281), built from the FINAL layer
+    # set (after every degrade branch) so they stay in lockstep with the register
+    # manifest: flat {kind,quantity,name,uri,t?,units} + the render hints (bbox +
+    # band_stats) so the seam resolves the SAME bbox + rescale WITHOUT a COG
+    # re-read. The peak is non-temporal (t absent); frames carry seconds-from-start.
+    outputs_entries: list[dict[str, Any]] = []
+    for lyr in layers:
+        is_peak = lyr.get("role") == "primary"
+        outputs_entries.append(
+            _outputs.build_entry(
+                kind="raster",
+                quantity=SWAN_WAVE_HEIGHT_QUANTITY,
+                name=lyr["name"],
+                uri=lyr["cog_uri"],
+                t=None if is_peak else frame_t_by_no.get(lyr.get("frame_no")),
+                units="meters",
+                bbox=lyr.get("bbox"),
+                band_stats=lyr.get("band_stats"),
+            )
+        )
     LOG.info(
         "swan postprocess run_id=%s mode=%s n_frames=%d max_hs_m=%.4g "
-        "wave_area_km2=%.4g cog_count=%d",
+        "wave_area_km2=%.4g cog_count=%d outputs_entries=%d",
         run_id, mode, len(layers), metrics["max_hs_m"],
-        metrics["wave_area_km2"], len(cog_paths),
+        metrics["wave_area_km2"], len(cog_paths), len(outputs_entries),
     )
     return SwanPostprocessResult(
         status="ok",
         manifest=mf,
         metrics=metrics,
         cog_paths=cog_paths,
+        outputs_entries=outputs_entries,
     )

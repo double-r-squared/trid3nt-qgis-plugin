@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from workers._raster_postprocess import manifest as _manifest
+from workers._raster_postprocess import outputs_manifest as _outputs
 from workers._raster_postprocess.band_stats import compute_band_stats
 
 LOG = logging.getLogger("trid3nt.worker.geoclaw_postprocess")
@@ -34,6 +34,12 @@ NODATA_DEPTH_M: float = 0.001
 
 GEOCLAW_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
+#: The physical ``quantity`` (outputs.json entry key + the seam's styling lookup).
+#: GeoClaw inundation IS flood depth -- the engine-agnostic physical quantity, so
+#: it resolves to the SAME pinned ``continuous_flood_depth`` preset SFINCS uses
+#: (ADR 0281). The seam mints the layer_id off this quantity (``flood-depth-*``).
+GEOCLAW_DEPTH_QUANTITY: str = "flood_depth"
+
 #: Target ground resolution (m/px) for adaptive raster sizing.
 GEOCLAW_TARGET_GROUND_RES_M: float = 25.0
 GEOCLAW_MIN_PX_PER_SIDE: int = 256
@@ -41,9 +47,6 @@ GEOCLAW_MAX_PX_PER_SIDE: int = 2500
 GEOCLAW_MAX_TOTAL_CELLS: int = 5_000_000
 
 _FGMAX_SENTINEL_ABS: float = 1e8
-
-#: Upper bound on emitted animation frames.
-MAX_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 _PEAK_COG: str = "geoclaw_depth_peak.tif"
 _FRAME_COG_TMPL: str = "geoclaw_depth_frame_{n:02d}.tif"
@@ -81,19 +84,22 @@ class GeoClawPostprocessResult:
     cog_paths: list[Path] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
+    #: The emit-on-solve outputs.json entries (ADR 0281) built from the SAME
+    #: ordered frames as ``manifest.layers`` -- carried alongside the legacy
+    #: publish_manifest so the entrypoint writes BOTH during the migration window
+    #: (the seam consumes outputs.json; the register path the publish_manifest).
+    #: Empty on the error/empty path.
+    outputs_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
 # Frame-index selector (inlined).
 # --------------------------------------------------------------------------- #
 def _select_frame_indices(n_steps: int) -> list[int]:
-    if n_steps <= 0:
-        return []
-    if n_steps <= MAX_FRAMES:
-        return list(range(n_steps))
-    import numpy as np  # noqa: PLC0415
-    idx = np.linspace(0, n_steps - 1, MAX_FRAMES).round().astype(int)
-    return [int(i) for i in np.unique(idx)]
+    """Every solver-written frame -- NEVER omit (ADR 0281: the bespoke post-hoc
+    subsample-to-cap thinning is deleted). The deck-side ``output_frames`` lever
+    is the SOLE frame-count control; there is no agent-side subsample."""
+    return list(range(n_steps)) if n_steps > 0 else []
 
 
 # --------------------------------------------------------------------------- #
@@ -392,6 +398,27 @@ def _discover_frames(scratch: Path) -> list[tuple[int, Path]]:
     return found
 
 
+def _read_fort_t_seconds(q_path: Path) -> float | None:
+    """Read the physical frame time (seconds) from the ``fort.tNNNN`` sibling.
+
+    GeoClaw writes one ``fort.tNNNN`` per ``fort.qNNNN`` frame whose FIRST token is
+    the frame time in seconds. Returns ``None`` when the sibling is absent or
+    unparseable (the outputs.json ``t`` then falls back to the frame ordinal --
+    ``t`` is additive replay metadata, so a missing time never breaks the seam).
+    """
+    m = re.match(r"^fort\.q(\d{4,})$", q_path.name)
+    if not m:
+        return None
+    t_path = q_path.with_name(f"fort.t{m.group(1)}")
+    if not t_path.is_file():
+        return None
+    try:
+        first = t_path.read_text(errors="replace").split("\n", 1)[0].split()
+        return float(first[0]) if first else None
+    except (ValueError, IndexError, OSError):
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # Top-level.
 # --------------------------------------------------------------------------- #
@@ -490,6 +517,8 @@ def run_geoclaw_postprocess(
     # --- Write COGs ---
     cog_paths: list[Path] = []
     layers: list[dict[str, Any]] = []
+    #: frame_no -> physical seconds-from-start (fort.t), for the outputs.json ``t``.
+    frame_t_by_no: dict[int, float | None] = {}
 
     peak_cog_path = scratch / _PEAK_COG
     try:
@@ -538,6 +567,11 @@ def run_geoclaw_postprocess(
                 layers = layers[:1]
                 break
             cog_paths.append(frame_cog_path)
+            # Physical frame time (seconds from start) from the fort.tNNNN sibling
+            # of the ORIGINAL discovered frame; ordinal fallback keeps ``t`` distinct
+            # + monotonic so the seam's temporal group orders correctly.
+            _t = _read_fort_t_seconds(frame_files[t_idx][1])
+            frame_t_by_no[frame_no] = _t if _t is not None else float(frame_no)
             fm = compute_geoclaw_depth_metrics(grids[t_idx], bbox=bbox)  # type: ignore[arg-type]
             try:
                 fbs = compute_band_stats(str(frame_cog_path))
@@ -570,15 +604,36 @@ def run_geoclaw_postprocess(
         metrics=metrics,
         layers=layers,
     )
+    # Emit-on-solve outputs.json entries (ADR 0281), built from the FINAL layer
+    # set (after every degrade branch) so they stay in lockstep with the register
+    # manifest: flat {kind,quantity,name,uri,t?,units} + the render hints (bbox +
+    # band_stats) so the seam resolves the SAME bbox + rescale WITHOUT a COG
+    # re-read. The peak is non-temporal (t absent); frames carry seconds-from-start.
+    outputs_entries: list[dict[str, Any]] = []
+    for lyr in layers:
+        is_peak = lyr.get("role") == "primary"
+        outputs_entries.append(
+            _outputs.build_entry(
+                kind="raster",
+                quantity=GEOCLAW_DEPTH_QUANTITY,
+                name=lyr["name"],
+                uri=lyr["cog_uri"],
+                t=None if is_peak else frame_t_by_no.get(lyr.get("frame_no")),
+                units="meters",
+                bbox=lyr.get("bbox"),
+                band_stats=lyr.get("band_stats"),
+            )
+        )
     LOG.info(
         "geoclaw postprocess run_id=%s scenario=%s n_frames=%d "
-        "max_depth_m=%.4g flooded_area_km2=%.4g",
+        "max_depth_m=%.4g flooded_area_km2=%.4g outputs_entries=%d",
         run_id, scenario, len(layers),
-        metrics["max_depth_m"], metrics["flooded_area_km2"],
+        metrics["max_depth_m"], metrics["flooded_area_km2"], len(outputs_entries),
     )
     return GeoClawPostprocessResult(
         status="ok",
         manifest=mf,
         metrics=metrics,
         cog_paths=cog_paths,
+        outputs_entries=outputs_entries,
     )

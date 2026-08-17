@@ -86,6 +86,21 @@ def test_run_geoclaw_postprocess_ok(tmp_path: Path):
     assert m["max_depth_m"] == pytest.approx(2.5, rel=0.2)
     assert m["flooded_area_km2"] >= 0.0
 
+    # Emit-on-solve outputs.json entries (ADR 0281): one per manifest layer, flat
+    # {kind,quantity,name,uri} + render hints. A single fort.q frame -> peak only
+    # (non-temporal: no ``t``), physical quantity ``flood_depth``.
+    entries = result.outputs_entries
+    assert len(entries) == len(manifest["layers"])
+    peak_e = entries[0]
+    assert peak_e["kind"] == "raster"
+    assert peak_e["quantity"] == "flood_depth"
+    assert peak_e["name"] == "Peak flood depth"
+    assert peak_e["uri"] == layer["cog_uri"]
+    assert peak_e["units"] == "meters"
+    assert "t" not in peak_e  # peak is non-temporal
+    assert peak_e["bbox"] == layer["bbox"]
+    assert peak_e["band_stats"] == layer["band_stats"]
+
 
 def test_run_geoclaw_postprocess_dry_honesty_gate(tmp_path: Path):
     _write_frame(tmp_path, h_value=0.0)  # no water
