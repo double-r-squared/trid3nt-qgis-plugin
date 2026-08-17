@@ -98,6 +98,13 @@ from .publish_manifest import (
     PublishManifestLayer,
     parse_publish_manifest,
 )
+from .outputs_manifest import (
+    OUTPUTS_MANIFEST_SCHEMA_VERSION,
+    OUTPUT_KINDS,
+    OutputEntry,
+    OutputsManifest,
+    parse_outputs_manifest,
+)
 from .swan_contracts import SwanRunArgs, SwanWaveBoundary, WaveFieldLayerURI
 from .swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from .sandbox_contracts import (
@@ -130,6 +137,7 @@ __all__ = [
     "modflow_contracts",
     "payload_warning",
     "publish_manifest",
+    "outputs_manifest",
     "region_choice",
     "sandbox_contracts",
     "secrets",
@@ -181,6 +189,12 @@ __all__ = [
     "PublishManifestBandStats",
     "PublishManifestLayer",
     "parse_publish_manifest",
+    # emit-on-solve outputs.json manifest (writer + tolerant reader)
+    "OUTPUTS_MANIFEST_SCHEMA_VERSION",
+    "OUTPUT_KINDS",
+    "OutputEntry",
+    "OutputsManifest",
+    "parse_outputs_manifest",
     # chart-emission contracts (sprint-13 conversational analysis layer)
     "ChartEmissionPayload",
     "SessionChartRecord",
