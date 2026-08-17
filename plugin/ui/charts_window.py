@@ -32,7 +32,7 @@ the app window horizontally". This module is that window:
       flash the QGIS canvas to that layer's extent (the honest reachable
       half of TUFLOW's map<->plot linking; per-feature click->plot linking
       needs per-feature series data the ``chart-emission`` payload does not
-      carry today -- see ADR 0119).
+      carry today -- ).
 
 Durability: the window's chart list rebuilds from the persisted
 ``SessionChartRecord`` replay on every case open (``set_charts``); a case

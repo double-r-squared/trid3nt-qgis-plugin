@@ -1,4 +1,4 @@
-"""Proof render for the GeoClaw Lagrangian particle-track fold (ADR 0155).
+"""Proof render for the GeoClaw Lagrangian particle-track fold.
 
 Two artifacts to docs/proof/templates/:
   - geoclaw_lagrangian_particles.png: the peak-depth raster + the particle DRIFT

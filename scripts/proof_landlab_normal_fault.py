@@ -1,4 +1,4 @@
-"""Proof render for landlab_normal_fault_scarp_evolution (ADR 0252).
+"""Proof render for landlab_normal_fault_scarp_evolution.
 
 Deterministic: downloads the staged Wasatch Range front (Provo, UT) DEM the live
 run used, re-runs the worker chain (byte-identical to the published run) with the

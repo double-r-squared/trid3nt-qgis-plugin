@@ -1,4 +1,4 @@
-"""In-container WATERSHED-FIRST mesher for the ADR 0193 sandbox.
+"""In-container WATERSHED-FIRST mesher for the sandbox.
 
 Runs INSIDE the GPL-isolated ``trid3nt-local/mesh:latest`` image (mounted, not
 baked). Meshes an ARBITRARY polygon interior -- a pysheds catchment -- with the

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proofs for the HEC-RAS 2025 rain-on-grid landing (ADR 0209).
+"""Proofs for the HEC-RAS 2025 rain-on-grid landing.
 
 (1) hecras_flood_2d_rog_depth.png  -- max water depth over the Coweeta catchment on
     ESRI World Imagery (EPSG:3857 tiles AND data), catchment boundary overlaid, mesh

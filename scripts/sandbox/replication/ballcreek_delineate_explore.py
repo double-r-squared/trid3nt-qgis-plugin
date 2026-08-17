@@ -1,4 +1,4 @@
-"""Ball Creek fork identification (ADR 0204) -- DEM flow-network exploration.
+"""Ball Creek fork identification -- DEM flow-network exploration.
 
 The EDI EML for the Ball Creek weir #9 record carries only the whole-basin
 bounding box (CWTBASIN 21.85 km2), not the weir point. This driver locates the

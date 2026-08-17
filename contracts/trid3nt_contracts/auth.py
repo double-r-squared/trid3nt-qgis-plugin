@@ -1,9 +1,9 @@
-"""Auth handshake envelopes for the WebSocket connect flow (Appendix H, FR-AS-5).
+"""Auth handshake envelopes for the WebSocket connect flow.
 
 Wave 2 of sprint-12-mega lands Firebase Authentication into the WebSocket
-connect handshake. Per Appendix H.5 the agent verifies a Firebase ID token on
-connect, resolves it to a ``UserDocument._id`` via the FR-MP-1 Persistence
-interface (job-0115), and binds the resolved user to the session context so
+connect handshake.  the agent verifies a Firebase ID token on
+connect, resolves it to a ``UserDocument._id`` via the Persistence
+interface, and binds the resolved user to the session context so
 every subsequent envelope is user-scoped.
 
 This module defines the **two envelopes** the auth handshake uses:
@@ -14,7 +14,7 @@ This module defines the **two envelopes** the auth handshake uses:
 - ``AuthAckEnvelope`` (agent → client, type ``auth-ack``) — the agent
   confirms the resolved authenticated user id and whether the user is
   anonymous. Sent once per connect after either successful ``verify_id_token``
-  or anonymous-fallback provisioning (job-0122 scope).
+  or anonymous-fallback provisioning (scope).
 
 The H.5 ``token-refresh`` envelope is deferred to a follow-up job when
 token-refresh wiring lands.
@@ -23,18 +23,18 @@ Invariants this module is responsible for:
 
 - **Invariant 9 (no cost theater).** No cost / spend / quota fields on either
   envelope.
-- **Decision F (wire isolation).** The raw token NEVER appears in
+- **(wire isolation).** The raw token NEVER appears in
   ``AuthAckEnvelope`` — the agent discards it; only the resolved
   ``user_id`` flows back to the client.
 
 SRS references:
 
-- Appendix H.1 — Firebase Authentication as the identity provider.
-- Appendix H.3 — Anonymous → authenticated upgrade (``is_anonymous`` flag).
-- Appendix H.5 — Session validation: ``verify_id_token`` resolves to
+- Firebase Authentication as the identity provider.
+- Anonymous → authenticated upgrade (``is_anonymous`` flag).
+- Session validation: ``verify_id_token`` resolves to
   ``UserDocument._id`` via Persistence.
-- Appendix A.5 — Connection lifecycle (the handshake sits here once landed).
-- Appendix A.6 — ``AUTH_TOKEN_EXPIRED`` / ``AUTH_TOKEN_INVALID`` error codes
+- Connection lifecycle (the handshake sits here once landed).
+- ``AUTH_TOKEN_EXPIRED`` / ``AUTH_TOKEN_INVALID`` error codes
   (forward-looking; this module pins the envelope shapes so the codes have
   somewhere to surface).
 """
@@ -100,7 +100,7 @@ class AdvertisedEndpoints(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Client → Agent: auth-token (Appendix H.5)
+# Client → Agent: auth-token
 # --------------------------------------------------------------------------- #
 
 
@@ -111,10 +111,10 @@ class AuthTokenEnvelope(GraceModel):
     any other client→agent envelope. The agent calls
     ``firebase_admin.auth.verify_id_token(token)`` to resolve the Firebase
     ``uid`` (and the tier custom-claim if present), then looks up or
-    auto-provisions the corresponding ``UserDocument`` via the FR-MP-1
-    Persistence interface (job-0115).
+    auto-provisions the corresponding ``UserDocument`` via the
+    Persistence interface.
 
-    Wave 2 scope (job-0122):
+    Wave 2 scope:
     - ``token`` is a non-empty string — the JWT issued by Firebase Auth.
     - ``anonymous`` may be sent as a hint by the client (e.g. when it
       explicitly signed in anonymously). The agent does NOT trust this hint
@@ -122,7 +122,7 @@ class AuthTokenEnvelope(GraceModel):
     - Empty / missing ``token`` triggers the anonymous-fallback path
       (server resolves an anonymous User with no IdP binding).
 
-    Decision F: the raw token is consumed by the agent and discarded after
+    the raw token is consumed by the agent and discarded after
     verification — it is NEVER persisted (Mongo) and NEVER re-emitted on the
     wire (the ack carries only the resolved identity, not the credential).
     """
@@ -140,7 +140,7 @@ class AuthTokenEnvelope(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Agent → Client: auth-ack (Appendix H.5)
+# Agent → Client: auth-ack
 # --------------------------------------------------------------------------- #
 
 
@@ -154,7 +154,7 @@ class AuthAckEnvelope(GraceModel):
     scoped to this user.
 
     Scope:
-    - ``user_id`` is the ULID-shaped ``UserDocument._id`` (per Appendix H.2
+    - ``user_id`` is the ULID-shaped ``UserDocument._id`` (
       and the ``User`` contract).
     - ``is_anonymous`` is True for the local user.
 

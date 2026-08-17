@@ -1,4 +1,4 @@
-"""Offline gates for the Bald Eagle Sayers Dam SA/2D-connection deck (ADR 0174).
+"""Offline gates for the Bald Eagle Sayers Dam SA/2D-connection deck.
 
 Host-side, no solver: the assembled deck's plan HDF must be Results-typed, must
 KEEP the ``Type="Connection"`` Sayers Dam structure (unlike the pure-2D fresh
@@ -6,7 +6,7 @@ decks, which strip Structures), must carry the 2D-BC Event-Conditions forcing on
 g09's real BC lines, and must stage the matched x09 + an impounding b09. The
 end-to-end SOLVE with NONZERO connection weir flow (peak ~300k cfs, vol err
 0.0006%) is exercised by ``build_sayers_connection_deck.py`` +
-``solve_sayers_connection.py`` inside ``trid3nt-local/hecras:latest`` (ADR 0174)."""
+``solve_sayers_connection.py`` inside ``trid3nt-local/hecras:latest``."""
 from __future__ import annotations
 
 import pytest

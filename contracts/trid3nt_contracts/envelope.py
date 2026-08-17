@@ -1,4 +1,4 @@
-"""AssessmentEnvelope and supporting types (SRS Appendix B, FR-TA-1, FR-AS-7).
+"""AssessmentEnvelope and supporting types (SRS).
 
 The ``AssessmentEnvelope`` is the system's central output: what every hazard
 engine produces, what the agent narrates from, what is embedded in the ``runs``
@@ -55,14 +55,14 @@ __all__ = [
 ]
 
 
-# Open enum (Decision G): new engines register new hazards without a breaking
+# Open enum: new engines register new hazards without a breaking
 # change. v0.1 ships flood as the only fully-typed subtype.
 HazardType = Literal["flood", "groundwater", "wildfire", "seismic", "spill"]
 EnvelopeType = Literal["modeled", "discovered"]
 
 
 # --------------------------------------------------------------------------- #
-# Supporting types (Appendix B.3)
+# Supporting types
 # --------------------------------------------------------------------------- #
 
 
@@ -94,7 +94,7 @@ class ResultLayer(GraceModel):
 
     Field-for-field alignable with ``map-command load-layer`` args
     (``layer_id``, ``style_preset``, ``temporal``) so the UI renders without
-    translation. Output formats are fixed by FR-CE-4/FR-QS-3: rasters COG,
+    translation. Output formats are fixed by/: rasters COG,
     vectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer
     shape that maps onto this.
 
@@ -143,7 +143,7 @@ class CatalogReference(GraceModel):
 
 
 class BaseMetrics(GraceModel):
-    """Empty base; subtype payloads carry the real metric fields (Appendix B.3).
+    """Empty base; subtype payloads carry the real metric fields.
 
     The envelope's top-level ``metrics`` field is ``BaseMetrics`` and stays
     empty by design — real numbers live in the hazard subtype payload
@@ -152,7 +152,7 @@ class BaseMetrics(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Flood subtype (Appendix B.4) — the only fully-typed subtype in v0.1
+# Flood subtype — the only fully-typed subtype in v0.1
 # --------------------------------------------------------------------------- #
 
 
@@ -199,12 +199,12 @@ class FloodPayload(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Top-level envelope (Appendix B.2)
+# Top-level envelope
 # --------------------------------------------------------------------------- #
 
 
 class AssessmentEnvelope(GraceModel):
-    """The central output structure (Appendix B.2).
+    """The central output structure.
 
     For a given envelope, exactly one subtype field matching ``hazard_type`` is
     populated; the rest are ``None``. ``envelope_type`` (modeled vs discovered)
@@ -213,7 +213,7 @@ class AssessmentEnvelope(GraceModel):
     v0.1 note: only the flood subtype is fully typed (``FloodPayload``). The
     v0.2+/v0.3+ subtypes (groundwater/wildfire/seismic/spill) are carried as
     permissive ``dict | None`` slots until their engines land — matching
-    Appendix B.6b, which states discovery payloads are a permissive dict
+.6b, which states discovery payloads are a permissive dict
     validated at the workflow layer in v0.1. See report Open Question OQ-S2.
     """
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0190 row 3 proof: SWAN NONSTATIONARY storm evolution.
+"""row 3 proof: SWAN NONSTATIONARY storm evolution.
 
 Two figures into docs/proof/templates/ (named after the workflow file):
   * swan_wave_field_nonstationary_storm_peak_hs.png -- the peak-Hs field over
@@ -107,7 +107,7 @@ def main():
     fig.text(0.5, 0.005,
              "swan_wave_field mode=nonstationary storm_peak_hs_m: the offshore "
              "boundary builds to 6 m at t=18 h then decays; the nearshore wave "
-             "field marches with it (ADR 0190 row 3; frames feed the scrubber "
+             "field marches with it (row 3; frames feed the scrubber "
              f"animation). run {RUN_ID}.",
              ha="center", fontsize=6.5, color="0.4")
     p2 = os.path.join(OUT, f"{STEM}_frames.png")

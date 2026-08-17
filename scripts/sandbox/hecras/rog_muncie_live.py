@@ -3,7 +3,7 @@
 
 Carves Muncie to the 2068-cell de-risk block, composes a pure-2D RoG deck
 (25 mm/hr x 6 h, CN 80 AMC II) with links 1-2 meteorology + SCS-CN infiltration
-+ link 3 (the decoded per-area precip interpolation folder, ADR 0205), into the
++ link 3 (the decoded per-area precip interpolation folder), into the
 given rundir. The solve runs separately through trid3nt-local/hecras:latest via
 solve_freshtopo.py. Host-only numpy/h5py; no AWS.
 """
@@ -33,7 +33,7 @@ def main() -> int:
         proj = proj.decode() if isinstance(proj, bytes) else str(proj)
     # apply_infiltration: False (default) = crash-free deck that reaches the engine's
     # precip readers past MetInterp; True = also author the byte-exact SCS-CN +
-    # Percent Impervious layers and reach the READ_UN_HYDROLOGY2D residual (ADR 0205).
+    # Percent Impervious layers and reach the READ_UN_HYDROLOGY2D residual.
     apply_infil = len(sys.argv) > 2 and sys.argv[2] == "--infil"
     info = compose_pure2d_deck(
         out, r.mesh, r.tables, projection_wkt=proj,

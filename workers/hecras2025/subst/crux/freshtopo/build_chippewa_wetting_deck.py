@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Assemble the WETTING pure-2D fake-reach carve deck (ADR 0138 / OI-FT1).
+"""Assemble the WETTING pure-2D fake-reach carve deck (/ OI-FT1).
 
-This extends ``build_chippewa_fakereach_deck.py`` (ADR 0137, which SOLVES but
+This extends ``build_chippewa_fakereach_deck.py`` (which SOLVES but
 stays DRY) with the ONE missing forcing link the chain named: the plan-HDF
 ``/Event Conditions`` 2D-BC-line flow-hydrograph enumeration read by the engine's
 ``read_un_q2d_bc_``. That schema was decoded (schema facts only) from shipped
@@ -9,7 +9,7 @@ HEC-RAS 6.6 pure-2D plan HDFs and is authored here by ``hecras_event_conditions`
 against OUR carved ``Inflow`` BC line -- directing moving water onto the carved
 2D area so it WETS.
 
-The deck otherwise matches ADR 0137: the fresh NW-quadrant Muncie carve, the
+The deck otherwise matches: the fresh NW-quadrant Muncie carve, the
 Chippewa clean fake reach (``.x04``/``.b04``, an inert required-1D placeholder),
 solved by production 6.6 ``RasGeomPreprocess`` + ``RasUnsteady``.
 

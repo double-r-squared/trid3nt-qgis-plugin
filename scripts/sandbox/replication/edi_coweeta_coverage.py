@@ -1,4 +1,4 @@
-"""EDI/Coweeta streamflow coverage probe (ADR 0202) -- direct-call sandbox driver.
+"""EDI/Coweeta streamflow coverage probe -- direct-call sandbox driver.
 
 Determines whether the USFS Coweeta Hydrologic Laboratory / Coweeta LTER
 streamflow record on the EDI portal temporally overlaps our MRMS QPE archive

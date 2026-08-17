@@ -2,7 +2,7 @@
 
 The RoG analogue of ``telemac_river_dye_build``: instead of building a channel
 mesh from a river centerline and injecting a dye pulse, this consumes a
-watershed SELAFIN staged by the agent-side mesh-acquisition step (ADR 0196
+watershed SELAFIN staged by the agent-side mesh-acquisition step (
 Decision 1 -- UTM metres, BOTTOM = bed, positive-up), authors a rain-on-grid
 steering deck, solves locally, and extracts the outlet hydrograph + max fields
 + mass balance.
@@ -22,7 +22,7 @@ Physics (grounded in the installed TELEMAC v9.0.0 sources, not guessed):
     from FORMATTED DATA FILE 2 -- a scatter file of ``X Y CN2`` the engine
     interpolates back onto the mesh nodes. The engine's steep-slope branch is
     compiled OFF (``STEEPSLOPECOR=.FALSE.``), so the Huang correction is baked
-    into the CN2 field by the agent before it is written (ADR 0195).
+    into the CN2 field by the agent before it is written.
   * DISTRIBUTED MANNING -- ``FRICTION DATA = YES`` + a FRICTION DATA FILE
     (one ``<zone> MANNING <n> NULL`` line per distinct per-NLCD roughness, ended
     by ``END``) + a ZONES FILE (``<node> <zone>`` per node, read by

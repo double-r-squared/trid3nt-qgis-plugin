@@ -22,10 +22,15 @@ surface. (See also `server-package.md` for the facade mechanism in detail.)
   routing/stage labels), `cases.py` (case lifecycle over the wire),
   `live_turn.py` (the detached-turn registry), `wire.py` (envelope build +
   session-safe send primitives).
-- `protocol/` -- the WS surface. `loop.py` (`_make_handler` + `run_server` +
-  `inflight_turn_count`), `auth.py` (connect handshake + session resume),
-  `handlers.py` (dev-invoke / secret-add / layer-delete + bg-task drain),
-  `connections.py` (session-connection registry).
+- `protocol/` -- the WS surface + the read-only HTTP catalog. `loop.py`
+  (`_make_handler` + `run_server` + `inflight_turn_count`), `auth.py` (connect
+  handshake + session resume), `handlers.py` (dev-invoke / secret-add /
+  layer-delete + bg-task drain), `connections.py` (session-connection registry),
+  `catalog_http.py` (the `/catalog` page + `/api/*` HTTP listener on 8766 --
+  tool catalog, telemetry summary, case-list, building-detail, probe-point,
+  ingest, local-models; mounted by `loop.run_server`). Its provider
+  model-discovery is delegated to `adapters/model_discovery`; the corpus path
+  is anchored on the package root, not `__file__` depth.
 - Root leaves: `errors.py`, `config.py`, `styles.py`, `interactions.py`,
   `spatial.py`, and `__init__.py` (the facade).
 

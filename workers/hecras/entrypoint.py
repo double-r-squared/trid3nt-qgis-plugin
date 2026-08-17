@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover - image runs from the worker dir
 
 #: Baked shipped-geometry decks (engine-landing wave). ``archetype`` in the
 #: manifest names one; the entrypoint copies its ``wrk_source`` into the rundir
-#: when the deck is not already staged there. The geometry is FROZEN (ADR 0100);
+#: when the deck is not already staged there. The geometry is FROZEN;
 #: only the unsteady flow forcing is reparameterized.
 _HERE = Path(__file__).resolve().parent
 _BAKED_DECKS: dict[str, dict[str, str]] = {
@@ -85,7 +85,7 @@ class HecrasError(RuntimeError):
 
 
 #: PARSER VERSION -- bump on a manifest.json shape change. Named in the
-#: strict-field error (ADR 0158).
+#: strict-field error.
 _PARSER_VERSION = "hecras-manifest-1"
 
 #: Every top-level manifest.json key ``run()`` reads (both manifest shapes:
@@ -93,13 +93,13 @@ _PARSER_VERSION = "hecras-manifest-1"
 #: archetype path -- archetype/breach_enabled/flow_scale/target_peak_cfs).
 #: An unknown key would otherwise silently keep the deck's baked default
 #: (e.g. a typo'd flow knob solving the UNSCALED baseline, never erroring) --
-#: the ADR 0148 lesson.
+#: the lesson.
 #:
 #: The GENERIC run_solver-seam envelope (``run_id`` / ``inputs`` / ``outputs`` /
 #: ``hecras_args``) rides the SAME manifest.json: the seam reads ``inputs``/
 #: ``outputs`` to stage the deck + collect results (solver.py) while the worker
 #: reads only the solve fields. They are ACCEPTED-and-ignored here so the M3-gate
-#: no-archetype path (a fresh composed deck staged as ``inputs``, ADR 0140/0188)
+#: no-archetype path (a fresh composed deck staged as ``inputs``)
 #: is not rejected as "unknown fields" -- they are the seam's contract, not typos.
 _KNOWN_MANIFEST_FIELDS = frozenset(
     {
@@ -121,7 +121,7 @@ _KNOWN_MANIFEST_FIELDS = frozenset(
 
 def _reject_unknown_manifest_fields(manifest: dict) -> None:
     """Raise loudly if ``manifest`` carries a top-level key ``run()`` never
-    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    reads (-- the lesson: a stale image silently dropped
     unknown build_spec fields and two registered knob templates ran as
     no-ops)."""
     unknown = sorted(set(manifest) - _KNOWN_MANIFEST_FIELDS)
@@ -342,7 +342,7 @@ def run(data_dir: Path) -> dict:
     - **Engine landing** (``archetype`` names a baked deck): the entrypoint copies
       the baked shipped-geometry deck into ``data_dir`` and applies the unsteady
       flow-forcing reparameterization (``flow_scale`` / ``target_peak_cfs``) before
-      solving. The geometry is FROZEN (ADR 0100).
+      solving. The geometry is FROZEN.
     """
     manifest_path = data_dir / "manifest.json"
     if not manifest_path.is_file():

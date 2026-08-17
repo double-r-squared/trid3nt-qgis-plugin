@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ADR 0250 2D structure-authoring A/B seam-probe figure (baseline vs authored weir).
+"""2D structure-authoring A/B seam-probe figure (baseline vs authored weir).
 
 Renders the solver's per-cell depth field as FILLED cell footprints on the
 structured mesh grid (pcolormesh) -- never cell-center scatter. The StructChannel
@@ -109,7 +109,7 @@ cb2.set_label("depth diff (m)")
 
 fig.text(0.5, 0.02,
           "StructureLayer -> engine Weir bridge ABSENT in this beta "
-          "(InitializeComputeDriver wires ONLY InitializeDriver_Culverts, ADR 0250); "
+          "(InitializeComputeDriver wires ONLY InitializeDriver_Culverts); "
           "cells rendered as FILLED footprints on the 10 m structured mesh, never cell-center scatter.",
           ha="center", fontsize=7.6, style="italic")
 

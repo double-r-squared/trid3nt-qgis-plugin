@@ -1,8 +1,8 @@
-"""Atomic-tool registration metadata (FR-DC-2, FR-CE-8, FR-AS-3).
+"""Atomic-tool registration metadata.
 
 This module owns ``AtomicToolMetadata`` — the pydantic v2 model every
 external-API atomic tool declares at registration time so the cache shim
-(SRS §3.9 / FR-DC-1..6) can route the call correctly. ``agent`` consumes
+(SRS §3.9..6) can route the call correctly. ``agent`` consumes
 this model in the ADK FunctionTool registry; ``schema`` owns the shape.
 
 Why a dedicated ``tool_registry`` module rather than extending ``agent.py``
@@ -18,8 +18,8 @@ Why a dedicated ``tool_registry`` module rather than extending ``agent.py``
   (tool-result schemas, retry-policy descriptors, etc.); giving the
   registry its own module keeps the seam clean.
 
-The four TTL classes match SRS §3.9 FR-DC-2 verbatim. Misconfigured tools
-fail-fast at import time (FR-CE-8: "cache class is a required property
+The four TTL classes match SRS §3.9 verbatim. Misconfigured tools
+fail-fast at import time (: "cache class is a required property
 validated at tool-registration time").
 
 Invariants this module is responsible for:
@@ -67,9 +67,9 @@ __all__ += [
 ]
 
 
-#: The four TTL classes registered per atomic tool (SRS FR-DC-2).
+#: The four TTL classes registered per atomic tool (SRS).
 #:
-#: Names match the kickoff verbatim. NOTE: SRS FR-DC-2 prose at
+#: Names match the kickoff verbatim. NOTE: SRS prose at
 #: ``docs/srs/03-functional-requirements.md`` describes the live class as
 #: "encoded as ``ttl_class: 'none'``" — that prose-vs-kickoff naming gap is
 #: surfaced as an Open Question in this job's report. The pydantic value here
@@ -105,7 +105,7 @@ TTL_CLASSES: tuple[str, ...] = (
 EngineTier = Literal["general", "door", "template", "catalog", "internal"]
 
 
-#: WHO owns a resolution bound (ADR 0225, the two-layer-truth architecture).
+#: WHO owns a resolution bound (the two-layer-truth architecture).
 #: ``"solver"`` - the bound is a MODEL constraint (a mesh-generator's edge-length
 #: window, a node-budget ceiling, an output-raster cap); it lives with the template.
 #: ``"data"`` - the bound is a DATA-native fact (a source's finest cell, a tier
@@ -116,7 +116,7 @@ ResolutionConstraintSource = Literal["solver", "data"]
 class ResolutionSpec(GraceModel):
     """A DECLARED valid-resolution range for one granularity-bearing tool param.
 
-    NATE's clamp ruling (ADR 0225): silent coercion to an undeclared resolution is
+    NATE's clamp ruling: silent coercion to an undeclared resolution is
     BANNED. A tool DECLARES the resolutions it can actually run (min/max or a discrete
     option set) so the user picks from REALITY; an out-of-range ask gets the declared
     range QUOTED BACK (typed / gated), never a silent snap. This is the machine-readable
@@ -249,7 +249,7 @@ class ResolutionSpec(GraceModel):
 
 
 class AtomicToolMetadata(GraceModel):
-    """Cache-shim metadata for an atomic tool's registration (FR-CE-8, FR-DC-2).
+    """Cache-shim metadata for an atomic tool's registration.
 
     Every atomic tool that may issue a network call to an external public data
     source declares one of these at registration time. The agent service's
@@ -260,18 +260,18 @@ class AtomicToolMetadata(GraceModel):
 
     - ``name`` — atomic-tool function name (Python identifier, e.g.
       ``"fetch_dem"``). The agent registry uses this as the registry key.
-    - ``ttl_class`` — one of the four FR-DC-2 classes. Required for every
-      external-API tool. ``"live-no-cache"`` is reserved for the FR-DC-6
+    - ``ttl_class`` — one of the four classes. Required for every
+      external-API tool. ``"live-no-cache"`` is reserved for the
       uncacheable-by-construction enumeration (interactive solicitation
       tools, envelope emitters, MongoDB writes, solver dispatchers).
     - ``source_class`` — the ``<source-class>`` prefix in the cache bucket
-      layout per FR-DC-1 (e.g. ``"dem"``, ``"buildings"``, ``"geocode"``).
+      layout  (e.g. ``"dem"``, ``"buildings"``, ``"geocode"``).
       Required when ``cacheable=True``; MAY be omitted when ``cacheable=False``
       (no bucket prefix is needed if nothing is written).
-    - ``cacheable`` — explicit boolean for FR-DC-6 enumeration; defaults to
+    - ``cacheable`` — explicit boolean for enumeration; defaults to
       ``True`` because the cacheable case is the common case. ``False`` for
       interactive solicitation tools, envelope emitters, MongoDB writes,
-      and solver dispatchers per FR-DC-6.
+      and solver dispatchers.
 
     Cross-field rule (``_validate_cacheable_consistency``):
 
@@ -291,7 +291,7 @@ class AtomicToolMetadata(GraceModel):
     source_class: str | None = None
     cacheable: bool = True
 
-    # --- Wave 1.5 additions (job-0114-schema-20260608) --- #
+    # --- Wave 1.5 additions (schema-20260608)
     #
     # Both fields default to safe / opt-out values so the ~30 existing
     # ``AtomicToolMetadata(...)`` call sites in src/
@@ -444,7 +444,7 @@ class AtomicToolMetadata(GraceModel):
         ),
     )
 
-    # --- Declared resolutions (ADR 0225, NATE's clamp ruling) --- #
+    # --- Declared resolutions (NATE's clamp ruling)
     #
     # A tool with a granularity-bearing param DECLARES the resolutions it can
     # actually run so the user picks from reality; an out-of-range ask is quoted
@@ -458,7 +458,7 @@ class AtomicToolMetadata(GraceModel):
         default=(),
         description=(
             "Declared valid-resolution ranges, one ResolutionSpec per "
-            "granularity-bearing parameter (ADR 0225). Read by the docstring, the "
+            "granularity-bearing parameter. Read by the docstring, the "
             "payload/input-review gate card, and the registry sweep test that FAILS "
             "when a future resolution-class param ships without a declaration."
         ),
@@ -471,7 +471,7 @@ class AtomicToolMetadata(GraceModel):
                 return spec
         return None
 
-    # --- Declared confirm gate (ADR 0273, the gate-collapse carrier) --- #
+    # --- Declared confirm gate (the gate-collapse carrier)
     #
     # A consequential solver run or a heavy raster fetch DECLARES its confirm gate
     # here so the server gate engine reads membership from METADATA, not a hand-wired
@@ -483,7 +483,7 @@ class AtomicToolMetadata(GraceModel):
     gate_spec: GateSpec | None = Field(
         default=None,
         description=(
-            "Declared confirm gate (ADR 0273). Presence is the server gate engine's "
+            "Declared confirm gate. Presence is the server gate engine's "
             "membership signal; names the pure estimate/pin providers + the card's "
             "levers. None (default) for every un-gated tool."
         ),
@@ -491,7 +491,7 @@ class AtomicToolMetadata(GraceModel):
 
     @model_validator(mode="after")
     def _validate_cacheable_consistency(self) -> AtomicToolMetadata:
-        """Enforce the FR-DC-6 cross-field consistency rule."""
+        """Enforce the cross-field consistency rule."""
         if self.cacheable:
             if self.ttl_class == "live-no-cache":
                 raise ValueError(

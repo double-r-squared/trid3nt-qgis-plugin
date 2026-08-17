@@ -12,7 +12,7 @@ sibling carry the animation (see ``export_case_to_qgis`` + ``postprocess_telemac
 
 ``TelemacDyeLayerURI`` extends ``LayerURI`` field-for-field (so it still maps onto
 ``map-command load-layer`` with no translation) and adds the dye narration
-scalars the agent cites rather than invents (invariant 1 / FR-AS-7).
+scalars the agent cites rather than invents (invariant 1).
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ __all__ = [
 TELEMAC_COASTAL_DEPTH_STYLE_PRESET: str = "continuous_coastal_inundation_depth"
 
 #: Style preset for the TELEMAC-3D stratified / 3D-hydrodynamics surface (or
-#: bottom) field raster (ADR 0241). A DISTINCT continuous key so
+#: bottom) field raster. A DISTINCT continuous key so
 #: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the TELEMAC-3D
 #: result SELAFIN mesh sibling for the full-column animation without colliding
 #: with the dye/WSE/DO/wave/agitation presets. The COG variable differs by mode
@@ -64,7 +64,7 @@ TELEMAC3D_STRATIFICATION_STYLE_PRESET: str = "continuous_stratified_flow"
 #: ``legend`` so the 0..~2.5 Kd range renders regardless of QML preset coverage.
 TELEMAC_AGITATION_STYLE_PRESET: str = "continuous_wave_agitation"
 
-#: Style preset for the TOMAWAC significant-wave-height (Hs) raster (ADR 0236). A
+#: Style preset for the TOMAWAC significant-wave-height (Hs) raster. A
 #: DISTINCT continuous key so ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET``
 #: maps it to the TOMAWAC result SELAFIN mesh sibling for animation without
 #: colliding with the dye/WSE/DO presets. The layer always carries a data-driven
@@ -118,8 +118,7 @@ class TelemacWseLayerURI(LayerURI):
     ``FREE SURFACE`` variable, masked to cells that were ever wet so dry terrain
     is never mistaken for a water surface). Extends ``LayerURI`` field-for-field
     (so it still maps onto ``map-command load-layer``) and adds the WSE scalars +
-    the honesty metadata a like-for-like WSE-vs-HWM pairing needs (Invariant 1 /
-    FR-AS-7):
+    the honesty metadata a like-for-like WSE-vs-HWM pairing needs (Invariant 1):
 
         wse_max_m: peak free-surface elevation anywhere/anytime over the run
             (metres in the mesh's vertical datum, ``ge`` unconstrained since an
@@ -165,7 +164,7 @@ class TelemacDyeLayerURI(LayerURI):
 
     Extends ``LayerURI`` field-for-field (same as every other layer). Adds the
     structured numbers the agent narrates about the tracer plume so the LLM cites
-    typed fields, never invents them (invariant 1, FR-AS-7):
+    typed fields, never invents them (invariant 1):
 
         dye_cmax_mgl: peak dye concentration anywhere/anytime in the reach, mg/L
             (>= 0) -- the strength of the spill signal.
@@ -208,7 +207,7 @@ class TelemacDyeLayerURI(LayerURI):
     # GAIA v2 erodible-bed only: deepest bed SCOUR magnitude (mm, >= 0). None on
     # the v1 supply-limited path and every non-sediment run.
     max_scour_mm: float | None = Field(default=None, ge=0.0)
-    # GAIA v3 multi-class graded-sediment SORTING scalars (ADR 0240): the spread
+    # GAIA v3 multi-class graded-sediment SORTING scalars: the spread
     # of the SURFACE mean grain size (um) after the bed sorts - the bed armors in
     # scour zones (D50 up) and fines in deposits (D50 down). Populated ONLY for a
     # multi-class (>= 2 grain classes) run; None on single-class / non-sediment.
@@ -229,7 +228,7 @@ class TelemacDoLayerURI(LayerURI):
     is the steady-state DISSOLVED O2 field (mg/L); the along-reach DO-vs-distance
     sag curve rides in ``sag_curve_*`` for the dock chart. Extends ``LayerURI``
     field-for-field and adds the typed scalars the agent narrates rather than
-    invents (Invariant 1 / FR-AS-7):
+    invents (Invariant 1):
 
         do_min_mgl: the SAG minimum - lowest dissolved oxygen anywhere in the
             reach, mg/L (>= 0). The headline: how low DO bottoms out.
@@ -279,7 +278,7 @@ class TelemacSedimentLayerURI(LayerURI):
     from ``gaia_river.slf`` and rendered on the diverging
     ``TELEMAC_BED_EVOLUTION_STYLE_PRESET`` ramp. Extends ``LayerURI`` field-for-
     field (so it still maps onto ``map-command load-layer``) and adds the sediment
-    scalars the agent cites rather than invents (Invariant 1 / FR-AS-7):
+    scalars the agent cites rather than invents (Invariant 1):
 
         deposited_mass_kg: NET sediment mass left on the bed over the run (kg, >= 0)
             - from GAIA's own listing mass balance (CUMULATED BED EVOLUTIONS, the
@@ -312,14 +311,14 @@ class TelemacSedimentLayerURI(LayerURI):
 
 
 class TelemacWaveLayerURI(LayerURI):
-    """A ``LayerURI`` for a TOMAWAC significant-wave-height (Hs) field (ADR 0236).
+    """A ``LayerURI`` for a TOMAWAC significant-wave-height (Hs) field.
 
     The spectral-wave analogue of ``TelemacDyeLayerURI``: TOMAWAC solves the
     wave-action balance (wind-wave generation, shoaling/breaking, wave-current
     interaction, bottom friction) over a real-lake or idealized basin, and the
     primary artifact is the significant wave height Hs field. Extends ``LayerURI``
     field-for-field and adds the wave scalars the agent cites rather than invents
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         hs_max_m: peak significant wave height anywhere in the domain, m (>= 0)
             -- the strongest sea the storm builds.
@@ -356,7 +355,7 @@ class TelemacWaveLayerURI(LayerURI):
 
 
 class ArtemisAgitationLayerURI(LayerURI):
-    """A ``LayerURI`` for an ARTEMIS harbour-agitation field (ADR 0237).
+    """A ``LayerURI`` for an ARTEMIS harbour-agitation field.
 
     The phase-RESOLVING complement to ``TelemacWaveLayerURI`` (TOMAWAC's
     phase-averaged spectral tier): ARTEMIS solves the elliptic mild-slope
@@ -364,7 +363,7 @@ class ArtemisAgitationLayerURI(LayerURI):
     reflection inside harbours and around structures. The primary artifact is the
     dimensionless agitation coefficient Kd = Hs/H0 (how much the incident wave is
     amplified or sheltered). Extends ``LayerURI`` field-for-field and adds the
-    agitation scalars the agent cites rather than invents (invariant 1, FR-AS-7):
+    agitation scalars the agent cites rather than invents (invariant 1):
 
         kd_max: peak agitation coefficient anywhere in the domain (>= 0) -- the
             strongest amplification (a resonant antinode or a focus caustic).
@@ -399,7 +398,7 @@ class ArtemisAgitationLayerURI(LayerURI):
 
 
 class Telemac3dLayerURI(LayerURI):
-    """A ``LayerURI`` for a TELEMAC-3D stratified / 3D-hydrodynamics field (ADR 0241).
+    """A ``LayerURI`` for a TELEMAC-3D stratified / 3D-hydrodynamics field.
 
     The three-dimensional baroclinic analogue of the 2D TELEMAC layers: TELEMAC-3D
     solves the 3D (hydrostatic / non-hydrostatic) Navier-Stokes equations with
@@ -407,7 +406,7 @@ class Telemac3dLayerURI(LayerURI):
     vertical structure a 2D depth-averaging cannot resolve. The primary artifact is
     a SURFACE-layer field COG (temperature / velocity / salinity by mode) plus a
     BOTTOM-layer companion; the discriminating 3D signature is carried in the scalar
-    fields the agent cites rather than invents (invariant 1, FR-AS-7):
+    fields the agent cites rather than invents (invariant 1):
 
         stratification_metric: the headline discriminating magnitude (>= 0) -
             top-to-bottom temperature difference (stratification), surface-minus-
@@ -460,7 +459,7 @@ class Telemac3dLayerURI(LayerURI):
 
 class TelemacCoastalLayerURI(LayerURI):
     """A ``LayerURI`` for a TELEMAC-2D coastal tidal/surge PEAK-INUNDATION-DEPTH
-    field (ADR 0259).
+    field.
 
     The storm-tide analogue of the other TELEMAC layers: an open-water coastal
     domain (real NOAA DEM_all topobathy) with ONE seaward liquid boundary driven
@@ -469,7 +468,7 @@ class TelemacCoastalLayerURI(LayerURI):
     low coast as the boundary stage rises. The primary artifact is the per-node
     MAX-over-time WATER DEPTH (peak inundation depth) COG. Extends ``LayerURI``
     field-for-field and adds the storm-tide scalars the agent cites rather than
-    invents (invariant 1, FR-AS-7):
+    invents (invariant 1):
 
         peak_depth_m: peak water depth anywhere in the domain over the run, m
             (>= 0) -- the deepest inundation the tide/surge produced.

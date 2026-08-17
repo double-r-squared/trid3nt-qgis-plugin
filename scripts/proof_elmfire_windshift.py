@@ -1,5 +1,5 @@
 """LIVE real-data proof for a mid-run WIND-DIRECTION SHIFT on the committed
-Sacramento nr Red Bluff CA showcase reach (ADR 0239 amendment 2 bbox/ignition),
+Sacramento nr Red Bluff CA showcase reach (amendment 2 bbox/ignition),
 spotting ON. NATE asks (1) whether the fire starts from a point / grows into
 its shape in <30 min, and (2)/(3) to "toss in a wind direction change" and see
 it turn the fire head.
@@ -82,7 +82,7 @@ _r.loader.exec_module(rfp)
 
 TO4326 = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
 
-# ---- the COMMITTED showcase reach (ADR 0239 amendment 2 / f6b1b59) -------- #
+# ---- the COMMITTED showcase reach (amendment 2 / f6b1b59)
 # docs/proof/templates/elmfire_river_barrier_proof_result.json: chosen_reach
 # "sacramento_redbluff_CA" -- SAME bbox + ignition, no re-search.
 BBOX = [-122.19893597835888, 40.0977537437604, -122.11237150586113, 40.152662229617306]

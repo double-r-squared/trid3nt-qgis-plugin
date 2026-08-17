@@ -1,7 +1,7 @@
 """Run the GeoClaw storm-surge template end-to-end through the REAL composer
 (model_geoclaw_inundation): real Gulf topo-bathy fetch -> deck -> geoclaw image
 solve -> agent postprocess (depth COG + mesh.geojson + eta frames). This is the
-DEFAULT-path proof run for the parametric-Holland surge front (ADR 0168).
+DEFAULT-path proof run for the parametric-Holland surge front.
 
 Ike 2008 published NHC best track (bal092008) over Galveston/Bolivar, Garratt drag.
 

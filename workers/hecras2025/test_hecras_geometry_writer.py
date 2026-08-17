@@ -1,4 +1,4 @@
-"""Offline round-trip test for the 2D geometry writer (ADR 0132 OI-2).
+"""Offline round-trip test for the 2D geometry writer (OI-2).
 
 Reads HEC's shipped Muncie 2D flow-area geometry (the ground truth this whole
 HEC-RAS track matches bit-for-bit), rebuilds the writer's ``Mesh2D`` +

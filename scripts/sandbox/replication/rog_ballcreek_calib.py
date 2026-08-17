@@ -1,4 +1,4 @@
-"""Ball Creek calibration trials with raw + peak-aligned NSE (ADR 0204).
+"""Ball Creek calibration trials with raw + peak-aligned NSE.
 
 Runs a (CN, Manning, Ia-option) grid on the calibration event via
 rog_ballcreek_live.phase_solve (24 h max-burst forcing from the event JSON) and

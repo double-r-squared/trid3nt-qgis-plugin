@@ -1,4 +1,4 @@
-"""SWMM solver AWS Batch worker — FR-CE-1/2/3 substrate (P7).
+"""SWMM solver AWS Batch worker — substrate (P7).
 
 The CLOUD LANE for the urban PySWMM engine: a thin container entrypoint that
 wraps pyswmm for invocation as an AWS Batch job, so SWMM scales beyond the

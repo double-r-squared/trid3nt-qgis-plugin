@@ -1,4 +1,4 @@
-"""Offline gates for the 2D-BC-line Event-Conditions author (OI-FT1, ADR 0138).
+"""Offline gates for the 2D-BC-line Event-Conditions author (OI-FT1).
 
 No engine, no vendored data: build a tiny in-memory geometry (a 2D area + one BC
 line) via the production geometry writer, author the EC group, and assert the

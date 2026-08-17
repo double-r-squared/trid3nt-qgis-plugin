@@ -1,11 +1,11 @@
-"""Qt harness for the ADR 0018 tool-selection picker card (Stage 3, 2026-07-22).
+"""Qt harness for the tool-selection picker card (Stage 3, 2026-07-22).
 
 Run as a SUBPROCESS by ``test_tool_picker.TestToolPickerQt`` -- it needs
 ``qgis.PyQt`` (PyQt5), which the pure-python test venv does not have; the
 test probes the system interpreter and skips honestly when absent (the same
 convention as ``qt_dock_ui_harness.py``).
 
-Offscreen, no agent, no network. Checks (the card contract, ADR 0018 +
+Offscreen, no agent, no network. Checks (the card contract, +
 the fixed interface contract):
 
   1. RENDER: a ``tool-candidates`` event paints ONE ToolCandidatesCard with

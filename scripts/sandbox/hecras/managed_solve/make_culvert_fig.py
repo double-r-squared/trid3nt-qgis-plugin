@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ADR 0251 culvert-through-embankment A/B/C seam proof figure.
+# culvert-through-embankment A/B/C seam proof figure.
 import h5py, numpy as np, json
 import matplotlib
 matplotlib.use("Agg")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proof render for ADR 0227: the surfaced bathymetry INPUT layer over ESRI.
+"""Proof render for: the surfaced bathymetry INPUT layer over ESRI.
 
 Renders the exact topobathy COG the schism_pahm_surge showcase surfaced as its
 Case input layer, on ESRI World Imagery in EPSG:3857 with a hypsometric/terrain
@@ -23,7 +23,7 @@ BATHY_URI = "s3://trid3nt-cache/cache/static-30d/topobathy/5d50194c46da76c485b6f
 OUT_PNG = str(_REPO_ROOT / "docs/proof/templates/input_bathymetry_layer.png")
 TITLE = "Input: bathymetry (topobathy composite) over ESRI -- schism_pahm_surge"
 CAPTION = (
-    "ADR 0227 -- fetched topobathy surfaced as a role=context Case INPUT layer "
+    "-- fetched topobathy surfaced as a role=context Case INPUT layer "
     "(continuous_dem hypsometric ramp, EPSG:3857 over ESRI World Imagery). "
     "Source: CUDEM 1/9\" nearshore + ETOPO 2022 shelf base, ~199 m fetch cell. "
     "Fed schism_pahm_surge Hurricane Ike (2008) Galveston surge; "

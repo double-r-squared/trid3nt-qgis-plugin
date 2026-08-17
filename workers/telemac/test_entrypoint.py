@@ -58,8 +58,8 @@ def test_reach_config_ignores_manifest_workdir_pin(tmp_path):
 
 
 def test_reach_config_rejects_unknown_keys(tmp_path):
-    """ADR 0158: an unknown reach key errors loudly instead of being dropped
-    with a log warning (the ADR 0148 lesson -- a WARNING line is invisible in
+    """an unknown reach key errors loudly instead of being dropped
+    with a log warning (the lesson -- a WARNING line is invisible in
     practice; two registered knob templates ran as no-ops that way)."""
     with pytest.raises(E.TelemacManifestUnknownFieldsError, match="bogus"):
         E._reach_config(tmp_path, {
@@ -68,12 +68,12 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
 
 
 def test_parser_version_is_reach_7():
-    """ADR 0254: the NESTOR dredging fields bump the parser stamp to reach-9."""
+    """the NESTOR dredging fields bump the parser stamp to reach-9."""
     assert E._PARSER_VERSION == "telemac-reach-9"
 
 
 def test_reach_config_accepts_erodible_bed_fields(tmp_path):
-    """ADR 0216: the GAIA v2 erodible-bed knobs are known fields (bedload scour)."""
+    """the GAIA v2 erodible-bed knobs are known fields (bedload scour)."""
     cfg = E._reach_config(tmp_path, {
         "substance_class": "sediment", "erodible_bed": True,
         "bed_thickness_m": 4.0, "bedload_formula": 1,
@@ -84,7 +84,7 @@ def test_reach_config_accepts_erodible_bed_fields(tmp_path):
 
 
 def test_reach_config_accepts_soil_store_fields(tmp_path):
-    """ADR 0213: the soil-store knobs are known fields (continuous SCS-CN store)."""
+    """the soil-store knobs are known fields (continuous SCS-CN store)."""
     cfg = E._reach_config(tmp_path, {
         "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
         "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
@@ -96,7 +96,7 @@ def test_reach_config_accepts_soil_store_fields(tmp_path):
 
 
 def test_reach_config_accepts_hyetograph_blocks(tmp_path):
-    """ADR 0206: rain_hyetograph_blocks is a known field (time-varying native path)."""
+    """rain_hyetograph_blocks is a known field (time-varying native path)."""
     cfg = E._reach_config(tmp_path, {
         "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
         "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
@@ -124,13 +124,13 @@ def test_reach_config_rejects_unknown_key_names_v7(tmp_path):
 
 
 def test_default_outputs_include_bed_cog():
-    """ADR 0231: the supervisor uploads the in-worker bed COG so the composer can
+    """the supervisor uploads the in-worker bed COG so the composer can
     surface the river bed bathymetry as a role=context input."""
     assert "bed_bathymetry.tif" in E.DEFAULT_OUTPUTS
 
 
 def test_write_bed_cog_nonconstant_and_finite(tmp_path):
-    """ADR 0231 behavior: write_bed_cog rasterizes the solved bed to a small 4326
+    """behavior: write_bed_cog rasterizes the solved bed to a small 4326
     COG whose valid pixels are FINITE and NON-CONSTANT (a real sloped bed, never a
     flat placeholder). Mirrors the in-image smoke assertion, offline on a
     synthetic sloped mesh so it runs without TELEMAC."""
@@ -170,7 +170,7 @@ def test_write_bed_cog_nonconstant_and_finite(tmp_path):
 
 
 def test_write_bed_cog_lonlat_nonconstant_and_finite(tmp_path):
-    """ADR 0244 S3: the shared wave-module bed writer rasterizes node lon/lat/z
+    """S3: the shared wave-module bed writer rasterizes node lon/lat/z
     (a NOAA lake-datum bed) to a small 4326 COG whose valid pixels are FINITE and
     NON-CONSTANT (the real sloped lake bed, never a flat placeholder), dropping
     non-finite (off-lake / land) nodes. Offline on a synthetic sloped lake patch."""

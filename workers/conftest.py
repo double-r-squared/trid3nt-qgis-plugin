@@ -1,4 +1,4 @@
-"""conftest.py for workers tests (job-0062).
+"""conftest.py for workers tests.
 
 Installs qgis.* stub modules into sys.modules before pytest collects any test
 module. Placing this conftest at workers/ ensures it is discovered

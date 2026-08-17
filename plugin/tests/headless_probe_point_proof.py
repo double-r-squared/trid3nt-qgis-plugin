@@ -4,7 +4,7 @@ Proves the FULL plugin-side flow -- POST /api/probe-point -> dock note-block
 formatting -- by driving the REAL, unmodified ``probe.py``
 (``post_probe_point`` / ``format_probe_result``) against a STUB HTTP server
 that mirrors the agent route's real contract (the server's
-``tool_catalog_http.py`` + ``tools/probe_point.py``):
+``catalog_http.py`` + ``tools/probe_point.py``):
 
     POST /api/probe-point {"case_id","lon","lat"}
       -> 200 {"status":"ok","point":{"lon","lat"},"case_id","results":[
@@ -49,7 +49,7 @@ sys.path.insert(0, PLUGIN_PATH)
 from plugin.render import probe  # noqa: E402
 
 AGENT_HTTP = os.environ.get("TRID3NT_AGENT_HTTP", "http://127.0.0.1:8766")
-# The groundwater case named in the job-0308-style kickoff's live-verify
+# The groundwater case named in the-style kickoff's live-verify
 # plan (Twin Falls MODFLOW plume) -- a real point inside its plume bbox lands
 # a concentration value, not just an honest empty/absent-layer response.
 CASE_ID = os.environ.get("TRID3NT_CASE_ID", "01KX80KJ8TV7YZBTVKSNRH1E2K")

@@ -453,7 +453,7 @@ def load_tool_call_records(
 # Shadow mode computes the WOULD-BE-visible tool set per turn via
 # ``retrieve_visible_tools`` WITHOUT changing the catalog the model actually
 # sees (the model still sees the full registry). We log that would-be set so a
-# recall@k measurement (tool_catalog_http.build_telemetry_summary) can compare
+# recall@k measurement (catalog_http.build_telemetry_summary) can compare
 # it against the tools the LLM actually dispatched that turn, per solver
 # flow. recall = |dispatched-llm-tools that WERE in the retrieved set| /
 # |dispatched-llm-tools|.

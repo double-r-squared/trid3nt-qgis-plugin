@@ -1,4 +1,4 @@
-"""ADR 0192 mesh-front STANDALONE sandbox -- OceanMesh2D coastal mesh builder.
+"""mesh-front STANDALONE sandbox -- OceanMesh2D coastal mesh builder.
 
 RESEARCH / LOCAL-FIRST STANDALONE CAPABILITY (nothing registered, nothing wired
 into any workflow/template/engine). Meshes named US coastal AOIs with the

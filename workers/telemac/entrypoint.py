@@ -89,12 +89,12 @@ DEFAULT_OUTPUTS = [
     "t2d_river.waqtel",    # decay class: the WAQTEL steering file (forcing evidence)
     "gaia_river.slf",      # sediment class: GAIA result (CUMUL BED EVOL deposition)
     "gaia_river.cas",      # sediment class: the GAIA steering file (evidence)
-    "bed_bathymetry.tif",  # ADR 0231: the in-worker-sampled river bed as a 4326 COG
-    "res_agitation.slf",   # agitation class (ADR 0237): raw ARTEMIS result (mesh sibling)
+    "bed_bathymetry.tif",  #: the in-worker-sampled river bed as a 4326 COG
+    "res_agitation.slf",   # agitation class: raw ARTEMIS result (mesh sibling)
     "agit_field.slf",      # agitation class: single-frame WAVE HEIGHT field -> Kd COG
     "art_agit.cas",        # agitation class: the ARTEMIS steering deck (evidence)
     "bc_agit.cli",         # agitation class: boundary conditions (evidence)
-    "nestor.act",          # dredging (ADR 0254): NESTOR action file (dig/dump rule, evidence)
+    "nestor.act",          # dredging: NESTOR action file (dig/dump rule, evidence)
     "nestor.pol",          # dredging: NESTOR polygon file (dredge/dump zones, evidence)
     "nestor.ref",          # dredging (criterion): NESTOR surface reference (design grade, evidence)
 ]
@@ -162,22 +162,22 @@ class TelemacManifestUnknownFieldsError(ValueError):
 #: worker-output-contract change (a new uploaded artifact + result-envelope key),
 #: because the version doubles as the worker-image/behavior provenance marker the
 #: image-staleness law keys off (a stale image is caught by a drifted version).
-#: Named in the strict-field error (ADR 0158). -3 added the ADR 0196
-#: rain-on-grid fields; -4 added the ADR 0206 time-varying native hyetograph
-#: field (rain_hyetograph_blocks); -5 adds the ADR 0213 continuous
+#: Named in the strict-field error. -3 added the
+#: rain-on-grid fields; -4 added the time-varying native hyetograph
+#: field (rain_hyetograph_blocks); -5 adds the continuous
 #: soil-moisture-store fields (soil_store, soil_store_capacity_mm,
 #: soil_store_recovery_h, soil_store_init_mm); -6 adds the GAIA v2 erodible-bed
 #: morphodynamics fields (erodible_bed toggles bedload scour; bed_thickness_m,
 #: bedload_formula, morphological_factor tune the erodible stock + transport law);
-#: -7 marks the ADR 0231 worker-output contract: the run now writes the
+#: -7 marks the worker-output contract: the run now writes the
 #: in-worker-sampled bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog /
 #: bed_cog_min_m / bed_cog_max_m keys in telemac_metrics.json so the composer
 #: surfaces the river bed bathymetry as a role=context input.
-#: -8 adds the ADR 0240 GAIA v3 multi-class graded-sediment field
+#: -8 adds the GAIA v3 multi-class graded-sediment field
 #: (sediment_gradation: >=2 (d50_um, fraction) classes -> a multi-class bedload
 #: deck with Egiazaroff hiding, so the bed SORTS/armors; the run reports the
 #: surface D50 spread as the sorting honesty-floor number).
-#: -9 adds the ADR 0254 NESTOR dredging fields (dredging arms the precompiled
+#: -9 adds the NESTOR dredging fields (dredging arms the precompiled
 #: NESTOR module on the erodible-bed base: dredge_mode scheduled|criterion,
 #: zone geometry dredge_zone_utm/disposal_zone_utm/dredge_station_frac/
 #: dredge_zone_len_m/dredge_disposal[_station_frac], and the dig/dump numbers
@@ -191,8 +191,8 @@ def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
     """Build a ``ReachConfig`` from manifest overrides, pinned to ``data_dir``.
 
     Only known ``ReachConfig`` fields are accepted -- an unknown key raises
-    loudly (ADR 0158; formerly dropped with a log warning, which is exactly the
-    ADR 0148 failure mode: a stale image / typo'd knob silently ran as a
+    loudly (formerly dropped with a log warning, which is exactly the
+    failure mode: a stale image / typo'd knob silently ran as a
     no-op instead of applying, and a WARNING-level log line is invisible in
     practice). ``workdir`` is forced to the mounted data dir so every artifact
     lands where the supervisor uploads from.
@@ -493,7 +493,7 @@ def run_pipeline(
     mesh["bed_z"] = Z  # oil release snaps to the local thalweg (deepest node)
     LOG.info("dem bed: %s", bed)
 
-    # 4b. ADR 0231: write the in-worker-sampled bed as a small 4326 COG so the
+    # 4b.: write the in-worker-sampled bed as a small 4326 COG so the
     # composer can surface the river bed bathymetry as a role=context input.
     # Best-effort: a bed-COG hiccup NEVER voids a CORRECT END solve.
     bed_cog_meta: dict[str, Any] = {}
@@ -649,7 +649,7 @@ def run_pipeline(
                     cy = float((gy[mmask] * dep[mmask]).sum() / dep[mmask].sum())
                     sediment_stats["sediment_deposit_centroid_dist_m"] = round(
                         float(np.hypot(cx - sx, cy - sy)), 1)
-            # GAIA v3 MULTI-CLASS SORTING signature (ADR 0240): the surface MEAN
+            # GAIA v3 MULTI-CLASS SORTING signature: the surface MEAN
             # DIAMETER field spread. A single-class bed is uniform (range ~0 -
             # sorting is structurally impossible); a graded mix armors in scour
             # zones (D50 up) and fines in deposition zones (D50 down), so the
@@ -739,7 +739,7 @@ def run_pipeline(
         "enforced_slope": bed.get("enforced_slope"),
         "bed_drop_m": bed.get("bed_drop_m"),
         "reach_len_m": bed.get("reach_len_m"),
-        # ADR 0231: the in-worker-sampled bed COG key (+ its finite range) so the
+        # the in-worker-sampled bed COG key (+ its finite range) so the
         # composer surfaces the river bed bathymetry as a role=context input.
         # Empty dict when the best-effort write failed (bed input simply absent).
         **bed_cog_meta,
@@ -808,7 +808,7 @@ def run_rog_pipeline(
     reach_overrides: dict[str, Any],
     run_id: str | None,
 ) -> dict[str, Any]:
-    """Run the rain-on-grid pipeline (ADR 0196) in ``data_dir``.
+    """Run the rain-on-grid pipeline in ``data_dir``.
 
     Consumes the watershed SELAFIN + per-node CN2/Manning fields the agent-side
     composer staged into the rundir (mesh_acquisition + fetch_landcover), builds
@@ -871,7 +871,7 @@ def run_rog_pipeline(
     fric_stats = R.write_friction_files(fric, zones, manning)
 
     rain_mm_per_day = float(getattr(cfg, "rain_intensity_mm_per_hr", 25.0)) * 24.0
-    # TIME-VARYING native hyetograph (ADR 0206): when blocks are staged, write
+    # TIME-VARYING native hyetograph: when blocks are staged, write
     # the block FORMATTED DATA FILE 1 + the per-case RAINDEF=3 FORTRAN FILE so
     # the engine's native SCS-CN runs on the real hyetograph; else the constant
     # design-storm native path is authored (byte-identical to before).
@@ -881,7 +881,7 @@ def run_rog_pipeline(
     soil_audit: dict[str, Any] = {}
     runoff_path = str(getattr(cfg, "runoff_path", "native"))
     if blocks and getattr(cfg, "soil_store", False):
-        # CONTINUOUS SOIL-MOISTURE STORE (ADR 0213): transform the GROSS
+        # CONTINUOUS SOIL-MOISTURE STORE: transform the GROSS
         # hyetograph to NET rainfall-excess through the Michel-2005 store, then
         # feed the net series to the engine on a uniform CN=100 pass-through so
         # the engine's SCS-CN abstracts nothing (the store IS the infiltration
@@ -1028,10 +1028,10 @@ class TomawacManifestUnknownFieldsError(ValueError):
     """manifest.json['wave'] carries a key ``TomawacConfig`` has no field for."""
 
 
-#: TOMAWAC PARSER VERSION (ADR 0236) -- bump on a TomawacConfig field
+#: TOMAWAC PARSER VERSION -- bump on a TomawacConfig field
 #: addition/rename/retirement OR a wave worker-output-contract change, because it
 #: doubles as the tomawac worker-image/behavior provenance marker the
-#: image-staleness law (ADR 0148) keys off. -1 is the initial wave leg
+#: image-staleness law keys off. -1 is the initial wave leg
 #: (idealized 4 question classes + the NOAA Great Lakes real-bathy path).
 #: -2 marks the worker-output-contract change: the real-bathy run writes the
 #: sampled lake-datum bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog
@@ -1043,7 +1043,7 @@ _TOMAWAC_PARSER_VERSION = "tomawac-wave-2"
 def _tomawac_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
     """Build a ``TomawacConfig`` from manifest['wave'], rejecting unknown keys.
 
-    Same strict-unknown-field gate as ``_reach_config`` (ADR 0158): an unknown key
+    Same strict-unknown-field gate as ``_reach_config``: an unknown key
     raises loudly rather than silently no-opping the intended wave knob (the ADR
     0148 stale-image failure mode). ``workdir`` is pinned to the mounted data dir.
     """
@@ -1078,7 +1078,7 @@ def _tomawac_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
 def run_tomawac_pipeline(
     data_dir: Path, wave_overrides: dict[str, Any], run_id: str | None
 ) -> dict[str, Any]:
-    """Run the TOMAWAC wave pipeline (ADR 0236) in ``data_dir``.
+    """Run the TOMAWAC wave pipeline in ``data_dir``.
 
     Authors + solves ONE spectral-wave field (one of the four question classes)
     through the baked tomawac binary and writes the result SELAFIN + metrics into
@@ -1099,10 +1099,10 @@ class ArtemisManifestUnknownFieldsError(ValueError):
     """manifest.json['agitation'] carries a key ``ArtemisConfig`` has no field for."""
 
 
-#: ARTEMIS PARSER VERSION (ADR 0237) -- bump on an ArtemisConfig field
+#: ARTEMIS PARSER VERSION -- bump on an ArtemisConfig field
 #: addition/rename/retirement OR an agitation worker-output-contract change,
 #: because it doubles as the artemis worker-image/behavior provenance marker the
-#: image-staleness law (ADR 0148) keys off. -1 is the initial agitation leg (three
+#: image-staleness law keys off. -1 is the initial agitation leg (three
 #: question classes diffraction/resonance/shoal + the NOAA Great Lakes real-bathy
 #: breakwater-diffraction path). -2 adds the REAL surveyed-structure path:
 #: breakwater_polylines (OSM man_made=breakwater/pier geometry meshed as a thin
@@ -1119,7 +1119,7 @@ def _artemis_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
 
     Same strict-unknown-field gate as ``_reach_config`` / ``_tomawac_config`` (ADR
     0158): an unknown key raises loudly rather than silently no-opping the intended
-    agitation knob (the ADR 0148 stale-image failure mode). ``workdir`` is pinned
+    agitation knob (the stale-image failure mode). ``workdir`` is pinned
     to the mounted data dir.
     """
     from artemis_build import ArtemisConfig  # noqa: WPS433 -- worker payload
@@ -1154,7 +1154,7 @@ def _artemis_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
 def run_artemis_pipeline(
     data_dir: Path, agitation_overrides: dict[str, Any], run_id: str | None
 ) -> dict[str, Any]:
-    """Run the ARTEMIS harbour-agitation pipeline (ADR 0237) in ``data_dir``.
+    """Run the ARTEMIS harbour-agitation pipeline in ``data_dir``.
 
     Authors + solves ONE phase-resolving agitation field (one of the three
     question classes: diffraction / resonance / shoal) through the baked artemis
@@ -1176,10 +1176,10 @@ class Telemac3dManifestUnknownFieldsError(ValueError):
     """manifest.json['stratified'] carries a key ``Telemac3dConfig`` has no field for."""
 
 
-#: TELEMAC-3D PARSER VERSION (ADR 0241) -- bump on a Telemac3dConfig field
+#: TELEMAC-3D PARSER VERSION -- bump on a Telemac3dConfig field
 #: addition/rename/retirement OR a 3D worker-output-contract change, because it
 #: doubles as the telemac3d worker-image/behavior provenance marker the
-#: image-staleness law (ADR 0148) keys off. -1 is the initial 3D stratified leg
+#: image-staleness law keys off. -1 is the initial 3D stratified leg
 #: (three question classes stratification/wind_circulation/salt_wedge + the NOAA
 #: Great Lakes real-bathy path for the two closed-basin modes).
 _TELEMAC3D_PARSER_VERSION = "telemac3d-strat-1"
@@ -1189,8 +1189,8 @@ def _telemac3d_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
     """Build a ``Telemac3dConfig`` from manifest['stratified'], rejecting unknown keys.
 
     Same strict-unknown-field gate as ``_reach_config`` / ``_tomawac_config`` /
-    ``_artemis_config`` (ADR 0158): an unknown key raises loudly rather than
-    silently no-opping the intended 3D knob (the ADR 0148 stale-image failure
+    ``_artemis_config``: an unknown key raises loudly rather than
+    silently no-opping the intended 3D knob (the stale-image failure
     mode). ``workdir`` is pinned to the mounted data dir.
     """
     from telemac3d_build import Telemac3dConfig  # noqa: WPS433 -- worker payload
@@ -1224,7 +1224,7 @@ def _telemac3d_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
 def run_telemac3d_pipeline(
     data_dir: Path, stratified_overrides: dict[str, Any], run_id: str | None
 ) -> dict[str, Any]:
-    """Run the TELEMAC-3D stratified pipeline (ADR 0241) in ``data_dir``.
+    """Run the TELEMAC-3D stratified pipeline in ``data_dir``.
 
     Authors + solves ONE 3D field (one of the three question classes:
     stratification / wind_circulation / salt_wedge) through the baked telemac3d
@@ -1249,7 +1249,7 @@ class CoastalManifestUnknownFieldsError(ValueError):
 
 #: COASTAL PARSER VERSION -- bump on a CoastalConfig field
 #: addition/rename/retirement OR a coastal worker-output-contract change; doubles
-#: as the coastal-tidal worker-image/behavior provenance marker (ADR 0148/0259).
+#: as the coastal-tidal worker-image/behavior provenance marker.
 _COASTAL_PARSER_VERSION = "coastal-tidal-1"
 
 
@@ -1257,8 +1257,8 @@ def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
     """Build a ``CoastalConfig`` from manifest['coastal'], rejecting unknown keys.
 
     Same strict-unknown-field gate as ``_reach_config`` / ``_tomawac_config``
-    (ADR 0158): an unknown key raises loudly rather than silently no-opping the
-    intended coastal knob (the ADR 0148 stale-image failure mode). ``workdir`` is
+: an unknown key raises loudly rather than silently no-opping the
+    intended coastal knob (the stale-image failure mode). ``workdir`` is
     not a CoastalConfig field (solve takes it as an argument); 'mode' is the
     routing key, not a field.
     """
@@ -1292,7 +1292,7 @@ def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
 def run_coastal_pipeline(
     data_dir: Path, coastal_overrides: dict[str, Any], run_id: str | None
 ) -> dict[str, Any]:
-    """Run the coastal tidal/surge inundation pipeline (ADR 0259) in ``data_dir``.
+    """Run the coastal tidal/surge inundation pipeline in ``data_dir``.
 
     Authors + solves ONE coastal open-water TELEMAC-2D domain (real NOAA
     topobathy, one seaward liquid boundary forced by a NOAA CO-OPS / GTSM water-
@@ -1377,7 +1377,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import telemac_river_dye_build as B  # noqa: WPS433 -- for the typed banks gate
 
-    # ADR 0259: a manifest['coastal'] block routes to the coastal tidal/surge
+    # a manifest['coastal'] block routes to the coastal tidal/surge
     # inundation pipeline (telemac_coastal_build) through the baked telemac2d
     # binary -- a coastal open-water domain with one seaward liquid boundary
     # forced by a LIQUID BOUNDARIES FILE; separate from every other leg.
@@ -1408,7 +1408,7 @@ def main(argv: list[str] | None = None) -> int:
                  metrics.get("status"), ok, metrics.get("wall_s"))
         return 0 if ok else 1
 
-    # ADR 0241: a manifest['stratified'] block routes to the TELEMAC-3D
+    # a manifest['stratified'] block routes to the TELEMAC-3D
     # stratified / 3D-hydrodynamics pipeline (telemac3d_build) through the baked
     # telemac3d binary -- entirely separate from the channel-dye / RoG / TOMAWAC /
     # ARTEMIS legs (no shared config).
@@ -1439,7 +1439,7 @@ def main(argv: list[str] | None = None) -> int:
                  metrics.get("status"), ok, metrics.get("wall_s"))
         return 0 if ok else 1
 
-    # ADR 0237: a manifest['agitation'] block routes to the ARTEMIS phase-resolving
+    # a manifest['agitation'] block routes to the ARTEMIS phase-resolving
     # harbour-agitation pipeline (artemis_build) through the baked artemis binary --
     # entirely separate from the channel-dye / RoG / TOMAWAC legs.
     if agitation_overrides is not None:
@@ -1469,7 +1469,7 @@ def main(argv: list[str] | None = None) -> int:
                  metrics.get("status"), ok, metrics.get("wall_s"))
         return 0 if ok else 1
 
-    # ADR 0236: a manifest['wave'] block routes to the TOMAWAC spectral-wave
+    # a manifest['wave'] block routes to the TOMAWAC spectral-wave
     # pipeline (tomawac_build) through the baked tomawac binary -- entirely
     # separate from the channel-dye / RoG legs (no shared ReachConfig).
     if wave_overrides is not None:
@@ -1499,7 +1499,7 @@ def main(argv: list[str] | None = None) -> int:
                  metrics.get("status"), ok, metrics.get("wall_s"))
         return 0 if ok else 1
 
-    # ADR 0196: mode="rain_on_grid" routes to the RoG pipeline (rog_build); every
+    # mode="rain_on_grid" routes to the RoG pipeline (rog_build); every
     # other value keeps the historical channel-dye pipeline byte-identical.
     mode = str((reach_overrides or {}).get("mode", "river_dye") or "river_dye").lower()
 

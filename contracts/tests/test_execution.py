@@ -1,4 +1,4 @@
-"""Round-trip + invariant tests for solver-execution shapes (FR-TA-2)."""
+"""Round-trip + invariant tests for solver-execution shapes."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Ball Creek RoG SOIL-STORE proof charts (ADR 0213) -> docs/proof/templates/.
+"""Ball Creek RoG SOIL-STORE proof charts -> docs/proof/templates/.
 
 Regenerates the three dock-exact computed-vs-observed overlays IN PLACE so they
 show the fidelity-ladder progression (0206 static-CN hyetograph -> 0213
@@ -101,7 +101,7 @@ def ladder_chart():
     cols = ["0204\nconstant", "0206\nhyetograph", "0213\nsoil store", "0213 store\n+fine mesh"]
     rows = ["aligned NSE (Dec)", "peak err % (Dec)", "timing lag h (Dec)",
             "vol err % (Dec)", "2nd-peak err % (multi-peak)"]
-    # values from the graded solves (this ADR) / ADR 0204/0206 tables.
+    # values from the graded solves (this ADR) / tables.
     data = [
         ["+0.04", "+0.51", "+0.75", "-108*"],
         ["-1.7", "+5.4", "+21", "-54"],

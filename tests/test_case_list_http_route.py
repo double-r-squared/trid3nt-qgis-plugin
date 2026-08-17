@@ -22,7 +22,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from trid3nt_server import server, tool_catalog_http
+from trid3nt_server import server
+from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
 

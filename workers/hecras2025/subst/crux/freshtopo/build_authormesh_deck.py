@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compose a pure-2D deck from a C# AuthorMesh dump -- the fresh-C#-topology SOLVE.
 
-This is the ADR 0134/0135 link c2 probe: a mesh authored ENTIRELY by the C#
+This is the link c2 probe: a mesh authored ENTIRELY by the C#
 AuthorMesh path (TryCreateMesh topology + ComputeFrom subgrid tables over real
 terrain), adapted to Mesh2D, composed into the pure-2D deck, and handed to the
 production 6.6 engines. Unlike the carve (which reindexes Muncie's solver-proven

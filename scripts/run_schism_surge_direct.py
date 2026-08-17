@@ -1,4 +1,4 @@
-"""Direct SCHISM PaHM storm-surge invocation for trid3nt-local proof (ADR 0217).
+"""Direct SCHISM PaHM storm-surge invocation for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the REGISTERED template
 (``schism_pahm_surge``) directly against MinIO + the local-docker schism image.

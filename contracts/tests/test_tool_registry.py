@@ -1,8 +1,8 @@
-"""Tests for ``AtomicToolMetadata`` (FR-DC-2, FR-CE-8, FR-AS-3).
+"""Tests for ``AtomicToolMetadata``.
 
-job-0030-schema-20260606 (sprint-06 / M4 pre-flight). Verifies:
+-schema-20260606 (sprint-06 / M4 pre-flight). Verifies:
 - All four TTL classes are accepted on a cacheable tool with a source_class.
-- The ``live-no-cache`` class round-trips on an uncacheable tool (FR-DC-6).
+- The ``live-no-cache`` class round-trips on an uncacheable tool.
 - The cross-field ``model_validator`` rejects the two inconsistent combos.
 - ``source_class`` is required when ``cacheable=True``.
 - JSON serialize → deserialize → re-serialize is idempotent.
@@ -37,7 +37,7 @@ from trid3nt_contracts.tool_registry import (
 def test_atomic_tool_metadata_accepts_all_four_ttl_classes(
     ttl_class: str, cacheable: bool, source_class: str | None
 ) -> None:
-    """FR-DC-2: each of the four TTL classes is a legal registration."""
+    """each of the four TTL classes is a legal registration."""
     meta = AtomicToolMetadata(
         name=f"fetch_{ttl_class.replace('-', '_')}",
         ttl_class=ttl_class,  # type: ignore[arg-type]
@@ -60,11 +60,11 @@ def test_ttl_classes_tuple_matches_literal_members() -> None:
     )
 
 
-# --- Cross-field validator (FR-DC-6 consistency rule) --- #
+# --- Cross-field validator (consistency rule)
 
 
 def test_atomic_tool_metadata_rejects_cacheable_with_live_no_cache() -> None:
-    """cacheable=True + ttl_class='live-no-cache' is inconsistent (FR-DC-6)."""
+    """cacheable=True + ttl_class='live-no-cache' is inconsistent."""
     with pytest.raises(ValidationError) as exc_info:
         AtomicToolMetadata(
             name="fetch_x",
@@ -76,7 +76,7 @@ def test_atomic_tool_metadata_rejects_cacheable_with_live_no_cache() -> None:
 
 
 def test_atomic_tool_metadata_rejects_uncacheable_with_static_class() -> None:
-    """cacheable=False + ttl_class='static-30d' is inconsistent (FR-DC-6)."""
+    """cacheable=False + ttl_class='static-30d' is inconsistent."""
     with pytest.raises(ValidationError) as exc_info:
         AtomicToolMetadata(
             name="request_spatial_input",
@@ -87,7 +87,7 @@ def test_atomic_tool_metadata_rejects_uncacheable_with_static_class() -> None:
 
 
 def test_atomic_tool_metadata_rejects_cacheable_without_source_class() -> None:
-    """cacheable=True requires a non-empty ``source_class`` (FR-DC-1 bucket path)."""
+    """cacheable=True requires a non-empty ``source_class`` (bucket path)."""
     with pytest.raises(ValidationError) as exc_info:
         AtomicToolMetadata(
             name="fetch_dem",
@@ -108,7 +108,7 @@ def test_atomic_tool_metadata_rejects_cacheable_without_source_class() -> None:
 
 
 def test_atomic_tool_metadata_uncacheable_omits_source_class() -> None:
-    """FR-DC-6 uncacheable tool: source_class MAY be None / omitted."""
+    """uncacheable tool: source_class MAY be None / omitted."""
     meta = AtomicToolMetadata(
         name="request_spatial_input",
         ttl_class="live-no-cache",
@@ -167,7 +167,7 @@ def test_atomic_tool_metadata_forbids_extra_fields() -> None:
 
 
 def test_atomic_tool_metadata_rejects_unknown_ttl_class() -> None:
-    """ttl_class is a closed 4-member Literal (FR-DC-2 binding registry)."""
+    """ttl_class is a closed 4-member Literal (binding registry)."""
     with pytest.raises(ValidationError):
         AtomicToolMetadata.model_validate(
             {
@@ -180,7 +180,7 @@ def test_atomic_tool_metadata_rejects_unknown_ttl_class() -> None:
 
 
 # ============================================================================ #
-# Wave 1.5 additions (job-0114-schema-20260608):
+# Wave 1.5 additions (schema-20260608):
 #   supports_global_query + payload_mb_estimator_name
 # ============================================================================ #
 
@@ -321,7 +321,7 @@ def test_atomic_tool_metadata_payload_estimator_name_rejects_non_str() -> None:
 
 
 def test_atomic_tool_metadata_wave15_does_not_break_cacheable_validator() -> None:
-    """Adding the new fields must not weaken the FR-DC-6 cross-field rule."""
+    """Adding the new fields must not weaken the cross-field rule."""
     # cacheable=True + live-no-cache + supports_global_query=True is still
     # rejected — the cross-field rule still fires.
     with pytest.raises(ValidationError):
@@ -388,7 +388,7 @@ def test_engine_tier_default_none_general() -> None:
     assert meta_cacheable.engine is None
     assert meta_cacheable.tier == "general"
 
-    # Uncacheable path (FR-DC-6) also defaults the two new fields.
+    # Uncacheable path also defaults the two new fields.
     meta_uncacheable = AtomicToolMetadata(
         name="request_spatial_input",
         ttl_class="live-no-cache",

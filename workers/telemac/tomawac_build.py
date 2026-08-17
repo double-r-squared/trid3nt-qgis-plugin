@@ -1,4 +1,4 @@
-"""TOMAWAC spectral-wave pipeline (ADR 0236): idealized + real-lake wave fields.
+"""TOMAWAC spectral-wave pipeline: idealized + real-lake wave fields.
 
 The productionized promotion of ``docs/proof/templates/tomawac_sandbox.py`` (the
 canonical composer prototype whose physics is PROVEN through the baked tomawac
@@ -26,7 +26,7 @@ Two bathymetry paths:
     convention (gotcha 1). The fetch-growth mode over a real lake IS the proof
     norm #9 discriminating pair (upwind vs downwind shore, same storm).
 
-ALL SIX deck gotchas from ADR 0236 are baked here (see write_cas / the mesh
+ALL SIX deck gotchas  are baked here (see write_cas / the mesh
 writers): negative bed, initial/boundary spectrum type 6, linear wave growth
 bootstrap, KENT=5 incident boundary, wide domain for the 1D fetch law, and a
 current GRADIENT for the wave-current class (compiled USER_ANACOS).
@@ -70,7 +70,7 @@ class TomawacConfig:
     bathy_source: str = "idealized"
     #: real-bathy AOI (min_lon, min_lat, max_lon, max_lat), EPSG:4326
     bbox: tuple = None                  # type: ignore[assignment]
-    #: mesh/grid knob (ADR 0225/0232): target node spacing in metres. The grid
+    #: mesh/grid knob: target node spacing in metres. The grid
     #: node count is capped; a coarser spacing is used (self-labeled) if the AOI
     #: would exceed the cap.
     target_resolution_m: float = None   # type: ignore[assignment]

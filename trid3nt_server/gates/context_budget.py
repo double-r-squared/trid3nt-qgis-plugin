@@ -77,6 +77,8 @@ from typing import Any
 
 from google.genai import types as genai_types
 
+from trid3nt_server.adapters.model_discovery import _ollama_root
+
 logger = logging.getLogger("trid3nt_server.gates.context_budget")
 
 # ---------------------------------------------------------------------------
@@ -279,16 +281,6 @@ _SUFFIX_RE = re.compile(r"-(\d+)k$", re.IGNORECASE)
 # Matches a "num_ctx <int>" line inside Ollama /api/show's ``parameters``
 # free-text field, e.g. "top_k    20\nnum_ctx    16384\ntemperature   1".
 _PARAM_NUM_CTX_RE = re.compile(r"^\s*num_ctx\s+(\d+)\s*$", re.IGNORECASE | re.MULTILINE)
-
-
-def _ollama_root(base_url: str | None) -> str:
-    """Strip a trailing OpenAI-compat ``/v1`` mount to reach Ollama's native
-    API root (``TRID3NT_OPENAI_BASE_URL`` is typically
-    ``http://host:11434/v1``; ``/api/show`` lives at the bare root)."""
-    root = (base_url or "").rstrip("/")
-    if root.lower().endswith("/v1"):
-        root = root[: -len("/v1")]
-    return root
 
 
 def num_ctx_from_suffix(model_name: str | None) -> int | None:

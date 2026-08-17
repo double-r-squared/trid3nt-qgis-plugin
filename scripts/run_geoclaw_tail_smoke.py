@@ -1,4 +1,4 @@
-"""Live smoke for the GeoClaw CAND-S tail folds (ADR 0155): Lagrangian particle
+"""Live smoke for the GeoClaw CAND-S tail folds: Lagrangian particle
 gauges + the onshore fgmax mask.
 
 Two direct-call solves against the local-docker GeoClaw image (Crescent City, CA):

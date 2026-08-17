@@ -1,4 +1,4 @@
-"""ADR 0194 -- coastal water-edge RE-MESH driver (STANDALONE sandbox).
+"""-- coastal water-edge RE-MESH driver (STANDALONE sandbox).
 
 NATE's alignment directive for the estuary cases: the v1 GSHHG-intermediate
 shoreline is too coarse ("close but not really" aligned to the river). This
@@ -13,7 +13,7 @@ closure (land on the inland sides, a straight offshore open boundary on the
 seaward side). The tight v1 AOI box is drawn only as a residual overlay and does
 not truncate the mesh.
 
-Reuses ADR 0192 machinery unchanged: the container mesher, the format writers,
+Reuses machinery unchanged: the container mesher, the format writers,
 MDAL + SERAFIN verification, and the topobathy DEM fetch.
 
 Run:
@@ -145,7 +145,7 @@ def run(aoi: str) -> dict:
     dem_container = decimate_dem(rundir)
 
     # 3) mesh the exact water polygon with the custom-SDF container mesher
-    #    (mounted, not baked -- the ADR 0193 watershed pattern; the coastal
+    #    (mounted, not baked -- the watershed pattern; the coastal
     #    Shoreline path smooths/drops holes and cannot hold the real edge).
     conf = {
         "bbox": list(domain),

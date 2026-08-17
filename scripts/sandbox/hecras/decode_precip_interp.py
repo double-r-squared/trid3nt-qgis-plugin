@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Decode a reference plan HDF's rain-on-grid precipitation interpolation folder.
 
-The ADR 0199 link-3 residual: the HEC-RAS 6.x per-2D-area precipitation
+The link-3 residual: the HEC-RAS 6.x per-2D-area precipitation
 interpolation folder ``Event Conditions/Meteorology/Precipitation/2D Flow Areas/
 <area>`` that ``RasUnsteady``'s ``READ_UN_M2D_PRECIP_INTERP`` (MetInterp.f90) reads
 is a WINDOWS RAS-preprocessing artifact -- it is generated when RAS Mapper computes

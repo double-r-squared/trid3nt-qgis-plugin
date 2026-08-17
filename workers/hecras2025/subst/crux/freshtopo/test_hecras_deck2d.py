@@ -6,7 +6,7 @@ production Linux engines read (the 2D flow area, the Inflow + DS Boundary Condit
 Lines, the 2D-BC Event-Conditions forcing, the .xNN/.bNN). The end-to-end SOLVE
 (this composer -> production 6.6 engines, 1906 wet / WSE 946.94 / the x1.5 delta)
 is exercised live by ``build_chippewa_wetting_deck`` in ``trid3nt-local/hecras:latest``
-(ADR 0138 / the flood2d landing acceptance (a)).
+(/ the flood2d landing acceptance (a)).
 """
 from __future__ import annotations
 
@@ -131,7 +131,7 @@ def _b04_interval(deck_paths) -> str:
 
 
 def test_compose_computation_interval_default_2min(tmp_path, carved, projection):
-    # ADR 0188: the stability knob defaults to the shipped Chippewa 2MIN step.
+    # the stability knob defaults to the shipped Chippewa 2MIN step.
     info = compose_pure2d_deck(
         tmp_path / "run", carved.mesh, carved.tables,
         projection_wkt=projection, target_peak_cfs=2000.0)
@@ -140,7 +140,7 @@ def test_compose_computation_interval_default_2min(tmp_path, carved, projection)
 
 
 def test_compose_computation_interval_override_patches_bnn(tmp_path, carved, projection):
-    # ADR 0188: an explicit interval is patched into the .bNN + rides provenance.
+    # an explicit interval is patched into the .bNN + rides provenance.
     info = compose_pure2d_deck(
         tmp_path / "run", carved.mesh, carved.tables,
         projection_wkt=projection, target_peak_cfs=2000.0,
@@ -159,7 +159,7 @@ def test_compose_rejects_bad_computation_interval(tmp_path, carved, projection):
 
 def test_compose_rejects_overlapping_inflow_and_ds_runs(tmp_path, carved, projection):
     # forcing the inflow onto the SAME south edge as DS must be refused (the outlet
-    # cannot share the inlet faces -- the ADR 0138 drainage physics)
+    # cannot share the inlet faces -- the drainage physics)
     with pytest.raises(ValueError, match="overlap"):
         compose_pure2d_deck(
             tmp_path / "run", carved.mesh, carved.tables,

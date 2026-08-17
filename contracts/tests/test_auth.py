@@ -1,4 +1,4 @@
-"""Round-trip + invariant tests for the Auth handshake envelopes (job-0122).
+"""Round-trip + invariant tests for the Auth handshake envelopes.
 
 Coverage:
 

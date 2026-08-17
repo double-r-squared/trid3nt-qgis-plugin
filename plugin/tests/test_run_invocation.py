@@ -1,4 +1,4 @@
-"""Unit tests for the ``!run`` chat-invocation parser (ADR 0114).
+"""Unit tests for the ``!run`` chat-invocation parser.
 
 Pure parser -- no QGIS, no network. Run with:
 

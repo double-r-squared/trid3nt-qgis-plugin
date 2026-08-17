@@ -1,4 +1,4 @@
-"""GeoClaw storm-surge proofs (ADR 0168) from the Ike-anchor direct smoke run
+"""GeoClaw storm-surge proofs from the Ike-anchor direct smoke run
 (scripts/run_geoclaw_surge_smoke.py ike) + the drag-law A/B run.
 
 Emits to docs/proof/templates/:

@@ -94,7 +94,7 @@ KG_TO_G = 1000.0
 TIME_UNITS = "DAYS"
 LENGTH_UNITS = "METERS"
 
-# --- GWE (Groundwater Energy / heat transport) thermal defaults (ADR 0235) --- #
+# --- GWE (Groundwater Energy / heat transport) thermal defaults
 # NO thermal-property fetcher exists, so these are LOUD, provenance-labelled
 # defaults (per the 0215 wellhead-reeval doctrine): typical saturated
 # sand/gravel aquifer thermal properties from the MF6 GWE example suite
@@ -238,7 +238,7 @@ DEFAULT_CSUB_INTERBED_THICK_FRAC = 0.5
 CSUB_STO_SS_FLOOR = 0.0
 
 #: Vertical hydraulic conductivity (m/day) of a DELAY interbed (csub_delay_interbeds
-#: knob, ADR 0228). A LOW kv gives finite consolidation diffusivity -> slow, time-
+#: knob). A LOW kv gives finite consolidation diffusivity -> slow, time
 #: lagged compaction; the delay bed compacts BELOW an equivalent no-delay bed at
 #: end-of-pumping. Pinned by fixtures/csub_delay_smoke proof (B). nodelay ignores kv.
 CSUB_DELAY_INTERBED_KV_M_DAY = 1e-6
@@ -249,13 +249,13 @@ CSUB_DELAY_INTERBED_KV_M_DAY = 1e-6
 DEFAULT_CSUB_NDELAYCELLS = 19
 
 #: Geostatic unit weights (specific gravity) for the EFFECTIVE_STRESS CSUB
-#: formulation (csub_effective_stress knob, ADR 0228): sgm = moist (above water
+#: formulation (csub_effective_stress knob): sgm = moist (above water
 #: table), sgs = saturated (below). Pinned by fixtures/csub_delay_smoke proof (C).
 #: Only written when csub_effective_stress is on (head_based is dropped).
 DEFAULT_CSUB_SGM = 1.7
 DEFAULT_CSUB_SGS = 2.0
 
-#: Vadose-transport (UZF+UZT) demo defaults (ADR 0228). The unsaturated-zone
+#: Vadose-transport (UZF+UZT) demo defaults. The unsaturated-zone
 #: solute question ("surface spill -> how long to reach groundwater") is a
 #: purely-advective vertical travel-time problem (MF6 has NO unsaturated
 #: dispersion; matches modflow6-examples ex-gwt-uzt-2d). These parameterize the
@@ -401,10 +401,10 @@ DEFAULT_PRT_RING_RADIUS_M = 0.30 * PRT_CELL_SIZE_M
 #: PRT aquifer porosity when the caller does not supply one (controls travel time).
 DEFAULT_PRT_POROSITY = 0.25
 
-#: DISV quad-refined capture zone (ADR 0258): gridgen refines a square polygon of
+#: DISV quad-refined capture zone: gridgen refines a square polygon of
 #: this half-width (m) around the well through this many quadtree levels. 3 levels
 #: on the 100 m base grid -> a 12.5 m finest cell that RESOLVES the pumping cone of
-#: depression the structured 100 m grid smears (the ADR 0258 discriminant). Matches
+#: depression the structured 100 m grid smears (the discriminant). Matches
 #: the proven smoke driver modflow_capture_zone_disv_quadrefined_prt_smoke.py.
 DISV_REFINE_HALF_WIDTH_M = 300.0
 DISV_REFINE_LEVEL = 3
@@ -472,19 +472,19 @@ def _build_gwf_dis(
 
 
 # ---------------------------------------------------------------------------
-# DISV / gridgen generator (ADR 0099, mesh wave M2). A refinement-capable
+# DISV / gridgen generator (mesh wave M2). A refinement-capable
 # groundwater grid: flopy Gridgen refines a base structured grid around drawn
 # refine_region polygons (and the well) into a DISV vertex grid. Lives IN this
 # module -- NOT a sibling -- for the same dual-import reason _build_gwf_dis does
 # (gwt_adapter is imported FLAT server-side + PACKAGE worker-side, so a sibling
-# import resolves in neither; ADR 0098 decision 3).
+# import resolves in neither; decision 3).
 #
 # IMAGE DEPENDENCY (STOP condition): flopy Gridgen shells out to the USGS
 # ``gridgen`` binary at build() time. That binary is NOT in the modflow worker
 # image (workers/modflow/Dockerfile installs only mf6 + flopy). The
 # component builds + tests offline (availability probe + refinement-feature
 # construction + typed STOP); the LIVE DISV grid build is gated on adding the
-# gridgen binary to the image -- the named image-rebuild condition (ADR 0099).
+# gridgen binary to the image -- the named image-rebuild condition.
 # ---------------------------------------------------------------------------
 
 #: The USGS gridgen executable flopy's Gridgen wrapper resolves. Mirrors the
@@ -500,7 +500,7 @@ class GridgenUnavailableError(RuntimeError):
 
     Raised BEFORE any partial deck is built so a DISV request fails honestly
     rather than silently degrading to a uniform DIS grid the user did not ask
-    for. The message names the image-rebuild condition (ADR 0099).
+    for. The message names the image-rebuild condition.
     """
 
     def __init__(self, exe_name: str = GRIDGEN_EXE) -> None:
@@ -508,7 +508,7 @@ class GridgenUnavailableError(RuntimeError):
             f"DISV grid requested but the {exe_name!r} binary is not installed "
             "in the modflow worker image. Add the USGS gridgen executable to "
             "workers/modflow/Dockerfile (the named image-rebuild "
-            "condition, ADR 0099) before the DISV/refinement leg can run live."
+            "condition) before the DISV/refinement leg can run live."
         )
         self.exe_name = exe_name
         self.error_code = "MODFLOW_GRIDGEN_UNAVAILABLE"
@@ -527,7 +527,7 @@ def _refine_level_for(base_size_m: float, target_size_m: float, *, max_level: in
     ``target ~= base / 2**L`` -> ``L = ceil(log2(base/target))`` clamped
     ``[0, max_level]``. Duplicated worker-side (the server surface lives in
     ``agent/mesh/refine_regions.py`` but the Docker image COPYs only
-    ``workers/*``; fold-by-duplication, ADR 0098/0099).
+    ``workers/*``; fold-by-duplication).
     """
     import math as _math
 
@@ -637,7 +637,7 @@ def prt_grid_geometry(lat: float, lon: float) -> dict:
 
     Reproduces exactly the local-origin grid ``_build_prt_capture_zone_deck``
     builds so the COMPOSER can sample the kriged water-table surface at each cell
-    centre (ADR 0215 item 3, the per-cell IC) BEFORE the deck exists. Returns the
+    centre (item 3, the per-cell IC) BEFORE the deck exists. Returns the
     41x41 grid params + the model UTM EPSG + the per-cell centre coordinates in
     both LOCAL (0-origin) and true UTM metres, plus their EPSG:4326 lon/lat.
 
@@ -878,7 +878,7 @@ class DeckManifest:
     # legacy hardcoded west->east REGIONAL_GRADIENT drives the flow (no DEM).
     regional_gradient_x: float = 0.0    # head-gradient east-component (m/m)
     regional_gradient_y: float = 0.0    # head-gradient north-component (m/m)
-    # multi-well WELLFIELD + NHD RIV (ADR 0215 wellhead-reeval part 2). One entry
+    # multi-well WELLFIELD + NHD RIV (wellhead-reeval part 2). One entry
     # per snapped well cell: [row, col, rate_m3_day (negative = extraction), lat,
     # lon]; empty for a single-well deck (the well_row/well_col/pumping_rate_m3_day
     # fields carry the lone well). ``prt_river_cell_count`` echoes the NHD RIV cells
@@ -889,7 +889,7 @@ class DeckManifest:
     gradient_source: str = "demo_west_east"  # "dem" | "demo_west_east"
     gradient_magnitude: float = 0.0     # |gradient| (m/m); 0.0 => manifest not populated
     gradient_azimuth_deg: float | None = None  # compass azimuth (deg) water flows toward
-    # --- GWE (heat transport / gwe_thermal archetype family, ADR 0235) ------- #
+    # --- GWE (heat transport / gwe_thermal archetype family)
     # All default to the non-GWE (contaminant/flow) path so every other deck is
     # byte-identical. Set only when archetype == "gwe_thermal".
     gwe_present: bool = False           # True iff a GWE energy-transport model was written
@@ -952,7 +952,7 @@ class DeckManifest:
     csub_ssv_inelastic_m: float = 0.0  # inelastic Ssv written to every interbed (m^-1)
     csub_sse_elastic_m: float = 0.0    # elastic Sse written to every interbed (m^-1)
     csub_interbed_thick_frac: float = 0.0  # interbed thickness fraction of the layer
-    # --- ADR 0228: vadose_transport UZF+UZT unsaturated-zone solute travel ------ #
+    # --- vadose_transport UZF+UZT unsaturated-zone solute travel
     # ``archetype == "vadose_transport"``: a DUAL-model GWF+GWT sim (dual IMS, GWF
     # first) with a UZF unsaturated-flow column (vertical ivertcon chain of
     # Brooks-Corey cells) + a UZT transport package keyed to the UZF flows
@@ -969,7 +969,7 @@ class DeckManifest:
     vadose_eps: float = 0.0        # Brooks-Corey exponent written
     vadose_infiltration_conc: float = 0.0     # UZT infiltration tracer concentration written
     vadose_infiltration_rate_m_day: float = 0.0  # UZF surface infiltration flux written (m/day)
-    # --- PRT DISV quad-refined grid (ADR 0258 product port) ------------------- #
+    # --- PRT DISV quad-refined grid (product port)
     # ``grid_type == "disv_quadrefined"`` on capture_zone / wellhead_protection:
     # the GWF grid is an unstructured DISV vertex grid, gridgen-refined around the
     # well (resolves the pumping cone the 100 m structured grid smears). The PRT
@@ -1401,7 +1401,7 @@ def _build_csub_interbeds(
     n = len(footprint_cells)
     if n < 1:
         raise ValueError("CSUB requires >= 1 footprint cell (empty pumped footprint?)")
-    # cdelay / kv select nodelay-vs-delay interbeds (ADR 0228 csub_delay_interbeds
+    # cdelay / kv select nodelay-vs-delay interbeds (csub_delay_interbeds
     # knob). nodelay (default) ignores kv -> a positive dummy keeps the byte-
     # identical v1 deck; a "delay" interbed models finite consolidation diffusivity
     # via a LOW vertical K (1e-6 m/day -> slow, time-lagged compaction; the delay
@@ -2400,7 +2400,7 @@ def _build_gwf_only_archetype_deck(
             key.format(gwf=gwf_name): entries
             for key, entries in csub_build["obs"].items()
         }
-        # Formulation knobs (ADR 0228; DEFAULTS byte-identical to v1):
+        # Formulation knobs (DEFAULTS byte-identical to v1):
         #   csub_effective_stress OFF (default) -> HEAD_BASED + initial-head
         #     preconsolidation (v1, byte-identical). ON -> drop head_based for the
         #     EFFECTIVE_STRESS formulation (geostatic sgm/sgs unit weights + a
@@ -2774,7 +2774,7 @@ def _build_vadose_transport_deck(
     gwt_name: str,
     write: bool,
 ) -> DeckManifest:
-    """Assemble a vadose_transport UZF+UZT unsaturated-zone-travel deck (ADR 0228).
+    """Assemble a vadose_transport UZF+UZT unsaturated-zone-travel deck.
 
     Productionizes ``fixtures/uzt_smoke`` (the proven deck): a 1-cell-plan vertical
     column georegistered at the spill point, with a UZF unsaturated-flow package (a
@@ -3328,7 +3328,7 @@ def _build_disv_capture_zone_deck(
     regional_gradient_y: float | None,
     advanced_physics: dict | None,
 ) -> DeckManifest:
-    """Assemble the STEADY GWF deck on a gridgen quad-refined DISV grid (ADR 0258).
+    """Assemble the STEADY GWF deck on a gridgen quad-refined DISV grid.
 
     The DISV analogue of the structured branch in ``_build_prt_capture_zone_deck``:
     gridgen refines a ``DISV_REFINE_HALF_WIDTH_M`` square around the well through
@@ -3510,7 +3510,7 @@ def _build_prt_capture_zone_deck(
     # hardcoded west->east REGIONAL_GRADIENT CHD is built (byte-identical).
     regional_gradient_x: float | None = None,
     regional_gradient_y: float | None = None,
-    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC
     # ALL default to the single-well steady demo path (byte-identical to part 1).
     #   wells: [{lon, lat, rate_m3_day, name}] -- a WELLFIELD. Each gets one WEL
     #     record + a particle ring (US EPA 440/6-87-010; ex-prt-mp7-p03). None =>
@@ -3534,13 +3534,13 @@ def _build_prt_capture_zone_deck(
     # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
     # is the only lever this GWF-only PRT archetype reads. None/{} => byte-identical.
     advanced_physics: dict | None = None,
-    # Drawn refine_region polygons (ADR 0099 mesh M2): {polygon, target_size_m,
+    # Drawn refine_region polygons (mesh M2): {polygon, target_size_m,
     # bbox} entries. When provided the grid is built as a gridgen-refined DISV
     # vertex grid around the regions/well; None (default) keeps the uniform DIS
     # grid byte-identical. NOTE: the live DISV leg is gated on the gridgen binary
-    # (GridgenUnavailableError names the image-rebuild condition, ADR 0099).
+    # (GridgenUnavailableError names the image-rebuild condition).
     refine_regions: list[dict] | None = None,
-    # grid_type knob (ADR 0258): "structured" (default, the 41x41 / 100 m uniform
+    # grid_type knob: "structured" (default, the 41x41 / 100 m uniform
     # DIS grid) or "disv_quadrefined" (a gridgen 3-level quad-refined DISV vertex
     # grid around the well). The DISV leg supports the single-well STEADY capture
     # zone only; transient / multi-well / NHD-RIV on DISV raise a typed error.
@@ -3621,7 +3621,7 @@ def _build_prt_capture_zone_deck(
 
     # ---------------------------------------------------------------------- #
     # Well cells: snap each caller-supplied well to the LOCAL grid. ``wells`` (a
-    # WELLFIELD, ADR 0215) takes precedence; else the single ``well_location_latlon``
+    # WELLFIELD) takes precedence; else the single ``well_location_latlon``
     # (back-compat, part 1); else the grid centre. Each snapped well carries its
     # cell index, the SIGNED WEL rate (negative = extraction), and its real coords.
     # ---------------------------------------------------------------------- #
@@ -3694,7 +3694,7 @@ def _build_prt_capture_zone_deck(
     )
 
     # ---------------------------------------------------------------------- #
-    # DISV quad-refined branch (ADR 0258). A gridgen 3-level refined vertex grid
+    # DISV quad-refined branch. A gridgen 3-level refined vertex grid
     # around the well resolves the pumping cone the uniform 100 m grid smears. It
     # supports the SINGLE-WELL STEADY capture zone only (the ADR-scoped port);
     # transient / multi-well / NHD-RIV on DISV are not yet ported and raise here
@@ -3705,7 +3705,7 @@ def _build_prt_capture_zone_deck(
             raise ValueError(
                 "grid_type='disv_quadrefined' supports the single-well steady "
                 "capture zone only; transient, multi-well WELLFIELD, and NHD-RIV "
-                "boundaries are not yet ported to DISV (ADR 0258 scoped follow-on)."
+                "boundaries are not yet ported to DISV (scoped follow-on)."
             )
         return _build_disv_capture_zone_deck(
             archetype=archetype,
@@ -3740,7 +3740,7 @@ def _build_prt_capture_zone_deck(
     # GWF simulation. STEADY single period (part-1 demo, byte-identical) OR
     # TRANSIENT: a steady spin-up period 0 (wellfield OFF, the table equilibrates
     # to the CHD/RIV boundaries) + N transient storage periods (wellfield ON) so
-    # the 1/5/10-yr isochrones evolve with the drawdown (ADR 0215; ex-prt-mp7-p03).
+    # the 1/5/10-yr isochrones evolve with the drawdown (ex-prt-mp7-p03).
     # The transient reversed budget is what the PRT tracks per period.
     # ---------------------------------------------------------------------- #
     sim = flopy.mf6.MFSimulation(
@@ -3795,8 +3795,8 @@ def _build_prt_capture_zone_deck(
         eff_sy = eff_ss = 0.0
 
     # Grid: uniform DIS (the structured branch). ARBITRARY drawn refine_region
-    # polygons (ADR 0099 M2) route to a typed error: the DISV grid build now
-    # succeeds (the gridgen binary is provisioned, ADR 0258) but this structured
+    # polygons (M2) route to a typed error: the DISV grid build now
+    # succeeds (the gridgen binary is provisioned) but this structured
     # branch's CHD/WEL/RIV use (row, col) cellids, so a DISV grid here would build
     # a WRONG deck. The DISV capture zone is delivered by the ported grid_type=
     # 'disv_quadrefined' knob (fixed 3-level refinement around the well); the
@@ -3805,7 +3805,7 @@ def _build_prt_capture_zone_deck(
         raise ValueError(
             "drawn refine_regions on capture_zone are not supported by the "
             "structured boundary branch; use grid_type='disv_quadrefined' for the "
-            "gridgen quad-refined DISV capture zone (ADR 0258). Arbitrary "
+            "gridgen quad-refined DISV capture zone. Arbitrary "
             "drawn-polygon DISV refinement is a separate follow-on."
         )
     else:
@@ -3823,7 +3823,7 @@ def _build_prt_capture_zone_deck(
         )
 
     # IC: uniform aquifer-top head (part 1) OR the per-cell kriged water-table
-    # surface (ADR 0215 item 3). ``starting_head_by_cell`` is the composer's
+    # surface (item 3). ``starting_head_by_cell`` is the composer's
     # kriged/trend surface sampled at each cell centre and re-referenced about the
     # deck datum, so the interior IC carries the measured water-table CURVATURE a
     # single gradient plane cannot. The steady solve equilibrates to the boundaries
@@ -3920,7 +3920,7 @@ def _build_prt_capture_zone_deck(
         filename=f"{gwf_name}.chd",
     )
 
-    # RIV: NHD river-reach head-dependent boundaries (ADR 0215 item 4). Each reach
+    # RIV: NHD river-reach head-dependent boundaries (item 4). Each reach
     # polyline is projected to the model UTM frame, rasterized onto the grid, and
     # draped as RIV cells. The RIV STAGE is sampled from the kriged water-table IC
     # at each reach cell (``starting_head_by_cell``) -- the river surface tracks the
@@ -3975,7 +3975,7 @@ def _build_prt_capture_zone_deck(
                 pname="riv-0",
             )
 
-    # WEL: one extraction record per snapped wellfield cell (ADR 0215 item 1). For
+    # WEL: one extraction record per snapped wellfield cell (item 1). For
     # a TRANSIENT run the wells are OFF in the steady spin-up period 0 (the table
     # equilibrates to the boundaries) and ON in every transient period 1..N so the
     # isochrones reflect the drawdown as it develops; for a steady run the wells
@@ -4055,7 +4055,7 @@ def _build_prt_capture_zone_deck(
         model_utm_epsg=model_utm_epsg,
         n_particles=n_particles,
         capture_zone_travel_time_years=tz_years,
-        # Multi-well WELLFIELD + NHD RIV (ADR 0215): one [row, col, rate, lat, lon]
+        # Multi-well WELLFIELD + NHD RIV: one [row, col, rate, lat, lon]
         # per snapped well (deck order) + the RIV cell count draped from NHD.
         prt_well_cells=[
             [float(w["row"]), float(w["col"]), float(w["rate"]),
@@ -4178,7 +4178,7 @@ def build_and_run_prt_from_gwf(
     )
     # TDIS: mirror the REVERSED GWF schedule so the PRT steps through the reversed
     # flow field period-for-period. For a STEADY GWF (1 period) this is the legacy
-    # single (1 day, 1 step) period; for a TRANSIENT GWF (ADR 0215 item 1) the
+    # single (1 day, 1 step) period; for a TRANSIENT GWF (item 1) the
     # reversed schedule is the GWF periods in reverse order, so the per-period
     # reversed budget the PRT FMI reads is the time-evolving wellfield drawdown run
     # backward (the isochrones become time-evolving, ex-prt-mp7-p03).
@@ -4200,7 +4200,7 @@ def build_and_run_prt_from_gwf(
     # Create the PRT model.
     prt = flopy.mf6.ModflowPrt(psim, modelname=prt_name)
 
-    # DIS: must mirror the GWF grid exactly. DISV (ADR 0258) when the deck carries
+    # DIS: must mirror the GWF grid exactly. DISV when the deck carries
     # the gridgen gridprops; else the structured DIS (local-origin geometry). For
     # DISV, a VertexGrid over the same gridprops gives the cell centres + the
     # cell2d containing each release point.
@@ -4243,7 +4243,7 @@ def build_and_run_prt_from_gwf(
     releasepts = []
     irptno = 0
     if is_disv:
-        # DISV: one well cell2d (single-well steady, ADR 0258). The well cell
+        # DISV: one well cell2d (single-well steady). The well cell
         # centre is the ring origin; each release point is intersected to its own
         # (possibly finer) cell2d so the cellid matches the particle's position.
         wc2d = int(deck.disv_well_cell2d)
@@ -4257,7 +4257,7 @@ def build_and_run_prt_from_gwf(
             releasepts.append((irptno, (0, cid), xrpt, yrpt, zrpt, f"w0_p{n}"))
             irptno += 1
     else:
-        # Build a particle release ring around EACH wellfield cell (ADR 0215 item 1).
+        # Build a particle release ring around EACH wellfield cell (item 1).
         # The GWF grid is at local (0,0) so cell centres are in local space (row 0 =
         # northernmost; ycellcenter for row r = (nrow-r-0.5)*delc). Each particle's
         # boundname is "w{k}_p{n}" so the postprocess can ALLOCATE which well captured
@@ -4745,7 +4745,7 @@ def _build_gwe_thermal_deck(
     SSM maps onto the transport source (the ex-gwe-ates / ex-gwe-barends pattern
     -- see docs/decisions/0235-modflow-gwe.md for the replicated example roster).
 
-    Two modes (the ``gwe_thermal`` archetype family; heat-twin-of-plume, ADR 0235):
+    Two modes (the ``gwe_thermal`` archetype family; heat-twin-of-plume):
       * ``injection_plume`` -- continuous warm-water injection drives a
         downgradient thermal plume (radial conductive-advective heat transport,
         temperature-dependent-viscosity plume, generic thermal source). The GWE
@@ -4967,7 +4967,7 @@ def build_modflow_deck(
     csub_cg_ske_m: float | None = None,
     csub_delay_interbeds: bool = False,
     csub_effective_stress: bool = False,
-    # --- ADR 0228: vadose_transport UZF+UZT forcing (ADDITIVE, all optional) - #
+    # --- vadose_transport UZF+UZT forcing (ADDITIVE, all optional)
     # Threaded into the vadose_transport dispatch branch when
     # archetype == "vadose_transport"; ignored otherwise. All demo-defaulted.
     vadose_thickness_m: float | None = None,
@@ -5033,7 +5033,7 @@ def build_modflow_deck(
     # legacy hardcoded west->east CHD (byte-identical). Ignored for non-PRT decks.
     regional_gradient_x: float | None = None,
     regional_gradient_y: float | None = None,
-    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC
     # Threaded into the capture_zone / wellhead_protection PRT deck; ignored for
     # every other archetype. ALL default to the single-well steady demo path.
     wells: list[dict] | None = None,
@@ -5051,21 +5051,21 @@ def build_modflow_deck(
     # --- advanced-physics overrides (levers STEP 3; ADDITIVE, optional) ----- #
     advanced_physics: dict | None = None,
     save_concentration_all_steps: bool = True,
-    # Drawn refine_region polygons (ADR 0099 M2): forwarded to the capture_zone /
+    # Drawn refine_region polygons (M2): forwarded to the capture_zone
     # wellhead_protection PRT archetype to build a gridgen-refined DISV grid.
     # None (default) => uniform DIS, byte-identical. LIVE DISV gated on the
     # gridgen binary (GridgenUnavailableError names the image condition).
     refine_regions: list[dict] | None = None,
-    # --- PRT grid_type knob (ADR 0258 DISV port; ADDITIVE, optional) --------- #
+    # --- PRT grid_type knob (DISV port; ADDITIVE, optional)
     # ``grid_type`` on capture_zone / wellhead_protection selects the GWF+PRT grid:
     #   "structured"       -> the uniform 41x41 / 100 m DIS grid (default, unchanged)
     #   "disv_quadrefined" -> a gridgen 3-level quad-refined DISV vertex grid around
     #                         the well (resolves the pumping cone the 100 m structured
-    #                         grid smears; ADR 0258). LIVE leg needs the gridgen binary
+    #                         grid smears). LIVE leg needs the gridgen binary
     #                         (GridgenUnavailableError names the host/image condition).
     # Ignored for every non-PRT archetype.
     grid_type: str = "structured",
-    # --- gwe_thermal (heat transport, ADR 0235; ADDITIVE, all optional) ------ #
+    # --- gwe_thermal (heat transport,; ADDITIVE, all optional)
     # Threaded into the GWE deck when archetype == "gwe_thermal"; ignored
     # otherwise. ``gwe_mode`` selects injection_plume vs ates (reuses the shared
     # ``n_cycles`` field for ates). Thermal properties are LOUD demo defaults
@@ -5281,7 +5281,7 @@ def build_modflow_deck(
         # gwe_thermal: GWF + GWE heat-transport in ONE sim (heat twin of the
         # plume). Reuses the plan-view UTM georegistration + REGIONAL_GRADIENT
         # CHD computed above; the warm-water injection WEL sits at the grid
-        # centre (the resolved spill cell). ADR 0235.
+        # centre (the resolved spill cell).
         if archetype == "gwe_thermal":
             return _build_gwe_thermal_deck(
                 mode=(gwe_mode or "injection_plume"),

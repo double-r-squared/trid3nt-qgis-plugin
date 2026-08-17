@@ -1,5 +1,5 @@
 """GAIA erodible-bed scour proof render: the SIGNED bed-evolution COG over ESRI
-World Imagery (EPSG:3857 tiles AND data, per the ADR 0197 lesson;
+World Imagery (EPSG:3857 tiles AND data, per the lesson;
 merc_render.py is the shared mercator module). Overwrites
 docs/proof/templates/telemac_erodible_bed_scour_proof.png in place. A second
 file, the _chart.png, carries the along-channel bed-change profile (dock-exact

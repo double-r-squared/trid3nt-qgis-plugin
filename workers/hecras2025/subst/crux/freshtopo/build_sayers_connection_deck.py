@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the Bald Eagle Sayers Dam SA/2D-connection solve deck (ADR 0174).
+"""Assemble the Bald Eagle Sayers Dam SA/2D-connection solve deck.
 
 The connection front's matched pair, both HEC-authored (Example_Projects_6_6):
 
@@ -10,7 +10,7 @@ The connection front's matched pair, both HEC-authored (Example_Projects_6_6):
      geometry, carrying the ``Section - Storage Area Connection Data`` weir block
      with the HW/TW cell-face pairing arrays.
 
-ADR 0173 partitioned the connection blocker to exactly this missing mesh; with it
+partitioned the connection blocker to exactly this missing mesh; with it
 seeded the deck solves end-to-end through the production 6.6 engines
 (RasGeomPreprocess + RasUnsteady) with NONZERO weir flow across the connection.
 
@@ -22,7 +22,7 @@ outflows) that wets the mesh; ``patch_chippewa_bnn(initial_stage=...)`` seeds th
 and overtops the Sayers Dam connection from t=0. The shipped x09 is used verbatim
 (the original g09 mesh needs no perimeter/name patch); ``--weir-coef`` rewrites
 both the x09 connection weir-coef fields and the plan-HDF ``Weir Coef`` attribute
-for the ADR 0174 weir-discharge A/B.
+for the weir-discharge A/B.
 
 Solve: docker run --rm -v <out>:/run -v <freshtopo>:/ft:ro --entrypoint bash \
          trid3nt-local/hecras:latest -lc \

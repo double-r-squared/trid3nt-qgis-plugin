@@ -1,4 +1,4 @@
-"""Offline ICM water-quality module smoke (ADR 0260): author a baroclinic estuary
+"""Offline ICM water-quality module smoke: author a baroclinic estuary
 deck, add the ICM eutrophication inputs (full icm.nml + a minimal ICM_rad.th.nc
 radiation series so iRad=1 avoids sflux), run the targeted pschism_ICM_TVD-VL
 binary DIRECTLY through the image, and prove the module solves to completion with

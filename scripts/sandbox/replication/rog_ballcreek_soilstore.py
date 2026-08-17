@@ -1,6 +1,6 @@
-"""Ball Creek RoG RE-GRADE with the CONTINUOUS SOIL-MOISTURE STORE (ADR 0213).
+"""Ball Creek RoG RE-GRADE with the CONTINUOUS SOIL-MOISTURE STORE.
 
-Lever 1 of the fidelity-ladder-II. ADR 0206 drove each event through the native
+Lever 1 of the fidelity-ladder-II. drove each event through the native
 SCS-CN on the REAL AORC hyetograph (RAINDEF=3), landing aligned NSE 0.51 on the
 Dec 2015 calibration but a static curve number that (a) does not transfer across
 antecedent regimes (Dec CN53 vs Feb CN90) and (b) exhausts on the multi-peak

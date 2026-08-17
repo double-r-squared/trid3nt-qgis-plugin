@@ -1,4 +1,4 @@
-"""Solver-execution shapes (FR-TA-2): ModelSetup, RunResult, ExecutionHandle,
+"""Solver-execution shapes: ModelSetup, RunResult, ExecutionHandle,
 LayerURI.
 
 These are the return types of the model-setup/execution tool chain:
@@ -189,7 +189,7 @@ class ExecutionHandle(GraceModel):
     solver: str
     compute_class: ComputeClass
 
-    # --- Cancellation seam (FR-CE-2/3, FR-AS-6) ---
+    # --- Cancellation seam
     workflows_execution_id: str  # Cloud Workflows execution identifier
     workflow_name: str  # the Cloud Workflows definition name
     workflow_location: str  # GCP region of the workflow execution
@@ -241,7 +241,7 @@ class LayerURI(GraceModel):
     ``ResultLayer`` so postprocess output maps onto the visualization seam with
     no translation. ``uri`` is a COG (raster) or FlatGeobuf/GeoParquet (vector).
 
-    ``bbox`` is optional (job-0068): when present the pipeline emitter emits a
+    ``bbox`` is optional: when present the pipeline emitter emits a
     ``map-command(zoom-to)`` after ``add_loaded_layer`` so the client camera
     flies to the layer's geographic extent. Format: ``(min_lon, min_lat,
     max_lon, max_lat)`` in EPSG:4326.
@@ -255,9 +255,9 @@ class LayerURI(GraceModel):
 
     layer_id: str  # stable id; flows into map-command load-layer args
     name: str
-    # ``mesh`` (ADR 0118, SCHISM landing): an unstructured/UGRID solver mesh the
+    # ``mesh`` (SCHISM landing): an unstructured/UGRID solver mesh the
     # plugin opens via MDAL (``QgsMeshLayer``) -- the ONE format the live
-    # materializer STAGES rather than streams (ADR 0116). SCHISM's out2d UGRID +
+    # materializer STAGES rather than streams. SCHISM's out2d UGRID +
     # (retroactively) the SFINCS quadtree map are the mesh producers.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str  # gs://... COG / FlatGeobuf / GeoParquet / UGRID netCDF (mesh)
@@ -284,7 +284,7 @@ class LayerURI(GraceModel):
     # assumptions line so the agent narrates which quantities are demo defaults
     # vs site-derived, and never mistakes a baked constant for measured data.
     synthetic_inputs: list[SyntheticInput] = Field(default_factory=list)
-    # Explicit CRS authority id for a ``layer_type="mesh"`` row (ADR 0118).
+    # Explicit CRS authority id for a ``layer_type="mesh"`` row.
     # MDAL reports an EMPTY crs() for a SCHISM out2d UGRID / a SFINCS quadtree
     # grid, so the plugin's ``_add_mesh`` applies this string via
     # ``QgsMeshLayer.setCrs(QgsCoordinateReferenceSystem(crs_authid))`` (0116).
@@ -294,7 +294,7 @@ class LayerURI(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# LayerURI SUBCLASS result models (the router's envelope-hook seam, ADR 0073).
+# LayerURI SUBCLASS result models (the router's envelope-hook seam).
 #
 # A source whose result is a ``LayerURI`` SUBCLASS carrying business fields
 # computed POST-serialize from the produced bytes declares the subclass by name
@@ -412,7 +412,7 @@ class LandcoverResult(LayerURI):
 
 
 class DemLayerURI(LayerURI):
-    """A NO-FIELD ``LayerURI`` subclass for the ``fetch_dem`` fold (ADR 0097).
+    """A NO-FIELD ``LayerURI`` subclass for the ``fetch_dem`` fold.
 
     ``fetch_dem`` carries NO business fields beyond the base ``LayerURI`` -- the
     twin returned a plain ``LayerURI``. But the router's ONLY seam to override the
@@ -431,7 +431,7 @@ class DemLayerURI(LayerURI):
 class TopobathyResult(LayerURI):
     """A merged coastal topo-bathymetry ``LayerURI`` plus its fetch-time provenance.
 
-    The ``fetch_topobathy`` fold's result model (ADR 0110). The four extra fields
+    The ``fetch_topobathy`` fold's result model. The four extra fields
     are FETCH-TIME PROVENANCE -- which of the composite's heterogeneous legs (CUDEM
     1/9" tiles, NCEI regional 1 m tiles, the ETOPO 2022 global fallback, 3DEP land)
     actually painted the merge -- and are NOT recoverable from the final single-band
@@ -460,7 +460,7 @@ class TopobathyResult(LayerURI):
 class StormTracksLayerURI(LayerURI):
     """The hurricane / tropical-cyclone track ``LayerURI`` plus its fetch-time mode provenance.
 
-    The ``fetch_storm_tracks`` fold's result model (ADR 0111). The twin returned a
+    The ``fetch_storm_tracks`` fold's result model. The twin returned a
     plain ``LayerURI``; the router's only seam to override the emitted ``layer_id`` /
     ``name`` (the twin's ``storm-tracks-{seed}`` id + ``Storm tracks - <mode> (<scope>)``
     name) is the ``hooks.envelope`` post-emit hook, which pairs with a result model.
@@ -483,7 +483,7 @@ class StormTracksLayerURI(LayerURI):
 class GOESSatelliteLayerURI(LayerURI):
     """The single-band GOES ABI imagery ``LayerURI`` plus its fetch-time scan provenance.
 
-    The ``fetch_goes_satellite`` fold's result model (ADR 0111). The twin returned a
+    The ``fetch_goes_satellite`` fold's result model. The twin returned a
     plain ``LayerURI`` with an em-dash in its ``name``; the router's only seam to
     reproduce that exact ``name`` is the ``hooks.envelope`` post-emit hook, which pairs
     with a result model. The extra fields are FETCH-TIME PROVENANCE (which bird + which
@@ -506,7 +506,7 @@ class GOESSatelliteLayerURI(LayerURI):
 class NWMStreamflowLayerURI(LayerURI):
     """The NOAA NWM point-streamflow ``LayerURI`` plus its fetch-time cycle provenance.
 
-    The ``fetch_noaa_nwm_streamflow`` fold's result model (ADR 0112, the fetcher-finale
+    The ``fetch_noaa_nwm_streamflow`` fold's result model (the fetcher-finale
     endgame -- the LAST coded data-fetcher). The twin returned a plain ``LayerURI``; the
     router's only seam to reproduce its exact ``layer_id`` /
     ``name`` (``nwm-streamflow-{product}-{seed}`` + ``NWM streamflow -- <product>

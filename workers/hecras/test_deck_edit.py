@@ -216,10 +216,10 @@ def test_apply_flow_scale_missing_boundary_raises(tmp_path):
         entrypoint._apply_flow_scale(tmp_path, "Absent.b04", {"flow_scale": 1.0})
 
 
-# --- pure-2D 2D-BC-line forcing (ADR 0134 discharge, ADR 0135) ------------
+# --- pure-2D 2D-BC-line forcing (discharge)
 # The shipped pure-2D reference b06 (BaldEagle plan 06) expresses its inflow as a
 # BARE "Upstream Flow Hydrograph" (no River/Reach/RS suffix -- that absence is what
-# marks a 2D-BC-line inflow). ADR 0134 claimed the existing flow scaler drives this
+# marks a 2D-BC-line inflow). claimed the existing flow scaler drives this
 # stanza unchanged; this proves it empirically against the REAL shipped artifact.
 _PURE2D_B06 = (
     Path(__file__).resolve().parent.parent

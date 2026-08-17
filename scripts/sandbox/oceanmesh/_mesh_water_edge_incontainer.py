@@ -1,4 +1,4 @@
-"""In-container WATER-EDGE coastal mesher for the ADR 0194 sandbox.
+"""In-container WATER-EDGE coastal mesher for the sandbox.
 
 Runs INSIDE the GPL-isolated ``trid3nt-local/mesh:latest`` image (mounted, not
 baked). Meshes the interior of a HIGH-RES water polygon (OSM coastline + NHD
@@ -10,7 +10,7 @@ exterior-ring-only coord arrays (holes discarded) and Chaikin-SMOOTHS the
 shoreline, which both breaks a "domain-box minus water" land polygon AND moves
 the meshed edge off the imagery -- the opposite of the alignment goal. A custom
 signed-distance function over the exact water polygon (holes = islands preserved)
-keeps the meshed edge ON the real shoreline. This mirrors the proven ADR 0193
+keeps the meshed edge ON the real shoreline. This mirrors the proven
 watershed custom-SDF mesher, with coastal sizing instead of distance-to-river:
 
   * signed distance function  -- negative INSIDE the water polygon (islands are

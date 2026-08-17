@@ -34,7 +34,7 @@ Design notes
   ``total_rain_depth_mm`` + ``storm_duration_hr`` + ``rain_interval_min``. It is
   NOT flat and NOT SCS-Type-II — these args parameterize the nested builder.
 - ``SWMMDepthLayerURI`` is a structured numeric carrier (invariant 1 / Decision
-  H / FR-AS-7): the agent narrates ``max_depth_m``, ``flooded_area_km2`` and
+  H): the agent narrates ``max_depth_m``, ``flooded_area_km2`` and
   ``n_buildings_affected`` from these typed fields rather than inventing them.
 - ``barriers`` is a GeoJSON ``FeatureCollection`` of tagged ``LineString``
   segments (each feature's ``properties.barrier_type`` ∈ {"wall", "flap_gate"})
@@ -434,7 +434,7 @@ class SWMMDepthLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates about the inundation so the
-    LLM cites typed fields, never invents them (invariant 1, FR-AS-7):
+    LLM cites typed fields, never invents them (invariant 1):
 
         max_depth_m: peak overland water depth across the AOI, m (>= 0).
         flooded_area_km2: areal footprint above the wet threshold, km^2 (>= 0).
@@ -479,7 +479,7 @@ class SWMMNetworkLayerURI(LayerURI):
 
     Extends ``LayerURI`` field-for-field (so it maps onto ``map-command
     load-layer`` with no translation, same as every other layer) and carries the
-    typed network + response scalars the agent narrates (invariant 1 / FR-AS-7 -
+    typed network + response scalars the agent narrates (invariant 1 --
     the LLM cites these fields, never invents a pipe count or a peak flow). The
     layer itself is a VECTOR (nodes as points carrying max-HGL / flooded, conduits
     as lines carrying surcharge) - a piped network's natural render.
@@ -560,7 +560,7 @@ class SWMMPollutantLayerURI(LayerURI):
 
     Extends ``LayerURI`` field-for-field (so it maps onto ``map-command
     load-layer`` with no translation, same as every other layer) and carries the
-    WQ numbers the agent narrates for one pollutant (invariant 1 / FR-AS-7 — the
+    WQ numbers the agent narrates for one pollutant (invariant 1 — the
     LLM cites these typed fields, never invents a load or a concentration). It is
     ADDITIVE CONTEXT beside the depth ``SWMMDepthLayerURI`` primary: a WQ failure
     never sinks the flood headline.
@@ -596,13 +596,13 @@ class SWMMPollutantLayerURI(LayerURI):
 
 
 class SWMMDeckRunResult(GraceModel):
-    """The typed result of running a CITED, PUBLISHED SWMM ``.inp`` deck (ADR 0128).
+    """The typed result of running a CITED, PUBLISHED SWMM ``.inp`` deck.
 
     NOT a ``LayerURI``: the cited textbook decks carry SCHEMATIC coordinates (local
     model units, not lon/lat), so the runner emits CHARTS (hydrographs / stage
     recession / control tracking / pollutographs) as the primary product and does
     NOT fabricate a georeferenced map layer. This carrier holds the typed scalars
-    the agent narrates (invariant 1 / FR-AS-7 - the LLM cites these fields, never
+    the agent narrates (invariant 1 -- the LLM cites these fields, never
     invents a peak flow or a pond stage) plus the LOUD demonstration-honesty
     citation (the deck is the cited example's network, NOT a user AOI).
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Paper-style dynamic-resolution inputs for the 2025 rain-on-grid mesh (ADR 0210).
+"""Paper-style dynamic-resolution inputs for the 2025 rain-on-grid mesh.
 
-The ADR 0209 RoG path meshes the AOI as a UNIFORM structured grid (one cell size
+The RoG path meshes the AOI as a UNIFORM structured grid (one cell size
 everywhere). Godara et al. -- the cross-engine comparison the RoG path replicates --
 instead ran a graded mesh: a coarse background refined through nested bands down to
 the channel scale along breaklines. This module authors those inputs on the host so

@@ -4,7 +4,7 @@ Composes a real ``sfincs_build_spec`` over a coastal topobathy DEM, stages it +
 the DEM to MinIO, runs the ``trid3nt-local/sfincs`` worker in ``--build-spec-uri``
 build+solve mode (cht_sfincs authors the variable-resolution 2:1-balanced grid,
 the SFINCS binary solves it, the worker rasterizes the face-indexed output), then
-reads the genuine ``sfincs_map.nc`` back, publishes it as the ADR 0159 native
+reads the genuine ``sfincs_map.nc`` back, publishes it as the native
 UGRID mesh ``LayerURI`` + a peak-depth COG, and renders the two proof images.
 
 The DEM is a fetched Mexico Beach / Hurricane Michael topobathy COG (EPSG:32616,

@@ -1,9 +1,9 @@
-"""Unit tests for the MODFLOW 6 GWF+GWT deck adapter (job-0221).
+"""Unit tests for the MODFLOW 6 GWF+GWT deck adapter.
 
 These tests assert the *deck construction* contract - no LLM call, no `mf6`
 binary required (engine invariant 2: workflows/adapters are unit-testable
 without the solver in the loop). The end-to-end solver run lives in the job's
-evidence script (`reports/inflight/job-0221-engine-20260609/evidence/`), which
+evidence script (`reports/inflight/-engine-20260609/evidence/`), which
 runs the pinned `mf6` 6.5.0 binary and asserts plume physics.
 
 Run:
@@ -1735,13 +1735,13 @@ def test_real_run_capture_zone_produces_pathlines(tmp_path):
 
 
 # =========================================================================== #
-# ADR 0215 wellhead-reeval part 2: multi-well WELLFIELD + transient + NHD RIV +
+# wellhead-reeval part 2: multi-well WELLFIELD + transient + NHD RIV +
 # kriged per-cell IC on the capture_zone / wellhead_protection PRT path. Deck-
 # SHAPE asserts (no mf6) + a REAL mf6-run transient multi-well test that proves
 # the isochrones grow with travel time and the per-well allocation is nonempty.
 # =========================================================================== #
 
-# A 3-well field near the _PLATTE High Plains site (ADR 0215 live case).
+# A 3-well field near the _PLATTE High Plains site (live case).
 PLATTE_WELLS = [
     {"lon": -98.42, "lat": 40.905, "rate_m3_day": 1600.0, "name": "M-1"},
     {"lon": -98.395, "lat": 40.895, "rate_m3_day": 1000.0, "name": "M-2"},
@@ -1753,7 +1753,7 @@ PLATTE_SPILL = dict(
     contaminant="n/a",
     release_rate_kg_s=1.0,
     duration_days=1.0,
-    aquifer_k_ms=2.48e-6,  # SoilGrids-derived K at _PLATTE (ADR 0215 part 1)
+    aquifer_k_ms=2.48e-6,  # SoilGrids-derived K at _PLATTE (part 1)
     porosity=0.198,
 )
 
@@ -1810,7 +1810,7 @@ def test_capture_zone_transient_writes_sto_and_spinup(tmp_path):
 
 
 def test_capture_zone_river_reaches_drape_riv_cells(tmp_path):
-    """NHD reaches rasterize to RIV cells + a RIV package file (ADR 0215 item 4)."""
+    """NHD reaches rasterize to RIV cells + a RIV package file (item 4)."""
     d = build_modflow_deck(
         workdir=tmp_path, archetype="capture_zone", wells=PLATTE_WELLS,
         river_reaches=PLATTE_REACHES, **PLATTE_SPILL
@@ -1829,7 +1829,7 @@ def test_capture_zone_no_reaches_no_riv(tmp_path):
 
 
 def test_capture_zone_kriged_ic_written_as_array(tmp_path):
-    """A per-cell kriged IC writes a non-constant strt array (ADR 0215 item 3)."""
+    """A per-cell kriged IC writes a non-constant strt array (item 3)."""
     n = int(round(2 * PRT_DOMAIN_HALF_WIDTH_M / PRT_CELL_SIZE_M))
     ic = _platte_kriged_ic(n, n)
     build_modflow_deck(
@@ -1855,7 +1855,7 @@ def test_real_run_transient_multiwell_allocation_and_evolving_zones(tmp_path):
     """Full transient multi-well workflow: build (3 wells + RIV + kriged IC +
     transient), run mf6, per-period reverse, run PRT, and assert (a) the per-well
     particle allocation is nonempty for every well and (b) the isochrone areas
-    GROW with travel time (the zones evolve, ADR 0215 item 1)."""
+    GROW with travel time (the zones evolve, item 1)."""
     import pandas as pd
     from shapely.geometry import MultiPoint
 

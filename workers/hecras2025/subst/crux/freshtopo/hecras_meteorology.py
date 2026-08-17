@@ -5,7 +5,7 @@ The rain-on-grid (RoG) forcing link: instead of an inflow hydrograph on a BC lin
 (``hecras_event_conditions``), a RoG run rains uniformly over the whole 2D area.
 HEC-RAS stores spatially-and-temporally uniform precipitation as a CONSTANT-mode
 Meteorology record in the plan HDF's Event Conditions -- the same group the engine
-reads the 2D-BC forcing from (ADR 0136-0138), so a composed pure-2D deck honours it
+reads the 2D-BC forcing from (-0138), so a composed pure-2D deck honours it
 with no DSS file and no image rebuild for the forcing itself.
 
 Structure DECODED from the HEC-RAS 6.x ``RasUnsteady.set_constant_precipitation`` /
@@ -32,7 +32,7 @@ whole computation window -- a single-storm design event, ``depth = rate * durati
 (mass-balance hand-checkable). It has no falling limb WITHIN the storm; a true
 time-varying hyetograph (rain that stops mid-run so drainage/recession is captured)
 needs a DSS or ASCII ``Precipitation Hydrograph=`` record and is the RoG residual --
-the exact analog of the TELEMAC constant-rain ``RAINDEF=1`` limit (ADR 0195/0196).
+the exact analog of the TELEMAC constant-rain ``RAINDEF=1`` limit.
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def write_uniform_precipitation(
     """Author a SPATIALLY-UNIFORM design storm as a gridded Meteorology record.
 
     The structure below is LIVE-DECODED against the 6.6 Linux compute engine (a
-    chain of iterative solves, ADR 0199), NOT guessed -- the engine's meteorology
+    chain of iterative solves), NOT guessed -- the engine's meteorology
     readers open, in order:
 
       1. ``READ_UN_MET_PRECIP_DATA`` -> ``Precipitation/Values`` DIRECTLY (a
@@ -85,11 +85,11 @@ def write_uniform_precipitation(
     folder ``Precipitation/2D Flow Areas/<area>`` that ``READ_UN_M2D_PRECIP_INTERP``
     (``MetInterp.f90``) opens -- is authored by ``write_precipitation_interpolation``
     (schema DECODED byte-exact 2026-08-08 from the un-stripped 6.6 ``RasUnsteady``
-    reader + the decompiled 2025 managed engine's nearest-neighbour math, ADR 0205).
+    reader + the decompiled 2025 managed engine's nearest-neighbour math).
     That decode is VERIFIED live: the engine now reads PAST the MetInterp segfault
     that blocked all 12 prior attempts. Actually delivering the rain to cells
     (``INIT_PRECIP2CELL`` -> ``precip2fvcell``) routes through the 2D-hydrology module
-    (``READ_UN_HYDROLOGY2D``), which is the remaining frozen residual -- see ADR 0205.
+    (``READ_UN_HYDROLOGY2D``), which is the remaining frozen residual --.
     ``depth = rate * duration`` (mm) is mass-balance-checkable. Cumulative amounts
     (mm), grid-extent attrs on ``Values``, ``Meteorology/Attributes`` index row.
     Returns a provenance dict."""

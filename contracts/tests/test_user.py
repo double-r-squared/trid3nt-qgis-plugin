@@ -1,4 +1,4 @@
-"""Round-trip + invariant tests for the ``User`` schema (job-0115).
+"""Round-trip + invariant tests for the ``User`` schema.
 
 The User contract is the Wave 1.5 Auth/Users-track stub the agent persistence
 layer (``server/.../persistence.py``) needs ahead of the full Firebase

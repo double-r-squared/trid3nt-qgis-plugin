@@ -1,6 +1,6 @@
 """Region-disambiguation picker envelopes (state-bbox-fallback narrowing).
 
-job-0346 added a state-snap fallback to ``geocode_location``: a vague /
+added a state-snap fallback to ``geocode_location``: a vague
 regional query ("south Florida", "the Texas panhandle") that has no precise
 OSM match snaps to the **whole state** bbox and stamps
 ``source="state-bbox-fallback"`` + an honest ``fallback_reason``. That whole-
@@ -53,7 +53,7 @@ Invariants this module is responsible for:
   message, exactly as the credential flow does.
 
 SRS references:
-- Appendix A.3 (client -> server) / A.4 (server -> client) for envelope-type
+- (client -> server) / A.4 (server -> client) for envelope-type
   discipline (kebab-case ``type``, ``payload`` always an object).
 - Mirrors ``secrets.CredentialRequestEnvelopePayload`` /
   ``CredentialProvidedEnvelopePayload`` (the proven interactive-card seam).

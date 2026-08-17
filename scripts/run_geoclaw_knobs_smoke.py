@@ -6,7 +6,7 @@ and reports, per run: the new MinIO run prefix, the depth-layer scalars, and the
 (~1e5 == no wave, ~1e9+ == a real wave). Cheap: coarse grid, short sim window.
 
 The banded Manning + the explicit AMR window activate ONLY when the deployed
-image carries the current worker (ADR 0147: a stale baked setrun_builder silently
+image carries the current worker (a stale baked setrun_builder silently
 dropped both). Rebuild before smoking a worker change:
   docker build -f workers/geoclaw/Dockerfile -t trid3nt-local/geoclaw:latest .
 
@@ -162,7 +162,7 @@ async def _main() -> int:
                 output_frames=OUTPUT_FRAMES,
                 amr_levels=4,
             ),
-            # AOI ambient drops to L3 so the L4 window refines above it (ADR 0147).
+            # AOI ambient drops to L3 so the L4 window refines above it.
             setrun_needles=["4, 4, 0.0, 900.0, -124.21, -124.18, 41.745, 41.77"],
         )
     )

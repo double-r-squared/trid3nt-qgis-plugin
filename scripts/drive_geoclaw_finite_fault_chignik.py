@@ -1,5 +1,5 @@
 """Direct-call (headless, no LLM/WS) coarsened tsunami re-run on the REAL 2021 M8.2
-Chignik finite-fault source -- the ADR 0226 finite-fault-upgrade live proof.
+Chignik finite-fault source -- the finite-fault-upgrade live proof.
 
 Exercises the FULL real path: earthquake_source resolve (USGS ComCat) -> finite-fault
 product fetch (ak0219neiszm_1) -> normalized CSV stage -> domain enclosure of the

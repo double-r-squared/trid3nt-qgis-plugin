@@ -1,4 +1,4 @@
-"""Round-trip + leak-resistance tests for per-Case secrets envelopes (job-0100).
+"""Round-trip + leak-resistance tests for per-Case secrets envelopes.
 
 The §F.3 forward-looking shapes this module owns:
 
@@ -297,7 +297,7 @@ def test_secrets_payloads_exposed_via_module_registries() -> None:
     ``SECRET_AGENT_TO_CLIENT_PAYLOADS`` / ``SECRET_PAYLOADS``) so a future
     follow-up job can ``**SECRET_CLIENT_TO_AGENT_PAYLOADS`` them into
     ``ws.CLIENT_TO_AGENT_PAYLOADS`` (etc.) when ``ws.py`` is in that job's
-    file-ownership scope. job-0100's kickoff explicitly scoped ``ws.py`` as
+    file-ownership scope.'s kickoff explicitly scoped ``ws.py`` as
     FROZEN; see ``OQ-0100-WS-REGISTRY-WIRING`` in the report.
     """
     # Client -> agent (add, revoke)

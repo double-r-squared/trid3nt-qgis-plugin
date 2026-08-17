@@ -4,7 +4,7 @@ QGIS-only export helper at the bottom.
 Bidirectional layer push (the reverse seam of layer materialization): the
 user's ACTIVE QGIS layer (vector or raster) is sent INTO the current case as a
 first-class input layer, via the agent's HTTP listener
-(``tool_catalog_http.py``, default ``http://127.0.0.1:8766``):
+(``catalog_http.py``, default ``http://127.0.0.1:8766``):
 
     1. POST /api/ingest-layer-file?filename=<name>  (raw request-body upload;
        Content-Type: application/octet-stream, NOT multipart/form-data -- this

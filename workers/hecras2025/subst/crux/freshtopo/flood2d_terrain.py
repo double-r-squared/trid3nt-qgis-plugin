@@ -166,7 +166,7 @@ def prepare_terrain(
     py0, py1 = miny + dy, maxy - dy
 
     # perimeter: rectangle, CCW, OPEN (drop the closing point) -- TryCreateMesh
-    # requires CCW-open (ADR 0132 STEP 2). Sample edges so the mesh boundary is
+    # requires CCW-open (STEP 2). Sample edges so the mesh boundary is
     # smooth; keep it modest (a rectangle needs only corners, but a few points per
     # edge helps the tessellator).
     def _edge(a, b, n):

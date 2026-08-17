@@ -37,8 +37,8 @@ Design notes
     "surge"      — a prescribed sea-surface elevation forcing at the open ocean
                    boundary (a tide+surge hydrograph), the shallow-water surge
                    run-up family.
-- ``GeoClawDepthLayerURI`` is a structured numeric carrier (invariant 1 /
-  FR-AS-7): the agent narrates ``max_depth_m``, ``flooded_area_km2`` and
+- ``GeoClawDepthLayerURI`` is a structured numeric carrier (invariant 1):
+  the agent narrates ``max_depth_m``, ``flooded_area_km2`` and
   ``max_inundation_m`` from these typed fields rather than inventing them.
 - The depth raster reuses the SHARED ``continuous_flood_depth`` style preset
   (GeoClaw depth is the same physical quantity SFINCS/SWMM emit), so NO new
@@ -169,7 +169,7 @@ class StormTrackPoint(GraceModel):
 #:   "garratt" — Garratt (1977) capped linear drag (the GeoClaw default).
 #:   "powell"  — Powell (2003) sector-averaged drag (saturates/decreases at high wind).
 #: The choice measurably changes the surface stress -> the surge height (the knob
-#: must DO something, never silently no-op — the ADR 0143 lesson).
+#: must DO something, never silently no-op — the lesson).
 WindDragLaw = Literal["none", "garratt", "powell"]
 
 #: The driver-scenario families GeoClaw can run. Open ``Literal`` so the engine
@@ -331,7 +331,7 @@ class GeoClawRunArgs(GraceModel):
     tsunami_dtopo_uri: str | None = None
     source_magnitude: float = Field(default=8.0, gt=0.0, le=10.0)
 
-    # ADR 0226 finite-fault UPGRADE (measured-inversion rung of the tsunami-source
+    # finite-fault UPGRADE (measured-inversion rung of the tsunami-source
     # ladder). finite_fault_uri is a staged clawpack CSVFault subfault table (a
     # published USGS finite-fault inversion's N patches) the worker reads to build a
     # MULTI-subfault Okada dtopo -- a real, concentrated, asymmetric slip field, not
@@ -601,7 +601,7 @@ class GeoClawDepthLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates about the inundation so the
-    LLM cites typed fields, never invents them (invariant 1, FR-AS-7):
+    LLM cites typed fields, never invents them (invariant 1):
 
         max_depth_m: peak overland water depth across the AOI, m (>= 0).
         flooded_area_km2: areal footprint above the wet threshold, km^2 (>= 0).

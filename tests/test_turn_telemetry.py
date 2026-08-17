@@ -218,7 +218,7 @@ def test_empty_turn_summary_zero_state():
 async def test_summary_endpoint_folds_turns_by_model():
     """/api/telemetry/summary carries the ``turns_by_model`` section, read
     from the turn-telemetry JSONL sink."""
-    from trid3nt_server.tool_catalog_http import build_telemetry_summary
+    from trid3nt_server.server.protocol.catalog_http import build_telemetry_summary
 
     with tempfile.NamedTemporaryFile(
         suffix=".jsonl", delete=False, mode="w", encoding="utf-8"

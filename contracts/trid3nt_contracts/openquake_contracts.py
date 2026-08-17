@@ -36,8 +36,8 @@ Design notes
   RAM-hungry, ~2 GB/thread; a fine ``site_grid_spacing_km`` over a wide AOI
   blows the cell budget, so the composer/worker may COARSEN it — this is the
   requested spacing, not a guarantee, mirroring the SFINCS/SWMM adaptive grid).
-- ``SeismicHazardLayerURI`` is a structured numeric carrier (invariant 1 /
-  Decision N / FR-AS-7): the agent narrates ``max_hazard_value`` and
+- ``SeismicHazardLayerURI`` is a structured numeric carrier (invariant 1):
+  the agent narrates ``max_hazard_value`` and
   ``hazard_area_km2`` from these typed fields rather than inventing them.
 """
 
@@ -166,7 +166,7 @@ class OpenQuakeRunArgs(EngineRunArgsMixin):
 
     # Reference site condition (Vs30, m/s) for the [site_params] deck block. The
     # 760 m/s default is the generic NEHRP B/C rock boundary -- a DEMO default,
-    # NOT a site-specific measurement (there is no Vs30 fetcher yet, ADR 0107).
+    # NOT a site-specific measurement (there is no Vs30 fetcher yet).
     # ADDITIVE: default reproduces the prior hardcoded 760.0 byte-for-byte.
     reference_vs30_ms: float = Field(default=760.0, gt=0.0)
 
@@ -240,7 +240,7 @@ class SeismicHazardLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates about the hazard so the LLM
-    cites typed fields, never invents them (invariant 1, FR-AS-7):
+    cites typed fields, never invents them (invariant 1):
 
         imt: the Intensity Measure Type the map represents (e.g. ``"PGA"``).
         poe: the probability of exceedance the map is computed at (e.g. 0.10).

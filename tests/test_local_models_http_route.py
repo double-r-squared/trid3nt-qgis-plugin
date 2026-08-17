@@ -18,7 +18,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from trid3nt_server import tool_catalog_http
+from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from trid3nt_server.adapters import model_discovery
 
 
 class _FakeReader:
@@ -109,7 +110,7 @@ def test_local_models_listed_with_default_first(monkeypatch):
         },
         separators=(",", ":"),
     ).encode("utf-8")
-    monkeypatch.setattr(tool_catalog_http, "_fetch_local_models", lambda: body)
+    monkeypatch.setattr(model_discovery, "_fetch_local_models", lambda: body)
 
     writer = _dispatch()
     out = bytes(writer.buffer)
@@ -126,9 +127,9 @@ def test_upstream_unreachable_is_typed_502(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
 
     def _boom():
-        raise tool_catalog_http._LocalModelsUpstreamError("ollama down")
+        raise model_discovery._LocalModelsUpstreamError("ollama down")
 
-    monkeypatch.setattr(tool_catalog_http, "_fetch_local_models", _boom)
+    monkeypatch.setattr(model_discovery, "_fetch_local_models", _boom)
     writer = _dispatch()
     out = bytes(writer.buffer)
     assert _status(out) == 502
@@ -181,7 +182,7 @@ def test_fetch_local_models_maps_ollama_tags(monkeypatch):
     }
     monkeypatch.setattr(httpx, "Client", _FakeHttpxClient)
 
-    payload = json.loads(tool_catalog_http._fetch_local_models())
+    payload = json.loads(model_discovery._fetch_local_models())
     # Configured default moved first; malformed entry dropped.
     assert payload == {
         "models": [
@@ -200,7 +201,7 @@ def test_fetch_local_models_null_default_when_env_unset(monkeypatch):
     _FakeHttpxClient.payload = {"models": [{"name": "llama3.2:3b"}]}
     monkeypatch.setattr(httpx, "Client", _FakeHttpxClient)
 
-    payload = json.loads(tool_catalog_http._fetch_local_models())
+    payload = json.loads(model_discovery._fetch_local_models())
     assert payload["default"] is None
     assert payload["models"] == [{"id": "llama3.2:3b", "label": "llama3.2:3b"}]
 
@@ -213,16 +214,16 @@ def test_fetch_local_models_null_default_when_env_unset(monkeypatch):
 def test_tags_url_strips_v1_suffix(monkeypatch):
     monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
     assert (
-        tool_catalog_http._ollama_tags_url()
+        model_discovery._ollama_tags_url()
         == "http://127.0.0.1:11434/api/tags"
     )
 
 
 def test_tags_url_trailing_slash_and_default(monkeypatch):
     monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://box:11434/v1/")
-    assert tool_catalog_http._ollama_tags_url() == "http://box:11434/api/tags"
+    assert model_discovery._ollama_tags_url() == "http://box:11434/api/tags"
     monkeypatch.delenv("TRID3NT_OPENAI_BASE_URL", raising=False)
     assert (
-        tool_catalog_http._ollama_tags_url()
+        model_discovery._ollama_tags_url()
         == "http://127.0.0.1:11434/api/tags"
     )

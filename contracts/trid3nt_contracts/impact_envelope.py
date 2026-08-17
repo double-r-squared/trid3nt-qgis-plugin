@@ -1,4 +1,4 @@
-"""ImpactEnvelope — Pelicun post-processor output contract (SRS Appendix B.6c).
+"""ImpactEnvelope — Pelicun post-processor output contract (SRS.6c).
 
 The ``ImpactEnvelope`` is the structured aggregate produced by
 ``postprocess_pelicun`` after aggregating a per-feature Pelicun damage-state
@@ -14,7 +14,7 @@ but the agent's narrative and the UI summary panel need *aggregate* statistics:
 total structures damaged, expected portfolio loss (USD), displaced population,
 and per-occupancy-class breakdowns.  ``ImpactEnvelope`` is that aggregate
 output — a typed, narratable shape that gives the agent **every number it might
-cite without inventing any** (Invariant 1 / Decision N).
+cite without inventing any** (Invariant 1).
 
 **Consumer guidance:**
 

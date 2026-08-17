@@ -1,6 +1,6 @@
 """Per-Case API-key secret envelopes (§F.3 forward-looking contract).
 
-Sprint-12-mega Wave 1, job-0100. The §F.3 architecture currently documented in
+Sprint-12-mega Wave 1,. The §F.3 architecture currently documented in
 ``docs/srs/F-data-sources-discovery-secrets.md`` is a **per-user** Cloud-Function
 mediated UX (deferred indefinitely until M6+ identity machinery lands). The
 shapes in this module are the **per-Case** scoped envelope contract the sprint-12
@@ -39,15 +39,15 @@ This module owns:
   request it answers (and the ``secret_id`` the ``secret-add`` minted) so the
   agent can resume the exact paused tool. It carries NO key material —
   ``secret-add`` is the only envelope that ever transports the raw key value
-  (Decision F). The client may instead send a request with ``provided=False``
+. The client may instead send a request with ``provided=False``
   to signal the user declined / cancelled the credential prompt, in which case
   the agent narrates honestly and abandons the paused tool.
 
 Invariants this module is responsible for:
 
-- **Decision F (wire isolation).** The ``key_value`` field is transient on
+- **(wire isolation).** The ``key_value`` field is transient on
   the wire and **never** stored in the WebSocket envelope persistence path
-  (Decision F logs every envelope to MongoDB). The server consumes
+  (logs every envelope to MongoDB). The server consumes
   ``SecretAddEnvelopePayload``, writes the key value to the vault, then
   returns a ``SecretsListEnvelopePayload`` containing only the vault-ref-bearing
   ``SecretRecord``. The raw key value MUST be cleared on the server side before
@@ -60,12 +60,12 @@ Invariants this module is responsible for:
   existing A.3 ``cancel`` message.
 
 SRS references:
-- Appendix F.3 (``docs/srs/F-data-sources-discovery-secrets.md``) — the
+- (``docs/srs/F-data-sources-discovery-secrets.md``) — the
   forward-looking design the per-user Cloud-Function flow describes. The
   sprint-12 Case-scoped envelopes are a divergent (per-Case, in-band
   WebSocket) shape — see ``OQ-0100-F3-CASE-VS-USER-SCOPE`` in the job report
   for the proposed amendment.
-- Appendix A.3 (client -> server) / A.4 (server -> client) for envelope-type
+- (client -> server) / A.4 (server -> client) for envelope-type
   discipline (kebab-case ``type``, ``payload`` always an object).
 """
 
@@ -100,7 +100,7 @@ __all__ = [
 # --------------------------------------------------------------------------- #
 
 # Closed Literal of providers a Case secret can be bound to. The set is closed
-# at v0.1 — a new provider is an SRS amendment (Appendix F.3 update), not a
+# at v0.1 — a new provider is an SRS amendment (update), not a
 # silent open-enum, because the agent-side per-provider plumbing (Census ACS
 # uses a query param, OpenWeatherMap uses a header, LLM keys go through the
 # vendor SDK, etc.) is per-provider code and registering an unknown provider
@@ -156,7 +156,7 @@ class SecretRecord(GraceModel):
     Fields:
 
     - ``secret_id`` — ULID identifier (matches the WS envelope id discipline,
-      Appendix A.1).
+).
     - ``provider`` — closed ``ProviderID`` Literal.
     - ``case_id`` — when ``None`` the record is user-level (cross-Case
       default); when set it scopes the key to a single Case. Forward-looking:
@@ -232,9 +232,9 @@ class SecretAddEnvelopePayload(GraceModel):
     ``__repr_args__`` override below) so e.g. ``print(payload)`` or a stray
     f-string does NOT echo the key value.
 
-    Decision F binding: this envelope is the only place the raw key value
+    binding: this envelope is the only place the raw key value
     appears on the wire. The server MUST NOT persist this payload as-is to
-    the ``sessions`` collection (Decision F logs every envelope; an
+    the ``sessions`` collection (logs every envelope; an
     unredacted ``key_value`` would land in MongoDB). The agent service is
     responsible for redacting the field at the persistence boundary; the
     schema-side back-stop is the ``repr`` elision below.
@@ -320,7 +320,7 @@ class CredentialRequestEnvelopePayload(GraceModel):
     Once the secret is saved, the client emits a
     ``CredentialProvidedEnvelopePayload`` carrying this envelope's
     ``request_id`` so the agent can resume the exact paused tool. This
-    envelope carries NO key material in either direction — Decision F keeps
+    envelope carries NO key material in either direction — keeps
     the raw key isolated to the ``secret-add`` transport.
 
     Fields:
@@ -376,7 +376,7 @@ class CredentialProvidedEnvelopePayload(GraceModel):
     key the agent asked for (a ``CredentialRequestEnvelopePayload``). It tells
     the agent the credential is now in the vault and the paused tool can be
     retried. It carries NO key material — ``secret-add`` is the only envelope
-    that ever transports the raw key value (Decision F).
+    that ever transports the raw key value.
 
     Fields:
 
@@ -406,7 +406,7 @@ class CredentialProvidedEnvelopePayload(GraceModel):
 # Routing registry (per-module — sibling follow-up wires into ws.ALL_PAYLOADS)
 # --------------------------------------------------------------------------- #
 
-# job-0100 scope explicitly FROZE ``ws.py`` — the kickoff file-ownership list
+# scope explicitly FROZE ``ws.py`` — the kickoff file-ownership list
 # covers only ``secrets.py`` + ``__init__.py`` registration. These three
 # module-level dicts give a follow-up job (or downstream consumer) the typed
 # surface to spread into ``ws.CLIENT_TO_AGENT_PAYLOADS`` / etc. when that

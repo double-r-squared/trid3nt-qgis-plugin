@@ -1,4 +1,4 @@
-"""HEC-RAS 2025 Beta headless-characterization worker (ADR 0127 spike).
+"""HEC-RAS 2025 Beta headless-characterization worker (spike).
 
 The 2025 line is HEC's ground-up C#/.NET rewrite: a single-`.h5` project, a new
 explicit solver, a NATIVE headless mesher (`ras mesh` / `ras prepare` compute the

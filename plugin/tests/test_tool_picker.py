@@ -1,4 +1,4 @@
-"""Tool-selection picker tests (ADR 0018 auto/ask modes -- Stage 3, 2026-07-22).
+"""Tool-selection picker tests (auto/ask modes -- Stage 3, 2026-07-22).
 
 The agent's ``tool-candidates`` envelope (contracts ws.ToolCandidatesPayload)
 surfaces the retrieval-ranked tool candidates for a step as an inline picker

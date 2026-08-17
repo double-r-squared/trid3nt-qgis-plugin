@@ -1,7 +1,7 @@
 """Worker tests for the coastal-TIN -> hgrid.gr3 bridge (flat-import from the
 worker dir, mirroring the hecras/mesh worker test convention). Synthetic meshes
 only -- deterministic, light, no fixture files. The live SCHISM-ipre acceptance
-of a real Galveston TIN grid is proven in ADR 0115 (not re-run here)."""
+of a real Galveston TIN grid is proven in (not re-run here)."""
 
 from __future__ import annotations
 

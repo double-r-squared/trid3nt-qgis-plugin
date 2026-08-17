@@ -1,4 +1,4 @@
-"""DISV / gridgen generator tests (ADR 0099, mesh wave M2).
+"""DISV / gridgen generator tests (mesh wave M2).
 
 The gridgen binary is NOT in the modflow worker image, so these tests exercise
 everything up to the binary boundary: the availability probe, the
@@ -118,7 +118,7 @@ def test_gridgen_error_names_image_condition() -> None:
 
 def test_capture_zone_with_refine_regions_routes_to_grid_type(tmp_path) -> None:
     """Drawn refine_region on the structured branch is a typed error directing to
-    grid_type='disv_quadrefined' (ADR 0258). The gridgen binary is now provisioned,
+    grid_type='disv_quadrefined'. The gridgen binary is now provisioned,
     so the DISV grid would build -- but the structured CHD/WEL use (row, col), so a
     DISV grid here is a WRONG deck; the ported knob is the supported DISV path."""
     ring = [
@@ -166,7 +166,7 @@ def test_capture_zone_default_still_dis(tmp_path) -> None:
     not ga.gridgen_available(), reason="gridgen binary not provisioned (TRID3NT_GRIDGEN_BIN)"
 )
 def test_capture_zone_grid_type_disv_builds_refined_vertex_grid(tmp_path) -> None:
-    """grid_type='disv_quadrefined' builds a gridgen-refined DISV deck (ADR 0258).
+    """grid_type='disv_quadrefined' builds a gridgen-refined DISV deck.
 
     Pins the ported knob: a .disv file (not .dis), the refined ncpl exceeds the
     41x41 base, the finest cell is 12.5 m (3 levels on 100 m), and the manifest

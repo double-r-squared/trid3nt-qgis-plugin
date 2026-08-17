@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Assemble the CLEAN pure-2D fake-reach carve deck (ADR 0137) -- the deck that
+"""Assemble the CLEAN pure-2D fake-reach carve deck -- the deck that
 proves the fresh carved topology solves through a genuine, dam-free pure-2D deck.
 
-Difference from ``build_freshtopo_deck.py`` (ADR 0136): that deck keeps Muncie's
+Difference from ``build_freshtopo_deck.py``: that deck keeps Muncie's
 REAL White River 1D reach carrying the forcing (the 2D area rides along, dry).
 THIS deck replaces the 1D side with the shipped Chippewa clean ``Fake River``/
 ``Fake Reach`` skeleton (``patch_chippewa_xnn`` / ``patch_chippewa_bnn``) -- a

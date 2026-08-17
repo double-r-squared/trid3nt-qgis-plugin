@@ -1,4 +1,4 @@
-"""Round-trip + negative tests for EventMetadata + ClaimSet (Appendix C)."""
+"""Round-trip + negative tests for EventMetadata + ClaimSet."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def test_hurricane_event_roundtrip_idempotent() -> None:
 
 
 def test_intensity_bare_float_rejected_decision_m() -> None:
-    """Decision M: every numeric intensity quantity is a ClaimSet, never a bare number.
+    """every numeric intensity quantity is a ClaimSet, never a bare number.
 
     Smuggling a bare float into a ClaimSet slot must fail validation.
     """
@@ -128,7 +128,7 @@ def test_non_numeric_intensity_field_stays_scalar() -> None:
 
 
 def test_event_location_requires_bbox_or_place_name() -> None:
-    """At least one of bbox or place_name is required (Appendix C)."""
+    """At least one of bbox or place_name is required."""
     with pytest.raises(ValidationError):
         EventLocation()
 
@@ -173,7 +173,7 @@ def test_wrong_intensity_payload_for_event_type_rejected() -> None:
 
 
 def test_event_with_empty_intensity_allowed() -> None:
-    """Appendix C.4 + the dispatcher: zero-intensity payloads are valid (the
+    """+ the dispatcher: zero-intensity payloads are valid (the
     extractor may find no quantitative claims), as long as no *wrong* payload is
     populated."""
     base = _hurricane_event().model_dump(mode="json")

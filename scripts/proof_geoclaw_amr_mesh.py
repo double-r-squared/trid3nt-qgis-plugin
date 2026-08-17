@@ -7,7 +7,7 @@
     ONLY overlay is the yellow dashed user AMR window (the residual of the user's
     edit) + the white AOI box, over Esri World Imagery.
   * amr_regions.png -- the MID-RUN SEA-SURFACE ANOMALY (eta) snapshot (the
-    approved ADR 0148 raster style): a full-AOI wave field on the diverging
+    approved raster style): a full-AOI wave field on the diverging
     blue-white-red ramp (Clawpack-gallery), from a mid-run fort.q frame with the
     wave inside the domain, symmetric vmin/vmax.
   * amr_regions_depth.png -- the peak-inundation depth product map from the SAME

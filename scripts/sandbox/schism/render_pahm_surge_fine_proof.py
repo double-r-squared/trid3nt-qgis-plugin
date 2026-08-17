@@ -8,7 +8,7 @@ schism_elev_max.tif at s3://trid3nt-runs/01KZSS2EJ962MFQ9YTRT1CMARY/.
 Small explicit-resolution AOI [-95.05, 29.2, -94.6, 29.65], resolution_m=30
 (user coarsening). Bathymetry = REAL NOAA NCEI CUDEM 1/9" (8 tiles intersect
 this AOI, read + composited over the ETOPO 2022 shelf base) -- the resolution
-doctrine (ADR 0224) fix: the prior render used ETOPO ~450 m because skip_cudem
+doctrine fix: the prior render used ETOPO ~450 m because skip_cudem
 was FORCED unconditionally, NOT because CUDEM omits this coast (it does not).
 """
 from __future__ import annotations
@@ -144,7 +144,7 @@ def render_map():
         f"peak surge {peak_surge_m:.2f} m (reported {PEAK_SURGE_REPORTED_M:.2f} m)  |  "
         f"case {CASE_ID}  |  run {RUN_ID}  |  "
         "bathymetry = REAL NOAA NCEI CUDEM 1/9\" (8 tiles read + composited over the ETOPO "
-        "shelf base) -- resolution doctrine (ADR 0224): the prior render was ETOPO ~450 m "
+        "shelf base) -- resolution doctrine: the prior render was ETOPO ~450 m "
         "because skip_cudem was FORCED, not because CUDEM omits this coast  |  "
         f"color scale pinned 0-{VMAX_PINNED:.1f} m"
     )

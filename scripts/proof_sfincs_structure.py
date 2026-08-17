@@ -1,7 +1,7 @@
 """Proof for the SFINCS thin-dam SURGE-ONLY protected-side demonstration
-(ADR 0256, 2nd addendum -- the rain lever). Reads the two published depth COGs
+(2nd addendum -- the rain lever). Reads the two published depth COGs
 from the surge-only smoke (docs/proof/sfincs_surge_only_smoke_result.json) and
-renders A (no dam) | B (thin dam) | difference as FILLED cells (ADR 0251) over
+renders A (no dam) | B (thin dam) | difference as FILLED cells over
 the Esri World Imagery basemap with the shore-parallel thin-dam line drawn in
 cyan. With rainfall="none" the ONLY water is the surge from the sea, so the
 protected (landward/north) side floods in A and stays DRY in B -- the textbook

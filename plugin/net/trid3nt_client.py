@@ -475,7 +475,7 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     Live-feedback 2026-07-09: the QGIS dock previously could not show ANY
     cases until the user pressed Connect, because ``case-list`` only ever
     arrived as a WS envelope. The local agent's HTTP listener
-    (``tool_catalog_http.py``) mirrors that same envelope's data over plain
+    (``catalog_http.py``) mirrors that same envelope's data over plain
     HTTP for the local single-user seam, so the dock's Cases dialog can
     populate BEFORE a connection exists. Plain ``urllib`` (stdlib only) -- no
     WebSocket involved.
@@ -721,7 +721,7 @@ def parse_charts(session_state_payload: dict) -> list:
     (OpenQuake result parity, live-feedback 2026-07-13).
 
     The server hydrates the session document's append-only ``charts`` array
-    into every ``case-open`` rehydration (oldest-first, job-0294b), so the
+    into every ``case-open`` rehydration (oldest-first), so the
     envelope the plugin already receives carries them -- no extra fetch.
     Each row is the exact payload a live ``chart-emission`` frame carries:
     ``chart_id`` + ``title`` + ``caption`` + the Vega-Lite ``vega_lite_spec``.
@@ -972,7 +972,7 @@ def s3_to_http(uri: str, endpoint: str) -> Optional[str]:
 
 
 #: The local agent's HTTP listener port (tool catalog + /api/* routes --
-#: ``tool_catalog_http.py``). Old daemons that predate endpoint advertisement
+#: ``catalog_http.py``). Old daemons that predate endpoint advertisement
 #: always bind this port, so it is the fallback-derivation constant.
 DEFAULT_HTTP_PORT = 8766
 
@@ -1330,7 +1330,7 @@ class AgentEvent:
       credential-request raw payload (the JIT API-key prompt for a paused
                       keyed tool, contracts secrets.py -- the dock renders
                       the key-entry card; the reply is secret-add (raw key,
-                      Decision F) THEN credential-provided, or
+) THEN credential-provided, or
                       credential-provided provided=False on Skip. LANE K,
                       2026-07-22)
       case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
@@ -1623,21 +1623,21 @@ class AgentClient:
             env default (``TRID3NT_OPENAI_MODEL``). Mirrors the ``show_thinking``
             add exactly: a LIVE per-turn switch, no agent restart. (Provider
             base_url/api_key are agent-process env, NOT sent here.)
-        :param aoi_bbox: Structured per-message AOI (ADR 0017 mechanism 2,
+        :param aoi_bbox: Structured per-message AOI (mechanism 2,
             2026-07-22) - ``[min_lon, min_lat, max_lon, max_lat]`` (EPSG:4326).
             Rides the ``UserMessagePayload.aoi_bbox`` contract field, replacing
             the legacy bracketed in-text prose line ("[QGIS map canvas AOI
             ...]"). ``None`` = no AOI this turn; the key is then OMITTED so a
             plain message stays byte-identical to the pre-field payload
             (mirrors the ``show_thinking`` / ``model_id`` omit convention).
-        :param tool_choice_mode: ADR 0018 auto/ask modes (Stage 3, 2026-07-22)
+        :param tool_choice_mode: auto/ask modes (Stage 3, 2026-07-22)
             - ``"ask"`` rides ``tool_choice_mode="ask"`` on the payload so the
             server surfaces tool selection as ``tool-candidates`` picker cards
             for this turn. Anything else (``""`` / ``"auto"``) OMITS the key --
             the server's default IS auto, so a default send stays byte-identical
             to the pre-field payload (the ``show_thinking`` omit convention;
             AUTO's measured-ambiguity cards need no flag).
-        :param drawn_geometry: ADR 0159 draw-a-region supply path -- the dock's
+        :param drawn_geometry: draw-a-region supply path -- the dock's
             'Draw region' rubber-band rectangle as ``{"geometry_type":
             "rectangle", "bbox": [min_lon, min_lat, max_lon, max_lat]}``
             (EPSG:4326). Rides ``UserMessagePayload.drawn_geometry``; ``None``
@@ -1653,7 +1653,7 @@ class AgentClient:
             payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
         if tool_choice_mode == "ask":
             payload["tool_choice_mode"] = "ask"
-        # ADR 0159: the dock's 'Draw region' rubber-band rectangle rides
+        # the dock's 'Draw region' rubber-band rectangle rides
         # ``drawn_geometry`` ({"geometry_type": "rectangle", "bbox": [4 floats]},
         # EPSG:4326) exactly as ``aoi_bbox`` carries the canvas AOI. Omitted when
         # nothing was drawn so a plain message stays byte-identical to the
@@ -1670,7 +1670,7 @@ class AgentClient:
     def send_dev_tool_invoke(
         self, name: str, args: dict, raw_text: str = ""
     ) -> None:
-        """Send a ``!run`` direct tool invocation (ADR 0114).
+        """Send a ``!run`` direct tool invocation.
 
         The dock parses ``!run <tool>(...)`` CLIENT-side (``run_invocation``)
         and calls this with the structured ``(name, args)``. The server runs
@@ -1744,7 +1744,7 @@ class AgentClient:
     ) -> None:
         """Answer a ``credential-request`` with the user's key (LANE K).
 
-        Contract (``contracts .../secrets.py``, Decision F): the raw key rides
+        Contract (``contracts .../secrets.py``): the raw key rides
         ONLY the ``secret-add`` envelope -- the daemon writes it to the
         in-memory resolver session cache on receipt -- and the
         ``credential-provided`` retry signal that follows carries NO key
@@ -1803,7 +1803,7 @@ class AgentClient:
         tool_name: Optional[str] = None,
         free_text: Optional[str] = None,
     ) -> None:
-        """Answer a ``tool-candidates`` picker (ADR 0018 auto/ask modes).
+        """Answer a ``tool-candidates`` picker (auto/ask modes).
 
         Contract (``ws.ToolChoicePayload``): ONE envelope, ``request_id`` echo
         + exactly one of three shapes -- ``tool_name`` set (a candidate's name
@@ -1992,7 +1992,7 @@ class AgentClient:
             # goes out via submit_credential / decline_credential below.
             return AgentEvent("credential-request", payload)
         if etype == "tool-candidates":
-            # Tool-selection picker (ADR 0018 auto/ask modes, Stage 3
+            # Tool-selection picker (auto/ask modes, Stage 3
             # 2026-07-22): the agent ranked several plausible tools for a
             # step and asks which should run (contracts ws.
             # ToolCandidatesPayload -- request_id / stage_label / candidates
@@ -2050,7 +2050,7 @@ class AgentClient:
             return AgentEvent("spatial-input-request", payload)
         if etype == "code-exec-result":
             # The run OUTCOME that follows an approved code-exec-request
-            # (contracts sandbox_contracts.CodeExecResultPayload, job-0233):
+            # (contracts sandbox_contracts.CodeExecResultPayload):
             # status + stdout/stderr tails + the result descriptor. Fire-and-
             # forget (no reply); the dock updates the approved code-exec
             # card's folded chip with the outcome. Previously fell through to

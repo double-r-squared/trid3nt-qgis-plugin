@@ -1,7 +1,7 @@
 """The pure-2D DECK COMPOSER -- assemble a complete, solvable HEC-RAS 6.6 deck
 from any authored 2D mesh (carve OR the C# AuthorMesh path), source-agnostic.
 
-This formalizes the deck assembly the ADR 0136/0137/0138 chain proved link by
+This formalizes the deck assembly the chain proved link by
 link into ONE reusable composer. It takes a ``Mesh2D`` + ``SubgridTables`` (the
 ``hecras_geometry_writer`` inputs -- produced EITHER by ``carve_muncie`` from
 Muncie's solver-proven arrays, OR by the C# ``AuthorMesh`` full-topology dump over
@@ -14,15 +14,15 @@ Linux engines solve:
                                   perimeter, the 1D<->2D coupling groups stripped,
                                   and the 2D-BC ``/Event Conditions`` forcing
                                   (Inflow = flow hydrograph, DS = normal-depth
-                                  outlet -- the ADR 0138 partial-wetting physics).
+                                  outlet -- the partial-wetting physics).
     <rundir>/<stem>.x04           the Chippewa CLEAN pure-2D geometry preprocessor
                                   (dam-free fake reach; SA name + perimeter count
-                                  patched to the authored mesh -- ADR 0137).
+                                  patched to the authored mesh --).
     <rundir>/<stem>.b04           the Chippewa boundary file (inert fake-reach hold;
                                   the REAL 2D forcing lives in Event Conditions).
 
 Two deck files are still RE-USED, not authored from scratch, and this is a labeled
-architectural fact (ADR 0137/0138): the plan HDF is COPIED from HEC's shipped
+architectural fact: the plan HDF is COPIED from HEC's shipped
 Muncie plan as a container (it carries Plan Data / run control / geompre metadata
 the composer does not re-derive), and the ``.xNN`` is patched from the shipped
 Chippewa clean pure-2D reference. Only the 2D-area subgroup, the BC lines, the
@@ -32,7 +32,7 @@ The composer is mesh-SOURCE-agnostic: it never touches terrain, C#, or the carve
 The CARVE path (``build_chippewa_wetting_deck``) and the C# AuthorMesh path feed
 the identical ``compose_pure2d_deck`` entry, so a deck that solves from one source
 solves from the other (same writer, same engines). Acceptance (a) -- the Muncie
-carve through this composer -- reproduces ADR 0138 (1906 wet / WSE 946.94 / the
+carve through this composer -- reproduces (1906 wet / WSE 946.94 / the
 monotone x1.5 delta) exactly.
 """
 from __future__ import annotations
@@ -74,7 +74,7 @@ from hecras_meteorology import (  # noqa: E402
 #: solve harness (``solve_freshtopo``) resolve unchanged.
 AREA_NAME = "2D Interior Area"
 
-#: Muncie plan skeleton reused as the plan-HDF container (ADR 0137 architecture).
+#: Muncie plan skeleton reused as the plan-HDF container (architecture).
 MUNCIE_PLAN = (
     _HECRAS2025.parent
     / "hecras/fixtures/muncie_smoke/wrk_source/Muncie.p04.tmp.hdf"
@@ -82,19 +82,19 @@ MUNCIE_PLAN = (
 
 #: Groups that make the copied Muncie plan a COMBINED 1D/2D deck; a pure-2D deck
 #: strips them (the carved perimeter no longer lies on Muncie's weir/reference
-#: lines -- left in they crash ``RasUnsteady`` in ``jobinit_lw_q2d``, ADR 0136).
+#: lines -- left in they crash ``RasUnsteady`` in ``jobinit_lw_q2d``).
 _STRIP_2D_COUPLING = ["Structures", "Reference Lines", "2D Flow Area Break Lines"]
 
 #: The composed plan's computational window mirrors the copied Muncie plan (25
 #: hourly ordinates over one day, Interval=Days) so the EC hydrograph is
-#: consistent with the plan's Plan Data (ADR 0138).
+#: consistent with the plan's Plan Data.
 DEFAULT_START_DATE = "01Jan1900 2400"
 DEFAULT_END_DATE = "02Jan1900 2400"
 DEFAULT_N_ORD = 25
 
 #: The plan-HDF path + attribute name the Linux engine reads the 2D solver from.
 #: ``RasUnsteady`` prints "2D Unsteady <name> Equation Set" from this value
-#: (ADR 0136), so the composed plan honours it with no ASCII .pXX and no image
+#:, so the composed plan honours it with no ASCII .pXX and no image
 #: rebuild -- it is a pure host-side h5py attribute on the copied plan skeleton.
 _PLAN_PARAMS_GROUP = "Plan Data/Plan Parameters"
 _EQUATION_SET_ATTR = "2D Equation Set"
@@ -195,7 +195,7 @@ def _bc_runs(mesh: Mesh2D, tables: SubgridTables, *, n_bc_faces: int,
     Inflow defaults to the LOWEST-elevation perimeter run (where water naturally
     enters); ``inflow_edge`` overrides to a compass side. DS is a second,
     non-overlapping run on ``ds_edge`` (default south) -- the normal-depth outlet
-    so the domain DRAINS rather than fills (the ADR 0138 partial-wetting lesson:
+    so the domain DRAINS rather than fills (the partial-wetting lesson:
     inflow + outlet = physical drainage). Raises if the two runs overlap.
     """
     if inflow_edge is not None:
@@ -351,7 +351,7 @@ def compose_pure2d_deck(
             if grp in f["Geometry"]:
                 del f["Geometry"][grp]
 
-        # --- Event-Conditions forcing (the wetting link, ADR 0138) --- #
+        # --- Event-Conditions forcing (the wetting link)
         n_stale = strip_1d_reach_bcs(f)
         if rain_on_grid:
             write_normal_depth_2d_bc(f, area_name, "Outlet", slope=ds_slope)
@@ -362,7 +362,7 @@ def compose_pure2d_deck(
                             float(xy[:, 0].max()), float(xy[:, 1].max())),
                 projection_wkt=proj_wkt)
             # The 2D-hydrology module (READ_UN_HYDROLOGY2D) is the FROZEN residual
-            # (ADR 0205). The decoded precip interpolation folder (below) is READ
+            #. The decoded precip interpolation folder (below) is READ
             # cleanly -- the engine passes the MetInterp segfault that blocked all 12
             # prior attempts -- but precip application (INIT_PRECIP2CELL ->
             # precip2fvcell) AND SCS-CN infiltration both route THROUGH the hydrology
@@ -384,7 +384,7 @@ def compose_pure2d_deck(
             else:
                 infil_prov = None
             # Link 3: the per-area precip->cell interpolation folder MetInterp opens
-            # (schema decoded byte-exact, ADR 0205). Cell arrays index 1:1 with the
+            # (schema decoded byte-exact). Cell arrays index 1:1 with the
             # geometry's Manning length (TOTAL cells incl. ghosts); faces = all faces.
             n_cells_total = int(f[f"{AREA_GROUP}/{area_name}/Cells Center Manning's n"].shape[0])
             interp_prov = write_precipitation_interpolation(

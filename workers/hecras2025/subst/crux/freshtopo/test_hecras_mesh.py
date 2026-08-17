@@ -1,4 +1,4 @@
-"""Offline tests for the standalone HEC-RAS RoG mesh authoring (hecras_mesh.py, ADR 0211).
+"""Offline tests for the standalone HEC-RAS RoG mesh authoring (hecras_mesh.py).
 
 No docker / no engine: these validate the PURE host surfaces -- the meshprobe spec the
 driver reads, the local-frame reconstruction the consume path depends on, and the

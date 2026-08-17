@@ -46,7 +46,7 @@ Design notes
   geotechnical parameters). The infinite-slope chain consumes the soil
   parameters; the overland-flow chain consumes the rainfall parameters.
 - ``LandlabSusceptibilityLayerURI`` is a structured numeric carrier (invariant 1
-  / Decision H / FR-AS-7): the agent narrates ``unstable_area_fraction`` /
+ ): the agent narrates ``unstable_area_fraction``
   ``min_factor_of_safety`` / ``mean_probability_of_failure`` from these typed
   fields rather than inventing them.
 """
@@ -694,7 +694,7 @@ class LandlabSusceptibilityLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates about the hazard so the LLM
-    cites typed fields, never invents them (invariant 1, FR-AS-7):
+    cites typed fields, never invents them (invariant 1):
 
         unstable_area_fraction: fraction of the AOI flagged unstable
             (probability-of-failure above the unstable threshold for the
@@ -731,7 +731,7 @@ class LandlabFlowAccumulationLayerURI(LayerURI):
     ``map-command load-layer`` with no translation. The primary raster is the
     log-styled ``drainage_area`` (m^2) field; the channel network is a companion
     vector layer. Adds the structured numbers the agent narrates (invariant 1,
-    FR-AS-7 -- typed fields, never invented):
+    -- typed fields, never invented):
 
         max_drainage_area_km2: the maximum contributing drainage area over the
             AOI (km^2) -- the size of the largest accumulated flow path (the
@@ -764,7 +764,7 @@ class LandlabGreenAmptLayerURI(LayerURI):
     ``map-command load-layer`` with no translation. The primary raster is the
     per-cell cumulative infiltration depth (m); a companion runoff-depth
     (rainfall-excess) raster is emitted alongside. Adds the structured numbers
-    the agent narrates (invariant 1, FR-AS-7 -- typed fields, never invented):
+    the agent narrates (invariant 1, -- typed fields, never invented):
 
         infiltrated_fraction: domain-mean share of the storm rainfall that
             infiltrated, dimensionless in [0, 1].
@@ -1084,7 +1084,7 @@ class LandlabGroundwaterLayerURI(LayerURI):
     surface minus the steady water-table elevation, 0 at a seepage face). The
     steady water-table elevation and the seepage (surface-water specific
     discharge) fields are emitted as companion rasters. Adds the structured
-    numbers the agent narrates (invariant 1, FR-AS-7 -- typed fields, never
+    numbers the agent narrates (invariant 1, -- typed fields, never
     invented):
 
         mean_depth_to_water_m: domain-mean depth to the water table (m).

@@ -1,12 +1,12 @@
-"""Ball Creek rain-on-grid replication (ADR 0204) -- live direct driver.
+"""Ball Creek rain-on-grid replication -- live direct driver.
 
 Executes the Godara et al. (2024) rain-on-grid protocol on the Ball Creek fork of
 the Coweeta basin, gauged by EDI weir house #9 (knb-lter-cwt.3037/19, hourly
 discharge in m3/s, 2014-2019). The domain is re-cut to the Ball Creek catchment
-(ADR 0202 spatial caveat); forcing is the NOAA AORC hyetograph (fetch_aorc_precip)
+(spatial caveat); forcing is the NOAA AORC hyetograph (fetch_aorc_precip)
 over the catchment; observed discharge is the EDI record (fetch_lter_records).
 
-INSTALLED-ENGINE CONSTRAINT (ADR 0195/0196): TELEMAC v9.0.0 hardcodes RAINDEF=1
+INSTALLED-ENGINE CONSTRAINT: TELEMAC v9.0.0 hardcodes RAINDEF=1
 (constant rain intensity; a time-varying hyetograph needs a user_rain.f recompile).
 So each event is driven as a constant-intensity design storm = AORC storm-core
 total / core duration, for a rain window (DURATION OF RAIN OR EVAPORATION IN HOURS,
@@ -37,7 +37,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 
-# Ball Creek weir #9 pour point (ADR 0204 delineation): a channel cell +12 up the
+# Ball Creek weir #9 pour point (delineation): a channel cell +12 up the
 # Ball Creek fork so the mesh 8-cell max-accumulation snap resolves to the fork
 # outlet (~-83.4297, 35.0592) without jumping to the Coweeta Creek merged stem.
 POUR_POINT = (-83.43131, 35.05701)

@@ -80,11 +80,11 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: (us_drought_monitor date). Both are phase-2 wave-2 ArcGIS-family additions.
 #: ``point`` = a 2-element ``[lon, lat]`` float list (nldi seed_point); the
 #: router coerces + finite-checks it and leaves the CONUS / mutual-exclusion
-#: gate to the delegating executor (phase-2 wave-3, ADR 0040).
+#: gate to the delegating executor (phase-2 wave-3).
 #: ``float_list`` = a scalar float OR a ``list[float]`` (slr_scenarios
 #: scenario_ft) validated against ``values`` (the allowed level set),
 #: sorted + deduped -- the fan-out mode's per-value driver (phase-2 wave-6,
-#: ADR 0052). A scalar is coerced to a 1-element list.
+#:). A scalar is coerced to a 1-element list.
 #: ``str_list`` = a ``list[str]`` free-text filter set (nws_event event_types);
 #: each entry stripped, empties dropped, sorted + deduped for cache-key
 #: stability -- the string sibling of ``float_list`` with no allowed-set gate
@@ -92,13 +92,13 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: ``bool`` = a truthy flag param (nws_river_forecast include_thresholds /
 #: include_series). Coerced with ``bool(value)`` (the twin's ``bool(flag)``
 #: contract); the promoted signature annotates it ``bool`` (chained-resolution
-#: mode, ADR 0063). No prior spec declares it (strict no-op).
+#: mode). No prior spec declares it (strict no-op).
 #: ``datetime_range`` = a 2-element ``[start, end]`` ISO datetime-pair list
 #: (movebank ``time_range``). Each entry parses as an ISO date OR datetime; the
 #: router coerces to a ``(datetime, datetime)`` tuple with ``start <= end`` and
 #: echoes ``[start.isoformat(), end.isoformat()]`` for cache-key stability -- the
 #: datetime sibling of ``int_range`` no ``iso_date`` pair carries (a raw
-#: datetime-pair kwarg, LayerURI-envelope wave, ADR 0073). No prior spec declares
+#: datetime-pair kwarg, LayerURI-envelope wave). No prior spec declares
 #: it (strict no-op).
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
@@ -170,13 +170,13 @@ class ParamSpec(GraceModel):
     #: (bbox -> BBOX_INVALID, year -> YEAR_INVALID). Default (None) = spec-level.
     error_suffix: str | None = None
     #: Force this None-default param OPTIONAL in the promoted inputSchema
-    #: (phase-2 wave-3, ADR 0040). The adapter marks a None-default NON-Optional
+    #: (phase-2 wave-3). The adapter marks a None-default NON-Optional
     #: annotation as required-in-schema (the wave-2 quirk). A twin that annotated
     #: the param ``T | None = None`` is NOT required; setting ``schema_optional:
     #: true`` reproduces that (wqp bbox, nldi seed_point/comid). Default False
     #: preserves the wave-2 required behavior for every prior spec.
     schema_optional: bool = False
-    #: str-param alias table (phase-2 wave-3, ADR 0040). When set, a str value is
+    #: str-param alias table (phase-2 wave-3). When set, a str value is
     #: lower-cased + stripped and mapped through this table; an unmapped value
     #: passes through verbatim (stripped) -- exactly the wqp
     #: ``_resolve_characteristic`` alias-or-passthrough contract. Default (None) =
@@ -213,7 +213,7 @@ class NormalizeSpec(GraceModel):
     quantity: str | None = None
     orientation: str | None = None           # raster only (gridmet no-sortby lesson)
     #: Emit ``LayerURI.units`` from a request param's resolved value rather than
-    #: the static ``units`` (phase-2 wave-3, ADR 0040). The wqp twin stamps
+    #: the static ``units`` (phase-2 wave-3). The wqp twin stamps
     #: ``units=<resolved characteristic>``; setting ``units_from_param:
     #: characteristic`` reproduces it. Default (None) = the static ``units`` stamp.
     units_from_param: str | None = None
@@ -229,7 +229,7 @@ class NormalizeSpec(GraceModel):
 class OutputSpec(GraceModel):
     """Output surface (contract sec 1.1 ``output``)."""
 
-    #: ``record`` (ADR 0076): the source returns a bare JSON dict, NOT a renderable
+    #: ``record``: the source returns a bare JSON dict, NOT a renderable
     #: LayerURI. ``route()`` runs the ``hooks.record`` dict builder, caches its JSON
     #: bytes via ``read_through``, and returns the parsed dict envelope (honesty floor
     #: intact: the hook raises typed input/empty/upstream errors; no fabricated
@@ -247,7 +247,7 @@ class OutputSpec(GraceModel):
     #: static ``style_preset``. Default (None) = the static preset for every prior
     #: spec (strict no-op).
     style_preset_by_param: dict[str, Any] | None = None
-    #: Per-param MAPPED role (multi-asset RGB composite wave, ADR 0080). ``{"param":
+    #: Per-param MAPPED role (multi-asset RGB composite wave). ``{"param":
     #: "band_combo", "map": {"thermal": "primary"}}`` selects the LayerURI ``role`` by
     #: a param value; a value absent from the map falls back to the static ``role``.
     #: The landsat thermal LST product is the analytical ``primary`` while the RGB
@@ -259,7 +259,7 @@ class OutputSpec(GraceModel):
     #: sets ``emit_bbox: false`` to stay byte-identical (VERDICT round-2 tell).
     emit_bbox: bool = True
     #: Stamp ``LayerURI.bbox`` from the EXTENT of the emitted vector features
-    #: rather than the request bbox (tier-3 hook wave, ADR 0056). A dict
+    #: rather than the request bbox (tier-3 hook wave). A dict
     #: ``{pad: <deg>}`` -- the point-event fetchers (earthquakes / tsunami /
     #: volcano) auto-zoom the camera to the events' bounds, padding a degenerate
     #: single-point axis by ``pad`` degrees. The router reads the extent back from
@@ -276,7 +276,7 @@ class OutputSpec(GraceModel):
     #: pairing). Default (None) = the plain LayerURI (strict no-op for every prior
     #: spec).
     result_model: str | None = None
-    #: Auto-publish the returned raster LayerURI server-side (ADR 0075). Propagated
+    #: Auto-publish the returned raster LayerURI server-side. Propagated
     #: into ``AtomicToolMetadata.auto_publish`` at registration so the server dispatch
     #: wrapper renders (or suppresses) the raster exactly as it did for the twin's
     #: metadata flag. Default True = the terminal-product behaviour every prior fetcher
@@ -284,7 +284,7 @@ class OutputSpec(GraceModel):
     #: solver setup and should not auto-render (fetch_3dep_extra / fetch_dem opt out).
     #: No effect on vector output. Strict no-op for every prior spec (none set it).
     auto_publish: bool = True
-    #: EMPTINESS-DRIVEN output switch (finisher-mechanisms wave, ADR 0081). A
+    #: EMPTINESS-DRIVEN output switch (finisher-mechanisms wave). A
     #: hook name ``<source>.<point>`` called with ``(spec, params)`` when the
     #: produced vector FGB is FEATURE-EMPTY: its returned dict is what ``route()``
     #: returns INSTEAD of the LayerURI, reproducing a twin whose non-empty path is
@@ -294,7 +294,7 @@ class OutputSpec(GraceModel):
     #: envelope path). Validated as a resolvable hook at load. Default (None) = the
     #: LayerURI is always returned (strict no-op for every prior spec).
     variant_by_emptiness: str | None = None
-    #: FETCH-TIME PROVENANCE CHANNEL (ADR 0110). When True, ``route()`` binds a
+    #: FETCH-TIME PROVENANCE CHANNEL. When True, ``route`` binds a
     #: :class:`ProvenanceRecorder` around the fetch so the delegate/executor can
     #: ``record_provenance({...})`` a small typed dict during a NON-cached fetch;
     #: the cache persists it as a ``<key>.provenance.json`` sibling of the artifact
@@ -306,7 +306,7 @@ class OutputSpec(GraceModel):
     #: no-op for every prior spec).
     provenance: bool = False
     #: Keep attribute-only (NULL-geometry) features in the emitted FGB instead of
-    #: dropping them (chained-resolution mode, ADR 0063). The nws_alerts_conus twin
+    #: dropping them (chained-resolution mode). The nws_alerts_conus twin
     #: preserves alerts whose zone references could not be resolved as NULL-geometry
     #: rows (property table survives, no map footprint) and writes with
     #: ``SPATIAL_INDEX=NO`` (pyogrio rejects a spatial index over NULL geometry).
@@ -338,7 +338,7 @@ class PayloadEstimateSpec(GraceModel):
     ceil_mb: float | None = None
     # bbox_area / tiled
     mb_per_sq_deg: float | None = None
-    #: Per-param MB/deg^2 coefficient table for the ``bbox_area`` model (ADR 0075).
+    #: Per-param MB/deg^2 coefficient table for the ``bbox_area`` model.
     #: ``{"param": "resolution", "map": {"1 arc-second": 5.0, "1 meter": 5000.0, ...},
     #: "default": 50.0}`` -- fetch_3dep_extra's estimate scales the SAME bbox area by a
     #: per-resolution coefficient (5 / 500 / 5000 / 1 / 200 MB/deg^2) the single
@@ -360,7 +360,7 @@ class PayloadEstimateSpec(GraceModel):
 
 
 class HookSpec(GraceModel):
-    """Named extension points for the ONE irreducible per-source step (ADR 0056).
+    """Named extension points for the ONE irreducible per-source step.
 
     The tier-3 hook contract: a source whose bespoke-ness is a single clean step
     the declarative modes cannot express references a REGISTERED PURE FUNCTION by
@@ -398,7 +398,7 @@ class HookSpec(GraceModel):
     #: no-events / too-large gate lives here, the one irreducible decode step.
     parse_response: str | None = None
 
-    # --- chained-resolution mode (ADR 0063): resolve-then-fetch / bounded ---
+    # --- chained-resolution mode: resolve-then-fetch / bounded
     # --- per-item detail enrichment. Two composable phases; a source declares ---
     # --- only the phase(s) it needs. The router owns the orchestration + the ---
     # --- transport + the bounded/deduped/best-effort detail loop; these hooks ---
@@ -445,7 +445,7 @@ class HookSpec(GraceModel):
     #: enrichment join.
     enrich_merge: str | None = None
 
-    #: POST-EMIT ENVELOPE (LayerURI-envelope wave, ADR 0073).
+    #: POST-EMIT ENVELOPE (LayerURI-envelope wave).
     #: ``(spec, params, layer: LayerURI, data: bytes) -> dict[str, Any]``. The
     #: last hook the router calls: it receives the ASSEMBLED base ``LayerURI`` +
     #: the produced bytes (FGB/COG, available on cache hit + miss) and returns the
@@ -460,7 +460,7 @@ class HookSpec(GraceModel):
     #: emits the plain LayerURI unchanged).
     envelope: str | None = None
 
-    #: LIBRARY-DELEGATE call (ADR 0074, generalizing the dataretrieval precedent).
+    #: LIBRARY-DELEGATE call (generalizing the dataretrieval precedent).
     #: ``(spec, params, *, timeout_s: float) -> features | (array, transform, crs)``.
     #: The ONE sanctioned impurity: a source whose maintained LIBRARY owns discovery
     #: + the socket (pfdf, HRRR-Zarr) names a registered hook that CALLS the library
@@ -475,7 +475,7 @@ class HookSpec(GraceModel):
     #: it (strict no-op).
     delegate: str | None = None
 
-    #: LIBRARY-DELEGATE pre-cache input validation (ADR 0074). ``(spec, params) ->
+    #: LIBRARY-DELEGATE pre-cache input validation. ``(spec, params) ->
     #: None``. Runs in ``route()`` AFTER type/gate validation and BEFORE
     #: ``read_through`` -- the source-specific input gate the declarative param/gate
     #: surface cannot express (pfdf statsgo's exact CONUS envelope, 3dep's US bounds)
@@ -484,7 +484,7 @@ class HookSpec(GraceModel):
     #: dataretrieval ``pre_validate`` step. No prior spec declares it (strict no-op).
     delegate_validate: str | None = None
 
-    #: RECORD-RETURN dict builder (ADR 0076). ``(spec, params, bodies: list[bytes])
+    #: RECORD-RETURN dict builder. ``(spec, params, bodies: list[bytes])
     #: -> dict | None``. For a ``shape: record`` / ``output.layer_type: record``
     #: source whose result is a bare structured JSON dict (a discovery record, a
     #: summary), NOT a renderable LayerURI. The router owns the transport (fetches the
@@ -499,7 +499,7 @@ class HookSpec(GraceModel):
     #: no-op).
     record: str | None = None
 
-    #: SOCKETED PRE-CACHE-KEY delegate resolve (ADR 0076). ``(spec, params, *,
+    #: SOCKETED PRE-CACHE-KEY delegate resolve. ``(spec, params, *,
     #: timeout_s: float) -> dict``. The delegate sibling of the chained-resolution
     #: ``resolve_build``/``resolve_parse`` (which resolve over the router's http
     #: transport): a source whose cycle/key resolution walks a LIBRARY socket (HRRR-
@@ -513,7 +513,7 @@ class HookSpec(GraceModel):
     #: prior spec declares it (strict no-op).
     delegate_resolve: str | None = None
 
-    #: GENERIC PRE-CACHE-KEY resolve (landcover + flood-extent wave, ADR 0082).
+    #: GENERIC PRE-CACHE-KEY resolve (landcover + flood-extent wave).
     #: ``(spec, params) -> dict``. A source whose cache key depends on a value that
     #: must be resolved from the network BEFORE ``read_through`` -- but over the
     #: shared HTTP transport, NOT a library socket (the ``delegate_resolve`` sibling
@@ -527,7 +527,7 @@ class HookSpec(GraceModel):
     #: walk) neither expresses. No prior spec declares it (strict no-op).
     pre_resolve: str | None = None
 
-    #: POST-ARRAY PER-BAND COLORMAP (raster-modes wave, ADR 0086). ``(spec, params)
+    #: POST-ARRAY PER-BAND COLORMAP (raster-modes wave). ``(spec, params)
     #: -> dict[int, tuple[int, int, int, int]]``. A ``raster-cog`` source whose
     #: rendered palette is a PURE function of a request param (the jrc-gsw per-band
     #: occurrence/recurrence/seasonality/change ramp, computed from ``band`` alone --
@@ -540,7 +540,7 @@ class HookSpec(GraceModel):
     #: palette unless the spec names the hook).
     colormap: str | None = None
 
-    #: FRAMES-LIST pre-loop RESOLVE (animation wave 1, ADR 0087). ``(spec, params)
+    #: FRAMES-LIST pre-loop RESOLVE (animation wave 1). ``(spec, params)
     #: -> list[FramePlan]``. A ``shape: animation_frames`` source (an ordered
     #: per-timestamp animation that returns ``list[LayerURI]``, not one layer) names
     #: this hook: it does the pre-loop timestamp-index fetch + window + subsample +
@@ -553,7 +553,7 @@ class HookSpec(GraceModel):
     #: declares it (strict no-op).
     frames_plan: str | None = None
 
-    #: FRAMES-LIST per-frame COG BUILDER (animation wave 1, ADR 0087). ``(spec,
+    #: FRAMES-LIST per-frame COG BUILDER (animation wave 1). ``(spec,
     #: params, frame: FramePlan) -> bytes``. The ``shape: animation_frames``
     #: executor's per-frame ``read_through`` fetch_fn: builds ONE frame's raster
     #: bytes (the CIRA SLIDER tile-stitch mosaic -> EPSG:4326 COG, or a post-stitch
@@ -566,7 +566,7 @@ class HookSpec(GraceModel):
     #: prior spec declares it (strict no-op).
     frame_bytes: str | None = None
 
-    #: TRANSPORT-STATUS classification (keyed/misc wave, ADR 0071).
+    #: TRANSPORT-STATUS classification (keyed/misc wave).
     #: ``(spec, status: int | None, body: str | None) -> RouterError | None``. The
     #: http_json transport collapses every non-2xx to a retryable UPSTREAM error;
     #: a keyed source that must split the HTTP status into the twin's distinct typed
@@ -580,7 +580,7 @@ class HookSpec(GraceModel):
 
 
 class DispatchSpec(GraceModel):
-    """A spec-declared, SINGLE-TARGET pre-flight cross-sibling dispatch (ADR 0097).
+    """A spec-declared, SINGLE-TARGET pre-flight cross-sibling dispatch.
 
     The FIRST tool-composes-tool seam: for ONE declared param value the router
     SHORT-CIRCUITS ``route()`` and serves the request from a NAMED sibling
@@ -695,10 +695,10 @@ class SourceSpec(GraceModel):
     # --- ingestion (shape-specific; flexible dict keyed by shape, sec 1.2) ---
     ingest: dict[str, Any] = Field(default_factory=dict)
 
-    # --- tier-3 hooks: named pure fns for the ONE irreducible step (ADR 0056) ---
+    # --- tier-3 hooks: named pure fns for the ONE irreducible step
     hooks: HookSpec | None = None
 
-    # --- cross-sibling pre-flight dispatch (ADR 0097): one param value -> serve
+    # --- cross-sibling pre-flight dispatch: one param value -> serve
     # --- a named sibling tool's result verbatim (fetch_dem source="copernicus"). --
     dispatch: list[DispatchSpec] = Field(default_factory=list)
 
@@ -717,7 +717,7 @@ class SourceSpec(GraceModel):
     caveats: list[str] = Field(default_factory=list)
     fallback: list[str] = Field(default_factory=list)
 
-    # --- declared DATA-native resolutions (ADR 0225, two-layer truth) ---
+    # --- declared DATA-native resolutions (two-layer truth)
     # A source's native cell / tier facts live HERE (with the fetcher), so the
     # payload/input-review gate card can QUOTE them ("data native 3DEP 10 m") next to
     # a solver's declared range. Synthesized onto the tool's
@@ -725,7 +725,7 @@ class SourceSpec(GraceModel):
     # a source with no granularity-bearing param (the common case).
     resolution_declarations: tuple[ResolutionSpec, ...] = Field(default=())
 
-    # --- declared confirm gate (ADR 0273, the gate-collapse) ---
+    # --- declared confirm gate (the gate-collapse)
     # A HEAVY raster fetcher (fetch_dem/topobathy/landcover) DECLARES its
     # resolution confirm gate here; the router synthesizes the canonical fetch
     # GateSpec onto the tool's ``AtomicToolMetadata.gate_spec`` (kind='fetch',
@@ -763,7 +763,7 @@ class SourceSpec(GraceModel):
                 f"shape={self.shape} requires output.layer_type=vector; "
                 f"got {self.output.layer_type!r}"
             )
-        # record shape (ADR 0076) <-> record layer_type + json ext + a record hook.
+        # record shape <-> record layer_type + json ext + a record hook.
         if self.shape == "record" and self.output.layer_type != "record":
             raise ValueError(
                 f"shape=record requires output.layer_type=record; "
@@ -773,7 +773,7 @@ class SourceSpec(GraceModel):
             raise ValueError(
                 f"output.layer_type=record requires shape=record; got {self.shape!r}"
             )
-        # animation_frames shape (ADR 0087) <-> raster frames + the two frames hooks.
+        # animation_frames shape <-> raster frames + the two frames hooks.
         # It returns list[LayerURI] (ordered per-timestamp), so it emits raster tif
         # frames and MUST declare both the pre-loop frames_plan and the per-frame
         # frame_bytes builder (the router has nothing else to resolve the frame set /

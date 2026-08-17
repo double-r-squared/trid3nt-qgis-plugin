@@ -1,4 +1,4 @@
-"""Tests for the tool payload-warning envelopes (job-0127).
+"""Tests for the tool payload-warning envelopes.
 
 Covers:
 - Round-trip serialization for both envelopes (JSON idempotence).

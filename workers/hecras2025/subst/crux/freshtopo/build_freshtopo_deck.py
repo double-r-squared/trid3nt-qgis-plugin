@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the fresh-topology deck (carve -> geometry HDF -> .xNN/.bNN) -- ADR 0136.
+"""Assemble the fresh-topology deck (carve -> geometry HDF -> .xNN/.bNN) --.
 
 Runs on the HOST (numpy/h5py). Produces a rundir the solver harness consumes:
 
@@ -13,7 +13,7 @@ Runs on the HOST (numpy/h5py). Produces a rundir the solver harness consumes:
                          inflow scale.
 
 This deck SOLVES end-to-end through the production 6.6 RasGeomPreprocess +
-RasUnsteady (ADR 0136): the fresh tessellation passes the solver's geometry +
+RasUnsteady: the fresh tessellation passes the solver's geometry +
 2D-initialisation consistency checks and completes with valid volume accounting.
 The White River 1D reach carries the forcing; the fresh 2D flow area is present
 and solved (dry -- directing an inflow to its BC line has no combined-deck .bNN

@@ -1,4 +1,4 @@
-"""Distributed on-mesh RAINFALL / EVAPORATION knob (ADR 0190 row 1).
+"""Distributed on-mesh RAINFALL / EVAPORATION knob (row 1).
 
 author_deck emits the native TELEMAC-2D RAIN OR EVAPORATION source term ONLY
 when ReachConfig.rain_or_evap_mm_per_day is set (non-None); unset leaves the

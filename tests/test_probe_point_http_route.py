@@ -23,7 +23,7 @@ import json
 
 import pytest
 
-from trid3nt_server import tool_catalog_http
+from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
 from trid3nt_server.cases.probe_point import (
     ProbePointCaseNotFoundError,
     ProbePointInputError,

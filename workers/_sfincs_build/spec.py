@@ -37,7 +37,7 @@ JOB_SPEC_FILENAME: str = "sfincs_build_spec.json"
 
 #: PARSER VERSION -- bump whenever a job_spec top-level field is added,
 #: renamed, or retired. Named in the strict-field error so a stale worker
-#: image is distinguishable from a genuinely-malformed caller (ADR 0158).
+#: image is distinguishable from a genuinely-malformed caller.
 _PARSER_VERSION = "sfincs-jobspec-1"
 
 #: Every top-level job_spec key this worker understands. ``schema_version`` /
@@ -64,7 +64,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
 
 def _reject_unknown_spec_fields(spec: dict[str, Any]) -> None:
     """Raise loudly if ``spec`` carries a top-level key this worker never reads
-    (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped unknown
+    (-- the lesson: a stale image silently dropped unknown
     build_spec fields and two registered knob templates ran as no-ops).
     """
     unknown = sorted(set(spec) - _KNOWN_SPEC_FIELDS)

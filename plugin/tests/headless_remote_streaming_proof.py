@@ -1,4 +1,4 @@
-"""Live proof: remote streaming (ADR 0116) -- drives the REAL LayerMaterializer
+"""Live proof: remote streaming -- drives the REAL LayerMaterializer
 under a real QgsApplication against the tailnet MinIO endpoint (the path a
 remote QGIS client uses over the tailnet).
 

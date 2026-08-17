@@ -1,4 +1,4 @@
-"""ESRI-World-Imagery mesh-proof renderer for the ADR 0192 mesh-front sandbox.
+"""ESRI-World-Imagery mesh-proof renderer for the mesh-front sandbox.
 
 SANDBOX ONLY. Renders a coastal TIN wireframe over ESRI World Imagery satellite
 tiles to the project proof norms: white box = AOI extent only, wireframe a single

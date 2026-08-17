@@ -1,8 +1,8 @@
-"""Case-workflow result envelopes (job-0118).
+"""Case-workflow result envelopes.
 
 This module holds typed result shapes for the **higher-order Case workflows**
 that compose existing atomic tools and modeling workflows end-to-end. Unlike
-``AssessmentEnvelope`` (Appendix B.2) which is the canonical single-hazard /
+``AssessmentEnvelope`` which is the canonical single-hazard
 single-discovery payload, ``CaseOneResult`` (and future siblings) bundle
 multiple per-tool outputs (flood layer + N species layers + protected-area
 layer + cross-layer impact metrics + a narration-ready summary string) into
@@ -38,7 +38,7 @@ from .execution import LayerURI
 
 __all__ = [
     "CaseOneResult",
-    # Case 2 — news/alert event ingest (job-0119)
+    # Case 2 — news/alert event ingest
     "EventIngestResult",
     "DerivedEventParam",
     "EventIngestProvenance",
@@ -46,7 +46,7 @@ __all__ = [
 
 
 class CaseOneResult(GraceModel):
-    """Return type for ``model_flood_habitat_scenario`` (job-0118).
+    """Return type for ``model_flood_habitat_scenario``.
 
     Carries the full result bundle for the Case 1 composer: one flood-depth
     layer (from the SFINCS modeling pipeline), zero-or-more per-species
@@ -95,7 +95,7 @@ class CaseOneResult(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Case 2 — news / alert event-ingest composer result (job-0119)
+# Case 2 — news / alert event-ingest composer result
 # --------------------------------------------------------------------------- #
 
 
@@ -136,7 +136,7 @@ class EventIngestProvenance(GraceModel):
     Carries enough information for the user to drill from a derived parameter
     back to the originating source: the input identifier (URL or alert ID),
     the source type tag, a post-redirect final URL, the page/alert title, a
-    short citation snippet (typically a description excerpt), the FR-HEP-2
+    short citation snippet (typically a description excerpt), the
     source-authority tier, and the fetch timestamp.
     """
 
@@ -152,7 +152,7 @@ class EventIngestProvenance(GraceModel):
 
 
 class EventIngestResult(GraceModel):
-    """Result of the Case 2 ``model_news_event_ingest`` composer (job-0119).
+    """Result of the Case 2 ``model_news_event_ingest`` composer.
 
     Returned by the news/alert-ingest workflow BEFORE any downstream solver
     runs. The user reviews this envelope (via the ``case2-event-ingest-result``

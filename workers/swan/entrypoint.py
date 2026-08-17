@@ -33,7 +33,7 @@ The SWAN-specific differences from the GeoClaw shim:
      convergence guard / SWMM continuity-error gate. A 'complete' run with no
      wave output never reads status ok.
 
-Contract (FR-CE-1/2/3 -- IDENTICAL to the GeoClaw worker, only the solver + the
+Contract (-- IDENTICAL to the GeoClaw worker, only the solver + the
 ``.swn`` deck author + the honesty gate differ):
 
     Input  (env or CLI):
@@ -533,7 +533,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-swan-entrypoint",
-        description="SWAN spectral wave AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="SWAN spectral wave AWS Batch worker entrypoint.",
     )
     p.add_argument(
         "--run-id",

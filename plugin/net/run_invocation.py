@@ -1,4 +1,4 @@
-"""``!run`` chat-invocation parser (client parse-first, ADR 0114).
+"""``!run`` chat-invocation parser (client parse-first).
 
 NATE's feature: a chat message may invoke a tool DIRECTLY -- the same way the
 LLM or a workflow would -- by prefixing the composer text with ``!run`` and a

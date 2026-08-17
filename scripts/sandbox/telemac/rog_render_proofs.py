@@ -1,4 +1,4 @@
-"""Render the ADR 0196 C4 Coweeta rain-on-grid proofs to docs/proof/templates/.
+"""Render the C4 Coweeta rain-on-grid proofs to docs/proof/templates/.
 
 Three panels, all EPSG:3857 (Web Mercator; the parallel alignment wave found
 vertical misalignment when a latitude frame mixes -- both the ESRI tiles AND the

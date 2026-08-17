@@ -1,6 +1,6 @@
 """Pure-2D HEC-RAS deck authors -- the .xNN (link c4) + .bNN (c5) for a fresh AOI.
 
-The ADR 0134/0135 pure-2D deck needs, besides the geometry HDF (the
+The pure-2D deck needs, besides the geometry HDF (the
 ``hecras_geometry_writer``), two ASCII intermediates the Linux engines read:
 
 * the ``.xNN`` geometry-preprocessor file -- declares the 2D area as a Storage
@@ -9,7 +9,7 @@ The ADR 0134/0135 pure-2D deck needs, besides the geometry HDF (the
   ``BaldEagleDamBrk.x09`` skeleton (``pure2d_reference/``), with the dam /
   gate / storage-area-connection stanzas REMOVED (we have no structures) and
   the SA name + perimeter-point count patched to the fresh mesh. This is the
-  ONE remaining deck author ADR 0135 named (link c4, shrunk to the .xNN).
+  ONE remaining deck author named (link c4, shrunk to the .xNN).
 
 * the ``.bNN`` boundary file -- a BARE ``Upstream Flow Hydrograph`` (no
   ``River:/Reach:/RS:`` suffix -- that suffix marks a 1D inflow; its absence
@@ -48,7 +48,7 @@ def patch_chippewa_xnn(area_name: str, n_perimeter: int) -> str:
     """Author a CLEAN pure-2D ``.xNN`` by patching the shipped Chippewa ``x01``.
 
     ``chippewa_reference/Chippewa_2D.x01`` (HEC-RAS 6.4) is the DAM-FREE pure-2D
-    geometry preprocessor deck ADR 0136 said the distribution lacked: a single 2D
+    geometry preprocessor deck said the distribution lacked: a single 2D
     area declared as a Storage Area, an EMPTY Storage-Area-Connection section, and
     a minimal ``Fake River``/``Fake Reach`` (2 dummy cross sections) satisfying the
     engine's >=1-reach requirement -- with NONE of the ``x09`` Sayers-Dam
@@ -65,7 +65,7 @@ def patch_chippewa_xnn(area_name: str, n_perimeter: int) -> str:
     whole line to proper 8-wide fields.
 
     Proven: the deck this authors SOLVES end-to-end through the production 6.6
-    ``RasGeomPreprocess`` + ``RasUnsteady`` on a fresh carved mesh (ADR 0137, vol
+    ``RasGeomPreprocess`` + ``RasUnsteady`` on a fresh carved mesh (vol
     err 0.0). The 2D area stays DRY -- routing the fake-reach inflow ONTO the 2D BC
     line needs the plan-HDF 2D-BC ``/Event Conditions`` schema, which no shipped
     reference in this distribution exposes (OI-FT1, the precise open item).
@@ -88,7 +88,7 @@ def patch_chippewa_bnn(peak_cfs: float, *, hydrograph_node: int = 1,
     The 6.6-correct 2D-BC-line inflow header is the SUFFIXED fake-reach form
     ``Upstream Flow Hydrograph - River: Fake River  Reach: Fake Reach  RS: 100``
     (NOT the bare ``b06`` form, which is 6.2-only and maps to the 1D reach in a 6.6
-    engine -- the ADR 0136 mis-map). We keep b02's exact header/section skeleton and
+    engine -- the mis-map). We keep b02's exact header/section skeleton and
     patch two fields: the inflow ordinates to a constant ``peak_cfs`` hold, and
     ``HYDROGRAPH LOCATIONS`` from the shipped ``0`` (which divide-by-zeros in the 1D
     output-block ``hdf_set_compression``) to one valid node.
@@ -140,7 +140,7 @@ def patch_xnn(area_name: str, n_perimeter: int) -> str:
     fake ``Fake River``/``Fake Reach`` (the engine's required >=1 reach), the
     PropertyTableOptions -- is carried verbatim.
 
-    Rationale (ADR 0135): re-authoring the Arrays Sizes / section skeleton by
+    Rationale: re-authoring the Arrays Sizes / section skeleton by
     hand mis-set the 1D htab counts (``end-of-file during read`` in htabreal);
     the shipped reference's counts already match its fake reach exactly, so
     patching is both simpler AND proven.
@@ -203,7 +203,7 @@ def patch_bnn(
 def remove_lateral_weirs(x04_text: str, new_perimeter: int) -> str:
     """Strip the 1D<->2D lateral-weir coupling from a Muncie-style ``.xNN``.
 
-    THE WORKING .xNN PATH (ADR 0136). Muncie's shipped ``x04`` is a proven,
+    THE WORKING .xNN PATH. Muncie's shipped ``x04`` is a proven,
     fully-parsing geometry for the 6.6 engine, but it is a COMBINED 1D/2D deck:
     its White River reach carries two ``NODE`` type-6 lateral-weir structures
     (at RS 13214 + RS 7300) whose ``DS SA/2D`` is ``2D Interior Area``. Left in
@@ -213,7 +213,7 @@ def remove_lateral_weirs(x04_text: str, new_perimeter: int) -> str:
     Arrays Sizes B-row + the Reach Boundaries downstream node, and patches the SA
     perimeter-point count to ``new_perimeter`` -- yielding a standalone White
     River reach + a bare 2D flow area, which the 6.6 engine solves end-to-end
-    (ADR 0136: vol err 0.0021%). This is the durable ``.xNN`` author the ADR 0135
+    (vol err 0.0021%). This is the durable ``.xNN`` author the
     charter asked for -- built by patching a proven reference, not blind.
 
     Preferred over the from-scratch x09 patch (``patch_xnn``): the shipped x09's
@@ -258,7 +258,7 @@ def remove_lateral_weirs(x04_text: str, new_perimeter: int) -> str:
 
 def patch_muncie_bnn(muncie_b04_text: str, *, flow_scale: float = 1.0,
                      hydrograph_node: int = 30) -> str:
-    """Author the WORKING ``.bNN`` by patching Muncie's shipped ``b04`` (ADR 0136).
+    """Author the WORKING ``.bNN`` by patching Muncie's shipped ``b04``.
 
     Three edits make the shipped combined-deck boundary file solve on a
     lateral-weir-stripped deck: (1) zero the ``Breach Data`` (the weir breach is

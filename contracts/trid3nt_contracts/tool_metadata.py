@@ -1,8 +1,8 @@
 """Tool docstring metadata conventions and ``tool_category`` vocabulary.
 
-CONVENTION ONLY. This module documents the required docstring sections (FR-AS-3,
-FR-TA-3) and the ``tool_category`` vocabulary used in the ``tool-call-start``
-WebSocket message (Appendix A.4). ``agent`` owns the tool registry / ``FunctionTool``
+CONVENTION ONLY. This module documents the required docstring sections (
+) and the ``tool_category`` vocabulary used in the ``tool-call-start``
+WebSocket message. ``agent`` owns the tool registry / ``FunctionTool``
 code; ``schema`` owns these conventions and the message field they populate.
 
 The constants here are importable so ``agent`` and ``testing`` can assert that a
@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-#: Required docstring sections for every registered tool (FR-AS-3).
+#: Required docstring sections for every registered tool.
 #: The agent's registry should reject (or flag) a tool whose docstring is
 #: missing any of these. ``testing`` asserts presence as a negative control.
 REQUIRED_DOCSTRING_SECTIONS: tuple[str, ...] = (
@@ -32,11 +32,11 @@ REQUIRED_DOCSTRING_SECTIONS: tuple[str, ...] = (
 
 
 #: ``tool_category`` vocabulary for ``tool-call-start.tool_category`` (A.4).
-#: Open enum (Decision G): a new engine may add a category without a breaking
-#: change. Members mirror the FR-TA-2 tool groupings. The pipeline strip uses
+#: Open enum: a new engine may add a category without a breaking
+#: change. Members mirror the tool groupings. The pipeline strip uses
 #: the category to group/icon steps client-side.
 TOOL_CATEGORIES: tuple[str, ...] = (
-    "workflow",  # FR-TA-1 deterministic workflows
+    "workflow",  # deterministic workflows
     "discovery",  # public hazard layer discovery (catalog search / fetch / summarize)
     "data-fetch",  # DEM, landcover, rivers, precip, streamflow, tracks, buildings
     "event-sourcing",  # news + agency feeds + generic web fetch

@@ -1,6 +1,6 @@
 """HEC-RAS unsteady-flow deck reparameterization (engine-landing wave).
 
-TEMPLATE-FIRST reparameterization (ADR 0100 / 0109): the shipped Muncie project's
+TEMPLATE-FIRST reparameterization (/ 0109): the shipped Muncie project's
 GEOMETRY is frozen (RASMapper's 2D subgrid tables cannot be rebuilt headless), so
 the ONE thing a run varies is the unsteady FLOW forcing -- the inflow hydrograph
 in the boundary-condition file (``.bNN``).

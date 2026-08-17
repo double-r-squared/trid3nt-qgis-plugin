@@ -3,7 +3,7 @@
 CRS math + guard logic for the dock's explicit AOI (the drawn Set-AOI
 rectangle / rehydrated case bbox, A2 NATE 2026-07-20).
 
-How the AOI rides the wire (ADR 0017 mechanism 2, 2026-07-22):
+How the AOI rides the wire (mechanism 2, 2026-07-22):
 
 * The PERSISTENT Case bbox carrier is unchanged: ``case-command create`` /
   ``set-bbox`` accept ``args.bbox = [lon_min, lat_min, lon_max, lat_max]``

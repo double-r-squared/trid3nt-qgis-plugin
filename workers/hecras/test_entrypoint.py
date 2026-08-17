@@ -84,8 +84,8 @@ def test_run_raises_on_missing_plan_hdf(tmp_path):
 
 
 def test_run_rejects_unknown_manifest_field(tmp_path):
-    """ADR 0158: an unknown manifest.json field errors loudly instead of
-    silently keeping the deck's baked default (the ADR 0148 lesson)."""
+    """an unknown manifest.json field errors loudly instead of
+    silently keeping the deck's baked default (the lesson)."""
     (tmp_path / "manifest.json").write_text(
         json.dumps({
             "plan_hdf": "Absent.p04.tmp.hdf", "geom_suffix": "x04",
@@ -97,7 +97,7 @@ def test_run_rejects_unknown_manifest_field(tmp_path):
 
 
 def test_seam_envelope_fields_are_accepted():
-    """ADR 0188: the generic run_solver-seam envelope (run_id/inputs/outputs/
+    """the generic run_solver-seam envelope (run_id/inputs/outputs/
     hecras_args) rides the same manifest.json and must NOT be rejected as
     unknown -- the M3-gate fresh-deck path (hecras_flood_2d) stages via it."""
     for field in ("run_id", "inputs", "outputs", "hecras_args"):

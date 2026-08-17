@@ -1,6 +1,6 @@
-"""Author the plan-HDF ``/Event Conditions`` 2D-BC-line schema (OI-FT1, ADR 0138).
+"""Author the plan-HDF ``/Event Conditions`` 2D-BC-line schema (OI-FT1).
 
-This is the LAST forcing link the ADR 0136/0137 chain named: the engine's
+This is the LAST forcing link the chain named: the engine's
 ``read_un_q2d_bc_`` (Read_UN_Q2D_BC.for) reads each 2D-BC-line flow hydrograph /
 normal depth from ``/Event Conditions/Unsteady/Boundary Conditions`` -- NOT from
 the ``.bNN`` fake-reach header (which is an inert required-1D placeholder) NOR

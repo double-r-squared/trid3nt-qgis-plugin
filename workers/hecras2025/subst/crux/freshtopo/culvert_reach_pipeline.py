@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Culvert-through-embankment on the HEC-RAS 2025 managed engine (ADR 0251, Stage 2).
+"""Culvert-through-embankment on the HEC-RAS 2025 managed engine (Stage 2).
 
-The productionized culvert leg. The seam is PROVEN (ADR 0251 A/B/C: the Culvert is
+The productionized culvert leg. The seam is PROVEN (A/B/C: the Culvert is
 the ONE 2D structure the 2025 beta wires into the compute -- ``InitializeDriver_Culverts``
 copies every barrel/opening field into the solve; a barrel conveys flow a raised
 embankment otherwise blocks). This module drives that on a REAL reach:
@@ -237,7 +237,7 @@ def seal_embankment(prep: Rog2025Prep, geom: CulvertGeometry, *, cap_m: float,
     so the cell never blocks and case B never ponds. This raises the real road band
     (widened ``widen_cells`` mesh cells each side so it spans >= one full cell) to
     ``crest + cap_m``, sealing the mesh road cell. Applied to BOTH A and B (the barrel is
-    then the ONLY difference -- the ADR 0251 seam-probe design on the REAL road/terrain).
+    then the ONLY difference -- the seam-probe design on the REAL road/terrain).
     Returns the sealing crest elevation (m). HONEST: this is a burned 1-cell cap at the
     REAL road centerline, used because the sub-cell fill under-resolves at screening scale."""
     import numpy as np
@@ -350,7 +350,7 @@ def _upstream_downstream_masks(result_h5, geom: CulvertGeometry):
 def extract_discriminant(result_a, result_b, geom: CulvertGeometry) -> dict:
     """A/B discriminant: upstream ponding (B) vs conveyance (A), + max|A-B| depth delta.
 
-    Mirrors the ADR 0251 seam-probe metric on the real reach. B (no barrel) traps the
+    Mirrors the seam-probe metric on the real reach. B (no barrel) traps the
     reach inflow upstream of the embankment (storage rises); A (barrel) conveys it under
     the road (upstream storage quasi-steady). The final-step upstream mean depth orders
     A < B, and max|A-B| over the per-cell depth field proves the barrel is hydraulically
@@ -452,7 +452,7 @@ def run_culvert_reach(dem_tif, workdir, *, cell_size=25.0, elev_units="m", bbox4
                              "at screening mesh)" if seal_crest is not None
                              else "real 3DEP terrain (road embankment in the lidar)"),
         "engine": "HEC-RAS 2025 managed (CPU, beta)",
-        "structure": "culvert barrel (InitializeDriver_Culverts wired; ADR 0251)",
+        "structure": "culvert barrel (InitializeDriver_Culverts wired)",
     }
 
 

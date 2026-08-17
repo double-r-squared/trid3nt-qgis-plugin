@@ -1,4 +1,4 @@
-"""Ball Creek RoG replication proof charts (ADR 0204) -> docs/proof/templates/.
+"""Ball Creek RoG replication proof charts -> docs/proof/templates/.
 
 Dock-exact computed-vs-observed outlet-discharge overlays (6.0 x 2.2 in, dpi 200,
 caption strip, quantitative axes, no annotation boxes):

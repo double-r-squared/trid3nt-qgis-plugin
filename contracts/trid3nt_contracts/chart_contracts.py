@@ -1,6 +1,6 @@
 """Chart-emission envelope + Vega-Lite wire-format contract (sprint-13 Stage 1,
 conversational data-analysis layer; see memory ``project_conversational_data
-_analysis_layer`` + sprint-13 manifest job-0223).
+_analysis_layer`` + sprint-13 manifest).
 
 The conversational analysis layer lets a user ask data-backed follow-up
 questions about layers already on the map ("how many structures?", "show me a
@@ -25,7 +25,7 @@ contract to police. We do a **cheap structural sanity check** (see
 or empty spec is rejected at the contract boundary instead of failing silently in
 the browser.
 
-Determinism boundary (Invariant 1 / Decision H / FR-AS-7)
+Determinism boundary (Invariant 1)
 ---------------------------------------------------------
 The chart's numbers live inside ``vega_lite_spec`` as structured data computed by
 a deterministic tool, never narrated free text the LLM invents. The agent's
@@ -53,17 +53,17 @@ appends; it does NOT add the ``charts`` array field to
 ``collections.SessionDocument`` itself. Adding that field is a sibling
 schema follow-up (``collections.py`` is a separate ownership surface and the
 field has downstream session-replay implications for ``web`` + ``agent``); it is
-surfaced as an Open Question in the job-0223 report rather than landed here. The
+surfaced as an Open Question in the report rather than landed here. The
 writer can persist ``SessionChartRecord`` documents today via a ``$push`` to a
 ``charts`` array without the field being declared on the model, because the
 session writer round-trips through Mongo, not through ``SessionDocument``
 validation on write.
 
-Registration (manifest job-0223 scope: "register chart-emission the same way")
+Registration (manifest scope: "register chart-emission the same way")
 ------------------------------------------------------------------------------
-``chart-emission`` is an agent -> client (Appendix A.4) message. Following the
+``chart-emission`` is an agent -> client message. Following the
 ``secrets`` / ``payload_warning`` precedent, this module exports a per-module
-routing fragment :data:`CHART_AGENT_TO_CLIENT_PAYLOADS`; ``ws.py`` (Appendix A,
+routing fragment :data:`CHART_AGENT_TO_CLIENT_PAYLOADS`; ``ws.py`` (
 schema-owned) splats it into ``AGENT_TO_CLIENT_PAYLOADS`` / ``ALL_PAYLOADS`` so
 the wire envelope is decode-routable like every other message.
 """
@@ -112,12 +112,12 @@ def is_structurally_valid_vega_lite_spec(spec: dict[str, Any]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# chart-emission envelope payload (agent -> client, Appendix A.4 amendment)
+# chart-emission envelope payload (agent -> client, amendment)
 # --------------------------------------------------------------------------- #
 
 
 class ChartEmissionPayload(GraceModel):
-    """``chart-emission`` (Appendix A.4 amendment, job-0223, sprint-13).
+    """``chart-emission`` (amendment, sprint-13).
 
     The agent emits this after a chart-generation tool computes chart data and
     builds a Vega-Lite v5 spec. The client renders the spec inline (stacked
@@ -223,9 +223,9 @@ class SessionChartRecord(GraceModel):
 # Routing registry fragment (sibling wires into ws.ALL_PAYLOADS — see ws.py)
 # --------------------------------------------------------------------------- #
 #
-# ``chart-emission`` is agent -> client (Appendix A.4). Following the
+# ``chart-emission`` is agent -> client. Following the
 # ``secrets`` / ``payload_warning`` precedent, this module exposes the typed
-# routing fragment; ``ws.py`` (Appendix A, schema-owned) splats it into
+# routing fragment; ``ws.py`` (schema-owned) splats it into
 # ``AGENT_TO_CLIENT_PAYLOADS`` so the decoder can route the wire envelope.
 
 CHART_AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {

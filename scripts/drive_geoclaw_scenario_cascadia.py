@@ -1,11 +1,11 @@
-"""ADR 0230 Slab2 SCENARIO live driver (direct-call, local-docker): a Cascadia M9.0
+"""Slab2 SCENARIO live driver (direct-call, local-docker): a Cascadia M9.0
 "what if" tsunami end to end.
 
 The scenario rung: NOT a real catalog event -- a HYPOTHETICAL full-margin Cascadia
 rupture whose GEOMETRY is the real USGS Slab2 subduction interface (depth/strike/dip),
 tiled into subfaults that follow the CURVED trench, with a Strasser-2010-scaled,
 Tukey-tapered slip summing to M9.0. Drives a multi-subfault Okada deformation ->
-dtopo -> the deep-water bathymetry (ADR 0229 rung) -> GeoClaw solve -> coastal
+dtopo -> the deep-water bathymetry (rung) -> GeoClaw solve -> coastal
 amplitude on the Washington/Oregon coast.
 
 ScienceBase is Cloudflare-walled from this datacenter (the production

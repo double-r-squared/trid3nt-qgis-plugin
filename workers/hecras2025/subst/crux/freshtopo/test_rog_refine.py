@@ -1,4 +1,4 @@
-"""Offline tests for the ADR 0210 graded-mesh input authoring (rog_refine.py).
+"""Offline tests for the graded-mesh input authoring (rog_refine.py).
 
 No docker / no engine: these validate the host-side seed + breakline generation and
 the invariant that makes the HEC mesh accept the seeds -- every INTERIOR Voronoi
@@ -105,7 +105,7 @@ def test_crowding_relief_bounds_interior_degree(built):
     """The crowding-relief pass keeps the interior Voronoi/Delaunay degree bounded on this
     gentle fixture (HEC rejects >8-sided cells; on this domain the relieved cloud stays
     within the cap -- on steeper real transitions HEC's own face-collapse + the driver's
-    seed-drop backstop carry the residual, verified in-engine, ADR 0210)."""
+    seed-drop backstop carry the residual, verified in-engine)."""
     _, seeds = built
     assert _interior_max_degree(seeds, _W, _H, margin=60.0) <= 8
 

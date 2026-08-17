@@ -223,7 +223,7 @@ class SettingsDialog(QDialog):
         self.show_thinking_checkbox.setChecked(settings.show_thinking)
         form.addRow("", self.show_thinking_checkbox)
 
-        # ADR 0018 auto/ask modes (Stage 3, 2026-07-22): the small Auto/Ask
+        # auto/ask modes (Stage 3, 2026-07-22): the small Auto/Ask
         # tool-selection control -- rides every user-message like
         # show_thinking (apply-on-Save, the item-4 discipline). "auto" =
         # autonomous tool selection (picker only on a measured near-tie);
@@ -284,7 +284,7 @@ class SettingsDialog(QDialog):
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
-        # ADR 0018: persist the Auto/Ask tool-selection mode (rides the next
+        # persist the Auto/Ask tool-selection mode (rides the next
         # user-message via the dock's send path -- no restart, no push).
         self._settings.tool_choice_mode = self.tool_choice_combo.currentText()
         # OpenRouter model-extensibility (design 2026-07-19): persist provider

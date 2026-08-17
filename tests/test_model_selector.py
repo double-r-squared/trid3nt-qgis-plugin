@@ -24,7 +24,7 @@ import pytest
 
 from trid3nt_server.adapters import bedrock_adapter as ba
 from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
-from trid3nt_server.tool_catalog_http import _aggregate_records, _normalize_record
+from trid3nt_server.server.protocol.catalog_http import _aggregate_records, _normalize_record
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests

@@ -1,4 +1,4 @@
-"""Offline gates for the fresh-AOI terrain prep (ADR 0140 promotion).
+"""Offline gates for the fresh-AOI terrain prep (promotion).
 
 Pure rasterio/pyproj/numpy on a SYNTHETIC DEM (no network, no docker): the local
 ftUS CRS, the m->ftUS elevation conversion, the nodata fill (so ComputeFrom never

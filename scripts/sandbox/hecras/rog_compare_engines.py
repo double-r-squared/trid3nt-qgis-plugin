@@ -1,8 +1,8 @@
-"""Cross-engine rain-on-grid comparison: TELEMAC-2D vs HEC-RAS 2D (ADR 0199).
+"""Cross-engine rain-on-grid comparison: TELEMAC-2D vs HEC-RAS 2D.
 
 Replicates the Godara, Bruland and Alfredsen 2024 (Front. Water 6:1384205)
 TELEMAC-vs-HEC-RAS rain-on-grid EXPERIMENT on OUR US catchment -- Coweeta Creek
-NC (pour point -83.40402 35.05746, the ADR 0193/0196 site) -- with the SAME design
+NC (pour point -83.40402 35.05746, the site) -- with the SAME design
 storm (25 mm/hr for 6 h) and the SAME AMC-II / CN-equivalent infiltration, so the
 two solvers are compared like-for-like on a steep catchment.
 
@@ -17,15 +17,15 @@ Reported (the paper's experiment, our catchment):
       mesh stability on this steep catchment, velocity behaviour on steep slopes) --
       reported honestly whichever way it lands; disagreement is a finding.
 
-Engine status (2026-08-09, ADR 0209):
-  - TELEMAC-2D RoG: LIVE (ADR 0196). ``--telemac`` runs the landed direct driver,
-    ``--telemac-ref`` reads the ADR 0196 landed numbers as the reference row.
+Engine status (2026-08-09):
+  - TELEMAC-2D RoG: LIVE. ``--telemac`` runs the landed direct driver,
+    ``--telemac-ref`` reads the landed numbers as the reference row.
   - HEC-RAS 2025 RoG: LIVE end-to-end on the managed CPU engine (rog2025_pipeline).
     ``--hecras`` reprojects the cached Coweeta DEM, authors a 2025 project (structured
     2D area + constant design storm + NormalDepth outlet), prepares + solves on the
     CPU, and extracts outlet Q / max depth+velocity / runoff from the result HDF,
     restricted to the delineated catchment. RAIN-ONLY (the 2025 beta has no
-    infiltration layer, ADR 0209 D2) -- so its runoff coefficient is an upper bound
+    infiltration layer, D2) -- so its runoff coefficient is an upper bound
     vs the TELEMAC AMC-II (SCS-CN) row.
 
 Run in the agent venv with the MinIO env block. ASCII only.
@@ -50,11 +50,11 @@ DESIGN_STORM_MM_PER_HR = 25.0
 STORM_DURATION_HR = 6.0
 AMC = "normal"                                     # AMC II
 CN2 = 80.0                                          # AMC-II CN-equivalent
-#: cached Coweeta DEM + delineated catchment (ADR 0193/0196 site).
+#: cached Coweeta DEM + delineated catchment (site).
 COWEETA_DEM = "/tmp/rog_coweeta/dem.tif"
 COWEETA_CATCHMENT = "/tmp/rog_coweeta/catchment.geojson"
 
-#: The ADR 0196 landed TELEMAC-2D RoG Coweeta live numbers (AMC II), the reference
+#: The landed TELEMAC-2D RoG Coweeta live numbers (AMC II), the reference
 #: row when the live TELEMAC re-run is not exercised here.
 TELEMAC_REF = {
     "engine": "TELEMAC-2D",
@@ -66,7 +66,7 @@ TELEMAC_REF = {
     "wall_s": 45.0,
     "nodes": 4854,
     "cells": 9521,
-    "status": "live (ADR 0196 C4)",
+    "status": "live (C4)",
 }
 
 
@@ -142,7 +142,7 @@ def run_hecras(workdir: Path, *, do_solve: bool = True, full_swe: bool = False) 
 
 
 def run_telemac(workdir: Path) -> dict:
-    """Run the landed TELEMAC-2D RoG Coweeta driver end-to-end (ADR 0196)."""
+    """Run the landed TELEMAC-2D RoG Coweeta driver end-to-end."""
     driver = REPO / "scripts/sandbox/telemac/rog_coweeta_live.py"
     t0 = time.time()
     proc = subprocess.run(
@@ -173,7 +173,7 @@ def main() -> int:
     ap.add_argument("--full-swe", action="store_true", help="HR: full SWE instead of Diffusion Wave")
     ap.add_argument("--telemac", action="store_true", help="run the live TELEMAC RoG driver")
     ap.add_argument("--telemac-ref", action="store_true",
-                    help="use the ADR 0196 landed TELEMAC numbers (no live re-run)")
+                    help="use the landed TELEMAC numbers (no live re-run)")
     ap.add_argument("--workdir", default="/tmp/rog_compare")
     args = ap.parse_args()
 

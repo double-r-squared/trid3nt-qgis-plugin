@@ -1,4 +1,4 @@
-"""Round-trip + invariant tests for Case persistence envelopes (FR-MP-6).
+"""Round-trip + invariant tests for Case persistence envelopes.
 
 Every Case persistence type defined in ``trid3nt_contracts.case`` is exercised:
 - A real instance is built, dumped via ``model_dump(mode="json")``, JSON-text
@@ -415,7 +415,7 @@ def test_module_exports_via_package_namespace() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ToolCardRecord + role="tool" (job-0267 — full-stream persistence)
+# ToolCardRecord + role="tool" (full-stream persistence)
 # --------------------------------------------------------------------------- #
 
 
@@ -704,7 +704,7 @@ def test_case_chat_message_tool_role_roundtrip() -> None:
 
 
 def test_case_chat_message_tool_card_default_none_backcompat() -> None:
-    """Pre-job-0267 documents (no ``tool_card`` key at all) validate unchanged."""
+    """Pre-documents (no ``tool_card`` key at all) validate unchanged."""
     raw = {
         "schema_version": "v1",
         "message_id": new_ulid(),

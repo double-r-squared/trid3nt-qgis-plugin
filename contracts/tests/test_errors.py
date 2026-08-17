@@ -1,4 +1,4 @@
-"""Tests for ``trid3nt_contracts.errors.ToolInputError`` (job-0114-schema).
+"""Tests for ``trid3nt_contracts.errors.ToolInputError`` (schema).
 
 Verifies:
 - All three closed-enum codes round-trip cleanly.

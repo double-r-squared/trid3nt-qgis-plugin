@@ -1,4 +1,4 @@
-"""Direct Landlab groundwater invocations for trid3nt-local proof (ADR 0214).
+"""Direct Landlab groundwater invocations for trid3nt-local proof.
 
 Bypasses the LLM/agent chat layer -- calls the deterministic Landlab groundwater
 composers directly. Each runs the FULL local off-box chain:

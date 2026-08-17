@@ -1,10 +1,10 @@
-"""Offline tests for the fresh-topology carve + deck authors (ADR 0136).
+"""Offline tests for the fresh-topology carve + deck authors.
 
 Worker-local (numpy/h5py only, no docker, no server code). Validates the carve
 machinery reproduces HEC's 2D conventions (identity + sub-rectangle) and that the
 .xNN weir-removal + .bNN patch transforms are structurally correct. The SOLVE
-itself is proven separately in-container (ADR 0136); these gates guard the pure
-authoring logic the way ADR 0133's writer round-trip does.
+itself is proven separately in-container; these gates guard the pure
+authoring logic the way's writer round-trip does.
 
 Run from this dir:  python -m pytest test_freshtopo.py -q
 """

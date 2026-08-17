@@ -1,6 +1,6 @@
 """SFINCS Cloud Run Job entrypoint — thin shim around the upstream binary.
 
-Contract (M5 / FR-CE-1/2/3):
+Contract (M5):
 
     Input  (env or CLI):
         --run-id RUN_ID
@@ -338,7 +338,7 @@ def run_raster_postprocess(
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-sfincs-entrypoint",
-        description="SFINCS Cloud Run Job entrypoint (FR-CE-1/2/3).",
+        description="SFINCS Cloud Run Job entrypoint.",
     )
     p.add_argument(
         "--run-id",
@@ -589,7 +589,7 @@ def main(argv: list[str] | None = None) -> int:
 
             spec = validate_job_spec(_read_manifest(build_spec_uri))
             # QUADTREE (M4): a variable-resolution coastal quadtree deck authored
-            # by cht_sfincs (hydromt cannot build quadtree from scratch; ADR 0113).
+            # by cht_sfincs (hydromt cannot build quadtree from scratch).
             # The solve + postprocess tail below is IDENTICAL to the regular grid
             # (SFINCS consumes qtrfile natively; the read-side probe is face-aware).
             _is_quadtree = bool((spec.get("options") or {}).get("quadtree"))

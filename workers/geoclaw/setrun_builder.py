@@ -109,7 +109,7 @@ _VALID_SCENARIOS = {"dam_break", "tsunami", "surge", "thacker"}
 
 #: PARSER VERSION -- bump whenever a build_spec top-level field is added,
 #: renamed, or retired. Named in the strict-field error so a stale worker
-#: image (which silently dropped unknown fields before ADR 0158) is
+#: image (which silently dropped unknown fields before) is
 #: distinguishable from a genuinely-malformed caller.
 _PARSER_VERSION = "geoclaw-spec-7"
 
@@ -122,7 +122,7 @@ _THACKER_GRAVITY = 9.81
 #: GeoClaw ``surge_data.drag_law`` codes (storm_module.f90): the wind-stress
 #: coefficient law selected for the surge wind forcing. The knob MUST land a
 #: distinct integer (an unknown name raises) so a drag-law choice measurably
-#: changes the run rather than silently no-opping (the ADR 0143 lesson).
+#: changes the run rather than silently no-opping (the lesson).
 _DRAG_LAW_CODES: dict[str, int] = {"none": 0, "garratt": 1, "powell": 2}
 
 #: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
@@ -177,7 +177,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
 
 def _reject_unknown_spec_fields(raw: dict[str, Any]) -> None:
     """Raise loudly if ``raw`` carries a top-level key ``parse_build_spec`` never
-    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    reads (-- the lesson: a stale image silently dropped
     unknown build_spec fields and two registered knob templates ran as no-ops).
     """
     unknown = sorted(set(raw) - _KNOWN_SPEC_FIELDS)
@@ -1078,7 +1078,7 @@ def render_maketopo_dtopo(spec: GeoClawBuildSpec) -> str:
     """Render a ``maketopo.py`` that synthesizes an Okada dtopo for the tsunami
     scenario (when no dtopo file was staged).
 
-    Fallback ladder (ADR 0226 finite-fault upgrade -- the data-source fallback
+    Fallback ladder (finite-fault upgrade -- the data-source fallback
     norm):
       * ``finite_fault_file`` staged -> a MULTI-subfault Okada from a published USGS
         finite-fault inversion (``_render_finite_fault_construction``): a real,

@@ -1,5 +1,5 @@
 """Validation + round-trip tests for the python-sandbox code-exec contracts
-(sprint-13 Stage 2, conversational data-analysis layer, job-0233).
+(sprint-13 Stage 2, conversational data-analysis layer).
 
 Covers:
 - ``CodeExecRequestPayload`` round-trip + bounds (python_code min/max length,

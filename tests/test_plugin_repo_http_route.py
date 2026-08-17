@@ -29,7 +29,8 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server import plugin_repo, tool_catalog_http
+from trid3nt_server import plugin_repo
+from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
 
 # ---------------------------------------------------------------------------
 # Fixture repo helpers

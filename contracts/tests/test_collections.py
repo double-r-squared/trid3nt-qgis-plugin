@@ -1,4 +1,4 @@
-"""Round-trip + negative tests for the five MongoDB collections (Appendix D)."""
+"""Round-trip + negative tests for the five MongoDB collections."""
 
 from __future__ import annotations
 
@@ -278,7 +278,7 @@ def test_vector_indexes_cover_runs_articles_events() -> None:
 
 
 def test_embedding_dimension_default_is_768_oq7() -> None:
-    """OQ-7: SRS Decision L default (text-embedding-005, 768 dims)."""
+    """OQ-7: SRS default (text-embedding-005, 768 dims)."""
     assert EMBEDDING_DIMENSIONS_DEFAULT == 768
     assert EMBEDDING_MODEL_DEFAULT == "text-embedding-005"
 
@@ -315,8 +315,8 @@ def test_sessions_ttl_config() -> None:
     assert SESSIONS_TTL["expire_after_seconds"] == 30 * 24 * 60 * 60
 
 
-# --- D.6 PipelineStepSummary extended fields (job-0030) -------------------- #
-# Closes job-0026 OQ-W-26-PIPELINE-STEP-FIELDS.
+# --- D.6 PipelineStepSummary extended fields
+# Closes OQ-W-26-PIPELINE-STEP-FIELDS.
 
 
 def test_pipeline_step_summary_carries_new_optional_fields_roundtrip() -> None:
@@ -393,7 +393,7 @@ def test_pipeline_step_summary_progress_percent_rejects_out_of_range(
     ],
 )
 def test_pipeline_step_summary_error_code_accepts_screaming_snake(code: str) -> None:
-    """Appendix A.6: SCREAMING_SNAKE_CASE is the wire convention."""
+    """SCREAMING_SNAKE_CASE is the wire convention."""
     step = PipelineStepSummary(
         step_id=new_ulid(),
         name="step",
@@ -457,7 +457,7 @@ def test_pipeline_step_summary_error_message_512_char_cap() -> None:
         )
 
 
-# --- D.6 PipelineStepSummary.duration_ms (job-0264) ------------------------- #
+# --- D.6 PipelineStepSummary.duration_ms
 # ELEVATED tool-timer requirement: authoritative wall-clock duration stamped
 # on the terminal transition. Optional, ge=0, defaults None.
 
@@ -582,7 +582,7 @@ def test_pipeline_step_summary_rejects_unknown_role() -> None:
         )
 
 
-# --- D.2 ProjectLayerSummary: job-0072 new optional fields ------------------ #
+# --- D.2 ProjectLayerSummary: new optional fields
 # Closes OQ-62-LAYERURI-URI-FIELD, OQ-W-65-STYLE-PRESET, OQ-0068-ZIDX.
 
 
@@ -637,7 +637,7 @@ def test_project_layer_summary_new_optional_fields_roundtrip_non_default() -> No
 
 
 def test_project_layer_summary_backward_compat_missing_new_fields() -> None:
-    """Documents written before job-0072 (without wms_url/opacity/z_index) still parse."""
+    """Documents written before (without wms_url/opacity/z_index) still parse."""
     import json
 
     old_doc = {

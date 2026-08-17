@@ -292,7 +292,7 @@ class FireSpreadLayerURI(LayerURI):
 
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command
     load-layer`` unchanged. Adds the structured numbers the agent narrates
-    (Invariant 1 / FR-AS-7 — typed fields, never free-generated):
+    (Invariant 1 — typed fields, never free-generated):
 
         burned_area_km2: areal footprint the fire reached within the sim
             window, km^2 (>= 0). Computed by counting valid time-of-arrival

@@ -18,13 +18,13 @@ TWO PHASES, one source of truth:
   ``TRID3NT_PLUGIN_REPO_DIR``).
 
 - SERVE (per request, ``render_plugins_xml`` / ``served_zip_path`` -- mounted
-  by ``tool_catalog_http._handle_http``). ``GET /plugin-repo/plugins.xml``
+  by ``catalog_http._handle_http``). ``GET /plugin-repo/plugins.xml``
   returns the packaged index with its ``download_url`` host filled in from the
   REQUEST's own Host header; ``GET /plugin-repo/<versioned-zip>`` serves the
   packaged zip bytes as a fallback/manual-QA path.
 
 - FRESH ZIP (per request, ``build_fresh_zip`` -- also mounted by
-  ``tool_catalog_http._handle_http`` at the FIXED path
+  ``catalog_http._handle_http`` at the FIXED path
   :data:`FRESH_ZIP_URL_PATH`, ``/plugin-repo/trid3nt.zip``). This is the
   ``download_url`` every ``plugins.xml`` now advertises. It builds straight
   from ``plugin/`` on the daemon's OWN checkout -- no prior
@@ -115,7 +115,7 @@ _DEFAULT_QGIS_MINIMUM_VERSION = "3.28"
 HOST_SENTINEL = "__TRID3NT_DAEMON_HOST__"
 
 #: Fixed-name route the FRESH zip is served at (see module docstring). The
-#: literal string in ``tool_catalog_http.py``'s route dispatch MUST match
+#: literal string in ``catalog_http.py``'s route dispatch MUST match
 #: this -- it is duplicated there rather than imported to follow that
 #: module's existing per-branch literal-path convention.
 FRESH_ZIP_URL_PATH = "/plugin-repo/trid3nt.zip"

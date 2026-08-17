@@ -1,4 +1,4 @@
-"""CSUB delay-interbed + effective-stress upgrade prototype (ADR 0228).
+"""CSUB delay-interbed + effective-stress upgrade prototype.
 
 The landed land_subsidence archetype uses ONE no-delay HEAD_BASED interbed per
 pumped cell. The board row csub_effective_stress_vs_head_based_crosscheck asks

@@ -1,4 +1,4 @@
-"""Remote-streaming wave (ADR 0116) -- the plugin side.
+"""Remote-streaming wave -- the plugin side.
 
 Covers the three things this wave adds to the materializer:
 

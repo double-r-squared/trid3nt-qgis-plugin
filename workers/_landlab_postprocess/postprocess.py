@@ -207,7 +207,7 @@ def run_landlab_postprocess(
     manifest's ``cog_uri`` is the resolved runs-bucket URI for that key.
 
     NEVER raises for an expected-empty result -- returns a status=error result
-    with the typed error_code (honesty gate / Invariant 1 / FR-AS-7).
+    with the typed error_code (honesty gate / Invariant 1).
     """
     import numpy as np  # noqa: PLC0415
 

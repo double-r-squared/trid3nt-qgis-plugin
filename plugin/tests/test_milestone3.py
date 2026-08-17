@@ -52,7 +52,7 @@ def _make_gpkg(path: str, tables: list) -> None:
 
 class _CaseListStub(http.server.BaseHTTPRequestHandler):
     """Mirrors the agent's real ``GET /api/case-list`` route in miniature
-    (the server's ``tool_catalog_http.py``): 200 ``{"cases": [...]}`` on
+    (the server's ``catalog_http.py``): 200 ``{"cases": [...]}`` on
     success, or a configurable status + ``{"error": ...}`` body."""
 
     status: int = 200
@@ -913,7 +913,7 @@ class TestSelectionAoi(unittest.TestCase):
         status = aoi.aoi_status_text(wide, True, source="selection")
         self.assertIn("selection", status)
         self.assertIn("too large", status)
-        # ADR 0017 (2026-07-22): the per-message in-text context line is GONE
+        # (2026-07-22): the per-message in-text context line is GONE
         # -- the AOI rides the structured ``aoi_bbox`` user-message payload
         # field for every source (see test_client structured-AOI tests).
         self.assertFalse(hasattr(aoi, "attach_aoi_to_text"))

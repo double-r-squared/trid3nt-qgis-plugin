@@ -4,7 +4,7 @@ The dock's "Probe" map tool: click the QGIS canvas and the dock shows the
 value (or a mini time series, for a detected animation-frame sequence) of
 every raster layer loaded on the current case at that point. Deterministic
 -- no LLM in the loop -- driven by the agent's HTTP listener
-(``tool_catalog_http.py``, default ``http://127.0.0.1:8766``):
+(``catalog_http.py``, default ``http://127.0.0.1:8766``):
 
     POST /api/probe-point {"case_id", "lon", "lat"}  (EPSG:4326)
     -> 200 {"status": "ok", "point": {"lon", "lat"}, "case_id", "results": [

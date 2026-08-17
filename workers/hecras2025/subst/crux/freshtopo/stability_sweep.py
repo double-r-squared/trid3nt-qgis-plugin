@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""2D-model stability diagnostic sweep on ONE authored fresh-AOI deck (ADR 0188).
+"""2D-model stability diagnostic sweep on ONE authored fresh-AOI deck.
 
 Reference driver for the ``2d_model_stability_diagnostic_sweep`` board row: it
 authors a single mesh ONCE, then re-solves the identical deck at a descending
@@ -7,7 +7,7 @@ ladder of computation intervals (time steps) and reports how the peak water
 surface and volume error converge as the step tightens -- the automated analogue
 of the published Bald Eagle Creek 5-trial convergence path.
 
-Finding (ADR 0188, Blanco River canyon nr Wimberley TX, 8075 cells, 15000 cfs):
+Finding (Blanco River canyon nr Wimberley TX, 8075 cells, 15000 cfs):
 the coarse 10MIN step is numerically UNSTABLE (max depth overshoots to 487 ft),
 and tightening the step collapses the spurious spike monotonically --
   10MIN -> 487.5 ft ; 5MIN -> 244.8 ft ; 2MIN -> 116.1 ft ; 1MIN -> 116.1 ft --

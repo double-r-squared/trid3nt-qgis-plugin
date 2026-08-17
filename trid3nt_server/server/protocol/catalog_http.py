@@ -47,7 +47,9 @@ from typing import Any
 
 import yaml
 
-logger = logging.getLogger("trid3nt_server.tool_catalog_http")
+from trid3nt_server.adapters import model_discovery
+
+logger = logging.getLogger("trid3nt_server.server.protocol.catalog_http")
 
 __all__ = [
     "build_catalog_payload",
@@ -82,8 +84,15 @@ def _default_corpus_path() -> Path:
     env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
-    here = Path(__file__).resolve()
-    return here.parent / "data" / "tool_query_corpus.yaml"
+    return _package_data_dir() / "tool_query_corpus.yaml"
+
+
+def _package_data_dir() -> Path:
+    """The ``trid3nt_server/data`` directory, anchored on the package root so the
+    corpus resolves regardless of this module's depth in the package tree."""
+    import trid3nt_server
+
+    return Path(trid3nt_server.__file__).resolve().parent / "data"
 
 
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
@@ -94,7 +103,7 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
         with p.open() as fh:
             data = yaml.safe_load(fh) or {}
     except Exception:  # noqa: BLE001 -- best-effort
-        logger.exception("tool_catalog_http: failed to parse corpus YAML at %s", p)
+        logger.exception("catalog_http: failed to parse corpus YAML at %s", p)
         return {}
     if not isinstance(data, dict):
         return {}
@@ -110,12 +119,11 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
     residual ``data/tool_query_corpus.yaml``. Same shape/content as the
     pre-restructure monolith (flat composition, no tiers).
     """
-    here = Path(__file__).resolve()
-    tools_dir = here.parent / "data"
+    tools_dir = _package_data_dir()
     composed: dict[str, list[str]] = {}
     for cpath in sorted(tools_dir.rglob("corpus.yaml")):
         composed.update(_read_corpus_yaml(cpath))
-    composed.update(_read_corpus_yaml(here.parent / "data" / "tool_query_corpus.yaml"))
+    composed.update(_read_corpus_yaml(tools_dir / "tool_query_corpus.yaml"))
     return composed
 
 
@@ -146,7 +154,7 @@ def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
         else:
             _CORPUS_CACHE = _compose_corpus_from_tree()
     logger.info(
-        "tool_catalog_http: loaded %d tool query entries", len(_CORPUS_CACHE)
+        "catalog_http: loaded %d tool query entries", len(_CORPUS_CACHE)
     )
     return _CORPUS_CACHE
 
@@ -193,7 +201,7 @@ def build_catalog_payload(
           ]
         }
     """
-    from .data import TOOL_REGISTRY
+    from trid3nt_server.data import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
     if use_cache and _PAYLOAD_CACHE is not None:
@@ -1202,12 +1210,12 @@ async def build_telemetry_summary(
     # read/compute fault leaves the zero-state section (never breaks the
     # dashboard).
     try:
-        from .telemetry import build_turn_summary, load_turn_records
+        from trid3nt_server.telemetry import build_turn_summary, load_turn_records
 
         summary["turns_by_model"] = build_turn_summary(load_turn_records())
     except Exception:  # noqa: BLE001 -- never break the dashboard on turn read
         logger.warning("telemetry summary: turn telemetry read failed", exc_info=True)
-        from .telemetry import empty_turn_summary
+        from trid3nt_server.telemetry import empty_turn_summary
 
         summary["turns_by_model"] = empty_turn_summary()
     return summary
@@ -1275,12 +1283,12 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     try:
         import boto3
 
-        from .data.cache import CACHE_BUCKET, cache_path
+        from trid3nt_server.data.cache import CACHE_BUCKET, cache_path
         # fetch_buildings is folded to the router: the sidecar identity
         # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
         # coded twin. Read it from the spec, falling back to the load-bearing literals
         # so a cold spec registry never breaks the enrich read.
-        from .data.fetchers._router.registration import get_spec
+        from trid3nt_server.data.fetchers._router.registration import get_spec
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None
@@ -1434,14 +1442,14 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
     # A same-name model must re-discover its num_ctx (the provider/num_ctx
     # switch invalidates the process-lifetime cache).
     try:
-        from .gates.context_budget import reset_num_ctx_cache
+        from trid3nt_server.gates.context_budget import reset_num_ctx_cache
 
         reset_num_ctx_cache()
     except Exception:  # noqa: BLE001 -- cache reset is best-effort, never fatal
         pass
     effective_model = os.environ.get("TRID3NT_OPENAI_MODEL", "").strip() or None
     base_url = os.environ.get("TRID3NT_OPENAI_BASE_URL", "").strip()
-    host = _base_url_host(base_url) if base_url else ""
+    host = model_discovery._base_url_host(base_url) if base_url else ""
     return json.dumps(
         {"ok": True, "model": effective_model, "base_url_host": host},
         separators=(",", ":"),
@@ -1480,7 +1488,7 @@ class _CaseListPersistenceUnavailable(Exception):
 def _case_list_route_enabled() -> bool:
     """The route exists only under the local single-user seam (see above)."""
     try:
-        from .credentials.auth_handshake import _is_local_single_user_mode
+        from trid3nt_server.credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1514,8 +1522,8 @@ async def build_case_list_payload() -> dict[str, Any]:
     (the dispatcher maps that to an honest 503) -- never a fabricated empty
     list.
     """
-    from .credentials.auth_handshake import LOCAL_SINGLE_USER_ID
-    from .server import get_persistence
+    from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
+    from trid3nt_server.server import get_persistence
 
     persistence = get_persistence()
     if persistence is None:
@@ -1563,7 +1571,7 @@ def _ingest_layer_route_enabled() -> bool:
     """The routes exist only under the local single-user seam (mirrors
     ``_case_list_route_enabled``)."""
     try:
-        from .credentials.auth_handshake import _is_local_single_user_mode
+        from trid3nt_server.credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1573,14 +1581,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .cases.ingest_user_layer import ingest_user_layer
+    from trid3nt_server.cases.ingest_user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from .cases.ingest_user_layer import upload_layer_file
+    from trid3nt_server.cases.ingest_user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -1659,7 +1667,7 @@ def _probe_point_route_enabled() -> bool:
     """The route exists only under the local single-user seam (mirrors
     ``_ingest_layer_route_enabled`` / ``_case_list_route_enabled``)."""
     try:
-        from .credentials.auth_handshake import _is_local_single_user_mode
+        from trid3nt_server.credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1669,7 +1677,7 @@ def _probe_point_route_enabled() -> bool:
 def _probe_point_fn():
     """Lazy-import seam for the probe core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .cases.probe_point import probe_point_at
+    from trid3nt_server.cases.probe_point import probe_point_at
 
     return probe_point_at
 
@@ -1703,216 +1711,6 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
     result = await _probe_point_fn()(case_id=case_id.strip(), lon=lon, lat=lat)
     return json.dumps(result, separators=(",", ":")).encode("utf-8")
 
-
-# ---------------------------------------------------------------------------
-# /api/local-models -- installed local (Ollama) models (F2, live-feedback
-# 2026-07-08).
-# ---------------------------------------------------------------------------
-#
-# The TRID3NT LOCAL build serves its LLM through an OpenAI-compatible endpoint
-# (MODEL_PROVIDER=openai, typically Ollama). The web model selector needs the
-# REAL installed model list to offer cloud-style hot-swap, but the browser
-# generally cannot reach the Ollama server (:11434) directly. This endpoint
-# proxies Ollama's ``GET /api/tags`` from the agent process (which CAN reach
-# it -- it is the same host the chat completions go to) and returns:
-#
-#     {"models": [{"id": "qwen3:8b-16k", "label": "qwen3:8b-16k"}, ...],
-#      "default": "qwen3:8b-16k" | null}
-#
-# ``default`` is the agent's configured TRID3NT_OPENAI_MODEL (null when unset).
-# CLOUD posture: when MODEL_PROVIDER != "openai" the route is treated as
-# ABSENT (404, exactly what an unknown path returns today), so the cloud
-# surface is behavior-identical. Ollama unreachable -> honest 502.
-
-
-def _local_models_route_enabled() -> bool:
-    """The route exists only for the OpenAI-compatible (local) provider."""
-    try:
-        from .adapters.bedrock_adapter import model_provider
-
-        return model_provider() == "openai"
-    except Exception:  # noqa: BLE001 -- import fault -> route absent
-        return False
-
-
-def _ollama_tags_url() -> str:
-    """Derive the Ollama ``/api/tags`` URL from the agent's own LLM endpoint.
-
-    ``TRID3NT_OPENAI_BASE_URL`` is the OpenAI-compatible base the adapter dials
-    (e.g. ``http://127.0.0.1:11434/v1``); the native Ollama API lives one level
-    up. Strips a trailing ``/v1`` and appends ``/api/tags``. Falls back to the
-    Ollama default host when the env is unset (dev convenience).
-    """
-    base = os.environ.get("TRID3NT_OPENAI_BASE_URL", "").strip().rstrip("/")
-    if base.endswith("/v1"):
-        base = base[: -len("/v1")]
-    if not base:
-        base = "http://127.0.0.1:11434"
-    return f"{base}/api/tags"
-
-
-class _LocalModelsUpstreamError(Exception):
-    """Ollama /api/tags (or OpenRouter /models) unreachable or unusable."""
-
-
-# OpenRouter free-model dropdown (design 2026-07-19). ``GET /models`` on
-# OpenRouter is large (~300 entries) and rarely changes; cache the FILTERED
-# result per base_url for a process TTL so the plugin's provider-change
-# repopulate does not re-fetch every open. A restart (or a different base_url
-# key) naturally bypasses staleness -- there is no explicit invalidation, by
-# design. Mirrors the context_budget ``_NUM_CTX_CACHE`` module-cache pattern.
-_OPENROUTER_MODELS_TTL_S = 600.0
-_OPENROUTER_MODELS_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
-
-
-def _base_url_host(base_url: str) -> str:
-    """Lowercased host of an OpenAI-compatible base URL ("" when unparsable)."""
-    from urllib.parse import urlsplit
-
-    return (urlsplit(base_url).hostname or "").lower()
-
-
-def _filter_openrouter_models(raw: Any) -> list[dict[str, str]]:
-    """PURE: an OpenRouter ``GET /models`` body -> ``[{"id","label"}]`` of the
-    FREE, TOOL-CAPABLE models only.
-
-      FREE          = ``pricing.prompt == "0"`` AND ``pricing.completion == "0"``
-                      OR the id ends with ``:free``.
-      TOOL-CAPABLE  = ``"tools"`` present in ``supported_parameters``. A model
-                      MISSING ``supported_parameters`` is kept OUT of the free
-                      list (to be safe -- the agent is tool_choice=auto every
-                      round; a model that cannot honor tools narrates a fake
-                      answer, the design's top risk).
-
-    Never raises on absent / oddly-typed keys -- a malformed row is skipped,
-    never fatal, so one bad entry cannot blank the whole list.
-    """
-    data = raw.get("data") if isinstance(raw, dict) else None
-    if not isinstance(data, list):
-        return []
-    out: list[dict[str, str]] = []
-    for m in data:
-        if not isinstance(m, dict):
-            continue
-        mid = m.get("id")
-        if not isinstance(mid, str) or not mid.strip():
-            continue
-        mid = mid.strip()
-        pricing = m.get("pricing")
-        prompt_free = completion_free = False
-        if isinstance(pricing, dict):
-            prompt_free = pricing.get("prompt") == "0"
-            completion_free = pricing.get("completion") == "0"
-        is_free = (prompt_free and completion_free) or mid.endswith(":free")
-        if not is_free:
-            continue
-        supported = m.get("supported_parameters")
-        if not isinstance(supported, list) or "tools" not in supported:
-            continue
-        label = mid if mid.endswith(":free") else f"{mid} (free)"
-        out.append({"id": mid, "label": label})
-    return out
-
-
-def _fetch_openrouter_models(base_url: str) -> bytes:
-    """SYNC (httpx): OpenRouter free + tool-capable models in the SAME shape the
-    Ollama branch returns -- ``{"models":[{"id","label"}], "default": ...}``.
-
-    Sends the configured provider key as a ``Bearer`` header (reuses
-    ``openai_adapter.openai_api_key()``); the key is NEVER logged. Result is
-    cached per ``base_url`` with a process TTL (see ``_OPENROUTER_MODELS_CACHE``).
-    Raises ``_LocalModelsUpstreamError`` on any upstream fault -> honest 502.
-    """
-    import time
-
-    import httpx
-
-    from .adapters.openai_adapter import openai_api_key
-
-    now = time.monotonic()
-    cached = _OPENROUTER_MODELS_CACHE.get(base_url)
-    if cached is not None and (now - cached[0]) < _OPENROUTER_MODELS_TTL_S:
-        models = cached[1]
-    else:
-        url = f"{base_url.rstrip('/')}/models"
-        headers: dict[str, str] = {}
-        key = openai_api_key()
-        if key and key != "not-needed":
-            headers["Authorization"] = f"Bearer {key}"
-        try:
-            with httpx.Client(timeout=8.0) as client:
-                resp = client.get(url, headers=headers)
-                resp.raise_for_status()
-                payload = resp.json()
-        except Exception as exc:  # noqa: BLE001 -- unreachable / 4xx / non-JSON
-            # NB: the message carries only the URL (host + path), never the key.
-            raise _LocalModelsUpstreamError(
-                f"OpenRouter model list unreachable at {url}: {exc}"
-            ) from exc
-        models = _filter_openrouter_models(payload)
-        _OPENROUTER_MODELS_CACHE[base_url] = (now, models)
-
-    default = os.environ.get("TRID3NT_OPENAI_MODEL", "").strip() or None
-    # Configured default first, so a client picking entry 0 gets the served
-    # model. Build a NEW list -- never mutate the cached list in place.
-    ordered = list(models)
-    if default is not None:
-        for i, m in enumerate(ordered):
-            if m["id"] == default:
-                ordered.insert(0, ordered.pop(i))
-                break
-    return json.dumps(
-        {"models": ordered, "default": default}, separators=(",", ":")
-    ).encode("utf-8")
-
-
-def _fetch_local_models() -> bytes:
-    """SYNC (httpx; caller wraps in ``asyncio.to_thread``): build the JSON body.
-
-    Branches on the configured provider base URL: an ``openrouter.ai`` host
-    lists the FREE + tool-capable OpenRouter models (design 2026-07-19); any
-    other base URL (local Ollama) lists the installed Ollama models. Raises
-    ``_LocalModelsUpstreamError`` on any upstream fault so the handler emits an
-    honest 502 -- never a fabricated empty success.
-    """
-    import httpx
-
-    base = os.environ.get("TRID3NT_OPENAI_BASE_URL", "").strip()
-    if base and _base_url_host(base).endswith("openrouter.ai"):
-        return _fetch_openrouter_models(base)
-
-    url = _ollama_tags_url()
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            payload = resp.json()
-    except Exception as exc:  # noqa: BLE001 -- unreachable / non-JSON / 5xx
-        raise _LocalModelsUpstreamError(
-            f"local model runtime unreachable at {url}: {exc}"
-        ) from exc
-
-    raw_models = payload.get("models") if isinstance(payload, dict) else None
-    models: list[dict[str, str]] = []
-    if isinstance(raw_models, list):
-        for m in raw_models:
-            if not isinstance(m, dict):
-                continue
-            name = m.get("name") or m.get("model")
-            if isinstance(name, str) and name.strip():
-                name = name.strip()
-                models.append({"id": name, "label": name})
-    default = os.environ.get("TRID3NT_OPENAI_MODEL", "").strip() or None
-    # Configured default first, so a client that picks entry 0 gets the model
-    # the agent would serve anyway.
-    if default is not None:
-        for i, m in enumerate(models):
-            if m["id"] == default:
-                models.insert(0, models.pop(i))
-                break
-    return json.dumps(
-        {"models": models, "default": default}, separators=(",", ":")
-    ).encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -2041,7 +1839,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .cases.ingest_user_layer import MAX_INGEST_BYTES
+        from trid3nt_server.cases.ingest_user_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -2067,7 +1865,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .cases.ingest_user_layer import ImportLayerError, ObjectTooLargeError
+        from trid3nt_server.cases.ingest_user_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -2140,7 +1938,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .cases.ingest_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from trid3nt_server.cases.ingest_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)
@@ -2199,7 +1997,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .cases.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+        from trid3nt_server.cases.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)
@@ -2247,7 +2045,7 @@ async def _handle_http(
         # /api/local-models -- absent (404) on the cloud surface. SECURITY: the
         # api_key rides the body, is written to env, and is NEVER logged or
         # echoed -- only the base_url host + effective model return.
-        if not _local_models_route_enabled():
+        if not model_discovery._local_models_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
             await writer.drain()
             writer.close()
@@ -2361,13 +2159,13 @@ async def _handle_http(
         # as any unknown path) unless MODEL_PROVIDER=openai, so the cloud
         # agent's HTTP surface is behavior-identical. The upstream fetch runs
         # off the event loop.
-        if not _local_models_route_enabled():
+        if not model_discovery._local_models_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
         else:
             try:
-                body = await asyncio.to_thread(_fetch_local_models)
+                body = await asyncio.to_thread(model_discovery._fetch_local_models)
                 writer.write(_format_response(200, body))
-            except _LocalModelsUpstreamError as exc:
+            except model_discovery._LocalModelsUpstreamError as exc:
                 writer.write(
                     _format_response(
                         502,
@@ -2420,7 +2218,7 @@ async def _handle_http(
         # module docstring). Cheap: one `git rev-parse` subprocess, off the
         # event loop.
         try:
-            from . import plugin_repo
+            from trid3nt_server import plugin_repo
 
             payload = await asyncio.to_thread(plugin_repo.build_version_payload)
             body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -2434,7 +2232,7 @@ async def _handle_http(
         # is filled from the REQUEST's own Host header so a tailnet client's
         # "Add repository" URL (http://<daemon-host>:8766/plugin-repo/plugins.xml)
         # round-trips to a reachable zip URL without a hardcoded host.
-        from . import plugin_repo
+        from trid3nt_server import plugin_repo
 
         try:
             host = host_header or (
@@ -2466,7 +2264,7 @@ async def _handle_http(
         # module docstring (FRESH ZIP section). No deploy-time
         # package_plugin_repo() step required. ?v=<version> (already
         # stripped into proxy_qs above) is a pure cache-busting hint.
-        from . import plugin_repo
+        from trid3nt_server import plugin_repo
 
         try:
             data, _version, zip_filename = await asyncio.to_thread(
@@ -2499,7 +2297,7 @@ async def _handle_http(
         # manual-QA / fallback path; served straight from the packaged
         # directory (deploy-time artifact). Not what plugins.xml advertises
         # anymore (see the /plugin-repo/trid3nt.zip branch above).
-        from . import plugin_repo
+        from trid3nt_server import plugin_repo
 
         filename = proxy_path[len("/plugin-repo/") :]
         try:

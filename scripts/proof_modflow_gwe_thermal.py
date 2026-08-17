@@ -1,4 +1,4 @@
-"""Proof renders for the MODFLOW GWE heat-transport archetype family (ADR 0235).
+"""Proof renders for the MODFLOW GWE heat-transport archetype family.
 
 Deterministic, reuses the product deck-builder (workers/modflow
 build_modflow_deck) + the LOCAL mf6 6.7.0 binary. Two renders, QGIS-true style
@@ -152,7 +152,7 @@ def render_plume_over_esri():
            "45 degC water injected at 600 m3/day into a 10 degC aquifer for 180 d. "
            "Colour = temperature above ambient; cyan dot = injection well; white "
            "wireframe = model mesh (every 5th cell, 50 m). Thermal properties are "
-           "LOUD demo defaults (no thermal-property fetcher; ADR 0215/0235). Plume "
+           "LOUD demo defaults (no thermal-property fetcher). Plume "
            f"peak = +{temp.max() - GWE_AMBIENT_TEMPERATURE_C:.1f} degC. EPSG:3857, "
            "ESRI World Imagery.")
     fig.text(0.01, 0.005, cap, fontsize=6, color="0.35", wrap=True)

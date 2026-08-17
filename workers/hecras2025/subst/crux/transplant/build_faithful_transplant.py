@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""FAITHFUL TRANSPLANT author (ADR 0132 close-out, step 4). Write the
+"""FAITHFUL TRANSPLANT author (close-out, step 4). Write the
 2025-computed Muncie subgrid property tables (ComputeMuncie.cs, REAL terrain)
 into a COPY of the 6.x Muncie geometry -- mapped into the 6.x cell/face ordering
 via the bit-identical center bijection (cells) and midpoint match (faces) -- then
 the deck is solved by the production 6.x RasGeomPreprocess + RasUnsteady
-(transplant_solve.py mode=prebuilt) and compared to the ADR 0109 baseline.
+(transplant_solve.py mode=prebuilt) and compared to the baseline.
 
 This is the exact-topology in-place transplant OI-2 describes: the 2025 VALUES
 replace the GUI-computed values in Muncie's own 6.x topology. Real cells (0..5390)

@@ -1,6 +1,6 @@
-"""Ball Creek RoG RE-GRADE with the TRUE time-varying AORC hyetograph (ADR 0206).
+"""Ball Creek RoG RE-GRADE with the TRUE time-varying AORC hyetograph.
 
-ADR 0204 drove each event as a CONSTANT design-storm intensity (the installed
+drove each event as a CONSTANT design-storm intensity (the installed
 RAINDEF=1 limit) and landed raw NSE -1.41 with a +11 h peak-timing lag. This
 driver replaces the constant pulse with the REAL AORC hourly hyetograph via the
 new native time-varying path (rain_hyetograph_blocks -> RAINDEF=3 FORTRAN FILE),
@@ -35,7 +35,7 @@ TIME_STEP_S = 2.0
 
 def build_blocks(key: str) -> dict:
     """Block hyetograph (t_end_s, gross_mm) from the cached AORC hourly series,
-    aligned so t=0 is the ADR 0204 rising-limb start, spanning the sim window."""
+    aligned so t=0 is the rising-limb start, spanning the sim window."""
     f = json.loads((FORCING_DIR / f"{key}.json").read_text())
     t_rise = pd.to_datetime(f["t_rise"])
     sim_h = int(f["sim_hours"])

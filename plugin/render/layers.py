@@ -29,7 +29,7 @@ tree, grouped under "TRID3NT <case>".
           object), so it stages to the session temp dir as a small ``.geojson``
           -> ogr layer, labeled as staged.
 
-STREAMING IS THE PATH (remote-streaming paradigm, ADR 0116): a layer registers
+STREAMING IS THE PATH (remote-streaming paradigm): a layer registers
 reading IN PLACE from the advertised data endpoint -- COGs and FlatGeobuf via
 ``/vsicurl/`` (ranged: overviews/windows for the COG, spatial-index reads for
 the FGB), so a remote client over the tailnet never downloads the project. The
@@ -160,7 +160,7 @@ def _safe_filename(name: str) -> str:
     return _SAFE_NAME.sub("_", name).strip("_") or "layer"
 
 
-# -- session-scoped staging temp dir (remote-streaming TTL, ADR 0116) -------- #
+# -- session-scoped staging temp dir (remote-streaming TTL)
 #
 # Streaming is the path; the ONE fallback (a format MDAL cannot open over
 # /vsicurl -- netCDF meshes) stages a local copy. Per NATE's no-silent-
@@ -907,7 +907,7 @@ class LayerMaterializer:
         self.data_base_override: Optional[str] = None
         self._added_ids: set[str] = set()
         self._group_name: Optional[str] = None
-        #: Per-session staging dir tag (ADR 0116). One materializer = one dock
+        #: Per-session staging dir tag. One materializer = one dock
         #: connection = one session; its ``trid3nt_session_<tag>`` subdir holds
         #: every staged (non-streamable) artifact and is swept on close.
         self._session_tag: str = uuid.uuid4().hex[:12]
@@ -998,7 +998,7 @@ class LayerMaterializer:
 
     def cleanup_session(self) -> None:
         """Remove this session's staging dir and everything staged in it (the
-        session-TTL cleanup, ADR 0116): called on dock disconnect and on dock
+        session-TTL cleanup): called on dock disconnect and on dock
         close/plugin unload. Best-effort -- a cleanup failure is never a crash,
         and any residue is caught by ``sweep_stale_session_dirs`` next start."""
         path = self._temp_dir

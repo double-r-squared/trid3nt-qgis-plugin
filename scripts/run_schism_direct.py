@@ -1,4 +1,4 @@
-"""Direct SCHISM tidal-hydro invocation for trid3nt-local proof (engine #12, ADR 0118).
+"""Direct SCHISM tidal-hydro invocation for trid3nt-local proof (engine #12).
 
 Bypasses the LLM/agent chat layer -- calls the REGISTERED template
 (``schism_tidal_hydro``) directly. The chain runs:

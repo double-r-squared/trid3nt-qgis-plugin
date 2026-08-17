@@ -51,7 +51,7 @@ GWF_HDS_FILENAME: str = "gwf_model.hds"
 
 #: The MF6 GWE temperature output stem the GWE OC package writes (gwt_adapter's
 #: gwe_thermal deck registers ``gwe_model.ucn`` with text=TEMPERATURE). Recursive
-#: glob captures it wherever it lands (ADR 0235).
+#: glob captures it wherever it lands.
 GWE_UCN_FILENAME: str = "gwe_model.ucn"
 
 #: GWF cell-by-cell budget filename (gwt_adapter registers ``gwf_model.cbc``).
@@ -69,7 +69,7 @@ _MF6_DRY_SENTINEL: float = 1e29
 #: Temperature EXCESS floor (degC) below which a cell is NOT counted as a thermal
 #: plume (and is masked to NaN in the render COG). The GWE temperature COG renders
 #: the peak-over-time temperature excess above the undisturbed aquifer, so a cell
-#: within this margin of ambient reads as "no measurable heating" (ADR 0235).
+#: within this margin of ambient reads as "no measurable heating".
 THERMAL_DETECTION_FLOOR_C: float = 0.1
 
 #: Default per-cell area (m^2) when the deck georegistration is unavailable
@@ -305,14 +305,14 @@ def _locate_gwe_ucn(deck_dir: Path) -> Path | None:
 
     NOT a plain ``*.ucn`` fallback: a gwe_thermal deck writes ONLY the GWE
     temperature ucn (there is no GWT concentration ucn), so the exact stem is
-    the correct locator and avoids picking up an unrelated file. ADR 0235.
+    the correct locator and avoids picking up an unrelated file.
     """
     hits = sorted(glob.glob(str(deck_dir / "**" / GWE_UCN_FILENAME), recursive=True))
     return Path(hits[0]) if hits else None
 
 
 # ---------------------------------------------------------------------------
-# GWE temperature readers (gwe_thermal heat-transport path, ADR 0235)
+# GWE temperature readers (gwe_thermal heat-transport path)
 # ---------------------------------------------------------------------------
 
 
@@ -1621,7 +1621,7 @@ def run_gwe_thermal_postprocess(
     The heat twin of ``run_plume_postprocess``: reads the GWE ``gwe_model.ucn``
     TEMPERATURE history, renders the peak-over-time temperature EXCESS above the
     undisturbed aquifer as a reprojected EPSG:4326 COG, and (for an ``ates`` deck)
-    computes the per-cycle recovery-efficiency series for the chart. ADR 0235.
+    computes the per-cycle recovery-efficiency series for the chart.
 
     Honesty gate: peak temperature excess <= THERMAL_DETECTION_FLOOR_C ->
     MODFLOW_THERMAL_EMPTY (a clean solve with no measurable heating never reads
@@ -1766,7 +1766,7 @@ _ARCHETYPE_POSTPROCESS_RUNNERS: dict[str, str] = {
     "MAR": "run_mounding_postprocess",
     "ASR": "run_asr_postprocess",
     "wetland_hydroperiod": "run_wetland_hydroperiod_postprocess",
-    # ADR 0235: GWE heat transport (both injection_plume + ates modes ride this
+    # GWE heat transport (both injection_plume + ates modes ride this
     # one runner; the recovery series is emitted only when extract periods exist).
     "gwe_thermal": "run_gwe_thermal_postprocess",
 }

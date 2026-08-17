@@ -1,11 +1,11 @@
-"""ADR 0194 -- high-res coastal water-edge builder (STANDALONE sandbox).
+"""-- high-res coastal water-edge builder (STANDALONE sandbox).
 
 Builds a REAL coastal WATER polygon to replace the coarse GSHHG-intermediate
 shoreline. The water polygon is handed to the custom-SDF coastal mesher
 (_mesh_water_edge_incontainer.py), which meshes its interior with the exact
 edge preserved -- aligned to the true shoreline, never cookie-cut by the AOI box.
 
-ADR 0201 connectivity fix: a back-bay connected to the main water body only
+connectivity fix: a back-bay connected to the main water body only
 through a narrow tidal pass/strait (e.g. Tampa Bay's Boca Ciega Bay, reached
 only via John's Pass / Blind Pass / Pass-a-Grille) can fail BOTH assembly
 paths -- (a) OSM's mainland-facing bay shoreline is sometimes undertraced as
@@ -68,7 +68,7 @@ from shapely.validation import make_valid
 # tidal-pass digitization slop between independently-sourced water polygons
 # (OSM coastline vs NHD; real FL passes -- John's, Blind, Pass-a-Grille -- are
 # 100-250 m wide) and comfortably smaller than the coast-to-inland-waterbody
-# distance for a genuine isolated pond/lake (typically >1 km). ADR 0201.
+# distance for a genuine isolated pond/lake (typically >1 km).
 _PASS_DILATION_M = 300.0
 
 log = logging.getLogger("water_edge")
@@ -325,7 +325,7 @@ def reconnect_narrow_passes(water, bbox, pass_dilation_m: float = _PASS_DILATION
 # polygons that CONNECT to the coastline water, adding river arms the coastline
 # generalizes over. Never fails the build.
 #
-# ADR 0201: hydro.nationalmap.gov intermittently 500s; each layer query gets a
+# hydro.nationalmap.gov intermittently 500s; each layer query gets a
 # bounded exponential-backoff retry (3 attempts) before the leg is allowed to
 # degrade, and the degrade is logged loudly (not just swallowed into `error`).
 # --------------------------------------------------------------------------- #
@@ -470,7 +470,7 @@ def build_coastal_water(bbox, use_nhd: bool = True,
 
     OSM coastline water UNION (best-effort) connected NHDArea/NHDWaterbody
     (dilation-connected, see ``nhd_water_union``), clipped to the domain, then
-    a final ``reconnect_narrow_passes`` pass (ADR 0201) bridges any remaining
+    a final ``reconnect_narrow_passes`` pass bridges any remaining
     sub-resolution gap between the union's parts and drops parts with no path
     to the main body within ``pass_dilation_m`` (isolated inland ponds/lakes).
     The result is valid and self-intersection-free (make_valid + set_precision).

@@ -1,4 +1,4 @@
-"""ADR 0229 deep-water run-up PROOF renders + physics asserts (Chignik M8.2).
+"""deep-water run-up PROOF renders + physics asserts (Chignik M8.2).
 
 Consumes a solved run (scripts/drive_geoclaw_chignik_runup_proof.py) and renders,
 all EPSG:3857 over Esri World Imagery:
@@ -307,7 +307,7 @@ def main() -> int:
                   "the old 3DEP-land-clobbered path returned land-only (min ~ -68 m).",
                   cmap="terrain", diverging=False)
     _render_field(defo_bytes, "geoclaw_chignik_runup_deformation.png",
-                  "Chignik M8.2 -- Okada seafloor deformation (input layer, ADR 0226/0227)",
+                  "Chignik M8.2 -- Okada seafloor deformation (input layer)",
                   "Signed coseismic dZ from the 294-subfault USGS finite-fault inversion "
                   "(red=uplift / blue=subsidence).", cmap="RdBu_r", diverging=True)
     if fgout_frames:

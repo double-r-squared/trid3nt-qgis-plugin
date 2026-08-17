@@ -23,7 +23,7 @@ Two shapes back the SWAN wave-field path:
 - ``WaveFieldLayerURI`` -- the postprocess output layer. Extends ``LayerURI``
   field-for-field (so it still maps onto ``map-command load-layer`` with no
   translation, like every other layer) and adds the wave scalars the agent
-  narrates (determinism boundary, Invariant 1 / FR-AS-7): the agent narrates
+  narrates (determinism boundary, Invariant 1): the agent narrates
   ``max_hs_m`` / ``mean_tp_s`` / ``mean_dir_deg`` / ``wave_area_km2`` from these
   typed fields rather than inventing them.
 
@@ -227,7 +227,7 @@ class SwanRunArgs(GraceModel):
             or ``"dewit"`` (lpar); ``None`` keeps the bare-DCTA default.
         triad_urcrit / triad_lpar: biphase calibration constants (Eldeberky Ursell
             threshold 0.63 / DeWit averaging 0.0).
-        compute_class: FR-CE-3 compute class hint. Default ``"standard"``.
+        compute_class: compute class hint. Default ``"standard"``.
     """
 
     schema_version: Literal["v1"] = "v1"
@@ -306,7 +306,7 @@ class WaveFieldLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates about the wave field so the
-    LLM cites typed fields, never invents them (invariant 1, FR-AS-7):
+    LLM cites typed fields, never invents them (invariant 1):
 
         max_hs_m: peak significant wave height across the AOI, m (>= 0).
         mean_tp_s: mean peak period over the wet (wave-bearing) cells, s (>= 0).

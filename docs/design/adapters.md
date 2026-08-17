@@ -13,15 +13,22 @@ surface the turn engine drives regardless of backend.
 - `bedrock_adapter.py` -- the default cloud provider (`model_provider`).
 - `openai_adapter.py` -- OpenRouter + local-model (Ollama) path
   (`stream_openai`, `FunctionCallEvent`, `openai_api_key`).
+- `model_discovery.py` -- the provider model-LIST surface behind
+  `/api/local-models`: the installed-Ollama and OpenRouter free/tool-capable
+  listings + the Ollama API-root/tags URL derivation (`_fetch_local_models`,
+  `_filter_openrouter_models`, `_fetch_openrouter_models`, `_ollama_root`,
+  `_ollama_tags_url`, `_local_models_route_enabled`). The provider nouns
+  (`openrouter.ai`, Ollama, `model_provider() == "openai"`) that used to sit in
+  the catalog HTTP module + `gates/context_budget` are quarantined here.
 - `scripted_adapter.py` -- deterministic test double.
 
 ## Composition
 
-`server/turn.py` and `server/_core` drive these via the shared `adapter.py`
-surface. The pluggable-LLM story (cloud API or local model) is a provider swap
-behind this seam. Model-discovery HTTP routes still live in
-`tool_catalog_http` / `gates/context_budget`; folding them into this folder is
-deferred (ADR 0277).
+`server/turn/stream.py` drives these via the shared `adapter.py` surface. The
+pluggable-LLM story (cloud API or local model) is a provider swap behind this
+seam. Provider model-discovery folded into `model_discovery.py` (ADR 0279): the
+`protocol/catalog_http` route handler and `gates/context_budget` import it
+instead of defining provider logic themselves.
 
 ## Invariants / extension points
 

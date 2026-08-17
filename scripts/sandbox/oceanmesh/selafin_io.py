@@ -1,4 +1,4 @@
-"""Minimal SELAFIN (.slf) geometry writer for the ADR 0192 mesh-front sandbox.
+"""Minimal SELAFIN (.slf) geometry writer for the mesh-front sandbox.
 
 SANDBOX ONLY (nothing landed). Writes a single-variable 2D SELAFIN geometry
 file -- the native TELEMAC-2D geometry format (GEO / SELAFIN / SERAFIN) -- from

@@ -1,4 +1,4 @@
-"""ADR 0229 deep-water run-up LIVE proof driver (direct-call, local-docker).
+"""deep-water run-up LIVE proof driver (direct-call, local-docker).
 
 Re-drives the REAL 2021 M8.2 Chignik finite-fault tsunami NOW that the deep-water
 rung (ETOPO full-column no longer clobbered by the 3DEP land ocean-fill) lets the

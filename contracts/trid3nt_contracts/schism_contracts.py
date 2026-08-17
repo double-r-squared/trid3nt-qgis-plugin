@@ -11,23 +11,23 @@ sflux atmosphere, no river discharge). Two mesh sources feed it:
     case (Lynch & Gray annular tidal channel; an IDEALIZED, non-georeferenced
     mesh with a bundled ANALYTICAL M2 solution). The deliverable is the analytical
     RMSE/amplitude VERIFICATION at the station point -- the spike's green gate
-    re-proven through the product path (ADR 0115).
-  * ``coastal_tin`` -- an oceanmesh ``coastal_tin`` TIN (ADR 0101) for a REAL US
+    re-proven through the product path.
+  * ``coastal_tin`` -- an oceanmesh ``coastal_tin`` TIN for a REAL US
     coastal AOI, bathymetry sampled from our terrain fetchers (fetch_topobathy /
     fetch_dem, NAVD88) onto the TIN nodes via the proven ``tin_to_hgrid`` bridge,
     with a constituent tidal boundary. The deliverable is a max water-surface
-    elevation surface CLIPPED to the AOI + COG (the ADR 0116 output contract) plus
+    elevation surface CLIPPED to the AOI + COG (the output contract) plus
     the mesh preview + a station elevation-timeseries chart.
 
 ``SCHISMRunArgs`` is the typed run spec the composer assembles; the result is a
 ``SchismElevationLayerURI`` (extends ``LayerURI``) carrying the tidal scalars the
-agent CITES rather than invents (invariant 1 / FR-AS-7). No raw continental netCDF
-is ever a layer (ADR 0116): the 2D max-elevation field is clipped + COG-tiled.
+agent CITES rather than invents (invariant 1). No raw continental netCDF
+is ever a layer: the 2D max-elevation field is clipped + COG-tiled.
 
 Fidelity scope, stated honestly (demonstration-geometry doctrine where it applies):
 this archetype answers a BAROTROPIC TIDAL circulation question -- surge, waves
 (WWM-III), and compound coastal flooding are the coming candidates (they need the
-forcing legs, ADR 0115 section 4a), NOT this wave. For fast arbitrary-AOI flood
+forcing legs, section 4a), NOT this wave. For fast arbitrary-AOI flood
 SCREENING use ``sfincs_flood``; SCHISM is the refinement-grade cross-scale core.
 """
 
@@ -77,7 +77,7 @@ SCHISM_WAVE_STYLE_PRESET: str = "continuous_flood_depth"
 #: The registered archetypes for this engine. v1 shipped the barotropic
 #: tidal-hydrodynamics archetype (``tidal_hydro``, no external forcing legs); the
 #: SCHISM+WWM two-way wave-current coupling archetype (``coupled_waves``, the Duck
-#: FRF validation, ADR 0126/0129) is the second. STOFS-class surge + CORIE estuary
+#: FRF validation) is the second. STOFS-class surge + CORIE estuary
 #: remain queued sign-off candidates (each needing its own forcing legs).
 SCHISM_ARCHETYPES: tuple[str, ...] = (
     "tidal_hydro", "coupled_waves", "baroclinic_circulation"
@@ -136,7 +136,7 @@ class SCHISMRunArgs(GraceModel):
     Assembled by the SCHISM composer after agent-confirmed parameter extraction;
     serialized (in part) into the worker manifest. Confirmation-before-consequence
     (invariant 9 -- a solver run) is enforced by the input-review + mesh-preview
-    gates around the template (ADR 0107 / 0099), not re-implemented here.
+    gates around the template (/ 0099), not re-implemented here.
 
     Fields:
         schema_version: contract version pin (additive growth only).
@@ -166,7 +166,7 @@ class SCHISMRunArgs(GraceModel):
         open_boundary_side: which exterior side of the TIN is the open (tidal)
             boundary (``"south"|"north"|"east"|"west"``). Default ``"south"``
             (seaward for a Gulf coast).
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved tidal forcing + mesh basis for review before the solve (and
             fires the mesh preview gate); ``"auto"`` (default) proceeds labeled.
     """
@@ -212,7 +212,7 @@ class SchismElevationLayerURI(LayerURI):
     free-surface ELEVATION at each mesh node, interpolated onto a regular grid and
     (for a georeferenced ``coastal_tin`` run) CLIPPED to the AOI + COG-tiled (ADR
     0116 -- never a raw continental netCDF layer). Adds the numbers the agent
-    narrates rather than invents (invariant 1 / FR-AS-7):
+    narrates rather than invents (invariant 1):
 
         elev_max_m: peak water-surface elevation anywhere/anytime (metres, native
             datum) -- the headline high-water crest.
@@ -237,7 +237,7 @@ class SchismElevationLayerURI(LayerURI):
             correlation. ``None`` for a coastal_tin run.
 
     ``layer_type`` is ``"raster"`` (the max-elevation COG); the SEPARATE mesh
-    preview rides as a ``layer_type="mesh"`` LayerURI (ADR 0118). Uses the
+    preview rides as a ``layer_type="mesh"`` LayerURI. Uses the
     ``continuous_flood_depth`` style preset + a data-driven ``legend``. The
     ``fallback_note`` carries any demonstration-geometry / bathymetry-source
     honesty floor.
@@ -260,14 +260,14 @@ class SchismElevationLayerURI(LayerURI):
 class SchismWaveLayerURI(LayerURI):
     """A ``LayerURI`` for a SCHISM+WWM max significant-wave-HEIGHT raster + wave scalars.
 
-    The ``coupled_waves`` archetype's typed result (ADR 0126/0129): the two-way
+    The ``coupled_waves`` archetype's typed result: the two-way
     wave-current coupled solve (SCHISM hydro core + WWM-III spectral waves + the
     GOTM k-epsilon turbulence closure, ``itur=3``) writes ``sigWaveHeight`` (Hs) and
     ``peakPeriod`` (Tp) per node per step into ``out2d``. The raster is the PEAK
     (max-over-time) significant wave height at each mesh node, interpolated onto a
     regular grid and (for the georeferenced Duck FRF mesh) CLIPPED to the mesh AOI +
-    COG-tiled (ADR 0116 -- never a raw netCDF layer). The scalars the agent CITES
-    rather than invents (invariant 1 / FR-AS-7):
+    COG-tiled (-- never a raw netCDF layer). The scalars the agent CITES
+    rather than invents (invariant 1):
 
         hs_max_m: peak significant wave height anywhere/anytime (metres) -- the
             headline nearshore wave crest.
@@ -279,7 +279,7 @@ class SchismWaveLayerURI(LayerURI):
         n_nodes / n_elements: the SCHISM grid size (the modeled domain extent).
         sim_hours: the coupled-run length (hours; the Duck case is 4 h).
 
-    Boundary forcing (ADR 0189 -- the parametric-spectrum row):
+    Boundary forcing (-- the parametric-spectrum row):
 
         forcing_mode: ``"observed_spectrum"`` (the bundled non-parametric Duck
             8m-array boundary -- the validation case) or ``"parametric_jonswap"``
@@ -305,7 +305,7 @@ class SchismWaveLayerURI(LayerURI):
         vv_tp_rmse_s: RMSE of modeled vs measured Tp across the gauges (seconds).
 
     ``layer_type`` is ``"raster"`` (the max-Hs COG); the SEPARATE mesh preview rides
-    as a ``layer_type="mesh"`` LayerURI (ADR 0118). Uses the
+    as a ``layer_type="mesh"`` LayerURI. Uses the
     ``continuous_flood_depth`` style preset + a data-driven ``legend``. The
     ``fallback_note`` carries the coupled-wave fidelity / published-fixture honesty
     floor.
@@ -319,7 +319,7 @@ class SchismWaveLayerURI(LayerURI):
     n_nodes: int | None = Field(default=None, ge=0)
     n_elements: int | None = Field(default=None, ge=0)
     sim_hours: float | None = Field(default=None, ge=0.0)
-    # boundary forcing (ADR 0189 parametric-spectrum row)
+    # boundary forcing (parametric-spectrum row)
     forcing_mode: str | None = None
     forced_hs_m: float | None = Field(default=None, ge=0.0)
     forced_tp_s: float | None = Field(default=None, ge=0.0)
@@ -345,14 +345,14 @@ SCHISM_SALINITY_STYLE_PRESET: str = "continuous_flood_depth"
 class SchismBaroclinicLayerURI(LayerURI):
     """A ``LayerURI`` for a density-driven 3D SCHISM estuary: surface salinity + stratification.
 
-    The ``baroclinic_circulation`` archetype's typed result (ADR 0189): a 3D
+    The ``baroclinic_circulation`` archetype's typed result: a 3D
     baroclinic (ibc=0) estuary solve on a coarse georeferenced channel, forced by an
     estuarine salinity gradient + a sustained freshwater river source + a tidal
     ocean boundary, so the density field drives a gravitational circulation and the
     water column stratifies. The primary raster is the surface (top-layer) salinity
     at each mesh node, interpolated onto a regular grid + clipped to the mesh AOI +
-    COG-tiled (ADR 0116). The scalars the agent CITES rather than invents
-    (invariant 1 / FR-AS-7):
+    COG-tiled. The scalars the agent CITES rather than invents
+    (invariant 1):
 
         surface_salinity_min_psu / surface_salinity_max_psu: the surface salinity
             range over the wet nodes (psu) -- the fresh (river) to salty (ocean)
@@ -388,7 +388,7 @@ class SchismBaroclinicLayerURI(LayerURI):
 
 
 class SchismTransportValidationResult(GraceModel):
-    """Typed result of a SCHISM transport-scheme numerical-mixing V&V (ADR 0156).
+    """Typed result of a SCHISM transport-scheme numerical-mixing V&V.
 
     NOT a ``LayerURI``: the case advects a temperature FRONT (a conservative scalar)
     across the idealized QuarterAnnulus tidal channel TWICE on the hydro-core binary

@@ -1,6 +1,6 @@
-"""Round-trip + negative tests for the Mode 1 CatalogEntry, the new Appendix D
+"""Round-trip + negative tests for the Mode 1 CatalogEntry, the new
 collections (D.11 ``catalog_entries`` + D.12 ``catalog_audit_log``), and the
-four new Appendix A envelopes (sprint-08 — FR-FR-1 + §F.1.2 Mode 2).
+four new envelopes (sprint-08 — + §F.1.2 Mode 2).
 
 Test count for this job (≥6 new tests required per the kickoff):
 
@@ -12,7 +12,7 @@ Test count for this job (≥6 new tests required per the kickoff):
    document is a CatalogEntry; round-trips through MongoDB dump kwargs.
 4. ``test_catalog_audit_log_document_roundtrip`` — D.12 audit-log document
    round-trips with ULID ``_id`` aliasing + every event_type literal accepted.
-5. ``test_recovery_choice_envelope_roundtrip`` — FR-FR-1 ``recovery-choice`` +
+5. ``test_recovery_choice_envelope_roundtrip`` — ``recovery-choice`` +
    ``recovery-choice-response`` shapes round-trip; options subset rule.
 6. ``test_offer_catalog_addition_envelope_roundtrip`` — §F.1.2 Mode 2
    ``offer-catalog-addition`` + ``catalog-addition-response`` shapes round-trip
@@ -242,12 +242,12 @@ def test_catalog_audit_log_document_roundtrip(event_type: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 5. FR-FR-1 recovery-choice + recovery-choice-response
+# 5. recovery-choice + recovery-choice-response
 # --------------------------------------------------------------------------- #
 
 
 def test_recovery_choice_envelope_roundtrip() -> None:
-    """FR-FR-1 envelopes round-trip; chat-text + cancelled cases work."""
+    """envelopes round-trip; chat-text + cancelled cases work."""
     # recovery-choice (agent -> client)
     req = RecoveryChoicePayload(
         request_id=new_ulid(),
@@ -270,7 +270,7 @@ def test_recovery_choice_envelope_roundtrip() -> None:
     with pytest.raises(ValidationError):
         RecoveryChoicePayload.model_validate(bad)
 
-    # FR-FR-2 narrowing — single-option gate (e.g. GEOCODE_NO_MATCH -> chat only)
+    # narrowing — single-option gate (e.g. GEOCODE_NO_MATCH -> chat only)
     narrowed = RecoveryChoicePayload(
         request_id=new_ulid(),
         failed_step_id=new_ulid(),

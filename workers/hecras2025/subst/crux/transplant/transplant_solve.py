@@ -8,7 +8,7 @@ that were authored by an EXTERNAL writer (h5py) rather than by RASMapper? ADR
 2D tables back in via h5py and confirm the 6.x chain (RasGeomPreprocess +
 RasUnsteady) reads them and solves.
 
-RasGeomPreprocess does NOT recompute the 2D subgrid tables (ADR 0100 -- it only
+RasGeomPreprocess does NOT recompute the 2D subgrid tables (-- it only
 rebuilds 1D cross-section conveyance), so whatever we write into the plan HDF's
 2D `Cells Volume Elevation` / `Faces Area Elevation` groups is exactly what
 RasUnsteady solves with. That is the transplant lever.
@@ -46,7 +46,7 @@ MODE = os.environ.get("TRANSPLANT_MODE", "identity")
 FACTOR = float(os.environ.get("TRANSPLANT_FACTOR", "1.10"))
 _FILL = 1e30
 
-# Baseline (ADR 0109 / on-machine 2026-08-04): the ground truth to reproduce.
+# Baseline (/ on-machine 2026-08-04): the ground truth to reproduce.
 BASE = {"wse_max_ft": 951.93, "wet_cells": 4881, "vol_err_pct": 0.00584}
 
 

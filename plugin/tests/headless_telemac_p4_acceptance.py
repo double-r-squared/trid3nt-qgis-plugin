@@ -13,7 +13,7 @@ completes, it triggers the plugin's remote-mode-only mesh fallback
 (``dock.hydrate_case_layers``, formerly ``open_case_in_qgis`` -- decision A,
 NATE 2026-07-31, made the by-URI case-open replay LOCAL-mode automatic and
 mesh-less; native MDAL mesh materialization is REMOTE-mode-only now, a
-pre-existing gap from ADR 0058, not fixed by decision A) -- the REAL path that
+pre-existing gap  not fixed by decision A) -- the REAL path that
 discovers the SELAFIN mesh sibling and materializes it -- then ASSERTS the
 animated DYE mesh. NOTE: this requires ``trid3nt/mode=remote`` in QSettings
 (unset here -- defaults to local, where ``hydrate_case_layers`` now no-ops);

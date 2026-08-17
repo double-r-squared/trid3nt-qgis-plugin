@@ -1,4 +1,4 @@
-"""Offline tests for the HEC-RAS 2025 rain-on-grid pipeline (ADR 0209).
+"""Offline tests for the HEC-RAS 2025 rain-on-grid pipeline.
 
 Exercises the PURE-PYTHON authoring-prep + metric-extraction + depth-COG paths (no
 Docker / no server): terrain georef math, subgrid-volume metric extraction against a
@@ -15,7 +15,7 @@ import pytest
 
 import rog2025_pipeline as rp
 
-# A saved real solve (the ADR 0209 Coweeta DWE run); tests skip if absent (the HDF is
+# A saved real solve (the Coweeta DWE run); tests skip if absent (the HDF is
 # a session artifact outside the repo, like the other proprietary-adjacent fixtures).
 _COWEETA_JSON = Path("/tmp/rog2025_coweeta_dwe.json")
 _CATCHMENT = Path("/tmp/rog_coweeta/catchment.geojson")

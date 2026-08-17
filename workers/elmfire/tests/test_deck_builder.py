@@ -293,8 +293,8 @@ def test_missing_spec_field_raises_spec_error(source_rasters, tmp_path) -> None:
 
 
 def test_unknown_top_level_spec_field_raises_typed_error(source_rasters, tmp_path) -> None:
-    """ADR 0158: an unknown top-level deck-spec field errors loudly instead of
-    silently vanishing (the ADR 0148 lesson)."""
+    """an unknown top-level deck-spec field errors loudly instead of
+    silently vanishing (the lesson)."""
     spec = _make_spec(source_rasters, typo_field_name=1.0)
     with pytest.raises(db.ElmfireSpecUnknownFieldsError, match="typo_field_name"):
         db.build_deck(spec, tmp_path / "deck")
@@ -433,7 +433,7 @@ def test_non_s3_uri_scheme_rejected(source_rasters, tmp_path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Transient multi-band weather + time-control emission (ADR 0161 front A/B).
+# Transient multi-band weather + time-control emission (front A/B).
 # --------------------------------------------------------------------------- #
 
 _GRID = {
@@ -512,7 +512,7 @@ def test_write_weather_bands_empty_raises(tmp_path) -> None:
 
 # --------------------------------------------------------------------------- #
 # REAL-DATA transient weather (``build_deck(..., weather_schedule=)``,
-# ADR 0239 amendment 3 - the wind-shift-on-real-fuels surface).
+# amendment 3 - the wind-shift-on-real-fuels surface).
 # --------------------------------------------------------------------------- #
 
 

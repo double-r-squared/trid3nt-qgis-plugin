@@ -1,4 +1,4 @@
-"""TELEMAC-3D stratified / 3D-hydrodynamics pipeline (ADR 0241).
+"""TELEMAC-3D stratified / 3D-hydrodynamics pipeline.
 
 The productionized promotion of ``docs/proof/templates/telemac3d_sandbox.py``
 (the canonical composer prototype whose physics is PROVEN through the baked
@@ -45,7 +45,7 @@ Two bathymetry paths (stratification / wind_circulation):
     (a real estuary needs a tidal liquid boundary - out of the closed-basin
     archetype), labeled as such.
 
-ALL EIGHT deck gotchas from ADR 0241 are baked here (see write_cas / the
+ALL EIGHT deck gotchas  are baked here (see write_cas / the
 CONDI3D fortran authors): mandatory scalar ``INITIAL VALUES OF TRACERS`` beside
 the USER_CONDI3D_TRAC override, TEMPERATURE/SALINIT name-prefix indexing,
 density-law selection, CONDI3D 3D-coord (bed-referenced Z) semantics, the 2D
@@ -93,7 +93,7 @@ class Telemac3dConfig:
     bathy_source: str = "idealized"
     #: real-bathy AOI (min_lon, min_lat, max_lon, max_lat), EPSG:4326
     bbox: tuple = None                  # type: ignore[assignment]
-    #: mesh/grid knob (ADR 0225/0232): target horizontal node spacing in metres.
+    #: mesh/grid knob: target horizontal node spacing in metres.
     target_resolution_m: float = None   # type: ignore[assignment]
     #: number of horizontal levels (NPLAN, the sigma planes = the 3D DOF).
     nplan: int = 13
@@ -391,7 +391,7 @@ def wind_components(speed, dir_from_deg):
 
 # ---------------------------------------------------------------------------
 # 6. Real Great Lakes bathymetry (NOAA NGDC DEM_all -> greatlakes_lakedatum),
-#    mirroring the proven TOMAWAC/ARTEMIS fetch (ADR 0236/0237).
+#    mirroring the proven TOMAWAC/ARTEMIS fetch.
 # ---------------------------------------------------------------------------
 def fetch_greatlakes_bathy(lon, lat, bbox):
     """Sample Great Lakes lake-datum bathymetry at node lon/lat via NOAA DEM_all.

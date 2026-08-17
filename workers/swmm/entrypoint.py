@@ -14,7 +14,7 @@ out-of-process worker lane), and runs the SAME pyswmm solve the local-exec
 ``LocalSolverSpec`` does (``workers/swmm/run_inp.py``), just inside a
 container.
 
-Contract (FR-CE-1/2/3 — IDENTICAL to the SFINCS worker, only the solver +
+Contract (IDENTICAL to the SFINCS worker, only the solver +
 field names differ):
 
     Input  (env or CLI):
@@ -298,7 +298,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-swmm-entrypoint",
-        description="SWMM AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="SWMM AWS Batch worker entrypoint.",
     )
     p.add_argument(
         "--run-id",

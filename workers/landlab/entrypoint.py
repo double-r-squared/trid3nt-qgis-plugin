@@ -16,7 +16,7 @@ AOI, runs the documented component chain (``component_chain.run_component_chain`
 — LandslideProbability or OverlandFlow), and writes the output field as a COG
 back to the runs bucket.
 
-Contract (FR-CE-1/2/3 — IDENTICAL completion schema to SWMM/MODFLOW, only the
+Contract (IDENTICAL completion schema to SWMM/MODFLOW, only the
 solver + stdout/stderr field names carry the ``landlab_`` prefix):
 
     Input  (env or CLI):
@@ -465,7 +465,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-landlab-entrypoint",
-        description="Landlab AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="Landlab AWS Batch worker entrypoint.",
     )
     p.add_argument(
         "--run-id",

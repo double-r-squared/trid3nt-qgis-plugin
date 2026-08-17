@@ -1,7 +1,7 @@
 """Offline RoG smoke: synthetic watershed TIN -> full worker pipeline THROUGH
 the telemac image, asserting CORRECT END OF RUN + sane outlet hydrograph.
 
-De-risks the ADR 0196 C1 deck (constant rain + SCS-CN infiltration + FORMATTED
+De-risks the C1 deck (constant rain + SCS-CN infiltration + FORMATTED
 DATA FILE 2 CN map + distributed Manning zones + free-exit outlet) on a tiny
 tilted-plane catchment BEFORE the hours-class Coweeta live run and BEFORE the
 image rebuild -- run with the worker dir mounted over the baked copy:

@@ -1,4 +1,4 @@
-"""Proofs for the ADR 0161 ELMFIRE transient-weather + crown-fire fronts.
+"""Proofs for the ELMFIRE transient-weather + crown-fire fronts.
 
 Solves the representative constant/transient/canopied decks directly through the
 rebuilt trid3nt/elmfire:dev image (build_constant_flat_deck agent-side -> docker

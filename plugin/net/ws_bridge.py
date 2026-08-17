@@ -275,7 +275,7 @@ class AgentWorker(QObject):
     def send_dev_tool_invoke(
         self, name: str, args: dict, raw_text: str = ""
     ) -> None:
-        # ADR 0114: the parsed ``!run`` direct tool invocation. One
+        # the parsed ``!run`` direct tool invocation. One
         # ``dev-tool-invoke`` envelope, buffered while disconnected like every
         # user-intent verb.
         if self.client is not None:
@@ -330,7 +330,7 @@ class AgentWorker(QObject):
         tool_name: Optional[str] = None,
         free_text: Optional[str] = None,
     ) -> None:
-        # ADR 0018 picker reply -- one tool-choice envelope (pick / guidance
+        # picker reply -- one tool-choice envelope (pick / guidance
         # / let-agent-decide), buffered while disconnected like every
         # user-intent verb.
         if self.client is not None:
@@ -473,7 +473,7 @@ class AgentBridge(QObject):
     def send_dev_tool_invoke(
         self, name: str, args: dict, raw_text: str = ""
     ) -> None:
-        # ADR 0114 (!run) pass-through to the worker's client (mutex-guarded
+        # (!run) pass-through to the worker's client (mutex-guarded
         # socket write; buffers while disconnected).
         if self._worker is not None:
             self._worker.send_dev_tool_invoke(name, args, raw_text=raw_text)
@@ -528,7 +528,7 @@ class AgentBridge(QObject):
         tool_name: Optional[str] = None,
         free_text: Optional[str] = None,
     ) -> None:
-        # ADR 0018 picker reply: pass-through to the worker's client
+        # picker reply: pass-through to the worker's client
         # (mutex-guarded socket write; buffers while disconnected).
         if self._worker is not None:
             self._worker.send_tool_choice(

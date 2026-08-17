@@ -1,4 +1,4 @@
-"""Round-trip + negative tests for AssessmentEnvelope (Appendix B)."""
+"""Round-trip + negative tests for AssessmentEnvelope."""
 
 from __future__ import annotations
 

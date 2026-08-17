@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0190 row 3 driver: SWAN NONSTATIONARY time-marching storm evolution.
+"""row 3 driver: SWAN NONSTATIONARY time-marching storm evolution.
 
 Drives model_swan_wave_field directly (no LLM) with a TIME-VARYING storm
 boundary (build-peak-decay Hs over 24-48 h) at a US coastal site, producing
@@ -20,7 +20,7 @@ import sys
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("swan_storm")
 
-# Mexico Beach / Tyndall FL shelf (the ADR 0147 SWAN shelf AOI, matching the
+# Mexico Beach / Tyndall FL shelf (the SWAN shelf AOI, matching the
 # showcase _APALACHEE box). Real continuous below-datum CUDEM bathymetry, ~86%
 # wet -- open ocean to the SOUTH -> boundary side S. NOTE: the Big Bend box near
 # -84.0 was ABANDONED for the proof because its CUDEM topobathy tile carries a

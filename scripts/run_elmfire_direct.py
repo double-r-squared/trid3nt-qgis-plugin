@@ -90,7 +90,7 @@ async def _run():
             domain_km=8.0,
         )
     if WHICH == "crown_ros":
-        # Cruz (2005) active crown-fire ROS exact-solution verification (ADR 0256):
+        # Cruz (2005) active crown-fire ROS exact-solution verification:
         # uncapped active-crown deck, numerical head ROS vs the Cruz closed form.
         from trid3nt_server.workflows.elmfire.verification.crown_ros import (
             elmfire_crown_fire_active_ros_verification as fn,

@@ -209,7 +209,7 @@ _CRED_CARD_STYLE = (
 )
 _CRED_TITLE_STYLE = "color: #3fb950; font-weight: bold; border: none;"
 
-# Tool-selection picker card chrome (ADR 0018 auto/ask modes -- Stage 3,
+# Tool-selection picker card chrome (auto/ask modes -- Stage 3,
 # 2026-07-22). Teal -- a "steer the routing" affordance, distinct from the
 # amber caution gate, the blue code gate and the green credential card --
 # with the same N6/STYLE-1 discipline: a subtle low-alpha fill scoped to the
@@ -311,7 +311,7 @@ class _WrapLabel(QLabel):
 
 
 class _RunPrefixHighlighter(QSyntaxHighlighter):
-    """Colours the leading anchored ``!run`` token blue (ADR 0114).
+    """Colours the leading anchored ``!run`` token blue.
 
     The blue signal fires on EXACTLY the same predicate as the parse-first
     routing (``is_run_prefix``), so the highlight can never disagree with where
@@ -365,7 +365,7 @@ class _ChatInput(QPlainTextEdit):
         self.document().documentLayout().documentSizeChanged.connect(
             self._adjust_height
         )
-        # ADR 0114: colour the leading ``!run`` token blue while the composer is
+        # colour the leading ``!run`` token blue while the composer is
         # anchored as a direct invocation (same predicate as parse-first
         # routing). Held on self so it is not GC'd.
         self._run_highlighter = _RunPrefixHighlighter(self.document())
@@ -1659,7 +1659,7 @@ class CodeExecCard(QFrame):
         self.details_toggle.setChecked(False)
         self.details_toggle.setText("show details")
 
-    # -- run outcome (code-exec-result, job-0233) -------------------------- #
+    # -- run outcome (code-exec-result)
 
     def update_from_result(self, result: gate.CodeExecResult) -> None:
         """Fold the run OUTCOME into this card once the ``code-exec-result``
@@ -1696,7 +1696,7 @@ class CredentialCard(QFrame):
     the server is the only source of URLs), and a MASKED QLineEdit (password
     echo) for the key. Submit hands the key to ``on_decide(request_id,
     provider_id, key)`` (the dock's send hook -> secret-add THEN
-    credential-provided, Decision F ordering); Skip hands ``None``
+    credential-provided, ordering); Skip hands ``None``
     (credential-provided ``provided=False`` -- the server's real decline
     path). Locks after one answer and folds to a one-line chip -- the exact
     GateCard collapse pattern.

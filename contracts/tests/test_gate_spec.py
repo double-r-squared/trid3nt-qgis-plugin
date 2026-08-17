@@ -1,4 +1,4 @@
-"""Tests for the confirm-gate declaration contract (ADR 0273, the gate-collapse).
+"""Tests for the confirm-gate declaration contract (the gate-collapse).
 
 Verifies the declarative carrier NATE's gate-collapse rides on:
 - :class:`GateSpec` / :class:`LeverSpec` construct and validate.

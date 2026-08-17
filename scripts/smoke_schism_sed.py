@@ -1,4 +1,4 @@
-"""Offline SED3D module smoke (ADR 0260): author a baroclinic estuary deck, add
+"""Offline SED3D module smoke: author a baroclinic estuary deck, add
 the SED3D sediment inputs, run the targeted pschism_SED_TVD-VL binary DIRECTLY
 through the image (no MinIO/daemon), and prove the module solves to completion
 with a physically-sensible discriminating pair (fine class suspends more than

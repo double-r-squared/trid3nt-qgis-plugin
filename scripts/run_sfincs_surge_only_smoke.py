@@ -1,4 +1,4 @@
-"""SFINCS thin-dam SURGE-ONLY protected-side proof (ADR 0256 2nd addendum).
+"""SFINCS thin-dam SURGE-ONLY protected-side proof (2nd addendum).
 
 The earlier structure proofs put the co-occurring design-storm RAIN on both
 sides of the barrier, so a levee that excludes Gulf surge from the south still

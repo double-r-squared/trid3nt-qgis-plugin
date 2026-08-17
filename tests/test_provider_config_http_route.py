@@ -24,7 +24,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from trid3nt_server import tool_catalog_http
+from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
+from trid3nt_server.adapters import model_discovery
 from trid3nt_server.gates import context_budget
 
 
@@ -243,7 +244,7 @@ def test_filter_keeps_free_tool_capable_only():
             {"pricing": {"prompt": "0", "completion": "0"}},  # no id -> skipped
         ]
     }
-    out = tool_catalog_http._filter_openrouter_models(raw)
+    out = model_discovery._filter_openrouter_models(raw)
     ids = [m["id"] for m in out]
     assert ids == [
         "meta-llama/llama-3.3-70b-instruct",
@@ -260,8 +261,8 @@ def test_filter_keeps_free_tool_capable_only():
 
 
 def test_filter_handles_non_dict_payload():
-    assert tool_catalog_http._filter_openrouter_models(None) == []
-    assert tool_catalog_http._filter_openrouter_models({"data": "nope"}) == []
+    assert model_discovery._filter_openrouter_models(None) == []
+    assert model_discovery._filter_openrouter_models({"data": "nope"}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +310,7 @@ def test_fetch_local_models_routes_to_openrouter(monkeypatch):
         "TRID3NT_OPENAI_MODEL", "qwen/qwen-2.5-72b-instruct:free"
     )
     # Fresh cache so the fetch actually runs.
-    tool_catalog_http._OPENROUTER_MODELS_CACHE.clear()
+    model_discovery._OPENROUTER_MODELS_CACHE.clear()
     _FakeHttpxClient.calls = 0
     _FakeHttpxClient.payload = {
         "data": [
@@ -327,7 +328,7 @@ def test_fetch_local_models_routes_to_openrouter(monkeypatch):
     }
     monkeypatch.setattr(httpx, "Client", _FakeHttpxClient)
 
-    payload = json.loads(tool_catalog_http._fetch_local_models())
+    payload = json.loads(model_discovery._fetch_local_models())
     # Configured default moved first.
     assert payload["default"] == "qwen/qwen-2.5-72b-instruct:free"
     assert payload["models"][0]["id"] == "qwen/qwen-2.5-72b-instruct:free"
@@ -340,7 +341,7 @@ def test_fetch_local_models_routes_to_openrouter(monkeypatch):
 
     # Second call within the TTL is served from cache (no new round trip).
     calls_after_first = _FakeHttpxClient.calls
-    tool_catalog_http._fetch_local_models()
+    model_discovery._fetch_local_models()
     assert _FakeHttpxClient.calls == calls_after_first
 
 
@@ -349,7 +350,7 @@ def test_fetch_openrouter_upstream_error_is_typed(monkeypatch):
 
     monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     monkeypatch.delenv("TRID3NT_OPENAI_API_KEY", raising=False)
-    tool_catalog_http._OPENROUTER_MODELS_CACHE.clear()
+    model_discovery._OPENROUTER_MODELS_CACHE.clear()
 
     class _BoomClient(_FakeHttpxClient):
         def get(self, url, headers=None):
@@ -357,8 +358,8 @@ def test_fetch_openrouter_upstream_error_is_typed(monkeypatch):
 
     monkeypatch.setattr(httpx, "Client", _BoomClient)
     try:
-        tool_catalog_http._fetch_local_models()
-    except tool_catalog_http._LocalModelsUpstreamError as exc:
+        model_discovery._fetch_local_models()
+    except model_discovery._LocalModelsUpstreamError as exc:
         assert "openrouter.ai" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("expected _LocalModelsUpstreamError")

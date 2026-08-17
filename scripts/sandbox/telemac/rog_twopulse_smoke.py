@@ -1,4 +1,4 @@
-"""Two-pulse DISCRIMINATING test for the ADR 0206 time-varying hyetograph path.
+"""Two-pulse DISCRIMINATING test for the time-varying hyetograph path.
 
 A constant-rain design storm can only produce a SINGLE outlet-hydrograph hump;
 a true time-varying hyetograph with two separated rain pulses must produce TWO

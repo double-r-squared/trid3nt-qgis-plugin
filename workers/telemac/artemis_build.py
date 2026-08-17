@@ -1,11 +1,11 @@
-"""ARTEMIS harbour-agitation pipeline (ADR 0237): idealized + real-harbour fields.
+"""ARTEMIS harbour-agitation pipeline: idealized + real-harbour fields.
 
 The productionized promotion of ``docs/proof/templates/artemis_sandbox.py`` (the
 canonical composer prototype whose physics is PROVEN through the baked artemis
 binary in ``trid3nt-local/telemac:latest``). ARTEMIS is TELEMAC's phase-RESOLVING
 elliptic mild-slope (Berkhoff) wave solver: steady-state diffraction / refraction
 / partial reflection inside harbours and around structures - the refinement-grade
-phase-resolving complement to TOMAWAC's phase-averaged spectral tier (ADR 0236).
+phase-resolving complement to TOMAWAC's phase-averaged spectral tier.
 Runs INSIDE the worker image (needs the baked ``artemis`` binary + the
 opentelemac SELAFIN python API); imports NO agent code.
 
@@ -29,13 +29,13 @@ Two bathymetry paths:
     the citations law like the GWE analytic V&V).
   * ``noaa_greatlakes`` - a REAL US Great Lakes harbour AOI whose node bed is
     sampled from the NOAA NGDC ``DEM_all`` ImageServer (the ``greatlakes_lakedatum``
-    bathymetry, verified in ADR 0236 for the TOMAWAC leg: -159 m at a Lake
+    bathymetry, verified in for the TOMAWAC leg: -159 m at a Lake
     Superior deep; USGS 3DEP is NoData over the lake and Copernicus gives the
     lake SURFACE, not the bottom). A schematic breakwater segment (labeled) is a
     thin solid barrier; the diffraction-sheltering pair over real bathymetry IS
     the proof-norm-#9 discriminating signature.
 
-ALL EIGHT deck gotchas from ADR 0237 are baked here (see write_cli / write_cas /
+ALL EIGHT deck gotchas  are baked here (see write_cli / write_cas
 build_mesh): the .cli column re-map (col1 LIHBOR / col4 HB / col5 TETAP tangent /
 col7 RP), TETAP is the BOUNDARY TANGENT not the wave direction, the incident
 direction lives only in DIRECTION OF WAVE PROPAGATION, the all-incident outer
@@ -65,7 +65,7 @@ G = 9.81
 #: NOAA NGDC DEM mosaic ImageServer - the DEM_all mosaic includes the
 #: greatlakes_lakedatum bathymetry (lake-bottom depth, negative below the Great
 #: Lakes low-water datum). exportImage returns a GeoTIFF sampled at nodes. Same
-#: proven source the TOMAWAC leg uses (ADR 0236).
+#: proven source the TOMAWAC leg uses.
 _NOAA_DEM_ALL_URL = (
     "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/"
     "ImageServer/exportImage"
@@ -85,7 +85,7 @@ class ArtemisConfig:
     bathy_source: str = "idealized"
     #: real-bathy AOI (min_lon, min_lat, max_lon, max_lat), EPSG:4326
     bbox: tuple = None                  # type: ignore[assignment]
-    #: mesh/grid knob (ADR 0225/0232): target node spacing in metres.
+    #: mesh/grid knob: target node spacing in metres.
     target_resolution_m: float = None   # type: ignore[assignment]
     #: incident wave forcing.
     wave_period_s: float = 8.0
@@ -394,7 +394,7 @@ def berkhoff_bottom(X, Y):
 
 # ---------------------------------------------------------------------------
 # 4. Real Great Lakes bathymetry (NOAA NGDC DEM_all -> greatlakes_lakedatum),
-#    mirroring the proven TOMAWAC fetch (ADR 0236).
+#    mirroring the proven TOMAWAC fetch.
 # ---------------------------------------------------------------------------
 def fetch_greatlakes_bathy(lon, lat, bbox):
     """Sample Great Lakes lake-datum bathymetry at node lon/lat via NOAA DEM_all.

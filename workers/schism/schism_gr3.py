@@ -3,7 +3,7 @@
 SCHISM consumes its native triangular mesh as ``hgrid.gr3`` (a simple ASCII
 format: a node table with per-node depth, an element connectivity table, then
 open/land boundary segment blocks). The oceanmesh ``coastal_tin`` worker
-(ADR 0101) already produces exactly the geometry SCHISM needs -- lon/lat nodes
+ already produces exactly the geometry SCHISM needs -- lon/lat nodes
 (EPSG:4326) + triangle connectivity -- so this module is the thin translator
 that lets a TRID3NT-meshed coastal domain feed SCHISM.
 

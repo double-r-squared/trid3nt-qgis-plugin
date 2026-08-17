@@ -87,8 +87,8 @@ def test_parse_valid_spec_fills_defaults():
 
 
 def test_parse_rejects_unknown_top_level_field():
-    """ADR 0158: an unknown build_spec field errors loudly instead of silently
-    no-opping the intended knob (the ADR 0148 lesson)."""
+    """an unknown build_spec field errors loudly instead of silently
+    no-opping the intended knob (the lesson)."""
     with pytest.raises(SwanDeckError) as ei:
         parse_build_spec(_spec(typo_field_name=1.0))
     assert ei.value.error_code == "SWAN_SPEC_UNKNOWN_FIELDS"
@@ -633,7 +633,7 @@ def test_parse_rejects_bad_physics_knobs():
 
 # ===========================================================================
 # (7) NONSTATIONARY storm evolution: ISO times + BLOCK OUTPUT + TPAR boundary
-#     (ADR 0190 row 3).
+#     (row 3).
 # ===========================================================================
 def test_nonstationary_compute_uses_iso_datetime_strings():
     """The COMPUTE tbegc/tendc are full ISO YYYYMMDD.HHMMSS strings (not bare

@@ -1,1 +1,1 @@
-"""SCHISM cross-scale hydrodynamic solver worker (spike / ADR 0115)."""
+"""SCHISM cross-scale hydrodynamic solver worker (spike)."""

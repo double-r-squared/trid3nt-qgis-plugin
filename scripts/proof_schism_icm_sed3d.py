@@ -1,4 +1,4 @@
-"""Discriminating-pair proof figures for ADR 0260 (SCHISM ICM + SED3D targeted
+"""Discriminating-pair proof figures for (SCHISM ICM + SED3D targeted
 binaries). Filled tricontourf fields (never scatter) on the georeferenced estuary
 mesh with the mesh wireframe overlaid:
 
@@ -75,7 +75,7 @@ def sed_figure():
     fig.suptitle("SCHISM SED3D multiclass suspended transport (pschism_SED_TVD-VL) "
                  "-- IDEALIZED Galveston Bay channel\nfine stays suspended / coarse "
                  "settles near the river source; identical tidal+river forcing "
-                 "(ADR 0260)", fontsize=10)
+                 "", fontsize=10)
     fig.tight_layout()
     p = OUT / "schism_sed3d_multiclass_settling.png"
     fig.savefig(p, dpi=130); plt.close(fig)
@@ -98,7 +98,7 @@ def icm_figure():
           "GnBu", 0, vmax, "g/m3 (NH4-N)")
     fig.suptitle("SCHISM ICM eutrophication core (pschism_ICM_TVD-VL) -- IDEALIZED "
                  "Galveston Bay channel\nnutrient plume appears only under river "
-                 "loading; 17-var water-quality kinetics (ADR 0260)", fontsize=10)
+                 "loading; 17-var water-quality kinetics", fontsize=10)
     fig.tight_layout()
     p = OUT / "schism_icm_eutrophication_load.png"
     fig.savefig(p, dpi=130); plt.close(fig)

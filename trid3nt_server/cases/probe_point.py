@@ -1,5 +1,5 @@
 """Deterministic map-click point probe -- server-side core for
-``POST /api/probe-point`` on the catalog HTTP listener (``tool_catalog_http.py``).
+``POST /api/probe-point`` on the catalog HTTP listener (``catalog_http.py``).
 
 The TRID3NT QGIS plugin's dock has a "Probe" map tool: click the canvas and
 the dock shows the value (or a mini time series, for an animation-frame

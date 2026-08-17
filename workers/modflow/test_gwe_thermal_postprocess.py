@@ -1,4 +1,4 @@
-"""Offline worker-side postprocess test for the GWE gwe_thermal runner (ADR 0235).
+"""Offline worker-side postprocess test for the GWE gwe_thermal runner.
 
 Exercises ``run_gwe_thermal_postprocess`` (the temperature-COG twin of
 ``run_plume_postprocess``) end-to-end against a REAL mf6 6.7.0 solve of the

@@ -1,4 +1,4 @@
-"""ADR 0189 SCHISM shortlist proofs (docs/proof/templates/):
+"""SCHISM shortlist proofs (docs/proof/templates/):
   Row 1 schism_coupled_waves (parametric JONSWAP): nearshore Hs over Esri imagery
     at the Duck NC FRF + a KNOB-demonstration cross-shore chart (storm Hs vs calm
     Hs, with wave setup) + the FRF mesh.

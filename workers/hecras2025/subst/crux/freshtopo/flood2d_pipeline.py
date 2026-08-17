@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """hecras_flood_2d authoring+solve pipeline -- fresh-AOI DEM -> solved 2D deck.
 
-The durable backend the ``hecras_flood_2d`` template orchestrates (ADR 0139
+The durable backend the ``hecras_flood_2d`` template orchestrates (
 promotion). Ties the proven chain into ONE callable:
 
     fetched DEM (4326/projected, m)                                  [seam-1]

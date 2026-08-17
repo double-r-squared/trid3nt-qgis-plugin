@@ -1,8 +1,8 @@
-"""Live Coweeta Creek rain-on-grid proof (ADR 0196 C4) -- direct driver.
+"""Live Coweeta Creek rain-on-grid proof (C4) -- direct driver.
 
 Runs the REAL pieces the registered telemac_rain_on_grid template composes,
 end-to-end, on the Coweeta Creek NC catchment (pour point -83.40402 35.05746,
-ADR 0193 site), THROUGH the rebuilt trid3nt-local/telemac:latest image:
+site), THROUGH the rebuilt trid3nt-local/telemac:latest image:
 
   phase "mesh"  -- acquire_watershed_mesh (pysheds delineation + NHD river +
                    3DEP DEM + OceanMesh2D TIN, projected to UTM) -> watershed.slf;

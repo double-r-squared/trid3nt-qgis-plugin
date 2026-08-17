@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0190 row 4 proof: SWMM RTK unit-hydrograph RDII (closed form + native SWMM).
+"""row 4 proof: SWMM RTK unit-hydrograph RDII (closed form + native SWMM).
 
 Closed-form validation class -> charts/scalars, no raster. Two panels into
 docs/proof/templates/ (named after the tool):
@@ -116,7 +116,7 @@ def main():
     ax.set_title("RTK triangular unit hydrographs (short / medium / long)", fontsize=8)
     fig.text(0.5, 0.005,
              "swmm_rdii_rtk_unit_hydrograph: each UH area = R x rainfall x area "
-             "(the RTK volume identity); base = T(1+K) (ADR 0190 row 4)",
+             "(the RTK volume identity); base = T(1+K) (row 4)",
              ha="center", fontsize=6, color="0.4")
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     p2 = os.path.join(OUT, f"{STEM}_unit_hydrographs.png")

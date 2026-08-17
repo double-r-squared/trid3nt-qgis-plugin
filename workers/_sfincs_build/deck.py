@@ -47,7 +47,7 @@ logger = logging.getLogger("trid3nt.worker.sfincs_build")
 # GDAL/rasterio env (vendored from sfincs_builder — stabilize remote reads).
 # --------------------------------------------------------------------------- #
 os.environ.setdefault("GDAL_NUM_THREADS", "1")
-# Modest VSI cache + timeout for transient GCS hiccups (FR-DT-2 cache is
+# Modest VSI cache + timeout for transient GCS hiccups (cache is
 # external; this is the per-read pace inside GDAL).
 os.environ.setdefault("GDAL_HTTP_TIMEOUT", "60")
 os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "3")
@@ -424,10 +424,10 @@ class BuildOptions:
     """Knobs ``build_sfincs_model`` exposes for engine-internal tuning.
 
     The workflow caller populates these from defaults — never user-input — per
-    Decision K. Surfaces:
+. Surfaces:
 
     - ``grid_resolution_m`` — SFINCS grid spacing. Defaults to 30 m to match
-      NLCD native + NFR-P-4 (≤200 km² at 30 m).
+      NLCD native + (≤200 km² at 30 m).
     - ``simulation_hours`` — total simulation length (storm duration + spin-up).
     - ``crs`` — projected CRS the model grid is built in. SFINCS runs in a
       projected metric CRS; we use EPSG:3857 (Web Mercator) as a generic
@@ -436,7 +436,7 @@ class BuildOptions:
       (TENTATIVE: EPSG:3857 for v0.1 smoke).
     - ``output_setup_uri`` — explicit override for the staged deck's gs:// URI.
       When ``None`` we derive one inside the cache bucket.
-    - ``compute_class`` — FR-CE-3 compute class the solve will run on; feeds the
+    - ``compute_class`` — compute class the solve will run on; feeds the
       autoscale cap sizing (vCPU → cell cap via the perf model). The workflow
       passes the same class it hands ``run_solver``. Provenance only otherwise.
     - ``autoscale_grid`` — when ``True`` (default), ``build_sfincs_model`` snaps
@@ -722,7 +722,7 @@ def _rasterio_open_with_retry(read_path: str, *, max_attempts: int = 3):
     generic ``RuntimeError`` / ``OSError`` — programming errors
     (TypeError, ValueError on the path string) escape immediately.
 
-    NFR-R-1: external-API resilience — segfault root cause (gcsfs) is
+    external-API resilience — segfault root cause (gcsfs) is
     avoided structurally by the ``/vsigs/`` swap; this wrapper handles
     the remaining transient layer.
     """
@@ -944,7 +944,7 @@ def _compute_active_mask_bounds(dem_read_path: str) -> tuple[float, float, bool]
 
 
 # --------------------------------------------------------------------------- #
-# Adaptive grid-resolution autoscale (— SFINCS per-job autoscale)
+# Adaptive grid-resolution autoscale (SFINCS per-job autoscale)
 #
 # The immediate win (applies on the CURRENT local-docker / gcp-workflows path,
 # NOT just AWS Batch): coarsen the SFINCS grid resolution for big AOIs so the
@@ -1048,7 +1048,7 @@ SFINCS_THREAD_EXP: float = _env_float("TRID3NT_SFINCS_THREAD_EXP", 0.85)
 SFINCS_PERF_REF_VCPU: float = _env_float("TRID3NT_SFINCS_PERF_REF_VCPU", 8.0)
 
 #: Resolution ladder (metres) the autoscaler snaps UP through. 30 m is the
-#: NLCD-native NFR-P-4 baseline; 200 m is the coarsest rung we will ever solve
+#: NLCD-native baseline; 200 m is the coarsest rung we will ever solve
 #: at (a 200 m flood grid is coarse but still meaningful for a regional AOI,
 #: and is the floor against degenerate over-coarsening). Env:
 #: ``TRID3NT_SFINCS_RES_LADDER`` (comma-separated).
@@ -1084,7 +1084,7 @@ def resolve_solve_vcpus(compute_class: str = "medium") -> int:
 
     ``TRID3NT_SFINCS_SOLVE_VCPUS`` (if set) wins outright — it lets a redeploy on
     a bigger always-on box re-size the cap without a code change. Otherwise map
-    the FR-CE-3 ``compute_class`` through ``SFINCS_COMPUTE_CLASS_VCPUS`` (default
+    the ``compute_class`` through ``SFINCS_COMPUTE_CLASS_VCPUS`` (default
     8 — the current EC2 box).
     """
     env_v = os.environ.get("TRID3NT_SFINCS_SOLVE_VCPUS")
@@ -1290,8 +1290,8 @@ def autoscale_grid_resolution(
         zmin/zmax: the ``setup_mask_active`` elevation window — the
             same window the solve will actually mask to, so the estimate counts
             the cells SFINCS will really solve, not the raw bbox.
-        compute_class: FR-CE-3 class → vCPU via ``resolve_solve_vcpus``.
-        base_resolution_m: the finest resolution to consider (NFR-P-4 30 m).
+        compute_class: class → vCPU via ``resolve_solve_vcpus``.
+        base_resolution_m: the finest resolution to consider (30 m).
 
     Returns:
         ``GridAutoscaleResult`` with the chosen resolution + the estimate +
@@ -1777,7 +1777,7 @@ def _generate_hydromt_yaml_config(
         ``(region: dict, res: float = 100, crs: Union[str, int] = "utm", ...)``.
         We pass ``region: {bbox: [...]}`` + ``res``; ``crs`` left at the
         ``"utm"`` default so HydroMT picks the appropriate UTM zone for the
-        bbox (Decision K: minimal parameter surface, derive inside).
+        bbox (minimal parameter surface, derive inside).
       * setup_dep — DEM/topobathy ingest. Live sig:
         ``(datasets_dep: List[dict], buffer_cells: int = 0, interp_method:
         str = "linear")``. We pass ``datasets_dep: [{elevtn: <path>}]``.
@@ -2228,7 +2228,7 @@ def _spiderweb_from_dict(d: dict[str, Any] | None) -> "SpiderwebForcing | None":
 
 
 #: PARSER VERSION -- bump whenever ``forcing`` / ``options`` top-level fields
-#: change. Named in the strict-field errors below (ADR 0158).
+#: change. Named in the strict-field errors below.
 _FORCING_OPTIONS_PARSER_VERSION = "sfincs-forcing-options-1"
 
 #: Every top-level key ``forcing_spec_from_dict`` reads (mirrors the
@@ -2280,8 +2280,8 @@ _KNOWN_OPTIONS_FIELDS = frozenset(
 def _reject_unknown_dict_fields(
     d: dict[str, Any], known: frozenset[str], *, what: str
 ) -> None:
-    """Raise loudly if ``d`` carries a top-level key outside ``known`` (ADR 0158
-    -- the ADR 0148 lesson: a stale image silently dropped unknown build_spec
+    """Raise loudly if ``d`` carries a top-level key outside ``known`` (
+    -- the lesson: a stale image silently dropped unknown build_spec
     fields and two registered knob templates ran as no-ops)."""
     unknown = sorted(set(d) - known)
     if unknown:

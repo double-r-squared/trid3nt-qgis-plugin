@@ -1,4 +1,4 @@
-"""Landlab AWS Batch worker package (— NEW engine).
+"""Landlab AWS Batch worker package (NEW engine).
 
 A thin S3-IN -> build RasterModelGrid from a DEM COG -> run a documented Landlab
 component chain (LandslideProbability / OverlandFlow) -> field COG -> S3-OUT

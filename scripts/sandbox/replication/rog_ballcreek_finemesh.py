@@ -1,14 +1,14 @@
-"""Ball Creek CHANNEL-RESOLVING mesh (ADR 0213 lever 2).
+"""Ball Creek CHANNEL-RESOLVING mesh (lever 2).
 
 Regenerates the Ball Creek watershed mesh with a TIGHTER channel band -- channel
-edge ~18 m (vs the ADR 0204/0206 coarse 30 m floor) while RAISING the hillslope
+edge ~18 m (vs the coarse 30 m floor) while RAISING the hillslope
 ceiling to 300 m (vs 200 m) so the extra channel resolution is paid for by
-coarser hillslopes, keeping the total node count sane (the ADR 0210 HEC-RAS
+coarser hillslopes, keeping the total node count sane (the HEC-RAS
 lesson: fewer total cells, more of them in the channel).
 
 The catchment is IDENTICAL to the coarse run (same pour point) so this REUSES
 the cached delineation (catchment.geojson), river network (flowlines.fgb), bare-
-earth bed (dem_bed.tif) and NLCD (nlcd.tif) staged by the ADR 0204 coarse build,
+earth bed (dem_bed.tif) and NLCD (nlcd.tif) staged by the coarse build,
 and re-runs ONLY the OceanMesh2D sizing with the tight band -- no pysheds
 delineation, no re-fetch (the delineation does not depend on edge length). Stages
 watershed.slf + node CN2/Manning against the new mesh, writes a channel-band edge

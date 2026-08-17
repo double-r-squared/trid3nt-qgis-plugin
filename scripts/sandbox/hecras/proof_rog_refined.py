@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Proofs for the ADR 0210 channel-refined rain-on-grid mesh.
+"""Proofs for the channel-refined rain-on-grid mesh.
 
 (1) hecras_flood_2d_rog_mesh.png -- the GRADED HEC-RAS 2025 mesh (Voronoi cells) over
     ESRI World Imagery, cells shaded by size + thin wireframe edges + the channel
     network, so the fine channel bands (down to ~22 m) stand out against the ~90 m
     hillslope background (the paper's dynamic resolution). Separate image per the norm.
 (2) hecras_flood_2d_rog_depth_refined.png -- max depth on the refined mesh (sibling of
-    the uniform depth proof; the default stays uniform, ADR 0210).
+    the uniform depth proof; the default stays uniform).
 (3) hecras_flood_2d_rog_compare_chart.png -- uniform-60m vs refined outlet hydrograph
     vs the TELEMAC-2D reference peak (the refinement sharpens channel routing -- earlier
     peak, higher channel velocity -- without moving the infiltration-dominated HR/TELEMAC

@@ -1,8 +1,8 @@
-"""Case persistence envelopes (FR-MP-6, Appendix A.6/A.7 amendments, sprint-12).
+"""Case persistence envelopes (/A.7 amendments, sprint-12).
 
-A "Case" is the user-facing name for a `projects` document (FR-MP-5 nomenclature
+A "Case" is the user-facing name for a `projects` document (nomenclature
 stays canonical in storage). This module owns the **wire-shape envelopes** that
-back the FR-MP-6 Case UX flow:
+back the Case UX flow:
 
 - ``CaseSummary`` — the left-rail entity (denormalized from ``ProjectDocument``).
 - ``CaseChatMessage`` — a single persisted chat exchange in a Case session
@@ -26,17 +26,17 @@ Invariants this module is responsible for:
 
 - **8. Cancellation is first-class.** ``case-command`` carries no ad-hoc
   cancellation field; cancellation flows through the existing ``cancel``
-  message (Appendix A.3), not a Case lifecycle command.
+  message, not a Case lifecycle command.
 - **9. No cost theater.** No cost field anywhere on Case envelopes — neither
   on ``CaseSummary`` (no aggregate cost), nor on ``CaseCommandEnvelope``, nor
   on the rehydration replay. Cost surfacing is forbidden everywhere (A.4 /
   invariant 9).
 
 SRS references:
-- FR-MP-6 (Case UX flow) — `docs/srs/03-functional-requirements.md`.
-- Appendix A.3 (client -> server messages) and A.4 (server -> client messages)
+- (Case UX flow) — `docs/srs/03-functional-requirements.md`.
+- (client -> server messages) and A.4 (server -> client messages)
   for the envelope-type discipline.
-- Appendix D.2 (``projects``) and D.6 (``sessions``) for the underlying storage
+- (``projects``) and D.6 (``sessions``) for the underlying storage
   shapes the Case envelopes denormalize from.
 """
 
@@ -54,7 +54,7 @@ from .common import (
 )
 
 __all__ = [
-    # Case persistence envelopes (FR-MP-6)
+    # Case persistence envelopes
     "CaseStatus",
     "CaseSummary",
     "CaseChatMessage",
@@ -74,7 +74,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Case persistence envelopes (FR-MP-6)
+# Case persistence envelopes
 # --------------------------------------------------------------------------- #
 
 # Closed enum: Case lifecycle status. ``deleted`` is a soft-delete tombstone
@@ -84,16 +84,16 @@ CaseStatus = Literal["active", "archived", "deleted"]
 
 
 class CaseSummary(GraceModel):
-    """Top-level Case record — the left-rail entity (FR-MP-6 landing state).
+    """Top-level Case record — the left-rail entity (landing state).
 
     Denormalized from ``ProjectDocument`` (D.2) so the client can render the
     Cases list without joining sessions/runs. The Case identifier maps 1:1 to
-    ``projects._id`` (FR-MP-6: UI labels say "Case", schema/code say
+    ``projects._id`` (UI labels say "Case", schema/code say
     "Project"); ``case_id`` here IS the ``project_id``.
 
     ``qgs_project_uri`` is lazy-init by design — a fresh Case has no published
     ``.qgs`` yet; ``publish_layer`` writes the URI on first layer emission
-    (see ``ProjectDocument.qgs_uri``, FR-MP-3).
+    (see ``ProjectDocument.qgs_uri``).
 
     Invariant 9: no cost field anywhere. The summary carries no aggregate
     cost / spent / quota fields.
@@ -101,7 +101,7 @@ class CaseSummary(GraceModel):
 
     schema_version: Literal["v1"] = "v1"
 
-    case_id: ULIDStr  # ULID; maps 1:1 to projects._id (FR-MP-5 / FR-MP-6)
+    case_id: ULIDStr  # ULID; maps 1:1 to projects._id (/)
     title: str  # user-edited; ``ProjectDocument.name`` is the storage field
     created_at: UTCDatetime  # ISO-8601 UTC
     updated_at: UTCDatetime  # ISO-8601 UTC
@@ -109,7 +109,7 @@ class CaseSummary(GraceModel):
 
     bbox: BBox | None = None  # [minLon, minLat, maxLon, maxLat] EPSG:4326
     # Primary hazard label is denormalized from the Case's runs; open enum so
-    # registering a new hazard does not break the Case envelope (Decision G).
+    # registering a new hazard does not break the Case envelope.
     primary_hazard: str | None = None
 
     # Layer summary is a flat list of layer_ids the Case currently has loaded.
@@ -117,12 +117,12 @@ class CaseSummary(GraceModel):
     # the left-rail summary stays cheap.
     layer_summary: list[str] = Field(default_factory=list)
 
-    # job-0172 Part B: per-Case persisted ``ProjectLayerSummary`` dicts. The
+    # Part B: per-Case persisted ``ProjectLayerSummary`` dicts. The
     # PipelineEmitter holds these per-connection in memory; we mirror them
     # onto the Case document so a Case re-open (fresh connection, fresh
     # emitter) rehydrates ``loaded_layers`` deterministically rather than
     # showing an empty LayerPanel. Entries are full ``ProjectLayerSummary``
-    # ``model_dump(mode="json")`` shapes (matches Appendix D.2 envelope
+    # ``model_dump(mode="json")`` shapes (matches envelope
     # discipline + ``CaseSessionState.loaded_layers``). Dedup is by ``uri``:
     # republishing the same layer overwrites the existing entry in place.
     loaded_layer_summaries: list[dict] = Field(default_factory=list)
@@ -132,7 +132,7 @@ class CaseSummary(GraceModel):
 
 # Persisted tool-card lifecycle states (durable, replayable).
 #
-# job-0267 originally pinned this to the two TERMINAL outcomes (``complete`` /
+# originally pinned this to the two TERMINAL outcomes (``complete``
 # ``failed``): an on-box atomic tool persists exactly once, at terminal, and a
 # cancelled dispatch left NO row (Invariant 8). A long-running off-box SOLVE is
 # different — its SIM/dispatch card spans a WS reconnect window, so the "nothing
@@ -211,7 +211,7 @@ class PersistedSubStepRecord(GraceModel):
 
 
 class ToolCardRecord(GraceModel):
-    """Replayable record of ONE tool dispatch inside a Case turn (job-0267).
+    """Replayable record of ONE tool dispatch inside a Case turn.
 
     The live UI renders tool usage cards inline in the chat scroll from
     ``pipeline-state`` envelopes (``feedback_chat_tool_interleave``); those
@@ -220,7 +220,7 @@ class ToolCardRecord(GraceModel):
     the rehydration replay (``CaseSessionState.chat_history``) can re-render
     the card without replaying the live pipeline.
 
-    ``duration_ms`` / ``started_at`` mirror the authoritative job-0264 stamps
+    ``duration_ms`` / ``started_at`` mirror the authoritative stamps
     on ``PipelineStepSummary`` (the agent copies them from the emitter's
     terminal step, falling back to a wall-clock measure around the dispatch).
     ``label`` is the human-facing step name the live card showed (the registry
@@ -276,7 +276,7 @@ class ToolCardRecord(GraceModel):
 
 
 class CaseChatMessage(GraceModel):
-    """One persisted chat exchange in a Case session (FR-MP-6 persistence).
+    """One persisted chat exchange in a Case session (persistence).
 
     Mirrors ``ChatMessage`` (D.6) but carries the per-turn **layer / map-command
     emissions** so Case rehydration can replay deterministically: when a user
@@ -290,7 +290,7 @@ class CaseChatMessage(GraceModel):
     (ws.py imports from common only). The agent service round-trips each entry
     through ``MAP_COMMAND_ARGS`` validation before write.
 
-    job-0267 (full-stream persistence): ``role`` gains the ``"tool"`` value —
+    (full-stream persistence): ``role`` gains the ``"tool"`` value
     one ``role="tool"`` message per dispatched registry tool, interleaved with
     the ``user`` / ``agent`` turns by ``created_at``, so a Case reopen replays
     the FULL stream (user prompt → tool cards → agent narration) in arrival
@@ -298,7 +298,7 @@ class CaseChatMessage(GraceModel):
     (``ToolCardRecord``) — the contract-blessed access path the web renderer
     consumes — and ``content`` carries the same record as a JSON string
     (belt-and-suspenders for non-contract consumers; never free text).
-    ``tool_card`` is ``None`` for every other role, and pre-job-0267 documents
+    ``tool_card`` is ``None`` for every other role, and pre-documents
     (no ``tool_card`` field at all) validate unchanged.
     """
 
@@ -325,7 +325,7 @@ class CaseChatMessage(GraceModel):
     # contents, including via the full-fidelity ``parts_blob`` path.
     thinking: str | None = None
 
-    # job-0267: typed tool-card payload; set IFF ``role == "tool"``.
+    # typed tool-card payload; set IFF ``role == "tool"``.
     tool_card: ToolCardRecord | None = None
 
     # Link to the PipelineRecord (D.6 PipelineSnapshot) this turn dispatched,
@@ -345,12 +345,12 @@ class CaseChatMessage(GraceModel):
 
 
 class CaseSessionState(GraceModel):
-    """The rehydration envelope returned when a user opens a Case (FR-MP-6 resume).
+    """The rehydration envelope returned when a user opens a Case (resume).
 
     The client uses this to reconstruct the full Case session: the chat panel
     re-renders ``chat_history``, the LayerPanel re-registers ``loaded_layers``
     against QGIS Server (the published ``.qgs`` is the source-of-truth per
-    FR-MP-3), the PipelineStrip reflects ``current_pipeline`` and the audit
+), the PipelineStrip reflects ``current_pipeline`` and the audit
     history reflects ``pipeline_history``.
 
     ``loaded_layers`` and ``pipeline_history`` / ``current_pipeline`` are kept
@@ -368,7 +368,7 @@ class CaseSessionState(GraceModel):
     loaded_layers: list[dict] = Field(default_factory=list)  # ProjectLayerSummary[]
     pipeline_history: list[dict] = Field(default_factory=list)  # PipelineSnapshot[]
     current_pipeline: dict | None = None  # PipelineSnapshot | None
-    # job-0294b (sprint-14-aws): the persisted chart replay set. job-0230
+    # The persisted chart replay set.
     # ``$push``es SessionChartRecords onto the sessions doc, but the read side
     # was never wired — a re-opened Case dropped its charts. Each entry here is
     # a ``ChartEmissionPayload`` dict (the record's ``.payload``, emitted-at
@@ -426,12 +426,12 @@ class CaseManifestLayer(GraceModel):
 
     layer_id: str
     name: str
-    layer_type: Literal["raster", "vector", "mesh"]  # ADR 0118: mesh = MDAL row
+    layer_type: Literal["raster", "vector", "mesh"]  #: mesh = MDAL row
     style_preset: str
     asset_url: str  # display face the cold path serves (wms_url, else uri)
     bbox: BBox | None = None  # per-layer extent when known; AOI fallback at Case
     wms_url: str | None = None  # optional QGIS WMS GetMap face (display branch)
-    crs_authid: str | None = None  # ADR 0118: explicit CRS for an MDAL mesh row
+    crs_authid: str | None = None  #: explicit CRS for an MDAL mesh row
 
 
 class CaseManifest(GraceModel):
@@ -470,7 +470,7 @@ class CaseManifest(GraceModel):
 class CaseListEnvelopePayload(GraceModel):
     """``case-list`` (A.4 amendment): server -> client list of all Cases.
 
-    Emitted on session connect (initial landing state per FR-MP-6) and
+    Emitted on session connect (initial landing state ) and
     refreshed after any Case lifecycle command (``create`` / ``rename`` /
     ``archive`` / ``delete``). The client renders the left rail from this list.
 
@@ -501,9 +501,9 @@ class CaseOpenEnvelopePayload(GraceModel):
 
 
 # Closed enum: Case lifecycle commands. The set is closed at v0.1 — a new
-# command is an SRS amendment (FR-MP-6) not a silent open-enum, because the
+# command is an SRS amendment not a silent open-enum, because the
 # server-side dispatch table needs to enumerate handlers.
-# job-0269 (proposed FR-MP-6/A.3 amendment): ``deselect`` — the client
+# (proposed/A.3 amendment): ``deselect`` — the client
 # navigated OUT of the active Case to the Cases root. Carries no case_id.
 # Without it the session-scoped active Case silently kept pointing at the
 # last-opened Case, so root prompts skipped auto-create and dispatched into

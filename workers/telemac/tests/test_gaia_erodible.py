@@ -1,4 +1,4 @@
-"""ADR 0216: GAIA v2 erodible-bed morphodynamics deck authoring.
+"""GAIA v2 erodible-bed morphodynamics deck authoring.
 
 Pins the write_gaia_deck branch: erodible_bed=True emits the bedload recipe
 (BED LOAD FOR ALL SANDS = YES + LAYERS INITIAL THICKNESS > 0 + a bed-load
@@ -80,7 +80,7 @@ def test_gaia_v2_erodible_deck_enables_bedload_and_stock(tmp_path):
 
 
 def test_erodible_sediment_couples_gaia_in_t2d_deck(tmp_path):
-    # ADR 0216 false-green fix (deck-level proof): the config the server stages
+    # false-green fix (deck-level proof): the config the server stages
     # for a SCOUR prompt - substance_class='sediment', erodible_bed=True - MUST
     # author the GAIA coupling into the t2d deck. The old mislabeled run staged
     # NO substance_class, so the deck carried ZERO GAIA keywords (a plain tracer
@@ -109,7 +109,7 @@ def test_gaia_v2_bed_thickness_floored(tmp_path, thick, expected):
     assert f"LAYERS INITIAL THICKNESS        = {expected}" in deck
 
 
-# --- ADR 0240: GAIA v3 multi-class graded sediment (grain sorting) ---------- #
+# --- GAIA v3 multi-class graded sediment (grain sorting)
 
 def test_normalize_gradation_renormalizes_sorts_and_caps():
     # renormalizes weights to sum 1, sorts fine->coarse, drops <2-class specs

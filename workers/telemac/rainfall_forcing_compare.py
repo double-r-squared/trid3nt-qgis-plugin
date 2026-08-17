@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""ADR 0190 row 1 reference driver: distributed on-mesh RAINFALL vs no-rain.
+"""row 1 reference driver: distributed on-mesh RAINFALL vs no-rain.
 
-Non-registered reference driver (the ADR 0188 form). Solves the SAME river
+Non-registered reference driver (the form). Solves the SAME river
 reach + mesh TWICE through the real run_solver seam -- once with NO rain forcing
 (baseline) and once with a distributed on-mesh RAIN OR EVAPORATION source term
 -- then reads WATER DEPTH from both r2d_river.slf results and quantifies the

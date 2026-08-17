@@ -1,6 +1,6 @@
-# ADR 0158: SCHISM's manifest.json (variant/ncompute/nscribe/timeout_s/run_id)
+# SCHISM's manifest.json (variant/ncompute/nscribe/timeout_s/run_id)
 # is the worker-side "build-spec parse entry point" for the mpirun invocation.
-# An unknown key previously kept its default SILENTLY (the ADR 0148 lesson --
+# An unknown key previously kept its default SILENTLY (the lesson
 # a typo'd rank/variant knob would solve with the WRONG config, never erroring).
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def test_known_manifest_fields_accepted():
 
 
 def test_seam_envelope_fields_accepted():
-    # ADR 0189: the generic run_solver seam writes inputs/outputs/schism_args into
+    # the generic run_solver seam writes inputs/outputs/schism_args into
     # rundir/manifest.json verbatim -- the entrypoint must accept-and-ignore them.
     _reject_unknown_manifest_fields(
         {"variant": "hydro", "ncompute": 3, "nscribe": 5, "run_id": "r2",

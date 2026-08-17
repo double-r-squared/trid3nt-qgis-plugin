@@ -1,4 +1,4 @@
-"""ADR 0178: coast-following quadtree refinement + the sfincs_map.nc CRS stamp.
+"""coast-following quadtree refinement + the sfincs_map.nc CRS stamp.
 
 Offline unit coverage (no cht_sfincs / no docker) for the two worker-side legs:
 

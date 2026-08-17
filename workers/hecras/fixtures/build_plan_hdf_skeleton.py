@@ -20,7 +20,7 @@ this skeleton reaches the geometry reader). It is NOT yet solvable: RasGeomPrepr
 reads the network geometry from a Muncie-format ``.xNN`` preprocessor file (the
 ``Section - Arrays Sizes`` / ``FORMAT 50`` reader), and the seeded fixtures ship only
 the GUI ``.gNN`` text, not the ``.xNN``. Authoring that ``.xNN`` is the remaining
-per-front lift (see ADR 0173). This builder discharges the plan-HDF half of ADR
+per-front lift. This builder discharges the plan-HDF half of ADR
 0172's recipe and is the reference the ``.xNN`` author builds beside.
 """
 from __future__ import annotations

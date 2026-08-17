@@ -220,7 +220,7 @@ class ReachConfig:
     # in-image against gaia.dico v9.0 (CLASSES SEDIMENT DIAMETERS/INITIAL FRACTION/
     # TYPE OF SEDIMENT arrays, HIDING FACTOR FORMULA=1 Egiazaroff, D50 output var).
     sediment_gradation: tuple = ()      # v3 [(d50_um, fraction), ...] >=2 -> multi-class
-    # NESTOR DREDGING (ADR 0254) -- a dig/dump rule layered ONTO the GAIA v2
+    # NESTOR DREDGING -- a dig/dump rule layered ONTO the GAIA v2
     # erodible-bed morphodynamics base. dredging False (default) leaves every
     # sediment run byte-identical (no NESTOR keywords, no action/polygon files).
     # dredging True arms the in-image-precompiled NESTOR module (libnestor4*.so):
@@ -294,7 +294,7 @@ class ReachConfig:
     graphic_period: int = 200
     min_bed_slope: float = 3.0e-4       # enforced gentle downstream slope floor
     max_bed_slope: float = 6.0e-3
-    # RAIN-ON-GRID (ADR 0196). mode="rain_on_grid" routes the worker to the RoG
+    # RAIN-ON-GRID. mode="rain_on_grid" routes the worker to the RoG
     # pipeline (rog_build) instead of the channel-dye pipeline: a rain-fed
     # delineated-watershed TIN (staged by the agent-side mesh_acquisition step as
     # watershed_slf, UTM metres, BOTTOM = bed) solves with a distributed CN
@@ -318,7 +318,7 @@ class ReachConfig:
     rain_intensity_mm_per_hr: float = 25.0   # constant design-storm intensity (native)
     rain_duration_s: float = None       # type: ignore[assignment]  # rain-on window (defaults to duration_s)
     rain_hyetograph_mm: list = None     # type: ignore[assignment]  # per-step net rain (preprocessing)
-    # TIME-VARYING native hyetograph (ADR 0206): a list of [t_end_s, gross_mm]
+    # TIME-VARYING native hyetograph: a list of [t_end_s, gross_mm]
     # blocks (gross rainfall per interval, t from 0). When set, the RoG worker
     # stages a per-case FORTRAN FILE flipping the engine's hardcoded RAINDEF=1
     # to RAINDEF=3 and writes the block file as FORMATTED DATA FILE 1, so the
@@ -326,7 +326,7 @@ class ReachConfig:
     # the constant-rain peak-timing lag). Empty/None -> the constant design-storm
     # native path (rain_intensity_mm_per_hr) is used, byte-identical to before.
     rain_hyetograph_blocks: list = None  # type: ignore[assignment]
-    # CONTINUOUS SOIL-MOISTURE STORE (ADR 0213). When soil_store is True and a
+    # CONTINUOUS SOIL-MOISTURE STORE. When soil_store is True and a
     # rain_hyetograph_blocks GROSS series is set, the worker transforms the gross
     # hyetograph into a NET rainfall-excess hyetograph through a Michel et al.
     # (2005) continuous SCS-CN production store (level V, capacity S, recovery
@@ -616,8 +616,8 @@ def fetch_river_centerline(cfg: ReachConfig):
     else:
         # No river_name to disambiguate: prefer the dominant nearby mainstem
         # over the bare nearest-flowline snap, so a seed near a confluence does
-        # not land on a short low-order tributary stub (ADR 0104 Bug-1
-        # reach-selection residual; ADR 0108). Fail-open to the raw seed.
+        # not land on a short low-order tributary stub (Bug-1
+        # reach-selection residual). Fail-open to the raw seed.
         main = _mainstem_flowline_seed(seed_lon, seed_lat)
         if main is not None:
             LOG.info(
@@ -1754,7 +1754,7 @@ def _project_s(X, Y, cl):
 
 
 # ---------------------------------------------------------------------------
-# 4b. Bed-bathymetry COG (ADR 0231 in-worker input surfacing)
+# 4b. Bed-bathymetry COG (in-worker input surfacing)
 # ---------------------------------------------------------------------------
 # The bed is sampled + fitted INSIDE this worker (fetch_dem_bed), so the composer
 # has no emitter/uri for it -- the honest way to surface NATE's "if there is a
@@ -2260,7 +2260,7 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
             "MASS-BALANCE                    = YES",
         ]
     if dredging:
-        # NESTOR dig/dump coupling (ADR 0254): enable the precompiled module and
+        # NESTOR dig/dump coupling: enable the precompiled module and
         # name its own-format input files. Keywords pinned against gaia.dico v9.0
         # (NESTOR logical INDEX 25; NESTOR ACTION/POLYGON/SURFACE REFERENCE FILE).
         # The action + polygon (+ surface-ref) files are authored by
@@ -2299,7 +2299,7 @@ def write_gaia_deck(cfg, slf_name: str, cli_name: str, workdir: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# NESTOR dredging deck authoring (ADR 0254)
+# NESTOR dredging deck authoring
 # ---------------------------------------------------------------------------
 # NESTOR reads three own-format ASCII files, named in the GAIA steering via the
 # NESTOR ACTION FILE / NESTOR POLYGON FILE / NESTOR SURFACE REFERENCE FILE
@@ -2449,7 +2449,7 @@ def write_nestor_action_file(cfg, workdir: str, has_dump: bool) -> str:
     t0 = _nestor_time_str(max(0.0, float(getattr(cfg, "dredge_start_frac", 0.15))) * dur)
     t1 = _nestor_time_str(min(1.0, float(getattr(cfg, "dredge_end_frac", 0.95))) * dur)
     lines = [
-        "/ NESTOR action file - channel maintenance dredging (ADR 0254)",
+        "/ NESTOR action file - channel maintenance dredging",
         f"/ mode={mode}",
         # RESTART is read as a Fortran LOGICAL (READ(valueStr,*) Restart), so the
         # value MUST be a Fortran logical literal (F/.FALSE.), NOT DAMOCLES YES/NO.
@@ -3012,7 +3012,7 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {_tracer_diff}
             f"GAIA STEERING FILE              = {GAIA_STEERING_FILENAME}\n"
         )
         if bool(getattr(cfg, "dredging", False)):
-            # NESTOR dredging (ADR 0254): author the action + polygon (+ surface-
+            # NESTOR dredging: author the action + polygon (+ surface
             # reference) files and stamp a deterministic time origin so the action-
             # file absolute dates (yyyy.mm.dd-hh:mm:ss) map to sim seconds through
             # NESTOR's DateStringToSeconds (seconds since MARDAT/MARTIM). GAIA

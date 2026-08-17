@@ -889,7 +889,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # Best-effort mount of the catalog HTTP listener.
     http_server = None
     try:
-        from trid3nt_server.tool_catalog_http import serve_catalog_http
+        from trid3nt_server.server.protocol.catalog_http import serve_catalog_http
 
         http_server = await serve_catalog_http(host=host)
     except Exception:  # noqa: BLE001 -- discovery surface, never blocks WS

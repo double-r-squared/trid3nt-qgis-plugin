@@ -1,5 +1,5 @@
 """One-off live drive: schism_pahm_surge on a SMALL AOI at explicit resolution_m=30
-(ADR 0219 explicit-override path). Reuses seed_showcase_cases.py's WS-protocol
+(explicit-override path). Reuses seed_showcase_cases.py's WS-protocol
 helpers verbatim (product code, not reinvented) -- creates a fresh Case, dispatches
 via dev-tool-invoke exactly like the QGIS plugin's !run path, auto-confirms the
 tool-payload-warning gate if it fires, and prints the full turn trace + final

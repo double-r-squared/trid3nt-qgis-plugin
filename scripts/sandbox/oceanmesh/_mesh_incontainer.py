@@ -1,4 +1,4 @@
-"""In-container OceanMesh2D driver for the ADR 0192 standalone mesh-front sandbox.
+"""In-container OceanMesh2D driver for the standalone mesh-front sandbox.
 
 Runs INSIDE the isolated ``trid3nt-local/mesh:latest`` image (the GPL-isolated
 CHLNDDEV ``oceanmesh`` install -- the authentic OceanMesh2D Python port). It is

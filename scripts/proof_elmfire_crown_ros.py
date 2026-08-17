@@ -1,8 +1,8 @@
-"""Proof for elmfire_crown_fire_active_ros_verification (ADR 0256): the Cruz
+"""Proof for elmfire_crown_fire_active_ros_verification: the Cruz
 (2005) active crown-fire ROS exact-solution gate.
 
 Runs the live in-image verification, downloads the PUBLISHED time-of-arrival COG,
-and renders it as FILLED cells (ADR 0251: never cell-center scatter) over the
+and renders it as FILLED cells (never cell-center scatter) over the
 Esri World Imagery basemap with the grid overlay, plus a numerical-vs-Cruz ROS
 panel. The verification deck is a SYNTHETIC all-constant canopied deck at a
 neutral mid-CONUS point (the geography is immaterial on constant fuel); the

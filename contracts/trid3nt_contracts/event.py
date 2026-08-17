@@ -1,4 +1,4 @@
-"""EventMetadata, ClaimSet/NumericClaim, and the intensity union (Appendix C).
+"""EventMetadata, ClaimSet/NumericClaim, and the intensity union.
 
 ``EventMetadata`` is the structured representation of a real-world hazard event
 extracted from news + agency content. Produced by ``extract_event_metadata``,
@@ -10,7 +10,7 @@ Invariants this module is responsible for:
   is a closed ``Literal`` mapped from a curated table (engine-owned), never
   LLM-judged. ``consensus_value`` is what gets narrated.
 - **Every numeric intensity field is a ``ClaimSet | None``, never a bare number**
-  (Decision M, C.4). Non-numeric fields (landfall_location, breach_type,
+  (C.4). Non-numeric fields (landfall_location, breach_type,
   river_name, gauge_id, ...) stay scalar.
 """
 
@@ -52,7 +52,7 @@ __all__ = [
 ]
 
 
-# Open enum (Decision G): grows as wildfire/seismic/contaminant engines land.
+# Open enum: grows as wildfire/seismic/contaminant engines land.
 EventType = Literal[
     "hurricane",
     "tropical_storm",
@@ -67,7 +67,7 @@ EventType = Literal[
 ]
 
 # Closed Literal mapped from a curated source-to-tier table (engine-owned,
-# FR-HEP-2, invariant 7). Never a field the LLM free-fills with a judged tier.
+#, invariant 7). Never a field the LLM free-fills with a judged tier.
 SourceType = Literal[
     "agency",  # tier 1 or 2: NWS, USGS, NHC, etc.
     "major_news",  # tier 3: AP, Reuters, NYT, WaPo with direct sourcing
@@ -88,7 +88,7 @@ ConsensusConfidence = Literal["high", "medium", "low"]
 
 
 # --------------------------------------------------------------------------- #
-# Claim-set types for multi-source numerical evidence (Appendix C.3)
+# Claim-set types for multi-source numerical evidence
 # --------------------------------------------------------------------------- #
 
 
@@ -123,7 +123,7 @@ class ClaimSet(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Location and provenance (Appendix C.3)
+# Location and provenance
 # --------------------------------------------------------------------------- #
 
 
@@ -176,7 +176,7 @@ class EventProvenance(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Intensity indicators, discriminated by event_type (Appendix C.4)
+# Intensity indicators, discriminated by event_type
 # --------------------------------------------------------------------------- #
 # Every numeric quantity is ClaimSet | None. Non-numeric fields stay scalar.
 
@@ -266,12 +266,12 @@ _EVENT_TYPE_TO_INTENSITY: dict[str, str] = {
 
 
 # --------------------------------------------------------------------------- #
-# Top-level EventMetadata (Appendix C.2)
+# Top-level EventMetadata
 # --------------------------------------------------------------------------- #
 
 
 class EventMetadata(GraceModel):
-    """Structured representation of a real-world hazard event (Appendix C.2)."""
+    """Structured representation of a real-world hazard event."""
 
     schema_version: Literal["v1"] = "v1"
 

@@ -1,6 +1,6 @@
 """MODFLOW 6 solver Cloud Run Job — Case 2 groundwater substrate.
 
-Sprint-13 / MOD-1 / / FR-CE-1/2/3. The MODFLOW-6 analogue of the
+The MODFLOW-6 analogue of the
 SFINCS solver worker (workers/sfincs/). Reads a JSON setup manifest
 from GCS, fetches the FloPy-generated input deck declared in the manifest
 (simulation namefile `mfsim.nam` + GWF and GWT model namefiles + their

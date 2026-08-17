@@ -1,4 +1,4 @@
-"""Tests for case_results.CaseOneResult (job-0118).
+"""Tests for case_results.CaseOneResult.
 
 Covers:
 - pydantic round-trip

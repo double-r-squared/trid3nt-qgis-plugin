@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Adapt an AuthorMesh full-topology + subgrid-tables dump into Mesh2D/SubgridTables.
 
-The C# ``AuthorMesh`` (OI-B, ADR 0134 c1) dumps a fresh mesh's raw topology (Faces
+The C# ``AuthorMesh`` (OI-B, c1) dumps a fresh mesh's raw topology (Faces
 cellA/cellB/fpA/fpB, FacePoint coords, per-cell face lists, normals, perimeter) and
 -- over a real terrain -- the ``MeshPropertyTables.ComputeFrom`` subgrid curves.
 This adapter reconstructs a ``MuncieGeom``-shaped structure from that dump and runs

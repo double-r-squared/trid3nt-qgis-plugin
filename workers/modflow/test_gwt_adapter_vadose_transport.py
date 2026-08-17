@@ -1,4 +1,4 @@
-"""Unit + live tests for the MODFLOW 6 UZF+UZT vadose_transport deck (ADR 0228).
+"""Unit + live tests for the MODFLOW 6 UZF+UZT vadose_transport deck.
 
 These assert the *deck construction* contract for the ``vadose_transport``
 archetype (a DUAL-model GWF+GWT sim: a UZF unsaturated-flow ivertcon column

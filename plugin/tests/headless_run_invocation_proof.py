@@ -1,4 +1,4 @@
-"""Live-proof driver for the ``!run`` direct tool invocation (ADR 0114).
+"""Live-proof driver for the ``!run`` direct tool invocation.
 
 Drives the WS as a client (the pure-stdlib ``AgentClient`` -- no QGIS needed),
 exactly as the dock does: parse the ``!run`` line CLIENT-side with the product

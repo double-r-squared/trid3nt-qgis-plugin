@@ -1,4 +1,4 @@
-"""ADR 0257 queued real-US case: SGN (Boussinesq) vs SWE arrival-waveform
+"""queued real-US case: SGN (Boussinesq) vs SWE arrival-waveform
 comparison on the REAL 2021 M8.2 Chignik finite-fault tsunami (the same source /
 domain staging the repo already drives -- drive_geoclaw_finite_fault_chignik.py +
 drive_geoclaw_chignik_runup_proof.py).
@@ -12,7 +12,7 @@ downloader copies the solved ``_output/`` (the ``gauge00001.txt`` series) to a
 persistent scratch dir BEFORE the composer cleans it, so the raw water-surface
 time series survives for the overlay.
 
-Budget (deliberate, ADR 0257): SGN is ~17x SWE (implicit PETSc step). Coarsened
+Budget (deliberate): SGN is ~17x SWE (implicit PETSc step). Coarsened
 to keep SGN under ~60-90 min wall -- amr_levels=2, sim_duration bounded to the
 near-field propagation-to-gauge window. The comparison target is arrival waveform
 + leading-wave shape + trailing dispersive oscillations, which survive moderate
@@ -39,7 +39,7 @@ logger = logging.getLogger("sgn_vs_swe")
 # REAL 2021 M8.2 Chignik catalog values, as resolved by the earthquake_source
 # path (USGS ComCat event ak0219neiszm):
 #   epicenter (-157.8876, 55.3635), Mw 8.2, focal depth 35 km.
-# BUDGET COARSENING (ADR 0257): the finite-fault footprint enclosure that the
+# BUDGET COARSENING: the finite-fault footprint enclosure that the
 # earthquake_source path performs grows the computational domain to basin scale
 # (-160.8..-154.3 lon x 53.9..57.0 lat ~ 415x350 km, ~242k base cells); at the
 # ~17x SGN implicit cost that is a multi-HOUR solve. Per the ADR budget guidance

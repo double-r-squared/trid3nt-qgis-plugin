@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0218 proof: SWMM Snow Pack degree-day melt (rain-on-snow), REAL forcing.
+"""proof: SWMM Snow Pack degree-day melt (rain-on-snow), REAL forcing.
 
 Chart-first validation class -> charts/scalars, no raster. Temperature forcing is
 REAL hourly KBUF (Buffalo NY) ASOS air temperature (fetch_asos_metar ``tmpf``)

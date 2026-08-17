@@ -1,6 +1,6 @@
-"""Round-trip + negative tests for the Appendix A WebSocket protocol (ws.py).
+"""Round-trip + negative tests for the WebSocket protocol (ws.py).
 
-Every message type listed in ``ws.ALL_PAYLOADS`` (Appendix A.3, A.4, A.4b) is
+Every message type listed in ``ws.ALL_PAYLOADS`` (A.4, A.4b) is
 exercised: a real instance is built, dumped to JSON via the Envelope, parsed
 back, and re-dumped — both passes must be byte-identical (idempotent).
 """
@@ -83,13 +83,13 @@ def test_user_message_roundtrip(session_id: str) -> None:
 
 
 def test_user_message_research_mode_field_removed() -> None:
-    """The FR-WC-15 research_mode carrier was cut; ``extra="forbid"`` now rejects it."""
+    """The research_mode carrier was cut; ``extra="forbid"`` now rejects it."""
     with pytest.raises(ValidationError):
         ws.UserMessagePayload(text="hi", research_mode="research")  # type: ignore[call-arg]
 
 
 def test_user_message_drawn_geometry_roundtrip(session_id: str) -> None:
-    """ADR 0159: the dock's 'Draw region' rectangle rides ``drawn_geometry`` and
+    """the dock's 'Draw region' rectangle rides ``drawn_geometry`` and
     round-trips through the A.1 envelope wire form unchanged."""
     payload = ws.UserMessagePayload(
         text="refine the mesh where I drew",
@@ -222,7 +222,7 @@ def test_spatial_input_response_cancelled(session_id: str) -> None:
     assert dumped["payload"]["cancelled"] is True
 
 
-# --- FR-WC-16 urban vector-draw (vector_draw mode) -------------------------- #
+# --- urban vector-draw (vector_draw mode)
 
 
 def _vector_draw_feature_collection() -> dict[str, Any]:
@@ -278,7 +278,7 @@ def _vector_draw_feature_collection() -> dict[str, Any]:
 
 
 def test_spatial_input_response_vector_draw_roundtrips(session_id: str) -> None:
-    """FR-WC-16: a vector_draw reply carrying a role-tagged FeatureCollection
+    """a vector_draw reply carrying a role-tagged FeatureCollection
     with per-segment barrier tags + flap direction serializes/deserializes
     cleanly through the envelope."""
     fc = _vector_draw_feature_collection()
@@ -466,7 +466,7 @@ def test_pipeline_state_invalid_step_state_rejected() -> None:
 
 
 def test_pipeline_step_duration_ms_wire_roundtrip(session_id: str) -> None:
-    """job-0264: duration_ms is carried on the pipeline-state wire shape.
+    """duration_ms is carried on the pipeline-state wire shape.
 
     Optional + ge=0; defaults to None for non-terminal steps and round-trips
     through the envelope serialization unchanged when populated.
@@ -491,7 +491,7 @@ def test_pipeline_step_duration_ms_wire_roundtrip(session_id: str) -> None:
 
 
 def test_pipeline_step_duration_ms_rejects_negative() -> None:
-    """job-0264: Field(ge=0) rejects negative durations on the wire shape."""
+    """Field(ge=0) rejects negative durations on the wire shape."""
     with pytest.raises(ValidationError):
         ws.PipelineStep(
             step_id=new_ulid(), name="x", tool_name="x", state="complete", duration_ms=-1
@@ -774,7 +774,7 @@ def test_spatial_input_request(session_id: str) -> None:
 
 
 def test_spatial_input_request_vector_draw_mode(session_id: str) -> None:
-    """FR-WC-16: the request may ask the client to open the vector-draw surface."""
+    """the request may ask the client to open the vector-draw surface."""
     payload = ws.SpatialInputRequestPayload(
         request_id=new_ulid(),
         mode="vector_draw",
@@ -831,7 +831,7 @@ def test_clarification_request_ok(session_id: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# tool-candidates / tool-choice (ADR 0018 auto/ask modes -- Stage 3)
+# tool-candidates / tool-choice (auto/ask modes -- Stage 3)
 # --------------------------------------------------------------------------- #
 
 
@@ -904,7 +904,7 @@ def test_tool_picker_payloads_registered() -> None:
 
 
 def test_user_message_tool_choice_mode(session_id: str) -> None:
-    """ADR 0018: the mode rides user-message like show_thinking/model_id;
+    """the mode rides user-message like show_thinking/model_id;
     absent (None) preserves the prior wire shape, and the Literal is closed."""
     default = ws.UserMessagePayload(text="hi")
     dumped = _roundtrip_idempotent(_wrap(default, session_id))
@@ -924,7 +924,7 @@ def test_user_message_tool_choice_mode(session_id: str) -> None:
 
 
 def test_secrets_payloads_registered_in_ws_dicts() -> None:
-    """job-0115 — OQ-0100-WS-REGISTRY-WIRING resolved by splatting the §F.3
+    """OQ-0100-WS-REGISTRY-WIRING resolved by splatting the §F.3
     per-Case secrets payloads into the ws.py routing dicts.
 
     Mirrors the per-module ``SECRET_*_PAYLOADS`` dicts the secrets module
@@ -1010,7 +1010,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
                 ws.ClarificationOption(id="b", label="B", description="b"),
             ],
         ),
-        # sprint-08 — FR-FR-1 + §F.1.2 Mode 2
+        # sprint-08 — + §F.1.2 Mode 2
         "recovery-choice": lambda: ws.RecoveryChoicePayload(
             request_id=new_ulid(),
             failed_step_id=new_ulid(),
@@ -1022,7 +1022,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "recovery-choice-response": lambda: ws.RecoveryChoiceResponsePayload(
             request_id=new_ulid(), choice="retry"
         ),
-        # job-0115 — §F.3 per-Case secrets envelopes (OQ-0100-WS-REGISTRY-WIRING)
+        # — §F.3 per-Case secrets envelopes (OQ-0100-WS-REGISTRY-WIRING)
         "secret-add": lambda: ws.SecretAddEnvelopePayload(
             provider="ebird", case_id=new_ulid(), key_value="x"
         ),
@@ -1041,7 +1041,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "credential-provided": lambda: ws.CredentialProvidedEnvelopePayload(
             request_id=new_ulid(), secret_id=new_ulid()
         ),
-        # job-0127 — tool payload-warning envelopes (Wave 2)
+        # — tool payload-warning envelopes (Wave 2)
         "tool-payload-warning": lambda: ws.PayloadWarningEnvelopePayload(
             warning_id=new_ulid(),
             tool_name="fetch_dem",
@@ -1054,7 +1054,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             warning_id=new_ulid(),
             decision="proceed",
         ),
-        # job-0223 — chart-emission envelope (sprint-13 conversational analysis)
+        # — chart-emission envelope (sprint-13 conversational analysis)
         "chart-emission": lambda: ChartEmissionPayload(
             chart_id=new_ulid(),
             vega_lite_spec={
@@ -1064,7 +1064,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             },
             title="Damage distribution",
         ),
-        # job-0233 — python-sandbox code-exec envelopes (sprint-13 Stage 2)
+        # — python-sandbox code-exec envelopes (sprint-13 Stage 2)
         "code-exec-request": lambda: CodeExecRequestPayload(
             code_exec_id=new_ulid(),
             python_code="result = dem.read(1).mean()",
@@ -1116,7 +1116,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             elapsed_seconds=42.5,
             eta_seconds=300.0,
         ),
-        # ADR 0018 auto/ask modes -- tool-selection picker (Stage 3,
+        # auto/ask modes -- tool-selection picker (Stage 3,
         # 2026-07-22). Request is agent->client (ranked candidates + reason +
         # fail-open timeout); reply is client->agent (verbatim pick OR
         # free-text guidance OR both-None let-agent-decide).

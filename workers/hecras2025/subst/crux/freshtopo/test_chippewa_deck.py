@@ -1,8 +1,8 @@
-"""Offline round-trip gates for the CLEAN pure-2D fake-reach authors (ADR 0137).
+"""Offline round-trip gates for the CLEAN pure-2D fake-reach authors.
 
 These validate the ``patch_chippewa_{xnn,bnn}`` authors against the vendored,
 HEC-authored Chippewa reference WITHOUT the solver -- the same offline discipline
-the ADR 0133/0135 writers land under. The end-to-end SOLVE (fresh carved mesh ->
+the writers land under. The end-to-end SOLVE (fresh carved mesh ->
 these authors -> production 6.6 engines, vol err 0.0) is exercised by
 ``build_chippewa_fakereach_deck.py`` inside ``trid3nt-local/hecras:latest``.
 """

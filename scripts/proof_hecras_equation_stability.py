@@ -1,4 +1,4 @@
-"""ADR 0188 HEC-RAS proofs: DW-vs-SWE equation-set regression + stability sweep.
+"""HEC-RAS proofs: DW-vs-SWE equation-set regression + stability sweep.
 
 From the direct-call live runs (Blanco River canyon nr Wimberley TX, fresh-authored
 8075-cell 2D mesh, 329 ft relief, 15000 cfs). Emits to docs/proof/templates/:
@@ -43,7 +43,7 @@ TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapSe
 ZOOM = 14
 TO3857 = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
-# The four solved stability trials (ADR 0188 live sweep; peak WSE ft / vol err %).
+# The four solved stability trials (live sweep; peak WSE ft / vol err %).
 SWEEP = [
     ("10MIN", 1409.715, 487.49, 0.003776),
     ("5MIN", 1167.069, 244.84, 0.011979),

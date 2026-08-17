@@ -150,7 +150,7 @@ class PluginSettings:
 
     @property
     def tool_choice_mode(self) -> str:
-        """ADR 0018 auto/ask modes (Stage 3, 2026-07-22): the tool-selection
+        """auto/ask modes (Stage 3, 2026-07-22): the tool-selection
         VISIBILITY mode ridden on every user-message (mirrors show_thinking).
         ``"auto"`` (default) = autonomous selection, no picker cards (the
         server may still ask on a measured retrieval near-tie); ``"ask"`` =

@@ -151,8 +151,8 @@ def test_validate_job_spec_gate():
 
 
 def test_validate_job_spec_rejects_unknown_top_level_field():
-    """ADR 0158: an unknown TOP-LEVEL job_spec key errors loudly instead of
-    silently vanishing (the ADR 0148 lesson). run_args internals stay open
+    """an unknown TOP-LEVEL job_spec key errors loudly instead of
+    silently vanishing (the lesson). run_args internals stay open
     (unpacked as **kwargs against build_modflow_deck's typed signature, which
     already raises TypeError on an unknown run_args key)."""
     from workers._modflow_build import validate_job_spec
@@ -194,7 +194,7 @@ def test_build_modflow_deck_rejects_unknown_run_args_key_via_typeerror():
 
 
 def test_parser_version_is_bumped_for_adr_0228_fields():
-    """The parser version is bumped to -3 for the ADR 0228 vadose_transport +
+    """The parser version is bumped to -3 for the vadose_transport +
     CSUB-knob run_args."""
     from workers._modflow_build.spec import _PARSER_VERSION
 
@@ -202,7 +202,7 @@ def test_parser_version_is_bumped_for_adr_0228_fields():
 
 
 def test_job_spec_accepts_vadose_transport_fields(tmp_path):
-    """The ADR 0228 vadose_transport run_args flow through the OPEN passthrough
+    """The vadose_transport run_args flow through the OPEN passthrough
     into the typed build_modflow_deck signature and BUILD a deck (not dropped)."""
     from workers._modflow_build import (
         build_deck_kwargs_from_spec,
@@ -232,8 +232,8 @@ def test_job_spec_accepts_vadose_transport_fields(tmp_path):
     ["vadose_thickness_metres", "vadose_infiltration_rates", "csub_delay_interbed"],
 )
 def test_job_spec_rejects_typo_of_adr_0228_fields_via_typeerror(typo, tmp_path):
-    """A MISNAMED variant of any ADR 0228 field raises a loud TypeError at the deck
-    call (ADR 0148 guard), never silently no-op'ing the intended field."""
+    """A MISNAMED variant of any field raises a loud TypeError at the deck
+    call (guard), never silently no-op'ing the intended field."""
     from workers._modflow_build import (
         build_deck_kwargs_from_spec,
         validate_job_spec,
@@ -263,7 +263,7 @@ def test_job_spec_rejects_typo_of_adr_0228_fields_via_typeerror(typo, tmp_path):
     ],
 )
 def test_job_spec_accepts_adr_0215_capture_zone_fields(field, value, tmp_path):
-    """Each new ADR 0215 run_arg flows through the OPEN passthrough into the typed
+    """Each new run_arg flows through the OPEN passthrough into the typed
     build_modflow_deck signature and is CONSUMED (builds a deck) -- not dropped."""
     from workers._modflow_build import (
         build_deck_kwargs_from_spec,
@@ -292,7 +292,7 @@ def test_job_spec_accepts_adr_0215_capture_zone_fields(field, value, tmp_path):
 )
 def test_job_spec_rejects_typo_of_adr_0215_fields_via_typeerror(typo, tmp_path):
     """A MISNAMED variant of any new field raises a loud TypeError at the deck
-    call (ADR 0148 guard), never silently no-op'ing the intended field."""
+    call (guard), never silently no-op'ing the intended field."""
     from workers._modflow_build import (
         build_deck_kwargs_from_spec,
         validate_job_spec,

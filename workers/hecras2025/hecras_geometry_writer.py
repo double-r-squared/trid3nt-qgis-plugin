@@ -3,26 +3,26 @@
 Serialize a 2025-authored ``Mesh`` (topology arrays from
 ``Geospatial.Vectors.Mesh`` -- Cells / Faces / FacePoints / CellCenters /
 Perimeter) plus ``MeshPropertyTables`` subgrid curves (cell volume-elevation,
-face area-elevation-WP-Manning, computed headless on Linux, ADR 0130) into the
+face area-elevation-WP-Manning, computed headless on Linux) into the
 exact ``/Geometry/2D Flow Areas/<name>/`` schema the PRODUCTION 6.x solver
 consumes.
 
-This closes ADR 0132's OI-2. ADR 0132 proved every OTHER link end-to-end on
+This closes OI-2. It proved every OTHER link end-to-end on
 Muncie: the 2025 path authors an arbitrary real-AOI mesh (Q1, bit-identical
-centers), computes the subgrid tables headless on Linux (ADR 0130), those VALUES
+centers), computes the subgrid tables headless on Linux, those VALUES
 match the 6.x GUI ground truth (Q2, cell-volume corr 0.99988), and the
 production 6.x ``RasGeomPreprocess`` + ``RasUnsteady`` consume externally-authored
-2D tables and solve to the baseline (Q3, dWSE 0.008 ft). What ADR 0132 did NOT
+2D tables and solve to the baseline (Q3, dWSE 0.008 ft). What did NOT
 build is a writer that serializes a mesh into a FRESH geometry HDF group (its
 faithful-transplant step edited Muncie's OWN topology in place). This module is
 that writer.
 
-WHY IT SUPERSEDES THE ADR-0100 WRITE-BLOCK. ``mesh/hecras_geometry.py`` recorded
-(ADR 0100) that the WRITE direction was blocked because "nothing on the Linux
-stack computes the subgrid property tables". ADR 0130 removed exactly that
+WHY IT SUPERSEDES THE WRITE-BLOCK. ``mesh/hecras_geometry.py`` recorded
+ that the WRITE direction was blocked because "nothing on the Linux
+stack computes the subgrid property tables". removed exactly that
 premise (``MeshPropertyTables.ComputeFrom`` runs headless on Linux under the
 substituted open-source natives), so the writer is no longer dead code: its
-input tables are now computable, and ADR 0132-Q3 proved the 6.x solver accepts
+input tables are now computable, and-Q3 proved the 6.x solver accepts
 externally-authored tables.
 
 The layout is the classic HEC ragged ``Info(start, count)`` + flat ``Values``
@@ -31,7 +31,7 @@ guessed -- see ``MUNCIE_2D_SCHEMA`` in the sibling test). Pure ``h5py`` / ``nump
 no .NET, no server code, offline-suite-safe (h5py/numpy are worker-image deps and
 imported at module top only where the worker runs).
 
-``write_boundary_condition_lines`` (ADR 0134 link c3) authors the companion
+``write_boundary_condition_lines`` (link c3) authors the companion
 ``/Geometry/Boundary Condition Lines/`` group -- the forcing-entry polylines on the
 mesh perimeter that a pure-2D ``.bNN`` inflow maps to positionally; schema from the
 shipped pure-2D ``BaldEagleDamBrk.g09.hdf`` (``pure2d_reference/g09_hdf_schema.json``).
@@ -60,14 +60,14 @@ __all__ = [
 AREA_GROUP = "Geometry/2D Flow Areas"
 
 #: Boundary Condition Lines group -- the forcing-entry polylines on the mesh
-#: perimeter (schema from the pure-2D BaldEagle ``g09.hdf``, ADR 0134).
+#: perimeter (schema from the pure-2D BaldEagle ``g09.hdf``).
 BC_LINES_GROUP = "Geometry/Boundary Condition Lines"
 
 #: Per-cell facepoint-index padding (a cell with fewer than max-sides facepoints).
 FACEPOINT_PAD = -1
 
 # The Column/Row/Units/Can-Plot string attributes HEC stamps on each dataset.
-# Solver ingest does not depend on them (ADR 0132-Q3 solved with the transplant),
+# Solver ingest does not depend on them (Q3 solved with the transplant),
 # but reproducing them keeps a writer-authored HDF indistinguishable from a
 # RASMapper-authored one for downstream readers (ras-commander, RASMapper preview).
 _ATTRS: dict[str, dict[str, object]] = {
@@ -101,7 +101,7 @@ _ATTRS: dict[str, dict[str, object]] = {
 
 @dataclass
 class PropertyTableOptions:
-    """The ``PropertyTableOptions`` a 2025 ``ComputeFrom`` ran under (ADR 0130/0132).
+    """The ``PropertyTableOptions`` a 2025 ``ComputeFrom`` ran under.
 
     Values default to HEC's Muncie set (Cell Vol Tol 0.01, Face Conv Ratio 0.02,
     Face Profile/Area Tol 0.01, Cell Min Area Fraction 0.01, Laminar Depth 0.2,
@@ -152,7 +152,7 @@ class Mesh2D:
 
 @dataclass
 class SubgridTables:
-    """The ``MeshPropertyTables.ComputeFrom`` output (ADR 0130), per cell/face.
+    """The ``MeshPropertyTables.ComputeFrom`` output, per cell/face.
 
     Ragged: one variable-length curve per cell/face. The writer splits these into
     HEC's ``Info(start, count)`` + flat ``Values`` layout. Scalar per-cell/face
@@ -208,7 +208,7 @@ def write_2d_flow_area(
     *,
     projection_wkt: str,
     terrain_filename: str = ".\\Terrain\\Terrain.hdf",
-    authored_by: str = "trid3nt hecras_geometry_writer (ADR 0132 OI-2)",
+    authored_by: str = "trid3nt hecras_geometry_writer (OI-2)",
 ) -> dict:
     """Serialize ``mesh`` + ``tables`` into ``f`` under ``2D Flow Areas/<area_name>``.
 
@@ -220,7 +220,7 @@ def write_2d_flow_area(
     The writer performs the genuine SCHEMA ASSEMBLY (ragged Info/Values splitting,
     dtype casting, the two Attributes compounds, the attr stamping) -- the topology
     arrays and subgrid curves are produced upstream by the 2025 ``Mesh`` +
-    ``ComputeFrom`` (ADR 0130/0132), which this writer does not recompute.
+    ``ComputeFrom``, which this writer does not recompute.
     """
     import h5py  # local import keeps numpy-only importers light
 
@@ -323,7 +323,7 @@ def write_2d_flow_area(
 
 
 # =====================================================================
-# Boundary Condition Lines (ADR 0134 link c3) -- the forcing-entry polyline
+# Boundary Condition Lines (link c3) -- the forcing-entry polyline
 # =====================================================================
 #
 # A pure-2D deck forces the flow through a named 2D BC line on the mesh

@@ -1,4 +1,4 @@
-"""ADR 0254: NESTOR dredging deck authoring (action + polygon + surface-ref).
+"""NESTOR dredging deck authoring (action + polygon + surface-ref).
 
 Pins the NESTOR own-format grammar against the in-image compiled fortran the
 baked libnestor4*.so builds from (sources/nestor/readdigactions.f,

@@ -244,7 +244,7 @@ def test_csub_obs_keyed_by_icsubno_not_boundname():
 
 
 # --------------------------------------------------------------------------- #
-# CSUB formulation knobs (ADR 0228): csub_delay_interbeds + csub_effective_stress.
+# CSUB formulation knobs: csub_delay_interbeds + csub_effective_stress.
 # Defaults byte-identical to v1; the knobs are additive.
 # --------------------------------------------------------------------------- #
 

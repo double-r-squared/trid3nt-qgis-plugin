@@ -14,7 +14,7 @@ variant; this worker instantiates the inner model and calls ``predict()``. It
 runs on the SAME CPU SPOT Batch substrate the physics engines use (the spike
 verdict: the quantized model is CPU-runnable; NO GPU compute environment for v1).
 
-Contract (FR-CE-1/2/3 -- IDENTICAL to the OpenQuake/SWAN/SWMM workers; only the
+Contract (-- IDENTICAL to the OpenQuake/SWAN/SWMM workers; only the
 inference + field names differ):
 
     Input (env or CLI):
@@ -354,7 +354,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-canopy-entrypoint",
-        description="Canopy-height ML-inference AWS Batch worker (FR-CE-1/2/3).",
+        description="Canopy-height ML-inference AWS Batch worker.",
     )
     p.add_argument(
         "--run-id",

@@ -5,7 +5,7 @@ scratch (its ``setup_grid`` carries a ``# TODO gdf_refinement`` and ``setup_dep`
 raises ``NotImplementedError`` for quadtree in every released version through
 2.0.0-rc3), so quadtree authoring uses Deltares' ``cht_sfincs`` (GPL-3.0, the
 Coastal Hazards Toolkit) - kept worker-side behind the same GPL isolation that
-already carries ``hydromt_sfincs``. ADR 0113.
+already carries ``hydromt_sfincs``.
 
 Contract (mirror of :func:`deck.build_sfincs_deck`): ``build_sfincs_quadtree_deck
 (spec, scratch, download)`` localizes the topobathy DEM + waterlevel forcing,

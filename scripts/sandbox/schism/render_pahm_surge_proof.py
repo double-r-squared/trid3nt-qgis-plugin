@@ -1,5 +1,5 @@
 """SCHISM PaHM storm-surge proof render: the peak-surge COG over ESRI World
-Imagery (EPSG:3857 tiles AND data, per the ADR 0197 lesson; merc_render.py is
+Imagery (EPSG:3857 tiles AND data, per the lesson; merc_render.py is
 the shared mercator module) with the Hurricane Ike best track overlaid.
 Overwrites docs/proof/templates/schism_pahm_surge.png in place. A second file,
 the _chart.png, carries the coastal-gauge surge hydrograph (dock-exact panel

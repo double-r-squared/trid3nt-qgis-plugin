@@ -1,4 +1,4 @@
-"""Ball Creek RoG final runs (ADR 0204): validation + multi-peak, locked params.
+"""Ball Creek RoG final runs: validation + multi-peak, locked params.
 
 Calibrated params (frozen on the Dec 2015 event): uniform CN2 = 55, AMC II,
 Manning scale 1.0, initial-abstraction ratio 0.2, 24 h max-burst constant-rain

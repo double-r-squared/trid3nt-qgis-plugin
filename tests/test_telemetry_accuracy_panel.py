@@ -27,7 +27,7 @@ from trid3nt_server.telemetry import (
     build_live_solve_progress,
     build_solve_telemetry_record,
 )
-from trid3nt_server.tool_catalog_http import (
+from trid3nt_server.server.protocol.catalog_http import (
     _aggregate_records,
     _aggregate_solve_telemetry,
     _empty_solve_telemetry,
@@ -315,10 +315,10 @@ def test_build_telemetry_summary_folds_solve_section(tmp_path, monkeypatch):
     tel_path = tmp_path / "tel.jsonl"
     solve_path = tmp_path / "solve.jsonl"
     monkeypatch.setattr(
-        "trid3nt_server.tool_catalog_http._get_telemetry_path", lambda: tel_path
+        "trid3nt_server.server.protocol.catalog_http._get_telemetry_path", lambda: tel_path
     )
     monkeypatch.setattr(
-        "trid3nt_server.tool_catalog_http._get_solve_telemetry_path", lambda: solve_path
+        "trid3nt_server.server.protocol.catalog_http._get_solve_telemetry_path", lambda: solve_path
     )
     monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
 
@@ -348,10 +348,10 @@ def test_build_telemetry_summary_solve_zero_state(tmp_path, monkeypatch):
     """No solve sink -> the solve_telemetry section is the zero-state."""
     tel_path = tmp_path / "tel.jsonl"
     monkeypatch.setattr(
-        "trid3nt_server.tool_catalog_http._get_telemetry_path", lambda: tel_path
+        "trid3nt_server.server.protocol.catalog_http._get_telemetry_path", lambda: tel_path
     )
     monkeypatch.setattr(
-        "trid3nt_server.tool_catalog_http._get_solve_telemetry_path",
+        "trid3nt_server.server.protocol.catalog_http._get_solve_telemetry_path",
         lambda: tmp_path / "no_solves.jsonl",
     )
     monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)

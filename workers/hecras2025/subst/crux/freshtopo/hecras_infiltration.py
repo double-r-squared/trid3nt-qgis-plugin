@@ -4,7 +4,7 @@ The rain-on-grid (RoG) infiltration link: HEC-RAS 2D loses rainfall to the groun
 through a per-cell SCS Curve Number loss method stored in the geometry, under
 ``Geometry/2D Flow Areas/<area>/Infiltration``. Without it a rain-on-grid solve
 runs ZERO-loss (all rain becomes runoff) -- the same double-count trap the TELEMAC
-side avoids (ADR 0195). This authors the layer our own composer stamps into the
+side avoids. This authors the layer our own composer stamps into the
 plan HDF's Geometry, so the engine applies genuine SCS-CN abstraction.
 
 Structure DECODED byte-exact from the shipped public-domain Bald Eagle Creek dam-
@@ -31,7 +31,7 @@ class 1 for a single-CN authored layer). Cell arrays are sized to the TOTAL cell
 count (incl. ghost cells) so they index 1:1 with ``Cells Center Manning's n``.
 
 The AMC conversion is the canonical NRCS NEH-630 formula (byte-parity with the
-TELEMAC ``runoff_scs_cn.f`` branch, ADR 0195), kept self-contained so the worker
+TELEMAC ``runoff_scs_cn.f`` branch), kept self-contained so the worker
 tree imports nothing from the server package.
 """
 from __future__ import annotations
@@ -75,7 +75,7 @@ def amc_convert_cn(cn2: float, amc: int) -> float:
     NRCS NEH-630 (Chow 1988):
       AMC I (dry):  CN1 = 4.2*CN2 / (10 - 0.058*CN2)
       AMC III (wet):CN3 = 23*CN2 / (10 + 0.13*CN2)
-    Byte-parity with the TELEMAC ``runoff_scs_cn.f`` branch (ADR 0195).
+    Byte-parity with the TELEMAC ``runoff_scs_cn.f`` branch.
     """
     cn2 = float(cn2)
     if not (0.0 < cn2 <= 100.0):
@@ -216,7 +216,7 @@ def write_percent_impervious(
     reader (``READ_UN_HYDROLOGY2D`` -> ``surfacemodule.setsurfacepercentimpervious``)
     requires WHENEVER an Infiltration layer is present.
 
-    DECODED live (ADR 0205): with the precip interpolation folder in place the engine
+    DECODED live: with the precip interpolation folder in place the engine
     reads past MetInterp into ``READ_UN_HYDROLOGY2D``, which reads Curve Number +
     Abstraction Ratio + Minimum Infiltration Rate AND ``Percent Impervious``. Absent,
     the surface-module lookup faults (``H5Gcreate2: invalid location``). Structure

@@ -1,4 +1,4 @@
-"""Tests for ImpactEnvelope and OccupancyClassImpact (SRS Appendix B.6c.1)."""
+"""Tests for ImpactEnvelope and OccupancyClassImpact (SRS.6c.1)."""
 
 from __future__ import annotations
 

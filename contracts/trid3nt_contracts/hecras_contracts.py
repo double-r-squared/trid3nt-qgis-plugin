@@ -1,7 +1,7 @@
 """HEC-RAS 6.x 1D/2D riverine-flood engine contracts (engine #11 landing).
 
 HEC-RAS is the fidelity-ladder's refinement-grade riverine 1D/2D solver (the
-FEMA/USACE-canonical US engine). The landing is TEMPLATE-FIRST (ADR 0100 / the
+FEMA/USACE-canonical US engine). The landing is TEMPLATE-FIRST (/ the
 ras-commander feasibility spike): headless 2D mesh authoring is the real frontier
 (RASMapper's terrain subgrid tables need Windows DLLs), so the first archetype
 reparameterizes HEC's own shipped Muncie project (White River, Muncie IN) rather
@@ -10,10 +10,10 @@ subgrid tables are prebuilt); what varies is the unsteady FLOW forcing (the infl
 hydrograph, scaled by a plain multiplier or to a target peak discharge).
 
 ``HECRASRunArgs`` is the typed run spec the composer assembles (archetype selector
-+ flow-scaling knobs + the ADR 0107 input_mode lever); ``HecrasDepthLayerURI``
++ flow-scaling knobs + the input_mode lever); ``HecrasDepthLayerURI``
 extends ``LayerURI`` field-for-field (so it maps onto ``map-command load-layer``
 with no translation) and adds the riverine-flood scalars the agent cites rather
-than invents (invariant 1 / FR-AS-7). The headline deliverable is the SAME shape
+than invents (invariant 1). The headline deliverable is the SAME shape
 as every other flood engine: a peak overland-DEPTH raster (max water surface minus
 the per-cell bed elevation over the 2D flow area).
 
@@ -54,14 +54,14 @@ HECRAS_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: The registered archetypes for this engine. Both reparameterize HEC's own shipped
 #: Muncie White River (Muncie IN) demonstration project (frozen 1D/2D geometry):
-#:   - ``muncie_riverine_flood`` -- what-if UNSTEADY FLOW forcing (ADR 0109).
+#:   - ``muncie_riverine_flood`` -- what-if UNSTEADY FLOW forcing.
 #:   - ``muncie_levee_breach`` -- what the LEVEED protected 2D floodplain looks like
-#:     when the lateral-structure levee FAILS vs HOLDS (ADR 0125); the deck's
+#:     when the lateral-structure levee FAILS vs HOLDS; the deck's
 #:     Breach Data block is toggled. Bald Eagle Creek multi-2D levee + rain-on-grid
-#:     stay the queued next archetypes (ADR 0125 ledger), each needing its own
+#:     stay the queued next archetypes (ledger), each needing its own
 #:     shipped-geometry fixture (the Bald Eagle model awaits the Windows-Phase-1
 #:     unblock).
-#:   - ``fresh_aoi_flood_2d`` -- a GENUINELY-NEW user AOI (ADR 0140 promotion): a
+#:   - ``fresh_aoi_flood_2d`` -- a GENUINELY-NEW user AOI (promotion): a
 #:     fetched DEM is reprojected to a local ftUS grid and the 2D mesh + subgrid
 #:     tables are AUTHORED headless (the HEC-RAS 2025 AuthorMesh worker:
 #:     TryCreateMesh topology + MeshPropertyTables.ComputeFrom over the terrain),
@@ -99,11 +99,11 @@ class HECRASRunArgs(GraceModel):
     Assembled by the HEC-RAS composer after agent-confirmed parameter extraction;
     serialized into the worker manifest. Confirmation-before-consequence
     (invariant 9 -- a solver run) is enforced by the input-review gate around the
-    template (ADR 0107), not re-implemented here.
+    template, not re-implemented here.
 
     TEMPLATE-FIRST scope: the ``archetype`` selects a shipped-geometry project
     baked in the worker image; the geometry/terrain/mesh are FROZEN (RASMapper's
-    subgrid tables cannot be rebuilt headless -- ADR 0100). Only the unsteady FLOW
+    subgrid tables cannot be rebuilt headless --). Only the unsteady FLOW
     forcing is reparameterized.
 
     Fields:
@@ -125,9 +125,9 @@ class HECRASRunArgs(GraceModel):
             inflow discharge (cfs). When set, the worker derives the multiplier
             from the baseline peak (``target_peak_cfs / baseline_peak_cfs``), so a
             user/fetcher can pin the forcing to a real gauge/NWM peak (the seam-1
-            fetcher / ADR 0102 pattern, basis="fetched"). Overrides ``flow_scale``.
+            fetcher / pattern, basis="fetched"). Overrides ``flow_scale``.
             Clamped so the derived multiplier stays in the [0.25, 4.0] band.
-        input_mode: run-mode lever (ADR 0107). ``"user_gated"`` presents the
+        input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved flow forcing + the frozen-geometry note for review before the
             solve; ``"auto"`` (default) proceeds with them labeled.
     """
@@ -156,8 +156,7 @@ class HecrasDepthLayerURI(LayerURI):
     result). The raster is the peak (max-over-time) WATER DEPTH at each 2D flow-area
     cell -- the max water-surface elevation minus the cell's terrain bed elevation,
     masked to cells that were ever wet (dry terrain is never painted as water).
-    Adds the numbers the agent narrates rather than invents (invariant 1 /
-    FR-AS-7):
+    Adds the numbers the agent narrates rather than invents (invariant 1):
 
         depth_max_ft: peak water DEPTH anywhere/anytime in the 2D domain, feet
             (>= 0) -- the headline crest depth (the model is US Customary).

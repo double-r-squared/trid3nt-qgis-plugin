@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate the AuthorMesh full-topology dump against the shipped Muncie mesh.
 
-This is the ADR 0134 link-c1 gate, refined by ADR 0135 Finding 1 (byte-identity is
+This is the link-c1 gate, refined by Finding 1 (byte-identity is
 STRUCTURALLY impossible -- a fresh TryCreateMesh tessellation is +2 faces vs the 6.x
 GUI, so the meaningful c1 checks are the cell-center BIJECTION + internal STRUCTURAL
 consistency, not a byte-compare). Runs on the HOST (numpy/h5py). Reads the raw dump
@@ -45,7 +45,7 @@ def main() -> int:
     assert nc == NC_REAL, f"real cells {nc} != shipped {NC_REAL}"
     print(f"[gate 1] real cells {nc} == shipped {NC_REAL}  EXACT")
 
-    # --- gate 2: the +2 face/facepoint tie-break (ADR 0132/0135 Finding 1) ---
+    # --- gate 2: the +2 face/facepoint tie-break (Finding 1)
     import h5py
     with h5py.File(MUNCIE_PLAN, "r") as f:
         g = f[AREA]
@@ -57,7 +57,7 @@ def main() -> int:
           f"-- the expected +2 boundary tie-break")
     assert 0 <= nf - shipped_nf <= 4 and 0 <= nfp - shipped_nfp <= 4, "tessellation diverged too far"
 
-    # --- gate 3: cell-center BIJECTION vs shipped (ADR 0132: displacement 0.0 ft) ---
+    # --- gate 3: cell-center BIJECTION vs shipped (displacement 0.0 ft)
     from scipy.spatial import cKDTree  # noqa: PLC0415
     tree = cKDTree(shipped_cc)
     dist, idx = tree.query(cc[:NC_REAL], k=1)

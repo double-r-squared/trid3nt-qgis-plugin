@@ -2,7 +2,7 @@
 
 Direct TOOL_REGISTRY calls -- bypasses the LLM/agent chat layer, matching the
 repo's direct-call driver convention (``run_sfincs_direct.py`` etc). Exercises
-the 9-tool V&V wave (ADR 0021, ``docs/validation/build-contract.md``) end to
+the 9-tool V&V wave (``docs/validation/build-contract.md``) end to
 end: baseline solve -> diagnostics -> obs pairing -> skill metrics -> setter
 -> re-run -> re-score, plus a metamorphic rain-scaling rider.
 

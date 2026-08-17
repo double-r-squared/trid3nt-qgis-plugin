@@ -1,8 +1,8 @@
-"""CatalogEntry — the Mode 1 curated data-source catalog entry (FR-PHC-2 + §F.1.2).
+"""CatalogEntry — the Mode 1 curated data-source catalog entry (+ §F.1.2).
 
 One entry per **vetted public data source** in the curated catalog (sprint-08
 substrate). The catalog (`public_data_source_catalog.yaml`, and its MongoDB
-collection successor `catalog_entries` per Decision F) is the single source of
+collection successor `catalog_entries`) is the single source of
 truth for vetted endpoints under §F.1.2 Mode 1 (catalog-mediated). Every entry
 is research-driven and labeled at curator time with identification, endpoint
 URLs, access/credential/TTL tiering, license/citation/vintage provenance, a
@@ -16,11 +16,11 @@ catalog (§F.1.2 Mode 1 prose). The atomic tools `catalog_search` and
 `catalog_fetch` consume this shape; `engine` curates the content; `schema`
 owns the entry shape.
 
-The fields rewrite the v0.1 FR-PHC-2 stub (which carried `id` / `title` /
+The fields rewrite the v0.1 stub (which carried `id` / `title`
 `agency` / `topic` / `coverage` / `format` / `access` / `style_preset` /
 `license` / `description` / `last_verified`) to land the §F.1.2 binding contract.
 The earlier discovery-style fields (`agency` / `topic` / `coverage` /
-`format` / `style_preset`) were FR-PHC-2 v0.1 stub fields; they are NOT
+`format` / `style_preset`) were v0.1 stub fields; they are NOT
 preserved (pre-MVP scope — no migration shims per AGENTS.md). The new shape
 is the authoritative Mode 1 substrate.
 
@@ -64,9 +64,9 @@ AccessTier = Literal[1, 2, 3, 4]
 #: 1 = key-free public; 2 = key-required, free; 3 = paid commercial.
 CredentialTier = Literal[1, 2, 3]
 
-#: TTL class per FR-DC-2. Mirrors ``tool_registry.TTLClass`` verbatim so a
+#: TTL class. Mirrors ``tool_registry.TTLClass`` verbatim so a
 #: catalog-driven fetch shares the same cache-class vocabulary as a hardcoded
-#: atomic tool (FR-DC-1 bucket-layout discipline).
+#: atomic tool (bucket-layout discipline).
 TTLClass = Literal["static-30d", "semi-static-7d", "dynamic-1h", "live-no-cache"]
 
 #: Entry-status lifecycle per §F.1.2 Mode 1 + Mode 2.
@@ -84,7 +84,7 @@ EntryStatus = Literal[
 
 
 class CatalogEntry(GraceModel):
-    """A single curated public data-source catalog entry (FR-PHC-2 + §F.1.2).
+    """A single curated public data-source catalog entry (+ §F.1.2).
 
     Fields (per §F.1.2 Mode 1):
 
@@ -97,9 +97,9 @@ class CatalogEntry(GraceModel):
       alternative mirrors. ``min_length=1``.
     - ``access_tier`` — §F.1.1 access-pattern tier (1/2/3/4).
     - ``credential_tier`` — §F.1 credential tier (1/2/3).
-    - ``ttl_class`` — FR-DC-2 cache class.
-    - ``source_class`` — FR-DC-1 bucket-prefix identifier (``"dem"``,
-      ``"landcover"``, ``"flood_zone"``, …). Free-form string per FR-DC-1.
+    - ``ttl_class`` — cache class.
+    - ``source_class`` — bucket-prefix identifier (``"dem"``,
+      ``"landcover"``, ``"flood_zone"``, …). Free-form string.
     - ``license`` — license text or URL (e.g. ``"Public Domain (US Federal)"``,
       ``"CC-BY-4.0"``). Required structured field per Invariant 7.
     - ``citation`` — formal citation string. Required.
@@ -129,7 +129,7 @@ class CatalogEntry(GraceModel):
     credential_tier: CredentialTier
     ttl_class: TTLClass
 
-    # Bucket-prefix discipline (FR-DC-1).
+    # Bucket-prefix discipline.
     source_class: str = Field(min_length=1)
 
     # Provenance (Invariant 7).

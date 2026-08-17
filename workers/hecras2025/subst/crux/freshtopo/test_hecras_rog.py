@@ -1,4 +1,4 @@
-"""Offline gates for the HEC-RAS 2D RAIN-ON-GRID authoring (ADR 0199).
+"""Offline gates for the HEC-RAS 2D RAIN-ON-GRID authoring.
 
 No engine: build the infiltration + meteorology structures and compose a full RoG
 pure-2D deck from a carved Muncie sub-rectangle, then assert the plan-HDF trees the
@@ -129,7 +129,7 @@ def test_meteorology_units_validation():
 
 def test_precip_interpolation_folder_schema(tmp_path):
     # Byte-exact schema decoded from the un-stripped 6.6 READ_HDF_INTERP_COEFF
-    # (ADR 0205): 6 CSR datasets, int32 Info/Indexes + float32 Weights, one source
+    #: 6 CSR datasets, int32 Info/Indexes + float32 Weights, one source
     # entry per element (nearest single-pixel), weight 1.0.
     p = tmp_path / "interp.hdf"
     with h5py.File(p, "w") as f:
@@ -198,7 +198,7 @@ def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, pr
             == b"SCS Initial Loss Reset Time"
         # infiltration attrs mirrored on the 2D-area group (the geometry cross-ref)
         assert "Infiltration Layername" in area.attrs
-        # the sibling Percent Impervious group READ_UN_HYDROLOGY2D also reads (ADR 0205)
+        # the sibling Percent Impervious group READ_UN_HYDROLOGY2D also reads
         pi = area["Percent Impervious"]
         assert pi["Percent Impervious"].shape == (nc,) and pi["Percent Impervious"].dtype == np.float32
         assert pi["Cell Center Classifications"].shape == (nc,)
@@ -207,7 +207,7 @@ def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, pr
         assert "Percent Impervious Layername" in area.attrs
 
         # (2b) link 3: the per-area precip->cell interpolation folder MetInterp reads
-        # (schema decoded byte-exact from the un-stripped 6.6 reader, ADR 0205).
+        # (schema decoded byte-exact from the un-stripped 6.6 reader).
         interp = f[f"{PRECIP_INTERP_ROOT}/{AREA_NAME}"]
         assert interp["Cell Info"].shape == (nc, 2)
         assert interp["Cell Info"].dtype == np.int32
@@ -245,7 +245,7 @@ def test_rog_compose_authors_precip_infiltration_and_outlet(tmp_path, carved, pr
 def test_rog_default_omits_infiltration_but_keeps_interp(tmp_path, carved, projection):
     # DEFAULT rain-on-grid (apply_infiltration=False) authors the precip interp folder
     # (the link-3 unblock that lets the deck SOLVE) but NOT the SCS-CN layer -- whose
-    # hydrology reader is the frozen ADR-0205 residual. This is the solve-completing
+    # hydrology reader is the frozen residual. This is the solve-completing
     # structure proven live (zero-loss RoG).
     info = compose_pure2d_deck(
         tmp_path / "rog0", carved.mesh, carved.tables, projection_wkt=projection,

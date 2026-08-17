@@ -1,4 +1,4 @@
-"""Proof renders for the Landlab groundwater templates (ADR 0214).
+"""Proof renders for the Landlab groundwater templates.
 
 Deterministic: downloads the staged Panola Mountain (GA) DEM the live runs used,
 re-runs both chains via the worker (byte-identical to the published run), and

@@ -14,7 +14,7 @@ containerized CLI on AWS Batch only). It mirrors the SWMM worker shape exactly,
 differing ONLY in the solver invoked + the deck authoring (an OpenQuake deck
 templated from a build_spec rather than a staged ``.inp``).
 
-Contract (FR-CE-1/2/3 — IDENTICAL to the SWMM/SFINCS/MODFLOW workers; only the
+Contract (IDENTICAL to the SWMM/SFINCS/MODFLOW workers; only the
 solver + field names differ):
 
     Input  (env or CLI):
@@ -322,7 +322,7 @@ def resolve_hazard_map_csv(output_uris: list[str]) -> str | None:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-openquake-entrypoint",
-        description="OpenQuake PSHA AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="OpenQuake PSHA AWS Batch worker entrypoint.",
     )
     p.add_argument(
         "--run-id",

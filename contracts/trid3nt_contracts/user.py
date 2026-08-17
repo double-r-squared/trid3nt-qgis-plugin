@@ -21,7 +21,7 @@ Invariants this module is responsible for:
   if the shape ever has to break.
 
 SRS references:
-- Appendix D.6 (``sessions``) — the User contract is the per-user
+- (``sessions``) — the User contract is the per-user
   cross-Case parent of session records (a ``sessions`` document scopes to a
   ``user_id`` + ``case_id``).
 - §F.3 (per-Case secrets) — the ``case_id``-scoped ``SecretRecord``
@@ -80,6 +80,6 @@ class User(GraceModel):
     prefs: dict = Field(default_factory=dict)
     # Marks an anonymous (no-IdP) User. In the local single-user build the one
     # fixed user is provisioned with ``is_anonymous=True`` so the auth-ack keeps
-    # the client handshake unchanged. Default ``False`` (unchanged). (Decision F:
+    # the client handshake unchanged. Default ``False`` (unchanged). (:
     # an anonymous User has no credential to leak.)
     is_anonymous: bool = False

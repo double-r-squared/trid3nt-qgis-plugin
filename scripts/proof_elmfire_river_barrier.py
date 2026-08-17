@@ -1,4 +1,4 @@
-"""LIVE real-data proof for the ELMFIRE river-barrier ember-spotting demo (ADR 0239
+"""LIVE real-data proof for the ELMFIRE river-barrier ember-spotting demo (
 real mode). Picks a REAL river reach in grass/shrub fire country, runs the spotting
 OFF-vs-ON pair over REAL LANDFIRE fuels + a real 3DEP DEM, measures the river width +
 far-side burned area off the ToA grid, and renders the honest pair over ESRI imagery.

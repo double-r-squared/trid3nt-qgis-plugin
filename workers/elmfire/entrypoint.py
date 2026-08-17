@@ -33,7 +33,7 @@ The ELMFIRE-specific differences from the GeoClaw shim:
      burned-cell content - ``ELMFIRE_NO_SPREAD`` stays agent-side because it
      needs rasterio.)
 
-Contract (FR-CE-1/2/3 - IDENTICAL to the GeoClaw/SWAN workers):
+Contract (IDENTICAL to the GeoClaw/SWAN workers):
 
     Input  (env or CLI):
         --run-id RUN_ID
@@ -266,7 +266,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-elmfire-entrypoint",
-        description="ELMFIRE AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="ELMFIRE AWS Batch worker entrypoint.",
     )
     p.add_argument(
         "--run-id",

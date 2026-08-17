@@ -1,4 +1,4 @@
-"""ADR 0193 Part A -- pysheds watershed-coverage proof (STANDALONE sandbox).
+"""Part A -- pysheds watershed-coverage proof (STANDALONE sandbox).
 
 Proves the full python-gis-book chapter-12 pysheds workflow on a REAL US 3DEP
 DEM, at the Coweeta experimental watershed (Nantahala Mountains, NC -- a canonical

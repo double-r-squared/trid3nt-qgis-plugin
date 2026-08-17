@@ -1,4 +1,4 @@
-"""Shared typed errors that cross specialist boundaries (job-0114-schema).
+"""Shared typed errors that cross specialist boundaries (schema).
 
 Errors that an atomic tool raises BEFORE issuing any network call —
 input-shape problems the caller mis-formed — share a common typed model so
@@ -6,7 +6,7 @@ both the agent service (catching to format a chat response) and the web
 client (rendering ``tool-call-failed`` envelopes) can branch on a closed
 ``code`` discriminator instead of string-parsing exception messages.
 
-This module currently owns ``ToolInputError`` only (the FR-DC-6
+This module currently owns ``ToolInputError`` only (the
 fail-fast input-validation surface). Other typed-error families may be
 added here in the future as they earn a cross-boundary need.
 
@@ -47,7 +47,7 @@ __all__ = [
 #: who/what can ACT on a typed error, distinct from ``retryable`` (can it be
 #: retried at all).
 #:
-#: - ``"agent"`` -- upstream 4xx-arg/429/5xx/timeout, the existing FR-AS-11
+#: - ``"agent"`` -- upstream 4xx-arg/429/5xx/timeout, the existing
 #:   surface: routes as a rich verbatim ``function_response`` (unchanged
 #:   behavior) so the model self-corrects args or narrates.
 #: - ``"user"`` -- missing-credential/auth-config: the function_response

@@ -1,4 +1,4 @@
-"""Tool payload warning envelopes (Appendix A amendment, job-0127, sprint-12-mega).
+"""Tool payload warning envelopes (amendment, sprint-12-mega).
 
 The chat payload-warning system gates large tool dispatches behind explicit
 user confirmation. Before invoking a tool whose estimated response payload
@@ -354,7 +354,7 @@ class TimeScaleSuggestion(GraceModel):
 
 
 class PayloadWarningEnvelopePayload(GraceModel):
-    """``tool-payload-warning`` (Appendix A amendment, job-0127).
+    """``tool-payload-warning`` (amendment).
 
     Agent emits this when a registered estimator's projected payload
     exceeds the warning threshold. The client renders an inline chat card
@@ -434,7 +434,7 @@ class PayloadWarningEnvelopePayload(GraceModel):
     ttl_seconds: int = Field(default=300, ge=1)
     granularity: GranularitySuggestion | None = None
     time_scale: TimeScaleSuggestion | None = None
-    #: OPTIONAL resolved input-provenance table (ADR 0107, two-mode INPUT_REQUIRED
+    #: OPTIONAL resolved input-provenance table (two-mode INPUT_REQUIRED
     #: gate). When present the envelope is a USER-GATED input REVIEW card: the
     #: client renders one row per resolved physical input (param = value [basis,
     #: source]) so the user reviews what was fetched / interpreted / defaulted
@@ -464,7 +464,7 @@ PayloadConfirmationDecision = Literal["proceed", "cancel", "narrow_scope"]
 
 
 class PayloadConfirmationEnvelopePayload(GraceModel):
-    """``tool-payload-confirmation`` (Appendix A amendment, job-0127).
+    """``tool-payload-confirmation`` (amendment).
 
     Client returns this in response to a ``tool-payload-warning``. The
     agent matches ``warning_id`` against the paused dispatch coroutine and

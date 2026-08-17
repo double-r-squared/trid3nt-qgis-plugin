@@ -22,40 +22,40 @@ from . import catalog, collections, envelope, event, execution, tool_registry, w
 
 # (filename stem, model) for every top-level contract we export.
 _EXPORTS: list[tuple[str, type[BaseModel]]] = [
-    # Appendix B
+    #
     ("assessment_envelope", envelope.AssessmentEnvelope),
-    # Appendix C
+    #
     ("event_metadata", event.EventMetadata),
     ("claim_set", event.ClaimSet),
     ("numeric_claim", event.NumericClaim),
-    # Appendix D collections
+    # collections
     ("project_document", collections.ProjectDocument),
     ("run_document", collections.RunDocument),
     ("article_document", collections.ArticleDocument),
     ("event_document", collections.EventDocument),
     ("session_document", collections.SessionDocument),
-    # Appendix D sprint-08 additions (Mode 1 catalog substrate, §F.1.2)
+    # sprint-08 additions (Mode 1 catalog substrate, §F.1.2)
     ("catalog_entry_document", collections.CatalogEntryDocument),
     ("catalog_audit_log_document", collections.CatalogAuditLogDocument),
-    # Appendix D.6 PipelineStepSummary — exported standalone so the
+    # PipelineStepSummary — exported standalone so the
     # extended field surface (progress_percent / error_code / error_message)
     # is independently inspectable by the client mirror + agent emitter
-    # (job-0030, sprint-06 M4 pre-flight; closes job-0026 OQ-W-26).
+    # (sprint-06 M4 pre-flight; closes OQ-W-26).
     ("pipeline_step_summary", collections.PipelineStepSummary),
-    # FR-PHC-2
+    #
     ("catalog_entry", catalog.CatalogEntry),
-    # FR-TA-2 solver shapes
+    # solver shapes
     ("model_setup", execution.ModelSetup),
     ("execution_handle", execution.ExecutionHandle),
     ("run_result", execution.RunResult),
     ("layer_uri", execution.LayerURI),
-    # FR-DC-2 / FR-CE-8 atomic-tool registration metadata
+    # / atomic-tool registration metadata
     ("atomic_tool_metadata", tool_registry.AtomicToolMetadata),
 ]
 
 
 def _ws_message_exports() -> list[tuple[str, type[BaseModel]]]:
-    """One schema per WebSocket message payload (Appendix A)."""
+    """One schema per WebSocket message payload."""
     out: list[tuple[str, type[BaseModel]]] = []
     for msg_type, model in sorted(ws.ALL_PAYLOADS.items()):
         # ws_<kebab-with-underscores>.json

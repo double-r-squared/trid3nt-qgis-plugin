@@ -1,4 +1,4 @@
-"""WebSocket protocol: envelope + every message type (SRS Appendix A, FR-AS-5).
+"""WebSocket protocol: envelope + every message type (SRS).
 
 All messages share the A.1 envelope (``type``/``id``/``ts``/``session_id``/
 ``payload``). ``type`` is kebab-case; ``id`` is a ULID; ``ts`` is ISO-8601 ``Z``;
@@ -28,7 +28,7 @@ from .common import (
     GraceModel,
     ULIDStr,
     UTCDatetime,
-    _validate_bbox,  # shared EPSG:4326 ordering rules for aoi_bbox (ADR 0017)
+    _validate_bbox,  # shared EPSG:4326 ordering rules for aoi_bbox
     new_ulid,
     now_utc,
 )
@@ -71,16 +71,16 @@ __all__ = [
     "DisambiguationRequestPayload",
     "ClarificationOption",
     "ClarificationRequestPayload",
-    # agent -> client (sprint-08 forward-looking) — FR-FR-1
+    # agent -> client (sprint-08 forward-looking)
     "RecoveryChoiceOption",
     "RecoveryChoicePayload",
-    # ADR 0018 auto/ask modes -- tool-selection picker (Stage 3, 2026-07-22)
+    # auto/ask modes -- tool-selection picker (Stage 3, 2026-07-22)
     "ToolChoiceMode",
     "ToolCandidatesReason",
     "ToolCandidate",
     "ToolCandidatesPayload",
     "ToolChoicePayload",
-    # client -> agent (sprint-08 forward-looking) — FR-FR-1
+    # client -> agent (sprint-08 forward-looking)
     "RecoveryChoice",
     "RecoveryChoiceResponsePayload",
     # map-command args (A.4)
@@ -122,9 +122,9 @@ class Envelope(GraceModel, Generic[PayloadT]):
     id: ULIDStr = Field(default_factory=new_ulid)
     ts: UTCDatetime = Field(default_factory=now_utc)
     session_id: ULIDStr
-    # job-0277 (proposed A.1 amendment): the Case that OWNS the turn this
+    # (proposed A.1 amendment): the Case that OWNS the turn this
     # envelope belongs to, when one is bound. With per-Case chat streams and
-    # stream-scoped turn concurrency (job-0269), the client must route live
+    # stream-scoped turn concurrency, the client must route live
     # streaming envelopes to the OWNING Case's stream — "the stream the user
     # last messaged" misattributes a still-running turn's cards/narration the
     # moment the user switches Cases. None = no Case context (root turns,
@@ -176,7 +176,7 @@ ErrorCode = Literal[
 # Client -> Agent messages (A.3)
 # =========================================================================== #
 
-# ADR 0018 (auto/ask modes, Stage 3 2026-07-22): the ROUTING-VISIBILITY mode
+# (auto/ask modes, Stage 3 2026-07-22): the ROUTING-VISIBILITY mode
 # for a turn. Governs ONLY whether tool selection is surfaced as a
 # ``tool-candidates`` picker card -- the consent surface (payload warnings,
 # granularity, solver confirm, code-exec approval, credential entry, region
@@ -194,7 +194,7 @@ ToolChoiceMode = Literal["auto", "ask"]
 
 
 class DrawnGeometry(GraceModel):
-    """A user-drawn geometry attached to a ``user-message`` (ADR 0159).
+    """A user-drawn geometry attached to a ``user-message``.
 
     ONE rectangle for now -- the QGIS dock 'Draw region' rubber-band tool. Rides
     ``UserMessagePayload.drawn_geometry`` exactly as the canvas AOI rides
@@ -235,7 +235,7 @@ class UserMessagePayload(GraceModel):
     # The client sends this on every user-message so the agent can hot-swap the
     # model between turns without a session restart.
     model_id: str | None = None
-    # job-CASE-AUTHORITY (Appendix A.3 amendment): the Case the CLIENT is
+    # job-CASE-AUTHORITY (amendment): the Case the CLIENT is
     # currently in, stamped on every user-message. The server treats it as the
     # authority for turn-binding — a 'resize bbox' turn runs in the client's
     # current Case, never a stale in-memory server pointer. ``None`` (older
@@ -252,7 +252,7 @@ class UserMessagePayload(GraceModel):
     # behavior: thinking suppressed per TRID3NT_OPENAI_EXTRA_SYSTEM. Ignored by
     # the Bedrock path.
     show_thinking: bool | None = None
-    # Structured per-message AOI (ADR 0017 mechanism 2, 2026-07-22): the
+    # Structured per-message AOI (mechanism 2, 2026-07-22): the
     # client's current AOI as ``[min_lon, min_lat, max_lon, max_lat]``
     # (EPSG:4326) -- replacing the bracketed in-text prose line the QGIS dock
     # used to append to ``text`` ("[QGIS map canvas AOI (EPSG:4326): bbox =
@@ -264,7 +264,7 @@ class UserMessagePayload(GraceModel):
     # wire-identical shape. This is the PER-TURN AOI; the persistent Case bbox
     # still rides ``case-command`` unchanged.
     aoi_bbox: list[float] | None = None
-    # ADR 0018 (auto/ask modes, Stage 3 2026-07-22): the routing-visibility
+    # (auto/ask modes, Stage 3 2026-07-22): the routing-visibility
     # mode for THIS turn -- the per-message settings carrier the QGIS dock /
     # web settings toggle stamps, following the ``show_thinking`` /
     # ``model_id`` precedent exactly (no session-config envelope exists; this
@@ -275,7 +275,7 @@ class UserMessagePayload(GraceModel):
     # (see ``ToolCandidatesPayload``); consent gates are unaffected either
     # way (``ToolChoiceMode`` docstring).
     tool_choice_mode: ToolChoiceMode | None = None
-    # User-drawn geometry for THIS turn (ADR 0159): the QGIS dock 'Draw region'
+    # User-drawn geometry for THIS turn: the QGIS dock 'Draw region'
     # rubber-band rectangle, attached to the next message exactly as ``aoi_bbox``
     # carries the canvas AOI. Distinct from ``aoi_bbox`` (the analysis extent):
     # this is a sub-region KNOB a composer input-review gate consumes as
@@ -323,7 +323,7 @@ class SessionResumePayload(GraceModel):
 
     MESSAGE_TYPE: ClassVar[str] = "session-resume"
 
-    # job-CASE-AUTHORITY (Appendix A.3 amendment): the Case the CLIENT is
+    # job-CASE-AUTHORITY (amendment): the Case the CLIENT is
     # currently in, stamped on reconnect. On resume the server RE-BINDS its
     # active-Case pointer to this value before replaying the Case's layers — so
     # a reconnect replays the Case the user is actually in, never a stale
@@ -346,10 +346,10 @@ class SpatialInputResponsePayload(GraceModel):
 
     Three shapes ride this one payload, keyed by ``geometry_type``:
 
-    - ``"point"`` / ``"bbox"`` — the original FR-WC-13 pick-mode reply:
+    - ``"point"`` / ``"bbox"`` — the original pick-mode reply:
       ``coordinates`` is set (``[lon, lat]`` for point,
       ``[minLon, minLat, maxLon, maxLat]`` for bbox); ``features`` stays None.
-    - ``"vector_draw"`` — the FR-WC-16 urban vector-draw reply: ``features`` is
+    - ``"vector_draw"`` — the urban vector-draw reply: ``features`` is
       a GeoJSON ``FeatureCollection`` of the drawn geometry; ``coordinates``
       stays None. Each ``Feature.properties`` carries a ``role`` ∈
       {``"aoi"``, ``"barrier"``, ``"point"``}. For a ``"barrier"`` LineString,
@@ -409,7 +409,7 @@ def _validate_spatial_input_feature_collection(
 ) -> dict[str, Any]:
     """Shared structural validator for a role-tagged drawn FeatureCollection.
 
-    Enforces FR-WC-16's role + per-segment barrier vocabulary while staying a
+    Enforces the role + per-segment barrier vocabulary while staying a
     pure-structure check (no shapely/geojson import in the contracts package).
     """
     if fc.get("type") != "FeatureCollection":
@@ -559,8 +559,8 @@ class ToolCallStartPayload(GraceModel):
     call_id: ULIDStr
     step_id: ULIDStr
     tool_name: str
-    # tool_category vocabulary (FR-TA-3 convention; open enum). Mirrors the tool
-    # categories in FR-TA-2. See report OQ-S5 for the documented vocabulary.
+    # tool_category vocabulary (convention; open enum). Mirrors the tool
+    # categories in. See report OQ-S5 for the documented vocabulary.
     tool_category: str
     params: dict = Field(default_factory=dict)  # sanitized parameters
 
@@ -612,7 +612,7 @@ PipelineStepState = Literal["pending", "running", "complete", "failed", "cancell
 class PipelineStep(GraceModel):
     """One step in the pipeline snapshot.
 
-    ``duration_ms`` (job-0264, ELEVATED tool-timer requirement) is the
+    ``duration_ms`` (ELEVATED tool-timer requirement) is the
     authoritative wall-clock elapsed time the workflow stamps on the
     **terminal** transition (complete / failed / cancelled). It is derived
     deterministically from ``completed_at - started_at`` by the
@@ -899,24 +899,24 @@ SessionStateStatus = Literal["active", "max_turns_reached"]
 """Status of the session at the moment a ``session-state`` envelope is sent.
 
 - ``active``: normal operation (default).
-- ``max_turns_reached``: the agent has hit ``MAX_TURNS_PER_SESSION`` (FR-FR-3).
+- ``max_turns_reached``: the agent has hit ``MAX_TURNS_PER_SESSION``.
   No further tool calls will be dispatched; the user must start a new session.
 
-Added by job-0048 (sprint-08, FR-FR-3).
+Added by (sprint-08).
 """
 
 
 class SessionStatePayload(GraceModel):
     """``session-state`` (A.4): lets the client reconstruct the session.
 
-    The nested shapes are the JSON serialization of the Appendix D.6 models
+    The nested shapes are the JSON serialization of the models
     (``ChatMessage``, ``ProjectLayerSummary``, ``PipelineSnapshot``,
     ``MapView``). They are carried as plain ``dict``/``list`` here to avoid a
     circular contract dependency between ws.py and collections.py; the agent
     serializes the real D.6 models into them. See report OQ-S4.
 
     ``status`` is ``"active"`` in normal operation; ``"max_turns_reached"``
-    when the FR-FR-3 cap fires (job-0048). Defaults to ``"active"`` so
+    when the cap fires. Defaults to ``"active"`` so
     existing consumers do not need to change.
     """
 
@@ -927,7 +927,7 @@ class SessionStatePayload(GraceModel):
     pipeline_history: list[dict] = Field(default_factory=list)
     current_pipeline: dict | None = None
     map_view: dict | None = None
-    status: SessionStateStatus = "active"  # FR-FR-3 / job-0048
+    status: SessionStateStatus = "active"
 
 
 class ErrorPayload(GraceModel):
@@ -986,7 +986,7 @@ class SpatialInputRequestPayload(GraceModel):
     - ``"point"`` — single map click; the reply carries ``coordinates=[lon, lat]``.
     - ``"bbox"`` — a drag-rectangle; the reply carries
       ``coordinates=[minLon, minLat, maxLon, maxLat]``.
-    - ``"vector_draw"`` — FR-WC-16 urban vector-draw: the client opens a
+    - ``"vector_draw"`` — urban vector-draw: the client opens a
       terra-draw surface (rectangle / polygon / polyline + select-edit) and the
       reply carries ``features`` (a GeoJSON ``FeatureCollection`` with
       ``role``-tagged + per-segment ``barrier_type``/``flap_direction``
@@ -1072,27 +1072,27 @@ class ClarificationRequestPayload(GraceModel):
 
 
 # =========================================================================== #
-# recovery-choice + recovery-choice-response (sprint-08 — FR-FR-1 substrate)
+# recovery-choice + recovery-choice-response (sprint-08 — substrate)
 # =========================================================================== #
-# Forward-looking — §3.10 FR-FR-1 deny/retry/chat recovery gate. The web-client
+# Forward-looking — §3.10 deny/retry/chat recovery gate. The web-client
 # implementation follows the existing `request_clarification` modal pattern; the
 # response carries the user's selection (`deny` | `retry` | `chat`) and, when
 # `choice == "chat"`, the focused free-text the user typed to nudge the agent.
 #
-# Routing per FR-FR-2: only emitted for "recoverable" error classes (transient
+# Routing: only emitted for "recoverable" error classes (transient
 # upstream, recoverable-with-context). Substrate-integrity / user-initiated /
 # budget-overrun error codes fail closed without gating.
 
 
-#: The three actions a recovery-choice modal can return (FR-FR-1).
+#: The three actions a recovery-choice modal can return.
 RecoveryChoiceOption = Literal["deny", "retry", "chat"]
 
 
 class RecoveryChoicePayload(GraceModel):
-    """``recovery-choice`` (A.4 — sprint-08 amendment, FR-FR-1).
+    """``recovery-choice`` (A.4 — sprint-08 amendment).
 
     Agent emits this when an atomic-tool step fails with a *recoverable*
-    error class (FR-FR-2 routing table). The client renders a small
+    error class (routing table). The client renders a small
     out-of-chat modal (mirrors the §F.3 popup discipline) offering the user
     deny / retry / chat actions.
 
@@ -1101,7 +1101,7 @@ class RecoveryChoicePayload(GraceModel):
     - ``request_id`` — ULID identifying the gate; the response carries it back.
     - ``failed_step_id`` — the ULID of the pipeline step the gate is about.
       The client surfaces this so the user knows which step is being decided.
-    - ``error_code`` — Appendix A.6 SCREAMING_SNAKE_CASE code that the failed
+    - ``error_code`` — SCREAMING_SNAKE_CASE code that the failed
       step's PipelineStepSummary carried. Open set (regex-validated shape).
     - ``error_message`` — short human-readable explanation (e.g. ``"USGS 3DEP
       returned HTTP 503 — service unavailable"``). Capped at 512 chars to
@@ -1110,7 +1110,7 @@ class RecoveryChoicePayload(GraceModel):
       the step failed (e.g. ``"fetching DEM at Fort Myers bbox for flood
       scenario"``). Helps the user pick the right action.
     - ``options`` — non-empty subset of {``"deny"``, ``"retry"``, ``"chat"``}.
-      The routing table per FR-FR-2 may narrow this (e.g. omit ``"retry"`` for
+      The routing table  may narrow this (e.g. omit ``"retry"`` for
       ``GEOCODE_NO_MATCH`` where retry is futile). The client renders one
       button per option.
     - ``ttl_seconds`` — gate validity (seconds since envelope ``ts``); on
@@ -1136,7 +1136,7 @@ RecoveryChoice = Literal["deny", "retry", "chat"]
 
 
 class RecoveryChoiceResponsePayload(GraceModel):
-    """``recovery-choice-response`` (A.4b — sprint-08 amendment, FR-FR-1).
+    """``recovery-choice-response`` (A.4b — sprint-08 amendment).
 
     User has picked one of the three actions OR cancelled the gate.
 
@@ -1153,7 +1153,7 @@ class RecoveryChoiceResponsePayload(GraceModel):
     Cross-shape discipline (lightweight — full enforcement is the consumer's
     responsibility, matching the existing A.4b response shapes): ``chat_text``
     SHOULD be populated when ``choice == "chat"`` and SHOULD be None
-    otherwise; the agent service validates at receipt time per FR-AS-11.
+    otherwise; the agent service validates at receipt time.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "recovery-choice-response"
@@ -1165,11 +1165,11 @@ class RecoveryChoiceResponsePayload(GraceModel):
 
 
 # =========================================================================== #
-# tool-candidates + tool-choice (ADR 0018 auto/ask modes -- Stage 3, 2026-07-22)
+# tool-candidates + tool-choice (auto/ask modes -- Stage 3, 2026-07-22)
 # =========================================================================== #
 # The tool-selection picker seam. Retrieval/routing ties are a real error
 # species: the model picks a plausible-but-wrong tool and the turn goes down a
-# sad path the user could have prevented in one click (ADR 0018). The server
+# sad path the user could have prevented in one click. The server
 # (Lane S) emits ``tool-candidates`` when either (a) the turn runs in ASK mode
 # (``UserMessagePayload.tool_choice_mode == "ask"``) or (b) AUTO mode measured
 # a retrieval near-tie (top-1 vs top-2 score) -- ``reason`` says which. The
@@ -1283,16 +1283,16 @@ CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SpatialInputResponsePayload.MESSAGE_TYPE: SpatialInputResponsePayload,
     DisambiguationResponsePayload.MESSAGE_TYPE: DisambiguationResponsePayload,
     ClarificationResponsePayload.MESSAGE_TYPE: ClarificationResponsePayload,
-    # sprint-08 — FR-FR-1
+    # sprint-08
     RecoveryChoiceResponsePayload.MESSAGE_TYPE: RecoveryChoiceResponsePayload,
-    # ADR 0018 auto/ask modes -- the picker reply (Stage 3, 2026-07-22)
+    # auto/ask modes -- the picker reply (Stage 3, 2026-07-22)
     ToolChoicePayload.MESSAGE_TYPE: ToolChoicePayload,
 }
 
-# sprint-12-mega Wave 1.5 (job-0115): resolve OQ-0100-WS-REGISTRY-WIRING by
+# sprint-12-mega Wave 1.5: resolve OQ-0100-WS-REGISTRY-WIRING by
 # splatting the per-Case secrets envelopes (§F.3) into the routing dicts. The
 # secrets module owns the typed payloads + provider vocabulary; ws.py owns the
-# Appendix A.3/A.4 registry surface, so the wiring lives here. Cases envelope
+#/A.4 registry surface, so the wiring lives here. Cases envelope
 # wiring lands separately in Wave 2 with the Case UX agent job (do NOT add
 # case-* payloads here).
 from .secrets import (  # noqa: E402 — module-level imports below the dict literals
@@ -1300,7 +1300,7 @@ from .secrets import (  # noqa: E402 — module-level imports below the dict lit
     SECRET_CLIENT_TO_AGENT_PAYLOADS,
 )
 
-# sprint-12-mega Wave 2 (job-0127): tool payload-warning envelopes. The
+# sprint-12-mega Wave 2: tool payload-warning envelopes. The
 # warning is agent->client (gate emission); the confirmation is client->agent
 # (user decision). See payload_warning.py for the contract; see
 # trid3nt_server/server.py for the dispatcher gate.
@@ -1332,9 +1332,9 @@ AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SpatialInputRequestPayload.MESSAGE_TYPE: SpatialInputRequestPayload,
     DisambiguationRequestPayload.MESSAGE_TYPE: DisambiguationRequestPayload,
     ClarificationRequestPayload.MESSAGE_TYPE: ClarificationRequestPayload,
-    # sprint-08 — FR-FR-1
+    # sprint-08
     RecoveryChoicePayload.MESSAGE_TYPE: RecoveryChoicePayload,
-    # ADR 0018 auto/ask modes -- the picker request (Stage 3, 2026-07-22)
+    # auto/ask modes -- the picker request (Stage 3, 2026-07-22)
     ToolCandidatesPayload.MESSAGE_TYPE: ToolCandidatesPayload,
 }
 AGENT_TO_CLIENT_PAYLOADS.update(SECRET_AGENT_TO_CLIENT_PAYLOADS)
@@ -1342,7 +1342,7 @@ AGENT_TO_CLIENT_PAYLOADS[
     PayloadWarningEnvelopePayload.MESSAGE_TYPE
 ] = PayloadWarningEnvelopePayload
 
-# sprint-13 (job-0223): chart-emission envelope. Agent->client (A.4); the agent
+# sprint-13: chart-emission envelope. Agent->client (A.4); the agent
 # emits a Vega-Lite chart spec for the conversational data-analysis layer. See
 # chart_contracts.py for the contract; the per-module fragment is splatted here
 # following the secrets / payload_warning precedent.
@@ -1352,7 +1352,7 @@ from .chart_contracts import (  # noqa: E402
 
 AGENT_TO_CLIENT_PAYLOADS.update(CHART_AGENT_TO_CLIENT_PAYLOADS)
 
-# sprint-13 (job-0233): python-sandbox code-exec envelopes. Both agent->client
+# sprint-13: python-sandbox code-exec envelopes. Both agent->client
 # (A.4): ``code-exec-request`` (confirm card before the sandbox runs) +
 # ``code-exec-result`` (the run outcome). The confirmation REPLY rides the
 # existing ``tool-payload-confirmation`` message (no new client->agent shape).

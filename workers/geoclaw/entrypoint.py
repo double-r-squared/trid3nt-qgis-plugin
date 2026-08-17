@@ -27,7 +27,7 @@ The GeoClaw-specific differences from the SWMM shim:
      + ``_output/fort.h*`` (the headers postprocess needs) so the agent-side
      ``postprocess_geoclaw`` rasterizes each frame -> depth COG.
 
-Contract (FR-CE-1/2/3 — IDENTICAL to the SWMM worker, only the solver + a
+Contract (IDENTICAL to the SWMM worker, only the solver + a
 ``build_spec`` manifest field + the output globs differ):
 
     Input  (env or CLI):
@@ -684,7 +684,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-geoclaw-entrypoint",
-        description="GeoClaw (Clawpack) AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="GeoClaw (Clawpack) AWS Batch worker entrypoint.",
     )
     p.add_argument(
         "--run-id",
@@ -877,7 +877,7 @@ def main(argv: list[str] | None = None) -> int:
         # the postprocess is what MATERIALIZES the *.tif COGs on disk, so the
         # sweep's glob has to run after it or the freshly-written COGs never
         # get uploaded even though publish_manifest.json already references
-        # their cog_uris (job-fix for the ADR 0233 rebuild smoke finding).
+        # their cog_uris (job-fix for the rebuild smoke finding).
         pp = None
         if rc == 0:
             try:

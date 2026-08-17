@@ -70,7 +70,7 @@ def run_pipeline(data_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     (data_dir / "coastal_tin.geojson").write_text(
         json.dumps(geojson), encoding="utf-8"
     )
-    # RAW nodes + triangles (ADR 0118): the geojson is an edge-wireframe PREVIEW
+    # RAW nodes + triangles: the geojson is an edge-wireframe PREVIEW
     # only; a downstream solver-mesh bridge (SCHISM tin_to_hgrid) needs the raw
     # (N,2) lon/lat node table + the (M,3) triangle connectivity. Additive, numpy
     # already present, tiny -- written as a compressed .npz alongside the preview.

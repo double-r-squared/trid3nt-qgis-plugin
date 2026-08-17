@@ -153,7 +153,7 @@ SWAN_DEPMIN_M: float = 0.05
 
 #: PARSER VERSION -- bump whenever a build_spec top-level field is added,
 #: renamed, or retired. Named in the strict-field error so a stale worker
-#: image is distinguishable from a genuinely-malformed caller (ADR 0158).
+#: image is distinguishable from a genuinely-malformed caller.
 _PARSER_VERSION = "swan-spec-3"
 
 #: Every top-level build_spec field ``parse_build_spec`` reads. No legacy /
@@ -196,7 +196,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
 
 def _reject_unknown_spec_fields(raw: dict[str, Any]) -> None:
     """Raise loudly if ``raw`` carries a top-level key ``parse_build_spec`` never
-    reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently dropped
+    reads (-- the lesson: a stale image silently dropped
     unknown build_spec fields and two registered knob templates ran as no-ops).
     """
     unknown = sorted(set(raw) - _KNOWN_SPEC_FIELDS)
@@ -800,7 +800,7 @@ def render_swn_command_file(spec: SwanBuildSpec) -> str:
     # postprocess reads. NOHEADER keeps it a plain array per quantity; LAYOUT 3 is
     # the standard ordering. In NONSTATIONARY mode the BLOCK MUST carry an OUTPUT
     # <tbeg> <delt> <unit> clause or SWAN writes NO per-frame dumps (a silent gap
-    # the pre-ADR-0190 deck had). The output cadence is set so ~output_frames
+    # the pre-deck had). The output cadence is set so ~output_frames
     # dumps span the run.
     quant_str = " ".join(spec.output_quantities)
     if spec.mode == "nonstationary":

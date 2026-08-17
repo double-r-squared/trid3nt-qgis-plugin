@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Q2 NUMERIC-FIDELITY A/B (ADR 0132 close-out). Element-wise comparison of the
+"""Q2 NUMERIC-FIDELITY A/B (close-out). Element-wise comparison of the
 2025-computed Muncie subgrid property tables (ComputeMuncie.cs output over the
 REAL terrain) vs the shipped 6.x GUI-computed tables (extract_muncie_mesh.py
 npz). Cells matched by center (bit-identical bijection), faces matched by

@@ -248,7 +248,7 @@ class TestAoi(unittest.TestCase):
 
     def test_format_bbox_and_status_text(self):
         bbox = (-82.62, 35.55, -82.50, 35.64)
-        # ADR 0017 (2026-07-22): the in-text AOI prose injector
+        # (2026-07-22): the in-text AOI prose injector
         # (attach_aoi_to_text) is GONE -- the AOI rides the structured
         # ``aoi_bbox`` user-message field (see test_client). format_bbox
         # remains: it renders the one-time "Case AOI set to ..." note.

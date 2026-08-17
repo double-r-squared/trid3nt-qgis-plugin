@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Rain-on-grid on the HEC-RAS 2025 managed engine (ADR 0209).
+"""Rain-on-grid on the HEC-RAS 2025 managed engine.
 
 The productionized RoG backend: a fetched-AOI DEM -> a structured 2D area +
 constant design-storm precipitation + a NormalDepth outlet, authored + prepared +
 SOLVED entirely on Linux in the 2025 authoring image (mounted-driver pattern, no
-image rebuild -- the managed CPU solver is pure C#, ADR 0207). This is the path the
+image rebuild -- the managed CPU solver is pure C#). This is the path the
 6.6 Fortran solver could NOT take (its rain-on-grid needs a Windows-preprocessing
-hydrology scaffold; ADR 0205/0207).
+hydrology scaffold).
 
 Pipeline:
     DEM (any CRS, elevation in `elev_units`)                          [host]
@@ -187,7 +187,7 @@ def _author_prepare_solve(prep: Rog2025Prep, workdir, *, precip_mm_hr, storm_hou
     The project is authored under /probe/<name>; the exported synthetic Terrain.tif
     is overwritten with the real local DEM before prepare. Returns the result HDF.
 
-    ``refine`` (ADR 0210) = a ``RefineResult`` from ``rog_refine.build_refined_inputs``;
+    ``refine`` = a ``RefineResult`` from ``rog_refine.build_refined_inputs``;
     when present the driver builds the graded ``TryCreateMesh`` mesh from the staged
     seeds/breaklines instead of the uniform structured grid (spec ``refine_dir``)."""
     workdir = Path(workdir)
@@ -311,7 +311,7 @@ def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
     over the outlet-edge boundary faces. The core metrics are mesh-structure-agnostic
     (subgrid volume + point-in-polygon catchment mask + field maxes); ``unstructured``
     switches the wet-/domain-AREA reporting from a uniform cell_size**2 to true per-cell
-    Voronoi areas (the graded ADR-0210 mesh has non-uniform cells)."""
+    Voronoi areas (the graded mesh has non-uniform cells)."""
     import h5py
     import numpy as np
 
@@ -416,7 +416,7 @@ def extract_metrics(result_h5, prep: Rog2025Prep, *, precip_mm_hr, storm_hours,
 
 def build_depth_cog_unstructured(result_h5, prep, out_tif, catchment_geojson=None,
                                  depth_scale=1.0, out_res_m=None):
-    """Rasterize the GRADED-mesh per-cell MAX depth to a 4326 COG (ADR 0210).
+    """Rasterize the GRADED-mesh per-cell MAX depth to a 4326 COG.
 
     The structured mapping (cell -> (row,col) by cell_size) is invalid for the graded
     mesh (multiple fine cells collapse into one pixel; coarse gaps). Instead paint a fine
@@ -504,7 +504,7 @@ def build_depth_cog(result_h5, prep, out_tif, catchment_geojson=None, depth_scal
     placed into a UTM raster (origin_x/origin_y from the reproject) and warped to
     4326. Cells outside the catchment (if given) are masked. Pure rasterio (no server
     deps) so the server RoG branch just uploads + wraps this in the depth LayerURI.
-    (Graded ADR-0210 meshes use ``build_depth_cog_unstructured`` instead.)"""
+    (Graded meshes use ``build_depth_cog_unstructured`` instead.)"""
     import h5py
     import numpy as np
     import rasterio
@@ -569,7 +569,7 @@ def run_rog2025(dem_tif, workdir, *, precip_mm_hr=25.0, storm_hours=6.0,
                 image=AUTHORING_IMAGE_DEFAULT, probe_dir=PROBE_DIR_DEFAULT) -> dict:
     """Full RoG-2025 pipeline; returns prep + metrics + provenance.
 
-    ``channel_refinement`` (ADR 0210): None -> the uniform structured mesh (cell_size
+    ``channel_refinement``: None -> the uniform structured mesh (cell_size
     everywhere). Otherwise paper-style graded refinement -- a ``rog_refine.RefineConfig``
     OR a float target channel cell size (m). The channel network comes from
     ``flowlines_path`` (a river-geometry vector the caller fetched for the AOI); the
@@ -639,7 +639,7 @@ def run_rog2025_prebuilt(prep_doc, local_dem, seeds_path, breaklines_path, workd
                          precip_mm_hr=25.0, storm_hours=6.0, sim_hours=None,
                          diffusion=True, catchment_geojson=None,
                          image=AUTHORING_IMAGE_DEFAULT, probe_dir=PROBE_DIR_DEFAULT) -> dict:
-    """Consume a PRE-BUILT channel-refined mesh (ADR 0211): re-realize + solve.
+    """Consume a PRE-BUILT channel-refined mesh: re-realize + solve.
 
     The ``generate_mesh`` / gate consume path. Skips ``prepare_local_terrain`` AND
     ``rog_refine.build_refined_inputs`` -- the local terrain frame (``prep_doc`` +

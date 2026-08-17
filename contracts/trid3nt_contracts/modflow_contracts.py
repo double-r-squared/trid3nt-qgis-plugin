@@ -6,9 +6,9 @@ Two shapes back the Case 2 groundwater-contamination demo path
 
 - ``MODFLOWRunArgs``  - the forcing parameters the agent confirms with the user
   before submitting a MODFLOW run. Consumed by the engine adapter
-  (``workers/modflow/gwt_adapter.py``, job-0221) that maps these to
+  (``workers/modflow/gwt_adapter.py``) that maps these to
   MF6-GWT input files via ``flopy``, and by the agent-side
-  ``run_modflow_job`` tool (job-0227).
+  ``run_modflow_job`` tool.
 - ``PlumeLayerURI`` - the postprocess output layer. Extends ``LayerURI``
   field-for-field (so it still maps onto ``map-command load-layer`` with no
   translation, like every other layer) and adds the two plume scalars the
@@ -24,11 +24,11 @@ Design notes
   (lat in [-90, 90], lon in [-180, 180]).
 - Defaults for ``aquifer_k_ms`` (hydraulic conductivity) and ``porosity`` are
   TENTATIVE demo parameterization per sprint-13 manifest OQ-3: K=1e-4 m/s,
-  porosity=0.3 (saturated sandy coastal plain). The composer (job-0228) must
+  porosity=0.3 (saturated sandy coastal plain). The composer must
   narrate to the user that these are demo defaults, not site-specific
   hydrogeology. See report Open Questions.
-- ``PlumeLayerURI`` is a structured numeric carrier (invariant 1 / Decision H /
-  FR-AS-7): the agent narrates ``max_concentration_mgl`` and ``plume_area_km2``
+- ``PlumeLayerURI`` is a structured numeric carrier (invariant 1
+): the agent narrates ``max_concentration_mgl`` and ``plume_area_km2``
   from these typed fields rather than inventing them from free text.
 - ``contaminant`` is a free ``str`` (open by design - the contaminant name is an
   open vocabulary, e.g. "benzene", "TCE", "PFOA"; the engine maps it to MF6-GWT
@@ -104,7 +104,7 @@ DEFAULT_POROSITY: float = 0.3  # effective porosity, dimensionless
 DEFAULT_AQUIFER_SY: float = 0.2  # specific yield (drainable porosity), dimensionless
 DEFAULT_AQUIFER_SS: float = 1e-5  # specific storage (1/m), confined-aquifer demo value
 
-# Vadose-transport (UZT) demo defaults (ADR 0228). The unsaturated-zone solute
+# Vadose-transport (UZT) demo defaults. The unsaturated-zone solute
 # question ("surface spill -> how long to reach groundwater") is a purely-advective
 # vertical travel-time problem (MF6 has NO unsaturated dispersion). These parameterize
 # the UZF Brooks-Corey water-content column + the infiltration forcing. All are demo
@@ -185,7 +185,7 @@ class SpeciesSpec(GraceModel):
 
 
 class WellSpec(GraceModel):
-    """One pumping well in a multi-well WHPA / capture-zone WELLFIELD (ADR 0215).
+    """One pumping well in a multi-well WHPA / capture-zone WELLFIELD.
 
     WHPA practice (US EPA 440/6-87-010; USGS modflow6-examples ex-prt-mp7-p03 for
     transient PRT) delineates capture zones for a WELLFIELD of several wells, each
@@ -568,7 +568,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
     csub_delay_interbeds: bool = Field(
         default=False,
         description=(
-            "CSUB formulation knob (ADR 0228): when True the compressible interbed "
+            "CSUB formulation knob: when True the compressible interbed "
             "is a DELAY interbed (cdelay='delay' + ndelaycells + a LOW interbed "
             "vertical K) -> finite consolidation diffusivity, so compaction is "
             "TIME-LAGGED (the interbed keeps consolidating after the head decline, "
@@ -581,7 +581,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
     csub_effective_stress: bool = Field(
         default=False,
         description=(
-            "CSUB formulation knob (ADR 0228): when True the CSUB package uses the "
+            "CSUB formulation knob: when True the CSUB package uses the "
             "EFFECTIVE_STRESS formulation (geostatic sgm/sgs unit weights + a "
             "specified initial preconsolidation stress) instead of the default "
             "HEAD_BASED formulation. The two formulations bracket the same "
@@ -595,7 +595,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
         ),
     )
 
-    # --- vadose_transport: UZF+UZT unsaturated-zone solute travel (ADR 0228) - #
+    # --- vadose_transport: UZF+UZT unsaturated-zone solute travel
     # "A tracer/contaminant is spilled at the LAND SURFACE -- how long until it
     # reaches the water table, and at what concentration?" A MODFLOW-6 UZF
     # unsaturated-flow column (a vertical ivertcon chain of Brooks-Corey cells)
@@ -681,7 +681,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
         ),
     )
 
-    # --- gwe_thermal: GWF+GWE heat transport (ADR 0235) --------------------- #
+    # --- gwe_thermal: GWF+GWE heat transport
     # The heat twin of the contaminant plume: a warm-water injection WEL carrying
     # an AUXILIARY TEMPERATURE, coupled through a GWF6-GWE6 exchange to a GWE
     # energy-transport model (CND conduction + EST heat storage). ``gwe_mode``
@@ -830,7 +830,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
         default="structured",
         description=(
             "Discretization for the capture_zone / wellhead_protection GWF+PRT "
-            "grid (ADR 0258). 'structured' (default) is the uniform 41x41 / 100 m "
+            "grid. 'structured' (default) is the uniform 41x41 / 100 m "
             "DIS grid. 'disv_quadrefined' builds a gridgen 3-level quad-refined "
             "DISV vertex grid around the well (12.5 m finest cell) that RESOLVES "
             "the pumping cone of depression the 100 m structured grid smears -- a "
@@ -874,7 +874,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
         ),
     )
 
-    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC (ADR 0215) ---- #
+    # --- multi-well WELLFIELD + transient + NHD RIV + kriged IC
     # The wellhead-reeval part-2 upgrades to the capture_zone / wellhead_protection
     # PRT path. ALL optional/defaulted -> additive; a run-args with none of them is
     # byte-identical to the single-well steady demo deck (part 1).
@@ -912,7 +912,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
         default=None,
         description=(
             "NHD river-reach boundaries for the capture_zone / wellhead_protection "
-            "PRT deck (ADR 0215 item 4). Each reach is an ordered polyline of "
+            "PRT deck (item 4). Each reach is an ordered polyline of "
             "``(lon, lat)`` vertices (lon-first, EPSG:4326) as returned by "
             "``fetch_river_geometry`` / NLDI. The adapter rasterizes each reach "
             "onto the model grid and drapes a RIV head-dependent boundary on the "
@@ -932,11 +932,11 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "wellhead_protection GWF grid, one row per model row (north-first, "
             "flopy convention) x one value per column, in the deck's LOCAL datum "
             "(m; the PRT grid runs top=50 m / bottom=0 m). The composer samples "
-            "the shared kriged/trend water-table surface (ADR 0215 seam 2, "
+            "the shared kriged/trend water-table surface (seam 2, "
             "``water_table_interp.interpolate_water_table``) at each cell centre "
             "and re-references it about the deck datum so the interior IC carries "
             "the measured water-table CURVATURE a single gradient plane cannot "
-            "(the kriged per-cell IC, ADR 0215 item 3). This matters for the "
+            "(the kriged per-cell IC, item 3). This matters for the "
             "TRANSIENT solve (the initial condition before pumping). When None "
             "(the default) the IC is the uniform aquifer-top head (byte-identical "
             "to part 1). Must be shape nrow x ncol when supplied. Ignored for "
@@ -1056,7 +1056,7 @@ class PlumeLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the two structured numbers the agent narrates about the plume so the
-    LLM cites typed fields, never invents them (invariant 1, FR-AS-7):
+    LLM cites typed fields, never invents them (invariant 1):
 
         max_concentration_mgl: peak contaminant concentration in the plume,
             mg/L (>= 0).
@@ -1110,7 +1110,7 @@ class SeepageLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command
     load-layer`` with no translation (same as every other layer). Adds the
     structured numbers the agent narrates about the river<->aquifer exchange so
-    the LLM cites typed fields, never invents them (invariant 1, FR-AS-7):
+    the LLM cites typed fields, never invents them (invariant 1):
 
         total_leakage_m3_day: net signed RIV exchange summed over all reach
             cells, m^3/day (positive = net losing/recharging the aquifer).
@@ -1141,7 +1141,7 @@ class DrawdownLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured numbers
     the agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         max_drawdown_m: peak head decline anywhere in the domain, m (>= 0).
         head_decline_timeseries: OPTIONAL per-step head decline at the well (or a
@@ -1167,7 +1167,7 @@ class DewaterLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured numbers
     the agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         dewatering_rate_m3_day: total DRN outflow magnitude summed over the pit
             drain cells, m^3/day (>= 0) - the pumping rate the pit needs.
@@ -1194,7 +1194,7 @@ class BudgetPartitionLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured budget the
     agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         budget_partition_m3_day: mapping of zone/term label -> signed flow rate,
             m^3/day (positive = into the aquifer/zone, MF6 budget sign convention).
@@ -1216,7 +1216,7 @@ class MoundingLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured numbers
     the agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         max_mounding_m: peak head RISE (mounding) anywhere in the domain, m (>= 0).
         recharged_volume_m3: OPTIONAL total volume of water recharged into the
@@ -1241,7 +1241,7 @@ class ASRLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured numbers
     the agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         recovery_efficiency: OPTIONAL fraction (dimensionless, 0..1) of injected
             water recovered over the ASR cycle(s). None when not computed.
@@ -1269,7 +1269,7 @@ class HydroperiodLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured numbers
     the agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         seasonal_head_range_m: the seasonal water-table swing (max head minus min
             head over the wetland) m (>= 0).
@@ -1286,7 +1286,7 @@ class HydroperiodLayerURI(LayerURI):
 
 
 class ThermalPlumeLayerURI(LayerURI):
-    """A ``LayerURI`` for the GWE heat-transport layer + narration scalars (ADR 0235).
+    """A ``LayerURI`` for the GWE heat-transport layer + narration scalars.
 
     The headline output of the ``"gwe_thermal"`` archetype family (the heat twin
     of ``PlumeLayerURI``). The postprocess reads the GWE temperature output
@@ -1298,7 +1298,7 @@ class ThermalPlumeLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation (same as every other layer). Adds the structured numbers
     the agent narrates so the LLM cites typed fields, never invents them
-    (invariant 1, FR-AS-7):
+    (invariant 1):
 
         peak_temperature_c: peak absolute temperature anywhere in the domain, degC.
         peak_excess_temperature_c: peak temperature EXCESS above the undisturbed
@@ -1322,7 +1322,7 @@ class ThermalPlumeLayerURI(LayerURI):
     conductivities, ambient temperature) are LOUD demo defaults (no thermal-
     property fetcher in v1). The temperature field is a qualitative planning-grade
     heat-transport envelope, NOT a calibrated geothermal forecast. The agent must
-    narrate this caveat when presenting the layer (invariant 1, FR-AS-7).
+    narrate this caveat when presenting the layer (invariant 1).
     """
 
     peak_temperature_c: float
@@ -1351,7 +1351,7 @@ class CaptureZoneLayerURI(LayerURI):
     parameters, NOT a calibrated regulatory wellhead protection area. Treat it as
     a qualitative planning envelope, not a legally defensible delineation. The
     agent must narrate this caveat when presenting the layer to the user
-    (invariant 1, FR-AS-7).
+    (invariant 1).
 
     The difference between the two archetypes is framing and default travel-time
     tiers only; both produce the same carrier:
@@ -1363,7 +1363,7 @@ class CaptureZoneLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates so the LLM cites typed fields,
-    never invents them (invariant 1, FR-AS-7):
+    never invents them (invariant 1):
 
         capture_zone_area_km2: area of the outer isochrone envelope (the hull of
             all pathlines regardless of tier), km^2 (>= 0). This is the broadest
@@ -1500,7 +1500,7 @@ class CaptureZoneLayerURI(LayerURI):
             "screening sanity ballpark against the PRT-delineated envelope."
         ),
     )
-    # --- multi-well allocation (ADR 0215; ADDITIVE, default-safe) -------------- #
+    # --- multi-well allocation (ADDITIVE, default-safe)
     well_capture_allocation: dict[str, Any] = Field(
         default_factory=dict,
         description=(
@@ -1519,7 +1519,7 @@ class CaptureZoneLayerURI(LayerURI):
         description=(
             "True when the capture zone was delineated on a TRANSIENT flow field "
             "(steady spin-up + storage periods, per-period reversed PRT budget) so "
-            "the isochrones reflect the time-evolving wellfield drawdown (ADR 0215 "
+            "the isochrones reflect the time-evolving wellfield drawdown ("
             "item 1); False for the single steady-period demo (part 1). Narrated so "
             "the user knows whether the zones evolved with pumping time."
         ),
@@ -1529,7 +1529,7 @@ class CaptureZoneLayerURI(LayerURI):
         ge=0,
         description=(
             "Number of NHD RIV head-dependent boundary cells draped onto the grid "
-            "from ``MODFLOWRunArgs.river_reaches`` (ADR 0215 item 4). 0 => no NHD "
+            "from ``MODFLOWRunArgs.river_reaches`` (item 4). 0 => no NHD "
             "reaches bounded the domain (the demo/DEM CHD ring alone oriented the "
             "flow field). Narrated so the user knows a real river boundary "
             "constrained the capture zone."
@@ -1554,7 +1554,7 @@ class SaltwaterWedgeLayerURI(LayerURI):
     the bottom-layer 50%-isochlor (50% of seawater_salinity_ppt) toe penetration
     measured from the seaward boundary; it is a qualitative planning metric, NOT
     a regulatory or engineering delineation. The agent must narrate this caveat
-    when presenting the layer to the user (invariant 1, FR-AS-7).
+    when presenting the layer to the user (invariant 1).
 
     The PRIMARY product is a Vega-Lite cross-section heatmap chart (emitted via
     pipeline_emitter.emit_chart_payloads) showing salinity vs. distance inland
@@ -1573,7 +1573,7 @@ class SaltwaterWedgeLayerURI(LayerURI):
     Extends ``LayerURI`` field-for-field so it still maps onto
     ``map-command load-layer`` with no translation (same as every other layer).
     Adds the structured numbers the agent narrates so the LLM cites typed fields,
-    never invents them (invariant 1, FR-AS-7):
+    never invents them (invariant 1):
 
         intrusion_length_m: bottom-layer 50%-isochlor toe penetration measured
             inland from the seaward boundary, m (>= 0). This is the HEADLINE
@@ -1670,11 +1670,11 @@ class StreamReachLayerURI(LayerURI):
     Treat the depletion fraction as a qualitative planning estimate (the streambed
     resistance keeps it below the Glover-Balmer analytic curve; an honest,
     explainable gap), NOT a calibrated water-rights determination. The agent must
-    narrate this caveat (invariant 1, FR-AS-7).
+    narrate this caveat (invariant 1).
 
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation. Adds the structured numbers the agent narrates so the LLM
-    cites typed fields, never invents them (invariant 1, FR-AS-7):
+    cites typed fields, never invents them (invariant 1):
 
         total_depletion_m3_day: net streamflow captured from the stream by the
             pumping (sum of the pumped-vs-baseline exchange delta over all
@@ -1776,11 +1776,11 @@ class SubsidenceLayerURI(LayerURI):
     stress (honest on a flat demo grid, cannot represent depth-dependent
     effective-stress evolution -- that is v2). Treat the subsidence magnitude as a
     qualitative planning estimate, NOT a calibrated Central Valley forecast. The
-    agent must narrate this caveat (invariant 1, FR-AS-7).
+    agent must narrate this caveat (invariant 1).
 
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation. Adds the structured numbers the agent narrates so the LLM
-    cites typed fields, never invents them (invariant 1, FR-AS-7):
+    cites typed fields, never invents them (invariant 1):
 
         max_subsidence_cm: peak cumulative ground subsidence over the pumping
             horizon, cm (>= 0, positive-down). The headline scalar.
@@ -1840,7 +1840,7 @@ class SubsidenceLayerURI(LayerURI):
 
 
 class VadoseBreakthroughLayerURI(LayerURI):
-    """A ``LayerURI`` for the UZT vadose-transport breakthrough result (ADR 0228).
+    """A ``LayerURI`` for the UZT vadose-transport breakthrough result.
 
     The headline output of the ``"vadose_transport"`` archetype: a MODFLOW-6
     UZF+UZT unsaturated-zone column tracks a tracer spilled at the LAND SURFACE as
@@ -1861,11 +1861,11 @@ class VadoseBreakthroughLayerURI(LayerURI):
     content parameters, the infiltration rate, and the unsaturated vertical K are
     DEMO DEFAULTS with no site soil-hydraulics fetcher (v1). Treat the arrival time
     as a qualitative screening estimate, NOT a calibrated contaminant-transport
-    forecast. The agent must narrate this caveat (invariant 1, FR-AS-7).
+    forecast. The agent must narrate this caveat (invariant 1).
 
     Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
     with no translation. Adds the structured numbers the agent narrates so the LLM
-    cites typed fields, never invents them (invariant 1, FR-AS-7):
+    cites typed fields, never invents them (invariant 1):
 
         breakthrough_time_days: time from the surface spill to the tracer reaching
             the water table, days (>= 0) -- the FIRST time the base-of-column
@@ -1931,7 +1931,7 @@ class VadoseBreakthroughLayerURI(LayerURI):
 
 
 class ModflowValidationResult(GraceModel):
-    """Typed result of a MODFLOW package-VALIDATION case (ADR 0153).
+    """Typed result of a MODFLOW package-VALIDATION case.
 
     NOT a ``LayerURI``: each case authors a SMALL SYNTHETIC benchmark deck
     (a 200-cell channel, a 21x21 two-aquifer stub, a two-block barrier) whose

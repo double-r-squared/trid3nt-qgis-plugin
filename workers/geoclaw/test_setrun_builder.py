@@ -72,7 +72,7 @@ def test_parse_valid_spec_fills_defaults():
 
 
 def test_parse_rejects_unknown_top_level_field():
-    """ADR 0158: an unknown build_spec field errors loudly (the ADR 0148 lesson
+    """an unknown build_spec field errors loudly (the lesson
     was a stale image SILENTLY dropping unknown fields -- two knob templates
     ran as no-ops). Never a silent drop."""
     with pytest.raises(GeoClawDeckError) as ei:
@@ -365,7 +365,7 @@ def test_render_maketopo_dtopo_is_valid_python_and_uses_dtopotools():
     assert "from clawpack.geoclaw import dtopotools" in text
     assert "mw = 9.0" in text
     assert 'fault.dtopo.write("dtopo.tt3"' in text
-    # The Okada dtopo-authoring front (ADR 0226): the helper ALSO writes the
+    # The Okada dtopo-authoring front: the helper ALSO writes the
     # final-time vertical deformation dZ as an ESRI-ASCII grid so postprocess can
     # rasterize the coseismic uplift/subsidence PRODUCT (the "what deformation"
     # answer). Assert the numpy import + the ESRI header + the north-first write.
@@ -703,7 +703,7 @@ def test_render_maketopo_threads_user_fault_geometry_no_banner():
 
 
 def test_render_maketopo_finite_fault_builds_multi_subfault():
-    # ADR 0226 finite-fault upgrade: a staged finite_fault_file switches the
+    # finite-fault upgrade: a staged finite_fault_file switches the
     # maketopo to the NATIVE CSVFault multi-subfault reader (measured inversion),
     # NOT the single idealized rectangle. No synthetic banner on this rung.
     spec = parse_build_spec(
@@ -828,7 +828,7 @@ def test_banded_manning_form_matches_fortran_consumer_contract():
         (B >= 0). N coefficients therefore REQUIRE exactly N-1 breaks.
 
     This test pins the RENDER form (clawpack-free) that makes that chain fire; the
-    live smoke (ADR 0147) confirms the banded run differs from the scalar run.
+    live smoke confirms the banded run differs from the scalar run.
     """
     coeffs = [0.015, 0.06]  # [offshore B<0, onshore B>=0]
     breaks = [0.0]          # split at the still-water datum
@@ -851,7 +851,7 @@ def test_banded_manning_form_matches_fortran_consumer_contract():
 
 # ===========================================================================
 # AMR window governs refinement: the AOI ambient drops one level below a window
-# so an in-AOI window is demonstrably finer than its surroundings (ADR 0147).
+# so an in-AOI window is demonstrably finer than its surroundings.
 # ===========================================================================
 def test_amr_window_lowers_aoi_ambient_one_below_the_window():
     """With an explicit window the AOI default region pins amr_levels-1 (ambient)
@@ -893,7 +893,7 @@ def test_amr_window_can_exceed_the_requested_finest_raising_max_levels():
 
 def test_no_amr_window_keeps_aoi_at_the_requested_finest():
     """No windows -> the AOI default region stays at amr_levels (byte-identical to
-    the pre-ADR-0147 deck) and amr_levels_max == amr_levels."""
+    the pre-deck) and amr_levels_max == amr_levels."""
     spec = parse_build_spec(_spec(scenario="tsunami", amr_levels=3,
                                   domain_bbox=[-86.5, 28.9, -85.0, 30.5]))
     txt = render_setrun_py(spec)
@@ -904,7 +904,7 @@ def test_no_amr_window_keeps_aoi_at_the_requested_finest():
 
 
 # ===========================================================================
-# GeoClaw CAND-S tail (ADR 0155): Lagrangian particle gauges + onshore fgmax.
+# GeoClaw CAND-S tail: Lagrangian particle gauges + onshore fgmax.
 # ===========================================================================
 def test_lagrangian_particles_emit_gauges_and_per_gauge_gtype():
     """Seeded particles become gtype='lagrangian' gauges (ids 100+); the coastal
@@ -1050,7 +1050,7 @@ def test_parse_rejects_negative_fgout_frames():
 
 
 # --------------------------------------------------------------------------- #
-# Thacker paraboloid-basin V&V deck (ADR 0187) -- spec-5, Cartesian, frictionless.
+# Thacker paraboloid-basin V&V deck -- spec-5, Cartesian, frictionless.
 # --------------------------------------------------------------------------- #
 def _thacker_spec(**over):
     base = {

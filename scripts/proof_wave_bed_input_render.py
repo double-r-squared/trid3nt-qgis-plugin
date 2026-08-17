@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""QGIS-true proof renders of the in-worker lake-datum bed INPUT layers (ADR 0244
+"""QGIS-true proof renders of the in-worker lake-datum bed INPUT layers (
 S3): the tomawac (wave_field) + artemis (agitation) sampled beds surfaced as
 role=context Case inputs, on ESRI World Imagery with a terrain ramp. Reuses the
 shared render() (EPSG:3857 over ESRI). Pass the two live bed-COG uris. ASCII only.
@@ -37,7 +37,7 @@ def main() -> None:
     out = render(
         tomawac_uri, str(_OUT / "wave_field_input_bed_bathymetry.png"),
         "Input: lake bed bathymetry (NOAA Great Lakes lake-datum) -- tomawac_wave_field",
-        ("ADR 0244 S3 -- the NOAA lake-datum bed the TOMAWAC solve sampled IN-WORKER, "
+        ("S3 -- the NOAA lake-datum bed the TOMAWAC solve sampled IN-WORKER, "
          "surfaced as a role=context Case INPUT (continuous_dem/terrain ramp, EPSG:3857 "
          "over ESRI World Imagery). Lake Superior off Marquette, MI; fetch-growth wind "
          "case. Elevation m below lake datum (negative = lake bottom)."),
@@ -49,7 +49,7 @@ def main() -> None:
     out = render(
         artemis_uri, str(_OUT / "agitation_input_bed_bathymetry.png"),
         "Input: lake bed bathymetry (NOAA Great Lakes lake-datum) -- artemis_harbor_agitation",
-        ("ADR 0244 S3 -- the NOAA lake-datum bed the ARTEMIS diffraction solve sampled "
+        ("S3 -- the NOAA lake-datum bed the ARTEMIS diffraction solve sampled "
          "IN-WORKER, surfaced as a role=context Case INPUT (continuous_dem/terrain ramp, "
          "EPSG:3857 over ESRI World Imagery). Marquette Lower Harbor, MI. Elevation m "
          "below lake datum (negative = lake bottom)."),

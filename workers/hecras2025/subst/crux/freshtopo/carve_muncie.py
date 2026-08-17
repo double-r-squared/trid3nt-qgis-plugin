@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FRESH-TOPOLOGY carve (ADR 0135 fused c1+c2 -- the recommended first probe).
+"""FRESH-TOPOLOGY carve (fused c1+c2 -- the recommended first probe).
 
 Extract a spatial SUB-RECTANGLE of HEC's shipped Muncie 2D flow area and
 RE-INDEX it from zero into a NEW, smaller mesh with a FRESH topology (new cell /
@@ -8,7 +8,7 @@ ghost cells on every external face) -- while every hydraulic INGREDIENT (subgrid
 volume-elevation + area-elevation curves, cell/face min elevations, coordinates)
 is carried over solver-proven from the shipped 6.x geometry. The result is a
 topology this repo AUTHORED (different perimeter + cell layout than anything HEC
-shipped) built from solver-proven arrays: exactly the ADR 0135 probe of whether
+shipped) built from solver-proven arrays: exactly the probe of whether
 the production 6.x solver accepts a fresh tessellation.
 
 The HEC 2D conventions this carve reproduces (all decoded + validated against the

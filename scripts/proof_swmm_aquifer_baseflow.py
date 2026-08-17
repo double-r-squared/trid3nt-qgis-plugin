@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0218 proof: SWMM two-zone aquifer [GROUNDWATER] baseflow-to-node.
+"""proof: SWMM two-zone aquifer [GROUNDWATER] baseflow-to-node.
 
 Chart-first validation class -> charts/scalars, no raster. A pervious subcatchment
 over a two-zone SWMM aquifer discharges baseflow to a drainage node; a two-storm

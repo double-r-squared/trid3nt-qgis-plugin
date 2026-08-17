@@ -4,7 +4,7 @@ This module holds the cross-cutting building blocks every other contract module
 depends on: the canonical pydantic base configuration, the ULID id helpers, the
 ``BBox`` type and its EPSG:4326 ordering validator, and the shared ``TimeRange``.
 
-Conventions enforced here (SRS Appendix A.1, B.7, D.7):
+Conventions enforced here (SRS, B.7, D.7):
 - Ids are ULIDs: 26-char, Crockford base32, time-sortable, URL-safe.
 - ``bbox`` is always ``[minLon, minLat, maxLon, maxLat]`` in EPSG:4326.
 - Datetimes serialize to ISO-8601 with a ``Z`` suffix (UTC) on the wire.

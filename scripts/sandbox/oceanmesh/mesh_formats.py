@@ -1,4 +1,4 @@
-"""Coastal-TIN -> solver-mesh format writers for the ADR 0192 mesh-front sandbox.
+"""Coastal-TIN -> solver-mesh format writers for the mesh-front sandbox.
 
 SANDBOX ONLY (nothing landed): given the oceanmesh worker's raw output
 (``points`` (N,2) lon/lat + ``cells`` (M,3) 0-indexed triangles), emit the two

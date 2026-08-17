@@ -1,10 +1,10 @@
-"""Ball Creek RoG event forcing + calibration/validation harness (ADR 0204).
+"""Ball Creek RoG event forcing + calibration/validation harness.
 
 Builds the AORC-forced flash-flood forcing for each event, runs the TELEMAC RoG
 solve (via rog_ballcreek_live.phase_solve), aligns the computed outlet hydrograph
 to the observed EDI weir #9 series, and grades NSE + R2 (compute_skill_metrics).
 
-Forcing (installed-engine constant-rain constraint, ADR 0195/0196): each single
+Forcing (installed-engine constant-rain constraint): each single
 storm is represented by the rain over its rising limb -- a constant intensity =
 AORC(rising-limb window) / rising-limb hours, driven for rain_duration = rising
 hours (native RAIN_HDUR keyword) so the modelled peak lands at the observed peak

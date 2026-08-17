@@ -1,4 +1,4 @@
-"""SFINCS hydraulic-structure present-vs-absent DISCRIMINANT smoke (ADR 0256).
+"""SFINCS hydraulic-structure present-vs-absent DISCRIMINANT smoke.
 
 DIRECTIONAL-FLOW re-run (NATE catch, 2026-08-14): the originally-landed
 rain-on-grid smoke put uniform precip on both sides of the line, so a

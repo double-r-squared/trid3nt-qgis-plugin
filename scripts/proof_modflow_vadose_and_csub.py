@@ -1,4 +1,4 @@
-"""Proof renders for the MODFLOW vadose_transport + CSUB formulation knobs (ADR 0228).
+"""Proof renders for the MODFLOW vadose_transport + CSUB formulation knobs.
 
 Deterministic, reuses product code:
   - vadose breakthrough CHART (dock-exact): the UZT base-of-column concentration

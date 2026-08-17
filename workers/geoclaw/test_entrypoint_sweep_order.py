@@ -1,4 +1,4 @@
-"""Sweep-order regression test (fix for the ADR 0233 rebuild smoke finding,
+"""Sweep-order regression test (fix for the rebuild smoke finding,
 run 01KZWT7J3T0V95E8HF0E5S8XHF).
 
 The bug: ``main()`` ran the ``_expand_outputs`` upload sweep BEFORE

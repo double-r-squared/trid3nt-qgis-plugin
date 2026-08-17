@@ -132,7 +132,7 @@ class ElmfireSpecError(ElmfireDeckError):
 
 
 class ElmfireSpecUnknownFieldsError(ElmfireSpecError):
-    """Deck spec carries a top-level field the parser does not read (ADR 0158)."""
+    """Deck spec carries a top-level field the parser does not read."""
 
     error_code = "ELMFIRE_DECK_SPEC_UNKNOWN_FIELDS"
 
@@ -180,7 +180,7 @@ def _require(d: dict, key: str, ctx: str) -> Any:
 
 
 #: PARSER VERSION -- bump on a top-level deck-spec shape change. Named in the
-#: strict-field error (ADR 0158).
+#: strict-field error.
 _PARSER_VERSION = "elmfire-spec-1"
 
 #: Every top-level deck-spec key ``validate_deck_spec`` reads. The
@@ -195,7 +195,7 @@ _KNOWN_SPEC_FIELDS = frozenset(
 
 def _reject_unknown_spec_fields(spec: dict) -> None:
     """Raise loudly if ``spec`` carries a top-level key ``validate_deck_spec``
-    never reads (ADR 0158 -- the ADR 0148 lesson: a stale image silently
+    never reads (-- the lesson: a stale image silently
     dropped unknown build_spec fields and two registered knob templates ran
     as no-ops)."""
     unknown = sorted(set(spec) - _KNOWN_SPEC_FIELDS)
@@ -997,7 +997,7 @@ def build_deck(
     band count and ``DT_METEOROLOGY`` to ``dt_meteorology_s``. Unset (default)
     reproduces the base constant-weather deck byte-for-byte -- mirrors the
     synthetic flat-deck path's ``build_constant_flat_deck(weather_schedule=)``
-    (ADR 0161) onto the real-data deck (ADR 0239 amendment 3).
+ onto the real-data deck (amendment 3).
 
     Every failure mode is a typed :class:`ElmfireDeckError` subclass — a deck
     that returns from this function is co-registered, complete and runnable::

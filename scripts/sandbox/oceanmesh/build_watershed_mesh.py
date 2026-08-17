@@ -1,4 +1,4 @@
-"""ADR 0193 Part B -- WATERSHED-FIRST mesh driver (STANDALONE sandbox).
+"""Part B -- WATERSHED-FIRST mesh driver (STANDALONE sandbox).
 
 NATE's watershed-then-mesh method, end to end: delineate the watershed with
 pysheds (registered ``delineate_watershed``), pull the NHDPlus HR / OSM river
@@ -8,7 +8,7 @@ and mesh THAT domain with the authentic OceanMesh2D engine (in the GPL-isolated
 domain, so the mesh is never cookie-cut mid-water; the AOI box is only a residual
 render overlay.
 
-Reuses the ADR 0192 mesh machinery unchanged (docker mesher, format writers,
+Reuses the mesh machinery unchanged (docker mesher, format writers,
 MDAL + SERAFIN verification) via build_coastal_mesh + water_edge.
 
 Run:

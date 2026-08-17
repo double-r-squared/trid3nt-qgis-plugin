@@ -1,4 +1,4 @@
-"""Render the ADR 0226 finite-fault Okada seafloor-deformation proofs.
+"""Render the finite-fault Okada seafloor-deformation proofs.
 
 Canonical proof (``geoclaw_okada_deformation.png``): the REAL 2021 M8.2 Chignik
 seafloor deformation from the published USGS finite-fault inversion

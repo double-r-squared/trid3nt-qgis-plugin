@@ -1,11 +1,11 @@
-"""ADR 0230 Slab2 SCENARIO proof renders (Cascadia M9.0), EPSG:3857 over Esri World
+"""Slab2 SCENARIO proof renders (Cascadia M9.0), EPSG:3857 over Esri World
 Imagery, AMR mesh overlaid where present:
 
   1. geoclaw_scenario_cascadia_deformation.png -- the MONEY SHOT: the Slab2 multi-
      subfault Okada seafloor deformation dipole tracking the CURVED trench (vs the old
      straight bar). Signed RdBu (red uplift / blue subsidence).
   2. geoclaw_scenario_cascadia_bathy_input.png -- the fetched deep-water topobathy
-     INPUT layer (ADR 0227/0229 rung) under the run.
+     INPUT layer (rung) under the run.
   3. geoclaw_scenario_cascadia_max_amplitude.png -- max fgout surface amplitude + AMR
      mesh + the offshore decay transect points.
   4. geoclaw_scenario_cascadia_gauge_chart.png -- the Newport, Oregon coastal mareogram.
@@ -287,7 +287,7 @@ def main() -> int:
                   "trench -- NOT a straight bar. HYPOTHETICAL scenario, not a real event.",
                   cmap="RdBu_r", diverging=True)
     _render_field(dem_bytes, "geoclaw_scenario_cascadia_bathy_input.png",
-                  "Cascadia M9.0 SCENARIO -- bathymetry INPUT layer (deep-water rung, ADR 0227/0229)",
+                  "Cascadia M9.0 SCENARIO -- bathymetry INPUT layer (deep-water rung)",
                   "ETOPO 2022 full column + 3DEP onshore over the rupture-enclosing "
                   "Cascadia domain.", cmap="terrain", diverging=False)
     if fgout_frames:

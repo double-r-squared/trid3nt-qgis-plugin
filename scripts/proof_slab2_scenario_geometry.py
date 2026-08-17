@@ -1,4 +1,4 @@
-"""ADR 0230 Slab2 SCENARIO geometry proof (the curved-interface money shot), EPSG:3857
+"""Slab2 SCENARIO geometry proof (the curved-interface money shot), EPSG:3857
 over Esri World Imagery.
 
 Renders the Cascadia M9.0 scenario SUBFAULT tiling directly from resolve_slab2_scenario

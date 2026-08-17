@@ -29,7 +29,7 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
     ``tool-payload-confirmation``. Sims never start without a click here
     (user-controlled granularity, standing directive). Decision rules live in
     the pure ``gate`` module (tested without Qt).
-  * AOI ON THE WIRE (ADR 0017 mechanism 2, 2026-07-22): every outgoing
+  * AOI ON THE WIRE (mechanism 2, 2026-07-22): every outgoing
     user-message carries the drawn/persisted case AOI as the STRUCTURED
     ``aoi_bbox`` payload field ([min_lon, min_lat, max_lon, max_lat],
     EPSG:4326) -- the legacy bracketed in-text context line is gone; the
@@ -142,7 +142,7 @@ _LLM_STEP_NAMES = {
     "model_generate", "generate",
 }
 
-# ADR 0018 picker fail-open (Stage 3, 2026-07-22): event kinds that mean the
+# picker fail-open (Stage 3, 2026-07-22): event kinds that mean the
 # TURN MOVED ON -- any of these arriving while a ToolCandidatesCard is still
 # unanswered proves the server's ``timeout_s`` fail-open (or a cancel/error)
 # already resolved that selection, so the dock folds the open card to its
@@ -219,7 +219,7 @@ class Trid3ntDock(QDockWidget):
         self.iface = iface
         self.settings = PluginSettings()
         self.bridge = AgentBridge(self)
-        # Remote-streaming session TTL (ADR 0116): sweep crash-leftover staging
+        # Remote-streaming session TTL: sweep crash-leftover staging
         # dirs from prior sessions before this session opens its own. Only DEAD
         # owners are swept -- a concurrent live QGIS instance keeps its dir.
         sweep_stale_session_dirs()
@@ -266,7 +266,7 @@ class Trid3ntDock(QDockWidget):
         self._aoi_rubber = None
         self._aoi_map_tool = None
         self._prev_aoi_tool = None
-        # ADR 0159: the 'Draw region' supply path -- ONE rubber-band rectangle
+        # the 'Draw region' supply path -- ONE rubber-band rectangle
         # attached to the NEXT chat turn as ``drawn_geometry`` (a basis="user"
         # spatial knob the composer gates consume, e.g. geoclaw amr_regions).
         # ``_drawn_region`` is the pending ``{"geometry_type": "rectangle",
@@ -294,7 +294,7 @@ class Trid3ntDock(QDockWidget):
         # Item R2 (live-feedback 2026-07-18): short arg summaries from the
         # tool-io sidecar, keyed by step_id, for the tool chip rows.
         self._tool_args_by_step: Dict[str, str] = {}
-        # ADR 0018 (Stage 3, 2026-07-22): the OPEN (not yet answered/
+        # (Stage 3, 2026-07-22): the OPEN (not yet answered/
         # superseded) tool-picker cards, in arrival order. A subsequent turn
         # event folds them to "agent proceeded" (_supersede_open_tool_pickers);
         # reset on case switch (_clear_messages -- the widgets die with the
@@ -445,7 +445,7 @@ class Trid3ntDock(QDockWidget):
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
         button_row.addWidget(self.aoi_btn)
 
-        # ADR 0159: 'Draw region' -- drag ONE rectangle that rides the NEXT chat
+        # 'Draw region' -- drag ONE rectangle that rides the NEXT chat
         # turn as ``drawn_geometry`` (a basis="user" spatial knob for composer
         # gates, e.g. geoclaw amr_regions). Distinct from Set AOI (the analysis
         # extent): a drawn region is a sub-region knob, cleared on send.
@@ -627,7 +627,7 @@ class Trid3ntDock(QDockWidget):
         # gone -- the AOI note now fires only on an explicit Set-AOI.)
         self._sim_cards.clear()
         self._tool_args_by_step.clear()
-        # ADR 0018: open picker cards are per-case transcript state -- the
+        # open picker cards are per-case transcript state -- the
         # widgets die in the loop below; drop the tracking refs with them.
         self._open_tool_pickers = []
         self._tool_picker_turn_step = 0
@@ -641,7 +641,7 @@ class Trid3ntDock(QDockWidget):
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
         self._clear_aoi_overlay()
-        # ADR 0159: a pending drawn region is per-turn/per-case -- drop it on a
+        # a pending drawn region is per-turn/per-case -- drop it on a
         # case switch so it never rides a turn in the wrong case.
         self._clear_region_overlay()
         # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
@@ -1223,7 +1223,7 @@ class Trid3ntDock(QDockWidget):
                 "AOI overlay cleared (not connected -- nothing to sync)"
             )
 
-    # -- draw-a-region supply path (ADR 0159) --------------------------------- #
+    # -- draw-a-region supply path
 
     def _toggle_draw_region(self, checked: bool) -> None:
         """Install/restore the 'Draw region' map tool -- mirrors the Set-AOI
@@ -1422,14 +1422,14 @@ class Trid3ntDock(QDockWidget):
         self.bridge.stop()
         self._connected = False
         self._case_id = None
-        # Remote-streaming session TTL (ADR 0116): a disconnect ends the
+        # Remote-streaming session TTL: a disconnect ends the
         # session, so sweep everything staged this session (the ONE fallback
         # for non-streamable meshes) -- nothing outlives the session.
         self.materializer.cleanup_session()
         # Per-case-bbox 2026-07-19: the case AOI is per-case state -- a
         # disconnect ends the case binding, so the overlay must go too.
         self._clear_aoi_overlay()
-        self._clear_region_overlay()  # ADR 0159: drop any pending drawn region
+        self._clear_region_overlay  #: drop any pending drawn region
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
@@ -1495,7 +1495,7 @@ class Trid3ntDock(QDockWidget):
         """Fetch ``GET /api/case-list`` off the UI thread and feed the
         result into ``dlg`` (item b/c). Local-mode only in practice (the
         route is 404 outside the local single-user seam -- see
-        the server's ``tool_catalog_http.py``); remote mode simply
+        the server's ``catalog_http.py``); remote mode simply
         gets an honest failure note, which is fine since remote already has
         its own Connect-first flow."""
         dlg.info_lbl.setText("Loading cases ...")
@@ -1575,7 +1575,7 @@ class Trid3ntDock(QDockWidget):
         # leaves it cleared when the new case has none). _clear_aoi_overlay
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
-        self._clear_region_overlay()  # ADR 0159: drop any pending drawn region
+        self._clear_region_overlay  #: drop any pending drawn region
         # A2 (NATE 2026-07-20): a NEW case is BBOX-LESS -- the canvas-as-AOI
         # seed is gone. A clean slate with no AOI until the user Sets one (the
         # Set-AOI rectangle) or the LLM geocodes it.
@@ -1884,7 +1884,7 @@ class Trid3ntDock(QDockWidget):
     def _on_event(self, kind: str, data: object) -> None:
         if not isinstance(data, dict):
             return
-        # ADR 0018 picker fail-open: any turn-progress event proves the server
+        # picker fail-open: any turn-progress event proves the server
         # already resolved every still-open tool picker (its timeout_s
         # proceeded, or the turn errored/completed past it) -- fold them to
         # the "agent proceeded" chip BEFORE handling the event. A new
@@ -2016,7 +2016,7 @@ class Trid3ntDock(QDockWidget):
             # so the agent's pause waited out its TTL and failed.
             self._show_credential_card(data)
         elif kind == "tool-candidates":
-            # ADR 0018 (Stage 3, 2026-07-22): the tool-selection picker --
+            # (Stage 3, 2026-07-22): the tool-selection picker
             # ranked candidates + free-text + let-agent-decide, replying on
             # ONE tool-choice envelope. Fail-open: unanswered, the server's
             # timeout_s proceeds and the supersede hook above folds the card.
@@ -2124,7 +2124,7 @@ class Trid3ntDock(QDockWidget):
         SAME way a live publish would. The by-URI materializer STREAMS each
         layer in place from the advertised store via ``/vsicurl/`` (which the
         tailnet endpoint makes directly reachable -- the remote client reads
-        the same objects ranged over the tailnet, no download (ADR 0116).
+        the same objects ranged over the tailnet, no download.
 
         Rebinds the dock: authoritative title in the header, a FRESH layer
         group named for the case (dedup reset), the persisted loaded_layers
@@ -2158,7 +2158,7 @@ class Trid3ntDock(QDockWidget):
         self._set_dot("connected")
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
-        # Decision A (NATE 2026-07-31): layer restore rides the SAME gesture
+        # (NATE 2026-07-31): layer restore rides the SAME gesture
         # as the chat replay above -- the by-URI materializer reads the store
         # directly (MinIO on this box or the tailnet peer).
         if info.layers:
@@ -2608,7 +2608,7 @@ class Trid3ntDock(QDockWidget):
     ) -> None:
         """Send the credential reply. ``key_value`` set -> Submit: the raw key
         rides the EXISTING ``secret-add`` envelope (the ONLY transport that
-        ever carries it -- Decision F; the server vault-writes it 0600) and
+        ever carries it --; the server vault-writes it 0600) and
         THEN ``credential-provided`` ``provided=True`` resumes the paused
         tool. ``key_value`` None -> Skip: ``credential-provided``
         ``provided=False`` alone (no secret saved; the server re-raises the
@@ -2624,7 +2624,7 @@ class Trid3ntDock(QDockWidget):
             # before any failure surface we format here).
             self._note(f"credential reply send failed: {exc}", error=True)
 
-    # -- tool-selection picker card (ADR 0018, Stage 3 2026-07-22) --------------- #
+    # -- tool-selection picker card (Stage 3 2026-07-22)
 
     def _show_tool_candidates_card(self, payload: dict) -> None:
         """Render the ``tool-candidates`` picker as an inline card (contracts
@@ -2701,7 +2701,7 @@ class Trid3ntDock(QDockWidget):
     # -- sending ------------------------------------------------------------- #
 
     def _send_run_invocation(self, text, run_inv) -> None:
-        """Handle a parsed ``!run`` invocation (ADR 0114).
+        """Handle a parsed ``!run`` invocation.
 
         ``help`` / a local parse ``error`` render an honest local bubble and
         send NOTHING. A valid ``(name, args)`` echoes the ``!run`` signature as
@@ -2746,7 +2746,7 @@ class Trid3ntDock(QDockWidget):
         if not (self._case_id and self.bridge.running):
             self.status_label.setText("Not connected -- open Settings to connect")
             return
-        # !run direct tool invocation (ADR 0114): PARSE-FIRST, before the chat
+        # !run direct tool invocation: PARSE-FIRST, before the chat
         # path. A ``!run`` prefix routes straight to the server as a structured
         # ``dev-tool-invoke``; anything else (including a message that merely
         # MENTIONS !run mid-sentence) returns None and flows to chat below,
@@ -2770,7 +2770,7 @@ class Trid3ntDock(QDockWidget):
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
         bbox, _source = self._aoi_for_send()
-        # Structured AOI (ADR 0017 mechanism 2, 2026-07-22): the AOI rides the
+        # Structured AOI (mechanism 2, 2026-07-22): the AOI rides the
         # ``aoi_bbox`` payload field now -- the bracketed in-text prose line
         # ("[QGIS map canvas AOI ...]") is GONE; the chat text goes out CLEAN.
         # O1 (NATE 2026-07-20) still holds: no per-send AOI note -- the
@@ -2783,7 +2783,7 @@ class Trid3ntDock(QDockWidget):
             # model_id (empty = agent env default) so a MODEL switch applies
             # live on the next message with no agent restart -- mirrors the
             # show_thinking add. Provider base_url/key stay agent-process env.
-            # ADR 0018 (Stage 3, 2026-07-22): ride the persisted Auto/Ask
+            # (Stage 3, 2026-07-22): ride the persisted Auto/Ask
             # mode so the server surfaces tool selection as picker cards in
             # ask mode -- the same per-turn settings carrier as show_thinking
             # /model_id ("auto" is omitted on the wire; it IS the default).
@@ -2793,7 +2793,7 @@ class Trid3ntDock(QDockWidget):
                 model_id=self.settings.model_id,
                 aoi_bbox=bbox,
                 tool_choice_mode=self.settings.tool_choice_mode,
-                # ADR 0159: attach any pending drawn region to THIS turn, then
+                # attach any pending drawn region to THIS turn, then
                 # clear it below (one rectangle, one turn).
                 drawn_geometry=self._drawn_region,
             )
@@ -2825,6 +2825,6 @@ class Trid3ntDock(QDockWidget):
             self._charts_window.deleteLater()
             self._charts_window = None
         self.bridge.stop()
-        # Remote-streaming session TTL (ADR 0116): dock close / plugin unload
+        # Remote-streaming session TTL: dock close / plugin unload
         # ends the session -- remove its staging dir so nothing survives it.
         self.materializer.cleanup_session()

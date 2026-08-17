@@ -1,4 +1,4 @@
-"""Offline checks for the Results-typed plan-HDF skeleton builder (ADR 0173).
+"""Offline checks for the Results-typed plan-HDF skeleton builder.
 
 Pure h5py -- no engine image. Asserts the Muncie-diff transplant produces a
 ``File Type="HEC-RAS Results"`` wrapper carrying the seeded fixture's real

@@ -1,5 +1,5 @@
 """Validation + round-trip tests for the chart-emission contract (sprint-13
-Stage 1, conversational data-analysis layer, job-0223).
+Stage 1, conversational data-analysis layer).
 
 Covers:
 - ``ChartEmissionPayload`` JSON round-trip (idempotent serialize/deserialize),

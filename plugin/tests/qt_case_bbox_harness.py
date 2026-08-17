@@ -24,7 +24,7 @@ Checks:
   4. _clear_messages (case switch) clears _case_bbox.
   5. disconnect_agent clears _case_bbox.
   6. a case-open WITHOUT a bbox leaves _case_bbox None (no stale box).
-  7. (ADR 0017 structured AOI, 2026-07-22) _send with NO case bbox rides
+  7. (structured AOI, 2026-07-22) _send with NO case bbox rides
      aoi_bbox=None on send_chat and the text goes out clean.
   8. _send with a drawn/rehydrated case bbox rides it STRUCTURED as
      send_chat(aoi_bbox=[...]) -- the message text stays EXACTLY the user's
@@ -79,8 +79,8 @@ class RecBridge:
         self, text, show_thinking=False, model_id="", aoi_bbox=None,
         tool_choice_mode="",
     ) -> None:
-        # ADR 0017: record the STRUCTURED per-message AOI exactly as sent.
-        # (ADR 0018 grew the bridge surface with tool_choice_mode -- accepted
+        # record the STRUCTURED per-message AOI exactly as sent.
+        # (grew the bridge surface with tool_choice_mode -- accepted
         # here so the recorder mirrors the real AgentBridge signature; this
         # harness asserts the AOI leg only.)
         self.calls.append(("chat", text, aoi_bbox))
@@ -213,7 +213,7 @@ dock._on_case_open_event(
 if dock._case_bbox is not None:
     _fail(f"bbox-less case-open left a bbox: {dock._case_bbox}")
 
-# ---- 7. _send with NO AOI: aoi_bbox=None + clean text (ADR 0017) ----------- #
+# ---- 7. _send with NO AOI: aoi_bbox=None + clean text
 # C4 is open with no bbox -- the outgoing send_chat must carry aoi_bbox=None
 # and the text must be exactly what the user typed.
 
@@ -229,7 +229,7 @@ if sent_text != "plain message, no AOI":
 if sent_aoi is not None:
     _fail(f"no-AOI send must ride aoi_bbox=None, got {sent_aoi!r}")
 
-# ---- 8. _send rides the case bbox STRUCTURED + clean text (ADR 0017) ------- #
+# ---- 8. _send rides the case bbox STRUCTURED + clean text
 # A case-open with a bbox (the rehydrated drawn AOI), then a send: the bbox
 # rides send_chat(aoi_bbox=[...]) -- NOT a bracketed prose line appended to
 # the text -- and the set-time affordance (overlay) is still up afterwards.

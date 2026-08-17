@@ -1,19 +1,19 @@
-"""Shared contracts (SRS v0.3 Appendices A-D + FR-PHC-2 + solver shapes).
+"""Shared contracts (SRS v0.3 Appendices A-D + + solver shapes).
 
 Single source of truth for every type that crosses a specialist boundary:
-- ``ws``: WebSocket protocol - envelope + every message type (Appendix A).
-- ``envelope``: AssessmentEnvelope + flood subtype (Appendix B).
+- ``ws``: WebSocket protocol - envelope + every message type.
+- ``envelope``: AssessmentEnvelope + flood subtype.
 - ``impact_envelope``: ImpactEnvelope - Pelicun post-processor output
-  contract (Appendix B.6c).
-- ``event``: EventMetadata + ClaimSet/NumericClaim + intensity union (Appendix C).
+  contract (c).
+- ``event``: EventMetadata + ClaimSet/NumericClaim + intensity union.
 - ``collections``: the five MongoDB collection schemas + vector index configs
-  + TTL config (Appendix D).
-- ``catalog``: CatalogEntry - the public_hazard_catalog.yaml entry (FR-PHC-2).
+  + TTL config.
+- ``catalog``: CatalogEntry - the public_hazard_catalog.yaml entry.
 - ``case``: Case persistence envelopes (CaseSummary/CaseChatMessage/
-  CaseSessionState) + Case-lifecycle WebSocket envelopes (FR-MP-6).
-- ``execution``: ModelSetup / ExecutionHandle / RunResult / LayerURI (FR-TA-2).
+  CaseSessionState) + Case-lifecycle WebSocket envelopes.
+- ``execution``: ModelSetup / ExecutionHandle / RunResult / LayerURI.
 - ``tool_metadata``: tool-docstring metadata + ``tool_category`` conventions
-  (FR-TA-3, FR-AS-3) - convention only; ``agent`` owns the registry code.
+ - convention only; ``agent`` owns the registry code.
 
 All models subclass ``GraceModel`` (``extra="forbid"``, UTC-``Z`` datetimes).
 The canonical wire form is ``model_dump(mode="json")`` (add ``by_alias=True``
@@ -157,13 +157,13 @@ __all__ = [
     "MoundingLayerURI",
     "ASRLayerURI",
     "HydroperiodLayerURI",
-    # MODFLOW ADR 0235 GWE heat-transport temperature layer (gwe_thermal)
+    # MODFLOW GWE heat-transport temperature layer (gwe_thermal)
     "ThermalPlumeLayerURI",
     # MODFLOW Wave-4 PRT capture-zone vector layer (capture_zone / wellhead_protection)
     "CaptureZoneLayerURI",
     # MODFLOW Wave-5 variable-density saltwater intrusion layer (saltwater_intrusion)
     "SaltwaterWedgeLayerURI",
-    # MODFLOW ADR 0228 UZF+UZT vadose-zone breakthrough layer (vadose_transport)
+    # MODFLOW UZF+UZT vadose-zone breakthrough layer (vadose_transport)
     "VadoseBreakthroughLayerURI",
     # SWMM quasi-2D urban-flood contracts (sprint-16 P1)
     "SWMMRunArgs",

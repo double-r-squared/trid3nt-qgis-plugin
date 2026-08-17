@@ -1,4 +1,4 @@
-"""UZT (unsaturated-zone transport) local-first physics prototype (ADR 0228).
+"""UZT (unsaturated-zone transport) local-first physics prototype.
 
 Question class: a tracer applied at the LAND SURFACE transits the VADOSE zone
 via UZF unsaturated flow before reaching the water table -- how long until it

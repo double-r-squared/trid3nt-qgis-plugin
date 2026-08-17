@@ -1,4 +1,4 @@
-"""Offline unit tests for the rain-on-grid worker payload (ADR 0196 C1).
+"""Offline unit tests for the rain-on-grid worker payload (C1).
 
 TELEMAC-free: exercise the pure helpers (boundary walk, outlet classification,
 CN scatter map, distributed-friction zones, mass-balance parse) WITHOUT
@@ -117,7 +117,7 @@ def test_write_friction_files_distinct_zones(tmp_path):
 
 
 def test_write_hyetograph_file_block_format(tmp_path):
-    """ADR 0206: the block hyetograph matches the RAINDEF=3 reader contract --
+    """the block hyetograph matches the RAINDEF=3 reader contract
     two comment lines, a lone start time, then 't_end mm' rows, dry tail past
     the sim end. Returns the gross-rain integral for the mass check."""
     p = tmp_path / "hyeto.txt"
@@ -228,7 +228,7 @@ def test_parse_mass_balance_reads_engine_closure():
 
 
 # --------------------------------------------------------------------------- #
-# continuous soil-moisture store (ADR 0213) -- hand-computed fixtures.
+# continuous soil-moisture store -- hand-computed fixtures.
 # --------------------------------------------------------------------------- #
 def test_soil_store_dry_infiltrates_all():
     """An empty store (V0=0) has runoff coeff 1-(1-0)^2 = 0: the first pulse

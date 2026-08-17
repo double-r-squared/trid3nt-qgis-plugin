@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0190 row 1 proof renders: TELEMAC distributed rainfall vs no-rain.
+"""row 1 proof renders: TELEMAC distributed rainfall vs no-rain.
 
 Two figures into docs/proof/templates/, named after the workflow file
 (telemac_river_dye):
@@ -163,7 +163,7 @@ def main():
                  fontsize=8)
     fig.text(0.5, 0.005,
              "telemac_river_dye distributed rainfall forcing: rain-driven mean-depth "
-             "rise accumulates over the inflow-only run (ADR 0190 row 1)",
+             "rise accumulates over the inflow-only run (row 1)",
              ha="center", fontsize=6, color="0.4")
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     p2 = os.path.join(OUT, "telemac_river_dye_rainfall_timing_chart.png")

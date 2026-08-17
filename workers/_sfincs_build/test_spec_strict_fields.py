@@ -1,4 +1,4 @@
-# ADR 0158 strict-field coverage: the ADR 0148 lesson (a stale image SILENTLY
+# strict-field coverage: the lesson (a stale image SILENTLY
 # dropped unknown build_spec fields; two registered knob templates ran as
 # no-ops) applies to the SFINCS build-side job_spec too. These pin the
 # top-level strict checks on ``validate_job_spec`` / ``forcing_spec_from_dict``

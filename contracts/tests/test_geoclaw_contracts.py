@@ -54,7 +54,7 @@ def _depth_layer(**overrides: object) -> GeoClawDepthLayerURI:
 
 
 # --------------------------------------------------------------------------- #
-# Storm-surge fields (parametric-Holland forcing) -- ADR 0168.
+# Storm-surge fields (parametric-Holland forcing) --.
 # --------------------------------------------------------------------------- #
 def test_surge_fields_default_neutral() -> None:
     a = GeoClawRunArgs(bbox=BBOX, scenario="surge")

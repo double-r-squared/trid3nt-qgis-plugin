@@ -411,7 +411,7 @@ def code_exec_layer_lines(request: CodeExecRequest) -> list:
 #   ``request_id`` / ``provider_id`` / ``provider_label`` / ``signup_url``
 #   (None = no self-serve signup; NEVER a fabricated URL) /
 #   ``secret_key_name`` / ``message`` / ``tool_name``.
-# * the reply is TWO envelopes, in order, per the contract's Decision F
+# * the reply is TWO envelopes, in order, per the contract's
 #   split (raw key isolated to the secret-add transport):
 #     1. ``secret-add``  {provider, case_id, key_value}  -- the ONLY envelope
 #        that ever carries the raw key; the server vault-writes it (file
@@ -493,7 +493,7 @@ def credential_note_lines(request: CredentialRequest) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Tool-selection picker card (ADR 0018 auto/ask modes -- Stage 3, 2026-07-22)
+# Tool-selection picker card (auto/ask modes -- Stage 3, 2026-07-22)
 # --------------------------------------------------------------------------- #
 #
 # Contract source of truth (mirrored EXACTLY, not paraphrased):

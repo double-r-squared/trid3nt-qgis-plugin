@@ -1,4 +1,4 @@
-"""MongoDB collection schemas (SRS Appendix D, FR-MP-5, Decision F/L).
+"""Document-store collection schemas.
 
 Five collections, each a pydantic model mapping to a BSON document. The wire/
 storage form is ``model.model_dump(mode="json", by_alias=True)`` with the
@@ -36,7 +36,7 @@ from .common import GraceModel, ULIDStr, UTCDatetime
 from .event import EventMetadata
 from .execution import LegendKey
 
-#: SCREAMING_SNAKE_CASE error-code pattern (Appendix A.6).
+#: SCREAMING_SNAKE_CASE error-code pattern.
 #: Open set per A.6: codes are validated by shape, not against a closed registry,
 #: so every workflow/tool may register new codes without a schema change.
 _ERROR_CODE_RE: re.Pattern[str] = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$")
@@ -123,8 +123,8 @@ class ProjectLayerSummary(GraceModel):
 
     layer_id: str
     name: str
-    # ``mesh`` (ADR 0118): a UGRID/unstructured solver mesh the plugin opens via
-    # MDAL (``QgsMeshLayer``); it STAGES rather than streams (ADR 0116). Mirrors
+    # ``mesh``: a UGRID/unstructured solver mesh the plugin opens via
+    # MDAL (``QgsMeshLayer``); it STAGES rather than streams. Mirrors
     # ``LayerURI.layer_type``.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str
@@ -133,12 +133,12 @@ class ProjectLayerSummary(GraceModel):
     role: Literal["primary", "context", "input"]
     temporal: bool  # has WMS-T config
 
-    # --- Fields added by job-0072 (D.2 amendment) --- #
+    # --- Fields added by (D.2 amendment)
     wms_url: str | None = None       # QGIS Server WMS URL for MapLibre tile registration
     opacity: float | None = None     # 0.0–1.0; client falls back to 1.0 if absent
     z_index: int | None = None       # MapLibre layer-order arbitration; lower draws first
 
-    # --- Mesh CRS (ADR 0118); mirrored from LayerURI.crs_authid --- #
+    # --- Mesh CRS; mirrored from LayerURI.crs_authid
     # Explicit CRS for a ``layer_type="mesh"`` row -- MDAL reports an empty crs()
     # for a SCHISM out2d UGRID / SFINCS quadtree grid, so the plugin's _add_mesh
     # applies this string. Serializes into the WS layer row (event.raw) the
@@ -173,7 +173,7 @@ class ProjectDocument(DocModel):
 
 
 class UserSpatialInput(GraceModel):
-    """A user-provided spatial input recorded on a run (FR-AS-10)."""
+    """A user-provided spatial input recorded on a run."""
 
     request_id: ULIDStr  # the WebSocket request that solicited this input
     geometry_type: Literal["point", "bbox"]
@@ -269,7 +269,7 @@ class ArticleDocument(DocModel):
 class EventDocument(EventMetadata):
     """``events`` (D.5): an EventMetadata document. ``event_id`` is the ``_id``.
 
-    The collection schema *is* the ``EventMetadata`` schema (Appendix C); no
+    The collection schema *is* the ``EventMetadata`` schema; no
     wrapper fields are added. The Mongo ``_id`` is ``event_id`` (a ULID); the
     write path sets ``_id = event_id`` at insert time. We do not alias here to
     keep ``EventMetadata`` a single shape across wire and storage.
@@ -307,20 +307,20 @@ class ChatMessage(GraceModel):
 class PipelineStepSummary(GraceModel):
     """A step in a persisted pipeline snapshot. ``cancelled`` is distinct.
 
-    Optional progress + error fields (job-0030, sprint-06 M4 pre-flight,
-    resolving job-0026 OQ-W-26-PIPELINE-STEP-FIELDS):
+    Optional progress + error fields (sprint-06 M4 pre-flight,
+    resolving OQ-W-26-PIPELINE-STEP-FIELDS):
 
     - ``progress_percent`` is an integer 0..100, populated by the workflow
       when it can reasonably attribute progress (e.g. solver chunk N of M,
       n-of-M rows processed). Optional everywhere — never an LLM estimate
       (Invariant 1: determinism boundary).
     - ``error_code`` is a ``SCREAMING_SNAKE_CASE`` literal aligned with the
-      Appendix A.6 error-code convention; populated only when ``state ==
+      error-code convention; populated only when ``state ==
       "failed"``. The set of valid codes is **open** per A.6 (every workflow
       may register its own); validation is shape-only (regex).
     - ``error_message`` is a short human-readable accompanier, capped at
       512 chars to discourage stack-trace leakage. Free text.
-    - ``duration_ms`` (job-0264, ELEVATED tool-timer requirement) is the
+    - ``duration_ms`` (ELEVATED tool-timer requirement) is the
       authoritative wall-clock elapsed time, derived deterministically from
       ``completed_at - started_at`` and stamped on the **terminal** transition
       (complete / failed / cancelled) by the ``PipelineEmitter``. Never an LLM
@@ -365,7 +365,7 @@ class PipelineStepSummary(GraceModel):
     @field_validator("error_code")
     @classmethod
     def _validate_error_code_shape(cls, value: str | None) -> str | None:
-        """Enforce SCREAMING_SNAKE_CASE shape per Appendix A.6 convention."""
+        """Enforce SCREAMING_SNAKE_CASE shape  convention."""
         if value is None:
             return value
         if not _ERROR_CODE_RE.match(value):
@@ -478,9 +478,9 @@ CASES_ANON_TTL_SECONDS: int = int(
 # --------------------------------------------------------------------------- #
 # Mode 1 catalog substrate (sprint-08): catalog_entries + catalog_audit_log
 # --------------------------------------------------------------------------- #
-# Forward-looking — Decision F + §F.1.2 Mode 1 binding for sprint-08.
+# Forward-looking — + §F.1.2 Mode 1 binding for sprint-08.
 #
-# Numbering note: SRS Appendix D already uses D.7..D.10 for cross-cutting /
+# Numbering note: SRS already uses D.7..D.10 for cross-cutting
 # storage-sizing / design-rationale / known-open-choices meta sections. The
 # new collections therefore land at **D.11 catalog_entries** and **D.12
 # catalog_audit_log** rather than D.8/D.9 (the kickoff's numbering assumed
@@ -492,14 +492,14 @@ CASES_ANON_TTL_SECONDS: int = int(
 # - ``catalog_entries`` are durable until a curator deprecates / removes them
 #   (status lifecycle does the soft-delete work).
 # - ``catalog_audit_log`` is append-only retention; Mode 2 user-proposed +
-#   curator-review provenance must survive indefinitely per Decision M.
+#   curator-review provenance must survive indefinitely.
 
 
 class CatalogEntryDocument(CatalogEntry):
     """``catalog_entries`` (D.11): one curated Mode 1 catalog entry.
 
-    The collection schema *is* the ``CatalogEntry`` schema (Appendix F /
-    FR-PHC-2 + §F.1.2 Mode 1); no wrapper fields are added. The Mongo ``_id``
+    The collection schema *is* the ``CatalogEntry`` schema (/
+    + §F.1.2 Mode 1); no wrapper fields are added. The Mongo ``_id``
     is the entry ``id`` (a stable string identifier curated at entry-creation
     time, e.g. ``"usgs-3dep-dem-1m"``, ``"worldpop-1km-aggregated"``); the
     write path sets ``_id = id`` at insert time.
@@ -543,7 +543,7 @@ class CatalogAuditLogDocument(DocModel):
     Every catalog mutation lands one document here. Mode 2 user-proposed entries
     produce a ``user_proposed`` event at acceptance; curator-side approval /
     rejection produce a ``curator_approved`` / ``curator_rejected`` event
-    against the same ``entry_id``. Decision M (claim provenance) requires this
+    against the same ``entry_id``. (claim provenance) requires this
     trail to be inspectable: the catalog query path may surface user-proposed
     entries as provisional, and downstream run-document `CatalogReference`
     fields can be resolved back through this collection to recover the

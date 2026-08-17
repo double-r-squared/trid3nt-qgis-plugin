@@ -469,7 +469,7 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(sent[0]["case_id"], STUB_CASE_ID)
 
     def test_run_invocation_round_trip(self):
-        # ADR 0114: the ``!run`` direct tool invocation E2E over the WS -- the
+        # the ``!run`` direct tool invocation E2E over the WS -- the
         # client sends the structured ``dev-tool-invoke`` and the result rides
         # the SAME tool-io + pipeline + session-state + turn-complete frames a
         # model call produces.
@@ -596,7 +596,7 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertNotIn("model_id", sent[0]["payload"],
                          "model_id must be absent when the picker is empty")
 
-    # ADR 0017 mechanism 2 (structured AOI, 2026-07-22). ----------------------
+    # mechanism 2 (structured AOI, 2026-07-22).
 
     def test_send_chat_carries_structured_aoi_bbox_and_clean_text(self):
         """send_chat(aoi_bbox=...) rides the STRUCTURED ``aoi_bbox`` payload

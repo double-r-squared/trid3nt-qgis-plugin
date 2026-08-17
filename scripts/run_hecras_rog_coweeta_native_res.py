@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("run_hecras_rog_coweeta_native_res")
 
 # A first attempt used a ~6x6 km box, but the granularity autoscaler (soft cap
-# 12000 cells, ADR 0223) silently coarsened resolution_m=20 -> 61m for that AOI
+# 12000 cells) silently coarsened resolution_m=20 -> 61m for that AOI
 # size. To actually run the SOLVER at its declared 20 m floor (the NATE ask), the
 # box is shrunk to fit under the cap: ~3.2x1.4 km centered on the Coweeta outlet
 # reach (near 35.0601 N, -83.4306 W), 160x70 cells = 11200 < 12000 cap.

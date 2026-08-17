@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ADR 0251 Stage-2 real-site culvert-through-embankment A/B proof figure
+"""Stage-2 real-site culvert-through-embankment A/B proof figure
 (North Fork Salt Creek x Green Valley Road, Brown County IN).
 
 Renders the WITH-culvert (A) vs BLOCKED (B) peak-depth field as the reprojected
@@ -9,7 +9,7 @@ composer publishes) over ESRI World Imagery -- never cell-center scatter dots.
 The structured 2D mesh wireframe, culvert barrel, and embankment band are
 overlaid at their real UTM/EPSG:3857 positions.
 
-RESOLUTION RE-PROOF (2026-08-14, ADR 0251 append): renders a 2x2 panel, 10 m
+RESOLUTION RE-PROOF (2026-08-14, append): renders a 2x2 panel, 10 m
 (finest the template supports) on top, 20 m (screening default) on bottom --
 same site, bbox, DEM, barrel spec, auto_seal embankment mode; ONLY resolution_m
 differs. The 10 m case is driven directly through
@@ -23,7 +23,7 @@ composer run (2026-08-13, culvert_embankment_flow composer wave) staged its
 result HDFs + local_dem.tif to the probe host dir but did NOT persist the
 Rog2025Prep (origin_x/origin_y/utm_epsg) the composer used internally -- that
 prep only ever lived in the composer process's memory. This script RE-DERIVES
-an equivalent georeference for the 20 m row: ADR 0251 records the site centroid
+an equivalent georeference for the 20 m row: records the site centroid
 (lon -86.2883, lat 39.1893, UTM 16N/EPSG:32616); the local-frame culvert barrel
 midpoint (from the run's own spec.json, exact) is pinned to that centroid,
 fixing origin_x/origin_y. This reproduces the correct SHAPE/relative geometry
@@ -33,7 +33,7 @@ field, discriminant, barrel/embankment geometry, and terrain are all the REAL
 run outputs -- only the absolute placement of local (0,0) in UTM is a
 documented reconstruction. (A same-site same-bbox reproducer run at cell_size
 =20 -- ``/tmp/cvr_nfsalt_result.json`` -- lands the identical discriminant
-bit-for-bit, confirming the reconstruction is sound; see ADR 0251.)
+bit-for-bit, confirming the reconstruction is sound; .)
 
 Result HDFs used: cvr_cvr_nfsalt_run_A_culvert / _B_blocked under the probe host
 dir (timestamped 2026-08-13 19:13, before the committed PNG's 19:22 mtime --
@@ -68,7 +68,7 @@ SPEC_A_20 = json.loads((P / "cvr_cvr_nfsalt_run_A_culvert" / "spec.json").read_t
 
 NX20, NY20, CELL20 = 27, 43, 20.0
 UTM_EPSG = 32616  # IN Brown County -> UTM zone 16N
-SITE_LON, SITE_LAT = -86.2883, 39.1893  # ADR 0251 site centroid
+SITE_LON, SITE_LAT = -86.2883, 39.1893  # site centroid
 
 barrel20 = SPEC_A_20["culvert"]["barrel"]  # [us_x, us_y, ds_x, ds_y], local metres
 us_x20, us_y20, ds_x20, ds_y20 = barrel20

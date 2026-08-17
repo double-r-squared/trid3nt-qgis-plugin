@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live proof for generate_mesh mode=hecras + the RoG consume gate (ADR 0211).
+"""Live proof for generate_mesh mode=hecras + the RoG consume gate.
 
 Drives the live daemon through the SAME headless WS path the QGIS plugin + the
 seed_showcase driver use (reuses those proven client helpers -- no guessed event

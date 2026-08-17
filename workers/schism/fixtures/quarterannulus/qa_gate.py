@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 # amplitude/RMSE tolerances vs the published analytical M2 solution (measured
-# green at ADR 0115: amp err 0.0027 m / RMSE 0.0155 m on a 0.44 m signal).
+# green at: amp err 0.0027 m / RMSE 0.0155 m on a 0.44 m signal).
 AMP_ERR_TOL_M = 0.010
 RMSE_TOL_M = 0.030
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0190 row 2 proof: ELMFIRE Hirsch initial-attack POC (closed form).
+"""row 2 proof: ELMFIRE Hirsch initial-attack POC (closed form).
 
 Closed-form validation class -> charts/scalars, NO georeferenced raster. Two
 panels into docs/proof/templates/ (named after the tool):
@@ -49,7 +49,7 @@ def main():
     ax.set_title("Hirsch (1998) initial-attack POC vs attack delay", fontsize=8)
     fig.text(0.5, 0.02,
              "elmfire_initial_attack_containment_probability: a faster-spreading, more\n"
-             "intense fire loses containability sooner as response slows (ADR 0190 row 2;\n"
+             "intense fire loses containability sooner as response slows (row 2;\n"
              "exact published elmfire.io Hirsch coefficients)",
              ha="center", va="bottom", fontsize=6, color="0.4")
     fig.tight_layout(rect=(0, 0.20, 1, 1))
@@ -76,7 +76,7 @@ def main():
     cb.ax.tick_params(labelsize=7)
     fig.text(0.5, 0.005,
              "elmfire_initial_attack_containment_probability: POC logistic in fire "
-             "size, head-fire intensity + interaction (ADR 0190 row 2)",
+             "size, head-fire intensity + interaction (row 2)",
              ha="center", fontsize=6, color="0.4")
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     p2 = os.path.join(OUT, f"{STEM}_poc_surface.png")

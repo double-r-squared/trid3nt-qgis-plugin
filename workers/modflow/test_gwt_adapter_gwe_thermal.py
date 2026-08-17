@@ -1,4 +1,4 @@
-"""Unit + live tests for the MODFLOW 6 GWF+GWE heat-transport deck (ADR 0235).
+"""Unit + live tests for the MODFLOW 6 GWF+GWE heat-transport deck.
 
 Asserts the *deck construction* contract for the ``gwe_thermal`` archetype
 family (a DUAL-model GWF+GWE sim: a warm-water injection WEL carrying an

@@ -1,4 +1,4 @@
-"""Declarative confirm-gate metadata (the gate-collapse contract, ADR 0273).
+"""Declarative confirm-gate metadata (the gate-collapse contract).
 
 NATE's design call: the per-engine solver/fetch confirm gates are built from tool
 METADATA, not hand-wired name sets + per-engine ``if/elif`` branches. This module is
@@ -109,7 +109,7 @@ class LeverSpec(GraceModel):
 
 
 class GateSpec(GraceModel):
-    """A tool's DECLARED confirm gate (the gate-collapse carrier, ADR 0273).
+    """A tool's DECLARED confirm gate (the gate-collapse carrier).
 
     Presence of this on a tool's :class:`AtomicToolMetadata` is the ONE membership
     signal the server gate engine reads - the ``SOLVER_CONFIRM_TOOLS`` /

@@ -8,7 +8,7 @@ they want to bring INTO the current case as a first-class input layer.
 Two entry points share ONE core (``ingest_user_layer``):
 
 1. ``POST /api/ingest-layer`` on the catalog HTTP listener
-   (``tool_catalog_http.py``) -- the plugin's "Push layer" button drives this
+   (``catalog_http.py``) -- the plugin's "Push layer" button drives this
    directly, cold (no WS session required), mirroring the ``/api/export-qgis``
    + ``/api/case-list`` route conventions (local-single-user gated, typed
    errors -> honest 4xx bodies).

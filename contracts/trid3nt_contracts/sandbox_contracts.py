@@ -1,17 +1,17 @@
-"""Python-sandbox code-exec envelopes (sprint-13 Stage 2 / job-0233).
+"""Python-sandbox code-exec envelopes (sprint-13 Stage 2).
 
 The conversational data-analysis layer (memory ``project_conversational_data
 _analysis_layer``) lets the agent run **user-confirmed ad-hoc Python** over
 layers already on the map — "compute the 95th-percentile depth", "cross-tabulate
 damage by land-cover class" — in the egress-denied Cloud Run Job sandbox
-(``infra/python-sandbox/``, job-0232). The agent's ``code_exec_request`` atomic
+(``infra/python-sandbox/``). The agent's ``code_exec_request`` atomic
 tool (``trid3nt_server.data.meta.code_exec_tool``) drives two wire messages, both
-**agent -> client** (Appendix A.4 amendment):
+**agent -> client** (amendment):
 
 1. ``code-exec-request`` (:class:`CodeExecRequestPayload`) — emitted BEFORE the
    sandbox runs. The client renders a confirm card showing the exact Python the
    agent wants to execute, the layers it will receive, and the agent's rationale.
-   **Running arbitrary code is a consequential action** (FR-AS-8 / Invariant 9
+   **Running arbitrary code is a consequential action** (/ Invariant 9
    spirit), so this is a HARD confirm gate: the agent does not dispatch until the
    user approves. The user's decision rides back on the EXISTING
    ``tool-payload-confirmation`` envelope (``payload_warning.py``) — the
@@ -27,7 +27,7 @@ tool (``trid3nt_server.data.meta.code_exec_tool``) drives two wire messages, bot
    and the wallclock duration. The client renders this inline in the chat
    alongside the tool card.
 
-Determinism boundary (Invariant 1 / Decision H / FR-AS-7)
+Determinism boundary (Invariant 1)
 ---------------------------------------------------------
 Any NUMBER the agent narrates from a code-exec run is the structured ``result``
 descriptor computed by the deterministic sandbox, fed back to Gemini as the
@@ -45,15 +45,15 @@ action, which is *exactly* the shape the payload-warning gate already implements
 ``proceed``/``cancel`` decision + a ``warning_id`` correlation key). Reusing that
 confirmation reply — rather than minting a fourth ``*-response`` message — keeps
 the confirm-gate plumbing single-sourced (one ``pending_payload_warnings`` future
-map, one inbound handler) per the job-0233 kickoff's "reuse that seam" directive.
+map, one inbound handler) per the kickoff's "reuse that seam" directive.
 The ONLY new wire shapes are the two agent->client envelopes here.
 
-Registration (manifest job-0233 scope, chart-emission precedent)
+Registration (manifest scope, chart-emission precedent)
 ----------------------------------------------------------------
-Both messages are agent -> client (Appendix A.4). Following the ``secrets`` /
+Both messages are agent -> client. Following the ``secrets``
 ``payload_warning`` / ``chart-emission`` precedent, this module exports the
 per-module routing fragment :data:`SANDBOX_AGENT_TO_CLIENT_PAYLOADS`; ``ws.py``
-(Appendix A, schema-owned) splats it into ``AGENT_TO_CLIENT_PAYLOADS`` /
+(schema-owned) splats it into ``AGENT_TO_CLIENT_PAYLOADS``
 ``ALL_PAYLOADS`` so the wire envelope is decode-routable like every other message.
 """
 
@@ -83,7 +83,7 @@ CodeExecStatus = Literal["ok", "error", "timeout", "blocked"]
 
 
 class CodeExecRequestPayload(GraceModel):
-    """``code-exec-request`` (Appendix A.4 amendment, job-0233, sprint-13).
+    """``code-exec-request`` (amendment, sprint-13).
 
     Agent -> client, emitted BEFORE the sandbox runs. The client renders a
     confirm card; the user approves/denies via a ``tool-payload-confirmation``
@@ -138,7 +138,7 @@ class CodeExecRequestPayload(GraceModel):
 
 
 class CodeExecResultPayload(GraceModel):
-    """``code-exec-result`` (Appendix A.4 amendment, job-0233, sprint-13).
+    """``code-exec-result`` (amendment, sprint-13).
 
     Agent -> client, emitted AFTER the sandbox returns. The client renders the
     run outcome inline in the chat (status pill + stdout/stderr tails + the
@@ -192,9 +192,9 @@ class CodeExecResultPayload(GraceModel):
 # --------------------------------------------------------------------------- #
 #
 # Both ``code-exec-request`` and ``code-exec-result`` are agent -> client
-# (Appendix A.4). Following the ``secrets`` / ``payload_warning`` /
+#. Following the ``secrets`` / ``payload_warning``
 # ``chart-emission`` precedent, this module exposes the typed routing fragment;
-# ``ws.py`` (Appendix A, schema-owned) splats it into ``AGENT_TO_CLIENT_PAYLOADS``
+# ``ws.py`` (schema-owned) splats it into ``AGENT_TO_CLIENT_PAYLOADS``
 # so the decoder can route the wire envelopes. The confirmation REPLY rides the
 # existing ``tool-payload-confirmation`` (client -> agent) message — no new
 # client->agent shape is added here.

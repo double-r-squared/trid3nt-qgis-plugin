@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Standalone HEC-RAS RoG mesh authoring + validation (ADR 0211).
+"""Standalone HEC-RAS RoG mesh authoring + validation.
 
-The refined-mesh machinery of ADR 0210 (graded Poisson-disk seeds + channel
+The refined-mesh machinery of (graded Poisson-disk seeds + channel
 breaklines, ``rog_refine.py``) is here made usable INDEPENDENTLY of a solve: this
 module builds the channel-refined HEC-RAS cell mesh for an AOI, VALIDATES it through
 the in-container ``meshprobe`` (the driver realizes the cells but does NOT prepare or

@@ -1304,7 +1304,7 @@ async def _stream_model_reply(
                 # status="ok" with an empty layers list is success=True but
                 # result_usable=False. routed_ok stays None here -- the supersession
                 # heuristic is a same-session ADJACENT-chain signal only computable at
-                # aggregation time (tool_catalog_http._aggregate_records).
+                # aggregation time (catalog_http._aggregate_records).
                 _tel_result_usable = classify_result_usable(
                     call.name, result, summary
                 )

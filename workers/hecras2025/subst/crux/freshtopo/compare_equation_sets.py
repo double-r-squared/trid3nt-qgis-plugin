@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Diffusion-Wave vs full-SWE regression on ONE authored fresh-AOI 2D deck (ADR 0188).
+"""Diffusion-Wave vs full-SWE regression on ONE authored fresh-AOI 2D deck.
 
 Reference driver for the ``2d_diffusion_wave_vs_full_swe_regression`` board row: it
 authors a single steep-AOI mesh ONCE, stamps the two 2D equation sets on two copies
 of the identical plan HDF, solves both through the production 6.6 RasUnsteady, and
 reports how the peak-inundation deliverable and the per-cell water surface differ.
 
-Finding (ADR 0188, Blanco River canyon nr Wimberley TX, 329 ft relief, 15000 cfs):
+Finding (Blanco River canyon nr Wimberley TX, 329 ft relief, 15000 cfs):
 the two solvers agree on the peak-inundation ENVELOPE (wet extent, max depth, max
 WSE identical to sub-inch) and separate ONLY at a small set (~0.3% of cells, up to
 ~1.9 ft) of momentum-dominated cells -- the localized inertial signature. Diffusion
 Wave is the cheaper default; full SWE matters where local inertia does. This
-extends ADR 0157's low-gradient Muncie coincidence into a steep, dry, dynamics-
+extends the low-gradient Muncie coincidence into a steep, dry, dynamics
 driven regime.
 
 The comparison is a composed analysis (two engine runs + a host-side diff), not a

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ADR 0247 proof: HAZUS earthquake lifeline-network damage-and-loss templates.
+"""proof: HAZUS earthquake lifeline-network damage-and-loss templates.
 
 Chart-first validation class (tabular DL, no raster/mesh -> the QGIS/ESRI proof
 norm is N/A, mirror the pelicun_hazus_seismic_dl_run proof style). Drives the real

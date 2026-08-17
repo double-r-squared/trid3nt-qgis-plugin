@@ -315,7 +315,7 @@ def test_landslide_chain_sets_documented_fields(monkeypatch):
 
 # ===========================================================================
 # (3) flow_accumulation chain — REAL landlab chain (gated on the dep).
-# ADR 0122 hazard-easy-four #1: drainage area + channel network + routing comp.
+# hazard-easy-four #1: drainage area + channel network + routing comp.
 # ===========================================================================
 @_REQUIRES_LANDLAB
 def test_flow_accumulation_chain_in_memory():
@@ -374,7 +374,7 @@ def test_flow_accumulation_priority_flood_and_determinism():
 
 # ===========================================================================
 # (4) green_ampt_overland_flow chain -- REAL landlab chain (gated on the dep).
-# ADR 0123 hazard-easy-four continuation #1: infiltration-vs-runoff partition.
+# hazard-easy-four continuation #1: infiltration-vs-runoff partition.
 # ===========================================================================
 @_REQUIRES_LANDLAB
 def test_green_ampt_partition_and_conservation():
@@ -440,7 +440,7 @@ def test_green_ampt_conductivity_monotonicity_and_determinism():
 
 # ===========================================================================
 # (5) groundwater_steady / groundwater_storm chains -- REAL landlab chains
-# (gated on the dep). ADR 0214: GroundwaterDupuitPercolator water table +
+# (gated on the dep).: GroundwaterDupuitPercolator water table +
 # seepage + baseflow (mass-conservation V&V) and storm-driven recession.
 # ===========================================================================
 @_REQUIRES_LANDLAB

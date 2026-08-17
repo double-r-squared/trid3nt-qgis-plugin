@@ -1,6 +1,6 @@
 """Offline unit tests: ARTEMIS REAL surveyed-structure path (no solve, no network).
 
-The real-marina demo (ADR 0237) meshes an ACTUAL breakwater as a thin solid
+The real-marina demo meshes an ACTUAL breakwater as a thin solid
 barrier: OSM man_made=breakwater/pier polylines [[lon,lat],...] are projected to
 the mesh's LOCAL UTM frame (AOI SW-corner origin subtracted, matching the node
 coordinates), and a proof-norm-#9 REMOVED control keeps the same bathy but drops
@@ -68,7 +68,7 @@ def test_config_accepts_real_structure_fields():
 
 
 def test_entrypoint_strict_field_gate_allows_real_structure(tmp_path):
-    # the strict-field manifest gate (ADR 0158/0148) must ACCEPT the two new keys
+    # the strict-field manifest gate must ACCEPT the two new keys
     # (else a live real-structure run silently no-ops them).
     cfg = E._artemis_config(tmp_path, {
         "wave_mode": "diffraction", "bathy_source": "noaa_greatlakes",
@@ -87,12 +87,12 @@ def test_entrypoint_strict_field_gate_still_rejects_unknown(tmp_path):
 
 def test_parser_version_bumped_for_real_structure():
     # the image-provenance marker MUST move on a worker-output-contract change too
-    # (ADR 0148); -3 adds the in-worker lake-datum bed COG (ADR 0244 S3).
+    #; -3 adds the in-worker lake-datum bed COG (S3).
     assert E._ARTEMIS_PARSER_VERSION == "artemis-agitation-3"
 
 
 # ---------------------------------------------------------------------------
-# Slit-connectivity invariant (ADR 0237 amendment). NATE flagged "agitation
+# Slit-connectivity invariant (amendment). NATE flagged "agitation
 # moving through the breakwater" on the Cinder Pond pair; the diagnosis found it
 # was a RENDER-LIE (scipy.griddata bridged the mesh slit), NOT a solution leak:
 # the solid-barrier mask (0.6*dx wide) genuinely DISCONNECTS the mesh across the

@@ -1,6 +1,6 @@
 """MODFLOW 6 solver-worker entrypoint — thin shim around the `mf6` binary.
 
-Sprint-13 / MOD-1 / / FR-CE-1/2/3. The MODFLOW-6 analogue of
+The MODFLOW-6 analogue of
 workers/sfincs/entrypoint.py. Same OBJECT-STORE-IN -> RUN ->
 OBJECT-STORE-OUT envelope; SCHEME-AWARE like the SFINCS shim (``s3://`` via
 boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage
@@ -315,7 +315,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="trid3nt-modflow-entrypoint",
-        description="MODFLOW 6 Cloud Run Job entrypoint (FR-CE-1/2/3).",
+        description="MODFLOW 6 Cloud Run Job entrypoint.",
     )
     p.add_argument(
         "--run-id",

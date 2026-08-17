@@ -9,7 +9,7 @@ turn-complete) to exercise ``trid3nt_client.AgentClient`` end to end.
 Milestone 2 additions:
 
 * a user-message whose text contains ``"simulate"`` pauses behind a
-  ``tool-payload-warning`` (granularity + time_scale enrichments, job-0127 /
+  ``tool-payload-warning`` (granularity + time_scale enrichments,
   #154 shapes) and only proceeds when the matching
   ``tool-payload-confirmation`` arrives (decision recorded; cancel ->
   cancelled turn-complete). ``"simulate-hardcap"`` emits the hard-cap variant
@@ -30,7 +30,7 @@ Milestone 3 additions:
   live agent rejects a dead token: an ``error`` envelope with
   ``error_code=AUTH_REQUIRED`` then a 1008 (policy violation) close.
 
-Structured-AOI additions (ADR 0017 mechanism 2, 2026-07-22):
+Structured-AOI additions (mechanism 2, 2026-07-22):
 
 * every ``user-message`` payload is validated the way the live server's
   ``UserMessagePayload`` (``extra="forbid"``) would: unknown keys or a
@@ -59,8 +59,8 @@ STUB_CASE_ID = "01STUBCASEAAAAAAAAAAAAAAAA"
 
 #: The exact ``UserMessagePayload`` field surface (contracts ws.py). The live
 #: server is ``extra="forbid"`` -- any other key is a 400 there, so the stub
-#: rejects it too (ADR 0017 structured-AOI landing; ``tool_choice_mode`` is
-#: the ADR 0018 auto/ask carrier).
+#: rejects it too (structured-AOI landing; ``tool_choice_mode`` is
+#: the auto/ask carrier).
 USER_MESSAGE_ALLOWED_KEYS = frozenset(
     {
         "text",
@@ -143,7 +143,7 @@ LEGACY_RASTER_LAYER_ROW: dict[str, Any] = {
     "opacity": 0.8,
 }
 
-# A vector row with the additive inline_geojson merge (job-0175 shape).
+# A vector row with the additive inline_geojson merge (shape).
 VECTOR_LAYER_ROW: dict[str, Any] = {
     "layer_id": "01STUBVECTORAAAAAAAAAAAAAA",
     "name": "Buildings",
@@ -259,7 +259,7 @@ CODE_EXEC_REQUEST_ROW: dict[str, Any] = {
 STUB_TOOL_CANDIDATES_REQUEST_ID = "01STUBTOOLPICKAAAAAAAAAAAA"
 
 # A tool-candidates payload field-for-field the ToolCandidatesPayload contract
-# (contracts ws.py, ADR 0018 auto/ask modes). Candidates arrive ranked
+# (contracts ws.py, auto/ask modes). Candidates arrive ranked
 # best-first; ``reason`` is the closed enum ("ambiguity" = AUTO-mode measured
 # near-tie / "ask_mode" = the user's ASK mode surfacing every staged
 # selection); ``timeout_s`` is the SERVER's fail-open window -- unanswered,
@@ -505,19 +505,19 @@ class StubAgentServer:
         self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
         self.secret_adds: list[dict] = []  # secret-add payloads (LANE K)
         self.credential_replies: list[dict] = []  # credential-provided payloads
-        self.tool_choices: list[dict] = []  # tool-choice payloads (ADR 0018)
+        self.tool_choices: list[dict] = []  # tool-choice payloads
         #: region-choice-provided payloads (LANE A region-choice gate-WAIT).
         self.region_choices: list[dict] = []
         #: spatial-input-response payloads (LANE A spatial-input gate-WAIT).
         self.spatial_inputs: list[dict] = []
-        #: ADR 0018 auto/ask carrier: every ``tool_choice_mode`` value PRESENT
+        #: auto/ask carrier: every ``tool_choice_mode`` value PRESENT
         #: on a user-message payload (omitted keys are not recorded -- the
         #: default-auto send stays byte-identical, mirroring aoi_bbox).
         self.user_message_tool_choice_modes: list = []
         self.selects: list[Optional[str]] = []  # case-command select case_ids
-        #: ADR 0114 !run: every dev-tool-invoke payload received.
+        #: !run: every dev-tool-invoke payload received.
         self.dev_tool_invokes: list[dict] = []
-        #: ADR 0017 structured AOI: every ``aoi_bbox`` value PRESENT on a
+        #: structured AOI: every ``aoi_bbox`` value PRESENT on a
         #: user-message payload (omitted keys are not recorded).
         self.user_message_aoi_bboxes: list = []
         #: user-message contract violations (unknown key / malformed
@@ -681,7 +681,7 @@ class StubAgentServer:
             elif etype == "user-message":
                 case_id = env.get("case_id")
                 payload = env.get("payload") or {}
-                # ADR 0017 structured-AOI contract gate: mimic the live
+                # structured-AOI contract gate: mimic the live
                 # server's extra="forbid" UserMessagePayload validation so a
                 # plugin regression fails LOUDLY offline (error envelope, NO
                 # turn-complete) instead of 400ing against the live agent.
@@ -784,7 +784,7 @@ class StubAgentServer:
                     await send("turn-complete", {}, case_id=case_id)
                     continue
                 if "which-tool-timeout" in text:
-                    # ADR 0018 fail-open twin: the live server emits the
+                    # fail-open twin: the live server emits the
                     # picker, waits timeout_s WITHOUT a tool-choice, then
                     # proceeds with its own top pick. Simulated with zero
                     # wait: the request goes out and the turn IMMEDIATELY
@@ -829,7 +829,7 @@ class StubAgentServer:
                     await send("turn-complete", {}, case_id=case_id)
                     continue
                 if "which-tool" in text:
-                    # ADR 0018 picker pause: the agent surfaces the ranked
+                    # picker pause: the agent surfaces the ranked
                     # candidates and BLOCKS until the tool-choice reply
                     # arrives -- handled in the tool-choice branch below.
                     # (The live server's timeout_s fail-open is not simulated
@@ -925,7 +925,7 @@ class StubAgentServer:
                 )
                 await send("turn-complete", {}, case_id=case_id)
             elif etype == "dev-tool-invoke":
-                # !run direct tool invocation (ADR 0114): the live server runs
+                # !run direct tool invocation: the live server runs
                 # the named registry closure OUTSIDE the LLM loop and the result
                 # rides the SAME tool-io + pipeline-state + session-state +
                 # turn-complete frames a model call produces. Mirror that here
@@ -1010,7 +1010,7 @@ class StubAgentServer:
                     # the live server FAIL-CLOSES anything != "proceed").
                     if decision == "proceed":
                         # LANE A (2026-07-23): the run OUTCOME rides an
-                        # ADDITIONAL code-exec-result envelope (job-0233), IN
+                        # ADDITIONAL code-exec-result envelope, IN
                         # ADDITION to the narration -- the dock folds it into
                         # the approved card's chip.
                         await send(
@@ -1061,7 +1061,7 @@ class StubAgentServer:
 
             elif etype == "secret-add":
                 # LANE K (contract SecretAddEnvelopePayload): the ONLY
-                # envelope that ever carries the raw key (Decision F). The
+                # envelope that ever carries the raw key. The
                 # live server vault-writes key_value and answers with a
                 # refreshed secrets-list whose SecretRecord rows carry
                 # vault_ref, NEVER the raw value -- mirrored here so a
@@ -1123,7 +1123,7 @@ class StubAgentServer:
                     )
                     await send("turn-complete", {}, case_id=gate_case)
             elif etype == "tool-choice":
-                # ADR 0018 (contract ToolChoicePayload): the picker reply --
+                # (contract ToolChoicePayload): the picker reply
                 # request_id echo + exactly one of three shapes. The live
                 # server resumes its paused selection with the verbatim pick,
                 # feeds free text back into the selection step, or proceeds

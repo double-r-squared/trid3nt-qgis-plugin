@@ -14,7 +14,7 @@ This is the single entry point the SFINCS worker entrypoints call after the solv
   5. assembles the typed :mod:`manifest` dict (status + peak metrics + layers),
   6. applies the EMPTY-FIELD HONESTY GATE (flooded_cell_count==0 -> status=error
      with the typed code) so the agent never registers a status=ok-but-empty
-     layer (Invariant 1 / FR-AS-7).
+     layer (Invariant 1).
 
 The orchestrator never imports cht_sfincs and never imports agent code. It does
 NOT itself upload (the entrypoint owns the bucket/scheme/run-id + the sweep) nor
