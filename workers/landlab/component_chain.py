@@ -1202,9 +1202,6 @@ def _run_landslide_storm_ensemble(
 # overland_flow_timeseries: the de Almeida OverlandFlow chain sampled at N
 # intervals so depth is written frame by frame (time-stepped animation output).
 # --------------------------------------------------------------------------- #
-#: Upper bound on time-step depth snapshots written by the worker (the composer
-#: subsamples again to the animation frame cap; this bounds worker COG count).
-_MAX_TIMESERIES_SNAPSHOTS: int = 48
 
 
 def _run_overland_flow_timeseries(
@@ -1213,7 +1210,7 @@ def _run_overland_flow_timeseries(
     """The de Almeida OverlandFlow chain writing depth at N intervals.
 
     Steps OverlandFlow over the storm while snapshotting ``surface_water__depth``
-    every ``output_interval_s`` (subsampled to ``_MAX_TIMESERIES_SNAPSHOTS``). The
+    every ``output_interval_s`` (honored EXACTLY -- never-omit, ADR 0282). The
     primary field is the PEAK depth; each snapshot is a secondary field
     ``depth_step_NN`` the composer publishes as an animation frame; the
     depth-vs-time series at the max-depth cell drives the hydrograph chart.
@@ -1243,10 +1240,16 @@ def _run_overland_flow_timeseries(
     duration_hr = float(spec.get("storm_duration_hr", 2.0))
     rain_ms = intensity_mm_hr / 1000.0 / 3600.0
     duration_s = duration_hr * 3600.0
+    # NEVER-OMIT (ADR 0282): honor ``output_interval_s`` EXACTLY -- the old
+    # ``max(interval_s, duration_s/48)`` interval FLOOR that silently coarsened a
+    # fine cadence is retired. Cadence is the SOLE deck-side frame-count control;
+    # the emit-on-solve seam publishes every snapshot (no post-hoc thinning). The
+    # universal cadence name ``output_interval_min`` maps as
+    # ``output_interval_s = output_interval_min * 60`` (0281 aliasing precedent --
+    # documented, not double-threaded: ``output_interval_s`` stays the native
+    # lever the composer already wires). Runs exec-from-source, so this takes
+    # effect immediately (no worker-image rebuild).
     interval_s = float(spec.get("output_interval_s", 300.0))
-    # Bound the snapshot count: never finer than duration/_MAX so a long storm
-    # cannot balloon the frame count.
-    interval_s = max(interval_s, duration_s / float(_MAX_TIMESERIES_SNAPSHOTS))
 
     of = OverlandFlow(grid, steep_slopes=True)
 

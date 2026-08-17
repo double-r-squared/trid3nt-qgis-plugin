@@ -264,14 +264,20 @@ def _install_pyswmm_free_chain(monkeypatch, *, solve_fn=None, n_buildings_droppe
     )
     frames = [
         _depth_layer(
-            f"swmm-depth-frame-{i:02d}-RID", f"Flood depth step {i}",
+            f"flood-depth-frame-{i:02d}-RID", f"Flood depth step {i}",
             f"s3://runs/RID/swmm_depth_frame_{i:02d}.tif", "context",
         )
         for i in range(1, 4)
     ]
+    # ADR 0282: postprocess_swmm returns ONLY the peak + writes the frames to
+    # outputs.json; the composer's seam fork reads them back via
+    # _read_swmm_frame_layers. Stub that round-trip to the synthetic frames.
     monkeypatch.setattr(
         M, "postprocess_swmm",
-        lambda *a, **k: ([peak] + frames, {"max_depth_m": 1.25}),
+        lambda *a, **k: ([peak], {"max_depth_m": 1.25}),
+    )
+    monkeypatch.setattr(
+        M, "_read_swmm_frame_layers", lambda run_id, bbox: list(frames),
     )
     # No scratch dir to clean (stubbed inp path); make cleanup a no-op.
     monkeypatch.setattr(M, "_cleanup_deck_dir", lambda d: None)

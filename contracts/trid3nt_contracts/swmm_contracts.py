@@ -339,6 +339,15 @@ class SWMMRunArgs(EngineRunArgsMixin):
     target_resolution_m: float = Field(default=DEFAULT_TARGET_RESOLUTION_M, gt=0.0)
     manning_overland: float = Field(default=DEFAULT_MANNING_OVERLAND, gt=0.0)
 
+    # Universal emit-on-solve cadence lever (ADR 0282). The OUTPUT reporting
+    # cadence -- how often SWMM writes a depth snapshot -> the animation frame
+    # count (deck-side REPORT_STEP, interval-shaped so ``output_interval_min``
+    # maps DIRECTLY). ``None`` (default) keeps the legacy 5-min REPORT_STEP
+    # (byte-identical). Distinct from ``rain_interval_min`` (the hyetograph
+    # forcing timestep). This is the SOLE frame-count control -- there is NO
+    # post-hoc frame thinning (the seam publishes every reported step).
+    output_interval_min: float | None = Field(default=None, gt=0.0)
+
     # Mass-balance honesty gate (cross-check improvement). Continuity error
     # above this fraction -> typed SWMM_MASS_BALANCE_EXCEEDED, not a wrong layer.
     mass_balance_tolerance_pct: float = Field(default=5.0, gt=0.0, le=100.0)

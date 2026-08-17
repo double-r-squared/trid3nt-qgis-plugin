@@ -38,6 +38,10 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
+from trid3nt_server.emission.outputs_seam import (
+    build_layers_from_outputs,
+    read_outputs_manifest,
+)
 from trid3nt_server.workflows.landlab._composer_common import (
     LANDLAB_RES_SPEC,
     cleanup_solve,
@@ -368,7 +372,6 @@ async def model_landlab_overland_flow_timeseries(
         )
 
     raw_primary = layers[0]
-    frame_layers = layers[1:]
 
     async with substep(current_emitter(), "publish_layer"):
         primary = await asyncio.to_thread(
@@ -385,9 +388,20 @@ async def model_landlab_overland_flow_timeseries(
     if _upd:
         primary = primary.model_copy(update=_upd)
 
-    # --- Per-interval animation frames (center-scrubber temporal group) ---
+    # --- Per-interval animation frames (EMIT-ON-SOLVE SEAM, ADR 0282) ---------
+    # postprocess_landlab_overland_timeseries wrote the peak + EVERY snapshot's
+    # depth COG to outputs.json host-side. The SEAM owns the TEMPORAL FRAMES
+    # (frames_only=True -> it skips the peak entry; the typed peak above stays the
+    # composer-built return). Each frame is published through the render chokepoint
+    # + emitted as a center-scrubber temporal group (the "Overland depth step N"
+    # name token rides through). Absent/unreadable outputs.json -> no frames (an
+    # honest peak-only degrade). No worker-image staleness -- the writer runs
+    # agent-side (exec-from-source worker + host postprocess).
     if emitter is not None:
-        for frame in frame_layers:
+        seam_frames = await asyncio.to_thread(
+            _read_overland_frame_layers, solve.run_id, tuple(solve.bbox)
+        )
+        for frame in seam_frames:
             pub = await asyncio.to_thread(
                 publish_raster_layer, frame, default_style=OVERLAND_STYLE_PRESET
             )
@@ -408,3 +422,31 @@ async def model_landlab_overland_flow_timeseries(
     )
     await emit_zoom_to(emitter, solve.bbox)
     return primary
+
+
+def _read_overland_frame_layers(
+    run_id: str, bbox: tuple[float, float, float, float]
+) -> list[Any]:
+    """Read ``outputs.json`` -> the SEAM's overland-depth frame layers (frames-only).
+
+    The emit-on-solve fork (ADR 0282): the postprocess wrote the peak + every
+    snapshot's depth COG to ``outputs.json`` host-side. This builds the CONTEXT
+    frame layers via ``build_layers_from_outputs`` with ``frames_only=True`` (the
+    peak entry is skipped -- the composer keeps its own typed peak). Returns
+    ``[]`` on an absent / unreadable / unknown-schema manifest (an honest
+    peak-only degrade) -- never raises.
+    """
+    import types as _types
+
+    manifest = read_outputs_manifest(_types.SimpleNamespace(run_id=run_id))
+    if manifest is None:
+        logger.info(
+            "model_landlab_overland_flow_timeseries: no outputs.json for "
+            "run_id=%s -- peak-only (no animation frames).",
+            run_id,
+        )
+        return []
+    seam = build_layers_from_outputs(
+        manifest, run_id=run_id, bbox=tuple(bbox), frames_only=True
+    )
+    return [lyr for lyr in seam.layers if lyr.role == "context"]

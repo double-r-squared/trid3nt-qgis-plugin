@@ -83,6 +83,7 @@ __all__ = [
     "compute_landlab_metrics",
     "LANDSLIDE_STYLE_PRESET",
     "OVERLAND_STYLE_PRESET",
+    "OVERLAND_QUANTITY",
     "DRAINAGE_AREA_STYLE_PRESET",
     "INFILTRATION_STYLE_PRESET",
     "RUNOFF_STYLE_PRESET",
@@ -1289,6 +1290,13 @@ def build_overland_hydrograph_chart_spec(
     }
 
 
+#: The physical quantity the emit-on-solve seam keys styling + grouping on for
+#: the overland-flow animation. It is a DEPTH field, so it shares the SFINCS/SWMM
+#: ``flood_depth`` family (the seam resolves it to ``continuous_flood_depth`` --
+#: byte-identical to ``OVERLAND_STYLE_PRESET``). ADR 0282.
+OVERLAND_QUANTITY: str = "flood_depth"
+
+
 def postprocess_landlab_overland_timeseries(
     field_cog_path: str | Path,
     *,
@@ -1297,19 +1305,22 @@ def postprocess_landlab_overland_timeseries(
     frame_cogs_by_token: dict[str, str] | None = None,
     runs_bucket: str | None = None,
 ) -> tuple[list[LayerURI], dict[str, Any]]:
-    """Reproject the peak-depth COG + emit the peak layer + per-frame animation layers.
+    """Reproject the peak-depth COG + write the per-frame animation to outputs.json.
 
     ``frame_cogs_by_token`` maps ``depth_step_NN`` -> local COG path (the composer
-    downloads them alongside the peak field). Each frame is reprojected to 4326,
-    uploaded, and emitted as a time-stepped animation LayerURI carrying the web
-    scrubber ``step N`` naming. Returns ``(layers, metrics)`` where ``layers[0]``
-    is the peak-depth primary and ``layers[1:]`` the ordered frames.
+    downloads them alongside the peak field, produced by the exec-from-source
+    OverlandFlow worker). Each frame is reprojected to 4326, uploaded, and
+    recorded as an ``outputs.json`` entry carrying its physical ``t`` = the
+    worker's REAL snapshot elapsed seconds (from ``result.max_cell_series``); the
+    emit-on-solve seam builds the temporal group from it (ADR 0282, OPTION a --
+    the seam owns the frames; this postprocess keeps the typed peak). Returns
+    ``(layers, metrics)`` where ``layers == [peak]`` -- the frames are NO LONGER
+    returned as layers (they live in ``outputs.json``, NEVER-OMIT: every snapshot
+    the worker wrote is published, no post-hoc thinning).
     """
     import numpy as np
 
     from trid3nt_server.workflows.shared.frames import (
-        frame_dest_filename,
-        frame_layer_id,
         frame_name,
         peak_layer_id,
         peak_layer_name,
@@ -1343,8 +1354,11 @@ def postprocess_landlab_overland_timeseries(
     stem = "landlab-overland-depth"
     quantity_label = "Overland depth"
 
-    # --- Per-frame animation layers (ordered by the depth_step token index) ---
-    frame_layers: list[LayerURI] = []
+    # --- Per-frame COGs -> outputs.json entries (ordered by depth_step token) ---
+    # Each snapshot's physical t = the worker's real elapsed seconds
+    # (result.max_cell_series[i].time_s -- one entry per snapshot, same order);
+    # ordinal fallback keeps t distinct + monotonic when the series is absent.
+    frame_entries: list[dict[str, Any]] = []
     tokens = sorted((frame_cogs_by_token or {}).keys())
     frame_no = 0
     for tok in tokens:
@@ -1362,22 +1376,37 @@ def postprocess_landlab_overland_timeseries(
                 dst_frame,
                 run_id,
                 runs_bucket,
-                dest_filename=frame_dest_filename(stem.replace("-", "_"), frame_no),
+                dest_filename=f"{stem.replace('-', '_')}_frame_{frame_no:02d}.tif",
             )
         finally:
             _safe_unlink(dst_frame)
-        frame_layers.append(
-            LayerURI(
-                layer_id=frame_layer_id(stem, frame_no, run_id),
+        t_s = _overland_frame_t(series, frame_no)
+        frame_entries.append(
+            _build_overland_entry(
                 name=frame_name(frame_no, quantity_label),
-                layer_type="raster",
                 uri=frame_uri,
-                style_preset=OVERLAND_STYLE_PRESET,
-                role="context",
-                units="meters",
+                t=t_s,
                 bbox=bbox,
             )
         )
+
+    # A single frame can never form a web scrubber group; drop a lone frame.
+    n_frames = len(frame_entries) if len(frame_entries) >= 2 else 0
+    if n_frames == 0:
+        frame_entries = []
+
+    # Peak entry rides outputs.json for completeness (a whole-run record) but the
+    # composer keeps its own typed peak (frames_only=True -> the seam skips it).
+    entries: list[dict[str, Any]] = [
+        _build_overland_entry(
+            name=peak_layer_name(quantity_label),
+            uri=peak_uri,
+            t=None,
+            bbox=bbox,
+        ),
+        *frame_entries,
+    ]
+    _write_landlab_outputs_manifest(entries, run_id=run_id, runs_bucket=runs_bucket)
 
     primary = LandlabOverlandTimeseriesLayerURI(
         layer_id=peak_layer_id(stem, run_id),
@@ -1390,30 +1419,95 @@ def postprocess_landlab_overland_timeseries(
         bbox=bbox,
         wet_area_fraction=wet_frac,
         max_depth_m=max_depth,
-        n_frames=len(frame_layers),
+        n_frames=n_frames,
         time_to_peak_s=time_to_peak,
     )
-    # A single frame can never form a web scrubber group; drop a lone frame.
-    if len(frame_layers) < 2:
-        frame_layers = []
-        primary = primary.model_copy(update={"n_frames": 0})
 
-    layers: list[LayerURI] = [primary, *frame_layers]
+    layers: list[LayerURI] = [primary]
     metrics = {
         "analysis": "overland_flow_timeseries",
         "crs": "EPSG:4326",
         "wet_area_fraction": wet_frac,
         "max_depth_m": max_depth,
         "time_to_peak_s": time_to_peak,
-        "n_frames": len(frame_layers),
+        "n_frames": n_frames,
         "max_cell_series": series,
     }
     logger.info(
         "postprocess_landlab_overland_timeseries run_id=%s max_depth=%.4f m "
         "frames=%d uri=%s",
-        run_id, max_depth, len(frame_layers), peak_uri,
+        run_id, max_depth, n_frames, peak_uri,
     )
     return layers, metrics
+
+
+def _overland_frame_t(series: list[dict[str, Any]], frame_no: int) -> float:
+    """Physical ``t`` (elapsed seconds) for overland frame ``frame_no`` (1-based).
+
+    The worker writes one ``max_cell_series`` entry per snapshot, same order as the
+    ``depth_step_NN`` tokens, so ``series[frame_no-1].time_s`` is that snapshot's
+    real elapsed time. Ordinal fallback (``frame_no-1``) keeps ``t`` distinct +
+    monotonic so the seam orders frames correctly when the series is absent.
+    """
+    idx = frame_no - 1
+    if 0 <= idx < len(series):
+        try:
+            return float(series[idx].get("time_s"))
+        except (TypeError, ValueError):
+            pass
+    return float(idx)
+
+
+def _build_overland_entry(
+    *,
+    name: str,
+    uri: str,
+    t: float | None,
+    bbox: tuple[float, float, float, float] | None,
+) -> dict[str, Any]:
+    """One ``outputs.json`` entry for an overland depth COG (quantity flood_depth).
+
+    ``band_stats`` is OMITTED (``flood_depth`` is a REGISTERED seam quantity ->
+    ``continuous_flood_depth``, so the seam never consults band stats and
+    byte-equivalence holds without it -- ADR 0282). ``bbox`` is carried for the
+    seam's zoom-to.
+    """
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    return build_entry(
+        kind="raster",
+        quantity=OVERLAND_QUANTITY,
+        name=name,
+        uri=uri,
+        t=t,
+        units="meters",
+        bbox=list(bbox) if bbox else None,
+    )
+
+
+def _write_landlab_outputs_manifest(
+    entries: list[dict[str, Any]],
+    *,
+    run_id: str,
+    runs_bucket: str | None,
+) -> None:
+    """Best-effort host-side write of ``outputs.json`` under the run prefix."""
+    try:
+        from trid3nt_server.workflows.shared.outputs_manifest_io import (
+            write_outputs_manifest,
+        )
+
+        write_outputs_manifest(
+            run_id=run_id, engine="landlab", entries=entries, runs_bucket=runs_bucket
+        )
+    except Exception as exc:  # noqa: BLE001 -- never sink the run on a manifest miss
+        logger.warning(
+            "postprocess_landlab_overland_timeseries: outputs.json write failed "
+            "run_id=%s (%s: %s) -- the seam falls back to peak-only.",
+            run_id,
+            type(exc).__name__,
+            exc,
+        )
 
 
 # --------------------------------------------------------------------------- #

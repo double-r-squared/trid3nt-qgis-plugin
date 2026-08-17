@@ -292,6 +292,19 @@ async def model_swmm_dual_drainage(
     async with substep(emitter, "publish_layer"):
         peak = await asyncio.to_thread(_publish_peak_layer, raw_peak, rid)
 
+    # --- emit-on-solve seam frames (ADR 0282): the depth animation group -------
+    # postprocess_swmm wrote the peak + every per-frame depth COG to outputs.json
+    # host-side; the seam (frames_only) builds the CONTEXT frame layers (the peak
+    # stays the composer-built typed layer). Absent outputs.json -> no frames (an
+    # honest peak-only degrade). Reuses the urban_flood publish+emit chokepoint.
+    from trid3nt_server.workflows.swmm.urban_flood.urban_flood import (
+        _emit_frame_layers,
+        _read_swmm_frame_layers,
+    )
+
+    _dd_frames = await asyncio.to_thread(_read_swmm_frame_layers, rid, bbox)
+    await _emit_frame_layers(emitter, _dd_frames, rid)
+
     resp = read_network_response(
         run.rpt_path, node_filter=set(dd.pipe_node_coords),
         conduit_filter={e[0] for e in dd.pipe_conduit_endpoints},

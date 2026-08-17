@@ -13,14 +13,14 @@ UNCHANGED:
     :class:`~trid3nt_contracts.swmm_contracts.SWMMDepthLayerURI` carrying the
     three narration scalars (``max_depth_m`` / ``flooded_area_km2`` /
     ``n_buildings_affected``) + the tagged barrier geometry echoed back.
-  - ``layers[1:]`` = up to ``MAX_FLOOD_FRAMES`` per-timestep depth COGs, role
-    ``"context"``, names ``"Flood depth step N"`` (N = 1..k, contiguous,
-    1-based) — the EXACT web ``parseFrameToken`` / ``detectSequentialGroups``
-    token so the LayerPanel collapses them into one bottom-center-scrubber
-    temporal group. Each frame lands at a DISTINCT runs-bucket key so its
-    TiTiler ``url=`` (hence ``_layer_identity_key``) is unique (no dedup
-    collapse). The frames are also ``SWMMDepthLayerURI`` (the depth scalars on a
-    frame describe THAT frame; the agent narrates from ``layers[0]``).
+  - the EMIT-ON-SOLVE FRAMES (ADR 0282): EVERY reporting step's depth COG is
+    written and recorded in ``outputs.json`` under the run prefix (never-omit --
+    cadence resolves DECK-SIDE via ``REPORT_STEP`` <- ``output_interval_min``,
+    there is no post-hoc thinning). Names ``"Flood depth step N"`` (N = 1..k,
+    contiguous) are the EXACT web ``detectSequentialGroups`` token; each frame
+    lands at a DISTINCT runs-bucket key. The emit-on-solve SEAM (``frames_only``)
+    builds the temporal group from ``outputs.json``; the composer keeps the typed
+    peak (OPTION a). ``postprocess_swmm`` therefore returns ``[peak]`` only.
 
 This is the SWMM analogue of ``postprocess_flood`` (SFINCS) and
 ``postprocess_modflow`` (MF6-GWT). The defining difference: SWMM emits
@@ -35,8 +35,7 @@ georegistration need. No builder change is required.
 Reuse (do NOT reinvent): the COG-write + CRS round-trip guard pattern from
 ``postprocess_flood._write_verified_cog`` (adapted for a projected-metres grid
 reprojected to EPSG:4326, like ``postprocess_modflow._write_reprojected_cog``,
-since the MapLibre basemap is web-mercator/4326), the even-subsample frame
-selector ``_select_frame_time_indices`` (MAX_FLOOD_FRAMES=24), the
+since the MapLibre basemap is web-mercator/4326), the
 ``NODATA_DEPTH_M=0.05`` wet threshold, and the
 ``continuous_flood_depth`` style preset. The honesty floor (Invariant 1):
 the depth scalars are computed with plain arithmetic from the depth
@@ -65,10 +64,11 @@ from trid3nt_server.workflows.shared.cog_io import (
     NODATA_DEPTH_M,
     RUNS_BUCKET_DEFAULT,
 )
-from trid3nt_server.workflows.shared.frames import (
-    MAX_FLOOD_FRAMES,
-    _select_frame_time_indices,
-)
+
+#: The physical quantity the emit-on-solve seam keys styling + grouping on. SWMM
+#: overland depth shares the SFINCS/GeoClaw ``flood_depth`` family (the seam
+#: resolves it to ``continuous_flood_depth`` -- ADR 0282).
+SWMM_DEPTH_QUANTITY: str = "flood_depth"
 
 __all__ = [
     "PostprocessSWMMError",
@@ -83,8 +83,8 @@ __all__ = [
     "read_runoff_quality_built_washed",
     "CONCENTRATION_STYLE_PRESET",
     "FLOOD_DEPTH_STYLE_PRESET",
+    "SWMM_DEPTH_QUANTITY",
     "NODATA_DEPTH_M",
-    "MAX_FLOOD_FRAMES",
     "RUNS_BUCKET_DEFAULT",
 ]
 
@@ -422,16 +422,18 @@ def _count_buildings_affected(
 # --------------------------------------------------------------------------- #
 def _read_node_depth_snapshots(
     out_path: str, grid_shape: tuple[int, int]
-) -> tuple[list[Any], int]:
+) -> tuple[list[Any], int, list[float]]:
     """Read every reporting timestep's node ``INVERT_DEPTH`` as a scattered grid.
 
-    Returns ``(grids, n_steps)`` where ``grids`` is a list of ``(H, W)`` numpy
-    arrays (one per reporting step, time-ascending; dropped/sub-threshold cells =
-    NaN). Uses the pyswmm ``Output`` binary API: ``node_attribute(INVERT_DEPTH,
-    t)`` returns ``{node_name: depth_m}`` for ALL nodes at step ``t``, which we
-    scatter via :func:`scatter_node_depths_to_grid`. Raises a typed
-    ``PostprocessSWMMError`` on a missing dependency / read failure / empty
-    output.
+    Returns ``(grids, n_steps, times_s)`` where ``grids`` is a list of ``(H, W)``
+    numpy arrays (one per reporting step, time-ascending; dropped/sub-threshold
+    cells = NaN) and ``times_s`` is the per-step ELAPSED SECONDS from the run
+    start (``(out.times[i] - out.times[0]).total_seconds()``) -- the physical
+    ``t`` each ``outputs.json`` frame entry carries (ADR 0282). Uses the pyswmm
+    ``Output`` binary API: ``node_attribute(INVERT_DEPTH, t)`` returns
+    ``{node_name: depth_m}`` for ALL nodes at step ``t``, which we scatter via
+    :func:`scatter_node_depths_to_grid`. Raises a typed ``PostprocessSWMMError``
+    on a missing dependency / read failure / empty output.
     """
     try:
         from pyswmm import Output
@@ -451,6 +453,7 @@ def _read_node_depth_snapshots(
         )
 
     grids: list[Any] = []
+    times_s: list[float] = []
     try:
         with Output(out_path) as out:
             times = out.times  # property: list of datetimes, one per report step
@@ -465,9 +468,11 @@ def _read_node_depth_snapshots(
                     ),
                     details={"out_path": out_path},
                 )
+            t0 = times[0]
             for t in range(n_steps):
                 depth_by_node = out.node_attribute(NodeAttribute.INVERT_DEPTH, t)
                 grids.append(scatter_node_depths_to_grid(depth_by_node, grid_shape))
+                times_s.append(float((times[t] - t0).total_seconds()))
     except PostprocessSWMMError:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -477,7 +482,7 @@ def _read_node_depth_snapshots(
             details={"out_path": out_path},
         ) from exc
 
-    return grids, n_steps
+    return grids, n_steps, times_s
 
 
 def _peak_grid_from_snapshots(grids: list[Any]) -> Any:
@@ -613,16 +618,15 @@ def postprocess_swmm(
     runs_bucket: str | None = None,
     building_footprints: Any = None,
 ) -> tuple[list[SWMMDepthLayerURI], dict[str, Any]]:
-    """Rasterize a solved SWMM run into a peak + per-frame depth-COG layer set.
+    """Rasterize a solved SWMM run into a peak layer + an outputs.json frame stream.
 
     Reads the per-timestep node ``INVERT_DEPTH`` from ``run.out_path`` (the
     pyswmm ``Output`` binary API), scatters each storage node's depth onto the
     mesh-cell grid the deck was built from (``build.grid_shape``; dropped/building
-    cells + sub-threshold cells -> NaN), writes the PEAK + up to
-    ``MAX_FLOOD_FRAMES`` per-timestep depth COGs (reprojected to EPSG:4326),
-    uploads them, and returns the EXACT ``(layers, metrics)`` shape
-    ``postprocess_flood`` returns so the Phase-1 scrubber path consumes it
-    unchanged.
+    cells + sub-threshold cells -> NaN), writes the PEAK COG + EVERY per-frame
+    depth COG (reprojected to EPSG:4326, never-omit), records the peak + frames in
+    ``outputs.json`` host-side (the emit-on-solve seam builds the animation from
+    it), and returns ``([peak], metrics)`` (ADR 0282 -- the seam owns the frames).
 
     Args:
         run: a ``swmm_mesh_builder.RunResult`` (carries ``out_path`` +
@@ -640,14 +644,16 @@ def postprocess_swmm(
     Returns:
         ``(layers, metrics)``:
 
-        - ``layers[0]`` = the PEAK ``SWMMDepthLayerURI`` (role ``"primary"``,
-          name ``"Peak flood depth"``, style ``continuous_flood_depth``) carrying
-          ``max_depth_m`` / ``flooded_area_km2`` / ``n_buildings_affected`` + the
-          echoed barrier geometry.
-        - ``layers[1:]`` = up to ``MAX_FLOOD_FRAMES`` per-frame
-          ``SWMMDepthLayerURI`` (role ``"context"``, names ``"Flood depth step
-          N"``, distinct runs-bucket keys). Present only when the run has > 1
-          reporting timestep (else just the peak).
+        - ``layers`` = ``[peak]`` -- ONLY the PEAK ``SWMMDepthLayerURI`` (role
+          ``"primary"``, name ``"Peak flood depth"``, style
+          ``continuous_flood_depth``) carrying ``max_depth_m`` /
+          ``flooded_area_km2`` / ``n_buildings_affected`` + the echoed barrier
+          geometry. The per-frame animation is NO LONGER returned as layers: every
+          reporting step's depth COG is written and recorded in ``outputs.json``
+          under the run prefix (NEVER-OMIT), and the emit-on-solve seam builds the
+          temporal frame group from it (ADR 0282, OPTION a -- the seam owns the
+          frames, the composer keeps the typed peak). A 1-step run emits just the
+          peak (no group forms below 2 members).
         - ``metrics`` = the peak aggregates dict (``max_depth_m`` /
           ``mean_depth_m`` / ``p95_depth_m`` / ``flooded_cell_count`` /
           ``flooded_area_km2`` / ``n_buildings_affected`` / ``crs``) the workflow
@@ -666,8 +672,8 @@ def postprocess_swmm(
 
     grid_transform = _affine_from_build(build)
 
-    # --- read every reporting step's scattered node-depth grid ---
-    grids, n_steps = _read_node_depth_snapshots(out_path, grid_shape)
+    # --- read every reporting step's scattered node-depth grid + elapsed t ---
+    grids, n_steps, times_s = _read_node_depth_snapshots(out_path, grid_shape)
 
     # --- PEAK grid (max-total-depth step) + the narration scalars ---
     peak_grid = _peak_grid_from_snapshots(grids)
@@ -726,73 +732,134 @@ def postprocess_swmm(
         )
     ]
 
-    # --- per-frame layers (engine-agnostic flood animation, Phase 1) ---
-    # Only when the run has > 1 reporting step; a 1-frame group never forms on
-    # the web (needs >= 2 distinct members) so we emit just the peak otherwise.
+    # --- emit-on-solve: the peak + ALL per-frame COGs -> outputs.json (ADR 0282)
+    # The TYPED PEAK stays composer-built (layers[0], the tool return + narration
+    # scalars); the seam owns the TEMPORAL FRAMES ONLY. Every reporting step is
+    # written (NEVER-OMIT -- the 144-cap post-hoc thinning is gone; cadence
+    # resolves DECK-SIDE via REPORT_STEP <- output_interval_min). The peak entry
+    # rides outputs.json for completeness (a whole-run record) but the composer
+    # does NOT consume it (build_layers_from_outputs frames_only=True).
+    entries: list[dict[str, Any]] = [
+        _build_manifest_entry(
+            name="Peak flood depth",
+            uri=peak_uri,
+            t=None,
+            bbox=peak_bbox,
+        )
+    ]
+    # Only when the run has > 1 reporting step does an animation group form on
+    # the web (needs >= 2 distinct members); a 1-step run emits just the peak.
     if n_steps > 1:
-        frame_indices = _select_frame_time_indices(n_steps)
-        frame_layers = _emit_frame_layers(
+        frame_entries = _write_frame_cogs_and_entries(
             grids,
-            frame_indices,
+            times_s,
             run_id=run_id,
             runs_bucket=runs_bucket,
             grid_crs=grid_crs,
             grid_transform=grid_transform,
-            resolution_m=resolution_m,
-            barriers=barriers,
         )
-        # A lone styled frame can never group — drop a <2 frame set.
-        if len(frame_layers) >= 2:
-            layers.extend(frame_layers)
+        if len(frame_entries) >= 2:
+            entries.extend(frame_entries)
         else:
             logger.info(
-                "postprocess_swmm: < 2 frame layers (%d) — emitting peak only "
-                "(no animation group) for run_id=%s",
-                len(frame_layers),
+                "postprocess_swmm: < 2 frame COGs (%d) -- peak-only (no animation "
+                "group) for run_id=%s",
+                len(frame_entries),
                 run_id,
             )
 
-    if len(layers) > 1:
-        logger.info(
-            "postprocess_swmm: emitted peak layer + %d time-step frames "
-            "(animation group) for run_id=%s",
-            len(layers) - 1,
-            run_id,
-        )
+    # Write the manifest host-side (best-effort: a write miss degrades to
+    # peak-only, never sinks the run -- "failure retracts nothing").
+    _write_swmm_outputs_manifest(entries, run_id=run_id, runs_bucket=runs_bucket)
+
+    logger.info(
+        "postprocess_swmm: peak layer + %d outputs.json frame entries for run_id=%s",
+        max(len(entries) - 1, 0),
+        run_id,
+    )
     return layers, metrics
 
 
-def _emit_frame_layers(
+def _build_manifest_entry(
+    *,
+    name: str,
+    uri: str,
+    t: float | None,
+    bbox: tuple[float, float, float, float] | None,
+) -> dict[str, Any]:
+    """One ``outputs.json`` entry for a SWMM depth COG (``quantity=flood_depth``).
+
+    ``band_stats`` is deliberately OMITTED: ``flood_depth`` is a REGISTERED seam
+    quantity (``continuous_flood_depth`` -- the pinned ``0,3`` / ``ylgnbu``), so
+    the seam resolves style WITHOUT consulting band stats and byte-equivalence
+    holds without the field (ADR 0282). ``bbox`` is carried so the seam stamps
+    the per-frame zoom-to extent without a COG re-read.
+    """
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    return build_entry(
+        kind="raster",
+        quantity=SWMM_DEPTH_QUANTITY,
+        name=name,
+        uri=uri,
+        t=t,
+        units="meters",
+        bbox=list(bbox) if bbox else None,
+    )
+
+
+def _write_swmm_outputs_manifest(
+    entries: list[dict[str, Any]],
+    *,
+    run_id: str,
+    runs_bucket: str | None,
+) -> None:
+    """Best-effort host-side write of ``outputs.json`` under the run prefix."""
+    try:
+        from trid3nt_server.workflows.shared.outputs_manifest_io import (
+            write_outputs_manifest,
+        )
+
+        write_outputs_manifest(
+            run_id=run_id, engine="swmm", entries=entries, runs_bucket=runs_bucket
+        )
+    except Exception as exc:  # noqa: BLE001 -- never sink the run on a manifest miss
+        logger.warning(
+            "postprocess_swmm: outputs.json write failed run_id=%s (%s: %s) -- "
+            "the seam falls back to peak-only (no animation frames).",
+            run_id,
+            type(exc).__name__,
+            exc,
+        )
+
+
+def _write_frame_cogs_and_entries(
     grids: list[Any],
-    frame_indices: list[int],
+    times_s: list[float],
     *,
     run_id: str,
     runs_bucket: str | None,
     grid_crs: str,
     grid_transform: Any,
-    resolution_m: float,
-    barriers: dict | None,
-) -> list[SWMMDepthLayerURI]:
-    """Write + upload the per-frame depth COGs as contiguous ``step N`` layers.
+) -> list[dict[str, Any]]:
+    """Write + upload EVERY per-frame depth COG (never-omit) -> outputs.json entries.
 
-    A single corrupt frame must NOT sink the whole animation OR the peak layer:
-    on a frame write/upload failure we clean up the partial frames and return
-    ``[]`` (the caller degrades to peak-only) — better one good layer than a
-    broken group (the honesty stance from postprocess_flood).
+    Returns one entry per reporting step (``name="Flood depth step N"``,
+    ``quantity=flood_depth``, ``t`` = elapsed seconds from ``times_s``, per-frame
+    ``bbox``). A single corrupt frame must NOT sink the animation OR the peak: on
+    a write/upload failure the partial frames are cleaned up and ``[]`` is
+    returned (the caller degrades to peak-only) -- the honesty stance carried from
+    the register path.
     """
-    frame_layers: list[SWMMDepthLayerURI] = []
+    entries: list[dict[str, Any]] = []
     written_cogs: list[Path] = []
     try:
-        for frame_no, t_idx in enumerate(frame_indices, start=1):
-            grid_t = grids[t_idx]
+        for frame_no, grid_t in enumerate(grids, start=1):
             frame_cog = _write_depth_cog_4326(
                 grid_t, grid_crs=grid_crs, grid_transform=grid_transform
             )
             written_cogs.append(frame_cog)
             frame_bbox = _cog_bbox_4326(frame_cog)
-            frame_metrics = compute_swmm_depth_metrics(
-                grid_t, resolution_m=resolution_m
-            )
             frame_uri = _upload_cog_to_runs_bucket(
                 frame_cog,
                 run_id,
@@ -801,20 +868,13 @@ def _emit_frame_layers(
             )
             _safe_unlink(frame_cog)
             written_cogs.pop()  # uploaded + unlinked
-            frame_layers.append(
-                SWMMDepthLayerURI(
-                    layer_id=f"swmm-depth-frame-{frame_no:02d}-{run_id}",
+            t_val = float(times_s[frame_no - 1]) if frame_no - 1 < len(times_s) else float(frame_no - 1)
+            entries.append(
+                _build_manifest_entry(
                     name=f"Flood depth step {frame_no}",
-                    layer_type="raster",
                     uri=frame_uri,
-                    style_preset=FLOOD_DEPTH_STYLE_PRESET,
-                    role="context",
-                    units="meters",
+                    t=t_val,
                     bbox=frame_bbox,
-                    max_depth_m=float(frame_metrics["max_depth_m"]),
-                    flooded_area_km2=float(frame_metrics["flooded_area_km2"]),
-                    n_buildings_affected=int(frame_metrics["n_buildings_affected"]),
-                    barriers=barriers,
                 )
             )
     except PostprocessSWMMError as exc:
@@ -826,7 +886,7 @@ def _emit_frame_layers(
         for p in written_cogs:
             _safe_unlink(p)
         return []
-    return frame_layers
+    return entries
 
 
 def _affine_from_build(build: Any) -> Any:

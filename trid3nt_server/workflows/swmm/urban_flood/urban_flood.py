@@ -130,6 +130,7 @@ async def swmm_urban_flood(
     target_resolution_m: float = 10.0,
     manning_overland: float = 0.03,
     mass_balance_tolerance_pct: float = 5.0,
+    output_interval_min: float | None = None,
     barriers: dict[str, Any] | None = None,
     pollutants: list[str] | None = None,
     dry_buildup_days: int = 0,
@@ -208,6 +209,11 @@ async def swmm_urban_flood(
             Continuity error EXCEEDS this (%), raises typed
             ``SWMM_MASS_BALANCE_EXCEEDED`` instead of publishing a
             silently-wrong depth layer. Default 5%.
+        output_interval_min: OPTIONAL animation cadence (minutes) -- how often a
+            depth snapshot is written (the deck REPORT_STEP), which sets the
+            number of animation frames. ``None`` (default) keeps a 5-minute
+            cadence. Distinct from ``rain_interval_min`` (the storm forcing
+            timestep). Every reported step is published (no thinning).
         barriers: OPTIONAL GeoJSON FeatureCollection of tagged LineString
             segments; each feature's ``properties.barrier_type`` in
             {"wall", "flap_gate"}: RED ``wall`` omits the overland conduit
@@ -284,6 +290,8 @@ async def swmm_urban_flood(
             manning_overland=float(manning_overland),
             mass_balance_tolerance_pct=float(mass_balance_tolerance_pct),
         )
+        if output_interval_min is not None:
+            kwargs["output_interval_min"] = float(output_interval_min)
         if total_rain_depth_mm is not None:
             kwargs["total_rain_depth_mm"] = float(total_rain_depth_mm)
         if barriers is not None:
@@ -374,6 +382,10 @@ from trid3nt_server.emission.pipeline_emitter import (
     substep,
 )
 from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.emission.outputs_seam import (
+    build_layers_from_outputs,
+    read_outputs_manifest,
+)
 from trid3nt_server.workflows.swmm.postprocess_swmm import (
     CONCENTRATION_STYLE_PRESET,
     FLOOD_DEPTH_STYLE_PRESET,
@@ -1437,7 +1449,6 @@ async def model_swmm_urban_flood(
         )
 
     raw_peak = layers[0]
-    frame_layers = layers[1:]
 
     # --- Step 7 (BREAK A): publish the PEAK COG through publish_layer ---------
     # postprocess_swmm returns the peak + frame COGs as RAW s3:// object URIs.
@@ -1499,16 +1510,18 @@ async def model_swmm_urban_flood(
         peak = peak.model_copy(update=peak_updates)
 
     # --- Step 7b / 9b: publish + emit the per-frame animation layers OUT-OF-BAND
-    # Mirrors the composer Step-9b: each frame is a DISTINCT COG (distinct
-    # runs-bucket key -> distinct published url -> no dedup collapse). Each frame
-    # COG is published through publish_layer (renderable URL) and emitted in
-    # ascending step order via emitter.add_loaded_layer so all N frames arrive as
-    # one contiguous sequential group; the "Flood depth step N" name token is
-    # preserved so the web detectSequentialGroups scrubber group forms. Frames are
-    # emitted ONLY through the emitter (NOT returned), so they never reach
-    # summarize_tool_result. When the emitter is None (direct/smoke/test) frame
-    # emission is skipped - the frames still live in `layers` for tests to assert.
-    emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)
+    # EMIT-ON-SOLVE SEAM (ADR 0282, OPTION a): postprocess_swmm wrote the peak +
+    # ALL per-frame depth COGs to ``outputs.json`` host-side. The SEAM owns the
+    # TEMPORAL FRAMES (frames_only=True -> it skips the peak entry, which stays the
+    # composer-built typed layer above). Each seam frame is a DISTINCT COG
+    # (distinct runs-bucket key -> distinct published url -> no dedup collapse);
+    # the "Flood depth step N" name token rides through so the web
+    # detectSequentialGroups scrubber group forms. Frames emit ONLY through the
+    # emitter (never returned). Absent/unreadable outputs.json -> no frames (an
+    # honest peak-only degrade, never a crash). When the emitter is None
+    # (direct/smoke/test) emission is skipped.
+    seam_frames = await asyncio.to_thread(_read_swmm_frame_layers, staging.run_id, bbox)
+    emitted_frames = await _emit_frame_layers(emitter, seam_frames, staging.run_id)
 
     # --- Step 7c: WATER-QUALITY (buildup/washoff) additive context ----------
     # When the run authored WQ sections (staging.pollutants non-empty), read the
@@ -1586,7 +1599,7 @@ async def model_swmm_urban_flood(
         n_buildings_dropped,
         peak.n_buildings_affected,
         emitted_frames,
-        len(frame_layers),
+        len(seam_frames),
         run.continuity_error_pct,
         peak.uri,
     )
@@ -1678,8 +1691,37 @@ def _publish_peak_layer(
     )
 
 
+def _read_swmm_frame_layers(
+    run_id: str, bbox: tuple[float, float, float, float]
+) -> list[LayerURI]:
+    """Read ``outputs.json`` -> the SEAM's temporal frame LayerURIs (frames-only).
+
+    The emit-on-solve fork (ADR 0282): postprocess_swmm wrote the peak + every
+    per-frame depth COG to ``outputs.json`` host-side. This reads it back and
+    builds the CONTEXT frame layers via ``build_layers_from_outputs`` with
+    ``frames_only=True`` (the peak entry is skipped -- the composer keeps its own
+    typed peak, so the same COG uri is never registered twice). Returns ``[]`` on
+    an absent / unreadable / unknown-schema manifest (an honest peak-only degrade)
+    -- never raises. Runs off the event loop (a small S3 GET + pure build).
+    """
+    import types as _types
+
+    manifest = read_outputs_manifest(_types.SimpleNamespace(run_id=run_id))
+    if manifest is None:
+        logger.info(
+            "model_swmm_urban_flood: no outputs.json for run_id=%s -- peak-only "
+            "(no animation frames).",
+            run_id,
+        )
+        return []
+    seam = build_layers_from_outputs(
+        manifest, run_id=run_id, bbox=tuple(bbox), frames_only=True
+    )
+    return [lyr for lyr in seam.layers if lyr.role == "context"]
+
+
 async def _emit_frame_layers(
-    emitter: Any, frame_layers: list[SWMMDepthLayerURI], run_id: str
+    emitter: Any, frame_layers: list[LayerURI], run_id: str
 ) -> int:
     """Publish + emit per-frame depth COGs out-of-band so the web scrubber forms.
 
@@ -1691,6 +1733,11 @@ async def _emit_frame_layers(
     fails to publish is HONESTLY DROPPED (its raw uri never renders) - the
     remaining frames + the peak stay intact; if too many drop the group may fall
     below 2 members and simply not form (acceptable, never a fake row).
+
+    Accepts the SEAM's plain ``LayerURI`` frames (ADR 0282) OR the legacy
+    register-path ``SWMMDepthLayerURI`` frames (the AWS-batch manifest lane) -- the
+    re-wrap reads the depth scalars via ``getattr`` defaults so a plain seam frame
+    (context metrics absent) works unchanged.
 
     Returns the number of frames emitted (0 when no emitter is bound - the
     direct/smoke/test path). Never raises - a frame publish/emit failure must not
@@ -1736,6 +1783,8 @@ async def _emit_frame_layers(
                 )
                 continue
             # Keep the "Flood depth step N" name token so the web grouping forms.
+            # Context frames carry no narration scalars (the peak drives
+            # narration) -- getattr defaults let a plain seam LayerURI re-wrap.
             emit_layer = SWMMDepthLayerURI(
                 layer_id=lyr.layer_id,
                 name=lyr.name,
@@ -1745,10 +1794,10 @@ async def _emit_frame_layers(
                 role=lyr.role,
                 units=lyr.units,
                 bbox=lyr.bbox,
-                max_depth_m=lyr.max_depth_m,
-                flooded_area_km2=lyr.flooded_area_km2,
-                n_buildings_affected=lyr.n_buildings_affected,
-                barriers=lyr.barriers,
+                max_depth_m=float(getattr(lyr, "max_depth_m", 0.0) or 0.0),
+                flooded_area_km2=float(getattr(lyr, "flooded_area_km2", 0.0) or 0.0),
+                n_buildings_affected=int(getattr(lyr, "n_buildings_affected", 0) or 0),
+                barriers=getattr(lyr, "barriers", None),
             )
         try:
             await emitter.add_loaded_layer(emit_layer)

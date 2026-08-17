@@ -305,6 +305,7 @@ def build_layers_from_outputs(
     *,
     run_id: str,
     bbox: tuple[float, float, float, float] | None = None,
+    frames_only: bool = False,
 ) -> SeamPublishResult:
     """Turn a parsed ``outputs.json`` into registered ``LayerURI``s + replay meta.
 
@@ -313,22 +314,33 @@ def build_layers_from_outputs(
     agent-side). Does NO heavy I/O for registered quantities that carry
     ``band_stats`` (the register-only fast path); the only COG touch is the
     unregistered-quantity neutral-ramp fallback.
+
+    ``frames_only`` (the M-class ruling, ADR 0282 OPTION a): when True, the seam
+    owns the TEMPORAL FRAMES ONLY -- standalone rasters (the peak/final field) and
+    vectors are NOT built or registered. The composer keeps its own typed peak
+    layer (with the narration scalars on it) and never consumes the seam's peak
+    entry, so the same COG uri is never registered twice. ``outputs.json`` still
+    carries the peak entry for completeness (a whole-run record); the seam simply
+    skips it. Default False = the S-class behaviour (seam owns all publication).
     """
     result = SeamPublishResult()
 
     # Split raster entries into non-temporal (standalone) and temporal (grouped
-    # by quantity). Non-raster kinds route per Section 5.
+    # by quantity). Non-raster kinds route per Section 5. Under ``frames_only``
+    # the standalone/vector buckets stay empty (the peak stays composer-built).
     standalone: list[OutputEntry] = []
     temporal_by_quantity: dict[str, list[OutputEntry]] = {}
     vectors: list[OutputEntry] = []
     for entry in manifest.entries:
         if entry.kind == "raster":
             if entry.t is None:
-                standalone.append(entry)
+                if not frames_only:
+                    standalone.append(entry)
             else:
                 temporal_by_quantity.setdefault(entry.quantity, []).append(entry)
         elif entry.kind == "vector":
-            vectors.append(entry)
+            if not frames_only:
+                vectors.append(entry)
         elif entry.kind == "mesh":
             result.mesh_count += 1
             logger.info(

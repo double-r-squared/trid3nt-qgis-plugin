@@ -965,6 +965,24 @@ def _cell_node(i: int, j: int) -> str:
     return f"S_{i}_{j}"
 
 
+def _report_step_hms(output_interval_min: float | None) -> str:
+    """Format the universal cadence lever as a SWMM ``REPORT_STEP`` ``HH:MM:SS``.
+
+    ``output_interval_min`` (minutes, the ADR 0282 universal name) maps DIRECTLY
+    onto the interval-shaped ``REPORT_STEP``. ``None`` (or a non-positive value)
+    keeps the legacy 5-minute cadence (``"00:05:00"``, byte-identical). The seam
+    then publishes EVERY reported step -- REPORT_STEP is the sole frame-count
+    control (no post-hoc thinning).
+    """
+    if output_interval_min is None or float(output_interval_min) <= 0.0:
+        return "00:05:00"
+    total_s = int(round(float(output_interval_min) * 60.0))
+    total_s = max(total_s, 1)
+    h, rem = divmod(total_s, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
 def build_swmm_mesh(
     *,
     dem_path: str,
@@ -992,6 +1010,7 @@ def build_swmm_mesh(
     barriers: dict | None = None,
     nesting_exponent: float = 0.62,
     sim_routing_step_s: float = 2.0,
+    output_interval_min: float | None = None,
     enable_autoscale: bool = True,
     advanced_physics: dict | None = None,
     pollutants: list[Any] | None = None,
@@ -1144,7 +1163,11 @@ def build_swmm_mesh(
         "SWEEP_START": "01/01",
         "SWEEP_END": "12/31",
         "DRY_DAYS": 0,
-        "REPORT_STEP": "00:05:00",
+        # Universal cadence lever (ADR 0282): output_interval_min -> REPORT_STEP.
+        # None keeps the legacy 5-min reporting cadence (byte-identical). This is
+        # the SOLE frame-count control -- the emit-on-solve seam publishes every
+        # reported step (no post-hoc thinning).
+        "REPORT_STEP": _report_step_hms(output_interval_min),
         "WET_STEP": "00:01:00",
         "DRY_STEP": "00:05:00",
         "ROUTING_STEP": sim_routing_step_s,

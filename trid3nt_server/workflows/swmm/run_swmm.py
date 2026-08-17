@@ -277,6 +277,9 @@ def build_and_stage_swmm_deck(
         manning_overland=float(run_args.manning_overland),
         barriers=run_args.barriers,
         enable_autoscale=bool(enable_autoscale),
+        # Universal emit-on-solve cadence lever (ADR 0282): None -> the legacy
+        # 5-min REPORT_STEP (byte-identical deck).
+        output_interval_min=getattr(run_args, "output_interval_min", None),
         advanced_physics=resolved_physics or None,
         pollutants=pollutant_specs or None,
         dry_buildup_days=int(getattr(run_args, "dry_buildup_days", 0) or 0),

@@ -71,7 +71,35 @@ path's engine-prefixed stems; web temporal grouping rides the `name` token,
 unchanged. Cadence stays the count-native `output_frames` lever (aliased to the
 universal `output_interval_min` vocabulary in ADR 0281; no redundant param added).
 
-REMAINING: the other engine legs (M/L-class), the `publish_manifest` collapse
+MIGRATED ENGINES (M-class, HOST-EXEC writer -- the agent postprocess is the
+producer; NO worker image, so offline-green == deploy-green, effective
+immediately). These use the OPTION (a) ruling: the seam owns the TEMPORAL FRAMES
+ONLY (`build_layers_from_outputs(..., frames_only=True)`); the TYPED PEAK layer +
+its narration scalars stay composer-built exactly as before, and the composer does
+NOT consume the seam's peak entry (avoids double-registering the same COG uri).
+Byte-equivalence is measured on the FRAME render stream (ADR 0282):
+
+- **SWMM urban_flood + dual_drainage** (ADR 0282): `postprocess_swmm` writes
+  `outputs.json` host-side (the shared `workflows/shared/outputs_manifest_io`
+  writer's FIRST real use), `quantity="flood_depth"`, per-frame `t` = elapsed
+  seconds from the `.out` report steps; the 144-frame `_select_frame_time_indices`
+  cap is GONE (never-omit) and cadence resolves DECK-SIDE via `output_interval_min
+  -> REPORT_STEP`. `dual_drainage` gains the depth animation for the first time.
+- **Landlab overland_flow_timeseries** (ADR 0282):
+  `postprocess_landlab_overland_timeseries` writes `outputs.json` host-side,
+  `quantity="flood_depth"` (shares the depth family), per-frame `t` = the worker's
+  REAL snapshot elapsed seconds (`max_cell_series`); the worker interval FLOOR
+  (`max(output_interval_s, duration_s/48)` + `_MAX_TIMESERIES_SNAPSHOTS`) is GONE
+  (honor `output_interval_s` exactly; runs exec-from-source so it takes effect
+  immediately). The universal `output_interval_min` aliases the native
+  `output_interval_s` (0281 precedent -- documented, not double-threaded).
+
+The M-class seam mints `layer_id` off the physical quantity (`flood-depth-frame-*`),
+the same explained non-rendering divergence from the register path's stems
+(`swmm-depth-frame-*` / `landlab-overland-depth-frame-*`); grouping rides the
+`name` token (`"Flood depth step N"` / `"Overland depth step N"`), unchanged.
+
+REMAINING: the other engine legs (L-class), the `publish_manifest` collapse
 (ledger row 19, gated on the LAST engine migrating), and -- separately, OPTION A
 -- the per-engine `output_quantities` scaffold migration.
 

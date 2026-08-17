@@ -35,7 +35,6 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.swmm.postprocess_swmm import (
-    MAX_FLOOD_FRAMES,
     NODATA_DEPTH_M,
     PostprocessSWMMError,
     compute_swmm_depth_metrics,
@@ -223,20 +222,31 @@ def _fake_upload(local_cog, run_id, runs_bucket=None, *, dest_filename="swmm_dep
     return f"gs://test-runs/{run_id}/{dest_filename}"
 
 
-def test_postprocess_swmm_emits_peak_plus_frames(solved_run):
-    """postprocess_swmm returns the EXACT postprocess_flood shape: layers[0] peak
-    primary + layers[1:] contiguous 'Flood depth step N' context frames, all
-    SWMMDepthLayerURI with the narration scalars set."""
+def test_postprocess_swmm_emits_peak_plus_outputs_frames(solved_run):
+    """ADR 0282: postprocess_swmm returns ONLY the peak (layers == [peak]) and
+    writes the peak + EVERY per-frame COG to outputs.json (never-omit). The seam
+    owns the frames; the typed peak stays composer-built."""
     from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI
 
     build, run = solved_run
+    captured: dict[str, object] = {}
+
+    def _capture_manifest(*, run_id, engine, entries, runs_bucket=None):  # noqa: ANN001
+        captured["engine"] = engine
+        captured["entries"] = entries
+        return f"gs://test-runs/{run_id}/outputs.json"
+
     with patch(
         "trid3nt_server.workflows.swmm.postprocess_swmm._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
+    ), patch(
+        "trid3nt_server.workflows.shared.outputs_manifest_io.write_outputs_manifest",
+        side_effect=_capture_manifest,
     ):
         layers, metrics = postprocess_swmm(run, build, run_id="run-swmm")
 
-    # --- layers[0] = peak primary, the postprocess_flood-identical contract ---
+    # --- layers == [peak], the typed composer-built primary --------------------
+    assert len(layers) == 1
     peak = layers[0]
     assert isinstance(peak, SWMMDepthLayerURI)
     assert peak.name == "Peak flood depth"
@@ -245,30 +255,33 @@ def test_postprocess_swmm_emits_peak_plus_frames(solved_run):
     assert peak.style_preset == "continuous_flood_depth"
     assert peak.layer_type == "raster"
     assert peak.units == "meters"
-    # narration scalars are typed + non-negative (Invariant 1 / FR-AS-7).
     assert peak.max_depth_m >= 0.0
     assert peak.flooded_area_km2 >= 0.0
     assert peak.n_buildings_affected >= 0
-    # metrics dict carries the peak aggregates + 4326 crs tag.
     assert metrics["max_depth_m"] == pytest.approx(peak.max_depth_m)
     assert metrics["crs"] == "EPSG:4326"
 
-    # --- layers[1:] = per-frame context, contiguous "Flood depth step N" ------
-    frames = layers[1:]
+    # --- outputs.json: peak (t=None) + N frame entries (contiguous, never-omit) -
+    assert captured["engine"] == "swmm"
+    entries = captured["entries"]
+    peak_e = entries[0]
+    assert peak_e["quantity"] == "flood_depth" and "t" not in peak_e
+    assert peak_e["name"] == "Peak flood depth"
+    frames = entries[1:]
     assert len(frames) >= 2, f"expected a multi-frame group; got {len(frames)}"
-    assert len(frames) <= MAX_FLOOD_FRAMES
-    assert all(isinstance(f, SWMMDepthLayerURI) for f in frames)
-    assert all(f.role == "context" for f in frames)
-    assert all(f.style_preset == "continuous_flood_depth" for f in frames)
-    names = [f.name for f in frames]
+    assert all(f["quantity"] == "flood_depth" and f["units"] == "meters" for f in frames)
+    names = [f["name"] for f in frames]
     assert names == [f"Flood depth step {i}" for i in range(1, len(frames) + 1)]
-    # each name matches the web step-token regex (the grouping contract).
     for name in names:
         assert _WEB_STEP_TOKEN_RE.search(name) is not None, name
-    # DISTINCT uris (distinct runs-bucket keys -> distinct identity key).
-    uris = [f.uri for f in frames]
+    # monotonically increasing physical t (elapsed seconds from the .out steps).
+    ts = [f["t"] for f in frames]
+    assert ts == sorted(ts) and len(set(ts)) == len(ts)
+    # DISTINCT uris + each carries a bbox render hint; peak uri excluded.
+    uris = [f["uri"] for f in frames]
     assert len(set(uris)) == len(uris)
     assert peak.uri not in uris
+    assert all("bbox" in f for f in frames)
 
 
 def test_peak_cog_is_valid_4326(solved_run):

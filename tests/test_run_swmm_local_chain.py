@@ -393,12 +393,25 @@ class _MeshUploadS3:
 
     def __init__(self) -> None:
         self.puts: list[dict] = []
+        self._store: dict[tuple[str, str], bytes] = {}
 
     def put_object(self, **kw):  # noqa: ANN003
         body = kw.get("Body")
         data = body.read() if hasattr(body, "read") else body
         self.puts.append({"Bucket": kw["Bucket"], "Key": kw["Key"], "Body": data})
+        self._store[(kw["Bucket"], kw["Key"])] = data
         return {}
+
+    def get_object(self, Bucket, Key):  # noqa: ANN001, N803
+        # Stateful GET so the ADR-0282 outputs.json write -> seam read-back
+        # round-trip works end to end in-test (the composer's _read_swmm_frame_layers
+        # reads the manifest this fake stored on put_object).
+        data = self._store.get((Bucket, Key))
+        if data is None:
+            raise KeyError(f"no object s3://{Bucket}/{Key}")
+        import io
+
+        return {"Body": io.BytesIO(data)}
 
 
 def _install_mesh_upload_s3(monkeypatch) -> "_MeshUploadS3":
