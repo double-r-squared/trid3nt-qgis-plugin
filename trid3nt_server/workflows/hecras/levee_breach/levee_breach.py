@@ -271,6 +271,7 @@ from trid3nt_server.data.publish_layer.publish_layer import (
     publish_layer,
 )
 from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+from trid3nt_server.workflows.hecras._frame_emit import read_and_emit_hecras_frames
 from trid3nt_server.workflows.hecras.postprocess_hecras import (
     PostprocessHecrasError,
     postprocess_hecras,
@@ -561,6 +562,15 @@ async def model_hecras_levee_breach(
             await _maybe_emit_inflow_chart(emitter, pp_metrics, eff_scale, eff_breach)
         except Exception as exc:  # noqa: BLE001
             logger.warning("hecras inflow chart skipped: %s", exc)
+
+    # --- Best-effort: the per-step depth animation (ADR 0287 seam) ------------ #
+    # A breaching levee floods the protected side over time -> a flood_depth group.
+    # A levee-HELD (dry) run wrote no frames (postprocess skips them) -> peak-only,
+    # an honest empty animation.
+    await read_and_emit_hecras_frames(
+        emitter, run_id=batch_run_id,
+        bbox=tuple(depth.bbox) if depth.bbox else None,
+    )
 
     # --- AUTHORITATIVE LAST zoom-to ------------------------------------------- #
     if emitter is not None and depth.bbox:

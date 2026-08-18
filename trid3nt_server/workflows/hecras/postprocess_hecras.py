@@ -50,9 +50,24 @@ __all__ = [
     "make_hecras_mesh_layer_uri",
     "HECRAS_WET_DEPTH_FT",
     "HECRAS_TARGET_GROUND_RES_M",
+    "HECRAS_FRAME_QUANTITY",
+    "HECRAS_FRAME_NAME_STEM",
 ]
 
 logger = logging.getLogger("trid3nt_server.workflows.hecras.postprocess_hecras")
+
+#: Seconds per day -- the honest DAYS->seconds conversion for the per-step frame
+#: ``t`` (a solved plan HDF stores the Unsteady Time Series ``Time`` in DAYS).
+_SECONDS_PER_DAY: float = 86400.0
+
+#: The emit-on-solve (ADR 0287) per-step frame quantity + web name stem. The
+#: quantity is the REGISTERED seam quantity ``flood_depth`` -> the SAME
+#: ``continuous_flood_depth`` preset the peak COG publishes through
+#: (``HECRAS_DEPTH_STYLE_PRESET``), so a frame renders byte-consistently with the
+#: peak; ``band_stats`` is never needed (registered quantity). The name stem forms
+#: the web ``detectSequentialGroups`` scrubber token ``"Flood depth step N"``.
+HECRAS_FRAME_QUANTITY: str = "flood_depth"
+HECRAS_FRAME_NAME_STEM: str = "Flood depth"
 
 #: Depth (ft) above which a 2D cell counts as WET. Below it a cell is dry / no-data
 #: (a dry HEC-RAS cell stores WSE == 0, so depth resolves negative and is masked
@@ -74,6 +89,17 @@ _MAX_PX_PER_SIDE: int = 2500
 _RESULTS_2D = (
     "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/"
     "2D Flow Areas"
+)
+#: Per-timestep 2D water-surface stack (the emit-on-solve frame source, ADR 0287).
+#: ``<area>/Water Surface`` = (n_steps, n_cells); the parallel ``Time`` one level
+#: up (``.../Unsteady Time Series/Time``) is (n_steps,) in DAYS. Verified on the
+#: real solved Muncie deck: WS (289, 5765), Time 0..1.0 d at an even 5-min step.
+_UNSTEADY_TS_2D = (
+    "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/"
+    "2D Flow Areas"
+)
+_UNSTEADY_TS_TIME = (
+    "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time"
 )
 _GEOM_2D = "Geometry/2D Flow Areas"
 #: Event Conditions inflow hydrograph group (for the forcing chart series).
@@ -230,6 +256,216 @@ def _read_inflow_series(plan_hdf: Path, flow_scale: float) -> list[dict[str, flo
     except Exception as exc:  # noqa: BLE001 -- chart is best-effort
         logger.warning("hecras inflow-series read failed (non-fatal): %s", exc)
         return []
+
+
+def _read_wse_steps(
+    plan_hdf: Path, area_name: str
+) -> tuple[Any, Any, Any] | None:
+    """Return ``(wse_steps, bed, t_days)`` for the per-step depth frames (ADR 0287).
+
+    ``wse_steps`` is the ``(n_steps, n_cells)`` Unsteady Time Series water-surface
+    stack, ``bed`` the ``(n_cells,)`` cell minimum elevation, ``t_days`` the
+    ``(n_steps,)`` parallel time in DAYS. Returns ``None`` when the plan HDF carries
+    NO per-step time series (an older/summary-only solve) -- the caller then
+    publishes the peak only (an honest additive degrade, never a failure).
+    """
+    import h5py  # lazy
+    import numpy as np
+
+    with h5py.File(plan_hdf, "r") as f:
+        ws_ds = f.get(f"{_UNSTEADY_TS_2D}/{area_name}/Water Surface")
+        t_ds = f.get(_UNSTEADY_TS_TIME)
+        if ws_ds is None or t_ds is None:
+            return None
+        wse_steps = np.asarray(ws_ds[()], dtype=np.float64)  # (n_steps, n_cells)
+        t_days = np.asarray(t_ds[()], dtype=np.float64)  # (n_steps,) DAYS
+        bed = np.asarray(
+            f[f"{_GEOM_2D}/{area_name}/Cells Minimum Elevation"][()], dtype=np.float64
+        )
+    if wse_steps.ndim != 2 or wse_steps.shape[0] == 0:
+        return None
+    n = min(wse_steps.shape[0], t_days.shape[0])
+    return wse_steps[:n], bed, t_days[:n]
+
+
+def _depth_for_step(wse_step: Any, bed: Any) -> Any:
+    """Per-cell wet depth (ft) for ONE step -- masked IDENTICALLY to the peak.
+
+    Mirrors ``_read_depth_per_cell`` exactly: HDF fill -> NaN, WSE<=0 (a dry cell
+    stores 0) -> NaN, ``depth = WSE - bed`` kept only where finite and > 0, so a dry
+    cell never paints. The wet-floor cut (``> HECRAS_WET_DEPTH_FT``) is applied by
+    the rasterizer (the peak's ``wet`` mask), not here.
+    """
+    import numpy as np
+
+    wse = np.where(np.abs(wse_step) > _HDF_FILL, np.nan, wse_step)
+    wse = np.where(wse <= 0.0, np.nan, wse)
+    n = min(wse.shape[0], bed.shape[0])
+    depth = wse[:n] - bed[:n]
+    return np.where(np.isfinite(depth) & (depth > 0.0), depth, np.nan)
+
+
+def _write_6x_frame_entries(
+    plan_hdf: Path,
+    fc: dict,
+    *,
+    area_name: str,
+    transform: Any,
+    width_px: int,
+    height_px: int,
+    peak_bbox: list[float],
+    run_id: str,
+    runs_bucket: str | None,
+) -> list[dict[str, Any]]:
+    """Rasterize EVERY per-step depth onto the peak's grid -> outputs.json entries.
+
+    NEVER-OMIT (ADR 0287): every Unsteady Time Series step is published -- there is
+    NO subsample cap (the caps in ``shared/frames`` are dead for the host-exec
+    producers; this producer, like MODFLOW's, writes all steps). A cell->pixel LABEL
+    raster is rasterized ONCE (``all_touched=False``, the peak's footprint) and every
+    step is a cheap index into it, so 289 frames cost 289 COG writes/uploads, not 289
+    polygon rasterizations. Each frame is ``quantity="flood_depth"`` (the registered
+    seam quantity -> the peak's ``continuous_flood_depth`` preset, no ``band_stats``),
+    ``name="Flood depth step N"`` (the web scrubber token), ``t = t_days*86400`` s,
+    ``bbox`` = the peak bbox (every frame shares the peak grid).
+
+    Best-effort: a step that fails to encode/upload does NOT sink the animation OR
+    the peak -- the partial frames stand, the failure is logged, and the loop stops
+    (the caller degrades to whatever frames landed). Returns ``[]`` when the plan HDF
+    carries no per-step series.
+    """
+    import numpy as np
+    import rasterio.features
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    steps = _read_wse_steps(plan_hdf, area_name)
+    if steps is None:
+        logger.info(
+            "hecras 6.x frames: no Unsteady Time Series for run_id=%s area=%s -- "
+            "peak-only (no animation).", run_id, area_name,
+        )
+        return []
+    wse_steps, bed, t_days = steps
+    n_cells = int(min(wse_steps.shape[1], bed.shape[0]))
+
+    # LABEL raster (cell_id+1) painted once with the peak's all_touched=False rule.
+    label_shapes: list[tuple[dict, int]] = []
+    for feat in fc["features"]:
+        if feat["properties"].get("role") != "cell":
+            continue
+        cid = int(feat["properties"]["cell_id"])
+        if 0 <= cid < n_cells:
+            label_shapes.append((feat["geometry"], cid + 1))
+    if not label_shapes:
+        return []
+    labels = rasterio.features.rasterize(
+        label_shapes,
+        out_shape=(height_px, width_px),
+        transform=transform,
+        fill=0,
+        dtype="int32",
+        all_touched=False,
+    )
+    valid = labels > 0
+    if not bool(valid.any()):
+        return []
+    cell_of_px = labels[valid].astype(np.int64) - 1  # cell index per painted pixel
+
+    entries: list[dict[str, Any]] = []
+    for frame_no, i in enumerate(range(wse_steps.shape[0]), start=1):
+        try:
+            depth_cell = _depth_for_step(wse_steps[i], bed)  # (n_cells,) ft, NaN dry
+            px_depth = depth_cell[cell_of_px]
+            wet = np.isfinite(px_depth) & (px_depth > HECRAS_WET_DEPTH_FT)
+            grid = np.full((height_px, width_px), np.nan, dtype="float32")
+            filled = np.full(cell_of_px.shape[0], np.nan, dtype="float32")
+            filled[wet] = px_depth[wet].astype("float32")
+            grid[valid] = filled
+            cog_path = cog_io.write_cog_4326_from_grid(
+                grid,
+                src_crs="EPSG:4326",
+                src_transform=transform,
+                reproject=False,
+                crs_roundtrip_guard=False,
+            )
+            try:
+                frame_uri = cog_io.upload_cog(
+                    cog_path,
+                    run_id,
+                    runs_bucket,
+                    dest_filename=f"hecras_depth_frame_{frame_no:02d}.tif",
+                    log_label="HEC-RAS depth frame COG",
+                )
+            finally:
+                cog_io.safe_unlink(cog_path)
+            entries.append(
+                build_entry(
+                    kind="raster",
+                    quantity=HECRAS_FRAME_QUANTITY,
+                    name=f"{HECRAS_FRAME_NAME_STEM} step {frame_no}",
+                    uri=frame_uri,
+                    t=float(t_days[i]) * _SECONDS_PER_DAY,
+                    units="ft",
+                    bbox=list(peak_bbox),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 -- frames are additive, never fatal
+            logger.warning(
+                "hecras 6.x frames: step %d COG write/upload failed for run_id=%s "
+                "(%s) -- keeping the %d frame(s) already published + the peak.",
+                frame_no, run_id, exc, len(entries),
+            )
+            break
+    return entries
+
+
+def _write_hecras_outputs_manifest(
+    entries: list[dict[str, Any]], *, run_id: str, runs_bucket: str | None
+) -> None:
+    """Best-effort host-side write of ``outputs.json`` under the run prefix.
+
+    The HEC-RAS postprocess runs IN the agent process (the plan HDF is downloaded
+    + opened with h5py agent-side -- no worker image owns the postprocess), so the
+    agent is its own manifest writer (schema Section 5.1). A write miss NEVER sinks
+    the run -- the seam degrades to peak-only (no animation), "failure retracts
+    nothing".
+    """
+    if not entries:
+        return
+    try:
+        from trid3nt_server.workflows.shared.outputs_manifest_io import (
+            write_outputs_manifest,
+        )
+
+        write_outputs_manifest(
+            run_id=run_id, engine="hecras", entries=entries, runs_bucket=runs_bucket
+        )
+    except Exception as exc:  # noqa: BLE001 -- never sink the run on a manifest miss
+        logger.warning(
+            "hecras frames: outputs.json write failed run_id=%s (%s: %s) -- the seam "
+            "falls back to peak-only (no animation frames).",
+            run_id, type(exc).__name__, exc,
+        )
+
+
+def _peak_frame_entry(cog_uri: str, bbox: list[float]) -> dict[str, Any]:
+    """One ``outputs.json`` peak entry (``t=None``) -- a whole-run record.
+
+    Under ``frames_only=True`` the seam SKIPS this (the composer keeps its own typed
+    ``HecrasDepthLayerURI`` peak with the narration scalars); it rides the manifest
+    for completeness only, matching the MODFLOW/SWMM 0282/0284 pattern.
+    """
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    return build_entry(
+        kind="raster",
+        quantity=HECRAS_FRAME_QUANTITY,
+        name=f"Peak {HECRAS_FRAME_NAME_STEM.lower()}",
+        uri=cog_uri,
+        t=None,
+        units="ft",
+        bbox=list(bbox),
+    )
 
 
 def postprocess_hecras(
@@ -390,6 +626,25 @@ def postprocess_hecras(
     if mesh_layer is not None:
         layers.append(mesh_layer)
 
+    # --- emit-on-solve: the per-step depth frames (ADR 0287, host-exec writer) --- #
+    # A wet solve publishes EVERY Unsteady Time Series step to outputs.json (the
+    # composer reads it back frames_only and animates the group beside the peak).
+    # A levee-HELD dry run has no wet cells at any step -> no frames (honest empty).
+    frame_count = 0
+    if not is_dry:
+        frame_entries = _write_6x_frame_entries(
+            plan_hdf, fc,
+            area_name=area_name, transform=transform,
+            width_px=width_px, height_px=height_px, peak_bbox=bbox,
+            run_id=run_id, runs_bucket=runs_bucket,
+        )
+        if frame_entries:
+            peak_entry = _peak_frame_entry(cog_uri, bbox)
+            _write_hecras_outputs_manifest(
+                [peak_entry, *frame_entries], run_id=run_id, runs_bucket=runs_bucket
+            )
+            frame_count = len(frame_entries)
+
     metrics = {
         **stats,
         "area_name": area_name,
@@ -400,13 +655,15 @@ def postprocess_hecras(
         "is_dry": is_dry,
         "bbox": bbox,
         "cog_uri": cog_uri,
+        "run_id": run_id,
+        "frame_count": frame_count,
         "inflow_hydrograph": _read_inflow_series(plan_hdf, float(flow_scale)),
     }
     logger.info(
         "postprocess_hecras run_id=%s area=%s depth_max=%.2f ft wet_cells=%d "
-        "flow_scale=%.3f peak=%s cfs uri=%s",
+        "flow_scale=%.3f peak=%s cfs frames=%d uri=%s",
         run_id, area_name, stats["depth_max_ft"], stats["wet_cell_count"],
-        flow_scale, peak_inflow_cfs, cog_uri,
+        flow_scale, peak_inflow_cfs, frame_count, cog_uri,
     )
     return layers, metrics
 

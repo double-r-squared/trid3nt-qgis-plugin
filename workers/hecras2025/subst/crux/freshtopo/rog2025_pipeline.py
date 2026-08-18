@@ -561,6 +561,134 @@ def build_depth_cog(result_h5, prep, out_tif, catchment_geojson=None, depth_scal
     }
 
 
+def build_depth_frames(result_h5, prep, out_dir, catchment_geojson=None,
+                       depth_scale=1.0, refined=False, out_res_m=None):
+    """Rasterize EVERY per-step Cell Depth to a 4326 COG (ADR 0287 emit-on-solve).
+
+    The frame sibling of ``build_depth_cog`` / ``build_depth_cog_unstructured``: same
+    georef, but reads ``Cell Depth`` per STEP (``[i]``) instead of ``.max(axis=0)``,
+    and reads the parallel ``/Results/Output Blocks/Base Output/Time`` (DAYS). The
+    placement (structured (row,col) OR the graded-mesh KDTree ``idx``) + the
+    catchment mask + the UTM->4326 warp transform are computed ONCE; every step is a
+    cheap re-fill + write, so N frames cost N COG writes, not N georef solves.
+
+    NEVER-OMIT (ADR 0287): every managed-engine mapping step is written -- there is
+    NO subsample cap. Returns a list of ``{"cog", "bbox4326", "t_days", "depth_max"}``
+    (one per step, ascending ``t_days``). Pure rasterio/scipy (no server deps) -- the
+    server RoG composer uploads each COG + writes ``outputs.json``. A step that fails
+    to write stops the loop (the frames already written stand; the caller degrades to
+    whatever landed + the peak)."""
+    import os
+    import h5py
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+    from rasterio.warp import calculate_default_transform, reproject, Resampling
+    from rasterio.crs import CRS
+
+    if isinstance(prep, Rog2025Prep):
+        prep = asdict(prep)
+    ox, oy, epsg = prep["origin_x"], prep["origin_y"], prep["utm_epsg"]
+    base = "/Results/Output Blocks/Base Output/2D Flow Areas/Base Mesh"
+    with h5py.File(result_h5, "r") as f:
+        depth_steps = f[f"{base}/Cell Depth"][:]                 # (Nt, Nc) m
+        cxy = f["/Geometry/2D Flow Areas/Base Mesh/Cell Coordinates"][:]
+        t_days = f["/Results/Output Blocks/Base Output/Time"][:]  # (Nt,) DAYS
+    nt = int(min(depth_steps.shape[0], len(t_days)))
+
+    src_crs = CRS.from_epsg(epsg)
+    dst_crs = CRS.from_epsg(4326)
+
+    if refined:
+        # graded mesh -> fine UTM raster by nearest cell center (build_depth_cog_
+        # unstructured georef); the KDTree idx + inside-mask are step-invariant.
+        from scipy.spatial import cKDTree
+        W, H = prep["width_m"], prep["height_m"]
+        if out_res_m is None:
+            out_res_m = max(8.0, prep["cell_size"] / 5.0)
+        nx = max(1, int(round(W / out_res_m)))
+        ny = max(1, int(round(H / out_res_m)))
+        xs = (np.arange(nx) + 0.5) * (W / nx)
+        ys = (np.arange(ny) + 0.5) * (H / ny)
+        gx, gy = np.meshgrid(xs, ys)                             # local metres, y up
+        _, idx = cKDTree(cxy).query(np.c_[gx.ravel(), gy.ravel()])
+        inside = None
+        if catchment_geojson:
+            import json as _json
+            from shapely.geometry import shape, Point
+            from shapely.prepared import prep as shapely_prep
+            from shapely.ops import transform as shp_transform
+            from pyproj import Transformer
+            g = _json.load(open(catchment_geojson))
+            feats = g["features"] if isinstance(g, dict) and "features" in g else [g]
+            geom = shape(feats[0]["geometry"])
+            tr = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True).transform
+            pg = shapely_prep(shp_transform(tr, geom))
+            uxg = ox + gx[::-1, :]; uyg = oy + gy[::-1, :]
+            inside = np.array([[pg.contains(Point(x, y)) for x, y in zip(rx, ry)]
+                               for rx, ry in zip(uxg, uyg)])
+        src_transform = from_origin(ox, oy + ny * out_res_m, W / nx, H / ny)
+        dt, dw, dh = calculate_default_transform(src_crs, dst_crs, nx, ny,
+                                                 ox, oy, ox + W, oy + H)
+
+        def _grid_for(step):
+            d = depth_steps[step][idx].astype("float32")
+            d[d <= 0.02] = np.nan
+            d = d * float(depth_scale)
+            grid = d.reshape(ny, nx)[::-1, :]
+            if inside is not None:
+                grid = np.where(inside, grid, np.nan)
+            return grid, src_transform, nx, ny, dt, dw, dh
+    else:
+        nx, ny, cs = prep["nx"], prep["ny"], prep["cell_size"]
+        col = np.clip((cxy[:, 0] / cs).astype(int), 0, nx - 1)
+        row = np.clip((ny - 1 - (cxy[:, 1] / cs)).astype(int), 0, ny - 1)
+        inmask = None
+        if catchment_geojson:
+            inmask, _ = _catchment_mask(cxy, Rog2025Prep(**prep), catchment_geojson)
+        src_transform = from_origin(ox, oy + ny * cs, cs, cs)
+        dt, dw, dh = calculate_default_transform(src_crs, dst_crs, nx, ny,
+                                                 ox, oy, ox + nx * cs, oy + ny * cs)
+
+        def _grid_for(step):
+            d = depth_steps[step].copy()
+            d[d <= 0.02] = np.nan
+            d = d * float(depth_scale)
+            grid = np.full((ny, nx), np.nan, dtype="float32")
+            if inmask is not None:
+                grid[row[inmask], col[inmask]] = d[inmask]
+            else:
+                grid[row, col] = d
+            return grid, src_transform, nx, ny, dt, dw, dh
+
+    frames = []
+    for step in range(nt):
+        grid, s_transform, gnx, gny, d_t, d_w, d_h = _grid_for(step)
+        out = np.full((d_h, d_w), np.nan, dtype="float32")
+        reproject(source=grid, destination=out, src_transform=s_transform, src_crs=src_crs,
+                  dst_transform=d_t, dst_crs=dst_crs, src_nodata=np.nan, dst_nodata=np.nan,
+                  resampling=Resampling.bilinear)
+        out_tif = os.path.join(str(out_dir), f"rog_depth_frame_{step + 1:02d}.tif")
+        prof = {"driver": "COG", "dtype": "float32", "width": d_w, "height": d_h, "count": 1,
+                "crs": dst_crs, "transform": d_t, "nodata": np.nan, "compress": "deflate"}
+        try:
+            with rasterio.open(out_tif, "w", **prof) as dst:
+                dst.write(out, 1)
+        except Exception:  # noqa: BLE001 -- COG driver may be unavailable
+            prof.update(driver="GTiff", tiled=True, blockxsize=256, blockysize=256)
+            with rasterio.open(out_tif, "w", **prof) as dst:
+                dst.write(out, 1)
+        finite = out[np.isfinite(out)]
+        bounds = rasterio.transform.array_bounds(d_h, d_w, d_t)  # (w,s,e,n)
+        frames.append({
+            "cog": str(out_tif),
+            "bbox4326": [bounds[0], bounds[1], bounds[2], bounds[3]],
+            "t_days": float(t_days[step]),
+            "depth_max": float(finite.max()) if finite.size else 0.0,
+        })
+    return frames
+
+
 def run_rog2025(dem_tif, workdir, *, precip_mm_hr=25.0, storm_hours=6.0,
                 sim_hours=None, cell_size=60.0, elev_units="m", bbox4326=None,
                 pour_point=None, outlet_edge=None, dt_s=None, report_every=None,

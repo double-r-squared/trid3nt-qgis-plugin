@@ -193,6 +193,39 @@ their quantity is a t0-difference or max-min RANGE reduction, or non-temporal; t
 temporal signal stays in their existing composer CHARTS. See ADR 0284's verdict
 table (the coverage-law denominator).
 
+MIGRATED ENGINES (L-class, HEC-RAS depth family -- ADR 0287, TWO agent-side
+producers). The recon REFUTED the "peak-only" framing: BOTH HEC-RAS lineages carry
+genuine per-step 2D fields. The 6.x lineage's plan HDF stores `Unsteady Time Series/
+2D Flow Areas/<area>/Water Surface` (Nt,Nc) at the `Base Output Interval` (verified
+(289,5765) at a 5-min step on Muncie); the 2025 managed lineage stores `Base Mesh/
+Cell Depth` (Nt,Nc). Both postprocess producers run AGENT-SIDE (the plan HDF is opened
+with h5py in-agent; the 2025 `build_depth_frames` runs mounted-driver in-process), so
+NO image rebuild binds this leg. Frames are ADDITIVE (no prior emission; the typed
+`HecrasDepthLayerURI` peak + charts + 2D mesh-preview vector stay composer-built,
+OPTION a). `quantity="flood_depth"` -> the peak's `continuous_flood_depth` preset, so
+a frame renders byte-consistently with the peak; frame `t = totim DAYS * 86400` s.
+
+- **riverine_flood** + **levee_breach** + **flood_2d inflow** (6.x, via
+  `postprocess_hecras`): `_write_6x_frame_entries` rasterizes EVERY Unsteady Time
+  Series step onto the peak's grid (a cell->pixel LABEL raster rasterized ONCE, then a
+  cheap per-step index -- masked identically to the peak) and writes `outputs.json`
+  host-side. levee-HELD (dry) = honest empty (no frames).
+- **flood_2d RoG** (2025 managed, via `rog2025_pipeline.build_depth_frames`): the
+  frame sibling of `build_depth_cog` (same georef, reads `Cell Depth[i]` per step);
+  the composer `_write_rog_frame_manifest` uploads each COG + writes `outputs.json`.
+- **culvert_embankment_flow**: CHARTS/PEAK-ONLY -- the A/B present-vs-absent
+  discriminant (ponding-vs-steady series + mass-balance bars + the A peak COG) is the
+  deliverable, NOT an animation (the 0284 discriminant fork class). Not migrated.
+
+The shared `workflows/hecras/_frame_emit.read_and_emit_hecras_frames` reads it back
+(`frames_only=True`) and all four depth-class composers emit the `flood_depth` group;
+NEVER-OMIT (every step, no cap -- the `shared/frames` selector is dead for the
+host-exec producers, LIVE only for the docker S-class). Cadence: the universal
+`output_interval_min` lever DEFERS ENTIRELY (ADR 0287 fork 2, the 0284-3A precedent) --
+it is ASYMMETRIC (6.x `Base Output Interval` attr-patch reachable; 2025 mapping
+interval is a managed-engine decompile), and an asymmetric lever silently no-oping on
+one path is the hidden-inconsistency class; BOTH cadence items are QUEUED for NATE.
+
 REMAINING: telemac3d + the other L-class legs, the `publish_manifest` collapse
 (ledger row 19, gated on the LAST engine migrating), and -- separately, OPTION A
 -- the per-engine `output_quantities` scaffold migration (MODFLOW's DEAD half is

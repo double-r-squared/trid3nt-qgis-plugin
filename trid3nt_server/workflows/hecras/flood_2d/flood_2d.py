@@ -447,7 +447,10 @@ from trid3nt_server.data.publish_layer.publish_layer import (
 from trid3nt_server.emission.layer_uri_emit import (
     publish_input_layer,
 )
+from trid3nt_server.workflows.hecras._frame_emit import read_and_emit_hecras_frames
 from trid3nt_server.workflows.hecras.postprocess_hecras import (
+    HECRAS_FRAME_NAME_STEM,
+    HECRAS_FRAME_QUANTITY,
     PostprocessHecrasError,
     postprocess_hecras,
 )
@@ -792,6 +795,12 @@ async def model_hecras_flood_2d(
         except Exception as exc:  # noqa: BLE001
             logger.warning("hecras_flood_2d inflow chart skipped: %s", exc)
 
+    # --- Best-effort: the per-step depth animation (ADR 0287 seam, 6.x path) --- #
+    await read_and_emit_hecras_frames(
+        emitter, run_id=batch_run_id,
+        bbox=tuple(depth.bbox) if depth.bbox else None,
+    )
+
     if emitter is not None and depth.bbox:
         try:
             await emitter.emit_map_command("zoom-to", {"bbox": list(depth.bbox)})
@@ -908,7 +917,8 @@ async def model_hecras_flood_2d_rog(
         sys.path.insert(0, str(_WORKERS_FRESHTOPO))
         sys.path.insert(0, str(_WORKERS_FRESHTOPO.parents[2]))
     from rog2025_pipeline import (  # type: ignore
-        run_rog2025, run_rog2025_prebuilt, build_depth_cog, build_depth_cog_unstructured)
+        run_rog2025, run_rog2025_prebuilt, build_depth_cog, build_depth_cog_unstructured,
+        build_depth_frames)
 
     catchment_geojson = None
     flowlines_path = None
@@ -947,7 +957,9 @@ async def model_hecras_flood_2d_rog(
                     param="geometry", value="structured 2D area (HEC-RAS 2025)", basis="derived",
                     note="channel-refinement inputs unavailable for this AOI; uniform mesh")
         async with substep(emitter, "rog_solve"):
-            dem_tif = await asyncio.to_thread(_fetch_dem_local, bbox)
+            # _fetch_dem_local returns (local_path, s3_uri); run_rog2025 wants the
+            # local path (the 6.x inflow path unpacks it identically).
+            dem_tif, _dem_s3_uri = await asyncio.to_thread(_fetch_dem_local, bbox)
             result = await asyncio.to_thread(
                 run_rog2025, dem_tif, workdir,
                 precip_mm_hr=float(design_storm_mm_per_hr), storm_hours=float(storm_duration_hr),
@@ -992,12 +1004,98 @@ async def model_hecras_flood_2d_rog(
         )
         depth = await asyncio.to_thread(_publish_depth_layer, depth, review_entries)
 
+    # --- Best-effort: the per-step depth animation (ADR 0287 seam, 2025 path) --- #
+    # The 2025 managed engine is the SECOND HEC-RAS producer: read Base Mesh/Cell
+    # Depth per step via build_depth_frames (same georef as the peak build_depth_cog),
+    # write outputs.json host-side, then emit the flood_depth group. Agent-side (the
+    # RoG pipeline runs mounted-driver in-process), so NO image rebuild binds it.
+    try:
+        await asyncio.to_thread(
+            _write_rog_frame_manifest,
+            result, run_tag, catchment_geojson, refined, cog_uri, depth.bbox, workdir,
+        )
+        await read_and_emit_hecras_frames(
+            emitter, run_id=run_tag,
+            bbox=tuple(depth.bbox) if depth.bbox else None,
+        )
+    except Exception as exc:  # noqa: BLE001 -- frames are additive, peak intact
+        logger.warning("hecras_flood_2d RoG frame animation skipped: %s", exc)
+
     if emitter is not None and depth.bbox:
         try:
             await emitter.emit_map_command("zoom-to", {"bbox": list(depth.bbox)})
         except Exception as exc:  # noqa: BLE001
             logger.warning("hecras_flood_2d RoG zoom-to failed: %s", exc)
     return depth
+
+
+def _write_rog_frame_manifest(
+    result: dict[str, Any],
+    run_tag: str,
+    catchment_geojson: str | None,
+    refined: bool,
+    peak_cog_uri: str,
+    peak_bbox: Any,
+    workdir: str,
+) -> int:
+    """Build + upload the 2025 RoG per-step depth frames and write outputs.json.
+
+    The composer half of the 2025 producer (ADR 0287): ``build_depth_frames`` writes
+    a local COG per Cell-Depth step (feet, matching the peak's ``1/0.3048`` scale) on
+    the SAME georef the peak used; each is uploaded to the run prefix + recorded as a
+    ``flood_depth`` frame entry (``t = t_days*86400`` s). The peak entry rides for
+    completeness (``t=None``; the seam skips it under ``frames_only``). SYNC (the
+    caller wraps this in ``asyncio.to_thread``). Returns the frame count (0 = no
+    per-step series / an empty solve -> peak-only)."""
+    from rog2025_pipeline import build_depth_frames  # type: ignore
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.shared import cog_io
+    from trid3nt_server.workflows.shared.outputs_manifest_io import (
+        write_outputs_manifest,
+    )
+
+    frames = build_depth_frames(
+        result["result_h5"], result["prep"], workdir,
+        catchment_geojson=catchment_geojson, depth_scale=1.0 / 0.3048, refined=refined,
+    )
+    if not frames:
+        return 0
+    runs_bucket = _get_runs_bucket()
+    entries: list[dict[str, Any]] = [
+        build_entry(
+            kind="raster", quantity=HECRAS_FRAME_QUANTITY,
+            name=f"Peak {HECRAS_FRAME_NAME_STEM.lower()}", uri=peak_cog_uri,
+            t=None, units="ft",
+            bbox=list(peak_bbox) if peak_bbox else None,
+        )
+    ]
+    for k, fr in enumerate(frames, start=1):
+        try:
+            frame_uri = cog_io.upload_cog(
+                Path(fr["cog"]), run_tag, runs_bucket,
+                dest_filename=f"hecras_rog_depth_frame_{k:02d}.tif",
+                log_label="HEC-RAS 2025 RoG depth frame COG",
+            )
+        finally:
+            cog_io.safe_unlink(fr["cog"])
+        entries.append(
+            build_entry(
+                kind="raster", quantity=HECRAS_FRAME_QUANTITY,
+                name=f"{HECRAS_FRAME_NAME_STEM} step {k}", uri=frame_uri,
+                t=float(fr["t_days"]) * 86400.0, units="ft",
+                bbox=list(fr["bbox4326"]),
+            )
+        )
+    write_outputs_manifest(
+        run_id=run_tag, engine="hecras", entries=entries, runs_bucket=runs_bucket
+    )
+    logger.info(
+        "hecras_flood_2d RoG: wrote %d depth frame(s) to outputs.json run_id=%s",
+        len(frames), run_tag,
+    )
+    return len(frames)
 
 
 def _read_run_metrics(run_id: str) -> dict[str, Any]:
