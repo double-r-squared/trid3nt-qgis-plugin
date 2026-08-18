@@ -67,6 +67,15 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    estimate/pin providers owned by the engine). Hand-wired emission or
    gating in a composer is a defect.
 
+9. NEVER INVENT THE WORLD. No demo/synthetic physics baked into
+   product code - a physics-consequential value with no real data
+   source REFUSES (typed error naming the need); it never defaults.
+   Proofs and demos run on real ingested data; if you cannot make the
+   real thing work, STOP and say so LOUDLY - never hand over synthetic
+   results for spot-checking as if they were the product. Synthetic is
+   for isolated verification gates only, banner-labeled, never the
+   deliverable.
+
 ## How to write code here
 
 - SIMPLICITY: prefer the boring solution. Reuse an existing seam,
