@@ -135,6 +135,7 @@ async def schism_tidal_hydro(
     tidal_amplitude_m: float = 0.5,
     sim_days: float = 5.0,
     open_boundary_side: str = "south",
+    output_interval_min: float | None = None,
     input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> SchismElevationLayerURI | dict[str, Any]:
@@ -179,6 +180,10 @@ async def schism_tidal_hydro(
         sim_days: run length in days (default 5; the verification is 5 d).
         open_boundary_side: which TIN side is the open (seaward) tidal boundary
             (``south|north|east|west``; default ``south``).
+        output_interval_min: minutes between map-output timesteps in the animated
+            out2d mesh (the universal cadence lever). ``None`` = the ~hourly default.
+            Applies to a ``coastal_tin`` run (the bundled verification mesh keeps its
+            published cadence).
         input_mode: run-mode lever. ``"user_gated"`` reviews the tidal
             forcing + mesh basis (and previews the TIN mesh) before solving.
 
@@ -223,7 +228,8 @@ async def schism_tidal_hydro(
         result = await model_schism_tidal_hydro(
             mesh_source=mesh_source, location_query=location_query, bbox=bbox_t,
             constituents=cons, tidal_amplitude_m=tidal_amplitude_m, sim_days=sim_days,
-            open_boundary_side=open_boundary_side, input_mode=input_mode,
+            open_boundary_side=open_boundary_side,
+            output_interval_min=output_interval_min, input_mode=input_mode,
         )
         if isinstance(result, dict):
             return result
@@ -257,11 +263,11 @@ from trid3nt_server.data.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
-from trid3nt_server.emission.layer_uri_emit import (
-    publish_input_layer,
-)
 from trid3nt_server.workflows.schism import deck_authoring
 from trid3nt_server.workflows.schism import postprocess_schism as pp
+from trid3nt_server.workflows.schism.results_mesh_seam import (
+    publish_results_mesh_via_seam,
+)
 from trid3nt_server.workflows.schism.run_schism import SCHISM_SOLVER_NAME
 
 
@@ -415,6 +421,7 @@ async def model_schism_tidal_hydro(
     sim_days: float,
     open_boundary_side: str,
     input_mode: str | None,
+    output_interval_min: float | None = None,
 ) -> SchismElevationLayerURI | dict[str, Any]:
     """Author/stage deck -> input+mesh gate -> solve -> postprocess -> publish."""
     emitter = current_emitter()
@@ -444,6 +451,7 @@ async def model_schism_tidal_hydro(
             workdir, location_query=location_query, bbox=bbox, constituents=constituents,
             tidal_amplitude_m=tidal_amplitude_m, sim_days=sim_days,
             open_boundary_side=open_boundary_side, input_mode=input_mode, emitter=emitter,
+            output_interval_min=output_interval_min,
         )
         deck_files = deck_info["deck_files"]
         fallback_note = deck_info["fallback_note"]
@@ -521,7 +529,6 @@ async def model_schism_tidal_hydro(
 
     elev = layers[0]
     assert isinstance(elev, SchismElevationLayerURI)
-    mesh_layer = layers[1] if len(layers) > 1 else None
 
     # --- Stage 4b: QuarterAnnulus analytical verification --------------------- #
     staout_local = await asyncio.to_thread(_download_run_output, batch_run_id, "outputs/staout_1")
@@ -552,12 +559,17 @@ async def model_schism_tidal_hydro(
     async with substep(emitter, "publish_layer"):
         elev = await asyncio.to_thread(_publish_elev_layer, elev, review.entries)
 
-    # --- Best-effort: the SCHISM mesh preview (layer_type="mesh") ------------- #
-    if mesh_layer is not None:
-        try:
-            await publish_input_layer(emitter, mesh_layer, role="context")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("schism mesh preview emit skipped: %s", exc)
+    # --- Best-effort: the native out2d mesh via the emit-on-solve seam (0286) - #
+    # The out2d netCDF (every timestep) IS the temporal artifact -- QGIS/MDAL
+    # animates it. Superseding the hand-wired publish_input_layer(mesh) against
+    # byte-equivalence (name/style/role/crs/uri modulo layer_id stem, ADR 0286).
+    await publish_results_mesh_via_seam(
+        emitter, run_id=batch_run_id, engine="schism",
+        peak_layers=[elev],
+        mesh_uri=metrics["mesh_uri"],
+        mesh_name=f"SCHISM mesh ({metrics['n_nodes']} nodes)",
+        crs_authid="EPSG:4326" if metrics["is_geographic"] else None,
+    )
 
     # --- Best-effort: the station elevation-timeseries chart ------------------ #
     if emitter is not None and station_series:
@@ -578,7 +590,7 @@ async def model_schism_tidal_hydro(
 
 async def _build_coastal_tin_deck(
     workdir: Path, *, location_query, bbox, constituents, tidal_amplitude_m, sim_days,
-    open_boundary_side, input_mode, emitter,
+    open_boundary_side, input_mode, emitter, output_interval_min=None,
 ) -> dict[str, Any]:
     """Generate a coastal TIN, sample bathymetry, and author the SCHISM deck.
 
@@ -599,7 +611,7 @@ async def _build_coastal_tin_deck(
             deck_authoring.author_coastal_tin_deck, workdir / "case",
             supplied_mesh=supplied_mesh, constituents=constituents,
             tidal_amplitude_m=tidal_amplitude_m, sim_days=sim_days,
-            open_boundary_side=open_side,
+            open_boundary_side=open_side, output_interval_min=output_interval_min,
         )
         note = _COASTAL_SUPPLIED_NOTE_TMPL.format(
             constituents="+".join(constituents), amp=f"{tidal_amplitude_m:g}",
@@ -686,7 +698,7 @@ async def _build_coastal_tin_deck(
         deck_authoring.author_coastal_tin_deck, workdir / "case",
         points=points, cells=cells, depths=depths, constituents=constituents,
         tidal_amplitude_m=tidal_amplitude_m, sim_days=sim_days,
-        open_boundary_side=open_boundary_side,
+        open_boundary_side=open_boundary_side, output_interval_min=output_interval_min,
     )
     note = _COASTAL_NOTE_TMPL.format(
         bathy_source=bathy_source, constituents="+".join(constituents),

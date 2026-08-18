@@ -357,6 +357,7 @@ async def schism_pahm_surge(
     bbox: list[float] | tuple[float, float, float, float] | None = None,
     sim_days: float = 1.5,
     open_boundary_side: str = "south",
+    output_interval_min: float | None = None,
     input_mode: str | None = None,
     allow_synthetic_domain: bool = False,
     resolution_m: float | None = None,
@@ -448,6 +449,7 @@ async def schism_pahm_surge(
         result = await model_schism_pahm_surge(
             storm_name=storm_name, year=year, location_query=location_query,
             bbox=bbox_t, sim_days=sim_days, open_boundary_side=open_boundary_side,
+            output_interval_min=output_interval_min,
             input_mode=input_mode, allow_synthetic_domain=bool(allow_synthetic_domain),
             resolution_m=float(resolution_m) if resolution_m is not None else None,
         )
@@ -482,6 +484,9 @@ from trid3nt_server.emission.layer_uri_emit import (
 from trid3nt_server.workflows.schism import deck_authoring
 from trid3nt_server.workflows.schism import holland_sflux as _H
 from trid3nt_server.workflows.schism import postprocess_schism as pp
+from trid3nt_server.workflows.schism.results_mesh_seam import (
+    publish_results_mesh_via_seam,
+)
 from trid3nt_server.workflows.schism.run_schism import SCHISM_SURGE_SOLVER_NAME
 from trid3nt_server.workflows.schism.tidal_hydro.tidal_hydro import (
     _download_run_output,
@@ -662,6 +667,7 @@ async def model_schism_pahm_surge(
     bbox: tuple[float, float, float, float] | None,
     sim_days: float,
     open_boundary_side: str,
+    output_interval_min: float | None = None,
     input_mode: str | None,
     allow_synthetic_domain: bool = False,
     resolution_m: float | None = None,
@@ -740,6 +746,7 @@ async def model_schism_pahm_surge(
             deck_authoring.author_pahm_surge_deck, case_dir,
             track=fixes, mesh_bbox=bbox, base_date=base_date, supplied_mesh=supplied_mesh,
             sim_days=sim_days, open_boundary_side=open_side,
+            output_interval_min=output_interval_min,
         )
     else:
         open_side = open_boundary_side
@@ -786,6 +793,7 @@ async def model_schism_pahm_surge(
             deck_authoring.author_pahm_surge_deck, case_dir,
             track=fixes, mesh_bbox=bbox, base_date=base_date, points=points,
             cells=cells, depths=depths, sim_days=sim_days, open_boundary_side=open_side,
+            output_interval_min=output_interval_min,
         )
 
     field = deck["holland_field"]
@@ -921,7 +929,6 @@ async def model_schism_pahm_surge(
 
     elev = layers[0]
     assert isinstance(elev, SchismElevationLayerURI)
-    mesh_layer = layers[1] if len(layers) > 1 else None
     elev = elev.model_copy(update={"mesh_source": "pahm_surge"})
 
     # --- Stage 7: station surge hydrograph ----------------------------------- #
@@ -937,11 +944,17 @@ async def model_schism_pahm_surge(
     async with substep(emitter, "publish_layer"):
         elev = await asyncio.to_thread(_publish_elev_layer, elev, review.entries)
 
-    if mesh_layer is not None:
-        try:
-            await publish_input_layer(emitter, mesh_layer, role="context")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("schism surge mesh preview emit skipped: %s", exc)
+    # --- Best-effort: the native out2d mesh via the emit-on-solve seam (0286) - #
+    # Supersedes the hand-wired publish_input_layer(mesh) against byte-equivalence
+    # (name/style/role/crs/uri modulo layer_id stem, ADR 0286). Surge always solves
+    # in the AOI-georeferenced frame -> crs EPSG:4326.
+    await publish_results_mesh_via_seam(
+        emitter, run_id=batch_run_id, engine="schism",
+        peak_layers=[elev],
+        mesh_uri=metrics["mesh_uri"],
+        mesh_name=f"SCHISM mesh ({metrics['n_nodes']} nodes)",
+        crs_authid="EPSG:4326" if metrics["is_geographic"] else None,
+    )
 
     # --- Best-effort: the best-track overlay --------------------------------- #
     if emitter is not None:

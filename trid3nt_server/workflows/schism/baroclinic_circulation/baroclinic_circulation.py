@@ -131,6 +131,7 @@ async def schism_baroclinic_circulation(
     ocean_salinity_psu: float = 33.0,
     sim_days: float = 2.0,
     ocean_side: str = "south",
+    output_interval_min: float | None = None,
     input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> SchismBaroclinicLayerURI | dict[str, Any]:
@@ -227,7 +228,8 @@ async def schism_baroclinic_circulation(
         result = await model_schism_baroclinic_circulation(
             location_query=location_query, bbox=bbox,
             river_discharge_m3s=river_discharge_m3s, ocean_salinity_psu=ocean_salinity_psu,
-            sim_days=sim_days, ocean_side=ocean_side, input_mode=input_mode,
+            sim_days=sim_days, ocean_side=ocean_side,
+            output_interval_min=output_interval_min, input_mode=input_mode,
         )
         if isinstance(result, dict):
             return result
@@ -263,6 +265,9 @@ from trid3nt_server.data.publish_layer.publish_layer import (
     publish_layer,
 )
 from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+from trid3nt_server.workflows.schism.results_mesh_seam import (
+    publish_results_mesh_via_seam,
+)
 
 
 def _cache_bucket() -> str:
@@ -504,7 +509,7 @@ async def _schism_mesh_precondition_gate(
 
 async def model_schism_baroclinic_circulation(
     *, location_query, bbox, river_discharge_m3s, ocean_salinity_psu, sim_days,
-    ocean_side, input_mode,
+    ocean_side, input_mode, output_interval_min=None,
 ) -> SchismBaroclinicLayerURI | dict[str, Any]:
     """Author the estuary deck -> input gate -> 3D baroclinic solve -> salinity postprocess -> publish."""
     emitter = current_emitter()
@@ -544,6 +549,7 @@ async def model_schism_baroclinic_circulation(
         sim_days=sim_days, ocean_side=ocean_side,
         river_discharge_m3s=deck_discharge_m3s, ocean_salinity_psu=ocean_salinity_psu,
         water_mask_fn=water_mask_fn, supplied_mesh=supplied_mesh,
+        output_interval_min=output_interval_min,
     )
     shoreline_clipped = bool(deck.get("shoreline_clipped"))
     used_supplied_mesh = supplied_mesh is not None
@@ -660,7 +666,6 @@ async def model_schism_baroclinic_circulation(
     surf = layers[0]
     assert isinstance(surf, SchismBaroclinicLayerURI)
     bottom_layer = layers[1] if len(layers) > 1 else None
-    mesh_layer = layers[2] if len(layers) > 2 else None
 
     async with substep(emitter, "publish_layer"):
         surf = await asyncio.to_thread(_publish_salinity_layer, surf, review.entries)
@@ -671,11 +676,20 @@ async def model_schism_baroclinic_circulation(
             await publish_input_layer(emitter, bottom_layer, role="context")
         except Exception as exc:  # noqa: BLE001
             logger.warning("schism bottom-salinity emit skipped: %s", exc)
-    if mesh_layer is not None:
-        try:
-            await publish_input_layer(emitter, mesh_layer, role="context")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("schism baroclinic mesh preview emit skipped: %s", exc)
+
+    # --- Best-effort: the native 3D salinity mesh via the emit-on-solve seam --- #
+    # The salinity netCDF (every timestep + vertical layer) IS the temporal
+    # artifact QGIS/MDAL animates -- a 3D column no per-step 2D COG stack can carry
+    # faithfully. Supersedes the hand-wired publish_input_layer(mesh) against
+    # byte-equivalence (name/style/role/crs/uri modulo layer_id stem, ADR 0286).
+    await publish_results_mesh_via_seam(
+        emitter, run_id=batch_run_id, engine="schism",
+        peak_layers=[p for p in (surf, bottom_layer) if p is not None],
+        mesh_uri=metrics["mesh_uri"],
+        mesh_name=(f"SCHISM 3D mesh ({metrics['n_nodes']} nodes x "
+                   f"{metrics['n_layers']} layers)"),
+        crs_authid="EPSG:4326" if metrics["is_geographic"] else None,
+    )
 
     if emitter is not None and surf.bbox:
         try:

@@ -266,7 +266,10 @@ def test_postprocess_baroclinic_metrics(tmp_path: Path, monkeypatch):
     assert isinstance(surf, SchismBaroclinicLayerURI)
     assert surf.max_stratification_psu is not None and surf.max_stratification_psu > 0
     assert metrics["bottom_salinity_max_psu"] > 25.0
-    assert len(layers) == 3  # surface + bottom + mesh
+    # surface + bottom COGs; the 3D salinity mesh now rides the emit-on-solve seam
+    # (kind="mesh" outputs.json entry, ADR 0286) -- no longer a returned layer.
+    assert len(layers) == 2  # surface + bottom
+    assert metrics["mesh_uri"] == "s3://runs/rid/outputs/out2d_1.nc"
 
 
 # --------------------------------------------------------------------------- #

@@ -127,6 +127,43 @@ Cadence for the L-class is the universal `output_interval_min` (minutes ->
 INERT until the image rebuild); rain_on_grid computes it AGENT-SIDE (its `time_step_s`
 is a composer constant). `None` = byte-identical current defaults.
 
+MIGRATED ENGINES (L-class, native-mesh temporal -- SCHISM, ADR 0286). Exactly the
+TELEMAC 0283 precedent applied to SCHISM: the result IS a native, time-stepped UGRID
+netCDF (`out2d_1.nc` elevation/velocity, or the 3D `salinity_1.nc`) that QGIS/MDAL
+animates directly (proven live: MDAL loads a real solved out2d valid, 7 dataset
+groups, 24-48 temporal steps with hourly reference times -- ADR 0286 gate #1). NO
+per-step rasterization. The agent-side postprocess (SCHISM postprocess is agent-side,
+so NO image law binds this leg) computes the typed peak COG; the composer then writes
+`outputs.json` (peak entry + the `kind="mesh"` netCDF entry, `crs_authid=EPSG:4326`
+or absent for the idealized planar QuarterAnnulus) via `workflows/schism/`
+`results_mesh_seam.publish_results_mesh_via_seam`, which reads it back through the
+seam (`frames_only=True`) and emits the mesh layer (`role="context"`,
+`style_preset="mesh_grid"`, `bbox=None`, `layer_id={quantity-base}-mesh-{run_id}`).
+The bespoke `publish_input_layer(mesh_layer)` in ALL FOUR composers (tidal_hydro,
+pahm_surge, coupled_waves, baroclinic) + the three inline mesh `LayerURI`
+constructions in `postprocess_schism` are SUPERSEDED against byte-equivalence
+(name/style/role/crs/uri/bbox modulo the `layer_id` stem -- the 0283 bar). Per-template:
+
+- **tidal_hydro** + **pahm_surge** (`out2d_1.nc`, `postprocess_schism`): MIGRATED --
+  2D elevation mesh, `EPSG:4326` (or `None` for the QuarterAnnulus verification mesh).
+- **coupled_waves** (`out2d_1.nc`, `postprocess_schism_waves`): MIGRATED -- the WWM
+  dataset groups animate; the primary deliverable stays the cross-shore Hs/Tp V&V chart.
+- **baroclinic_circulation** (mesh sibling `out2d_1.nc`, `postprocess_schism_baroclinic`):
+  MIGRATED -- the 3D salinity column's mesh (a 2D COG stack cannot carry it faithfully;
+  this case is why Option B beat per-step rasterization). Surface + bottom salinity COGs
+  stay as the composer's typed peaks.
+- **transport_validation**: CHARTS-ONLY (scheme-contrast + analytical gate; no map
+  animation) -- NOT migrated, no mesh emit exists. ICM/SED substrate smokes: OUT of scope.
+
+Cadence is the universal `output_interval_min` (minutes -> `nspool`, a timestep count):
+`nspool = round(output_interval_min*60/dt_s)`, wired AGENT-SIDE in `deck_authoring`
+(`_substitute_param_nml` / `_patch_transport_param` / `_patch_baroclinic_param`), so
+NO image rebuild. SCHISM requires `ihfskip` to be an integer multiple of `nspool`
+(else "ABORT: ihfskip/nspool /= integer"); the lever recomputes `ihfskip = ceil(
+nsteps/nspool)*nspool` to preserve it. `None` = byte-identical hourly default (proven
+live: a 2-day baroclinic at `output_interval_min=30` -> 96 out2d dataset-times vs
+`=120` -> 24, exactly the 4x the lever dictates).
+
 MIGRATED ENGINES (L-class, MODFLOW transport family -- ADR 0284, host-exec mf6).
 The GWT/GWE TRANSPORT templates have depth-class quantities that animate cleanly;
 MF6 OC saves EVERY transport step (never-omit by construction -- no cap ever

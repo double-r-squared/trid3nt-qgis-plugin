@@ -335,8 +335,24 @@ def _read_gr3_nodes(gr3_text: str) -> tuple[int, int, list[tuple[float, float]]]
     return n_elem, n_node, nodes
 
 
+def _resolve_nspool(dt_s: float, output_interval_min: float | None) -> int:
+    """Map-output cadence: ``nspool`` = timesteps between GRAPHIC printouts.
+
+    The charter law-8 universal cadence lever. ``output_interval_min`` (minutes
+    between map outputs) maps DIRECTLY: ``nspool = round(output_interval_min*60/dt)``
+    so the wall interval is ``dt * nspool``. ``None`` reproduces the byte-identical
+    ~hourly default (``round(3600/dt)``). Always >= 1 (never zero-spool). The caller
+    keeps ``ihfskip`` an integer multiple of this (SCHISM aborts otherwise:
+    "ihfskip/nspool /= integer").
+    """
+    if output_interval_min is None:
+        return max(1, int(round(3600.0 / dt_s)))
+    return max(1, int(round(float(output_interval_min) * 60.0 / dt_s)))
+
+
 def _patch_transport_param(
-    qa_param_text: str, *, sim_days: float, dt_s: float
+    qa_param_text: str, *, sim_days: float, dt_s: float,
+    output_interval_min: float | None = None,
 ) -> str:
     """Reuse the QA param.nml, switching to a baroclinic tracer-transport run.
 
@@ -350,7 +366,12 @@ def _patch_transport_param(
     import re
 
     nsteps = int(math.ceil(sim_days * 86400.0 / dt_s))
-    hourly = max(1, int(round(3600.0 / dt_s)))
+    nspool = _resolve_nspool(dt_s, output_interval_min)
+    # ONE output stack: ihfskip = nsteps by default (byte-identical); when the
+    # cadence lever moves nspool, round ihfskip UP to the next nspool multiple so
+    # the whole run still lands in one stack AND ihfskip/nspool stays integer.
+    ihfskip = nsteps if output_interval_min is None else \
+        int(math.ceil(nsteps / nspool)) * nspool
 
     def sub(pat: str, repl: str, t: str) -> str:
         return re.sub(pat, repl, t, count=1, flags=re.M)
@@ -363,9 +384,9 @@ def _patch_transport_param(
     t = sub(r"^(\s*drampbc\s*=\s*)\S+", r"\g<1>0.", t)
     t = sub(r"^(\s*itr_met\s*=\s*)\S+", r"\g<1>3", t)
     t = sub(r"^(\s*h_tvd\s*=\s*)\S+", r"\g<1>5", t)
-    t = sub(r"^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{nsteps}", t)
-    t = sub(r"^(\s*nspool\s*=\s*)\S+", rf"\g<1>{hourly}", t)
-    t = sub(r"^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{hourly}", t)
+    t = sub(r"^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{ihfskip}", t)
+    t = sub(r"^(\s*nspool\s*=\s*)\S+", rf"\g<1>{nspool}", t)
+    t = sub(r"^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{nspool}", t)
     t = sub(r"^(\s*flag_ic\(1\)\s*=\s*)\S+", r"\g<1>1", t)
     t = sub(r"^(\s*flag_ic\(2\)\s*=\s*)\S+", r"\g<1>1", t)
     t = sub(r"^(\s*iof_hydro\(18\)\s*=\s*)\S+", r"\g<1>1", t)  # surface T
@@ -488,6 +509,7 @@ def _author_sz_vgrid(nvrt: int, *, theta_b: float = 1.0, theta_f: float = 4.0,
 
 def _patch_baroclinic_param(
     qa_param_text: str, *, sim_days: float, dt_s: float,
+    output_interval_min: float | None = None,
 ) -> str:
     """Reuse the QA param.nml for a density-driven 3D BAROCLINIC estuary run.
 
@@ -500,7 +522,9 @@ def _patch_baroclinic_param(
     import re
 
     nsteps = int(math.ceil(sim_days * 86400.0 / dt_s))
-    hourly = max(1, int(round(3600.0 / dt_s)))
+    nspool = _resolve_nspool(dt_s, output_interval_min)
+    ihfskip = nsteps if output_interval_min is None else \
+        int(math.ceil(nsteps / nspool)) * nspool
 
     def sub(pat: str, repl: str, t: str) -> str:
         return re.sub(pat, repl, t, count=1, flags=re.M)
@@ -521,9 +545,9 @@ def _patch_baroclinic_param(
     t = sub(r"^(\s*h_tvd\s*=\s*)\S+", r"\g<1>5", t)
     t = sub(r"^(\s*if_source\s*=\s*)\S+", r"\g<1>1", t)  # river freshwater source
     t = sub(r"^(\s*dramp_ss\s*=\s*)\S+", r"\g<1>0.5", t)
-    t = sub(r"^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{nsteps}", t)
-    t = sub(r"^(\s*nspool\s*=\s*)\S+", rf"\g<1>{hourly}", t)
-    t = sub(r"^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{hourly}", t)
+    t = sub(r"^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{ihfskip}", t)
+    t = sub(r"^(\s*nspool\s*=\s*)\S+", rf"\g<1>{nspool}", t)
+    t = sub(r"^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{nspool}", t)
     t = sub(r"^(\s*flag_ic\(1\)\s*=\s*)\S+", r"\g<1>1", t)
     t = sub(r"^(\s*flag_ic\(2\)\s*=\s*)\S+", r"\g<1>1", t)
     t = sub(r"^(\s*iof_hydro\(18\)\s*=\s*)\S+", r"\g<1>1", t)  # temperature
@@ -699,6 +723,7 @@ def author_baroclinic_estuary_deck(
     coastal_drag_cd: float = 0.0025,
     water_mask_fn: Any = None,
     supplied_mesh: tuple[Any, Any, Any] | None = None,
+    output_interval_min: float | None = None,
 ) -> dict[str, Any]:
     """Author a coarse density-driven 3D BAROCLINIC estuary deck into ``dest_dir``.
 
@@ -789,6 +814,7 @@ def author_baroclinic_estuary_deck(
     (dest_dir / "param.nml").write_text(
         _patch_baroclinic_param(
             (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s,
+            output_interval_min=output_interval_min,
         ),
         encoding="utf-8",
     )
@@ -995,30 +1021,34 @@ def _author_station_in(lon_c: float, lat_c: float) -> str:
     )
 
 
-def _substitute_param_nml(qa_param_text: str, *, sim_days: float, dt_s: float) -> str:
+def _substitute_param_nml(
+    qa_param_text: str, *, sim_days: float, dt_s: float,
+    output_interval_min: float | None = None,
+) -> str:
     """Reuse the proven QA param.nml, substituting the coastal run knobs.
 
     Substitutes rnday (sim length), dt (time step), and ihfskip (stack spool) so
     the whole run lands in ONE output stack (out2d_1.nc). nspool (map cadence) and
-    nspool_sta (station cadence) are set to ~hourly. Everything else (barotropic
-    ibc=1, nchi=0, nvrt=2 via vgrid, iof_hydro(1)/(16) elevation+vel output,
-    iout_sta=1) is inherited verbatim from the green fixture.
+    nspool_sta (station cadence) default to ~hourly; ``output_interval_min`` moves
+    them (None = byte-identical hourly). Everything else (barotropic ibc=1, nchi=0,
+    nvrt=2 via vgrid, iof_hydro(1)/(16) elevation+vel output, iout_sta=1) is
+    inherited verbatim from the green fixture.
     """
     import re
 
     nsteps = int(math.ceil(sim_days * 86400.0 / dt_s))
-    hourly = max(1, int(round(3600.0 / dt_s)))  # ~1 output/hour (nspool)
+    nspool = _resolve_nspool(dt_s, output_interval_min)  # None -> ~1 output/hour
     # SCHISM REQUIRES ihfskip to be an integer multiple of nspool (else
     # "ABORT: ihfskip/nspool /= integer"). Round the single-stack length UP to the
     # next nspool multiple that still covers the whole run.
-    ihfskip = int(math.ceil(nsteps / hourly)) * hourly
+    ihfskip = int(math.ceil(nsteps / nspool)) * nspool
 
     text = qa_param_text
     text = re.sub(r"(?m)^(\s*rnday\s*=\s*)\S+", rf"\g<1>{sim_days:g}", text, count=1)
     text = re.sub(r"(?m)^(\s*dt\s*=\s*)\S+", rf"\g<1>{dt_s:g}.", text, count=1)
     text = re.sub(r"(?m)^(\s*ihfskip\s*=\s*)\S+", rf"\g<1>{ihfskip}", text, count=1)
-    text = re.sub(r"(?m)^(\s*nspool\s*=\s*)\S+", rf"\g<1>{hourly}", text, count=1)
-    text = re.sub(r"(?m)^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{hourly}", text, count=1)
+    text = re.sub(r"(?m)^(\s*nspool\s*=\s*)\S+", rf"\g<1>{nspool}", text, count=1)
+    text = re.sub(r"(?m)^(\s*nspool_sta\s*=\s*)\S+", rf"\g<1>{nspool}", text, count=1)
     return text
 
 
@@ -1035,6 +1065,7 @@ def author_coastal_tin_deck(
     dt_s: float = 120.0,
     coastal_drag_cd: float = 0.0025,
     supplied_mesh: tuple[Any, Any, Any] | None = None,
+    output_interval_min: float | None = None,
 ) -> dict[str, Any]:
     """Author a full coastal_tin SCHISM deck into ``dest_dir``.
 
@@ -1099,7 +1130,8 @@ def author_coastal_tin_deck(
 
     # param.nml: QA template with coastal knobs substituted.
     param_text = _substitute_param_nml(
-        (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s
+        (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s,
+        output_interval_min=output_interval_min,
     )
     (dest_dir / "param.nml").write_text(param_text, encoding="utf-8")
 
@@ -1197,6 +1229,7 @@ def _substitute_param_nml_surge(
     ref_lat: float,
     ref_lon: float,
     wtiminc_s: float,
+    output_interval_min: float | None = None,
 ) -> str:
     """QA param.nml -> a georeferenced barotropic SURGE deck.
 
@@ -1211,7 +1244,8 @@ def _substitute_param_nml_surge(
     """
     import re
 
-    text = _substitute_param_nml(qa_param_text, sim_days=sim_days, dt_s=dt_s)
+    text = _substitute_param_nml(qa_param_text, sim_days=sim_days, dt_s=dt_s,
+                                 output_interval_min=output_interval_min)
     # Record the projection centre (ics=1 informational; not load-bearing here).
     text = re.sub(r"(?m)^(\s*sfea0\s*=\s*)\S+", rf"\g<1>{ref_lat:.5f}", text, count=1)
     text = re.sub(r"(?m)^(\s*slam0\s*=\s*)\S+", rf"\g<1>{ref_lon:.5f}", text, count=1)
@@ -1251,6 +1285,7 @@ def author_pahm_surge_deck(
     coastal_drag_cd: float = 0.0025,
     sflux_cadence_hr: float = 1.0,
     supplied_mesh: tuple[Any, Any, Any] | None = None,
+    output_interval_min: float | None = None,
 ) -> dict[str, Any]:
     """Author a full PaHM-surge SCHISM deck (Holland sflux + still-water boundary).
 
@@ -1316,6 +1351,7 @@ def author_pahm_surge_deck(
     param_text = _substitute_param_nml_surge(
         (qa / "param.nml").read_text(encoding="utf-8"), sim_days=sim_days, dt_s=dt_s,
         base_date=base_date, ref_lat=lat_c, ref_lon=lon_c, wtiminc_s=wtiminc_s,
+        output_interval_min=output_interval_min,
     )
     (dest_dir / "param.nml").write_text(param_text, encoding="utf-8")
 

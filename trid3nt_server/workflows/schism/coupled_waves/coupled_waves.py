@@ -294,9 +294,11 @@ from trid3nt_server.data.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
-from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 from trid3nt_server.workflows.schism import deck_authoring
 from trid3nt_server.workflows.schism import postprocess_schism as pp
+from trid3nt_server.workflows.schism.results_mesh_seam import (
+    publish_results_mesh_via_seam,
+)
 from trid3nt_server.workflows.schism.run_schism import SCHISM_WAVE_SOLVER_NAME
 
 
@@ -472,7 +474,6 @@ async def model_schism_coupled_waves(
 
     wave = layers[0]
     assert isinstance(wave, SchismWaveLayerURI)
-    mesh_layer = layers[1] if len(layers) > 1 else None
 
     # --- Stage 4b: the cross-shore Hs/Tp V&V vs the bundled gauges ------------- #
     # The bundled gauges record the REAL 12 Oct 1994 event; a PRESCRIBED parametric
@@ -507,12 +508,18 @@ async def model_schism_coupled_waves(
     async with substep(emitter, "publish_layer"):
         wave = await asyncio.to_thread(_publish_wave_layer, wave, review.entries)
 
-    # --- Best-effort: the SCHISM+WWM mesh preview ----------------------------- #
-    if mesh_layer is not None:
-        try:
-            await publish_input_layer(emitter, mesh_layer, role="context")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("schism wave mesh preview emit skipped: %s", exc)
+    # --- Best-effort: the native out2d+WWM mesh via the emit-on-solve seam ----- #
+    # The out2d netCDF (every timestep, every WWM dataset group) IS the temporal
+    # artifact QGIS/MDAL animates. Supersedes the hand-wired
+    # publish_input_layer(mesh) against byte-equivalence (ADR 0286). The Duck FRF
+    # mesh is planar (non-geographic) -> crs_authid=None.
+    await publish_results_mesh_via_seam(
+        emitter, run_id=batch_run_id, engine="schism",
+        peak_layers=[wave],
+        mesh_uri=metrics["mesh_uri"],
+        mesh_name=f"SCHISM+WWM mesh ({metrics['n_nodes']} nodes)",
+        crs_authid="EPSG:4326" if metrics["is_geographic"] else None,
+    )
 
     # --- Best-effort: the cross-shore Hs/Tp verification chart (the artifact) -- #
     if emitter is not None and vv and vv.get("gauges"):

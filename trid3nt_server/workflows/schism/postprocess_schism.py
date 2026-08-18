@@ -11,10 +11,12 @@ time) water-surface elevation at each node, and produces:
     continental netCDF layer). For the IDEALIZED QuarterAnnulus verification mesh
     (planar non-geographic coords) it is a native-frame GeoTIFF with a LOUD
     non-geographic note -- the real QA deliverable is the analytical RMSE gate.
-  * ``layers[1]`` -- the MESH preview (``layer_type="mesh"``): the out2d
-    UGRID netCDF itself, which the plugin opens via MDAL (``QgsMeshLayer``); the
-    ONE format the live materializer STAGES. ``crs_authid`` carries the
-    explicit CRS MDAL needs.
+The native out2d UGRID netCDF (every timestep + dataset group -- the TEMPORAL
+artifact QGIS/MDAL animates directly) is NOT returned as a layer here: it rides the
+emit-on-solve seam as a ``kind="mesh"`` ``outputs.json`` entry (ADR 0286), written +
+published by the composer via ``results_mesh_seam``. ``metrics`` carries the
+``mesh_uri`` / ``n_nodes`` / ``is_geographic`` (+ ``crs_authid`` derivation) the
+composer needs to author that entry.
 
 Honesty floor (invariant 1): every elevation scalar is plain arithmetic
 from the netCDF -- no LLM. ``h5py``/``netCDF4``/``rasterio``/``pyproj`` are
@@ -276,8 +278,10 @@ def postprocess_schism(
     """Rasterize a SCHISM out2d to a max-elevation COG + emit the UGRID mesh preview.
 
     Returns ``(layers, metrics)``: ``layers[0]`` the ``SchismElevationLayerURI``
-    max-elevation COG (primary), ``layers[1]`` the ``layer_type="mesh"`` out2d
-    UGRID preview (context). ``metrics`` carries the elevation stats.
+    max-elevation COG (primary). The native out2d UGRID mesh rides the emit-on-solve
+    seam (``kind="mesh"`` outputs.json entry, ADR 0286) -- the composer authors +
+    publishes it; ``metrics`` carries the ``mesh_uri`` / ``n_nodes`` /
+    ``is_geographic`` it needs plus the elevation stats.
 
     ``reproject_xy`` (optional): a ``(node_x, node_y) -> (lon, lat)`` map applied to
     the out2d node coords before rasterizing -- the PaHM-surge deck's local metres
@@ -350,20 +354,11 @@ def postprocess_schism(
         constituents=list(constituents),
     )
 
+    # The native out2d UGRID mesh (every timestep, every dataset group) rides the
+    # emit-on-solve seam as a kind="mesh" outputs.json entry (ADR 0286) -- the
+    # composer writes it + publishes via results_mesh_seam, NOT hand-wired here.
+    # metrics carries the mesh_uri + n_nodes + is_geographic the composer needs.
     layers: list[LayerURI] = [elev_layer]
-
-    # --- the UGRID mesh preview (layer_type="mesh"/0118) ------------
-    mesh_layer = LayerURI(
-        layer_id=f"schism-mesh-{run_id}",
-        name=f"SCHISM mesh ({data['n_nodes']} nodes)",
-        layer_type="mesh",
-        uri=out2d_uri,  # the out2d UGRID netCDF the plugin opens via MDAL
-        style_preset="mesh_grid",
-        role="context",
-        bbox=None,
-        crs_authid=crs_authid,
-    )
-    layers.append(mesh_layer)
 
     metrics = {
         "elev_max_m": elev_max_m,
@@ -738,11 +733,13 @@ def postprocess_schism_waves(
     fallback_note: str | None = None,
     forcing: dict[str, Any] | None = None,
 ) -> tuple[list[LayerURI], dict[str, Any]]:
-    """Rasterize a SCHISM+WWM out2d to a max-Hs COG + emit the UGRID mesh preview.
+    """Rasterize a SCHISM+WWM out2d to a max-Hs COG; the mesh rides the seam.
 
     Returns ``(layers, metrics)``: ``layers[0]`` the ``SchismWaveLayerURI`` max-Hs
-    COG (primary), ``layers[1]`` the ``layer_type="mesh"`` out2d UGRID preview
-    (context). ``metrics`` carries the wave stats + the offshore anchor.
+    COG (primary). The native out2d+WWM UGRID mesh rides the emit-on-solve seam
+    (``kind="mesh"`` outputs.json entry, ADR 0286) -- the composer authors +
+    publishes it; ``metrics`` carries the ``mesh_uri`` / ``n_nodes`` /
+    ``is_geographic`` plus the wave stats + the offshore anchor.
     """
     import numpy as np
 
@@ -835,18 +832,10 @@ def postprocess_schism_waves(
         "forced_spread_deg": f.get("forced_spread_deg"),
     })
 
+    # The native out2d+WWM UGRID mesh rides the emit-on-solve seam (ADR 0286) --
+    # the composer writes the kind="mesh" outputs.json entry + publishes via
+    # results_mesh_seam. metrics carries mesh_uri + n_nodes + is_geographic.
     layers: list[LayerURI] = [wave_layer]
-    mesh_layer = LayerURI(
-        layer_id=f"schism-wave-mesh-{run_id}",
-        name=f"SCHISM+WWM mesh ({data['n_nodes']} nodes)",
-        layer_type="mesh",
-        uri=out2d_uri,
-        style_preset="mesh_grid",
-        role="context",
-        bbox=None,
-        crs_authid=crs_authid,
-    )
-    layers.append(mesh_layer)
 
     metrics = {
         "hs_max_m": hs_max_m,
@@ -1123,8 +1112,10 @@ def postprocess_schism_baroclinic(
 
     Returns ``(layers, metrics)``: ``layers[0]`` the ``SchismBaroclinicLayerURI``
     surface-salinity COG (primary), ``layers[1]`` the bottom-salinity COG
-    (context), ``layers[2]`` the mesh preview. ``metrics`` carries the
-    stratification stats.
+    (context). The native 3D salinity mesh rides the emit-on-solve seam
+    (``kind="mesh"`` outputs.json entry, ADR 0286) -- the composer authors +
+    publishes it; ``metrics`` carries the ``mesh_uri`` / ``n_nodes`` / ``n_layers``
+    / ``is_geographic`` plus the stratification stats.
     """
     import numpy as np
 
@@ -1210,18 +1201,13 @@ def postprocess_schism_baroclinic(
             units="psu", label="Bottom salinity (psu)",
         ),
     )
-    mesh_layer = LayerURI(
-        layer_id=f"schism-baroclinic-mesh-{run_id}",
-        name=f"SCHISM 3D mesh ({data['n_nodes']} nodes x {data['n_layers']} layers)",
-        layer_type="mesh",
-        uri=mesh_uri,
-        style_preset="mesh_grid",
-        role="context",
-        bbox=None,
-        crs_authid=crs_authid,
-    )
-    layers: list[LayerURI] = [surf_layer, bottom_layer, mesh_layer]
+    # The native 3D salinity mesh (every timestep + vertical layer) rides the
+    # emit-on-solve seam (ADR 0286) -- the composer writes the kind="mesh"
+    # outputs.json entry + publishes via results_mesh_seam. metrics carries the
+    # mesh_uri + n_nodes + n_layers + is_geographic the composer needs.
+    layers: list[LayerURI] = [surf_layer, bottom_layer]
     metrics = {
+        "mesh_uri": mesh_uri,
         "surface_salinity_min_psu": surf_min,
         "surface_salinity_max_psu": surf_max,
         "bottom_salinity_max_psu": bot_max,
