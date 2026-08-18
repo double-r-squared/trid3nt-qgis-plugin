@@ -125,6 +125,7 @@ _HECRAS_MUNCIE_METADATA = AtomicToolMetadata(
 async def hecras_riverine_flood(
     flow_scale: float = 1.0,
     target_peak_cfs: float | None = None,
+    run_demo_geometry: bool = False,
     input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
@@ -168,6 +169,13 @@ async def hecras_riverine_flood(
             inflow discharge in cfs. The worker derives the multiplier from the
             baseline peak, so a user (or a USGS-gauge / NWM peak) can pin the
             forcing to a real discharge. Overrides ``flow_scale``.
+        run_demo_geometry: EXPLICIT opt-in (default ``False``) to run HEC's baked
+            Muncie White River demonstration geometry. This template models ONLY
+            that frozen reach -- it is NOT a model of any AOI you name. Left False
+            the run REFUSES with a typed ``HECRAS_DEMO_GEOMETRY_REQUIRED`` error
+            (law 9: foreign geometry is never a silent answer to a place-named
+            request). Set True to run the demonstration explicitly; outputs are
+            banner-labeled DEMONSTRATION GEOMETRY.
         input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved flow forcing + the frozen-geometry note for review before the
             solve; ``"auto"`` (default) proceeds with them labeled.
@@ -218,6 +226,7 @@ async def hecras_riverine_flood(
         depth = await model_hecras_riverine_flood(
             flow_scale=flow_scale,
             target_peak_cfs=tp,
+            run_demo_geometry=bool(run_demo_geometry),
             input_mode=input_mode,
         )
         if isinstance(depth, dict):  # a gate cancel returns a typed dict
@@ -362,6 +371,7 @@ async def model_hecras_riverine_flood(
     *,
     flow_scale: float = 1.0,
     target_peak_cfs: float | None = None,
+    run_demo_geometry: bool = False,
     input_mode: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """Stage -> flow-scale -> solve -> postprocess -> publish the Muncie flood.
@@ -371,6 +381,23 @@ async def model_hecras_riverine_flood(
     postprocess fault."""
     emitter = current_emitter()
     begin_substeps(emitter, 3)  # run_solver + postprocess + publish
+
+    # --- demo-geometry opt-in (law 9, audit row 14): the baked Muncie reach is
+    # foreign to any AOI the user names, so it never answers a place-named request
+    # silently. Running it is an EXPLICIT choice (the pahm_surge allow_synthetic_
+    # domain precedent); left un-opted-in the run REFUSES before touching the solver.
+    if not run_demo_geometry:
+        return {
+            "status": "error",
+            "error_code": "HECRAS_DEMO_GEOMETRY_REQUIRED",
+            "error_message": (
+                "hecras_riverine_flood solves ONLY HEC's baked Muncie White River "
+                "(Muncie, IN) demonstration geometry -- it is NOT a model of any AOI "
+                "you name. Pass run_demo_geometry=True to explicitly run the Muncie "
+                "demonstration (outputs are banner-labeled DEMONSTRATION GEOMETRY), "
+                "or use sfincs_flood for a real place-named flood."
+            ),
+        }
 
     # --- Stage 1: the input-review gate ---------------------------- #
     # The physically dominant, otherwise-buried input is the FLOW forcing (the
@@ -392,8 +419,10 @@ async def model_hecras_riverine_flood(
         ),
         SyntheticInput(
             param="geometry", value="Muncie White River (IN) demonstration model",
-            basis="default_demo", consequence="physics",
-            note="FROZEN shipped 1D/2D geometry (terrain + mesh unchanged; not a user AOI)",
+            basis="default_demo", consequence="scenario",
+            note="DEMONSTRATION GEOMETRY (opt-in via run_demo_geometry=True): HEC's "
+                 "FROZEN shipped Muncie White River 1D/2D reach -- terrain + mesh "
+                 "unchanged, NOT a user AOI",
         ),
     ]
     review = await gate_input_review(

@@ -129,6 +129,7 @@ async def hecras_levee_breach(
     breach_enabled: bool = True,
     flow_scale: float = 1.0,
     target_peak_cfs: float | None = None,
+    run_demo_geometry: bool = False,
     input_mode: str | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
@@ -226,6 +227,7 @@ async def hecras_levee_breach(
             breach_enabled=breach_enabled,
             flow_scale=flow_scale,
             target_peak_cfs=tp,
+            run_demo_geometry=bool(run_demo_geometry),
             input_mode=input_mode,
         )
         if isinstance(depth, dict):  # a gate cancel returns a typed dict
@@ -372,6 +374,7 @@ async def model_hecras_levee_breach(
     breach_enabled: bool = True,
     flow_scale: float = 1.0,
     target_peak_cfs: float | None = None,
+    run_demo_geometry: bool = False,
     input_mode: str | None = None,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """Stage -> breach toggle + flow-scale -> solve -> postprocess -> publish.
@@ -381,6 +384,22 @@ async def model_hecras_levee_breach(
     ``HecrasLeveeBreachError`` on a fatal solve / postprocess fault."""
     emitter = current_emitter()
     begin_substeps(emitter, 3)  # run_solver + postprocess + publish
+
+    # --- demo-geometry opt-in (law 9, audit row 14): the baked Muncie leveed
+    # floodplain is foreign to any AOI the user names; running it is an EXPLICIT
+    # choice (pahm_surge allow_synthetic_domain precedent), never a silent answer.
+    if not run_demo_geometry:
+        return {
+            "status": "error",
+            "error_code": "HECRAS_DEMO_GEOMETRY_REQUIRED",
+            "error_message": (
+                "hecras_levee_breach solves ONLY HEC's baked Muncie White River "
+                "(Muncie, IN) leveed-floodplain demonstration geometry -- it is NOT a "
+                "model of any AOI you name. Pass run_demo_geometry=True to explicitly "
+                "run the Muncie demonstration (outputs are banner-labeled "
+                "DEMONSTRATION GEOMETRY), or use sfincs_flood for a real place-named flood."
+            ),
+        }
 
     # --- Stage 1: the input-review gate ---------------------------- #
     peak_est = (target_peak_cfs if target_peak_cfs is not None
@@ -406,13 +425,20 @@ async def model_hecras_levee_breach(
         SyntheticInput(
             param="breach_params",
             value="2 lateral-structure breaches (Breach Data block, shipped deck)",
-            basis="default_demo", consequence="scenario",
-            note="HEC's shipped Muncie breach geometry/timing -- toggled, not authored",
+            basis="default_demo" if breach_enabled else "user",
+            consequence="physics",
+            note="breach width / invert / formation-time are UN-FETCHABLE engineering "
+                 "(HEC's shipped Muncie breach geometry, toggled not authored); refuse "
+                 "in auto -- supply real breach params or run user_gated to approve. "
+                 "Literature: overtopping breaches ~2-4x levee height wide, "
+                 "0.5-3 h formation (USACE / Froehlich regressions)",
         ),
         SyntheticInput(
             param="geometry", value="Muncie White River (IN) leveed-floodplain demonstration model",
-            basis="default_demo", consequence="physics",
-            note="FROZEN shipped 1D/2D geometry (terrain + mesh unchanged; not a user AOI)",
+            basis="default_demo", consequence="scenario",
+            note="DEMONSTRATION GEOMETRY (opt-in via run_demo_geometry=True): HEC's "
+                 "FROZEN shipped Muncie leveed-floodplain reach -- terrain + mesh "
+                 "unchanged, NOT a user AOI",
         ),
     ]
     review = await gate_input_review(

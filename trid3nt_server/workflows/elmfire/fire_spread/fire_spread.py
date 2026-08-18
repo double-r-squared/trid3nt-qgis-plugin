@@ -36,7 +36,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.elmfire_contracts import (
+    DEFAULT_FIRE_WIND_DIR_DEG,
+    DEFAULT_FIRE_WIND_SPEED_MPH,
     ELMFIRE_TOA_STYLE_PRESET,
     ElmfireRunArgs,
     FireSpreadLayerURI,
@@ -707,6 +710,36 @@ async def model_elmfire_fire_spread(
     primary = await asyncio.to_thread(
         _publish_primary_layer, raw_primary, staging.run_id
     )
+
+    # --- fire-weather provenance (law 9, audit row 34): wind + fuel moisture
+    # DRIVE the entire spread; they rode SILENT. Surface them as the scenario
+    # what-if levers they are (the audit's borderline resolution -> scenario, no
+    # refuse: a fire-weather regime is the user's question). A RAWS / gridMET /
+    # HRRR fire-weather fetch is the queued real-source upgrade.
+    _fire_weather = [
+        SyntheticInput(
+            param="wind_speed_mph", value=round(float(run_args.wind_speed_mph), 1),
+            units="mph",
+            basis="default_demo" if float(run_args.wind_speed_mph) == DEFAULT_FIRE_WIND_SPEED_MPH else "user",
+            consequence="scenario",
+            note="sustained 20-ft driving wind (fire-weather scenario lever, not a "
+                 "forecast; RAWS/gridMET/HRRR fetch queued)",
+        ),
+        SyntheticInput(
+            param="wind_dir_deg", value=round(float(run_args.wind_dir_deg), 1),
+            units="deg",
+            basis="default_demo" if float(run_args.wind_dir_deg) == DEFAULT_FIRE_WIND_DIR_DEG else "user",
+            consequence="scenario",
+            note="direction the wind blows FROM (meteorological); scenario lever",
+        ),
+        SyntheticInput(
+            param="fuel_moisture", value=str(run_args.fuel_moisture),
+            basis="default_demo" if str(run_args.fuel_moisture) == "dry" else "user",
+            consequence="scenario",
+            note="dead/live fuel-moisture regime (dry = critical fire weather); scenario lever",
+        ),
+    ]
+    primary = primary.model_copy(update={"synthetic_inputs": _fire_weather})
 
     # --- Publish + emit frames/aux out-of-band (scrubber group). ------------
     emitted = await _emit_secondary_layers(emitter, secondary, staging.run_id)

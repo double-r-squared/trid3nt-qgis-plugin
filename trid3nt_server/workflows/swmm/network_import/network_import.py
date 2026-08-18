@@ -575,6 +575,19 @@ def _publish_network_layer(
             units="mm", basis=depth_basis, consequence="scenario",
             note=f"{return_period_yr}-yr/{storm_duration_hr:.0f}-hr design storm loading",
         ),
+        SyntheticInput(
+            param="subarea_roughness", value="n_imperv=0.012, n_perv=0.10, imperv=70%",
+            basis="default_demo", consequence="scenario",
+            note="per-surface-type SubArea overland-flow constants -- literature-"
+                 "canonical SWMM documented defaults (imported network has no "
+                 "sub-catchment survey), NOT a single bulk NLCD roughness",
+        ),
+        SyntheticInput(
+            param="infiltration_horton", value="Horton (documented rates)",
+            basis="default_demo", consequence="scenario",
+            note="Horton infiltration parameters -- literature-canonical SWMM "
+                 "documented defaults for the demo sub-areas",
+        ),
     ]
     if build.n_inverts_filled:
         provenance.append(SyntheticInput(

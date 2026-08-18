@@ -44,6 +44,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.swan_contracts import (
     SWAN_WAVE_HEIGHT_STYLE_PRESET,
@@ -619,6 +620,30 @@ def _record_swan_batch_solve_telemetry(
     return record_solve_telemetry(row)
 
 
+def _stamp_swan_provenance(peak: WaveFieldLayerURI, run_args: SwanRunArgs) -> WaveFieldLayerURI:
+    """Surface SWAN's wave-physics calibration coefficients (law 9, audit row 34).
+
+    They rode SILENT. They are literature-canonical SWAN constants (single
+    universally-accepted published values), so they carry a documented-default
+    label and PROCEED (numerical consequence, no refuse) -- they are not invented
+    site claims.
+    """
+    entry = SyntheticInput(
+        param="wave_physics_coefficients",
+        value=(f"breaking_alpha={run_args.breaking_alpha:g}, "
+               f"breaking_gamma={run_args.breaking_gamma:g}, "
+               f"friction_cfjon={run_args.friction_cfjon:g}, "
+               f"triads={'on' if run_args.triads else 'off'}"),
+        basis="default_demo", consequence="numerical",
+        note="literature-canonical SWAN calibration constants (depth-induced "
+             "breaker index + JONSWAP bottom friction + triad closure); documented "
+             "published values, not site-fit",
+    )
+    return peak.model_copy(update={
+        "synthetic_inputs": list(peak.synthetic_inputs or []) + [entry],
+    })
+
+
 async def model_swan_wave_field(
     run_args: SwanRunArgs,
     *,
@@ -878,7 +903,7 @@ async def model_swan_wave_field(
                 logger.warning(
                     "model_swan_wave_field: seam zoom-to failed: %s", exc
                 )
-        return peak
+        return _stamp_swan_provenance(peak, run_args)
     if manifest is not None:
         logger.info(
             "model_swan_wave_field: REGISTER-ONLY path (worker postprocess offload) "
@@ -917,7 +942,7 @@ async def model_swan_wave_field(
                 logger.warning(
                     "model_swan_wave_field: register-only zoom-to failed: %s", exc
                 )
-        return peak
+        return _stamp_swan_provenance(peak, run_args)
 
     # --- Step 4: download the Batch SWAN output (ON-BOX FALLBACK) ----------
     batch_run_id = getattr(run_result, "run_id", None) or staging.run_id
@@ -975,7 +1000,7 @@ async def model_swan_wave_field(
         except Exception as exc:  # noqa: BLE001
             logger.warning("model_swan_wave_field: authoritative zoom-to failed: %s", exc)
 
-    return peak
+    return _stamp_swan_provenance(peak, run_args)
 
 
 def _publish_peak_layer(

@@ -368,3 +368,73 @@ for `basis="default_demo"` (schema-level), so the omission cannot even construct
   = #5), row 27 (Muncie demo geometry = #14). Those rows are runtime fallbacks of
   the SAME invented values; the conversions should land together.
 </content>
+
+## CLOSING STATUS -- the ladder is complete (2026-08-18, ADR 0285 P1-P8)
+
+All 34 invented-physics rows are dispositioned. The mechanism (P1: the
+`consequence` tag + refuse-in-auto + the 3-layer sweep guard) plus the eight
+conversion waves close law 9 for the whole swept surface: no physics-consequential
+value with no real source runs on an invention in auto -- it derives, refuses, or
+(for un-fetchable engineering) waits for explicit approval; scenario/numerical/aoi
+and documented-canonical values proceed labeled.
+
+### Disposition of the 34 rows
+
+**WIRED -- derive-from-real-data-or-REFUSE (15 rows).** A real fetcher serves the
+value; an under-specified run derives it from the AOI or refuses when the source
+cannot serve.
+- MODFLOW aquifer K/porosity/vadose/thermal/SFR/gradient #1-#7 (SoilGrids
+  pedotransfer, P2).
+- Landlab soil strength/groundwater/green_ampt/channel_incision #8-#11 (SoilGrids
+  texture + literature offers, P3-completion).
+- GeoClaw storm_surge manning #16 + SWMM urban_flood overland_manning #23
+  (NLCD area-weighted Manning, P4).
+- SCHISM baroclinic river_discharge #19 (NWM dominant reach, P5).
+- SWMM aquifer_baseflow soil column #27 (SoilGrids two-zone column, P3-completion).
+
+**REFUSE + user-gated engineering/literature offer (10 rows).** No real source (or
+a QUEUED one); refuses in auto naming the need, approvable in user_gated.
+- Permanent (un-fetchable engineering): hecras culvert #12, levee breach_params
+  #15, swmm dual_drainage inlet_capture #26, swmm network junction/inverts #24.
+- Until a QUEUED source lands: hecras flood_2d peak #13 (USGS peak-flow regression),
+  openquake vs30 #18 (USGS Vs30), schism ocean_salinity #20 (WOA), telemac agitation
+  waves #29 (NDBC), telemac thermocline #30 (lake profiles), telemac datum #33
+  (CO-OPS datums).
+
+**GATED / opt-in / verified-compliant (5 rows).** Consent is explicit, or the value
+is already derived from real data.
+- hecras Muncie geometry #14 -> `run_demo_geometry` explicit opt-in (P7).
+- schism synthetic bathymetry #22 -> `allow_synthetic_domain` opt-in, VERIFIED
+  compliant (P5; coupled_waves = a misread, canonical DUCK94).
+- swmm synthesized drainage_network #25 -> labeled screening model-choice.
+- telemac river_dye bank geometry #31 -> already user-gated (fallback-audit row 23).
+- openquake secondary_perils Vs30 (part of #18) -> DEM-slope-derived (Wald-Allen),
+  compliant, no change (P6 law-6 correction).
+
+**LABELED -- surface without refusing (P8, scenario/numerical documented-default).**
+- elmfire fire weather #34, telemac do_sag WQ #32, swmm network n_imperv/n_perv/
+  Horton constants (part of #24), SWAN wave-physics coefficients, geoclaw default
+  fault/magnitude #17 + the storm-climatology borderline flags -> all scenario/
+  numerical documented labels, no refuse (a fire-weather regime / BOD load / storm
+  is the user's QUESTION; SWAN/Horton constants are literature-canonical).
+
+**DESIGN FORK -> NATE (1 row).** telemac wave_field wind #28 -- gridMET gives ambient
+not the storm the param means; recommend re-tag scenario (see ADR P5).
+
+### The consolidated NATE queue (refusals -> derivations when these land)
+
+USGS Vs30 (#18) - USGS peak-flow regression (#13) - RAWS/gridMET/HRRR fire weather
+(#34) - fetch_usgs_water_quality temp + O'Connor-Dobbins k2 (#32) - World Ocean
+Atlas salinity (#20) - NOAA CO-OPS tidal-constituent boundary (#21) + datums (#33) -
+NDBC buoy obs (#28/#29) - lake temperature profiles (#30) - wave_field wind fork
+(#28) - river_dye/discharge_resolve convergence - NLDI upstream-navigation inflow
+refinement (#19 fidelity). Un-fetchable engineering (#12/#15/#24/#26) stays
+user-gated permanently -- the honest law-9 endpoint.
+
+### Counts
+
+34 rows: **15 WIRED** (derive-or-refuse via a real fetcher) - **10 REFUSE**
+(4 permanent engineering + 6 until a queued source) - **5 GATED/compliant** -
+**~6 LABELED** (P8, no refuse; some rows span categories) - **1 FORK -> NATE**.
+Nothing was deleted in P6-P8 (relabels + gate-wirings + one opt-in + provenance
+labels; the demo constants that DIED were deleted in P2-P4, see the ledger).

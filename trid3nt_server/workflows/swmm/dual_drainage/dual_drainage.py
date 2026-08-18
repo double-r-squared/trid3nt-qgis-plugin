@@ -41,6 +41,7 @@ from trid3nt_server.mesh.swmm_network import (
     read_network_response,
 )
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
+from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -50,6 +51,11 @@ from trid3nt_server.emission.pipeline_emitter import (
 logger = logging.getLogger(
     "trid3nt_server.workflows.swmm.dual_drainage.dual_drainage"
 )
+
+#: The demo inlet-capture opening (m). Un-fetchable catchbasin engineering -- a
+#: real inlet carries a capture curve, not one fixed orifice. When left at this
+#: default the input-review gate REFUSES in auto (law 9, audit row 26).
+_DEFAULT_INLET_OPENING_M: float = 0.6
 
 __all__ = ["swmm_dual_drainage_coupling", "model_swmm_dual_drainage"]
 
@@ -266,6 +272,30 @@ async def model_swmm_dual_drainage(
             )
     eff_args = run_args.model_copy(update={"total_rain_depth_mm": float(depth_mm)})
 
+    # --- input-review gate: the inlet-capture opening is UN-FETCHABLE catchbasin
+    # engineering (law 9, audit row 26). Left at the demo default it REFUSES in auto;
+    # a user value / user_gated approval proceeds. ---
+    _inlet_is_demo = abs(float(inlet_opening_m) - _DEFAULT_INLET_OPENING_M) < 1e-9
+    _review = await gate_input_review(
+        tool_name="swmm_dual_drainage", mode=input_mode,
+        entries=[
+            SyntheticInput(param="inlet_capture", value=f"{inlet_opening_m} m opening",
+                           units="m", basis="default_demo" if _inlet_is_demo else "user",
+                           consequence="physics",
+                           note="fixed inlet orifice -- UN-FETCHABLE catchbasin engineering "
+                                "(real inlets carry a capture curve); supply inlet_opening_m "
+                                "or run user_gated to approve. Literature: HEC-22 grate/curb "
+                                "inlet capture, 0.3-1.0 m typical opening"),
+        ],
+        params={"inlet_opening_m": float(inlet_opening_m)},
+    )
+    if _review.cancelled:
+        raise SWMMNetworkError("USER_INPUT_CANCELLED",
+                               message=f"swmm_dual_drainage {_review.cancel_reason}")
+    _rv_inlet = _review.params.get("inlet_opening_m")
+    if _rv_inlet is not None:
+        inlet_opening_m = float(_rv_inlet)
+
     # --- Step 4: build overland mesh + load/parse pipe network + couple ---
     async with substep(emitter, "build_dual_drainage_deck"):
         staging, dd, combined_staging, network_source = await asyncio.to_thread(
@@ -337,7 +367,9 @@ async def model_swmm_dual_drainage(
                            real_source_if_any=network_source,
                            note="imported storm-drain nodes + conduits (minor system)"),
             SyntheticInput(param="inlet_capture", value=f"{inlet_opening_m} m opening",
-                           basis="default_demo", consequence="physics",
+                           units="m",
+                           basis="default_demo" if abs(float(inlet_opening_m) - _DEFAULT_INLET_OPENING_M) < 1e-9 else "user",
+                           consequence="physics",
                            note="fixed inlet orifice; real catchbasins carry a capture curve"),
             SyntheticInput(param="total_rain_depth_mm", value=round(float(depth_mm), 1),
                            units="mm", basis="fetched",

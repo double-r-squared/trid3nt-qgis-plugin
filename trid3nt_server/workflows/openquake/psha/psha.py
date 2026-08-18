@@ -55,6 +55,7 @@ from trid3nt_contracts.common import SyntheticInput
 
 from trid3nt_server.data import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.workflows.openquake._local_oq import VS30_DEMO_NOTE
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.openquake._template_card import TemplateCard
 from trid3nt_server.workflows.openquake.postprocess_openquake import (
@@ -306,8 +307,7 @@ async def openquake_psha(
     _vs30_prov = [SyntheticInput(
         param="vs30", value=round(float(run_args.reference_vs30_ms), 1),
         units="m/s", basis="user" if _vs30_user else "default_demo", consequence="physics",
-        note=(None if _vs30_user
-              else "generic NEHRP B/C rock default; no Vs30 fetcher yet (not site-specific)"),
+        note=(None if _vs30_user else VS30_DEMO_NOTE),
     )]
     _review = await gate_input_review(
         tool_name="openquake_psha", mode=input_mode,

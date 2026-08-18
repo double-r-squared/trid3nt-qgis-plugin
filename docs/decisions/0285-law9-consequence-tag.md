@@ -19,8 +19,19 @@ coastal-forcing wave, AFK-conservative: the shared `discharge_resolve` NWM seam 
 SCHISM baroclinic river_discharge row 19 wired + the row-20 salinity literature
 offer + the row-22 synthetic-bathy verification (2 findings, no change); rows 21/28/
 29/30/33 analyzed with per-row verdicts + a QUEUED-FOR-NATE list; live baroclinic
-discharge A/B; see the P5 section). The remaining conversions (P6-P8) are staged.
-Date: 2026-08-18. Source: `docs/design/demo-physics-defaults-audit.md`.
+discharge A/B; see the P5 section). **P6/P7/P8 LANDED -- THE LADDER CLOSES** (the
+tail wave): P6 = openquake Vs30 (row 18) verified refusing (psha/disaggregation/
+event_based) + the scenario_gmf tagging GAP fixed + secondary_perils verified
+compliant (Vs30 DEM-slope-derived, not invented) + the site-class literature offer
+enriched. P7 = un-fetchable engineering + demo geometry (rows 12-15, 26): culvert
+verified refusing; flood_2d peak mislabel corrected -> refuse; the Muncie demo
+geometry (row 14) made an EXPLICIT `run_demo_geometry` opt-in (pahm_surge precedent);
+levee breach_params (row 15) + dual_drainage inlet_capture (row 26) wired to refuse
+with literature offers. P8 = the SILENT stragglers labeled (rows 32, 34 + network
+literature constants + SWAN coefficients) scenario/numerical, no refusals. See the
+P6/P7/P8 sections + the audit's closing STATUS. Nothing deleted this wave (relabels +
+gate-wirings + one opt-in + provenance labels). Date: 2026-08-18. Source:
+`docs/design/demo-physics-defaults-audit.md`.
 
 ## Context
 
@@ -569,3 +580,133 @@ and points to a tighter river-mouth AOI / explicit discharge), but the derivatio
 selection policy is a screening lower bound, not a calibrated inflow. QUEUED: an
 NLDI upstream-navigation refinement (`fetch_nhdplus_nldi_navigate` exists) to find
 the true main-stem inflow reach from the estuary head.
+
+## P6 -- seismic site response: openquake Vs30 (LANDED)
+
+Audit row 18 (`reference_vs30` across the openquake family). Vs30 controls the
+site amplification of every ground-motion result; a single uniform reference Vs30
+stamped `reference_vs30_type = measured` is invented site response. There is no
+Vs30 fetcher yet (USGS Vs30 web service / topographic-slope Vs30 is QUEUED for
+NATE, a new surface -- not built this wave), so the law-9 position is REFUSE in
+auto with a user_gated literature offer.
+
+### Verification finding (the point of P6)
+
+The P1 tagging already made `reference_vs30` `physics`+`default_demo` in **psha,
+disaggregation, event_based** -- verified LIVE: an under-specified psha auto-run
+returns `USER_INPUT_CANCELLED` / `PHYSICS_INPUT_REQUIRED` naming `vs30`. But the
+verify found the row-18 family INCOMPLETE:
+
+- **scenario_gmf -- TAGGING GAP (fixed, in scope).** `openquake_scenario_gmf`
+  gated only `magnitude` + `rupture_geometry` (scenario); its uniform 760 rock
+  Vs30 (stamped `reference_vs30_type = measured` in the site model) had NO physics
+  entry, so it did NOT refuse in auto. A `vs30` `physics`+`default_demo` entry was
+  ADDED to its gate; it now refuses (verified offline + live).
+- **secondary_perils -- VERIFIED COMPLIANT (law-6 correction to the audit, no
+  change).** The audit lumped secondary_perils into row 18, but it DERIVES per-cell
+  Vs30 from the DEM topographic slope via the Wald-Allen (2007) active-tectonic
+  table (`wald_allen_vs30_active`); the `vs30` arg is only a UNIFORM OVERRIDE that
+  defaults to None -> slope-derived. That is derived-from-real-data, NOT an invented
+  default. Tagging it `physics` would wrongly refuse a template that already does
+  the honest thing. No change (a spurious `physics` entry added during the verify
+  was reverted).
+
+### The literature offer (site-class ranges)
+
+The refuse-in-auto note (`_local_oq.VS30_DEMO_NOTE`, shared by all four refusing
+templates) doubles as the user_gated literature offer: it names the ASCE 7-22
+site-class Vs30 bands (A >1500, B 760-1500, C 360-760, D 180-360, E <180 m/s) so a
+reviewer can approve a class-representative value. Verified live in the psha
+refusal message.
+
+### Verdict per template (row 18)
+
+| Template | Verdict |
+|---|---|
+| openquake_psha | REFUSES (P1, verified live) + enriched literature offer |
+| openquake_disaggregation | REFUSES (P1) + enriched note |
+| openquake_event_based | REFUSES (P1) + enriched note |
+| openquake_scenario_gmf | GAP FIXED -> now REFUSES (uniform 760, no derivation) |
+| openquake_secondary_perils | COMPLIANT, no change (Vs30 = DEM-slope-derived) |
+
+QUEUED FOR NATE: a USGS Vs30 web-service / topographic-slope Vs30 fetcher (turns
+the psha/scenario_gmf refusals into a derivation for the uniform-reference case).
+
+## P7 -- un-fetchable engineering + demo geometry (LANDED)
+
+Audit rows 12-15, 26. Genuinely un-derivable engineering values become user-gated
+offers (refuse in auto, literature note); the baked demo geometry becomes an
+EXPLICIT opt-in. No real source exists for any of these -- the honest law-9 path
+is refuse-or-approve, not invent.
+
+### Per-row verdict
+
+| Row | Template / param | Verdict | What landed |
+|---|---|---|---|
+| 12 | hecras culvert barrel geometry | **VERIFIED (already wired P1)** | The P1 mislabel fix (barrel_diameter/opening_type/entrance_exit_loss/barrel_manning `derived`->`default_demo`+`physics`) already routes through `gate_input_review`; an under-specified auto run REFUSES (`HECRAS_INPUT_REVIEW_CANCELLED` naming `barrel_diameter`). Verified live. |
+| 13 | hecras flood_2d `peak_inflow_cfs` (=5000) | **MISLABEL CORRECTED -> refuse** | The inflow-branch entry stamped the `_DEFAULT_PEAK_CFS` fallback `basis="user"` (a mislabel). Now threaded `peak_is_default` from the tool: an un-supplied peak is `default_demo`+`physics` and REFUSES in auto naming `peak_inflow_cfs` (a USGS regional-regression / gauge peak-flow fetcher is the queued real source). Also fixed a co-located LATENT BUG: the `equation_set`/`computation_interval` entries used `basis="default"`, which is NOT a valid `InputBasis` Literal and would raise on every default-equation-set inflow run -- corrected to `default_demo`+`numerical` (proceed, labeled). |
+| 14 | hecras Muncie baked geometry (riverine_flood, levee_breach) | **EXPLICIT OPT-IN** | The pahm_surge `allow_synthetic_domain` precedent: a `run_demo_geometry: bool = False` param. Left False the run REFUSES BEFORE the gate with a typed `HECRAS_DEMO_GEOMETRY_REQUIRED` (naming that the template models ONLY HEC's Muncie reach, and pointing to sfincs_flood for a real place). Set True the geometry entry is a CONSENTED `default_demo`+`scenario` (banner-noted DEMONSTRATION GEOMETRY) and proceeds. Never a silent answer to a place-named request. **Law-6 note:** the audit listed flood_2d + culvert under row 14, but flood_2d AUTHORS its own mesh from the fetched DEM and culvert builds fresh topo -- neither bakes Muncie, so only riverine_flood + levee_breach carry the opt-in. |
+| 15 | hecras levee_breach `breach_params` | **scenario -> physics + literature offer** | The shipped Muncie breach geometry/timing was tagged `scenario` (proceeded). Re-tagged `physics`: an active-breach auto run REFUSES naming `breach_params`, with a literature note (overtopping breaches ~2-4x levee height wide, 0.5-3 h formation; USACE/Froehlich). A levee-HOLDS run (breach_enabled=False) keeps `basis="user"` (breaches inactive -> not consequential -> no refuse). Two-layer consent: opt into the demo geometry AND approve/supply the breach engineering. |
+| 26 | swmm dual_drainage `inlet_capture` | **gate wired -> refuse + literature offer** | The entry was stamped on the result envelope but NEVER gated (no `gate_input_review` call) -- it labeled but did not refuse. Added a gate after the precip step: an un-supplied `inlet_opening_m` (the demo 0.6 m) is `default_demo`+`physics` and REFUSES in auto (`USER_INPUT_CANCELLED`), literature note (HEC-22 grate/curb inlet capture, 0.3-1.0 m). A user value proceeds. |
+
+Live: the culvert auto-refusal (row 12) is proven live (`HECRAS_INPUT_REVIEW_CANCELLED`
+naming barrel_diameter); riverine/levee opt-in refusals + the levee breach_params
+refusal + the dual_drainage inlet refusal are offline-proven (gate logic,
+deterministic).
+
+## P8 -- label the SILENT stragglers (LANDED, label-only, NO refusals)
+
+Audit rows 32, 34 + the borderline network/SWAN constants. These rode SILENT (no
+provenance surface). Per the audit plan they get a provenance entry tagged
+`scenario` or `numerical` (documented-default) so they SURFACE without refusing --
+refusing would brick canonical/what-if templates with no fetch alternative. No
+`physics` refusals added.
+
+- **row 34 (elmfire fire_spread wind/dir/moisture).** `wind_speed_mph`/`wind_dir_deg`/
+  `fuel_moisture` DRIVE the entire spread and rode SILENT. Surfaced as `scenario`
+  what-if levers (the audit's borderline resolution -- a fire-weather regime is the
+  user's question) stamped on the primary layer's `synthetic_inputs`. A RAWS/gridMET/
+  HRRR fire-weather fetch is the QUEUED real-source upgrade.
+- **row 32 (telemac do_sag WQ terms).** `discharge_bod_mgl` (the pollutant
+  source-term question) -> `scenario`; `water_temp_c` -> `scenario` (20 C is the
+  standard closed-form Streeter-Phelps condition; the canonical-validation carve-out
+  applies -- a site temperature via `fetch_usgs_water_quality` is QUEUED, not a
+  refusal that would break the analytical benchmark); `k1_per_day`/`k2_per_day` ->
+  `numerical` (documented rate coefficients; O'Connor-Dobbins reaeration derivation
+  QUEUED). Note: `streeter_phelps.py` is an analytics helper (no registered tool) --
+  do_sag IS the Streeter-Phelps template. The audit's `physics` reading of temp/
+  reaeration is deferred to the queued fetcher rather than a benchmark-breaking
+  refuse (law-6 judgment, surfaced).
+- **network_import literature constants.** The SubArea `n_imperv=0.012 / n_perv=0.10 /
+  imperviousness` + Horton infiltration constants (the P4 finding's QUEUED label-only
+  items) surfaced as `scenario` documented-defaults (literature-canonical per-surface
+  SWMM values, NOT a single bulk NLCD roughness). `junction_subarea`/`node_inverts`
+  keep their P1 `physics` refuse.
+- **SWAN physics coefficients.** `breaking_alpha/breaking_gamma/friction_cfjon/triads`
+  (literature-canonical SWAN calibration constants) surfaced as ONE `wave_physics_
+  coefficients` `numerical` documented-default entry on the peak layer. The storm
+  climatology (`storm_peak_hs_m`/`storm_peak_hour`) has NO hidden default -- it is
+  opt-in (None unless the user sets it), so there is no silent value to label.
+
+## Consolidated NATE queue (the ladder's outflow)
+
+The refusals become derivations WHEN these sources land (all deferred per the
+conservative rule -- name the source, then build):
+
+1. **USGS Vs30 fetcher** (row 18) -- turns psha/scenario_gmf uniform-reference
+   refusals into a slope/service-derived Vs30 (secondary_perils already slope-derives).
+2. **USGS regional peak-flow regression / gauge fetcher** (row 13) -- flood_2d
+   `peak_inflow_cfs` derivation.
+3. **RAWS / gridMET / HRRR fire-weather fetcher** (row 34) -- elmfire wind + fuel
+   moisture (turns the scenario label into a derived option).
+4. **`fetch_usgs_water_quality` water-temperature wiring** (row 32) -- do_sag
+   `water_temp_c`; O'Connor-Dobbins reaeration k2 from velocity/depth.
+5. Carried from P5: World Ocean Atlas salinity, CO-OPS tidal-constituent boundary,
+   the wave_field wind consequence fork, NDBC buoy obs, CO-OPS datums, lake
+   temperature profiles, river_dye/discharge_resolve convergence, NLDI
+   upstream-navigation inflow refinement.
+
+Culvert barrel geometry (row 12), levee breach engineering (row 15), dual_drainage
+inlet capture (row 26), network junction/invert engineering (row 24) have NO
+fetchable source -- they stay user-gated engineering offers permanently (the honest
+law-9 endpoint for un-fetchable engineering).

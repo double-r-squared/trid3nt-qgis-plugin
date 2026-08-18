@@ -24,6 +24,7 @@ import asyncio
 import logging
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import TelemacDoLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
@@ -252,6 +253,45 @@ async def telemac_do_sag(
             input_mode=input_mode,
             do_sag_config=do_sag_config,
         )
+        # water-quality provenance (law 9, audit row 32): the WQ terms rode SILENT.
+        # Surface them without refusing (P8 label-only + the canonical closed-form
+        # Streeter-Phelps runs at standard conditions): BOD load = the scenario
+        # question; water temp = documented standard condition (20 C S-P benchmark;
+        # fetch_usgs_water_quality queued for a site value); k1/k2 = documented
+        # rate coefficients (O'Connor-Dobbins reaeration queued).
+        _wq = [
+            SyntheticInput(
+                param="discharge_bod_mgl", value=round(float(discharge_bod_mgl), 2),
+                units="mg/L",
+                basis="default_demo" if float(discharge_bod_mgl) == 20.0 else "user",
+                consequence="scenario",
+                note="fully-mixed ultimate CBOD at the reach top -- the pollutant "
+                     "source-term question (scenario lever)",
+            ),
+            SyntheticInput(
+                param="water_temp_c", value=round(float(water_temp_c), 2), units="C",
+                basis="default_demo" if float(water_temp_c) == 20.0 else "user",
+                consequence="scenario",
+                note="sets DO saturation Cs; 20 C = the standard Streeter-Phelps "
+                     "condition (fetch_usgs_water_quality queued for a site temperature)",
+            ),
+            SyntheticInput(
+                param="k1_per_day", value=round(float(k1_per_day), 3), units="1/day",
+                basis="default_demo" if float(k1_per_day) == 0.3 else "user",
+                consequence="numerical",
+                note="CBOD deoxygenation rate -- documented rate coefficient",
+            ),
+            SyntheticInput(
+                param="k2_per_day", value=round(float(k2_per_day), 3), units="1/day",
+                basis="default_demo" if float(k2_per_day) == 0.9 else "user",
+                consequence="numerical",
+                note="surface reaeration rate -- documented coefficient "
+                     "(O'Connor-Dobbins velocity/depth derivation queued)",
+            ),
+        ]
+        layer = layer.model_copy(update={
+            "synthetic_inputs": list(layer.synthetic_inputs or []) + _wq,
+        })
         logger.info(
             "telemac_do_sag complete layer_id=%s do_min=%.3g mg/L at %sm violates=%s",
             layer.layer_id, layer.do_min_mgl, layer.do_min_distance_m,

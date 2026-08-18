@@ -46,6 +46,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
+from trid3nt_server.workflows.openquake._local_oq import VS30_DEMO_NOTE
 from trid3nt_server.workflows.openquake._template_card import TemplateCard
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -288,6 +289,11 @@ async def openquake_scenario_gmf(
             basis=("prompt_interpreted" if rupture_trace is not None
                    else ("fetched" if rupture.kind == "real-fault" else "default_demo")), consequence="scenario",
             note=rupture.note,
+        ),
+        SyntheticInput(
+            param="vs30", value=round(ref_vs30, 1), units="m/s",
+            basis="user" if vs30 is not None else "default_demo", consequence="physics",
+            note=(None if vs30 is not None else VS30_DEMO_NOTE),
         ),
     ]
     _review = await gate_input_review(

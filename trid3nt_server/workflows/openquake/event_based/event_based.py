@@ -36,6 +36,7 @@ from trid3nt_server.data import register_tool
 from trid3nt_server.workflows.openquake._local_oq import (
     DEFAULT_IMLS_G,
     LocalOqError,
+    VS30_DEMO_NOTE,
     aoi_centroid,
     imls_list_str,
     region_str,
@@ -209,8 +210,7 @@ async def openquake_event_based(
     _entries = [SyntheticInput(
         param="vs30", value=round(ref_vs30, 1), units="m/s",
         basis="user" if _vs30_user else "default_demo", consequence="physics",
-        note=(None if _vs30_user
-              else "generic NEHRP B/C rock default; no Vs30 fetcher yet (not site-specific)"),
+        note=(None if _vs30_user else VS30_DEMO_NOTE),
     )]
     _review = await gate_input_review(
         tool_name="openquake_event_based", mode=input_mode,

@@ -59,6 +59,16 @@ NEHRP_VS30: dict[str, float] = {
     "A": 1500.0, "B": 1080.0, "C": 540.0, "D": 260.0, "E": 150.0,
 }
 
+#: The refuse-in-auto note the whole openquake family stamps on an un-supplied
+#: reference Vs30 (law 9, audit row 18): site amplification with no fetcher yet.
+#: Doubles as the user_gated literature offer -- the ASCE 7-22 site-class Vs30
+#: bands let a reviewer approve a class-representative value.
+VS30_DEMO_NOTE: str = (
+    "generic NEHRP B/C reference rock (760 m/s); no Vs30 fetcher yet (not "
+    "site-specific). Site-class Vs30 (ASCE 7-22): A >1500, B 760-1500, C 360-760, "
+    "D 180-360, E <180 m/s -- supply the site value or run user_gated to approve."
+)
+
 #: The oq CLI binary (overridable for a non-standard install).
 _OQ_BIN: str = os.environ.get("TRID3NT_OQ_BIN", "oq")
 #: Subprocess wall-clock ceiling for one local solve (seconds).

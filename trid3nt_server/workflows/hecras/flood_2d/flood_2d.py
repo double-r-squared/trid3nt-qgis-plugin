@@ -387,6 +387,7 @@ async def hecras_flood_2d(
             sim_hours=float(sim_hours), inlet_edge=inlet_edge, outlet_edge=outlet_edge,
             equation_set=eq_key, computation_interval=interval, input_mode=input_mode,
             resolution_basis=_res_basis, resolution_note=_res_note,
+            peak_is_default=(target_peak_cfs is None),
         )
         if isinstance(depth, dict):
             return depth
@@ -631,6 +632,7 @@ async def model_hecras_flood_2d(
     input_mode: str | None = None,
     resolution_basis: str = "derived",
     resolution_note: str | None = None,
+    peak_is_default: bool = False,
 ) -> HecrasDepthLayerURI | dict[str, Any]:
     """fetch DEM -> author+compose -> run_solver -> postprocess -> publish."""
     emitter = current_emitter()
@@ -655,7 +657,12 @@ async def model_hecras_flood_2d(
         ),
         SyntheticInput(
             param="peak_inflow_cfs", value=round(float(target_peak_cfs), 1), units="cfs",
-            basis="user", note="peak of the inflow hydrograph forcing the run",
+            basis="default_demo" if peak_is_default else "user",
+            consequence="physics" if peak_is_default else None,
+            note=("peak inflow the hydrograph forces the run with -- NO real value "
+                  "resolved (pass target_peak_cfs; a USGS regional-regression / gauge "
+                  "peak-flow fetcher is the queued real source)" if peak_is_default
+                  else "peak of the inflow hydrograph forcing the run"),
         ),
         SyntheticInput(
             param="resolution_m", value=round(float(resolution_m), 1), units="m",
@@ -665,13 +672,15 @@ async def model_hecras_flood_2d(
         ),
         SyntheticInput(
             param="equation_set", value=eq_hec,
-            basis="user" if eq_key != _DEFAULT_EQUATION_SET else "default",
+            basis="user" if eq_key != _DEFAULT_EQUATION_SET else "default_demo",
+            consequence=None if eq_key != _DEFAULT_EQUATION_SET else "numerical",
             note="2D solver stamped on the plan (Diffusion Wave = default; "
             "SWE-ELM = full-momentum; same footprint, local inertial detail differs)",
         ),
         SyntheticInput(
             param="computation_interval", value=(computation_interval or "2MIN"),
-            basis="user" if computation_interval else "default",
+            basis="user" if computation_interval else "default_demo",
+            consequence=None if computation_interval else "numerical",
             note="RasUnsteady 2D time step (stability knob; coarser overshoots the peak)",
         ),
     ]
