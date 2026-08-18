@@ -3,8 +3,8 @@
 Status: LANDED (offline build half -- schema amendment + seam mesh path + the three
 composer producers/forks + the rain_on_grid bespoke-helper deletion + cadence lever
 + the plugin .slf-staging fix, all offline-provable). The live loop (image rebuild +
-real solves + the 2-cadence dataset-count proof + the .slf-through-the-dock load) is
-WAVE 4b -- see "What 4b must prove". Date: 2026-08-17. Builds on ADR 0280 (the seam +
+real solves + the 2-cadence dataset-count proof + the .slf-through-the-dock load)
+LANDED as WAVE 4b (EXECUTED 2026-08-17 -- see "4b -- EXECUTED"). Date: 2026-08-17. Builds on ADR 0280 (the seam +
 the frozen `outputs.json` schema), ADR 0281 (the S-class composer-fork pattern), and
 ADR 0282 (the M-class `frames_only` ruling).
 
@@ -147,6 +147,49 @@ comments). FOLLOW-UP flagged (out of this wave's named scope): residual
 - Zero offline-suite movement expected: baseline EXACTLY 4 fetch_resolution + 2
   river_dye. The worker deck/parser changes are INERT until 4b (offline-green !=
   deploy-green -- the deployed image still runs parser 9 / coastal-tidal-1).
+
+## 4b -- EXECUTED (2026-08-17, the live loop)
+
+Image rebuilt (`scripts/build_telemac_image.sh`, absolute context `workers/telemac`,
+3.55 GB). Provenance IN-IMAGE: `entrypoint._PARSER_VERSION == telemac-reach-10`,
+`COASTAL_PARSER_VERSION == coastal-tidal-2`, `ReachConfig.output_interval_min` +
+the `graphic_period` compute + `CoastalConfig.output_interval_min` all baked.
+
+Three legs solved LIVE through their registered tools (WS `dev-tool-invoke`, the
+seed_showcase direct-call path), each emitting the seam mesh layer
+(`model-results-mesh-{run_id}`, `mesh_grid`/`context`, crs_authid populated) with
+`outputs.json` carrying the `kind="mesh"` entry + the peak raster entry:
+
+| Leg | run_id | mesh crs | frames | seam mesh layer |
+|---|---|---|---|---|
+| rain_on_grid (cadence A, `output_interval_min=6`) | `01M094YVQMZSH85D5ETMA9744P` | EPSG:32617 | 31 | emitted |
+| rain_on_grid (cadence B, `output_interval_min=12`) | `01M0952VY5SXXWEHAKPMS8M761` | EPSG:32617 | 16 | emitted |
+| river_dye (`discharge_m3s=250`, `output_interval_min=2`) | `01M0959WWQ1DWBJCKRKJ4PS17E` | EPSG:32611 | 8 | emitted |
+| coastal_tidal_surge (Apalachicola, Michael window) | `01M095EXN3JG3PMFCBVQG4AEP1` | EPSG:32616 | 41 | emitted |
+
+**2-cadence proof** (cheapest leg, rain_on_grid, two solves differing ONLY in
+`output_interval_min`, same 4986-node mesh): 6 min -> 31 frames, 12 min -> 16
+frames. Arithmetic: sim 3 h / dt 3 s = 3600 steps; gp = round(min*60/3): 6->120
+(3600/120+1 = 31), 12->240 (3600/240+1 = 16); (31-1)/(16-1) = 2.0 exactly. The
+DECK-SIDE lever is separately confirmed live on river_dye: `output_interval_min=2`
+was READ by the rebuilt parser-10 (no unknown-field hard-error) and moved the
+cadence (reach dt 0.7 s -> gp 171 -> 8 frames).
+
+**Dock-load** (the plugin `.nc`-fix): the real solved `r2d_rog.slf` loads valid
+through REAL QGIS/MDAL (QGIS 3.40.6, `QgsMeshLayer(local,name,"mdal")`, 4 dataset
+groups) staged under its `.slf` extension -- the fix's intended path works.
+HONEST caveat: on MDAL 3.40.6 the SAME bytes staged `.nc` ALSO load (SELAFIN
+content-sniffing), so the extension-rejection the fix guards against is NOT
+exhibited on this MDAL build; the fix is correct-by-MDAL-driver-selection-spec
+(defensive), not demonstrably load-bearing here. Verification path: PyQGIS real
+MDAL via the system interpreter (qgis not importable in the agent venv).
+
+**Byte-equivalence** (rain_on_grid): the seam mesh layer name
+(`Model results (time series): Otto, North Carolina`) / style (`mesh_grid`) /
+role (`context`) / uri (`r2d_rog.slf`) match the deleted `_publish_full_results_mesh`
+field-for-field modulo the explained `layer_id` stem; the composer's typed peak is
+published once (the seam skips the peak entry under `frames_only`). Ledger row
+flipped to DELETED FINAL.
 
 ## What 4b must prove (the live loop -- NOT this wave)
 
