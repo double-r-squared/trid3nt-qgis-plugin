@@ -1,0 +1,351 @@
+"""Shared MODFLOW aquifer-property resolution (law 9).
+
+The MODFLOW archetype family needs an aquifer hydraulic conductivity (and an
+effective porosity) to solve. Historically, when the caller supplied neither and
+no fetcher served them, the family fell back to a demo constant
+(``DEFAULT_AQUIFER_K_MS = 1e-4`` / ``DEFAULT_POROSITY = 0.3``) - a physics value
+invented out of nothing, labeled but run on regardless. Law 9 forbids that: a
+physics-consequential parameter with no real data source must REFUSE, not run on
+an invention.
+
+This module is the single resolution seam the whole family shares. It generalizes
+the ``capture_zone`` SoilGrids pedotransfer path (previously private to that
+template): near-surface soil texture -> saturated K via the Saxton-Rawls (2006)
+pedotransfer function, a real derived basis at the AOI. When the caller supplies a
+value it is used (``user``); when SoilGrids can serve, K/porosity are DERIVED
+(``derived``, source named, screening caveat stated); when SoilGrids cannot serve
+(fetch fails, AOI off the soil surface / outside coverage) the resolution is
+UNRESOLVED and its ``SyntheticInput`` carries ``basis="default_demo",
+consequence="physics"`` so the input-review gate REFUSES in auto mode. The demo
+constant is gone - there is no invented value to fall back to.
+
+The screening caveat is stated truthfully in the entry note: pedotransfer from
+shallow soil texture is a NEAR-SURFACE proxy, NOT a measured aquifer conductivity
+(true aquifer K can differ by orders of magnitude). Derived-from-real-data is
+acceptable under law 9; invented is not.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import math
+from dataclasses import dataclass, field
+from typing import Any
+
+from trid3nt_contracts.common import SyntheticInput
+
+from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.workflows.shared.soil_hydraulics import (
+    SoilHydraulicsInputError,
+    ksat_from_texture,
+)
+
+logger = logging.getLogger("trid3nt_server.workflows.modflow._aquifer_resolve")
+
+__all__ = [
+    "sample_raster_at_points",
+    "mean_valid_raster",
+    "derive_soil_k",
+    "AquiferResolution",
+    "resolve_aquifer_properties",
+    "provenance_summary",
+    "SOIL_TEXTURE_HALF_DEG",
+    "SOIL_TEXTURE_DEPTH",
+]
+
+
+def provenance_summary(resolution: "AquiferResolution") -> str:
+    """Join the resolution's entry notes into one summary caveat line."""
+    return " ".join(e.note for e in resolution.entries if e.note)
+
+#: Half-width (deg) of the SoilGrids window fetched around the AOI for texture.
+#: A tight box (~0.02 deg ~= 2 km) is ample - the pedotransfer K is driven by the
+#: mean of the valid cells over this AOI window (robust to a nodata centroid).
+SOIL_TEXTURE_HALF_DEG: float = 0.02
+
+#: SoilGrids depth read for texture. The 5-15 cm horizon is a stable near-surface
+#: texture (below the tilled/organic surface skin) - still a NEAR-SURFACE proxy,
+#: NOT aquifer-depth material (the standing pedotransfer limitation).
+SOIL_TEXTURE_DEPTH: str = "5-15cm"
+
+
+def sample_raster_at_points(
+    dem_uri: str, lons: list[float], lats: list[float]
+) -> list[float | None]:
+    """Sample a raster's band-1 value at each ``(lon, lat)``; None off-grid.
+
+    The rasterio ``MemoryFile`` is held open across the whole sample loop (an
+    orphaned MemoryFile GC-corrupts a lazy read). Reprojects the query points to
+    the dataset CRS when it is not already EPSG:4326. NEVER raises.
+    """
+    try:
+        import rasterio
+        from pyproj import Transformer
+
+        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+
+        read_uri = dem_uri[len("file://"):] if dem_uri.startswith("file://") else dem_uri
+        dem_bytes = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))
+        out: list[float | None] = []
+        with rasterio.MemoryFile(dem_bytes) as mf:
+            with mf.open() as src:
+                src_crs = src.crs
+                if src_crs is not None and src_crs.to_epsg() != 4326:
+                    to_ds = Transformer.from_crs("EPSG:4326", src_crs, always_xy=True)
+                    xs, ys = to_ds.transform(list(lons), list(lats))
+                else:
+                    xs, ys = list(lons), list(lats)
+                nodata = src.nodata
+                for val in src.sample(list(zip(xs, ys)), indexes=1):
+                    v = float(val[0])
+                    if (nodata is not None and v == float(nodata)) or not math.isfinite(v):
+                        out.append(None)
+                    else:
+                        out.append(v)
+        return out
+    except Exception as exc:  # noqa: BLE001 -- raster sampling is best-effort
+        logger.warning("modflow: raster point-sampling failed (non-fatal): %s", exc)
+        return [None] * len(lons)
+
+
+def mean_valid_raster(uri: str) -> float | None:
+    """Mean of the VALID (non-nodata, finite) band-1 cells over a raster window.
+
+    The SoilGrids texture read fetches a tight (~2 km) AOI box, not a single cell.
+    Sampling only the exact AOI centroid is brittle: an urban / open-water /
+    river-corridor centroid can land on a nodata pixel while the surrounding AOI
+    carries real soil texture, which would wrongly force a law-9 refusal when a
+    genuine screening value exists. Averaging the valid cells over the window is
+    the representative AOI texture for a screening pedotransfer estimate. Returns
+    None only when EVERY cell is nodata / non-finite (genuinely no soil surface).
+    NEVER raises.
+    """
+    try:
+        import numpy as np
+        import rasterio
+
+        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+
+        read_uri = uri[len("file://"):] if uri.startswith("file://") else uri
+        data = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))
+        with rasterio.MemoryFile(data) as mf:
+            with mf.open() as src:
+                arr = src.read(1, masked=True).astype("float64")
+                nodata = src.nodata
+        masked = np.ma.masked_invalid(arr)
+        if nodata is not None:
+            masked = np.ma.masked_values(masked, float(nodata))
+        if masked.count() == 0:
+            return None
+        return float(masked.mean())
+    except Exception as exc:  # noqa: BLE001 -- raster read is best-effort
+        logger.warning("modflow: raster window-mean failed (non-fatal): %s", exc)
+        return None
+
+
+def derive_soil_k(lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
+    """Derive a labeled pedotransfer K at the AOI from SoilGrids texture.
+
+    Fetches SoilGrids sand + clay percent at ``SOIL_TEXTURE_DEPTH`` in a tight box
+    around the AOI, takes the mean of the valid cells over that window, and runs
+    the shared Saxton-Rawls seam. Returns ``(PedotransferK_or_None, meta)`` - a loud
+    provenance dict for narration. NEVER raises: any fetch / sample / pedotransfer
+    failure returns ``(None, meta_with_reason)`` so the caller REFUSES (law 9 -
+    there is no demo default to fall back to).
+    """
+    meta: dict[str, Any] = {}
+    try:
+        soil_entry = TOOL_REGISTRY.get("fetch_soilgrids")
+        if soil_entry is None:
+            meta["reason"] = "fetch_soilgrids not registered"
+            return None, meta
+        d = SOIL_TEXTURE_HALF_DEG
+        soil_bbox = [lon - d, lat - d, lon + d, lat + d]
+
+        def _fetch(prop: str) -> str | None:
+            layer = soil_entry.fn(
+                bbox=soil_bbox, soil_property=prop, depth=SOIL_TEXTURE_DEPTH
+            )
+            return (
+                layer.get("uri") if isinstance(layer, dict)
+                else getattr(layer, "uri", None)
+            )
+
+        sand_uri = _fetch("sand")
+        clay_uri = _fetch("clay")
+        if not sand_uri or not clay_uri:
+            meta["reason"] = "soilgrids returned no raster (ocean / off soil surface)"
+            return None, meta
+        # AOI-window mean of the valid cells (robust to a nodata centroid pixel).
+        sand_pct = mean_valid_raster(sand_uri)
+        clay_pct = mean_valid_raster(clay_uri)
+        if sand_pct is None or clay_pct is None:
+            meta["reason"] = "no valid soil texture over the AOI window (all nodata)"
+            return None, meta
+        pk = ksat_from_texture(
+            float(sand_pct) / 100.0, float(clay_pct) / 100.0,
+            depth_label=SOIL_TEXTURE_DEPTH,
+        )
+        meta.update(
+            {"sand_pct": round(float(sand_pct), 1), "clay_pct": round(float(clay_pct), 1),
+             "k_m_s": pk.k_m_s, "porosity": pk.porosity, "basis": pk.basis,
+             "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
+        )
+        return pk, meta
+    except SoilHydraulicsInputError as exc:
+        meta["reason"] = f"pedotransfer input invalid: {exc}"
+        return None, meta
+    except Exception as exc:  # noqa: BLE001 -- soil-K is best-effort; refuse on failure
+        meta["reason"] = f"soil-K step error: {exc}"
+        logger.warning(
+            "modflow soil-K step failed (non-fatal, will REFUSE - no demo default): %s",
+            exc,
+        )
+        return None, meta
+
+
+@dataclass
+class AquiferResolution:
+    """The resolved aquifer K + porosity and their machine-readable provenance.
+
+    ``k_ms`` / ``porosity`` are None only when UNRESOLVED (SoilGrids could not
+    serve and the caller supplied nothing) - in that case the corresponding
+    ``SyntheticInput`` in ``entries`` carries ``basis="default_demo",
+    consequence="physics"`` so the input-review gate refuses in auto mode. When
+    the resolution proceeds (user or derived), both values are real.
+    """
+
+    k_ms: float | None
+    porosity: float | None
+    k_source: str  # "user_supplied" | "soil_pedotransfer" | "unresolved"
+    porosity_source: str  # "user_supplied" | "soil_pedotransfer" | "unresolved"
+    soil_meta: dict[str, Any]
+    entries: list[SyntheticInput] = field(default_factory=list)
+
+    @property
+    def resolved(self) -> bool:
+        """True when both K and porosity are real (never an invented default)."""
+        return self.k_ms is not None and self.porosity is not None
+
+    @property
+    def k_source_token(self) -> str:
+        """Legacy ``k_source`` token for the existing caveat narration helpers."""
+        return {
+            "user_supplied": "user_supplied",
+            "soil_pedotransfer": "soil_pedotransfer",
+            "unresolved": "unresolved",
+        }[self.k_source]
+
+
+def _screening_caveat(meta: dict[str, Any]) -> str:
+    clamp = " (clamped to the plausible-media span)" if meta.get("clamped") else ""
+    return (
+        f"DERIVED from SoilGrids texture at the AOI (sand={meta.get('sand_pct')}%, "
+        f"clay={meta.get('clay_pct')}%, {meta.get('depth')}) via the Saxton-Rawls "
+        f"(2006) pedotransfer function{clamp}. SCREENING estimate - a NEAR-SURFACE "
+        "soil proxy, NOT a measured aquifer conductivity (true aquifer K can differ "
+        "by orders of magnitude). Supply a site aquifer-test value when one exists."
+    )
+
+
+async def resolve_aquifer_properties(
+    lat: float,
+    lon: float,
+    aquifer_k_ms: float | None,
+    porosity: float | None,
+    *,
+    allow_soil_derive: bool = True,
+) -> AquiferResolution:
+    """Resolve aquifer K + porosity at the AOI: user -> SoilGrids-derived -> REFUSE.
+
+    - Caller-supplied values are used verbatim (``basis="user"``).
+    - Any missing value is DERIVED from SoilGrids texture at the AOI via the shared
+      Saxton-Rawls pedotransfer seam (``basis="derived"``, source named, screening
+      caveat in the note).
+    - When SoilGrids cannot serve a still-missing physics value, that value is
+      UNRESOLVED: its ``SyntheticInput`` carries ``basis="default_demo",
+      consequence="physics"`` (value None) so the input-review gate REFUSES in auto
+      mode (law 9 - no invented default). The SoilGrids fetch is offloaded to a
+      thread (never blocks the event loop).
+    """
+    need_k = aquifer_k_ms is None
+    need_por = porosity is None
+
+    pk = None
+    meta: dict[str, Any] = {}
+    if (need_k or need_por) and allow_soil_derive:
+        pk, meta = await asyncio.to_thread(derive_soil_k, lat, lon)
+    elif need_k or need_por:
+        meta = {"reason": "soil-derivation disabled by caller (use_soil_k=False)"}
+
+    entries: list[SyntheticInput] = []
+
+    # --- aquifer_k_ms -----------------------------------------------------------
+    if not need_k:
+        k_ms = float(aquifer_k_ms)
+        k_source = "user_supplied"
+        entries.append(SyntheticInput(
+            param="aquifer_k_ms", value=round(k_ms, 8), units="m/s",
+            basis="user", consequence="physics", real_source_if_any=None,
+            note="caller-supplied aquifer hydraulic conductivity.",
+        ))
+    elif pk is not None:
+        k_ms = float(pk.k_m_s)
+        k_source = "soil_pedotransfer"
+        entries.append(SyntheticInput(
+            param="aquifer_k_ms", value=round(k_ms, 8), units="m/s",
+            basis="derived", consequence="physics",
+            real_source_if_any="fetch_soilgrids (Saxton-Rawls 2006 pedotransfer)",
+            note="Aquifer K " + _screening_caveat(meta),
+        ))
+    else:
+        k_ms = None
+        k_source = "unresolved"
+        entries.append(SyntheticInput(
+            param="aquifer_k_ms", value=None, units="m/s",
+            basis="default_demo", consequence="physics", real_source_if_any=None,
+            note=(
+                "aquifer hydraulic conductivity (m/s) is required and could not be "
+                f"resolved from SoilGrids at this AOI ({meta.get('reason', 'unavailable')}). "
+                "No invented default (law 9): supply aquifer_k_ms or run where "
+                "SoilGrids has coverage."
+            ),
+        ))
+
+    # --- porosity ---------------------------------------------------------------
+    if not need_por:
+        por = float(porosity)
+        por_source = "user_supplied"
+        entries.append(SyntheticInput(
+            param="porosity", value=round(por, 6), units="dimensionless",
+            basis="user", consequence="physics", real_source_if_any=None,
+            note="caller-supplied effective porosity.",
+        ))
+    elif pk is not None:
+        por = float(pk.porosity)
+        por_source = "soil_pedotransfer"
+        entries.append(SyntheticInput(
+            param="porosity", value=round(por, 6), units="dimensionless",
+            basis="derived", consequence="physics",
+            real_source_if_any="fetch_soilgrids (Saxton-Rawls 2006 pedotransfer)",
+            note="Effective porosity " + _screening_caveat(meta),
+        ))
+    else:
+        por = None
+        por_source = "unresolved"
+        entries.append(SyntheticInput(
+            param="porosity", value=None, units="dimensionless",
+            basis="default_demo", consequence="physics", real_source_if_any=None,
+            note=(
+                "effective porosity is required and could not be resolved from "
+                f"SoilGrids at this AOI ({meta.get('reason', 'unavailable')}). No "
+                "invented default (law 9): supply porosity or run where SoilGrids "
+                "has coverage."
+            ),
+        ))
+
+    return AquiferResolution(
+        k_ms=k_ms, porosity=por, k_source=k_source, porosity_source=por_source,
+        soil_meta=meta, entries=entries,
+    )

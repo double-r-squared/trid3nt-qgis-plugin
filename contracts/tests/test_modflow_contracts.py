@@ -33,12 +33,16 @@ from trid3nt_contracts import (
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.envelope import TemporalConfig
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
     DEFAULT_AQUIFER_SS,
     DEFAULT_AQUIFER_SY,
-    DEFAULT_POROSITY,
     DEFAULT_WETLAND_SY,
 )
+
+# Aquifer K/porosity are REQUIRED on MODFLOWRunArgs (law 9 - no demo default;
+# resolve at the AOI or refuse). These are TEST FIXTURES only, used to satisfy
+# the required fields where the test is exercising some OTHER field/bound.
+FIXTURE_AQUIFER_K_MS: float = 1e-4
+FIXTURE_POROSITY: float = 0.3
 
 
 # --------------------------------------------------------------------------- #
@@ -46,16 +50,30 @@ from trid3nt_contracts.modflow_contracts import (
 # --------------------------------------------------------------------------- #
 
 
-def test_modflow_run_args_minimal_applies_oq3_defaults() -> None:
-    """K and porosity default to the TENTATIVE OQ-3 demo values."""
+def test_modflow_run_args_requires_aquifer_k_and_porosity() -> None:
+    """K and porosity are REQUIRED (law 9): omitting them cannot construct.
+
+    The former OQ-3 demo defaults (1e-4 / 0.3) are deleted - a physics value with
+    no real source must be resolved at the AOI or refused, never invented.
+    """
+    with pytest.raises(ValidationError):
+        MODFLOWRunArgs(
+            spill_location_latlon=(26.6, -81.9),  # Fort-Myers-ish (lat, lon)
+            contaminant="benzene",
+            release_rate_kg_s=0.5,
+            duration_days=3.0,
+        )
+    # Supplied explicitly, it constructs.
     args = MODFLOWRunArgs(
-        spill_location_latlon=(26.6, -81.9),  # Fort-Myers-ish (lat, lon)
+        spill_location_latlon=(26.6, -81.9),
         contaminant="benzene",
         release_rate_kg_s=0.5,
         duration_days=3.0,
+        aquifer_k_ms=FIXTURE_AQUIFER_K_MS,
+        porosity=FIXTURE_POROSITY,
     )
-    assert args.aquifer_k_ms == DEFAULT_AQUIFER_K_MS == 1e-4
-    assert args.porosity == DEFAULT_POROSITY == 0.3
+    assert args.aquifer_k_ms == 1e-4
+    assert args.porosity == 0.3
     assert args.schema_version == "v2"
     # River-coupling fields default off -> the deck stays the pure-spill deck.
     assert args.river_geometry_uri is None
@@ -134,6 +152,7 @@ def test_porosity_boundary_one_is_allowed() -> None:
         contaminant="benzene",
         release_rate_kg_s=0.5,
         duration_days=3.0,
+        aquifer_k_ms=FIXTURE_AQUIFER_K_MS,
         porosity=1.0,
     )
     assert args.porosity == 1.0
@@ -181,6 +200,8 @@ def test_spill_location_latlon_order_is_lat_then_lon() -> None:
         contaminant="benzene",
         release_rate_kg_s=0.5,
         duration_days=3.0,
+        aquifer_k_ms=FIXTURE_AQUIFER_K_MS,
+        porosity=FIXTURE_POROSITY,
     )
     assert ok.spill_location_latlon == (26.6, -81.9)
     # First slot (lat) bounded to [-90, 90]: 100 is invalid as a latitude
@@ -353,6 +374,8 @@ def _spill_args(**overrides: object) -> MODFLOWRunArgs:
         contaminant="benzene",
         release_rate_kg_s=0.5,
         duration_days=3.0,
+        aquifer_k_ms=FIXTURE_AQUIFER_K_MS,
+        porosity=FIXTURE_POROSITY,
     )
     base.update(overrides)
     return MODFLOWRunArgs(**base)  # type: ignore[arg-type]

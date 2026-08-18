@@ -212,14 +212,14 @@ async def landlab_groundwater_storm_recession(
                 f"porosity={gw_porosity:.2f}, "
                 f"thickness={gw_storm_aquifer_thickness_m:.0f} m"
             ),
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="no aquifer-property fetcher yet; not aquifer-test-calibrated",
         ),
         SyntheticInput(
             param="storm_sequence",
             value=f"Poisson storms, mean depth {gw_storm_mean_depth_mm:.0f} mm, "
             f"{gw_storm_total_days:.0f} d span",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             note="labeled stochastic demo storm climatology (seeded, deterministic); "
             "not a fetched historical record",
         ),

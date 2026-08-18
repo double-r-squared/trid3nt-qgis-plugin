@@ -79,7 +79,7 @@ async def modflow_wellhead_protection(
     """Delineate an EPA-style wellhead protection area (WHPA) for a pumping well.
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -102,8 +102,10 @@ async def modflow_wellhead_protection(
           (use ``modflow_capture_zone``).
         - A drawdown cone (use ``modflow_sustainable_yield``).
 
-    PRECISION CAVEAT: the polygon is a demo planning envelope computed from DEMO
-    aquifer parameters, NOT a regulatory WHPA delineation. Always narrate this.
+    PRECISION CAVEAT: the polygon is a planning envelope computed from
+    SoilGrids-derived (or caller-supplied) aquifer parameters, refusing when no
+    real source can serve them (law 9), NOT a regulatory WHPA delineation. Always
+    narrate this.
 
     Params:
         location: place name (geocoded). Supply this OR ``aoi_latlon``.
@@ -112,7 +114,7 @@ async def modflow_wellhead_protection(
             invented; ask the user if absent (Invariant 9).
         travel_time_years: list of isochrone cutoffs in years. Default [2, 5, 10].
         n_particles: particles released around the well screen (default 16).
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``'standard'``. PRT
             archetypes run LOCAL-ONLY (fast; Batch is not used).
 

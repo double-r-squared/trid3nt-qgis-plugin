@@ -139,6 +139,8 @@ async def test_composer_full_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
     result = await model_saltwater_intrusion_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(25.78, -80.19),
         coastal_transect_latlon=((25.78, -80.20), (25.78, -80.18)),
         seawater_salinity_ppt=35.0,
@@ -161,7 +163,7 @@ async def test_composer_full_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.intrusion_layer.intrusion_length_m == pytest.approx(415.0)
     # Summary mirrors typed fields.
     assert result.summary["intrusion_length_m"] == pytest.approx(415.0)
-    assert "demo_aquifer_caveat" in result.summary
+    assert "aquifer_provenance" in result.summary
 
 
 @pytest.mark.asyncio
@@ -181,6 +183,8 @@ async def test_composer_assembles_correct_run_args(
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
     await model_saltwater_intrusion_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(34.0, -118.0),
         coastal_transect_latlon=((34.0, -118.1), (34.0, -117.9)),
         seawater_salinity_ppt=15.0,
@@ -221,6 +225,8 @@ async def test_composer_emits_chart_payload(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
     await model_saltwater_intrusion_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(25.78, -80.19),
         coastal_transect_latlon=((25.78, -80.20), (25.78, -80.18)),
     )
@@ -256,6 +262,8 @@ async def test_composer_no_chart_emit_when_none(
     )
 
     await model_saltwater_intrusion_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(25.78, -80.19),
         coastal_transect_latlon=((25.78, -80.20), (25.78, -80.18)),
     )
@@ -283,6 +291,8 @@ async def test_composer_surfaces_run_error_dict(
 
     with pytest.raises(SaltwaterIntrusionScenarioError, match="RUN_FAILED"):
         await model_saltwater_intrusion_scenario(
+            aquifer_k_ms=1e-4,
+            porosity=0.3,
             aoi_latlon=(25.78, -80.19),
             coastal_transect_latlon=((25.78, -80.20), (25.78, -80.18)),
         )

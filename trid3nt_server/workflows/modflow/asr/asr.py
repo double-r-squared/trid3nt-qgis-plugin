@@ -39,13 +39,16 @@ from pydantic import Field
 from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     ASRLayerURI,
-    DEFAULT_AQUIFER_K_MS,
     MODFLOWRunArgs,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.workflows.modflow._aquifer_resolve import (
+    provenance_summary,
+    resolve_aquifer_properties,
+)
 from trid3nt_server.data import register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 from trid3nt_server.workflows.modflow.sustainable_yield.sustainable_yield import (
@@ -166,7 +169,7 @@ async def model_asr_scenario(
             (m^3/day). REQUIRED  -  the adapter applies the WEL sign (recover = -).
         injection_months / recovery_months / n_cycles: cycle schedule controls.
             Demo defaults applied by the adapter when None.
-        aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity / aquifer_sy: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -220,24 +223,30 @@ async def model_asr_scenario(
     # the user supplied is user-provenance. The inject/recover rates are user
     # inputs (reviewable). Built BEFORE the solve so the gate can present
     # + adjust them (what-was-approved == what-ran).
+    # Aquifer K + porosity are resolved at the ASR well: caller-supplied, else
+    # SoilGrids-derived pedotransfer, else UNRESOLVED (the gate below refuses in
+    # auto - law 9, never an invented demo K). Specific yield adopts the same
+    # pedotransfer drainable-porosity estimate when unsupplied (sy ~= effective
+    # porosity for an unconfined aquifer).
+    resolution = await resolve_aquifer_properties(wlat, wlon, aquifer_k_ms, porosity)
     provenance: list[SyntheticInput] = [
         SyntheticInput(param="injection_rate_m3_day", value=round(inj, 3),
                        units="m^3/day", basis="user"),
         SyntheticInput(param="recovery_rate_m3_day", value=round(rec, 3),
                        units="m^3/day", basis="user"),
+        *resolution.entries,
     ]
-    for _pname, _val, _units in (
-        ("aquifer_k_ms", aquifer_k_ms, "m/s"),
-        ("porosity", porosity, None),
-        ("aquifer_sy", aquifer_sy, None),
-    ):
+    if aquifer_sy is not None:
         provenance.append(SyntheticInput(
-            param=_pname,
-            value=(round(float(_val), 6) if _val is not None else None),
-            units=_units,
-            basis="user" if _val is not None else "default_demo",
-            note=None if _val is not None else "demo aquifer default, not site hydrogeology",
-        ))
+            param="aquifer_sy", value=round(float(aquifer_sy), 6), basis="user",
+            consequence="physics", note="caller-supplied specific yield."))
+    elif resolution.porosity is not None:
+        provenance.append(SyntheticInput(
+            param="aquifer_sy", value=round(float(resolution.porosity), 6),
+            basis="derived", consequence="physics",
+            real_source_if_any="fetch_soilgrids (Saxton-Rawls 2006 pedotransfer)",
+            note="specific yield ~= drainable porosity from the SoilGrids "
+                 "pedotransfer (unconfined-aquifer screening estimate)."))
     for _pname, _val in (
         ("injection_months", injection_months),
         ("recovery_months", recovery_months),
@@ -245,7 +254,7 @@ async def model_asr_scenario(
     ):
         if _val is None:
             provenance.append(SyntheticInput(
-                param=_pname, basis="default_demo", note="demo cycle-schedule default",
+                param=_pname, basis="default_demo", consequence="scenario", note="demo cycle-schedule default",
             ))
 
     # --- two-mode input gate: review-before-run -----------------------
@@ -271,12 +280,16 @@ async def model_asr_scenario(
     provenance = _review.entries
     inj = abs(float(_review.params.get("injection_rate_m3_day", inj)))
     rec = abs(float(_review.params.get("recovery_rate_m3_day", rec)))
-    _rv_k = _review.params.get("aquifer_k_ms", aquifer_k_ms)
-    _rv_por = _review.params.get("porosity", porosity)
-    _rv_sy = _review.params.get("aquifer_sy", aquifer_sy)
-    aquifer_k_ms = float(_rv_k) if _rv_k is not None else None
-    porosity = float(_rv_por) if _rv_por is not None else None
-    aquifer_sy = float(_rv_sy) if _rv_sy is not None else None
+    # Prefer a gate-adjusted value (user_gated); else the resolved aquifer values
+    # (caller or SoilGrids-derived - guaranteed non-None past the refuse gate).
+    _rv_k = _review.params.get("aquifer_k_ms") or resolution.k_ms
+    _rv_por = _review.params.get("porosity") or resolution.porosity
+    _rv_sy = _review.params.get("aquifer_sy")
+    eff_k = float(_rv_k)
+    eff_porosity = float(_rv_por)
+    eff_sy = float(_rv_sy) if _rv_sy is not None else (
+        float(aquifer_sy) if aquifer_sy is not None else float(resolution.porosity)
+    )
 
     try:
         run_args = MODFLOWRunArgs(
@@ -291,7 +304,7 @@ async def model_asr_scenario(
             injection_months=injection_months,
             recovery_months=recovery_months,
             n_cycles=n_cycles,
-            **_aquifer_overrides(aquifer_k_ms, porosity, aquifer_sy, None),
+            **_aquifer_overrides(eff_k, eff_porosity, eff_sy, None),
         )
     except Exception as exc:  # noqa: BLE001
         raise ASRInputError(f"invalid ASR run arguments: {exc}") from exc
@@ -330,9 +343,9 @@ async def model_asr_scenario(
         "head_series_steps": (
             len(layer.head_timeseries) if layer.head_timeseries else 0
         ),
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, the specific yield, and the "
-            "cycle schedule are demo defaults, not site-specific hydrogeology."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The cycle schedule remains a demo default (scenario forcing)."
         ),
     }
     logger.info(
@@ -393,7 +406,7 @@ async def modflow_asr(
     """Model aquifer storage & recovery (ASR): seasonal inject/recover at a well.
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -423,7 +436,7 @@ async def modflow_asr(
             REQUIRED.
         recovery_rate_m3_day: recovery rate, POSITIVE magnitude (m^3/day). REQUIRED.
         injection_months / recovery_months / n_cycles: cycle schedule controls.
-        aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity / aquifer_sy: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``.
         input_mode: run-mode lever. ``"user_gated"`` presents the
             resolved inputs (inject/recover rates, aquifer + cycle defaults) for

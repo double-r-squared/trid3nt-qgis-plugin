@@ -67,6 +67,8 @@ def _run_args(species: Any) -> MODFLOWRunArgs:
         contaminant="TCE",
         release_rate_kg_s=0.01,
         duration_days=15.0,
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         archetype="multi_species",
         species=species,
     )
@@ -100,6 +102,8 @@ async def test_no_species_returns_typed_error() -> None:
         contaminant="TCE",
         release_rate_kg_s=0.01,
         duration_days=15.0,
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         archetype="multi_species",
         species=None,
     )

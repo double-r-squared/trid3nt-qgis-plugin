@@ -245,6 +245,8 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
         contaminant="TCE",
         release_rate_kg_s=0.02,
         duration_days=45.0,
+        aquifer_k_ms=1e-4,  # law 9: supply the physics input so auto proceeds
+        porosity=0.3,
     )
 
     # Geocode + river fetch happened with a bbox built around the geocoded point.
@@ -308,50 +310,42 @@ def _rs_common_mocks(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_aquifer_provenance_stamped_on_seepage_layer(monkeypatch) -> None:
-    """ADR 0223: the demo-aquifer prose caveat is mirrored as a structured
-    SyntheticInput on the returned seepage layer envelope (routed through the
-    input-review gate)."""
+async def test_demo_aquifer_refuses_in_auto(monkeypatch) -> None:
+    """Law 9: an unresolved demo aquifer K REFUSES in auto rather than stamping a
+    demo-default provenance entry and solving on it."""
     mod, _ = _rs_common_mocks(monkeypatch)
-    result = await mod.model_river_seepage_scenario(
-        location="Fort Myers, FL", contaminant="TCE",
-        release_rate_kg_s=0.02, duration_days=45.0,
-    )
-    si = result.seepage_layer.synthetic_inputs
-    assert any(e.param == "aquifer_k_ms" and e.basis == "default_demo" for e in si)
-    # No requested-DEM failure entry when the DEM was not requested.
-    assert not any(e.param == "streambed_elevation" for e in si)
-    assert "streambed_dem_fallback" not in result.summary
+    with pytest.raises(mod.RiverSeepageScenarioError) as exc:
+        await mod.model_river_seepage_scenario(
+            location="Fort Myers, FL", contaminant="TCE",
+            release_rate_kg_s=0.02, duration_days=45.0,
+        )
+    assert "PHYSICS_INPUT_REQUIRED" in str(exc.value)
+    assert "aquifer_k_ms" in str(exc.value)
 
 
 @pytest.mark.asyncio
-async def test_requested_dem_failure_is_labeled(monkeypatch) -> None:
-    """ADR 0223 (audit #5): when fetch_dem_for_streambed=True and the DEM fetch
-    FAILS, the degrade is a specific labeled review entry (not just a log line),
-    naming the requested-DEM failure on the envelope + summary."""
+async def test_requested_dem_failure_refuses_in_auto(monkeypatch) -> None:
+    """Audit #5 under law 9: when fetch_dem_for_streambed=True and the DEM fetch
+    FAILS, the demo streambed is a physics default that REFUSES in auto (a wrong
+    streambed elevation shifts the whole gaining/losing budget) rather than a
+    labeled fallback that solves. aquifer_k_ms is supplied to isolate the
+    streambed refusal."""
     mod, _ = _rs_common_mocks(monkeypatch)
 
     def _boom_fetch_dem(*, bbox):
         raise RuntimeError("3DEP tile unavailable for this AOI")
 
-    # add fetch_dem to the registry so the composer resolves it, then fails in it.
     reg = dict(mod.TOOL_REGISTRY)
     reg["fetch_dem"] = type("E", (), {"fn": staticmethod(_boom_fetch_dem)})
     monkeypatch.setattr(mod, "TOOL_REGISTRY", reg)
 
-    result = await mod.model_river_seepage_scenario(
-        location="Fort Myers, FL", contaminant="TCE",
-        release_rate_kg_s=0.02, duration_days=45.0,
-        fetch_dem_for_streambed=True,
-    )
-    # The requested-DEM degrade is surfaced structurally AND on the summary.
-    assert "streambed_dem_fallback" in result.summary
-    assert "requested" in result.summary["streambed_dem_fallback"].lower()
-    si = result.seepage_layer.synthetic_inputs
-    bed = [e for e in si if e.param == "streambed_elevation"]
-    assert len(bed) == 1
-    assert bed[0].basis == "default_demo"
-    assert "fetch_dem failed" in (bed[0].note or "")
+    with pytest.raises(mod.RiverSeepageScenarioError) as exc:
+        await mod.model_river_seepage_scenario(
+            location="Fort Myers, FL", contaminant="TCE",
+            release_rate_kg_s=0.02, duration_days=45.0,
+            fetch_dem_for_streambed=True, aquifer_k_ms=1e-4, porosity=0.3,
+        )
+    assert "streambed_elevation" in str(exc.value)
 
 
 @pytest.mark.asyncio

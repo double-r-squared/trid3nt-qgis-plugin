@@ -531,14 +531,14 @@ async def model_schism_baroclinic_circulation(
                 shoreline_clipped, used_supplied_mesh)
 
     review_entries = [
-        SyntheticInput(param="estuary_aoi", value=aoi_label, basis=aoi_basis,
+        SyntheticInput(param="estuary_aoi", value=aoi_label, basis=aoi_basis, consequence="aoi",
                        note="the georeferenced estuary footprint the coarse channel spans"),
         SyntheticInput(param="mesh_geometry",
                        value=(f"user-supplied mesh ({deck['n_nodes']} nodes x {deck['n_layers']} layers)"
                               if used_supplied_mesh else
                               f"coarse {'shoreline-clipped' if shoreline_clipped else 'rectangular'} "
                               f"channel ({deck['n_nodes']} nodes x {deck['n_layers']} layers)"),
-                       basis="user" if used_supplied_mesh else "default_demo",
+                       basis="user" if used_supplied_mesh else "default_demo", consequence="aoi",
                        note=((mesh_gate_note or "consumed a user-supplied mesh (generate_mesh): real "
                               "shoreline + real sampled bathymetry; the salinity IC gradient + tidal/"
                               "river forcing remain idealized")
@@ -550,16 +550,16 @@ async def model_schism_baroclinic_circulation(
                              "a graded lon/lat lattice + linearly-deepening idealized bathymetry -- "
                              "NOT surveyed (coastline clip unavailable for this AOI)")),
         SyntheticInput(param="river_discharge", value=round(river_discharge_m3s, 1), units="m3/s",
-                       basis="user" if river_discharge_m3s != 500.0 else "default_demo",
+                       basis="user" if river_discharge_m3s != 500.0 else "default_demo", consequence="physics",
                        note="freshwater point source at the landward edge (S=0)"),
         SyntheticInput(param="ocean_salinity", value=round(ocean_salinity_psu, 1), units="psu",
-                       basis="user" if ocean_salinity_psu != 33.0 else "default_demo",
+                       basis="user" if ocean_salinity_psu != 33.0 else "default_demo", consequence="physics",
                        note="seaward-end salinity (the estuarine gradient endpoint + boundary)"),
         SyntheticInput(param="baroclinic_config", value="ibc=0 (3D baroclinic), SZ vgrid, TVD transport",
-                       basis="default_demo",
+                       basis="default_demo", consequence="numerical",
                        note="the 3D density-driven pathway on the hydro-core binary"),
         SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d",
-                       basis="user" if sim_days != 2.0 else "default_demo",
+                       basis="user" if sim_days != 2.0 else "default_demo", consequence="scenario",
                        note="coarse baroclinic spin-up smoke; the 28-day CORIE V&V is NATE-gated"),
     ]
 

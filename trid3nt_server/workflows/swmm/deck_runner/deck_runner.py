@@ -242,7 +242,7 @@ async def model_published_deck(
         provenance.append(SyntheticInput(
             param="rain_scale",
             value=(applied_scale if deck.rain_scalable else None),
-            basis="default_demo", note="; ".join(override_labels),
+            basis="default_demo", consequence="scenario", note="; ".join(override_labels),
         ))
 
     result = SWMMDeckRunResult(

@@ -42,8 +42,6 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
-    DEFAULT_POROSITY,
     MODFLOWRunArgs,
     MultiSpeciesPlumeResult,
     PlumeLayerURI,
@@ -51,8 +49,12 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.gates.input_review import physics_refusal_reason
+from trid3nt_server.workflows.modflow._aquifer_resolve import (
+    provenance_summary,
+    resolve_aquifer_properties,
+)
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
     review_modflow_entries,
 )
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
@@ -416,6 +418,26 @@ async def model_contaminant_plume(
         location, spill_location_latlon, pipeline_emitter=pipeline_emitter
     )
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9) ------------- #
+    # Aquifer K + porosity are physics-consequential. Resolve them from the caller
+    # or SoilGrids-derived pedotransfer at the spill point; when neither serves,
+    # the input-review gate REFUSES in auto mode rather than solving on an invented
+    # demo constant. The gate runs BEFORE the (expensive) solver.
+    resolution = await resolve_aquifer_properties(lat, lon, aquifer_k_ms, porosity)
+    _review = await review_modflow_entries(
+        tool_name="modflow_contaminant_plume", entries=list(resolution.entries),
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+        input_mode=input_mode,
+    )
+    if _review.cancelled or not resolution.resolved:
+        raise ContaminantPlumeScenarioError(
+            _review.cancel_reason
+            or physics_refusal_reason("modflow_contaminant_plume", resolution.entries)
+            or "aquifer properties could not be resolved; the plume was not finalized"
+        )
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     # Assemble the forcing contract. The top-level contaminant / rate carry the
     # multi_species deck's required-but-unused scalars; the real per-species
     # forcing rides in ``species`` (mirrors the archetype placeholder pattern).
@@ -430,10 +452,8 @@ async def model_contaminant_plume(
         archetype="multi_species",
         species=specs,
     )
-    if aquifer_k_ms is not None:
-        kwargs["aquifer_k_ms"] = float(aquifer_k_ms)
-    if porosity is not None:
-        kwargs["porosity"] = float(porosity)
+    kwargs["aquifer_k_ms"] = eff_k
+    kwargs["porosity"] = eff_porosity
     try:
         run_args = MODFLOWRunArgs(**kwargs)
     except Exception as exc:  # noqa: BLE001 - pydantic ValidationError
@@ -515,32 +535,15 @@ async def model_contaminant_plume(
             }
             for p in plumes
         ],
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g} "
-            "are demo defaults, not site-specific hydrogeology. Each species "
-            "transports on the shared flow field; parent->daughter ingrowth "
-            "coupling is recorded but not yet wired (independent transport)."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " Each species transports on the shared flow field; parent->daughter "
+            "ingrowth coupling is recorded but not yet wired (independent transport)."
         ),
     }
-    # structured aquifer-K provenance routed through gate_input_review,
-    # stamped onto each plume layer (the prose caveat stays on the summary).
-    _k_entry = aquifer_k_review_entry(
-        k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-        k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-        porosity=(porosity if porosity is not None else DEFAULT_POROSITY),
-        note=summary["demo_aquifer_caveat"],
-    )
-    _review = await review_modflow_entries(
-        tool_name="modflow_contaminant_plume", entries=[_k_entry],
-        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
-        input_mode=input_mode,
-    )
-    if _review.cancelled:
-        raise ContaminantPlumeScenarioError(
-            f"contaminant-plume input review {_review.cancel_reason or 'not approved'}; "
-            "the plume was not finalized"
-        )
-    plumes = [p.model_copy(update={"synthetic_inputs": list(_review.entries)})
+    # The resolved aquifer-K/porosity provenance (already gated above) is stamped
+    # onto each plume layer's synthetic_inputs.
+    plumes = [p.model_copy(update={"synthetic_inputs": list(resolution.entries)})
               for p in plumes]
     logger.info(
         "contaminant_plume scenario complete location=%r n_plumes=%d",
@@ -591,8 +594,9 @@ async def modflow_contaminant_plume(
     """Model a groundwater contaminant plume (spill spread + peak concentration), single OR multi species.
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
-    calibrated regulatory delineation. Off-scope: surface-water inundation
+    K/porosity are SoilGrids-derived pedotransfer screening estimates at the AOI
+    unless supplied, and the run REFUSES when neither serves - never an invented
+    demo value), not a calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
 
@@ -626,7 +630,7 @@ async def modflow_contaminant_plume(
             sorption_kd?, decay_per_day?, parent?}`` - for a multi-contaminant
             spill. At least one species must carry a positive release rate; never
             invented (ask the user what was released if absent).
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         duration_days: optional transport duration (days). Demo default if None.
         compute_class: compute class. Default ``"standard"``.
 

@@ -523,14 +523,14 @@ async def model_tomawac_wave_field(
     _review_entries = [
         SyntheticInput(
             param="wind_speed_mps", value=round(wind_speed_mps, 1), units="m/s",
-            basis="default_demo", note="prescribed steady storm wind (no wave-forcing fetcher)"),
+            basis="default_demo", consequence="physics", note="prescribed steady storm wind (no wave-forcing fetcher)"),
         SyntheticInput(
             param="target_resolution_m", value=round(res_m, 0), units="m",
-            basis="default_demo" if res_default else "user",
+            basis="default_demo" if res_default else "user", consequence="numerical",
             note="wave grid node spacing"),
         SyntheticInput(
             param="bathy_source", value="noaa_greatlakes" if real else "idealized",
-            basis="fetched" if real else "default_demo", note=bathy_label),
+            basis="fetched" if real else "default_demo", consequence="physics", note=bathy_label),
     ]
     _review = await gate_input_review(
         tool_name="tomawac_wave_field", mode=input_mode,

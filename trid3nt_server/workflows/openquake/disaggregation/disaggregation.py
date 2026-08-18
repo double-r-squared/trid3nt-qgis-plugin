@@ -203,7 +203,7 @@ async def openquake_disaggregation(
     _vs30_user = vs30 is not None
     _entries = [SyntheticInput(
         param="vs30", value=round(ref_vs30, 1), units="m/s",
-        basis="user" if _vs30_user else "default_demo",
+        basis="user" if _vs30_user else "default_demo", consequence="physics",
         note=(None if _vs30_user
               else "generic NEHRP B/C rock default; no Vs30 fetcher yet (not site-specific)"),
     )]

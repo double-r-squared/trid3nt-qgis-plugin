@@ -647,7 +647,7 @@ async def model_coastal_tidal_surge(
                   else "astronomical PREDICTION (calm tide control)")),
         SyntheticInput(
             param="window", value=f"{win_start}..{win_end}", units=None,
-            basis="default_demo" if window_default else "user",
+            basis="default_demo" if window_default else "user", consequence="scenario",
             note="CO-OPS gauge series window (labeled Hurricane Michael demo default)"
             if window_default else "gauge series window"),
         SyntheticInput(
@@ -656,11 +656,11 @@ async def model_coastal_tidal_surge(
             note=str(station_meta.get("station_name") or "in-bbox CO-OPS gauge")),
         SyntheticInput(
             param="datum_offset_m", value=round(float(datum_offset_m), 3), units="m",
-            basis="user" if datum_offset_m else "default_demo",
+            basis="user" if datum_offset_m else "default_demo", consequence="physics",
             note=f"reconciles the {series_datum} tide datum to the DEM_all (~MSL) datum"),
         SyntheticInput(
             param="target_resolution_m", value=round(res_m, 0), units="m",
-            basis="default_demo" if target_resolution_m is None else "user",
+            basis="default_demo" if target_resolution_m is None else "user", consequence="numerical",
             note="coastal grid node spacing"),
     ]
     _review = await gate_input_review(

@@ -106,6 +106,8 @@ def test_physics_invalid_key_raises_typed_error() -> None:
         contaminant="TCE",
         release_rate_kg_s=0.1,
         duration_days=10.0,
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         advanced_physics={"not_a_real_key": 1.0},
     )
     with pytest.raises(MODFLOWWorkflowError) as ei:

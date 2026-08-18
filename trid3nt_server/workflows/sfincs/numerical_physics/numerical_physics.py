@@ -256,13 +256,13 @@ async def sfincs_advanced_numerical_physics_knobs(
             SyntheticInput(
                 param="solver_settings",
                 value="SFINCS defaults (no override)",
-                basis="default_demo",
+                basis="default_demo", consequence="numerical",
                 note="no numerical knob was set -> byte-identical to the sfincs_flood baseline",
             )
         ]
     review_entries.append(
         SyntheticInput(
-            param="scope", value="numerical-tuning surface", basis="default_demo",
+            param="scope", value="numerical-tuning surface", basis="default_demo", consequence="numerical",
             note=_PHYSICS_NOTE,
         )
     )

@@ -46,8 +46,6 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
-    DEFAULT_POROSITY,
     DrawdownLayerURI,
     MODFLOWRunArgs,
     StreamReachLayerURI,
@@ -55,9 +53,12 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.workflows.modflow._aquifer_resolve import AquiferResolution
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    provenance_summary,
+    resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import (
@@ -329,6 +330,20 @@ async def model_sustainable_yield_scenario(
             f"invalid well_location_latlon (expected (lat, lon)): {exc}"
         ) from exc
 
+    # --- Aquifer properties: resolve at the well or REFUSE (law 9), pre-solve ---
+    # Resolved ONCE and threaded into every branch (drawdown / stream-depletion /
+    # subsidence), so none of them solves on an invented demo K.
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_sustainable_yield", lat=wlat, lon=wlon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise SustainableYieldScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+    resolved_overrides = _aquifer_overrides(eff_k, eff_porosity, aquifer_sy, aquifer_ss)
+
     # A positive rate is interpreted as an extraction magnitude (negate to the
     # MF6 WEL sign). A negative rate is passed through (already extraction).
     rate = float(pumping_rate_m3_day)
@@ -351,9 +366,8 @@ async def model_sustainable_yield_scenario(
             river_inflow_m3_s=river_inflow_m3_s,
             sim_years=sim_years,
             n_periods=n_periods,
-            aquifer_overrides=_aquifer_overrides(
-                aquifer_k_ms, porosity, aquifer_sy, aquifer_ss
-            ),
+            aquifer_overrides=resolved_overrides,
+            resolution=resolution,
             compute_class=compute_class,
             pipeline_emitter=pipeline_emitter,
         )
@@ -377,9 +391,8 @@ async def model_sustainable_yield_scenario(
             inelastic_storage_override=inelastic_storage_override,
             csub_delay_interbeds=bool(csub_delay_interbeds),
             csub_effective_stress=bool(csub_effective_stress),
-            aquifer_overrides=_aquifer_overrides(
-                aquifer_k_ms, porosity, aquifer_sy, aquifer_ss
-            ),
+            aquifer_overrides=resolved_overrides,
+            resolution=resolution,
             compute_class=compute_class,
             pipeline_emitter=pipeline_emitter,
         )
@@ -395,7 +408,7 @@ async def model_sustainable_yield_scenario(
             pumping_rate_m3_day=wel_q,
             sim_years=sim_years,
             n_periods=n_periods,
-            **_aquifer_overrides(aquifer_k_ms, porosity, aquifer_sy, aquifer_ss),
+            **resolved_overrides,
         )
     except Exception as exc:  # noqa: BLE001  -  pydantic ValidationError
         raise SustainableYieldInputError(
@@ -435,10 +448,9 @@ async def model_sustainable_yield_scenario(
             if layer.head_decline_timeseries
             else 0
         ),
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g}, "
-            "and the storage terms are demo defaults, not site-specific "
-            "hydrogeology."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The storage terms remain demo defaults (storage properties)."
         ),
     }
     logger.info(
@@ -446,20 +458,13 @@ async def model_sustainable_yield_scenario(
         location_name,
         layer.max_drawdown_m,
     )
-    # structured aquifer-K provenance through gate_input_review.
+    # The resolved aquifer entries (already gated pre-solve) are stamped onto the
+    # layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_sustainable_yield", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=porosity, note=summary["demo_aquifer_caveat"],
-        )],
+        entries=list(resolution.entries),
         params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
     )
-    if _review.cancelled:
-        raise SustainableYieldScenarioError(
-            f"sustainable-yield input review {_review.cancel_reason or 'not approved'}"
-        )
     return SustainableYieldResult(
         drawdown_layer=layer, derived_params=derived, summary=summary
     )
@@ -531,6 +536,7 @@ async def _run_stream_depletion(
     sim_years: float | None,
     n_periods: int | None,
     aquifer_overrides: dict[str, Any],
+    resolution: AquiferResolution,
     compute_class: str,
     pipeline_emitter: Any | None,
 ) -> StreamDepletionResult:
@@ -621,12 +627,11 @@ async def _run_stream_depletion(
         "gaining_reach_count": layer.gaining_reach_count,
         "losing_reach_count": layer.losing_reach_count,
         "pumping_rate_m3_day": wel_q,
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g}, "
-            "the channel width, Manning roughness, and streambed K are demo "
-            "defaults, not site-specific hydrogeology. The depletion fraction is a "
-            "qualitative planning estimate (streambed resistance keeps it below the "
-            "Glover-Balmer analytic curve)."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The channel width, Manning roughness, and streambed K remain demo "
+            "defaults. The depletion fraction is a qualitative planning estimate "
+            "(streambed resistance keeps it below the Glover-Balmer analytic curve)."
         ),
     }
     logger.info(
@@ -637,22 +642,13 @@ async def _run_stream_depletion(
         layer.depletion_fraction,
         layer.n_reaches,
     )
-    # structured aquifer-K provenance through gate_input_review.
-    _sd_k = aquifer_overrides.get("aquifer_k_ms")
+    # The resolved aquifer entries (already gated pre-solve) are stamped onto the
+    # layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_stream_depletion", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if _sd_k is not None else "demo_default"),
-            k_ms=(_sd_k if _sd_k is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=aquifer_overrides.get("porosity"),
-            note=summary["demo_aquifer_caveat"],
-        )],
-        params={"aquifer_k_ms": _sd_k},
+        entries=list(resolution.entries),
+        params={"aquifer_k_ms": resolution.k_ms},
     )
-    if _review.cancelled:
-        raise SustainableYieldScenarioError(
-            f"stream-depletion input review {_review.cancel_reason or 'not approved'}"
-        )
     return StreamDepletionResult(
         reach_layer=layer, derived_params=derived, summary=summary
     )
@@ -678,6 +674,7 @@ async def _run_subsidence(
     csub_delay_interbeds: bool = False,
     csub_effective_stress: bool = False,
     aquifer_overrides: dict[str, Any],
+    resolution: AquiferResolution,
     compute_class: str,
     pipeline_emitter: Any | None,
 ) -> SubsidenceResult:
@@ -777,11 +774,11 @@ async def _run_subsidence(
             if csub_delay_interbeds
             else "no-delay interbed (consolidates instantly with head)"
         ),
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g}, "
-            "and the CSUB interbed thickness + inelastic/elastic compaction "
-            "storage are demo defaults (no site clay-fraction fetcher in v1), so "
-            "the subsidence magnitude is a qualitative planning estimate, NOT a "
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The CSUB interbed thickness + inelastic/elastic compaction storage "
+            "remain demo defaults (no site clay-fraction fetcher in v1), so the "
+            "subsidence magnitude is a qualitative planning estimate, NOT a "
             "calibrated Central Valley forecast. The HEAD_BASED formulation with "
             "preconsolidation = the initial head means all drawdown drives "
             "PERMANENT (inelastic) compaction; a previously-overdrafted aquifer "
@@ -797,22 +794,13 @@ async def _run_subsidence(
         layer.max_head_decline_m,
         layer.interbed_count,
     )
-    # structured aquifer-K provenance through gate_input_review.
-    _sub_k = aquifer_overrides.get("aquifer_k_ms")
+    # The resolved aquifer entries (already gated pre-solve) are stamped onto the
+    # layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_land_subsidence", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if _sub_k is not None else "demo_default"),
-            k_ms=(_sub_k if _sub_k is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=aquifer_overrides.get("porosity"),
-            note=summary["demo_aquifer_caveat"],
-        )],
-        params={"aquifer_k_ms": _sub_k},
+        entries=list(resolution.entries),
+        params={"aquifer_k_ms": resolution.k_ms},
     )
-    if _review.cancelled:
-        raise SustainableYieldScenarioError(
-            f"land-subsidence input review {_review.cancel_reason or 'not approved'}"
-        )
     return SubsidenceResult(
         subsidence_layer=layer, derived_params=derived, summary=summary
     )
@@ -949,7 +937,7 @@ async def modflow_sustainable_yield(
     """Model a pumping well's drawdown cone, OR its impact on a river, OR the land subsidence it causes.
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -1006,7 +994,7 @@ async def modflow_sustainable_yield(
         pumping_rate_m3_day: well extraction rate, m^3/day. REQUIRED. A positive
             value is treated as extraction magnitude; negative is extraction too.
         sim_years / n_periods: optional transient horizon controls.
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         couple_river_sfr: when True, run the SFR-coupled STREAM DEPLETION story
             (reach vector + depletion charts) instead of the drawdown cone.
         river_name: optional river name for narration (the flowline is fetched by

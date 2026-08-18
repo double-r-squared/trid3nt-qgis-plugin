@@ -2230,7 +2230,7 @@ async def model_telemac_river_dye(
             param="bank_source",
             value=_normalize_bank_source(bank_source),
             basis="fetched" if _normalize_bank_source(bank_source) == "nhd_area"
-            else "default_demo",
+            else "default_demo", consequence="physics",
             note=("real NHDArea banks" if _normalize_bank_source(bank_source) == "nhd_area"
                   else "assumed constant-width ribbon"),
         ),
@@ -2679,7 +2679,7 @@ async def model_telemac_river_dye(
         ),
         SyntheticInput(
             param="bank_geometry", value=_bank_provenance,
-            basis="fetched" if _bank_provenance == "nhd_area" else "default_demo",
+            basis="fetched" if _bank_provenance == "nhd_area" else "default_demo", consequence="physics",
             real_source_if_any="USGS NHDArea water polygons" if _bank_provenance == "nhd_area" else None,
             note=(
                 None if _bank_provenance == "nhd_area"
@@ -2693,7 +2693,7 @@ async def model_telemac_river_dye(
     if domain_clamp_notes:
         _telemac_provenance.append(SyntheticInput(
             param="domain_extent_clamped", value="; ".join(domain_clamp_notes),
-            basis="default_demo",
+            basis="default_demo", consequence="aoi",
             note="requested domain values exceeded the modelable window and were "
                  "clamped to keep the mesh builder tractable (screening guardrail)",
         ))

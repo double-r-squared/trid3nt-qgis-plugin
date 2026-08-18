@@ -293,7 +293,7 @@ async def model_geoclaw_thacker_validation(
         SyntheticInput(
             param="thacker_bowl",
             value=f"a={bowl_a_m} m, h0={bowl_h0_m} m, A={bowl_eta_amp}",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             note=(
                 "idealized non-geographic paraboloid-basin V&V (Thacker 1981), NOT a "
                 "hazard target -- a solver-verification fixture in planar metres"

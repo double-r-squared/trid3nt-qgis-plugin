@@ -44,7 +44,7 @@ def _entries() -> list[SyntheticInput]:
                        basis="fetched",
                        real_source_if_any="fetch_usace_dams"),
         SyntheticInput(param="source_magnitude", value=8.0, units="Mw",
-                       basis="default_demo"),
+                       basis="default_demo", consequence="scenario"),
     ]
 
 
@@ -201,7 +201,8 @@ async def test_provide_values_then_proceed(monkeypatch) -> None:
     entries = [
         SyntheticInput(param="injection_rate_m3_day", value=500.0,
                        units="m^3/day", basis="user"),
-        SyntheticInput(param="aquifer_k_ms", value=None, basis="default_demo"),
+        SyntheticInput(param="aquifer_k_ms", value=None, basis="default_demo",
+                       consequence="physics"),
     ]
     out = await gate_input_review(
         tool_name="modflow_asr", mode="user_gated",

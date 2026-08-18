@@ -625,13 +625,13 @@ async def model_artemis_harbor_agitation(
     _review_entries = [
         SyntheticInput(
             param="wave_period_s", value=round(wave_period_s, 1), units="s",
-            basis="default_demo", note="prescribed monochromatic incident wave period"),
+            basis="default_demo", consequence="physics", note="prescribed monochromatic incident wave period"),
         SyntheticInput(
             param="wave_height_m", value=round(wave_height_m, 2), units="m",
-            basis="default_demo", note="prescribed incident wave height H0"),
+            basis="default_demo", consequence="physics", note="prescribed incident wave height H0"),
         SyntheticInput(
             param="bathy_source", value="noaa_greatlakes" if real else "idealized",
-            basis="fetched" if real else "default_demo", note=bathy_label),
+            basis="fetched" if real else "default_demo", consequence="physics", note=bathy_label),
     ]
     if wave_mode == "diffraction":
         if real_polylines:
@@ -649,7 +649,7 @@ async def model_artemis_harbor_agitation(
                 "structure fetched)")
         _review_entries.append(SyntheticInput(
             param="breakwater", value=_bw_val, units=None,
-            basis=_bw_basis, note=_bw_note))
+            basis=_bw_basis, consequence="scenario", note=_bw_note))
     _review = await gate_input_review(
         tool_name="artemis_harbor_agitation", mode=input_mode,
         entries=_review_entries,

@@ -37,15 +37,16 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
     DewaterLayerURI,
     MODFLOWRunArgs,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    provenance_summary,
+    resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter
 from trid3nt_server.data import register_tool
@@ -180,7 +181,7 @@ async def model_mine_dewatering_scenario(
         drain_conductance_m2_day: per-cell DRN conductance (m^2/day). Demo
             default applied when None.
         well_pumping_rate_m3_day: optional supplemental sump WEL (m^3/day).
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -212,6 +213,17 @@ async def model_mine_dewatering_scenario(
         location, aoi_latlon, pipeline_emitter=pipeline_emitter
     )
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9), pre-solve ---
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_mine_dewatering", lat=lat, lon=lon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise MineDewateringScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -223,7 +235,7 @@ async def model_mine_dewatering_scenario(
             drain_elevation_m=drain_elevation_m,
             drain_conductance_m2_day=drain_conductance_m2_day,
             well_pumping_rate_m3_day=well_pumping_rate_m3_day,
-            **_aquifer_overrides(aquifer_k_ms, porosity, None, None),
+            **_aquifer_overrides(eff_k, eff_porosity, None, None),
         )
     except Exception as exc:  # noqa: BLE001
         raise MineDewateringInputError(
@@ -252,9 +264,9 @@ async def model_mine_dewatering_scenario(
         "location_name": location_name,
         "dewatering_rate_m3_day": layer.dewatering_rate_m3_day,
         "drain_cell_count": layer.drain_cell_count,
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s and the drain conductance / "
-            "elevation are demo defaults, not site-specific hydrogeology."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The drain conductance / elevation remain demo engineering defaults."
         ),
     }
     logger.info(
@@ -264,15 +276,11 @@ async def model_mine_dewatering_scenario(
         layer.dewatering_rate_m3_day,
         layer.drain_cell_count,
     )
-    # structured aquifer-K provenance routed through gate_input_review,
-    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    # The resolved aquifer-K/porosity entries (already gated pre-solve) are stamped
+    # onto the layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_mine_dewatering", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=porosity, note=summary["demo_aquifer_caveat"],
-        )],
+        entries=list(resolution.entries),
         params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
     )
     if _review.cancelled:
@@ -329,7 +337,7 @@ async def modflow_mine_dewatering(
     """Model an open-pit mine's dewatering rate (groundwater inflow to the pit).
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -357,7 +365,7 @@ async def modflow_mine_dewatering(
         drain_elevation_m: the target dewatered head (m). Demo default if None.
         drain_conductance_m2_day: per-cell DRN conductance. Demo default if None.
         well_pumping_rate_m3_day: optional supplemental sump WEL (m^3/day).
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``.
 
     Returns:

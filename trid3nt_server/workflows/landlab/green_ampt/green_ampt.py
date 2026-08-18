@@ -276,7 +276,7 @@ async def landlab_green_ampt_overland_flow(
         SyntheticInput(
             param="soil_hydraulic_properties",
             value=f"K={soil_hydraulic_conductivity_m_s:.1e} m/s, {green_ampt_soil_type}",
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="no SSURGO soil fetcher yet; not site-calibrated",
         )
     )

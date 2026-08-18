@@ -429,11 +429,11 @@ async def model_schism_tidal_hydro(
         fallback_note = _QA_NOTE
         review_entries = [
             SyntheticInput(param="mesh_source", value="bundled_quarterannulus",
-                           basis="default_demo",
+                           basis="default_demo", consequence="aoi",
                            note="SCHISM Test_QuarterAnnulus verification mesh (idealized, non-geographic)"),
             SyntheticInput(param="tidal_boundary", value="M2 analytical (baked)",
-                           basis="default_demo", note="the bundled bctides.in analytical M2 boundary"),
-            SyntheticInput(param="sim_days", value=5.0, units="d", basis="default_demo",
+                           basis="default_demo", consequence="physics", note="the bundled bctides.in analytical M2 boundary"),
+            SyntheticInput(param="sim_days", value=5.0, units="d", basis="default_demo", consequence="scenario",
                            note="the verification run length (past the 1-day ramp)"),
         ]
         n_nodes_grid = None
@@ -614,10 +614,10 @@ async def _build_coastal_tin_deck(
             SyntheticInput(param="bathymetry", value="user-supplied mesh (node-sampled)",
                            basis="user", note="the case mesh's own node bathymetry (positive-down)"),
             SyntheticInput(param="tidal_amplitude_m", value=round(tidal_amplitude_m, 4), units="m",
-                           basis="user" if tidal_amplitude_m != 0.5 else "default_demo",
+                           basis="user" if tidal_amplitude_m != 0.5 else "default_demo", consequence="physics",
                            note=f"uniform {'+'.join(constituents)} boundary re-keyed to the mesh's open ({open_side}) side"),
             SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d",
-                           basis="user" if sim_days != 5.0 else "default_demo"),
+                           basis="user" if sim_days != 5.0 else "default_demo", consequence="scenario"),
         ]
         return {
             "deck_files": deck["files"], "fallback_note": note, "review_entries": review_entries,
@@ -702,10 +702,10 @@ async def _build_coastal_tin_deck(
         SyntheticInput(param="bathymetry", value=bathy_source, basis="fetched",
                        real_source_if_any=bathy_source, note="sampled onto the TIN nodes (positive-down)"),
         SyntheticInput(param="tidal_amplitude_m", value=round(tidal_amplitude_m, 4), units="m",
-                       basis="user" if tidal_amplitude_m != 0.5 else "default_demo",
+                       basis="user" if tidal_amplitude_m != 0.5 else "default_demo", consequence="physics",
                        note=f"uniform {'+'.join(constituents)} open-boundary amplitude (screening)"),
         SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d",
-                       basis="user" if sim_days != 5.0 else "default_demo"),
+                       basis="user" if sim_days != 5.0 else "default_demo", consequence="scenario"),
     ]
     return {
         "deck_files": deck["files"], "fallback_note": note, "review_entries": review_entries,

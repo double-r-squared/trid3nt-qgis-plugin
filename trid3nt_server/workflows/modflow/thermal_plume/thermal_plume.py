@@ -50,7 +50,7 @@ from typing import Any
 
 from pydantic import Field
 
-from trid3nt_contracts.common import GraceModel
+from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
     MODFLOWRunArgs,
     ThermalPlumeLayerURI,
@@ -59,7 +59,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import register_tool
 from trid3nt_server.workflows.modflow._input_review import (
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    resolve_and_gate_aquifer,
     thermal_demo_review_entries,
 )
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
@@ -278,6 +280,37 @@ async def compose_thermal_scenario(
             ) from exc
         raise
 
+    # --- Aquifer + thermal properties: resolve at the well or REFUSE (law 9) --- #
+    # K/porosity are SoilGrids-derived; the undisturbed aquifer temperature and the
+    # aquifer-grain thermal conductivity have NO fetcher (row 4) - required inputs
+    # that REFUSE in auto rather than run on an invented demo value. Gate pre-solve.
+    _thermal_extra: list[SyntheticInput] = []
+    if ambient_temperature_c is None:
+        _thermal_extra.append(SyntheticInput(
+            param="ambient_temperature_c", value=None, units="degC",
+            basis="default_demo", consequence="physics", real_source_if_any=None,
+            note="undisturbed aquifer temperature is required and has no fetcher in "
+                 "v1; supply ambient_temperature_c (or approve in user_gated mode).",
+        ))
+    if thermal_conductivity_solid_wmc is None:
+        _thermal_extra.append(SyntheticInput(
+            param="thermal_conductivity_solid_wmc", value=None, units="W/(m*degC)",
+            basis="default_demo", consequence="physics", real_source_if_any=None,
+            note="aquifer-grain thermal conductivity is required (literature-range, "
+                 "not fetchable); supply it (or approve in user_gated mode).",
+        ))
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name=("modflow_thermal_storage" if mode == "ates"
+                       else "modflow_thermal_plume"),
+            lat=lat, lon=lon, aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+            extra_entries=_thermal_extra,
+        )
+    except AquiferRefusal as exc:
+        raise ThermalScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     # Duration: injection_plume defaults to a 120-day plume horizon; ates derives
     # a full-year-per-cycle seasonal horizon (360 days/cycle) when unset.
     if duration_days is not None:
@@ -293,8 +326,8 @@ async def compose_thermal_scenario(
             contaminant="temperature",
             release_rate_kg_s=1.0,  # placeholder: ignored (GWE energy-transport, not a mass SRC)
             duration_days=_duration,
-            aquifer_k_ms=(float(aquifer_k_ms) if aquifer_k_ms is not None else 1.0e-4),
-            porosity=(float(porosity) if porosity is not None else 0.2),
+            aquifer_k_ms=eff_k,
+            porosity=eff_porosity,
             archetype="gwe_thermal",
             gwe_mode=mode,
             injection_temperature_c=injection_temperature_c,
@@ -410,7 +443,7 @@ async def compose_thermal_scenario(
             "modflow_thermal_storage" if mode == "ates" else "modflow_thermal_plume"
         ),
         layer=layer,
-        entries=thermal_demo_review_entries(
+        entries=list(resolution.entries) + thermal_demo_review_entries(
             ambient_temperature_c=float(ambient),
             ambient_user_supplied=(ambient_temperature_c is not None),
             injection_temperature_c=float(inject_c),
@@ -481,8 +514,8 @@ async def modflow_thermal_plume(
     """Model a groundwater THERMAL PLUME from warm-water injection (MODFLOW 6 GWE).
 
     Fidelity: MODFLOW 6 local planning-grade heat-transport envelope on a 50 m demo
-    grid (aquifer thermal properties + ambient temperature default to narrated demo
-    values unless supplied), NOT a calibrated geothermal forecast. Off-scope:
+    grid (saturated K/porosity SoilGrids-derived at the AOI or refused; ambient
+    temperature + grain thermal conductivity refuse in auto unless supplied, law 9), NOT a calibrated geothermal forecast. Off-scope:
     seasonal aquifer thermal energy STORAGE recovery -> modflow_thermal_storage; a
     saturated CONTAMINANT plume -> modflow_contaminant_plume; pumping drawdown ->
     modflow_sustainable_yield.
@@ -618,8 +651,8 @@ async def modflow_thermal_storage(
     """Model AQUIFER THERMAL ENERGY STORAGE recovery efficiency (MODFLOW 6 GWE, ATES).
 
     Fidelity: MODFLOW 6 local planning-grade heat-transport envelope on a 50 m demo
-    grid (aquifer thermal properties + ambient temperature default to narrated demo
-    values unless supplied), NOT a calibrated ATES design tool. Off-scope: a one-way
+    grid (saturated K/porosity SoilGrids-derived at the AOI or refused; ambient
+    temperature + grain thermal conductivity refuse in auto unless supplied, law 9), NOT a calibrated ATES design tool. Off-scope: a one-way
     thermal PLUME from continuous injection -> modflow_thermal_plume; a saturated
     contaminant plume -> modflow_contaminant_plume.
 

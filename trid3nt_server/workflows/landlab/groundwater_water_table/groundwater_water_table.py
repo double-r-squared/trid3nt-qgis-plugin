@@ -214,14 +214,14 @@ async def landlab_groundwater_water_table(
                 f"K={gw_hydraulic_conductivity_m_s:.1e} m/s, "
                 f"porosity={gw_porosity:.2f}, thickness={gw_aquifer_thickness_m:.0f} m"
             ),
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="no aquifer-property fetcher yet; not aquifer-test-calibrated",
         ),
         SyntheticInput(
             param="gw_recharge_mm_yr",
             value=gw_recharge_mm_yr,
             units="mm/yr",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             note="labeled areal recharge (~5-20% of humid-region precip); "
             "no gridMET recharge fetcher wired",
         ),

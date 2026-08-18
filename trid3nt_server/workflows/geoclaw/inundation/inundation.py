@@ -604,7 +604,7 @@ async def geoclaw_inundation(
             param="bathy_target_resolution_m",
             value=round(float(bathy_target_resolution_m), 1),
             units="m",
-            basis="default_demo",
+            basis="default_demo", consequence="numerical",
             real_source_if_any="ETOPO 2022 (NCEI, ~15 arcsec deep-ocean native)",
             note=(
                 f"DECLARED basin-scale bathymetry floor (~1 arcminute) for the "
@@ -703,7 +703,7 @@ async def geoclaw_inundation(
             provenance.append(SyntheticInput(
                 param="fault_geometry",
                 value="generic synthetic Okada",
-                basis="default_demo",
+                basis="default_demo", consequence="scenario",
                 note=(
                     "fault " + "/".join(_fault_defaulted) + " not user-supplied; "
                     "illustrative, NOT a site-specific seismic source"
@@ -714,7 +714,7 @@ async def geoclaw_inundation(
             param="source_magnitude",
             value=float(source_magnitude),
             units="Mw",
-            basis="default_demo" if float(source_magnitude) == 8.0 else "user",
+            basis="default_demo" if float(source_magnitude) == 8.0 else "user", consequence="scenario",
             note=None if float(source_magnitude) == 8.0 else "user-supplied Mw",
         ))
     if effective_dam_depth is None:

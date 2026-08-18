@@ -189,7 +189,7 @@ async def landlab_normal_fault_scarp_evolution(
                 f"E-W trace at {fault_position_frac:g} of the domain, "
                 f"K={k_bedrock}, T={incision_run_duration_yr:g} yr"
             ),
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any=None,
             note=(
                 "the fault geometry + throw rate are a labeled demo scenario, not "

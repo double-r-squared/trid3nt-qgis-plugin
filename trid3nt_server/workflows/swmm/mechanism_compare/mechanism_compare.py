@@ -135,7 +135,7 @@ async def run_mechanism_comparison(build: ComparisonBuild) -> SWMMComparisonResu
         SyntheticInput(
             param=build.basis_param,
             value=None,
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any=build.basis_source,
             note=build.basis_note,
         )

@@ -337,7 +337,7 @@ async def model_swmm_dual_drainage(
                            real_source_if_any=network_source,
                            note="imported storm-drain nodes + conduits (minor system)"),
             SyntheticInput(param="inlet_capture", value=f"{inlet_opening_m} m opening",
-                           basis="default_demo",
+                           basis="default_demo", consequence="physics",
                            note="fixed inlet orifice; real catchbasins carry a capture curve"),
             SyntheticInput(param="total_rain_depth_mm", value=round(float(depth_mm), 1),
                            units="mm", basis="fetched",

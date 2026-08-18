@@ -188,14 +188,14 @@ async def landlab_landslide_storm_ensemble(
             value=(
                 f"{n_recharge_scenarios} draws, mean depth {mean_storm_depth_mm} mm"
             ),
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any="landlab PrecipitationDistribution (Poisson)",
             note="storm-generator means are demo defaults, not a fitted local climate",
         ),
         SyntheticInput(
             param="soil_properties",
             value="cohesion/friction/density/thickness/transmissivity",
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
         ),
     ]

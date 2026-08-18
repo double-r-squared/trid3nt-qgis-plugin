@@ -416,13 +416,13 @@ async def model_swmm_network_import(
         entries=[
             SyntheticInput(
                 param="total_rain_depth_mm", value=round(depth_mm, 1), units="mm",
-                basis=depth_basis,
+                basis=depth_basis, consequence="scenario",
                 real_source_if_any=("lookup_precip_return_period (NOAA Atlas-14)"
                                     if depth_basis == "fetched" else None),
                 note=f"{return_period_yr}-yr/{storm_duration_hr:.0f}-hr design storm",
             ),
             SyntheticInput(
-                param="junction_subarea", value="uniform demo", basis="default_demo",
+                param="junction_subarea", value="uniform demo", basis="default_demo", consequence="physics",
                 note="imported network has no sub-catchment delineation; each junction "
                      "drains one uniform demo sub-area of the storm",
             ),
@@ -572,14 +572,14 @@ def _publish_network_layer(
             value=round(build.hyetograph.total_depth_mm, 1)
             if getattr(build, "hyetograph", None) is not None
             and hasattr(build.hyetograph, "total_depth_mm") else None,
-            units="mm", basis=depth_basis,
+            units="mm", basis=depth_basis, consequence="scenario",
             note=f"{return_period_yr}-yr/{storm_duration_hr:.0f}-hr design storm loading",
         ),
     ]
     if build.n_inverts_filled:
         provenance.append(SyntheticInput(
             param="node_inverts", value=f"{build.n_inverts_filled} filled",
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="nodes with no GIS invert were DEM-interpolated / slope-walked",
         ))
 

@@ -132,7 +132,7 @@ async def run_package_validation(
         SyntheticInput(
             param=f"modflow_validation:{case}",
             value=None,
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any=meta.reference_source,
             note=meta.basis_note,
         )

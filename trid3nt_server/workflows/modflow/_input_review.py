@@ -22,7 +22,16 @@ from typing import Any
 
 from trid3nt_contracts.common import InputBasis, SyntheticInput
 
-from trid3nt_server.gates.input_review import ReviewOutcome, gate_input_review
+from trid3nt_server.gates.input_review import (
+    ReviewOutcome,
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.modflow._aquifer_resolve import (
+    AquiferResolution,
+    provenance_summary,
+    resolve_aquifer_properties,
+)
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow._input_review")
 
@@ -33,7 +42,55 @@ __all__ = [
     "thermal_demo_review_entries",
     "gate_and_stamp_modflow_inputs",
     "review_modflow_entries",
+    "AquiferRefusal",
+    "resolve_and_gate_aquifer",
+    "provenance_summary",
 ]
+
+
+class AquiferRefusal(RuntimeError):
+    """Aquifer K/porosity could not be resolved and the input-review gate refused.
+
+    Carries the typed ``PHYSICS_INPUT_REQUIRED`` message. Each archetype catches
+    this and re-raises its own typed scenario error, so the refusal surfaces to the
+    user as a normal typed stop (law 9 - never a solve on an invented demo K).
+    """
+
+
+async def resolve_and_gate_aquifer(
+    *,
+    tool_name: str,
+    lat: float,
+    lon: float,
+    aquifer_k_ms: float | None,
+    porosity: float | None,
+    input_mode: str | None = None,
+    allow_soil_derive: bool = True,
+    extra_entries: list[SyntheticInput] | None = None,
+) -> AquiferResolution:
+    """Resolve aquifer K/porosity at the AOI and gate BEFORE the solver (law 9).
+
+    Derives from SoilGrids (or accepts caller values); routes the provenance
+    entries (plus any ``extra_entries``) through the input-review gate. Raises
+    :class:`AquiferRefusal` when the gate cancels or a physics value stayed
+    unresolved - so the caller REFUSES rather than solving on an invented default.
+    On success returns the resolved :class:`AquiferResolution` (both values real).
+    """
+    resolution = await resolve_aquifer_properties(
+        lat, lon, aquifer_k_ms, porosity, allow_soil_derive=allow_soil_derive,
+    )
+    entries = list(resolution.entries) + list(extra_entries or [])
+    review = await gate_input_review(
+        tool_name=tool_name, mode=input_mode, entries=entries,
+        params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
+    )
+    if review.cancelled or not resolution.resolved:
+        raise AquiferRefusal(
+            review.cancel_reason
+            or physics_refusal_reason(tool_name, entries)
+            or f"{tool_name}: aquifer properties could not be resolved (law 9)."
+        )
+    return resolution
 
 
 def aquifer_k_basis(k_source: str) -> tuple[InputBasis, str | None]:
@@ -68,7 +125,7 @@ def aquifer_k_review_entry(
         param="aquifer_k_ms",
         value=(round(float(k_ms), 8) if k_ms is not None else None),
         units="m/s",
-        basis=basis,
+        basis=basis, consequence="physics",
         real_source_if_any=real_source,
         note=note,
     )
@@ -101,7 +158,7 @@ def vadose_soil_review_entries(
             param="vadose_thickness_m",
             value=round(float(thickness_m), 4),
             units="m",
-            basis=("user" if thickness_user_supplied else "default_demo"),
+            basis=("user" if thickness_user_supplied else "default_demo"), consequence="physics",
             real_source_if_any=None,
             note=note,
         ),
@@ -109,7 +166,7 @@ def vadose_soil_review_entries(
             param="vadose_brooks_corey",
             value=None,
             units="thtr/thts/eps (dimensionless)",
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             real_source_if_any=None,
             note=(
                 f"Brooks-Corey demo soil hydraulics: thtr={thtr:g}, thts={thts:g}, "
@@ -120,7 +177,7 @@ def vadose_soil_review_entries(
             param="vadose_infiltration_rate_m_day",
             value=round(float(infiltration_rate_m_day), 6),
             units="m/day",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any=None,
             note=(
                 f"Demo surface infiltration flux {infiltration_rate_m_day:g} m/day "
@@ -157,7 +214,7 @@ def thermal_demo_review_entries(
             param="ambient_temperature_c",
             value=round(float(ambient_temperature_c), 4),
             units="degC",
-            basis=("user" if ambient_user_supplied else "default_demo"),
+            basis=("user" if ambient_user_supplied else "default_demo"), consequence="physics",
             real_source_if_any=None,
             note=note,
         ),
@@ -165,7 +222,7 @@ def thermal_demo_review_entries(
             param="injection_temperature_c",
             value=round(float(injection_temperature_c), 4),
             units="degC",
-            basis=("user" if injection_user_supplied else "default_demo"),
+            basis=("user" if injection_user_supplied else "default_demo"), consequence="scenario",
             real_source_if_any=None,
             note=(
                 f"Injected-water temperature {injection_temperature_c:g} degC "
@@ -177,7 +234,7 @@ def thermal_demo_review_entries(
             param="thermal_conductivity_solid_wmc",
             value=round(float(thermal_conductivity_solid_wmc), 4),
             units="W/(m*degC)",
-            basis=("user" if conductivity_user_supplied else "default_demo"),
+            basis=("user" if conductivity_user_supplied else "default_demo"), consequence="physics",
             real_source_if_any=None,
             note=(
                 f"Aquifer-grain thermal conductivity {thermal_conductivity_solid_wmc:g} "

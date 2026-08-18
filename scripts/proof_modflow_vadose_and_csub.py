@@ -102,6 +102,7 @@ def _run_vadose_obs(thickness: float):
     ra = MODFLOWRunArgs(
         spill_location_latlon=TIPPECANOE, contaminant="nitrate",
         release_rate_kg_s=1.0, duration_days=1.0, archetype="vadose_transport",
+        aquifer_k_ms=1e-4, porosity=0.3,
         vadose_thickness_m=thickness,
     )
     st = build_and_stage_modflow_deck(ra)

@@ -50,6 +50,7 @@ __all__ = [
     "ReviewOutcome",
     "resolve_input_gate_mode",
     "render_input_review_lines",
+    "physics_refusal_reason",
     "gate_input_review",
 ]
 
@@ -120,6 +121,50 @@ def render_input_review_lines(entries: Any) -> list[str]:
         src = f", {source}" if source else ""
         lines.append(f"{param} = {val_txt} [{tag}{src}]")
     return lines
+
+
+def _physics_demo_entries(entries: Any) -> list[Any]:
+    """The entries that must REFUSE in auto: ``consequence="physics"`` demo defaults.
+
+    A physics-consequential value that fell back to a demo default with no real
+    data source is exactly what law 9 forbids running on - it silently ruins the
+    simulation. Scenario/numerical/aoi demo defaults are the user's question or a
+    solver knob, not a world invention, and are excluded here.
+    """
+    out = []
+    for e in entries or []:
+        if (_entry_field(e, "basis") == "default_demo"
+                and _entry_field(e, "consequence") == "physics"):
+            out.append(e)
+    return out
+
+
+def physics_refusal_reason(tool_name: str, entries: Any) -> str | None:
+    """The typed ``*_PHYSICS_INPUT_REQUIRED`` refusal text, or None if none refuse.
+
+    Names every physics-consequential input that fell back to a demo default and
+    what it needs, then tells the caller how to satisfy the gate: supply the value,
+    let a real fetcher resolve it, or re-run in ``user_gated`` mode to approve the
+    demo default explicitly. Templates that resolve inputs outside the gate can
+    raise on this directly; the gate returns it as the ``cancel_reason``.
+    """
+    refusing = _physics_demo_entries(entries)
+    if not refusing:
+        return None
+    needs = []
+    for e in refusing:
+        param = _entry_field(e, "param")
+        note = _entry_field(e, "note")
+        need = f" ({note})" if note else ""
+        needs.append(f"{param}{need}")
+    return (
+        f"PHYSICS_INPUT_REQUIRED: {tool_name} cannot run in auto mode -- these "
+        "physics-consequential inputs have no real data source and fell back to "
+        "invented demo defaults, which would silently ruin the simulation (law 9): "
+        + "; ".join(needs)
+        + ". Supply real values, ensure a fetcher can resolve them, or re-run in "
+        "user_gated mode to approve the demo defaults explicitly."
+    )
 
 
 def _build_review_envelope(
@@ -245,10 +290,24 @@ async def gate_input_review(
     entries to user-basis without re-fetching.
 
     Returns a :class:`ReviewOutcome`. In ``auto`` mode (or with no live session)
-    it returns ``proceed=True`` immediately with the inputs unchanged.
+    it returns ``proceed=True`` immediately with the inputs unchanged UNLESS a
+    physics-consequential demo default is present -- then it REFUSES (law 9): auto
+    mode and the headless no-emitter path cannot present the demo default for
+    approval, so a value that would silently ruin the simulation is not run on an
+    invention. Scenario/numerical/aoi demo defaults still proceed.
     """
     resolved_mode = resolve_input_gate_mode(mode)
+    physics_refusal = physics_refusal_reason(tool_name, entries)
     if resolved_mode == "auto":
+        if physics_refusal is not None:
+            logger.info(
+                "input-review gate REFUSE (auto) tool=%s -- physics demo default(s) "
+                "with no real source", tool_name,
+            )
+            return ReviewOutcome(
+                proceed=False, entries=list(entries), params=dict(params),
+                cancelled=True, cancel_reason=physics_refusal, mode="auto",
+            )
         return ReviewOutcome(proceed=True, entries=list(entries),
                              params=dict(params), mode="auto")
 
@@ -262,6 +321,19 @@ async def gate_input_review(
 
     emitter = current_emitter()
     if emitter is None:
+        # No live session to present the demo defaults for approval. A physics
+        # demo default still REFUSES (law 9 -- the value would silently ruin the
+        # run and there is no one to approve it); everything else fails open,
+        # labeled.
+        if physics_refusal is not None:
+            logger.info(
+                "input-review gate REFUSE (user_gated, no emitter) tool=%s -- "
+                "physics demo default(s) with no real source", tool_name,
+            )
+            return ReviewOutcome(
+                proceed=False, entries=list(entries), params=dict(params),
+                cancelled=True, cancel_reason=physics_refusal, mode="user_gated",
+            )
         logger.info(
             "input-review gate: user_gated requested for %s but no live session "
             "(direct-call/offline) -- proceeding with labeled inputs (fail-open)",

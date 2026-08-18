@@ -247,7 +247,7 @@ async def landlab_storm_sequence_generator(
                 f"mean depth {mean_storm_depth_mm} mm, storm {mean_storm_duration_hr} h, "
                 f"interstorm {mean_interstorm_duration_hr} h, {storm_total_years} yr"
             ),
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any="landlab PrecipitationDistribution (Poisson)",
             note="storm-generator means are demo defaults, not a fitted local climate",
         ),

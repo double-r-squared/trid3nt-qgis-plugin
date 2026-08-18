@@ -305,7 +305,7 @@ async def openquake_psha(
     _vs30_user = vs30 is not None
     _vs30_prov = [SyntheticInput(
         param="vs30", value=round(float(run_args.reference_vs30_ms), 1),
-        units="m/s", basis="user" if _vs30_user else "default_demo",
+        units="m/s", basis="user" if _vs30_user else "default_demo", consequence="physics",
         note=(None if _vs30_user
               else "generic NEHRP B/C rock default; no Vs30 fetcher yet (not site-specific)"),
     )]

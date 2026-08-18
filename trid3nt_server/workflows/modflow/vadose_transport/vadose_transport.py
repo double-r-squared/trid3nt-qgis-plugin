@@ -74,7 +74,9 @@ from trid3nt_contracts.modflow_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    resolve_and_gate_aquifer,
     vadose_soil_review_entries,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
@@ -239,6 +241,21 @@ async def model_vadose_transport_scenario(
             ) from exc
         raise
 
+    # --- Saturated-zone aquifer K/porosity: resolve at the AOI or REFUSE (law 9) #
+    # The vadose column sits above a saturated GWF+GWT domain that still needs a
+    # real hydraulic conductivity + porosity; SoilGrids-derive them or refuse (no
+    # invented demo constant). The Brooks-Corey vadose hydraulics keep their own
+    # labeled review below.
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_vadose_transport", lat=lat, lon=lon,
+            aquifer_k_ms=None, porosity=None,
+        )
+    except AquiferRefusal as exc:
+        raise VadoseTransportScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -246,6 +263,8 @@ async def model_vadose_transport_scenario(
             release_rate_kg_s=1.0,  # ignored: UZT infiltration-driven, not a SRC
             duration_days=1.0,      # ignored when archetype is set (deck sets TDIS)
             archetype="vadose_transport",
+            aquifer_k_ms=eff_k,
+            porosity=eff_porosity,
             vadose_thickness_m=vadose_thickness_m,
             vadose_thtr=(vadose_thtr if vadose_thtr is not None else DEFAULT_VADOSE_THTR),
             vadose_thts=(vadose_thts if vadose_thts is not None else DEFAULT_VADOSE_THTS),
@@ -339,7 +358,7 @@ async def model_vadose_transport_scenario(
     # stamped onto the layer envelope (the prose caveat stays on the summary).
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_vadose_transport", layer=layer,
-        entries=vadose_soil_review_entries(
+        entries=list(resolution.entries) + vadose_soil_review_entries(
             thickness_m=thickness_m or DEFAULT_VADOSE_THICKNESS_M,
             thickness_user_supplied=(vadose_thickness_m is not None),
             thtr=run_args.vadose_thtr,
@@ -408,8 +427,9 @@ async def modflow_vadose_transport(
     """Model how long a surface spill takes to reach the water table (UZF+UZT vadose travel).
 
     Fidelity: MODFLOW 6 local planning-grade UNSATURATED-zone travel-time envelope
-    (soil hydraulics + depth-to-water default to narrated demo values unless
-    supplied), not a calibrated contaminant-transport delineation. Off-scope:
+    (saturated K/porosity SoilGrids-derived at the AOI or refused; the unsaturated
+    soil hydraulics + depth-to-water refuse in auto unless supplied, law 9), not a
+    calibrated contaminant-transport delineation. Off-scope:
     a SATURATED plume footprint spreading laterally in the aquifer ->
     modflow_contaminant_plume; surface-water inundation -> sfincs_flood.
 

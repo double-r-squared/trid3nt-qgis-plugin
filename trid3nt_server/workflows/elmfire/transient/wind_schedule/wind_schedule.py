@@ -201,7 +201,7 @@ async def elmfire_transient_wind_schedule_spread(
                 f"(constant {float(wind_speed_mph):.0f} mph)"
             ),
             units="meteorological degrees",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             note="synthetic transient weather schedule (multi-band, interpolated); "
             "NOT a real reanalysis forcing",
         )

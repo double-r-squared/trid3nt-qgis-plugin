@@ -43,15 +43,15 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel, SyntheticInput
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
-    DEFAULT_POROSITY,
     PlumeLayerURI,
     SeepageLayerURI,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
+    provenance_summary,
+    resolve_and_gate_aquifer,
     review_modflow_entries,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, substep
@@ -188,7 +188,7 @@ async def model_river_seepage_scenario(
             keep the chain lean.
         along_river_source: place the contaminant SRC along the reach (True,
             the seepage source) vs at the spill point (False).
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -292,6 +292,17 @@ async def model_river_seepage_scenario(
             )
             logger.warning("river-seepage requested DEM unavailable: %s", exc)
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9), pre-solve ---
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_river_seepage", lat=lat, lon=lon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise RiverSeepageScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     # --- Stage 4: run the river-seepage solver -> seepage + plume ---
     # FOLD (engine-door refactor): run_river_seepage_job is now the UNREGISTERED
     # internal engine surface (its registration folded into this template), so we
@@ -318,8 +329,8 @@ async def model_river_seepage_scenario(
                 duration_days=duration_days,
                 river_geometry_uri=river_uri,
                 along_river_source=along_river_source,
-                aquifer_k_ms=aquifer_k_ms,
-                porosity=porosity,
+                aquifer_k_ms=eff_k,
+                porosity=eff_porosity,
                 compute_class=compute_class,
             ),
         )
@@ -350,10 +361,10 @@ async def model_river_seepage_scenario(
         "gaining_m3_day": seepage.gaining_m3_day,
         "losing_m3_day": seepage.losing_m3_day,
         "river_cell_count": seepage.river_cell_count,
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, porosity={DEFAULT_POROSITY:g} "
-            "and the streambed conductance are demo defaults, not site-specific "
-            "hydrogeology."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The streambed conductance remains a demo default (streambed K is an "
+            "un-fetchable literature-range parameter)."
         ),
     }
     logger.info(
@@ -366,20 +377,16 @@ async def model_river_seepage_scenario(
         seepage.river_cell_count,
     )
 
-    # structured provenance through gate_input_review. Always the
-    # aquifer-K entry; when the caller REQUESTED a real streambed DEM that failed,
-    # a specific labeled streambed-basis entry (not just the standing generic
-    # caveat) so the cross-request degrade is visible on the envelope.
-    _entries = [aquifer_k_review_entry(
-        k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-        k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-        porosity=porosity, note=summary["demo_aquifer_caveat"],
-    )]
+    # The aquifer-K/porosity entries (already gated pre-solve) are stamped for the
+    # envelope provenance; when the caller REQUESTED a real streambed DEM that
+    # failed, a specific labeled streambed-basis entry so the cross-request degrade
+    # is visible on the envelope (and refuses in auto - it is physics).
+    _entries = list(resolution.entries)
     if streambed_dem_failure is not None:
         summary["streambed_dem_fallback"] = streambed_dem_failure
         _entries.append(SyntheticInput(
             param="streambed_elevation", value="demo streambed (requested DEM unavailable)",
-            basis="default_demo", real_source_if_any=None, note=streambed_dem_failure,
+            basis="default_demo", consequence="physics", real_source_if_any=None, note=streambed_dem_failure,
         ))
     _review = await review_modflow_entries(
         tool_name="modflow_river_seepage", entries=_entries,
@@ -480,7 +487,7 @@ async def modflow_river_seepage(
     """GROUNDWATER <-> river seepage EXCHANGE: is a reach gaining or losing, how much leaks between aquifer and river.
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -521,7 +528,7 @@ async def modflow_river_seepage(
         along_river_source: place the SRC along the reach (default True).
         fetch_dem_for_streambed: also fetch a DEM for streambed elevation
             (default False - demo streambed otherwise).
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``.
 
     Returns:

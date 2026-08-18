@@ -232,18 +232,30 @@ Grouped by family; sized S/M/L. The mechanism wave (P1) is the gate; it must lan
 first because every downstream wave keys on the consequence tag and the
 refuse-in-auto behavior.
 
-- **P1 -- Mechanism + sweep guard (S).** Add `consequence` to `SyntheticInput`
+> **STATUS (2026-08-17): P1 LANDED, P2 LANDED** (ADR 0285). P1 = the `consequence`
+> tag + refuse-in-auto + the 3-layer sweep guard. P2 = the MODFLOW exemplar (rows
+> 1-7): the shared `_aquifer_resolve` SoilGrids seam, the demo constants deleted,
+> 12 archetypes wired to derive-or-refuse, and the live Woburn TCE A/B. P3-P8
+> remain staged for their per-engine waves.
+
+- **P1 -- Mechanism + sweep guard (S). [LANDED]** Add `consequence` to `SyntheticInput`
   (contracts). Teach `gate_input_review` to REFUSE in auto mode when an entry is
   `consequence="physics"` + `basis="default_demo"` (typed
   `*_PHYSICS_INPUT_REQUIRED` error carrying the param name + the need), while
   passing scenario/numerical/aoi. Add the standard typed-error helper the
   templates raise. **Sweep guard** (design below) lands here so the next waves
   are enforced, not hoped.
-- **P2 -- MODFLOW exemplar (M).** aquifer K/porosity, vadose hydraulics, thermal,
-  SFR gradient (#1-#7). Highest leverage: the SoilGrids pedotransfer seam already
-  exists in capture_zone -- generalize it to the archetype family as the DEFAULT,
-  refuse when it cannot resolve. This is the exemplar NATE named; land it as the
-  proving A/B (undeclared K -> typed refuse; SoilGrids available -> derived).
+- **P2 -- MODFLOW exemplar (M). [LANDED, ADR 0285]** aquifer K/porosity, vadose
+  hydraulics, thermal, SFR gradient (#1-#7). Highest leverage: the SoilGrids
+  pedotransfer seam already exists in capture_zone -- generalized to the archetype
+  family (the shared `_aquifer_resolve` seam) as the DEFAULT, refuse when it cannot
+  resolve. The demo constants (`DEFAULT_AQUIFER_K_MS`/`DEFAULT_POROSITY`) are
+  deleted; `aquifer_k_ms`/`porosity` are REQUIRED on `MODFLOWRunArgs`. Proven by
+  the live Woburn TCE A/B (undeclared K + SoilGrids unavailable -> typed refuse;
+  SoilGrids available -> derived K=9.1e-6 m/s vs the dead 1e-4). Texture is read as
+  the AOI-window valid-cell mean (robust to a nodata centroid). Rows 3/4/5/7
+  refuse the un-derivable physics (Brooks-Corey, ambient temp + grain conductivity,
+  DEM streambed, regional gradient) while scenario forcings proceed.
 - **P3 -- Groundwater + soil material props (M).** landlab groundwater/green_ampt/
   susceptibility (#8-#10), swmm aquifer_baseflow (#27). Same SoilGrids pedotransfer
   substrate as P2 -> refuse-or-derive. Shares the soil-hydraulics reader with P2.

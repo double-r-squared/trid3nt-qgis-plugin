@@ -563,7 +563,7 @@ def _aggregate_gdf(
         synthetic_inputs.append(SyntheticInput(
             param="replacement_value",
             value=n_default_rv,
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any="HAZUS-MH class-default replacement-value table",
             note=(
                 f"{n_default_rv} of {n_total} assessed structures use a HAZUS "

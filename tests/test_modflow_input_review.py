@@ -45,17 +45,29 @@ def _layer() -> LayerURI:
 
 
 @pytest.mark.asyncio
-async def test_gate_and_stamp_auto_mode_stamps_layer() -> None:
-    """auto mode (no live session) is a pass-through that stamps the entries onto
-    the layer's synthetic_inputs."""
+async def test_gate_and_stamp_auto_mode_stamps_resolved_entries() -> None:
+    """auto mode stamps a RESOLVED (user-supplied) entry onto the layer."""
     entry = aquifer_k_review_entry(
-        k_source="demo_default", k_ms=1e-4, porosity=0.3, note="demo")
+        k_source="user_supplied", k_ms=5e-5, porosity=0.3, note="user K")
     layer, review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_x", layer=_layer(), entries=[entry], input_mode="auto")
     assert review.proceed is True
     assert review.cancelled is False
     assert len(layer.synthetic_inputs) == 1
     assert layer.synthetic_inputs[0].param == "aquifer_k_ms"
+
+
+@pytest.mark.asyncio
+async def test_gate_and_stamp_auto_mode_refuses_demo_physics() -> None:
+    """auto mode REFUSES an unresolved demo aquifer K (law 9): the layer is not
+    stamped, the review cancels with a typed PHYSICS_INPUT_REQUIRED reason."""
+    entry = aquifer_k_review_entry(
+        k_source="demo_default", k_ms=1e-4, porosity=0.3, note="demo")
+    layer, review = await gate_and_stamp_modflow_inputs(
+        tool_name="modflow_x", layer=_layer(), entries=[entry], input_mode="auto")
+    assert review.proceed is False and review.cancelled is True
+    assert "PHYSICS_INPUT_REQUIRED" in (review.cancel_reason or "")
+    assert layer.synthetic_inputs == []  # nothing stamped on a refused run
 
 
 @pytest.mark.asyncio

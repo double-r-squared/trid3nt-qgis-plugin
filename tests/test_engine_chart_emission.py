@@ -371,8 +371,11 @@ async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> N
     emitter = PipelineEmitter(session_id=new_ulid(), sink=sink)
 
     async def run() -> Any:
+        # aquifer_k_ms + porosity supplied explicitly: under law 9 an unresolved
+        # demo K/porosity refuses in auto; this test exercises the chart-emission
+        # seam, so it provides the physics inputs to let the run proceed.
         return await mod.model_regional_water_budget_scenario(
-            aoi_latlon=(40.0, -100.0)
+            aoi_latlon=(40.0, -100.0), aquifer_k_ms=1e-4, porosity=0.3,
         )
 
     # emit_tool_call binds current_emitter() so the composer's side-emit fires.
@@ -422,6 +425,8 @@ async def test_sustainable_yield_composer_emits_head_decline(monkeypatch) -> Non
             pumping_rate_m3_day=500.0,
             sim_years=1.0,
             n_periods=4,
+            aquifer_k_ms=1e-4,  # law 9: supply the physics input so auto proceeds
+            porosity=0.3,
         )
 
     await emitter.emit_tool_call(
@@ -467,6 +472,8 @@ async def test_sustainable_yield_no_series_emits_no_chart(monkeypatch) -> None:
             aoi_latlon=(40.0, -100.0),
             well_location_latlon=(40.01, -100.01),
             pumping_rate_m3_day=500.0,
+            aquifer_k_ms=1e-4,  # law 9: supply the physics input so auto proceeds
+            porosity=0.3,
         )
 
     await emitter.emit_tool_call(

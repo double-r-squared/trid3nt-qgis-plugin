@@ -60,6 +60,9 @@ def _fake_cz_layer(*, area: float = 4.2, tiers: list[float] | None = None) -> Ca
         travel_time_years=_tiers,
         isochrone_areas_km2={str(t): round(area * (i + 1) / len(_tiers), 4) for i, t in enumerate(_tiers)},
         particle_count=16,
+        # A DEM-derived gradient so the composer's regional_gradient physics default
+        # does not refuse in auto (law 9); these tests isolate archetype threading.
+        gradient_source="dem", gradient_magnitude=0.0012, gradient_azimuth_deg=90.0,
     )
 
 
@@ -127,6 +130,8 @@ async def test_composer_full_chain_capture_zone(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
     result = await model_capture_zone_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(26.64, -81.87),
         well_location_latlon=(26.62, -81.88),
         travel_time_years=[1.0, 5.0, 10.0],
@@ -150,7 +155,7 @@ async def test_composer_full_chain_capture_zone(monkeypatch: pytest.MonkeyPatch)
     # The summary mirrors the typed layer fields.
     assert result.summary["capture_zone_area_km2"] == pytest.approx(3.7)
     assert result.summary["travel_time_years"] == [1.0, 5.0, 10.0]
-    assert "demo_aquifer_caveat" in result.summary
+    assert "aquifer_provenance" in result.summary
 
 
 @pytest.mark.asyncio
@@ -169,6 +174,8 @@ async def test_composer_full_chain_wellhead_protection(monkeypatch: pytest.Monke
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
     result = await model_capture_zone_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(26.64, -81.87),
         well_location_latlon=(26.62, -81.88),
         travel_time_years=None,  # should default to [2, 5, 10]
@@ -200,6 +207,8 @@ async def test_composer_surfaces_run_error_dict(monkeypatch: pytest.MonkeyPatch)
 
     with pytest.raises(CaptureZoneScenarioError, match="RUN_FAILED"):
         await model_capture_zone_scenario(
+            aquifer_k_ms=1e-4,  # user-supplied: pass the law-9 aquifer gate to reach the run-error path
+            porosity=0.3,
             aoi_latlon=(26.64, -81.87),
             well_location_latlon=(26.62, -81.88),
             use_measured_heads=False,  # hermetic: no USGS well fetch

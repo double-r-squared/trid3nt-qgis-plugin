@@ -233,14 +233,14 @@ async def openquake_secondary_perils(
     _entries = [
         SyntheticInput(
             param="magnitude", value=round(mag, 2), units="Mw",
-            basis="user" if magnitude != DEFAULT_SCENARIO_MAGNITUDE else "default_demo",
+            basis="user" if magnitude != DEFAULT_SCENARIO_MAGNITUDE else "default_demo", consequence="scenario",
             note=(None if magnitude != DEFAULT_SCENARIO_MAGNITUDE
                   else "labelled scenario magnitude demo default (not source-calibrated)"),
         ),
         SyntheticInput(
             param="rupture_geometry", value=rupture.kind, units=None,
             basis=("prompt_interpreted" if rupture_trace is not None
-                   else ("fetched" if rupture.kind == "real-fault" else "default_demo")),
+                   else ("fetched" if rupture.kind == "real-fault" else "default_demo")), consequence="scenario",
             note=rupture.note,
         ),
     ]

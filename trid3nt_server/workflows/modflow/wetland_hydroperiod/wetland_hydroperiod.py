@@ -38,15 +38,16 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
     HydroperiodLayerURI,
     MODFLOWRunArgs,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    provenance_summary,
+    resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.data import register_tool
@@ -171,7 +172,7 @@ async def model_wetland_hydroperiod_scenario(
         et_surface_m / et_max_rate_m_day / et_extinction_depth_m: EVT (ET sink)
             controls. Demo defaults applied by the adapter when None.
         n_periods: explicit transient period override.
-        aquifer_k_ms / porosity / specific_yield: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity / specific_yield: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -214,6 +215,17 @@ async def model_wetland_hydroperiod_scenario(
         else None
     )
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9), pre-solve ---
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_wetland_hydroperiod", lat=lat, lon=lon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise WetlandHydroperiodScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -227,7 +239,7 @@ async def model_wetland_hydroperiod_scenario(
             et_max_rate_m_day=et_max_rate_m_day,
             et_extinction_depth_m=et_extinction_depth_m,
             n_periods=n_periods,
-            **_wetland_overrides(aquifer_k_ms, porosity, specific_yield),
+            **_wetland_overrides(eff_k, eff_porosity, specific_yield),
         )
     except Exception as exc:  # noqa: BLE001
         raise WetlandHydroperiodInputError(
@@ -265,10 +277,10 @@ async def model_wetland_hydroperiod_scenario(
         "head_series_steps": (
             len(layer.head_timeseries) if layer.head_timeseries else 0
         ),
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, the specific yield, and the "
-            "recharge / ET schedule are demo defaults, not site-specific "
-            "hydrogeology."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The specific yield and the recharge / ET schedule remain demo "
+            "defaults (scenario forcing)."
         ),
     }
     logger.info(
@@ -276,15 +288,11 @@ async def model_wetland_hydroperiod_scenario(
         location_name,
         layer.seasonal_head_range_m,
     )
-    # structured aquifer-K provenance routed through gate_input_review,
-    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    # The resolved aquifer-K/porosity entries (already gated pre-solve) are stamped
+    # onto the layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_wetland_hydroperiod", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=porosity, note=summary["demo_aquifer_caveat"],
-        )],
+        entries=list(resolution.entries),
         params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
     )
     if _review.cancelled:
@@ -361,7 +369,7 @@ async def modflow_wetland_hydroperiod(
     """Model a wetland's seasonal water-table range (hydroperiod).
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -392,7 +400,7 @@ async def modflow_wetland_hydroperiod(
         et_surface_m / et_max_rate_m_day / et_extinction_depth_m: EVT controls.
             Demo defaults if None.
         n_periods: explicit transient period override.
-        aquifer_k_ms / porosity / specific_yield: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity / specific_yield: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``.
 
     Returns:

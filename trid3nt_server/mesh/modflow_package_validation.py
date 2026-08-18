@@ -64,7 +64,7 @@ Five cases, each exercising a package no archetype composer exposes:
 
 Honesty (loud): every number is a real parsed mf6 output (invariant 1); the
 decks are AUTHORED synthetic benchmarks labeled ``SyntheticInput(basis=
-"default_demo")`` by the composer.
+"default_demo", consequence="scenario")`` by the composer.
 """
 
 from __future__ import annotations

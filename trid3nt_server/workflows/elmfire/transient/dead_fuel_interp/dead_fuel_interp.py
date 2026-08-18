@@ -208,7 +208,7 @@ async def elmfire_dead_fuel_moisture_interpolation_frequency_control(
                 f"({int(n_bands)} meteorology bands)"
             ),
             units="percent",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             note="synthetic dead-fuel moisture-recovery schedule; NOT a real "
             "reanalysis forcing",
         )

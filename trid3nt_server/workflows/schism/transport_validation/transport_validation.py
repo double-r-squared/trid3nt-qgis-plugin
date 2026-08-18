@@ -345,13 +345,13 @@ async def model_schism_transport_validation(
     provenance = [
         SyntheticInput(
             param="schism_transport_validation:heat_front",
-            value=None, basis="default_demo",
+            value=None, basis="default_demo", consequence="scenario",
             real_source_if_any="schism_verification_tests Test_HeatConsv_TVD / Test_HeatConsv_Upwind",
             note="a temperature front advected across the QuarterAnnulus M2 channel; TVD vs upwind numerical mixing",
         ),
         SyntheticInput(
             param="schism_transport_validation:mass_conservation",
-            value=None, basis="default_demo",
+            value=None, basis="default_demo", consequence="scenario",
             real_source_if_any="schism_verification_tests Test_GEN_MassConsv",
             note="domain-integrated conservative-tracer mass over the run (GEN-module path documented, temperature proxy run)",
         ),

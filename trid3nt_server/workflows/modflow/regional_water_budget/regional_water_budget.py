@@ -45,8 +45,10 @@ from trid3nt_contracts.modflow_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    provenance_summary,
+    resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
@@ -134,7 +136,7 @@ async def model_regional_water_budget_scenario(
         aoi_latlon: an explicit ``(lat, lon)`` AOI point.
         zone_partition: optional zone-split scheme (e.g.
             ``"upgradient_downgradient"``). None = whole-domain budget only.
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -167,12 +169,18 @@ async def model_regional_water_budget_scenario(
             raise RegionalWaterBudgetInputError(str(exc)) from exc
         raise
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9), pre-solve ---
     try:
-        overrides: dict[str, Any] = {}
-        if aquifer_k_ms is not None:
-            overrides["aquifer_k_ms"] = float(aquifer_k_ms)
-        if porosity is not None:
-            overrides["porosity"] = float(porosity)
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_regional_water_budget", lat=lat, lon=lon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise RegionalWaterBudgetScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
+    try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
             contaminant="n/a",
@@ -180,7 +188,8 @@ async def model_regional_water_budget_scenario(
             duration_days=1.0,
             archetype="regional_water_budget",
             zone_partition=zone_partition,
-            **overrides,
+            aquifer_k_ms=eff_k,
+            porosity=eff_porosity,
         )
     except Exception as exc:  # noqa: BLE001
         raise RegionalWaterBudgetInputError(
@@ -224,27 +233,18 @@ async def model_regional_water_budget_scenario(
         location_name,
         sorted(layer.budget_partition_m3_day),
     )
-    # this archetype previously carried NO structured aquifer-K
-    # provenance -- add a machine-readable SyntheticInput routed through
-    # gate_input_review so the demo hydrogeology is labeled on the envelope.
+    # The resolved aquifer-K/porosity entries (already gated pre-solve) are stamped
+    # onto the layer envelope for machine-readable provenance.
     _k_note = (
-        "Aquifer K is caller-supplied." if aquifer_k_ms is not None else
-        "Aquifer K/porosity are demo defaults, not site-specific hydrogeology; the "
-        "budget partition is a planning-level illustration, not a calibrated model."
+        provenance_summary(resolution)
+        + " The budget partition is a planning-level illustration, not a calibrated model."
     )
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_regional_water_budget", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-            k_ms=aquifer_k_ms, porosity=porosity, note=_k_note,
-        )],
+        entries=list(resolution.entries),
         params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
     )
-    if _review.cancelled:
-        raise RegionalWaterBudgetScenarioError(
-            f"regional-water-budget input review {_review.cancel_reason or 'not approved'}"
-        )
-    summary["demo_aquifer_caveat"] = _k_note
+    summary["aquifer_provenance"] = _k_note
     return RegionalWaterBudgetResult(
         budget_layer=layer, derived_params=derived, summary=summary
     )
@@ -292,7 +292,7 @@ async def modflow_regional_water_budget(
     """Model a regional groundwater water-budget partition (where the water goes).
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -319,7 +319,7 @@ async def modflow_regional_water_budget(
         aoi_latlon: explicit ``(lat, lon)`` AOI point.
         zone_partition: optional zone-split scheme (e.g.
             ``"upgradient_downgradient"``). None = whole-domain budget.
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``.
 
     Returns:

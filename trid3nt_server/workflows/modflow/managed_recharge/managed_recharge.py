@@ -36,15 +36,16 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
     MODFLOWRunArgs,
     MoundingLayerURI,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    provenance_summary,
+    resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.data import register_tool
@@ -197,7 +198,7 @@ async def model_mar_scenario(
         recharge_months: number of months the basin floods (>= 1). Demo default
             applied by the adapter when None.
         n_periods: explicit transient period override (alternative to months).
-        aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity / aquifer_sy: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class.
         pipeline_emitter: optional PipelineEmitter for live progress cards.
 
@@ -234,6 +235,17 @@ async def model_mar_scenario(
         location, aoi_latlon, pipeline_emitter=pipeline_emitter
     )
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9), pre-solve ---
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_managed_recharge", lat=lat, lon=lon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise MARScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -245,7 +257,7 @@ async def model_mar_scenario(
             infiltration_rate_m_day=infiltration_rate_m_day,
             recharge_months=recharge_months,
             n_periods=n_periods,
-            **_aquifer_overrides(aquifer_k_ms, porosity, aquifer_sy, None),
+            **_aquifer_overrides(eff_k, eff_porosity, aquifer_sy, None),
         )
     except Exception as exc:  # noqa: BLE001
         raise MARInputError(f"invalid MAR run arguments: {exc}") from exc
@@ -277,10 +289,10 @@ async def model_mar_scenario(
         "max_mounding_m": layer.max_mounding_m,
         "recharged_volume_m3": layer.recharged_volume_m3,
         "basin_vertex_count": len(basin_verts),
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s, the specific yield, and the "
-            "recharge rate / duration are demo defaults, not site-specific "
-            "hydrogeology."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The specific yield and the recharge rate / duration remain demo "
+            "defaults (scenario forcing)."
         ),
     }
     logger.info(
@@ -289,15 +301,11 @@ async def model_mar_scenario(
         layer.max_mounding_m,
         layer.recharged_volume_m3,
     )
-    # structured aquifer-K provenance routed through gate_input_review,
-    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    # The resolved aquifer-K/porosity entries (already gated pre-solve) are stamped
+    # onto the layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_managed_recharge", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=porosity, note=summary["demo_aquifer_caveat"],
-        )],
+        entries=list(resolution.entries),
         params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
     )
     if _review.cancelled:
@@ -355,7 +363,7 @@ async def modflow_managed_recharge(
     """Model a managed-aquifer-recharge (MAR) groundwater mound under a basin.
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -384,7 +392,7 @@ async def modflow_managed_recharge(
         infiltration_rate_m_day: applied recharge rate (m/day). Demo default if None.
         recharge_months: months the basin floods (>= 1). Demo default if None.
         n_periods: explicit transient period override.
-        aquifer_k_ms / porosity / aquifer_sy: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity / aquifer_sy: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``.
 
     Returns:

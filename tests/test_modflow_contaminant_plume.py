@@ -365,6 +365,8 @@ async def test_composer_single_contaminant_yields_one_plume(
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
     result = await model_contaminant_plume(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         spill_location_latlon=(26.64, -81.87),
         contaminant="benzene",
         release_rate_kg_s=0.01,
@@ -403,6 +405,8 @@ async def test_composer_full_chain_two_plumes(
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
     result = await model_contaminant_plume(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         spill_location_latlon=(26.64, -81.87), species=TWO_SPECIES
     )
     assert isinstance(result, ContaminantPlumeResult)
@@ -438,7 +442,8 @@ async def test_composer_surfaces_run_error_dict(
 
     with pytest.raises(ContaminantPlumeScenarioError, match="EMPTY_RESULT"):
         await model_contaminant_plume(
-            spill_location_latlon=(26.64, -81.87), species=TWO_SPECIES
+            spill_location_latlon=(26.64, -81.87), species=TWO_SPECIES,
+            aquifer_k_ms=1e-4, porosity=0.3,  # user-supplied: pass the law-9 aquifer gate to reach the run-error path
         )
 
 

@@ -91,10 +91,13 @@ __all__ = [
 ]
 
 
-# TENTATIVE demo defaults (sprint-13 manifest OQ-3). Narrated as demo values,
-# not site-specific hydrogeology, by the Case 2 composer.
-DEFAULT_AQUIFER_K_MS: float = 1e-4  # hydraulic conductivity, m/s (sandy coastal plain)
-DEFAULT_POROSITY: float = 0.3  # effective porosity, dimensionless
+# Aquifer hydraulic conductivity + effective porosity have NO demo default (law
+# 9): a physics-consequential value with no real data source must be RESOLVED
+# (caller-supplied or SoilGrids-derived at the AOI via the shared
+# `_aquifer_resolve` seam) or the run REFUSES. `aquifer_k_ms` / `porosity` are
+# REQUIRED fields on `MODFLOWRunArgs` below - there is no invented fallback to
+# fall through to. (The former `DEFAULT_AQUIFER_K_MS = 1e-4` / `DEFAULT_POROSITY
+# = 0.3` demo constants were deleted; see DELETION_LEDGER + ADR 0285.)
 
 # Transient-storage defaults for the three new sprint-18 archetypes
 # (sustainable_yield / mine_dewatering / regional_water_budget). These feed the
@@ -411,8 +414,10 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
     release_rate_kg_s: float = Field(gt=0.0)
     duration_days: float = Field(gt=0.0)
 
-    aquifer_k_ms: float = Field(default=DEFAULT_AQUIFER_K_MS, gt=0.0)
-    porosity: float = Field(default=DEFAULT_POROSITY, gt=0.0, le=1.0)
+    # REQUIRED (law 9): no demo default - resolve at the AOI or refuse. See the
+    # module note above + the shared `_aquifer_resolve` seam.
+    aquifer_k_ms: float = Field(gt=0.0)
+    porosity: float = Field(gt=0.0, le=1.0)
 
     # --- River-coupling (sprint-17 J9; ADDITIVE, all optional) -------------- #
     river_geometry_uri: str | None = None

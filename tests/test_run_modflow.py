@@ -68,6 +68,8 @@ _SPILL_ARGS = MODFLOWRunArgs(
     contaminant="benzene",
     release_rate_kg_s=0.01,
     duration_days=30.0,
+    aquifer_k_ms=1e-4,
+    porosity=0.3,
 )
 
 

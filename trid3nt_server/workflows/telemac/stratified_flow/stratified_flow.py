@@ -551,21 +551,21 @@ async def model_telemac3d_stratified_flow(
     _review_entries = [
         SyntheticInput(
             param="wind_speed_mps", value=round(wind_speed_mps, 1), units="m/s",
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note=("calm (thermocline persists / no wind circulation)" if calm
                   else "prescribed steady wind (mixes the column / drives the gyre)")),
         SyntheticInput(
             param="bathy_source", value="noaa_greatlakes" if real else "idealized",
-            basis="fetched" if real else "default_demo", note=bathy_label),
+            basis="fetched" if real else "default_demo", consequence="physics", note=bathy_label),
         SyntheticInput(
             param="target_resolution_m", value=round(res_m, 0), units="m",
-            basis="default_demo" if res_default else "user",
+            basis="default_demo" if res_default else "user", consequence="numerical",
             note="horizontal grid node spacing"),
     ]
     if flow_mode == "stratification":
         _review_entries.append(SyntheticInput(
             param="thermocline", value=f"{warm_temp_c:g}C/{cold_temp_c:g}C",
-            units="C", basis="default_demo",
+            units="C", basis="default_demo", consequence="physics",
             note=(f"prescribed warm epilimnion over cold hypolimnion, thermocline "
                   f"at {thermocline_depth_m:g} m (no met-forcing fetcher)")))
     _review = await gate_input_review(

@@ -808,7 +808,7 @@ async def model_schism_pahm_surge(
     # --- Stage 4: input-review gate ------------------------------------------ #
     review_entries = [
         SyntheticInput(param="storm", value=storm_label,
-                       basis="user" if track_basis == "fetch_storm_tracks" else "default_demo",
+                       basis="user" if track_basis == "fetch_storm_tracks" else "default_demo", consequence="scenario",
                        real_source_if_any="IBTrACS best track" if track_basis == "fetch_storm_tracks" else "published HURDAT2 Ike track",
                        note=f"{len(fixes)} best-track fixes; peak 10-m wind {field.peak_wind_ms:.0f} m/s, min pressure {field.min_pressure_pa/100.0:.0f} hPa (Holland B~{field.holland_b_mean})"),
         SyntheticInput(param="forcing", value="parametric Holland-1980 sflux (nws=2)",
@@ -819,19 +819,19 @@ async def model_schism_pahm_surge(
                        basis="user" if supplied_mesh is not None else "derived",
                        note=f"{deck['n_nodes']} nodes / {deck['n_elements']} elements, open ({open_side}) boundary"),
         SyntheticInput(param="bathymetry", value=bathy_source,
-                       basis="fetched" if "COG" in bathy_source else "default_demo",
+                       basis="fetched" if "COG" in bathy_source else "default_demo", consequence="physics",
                        real_source_if_any=bathy_source if "COG" in bathy_source else None),
         SyntheticInput(
             param="domain_provenance",
             value="SYNTHETIC (idealized sloping shelf)" if synthetic_bathy else "REAL",
-            basis="default_demo" if synthetic_bathy else "fetched",
+            basis="default_demo" if synthetic_bathy else "fetched", consequence="aoi",
             real_source_if_any=None if synthetic_bathy else bathy_source,
             note=("mechanism-demo mode (allow_synthetic_domain=True): the surge PATTERN "
                   "is non-physical, magnitude-only" if synthetic_bathy else
                   "bathymetry traced to a real fetched source; the surge geometry reflects "
                   "actual coastal bathymetry, not an idealized shelf"),
         ),
-        SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d", basis="default_demo"),
+        SyntheticInput(param="sim_days", value=round(sim_days, 3), units="d", basis="default_demo", consequence="scenario"),
         SyntheticInput(
             param="resolution_m",
             value=(round(resolved_res_m, 1) if resolved_res_m is not None

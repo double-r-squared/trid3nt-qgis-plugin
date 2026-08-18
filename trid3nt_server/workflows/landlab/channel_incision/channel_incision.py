@@ -179,7 +179,7 @@ async def landlab_channel_incision_steady_state(
                 f"U={uplift_rate_m_yr} m/yr, K={k_bedrock}, m={m_sp}, n={n_sp}, "
                 f"T={incision_run_duration_yr:g} yr"
             ),
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             real_source_if_any=None,
             note=(
                 "landscape-evolution forcing is a labeled demo scenario, not a "

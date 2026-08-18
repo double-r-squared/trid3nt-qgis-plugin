@@ -374,7 +374,7 @@ async def landlab_susceptibility(
     if _soil_defaulted:
         provenance.append(SyntheticInput(
             param="soil_properties", value="/".join(_soil_defaulted),
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
         ))
 

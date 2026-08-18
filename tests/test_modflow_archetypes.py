@@ -188,6 +188,8 @@ async def test_sustainable_yield_assembles_args_and_threads_result(monkeypatch) 
     _patch_archetype_run(monkeypatch, captured, layer)
 
     result = await mod.model_sustainable_yield_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         location="Somewhere, USA",
         well_location_latlon=(40.0, -100.0),
         pumping_rate_m3_day=2000.0,  # positive -> negated to extraction
@@ -201,7 +203,7 @@ async def test_sustainable_yield_assembles_args_and_threads_result(monkeypatch) 
     assert result.drawdown_layer.max_drawdown_m == pytest.approx(6.13)
     assert result.summary["max_drawdown_m"] == pytest.approx(6.13)
     assert result.summary["head_decline_steps"] == 3
-    assert "demo_aquifer_caveat" in result.summary
+    assert "aquifer_provenance" in result.summary
 
 
 @pytest.mark.asyncio
@@ -244,6 +246,8 @@ async def test_mine_dewatering_assembles_args_and_threads_result(monkeypatch) ->
 
     pit = [(-100.003, 40.003), (-99.997, 40.003), (-99.997, 39.997)]
     result = await mod.model_mine_dewatering_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0),
         pit_footprint_lonlat=pit,
     )
@@ -279,6 +283,8 @@ async def test_mine_dewatering_accepts_geojson_polygon(monkeypatch) -> None:
         ],
     }
     result = await mod.model_mine_dewatering_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0), pit_footprint_lonlat=geojson
     )
     run_args = captured["run_args"]
@@ -320,6 +326,8 @@ async def test_regional_water_budget_assembles_args_and_threads_result(monkeypat
     _patch_archetype_run(monkeypatch, captured, layer)
 
     result = await mod.model_regional_water_budget_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0), zone_partition="upgradient_downgradient"
     )
     run_args = captured["run_args"]
@@ -378,6 +386,8 @@ async def test_archetype_run_tool_empty_result_is_honest_error(monkeypatch) -> N
         contaminant="n/a",
         release_rate_kg_s=1.0,
         duration_days=1.0,
+        aquifer_k_ms=1e-4,  # REQUIRED (law 9): no demo default on MODFLOWRunArgs
+        porosity=0.3,
         archetype="sustainable_yield",
         well_location_latlon=(40.0, -100.0),
         pumping_rate_m3_day=-2000.0,

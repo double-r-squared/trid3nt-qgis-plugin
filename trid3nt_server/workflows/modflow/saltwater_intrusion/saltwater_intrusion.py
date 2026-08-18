@@ -59,16 +59,16 @@ from pydantic import Field
 
 from trid3nt_contracts.common import GraceModel
 from trid3nt_contracts.modflow_contracts import (
-    DEFAULT_AQUIFER_K_MS,
-    DEFAULT_POROSITY,
     MODFLOWRunArgs,
     SaltwaterWedgeLayerURI,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.workflows.modflow._input_review import (
-    aquifer_k_review_entry,
+    AquiferRefusal,
     gate_and_stamp_modflow_inputs,
+    provenance_summary,
+    resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.data import register_tool
@@ -175,7 +175,7 @@ async def model_saltwater_intrusion_scenario(
         freshwater_inflow_m3_day: freshwater inflow at the inland WEL+AUX
             boundary, m^3/day. When None the adapter auto-derives a
             Henry-representative flux from the transect geometry + aquifer K.
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. NOTE: saltwater_intrusion is
             LOCAL-ONLY (the Henry demo grid is small + fast; Batch is not used).
         pipeline_emitter: optional PipelineEmitter for live progress cards.
@@ -241,6 +241,17 @@ async def model_saltwater_intrusion_scenario(
         location, aoi_latlon, pipeline_emitter=pipeline_emitter
     )
 
+    # --- Aquifer properties: resolve at the AOI or REFUSE (law 9), pre-solve ---
+    try:
+        resolution = await resolve_and_gate_aquifer(
+            tool_name="modflow_saltwater_intrusion", lat=lat, lon=lon,
+            aquifer_k_ms=aquifer_k_ms, porosity=porosity,
+        )
+    except AquiferRefusal as exc:
+        raise SaltwaterIntrusionScenarioError(str(exc)) from exc
+    eff_k = float(resolution.k_ms)
+    eff_porosity = float(resolution.porosity)
+
     try:
         run_args = MODFLOWRunArgs(
             spill_location_latlon=(lat, lon),
@@ -252,7 +263,7 @@ async def model_saltwater_intrusion_scenario(
             seawater_salinity_ppt=salinity,
             n_vertical_layers=nlay,
             freshwater_inflow_m3_day=freshwater_inflow_m3_day,
-            **_aquifer_overrides(aquifer_k_ms, porosity, None, None),
+            **_aquifer_overrides(eff_k, eff_porosity, None, None),
         )
     except Exception as exc:  # noqa: BLE001  -  pydantic ValidationError
         raise SaltwaterIntrusionInputError(
@@ -297,13 +308,11 @@ async def model_saltwater_intrusion_scenario(
         "toe_distance_m": toe_m,
         "seaward_salinity_ppt": layer.seaward_salinity_ppt,
         "transect_endpoints": [list(transect_eps[0]), list(transect_eps[1])],
-        "demo_aquifer_caveat": (
-            f"Aquifer K={DEFAULT_AQUIFER_K_MS:g} m/s and porosity="
-            f"{DEFAULT_POROSITY:g} are demo defaults, not site-specific "
-            "hydrogeology. The cross-section is a qualitative Henry-style "
-            "variable-density simulation on a 100-column structured grid -- "
-            "treat it as a planning-level wedge illustration, not a calibrated "
-            "intrusion depth forecast."
+        "aquifer_provenance": (
+            provenance_summary(resolution)
+            + " The cross-section is a qualitative Henry-style variable-density "
+            "simulation on a 100-column structured grid -- treat it as a "
+            "planning-level wedge illustration, not a calibrated intrusion forecast."
         ),
     }
     logger.info(
@@ -313,15 +322,11 @@ async def model_saltwater_intrusion_scenario(
         intrusion_m,
         layer.seaward_salinity_ppt,
     )
-    # structured aquifer-K provenance routed through gate_input_review,
-    # stamped onto the layer envelope (the prose caveat stays on the summary).
+    # The resolved aquifer-K/porosity entries (already gated pre-solve) are stamped
+    # onto the layer envelope for machine-readable provenance.
     layer, _review = await gate_and_stamp_modflow_inputs(
         tool_name="modflow_saltwater_intrusion", layer=layer,
-        entries=[aquifer_k_review_entry(
-            k_source=("user_supplied" if aquifer_k_ms is not None else "demo_default"),
-            k_ms=(aquifer_k_ms if aquifer_k_ms is not None else DEFAULT_AQUIFER_K_MS),
-            porosity=porosity, note=summary["demo_aquifer_caveat"],
-        )],
+        entries=list(resolution.entries),
         params={"aquifer_k_ms": aquifer_k_ms, "porosity": porosity},
     )
     if _review.cancelled:
@@ -378,7 +383,7 @@ async def modflow_saltwater_intrusion(
     """Model a coastal saltwater intrusion wedge (Henry-style variable-density BUY).
 
     Fidelity: MODFLOW 6 local planning-grade groundwater envelope (aquifer
-    K/porosity default to narrated demo values unless supplied), not a
+    K/porosity are SoilGrids-derived at the AOI or refused when unavailable, law 9), not a
     calibrated regulatory delineation. Off-scope: surface-water inundation
     flooding -> sfincs_flood; urban storm-sewer / pipe-network flooding ->
     swmm_urban_flood.
@@ -420,7 +425,7 @@ async def modflow_saltwater_intrusion(
         n_vertical_layers: number of vertical model layers (default 20; range 4..80).
         freshwater_inflow_m3_day: inland freshwater inflow, m^3/day. None -> adapter
             auto-derives from geometry + aquifer K.
-        aquifer_k_ms / porosity: optional demo-aquifer overrides.
+        aquifer_k_ms / porosity: optional overrides; else SoilGrids-derived at the AOI or refused (law 9).
         compute_class: compute class. Default ``"standard"``. This archetype
             runs LOCAL-ONLY (the Henry demo grid is small + fast; Batch is not used).
 

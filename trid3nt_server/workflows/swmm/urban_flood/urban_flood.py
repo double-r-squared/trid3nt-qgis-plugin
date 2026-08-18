@@ -687,13 +687,13 @@ def _build_swmm_provenance(
         note=(None if _user_depth else f"{run_args.return_period_yr}-yr/{run_args.storm_duration_hr:.0f}-hr design storm"),
     ))
     out.append(SyntheticInput(
-        param="drainage_network", value="synthesized", basis="default_demo",
+        param="drainage_network", value="synthesized", basis="default_demo", consequence="scenario",
         note=("quasi-2D overland grid from DEM cells (one storage node per cell, "
               "single outfall); NOT a surveyed storm-sewer/pipe network"),
     ))
     out.append(SyntheticInput(
-        param="overland_manning_n", value=0.03, basis="default_demo",
-        note="flat overland roughness; landcover-derived n not wired",
+        param="overland_manning_n", value=0.03, basis="default_demo", consequence="scenario",
+        note="flat overland roughness (standard published overland n); landcover-derived n not wired",
     ))
     if n_buildings_dropped > 0:
         out.append(SyntheticInput(
@@ -702,7 +702,7 @@ def _build_swmm_provenance(
         ))
     elif buildings_absent:
         out.append(SyntheticInput(
-            param="building_obstructions", value="none", basis="default_demo",
+            param="building_obstructions", value="none", basis="default_demo", consequence="scenario",
             note="OSM footprints unavailable; modeled without obstructions",
         ))
     if "10m" in (dem_source or ""):
@@ -983,13 +983,13 @@ async def model_swmm_urban_flood(
                            f"{run_args.storm_duration_hr:.0f}-hr design storm"),
             ),
             SyntheticInput(
-                param="drainage_network", value="synthesized", basis="default_demo",
+                param="drainage_network", value="synthesized", basis="default_demo", consequence="scenario",
                 note="quasi-2D overland grid from DEM cells; NOT a surveyed sewer network",
             ),
             SyntheticInput(
                 param="overland_manning_n",
-                value=float(effective_args.manning_overland), basis="default_demo",
-                note="flat overland roughness; landcover-derived n not wired",
+                value=float(effective_args.manning_overland), basis="default_demo", consequence="scenario",
+                note="flat overland roughness (standard published overland n); landcover-derived n not wired",
             ),
         ],
         params={"total_rain_depth_mm": (

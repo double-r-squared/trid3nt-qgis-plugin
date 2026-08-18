@@ -12,7 +12,7 @@ Honesty (loud): the decks are AUTHORED mechanism stubs (a single subcatchment, a
 wet-well, a pond-outlet), NOT a user AOI - their coordinates are schematic, so the
 comparison emits CHARTS + typed scalars, never a georeferenced map. Every number
 comes from a real parsed solver output (invariant 1). The synthetic basis is
-labeled ``SyntheticInput(basis="default_demo")`` by the composer; each variant
+labeled ``SyntheticInput(basis="default_demo", consequence="scenario")`` by the composer; each variant
 realizes a mechanism proven by the cited EPA / openswmm published examples.
 
 Deck syntax is the version-verified form for the installed SWMM (swmm-toolkit

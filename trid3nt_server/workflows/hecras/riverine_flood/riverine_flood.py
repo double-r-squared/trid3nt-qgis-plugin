@@ -381,7 +381,7 @@ async def model_hecras_riverine_flood(
     review_entries: list[SyntheticInput] = [
         SyntheticInput(
             param="flow_scale", value=round(float(flow_scale), 4), units="x",
-            basis="user" if (flow_scale != 1.0 or target_peak_cfs is not None) else "default_demo",
+            basis="user" if (flow_scale != 1.0 or target_peak_cfs is not None) else "default_demo", consequence="scenario",
             note="inflow-hydrograph multiplier on the baseline Muncie event (~21000 cfs peak)",
         ),
         SyntheticInput(
@@ -392,7 +392,7 @@ async def model_hecras_riverine_flood(
         ),
         SyntheticInput(
             param="geometry", value="Muncie White River (IN) demonstration model",
-            basis="default_demo",
+            basis="default_demo", consequence="physics",
             note="FROZEN shipped 1D/2D geometry (terrain + mesh unchanged; not a user AOI)",
         ),
     ]

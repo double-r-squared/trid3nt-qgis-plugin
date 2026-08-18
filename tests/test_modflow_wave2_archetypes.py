@@ -203,6 +203,8 @@ async def test_mar_assembles_args_and_threads_result(monkeypatch) -> None:
 
     basin = [(-100.003, 40.003), (-99.997, 40.003), (-99.997, 39.997)]
     result = await mod.model_mar_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0),
         basin_footprint_lonlat=basin,
         infiltration_rate_m_day=0.05,
@@ -216,7 +218,7 @@ async def test_mar_assembles_args_and_threads_result(monkeypatch) -> None:
     assert result.mounding_layer.max_mounding_m == pytest.approx(3.42)
     assert result.summary["max_mounding_m"] == pytest.approx(3.42)
     assert result.summary["recharged_volume_m3"] == pytest.approx(120000.0)
-    assert "demo_aquifer_caveat" in result.summary
+    assert "aquifer_provenance" in result.summary
 
 
 @pytest.mark.asyncio
@@ -243,6 +245,8 @@ async def test_mar_accepts_geojson_polygon(monkeypatch) -> None:
         ],
     }
     result = await mod.model_mar_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0), basin_footprint_lonlat=geojson
     )
     run_args = captured["run_args"]
@@ -287,6 +291,9 @@ async def test_asr_assembles_args_and_threads_result(monkeypatch) -> None:
     _patch_archetype_run(monkeypatch, captured, layer)
 
     result = await mod.model_asr_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
+        aquifer_sy=0.15,
         location="Somewhere, USA",
         well_location_latlon=(40.0, -100.0),
         injection_rate_m3_day=1500.0,
@@ -325,6 +332,9 @@ async def test_asr_negative_rate_normalized_to_magnitude(monkeypatch) -> None:
     )
     _patch_archetype_run(monkeypatch, captured, layer)
     result = await mod.model_asr_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
+        aquifer_sy=0.15,
         aoi_latlon=(40.0, -100.0),
         well_location_latlon=(40.0, -100.0),
         injection_rate_m3_day=-1000.0,  # passed negative -> magnitude
@@ -379,6 +389,8 @@ async def test_wetland_assembles_args_and_threads_result(monkeypatch) -> None:
 
     wetland = [(-100.003, 40.003), (-99.997, 40.003), (-99.997, 39.997)]
     result = await mod.model_wetland_hydroperiod_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0),
         wetland_footprint_lonlat=wetland,
         recharge_schedule_m_day=[0.01, 0.002, 0.01, 0.002],
@@ -413,6 +425,8 @@ async def test_wetland_specific_yield_override_threads(monkeypatch) -> None:
     _patch_archetype_run(monkeypatch, captured, layer)
     wetland = [(-100.001, 40.001), (-99.999, 40.001), (-99.999, 39.999)]
     await mod.model_wetland_hydroperiod_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.0, -100.0),
         wetland_footprint_lonlat=wetland,
         specific_yield=0.15,
@@ -484,6 +498,8 @@ async def test_archetype_run_tool_empty_mounding_is_honest_error(monkeypatch) ->
         contaminant="n/a",
         release_rate_kg_s=1.0,
         duration_days=1.0,
+        aquifer_k_ms=1e-4,  # REQUIRED (law 9): no demo default on MODFLOWRunArgs
+        porosity=0.3,
         archetype="MAR",
         basin_footprint_lonlat=[(-100.001, 40.001), (-99.999, 40.001)],
     )

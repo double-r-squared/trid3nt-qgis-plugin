@@ -22,7 +22,9 @@ from pydantic import (
     ConfigDict,
     Field,
     PlainSerializer,
+    ValidationInfo,
     field_validator,
+    model_validator,
 )
 from ulid import ULID
 
@@ -38,6 +40,7 @@ __all__ = [
     "TemporalMode",
     "EngineRunArgsMixin",
     "InputBasis",
+    "InputConsequence",
     "SyntheticInput",
     "render_assumptions_line",
 ]
@@ -265,6 +268,28 @@ InputBasis = Literal[
 ]
 
 
+#: What a demo default's WRONGNESS costs (law 9). The discriminator the
+#: input-review gate keys on to decide whether an unresolved ``default_demo``
+#: value may proceed or must REFUSE in auto mode:
+#:   - ``physics``: a physics-consequential world value (material property,
+#:     forcing magnitude, boundary/source term, friction/decay, invented terrain
+#:     or geometry). A ``default_demo`` with this consequence REFUSES in auto - a
+#:     wrong value silently ruins the simulation, so it never runs on an invention.
+#:   - ``scenario``: the user's QUESTION (magnitude, return period, source
+#:     location, a what-if forcing, a duration). A demo default here is a starting
+#:     assumption, not a claim about the world - it proceeds, labeled.
+#:   - ``numerical``: a solver setting (resolution, timestep, turbulence closure,
+#:     calibration constant). Not a world-claim - proceeds, labeled.
+#:   - ``aoi``: a default area/domain extent when the user named no place. Not a
+#:     physics invention - proceeds, labeled.
+InputConsequence = Literal["physics", "scenario", "numerical", "aoi"]
+
+#: Backfilled onto a pre-law-9 persisted entry that carried ``basis="default_demo"``
+#: without a ``consequence`` tag: tolerant reads coerce it to ``scenario`` (proceed,
+#: never a spurious refuse on history) and record why here.
+_HISTORY_CONSEQUENCE_NOTE = "consequence backfilled=scenario (pre-law-9 record)"
+
+
 class SyntheticInput(GraceModel):
     """One structured provenance entry for a physical model input.
 
@@ -281,6 +306,11 @@ class SyntheticInput(GraceModel):
       - ``value``: the value actually used (scalar/str; None when not surfaced).
       - ``units``: physical units, when applicable.
       - ``basis``: the provenance class (see ``InputBasis``).
+      - ``consequence``: what the value's wrongness costs (see ``InputConsequence``).
+        REQUIRED when ``basis == "default_demo"`` - the gate cannot decide
+        refuse-vs-proceed from ``basis`` alone, because a demo default may be an
+        invented physics value (refuse) or a scenario/numerical/aoi assumption
+        (proceed). Optional on other bases.
       - ``real_source_if_any``: the fetcher / dataset name when
         ``basis in {"fetched", "derived"}`` (e.g. ``"fetch_usace_dams"``).
       - ``note``: a short human-readable qualifier.
@@ -290,8 +320,36 @@ class SyntheticInput(GraceModel):
     value: float | int | str | None = None
     units: str | None = None
     basis: InputBasis
+    consequence: InputConsequence | None = None
     real_source_if_any: str | None = None
     note: str | None = None
+
+    @model_validator(mode="after")
+    def _require_consequence_for_demo(self, info: ValidationInfo) -> "SyntheticInput":
+        """A ``default_demo`` entry MUST carry a ``consequence`` tag (law 9).
+
+        Construction without it cannot succeed - the omission is the exact bug the
+        demo-physics audit exists to prevent (a new invented default shipping
+        untagged, so the gate cannot refuse it). Tolerant read: a deserialization
+        that opts in via ``context={"tolerant_history": True}`` (the persistence
+        load path for pre-law-9 records) backfills ``scenario`` with a note instead
+        of raising, so loading history never crashes.
+        """
+        if self.basis == "default_demo" and self.consequence is None:
+            tolerant = bool(info.context and info.context.get("tolerant_history"))
+            if tolerant:
+                object.__setattr__(self, "consequence", "scenario")
+                note = (self.note + "; " if self.note else "") + _HISTORY_CONSEQUENCE_NOTE
+                object.__setattr__(self, "note", note)
+                return self
+            raise ValueError(
+                "SyntheticInput(basis='default_demo') requires an explicit "
+                "consequence tag (physics|scenario|numerical|aoi): an unresolved "
+                "demo default must be classified so the input-review gate can "
+                "refuse an invented physics value in auto mode (law 9). "
+                f"param={self.param!r}"
+            )
+        return self
 
 
 def render_assumptions_line(entries: Any) -> str | None:

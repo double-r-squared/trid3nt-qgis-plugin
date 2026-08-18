@@ -387,19 +387,19 @@ async def model_schism_coupled_waves(
     else:
         wave_boundary_entry = SyntheticInput(
             param="wave_boundary", value="8m-array non-parametric spectrum (bundled)",
-            basis="default_demo",
+            basis="default_demo", consequence="scenario",
             real_source_if_any="DUCK94 8m-array observed wave spectra",
             note="the bundled DUCK94_wave_spectra_8m_array.nc spectral boundary")
     review_entries = [
         SyntheticInput(param="mesh_source", value="bundled_wwm_duck",
-                       basis="default_demo",
+                       basis="default_demo", consequence="aoi",
                        note="SCHISM Test_WWM_Duck FRF validation mesh (33586 elements / 17054 nodes)"),
         wave_boundary_entry,
         SyntheticInput(param="turbulence_closure", value="GOTM k-epsilon (itur=3, KE/KC)",
-                       basis="default_demo",
+                       basis="default_demo", consequence="numerical",
                        note="the faithful coupled config the WWM+GOTM binary exists for"),
         SyntheticInput(param="sim_hours", value=round(sim_hours, 3), units="h",
-                       basis="user" if sim_hours != 4.0 else "default_demo",
+                       basis="user" if sim_hours != 4.0 else "default_demo", consequence="scenario",
                        note="coupled-run window within the 4-hour published case"),
     ]
 

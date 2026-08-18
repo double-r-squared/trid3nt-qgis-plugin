@@ -588,6 +588,8 @@ def test_deck_base_uri_scheme_aware(
         contaminant="benzene",
         release_rate_kg_s=0.01,
         duration_days=30.0,
+        aquifer_k_ms=1e-4,  # REQUIRED (law 9): no demo default on MODFLOWRunArgs
+        porosity=0.3,
     )
     # Unset -> S3 default (GCP decommissioned).
     monkeypatch.delenv("TRID3NT_STORAGE_BACKEND", raising=False)
@@ -641,6 +643,8 @@ def test_deck_staging_uploads_via_boto3_under_s3(
         contaminant="benzene",
         release_rate_kg_s=0.01,
         duration_days=30.0,
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
     )
     with patch.dict("sys.modules", {"fsspec": angry_fsspec}, clear=False):
         staging = rm.build_and_stage_modflow_deck(

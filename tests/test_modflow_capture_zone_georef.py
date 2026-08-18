@@ -29,6 +29,7 @@ from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 from trid3nt_server.workflows.modflow import postprocess_modflow as pp
 from trid3nt_server.workflows.modflow.capture_zone import capture_zone as cz_mod
 from trid3nt_server.workflows.modflow.capture_zone.capture_zone import (
+    CaptureZoneInputError,
     FT_TO_M,
     GRADIENT_MAX_MM,
     NGVD29_TO_NAVD88_M,
@@ -347,6 +348,8 @@ async def test_composer_threads_dem_gradient(monkeypatch: pytest.MonkeyPatch) ->
         grad=lambda uri, lat, lon: (0.003, -0.001, 0.00316, 288.0),
     )
     result = await model_capture_zone_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(40.86, -98.40),
         well_location_latlon=(40.86, -98.40),
         use_dem_gradient=True,
@@ -359,42 +362,50 @@ async def test_composer_threads_dem_gradient(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-async def test_composer_falls_back_when_flat(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A None gradient (flat AOI) -> run_args gradient None, source demo, no raise."""
-    captured = _patch_dem(
+async def test_flat_aoi_gradient_refuses_in_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A None gradient (flat AOI) -> the demo west->east placeholder REFUSES (law 9).
+
+    The pre-law-9 silent fall back to an invented regional gradient is gone: the
+    zone ORIENTATION would be a placeholder, not the site's flow direction, so the
+    gate cancels with a typed refusal naming regional_gradient.
+    """
+    _patch_dem(
         monkeypatch,
         fetch=lambda **kw: {"uri": "file:///fake.tif"},
         grad=lambda uri, lat, lon: None,
         layer_source="demo_west_east",
     )
-    result = await model_capture_zone_scenario(
-        aoi_latlon=(40.86, -98.40),
-        well_location_latlon=(40.86, -98.40),
-        use_dem_gradient=True,
-    )
-    ra = captured["run_args"]
-    assert ra.regional_gradient_x is None and ra.regional_gradient_y is None
-    assert result.derived_params["gradient_source"] == "demo_west_east"
-    assert "placeholder" in result.summary["gradient_caveat"]
+    with pytest.raises(CaptureZoneInputError) as exc:
+        await model_capture_zone_scenario(
+            aoi_latlon=(40.86, -98.40),
+            well_location_latlon=(40.86, -98.40),
+            aquifer_k_ms=1e-4,  # isolate the gradient refusal
+            porosity=0.3,
+            use_dem_gradient=True,
+        )
+    assert "PHYSICS_INPUT_REQUIRED" in str(exc.value)
+    assert "regional_gradient" in str(exc.value)
 
 
 @pytest.mark.asyncio
-async def test_composer_falls_back_on_fetch_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A DEM fetch exception is non-fatal: demo gradient, run still succeeds."""
+async def test_dem_fetch_error_gradient_refuses_in_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A DEM fetch exception -> no usable gradient -> the demo gradient REFUSES."""
     def _boom(**kw: Any) -> Any:
         raise RuntimeError("3DEP unreachable")
 
-    captured = _patch_dem(
+    _patch_dem(
         monkeypatch, fetch=_boom, grad=lambda uri, lat, lon: (0.01, 0.0, 0.01, 270.0),
         layer_source="demo_west_east",
     )
-    result = await model_capture_zone_scenario(
-        aoi_latlon=(40.86, -98.40),
-        well_location_latlon=(40.86, -98.40),
-        use_dem_gradient=True,
-    )
-    assert captured["run_args"].regional_gradient_x is None
-    assert result.derived_params["gradient_source"] == "demo_west_east"
+    with pytest.raises(CaptureZoneInputError) as exc:
+        await model_capture_zone_scenario(
+            aoi_latlon=(40.86, -98.40),
+            well_location_latlon=(40.86, -98.40),
+            aquifer_k_ms=1e-4,
+            porosity=0.3,
+            use_dem_gradient=True,
+        )
+    assert "regional_gradient" in str(exc.value)
 
 
 # --------------------------------------------------------------------------- #
@@ -604,6 +615,8 @@ async def test_composer_threads_measured_gradient(
     captured = _patch_measured(monkeypatch, wells_feats=feats, dem_path=dem)
 
     result = await model_capture_zone_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(lat0, lon0),
         well_location_latlon=(lat0, lon0),
         use_measured_heads=True,
@@ -634,6 +647,8 @@ async def test_composer_measured_falls_back_to_dem(
     captured = _patch_measured(monkeypatch, wells_feats=feats, dem_path=dem)
 
     result = await model_capture_zone_scenario(
+        aquifer_k_ms=1e-4,
+        porosity=0.3,
         aoi_latlon=(lat0, lon0),
         well_location_latlon=(lat0, lon0),
         use_measured_heads=True,
