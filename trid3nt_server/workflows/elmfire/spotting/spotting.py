@@ -55,6 +55,9 @@ from trid3nt_contracts.elmfire_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import register_tool
+from trid3nt_server.workflows.elmfire._frame_emit import (
+    read_and_emit_elmfire_frames,
+)
 from trid3nt_server.workflows.elmfire._template_card import TemplateCard
 from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import (
     FireSpreadComposerError,
@@ -786,12 +789,15 @@ async def model_elmfire_river_barrier_crossing(
             int(on_split["num_land_components"]),
         )
 
-        # Publish the spotting-ON ToA COG (the far-side spot fire, if any) as primary.
+        # Publish the spotting-ON ToA COG (the far-side spot fire, if any) as primary,
+        # and write the hourly burned-extent frames to outputs.json (ADR 0288) so the
+        # ember-carried spread animates over the river.
         on_case = _RealCase(out_dir=on_out, run_id=on_run, epsg=epsg)
         base = await asyncio.to_thread(
             publish_primary_from_out_dir,
             on_case, bbox=bbox, duration_s=duration_s,
             ignition_lonlat=tuple(run_args.ignition_lonlat),
+            write_frames_manifest=True,
         )
     finally:
         for d in scratch_dirs:
@@ -816,7 +822,8 @@ async def model_elmfire_river_barrier_crossing(
         "pign_pct": float(pign_pct),
         "critical_spotting_intensity_kwm": float(critical_spotting_intensity_kwm),
         "fixed_wind_mph": float(run_args.wind_speed_mph),
-        "verdict": verdict,
+        # The verdict is the layer NAME + the numeric flags below (summary is
+        # dict[str, float] by contract -- a string 'verdict' fails validation).
         "break_jumped": 1.0 if jumped else 0.0,
         "off_side_leaks": 1.0 if off_leaks else 0.0,
     }
@@ -846,6 +853,17 @@ async def model_elmfire_river_barrier_crossing(
     await _maybe_emit_chart(
         emitter, off_far, on_far, primary.uri, river_width_m=river_width_m, verdict=verdict
     )
+
+    # Burned-extent animation of the spotting-ON case: read the seam frames + emit
+    # (ADR 0288). Best-effort -- a frame miss never sinks the typed peak / verdict.
+    frames_emitted = await read_and_emit_elmfire_frames(
+        emitter, run_id=on_run, bbox=bbox
+    )
+    logger.info(
+        "river barrier-jump: emitted %d burned-extent animation frames run_id=%s",
+        frames_emitted, on_run,
+    )
+
     if emitter is not None:
         try:
             await emitter.emit_map_command("zoom-to", {"bbox": list(bbox)})

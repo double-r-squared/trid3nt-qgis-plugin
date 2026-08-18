@@ -335,12 +335,20 @@ def publish_primary_from_out_dir(
     bbox: tuple[float, float, float, float],
     duration_s: float,
     ignition_lonlat: tuple[float, float],
+    write_frames_manifest: bool = False,
 ) -> Any:
     """Postprocess + publish the representative case's time-of-arrival COG.
 
     Returns the published PRIMARY ``FireSpreadLayerURI`` (the base each template
     decorates into an ``ElmfireSensitivityLayerURI``). Raises
     ``FireSpreadComposerError`` when postprocess yields no layer (honesty floor).
+
+    ``write_frames_manifest`` (default False -- the sweep/verification sensitivity
+    templates render the peak ALONE, so no throwaway frame COGs) forwards to
+    ``postprocess_elmfire`` so a frame-consuming composer (the spotting river-barrier
+    demo) gets the hourly burned-extent frames written to ``outputs.json`` under the
+    case's run prefix; that composer then reads them back via
+    ``elmfire._frame_emit`` (ADR 0288).
     """
     layers, _metrics = postprocess_elmfire(
         case.out_dir,
@@ -349,6 +357,7 @@ def publish_primary_from_out_dir(
         duration_s=duration_s,
         epsg=case.epsg,
         ignition_lonlat=ignition_lonlat,
+        write_frames_manifest=write_frames_manifest,
     )
     if not layers:
         raise FireSpreadComposerError(

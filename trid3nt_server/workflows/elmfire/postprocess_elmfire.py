@@ -20,12 +20,16 @@ the Phase-1 scrubber path consume it unchanged):
 
   - ``layers[0]``: the PRIMARY time-of-arrival COG (hours from ignition),
     ``FireSpreadLayerURI`` carrying the typed narration scalars.
-  - burned-extent ANIMATION frames: the single ToA raster encodes the whole
-    spread history, so postprocess thresholds it per dump hour — frame N =
-    arrival-hours masked to cells burned by hour N (the extent GROWS per
-    frame, the pixel value is the front age). Frame names carry the web
-    ``"Burned area step N"`` token (``frames.py`` convention) so
-    ``detectSequentialGroups`` forms one scrubber group.
+  - burned-extent ANIMATION frames (emit-on-solve seam, ``write_frames_manifest``):
+    the single ToA raster encodes the whole spread history, so postprocess
+    thresholds it per hour — frame N = arrival-hours masked to cells burned by
+    hour N (the extent GROWS per frame, the pixel value is the front age).
+    Thresholding a complete arrival-time field reconstructs the burn frontier at
+    each hour EXACTLY (lossless, not invented). The frames publish through
+    ``outputs.json`` (``quantity="fire_arrival"``, ``t`` = hour*3600 s, the web
+    ``"Burned area step N"`` scrubber token) -- OPTION a: the seam owns the
+    animation, this postprocess keeps the typed peak. They do NOT ride the returned
+    ``layers``.
   - flame-length COG (feet -> METRES, converted exactly once here) and
     spread-rate COG (ft/min -> m/min) as standalone context layers.
 
@@ -52,9 +56,7 @@ from trid3nt_contracts.elmfire_contracts import (
 from trid3nt_server.workflows.shared import cog_io
 from trid3nt_server.workflows.shared.cog_io import CogIoError
 from trid3nt_server.workflows.shared.frames import (
-    _select_frame_time_indices,
     frame_dest_filename,
-    frame_layer_id,
     frame_name,
 )
 from trid3nt_server.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
@@ -89,6 +91,13 @@ FTMIN_TO_MMIN: float = 0.3048
 #: The web frame-token stem + quantity label (frames.py naming contract).
 _FIRE_FRAME_STEM: str = "fire-burned"
 _FIRE_QUANTITY_LABEL: str = "Burned area"
+
+#: The physical quantity the burned-extent frames carry on the outputs.json seam.
+#: The pixel value IS fire-arrival time in HOURS (a per-hour ToA threshold), so
+#: the frames style through the SAME registry row as the peak ToA layer
+#: (``fire_arrival`` -> ``continuous_fire_arrival_hr``); the "Burned area" name
+#: token is what the web scrubber groups on.
+_FIRE_FRAME_QUANTITY: str = "fire_arrival"
 
 #: stage -> error_code map for cog_io failures (mirrors postprocess_geoclaw).
 _ELMFIRE_STAGE_CODES: dict[str, str] = {
@@ -210,25 +219,29 @@ def toa_frame_grids(toa_s: Any, duration_s: float) -> list[tuple[float, Any]]:
     Returns ``[(hour, grid), ...]`` ascending; ``grid`` is arrival time in
     HOURS on cells burned by ``hour`` (NaN elsewhere) — the burned extent
     GROWS frame to frame while the pixel value encodes the front age, so one
-    colormap tells both the where and the when. Hourly cadence matches the
-    deck's ``DTDUMP=3600``; frames are evenly subsampled to
-    ``MAX_FLOOD_FRAMES`` via the shared ``frames.py`` selector (endpoints
-    kept, never silent).
+    colormap tells both the where and the when. The ToA field IS the run's full
+    spatiotemporal solution, so a threshold ``toa <= hour`` reconstructs the burn
+    frontier at that hour EXACTLY (a lossless query of the solved arrival-time
+    field, never an interpolation or an invented intermediate state).
+
+    NEVER-OMIT (emit-on-solve seam): every hourly bucket over the burn duration
+    is returned -- there is no post-hoc frame thinning. The hourly cadence is a
+    numerical DERIVATION parameter (the threshold-sweep bucket width, aligned to
+    the deck's ``DTDUMP=3600``), NOT a solver output lever; the solver writes one
+    cumulative ToA raster regardless.
     """
     import numpy as np
 
     toa = np.asarray(toa_s, dtype="float64")
     n_hours = max(int(math.ceil(max(float(duration_s), 0.0) / 3600.0)), 1)
-    hours = [float(h) for h in range(1, n_hours + 1)]
-    kept = _select_frame_time_indices(len(hours))
     frames: list[tuple[float, Any]] = []
     toa_hr = toa / 3600.0
-    for idx in kept:
-        h = hours[idx]
+    for h in range(1, n_hours + 1):
+        hf = float(h)
         grid = np.where(
-            np.isfinite(toa) & (toa <= h * 3600.0), toa_hr, np.nan
+            np.isfinite(toa) & (toa <= hf * 3600.0), toa_hr, np.nan
         )
-        frames.append((h, grid))
+        frames.append((hf, grid))
     return frames
 
 
@@ -287,6 +300,118 @@ def _safe_unlink(p: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Emit-on-solve: derived burned-extent frames -> outputs.json (agent-side).
+# --------------------------------------------------------------------------- #
+def _write_burned_frames_manifest(
+    toa_s: Any,
+    *,
+    crs: str,
+    transform: Any,
+    duration_s: float,
+    run_id: str,
+    runs_bucket: str | None,
+    bbox: tuple[float, float, float, float],
+    primary_uri: str,
+) -> None:
+    """Derive the hourly burned-extent frames + write them to ``outputs.json``.
+
+    ELMFIRE postprocess runs IN the agent process (the solver container writes the
+    ToA raster; the frame derivation + write are 100% agent-side), so the agent is
+    its own manifest writer (schema §5.1 host-exec) -- NO worker image binds this.
+    Each frame is a per-hour ToA threshold (``quantity="fire_arrival"``, ``t`` =
+    hour*3600 s, name ``"Burned area step N"`` the web scrubber token); a peak entry
+    (``t=None``) rides for completeness (the seam skips it under ``frames_only``).
+    Best-effort by contract -- a COG or manifest-write miss degrades to peak-only
+    (never sinks the run), per "failure retracts nothing".
+
+    A single lone frame is NOT written (``< 2`` can never form a web scrubber
+    group); the composer then renders the peak alone.
+    """
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    frame_grids = toa_frame_grids(toa_s, duration_s)
+    entries: list[dict[str, Any]] = []
+    written: list[Path] = []
+    try:
+        for frame_no, (hour, grid) in enumerate(frame_grids, start=1):
+            cog = _write_fire_cog_4326(grid, crs, transform)
+            written.append(cog)
+            frame_uri = _upload_cog_to_runs_bucket(
+                cog,
+                run_id,
+                runs_bucket,
+                dest_filename=frame_dest_filename("elmfire_burned", frame_no),
+            )
+            _safe_unlink(cog)
+            written.pop()
+            entries.append(
+                build_entry(
+                    kind="raster",
+                    quantity=_FIRE_FRAME_QUANTITY,
+                    name=frame_name(frame_no, _FIRE_QUANTITY_LABEL),
+                    uri=frame_uri,
+                    t=float(hour) * 3600.0,
+                    units="hours",
+                    bbox=list(bbox),
+                )
+            )
+    except PostprocessElmfireError as exc:
+        logger.warning(
+            "postprocess_elmfire: a burned-extent frame COG failed (%s); degrading "
+            "to peak-only (no animation group) run_id=%s.",
+            exc,
+            run_id,
+        )
+        for p in written:
+            _safe_unlink(p)
+        return
+
+    if len(entries) < 2:
+        logger.info(
+            "postprocess_elmfire: only %d burned-extent frame -- peak-only (a lone "
+            "frame can never form a web scrubber group) run_id=%s.",
+            len(entries),
+            run_id,
+        )
+        return
+
+    # Peak entry (t=None) -- a whole-run record for completeness. The seam skips it
+    # under frames_only (the composer keeps its own typed peak), so the primary COG
+    # uri is never registered twice.
+    entries.append(
+        build_entry(
+            kind="raster",
+            quantity=_FIRE_FRAME_QUANTITY,
+            name="Fire arrival time",
+            uri=primary_uri,
+            t=None,
+            units="hours",
+            bbox=list(bbox),
+        )
+    )
+
+    try:
+        from trid3nt_server.workflows.shared.outputs_manifest_io import (
+            write_outputs_manifest,
+        )
+
+        write_outputs_manifest(
+            run_id=run_id,
+            engine="elmfire",
+            entries=entries,
+            runs_bucket=runs_bucket,
+        )
+    except Exception as exc:  # noqa: BLE001 -- never sink the run on a manifest miss
+        logger.warning(
+            "postprocess_elmfire: outputs.json write failed run_id=%s (%s: %s) -- "
+            "the seam falls back to peak-only (no animation frames).",
+            run_id,
+            type(exc).__name__,
+            exc,
+        )
+
+
+# --------------------------------------------------------------------------- #
 # Top-level postprocess.
 # --------------------------------------------------------------------------- #
 def postprocess_elmfire(
@@ -298,6 +423,7 @@ def postprocess_elmfire(
     epsg: int = 5070,
     runs_bucket: str | None = None,
     ignition_lonlat: tuple[float, float] | None = None,
+    write_frames_manifest: bool = False,
 ) -> tuple[list[FireSpreadLayerURI], dict[str, Any]]:
     """Turn a solved ELMFIRE outputs dir into the fire-spread COG layer set.
 
@@ -313,14 +439,21 @@ def postprocess_elmfire(
             manifest's ``grid.epsg``; FIRE-track canon 5070).
         runs_bucket: optional runs-bucket override.
         ignition_lonlat: echoed onto the layers (self-describing result).
+        write_frames_manifest: when True, derive the hourly burned-extent frames
+            + write them to ``outputs.json`` under the run prefix (the emit-on-solve
+            seam owns the animation; the composer reads it back frames-only). The
+            frames do NOT ride the returned ``layers`` -- the seam publishes them.
+            Default False (the sweep/verification composers that render the peak
+            alone, so no throwaway frame COGs are written).
 
     Returns:
         ``(layers, metrics)`` — ``layers[0]`` the PRIMARY ToA
-        ``FireSpreadLayerURI``; then the contiguous ``"Burned area step N"``
-        animation frames (>= 2 or none); then the flame-length / spread-rate
-        context COGs when the solver produced them. ``metrics`` carries the
-        typed aggregates (``burned_area_km2`` computed on the SOURCE projected
-        grid where the cell size is known in metres).
+        ``FireSpreadLayerURI`` (carrying the typed narration scalars), then the
+        flame-length / spread-rate context COGs when the solver produced them.
+        The burned-extent animation is NOT in ``layers``: it publishes through the
+        ``outputs.json`` seam (``write_frames_manifest``), OPTION a. ``metrics``
+        carries the typed aggregates (``burned_area_km2`` computed on the SOURCE
+        projected grid where the cell size is known in metres).
 
     Raises:
         PostprocessElmfireError: ``ELMFIRE_OUTPUT_EMPTY`` (no ToA raster),
@@ -381,7 +514,6 @@ def postprocess_elmfire(
         style_preset: str,
         role: str,
         units: str,
-        frame_burned_km2: float | None = None,
     ) -> FireSpreadLayerURI:
         return FireSpreadLayerURI(
             layer_id=layer_id,
@@ -392,11 +524,7 @@ def postprocess_elmfire(
             role=role,  # type: ignore[arg-type]
             units=units,
             bbox=tuple(bbox),
-            burned_area_km2=(
-                frame_burned_km2
-                if frame_burned_km2 is not None
-                else burned_area_km2
-            ),
+            burned_area_km2=burned_area_km2,
             fire_arrival_max_hr=fire_arrival_max_hr,
             max_flame_length_m=metrics["max_flame_length_m"],
             max_spread_rate_m_min=metrics["max_spread_rate_m_min"],
@@ -470,56 +598,21 @@ def postprocess_elmfire(
         )
     ]
 
-    # --- Burned-extent animation frames (per-hour ToA threshold). -----------
-    frame_grids = toa_frame_grids(toa_s, duration_s)
-    frame_layers: list[FireSpreadLayerURI] = []
-    written: list[Path] = []
-    cell_km2 = (cellsize_m * cellsize_m) / 1.0e6
-    try:
-        for frame_no, (_hour, grid) in enumerate(frame_grids, start=1):
-            cog = _write_fire_cog_4326(grid, crs, transform)
-            written.append(cog)
-            frame_uri = _upload_cog_to_runs_bucket(
-                cog,
-                run_id,
-                runs_bucket,
-                dest_filename=frame_dest_filename("elmfire_burned", frame_no),
-            )
-            _safe_unlink(cog)
-            written.pop()
-            frame_layers.append(
-                _mk_layer(
-                    layer_id=frame_layer_id(_FIRE_FRAME_STEM, frame_no, run_id),
-                    name=frame_name(frame_no, _FIRE_QUANTITY_LABEL),
-                    uri=frame_uri,
-                    style_preset=ELMFIRE_TOA_STYLE_PRESET,
-                    role="context",
-                    units="hours",
-                    frame_burned_km2=float(
-                        np.isfinite(np.asarray(grid)).sum()
-                    ) * cell_km2,
-                )
-            )
-    except PostprocessElmfireError as exc:
-        # Corrupt-frame guard: degrade to primary-only, never sink the run.
-        logger.warning(
-            "postprocess_elmfire: a frame COG write/upload failed (%s); "
-            "degrading to the primary ToA layer only (no animation group).",
-            exc,
-        )
-        for p in written:
-            _safe_unlink(p)
-        frame_layers = []
-
-    # "< 2 never groups": a lone frame can never form a web scrubber group.
-    if len(frame_layers) >= 2:
-        layers.extend(frame_layers)
-    elif frame_layers:
-        logger.info(
-            "postprocess_elmfire: only %d burned-extent frame — emitting the "
-            "primary ToA layer without an animation group (run_id=%s)",
-            len(frame_layers),
-            run_id,
+    # --- Burned-extent animation -> outputs.json seam (per-hour ToA threshold).
+    # OPTION a: the seam owns the temporal frames; this typed peak + aux stay
+    # composer-built. Only produced when a frame-consuming composer asks
+    # (fire_spread / spotting); the sweep/verification composers render the peak
+    # alone, so no throwaway frame COGs are written for them.
+    if write_frames_manifest:
+        _write_burned_frames_manifest(
+            toa_s,
+            crs=crs,
+            transform=transform,
+            duration_s=duration_s,
+            run_id=run_id,
+            runs_bucket=runs_bucket,
+            bbox=tuple(bbox),
+            primary_uri=primary_uri,
         )
 
     # --- Flame length / spread rate context COGs. ----------------------------
@@ -551,12 +644,12 @@ def postprocess_elmfire(
         )
 
     logger.info(
-        "postprocess_elmfire run_id=%s emitted %d layers (primary + %d frames "
-        "+ %d aux)",
+        "postprocess_elmfire run_id=%s emitted %d layers (primary + %d aux); "
+        "burned-extent frames %s the outputs.json seam",
         run_id,
         len(layers),
-        len(frame_layers) if len(frame_layers) >= 2 else 0,
         len(aux_data),
+        "written to" if write_frames_manifest else "not requested for",
     )
     return layers, metrics
 

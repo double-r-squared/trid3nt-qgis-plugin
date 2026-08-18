@@ -13,13 +13,15 @@ test_run_geoclaw_chain.py).
   4. **Tool typed errors** — missing bbox / MISSING IGNITION (the
      never-fabricate rule) / bad params.
   5. **Postprocess unit tests on a SYNTHETIC ToA .bil** — CRS stamp (the
-     FIRE-1 gdal_translate -a_srs step done in code), hourly burned-extent
-     frames with the web ``step N`` token, unit conversions (ft->m, ft/min ->
-     m/min), typed ELMFIRE_OUTPUT_EMPTY / ELMFIRE_NO_SPREAD.
+     FIRE-1 gdal_translate -a_srs step done in code), the hourly burned-extent
+     ToA-threshold frames written to the ``outputs.json`` seam under
+     ``write_frames_manifest`` (ADR 0288, NEVER-OMIT), unit conversions (ft->m,
+     ft/min -> m/min), typed ELMFIRE_OUTPUT_EMPTY / ELMFIRE_NO_SPREAD.
   6. **Composer mocked E2E** — REAL deck build from synthetic fetched rasters,
      run_solver/wait_for_completion mocked, synthetic solver outputs, REAL
-     postprocess (upload stubbed) -> the primary FireSpreadLayerURI + frame +
-     aux COGs, no AWS, no docker.
+     postprocess (upload stubbed) -> the primary FireSpreadLayerURI + aux COGs
+     emitted out-of-band, the burned-extent frames written to + read back from
+     the outputs.json seam (captured), no AWS, no docker.
   7. **Confirm gate** — elmfire_fire_spread in SOLVER_CONFIRM_TOOLS and the
      fire confirm card carries cell count + runtime estimate.
 """
@@ -352,8 +354,10 @@ def test_toa_frame_grids_threshold_per_hour():
 
 def test_postprocess_elmfire_end_to_end_shape(tmp_path: Path):
     """Synthetic ToA + flame-length + spread-rate BILs -> the (layers, metrics)
-    shape: primary ToA COG + contiguous 'Burned area step N' frames + aux COGs
-    with the ft->m conversions applied exactly once."""
+    shape: primary ToA COG + aux COGs with the ft->m conversions applied exactly
+    once. The burned-extent ANIMATION is NOT in ``layers`` (ADR 0288): it rides the
+    ``outputs.json`` seam only when ``write_frames_manifest=True`` (tested
+    separately). Default = peak + aux ONLY."""
     from trid3nt_server.workflows.elmfire import postprocess_elmfire as pe
 
     out = tmp_path / "outputs"
@@ -395,28 +399,72 @@ def test_postprocess_elmfire_end_to_end_shape(tmp_path: Path):
     assert primary.max_spread_rate_m_min == pytest.approx(100.0 * 0.3048)
     assert primary.ignition_lonlat == _IGN
 
-    # Contiguous 'Burned area step N' frames with distinct URIs (web contract).
-    frames = [l for l in layers[1:] if "step" in l.name]
-    assert len(frames) == 6
-    uris = set()
-    for n, fr in enumerate(frames, start=1):
-        assert fr.name == f"Burned area step {n}"
-        assert _WEB_STEP_TOKEN_RE.search(fr.name)
-        assert fr.role == "context"
-        uris.add(fr.uri)
-    assert len(uris) == len(frames)
-    # Frame burned area grows with the hour.
-    frame_areas = [fr.burned_area_km2 for fr in frames]
-    assert frame_areas == sorted(frame_areas)
+    # No burned-extent frames ride the returned layers (they publish through the
+    # outputs.json seam, ADR 0288).
+    assert not [l for l in layers if "step" in (l.name or "")]
 
     # Aux layers: flame length (m) + spread rate (m/min) as standalone COGs.
-    aux_names = {l.name for l in layers[1:]} - {f.name for f in frames}
+    aux_names = {l.name for l in layers[1:]}
     assert aux_names == {"Flame length", "Spread rate"}
     aux = {l.name: l for l in layers[1:] if l.name in aux_names}
     assert aux["Flame length"].units == "m"
     assert aux["Flame length"].style_preset == "continuous_flame_length_m"
     assert aux["Spread rate"].units == "m/min"
     assert aux["Spread rate"].style_preset == "continuous_fire_spread_rate"
+
+
+def test_postprocess_elmfire_writes_frames_manifest(tmp_path: Path):
+    """``write_frames_manifest=True`` (ADR 0288): the hourly burned-extent frames
+    are written to ``outputs.json`` (NEVER-OMIT: one entry per burn hour + a peak
+    ``t=None`` entry), each ``quantity="fire_arrival"`` carrying the web
+    ``"Burned area step N"`` scrubber token; they still do NOT ride ``layers``."""
+    from trid3nt_server.workflows.elmfire import postprocess_elmfire as pe
+
+    out = tmp_path / "outputs"
+    out.mkdir()
+    duration_s = 6 * 3600.0
+    toa = _toa_array(duration_s)
+    _write_bil(out / "time_of_arrival_0000001_0021600.bil", toa)
+
+    captured: dict = {}
+
+    def _capture_manifest(*, run_id, engine, entries, runs_bucket=None):
+        captured["run_id"] = run_id
+        captured["engine"] = engine
+        captured["entries"] = entries
+        return f"s3://fake-runs/{run_id}/outputs.json"
+
+    with patch.object(pe, "_upload_cog_to_runs_bucket", _fake_upload), \
+         patch(
+             "trid3nt_server.workflows.shared.outputs_manifest_io."
+             "write_outputs_manifest",
+             _capture_manifest,
+         ):
+        layers, _metrics = pe.postprocess_elmfire(
+            tmp_path,
+            _AOI,
+            run_id="RIDF2",
+            duration_s=duration_s,
+            epsg=5070,
+            ignition_lonlat=_IGN,
+            write_frames_manifest=True,
+        )
+
+    # Frames still NOT in layers (peak + no-aux here).
+    assert not [l for l in layers if "step" in (l.name or "")]
+    assert captured["engine"] == "elmfire"
+    entries = captured["entries"]
+    frame_entries = [e for e in entries if "step" in e["name"]]
+    peak_entries = [e for e in entries if e.get("t") is None]
+    # NEVER-OMIT: 6 hourly frames + 1 peak (t=None), no thinning.
+    assert len(frame_entries) == 6
+    assert len(peak_entries) == 1
+    for n, e in enumerate(frame_entries, start=1):
+        assert e["name"] == f"Burned area step {n}"
+        assert _WEB_STEP_TOKEN_RE.search(e["name"])
+        assert e["quantity"] == "fire_arrival"
+        assert e["kind"] == "raster"
+        assert e["t"] == pytest.approx(n * 3600.0)
 
 
 def test_postprocess_elmfire_empty_output_raises(tmp_path: Path):
@@ -617,6 +665,26 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
         async def add_loaded_layer(self, layer):
             emitted_layers.append(layer)
 
+    # The burned-extent frames publish through the outputs.json seam (ADR 0288).
+    # Capture the producer's manifest write + the composer's read/emit call so the
+    # test stays hermetic (no MinIO round-trip); the seam SEMANTICS live in
+    # test_elmfire_outputs_seam.py.
+    manifest_write: dict = {}
+
+    def _capture_manifest(*, run_id, engine, entries, runs_bucket=None):
+        manifest_write["run_id"] = run_id
+        manifest_write["entries"] = entries
+        return f"s3://fake-runs/{run_id}/outputs.json"
+
+    frame_emit: dict = {}
+
+    async def _fake_read_emit(emitter, *, run_id, bbox):
+        frame_emit["run_id"] = run_id
+        frame_emit["bbox"] = bbox
+        return len(
+            [e for e in manifest_write.get("entries", []) if "step" in e["name"]]
+        )
+
     with patch.object(comp, "fetch_elmfire_inputs", _fake_fetch), \
          patch.object(comp, "begin_substeps", lambda *a, **k: None), \
          patch.object(comp, "substep", _NullSubstep), \
@@ -628,6 +696,12 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
          patch.object(comp, "drive_live_solve_progress", _amock(None)), \
          patch.object(comp, "_download_elmfire_outputs", _fake_download), \
          patch.object(pe, "_upload_cog_to_runs_bucket", _fake_upload), \
+         patch(
+             "trid3nt_server.workflows.shared.outputs_manifest_io."
+             "write_outputs_manifest",
+             _capture_manifest,
+         ), \
+         patch.object(comp, "read_and_emit_elmfire_frames", _fake_read_emit), \
          patch.object(comp, "publish_layer", _fake_publish), \
          patch.object(comp, "current_emitter", lambda: _FakeEmitter()):
         primary = asyncio.run(comp.model_elmfire_fire_spread(run_args))
@@ -647,16 +721,24 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
     assert primary.max_flame_length_m == pytest.approx(8.0 * 0.3048)
     assert primary.max_spread_rate_m_min == pytest.approx(60.0 * 0.3048)
 
-    # Frames + aux layers were published + emitted out-of-band: 6 hourly
-    # burned-extent frames with the web 'step N' token + 2 aux layers.
-    frame_names = [
-        l.name for l in emitted_layers if _WEB_STEP_TOKEN_RE.search(l.name or "")
-    ]
-    assert frame_names == [f"Burned area step {n}" for n in range(1, 7)]
+    # Aux context layers publish + emit out-of-band; NO burned-extent frames ride
+    # the returned layers.
     emitted_names = {l.name for l in emitted_layers}
     assert {"Flame length", "Spread rate"} <= emitted_names
-    # Every emitted layer carries a published (renderable) URI.
+    assert not [l for l in emitted_layers if "step" in (l.name or "")]
     assert all(l.uri.startswith("https://tiles.example/") for l in emitted_layers)
+
+    # The burned-extent frames rode the seam: the producer wrote 6 hourly
+    # 'Burned area step N' entries to outputs.json under the SOLVE run prefix,
+    # and the composer read them back for the same run_id.
+    frame_entries = [
+        e for e in manifest_write["entries"] if _WEB_STEP_TOKEN_RE.search(e["name"])
+    ]
+    assert [e["name"] for e in frame_entries] == [
+        f"Burned area step {n}" for n in range(1, 7)
+    ]
+    assert manifest_write["run_id"] == "FIRERUN1"
+    assert frame_emit["run_id"] == "FIRERUN1"
 
 
 # ===========================================================================

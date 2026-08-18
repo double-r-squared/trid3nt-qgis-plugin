@@ -226,10 +226,63 @@ it is ASYMMETRIC (6.x `Base Output Interval` attr-patch reachable; 2025 mapping
 interval is a managed-engine decompile), and an asymmetric lever silently no-oping on
 one path is the hidden-inconsistency class; BOTH cadence items are QUEUED for NATE.
 
-REMAINING: telemac3d + the other L-class legs, the `publish_manifest` collapse
-(ledger row 19, gated on the LAST engine migrating), and -- separately, OPTION A
--- the per-engine `output_quantities` scaffold migration (MODFLOW's DEAD half is
-deleted; swmm/landlab/openquake halves are still LIVE, ADR 0284).
+MIGRATED ENGINES (ELMFIRE, derived-from-ToA burned-extent frames -- ADR 0288,
+agent-side producer). ELMFIRE writes NO per-step field: its native product is ONE
+cumulative `time_of_arrival` (ToA) raster (hours-from-ignition per cell). That single
+raster IS the run's complete spatiotemporal solution, so frame N = the ToA masked to
+`toa <= N*3600 s` reconstructs the burn frontier at hour N EXACTLY -- a LOSSLESS query
+of the solved arrival-time field (the burned extent grows frame to frame; the pixel
+value stays the arrival hour, so one colormap tells the where + the when), never an
+invented intermediate state. The frame derivation + per-hour COG writes + `outputs.json`
+write are 100% AGENT-SIDE in `postprocess_elmfire` (the solver container writes only the
+ToA `.bil`), so NO image rebuild binds this leg. Frames are ADDITIVE (the typed
+`FireSpreadLayerURI` / `ElmfireSensitivityLayerURI` ToA peak + flame/spread aux COGs +
+the sensitivity chart + the river-barrier verdict machinery stay composer-built,
+OPTION a). `quantity="fire_arrival"` -> the peak's `continuous_fire_arrival_hr` preset;
+frame `t = hour * 3600` s.
+
+- **fire_spread** + **spotting real-mode** (`model_elmfire_river_barrier_crossing`):
+  `postprocess_elmfire(write_frames_manifest=True)` derives EVERY hourly bucket over the
+  burn duration (`toa_frame_grids`, no cap) and writes `outputs.json`;
+  `_frame_emit.read_and_emit_elmfire_frames` reads it back (`frames_only=True`) + emits
+  the `fire_arrival` group. The derivation cadence (hourly, = the deck's `DTDUMP=3600`)
+  is a NUMERICAL threshold-sweep parameter, honestly labeled -- NOT a solver output
+  lever (the solver writes one cumulative ToA regardless).
+- **sensitivity / transient / crown / initial_attack / spotting-verification**:
+  PEAK-ONLY (`write_frames_manifest` defaults False) -- response-vs-knob sweeps (chart +
+  representative peak) or single-case discriminants, not animations.
+
+NEVER-OMIT: `toa_frame_grids` no longer calls `shared/frames._select_frame_time_indices`
+(the cap is gone; the hourly derivation cadence is the only frame-count control). The
+`shared/frames` selector stays LIVE for the docker S-class producers below.
+
+## Campaign close -- the per-engine emit-on-solve mechanism (all 10 engines)
+
+Every solver engine now surfaces its temporal result through the ONE `outputs.json`
+seam. The mechanism differs by where the native field lives and who writes the manifest:
+
+| Engine(s) | Native temporal product | Producer locus | Manifest writer | Frame mechanism | ADR |
+|---|---|---|---|---|---|
+| **SFINCS** / **GeoClaw** / **SWAN** | per-step raster field (depth / wave) | docker RASTER worker | worker (in-image) | worker rasterizes each saved step -> COG + `outputs.json` | 0280 / 0281 |
+| **SWMM** | per-step node/link + surface field | host-exec (pyswmm in-agent) | agent | agent rasterizes each report step | 0282 |
+| **landlab** | per-step grid field | host-exec (in-agent) | agent | agent writes each step COG | 0282 |
+| **MODFLOW** | per-step concentration / temperature (mf6 OC) | host-exec (mf6 in-agent) | agent | per-species/quantity group, every saved step | 0284 |
+| **TELEMAC** / **SCHISM** | native time-stepped UGRID mesh (SELAFIN / schout) | agent-side postprocess | agent | the mesh IS the temporal object (`kind="mesh"`, `crs_authid`), no per-step raster | 0283 / 0286 |
+| **HEC-RAS** | per-step 2D depth field, TWO lineages | agent-side (6.x plan HDF via h5py; 2025 managed via mounted driver) | agent | dual-lineage: 6.x `Water Surface`-bed per step; 2025 `Cell Depth[i]` per step | 0287 |
+| **ELMFIRE** | ONE cumulative ToA raster (no per-step field) | agent-side postprocess | agent | DERIVED: lossless per-hour `toa<=h` threshold of the single solved field | 0288 |
+
+Common to all: `frames_only=True` on read-back skips the composer's typed peak (no
+double registration); NEVER-OMIT (every saved/derived step, no post-hoc cap on the
+host-exec + agent-side producers; the `shared/frames` subsample selector is LIVE only
+for the docker S-class); each frame quantity resolves to the peak's physical preset so a
+frame renders byte-consistently with the peak; a frame publish/read/emit miss degrades
+to peak-only, never sinking the run.
+
+REMAINING (post-campaign, not blocking): telemac3d + any further L-class module legs,
+the `publish_manifest` collapse (ledger row 19 -- its "gated on the LAST engine
+migrating" condition is now MET, queued for NATE), and -- separately, OPTION A -- the
+per-engine `output_quantities` scaffold migration (MODFLOW's DEAD half is deleted;
+swmm/landlab/openquake halves are still LIVE, ADR 0284).
 
 ## Composition
 

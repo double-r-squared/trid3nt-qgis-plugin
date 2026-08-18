@@ -48,6 +48,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_server.data import register_tool
 from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.workflows.elmfire._frame_emit import (
+    read_and_emit_elmfire_frames,
+)
 from trid3nt_server.workflows.elmfire._template_card import TemplateCard
 from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
     PostprocessElmfireError,
@@ -688,6 +691,7 @@ async def model_elmfire_fire_spread(
                     duration_s=duration_s,
                     epsg=int(grid.get("epsg", 5070)),
                     ignition_lonlat=tuple(run_args.ignition_lonlat),
+                    write_frames_manifest=True,
                 )
         finally:
             if cleanup_outputs and out_is_temp:
@@ -741,13 +745,22 @@ async def model_elmfire_fire_spread(
     ]
     primary = primary.model_copy(update={"synthetic_inputs": _fire_weather})
 
-    # --- Publish + emit frames/aux out-of-band (scrubber group). ------------
+    # --- Publish + emit aux context COGs out-of-band. ----------------------
     emitted = await _emit_secondary_layers(emitter, secondary, staging.run_id)
+
+    # --- Burned-extent animation: read the seam frames + emit (ADR 0288). ---
+    # postprocess wrote the hourly ToA-threshold frames to outputs.json under the
+    # SOLVE run prefix (write_frames_manifest=True); the seam owns the temporal
+    # group, the typed peak above stays composer-built. Best-effort: a frame
+    # miss never sinks the peak.
+    frames_emitted = await read_and_emit_elmfire_frames(
+        emitter, run_id=solve_run_id, bbox=bbox
+    )
 
     logger.info(
         "model_elmfire_fire_spread complete run_id=%s burned_area_km2=%.4g "
         "arrival_max_hr=%.3g flame_max_m=%s spread_max_m_min=%s "
-        "secondary_emitted=%d/%d primary_uri=%s",
+        "aux_emitted=%d/%d frames_emitted=%d primary_uri=%s",
         staging.run_id,
         primary.burned_area_km2,
         primary.fire_arrival_max_hr,
@@ -755,6 +768,7 @@ async def model_elmfire_fire_spread(
         primary.max_spread_rate_m_min,
         emitted,
         len(secondary),
+        frames_emitted,
         primary.uri,
     )
 
