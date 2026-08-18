@@ -27,7 +27,7 @@ from trid3nt_server.gates.input_review import (
     gate_input_review,
     physics_refusal_reason,
 )
-from trid3nt_server.workflows.modflow._aquifer_resolve import (
+from trid3nt_server.workflows.shared.aquifer_resolve import (
     AquiferResolution,
     provenance_summary,
     resolve_aquifer_properties,

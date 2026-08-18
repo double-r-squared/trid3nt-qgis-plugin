@@ -35,6 +35,35 @@ from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
 from trid3nt_server.workflows.swmm.urban_flood import urban_flood as M
 
 
+@pytest.fixture(autouse=True)
+def _stub_overland_manning_resolution(monkeypatch):
+    """law 9 (ADR 0285 P4): the composer now DERIVES overland Manning's n from NLCD
+    (or REFUSES). These OFFLINE composer tests must not hit the MRLC fetch, so stub
+    the resolution to a fixed value (user path when supplied; derived otherwise).
+    The live derive/refuse behavior is proven by the P4 A/B, not here."""
+    from trid3nt_contracts.common import SyntheticInput
+    from trid3nt_server.workflows.shared.roughness_resolve import ManningResolution
+    import trid3nt_server.workflows.swmm.urban_flood.urban_flood as _uf
+
+    async def _fake_resolve(bbox, user_manning, *, param_name, units="s/m^(1/3)", **_kw):
+        supplied = user_manning is not None
+        n = float(user_manning) if supplied else 0.03
+        return ManningResolution(
+            manning_n=n,
+            source="user_supplied" if supplied else "nlcd_area_weighted",
+            entry=SyntheticInput(
+                param=param_name, value=round(n, 4), units=units,
+                basis="user" if supplied else "derived", consequence="physics",
+                real_source_if_any=(None if supplied
+                                    else "fetch_landcover (NLCD area-weighted Manning's n)"),
+                note="test-stubbed overland Manning's n.",
+            ),
+            meta={"source": "test_stub"},
+        )
+
+    monkeypatch.setattr(_uf, "resolve_overland_manning", _fake_resolve)
+
+
 # --------------------------------------------------------------------------- #
 # Helpers / fakes
 # --------------------------------------------------------------------------- #

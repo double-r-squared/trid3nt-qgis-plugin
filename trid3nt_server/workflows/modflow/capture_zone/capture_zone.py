@@ -72,7 +72,7 @@ from trid3nt_server.emission.pipeline_emitter import (
 )
 from trid3nt_server.data import TOOL_REGISTRY, register_tool
 from trid3nt_server.gates.input_review import physics_refusal_reason
-from trid3nt_server.workflows.modflow._aquifer_resolve import (
+from trid3nt_server.workflows.shared.aquifer_resolve import (
     provenance_summary,
     resolve_aquifer_properties,
 )
@@ -84,7 +84,7 @@ from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 # Shared, engine-agnostic provenance seams (also importable by the Landlab
 # groundwater templates): measured well heads -> a kriged / trend water-table
-# surface. (Aquifer-K pedotransfer now lives in the shared _aquifer_resolve seam.)
+# surface. (Aquifer-K pedotransfer now lives in the shared aquifer_resolve seam.)
 from trid3nt_server.workflows.shared.water_table_interp import (
     interpolate_water_table,
 )

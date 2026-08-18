@@ -13,8 +13,8 @@ import asyncio
 import sys
 
 from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.workflows.modflow import _aquifer_resolve
-from trid3nt_server.workflows.modflow._aquifer_resolve import (
+from trid3nt_server.workflows.shared import aquifer_resolve
+from trid3nt_server.workflows.shared.aquifer_resolve import (
     resolve_aquifer_properties,
 )
 from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import (
@@ -67,12 +67,12 @@ async def main() -> int:
     print("\n" + "-" * 78)
     print("(A) UNDER-SPECIFIED AUTO RUN -- SoilGrids off-coverage/unavailable")
     print("-" * 78)
-    orig_derive = _aquifer_resolve.derive_soil_k
+    orig_derive = aquifer_resolve.derive_soil_k
 
     def _no_soil(_lat: float, _lon: float):
         return None, {"reason": "AOI outside SoilGrids coverage (A/B: forced unavailable)"}
 
-    _aquifer_resolve.derive_soil_k = _no_soil  # type: ignore[assignment]
+    aquifer_resolve.derive_soil_k = _no_soil  # type: ignore[assignment]
     a_outcome = ""
     try:
         await model_contaminant_plume(
@@ -85,7 +85,7 @@ async def main() -> int:
         a_outcome = str(exc)
         print(f"(A) refused as expected:\n{a_outcome}")
     finally:
-        _aquifer_resolve.derive_soil_k = orig_derive  # type: ignore[assignment]
+        aquifer_resolve.derive_soil_k = orig_derive  # type: ignore[assignment]
 
     a_ok = ("PHYSICS_INPUT_REQUIRED" in a_outcome and "aquifer_k_ms" in a_outcome)
     print(f"\n(A) verdict: {'PASS' if a_ok else 'FAIL'} "

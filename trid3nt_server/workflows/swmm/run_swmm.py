@@ -274,7 +274,6 @@ def build_and_stage_swmm_deck(
         building_footprints=building_footprints,
         building_representation=run_args.building_representation,
         infiltration_method=run_args.infiltration_method,
-        manning_overland=float(run_args.manning_overland),
         barriers=run_args.barriers,
         enable_autoscale=bool(enable_autoscale),
         # Universal emit-on-solve cadence lever (ADR 0282): None -> the legacy
@@ -290,6 +289,14 @@ def build_and_stage_swmm_deck(
     # when supplied.
     if total_depth is not None:
         build_kwargs["total_rain_depth_mm"] = float(total_depth)
+    # manning_overland is Optional on SWMMRunArgs (law 9, ADR 0285 P4): the COMPOSER
+    # resolves it (NLCD-derived or user) or REFUSES before ever reaching here, so a
+    # populated value is threaded through. A None here means a direct-call caller
+    # (test / advanced) that skipped the composer's resolution -> defer to the mesh
+    # builder's mechanical default (DEFAULT_OVERLAND_N); this primitive cannot fetch
+    # NLCD (sync, no AOI fetch seam), so it never invents a friction for a USER run.
+    if run_args.manning_overland is not None:
+        build_kwargs["manning_overland"] = float(run_args.manning_overland)
 
     try:
         build = build_swmm_mesh(**build_kwargs)

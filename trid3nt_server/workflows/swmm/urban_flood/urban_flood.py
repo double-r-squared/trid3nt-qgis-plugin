@@ -128,7 +128,7 @@ async def swmm_urban_flood(
     building_representation: str = "drop",
     infiltration_method: str = "none",
     target_resolution_m: float = 10.0,
-    manning_overland: float = 0.03,
+    manning_overland: float | None = None,
     mass_balance_tolerance_pct: float = 5.0,
     output_interval_min: float | None = None,
     barriers: dict[str, Any] | None = None,
@@ -204,7 +204,10 @@ async def swmm_urban_flood(
             ``"green_ampt"``.
         target_resolution_m: requested overland cell size, m (> 0). Default
             10; subject to the adaptive-mesh budget for large AOIs.
-        manning_overland: overland-flow Manning n (> 0). Default 0.03.
+        manning_overland: overland-flow Manning n (> 0). Default None -> the
+            composer DERIVES it from NLCD land cover over the AOI (area-weighted
+            mean of the SFINCS Manning table), or REFUSES if NLCD cannot serve;
+            never a baked 0.03 (law 9). Supply a value for a calibrated run.
         mass_balance_tolerance_pct: honesty gate -- if SWMM Flow Routing
             Continuity error EXCEEDS this (%), raises typed
             ``SWMM_MASS_BALANCE_EXCEEDED`` instead of publishing a
@@ -287,9 +290,13 @@ async def swmm_urban_flood(
             building_representation=building_representation,
             infiltration_method=infiltration_method,
             target_resolution_m=float(target_resolution_m),
-            manning_overland=float(manning_overland),
             mass_balance_tolerance_pct=float(mass_balance_tolerance_pct),
         )
+        # law 9 (ADR 0285 P4): manning_overland is Optional. None (the default)
+        # means the composer DERIVES overland n from NLCD land cover over the AOI,
+        # or REFUSES - never a baked friction constant. A user value is threaded.
+        if manning_overland is not None:
+            kwargs["manning_overland"] = float(manning_overland)
         if output_interval_min is not None:
             kwargs["output_interval_min"] = float(output_interval_min)
         if total_rain_depth_mm is not None:
@@ -402,6 +409,7 @@ from trid3nt_server.workflows.swmm.run_swmm import (
     stage_swmm_manifest,
 )
 from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
+from trid3nt_server.workflows.shared.roughness_resolve import resolve_overland_manning
 from trid3nt_server.mesh.raster_cell_mesh import estimate_swmm_solve_seconds
 from trid3nt_server.mesh.mesh_preview import make_swmm_mesh_layer_uri
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
@@ -668,13 +676,15 @@ def _build_swmm_provenance(
     dem_source: str,
     buildings_absent: bool,
     n_buildings_dropped: int,
+    manning_entry: SyntheticInput | None = None,
 ) -> list[SyntheticInput]:
     """Structured input provenance for the urban-flood run (provenance-chain wave).
 
     Makes machine-visible the SWMM assumptions the audit flagged: the rainfall
     forcing (real Atlas-14 or user), the SYNTHESIZED quasi-2D drainage grid (there
-    is no surveyed storm-sewer network), the flat overland Manning n, the
-    buildings-obstruction state, and any coarse-DEM fallback."""
+    is no surveyed storm-sewer network), the overland Manning n (NLCD-derived or
+    user, law 9 - ADR 0285 P4), the buildings-obstruction state, and any coarse-DEM
+    fallback."""
     out: list[SyntheticInput] = []
     _depth = effective_args.total_rain_depth_mm
     _user_depth = run_args.total_rain_depth_mm is not None
@@ -691,10 +701,16 @@ def _build_swmm_provenance(
         note=("quasi-2D overland grid from DEM cells (one storage node per cell, "
               "single outfall); NOT a surveyed storm-sewer/pipe network"),
     ))
-    out.append(SyntheticInput(
-        param="overland_manning_n", value=0.03, basis="default_demo", consequence="scenario",
-        note="flat overland roughness (standard published overland n); landcover-derived n not wired",
-    ))
+    if manning_entry is not None:
+        out.append(manning_entry)
+    elif effective_args.manning_overland is not None:
+        # direct-call / legacy path with no threaded resolution: surface the value
+        # that was used as a user-supplied entry (physics consequence).
+        out.append(SyntheticInput(
+            param="overland_manning_n", value=float(effective_args.manning_overland),
+            units="s/m^(1/3)", basis="user", consequence="physics",
+            note="caller-supplied overland Manning's n.",
+        ))
     if n_buildings_dropped > 0:
         out.append(SyntheticInput(
             param="building_obstructions", value=n_buildings_dropped, basis="fetched",
@@ -893,6 +909,7 @@ async def model_swmm_urban_flood(
         int(_fetch_dem)
         + int(_fetch_buildings)
         + int(_fetch_precip)
+        + 1  # resolve overland Manning's n (NLCD-derived or user, law 9)
         + 4  # build deck, solve, postprocess, publish peak
     )
     begin_substeps(emitter, _planned_substeps)
@@ -961,12 +978,31 @@ async def model_swmm_urban_flood(
                 ),
             )
 
+    # --- law 9 (ADR 0285 P4): resolve the overland Manning's n ---------------
+    # user -> NLCD-derived (area-weighted mean of the SFINCS Manning table over the
+    # AOI) -> REFUSE. The NLCD fetch + raster read are offloaded off the loop by the
+    # resolver. When unresolved the entry is consequence="physics" default_demo, so
+    # the gate below refuses in auto mode (no invented friction constant).
+    async with substep(emitter, "resolve_overland_manning"):
+        _manning_res = await resolve_overland_manning(
+            bbox, run_args.manning_overland, param_name="overland_manning_n",
+        )
+    if _manning_res.resolved:
+        effective_args = effective_args.model_copy(
+            update={"manning_overland": float(_manning_res.manning_n)}
+        )
+        logger.info(
+            "model_swmm_urban_flood: overland Manning n=%s (%s)",
+            _manning_res.manning_n, _manning_res.source,
+        )
+
     # --- two-mode input gate: review-before-run -----------------------
     # Rainfall forcing is resolved (Atlas-14 or user); present it (+ the demo
-    # drainage-network + flat Manning) for review/adjust before the heavy deck
-    # build + solve in user_gated mode. auto (session default) + headless proceed
-    # labeled. (The server pre-dispatch granularity gate is complementary -- it
-    # gates mesh resolution.)
+    # drainage-network + the resolved/refused Manning) for review/adjust before the
+    # heavy deck build + solve in user_gated mode. auto (session default) + headless
+    # proceed on labeled/derived entries but REFUSE an unresolved physics Manning.
+    # (The server pre-dispatch granularity gate is complementary -- it gates mesh
+    # resolution.)
     _rain_user = run_args.total_rain_depth_mm is not None
     _review = await gate_input_review(
         tool_name="swmm_urban_flood", mode=input_mode,
@@ -986,11 +1022,7 @@ async def model_swmm_urban_flood(
                 param="drainage_network", value="synthesized", basis="default_demo", consequence="scenario",
                 note="quasi-2D overland grid from DEM cells; NOT a surveyed sewer network",
             ),
-            SyntheticInput(
-                param="overland_manning_n",
-                value=float(effective_args.manning_overland), basis="default_demo", consequence="scenario",
-                note="flat overland roughness (standard published overland n); landcover-derived n not wired",
-            ),
+            _manning_res.entry,
         ],
         params={"total_rain_depth_mm": (
             float(effective_args.total_rain_depth_mm)
@@ -1001,6 +1033,15 @@ async def model_swmm_urban_flood(
         raise UrbanFloodWorkflowError(
             "USER_INPUT_CANCELLED",
             f"swmm_urban_flood {_review.cancel_reason}",
+        )
+    # law 9 belt-and-suspenders: if the gate somehow proceeded on an unresolved
+    # physics Manning (no live emitter path that failed open), refuse explicitly
+    # rather than build a deck on a None friction. The gate's auto/headless refuse
+    # is the primary guard; this makes the direct-call path safe too.
+    if not _manning_res.resolved:
+        raise UrbanFloodWorkflowError(
+            "SWMM_PHYSICS_INPUT_REQUIRED",
+            str(_manning_res.entry.note),
         )
     _rv_depth = _review.params.get("total_rain_depth_mm")
     if _rv_depth is not None and (
@@ -1283,6 +1324,7 @@ async def model_swmm_urban_flood(
                 _peak_upd["synthetic_inputs"] = _build_swmm_provenance(
                     effective_args, run_args, dem_source,
                     _buildings_absent, _n_bldg_dropped,
+                    manning_entry=_manning_res.entry,
                 )
                 if _peak_upd:
                     peak = peak.model_copy(update=_peak_upd)
@@ -1505,6 +1547,7 @@ async def model_swmm_urban_flood(
         peak_updates["name"] = f"{peak.name} {_name_suffix}"
     peak_updates["synthetic_inputs"] = _build_swmm_provenance(
         effective_args, run_args, dem_source, _buildings_absent, n_buildings_dropped,
+        manning_entry=_manning_res.entry,
     )
     if peak_updates:
         peak = peak.model_copy(update=peak_updates)

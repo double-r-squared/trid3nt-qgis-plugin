@@ -53,7 +53,7 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.workflows.modflow._aquifer_resolve import AquiferResolution
+from trid3nt_server.workflows.shared.aquifer_resolve import AquiferResolution
 from trid3nt_server.workflows.modflow._input_review import (
     AquiferRefusal,
     gate_and_stamp_modflow_inputs,

@@ -45,7 +45,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.workflows.modflow._aquifer_resolve import (
+from trid3nt_server.workflows.shared.aquifer_resolve import (
     provenance_summary,
     resolve_aquifer_properties,
 )

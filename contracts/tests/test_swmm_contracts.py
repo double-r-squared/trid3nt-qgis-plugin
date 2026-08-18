@@ -23,7 +23,6 @@ from trid3nt_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.envelope import TemporalConfig
 from trid3nt_contracts.swmm_contracts import (
-    DEFAULT_MANNING_OVERLAND,
     DEFAULT_RAIN_INTERVAL_MIN,
     DEFAULT_RETURN_PERIOD_YR,
     DEFAULT_STORM_DURATION_HR,
@@ -71,7 +70,9 @@ def test_swmm_run_args_minimal_applies_demo_defaults() -> None:
     assert args.storm_duration_hr == DEFAULT_STORM_DURATION_HR == 6.0
     assert args.rain_interval_min == DEFAULT_RAIN_INTERVAL_MIN == 5
     assert args.target_resolution_m == DEFAULT_TARGET_RESOLUTION_M == 10.0
-    assert args.manning_overland == DEFAULT_MANNING_OVERLAND == 0.03
+    # law 9 (ADR 0285 P4): no demo overland Manning's n - None means the composer
+    # derives it from NLCD over the AOI or REFUSES (never a baked 0.03).
+    assert args.manning_overland is None
     assert args.mass_balance_tolerance_pct == 5.0
     assert args.schema_version == "v1"
     # building representation defaults to "drop" (matches the screenshot),

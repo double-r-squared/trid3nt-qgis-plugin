@@ -41,6 +41,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
+from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.workflows.shared.roughness_resolve import resolve_overland_manning
 from trid3nt_server.workflows.geoclaw._template_card import TemplateCard
 from trid3nt_server.workflows.geoclaw.inundation.inundation import (
     GeoClawComposerError,
@@ -136,10 +138,11 @@ async def geoclaw_storm_surge(
     sim_duration_s: float = 86400.0,
     output_frames: int = 24,
     amr_levels: int = 2,
-    manning_n: float = 0.025,
+    manning_n: float | None = None,
     sea_level_m: float = 0.0,
     coastal_gauge_lonlat: tuple[float, float] | list[float] | None = None,
     compute_class: str = "standard",
+    input_mode: str | None = None,
     # absorb LLM-invented kwargs + the server confirm gate's injected confirmed=True.
     **_extra_ignored: Any,
 ) -> GeoClawDepthLayerURI | dict[str, Any]:
@@ -177,7 +180,10 @@ async def geoclaw_storm_surge(
             spans [surge_t0_s, surge_t0_s + sim_duration_s].
         output_frames: animation frame count (default 24).
         amr_levels: AMR refinement levels (default 2).
-        manning_n: bottom-friction coefficient (default 0.025).
+        manning_n: bottom-friction coefficient. Default None -> DERIVED from NLCD
+            land cover over the AOI (area-weighted mean of the SFINCS Manning
+            table), or REFUSES if NLCD cannot serve; never a baked 0.025 (law 9).
+            Supply a value for a calibrated run.
         sea_level_m: still-water datum, m (default 0.0; raise for a tide offset).
         coastal_gauge_lonlat: OPTIONAL (lon, lat) of a coastal tide gauge for the
             surge waveform. Unset -> a deterministic seaward-edge fallback.
@@ -223,6 +229,31 @@ async def geoclaw_storm_surge(
         if len(cg) == 2:
             gauge = (float(cg[0]), float(cg[1]))
 
+    # --- law 9 (ADR 0285 P4): resolve the bottom-friction Manning's n -----------
+    # user -> NLCD-derived (area-weighted mean of the SFINCS Manning table over the
+    # AOI) -> REFUSE. Historically a bare 0.025 rode SILENTLY (no provenance). Now
+    # an unresolved value is consequence="physics" default_demo, so the input-review
+    # gate refuses in auto mode; a derived/user value proceeds labeled.
+    _manning_res = await resolve_overland_manning(
+        coerced, manning_n, param_name="manning_n",
+    )
+    _review = await gate_input_review(
+        tool_name="geoclaw_storm_surge", mode=input_mode,
+        entries=[_manning_res.entry], params={},
+    )
+    if _review.cancelled:
+        return {
+            "status": "error",
+            "error_code": "GEOCLAW_PHYSICS_INPUT_REQUIRED",
+            "error_message": f"geoclaw_storm_surge {_review.cancel_reason}",
+        }
+    if not _manning_res.resolved:
+        return {
+            "status": "error",
+            "error_code": "GEOCLAW_PHYSICS_INPUT_REQUIRED",
+            "error_message": str(_manning_res.entry.note),
+        }
+
     try:
         run_args = GeoClawRunArgs(
             bbox=tuple(coerced),  # type: ignore[arg-type]
@@ -230,7 +261,7 @@ async def geoclaw_storm_surge(
             sim_duration_s=float(sim_duration_s),
             output_frames=int(output_frames),
             amr_levels=int(amr_levels),
-            manning_n=float(manning_n),
+            manning_n=float(_manning_res.manning_n),
             sea_level_m=float(sea_level_m),
             storm_track=track,
             wind_drag_law=str(wind_drag_law),  # type: ignore[arg-type]
@@ -260,6 +291,13 @@ async def geoclaw_storm_surge(
             compute_class=compute_class,
             emit_gauge_series=True,
         )
+        # law 9: surface the resolved Manning's n provenance on the envelope.
+        try:
+            _si = list(getattr(primary, "synthetic_inputs", None) or [])
+            _si.append(_manning_res.entry)
+            primary = primary.model_copy(update={"synthetic_inputs": _si})
+        except Exception as exc:  # noqa: BLE001 - provenance surface is non-fatal
+            logger.warning("geoclaw_storm_surge: manning provenance attach failed: %s", exc)
         logger.info(
             "geoclaw_storm_surge complete layer_id=%s max_depth_m=%.4g "
             "max_inundation_m=%.4g uri=%s",

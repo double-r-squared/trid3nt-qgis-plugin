@@ -1,23 +1,32 @@
-"""Shared MODFLOW aquifer-property resolution (law 9).
+"""Shared soil-hydraulics + aquifer-property resolution (law 9).
 
-The MODFLOW archetype family needs an aquifer hydraulic conductivity (and an
-effective porosity) to solve. Historically, when the caller supplied neither and
-no fetcher served them, the family fell back to a demo constant
-(``DEFAULT_AQUIFER_K_MS = 1e-4`` / ``DEFAULT_POROSITY = 0.3``) - a physics value
-invented out of nothing, labeled but run on regardless. Law 9 forbids that: a
-physics-consequential parameter with no real data source must REFUSE, not run on
-an invention.
+Several engines need a soil / aquifer material property to solve - MODFLOW an
+aquifer hydraulic conductivity + porosity, the Landlab groundwater + Green-Ampt
+chains the same K + porosity, the SWMM two-zone aquifer a full moisture column
+(porosity, wilting point, field capacity, conductivity). Historically each fell
+back to a demo constant (e.g. MODFLOW's ``DEFAULT_AQUIFER_K_MS = 1e-4`` /
+``DEFAULT_POROSITY = 0.3``) - a physics value invented out of nothing, labeled but
+run on regardless. Law 9 forbids that: a physics-consequential parameter with no
+real data source must REFUSE, not run on an invention.
 
-This module is the single resolution seam the whole family shares. It generalizes
-the ``capture_zone`` SoilGrids pedotransfer path (previously private to that
-template): near-surface soil texture -> saturated K via the Saxton-Rawls (2006)
-pedotransfer function, a real derived basis at the AOI. When the caller supplies a
-value it is used (``user``); when SoilGrids can serve, K/porosity are DERIVED
-(``derived``, source named, screening caveat stated); when SoilGrids cannot serve
-(fetch fails, AOI off the soil surface / outside coverage) the resolution is
-UNRESOLVED and its ``SyntheticInput`` carries ``basis="default_demo",
+This module is the single resolution seam those engines share (it lives in
+``workflows/shared`` so landlab / swmm / modflow import one derivation, not three).
+Near-surface soil texture (SoilGrids sand + clay, AOI-window mean) drives the
+Saxton-Rawls (2006) pedotransfer functions - a real derived basis at the AOI:
+
+- ``derive_soil_k`` / ``resolve_aquifer_properties`` -> saturated K + porosity
+  (the MODFLOW / Landlab-groundwater path).
+- ``derive_soil_column`` -> the two-zone moisture column porosity / wilting /
+  field-capacity / conductivity (the SWMM aquifer-baseflow path), surfaced from
+  the SAME texture fit (theta_s / theta_1500 / theta_33 / Ksat).
+
+When the caller supplies a value it is used (``user``); when SoilGrids can serve,
+the value is DERIVED (``derived``, source named, screening caveat stated); when
+SoilGrids cannot serve (fetch fails, AOI off the soil surface / outside coverage)
+the value is UNRESOLVED and its ``SyntheticInput`` carries ``basis="default_demo",
 consequence="physics"`` so the input-review gate REFUSES in auto mode. The demo
-constant is gone - there is no invented value to fall back to.
+constants are gone - there is no invented value to fall back to. Each engine
+narrates its own entry (its own param names); the derivation is shared.
 
 The screening caveat is stated truthfully in the entry note: pedotransfer from
 shallow soil texture is a NEAR-SURFACE proxy, NOT a measured aquifer conductivity
@@ -37,16 +46,19 @@ from trid3nt_contracts.common import SyntheticInput
 
 from trid3nt_server.data import TOOL_REGISTRY
 from trid3nt_server.workflows.shared.soil_hydraulics import (
+    MM_PER_HR_TO_M_PER_S,
     SoilHydraulicsInputError,
     ksat_from_texture,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.modflow._aquifer_resolve")
+logger = logging.getLogger("trid3nt_server.workflows.shared.aquifer_resolve")
 
 __all__ = [
     "sample_raster_at_points",
     "mean_valid_raster",
     "derive_soil_k",
+    "SoilColumn",
+    "derive_soil_column",
     "AquiferResolution",
     "resolve_aquifer_properties",
     "provenance_summary",
@@ -144,22 +156,22 @@ def mean_valid_raster(uri: str) -> float | None:
         return None
 
 
-def derive_soil_k(lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
-    """Derive a labeled pedotransfer K at the AOI from SoilGrids texture.
+def _fetch_texture(lat: float, lon: float) -> tuple[float | None, float | None, dict[str, Any]]:
+    """AOI-window mean sand+clay percent from SoilGrids at ``SOIL_TEXTURE_DEPTH``.
 
-    Fetches SoilGrids sand + clay percent at ``SOIL_TEXTURE_DEPTH`` in a tight box
-    around the AOI, takes the mean of the valid cells over that window, and runs
-    the shared Saxton-Rawls seam. Returns ``(PedotransferK_or_None, meta)`` - a loud
-    provenance dict for narration. NEVER raises: any fetch / sample / pedotransfer
-    failure returns ``(None, meta_with_reason)`` so the caller REFUSES (law 9 -
-    there is no demo default to fall back to).
+    The single texture read every soil-hydraulics derivation shares (K, porosity,
+    the two-zone soil column). Fetches sand + clay percent in a tight box around
+    the AOI and averages the valid cells over the window (robust to a nodata
+    centroid pixel). Returns ``(sand_pct_or_None, clay_pct_or_None, meta)``;
+    NEVER raises - any failure returns ``(None, None, meta_with_reason)`` so the
+    caller REFUSES (law 9 - there is no demo default to fall back to).
     """
     meta: dict[str, Any] = {}
     try:
         soil_entry = TOOL_REGISTRY.get("fetch_soilgrids")
         if soil_entry is None:
             meta["reason"] = "fetch_soilgrids not registered"
-            return None, meta
+            return None, None, meta
         d = SOIL_TEXTURE_HALF_DEG
         soil_bbox = [lon - d, lat - d, lon + d, lat + d]
 
@@ -176,33 +188,109 @@ def derive_soil_k(lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
         clay_uri = _fetch("clay")
         if not sand_uri or not clay_uri:
             meta["reason"] = "soilgrids returned no raster (ocean / off soil surface)"
-            return None, meta
-        # AOI-window mean of the valid cells (robust to a nodata centroid pixel).
+            return None, None, meta
         sand_pct = mean_valid_raster(sand_uri)
         clay_pct = mean_valid_raster(clay_uri)
         if sand_pct is None or clay_pct is None:
             meta["reason"] = "no valid soil texture over the AOI window (all nodata)"
-            return None, meta
+            return None, None, meta
+        return float(sand_pct), float(clay_pct), meta
+    except Exception as exc:  # noqa: BLE001 -- texture read is best-effort; refuse on failure
+        meta["reason"] = f"soil-texture step error: {exc}"
+        logger.warning(
+            "soil-texture step failed (non-fatal, will REFUSE - no demo default): %s",
+            exc,
+        )
+        return None, None, meta
+
+
+def derive_soil_k(lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
+    """Derive a labeled pedotransfer K at the AOI from SoilGrids texture.
+
+    Fetches AOI-window SoilGrids sand + clay percent and runs the shared
+    Saxton-Rawls seam. Returns ``(PedotransferK_or_None, meta)`` - a loud
+    provenance dict for narration. NEVER raises: any fetch / sample / pedotransfer
+    failure returns ``(None, meta_with_reason)`` so the caller REFUSES (law 9 -
+    there is no demo default to fall back to).
+    """
+    sand_pct, clay_pct, meta = _fetch_texture(lat, lon)
+    if sand_pct is None or clay_pct is None:
+        return None, meta
+    try:
         pk = ksat_from_texture(
-            float(sand_pct) / 100.0, float(clay_pct) / 100.0,
-            depth_label=SOIL_TEXTURE_DEPTH,
+            sand_pct / 100.0, clay_pct / 100.0, depth_label=SOIL_TEXTURE_DEPTH,
         )
-        meta.update(
-            {"sand_pct": round(float(sand_pct), 1), "clay_pct": round(float(clay_pct), 1),
-             "k_m_s": pk.k_m_s, "porosity": pk.porosity, "basis": pk.basis,
-             "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
-        )
-        return pk, meta
     except SoilHydraulicsInputError as exc:
         meta["reason"] = f"pedotransfer input invalid: {exc}"
         return None, meta
-    except Exception as exc:  # noqa: BLE001 -- soil-K is best-effort; refuse on failure
-        meta["reason"] = f"soil-K step error: {exc}"
-        logger.warning(
-            "modflow soil-K step failed (non-fatal, will REFUSE - no demo default): %s",
-            exc,
-        )
+    meta.update(
+        {"sand_pct": round(sand_pct, 1), "clay_pct": round(clay_pct, 1),
+         "k_m_s": pk.k_m_s, "porosity": pk.porosity, "basis": pk.basis,
+         "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
+    )
+    return pk, meta
+
+
+@dataclass(frozen=True)
+class SoilColumn:
+    """A derived two-zone soil-moisture column + its provenance.
+
+    The SWMM ``[AQUIFERS]`` two-zone balance (and any moisture-column model) needs
+    porosity, wilting point, field capacity, and saturated conductivity. All four
+    come from the SAME Saxton-Rawls (2006) texture fit that serves the aquifer K:
+    theta_s (saturation) is porosity, theta_1500 is wilting point, theta_33 is
+    field capacity, and the Ksat closure is the conductivity. A NEAR-SURFACE soil
+    proxy, NOT a measured column - the standing pedotransfer limitation applies.
+    """
+
+    porosity: float
+    wilting_point: float
+    field_capacity: float
+    conductivity_m_s: float
+    conductivity_in_hr: float
+    sand_pct: float
+    clay_pct: float
+    clamped: bool
+
+
+def derive_soil_column(lat: float, lon: float) -> tuple[SoilColumn | None, dict[str, Any]]:
+    """Derive a labeled two-zone soil-moisture column at the AOI from SoilGrids.
+
+    Reuses the shared texture read + Saxton-Rawls seam: porosity = theta_s,
+    wilting point = theta_1500, field capacity = theta_33, conductivity = the
+    Ksat closure (m/s and in/hr). Returns ``(SoilColumn_or_None, meta)``. NEVER
+    raises: any fetch / pedotransfer failure returns ``(None, meta_with_reason)``
+    so the caller REFUSES (law 9 - no invented default). A NEAR-SURFACE proxy.
+    """
+    sand_pct, clay_pct, meta = _fetch_texture(lat, lon)
+    if sand_pct is None or clay_pct is None:
         return None, meta
+    try:
+        pk = ksat_from_texture(
+            sand_pct / 100.0, clay_pct / 100.0, depth_label=SOIL_TEXTURE_DEPTH,
+        )
+    except SoilHydraulicsInputError as exc:
+        meta["reason"] = f"pedotransfer input invalid: {exc}"
+        return None, meta
+    inter = pk.intermediates
+    column = SoilColumn(
+        porosity=round(float(inter["theta_s"]), 4),
+        wilting_point=round(float(inter["theta_1500"]), 4),
+        field_capacity=round(float(inter["theta_33"]), 4),
+        conductivity_m_s=pk.k_m_s,
+        conductivity_in_hr=round(pk.k_m_s / MM_PER_HR_TO_M_PER_S / 25.4, 4),
+        sand_pct=round(sand_pct, 1),
+        clay_pct=round(clay_pct, 1),
+        clamped=pk.clamped,
+    )
+    meta.update(
+        {"sand_pct": column.sand_pct, "clay_pct": column.clay_pct,
+         "porosity": column.porosity, "wilting_point": column.wilting_point,
+         "field_capacity": column.field_capacity,
+         "conductivity_in_hr": column.conductivity_in_hr,
+         "basis": pk.basis, "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
+    )
+    return column, meta
 
 
 @dataclass

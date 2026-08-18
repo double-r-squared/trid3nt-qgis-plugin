@@ -61,7 +61,6 @@ __all__ = [
     "DEFAULT_STORM_DURATION_HR",
     "DEFAULT_RAIN_INTERVAL_MIN",
     "DEFAULT_TARGET_RESOLUTION_M",
-    "DEFAULT_MANNING_OVERLAND",
     "PollutantSpec",
     "POLLUTANT_PRESETS",
     "resolve_pollutant_presets",
@@ -127,7 +126,11 @@ DEFAULT_RETURN_PERIOD_YR: int = 100  # design-storm return period, years
 DEFAULT_STORM_DURATION_HR: float = 6.0  # storm duration, hours (spike used 6 h)
 DEFAULT_RAIN_INTERVAL_MIN: int = 5  # hyetograph timestep, minutes
 DEFAULT_TARGET_RESOLUTION_M: float = 10.0  # target cell size, m (spike used 10 m)
-DEFAULT_MANNING_OVERLAND: float = 0.03  # overland Manning n (spike value)
+# NOTE (law 9, ADR 0285 P4): there is no demo overland Manning's n. When the user
+# supplies none, the composer DERIVES it from NLCD land cover over the AOI (the
+# area-weighted mean of the SFINCS manning_mapping table) or REFUSES - never an
+# invented friction constant. ``manning_overland`` is therefore Optional (None ->
+# derive-or-refuse), NOT a baked default.
 
 
 # --------------------------------------------------------------------------- #
@@ -312,7 +315,9 @@ class SWMMRunArgs(EngineRunArgsMixin):
             ``"none"`` (fully impervious, the spike default).
         target_resolution_m: requested overland cell size, m (> 0). Subject to
             the adaptive-grid budget for large AOIs.
-        manning_overland: overland-flow Manning n (> 0). Default 0.03 (spike).
+        manning_overland: overland-flow Manning n (> 0). Default None -> the
+            composer DERIVES it from NLCD land cover over the AOI (area-weighted
+            mean) or REFUSES; never a baked friction constant (law 9).
         mass_balance_tolerance_pct: the honesty gate. If the SWMM .rpt Flow
             Routing Continuity error EXCEEDS this (%), the worker raises a typed
             ``SWMM_MASS_BALANCE_EXCEEDED`` error instead of publishing a
@@ -337,7 +342,10 @@ class SWMMRunArgs(EngineRunArgsMixin):
     infiltration_method: InfiltrationMethod = "none"
 
     target_resolution_m: float = Field(default=DEFAULT_TARGET_RESOLUTION_M, gt=0.0)
-    manning_overland: float = Field(default=DEFAULT_MANNING_OVERLAND, gt=0.0)
+    # law 9 (ADR 0285 P4): None -> the composer derives overland n from NLCD land
+    # cover over the AOI, or REFUSES (no invented friction). A user value (> 0) is
+    # used verbatim.
+    manning_overland: float | None = Field(default=None, gt=0.0)
 
     # Universal emit-on-solve cadence lever (ADR 0282). The OUTPUT reporting
     # cadence -- how often SWMM writes a depth snapshot -> the animation frame

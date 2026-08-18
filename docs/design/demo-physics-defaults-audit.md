@@ -232,10 +232,24 @@ Grouped by family; sized S/M/L. The mechanism wave (P1) is the gate; it must lan
 first because every downstream wave keys on the consequence tag and the
 refuse-in-auto behavior.
 
-> **STATUS (2026-08-17): P1 LANDED, P2 LANDED** (ADR 0285). P1 = the `consequence`
+> **STATUS (2026-08-18): P1, P2, P3, P4 LANDED** (ADR 0285). P1 = the `consequence`
 > tag + refuse-in-auto + the 3-layer sweep guard. P2 = the MODFLOW exemplar (rows
 > 1-7): the shared `_aquifer_resolve` SoilGrids seam, the demo constants deleted,
-> 12 archetypes wired to derive-or-refuse, and the live Woburn TCE A/B. P3-P8
+> 12 archetypes wired to derive-or-refuse, and the live Woburn TCE A/B. P3 = the
+> soil-hydraulics substrate move (`_aquifer_resolve` hoisted to
+> `workflows/shared/aquifer_resolve.py` + `derive_soil_column` for the SWMM
+> two-zone column; per-engine template conversions for rows 8-10, 27 staged).
+> P4 = roughness/Manning: the shared `roughness_resolve` NLCD-derived-or-refuse
+> seam, **row 23** (swmm urban_flood `overland_manning_n`) + **row 16** (geoclaw
+> storm_surge `manning_n`) CONVERTED (0.03/0.025 demo constants deleted, live
+> urban_flood A/B). **row 24** = an audit MISREAD (the cited `curve_number=90.0` is
+> a demo *rainfall depth*, not a CN; network_import uses Horton, not SCS-CN -- no CN
+> to derive; the real invented params there are the SubArea `n_imperv/n_perv/
+> imperviousness` literature constants, QUEUED for a label-only pass). fallback-audit
+> **row 17** (raster_cell_mesh `n_imperv/n_perv`) is a DIFFERENT value-path (SubArea
+> surface roughness, not the overland conduit n) -- NOT converted (reported, not
+> silently widened). Geoclaw siblings `inundation`/`amr_regions`/`gauge_timeseries`
+> share the 0.025 default (beyond the audit's named 2) -- QUEUED for NATE. P5-P8
 > remain staged for their per-engine waves.
 
 - **P1 -- Mechanism + sweep guard (S). [LANDED]** Add `consequence` to `SyntheticInput`
@@ -259,9 +273,11 @@ refuse-in-auto behavior.
 - **P3 -- Groundwater + soil material props (M).** landlab groundwater/green_ampt/
   susceptibility (#8-#10), swmm aquifer_baseflow (#27). Same SoilGrids pedotransfer
   substrate as P2 -> refuse-or-derive. Shares the soil-hydraulics reader with P2.
-- **P4 -- Roughness / Manning (S-M).** geoclaw manning (#16), swmm overland_manning
-  (#23), swmm curve_number (#24). Reuse the existing sfincs NLCD->Manning table
-  (`manning_mapping.csv`) as the real source -> derive or refuse.
+- **P4 -- Roughness / Manning (S-M). [LANDED, ADR 0285 P4]** geoclaw manning (#16),
+  swmm overland_manning (#23) via the shared `roughness_resolve` seam (area-weighted
+  NLCD Manning's n from `manning_mapping.csv` -> derive or refuse). #24's
+  "curve_number=90" was an audit MISREAD (a demo rainfall depth; network_import uses
+  Horton, not SCS-CN) -- no CN wiring is honest, QUEUED for a label-only pass.
 - **P5 -- Coastal/hydro forcing + boundaries (M-L).** schism river_discharge /
   ocean_salinity / tidal_amplitude / synthetic bathy (#19-#22), telemac wind /
   wave / thermocline / datum (#28-#30, #33). Wire the existing weather / ocean /

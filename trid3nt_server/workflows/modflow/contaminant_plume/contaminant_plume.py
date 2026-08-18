@@ -50,7 +50,7 @@ from trid3nt_contracts.modflow_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.gates.input_review import physics_refusal_reason
-from trid3nt_server.workflows.modflow._aquifer_resolve import (
+from trid3nt_server.workflows.shared.aquifer_resolve import (
     provenance_summary,
     resolve_aquifer_properties,
 )

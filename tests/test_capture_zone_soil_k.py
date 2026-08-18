@@ -77,7 +77,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, *, sand: float | None, clay: float |
 
     # The SoilGrids pedotransfer read lives in the shared resolver seam now; patch
     # its module-level registry (capture_zone delegates to it).
-    from trid3nt_server.workflows.modflow import _aquifer_resolve as ar_mod
+    from trid3nt_server.workflows.shared import aquifer_resolve as ar_mod
     monkeypatch.setattr(
         ar_mod, "TOOL_REGISTRY",
         {"fetch_soilgrids": SimpleNamespace(fn=_fetch_soil)},

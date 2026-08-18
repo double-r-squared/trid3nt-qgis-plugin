@@ -94,7 +94,7 @@ __all__ = [
 # Aquifer hydraulic conductivity + effective porosity have NO demo default (law
 # 9): a physics-consequential value with no real data source must be RESOLVED
 # (caller-supplied or SoilGrids-derived at the AOI via the shared
-# `_aquifer_resolve` seam) or the run REFUSES. `aquifer_k_ms` / `porosity` are
+# `aquifer_resolve` seam) or the run REFUSES. `aquifer_k_ms` / `porosity` are
 # REQUIRED fields on `MODFLOWRunArgs` below - there is no invented fallback to
 # fall through to. (The former `DEFAULT_AQUIFER_K_MS = 1e-4` / `DEFAULT_POROSITY
 # = 0.3` demo constants were deleted; see DELETION_LEDGER + ADR 0285.)
@@ -415,7 +415,7 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
     duration_days: float = Field(gt=0.0)
 
     # REQUIRED (law 9): no demo default - resolve at the AOI or refuse. See the
-    # module note above + the shared `_aquifer_resolve` seam.
+    # module note above + the shared `aquifer_resolve` seam.
     aquifer_k_ms: float = Field(gt=0.0)
     porosity: float = Field(gt=0.0, le=1.0)
 

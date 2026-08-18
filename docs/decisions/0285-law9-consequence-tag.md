@@ -4,8 +4,14 @@ Status: P1 LANDED (mechanism + 3-layer sweep guard + existing-entry tagging +
 culvert mislabel fix + driver/test reconciliation; offline-provable). P2 LANDED
 (the MODFLOW exemplar -- shared SoilGrids aquifer-resolution seam, demo constants
 deleted, 12 archetypes wired, vadose/thermal/SFR rows, live Woburn A/B; see the
-P2 section below). The 8 SILENT rows and the remaining real-source conversions
-(P3-P8) are staged for their per-engine waves. Date: 2026-08-17. Source:
+P2 section below). P3 LANDED (the soil-hydraulics substrate move: `_aquifer_resolve`
+hoisted to `workflows/shared/aquifer_resolve.py`, `derive_soil_column` added for the
+SWMM two-zone column; per-engine template conversions staged). P4 LANDED (roughness/
+Manning: the shared `roughness_resolve` NLCD-derived-or-refuse seam, swmm
+urban_flood row 23 + geoclaw storm_surge row 16 wired, the 0.03/0.025 demo constants
+deleted, live urban_flood A/B; the row-24 CN misread + row-17 value-path +
+geoclaw-sibling findings reported). The remaining real-source conversions (P5-P8)
+are staged for their per-engine waves. Date: 2026-08-18. Source:
 `docs/design/demo-physics-defaults-audit.md`.
 
 ## Context
@@ -224,3 +230,128 @@ fields and the `demo_aquifer_caveat` -> `aquifer_provenance` summary key. Gates
 green: modflow root suite (583 passed / 1 skip), `workers/modflow` (218 / 15
 skip), contracts (721), daemon restart + `ws_smoke` all_passed, and the live A/B
 above (A=PASS refuse, B=PASS derived solve).
+
+## P3 -- the soil-hydraulics substrate move (LANDED)
+
+Audit rows 8-10 (landlab groundwater / green_ampt / susceptibility) + row 27
+(swmm aquifer_baseflow) share the SAME SoilGrids pedotransfer substrate the P2
+MODFLOW exemplar proved. P3 generalized that substrate so the per-engine
+conversions ride ONE derivation, not three:
+
+- The private `modflow/_aquifer_resolve.py` seam is HOISTED to
+  `workflows/shared/aquifer_resolve.py` (`git mv`); all five MODFLOW importers +
+  the test monkeypatch path + the proof script are reconciled to the shared path,
+  and the module docstring generalizes to name landlab/swmm. Old path grepped to
+  zero (bytecode cleared). Behavior-preserving: the modflow slice re-ran
+  identically (the single pre-existing `test_river_seepage` failure reproduces at
+  HEAD with P3 stashed - an offline-env SoilGrids-stub artifact, not a P3
+  regression).
+- `resolve_aquifer_properties` (K + porosity, the MODFLOW / landlab-groundwater
+  path) is joined by `derive_soil_column` -> the two-zone SWMM moisture column
+  (porosity / wilting point / field capacity / conductivity) surfaced from the
+  SAME Saxton-Rawls texture fit (theta_s / theta_1500 / theta_33 / Ksat). One
+  texture read, three consumers.
+
+The per-engine TEMPLATE conversions (wiring landlab susceptibility/groundwater/
+green_ampt + swmm aquifer_baseflow to derive-or-refuse through the shared seam)
+are STAGED on this substrate, not half-wired - they land in their engine waves.
+
+## P4 -- roughness / Manning (LANDED)
+
+Audit rows 16 (geoclaw storm_surge Manning), 23 (swmm urban_flood
+overland_manning), 24 (swmm network_import). The real source is the SAME
+version-pinned NLCD land-cover -> Manning's n table SFINCS already builds its
+per-cell roughness grid from (`shared/manning.py` + `data/manning_mapping.csv`),
+reduced to a single representative scalar for a whole AOI.
+
+### The shared resolution seam
+
+`trid3nt_server/workflows/shared/roughness_resolve.py` (new) is the roughness
+analogue of `aquifer_resolve.py`:
+
+- `nlcd_class_histogram` reads a fetched NLCD raster's per-class cell counts (the
+  shared boto3/GDAL reader, drops nodata sentinels).
+- `area_weighted_manning` reduces the histogram to ONE bulk friction:
+  `n_bar = sum(count_c * n_c) / sum(count_c)` over the classes carrying a mapping.
+  The honest-simple reduction of heterogeneous cover to a single scalar - a
+  SCREENING estimate, NOT a per-cell field (SFINCS builds that when the fidelity is
+  needed), but DERIVED from the real land cover at the AOI, not invented. (The
+  math is offline-unit-checked: 2x class-21 @0.035 + 1x class-42 @0.150 -> 0.0733.)
+- `resolve_overland_manning(bbox, user_manning, *, param_name)` is the ladder:
+  user (`basis="user"`) -> NLCD-derived (`basis="derived"`,
+  `real_source="fetch_landcover (NLCD area-weighted Manning's n)"`, screening
+  caveat in the note) -> UNRESOLVED (`basis="default_demo", consequence="physics"`,
+  value None) so the input-review gate REFUSES in auto mode. The NLCD fetch + raster
+  read are offloaded to a thread (never block the event loop). `param_name` lets
+  each engine narrate under its own name (SWMM `overland_manning_n` / GeoClaw
+  `manning_n`).
+
+### The conversions
+
+- **row 23 (swmm urban_flood `overland_manning_n`)** -- the composer resolves the
+  overland n through the seam after the DEM fetch, threads the resolved value into
+  `effective_args.manning_overland`, and includes the resolver's entry in the
+  input-review gate (refuses in auto when unresolved). The static
+  `overland_manning_n=0.03 consequence="scenario"` "landcover-derived n not wired"
+  entry is DELETED (both gate + envelope sites); `DEFAULT_MANNING_OVERLAND` is
+  DELETED and `manning_overland` is `float | None` (None -> derive-or-refuse) on
+  both `SWMMRunArgs` and the tool. ADR 0285's earlier `scenario` verdict for this
+  row (a stopgap so the demo did not brick with NO supply path) is now UPGRADED to
+  `physics` -> derived, exactly as that verdict flagged ("P4 upgrades
+  overland_manning to NLCD-derived (scenario -> derived)"). The frozen engine
+  primitive `build_swmm_mesh`'s mechanical `DEFAULT_OVERLAND_N=0.03` fallback is
+  RETAINED (direct-call/unit-test only; the composer always resolves/refuses first)
+  - a numerical-class default, never a user-facing invented physics surface.
+- **row 16 (geoclaw storm_surge `manning_n`, a SILENT row)** -- storm_surge had NO
+  provenance surface and NO gate. It now resolves `manning_n` through the SAME seam,
+  passes the entry through a new `gate_input_review` call (refuses in auto:
+  `GEOCLAW_PHYSICS_INPUT_REQUIRED`), and surfaces the entry on the returned layer.
+  Tool signature + docstring `0.025` -> `None`.
+
+### Scope findings surfaced (law 6 - verified, not silently widened)
+
+- **row 24 CN is an audit MISREAD.** The audit cited `network_import.py:544` as
+  `curve_number = 90.0`; that line is `_resolve_storm_depth() -> return 90.0,
+  "default_demo"` - a demo *rainfall depth* (90 mm, a `scenario` forcing), NOT a
+  curve number. `network_import` has NO curve number anywhere and uses HORTON
+  infiltration (`InfiltrationHorton`), not SCS-CN, so there is no CN to derive from
+  NLCD+SSURGO/GCN250. The real invented overland constitutive params in the
+  network subcatchments are `n_imperv=0.012 / n_perv=0.1 / imperviousness=70.0` +
+  the Horton coefficients (`swmm_network.py:837-843`) - literature-canonical
+  per-surface-type SWMM constants (like the SWAN coefficients), NOT a single bulk
+  roughness that NLCD area-weighting replaces. `junction_subarea` + `node_inverts`
+  are ALREADY physics-tagged (P1). No P4 wiring is honest here; QUEUED for a
+  label-only pass (P8-class) at NATE's call.
+- **fallback-audit row 17 (raster_cell_mesh roughness) is a DIFFERENT value-path.**
+  `raster_cell_mesh` `_n_imperv=0.012 / _n_perv=0.1 / imperviousness_pct`
+  (~lines 1205-1213) are the SubArea (subcatchment overland-flow) impervious/
+  pervious surface roughness, distinct from the overland CONDUIT roughness
+  (`overland_manning_n`, row 23) that P4 converts. They ride behind
+  `advanced_physics` (a documented lever) and are literature per-surface constants,
+  not an NLCD area-weight target. NOT converted (would widen scope wrongly);
+  reported for a label-only pass.
+- **geoclaw siblings beyond the audit's named 2.** The SAME `manning_n=0.025`
+  default lives in geoclaw `inundation` / `amr_regions` / `gauge_timeseries` (audit
+  row 16 named only storm_surge + regional_manning; regional_manning REQUIRES
+  `manning_coefficients` so has NO invented default). These siblings are QUEUED for
+  NATE's call, not converted this wave.
+
+### Guard + tests + live proof
+
+The P1 sweep guard holds (15 passed). Contracts reconciled (the
+`test_swmm_run_args_minimal_applies_demo_defaults` assertion is now
+`manning_overland is None`; `DEFAULT_MANNING_OVERLAND` import dropped) - 58 passed.
+The three composer suites (`test_run_swmm_local_chain`,
+`test_urban_flood_publish_offloop`, `test_swmm_two_card_sim_observability`) gained
+an autouse fixture that stubs `resolve_overland_manning` offline (the honest
+"provide the value / stub the fetch offline" pattern; the live derive/refuse is
+proven by the A/B, never by re-tagging physics as scenario) - 27 passed. Offline
+path checks: resolver refuse (default_demo/physics), user (basis=user), and
+storm_surge auto-refuse (`GEOCLAW_PHYSICS_INPUT_REQUIRED`) all pass.
+
+The live A/B on the cheapest affected template (swmm urban_flood, a real CONUS
+urban AOI): [A] under-specified auto run with NLCD available -> the area-weighted
+NLCD Manning's n is DERIVED and the pyswmm solve completes with the derived
+provenance visible (`basis="derived"`); [B] the SAME AOI with `fetch_landcover`
+force-failed -> the typed `SWMM_PHYSICS_INPUT_REQUIRED` refusal, no solve. (A/B
+values captured in the P4 return report.)
