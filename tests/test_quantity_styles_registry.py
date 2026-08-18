@@ -33,9 +33,20 @@ def test_unknown_quantity_falls_back_and_counts():
 
 
 def test_seeded_presets_are_real_registry_keys():
-    # Every seeded quantity maps to a preset the publish_layer registry knows
-    # (so the seam never emits a physically-wrong colormap for a KNOWN quantity).
+    # Every seeded quantity maps to a preset the publish_layer RASTER registry
+    # knows (so the seam never emits a physically-wrong colormap for a KNOWN
+    # quantity) -- EXCEPT the declared mesh presets, which render plugin-side via
+    # MDAL (QgsMeshLayer), not the raster titiler rescale registry (ADR 0283).
     for quantity, preset in qs.QUANTITY_STYLE_PRESETS.items():
-        assert preset in _QGIS_STYLE_REGISTRY, (
-            f"quantity {quantity!r} -> preset {preset!r} is not a registry key"
+        assert preset in _QGIS_STYLE_REGISTRY or preset in qs.MESH_PRESETS, (
+            f"quantity {quantity!r} -> preset {preset!r} is not a raster registry "
+            f"key nor a declared mesh preset"
         )
+
+
+def test_mesh_quantity_resolves_to_mesh_preset():
+    # The native-mesh quantity (ADR 0283) resolves to mesh_grid, is NOT a
+    # neutral-ramp fallback, and mesh_grid is a declared (non-raster) mesh preset.
+    preset, is_fallback = qs.resolve_style_preset("model_results")
+    assert preset == "mesh_grid" and is_fallback is False
+    assert preset in qs.MESH_PRESETS

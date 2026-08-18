@@ -24,7 +24,8 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   SAME registered, styled, legend-stashed `LayerURI` the register-only
   `publish_manifest.json` path produced -- raster no-`t` = standalone primary,
   raster+`t` sharing a `quantity` = a temporal group (frames in `t` order),
-  vector = a vector layer, mesh/scalar = log-only in v1. `layer_id` is
+  vector = a vector layer, mesh = a native `layer_type="mesh"` layer (ADR 0283),
+  scalar = log-only. `layer_id` is
   deterministic + idempotent from `(quantity, t-ordinal, run_id)`; the legend is
   STASHED side-band (byte-identical to `register_manifest_layers`). Proven
   field-for-field byte-equivalent in `tests/test_outputs_seam.py`. Carries the
@@ -42,7 +43,8 @@ The append-only `outputs.json` manifest (`trid3nt_contracts.outputs_manifest`,
 `{kind, quantity, name, uri, t?, units?}` entries under its run prefix; the
 seam consumer reads them on the existing completion poll and publishes each
 (raster+`t` sharing a `quantity` = a temporal group; raster with no `t` = one
-layer; vector = a vector layer; mesh/scalar = log-only in v1). v1 is AT-EXIT;
+layer; vector = a vector layer; mesh = a native SELAFIN `layer_type="mesh"` layer,
+ADR 0283; scalar = log-only). v1 is AT-EXIT;
 a MISSING manifest is a no-op (legacy engines byte-unchanged). See
 `docs/design/outputs-manifest-schema.md` (frozen schema; v1 gained OPTIONAL
 `bbox` + `band_stats` render-hint fields, ADR 0280 EXECUTED) + ADR 0280 (the
@@ -99,7 +101,33 @@ the same explained non-rendering divergence from the register path's stems
 (`swmm-depth-frame-*` / `landlab-overland-depth-frame-*`); grouping rides the
 `name` token (`"Flood depth step N"` / `"Overland depth step N"`), unchanged.
 
-REMAINING: the other engine legs (L-class), the `publish_manifest` collapse
+MIGRATED ENGINES (L-class, native-mesh temporal -- TELEMAC-2D, ADR 0283). The
+result IS a native, time-stepped SELAFIN that QGIS/MDAL animates directly, so the
+temporal artifact is a `kind="mesh"` entry, NOT per-frame COGs. The agent-side
+postprocess writes `outputs.json` (the peak entry + the mesh SELAFIN entry, the new
+OPTIONAL `crs_authid=EPSG:{utm}` because a SELAFIN carries no CRS) via the host-exec
+writer; the shared `workflows/telemac/results_mesh_seam.publish_results_mesh_via_seam`
+reads it back through the seam (`frames_only=True`) and emits the mesh layer
+(`role="context"`). Like the M-class it uses `frames_only=True` so the composer keeps
+its OWN typed peak -- but the mesh IS the temporal artifact, so `build_layers_from_outputs`
+builds it EVEN under `frames_only` (only standalone rasters + vectors are skipped).
+The mesh `LayerURI` carries `style_preset="mesh_grid"` (new registry row
+`model_results -> mesh_grid`), `bbox=None` (MDAL derives the extent), and the
+`crs_authid` from the entry; `layer_id = {quantity-base}-mesh-{run_id}`.
+
+- **rain_on_grid** (`r2d_rog.slf`): MIGRATED -- the bespoke `_publish_full_results_mesh`
+  is DELETED (ledger), byte-equivalent to the seam mesh layer except the `layer_id`
+  stem (the same explained divergence).
+- **river_dye** (`r2d_river.slf`) + **coastal_tidal_surge** (`res_coastal.slf`):
+  ADDITIVE -- the mesh animation is new alongside the existing peak COG.
+
+Cadence for the L-class is the universal `output_interval_min` (minutes ->
+`graphic_period`, a timestep count): river_dye + coastal thread it DECK-SIDE (worker
+`ReachConfig`/`CoastalConfig`, parser bumps `telemac-reach-10` / `coastal-tidal-2`,
+INERT until the image rebuild); rain_on_grid computes it AGENT-SIDE (its `time_step_s`
+is a composer constant). `None` = byte-identical current defaults.
+
+REMAINING: telemac3d + the other L-class legs, the `publish_manifest` collapse
 (ledger row 19, gated on the LAST engine migrating), and -- separately, OPTION A
 -- the per-engine `output_quantities` scaffold migration.
 

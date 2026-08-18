@@ -28,9 +28,11 @@ Pipeline (deterministic, composed here):
      ``run_solver`` seam (mode=rain_on_grid -> the worker's ``rog_build`` deck);
   6. ``postprocess_telemac_wse`` rasterizes the peak WATER DEPTH to a COG; the
      outlet hydrograph + runoff volume + continuity ride in the metrics;
-  7. the full-results SELAFIN (``r2d_rog.slf`` -- all frames, all variables) is
-     published as a ``layer_type="mesh"`` case layer alongside the depth COG,
-     so QGIS/MDAL animates it natively with the temporal controller.
+  7. the agent-side postprocess writes ``outputs.json`` (the peak entry + the
+     full-results SELAFIN ``r2d_rog.slf`` as a ``kind="mesh"`` entry) and the
+     emit-on-solve seam (ADR 0283) publishes it as a native ``layer_type="mesh"``
+     layer alongside the depth COG, so QGIS/MDAL animates it with the temporal
+     controller.
 
 Registered ``engine="telemac", tier="template"``, ``cacheable=False`` +
 ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"``
@@ -106,6 +108,7 @@ async def telemac_rain_on_grid(
     observed_gauge_id: str | None = None,
     mesh_uri: str | None = None,
     compute_class: str = "medium",
+    output_interval_min: float | None = None,
     **_extra_ignored: Any,
 ) -> Any:
     """FLASH FLOOD from RAIN falling on a WATERSHED: rainfall-runoff, an OUTLET HYDROGRAPH + a flood-DEPTH map.
@@ -172,6 +175,7 @@ async def telemac_rain_on_grid(
         soil_recovery_hr=soil_recovery_hr,
         observed_gauge_id=observed_gauge_id,
         mesh_uri=mesh_uri, compute_class=compute_class,
+        output_interval_min=output_interval_min,
     )
 
 
@@ -196,6 +200,7 @@ async def model_telemac_rain_on_grid(
     soil_store: bool = False,
     soil_store_capacity_mm: float | None = None,
     soil_recovery_hr: float = 120.0,
+    output_interval_min: float | None = None,
 ) -> Any:
     """Deterministic rain-on-grid composer (geocode -> mesh -> CN -> solve ->
     depth COG). Inlined here (the ``telemac_river_dye`` analogue)."""
@@ -328,7 +333,8 @@ async def model_telemac_rain_on_grid(
         sim_s=sim_s, runoff_path=decision.path, pour_point=pp,
         observed_gauge_id=observed_gauge_id, compute_class=compute_class,
         reach_name=(location or "watershed"), run_tag=run_tag,
-        hyetograph_blocks=hyeto_blocks, soil_params=soil_params)
+        hyetograph_blocks=hyeto_blocks, soil_params=soil_params,
+        output_interval_min=output_interval_min)
     # Stamp the mesh provenance (consumed a case mesh / skipped an incompatible
     # one) onto the result envelope so the assumptions line narrates it honestly.
     if mesh_gate_note and layer is not None:
@@ -538,6 +544,7 @@ async def _stage_solve_postprocess(
     *, mesh, node_cn2, node_manning, amc, curve_number, design_storm_mm_per_hr,
     sim_s, runoff_path, pour_point, observed_gauge_id, compute_class,
     reach_name, run_tag, hyetograph_blocks=None, soil_params=None,
+    output_interval_min=None,
 ):
     """Upload the mesh + node fields, dispatch run_solver, and rasterize the peak
     depth COG. Mirrors the ``telemac_river_dye`` run_solver seam."""
@@ -585,7 +592,12 @@ async def _stage_solve_postprocess(
         "n_outlet_nodes": 8,
         "duration_s": float(sim_s),
         "time_step_s": 3.0,
-        "graphic_period": 200,
+        # ADR 0283 cadence lever: graphic_period is computed AGENT-SIDE here (rog's
+        # time_step_s is the composer constant 3.0 s), so output_interval_min needs
+        # no worker-side change -- None keeps the byte-identical default of 200.
+        "graphic_period": (
+            max(1, round(float(output_interval_min) * 60.0 / 3.0))
+            if output_interval_min is not None else 200),
     }
     if curve_number is not None:
         reach["curve_number"] = float(curve_number)
@@ -632,47 +644,27 @@ async def _stage_solve_postprocess(
             "TELEMAC_ROG_NO_LAYER",
             "postprocess produced no depth layer (dry catchment?).")
     # (NATE full-results ask): publish the full-results SELAFIN
-    # (r2d_rog.slf -- ALL frames, ALL variables) as a case mesh layer alongside the
-    # peak-depth COG, so QGIS/MDAL animates it with the temporal controller.
-    await _publish_full_results_mesh(
-        batch_run_id, mesh_epsg=int(mesh.utm_epsg), reach_name=reach_name)
-    return layers[0]
-
-
-async def _publish_full_results_mesh(
-    run_id: str, *, mesh_epsg: int, reach_name: str
-) -> None:
-    """Publish r2d_rog.slf as a ``layer_type="mesh"`` case layer (best-effort).
-
-    The full-results SELAFIN (every frame, every variable) is a native MDAL mesh:
-    QGIS opens it directly and its time steps drive the temporal controller (no
-    per-frame COGs, no plugin change -- the 0200 mesh-layer seam). It rides the
-    runs-bucket object the depth COG was rasterized from (no re-upload), stamped in
-    the mesh's own UTM CRS. NEVER fails the run.
-
-    Payload scaling: a 6 h / 37-frame run is ~4 MB; the SELAFIN grows ~linearly
-    with frames x nodes, so a multi-day / high-graphic-period run can reach tens of
-    MB (still MDAL-streamable via /vsicurl/, but sizeable to download)."""
-    from trid3nt_contracts.execution import LayerURI
-
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
-    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+    # (r2d_rog.slf -- ALL frames, ALL variables) as a native mesh layer alongside
+    # the peak-depth COG, so QGIS/MDAL animates it with the temporal controller.
+    # EMIT-ON-SOLVE (ADR 0283): the agent-side postprocess writes outputs.json (the
+    # peak entry + the mesh SELAFIN entry) and the SEAM (frames_only=True) owns the
+    # mesh publication -- the composer keeps its typed peak (layers[0]).
     from trid3nt_server.emission.pipeline_emitter import current_emitter
+    from trid3nt_server.workflows.telemac.results_mesh_seam import (
+        publish_results_mesh_via_seam,
+    )
 
-    emitter = current_emitter()
-    if emitter is None:
-        return
-    try:
-        mesh_uri = f"s3://{_get_runs_bucket()}/{run_id}/r2d_rog.slf"
-        mesh_layer = LayerURI(
-            layer_id=f"rog-results-{run_id}",
-            name=f"Model results (time series): {reach_name}",
-            layer_type="mesh", uri=mesh_uri, style_preset="mesh_grid",
-            role="context", bbox=None, crs_authid=f"EPSG:{int(mesh_epsg)}")
-        await publish_input_layer(emitter, mesh_layer, role="context")
-        logger.info("rog: published full-results mesh layer %s", mesh_uri)
-    except Exception as exc:  # noqa: BLE001 -- full-results layer is a bonus
-        logger.warning("rog full-results mesh layer emit skipped: %s", exc)
+    await publish_results_mesh_via_seam(
+        current_emitter(),
+        run_id=batch_run_id,
+        engine="telemac",
+        peak_layer=layers[0],
+        peak_quantity="flood_depth",
+        mesh_basename="r2d_rog.slf",
+        mesh_epsg=int(mesh.utm_epsg),
+        reach_name=reach_name,
+    )
+    return layers[0]
 
 
 def _download_rog_result(run_id: str) -> str:

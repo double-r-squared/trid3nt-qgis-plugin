@@ -68,8 +68,8 @@ def test_reach_config_rejects_unknown_keys(tmp_path):
 
 
 def test_parser_version_is_reach_7():
-    """the NESTOR dredging fields bump the parser stamp to reach-9."""
-    assert E._PARSER_VERSION == "telemac-reach-9"
+    """the output_interval_min cadence lever bumps the parser stamp to reach-10."""
+    assert E._PARSER_VERSION == "telemac-reach-10"
 
 
 def test_reach_config_accepts_erodible_bed_fields(tmp_path):
@@ -118,8 +118,8 @@ def test_reach_config_accepts_rog_fields(tmp_path):
 
 
 def test_reach_config_rejects_unknown_key_names_v7(tmp_path):
-    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-9)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-9"):
+    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-10)."""
+    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-10"):
         E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
 
 

@@ -348,7 +348,21 @@ class ReachConfig:
     outlet_lonlat: tuple = None         # type: ignore[assignment]  # pour-point (lon, lat)
     n_outlet_nodes: int = 6             # ring nodes marked as the free-exit outlet
     observed_gauge_id: str = ""         # USGS NWIS gauge for NSE/R2 (composer wiring)
+    #: universal map-frame cadence lever (minutes between frames, ADR 0283). None
+    #: keeps the graphic_period default (byte-identical); set -> graphic_period is
+    #: derived from it in __post_init__.
+    output_interval_min: float | None = None
     workdir: str = field(default_factory=lambda: os.path.dirname(os.path.abspath(__file__)))
+
+    def __post_init__(self) -> None:
+        # ADR 0283 cadence: output_interval_min (minutes between GRAPHIC PRINTOUTS)
+        # -> graphic_period (a TIMESTEP COUNT = interval_s / time_step_s). None
+        # leaves graphic_period at its default so the deck is byte-identical.
+        if self.output_interval_min is not None:
+            self.graphic_period = max(
+                1,
+                round(float(self.output_interval_min) * 60.0 / float(self.time_step_s)),
+            )
 
 
 _NLDI = "https://api.water.usgs.gov/nldi/linked-data"

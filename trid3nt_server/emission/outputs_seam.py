@@ -14,7 +14,11 @@ Routing (Section 5):
                                          token preserved so ``detectSequentialGroups``
                                          forms the scrubber exactly as today).
   * ``vector``                        -> a vector layer.
-  * ``mesh`` / ``scalar``             -> parse + validate, log-only in v1.
+  * ``mesh``                          -> a native SELAFIN ``layer_type="mesh"``
+                                         layer (role ``context``, ``crs_authid``
+                                         from the entry, ``bbox=None``); MDAL
+                                         animates every frame from the one file.
+  * ``scalar``                        -> parse + validate, log-only in v1.
 
 Byte-equivalence with ``register_manifest_layers`` (the migration bar, Section
 7.1): the emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id),
@@ -321,7 +325,9 @@ def build_layers_from_outputs(
     layer (with the narration scalars on it) and never consumes the seam's peak
     entry, so the same COG uri is never registered twice. ``outputs.json`` still
     carries the peak entry for completeness (a whole-run record); the seam simply
-    skips it. Default False = the S-class behaviour (seam owns all publication).
+    skips it. A ``kind="mesh"`` entry IS the temporal artifact (ADR 0283), so it is
+    ALWAYS built (under frames_only too). Default False = the S-class behaviour
+    (seam owns all publication).
     """
     result = SeamPublishResult()
 
@@ -331,6 +337,7 @@ def build_layers_from_outputs(
     standalone: list[OutputEntry] = []
     temporal_by_quantity: dict[str, list[OutputEntry]] = {}
     vectors: list[OutputEntry] = []
+    meshes: list[OutputEntry] = []
     for entry in manifest.entries:
         if entry.kind == "raster":
             if entry.t is None:
@@ -342,13 +349,11 @@ def build_layers_from_outputs(
             if not frames_only:
                 vectors.append(entry)
         elif entry.kind == "mesh":
+            # The mesh sibling IS the TEMPORAL artifact (MDAL animates every frame
+            # from the one SELAFIN), so it is built even under frames_only -- only
+            # the standalone peak raster + vectors are skipped there.
             result.mesh_count += 1
-            logger.info(
-                "outputs_seam: mesh entry (log-only v1) quantity=%s name=%r uri=%s",
-                entry.quantity,
-                entry.name,
-                entry.uri,
-            )
+            meshes.append(entry)
         elif entry.kind == "scalar":
             result.scalar_count += 1
             logger.info(
@@ -444,6 +449,63 @@ def build_layers_from_outputs(
                 style_preset=preset,
                 uri=entry.uri,
             )
+        )
+
+    # --- Native mesh siblings (SELAFIN, ADR 0283): role context. ---
+    # The mesh sibling is a native MDAL temporal artifact (QGIS animates its
+    # dataset groups directly -- no per-frame COGs). It is NOT routed through the
+    # raster styling seam (no COG touch): the plugin's ``_add_mesh`` drives the
+    # dataset-group/CRS. ``crs_authid`` rides the entry (a SELAFIN carries no CRS).
+    # ``bbox`` stays None (MDAL derives the extent from the mesh) -- never the
+    # composer AOI, so it is byte-identical to the bespoke composer emit it
+    # supersedes. layer_id is minted off the quantity (``{base}-mesh-{run_id}``)
+    # for idempotence, standardized on the physical quantity like the raster stems.
+    for entry in meshes:
+        preset, is_fallback = resolve_style_preset(entry.quantity)
+        if is_fallback:
+            result.unknown_quantity_count += 1
+        layer_id = f"{_quantity_base(entry.quantity)}-mesh-{run_id}"
+        observe_published_layer(layer_id, gcs_uri=entry.uri)
+        entry_bbox: tuple[float, float, float, float] | None = None
+        if entry.bbox and len(entry.bbox) == 4:
+            entry_bbox = (
+                float(entry.bbox[0]),
+                float(entry.bbox[1]),
+                float(entry.bbox[2]),
+                float(entry.bbox[3]),
+            )
+        result.layers.append(
+            LayerURI(
+                layer_id=layer_id,
+                name=entry.name,
+                layer_type="mesh",
+                uri=entry.uri,
+                style_preset=preset,
+                role="context",
+                units=entry.units or None,
+                bbox=entry_bbox,
+                crs_authid=entry.crs_authid or None,
+            )
+        )
+        result.frames.append(
+            PublishedFrame(
+                layer_id=layer_id,
+                quantity=entry.quantity,
+                t=float(entry.t) if entry.t is not None else None,
+                group_id=None,
+                style_preset=preset,
+                uri=entry.uri,
+            )
+        )
+        logger.info(
+            "outputs_seam: registered MESH layer_id=%s name=%r quantity=%s "
+            "preset=%s crs=%s uri=%s",
+            layer_id,
+            entry.name,
+            entry.quantity,
+            preset,
+            entry.crs_authid,
+            entry.uri,
         )
 
     logger.info(

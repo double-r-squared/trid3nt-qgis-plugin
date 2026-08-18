@@ -1214,17 +1214,24 @@ class LayerMaterializer:
         return dest
 
     def _add_mesh(self, event: LayerEvent) -> str:
-        """Native MDAL mesh (SFINCS ``sfincs_map.nc`` and kin) -- the ONE
-        STAGED format. QGIS's MDAL provider cannot open a ``/vsicurl/`` or
-        plain-URL netCDF (it demands a local path; proven live 2026-08-04), so
-        the object stages to the session temp dir first, then loads as
-        ``QgsMeshLayer(local_path, name, "mdal")``. CRS comes from the row's
-        ``crs_authid`` (MDAL reports an empty crs() for a SFINCS quadtree grid);
-        the active scalar group is the cumulative peak-depth field, else a
-        tracer group. Every outcome is an honest note; never raises."""
+        """Native MDAL mesh (SFINCS ``sfincs_map.nc``, TELEMAC ``*.slf`` and kin)
+        -- a STAGED format. QGIS's MDAL provider cannot open a ``/vsicurl/`` or
+        plain-URL mesh (it demands a local path; proven live 2026-08-04), so the
+        object stages to the session temp dir first, then loads as
+        ``QgsMeshLayer(local_path, name, "mdal")``. The staged filename PRESERVES
+        the source object's extension (``.slf`` for a SELAFIN, ``.nc`` for a
+        netCDF): MDAL selects its driver partly by extension, so a SELAFIN staged
+        as ``.nc`` would be rejected. CRS comes from the row's ``crs_authid`` (MDAL
+        reports an empty crs() for a SELAFIN and a SFINCS quadtree grid); the active
+        scalar group is the cumulative peak-depth field, else a tracer group. Every
+        outcome is an honest note; never raises."""
         uri = event.uri or ""
         if uri.startswith("s3://"):
-            fname = f"{_safe_filename(event.name)}_{event.layer_id[:8]}.nc"
+            # Preserve the source extension so MDAL's extension-sensitive driver
+            # selection loads a SELAFIN (.slf) as SELAFIN, not netCDF; default .nc
+            # only when the uri carries no extension of its own.
+            src_ext = os.path.splitext(uri.split("?", 1)[0])[1] or ".nc"
+            fname = f"{_safe_filename(event.name)}_{event.layer_id[:8]}{src_ext}"
             local_path = self._stage_s3_to_session(uri, fname)
             if not local_path:
                 return f"mesh '{event.name}': could not stage {uri} -- skipped"

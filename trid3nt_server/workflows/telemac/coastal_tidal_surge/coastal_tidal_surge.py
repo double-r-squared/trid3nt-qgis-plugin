@@ -536,6 +536,7 @@ async def model_coastal_tidal_surge(
     bathy_source: str,
     compute_class: str = "medium",
     input_mode: str | None = None,
+    output_interval_min: float | None = None,
     pipeline_emitter: Any = None,
 ) -> TelemacCoastalLayerURI:
     """Compose place/AOI + a CO-OPS series -> coastal tidal/surge inundation layer.
@@ -683,6 +684,11 @@ async def model_coastal_tidal_surge(
         "duration_s": float(duration_s),
         "time_step_s": float(time_step_s),
     }
+    # ADR 0283 cadence lever: threaded ONLY when set, so the manifest + solve stay
+    # byte-identical (computed ~40-frame default) otherwise. INERT until the worker
+    # image is rebuilt to parser coastal-tidal-2.
+    if output_interval_min is not None:
+        coastal["output_interval_min"] = float(output_interval_min)
     if series:
         coastal["water_level_series"] = series
     run_tag = new_ulid()
@@ -775,6 +781,26 @@ async def model_coastal_tidal_surge(
                 published = enriched.model_copy(update={"uri": pub_uri})
             except PublishLayerError as exc:
                 logger.warning("coastal publish_layer failed (%s) - unpublished COG", exc)
+
+    # EMIT-ON-SOLVE (ADR 0283): write outputs.json (the peak entry + the
+    # res_coastal.slf mesh entry, crs_authid=EPSG:{utm}) and let the seam publish
+    # the native rising-tide mesh animation. The typed peak stays composer-built
+    # (frames_only). Best-effort -- peak-only on a miss. enriched carries the raw
+    # s3 COG uri for the whole-run record.
+    from trid3nt_server.workflows.telemac.results_mesh_seam import (
+        publish_results_mesh_via_seam,
+    )
+
+    await publish_results_mesh_via_seam(
+        emitter,
+        run_id=batch_run_id,
+        engine="telemac",
+        peak_layer=enriched,
+        peak_quantity="flood_depth",
+        mesh_basename="res_coastal.slf",
+        mesh_epsg=utm_epsg,
+        reach_name=reach,
+    )
 
     # in-worker bed input (S3): the NOAA DEM_all bed is sampled INSIDE the
     # solver container (no agent-side router fetch), so the composer rides the bed

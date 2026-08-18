@@ -78,6 +78,28 @@ Tolerant-read: an old producer that omits them is byte-unchanged. This amends th
 original "no `band_stats` / no `bbox` on the entry" line above -- the flat core is
 unchanged; the render hints are optional and additive. See ADR 0280 EXECUTED.
 
+**AMENDMENT (schema_version 1, ADR 0283 EXECUTED 2026-08-17):** one more OPTIONAL
+field REJOINS the entry -- `crs_authid` (an EPSG authority id string, e.g.
+`"EPSG:32617"`). It exists for `kind="mesh"` entries ONLY: a native SELAFIN mesh
+sibling carries NO CRS of its own, and the plugin's `_add_mesh` sets
+`QgsMeshLayer.setCrs(QgsCoordinateReferenceSystem(crs_authid))` from the row (0116).
+CRS is PER-RUN (the reach's UTM zone), so it cannot live in the `quantity->style`
+registry -- it rides the entry, exactly as the bespoke TELEMAC composer emit did
+before the seam owned mesh publication. The seam threads it onto the mesh
+`LayerURI` (`crs_authid=`). It is NOT part of the REQUIRED flat core; raster/vector
+entries omit it (their COGs/GeoJSON are self-describing). Tolerant-read: an old
+producer that omits it is byte-unchanged. Both the contracts writer/reader and the
+worker mirror carry the field. See ADR 0283 EXECUTED.
+
+`kind="mesh"` is NO LONGER log-only (superseding Section 0's "v1 validates +
+log-only's a `mesh` entry"): `build_layers_from_outputs` now publishes a
+`layer_type="mesh"` `LayerURI` per mesh entry (uri=the SELAFIN, style via
+`resolve_style_preset(quantity)` -> `mesh_grid`, role `context`, `crs_authid` from
+the entry, `bbox=None` so MDAL derives the extent, deterministic
+`{quantity-base}-mesh-{run_id}` id, idempotent). The mesh sibling IS the TEMPORAL
+artifact (MDAL animates every frame from the one file), so it is built even under
+`frames_only=True` -- only the standalone peak raster + vectors are skipped there.
+
 ## 2. Append semantics
 
 - **Entries are immutable once written.** A writer never edits or removes

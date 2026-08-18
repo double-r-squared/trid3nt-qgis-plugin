@@ -886,5 +886,46 @@ class TestColorRampItemsRejectNonFiniteOffset(unittest.TestCase):
             self.assertTrue(math.isfinite(item.value), item.value)
 
 
+class TestMeshStagingExtension(unittest.TestCase):
+    """ADR 0283: a native mesh stages under its SOURCE extension, not a hardcoded
+    ``.nc`` -- MDAL's driver selection is extension-sensitive, so a SELAFIN staged
+    as ``.nc`` could be rejected. The staged filename derives its extension from
+    the uri; ``.nc`` is only the default when the uri carries none."""
+
+    def _capture_staged_fname(self, uri):
+        layers, _ = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        captured = {}
+
+        def _fake_stage(s3_uri, filename):
+            captured["fname"] = filename
+            return None  # honest miss -> _add_mesh returns a skip note; fname captured
+
+        m._stage_s3_to_session = _fake_stage
+        event = _event(
+            layers,
+            {"layer_id": "model-results-mesh-01ABC", "name": "Model results",
+             "layer_type": "mesh", "uri": uri, "crs_authid": "EPSG:32617"},
+        )
+        m._add_mesh(event)
+        return captured.get("fname")
+
+    def test_selafin_stages_as_slf(self):
+        fname = self._capture_staged_fname(
+            "s3://trid3nt-runs/01ABC/r2d_river.slf"
+        )
+        self.assertTrue(fname.endswith(".slf"), fname)
+
+    def test_netcdf_stages_as_nc(self):
+        fname = self._capture_staged_fname(
+            "s3://trid3nt-runs/01ABC/sfincs_map.nc"
+        )
+        self.assertTrue(fname.endswith(".nc"), fname)
+
+    def test_extensionless_uri_defaults_to_nc(self):
+        fname = self._capture_staged_fname("s3://trid3nt-runs/01ABC/mesh_object")
+        self.assertTrue(fname.endswith(".nc"), fname)
+
+
 if __name__ == "__main__":
     unittest.main()

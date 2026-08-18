@@ -23,7 +23,7 @@ Format authority (pinned against the in-image v9.0 sources, NEVER guessed):
     discharge would be ``Q(<i>)`` (sources/telemac2d/q.f). With a single ocean
     boundary the column is ``SL(1)``.
 
-Parser version marker: ``coastal-tidal-1`` (a new coastal build path, distinct
+Parser version marker: ``coastal-tidal-2`` (a new coastal build path, distinct
 from the telemac-reach parser).  ASCII only; imports NO agent code; runs only
 inside the worker image.
 """
@@ -43,7 +43,8 @@ import numpy as np
 LOG = logging.getLogger("telemac_coastal")
 
 #: worker-image / behavior provenance marker (mirrors _TOMAWAC_PARSER_VERSION).
-COASTAL_PARSER_VERSION = "coastal-tidal-1"
+#: -2 adds the output_interval_min cadence lever (ADR 0283).
+COASTAL_PARSER_VERSION = "coastal-tidal-2"
 
 #: NOAA NGDC DEM_all topobathy mosaic ImageServer -- the SAME real-bathymetry
 #: source the TOMAWAC lake path samples (negative below MSL = bathymetry,
@@ -102,6 +103,10 @@ class CoastalConfig:
     time_step_s: float = 5.0
     #: graphic printout period (timesteps). None -> ~40 frames across the run.
     graphic_period: int | None = None
+    #: universal map-frame cadence lever (minutes between frames, ADR 0283). None
+    #: keeps the computed ~40-frame default; set -> graphic_period is derived from
+    #: it (interval_s / time_step_s) below. graphic_period, if given, still wins.
+    output_interval_min: float | None = None
 
     #: bottom-friction law/coefficient (3 = Strickler; ~40 = mixed sand/marsh).
     friction_law: int = 3
@@ -510,8 +515,14 @@ def author_deck(cfg: CoastalConfig, mesh, slf, cli, res, liq, cas_path,
     else:
         wind_block = ""
 
-    gp = int(cfg.graphic_period) if cfg.graphic_period else max(
-        1, int(round((cfg.duration_s or 3600.0) / cfg.time_step_s / 40.0)))
+    # ADR 0283 cadence: an explicit graphic_period wins; else output_interval_min
+    # (minutes) -> a TIMESTEP COUNT; else the ~40-frame computed default.
+    if cfg.graphic_period:
+        gp = int(cfg.graphic_period)
+    elif cfg.output_interval_min is not None:
+        gp = max(1, round(float(cfg.output_interval_min) * 60.0 / float(cfg.time_step_s)))
+    else:
+        gp = max(1, int(round((cfg.duration_s or 3600.0) / cfg.time_step_s / 40.0)))
 
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  COASTAL TIDAL/SURGE INUNDATION  -  {cfg.name}

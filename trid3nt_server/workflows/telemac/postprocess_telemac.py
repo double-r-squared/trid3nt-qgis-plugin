@@ -12,11 +12,11 @@ COG animation group): the TELEMAC result IS a native, time-stepped MDAL mesh --
 QGIS's MDAL provider opens the ``.slf`` directly and animates its DYE dataset
 group with ZERO new render code. So this postprocess emits ONLY the PEAK
 concentration COG (``layers[0]``, role ``"primary"``, style preset
-``continuous_dye_concentration``) as the map anchor + narration carrier; the
-time animation is played from the SELAFIN mesh SIBLING that
-``open_case_in_qgis`` discovers next to this COG in the runs bucket (its
-``_MESH_SIBLING_BY_STYLE_PRESET`` maps this style preset to ``r2d_river.slf``).
-No per-frame COGs are written -- the mesh already carries every frame.
+``continuous_dye_concentration``) as the map anchor + narration carrier; the time
+animation rides the result SELAFIN, published as a ``layer_type="mesh"`` layer by
+the emit-on-solve seam (the composer writes ``outputs.json`` with a ``kind="mesh"``
+entry for ``r2d_river.slf``; ADR 0283). No per-frame COGs are written -- the mesh
+already carries every frame.
 
 Honesty floor (invariant 1): the dye scalars are computed with plain
 arithmetic from the SELAFIN tracer field -- no LLM anywhere. The COG carries an

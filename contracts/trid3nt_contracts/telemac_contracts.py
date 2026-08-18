@@ -41,18 +41,17 @@ __all__ = [
 ]
 
 #: Style preset for the coastal tidal/surge PEAK-INUNDATION-DEPTH raster (ADR
-#: 0259). A DISTINCT continuous key so ``export_case_to_qgis`` maps it to the
-#: coastal result SELAFIN mesh sibling (``res_coastal.slf``) for the rising-tide
-#: animation without colliding with the dye/WSE/wave/agitation/3D presets. The
-#: layer carries a data-driven ``legend`` so the real depth range renders
+#: 0259). A DISTINCT continuous key for the peak-depth raster (never the
+#: dye/WSE/wave/agitation/3D presets). The rising-tide animation rides the result
+#: SELAFIN, published as a ``layer_type="mesh"`` layer by the emit-on-solve seam
+#: (ADR 0283). The layer carries a data-driven ``legend`` so the real depth renders
 #: (additive / legend-drives-render, same as the other TELEMAC layers).
 TELEMAC_COASTAL_DEPTH_STYLE_PRESET: str = "continuous_coastal_inundation_depth"
 
 #: Style preset for the TELEMAC-3D stratified / 3D-hydrodynamics surface (or
-#: bottom) field raster. A DISTINCT continuous key so
-#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the TELEMAC-3D
-#: result SELAFIN mesh sibling for the full-column animation without colliding
-#: with the dye/WSE/DO/wave/agitation presets. The COG variable differs by mode
+#: bottom) field raster. A DISTINCT continuous key (never the dye/WSE/DO/wave/
+#: agitation presets) so the peak raster styles cleanly. The COG variable differs
+#: by mode
 #: (temperature C / velocity m/s / salinity psu), so the layer ALWAYS carries a
 #: data-driven ``legend`` and the preset is purely the mesh-sibling routing key
 #: (additive / legend-drives-render, same as the other TELEMAC layers).
@@ -65,26 +64,25 @@ TELEMAC3D_STRATIFICATION_STYLE_PRESET: str = "continuous_stratified_flow"
 TELEMAC_AGITATION_STYLE_PRESET: str = "continuous_wave_agitation"
 
 #: Style preset for the TOMAWAC significant-wave-height (Hs) raster. A
-#: DISTINCT continuous key so ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET``
-#: maps it to the TOMAWAC result SELAFIN mesh sibling for animation without
-#: colliding with the dye/WSE/DO presets. The layer always carries a data-driven
+#: DISTINCT continuous key (never the dye/WSE/DO presets) so the peak raster styles
+#: cleanly. The layer always carries a data-driven
 #: ``legend`` so it renders regardless of QML preset-library coverage.
 TELEMAC_WAVE_STYLE_PRESET: str = "continuous_significant_wave_height"
 
 #: Style preset for the dye-concentration raster. A DISTINCT key (not the flood
 #: ``continuous_flood_depth`` nor the MODFLOW ``continuous_plume_concentration``)
-#: so ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` can map it to the
-#: TELEMAC SELAFIN mesh sibling without colliding with another engine. The layer
-#: always carries a data-driven ``legend`` so it renders regardless of the QML
+#: so the peak raster styles cleanly; the dye animation rides the result SELAFIN,
+#: published as a ``layer_type="mesh"`` layer by the emit-on-solve seam (ADR 0283).
+#: The layer always carries a data-driven ``legend`` so it renders regardless of
+#: the QML
 #: preset library's coverage of this key (additive, legend-drives-render design).
 TELEMAC_DYE_STYLE_PRESET: str = "continuous_dye_concentration"
 
 #: Style preset for the GAIA sediment BED-EVOLUTION (deposition) raster. A DISTINCT
 #: diverging key (mirrors the ``diverging_river_seepage`` pattern) so
 #: ``publish_layer._resolve_titiler_style_params`` renders it on a diverging rdbu
-#: ramp centered on 0 (deposition positive / erosion negative), and
-#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the GAIA SELAFIN
-#: mesh sibling (``gaia_river.slf``) without colliding with the dye preset. The
+#: ramp centered on 0 (deposition positive / erosion negative), never colliding
+#: with the dye preset. The
 #: layer carries a data-driven ``legend`` so the mm-scale range renders (a fixed
 #: registry range would wash out mm deposition), additive/legend-drives-render.
 TELEMAC_BED_EVOLUTION_STYLE_PRESET: str = "diverging_bed_evolution"
@@ -92,8 +90,7 @@ TELEMAC_BED_EVOLUTION_STYLE_PRESET: str = "diverging_bed_evolution"
 #: Style preset for the MAX FREE-SURFACE ELEVATION (WSE) raster -- the validation
 #: deliverable for the dam-break / river archetype (Malpasset). A DISTINCT
 #: continuous key so it renders on a sequential ramp (WSE decreases down-valley)
-#: and never collides with the dye/sediment presets in
-#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET``. The layer carries a
+#: and never collides with the dye/sediment presets. The layer carries a
 #: data-driven ``legend`` so the real WSE range renders (additive /
 #: legend-drives-render, same as the other TELEMAC layers).
 TELEMAC_WSE_STYLE_PRESET: str = "continuous_water_surface_elevation"
@@ -101,9 +98,8 @@ TELEMAC_WSE_STYLE_PRESET: str = "continuous_water_surface_elevation"
 #: Style preset for the DISSOLVED-OXYGEN (DO) field raster from a WAQTEL O2 sag
 #: run. A DISTINCT continuous key (never the dye/WSE/sediment presets) so
 #: ``publish_layer._resolve_titiler_style_params`` renders it on a REVERSED
-#: sequential ramp (low DO = the hazard = the hot end) and
-#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the TELEMAC
-#: SELAFIN mesh sibling without colliding with another engine. The layer carries
+#: sequential ramp (low DO = the hazard = the hot end), never colliding with
+#: another engine's preset. The layer carries
 #: a data-driven ``legend`` so the mg/L range renders (additive /
 #: legend-drives-render, same as the other TELEMAC layers).
 TELEMAC_DO_STYLE_PRESET: str = "continuous_dissolved_oxygen"

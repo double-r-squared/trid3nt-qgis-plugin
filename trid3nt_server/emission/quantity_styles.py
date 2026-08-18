@@ -24,11 +24,19 @@ logger = logging.getLogger("trid3nt_server.emission.quantity_styles")
 
 __all__ = [
     "NEUTRAL_FALLBACK_PRESET",
+    "MESH_PRESETS",
     "QUANTITY_STYLE_PRESETS",
     "resolve_style_preset",
     "unknown_quantity_fallback_count",
     "reset_unknown_quantity_fallback_count",
 ]
+
+#: Presets that are NOT raster colormaps: a ``layer_type="mesh"`` layer renders
+#: through the plugin's MDAL path (``QgsMeshLayer``), never the raster titiler
+#: rescale registry (``publish_layer._QGIS_STYLE_REGISTRY``), so its preset is a
+#: routing style, not a band rescale. A seeded quantity mapping to one of these is
+#: valid even though the preset is absent from the raster registry (ADR 0283).
+MESH_PRESETS: frozenset[str] = frozenset({"mesh_grid"})
 
 #: The honest neutral ramp for an unregistered quantity: a single-hue viridis
 #: rescale. The consumer computes the rescale from the COG's own band stats at
@@ -41,6 +49,12 @@ NEUTRAL_FALLBACK_PRESET: str = "neutral_ramp"
 #: today. A NEW quantity registers ONE row here; an unregistered one degrades to
 #: NEUTRAL_FALLBACK_PRESET (never a silent physically-wrong map).
 QUANTITY_STYLE_PRESETS: dict[str, str] = {
+    # Native-mesh temporal animation (TELEMAC SELAFIN sibling, ADR 0283): a
+    # kind="mesh" entry MDAL animates directly. The preset is the generic
+    # mesh-wireframe style (bbox=None, role=context) the mesh-preview seam uses --
+    # the plugin's _add_mesh drives the dataset-group/CRS, so this is a routing
+    # style, not a raster colormap.
+    "model_results": "mesh_grid",
     # Hydrology (the flood proving case + plume).
     "flood_depth": "continuous_flood_depth",
     "wave_height": "continuous_wave_height",

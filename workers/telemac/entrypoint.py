@@ -184,7 +184,10 @@ class TelemacManifestUnknownFieldsError(ValueError):
 #: dredge_volume_m3/dredge_start_frac/dredge_end_frac/dredge_crit_depth_m/
 #: dredge_dig_depth_m/dredge_rate_m_per_s/dredge_design_grade_m); the dig/dump bed
 #: change surfaces through the existing GAIA CUMUL BED EVOL deposition map + summary.
-_PARSER_VERSION = "telemac-reach-9"
+#: -10 adds the universal cadence lever ``output_interval_min`` (minutes between
+#: GRAPHIC PRINTOUTS -> graphic_period, ADR 0283) to ReachConfig; None keeps the
+#: byte-identical default. INERT until this image is rebuilt.
+_PARSER_VERSION = "telemac-reach-10"
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -1250,7 +1253,10 @@ class CoastalManifestUnknownFieldsError(ValueError):
 #: COASTAL PARSER VERSION -- bump on a CoastalConfig field
 #: addition/rename/retirement OR a coastal worker-output-contract change; doubles
 #: as the coastal-tidal worker-image/behavior provenance marker.
-_COASTAL_PARSER_VERSION = "coastal-tidal-1"
+#: -2 adds the universal cadence lever ``output_interval_min`` (minutes between
+#: frames -> graphic_period, ADR 0283) to CoastalConfig; None keeps the computed
+#: ~40-frame default. INERT until this image is rebuilt.
+_COASTAL_PARSER_VERSION = "coastal-tidal-2"
 
 
 def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:

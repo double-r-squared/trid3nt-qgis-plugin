@@ -90,16 +90,65 @@ def test_unknown_quantity_neutral_ramp():
     assert res.unknown_quantity_count == 1
 
 
-def test_mesh_and_scalar_are_log_only():
+def test_scalar_is_log_only():
     entries = [
-        build_entry(kind="mesh", quantity="mesh", name="Mesh",
-                    uri="s3://b/%s/mesh.nc" % RID),
         build_entry(kind="scalar", quantity="mass_balance", name="Mass balance",
                     uri="s3://b/%s/mb.json" % RID),
     ]
     res = build_layers_from_outputs(_manifest(entries), run_id=RID)
     assert res.layers == []
-    assert res.mesh_count == 1 and res.scalar_count == 1
+    assert res.scalar_count == 1
+
+
+def test_mesh_entry_publishes_native_mesh_layer(tmp_path):
+    """ADR 0283: a kind=mesh entry -> a layer_type=mesh LayerURI (role context),
+    crs_authid threaded from the entry, bbox None (MDAL derives the extent), and a
+    deterministic {quantity-base}-mesh-{run_id} id. Byte-equivalent (name/style/
+    role/crs/uri) to the bespoke rain_on_grid _publish_full_results_mesh it
+    supersedes; only the layer_id STEM diverges (idempotence key, explained)."""
+    reach = "Coweeta"
+    mesh_uri = "s3://trid3nt-runs/%s/r2d_rog.slf" % RID
+    entries = [
+        # peak entry (whole-run record, skipped under frames_only).
+        build_entry(kind="raster", quantity="flood_depth",
+                    name="Peak depth (%s)" % reach,
+                    uri="s3://trid3nt-runs/%s/telemac_wse_max.tif" % RID,
+                    bbox=[-83.5, 35.0, -83.4, 35.1]),
+        build_entry(kind="mesh", quantity="model_results",
+                    name="Model results (time series): %s" % reach,
+                    uri=mesh_uri, crs_authid="EPSG:32617"),
+    ]
+    manifest = _manifest(entries)
+
+    # frames_only=True (the composer path): the seam builds ONLY the mesh.
+    res = build_layers_from_outputs(
+        manifest, run_id=RID, bbox=(-83.5, 35.0, -83.4, 35.1), frames_only=True
+    )
+    assert len(res.layers) == 1 and res.mesh_count == 1
+    mesh = res.layers[0]
+
+    # Field-for-field vs the bespoke _publish_full_results_mesh (byte-equivalence).
+    assert mesh.name == "Model results (time series): %s" % reach
+    assert mesh.layer_type == "mesh"
+    assert mesh.uri == mesh_uri
+    assert mesh.style_preset == "mesh_grid"
+    assert mesh.role == "context"
+    assert mesh.bbox is None  # NOT the composer AOI -- MDAL derives it.
+    assert mesh.crs_authid == "EPSG:32617"
+    # The ONE explained divergence: layer_id stem (idempotence key).
+    assert mesh.layer_id == "model-results-mesh-%s" % RID
+    assert mesh.layer_id != "rog-results-%s" % RID
+    # idempotence: a re-poll mints the SAME id.
+    res2 = build_layers_from_outputs(manifest, run_id=RID, frames_only=True)
+    assert res2.layers[0].layer_id == mesh.layer_id
+
+    # frames_only=False: the mesh is STILL built (it is the temporal artifact),
+    # alongside the standalone peak.
+    res3 = build_layers_from_outputs(manifest, run_id=RID, frames_only=False)
+    assert res3.mesh_count == 1
+    assert sorted(l.layer_type for l in res3.layers) == ["mesh", "raster"]
+    mesh3 = [l for l in res3.layers if l.layer_type == "mesh"][0]
+    assert mesh3.role == "context" and mesh3.crs_authid == "EPSG:32617"
 
 
 def test_missing_manifest_is_a_noop():

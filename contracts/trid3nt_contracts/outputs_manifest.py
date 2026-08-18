@@ -75,9 +75,11 @@ def build_entry(
     units: str | None = None,
     bbox: list[float] | None = None,
     band_stats: dict[str, Any] | None = None,
+    crs_authid: str | None = None,
 ) -> dict[str, Any]:
     """Build ONE flat manifest entry dict (``{kind, quantity, name, uri, t?,
-    units?}`` plus the OPTIONAL render-hint fields ``bbox?`` / ``band_stats?``).
+    units?}`` plus the OPTIONAL render-hint fields ``bbox?`` / ``band_stats?`` /
+    ``crs_authid?``).
 
     Raises ``ValueError`` on an unrecognized ``kind`` (a typed reject at write
     time, never a silent drop -- Section 6) or a missing required field. ``t`` /
@@ -93,7 +95,15 @@ def build_entry(
     degrades to the workflow AOI bbox + a lazy per-COG stats touch. They are the
     minimal set the byte-equivalence bar (Section 7.1 lists bbox + band stats)
     needs; the flat ``{kind,quantity,name,uri,t,units}`` core is unchanged and
-    still the only REQUIRED shape. Both are omitted from the dict when ``None``.
+    still the only REQUIRED shape. All are omitted from the dict when ``None``.
+
+    CRS AMENDMENT (ADR 0283, schema_version 1): ``crs_authid`` is an OPTIONAL EPSG
+    authority id (``"EPSG:32616"``) a ``kind="mesh"`` entry carries, because a
+    SELAFIN mesh sibling carries NO CRS of its own -- the plugin's ``_add_mesh``
+    sets ``QgsMeshLayer.setCrs`` from this field (0116). It is per-run (the reach's
+    UTM zone), so it cannot live in the quantity->style registry; it rides the
+    entry. Absent for raster/vector entries (their COGs are self-describing).
+    Tolerant-read: an old producer that omits it is byte-unchanged.
     """
     if kind not in OUTPUT_KINDS:
         raise ValueError(
@@ -119,6 +129,8 @@ def build_entry(
         entry["bbox"] = [float(v) for v in bbox]
     if band_stats is not None:
         entry["band_stats"] = dict(band_stats)
+    if crs_authid:
+        entry["crs_authid"] = str(crs_authid)
     return entry
 
 
@@ -211,8 +223,11 @@ class OutputEntry(_ReaderModel):
     ``bbox`` (per-COG EPSG:4326) and ``band_stats`` are the OPTIONAL render-hint
     fields (ADR 0280 EXECUTED amendment): present when the producer precomputed
     them (docker raster workers), absent for host-exec engines (the seam then
-    uses the workflow bbox + a lazy stats touch). Tolerant-read: an old producer
-    that omits them is byte-unchanged.
+    uses the workflow bbox + a lazy stats touch). ``crs_authid`` is the OPTIONAL
+    EPSG authority id a ``kind="mesh"`` entry carries (ADR 0283): a SELAFIN sibling
+    has no CRS, so the seam threads this onto the mesh ``LayerURI`` for the
+    plugin's ``QgsMeshLayer.setCrs``. Tolerant-read: an old producer that omits any
+    of them is byte-unchanged.
     """
 
     kind: str
@@ -223,6 +238,7 @@ class OutputEntry(_ReaderModel):
     units: str | None = None
     bbox: list[float] | None = None
     band_stats: OutputBandStats | None = None
+    crs_authid: str | None = None
 
 
 class OutputsManifest(_ReaderModel):

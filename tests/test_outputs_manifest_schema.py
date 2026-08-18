@@ -37,6 +37,29 @@ def test_build_entry_flat_and_omits_absent_optionals():
         uri="s3://runs/x/flood_depth_peak.tif",
     )
     assert "t" not in bare and "units" not in bare
+    assert "crs_authid" not in bare
+
+
+def test_build_entry_carries_optional_crs_authid_on_mesh():
+    """ADR 0283: a kind=mesh entry may carry crs_authid (a SELAFIN has no CRS);
+    it is omitted (absent, not null) when unset, and tolerant-read both ways."""
+    mesh = om.build_entry(
+        kind="mesh", quantity="model_results",
+        name="Model results (time series): reach",
+        uri="s3://runs/x/r2d_river.slf", crs_authid="EPSG:32616",
+    )
+    assert mesh["crs_authid"] == "EPSG:32616"
+    # absent when unset.
+    nocrs = om.build_entry(
+        kind="mesh", quantity="model_results", name="Mesh",
+        uri="s3://runs/x/r2d.slf",
+    )
+    assert "crs_authid" not in nocrs
+    # round-trips through the tolerant reader; a raster entry reads None.
+    text = om.append_entries(None, engine="telemac", run_id="R", new=[mesh, nocrs])
+    m = om.parse_outputs_manifest(text)
+    assert m.entries[0].crs_authid == "EPSG:32616"
+    assert m.entries[1].crs_authid is None
 
 
 def test_build_entry_rejects_unknown_kind_and_missing_fields():

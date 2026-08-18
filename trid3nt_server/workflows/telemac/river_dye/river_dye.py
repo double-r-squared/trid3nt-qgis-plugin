@@ -214,6 +214,7 @@ async def telemac_river_dye(
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
     input_mode: str | None = None,
+    output_interval_min: float | None = None,
     # 2026-07-18 release-seeding tri-state, set ONLY by the approve-mesh
     # decision tail (underscore prefix -> stripped from the LLM schema by
     # _strip_private_params): True = the release coords came on the CALL and
@@ -836,6 +837,7 @@ async def telemac_river_dye(
             bank_source=bank_source,
             discharge_m3s=(float(discharge_m3s) if discharge_m3s is not None else None),
             input_mode=input_mode,
+            output_interval_min=output_interval_min,
             domain_clamp_notes=list(_domain_clamps),
         )
         logger.info(
@@ -2070,6 +2072,7 @@ async def model_telemac_river_dye(
     bank_source: str = "nhd_area",
     discharge_m3s: float | None = None,
     input_mode: str | None = None,
+    output_interval_min: float | None = None,
     # WAQTEL O2 dissolved-oxygen SAG (do_sag class). When set, the reach is solved
     # STARTING at the fully-mixed discharge (CBOD + DO at the inflow), WATER
     # QUALITY PROCESS = 2 couples the O2 module, and the result is postprocessed to
@@ -2484,6 +2487,11 @@ async def model_telemac_river_dye(
         "bank_source": _normalize_bank_source(bank_source),
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
+        # ADR 0283 cadence lever: threaded ONLY when set, so the manifest + solve
+        # stay byte-identical (graphic_period default) otherwise. INERT until the
+        # worker image is rebuilt to parser telemac-reach-10.
+        **({"output_interval_min": float(output_interval_min)}
+           if output_interval_min is not None else {}),
         "dye_conc_mgl": float(dye_concentration_mgl),
         # user-picked release point overrides spill_frac (worker snaps to
         # the nearest interior mesh node, validated within 2 channel widths).
@@ -2697,6 +2705,26 @@ async def model_telemac_river_dye(
             mesh_size_m, mesh_node_estimate, mesh_resolution_label, substance,
             _bank_provenance, _telemac_provenance,
         )
+
+    # EMIT-ON-SOLVE (ADR 0283): write outputs.json (the peak entry + the
+    # r2d_river.slf mesh entry, crs_authid=EPSG:{utm}) and let the seam publish the
+    # native results-mesh animation. The typed peak above stays composer-built
+    # (frames_only). Best-effort -- peak-only on a miss. raw_peak carries the s3
+    # COG uri for the whole-run record (the published peak is the composer's copy).
+    from trid3nt_server.workflows.telemac.results_mesh_seam import (
+        publish_results_mesh_via_seam,
+    )
+
+    await publish_results_mesh_via_seam(
+        emitter,
+        run_id=batch_run_id,
+        engine="telemac",
+        peak_layer=raw_peak,
+        peak_quantity="dye_concentration",
+        mesh_basename="r2d_river.slf",
+        mesh_epsg=int(utm_epsg),
+        reach_name=reach_name,
+    )
 
     logger.info(
         "model_telemac_river_dye complete run_id=%s reach=%s "

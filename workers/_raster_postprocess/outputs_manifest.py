@@ -61,13 +61,16 @@ def build_entry(
     units: str | None = None,
     bbox: list[float] | None = None,
     band_stats: dict[str, Any] | None = None,
+    crs_authid: str | None = None,
 ) -> dict[str, Any]:
     """Build ONE flat manifest entry dict.
 
     Raises ``ValueError`` on an unrecognized ``kind`` (a typed reject at write
     time, never a silent drop -- Section 6) or a missing required field. ``t`` /
-    ``units`` / ``bbox`` / ``band_stats`` are omitted from the dict (absent, not
-    null) when ``None`` so the object stays as small as the schema promises.
+    ``units`` / ``bbox`` / ``band_stats`` / ``crs_authid`` are omitted from the
+    dict (absent, not null) when ``None`` so the object stays as small as the
+    schema promises. ``crs_authid`` (ADR 0283) is the OPTIONAL EPSG authority id a
+    ``kind="mesh"`` entry carries (a SELAFIN sibling has no CRS of its own).
     """
     if kind not in OUTPUT_KINDS:
         raise ValueError(
@@ -93,6 +96,8 @@ def build_entry(
         entry["bbox"] = [float(v) for v in bbox]
     if band_stats is not None:
         entry["band_stats"] = dict(band_stats)
+    if crs_authid:
+        entry["crs_authid"] = str(crs_authid)
     return entry
 
 
