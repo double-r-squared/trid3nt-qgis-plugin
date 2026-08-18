@@ -127,9 +127,39 @@ Cadence for the L-class is the universal `output_interval_min` (minutes ->
 INERT until the image rebuild); rain_on_grid computes it AGENT-SIDE (its `time_step_s`
 is a composer constant). `None` = byte-identical current defaults.
 
+MIGRATED ENGINES (L-class, MODFLOW transport family -- ADR 0284, host-exec mf6).
+The GWT/GWE TRANSPORT templates have depth-class quantities that animate cleanly;
+MF6 OC saves EVERY transport step (never-omit by construction -- no cap ever
+existed, and `publish_modflow_quantities` was DEAD scaffold, now deleted). The
+agent-side `postprocess_multi_species` / `postprocess_gwe_thermal` read all saved
+steps + the totim in DAYS, rasterize each on the SAME grid georef the peak uses,
+and write `outputs.json` host-side (frame `t = totim_days * 86400` s, honest
+DAYS->seconds -- there is NO `output_interval_min` for MODFLOW; frame density IS
+the stress-period schedule levers `sim_years`/`n_periods`/`n_months`, fork 3A).
+The shared `workflows/modflow/_frame_emit.read_and_emit_modflow_frames` reads it
+back (`frames_only=True`) and both transport composers emit the group; the typed
+peak + narration scalars + charts stay composer-built (OPTION a).
+
+- **contaminant_plume** (single + multi species, via `postprocess_multi_species`):
+  per-species quantity `plume_concentration__<slug>` so N species never collide on
+  the seam's `(quantity, t)` grouping (they share one time discretization ->
+  identical save-times); the `emission/quantity_styles` per-instance FAMILY
+  fallback (`__`-suffix) styles every one as `continuous_plume_concentration`.
+- **thermal_plume / thermal_storage** (GWE, via `postprocess_gwe_thermal`): the
+  per-step temperature-EXCESS stack, bare registered `temperature` quantity (one
+  group); the ATES recovery chart is untouched. `_run_id` stashed on the layer for
+  the composer fork.
+
+Head-based MODFLOW templates (drawdown/mounding/hydroperiod/subsidence/dewatering/
+seepage/asr/saltwater/vadose/budget/capture/wellhead) get NO frames (fork 2A) --
+their quantity is a t0-difference or max-min RANGE reduction, or non-temporal; the
+temporal signal stays in their existing composer CHARTS. See ADR 0284's verdict
+table (the coverage-law denominator).
+
 REMAINING: telemac3d + the other L-class legs, the `publish_manifest` collapse
 (ledger row 19, gated on the LAST engine migrating), and -- separately, OPTION A
--- the per-engine `output_quantities` scaffold migration.
+-- the per-engine `output_quantities` scaffold migration (MODFLOW's DEAD half is
+deleted; swmm/landlab/openquake halves are still LIVE, ADR 0284).
 
 ## Composition
 

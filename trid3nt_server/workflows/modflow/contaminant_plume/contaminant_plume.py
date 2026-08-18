@@ -483,6 +483,21 @@ async def model_contaminant_plume(
     # Emit ONE per-species concentration summary chart from the typed scalars.
     await _emit_plume_chart(plumes)
 
+    # --- Emit-on-solve: the per-species concentration animation (ADR 0284) ----
+    # postprocess_multi_species wrote the peak + every saved-step concentration
+    # COG to outputs.json host-side. The SEAM owns the TEMPORAL FRAMES ONLY
+    # (frames_only -> the typed peak plumes above stay composer-built); each
+    # species is its own scrubber group. Best-effort: absent/unreadable manifest
+    # or no emitter -> peak-only (an honest degrade, never a crash).
+    from trid3nt_server.workflows.modflow._frame_emit import (
+        read_and_emit_modflow_frames,
+    )
+
+    _frame_bbox = plumes[0].bbox if plumes else None
+    await read_and_emit_modflow_frames(
+        emitter, run_id=result.run_id, bbox=_frame_bbox
+    )
+
     derived = {
         "location_name": location_name,
         "spill_location_latlon": [lat, lon],

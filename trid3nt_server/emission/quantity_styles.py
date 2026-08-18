@@ -44,6 +44,18 @@ MESH_PRESETS: frozenset[str] = frozenset({"mesh_grid"})
 #: NOT a physical band (an unknown quantity has no known physical range).
 NEUTRAL_FALLBACK_PRESET: str = "neutral_ramp"
 
+#: The per-instance family separator (ADR 0284). A producer that emits N sibling
+#: temporal groups sharing ONE physical quantity but which MUST NOT collide on
+#: the seam's ``(quantity, t)`` grouping (e.g. a multi_species MODFLOW run: N
+#: concentration stacks on ONE time discretization -> identical ``t`` per step)
+#: mints a per-instance quantity ``<family>__<slug>`` (e.g.
+#: ``plume_concentration__tce``). ``resolve_style_preset`` falls back to the
+#: family's registered preset when the full per-instance key is not itself
+#: registered, so every sibling styles as its physical family with ONE registry
+#: row. The double-underscore never appears in a base quantity key (they use
+#: single underscores between words), so the split is unambiguous.
+QUANTITY_FAMILY_SEP: str = "__"
+
 #: quantity (outputs.json entry key) -> style_preset (the key into
 #: publish_layer._QGIS_STYLE_REGISTRY). Seeded from the quantities engines emit
 #: today. A NEW quantity registers ONE row here; an unregistered one degrades to
@@ -113,6 +125,15 @@ def resolve_style_preset(quantity: str) -> tuple[str, bool]:
     preset = QUANTITY_STYLE_PRESETS.get(key)
     if preset is not None:
         return preset, False
+    # Per-instance family fallback (ADR 0284): "plume_concentration__tce" ->
+    # the "plume_concentration" family preset. ONE registry row styles every
+    # sibling stack; the siblings differ only to keep their seam temporal groups
+    # (and layer ids) distinct, never their physical colormap.
+    if QUANTITY_FAMILY_SEP in key:
+        family = key.split(QUANTITY_FAMILY_SEP, 1)[0]
+        family_preset = QUANTITY_STYLE_PRESETS.get(family)
+        if family_preset is not None:
+            return family_preset, False
     _UNKNOWN_FALLBACK_COUNT += 1
     logger.warning(
         "quantity_styles: unknown quantity %r -> neutral ramp (%s); register a "

@@ -348,6 +348,21 @@ async def compose_thermal_scenario(
     if chart is not None:
         await emit_chart_payloads(chart)
 
+    # --- Emit-on-solve: the temperature-excess animation (ADR 0284) ----------
+    # postprocess_gwe_thermal wrote the peak + every saved-step temperature-excess
+    # COG to outputs.json host-side + stashed the run_id. The SEAM owns the
+    # TEMPORAL FRAMES ONLY (frames_only -> the typed peak layer stays
+    # composer-built). Best-effort: absent manifest / no emitter -> peak-only.
+    from trid3nt_server.workflows.modflow._frame_emit import (
+        read_and_emit_modflow_frames,
+    )
+
+    await read_and_emit_modflow_frames(
+        current_emitter(),
+        run_id=getattr(layer, "_run_id", None),
+        bbox=getattr(layer, "bbox", None),
+    )
+
     caveat = (
         "The aquifer thermal properties (heat capacities, densities, thermal "
         "conductivities) and the ambient temperature are DEMO defaults (no site "

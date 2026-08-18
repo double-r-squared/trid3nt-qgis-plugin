@@ -1090,9 +1090,15 @@ class MultiSpeciesPlumeResult(GraceModel):
     Fields:
         plumes: ordered list of one ``PlumeLayerURI`` per species (same order as
             ``MODFLOWRunArgs.species``). At least one plume.
+        run_id: the run identifier the per-species concentration frames + the
+            ``outputs.json`` manifest are keyed under (emit-on-solve, ADR 0284).
+            Optional/additive: the composer reads it to fetch the frame stream
+            back through the seam (``frames_only=True``); ``None`` on a legacy
+            producer degrades to peak-only (no animation), never a break.
     """
 
     plumes: list[PlumeLayerURI] = Field(min_length=1)
+    run_id: str | None = None
 
 
 class SeepageLayerURI(LayerURI):

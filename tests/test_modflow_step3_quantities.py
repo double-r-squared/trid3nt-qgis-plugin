@@ -1,22 +1,21 @@
-"""STEP-3 MODFLOW registry quantities: concentration animation + head + physics.
+"""STEP-3 MODFLOW registry quantities: deck-builder physics + style presets.
 
 Covers:
   - the deck-builder advanced_physics wiring (GwtMst sorption/decay + GwtDsp
     dispersivity) is byte-identical when physics is None / {}, and applies the
     resolved overrides when given (gated on flopy);
-  - the OC saverecord flips to ALL concentration steps;
-  - ``publish_modflow_quantities`` routes the new readers through the shared
-    executor: a concentration TimeseriesField (peak + frames) + a head
-    RasterField, registered via the ONE registrar (cog_io patched, no rasterio);
   - the new style presets resolve.
+
+The `publish_modflow_quantities` executor path (the dormant `output_quantities`
+scaffold half for MODFLOW) was DEAD CODE (never called by a composer) and is
+DELETED in ADR 0284; the transport family's concentration/temperature animation
+is now the emit-on-solve seam, pinned by `tests/test_modflow_outputs_seam.py`.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import tempfile
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -115,58 +114,17 @@ def test_physics_invalid_key_raises_typed_error() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# publish_modflow_quantities executor wiring (cog_io patched, no rasterio/flopy)
+# The concentration-animation + water-table publish path (``publish_modflow_
+# quantities``) was DEAD CODE -- defined + unit-tested but NEVER called by any
+# composer (grep-to-zero). It is DELETED for MODFLOW scope in ADR 0284: the
+# transport family's concentration animation is now the emit-on-solve seam
+# (postprocess_multi_species / postprocess_gwe_thermal write outputs.json; the
+# composers read it back frames_only). The seam producer + fork are pinned by
+# ``tests/test_modflow_outputs_seam.py``. The OUTPUT_QUANTITIES modflow registry
+# specs remain (the scaffold; DELETION_LEDGER row 18) until the full scaffold
+# deletion. This module keeps the still-live deck-builder physics wiring + the
+# style-preset resolution checks below.
 # --------------------------------------------------------------------------- #
-def _fake_grid(v: float):
-    return [[v, v], [v, v]]
-
-
-def test_publish_modflow_quantities_emits_timeseries_and_head() -> None:
-    captured = {}
-
-    def _registrar(manifest, *, run_id, bbox=None):
-        captured["manifest"] = manifest
-        return manifest
-
-    conc_grids = [_fake_grid(1.0), _fake_grid(2.0), _fake_grid(3.0)]
-    geo = {"xorigin": 0.0, "yorigin": 0.0, "delr": 50.0, "delc": 50.0,
-           "nrow": 2, "ncol": 2}
-
-    with (
-        patch.object(pm, "_grid_georegistration_from_deck", return_value=geo),
-        patch.object(pm, "_resolve_ucn_path", return_value=Path("/tmp/x.ucn")),
-        patch.object(pm, "_resolve_gwf_hds_path", return_value=Path("/tmp/x.hds")),
-        patch.object(pm, "_read_concentration_steps",
-                     return_value=(conc_grids, conc_grids[-1])),
-        patch.object(pm, "_read_head_grid", return_value=__import__("numpy").array(
-            [[10.0, 11.0], [12.0, 13.0]])),
-        patch("trid3nt_server.workflows.shared.publish_quantities.cog_io.write_cog_4326_from_grid",
-              return_value=Path("/tmp/fake.tif")),
-        patch("trid3nt_server.workflows.shared.publish_quantities.cog_io.cog_bbox_4326",
-              return_value=(-1.0, 2.0, 3.0, 4.0)),
-        patch("trid3nt_server.workflows.shared.publish_quantities.cog_io.safe_unlink",
-              return_value=None),
-        patch.object(pm, "_upload_cog",
-                     side_effect=lambda c, r, b, *, cog_filename: f"s3://runs/{r}/{cog_filename}"),
-    ):
-        pm.publish_modflow_quantities(
-            "file:///tmp/run", run_id="R1", model_crs="EPSG:32617",
-            register_manifest_layers=_registrar,
-        )
-
-    manifest = captured["manifest"]
-    names = [layer.name for layer in manifest.layers]
-    # concentration animation: peak + 3 frames; head: 1 raster.
-    assert "Peak plume concentration" in names
-    assert "Plume concentration step 1" in names
-    assert "Plume concentration step 3" in names
-    assert "Water table (head)" in names
-    # head metrics bubbled up.
-    assert "max_head_m" in manifest.metrics
-    assert manifest.metrics.get("max_concentration_mgl") is not None
-    # the provenance rows (plume-concentration / river-seepage) are NOT published.
-    stems = [layer.layer_id_stem for layer in manifest.layers]
-    assert not any(s.startswith("river-seepage") for s in stems)
 
 
 def test_modflow_step3_style_presets_resolve() -> None:

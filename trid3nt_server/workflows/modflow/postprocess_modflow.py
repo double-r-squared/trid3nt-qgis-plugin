@@ -76,7 +76,6 @@ __all__ = [
     "postprocess_capture_zone",
     "postprocess_saltwater_intrusion",
     "postprocess_vadose",
-    "publish_modflow_quantities",
     "compute_plume_metrics",
     "compute_seepage_metrics",
     "compute_drawdown_metrics",
@@ -1239,6 +1238,169 @@ def _dispatch_publish_layer(
 
 
 # --------------------------------------------------------------------------- #
+# Emit-on-solve producer (ADR 0284): the TRANSPORT FAMILY frame stream.
+#
+# The transport templates (contaminant_plume single/multi species; GWE thermal)
+# have depth-class quantities that animate cleanly: concentration (mg/L) and
+# temperature-excess (degC). MF6 OC saves EVERY transport step (never-omit by
+# construction -- no post-hoc thinning ever existed here), so the producer reads
+# all saved steps, rasterizes each on the SAME grid georef the peak uses, and
+# writes an ``outputs.json`` manifest host-side (the 0282 host-exec writer). The
+# composer reads it back with ``frames_only=True`` and emits the temporal group;
+# the typed peak layer + its narration scalars stay composer-built, unchanged
+# (OPTION a). ``t`` is the MF6 totim in DAYS converted to seconds (TIME_UNITS is
+# DAYS for every transport deck -- gwt_adapter). Cadence is the stress-period
+# schedule (sim_years/n_periods/n_months), already user levers on the gates --
+# there is NO output_interval_min for MODFLOW (a DAYS multi-period schedule, not
+# a minute interval). Best-effort: a frame-emit failure NEVER sinks the typed
+# peak (frames are additive; "failure retracts nothing").
+# --------------------------------------------------------------------------- #
+
+#: Honest DAYS -> seconds for the outputs.json frame ``t`` (MF6 TIME_UNITS=DAYS).
+_SECONDS_PER_DAY: float = 86400.0
+
+#: The seam ``quantity`` family for MODFLOW concentration frames. A per-species
+#: run mints ``plume_concentration__<slug>`` (the family fallback in
+#: emission.quantity_styles resolves every one to continuous_plume_concentration)
+#: so the N species never collide on the seam's (quantity, t) temporal grouping
+#: -- their save-times are identical (one shared GWF time discretization).
+PLUME_FRAME_QUANTITY_BASE: str = "plume_concentration"
+
+#: The seam ``quantity`` for the GWE temperature-excess frame stream (ONE stack
+#: per run -> the bare registered quantity, no family suffix needed).
+TEMPERATURE_FRAME_QUANTITY: str = "temperature"
+
+
+def _write_transport_frame_entries(
+    render_grids: list[Any],
+    times_days: list[float],
+    *,
+    quantity: str,
+    name_stem: str,
+    units: str,
+    model_crs: str,
+    geo: dict[str, Any] | None,
+    mask_below_floor: bool,
+    run_id: str,
+    runs_bucket: str | None,
+    cog_slug: str,
+) -> list[dict[str, Any]]:
+    """Write + upload EVERY per-step render COG (never-omit) -> outputs.json entries.
+
+    Returns one ``outputs.json`` entry per saved transport step (``kind="raster"``,
+    the given ``quantity``, ``name=f"{name_stem} step N"`` -- the EXACT web
+    ``detectSequentialGroups`` token, ``t`` = ``times_days[i] * 86400`` seconds,
+    per-frame ``bbox``). ``band_stats`` is OMITTED: the quantity is a REGISTERED
+    seam quantity (or a registered FAMILY, ADR 0284), so the seam resolves style
+    WITHOUT band stats. Each COG lands at a DISTINCT runs-bucket key
+    (``{cog_slug}_frame_NN.tif``) so every frame is its own published layer.
+
+    ``mask_below_floor`` matches the peak's writer exactly (plume: True -- mask
+    cells at/below the detection floor; thermal: False -- the caller pre-floors
+    the excess grid so negative-side cells are already NaN). A single frame that
+    fails to encode does NOT sink the animation OR the peak: the partial COGs are
+    cleaned up and ``[]`` is returned (the caller degrades to peak-only).
+    """
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    entries: list[dict[str, Any]] = []
+    try:
+        for frame_no, (grid_t, t_days) in enumerate(
+            zip(render_grids, times_days), start=1
+        ):
+            cog_path = _write_reprojected_cog(
+                grid_t, model_crs, geo, mask_below_floor=mask_below_floor
+            )
+            frame_bbox = _cog_bbox_4326(cog_path)
+            frame_uri = _upload_cog(
+                cog_path,
+                run_id,
+                runs_bucket,
+                cog_filename=f"{cog_slug}_frame_{frame_no:02d}.tif",
+            )
+            entries.append(
+                build_entry(
+                    kind="raster",
+                    quantity=quantity,
+                    name=f"{name_stem} step {frame_no}",
+                    uri=frame_uri,
+                    t=float(t_days) * _SECONDS_PER_DAY,
+                    units=units,
+                    bbox=list(frame_bbox) if frame_bbox else None,
+                )
+            )
+    except PostprocessMODFLOWError as exc:
+        logger.warning(
+            "modflow transport frames: a frame COG write/upload failed (%s); "
+            "degrading to peak-only (no animation group) for run_id=%s quantity=%s.",
+            exc,
+            run_id,
+            quantity,
+        )
+        return []
+    return entries
+
+
+def _transport_peak_entry(
+    *,
+    quantity: str,
+    name: str,
+    uri: str,
+    units: str,
+    bbox: tuple[float, float, float, float] | None,
+) -> dict[str, Any]:
+    """One ``outputs.json`` peak entry (``t=None``) -- a whole-run record.
+
+    Under ``frames_only=True`` the seam SKIPS this (the composer keeps its own
+    typed peak); it rides the manifest for completeness only, matching the SWMM /
+    Landlab 0282 pattern.
+    """
+    from trid3nt_contracts.outputs_manifest import build_entry
+
+    return build_entry(
+        kind="raster",
+        quantity=quantity,
+        name=name,
+        uri=uri,
+        t=None,
+        units=units,
+        bbox=list(bbox) if bbox else None,
+    )
+
+
+def _write_modflow_outputs_manifest(
+    entries: list[dict[str, Any]],
+    *,
+    run_id: str,
+    runs_bucket: str | None,
+) -> None:
+    """Best-effort host-side write of ``outputs.json`` under the run prefix.
+
+    The transport producer runs IN the agent process (host-exec mf6, no worker
+    image), so the agent is its own manifest writer (schema Section 5.1). A write
+    miss NEVER sinks the run -- the seam degrades to peak-only (no animation).
+    """
+    if not entries:
+        return
+    try:
+        from trid3nt_server.workflows.shared.outputs_manifest_io import (
+            write_outputs_manifest,
+        )
+
+        write_outputs_manifest(
+            run_id=run_id, engine="modflow", entries=entries, runs_bucket=runs_bucket
+        )
+    except Exception as exc:  # noqa: BLE001 -- never sink the run on a manifest miss
+        logger.warning(
+            "modflow transport frames: outputs.json write failed run_id=%s "
+            "(%s: %s) -- the seam falls back to peak-only (no animation frames).",
+            run_id,
+            type(exc).__name__,
+            exc,
+        )
+
+
+# --------------------------------------------------------------------------- #
 # Top-level postprocess
 # --------------------------------------------------------------------------- #
 
@@ -1520,6 +1682,10 @@ def postprocess_multi_species(
     )  # default 50 m cells if deck georegistration unavailable (gwt_adapter CELL_SIZE_M)
 
     plumes: list[PlumeLayerURI] = []
+    # Emit-on-solve (ADR 0284): accumulate the per-species concentration frame
+    # stream + peak entries into ONE host-side outputs.json (written after the
+    # loop). Best-effort per species -- a frame miss NEVER sinks the typed peaks.
+    manifest_entries: list[dict[str, Any]] = []
     for idx, ucn_path in enumerate(ucn_paths):
         # Resolve the label by VALUE (match the composer-threaded real name whose
         # sanitised form equals this UCN stem), not by position - robust to the
@@ -1571,7 +1737,61 @@ def postprocess_multi_species(
             )
         )
 
-    return MultiSpeciesPlumeResult(plumes=plumes)
+        # --- emit-on-solve: this species' concentration frame stream ---------
+        # Per-species quantity ``plume_concentration__<slug>`` so N species never
+        # collide on the seam's (quantity, t) grouping (they share ONE time
+        # discretization -> identical save-times); the quantity_styles family
+        # fallback styles every one as continuous_plume_concentration. Best-effort:
+        # a frame read/write miss for one species is logged + skipped (the typed
+        # peaks + the other species stay intact).
+        try:
+            step_grids, step_days, _peak = _read_concentration_steps(ucn_path)
+            species_quantity = f"{PLUME_FRAME_QUANTITY_BASE}__{slug}"
+            manifest_entries.append(
+                _transport_peak_entry(
+                    quantity=species_quantity,
+                    name=f"Contaminant Plume - {species_label} (peak concentration)",
+                    uri=cog_uri,
+                    units="mg/L",
+                    bbox=bbox_4326,
+                )
+            )
+            # An animation group needs >= 2 members; a 1-step run emits peak-only.
+            if len(step_grids) > 1:
+                frame_entries = _write_transport_frame_entries(
+                    step_grids,
+                    step_days,
+                    quantity=species_quantity,
+                    name_stem=f"Contaminant Plume - {species_label}",
+                    units="mg/L",
+                    model_crs=model_crs,
+                    geo=geo,
+                    mask_below_floor=True,
+                    run_id=run_id,
+                    runs_bucket=runs_bucket,
+                    cog_slug=f"plume_{slug}",
+                )
+                if len(frame_entries) >= 2:
+                    manifest_entries.extend(frame_entries)
+        except Exception as exc:  # noqa: BLE001 -- frames are additive, never fatal
+            logger.warning(
+                "postprocess_multi_species: concentration frames for species=%r "
+                "failed (non-fatal, peak intact) run_id=%s: %s",
+                species_label,
+                run_id,
+                exc,
+            )
+
+    _write_modflow_outputs_manifest(
+        manifest_entries, run_id=run_id, runs_bucket=runs_bucket
+    )
+    logger.info(
+        "postprocess_multi_species run_id=%s n_plumes=%d outputs.json_entries=%d",
+        run_id,
+        len(plumes),
+        len(manifest_entries),
+    )
+    return MultiSpeciesPlumeResult(plumes=plumes, run_id=run_id)
 
 
 def _species_slug(species_label: str, idx: int) -> str:
@@ -2100,11 +2320,14 @@ def _read_cbc_term_signed_totals(
     return net, in_mag, out_mag
 
 
-def _read_concentration_steps(ucn_path: Path) -> tuple[list[Any], Any]:
-    """Read ALL saved transport steps -> (per-step 2D grids, final/peak grid).
+def _read_concentration_steps(ucn_path: Path) -> tuple[list[Any], list[float], Any]:
+    """Read ALL saved transport steps -> (per-step 2D grids, totim DAYS, peak grid).
 
-    Each step is the max-over-layers concentration; the PEAK is the final step
-    (matches the existing plume). Used by the concentration-animation reader.
+    Each step is the max-over-layers concentration (mg/L; MF6 dry sentinel ->
+    NaN); ``times`` is the parallel MF6 totim in DAYS (TIME_UNITS=DAYS) the
+    emit-on-solve producer converts to seconds for each frame ``t``; the PEAK is
+    the final step (matches the existing plume). OC saves EVERY step, so this is
+    the full transport history (never-omit by construction).
     """
     try:
         import flopy.utils  # type: ignore[import-not-found]
@@ -2144,7 +2367,7 @@ def _read_concentration_steps(ucn_path: Path) -> tuple[list[Any], Any]:
             message=f"could not read concentration steps from {ucn_path}: {exc}",
             details={"ucn_path": str(ucn_path)},
         ) from exc
-    return grids, grids[-1]
+    return grids, [float(t) for t in times], grids[-1]
 
 
 def _modflow_src_transform(geo: dict[str, Any] | None, nrow: int) -> Any:
@@ -2152,11 +2375,12 @@ def _modflow_src_transform(geo: dict[str, Any] | None, nrow: int) -> Any:
 
     Raises:
         PostprocessMODFLOWError: ``MODFLOW_GEOREGISTRATION_MISSING`` when
-            ``geo`` is ``None``. Feeds the concentration-animation +
-            water-table rasters (``publish_modflow_quantities``, both
-            ``default_on=True`` active map layers) - same honesty floor as
+            ``geo`` is ``None`` - the same honesty floor as
             ``_write_reprojected_cog``: an unplaced raster is a worse failure
-            than refusing to build it.
+            than refusing to build it. Retained (pinned by
+            ``test_modflow_georef_hardening``) as the georef-hardening guard;
+            the transport frame producer reprojects through
+            ``_write_reprojected_cog`` (which raises the identical error).
     """
     import rasterio  # type: ignore[import-not-found]
 
@@ -2172,119 +2396,6 @@ def _modflow_src_transform(geo: dict[str, Any] | None, nrow: int) -> Any:
     west = geo["xorigin"]
     north = geo["yorigin"] + nrow * geo["delc"]
     return rasterio.transform.from_origin(west, north, geo["delr"], geo["delc"])
-
-
-def publish_modflow_quantities(
-    run_outputs_uri: str,
-    *,
-    run_id: str,
-    model_crs: str,
-    register_manifest_layers: Any,
-    deck_dir: str | None = None,
-    runs_bucket: str | None = None,
-    bbox: tuple[float, float, float, float] | None = None,
-) -> Any:
-    """Publish the NEW MODFLOW quantities (concentration animation + head).
-
-    Builds registry readers bound to the in-memory grids, then routes them
-    through the shared ``publish_quantities`` executor (ONE registrar). The
-    EXISTING plume + seepage layers are produced by the byte-identical old
-    postprocess path; this ADDS the animation + water-table layers.
-
-    Returns the executor's ``register_manifest_layers`` result. Never publishes
-    the ``default_on=False`` provenance rows (plume-concentration / river-seepage).
-    """
-    from dataclasses import replace as _dc_replace
-
-    from trid3nt_contracts.output_quantities import (
-        RasterField,
-        TimeseriesField,
-        get_output_registry,
-    )
-
-    from trid3nt_server.workflows.shared import publish_quantities as _pq
-
-    geo = _grid_georegistration_from_deck(deck_dir)
-    cell_area_m2 = (
-        float(geo["delr"]) * float(geo["delc"]) if geo is not None else 2500.0
-    )
-
-    import numpy as np  # type: ignore[import-not-found]
-
-    # --- concentration animation reader (all saved UCN steps) --------------- #
-    ucn_path = _resolve_ucn_path(run_outputs_uri)
-    conc_grids, conc_peak = _read_concentration_steps(ucn_path)
-    nrow_c = int(np.asarray(conc_peak).shape[0])
-    conc_transform = _modflow_src_transform(geo, nrow_c)
-
-    def _mask_floor(a: Any) -> Any:
-        import numpy as np  # type: ignore[import-not-found]
-
-        return np.where(a > PLUME_DETECTION_FLOOR_MGL, a, np.nan).astype("float32")
-
-    def _conc_raster(grid: Any) -> RasterField:
-        max_conc, area = compute_plume_metrics(grid, cell_area_m2)
-        return RasterField(
-            grid=grid,
-            src_crs=model_crs,
-            src_transform=conc_transform,
-            reproject=True,
-            mask=_mask_floor,
-            crs_roundtrip_guard=False,
-            metrics={
-                "max_concentration_mgl": max_conc,
-                "plume_area_km2": area,
-            },
-        )
-
-    def _conc_ts_reader(_ctx: Any) -> TimeseriesField:
-        return TimeseriesField(
-            n_steps=len(conc_grids),
-            read_step=lambda i: _conc_raster(conc_grids[i]),
-            peak=_conc_raster(conc_peak),
-            quantity_label="Plume concentration",
-        )
-
-    # --- head / water-table reader (final-step .hds) ------------------------ #
-    hds_path = _resolve_gwf_hds_path(run_outputs_uri)
-    head_grid = np.asarray(_read_head_grid(hds_path), dtype="float64")
-    nrow_h = int(head_grid.shape[0]) if head_grid.ndim == 2 else nrow_c
-    head_transform = _modflow_src_transform(geo, nrow_h)
-
-    def _head_reader(_ctx: Any) -> RasterField:
-        finite = head_grid[np.isfinite(head_grid)]
-        max_head = float(np.max(finite)) if finite.size else 0.0
-        min_head = float(np.min(finite)) if finite.size else 0.0
-        return RasterField(
-            grid=head_grid,
-            src_crs=model_crs,
-            src_transform=head_transform,
-            reproject=True,
-            crs_roundtrip_guard=False,
-            metrics={"max_head_m": max_head, "min_head_m": min_head},
-        )
-
-    readers = {
-        "plume-concentration-ts": _conc_ts_reader,
-        "water-table": _head_reader,
-    }
-    specs = [
-        _dc_replace(spec, reader=readers[spec.quantity_id])
-        for spec in get_output_registry("modflow")
-        if spec.quantity_id in readers
-    ]
-
-    def _upload(cog: Path, rid: str, _bucket: Any = None, *, dest_filename: str) -> str:
-        return _upload_cog(cog, rid, runs_bucket, cog_filename=dest_filename)
-
-    return _pq.publish_quantities(
-        "modflow",
-        run_id=run_id,
-        upload=_upload,
-        register_manifest_layers=register_manifest_layers,
-        specs=specs,
-        bbox=bbox,
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -3246,12 +3357,16 @@ def _resolve_gwe_ucn_path(run_outputs_uri: str) -> Path:
     )
 
 
-def _read_temperature_series(ucn_path: Path) -> tuple[Any, list[tuple[int, int]]]:
-    """Read the FULL GWE temperature history + its (kstp, kper) index (degC).
+def _read_temperature_series(
+    ucn_path: Path,
+) -> tuple[Any, list[tuple[int, int]], list[float]]:
+    """Read the FULL GWE temperature history + (kstp,kper) index + totim DAYS (degC).
 
     ``get_alldata()`` -> ``(ntimes, nlay, nrow, ncol)``; ``get_kstpkper()`` -> the
     parallel step index (so the ATES recovery series can select extract-period
-    steps). Dry/inactive sentinels (|T| > 1e29) are masked to NaN.
+    steps); ``get_times()`` -> the parallel MF6 totim in DAYS (TIME_UNITS=DAYS)
+    the emit-on-solve producer converts to seconds for each temperature frame's
+    ``t``. Dry/inactive sentinels (|T| > 1e29) are masked to NaN.
     """
     try:
         import flopy.utils  # type: ignore[import-not-found]
@@ -3271,6 +3386,7 @@ def _read_temperature_series(ucn_path: Path) -> tuple[Any, list[tuple[int, int]]
                 message=f"{ucn_path} carries no temperature timesteps",
                 details={"ucn_path": str(ucn_path)},
             )
+        times_days = [float(t) for t in fp.get_times()]
         data = np.asarray(fp.get_alldata(), dtype="float64")
     except PostprocessMODFLOWError:
         raise
@@ -3281,7 +3397,7 @@ def _read_temperature_series(ucn_path: Path) -> tuple[Any, list[tuple[int, int]]
             details={"ucn_path": str(ucn_path)},
         ) from exc
     data = np.where(np.abs(data) > 1e29, np.nan, data)
-    return data, kstpkper
+    return data, kstpkper, times_days
 
 
 def _read_gwe_well_context(deck_dir: str | None) -> dict[str, Any] | None:
@@ -3413,7 +3529,7 @@ def postprocess_gwe_thermal(
     import numpy as np  # type: ignore[import-not-found]
 
     ucn_path = _resolve_gwe_ucn_path(run_outputs_uri)
-    alldata, kstpkper = _read_temperature_series(ucn_path)
+    alldata, kstpkper, times_days = _read_temperature_series(ucn_path)
     geo = _grid_georegistration_from_deck(deck_dir)
     ctx = _read_gwe_well_context(deck_dir)
 
@@ -3523,6 +3639,66 @@ def postprocess_gwe_thermal(
         except Exception as exc:  # noqa: BLE001
             logger.warning("postprocess_gwe_thermal: chart build failed (non-fatal): %s", exc)
     object.__setattr__(result, "_chart_payload", chart_payload)
+
+    # --- emit-on-solve: the per-step temperature-EXCESS frame stream (ADR 0284)
+    # Each frame is the step's max-over-layers temperature minus ambient, floored
+    # to the SAME THERMAL_DETECTION_FLOOR_C the peak render uses (mask_below_floor
+    # False -- the render grid is already NaN below the floor). ONE stack per run
+    # -> the bare registered ``temperature`` quantity. Best-effort: a frame miss
+    # NEVER sinks the typed peak. ``_run_id`` is stashed so the composer fork can
+    # fetch the frame group back through the seam.
+    try:
+        arr = np.asarray(alldata, dtype="float64")
+        step_render_grids: list[Any] = []
+        for i in range(arr.shape[0]):
+            step2d = np.nanmax(arr[i], axis=0)
+            step_excess = step2d - float(ambient_c)
+            step_render_grids.append(
+                np.where(
+                    step_excess > THERMAL_DETECTION_FLOOR_C, step_excess, np.nan
+                ).astype("float32")
+            )
+        name_stem = (
+            "Aquifer thermal storage temperature"
+            if is_ates
+            else "Thermal plume temperature"
+        )
+        manifest_entries: list[dict[str, Any]] = [
+            _transport_peak_entry(
+                quantity=TEMPERATURE_FRAME_QUANTITY,
+                name=result.name,
+                uri=cog_uri,
+                units="degC",
+                bbox=bbox_4326,
+            )
+        ]
+        if len(step_render_grids) > 1:
+            frame_entries = _write_transport_frame_entries(
+                step_render_grids,
+                times_days,
+                quantity=TEMPERATURE_FRAME_QUANTITY,
+                name_stem=name_stem,
+                units="degC",
+                model_crs=model_crs,
+                geo=geo,
+                mask_below_floor=False,
+                run_id=run_id,
+                runs_bucket=runs_bucket,
+                cog_slug="thermal_plume_temperature",
+            )
+            if len(frame_entries) >= 2:
+                manifest_entries.extend(frame_entries)
+        _write_modflow_outputs_manifest(
+            manifest_entries, run_id=run_id, runs_bucket=runs_bucket
+        )
+    except Exception as exc:  # noqa: BLE001 -- frames are additive, never fatal
+        logger.warning(
+            "postprocess_gwe_thermal: temperature frames failed (non-fatal, peak "
+            "intact) run_id=%s: %s",
+            run_id,
+            exc,
+        )
+    object.__setattr__(result, "_run_id", run_id)
     return result
 
 
