@@ -37,7 +37,15 @@ from trid3nt_contracts.landlab_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import (
+    derive_soil_scalars,
+    literature_offer_entry,
+    soil_derived_entry,
+)
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
 from trid3nt_server.workflows.landlab._composer_common import (
@@ -182,6 +190,37 @@ async def landlab_landslide_storm_ensemble(
             "error_message": f"invalid bbox: {bbox!r}",
         }
 
+    # --- law 9: soil-strength block DERIVED (density) or REFUSED (the rest) ---
+    # Shares row 8 with landlab_susceptibility: the dry bulk density is DERIVED from
+    # SoilGrids texture (Saxton-Rawls); cohesion / friction / thickness /
+    # transmissivity REFUSE in auto (no fetchable value / not texture-derivable).
+    _lat = 0.5 * (coerced[1] + coerced[3])
+    _lon = 0.5 * (coerced[0] + coerced[2])
+    _deriv, _soil_meta = await asyncio.to_thread(derive_soil_scalars, _lat, _lon)
+    soil_density_kg_m3, _den_entry = soil_derived_entry(
+        param="soil_density_kg_m3", units="kg/m^3", user_value=None,
+        derived_value=(_deriv.bulk_density_kg_m3 if _deriv is not None else None),
+        meta=_soil_meta, need="soil dry bulk density", derived_note="Soil bulk density",
+    )
+    _, _coh_entry = literature_offer_entry(
+        param="soil_cohesion_pa", units="Pa", user_value=None,
+        need="effective soil cohesion",
+        offer="~1-20 kPa for cohesive soils, ~0 for clean sands",
+    )
+    _, _fri_entry = literature_offer_entry(
+        param="soil_internal_friction_deg", units="deg", user_value=None,
+        need="soil internal friction angle", offer="~28-36 deg for most granular soils",
+    )
+    _, _thk_entry = literature_offer_entry(
+        param="soil_thickness_m", units="m", user_value=None,
+        need="soil mantle thickness over bedrock",
+        offer="~0.5-3 m for a colluvial hillslope mantle (site-specific)",
+    )
+    _, _tra_entry = literature_offer_entry(
+        param="soil_transmissivity_m2_day", units="m^2/day", user_value=None,
+        need="saturated soil transmissivity",
+        offer="Ksat x soil thickness; supply both or a measured transmissivity",
+    )
     provenance: list[SyntheticInput] = [
         SyntheticInput(
             param="recharge_scenarios",
@@ -192,18 +231,14 @@ async def landlab_landslide_storm_ensemble(
             real_source_if_any="landlab PrecipitationDistribution (Poisson)",
             note="storm-generator means are demo defaults, not a fitted local climate",
         ),
-        SyntheticInput(
-            param="soil_properties",
-            value="cohesion/friction/density/thickness/transmissivity",
-            basis="default_demo", consequence="physics",
-            note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
-        ),
+        _den_entry, _coh_entry, _fri_entry, _thk_entry, _tra_entry,
     ]
     source_note = (
         f"recharge ensemble: {n_recharge_scenarios} scenarios drawn from a Poisson "
         f"storm generator (mean depth {mean_storm_depth_mm} mm) - demo climate means; "
-        "SOIL block is a demo default (no SSURGO/POLARIS fetcher yet), not "
-        "site-calibrated."
+        "soil-strength block: bulk density DERIVED from SoilGrids texture, "
+        "cohesion / friction / thickness / transmissivity REFUSED (law 9 - not "
+        "texture-derivable)."
     )
 
     _review = await gate_input_review(
@@ -216,10 +251,15 @@ async def landlab_landslide_storm_ensemble(
         },
     )
     if _review.cancelled:
+        _phys = physics_refusal_reason("landlab_landslide_storm_ensemble", provenance)
         return {
             "status": "error",
-            "error_code": "USER_INPUT_CANCELLED",
-            "error_message": f"landlab_landslide_storm_ensemble {_review.cancel_reason}",
+            "error_code": (
+                "LANDLAB_PHYSICS_INPUT_REQUIRED" if _phys else "USER_INPUT_CANCELLED"
+            ),
+            "error_message": (
+                _review.cancel_reason or "landlab_landslide_storm_ensemble cancelled"
+            ),
         }
     provenance = _review.entries
     mean_storm_depth_mm = float(
@@ -239,6 +279,8 @@ async def landlab_landslide_storm_ensemble(
             mean_storm_depth_mm=float(mean_storm_depth_mm),
             n_recharge_scenarios=int(n_recharge_scenarios),
         )
+        if soil_density_kg_m3 is not None:
+            kwargs["soil_density_kg_m3"] = float(soil_density_kg_m3)
         if n_monte_carlo is not None:
             kwargs["n_monte_carlo"] = int(n_monte_carlo)
         run_args = LandlabRunArgs(**kwargs)

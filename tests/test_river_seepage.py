@@ -312,7 +312,18 @@ def _rs_common_mocks(monkeypatch):
 @pytest.mark.asyncio
 async def test_demo_aquifer_refuses_in_auto(monkeypatch) -> None:
     """Law 9: an unresolved demo aquifer K REFUSES in auto rather than stamping a
-    demo-default provenance entry and solving on it."""
+    demo-default provenance entry and solving on it.
+
+    The offline SoilGrids fetcher SERVES real texture (the SoilGrids REST API is
+    reachable without our infra), so the shared resolver would DERIVE a K and the
+    run would proceed - masking the refusal path. Force SoilGrids UNAVAILABLE by
+    monkeypatching the derivation to None (the proof-script pattern), so the test
+    exercises the refusal it names."""
+    from trid3nt_server.workflows.shared import aquifer_resolve
+    monkeypatch.setattr(
+        aquifer_resolve, "derive_soil_k",
+        lambda lat, lon: (None, {"reason": "SoilGrids forced unavailable (test)"}),
+    )
     mod, _ = _rs_common_mocks(monkeypatch)
     with pytest.raises(mod.RiverSeepageScenarioError) as exc:
         await mod.model_river_seepage_scenario(

@@ -63,19 +63,12 @@ from .execution import LayerURI
 __all__ = [
     "LandlabAnalysis",
     "LandlabDepressionHandler",
-    "DEFAULT_SOIL_TRANSMISSIVITY_M2_DAY",
-    "DEFAULT_SOIL_COHESION_PA",
-    "DEFAULT_SOIL_INTERNAL_FRICTION_DEG",
-    "DEFAULT_SOIL_DENSITY_KG_M3",
-    "DEFAULT_SOIL_THICKNESS_M",
     "DEFAULT_RECHARGE_MM_DAY",
     "DEFAULT_RAINFALL_INTENSITY_MM_HR",
     "DEFAULT_STORM_DURATION_HR",
     "DEFAULT_N_MONTE_CARLO",
     "DEFAULT_CHANNEL_THRESHOLD_CELLS",
-    "DEFAULT_GREEN_AMPT_K_M_S",
     "DEFAULT_INITIAL_SOIL_MOISTURE",
-    "DEFAULT_GREEN_AMPT_SOIL_TYPE",
     "DEFAULT_MEAN_STORM_DURATION_HR",
     "DEFAULT_MEAN_INTERSTORM_DURATION_HR",
     "DEFAULT_MEAN_STORM_DEPTH_MM",
@@ -100,8 +93,6 @@ __all__ = [
     "LandlabStormSequenceLayerURI",
     "LandlabGroundwaterLayerURI",
     "LandlabGroundwaterStormLayerURI",
-    "DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S",
-    "DEFAULT_GW_POROSITY",
     "DEFAULT_GW_AQUIFER_THICKNESS_M",
     "DEFAULT_GW_RECHARGE_MM_YR",
     "DEFAULT_GW_STORM_AQUIFER_THICKNESS_M",
@@ -193,23 +184,16 @@ LandlabDepressionHandler = Literal["fill", "priority_flood"]
 #: ``component_chain.DEFAULT_CHANNEL_THRESHOLD_CELLS``.
 DEFAULT_CHANNEL_THRESHOLD_CELLS: int = 100
 
-#: Green-Ampt infiltration demo defaults (labeled demo values, not
-#: SSURGO-calibrated - no soil fetcher yet). Mirrors the worker
-#: ``component_chain`` Green-Ampt constants.
-DEFAULT_GREEN_AMPT_K_M_S: float = 1.0e-5
+#: Green-Ampt initial soil moisture (a scenario initial condition, not a demo
+#: material property). The Ksat + soil-texture class are DERIVED from SoilGrids or
+#: REFUSE (law 9); this initial saturation is the run's starting state.
 DEFAULT_INITIAL_SOIL_MOISTURE: float = 0.15
-DEFAULT_GREEN_AMPT_SOIL_TYPE: str = "sandy loam"
 
 
-# TENTATIVE demo defaults (sprint-17). Narrated as demo values, NOT
-# site-calibrated geotechnical / hydrologic parameters, by the composer.
-#
-# Infinite-slope LandslideProbability soil parameters (Landlab tutorial values):
-DEFAULT_SOIL_TRANSMISSIVITY_M2_DAY: float = 20.0  # saturated soil transmissivity
-DEFAULT_SOIL_COHESION_PA: float = 10_000.0  # effective soil cohesion, Pa
-DEFAULT_SOIL_INTERNAL_FRICTION_DEG: float = 35.0  # internal angle of friction, deg
-DEFAULT_SOIL_DENSITY_KG_M3: float = 2000.0  # wet soil bulk density, kg/m^3
-DEFAULT_SOIL_THICKNESS_M: float = 1.0  # soil mantle thickness over bedrock, m
+# LandslideProbability triggering recharge (a scenario forcing, not a demo
+# material property): the groundwater recharge driving the relative-wetness term.
+# The soil-strength block (cohesion / friction / density / thickness /
+# transmissivity) is DERIVED from texture or REFUSES (law 9) - no demo defaults.
 DEFAULT_RECHARGE_MM_DAY: float = 30.0  # groundwater recharge driving wetness
 DEFAULT_N_MONTE_CARLO: int = 250  # Monte-Carlo draws for probability of failure
 # OverlandFlow rainfall design-storm parameters:
@@ -233,10 +217,10 @@ DEFAULT_CONDITION_DEM: bool = False
 DEFAULT_MIN_LAKE_DEPTH_M: float = 1.0  # deepest point must clear this, m
 DEFAULT_MIN_LAKE_AREA_M2: float = 10_000.0  # surface area must clear this, m^2
 
-# channel_incision (detachment-limited stream-power evolution) demo defaults.
-# The V&V recovers K + concavity from the steady state, so these are chosen to
-# reach quasi-steady state in a bounded step budget (K=1e-5, U=1 mm/yr, 1 Myr).
-DEFAULT_K_BEDROCK: float = 1.0e-5  # stream-power erodibility (n_sp=1 form)
+# channel_incision (detachment-limited stream-power evolution) scenario forcing.
+# Erodibility K_sp is a calibration coefficient with NO fetchable value -> it is
+# a law-9 REFUSE (literature-range user-gated offer), not a demo constant. The
+# stream-power exponents below are canonical published values (scenario/numerical).
 DEFAULT_M_SP: float = 0.5  # drainage-area exponent
 DEFAULT_N_SP: float = 1.0  # slope exponent (analytical concavity = m_sp/n_sp)
 DEFAULT_UPLIFT_RATE_M_YR: float = 1.0e-3  # rock uplift, m/yr (1 mm/yr)
@@ -257,11 +241,10 @@ DEFAULT_REFERENCE_CONCAVITY: float = 0.5  # classic theta ~0.45-0.5
 DEFAULT_STORM_TOTAL_YEARS: float = 5.0  # simulated span of the storm sequence
 DEFAULT_STORM_RANDOM_SEED: int = 1234  # deterministic Poisson seed
 
-# groundwater (GroundwaterDupuitPercolator) demo defaults. Labeled demo aquifer
-# properties, NOT site-calibrated hydrogeologic parameters (no SSURGO/aquifer
-# fetcher yet). Mirror the worker component_chain groundwater constants.
-DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S: float = 1.0e-4  # saturated K, m/s (sand)
-DEFAULT_GW_POROSITY: float = 0.3  # drainable porosity (dimensionless)
+# groundwater (GroundwaterDupuitPercolator) defaults. K + drainable porosity are
+# DERIVED from SoilGrids texture or REFUSE (law 9) - no demo constants. The aquifer
+# thickness (max saturated thickness above the base) is a structural/scenario
+# assumption of the screening domain (no fetcher), kept as a labeled scenario default.
 DEFAULT_GW_AQUIFER_THICKNESS_M: float = 20.0  # max saturated thickness above base
 DEFAULT_GW_RECHARGE_MM_YR: float = 200.0  # areal recharge, mm/yr (labeled default)
 DEFAULT_GW_REGULARIZATION_F: float = 0.01  # seepage-transition smoothing factor
@@ -340,15 +323,17 @@ class LandlabRunArgs(EngineRunArgsMixin):
     target_resolution_m: float = Field(default=30.0, gt=0.0)
 
     # --- infinite-slope LandslideProbability soil parameters ---
-    soil_transmissivity_m2_day: float = Field(
-        default=DEFAULT_SOIL_TRANSMISSIVITY_M2_DAY, gt=0.0
+    # law 9: the strength block is DERIVED from texture (density) or REFUSES
+    # (cohesion / friction / thickness / transmissivity - no fetcher / not
+    # texture-derivable) at the tool layer. None == unresolved -> the tool
+    # supplies a real value or refuses BEFORE the run reaches the worker.
+    soil_transmissivity_m2_day: float | None = Field(default=None, gt=0.0)
+    soil_cohesion_pa: float | None = Field(default=None, ge=0.0)
+    soil_internal_friction_deg: float | None = Field(
+        default=None, gt=0.0, lt=90.0
     )
-    soil_cohesion_pa: float = Field(default=DEFAULT_SOIL_COHESION_PA, ge=0.0)
-    soil_internal_friction_deg: float = Field(
-        default=DEFAULT_SOIL_INTERNAL_FRICTION_DEG, gt=0.0, lt=90.0
-    )
-    soil_density_kg_m3: float = Field(default=DEFAULT_SOIL_DENSITY_KG_M3, gt=0.0)
-    soil_thickness_m: float = Field(default=DEFAULT_SOIL_THICKNESS_M, gt=0.0)
+    soil_density_kg_m3: float | None = Field(default=None, gt=0.0)
+    soil_thickness_m: float | None = Field(default=None, gt=0.0)
     recharge_mm_day: float = Field(default=DEFAULT_RECHARGE_MM_DAY, ge=0.0)
     n_monte_carlo: int = Field(default=DEFAULT_N_MONTE_CARLO, ge=1)
 
@@ -369,19 +354,20 @@ class LandlabRunArgs(EngineRunArgsMixin):
     )
 
     # --- green_ampt_overland_flow chain parameters ---
-    #: Green-Ampt saturated hydraulic conductivity, m/s (> 0). Demo default
-    #: (sandy-loam K); not SSURGO-calibrated.
-    soil_hydraulic_conductivity_m_s: float = Field(
-        default=DEFAULT_GREEN_AMPT_K_M_S, gt=0.0
-    )
+    #: Green-Ampt saturated hydraulic conductivity, m/s (> 0). law 9: DERIVED from
+    #: SoilGrids texture (Saxton-Rawls) or REFUSED at the tool layer - None ==
+    #: unresolved (the tool supplies a real value or refuses before the run).
+    soil_hydraulic_conductivity_m_s: float | None = Field(default=None, gt=0.0)
     #: Green-Ampt initial soil moisture content, volumetric fraction in [0, 1)
-    #: (sets the moisture deficit). Demo default.
+    #: (sets the moisture deficit). A scenario initial condition, not a demo
+    #: material property.
     initial_soil_moisture_content: float = Field(
         default=DEFAULT_INITIAL_SOIL_MOISTURE, ge=0.0, lt=1.0
     )
     #: Green-Ampt soil texture class (selects Landlab's tabulated capillary-head
-    #: + porosity). Demo default "sandy loam".
-    green_ampt_soil_type: str = Field(default=DEFAULT_GREEN_AMPT_SOIL_TYPE)
+    #: + porosity). law 9: DERIVED (USDA class from SoilGrids texture) or REFUSED
+    #: at the tool layer - None == unresolved.
+    green_ampt_soil_type: str | None = Field(default=None)
 
     # --- landslide_storm_ensemble chain parameters ---
     #: Mean storm duration (hours) for the PrecipitationDistribution recharge
@@ -425,9 +411,10 @@ class LandlabRunArgs(EngineRunArgsMixin):
 
     # --- channel_incision (detachment-limited stream-power evolution) ---
     #: Stream-power bedrock erodibility K in E = K A^m S^n (units depend on
-    #: m_sp/n_sp; demo default 1e-5 for the n_sp=1 form). Drives how fast channels
-    #: incise; the slope-area V&V recovers this value from the steady state (> 0).
-    k_bedrock: float = Field(default=DEFAULT_K_BEDROCK, gt=0.0)
+    #: m_sp/n_sp). A calibration coefficient with NO fetchable real-world value ->
+    #: law 9 REFUSES at the tool layer (literature-range user-gated offer); None ==
+    #: unresolved. The slope-area V&V recovers this value from the steady state (> 0).
+    k_bedrock: float | None = Field(default=None, gt=0.0)
     #: Stream-power drainage-area exponent m in E = K A^m S^n (demo default 0.5).
     m_sp: float = Field(default=DEFAULT_M_SP, gt=0.0)
     #: Stream-power slope exponent n in E = K A^m S^n (demo default 1.0). The
@@ -467,13 +454,13 @@ class LandlabRunArgs(EngineRunArgsMixin):
     fault_position_frac: float = Field(default=DEFAULT_FAULT_POSITION_FRAC, ge=0.0, le=1.0)
 
     # --- groundwater (GroundwaterDupuitPercolator) shared aquifer parameters ---
-    #: Saturated hydraulic conductivity K, m/s (> 0). Demo default (permeable
-    #: sand); not aquifer-test-calibrated. Shared by both groundwater analyses.
-    gw_hydraulic_conductivity_m_s: float = Field(
-        default=DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S, gt=0.0
-    )
-    #: Drainable aquifer porosity, dimensionless in (0, 1). Demo default.
-    gw_porosity: float = Field(default=DEFAULT_GW_POROSITY, gt=0.0, lt=1.0)
+    #: Saturated hydraulic conductivity K, m/s (> 0). law 9: DERIVED from SoilGrids
+    #: texture (Saxton-Rawls) or REFUSED at the tool layer - None == unresolved.
+    #: Shared by both groundwater analyses.
+    gw_hydraulic_conductivity_m_s: float | None = Field(default=None, gt=0.0)
+    #: Drainable aquifer porosity, dimensionless in (0, 1). law 9: DERIVED from
+    #: texture alongside K or REFUSED - None == unresolved.
+    gw_porosity: float | None = Field(default=None, gt=0.0, lt=1.0)
     #: Maximum saturated aquifer thickness above the base, m (> 0), for the
     #: steady-state chain (aquifer_base = topo - thickness). Demo default.
     gw_aquifer_thickness_m: float = Field(

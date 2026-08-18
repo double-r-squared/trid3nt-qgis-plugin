@@ -34,8 +34,6 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.landlab_contracts import (
-    DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S,
-    DEFAULT_GW_POROSITY,
     DEFAULT_GW_STORM_AQUIFER_THICKNESS_M,
     DEFAULT_GW_STORM_MEAN_DEPTH_MM,
     DEFAULT_GW_STORM_TOTAL_DAYS,
@@ -44,7 +42,14 @@ from trid3nt_contracts.landlab_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import (
+    derive_soil_scalars,
+    soil_derived_entry,
+)
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
 from trid3nt_server.data.publish_layer.publish_layer import (
@@ -129,8 +134,8 @@ _METADATA = AtomicToolMetadata(
 )
 async def landlab_groundwater_storm_recession(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    gw_hydraulic_conductivity_m_s: float = DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S,
-    gw_porosity: float = DEFAULT_GW_POROSITY,
+    gw_hydraulic_conductivity_m_s: float | None = None,
+    gw_porosity: float | None = None,
     gw_storm_aquifer_thickness_m: float = DEFAULT_GW_STORM_AQUIFER_THICKNESS_M,
     gw_storm_mean_depth_mm: float = DEFAULT_GW_STORM_MEAN_DEPTH_MM,
     gw_storm_total_days: float = DEFAULT_GW_STORM_TOTAL_DAYS,
@@ -145,9 +150,10 @@ async def landlab_groundwater_storm_recession(
     sequence and integrated transiently on a real AOI DEM; a planning-grade
     seepage/baseflow hydrograph, not an aquifer-test-calibrated model. V&V: the
     transient mass-conservation gate (|rel error| < 1%). Data: the DEM is REAL
-    (USGS 3DEP via seam-1). The aquifer block + the stochastic storm sequence are
-    demo defaults (labeled in source_note); the storm sequence is deterministic
-    (seeded).
+    (USGS 3DEP via seam-1). The aquifer K + drainable porosity are DERIVED from
+    SoilGrids texture at the AOI (Saxton-Rawls) or REFUSE in auto when SoilGrids
+    cannot serve (law 9); the aquifer thickness + the stochastic storm sequence
+    are scenario defaults (labeled), the storm sequence deterministic (seeded).
     Off-scope: steady-state water-table depth + seepage map ->
     landlab_groundwater_water_table; storm infiltration-vs-runoff partition ->
     landlab_green_ampt_overland_flow; surface flood depth timeseries ->
@@ -162,9 +168,11 @@ async def landlab_groundwater_storm_recession(
     Params:
         bbox: watershed / catchment AOI, EPSG:4326 (min_lon, min_lat, max_lon,
             max_lat).
-        gw_hydraulic_conductivity_m_s: saturated hydraulic conductivity K, m/s
-            (default demo permeable-sand K).
-        gw_porosity: drainable aquifer porosity in (0, 1) (default demo 0.3).
+        gw_hydraulic_conductivity_m_s: saturated hydraulic conductivity K, m/s.
+            Unset -> DERIVED from SoilGrids texture; refuses in auto when
+            SoilGrids cannot serve (law 9).
+        gw_porosity: drainable aquifer porosity in (0, 1). Unset -> DERIVED from
+            texture alongside K; refuses in auto when unavailable.
         gw_storm_aquifer_thickness_m: max saturated thickness above the base, m
             (default demo 8 -- thinner so storms move the water table).
         gw_storm_mean_depth_mm: mean per-storm depth, mm (default demo 20).
@@ -204,16 +212,38 @@ async def landlab_groundwater_storm_recession(
             ),
         }
 
+    # --- law 9: aquifer K + drainable porosity DERIVED from SoilGrids or REFUSE;
+    # the aquifer thickness + storm sequence are scenario (proceed labeled) ---
+    _need_aq = gw_hydraulic_conductivity_m_s is None or gw_porosity is None
+    _lat = 0.5 * (coerced[1] + coerced[3])
+    _lon = 0.5 * (coerced[0] + coerced[2])
+    _deriv = None
+    _soil_meta: dict[str, Any] = {}
+    if _need_aq:
+        _deriv, _soil_meta = await asyncio.to_thread(derive_soil_scalars, _lat, _lon)
+
+    gw_hydraulic_conductivity_m_s, _k_entry = soil_derived_entry(
+        param="gw_hydraulic_conductivity_m_s", units="m/s",
+        user_value=gw_hydraulic_conductivity_m_s,
+        derived_value=(_deriv.k_m_s if _deriv is not None else None),
+        meta=_soil_meta, need="aquifer hydraulic conductivity",
+        derived_note="Aquifer K",
+    )
+    gw_porosity, _por_entry = soil_derived_entry(
+        param="gw_porosity", units="dimensionless", user_value=gw_porosity,
+        derived_value=(_deriv.drainable_porosity if _deriv is not None else None),
+        meta=_soil_meta, need="drainable aquifer porosity",
+        derived_note="Drainable porosity",
+    )
     provenance: list[SyntheticInput] = [
+        _k_entry,
+        _por_entry,
         SyntheticInput(
-            param="aquifer_properties",
-            value=(
-                f"K={gw_hydraulic_conductivity_m_s:.1e} m/s, "
-                f"porosity={gw_porosity:.2f}, "
-                f"thickness={gw_storm_aquifer_thickness_m:.0f} m"
-            ),
-            basis="default_demo", consequence="physics",
-            note="no aquifer-property fetcher yet; not aquifer-test-calibrated",
+            param="gw_storm_aquifer_thickness_m", value=gw_storm_aquifer_thickness_m,
+            units="m", basis="default_demo", consequence="scenario",
+            real_source_if_any=None,
+            note="screening structural assumption of the Dupuit domain (thinner so "
+            "storms move the water table); no depth-to-bedrock fetcher",
         ),
         SyntheticInput(
             param="storm_sequence",
@@ -224,12 +254,16 @@ async def landlab_groundwater_storm_recession(
             "not a fetched historical record",
         ),
     ]
+    _aq_prov = (
+        "DERIVED from SoilGrids texture at the AOI (Saxton-Rawls)"
+        if _deriv is not None else "user-supplied" if not _need_aq
+        else "UNRESOLVED - SoilGrids could not serve (law-9 refusal)"
+    )
     source_note = (
         f"transient GroundwaterDupuitPercolator forced by a Poisson storm sequence "
-        f"(mean depth {gw_storm_mean_depth_mm:.0f} mm, {gw_storm_total_days:.0f} d); "
-        f"aquifer block (K={gw_hydraulic_conductivity_m_s:.1e} m/s, "
-        f"porosity={gw_porosity:.2f}, thickness={gw_storm_aquifer_thickness_m:.0f} m) "
-        "is a demo default - no aquifer-property fetcher yet, not site-calibrated."
+        f"(mean depth {gw_storm_mean_depth_mm:.0f} mm, {gw_storm_total_days:.0f} d, "
+        f"scenario); aquifer K + drainable porosity {_aq_prov}; aquifer thickness "
+        f"{gw_storm_aquifer_thickness_m:.0f} m is a screening structural assumption."
     )
 
     _review = await gate_input_review(
@@ -244,24 +278,43 @@ async def landlab_groundwater_storm_recession(
         },
     )
     if _review.cancelled:
+        _phys = physics_refusal_reason(
+            "landlab_groundwater_storm_recession", provenance
+        )
         return {
             "status": "error",
-            "error_code": "USER_INPUT_CANCELLED",
+            "error_code": (
+                "LANDLAB_PHYSICS_INPUT_REQUIRED" if _phys else "USER_INPUT_CANCELLED"
+            ),
             "error_message": (
-                f"landlab_groundwater_storm_recession {_review.cancel_reason}"
+                _review.cancel_reason
+                or "landlab_groundwater_storm_recession cancelled"
             ),
         }
     provenance = _review.entries
-    gw_hydraulic_conductivity_m_s = float(
-        _review.params.get("gw_hydraulic_conductivity_m_s", gw_hydraulic_conductivity_m_s)
+    _rv_k = _review.params.get(
+        "gw_hydraulic_conductivity_m_s", gw_hydraulic_conductivity_m_s
     )
-    gw_porosity = float(_review.params.get("gw_porosity", gw_porosity))
+    gw_hydraulic_conductivity_m_s = float(_rv_k) if _rv_k is not None else None
+    _rv_por = _review.params.get("gw_porosity", gw_porosity)
+    gw_porosity = float(_rv_por) if _rv_por is not None else None
     gw_storm_aquifer_thickness_m = float(
         _review.params.get("gw_storm_aquifer_thickness_m", gw_storm_aquifer_thickness_m)
     )
     gw_storm_mean_depth_mm = float(
         _review.params.get("gw_storm_mean_depth_mm", gw_storm_mean_depth_mm)
     )
+    # law-9 belt-and-suspenders: never solve on an unresolved aquifer property.
+    if gw_hydraulic_conductivity_m_s is None or gw_porosity is None:
+        return {
+            "status": "error",
+            "error_code": "LANDLAB_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                physics_refusal_reason(
+                    "landlab_groundwater_storm_recession", provenance
+                ) or "aquifer K/porosity unresolved (law 9)."
+            ),
+        }
 
     try:
         run_args = LandlabRunArgs(

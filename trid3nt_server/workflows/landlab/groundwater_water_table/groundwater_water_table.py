@@ -40,15 +40,20 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import (
     DEFAULT_GW_AQUIFER_THICKNESS_M,
-    DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S,
-    DEFAULT_GW_POROSITY,
     DEFAULT_GW_RECHARGE_MM_YR,
     LandlabGroundwaterLayerURI,
     LandlabRunArgs,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import (
+    derive_soil_scalars,
+    soil_derived_entry,
+)
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
 from trid3nt_server.data.publish_layer.publish_layer import (
@@ -132,8 +137,8 @@ _METADATA = AtomicToolMetadata(
 )
 async def landlab_groundwater_water_table(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    gw_hydraulic_conductivity_m_s: float = DEFAULT_GW_HYDRAULIC_CONDUCTIVITY_M_S,
-    gw_porosity: float = DEFAULT_GW_POROSITY,
+    gw_hydraulic_conductivity_m_s: float | None = None,
+    gw_porosity: float | None = None,
     gw_aquifer_thickness_m: float = DEFAULT_GW_AQUIFER_THICKNESS_M,
     gw_recharge_mm_yr: float = DEFAULT_GW_RECHARGE_MM_YR,
     target_resolution_m: float = 30.0,
@@ -148,9 +153,11 @@ async def landlab_groundwater_water_table(
     planning-grade water-table / return-flow surface, not an aquifer-test-
     calibrated hydrogeologic model. V&V: the tutorial's mass-conservation gate
     (cumulative recharge == fluxes out + storage change; |rel error| < 1%).
-    Data: the DEM is REAL (USGS 3DEP via seam-1). The AQUIFER block (hydraulic
-    conductivity / porosity / thickness) and the areal recharge are demo defaults
-    (no aquifer-property fetcher yet) and are labeled in source_note.
+    Data: the DEM is REAL (USGS 3DEP via seam-1). The aquifer K + drainable
+    porosity are DERIVED from SoilGrids texture at the AOI (Saxton-Rawls) or
+    REFUSE in auto when SoilGrids cannot serve (law 9). The areal recharge (the
+    scenario forcing question) and the aquifer thickness (a screening structural
+    assumption) proceed labeled.
     Off-scope: storm-driven seepage HYDROGRAPH + recession ->
     landlab_groundwater_storm_recession; landslide susceptibility ->
     landlab_susceptibility; storm infiltration-vs-runoff partition ->
@@ -165,9 +172,11 @@ async def landlab_groundwater_water_table(
     Params:
         bbox: watershed / catchment AOI, EPSG:4326 (min_lon, min_lat, max_lon,
             max_lat).
-        gw_hydraulic_conductivity_m_s: saturated hydraulic conductivity K, m/s
-            (default demo permeable-sand K).
-        gw_porosity: drainable aquifer porosity in (0, 1) (default demo 0.3).
+        gw_hydraulic_conductivity_m_s: saturated hydraulic conductivity K, m/s.
+            Unset -> DERIVED from SoilGrids texture; refuses in auto when
+            SoilGrids cannot serve (law 9).
+        gw_porosity: drainable aquifer porosity in (0, 1). Unset -> DERIVED from
+            texture alongside K; refuses in auto when unavailable.
         gw_aquifer_thickness_m: max saturated thickness above the aquifer base, m
             (default demo 20).
         gw_recharge_mm_yr: constant areal recharge, mm/yr (default demo 200).
@@ -206,31 +215,59 @@ async def landlab_groundwater_water_table(
             ),
         }
 
-    # --- Aquifer block + recharge: labeled demo defaults, input-review gated ---
+    # --- law 9: aquifer K + drainable porosity DERIVED from SoilGrids or REFUSE;
+    # recharge + aquifer thickness are scenario/structural (proceed labeled) ---
+    # K + porosity come from ONE SoilGrids texture read at the AOI centroid
+    # (Saxton-Rawls). Areal recharge is the scenario forcing question (deriving a
+    # recharge from a precip fraction would invent the fraction). Aquifer thickness
+    # is a screening structural assumption of the Dupuit domain (no fetcher).
+    _need_aq = gw_hydraulic_conductivity_m_s is None or gw_porosity is None
+    _lat = 0.5 * (coerced[1] + coerced[3])
+    _lon = 0.5 * (coerced[0] + coerced[2])
+    _deriv = None
+    _soil_meta: dict[str, Any] = {}
+    if _need_aq:
+        _deriv, _soil_meta = await asyncio.to_thread(derive_soil_scalars, _lat, _lon)
+
+    gw_hydraulic_conductivity_m_s, _k_entry = soil_derived_entry(
+        param="gw_hydraulic_conductivity_m_s", units="m/s",
+        user_value=gw_hydraulic_conductivity_m_s,
+        derived_value=(_deriv.k_m_s if _deriv is not None else None),
+        meta=_soil_meta, need="aquifer hydraulic conductivity",
+        derived_note="Aquifer K",
+    )
+    gw_porosity, _por_entry = soil_derived_entry(
+        param="gw_porosity", units="dimensionless", user_value=gw_porosity,
+        derived_value=(_deriv.drainable_porosity if _deriv is not None else None),
+        meta=_soil_meta, need="drainable aquifer porosity",
+        derived_note="Drainable porosity",
+    )
     provenance: list[SyntheticInput] = [
+        _k_entry,
+        _por_entry,
         SyntheticInput(
-            param="aquifer_properties",
-            value=(
-                f"K={gw_hydraulic_conductivity_m_s:.1e} m/s, "
-                f"porosity={gw_porosity:.2f}, thickness={gw_aquifer_thickness_m:.0f} m"
-            ),
-            basis="default_demo", consequence="physics",
-            note="no aquifer-property fetcher yet; not aquifer-test-calibrated",
+            param="gw_aquifer_thickness_m", value=gw_aquifer_thickness_m, units="m",
+            basis="default_demo", consequence="scenario", real_source_if_any=None,
+            note="screening structural assumption of the Dupuit domain (max "
+            "saturated thickness above the base); no depth-to-bedrock fetcher",
         ),
         SyntheticInput(
-            param="gw_recharge_mm_yr",
-            value=gw_recharge_mm_yr,
-            units="mm/yr",
-            basis="default_demo", consequence="scenario",
-            note="labeled areal recharge (~5-20% of humid-region precip); "
-            "no gridMET recharge fetcher wired",
+            param="gw_recharge_mm_yr", value=gw_recharge_mm_yr, units="mm/yr",
+            basis="default_demo", consequence="scenario", real_source_if_any=None,
+            note="areal recharge is the scenario forcing question (~5-20% of "
+            "humid-region precip); a precip-fraction estimate would invent the fraction",
         ),
     ]
+    _aq_prov = (
+        "DERIVED from SoilGrids texture at the AOI (Saxton-Rawls)"
+        if _deriv is not None else "user-supplied" if not _need_aq
+        else "UNRESOLVED - SoilGrids could not serve (law-9 refusal)"
+    )
     source_note = (
         f"steady GroundwaterDupuitPercolator under {gw_recharge_mm_yr:.0f} mm/yr "
-        f"areal recharge; aquifer block (K={gw_hydraulic_conductivity_m_s:.1e} m/s, "
-        f"porosity={gw_porosity:.2f}, thickness={gw_aquifer_thickness_m:.0f} m) is a "
-        "demo default - no aquifer-property fetcher yet, not site-calibrated."
+        f"areal recharge (scenario); aquifer K + drainable porosity {_aq_prov}; "
+        f"aquifer thickness {gw_aquifer_thickness_m:.0f} m is a screening "
+        "structural assumption."
     )
 
     _review = await gate_input_review(
@@ -245,20 +282,38 @@ async def landlab_groundwater_water_table(
         },
     )
     if _review.cancelled:
+        _phys = physics_refusal_reason("landlab_groundwater_water_table", provenance)
         return {
             "status": "error",
-            "error_code": "USER_INPUT_CANCELLED",
-            "error_message": f"landlab_groundwater_water_table {_review.cancel_reason}",
+            "error_code": (
+                "LANDLAB_PHYSICS_INPUT_REQUIRED" if _phys else "USER_INPUT_CANCELLED"
+            ),
+            "error_message": (
+                _review.cancel_reason or "landlab_groundwater_water_table cancelled"
+            ),
         }
     provenance = _review.entries
-    gw_hydraulic_conductivity_m_s = float(
-        _review.params.get("gw_hydraulic_conductivity_m_s", gw_hydraulic_conductivity_m_s)
+    _rv_k = _review.params.get(
+        "gw_hydraulic_conductivity_m_s", gw_hydraulic_conductivity_m_s
     )
-    gw_porosity = float(_review.params.get("gw_porosity", gw_porosity))
+    gw_hydraulic_conductivity_m_s = float(_rv_k) if _rv_k is not None else None
+    _rv_por = _review.params.get("gw_porosity", gw_porosity)
+    gw_porosity = float(_rv_por) if _rv_por is not None else None
     gw_aquifer_thickness_m = float(
         _review.params.get("gw_aquifer_thickness_m", gw_aquifer_thickness_m)
     )
     gw_recharge_mm_yr = float(_review.params.get("gw_recharge_mm_yr", gw_recharge_mm_yr))
+    # law-9 belt-and-suspenders: never solve on an unresolved aquifer property.
+    if gw_hydraulic_conductivity_m_s is None or gw_porosity is None:
+        return {
+            "status": "error",
+            "error_code": "LANDLAB_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                physics_refusal_reason(
+                    "landlab_groundwater_water_table", provenance
+                ) or "aquifer K/porosity unresolved (law 9)."
+            ),
+        }
 
     try:
         run_args = LandlabRunArgs(

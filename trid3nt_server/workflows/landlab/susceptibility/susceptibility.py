@@ -47,7 +47,15 @@ from trid3nt_contracts.landlab_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import register_tool
-from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import (
+    derive_soil_scalars,
+    literature_offer_entry,
+    soil_derived_entry,
+)
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.workflows.landlab._template_card import TemplateCard
@@ -208,9 +216,12 @@ async def landlab_susceptibility(
     landslide chain's ``recharge_mm_day`` and the overland-flow chain's
     ``rainfall_intensity_mm_hr`` are DERIVED from it when unset; a failed lookup
     STOPS with a typed ``LANDLAB_RAINFALL_INPUT_REQUIRED`` gate (never a baked
-    default). The SOIL block (cohesion / friction / density / thickness /
-    transmissivity) STAYS demo-defaulted - there is no SSURGO/POLARIS soil fetcher
-    yet - and is labeled as such in ``source_note``.
+    default). The landslide SOIL-STRENGTH block is law-9 derive-or-refuse: the dry
+    bulk density is DERIVED from SoilGrids texture (Saxton-Rawls); cohesion,
+    internal friction, mantle thickness and transmissivity have no fetchable value
+    and REFUSE in auto (``LANDLAB_PHYSICS_INPUT_REQUIRED``) until supplied or
+    approved in ``user_gated`` mode. The overland-flow chain is rainfall-driven and
+    does NOT gate on soil strength.
     Off-scope: channel / riverine / coastal inundation -> sfincs_flood; post-fire
     debris-flow over a burn scar -> model_debris_flow; probabilistic seismic
     hazard -> openquake_psha.
@@ -231,9 +242,10 @@ async def landlab_susceptibility(
         target_resolution_m: grid cell size (default 30).
         soil_transmissivity_m2_day/soil_cohesion_pa/
             soil_internal_friction_deg/soil_density_kg_m3/
-            soil_thickness_m/n_monte_carlo: optional LandslideProbability
-            SOIL params; unset uses demo defaults (not site-calibrated;
-            no SSURGO/POLARIS fetcher yet - labeled in source_note).
+            soil_thickness_m: LandslideProbability soil-strength params.
+            soil_density_kg_m3 is DERIVED from SoilGrids texture when unset; the
+            others have no fetcher and REFUSE in auto until supplied (law 9).
+            n_monte_carlo: probability-of-failure draws.
         recharge_mm_day: LandslideProbability triggering recharge, mm/day.
             Unset -> DERIVED from the Atlas-14 design storm (mean intensity
             of the storm expressed as mm/day). Explicit value overrides.
@@ -333,9 +345,10 @@ async def landlab_susceptibility(
         _rainfall_label = "triggering rainfall: user-supplied"
     source_note = (
         _rainfall_label
-        + "; SOIL properties (cohesion / friction / density / thickness / "
-        "transmissivity) are demo defaults - no SSURGO/POLARIS soil fetcher yet, "
-        "not site-calibrated."
+        + ("; soil-strength block: bulk density DERIVED from SoilGrids texture (or "
+           "supplied); cohesion / internal friction / mantle thickness / "
+           "transmissivity are supplied or REFUSED (law 9 - not texture-derivable)."
+           if not _is_overland else "")
     )
 
     # provenance-chain wave: the same rainfall-vs-soil provenance as STRUCTURE, so
@@ -362,21 +375,59 @@ async def landlab_susceptibility(
             param=("rainfall_intensity_mm_hr" if _is_overland else "recharge_mm_day"),
             basis="user",
         ))
-    _soil_defaulted = [
-        n for n, v in (
-            ("cohesion", soil_cohesion_pa),
-            ("friction", soil_internal_friction_deg),
-            ("density", soil_density_kg_m3),
-            ("thickness", soil_thickness_m),
-            ("transmissivity", soil_transmissivity_m2_day),
-        ) if v is None
-    ]
-    if _soil_defaulted:
-        provenance.append(SyntheticInput(
-            param="soil_properties", value="/".join(_soil_defaulted),
-            basis="default_demo", consequence="physics",
-            note="no SSURGO/POLARIS soil fetcher yet; not site-calibrated",
-        ))
+    # --- law 9: soil-strength block DERIVED (density) or REFUSED (the rest) ---
+    # Only the landslide chain reads the strength block; the overland-flow chain
+    # is rainfall-driven, so an overland run does NOT gate on soil strength.
+    # Of the five, ONLY the dry bulk density is honestly served by texture
+    # (Saxton-Rawls rho_b = (1 - theta_s) * particle_density). Cohesion + internal
+    # friction have no fetchable value (geotechnical strength -> literature-range
+    # user-gated offers); the soil mantle thickness is depth-to-bedrock (not a
+    # texture output); transmissivity needs that thickness. All four REFUSE in auto
+    # until supplied (they set the factor-of-safety directly).
+    if not _is_overland:
+        _need_density = soil_density_kg_m3 is None
+        _lat = 0.5 * (coerced[1] + coerced[3])
+        _lon = 0.5 * (coerced[0] + coerced[2])
+        _deriv = None
+        _soil_meta: dict[str, Any] = {}
+        if _need_density:
+            _deriv, _soil_meta = await asyncio.to_thread(
+                derive_soil_scalars, _lat, _lon
+            )
+        soil_density_kg_m3, _den_entry = soil_derived_entry(
+            param="soil_density_kg_m3", units="kg/m^3",
+            user_value=soil_density_kg_m3,
+            derived_value=(_deriv.bulk_density_kg_m3 if _deriv is not None else None),
+            meta=_soil_meta, need="soil dry bulk density",
+            derived_note="Soil bulk density",
+        )
+        provenance.append(_den_entry)
+        soil_cohesion_pa, _coh_entry = literature_offer_entry(
+            param="soil_cohesion_pa", units="Pa", user_value=soil_cohesion_pa,
+            need="effective soil cohesion",
+            offer="~1-20 kPa for cohesive soils, ~0 for clean sands",
+        )
+        provenance.append(_coh_entry)
+        soil_internal_friction_deg, _fri_entry = literature_offer_entry(
+            param="soil_internal_friction_deg", units="deg",
+            user_value=soil_internal_friction_deg,
+            need="soil internal friction angle",
+            offer="~28-36 deg for most granular soils",
+        )
+        provenance.append(_fri_entry)
+        soil_thickness_m, _thk_entry = literature_offer_entry(
+            param="soil_thickness_m", units="m", user_value=soil_thickness_m,
+            need="soil mantle thickness over bedrock",
+            offer="~0.5-3 m for a colluvial hillslope mantle (site-specific)",
+        )
+        provenance.append(_thk_entry)
+        soil_transmissivity_m2_day, _tra_entry = literature_offer_entry(
+            param="soil_transmissivity_m2_day", units="m^2/day",
+            user_value=soil_transmissivity_m2_day,
+            need="saturated soil transmissivity",
+            offer="Ksat x soil thickness; supply both or a measured transmissivity",
+        )
+        provenance.append(_tra_entry)
 
     # --- two-mode input gate: review-before-run -----------------------
     # The triggering forcing (Atlas-14 rainfall/recharge) + demo soil block are
@@ -391,16 +442,37 @@ async def landlab_susceptibility(
         },
     )
     if _review.cancelled:
+        _phys = physics_refusal_reason("landlab_susceptibility", provenance)
         return {
             "status": "error",
-            "error_code": "USER_INPUT_CANCELLED",
-            "error_message": f"landlab_susceptibility {_review.cancel_reason}",
+            "error_code": (
+                "LANDLAB_PHYSICS_INPUT_REQUIRED" if _phys else "USER_INPUT_CANCELLED"
+            ),
+            "error_message": (
+                _review.cancel_reason or f"landlab_susceptibility cancelled"
+            ),
         }
     provenance = _review.entries
     _rv_rain = _review.params.get("rainfall_intensity_mm_hr", rainfall_intensity_mm_hr)
     _rv_rech = _review.params.get("recharge_mm_day", recharge_mm_day)
     rainfall_intensity_mm_hr = float(_rv_rain) if _rv_rain is not None else None
     recharge_mm_day = float(_rv_rech) if _rv_rech is not None else None
+    # law-9 belt-and-suspenders: the landslide chain must not solve on an
+    # unresolved strength value (e.g. the headless user_gated fail-open path).
+    if not _is_overland and any(
+        v is None for v in (
+            soil_density_kg_m3, soil_cohesion_pa, soil_internal_friction_deg,
+            soil_thickness_m, soil_transmissivity_m2_day,
+        )
+    ):
+        return {
+            "status": "error",
+            "error_code": "LANDLAB_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                physics_refusal_reason("landlab_susceptibility", provenance)
+                or "landslide soil-strength block unresolved (law 9)."
+            ),
+        }
 
     try:
         kwargs: dict[str, Any] = dict(

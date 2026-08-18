@@ -158,11 +158,6 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "analysis": run_args.analysis,
         "target_resolution_m": float(run_args.target_resolution_m),
         # infinite-slope LandslideProbability parameters
-        "soil_transmissivity_m2_day": float(run_args.soil_transmissivity_m2_day),
-        "soil_cohesion_pa": float(run_args.soil_cohesion_pa),
-        "soil_internal_friction_deg": float(run_args.soil_internal_friction_deg),
-        "soil_density_kg_m3": float(run_args.soil_density_kg_m3),
-        "soil_thickness_m": float(run_args.soil_thickness_m),
         "recharge_mm_day": float(run_args.recharge_mm_day),
         "n_monte_carlo": int(run_args.n_monte_carlo),
         # OverlandFlow parameters
@@ -176,15 +171,10 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "channel_threshold_cells": int(
             getattr(run_args, "channel_threshold_cells", 100)
         ),
-        # green_ampt_overland_flow parameters
-        "soil_hydraulic_conductivity_m_s": float(
-            getattr(run_args, "soil_hydraulic_conductivity_m_s", 1.0e-5)
-        ),
+        # green_ampt_overland_flow parameters (soil K + texture class are law-9
+        # derive-or-refuse, merged conditionally below when the tool resolved them).
         "initial_soil_moisture_content": float(
             getattr(run_args, "initial_soil_moisture_content", 0.15)
-        ),
-        "green_ampt_soil_type": str(
-            getattr(run_args, "green_ampt_soil_type", "sandy loam")
         ),
         # landslide_storm_ensemble parameters (PrecipitationDistribution draws).
         "mean_storm_duration_hr": float(
@@ -203,7 +193,7 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
         "min_lake_depth_m": float(getattr(run_args, "min_lake_depth_m", 1.0)),
         "min_lake_area_m2": float(getattr(run_args, "min_lake_area_m2", 10000.0)),
         # channel_incision (detachment-limited stream-power evolution) parameters.
-        "k_bedrock": float(getattr(run_args, "k_bedrock", 1.0e-5)),
+        # k_bedrock is a law-9 refuse-or-supply coefficient, merged conditionally below.
         "m_sp": float(getattr(run_args, "m_sp", 0.5)),
         "n_sp": float(getattr(run_args, "n_sp", 1.0)),
         "uplift_rate_m_yr": float(getattr(run_args, "uplift_rate_m_yr", 1.0e-3)),
@@ -221,10 +211,7 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
             getattr(run_args, "reference_concavity", 0.5)
         ),
         # groundwater (GroundwaterDupuitPercolator) shared aquifer parameters.
-        "gw_hydraulic_conductivity_m_s": float(
-            getattr(run_args, "gw_hydraulic_conductivity_m_s", 1.0e-4)
-        ),
-        "gw_porosity": float(getattr(run_args, "gw_porosity", 0.3)),
+        # K + drainable porosity are law-9 derive-or-refuse, merged conditionally below.
         "gw_aquifer_thickness_m": float(
             getattr(run_args, "gw_aquifer_thickness_m", 20.0)
         ),
@@ -252,6 +239,24 @@ def build_landlab_build_spec(run_args: LandlabRunArgs) -> dict[str, Any]:
             getattr(run_args, "gw_storm_random_seed", 1234)
         ),
     }
+    # law 9 (ADR 0285 P3): the texture-derived-or-refused material properties are
+    # merged ONLY when the tool resolved them (a real user/derived value). None ==
+    # unresolved -> the tool already refused before dispatch, so a None never
+    # reaches here on the analysis that reads it; omitting the key lets the worker's
+    # own retained mechanical fallback stand for a direct-call on an unrelated
+    # analysis (it never touches these keys).
+    _law9_optional = (
+        "soil_transmissivity_m2_day", "soil_cohesion_pa",
+        "soil_internal_friction_deg", "soil_density_kg_m3", "soil_thickness_m",
+        "soil_hydraulic_conductivity_m_s", "green_ampt_soil_type",
+        "k_bedrock", "gw_hydraulic_conductivity_m_s", "gw_porosity",
+    )
+    for _key in _law9_optional:
+        _val = getattr(run_args, _key, None)
+        if _val is None:
+            continue
+        spec[_key] = str(_val) if _key == "green_ampt_soil_type" else float(_val)
+
     # Merge the validated physics overrides (the chain reads flow_director /
     # overland_alpha / mannings_n). Absent => byte-identical.
     spec.update(resolved)

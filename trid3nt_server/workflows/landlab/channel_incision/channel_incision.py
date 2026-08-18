@@ -33,7 +33,11 @@ from trid3nt_contracts.landlab_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import literature_offer_entry
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
 from trid3nt_server.workflows.landlab._composer_common import (
@@ -108,7 +112,7 @@ _METADATA = AtomicToolMetadata(
 )
 async def landlab_channel_incision_steady_state(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    k_bedrock: float = 1.0e-5,
+    k_bedrock: float | None = None,
     m_sp: float = 0.5,
     n_sp: float = 1.0,
     uplift_rate_m_yr: float = 1.0e-3,
@@ -136,7 +140,9 @@ async def landlab_channel_incision_steady_state(
 
     Params:
         bbox: catchment AOI, EPSG:4326.
-        k_bedrock: stream-power erodibility K in E = K A^m S^n (default 1e-5).
+        k_bedrock: stream-power erodibility K in E = K A^m S^n. A calibration
+            coefficient with no fetchable value -> REFUSES in auto until supplied
+            (law 9, literature-range user-gated offer).
         m_sp: drainage-area exponent m (default 0.5).
         n_sp: slope exponent n (default 1.0). Analytical concavity = m_sp/n_sp.
         uplift_rate_m_yr: rock uplift forcing, m/yr (default 1e-3).
@@ -172,25 +178,35 @@ async def landlab_channel_incision_steady_state(
             "error_message": f"invalid bbox: {bbox!r}",
         }
 
+    # --- law 9: erodibility K_sp REFUSES (no fetchable value); uplift + exponents
+    # are scenario/numerical (the tectonic forcing IS the question; m/n are
+    # canonical published exponents) ---
+    k_bedrock, _k_entry = literature_offer_entry(
+        param="k_bedrock", units="stream-power K (n_sp=1 form)",
+        user_value=k_bedrock, need="stream-power bedrock erodibility K_sp",
+        offer="~1e-6 to 1e-4 for the n_sp=1 form (basin-calibrated)",
+    )
     provenance: list[SyntheticInput] = [
+        _k_entry,
         SyntheticInput(
-            param="uplift_erodibility_forcing",
-            value=(
-                f"U={uplift_rate_m_yr} m/yr, K={k_bedrock}, m={m_sp}, n={n_sp}, "
-                f"T={incision_run_duration_yr:g} yr"
-            ),
-            basis="default_demo", consequence="physics",
-            real_source_if_any=None,
+            param="uplift_rate_m_yr", value=uplift_rate_m_yr, units="m/yr",
+            basis="default_demo", consequence="scenario", real_source_if_any=None,
             note=(
-                "landscape-evolution forcing is a labeled demo scenario, not a "
-                "site-measured uplift/erodibility; the DEM terrain is real"
+                "rock-uplift forcing is the scenario question (a tectonic what-if), "
+                "not a site-measured slip rate; the DEM terrain is real"
             ),
         ),
+        SyntheticInput(
+            param="stream_power_exponents", value=f"m={m_sp}, n={n_sp}",
+            basis="default_demo", consequence="numerical", real_source_if_any=None,
+            note="canonical published stream-power exponents (analytical concavity m/n)",
+        ),
     ]
+    _k_prov = "user-supplied" if k_bedrock is not None else "UNRESOLVED (law-9 refusal)"
     source_note = (
-        f"DEM: USGS 3DEP (fetched, REAL). Evolved to steady state under a DEMO "
-        f"stream-power forcing (U={uplift_rate_m_yr} m/yr, K={k_bedrock}, "
-        f"m={m_sp}, n={n_sp}); the slope-area V&V recovers K + concavity from the "
+        f"DEM: USGS 3DEP (fetched, REAL). Stream-power forcing: erodibility K_sp "
+        f"{_k_prov}, uplift U={uplift_rate_m_yr} m/yr (scenario), m={m_sp}/n={n_sp} "
+        "(canonical exponents); the slope-area V&V recovers K + concavity from the "
         "steady state."
     )
 
@@ -205,19 +221,37 @@ async def landlab_channel_incision_steady_state(
         },
     )
     if _review.cancelled:
+        _phys = physics_refusal_reason(
+            "landlab_channel_incision_steady_state", provenance
+        )
         return {
             "status": "error",
-            "error_code": "USER_INPUT_CANCELLED",
+            "error_code": (
+                "LANDLAB_PHYSICS_INPUT_REQUIRED" if _phys else "USER_INPUT_CANCELLED"
+            ),
             "error_message": (
-                f"landlab_channel_incision_steady_state {_review.cancel_reason}"
+                _review.cancel_reason
+                or "landlab_channel_incision_steady_state cancelled"
             ),
         }
     provenance = _review.entries
-    k_bedrock = float(_review.params.get("k_bedrock", k_bedrock))
+    _rv_k = _review.params.get("k_bedrock", k_bedrock)
+    k_bedrock = float(_rv_k) if _rv_k is not None else None
     uplift_rate_m_yr = float(_review.params.get("uplift_rate_m_yr", uplift_rate_m_yr))
     target_resolution_m = float(
         _review.params.get("target_resolution_m", target_resolution_m)
     )
+    # law-9 belt-and-suspenders: never evolve on an unresolved erodibility.
+    if k_bedrock is None:
+        return {
+            "status": "error",
+            "error_code": "LANDLAB_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                physics_refusal_reason(
+                    "landlab_channel_incision_steady_state", provenance
+                ) or "stream-power erodibility K_sp unresolved (law 9)."
+            ),
+        }
 
     try:
         run_args = LandlabRunArgs(

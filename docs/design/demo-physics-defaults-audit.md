@@ -232,7 +232,19 @@ Grouped by family; sized S/M/L. The mechanism wave (P1) is the gate; it must lan
 first because every downstream wave keys on the consequence tag and the
 refuse-in-auto behavior.
 
-> **STATUS (2026-08-18): P1, P2, P3, P4 LANDED** (ADR 0285). P1 = the `consequence`
+> **STATUS (2026-08-18): P1, P2, P3, P3-completion, P4 LANDED** (ADR 0285). P3-completion
+> wired the staged per-engine template conversions on the P3 substrate: landlab
+> **row 8** (susceptibility soil-strength: bulk density DERIVED from texture,
+> cohesion/friction/thickness/transmissivity REFUSE with literature offers -- law-6
+> correction: thickness is NOT texture-derivable, contra the audit's conversion
+> column), **row 9** (groundwater K+porosity DERIVED; recharge stays scenario -- a
+> precip-fraction estimate would invent the fraction; aquifer thickness = scenario
+> structural assumption), **row 10** (green_ampt Ksat + USDA texture class DERIVED),
+> **row 11** (channel_incision K_sp REFUSES with a literature offer; uplift ->
+> scenario, m/n -> numerical), and swmm **row 27** (aquifer_baseflow two-zone column
+> DERIVED from SoilGrids via a new gate, was SILENT). The 10 physics demo constants
+> DELETED; the river_seepage refusal-test premise fixed; live aquifer-column A/B at
+> Ames IA (derived conductivity 0.13 in/hr vs the dead 0.8 demo). P1 = the `consequence`
 > tag + refuse-in-auto + the 3-layer sweep guard. P2 = the MODFLOW exemplar (rows
 > 1-7): the shared `_aquifer_resolve` SoilGrids seam, the demo constants deleted,
 > 12 archetypes wired to derive-or-refuse, and the live Woburn TCE A/B. P3 = the
@@ -270,9 +282,14 @@ refuse-in-auto behavior.
   the AOI-window valid-cell mean (robust to a nodata centroid). Rows 3/4/5/7
   refuse the un-derivable physics (Brooks-Corey, ambient temp + grain conductivity,
   DEM streambed, regional gradient) while scenario forcings proceed.
-- **P3 -- Groundwater + soil material props (M).** landlab groundwater/green_ampt/
-  susceptibility (#8-#10), swmm aquifer_baseflow (#27). Same SoilGrids pedotransfer
-  substrate as P2 -> refuse-or-derive. Shares the soil-hydraulics reader with P2.
+- **P3 -- Groundwater + soil material props (M). [LANDED, ADR 0285 P3 + P3-completion]**
+  landlab susceptibility/groundwater/green_ampt/channel_incision (#8-#11), swmm
+  aquifer_baseflow (#27). The P3 wave built the substrate (`aquifer_resolve` hoist +
+  `derive_soil_column`); P3-completion wired every template to derive-or-refuse
+  through it (`derive_soil_scalars` / `soil_derived_entry` / `literature_offer_entry`),
+  deleted the 10 physics demo constants, and proved it with the live Ames-IA
+  aquifer-column A/B. Row 11 K_sp refuses (calibration coefficient); recharge stays
+  scenario (a precip-fraction would invent the fraction).
 - **P4 -- Roughness / Manning (S-M). [LANDED, ADR 0285 P4]** geoclaw manning (#16),
   swmm overland_manning (#23) via the shared `roughness_resolve` seam (area-weighted
   NLCD Manning's n from `manning_mapping.csv` -> derive or refuse). #24's

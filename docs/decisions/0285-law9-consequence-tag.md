@@ -10,8 +10,12 @@ SWMM two-zone column; per-engine template conversions staged). P4 LANDED (roughn
 Manning: the shared `roughness_resolve` NLCD-derived-or-refuse seam, swmm
 urban_flood row 23 + geoclaw storm_surge row 16 wired, the 0.03/0.025 demo constants
 deleted, live urban_flood A/B; the row-24 CN misread + row-17 value-path +
-geoclaw-sibling findings reported). The remaining real-source conversions (P5-P8)
-are staged for their per-engine waves. Date: 2026-08-18. Source:
+geoclaw-sibling findings reported). P3-COMPLETION LANDED (the staged per-engine
+template conversions on the P3 substrate: landlab susceptibility row 8 / groundwater
+row 9 / green_ampt row 10 / channel_incision row 11 + swmm aquifer_baseflow row 27;
+the demo constants deleted; the river_seepage refusal-test premise fixed; live
+aquifer-column A/B; see the P3-completion section). The remaining real-source
+conversions (P5-P8) are staged for their per-engine waves. Date: 2026-08-18. Source:
 `docs/design/demo-physics-defaults-audit.md`.
 
 ## Context
@@ -355,3 +359,108 @@ NLCD Manning's n is DERIVED and the pyswmm solve completes with the derived
 provenance visible (`basis="derived"`); [B] the SAME AOI with `fetch_landcover`
 force-failed -> the typed `SWMM_PHYSICS_INPUT_REQUIRED` refusal, no solve. (A/B
 values captured in the P4 return report.)
+
+## P3-completion -- the staged per-engine soil-hydraulics conversions (LANDED)
+
+P3 (LANDED earlier) built the SUBSTRATE: it hoisted `_aquifer_resolve` to
+`workflows/shared/aquifer_resolve.py` and added `derive_soil_column` (the two-zone
+SWMM column). P3-completion wires the per-engine TEMPLATE conversions P3 staged
+FOR that substrate (audit rows 8-11 + 27), so an under-specified auto run DERIVES
+the material property from the AOI or REFUSES - never an invented default.
+
+### Shared-seam additions (`aquifer_resolve.py`)
+
+- `derive_soil_scalars(lat, lon) -> SoilDerivation` - ONE SoilGrids texture read
+  serves every Landlab consumer's scalar: Ksat, drainable porosity, dry BULK
+  DENSITY (`rho_b = (1 - theta_s) * 2650`, Saxton-Rawls Eq. 6), and the USDA
+  texture class. `usda_texture_class(sand, clay)` classifies the texture triangle
+  into the label Landlab's Green-Ampt table keys the capillary suction on.
+- `soil_derived_entry(...)` - the user -> SoilGrids-derived -> REFUSE ladder for
+  ONE texture-derived scalar (returns the effective value + a `SyntheticInput`).
+- `literature_offer_entry(...)` - the user -> REFUSE-with-literature-offer ladder
+  for an UN-derivable physics scalar (geotechnical strength, calibration
+  coefficients): `default_demo/physics` with the literature range in the note a
+  `user_gated` session can approve. Both keep the gate's auto-refuse mechanism.
+
+### The per-row conversions
+
+- **row 8 (landlab susceptibility, + landslide_storm_ensemble share the block).**
+  Of the five strength params, only the DRY BULK DENSITY is honestly served by
+  texture (Saxton-Rawls) - DERIVED. Cohesion + internal friction (no fetchable
+  value), soil mantle thickness (depth-to-bedrock, NOT a texture output), and
+  transmissivity (needs that thickness) REFUSE in auto with literature-range
+  user-gated offers. **Law-6 correction to the audit:** the audit's conversion
+  column said "SoilGrids + a strength pedotransfer can serve density/THICKNESS" -
+  thickness is NOT texture-derivable (our texture read gives sand/clay, not
+  depth-to-restrictive-layer), so thickness REFUSES, it is not derived. The
+  overland-flow chain (rainfall-driven) does NOT gate on soil strength.
+- **row 9 (landlab groundwater_water_table + groundwater_storm_recession).** K +
+  drainable porosity DERIVED from the shared texture read or REFUSE. **Recharge
+  decision (the P3 gridMET-derivability check):** recharge stays
+  `consequence="scenario"` and PROCEEDS labeled - it is NOT auto-derived. A
+  precip-fraction screening estimate (recharge = f * P) requires INVENTING the
+  fraction f, which varies an order of magnitude with climate/soil/land use
+  (~1-50%); deriving "recharge = 0.1 * precip" would invent the 0.1 - itself a
+  law-9 violation. Areal recharge is the user's scenario FORCING question (the
+  audit's own borderline guidance + the P1 tag), so it proceeds labeled, not
+  refused. The aquifer thickness (max saturated thickness above the Dupuit base)
+  is a screening STRUCTURAL assumption (no fetcher) -> `consequence="scenario"`
+  (a NATE judgment-call surfaced: physics-consequential but not fetchable and not
+  the FoS-style silent-hazard driver; tagging it physics would brick the template
+  with no supply path, mirroring the ADR's urban_flood borderline resolution).
+- **row 10 (landlab green_ampt).** Ksat (Saxton-Rawls) AND the USDA texture class
+  (which SELECTS the Green-Ampt capillary suction) DERIVED from ONE SoilGrids read
+  or REFUSE. A straight SoilColumn/texture fit, exactly as the audit named.
+- **row 11 (landlab channel_incision).** K_sp REFUSES with a literature-range
+  offer (a calibration coefficient, no fetchable value). The combined
+  `uplift_erodibility_forcing` physics entry is SPLIT: K_sp -> physics (refuse);
+  uplift_rate -> scenario (the tectonic what-if); m_sp/n_sp -> numerical (canonical
+  published exponents, kept). channel_incision now REFUSES in auto until k_bedrock
+  is supplied - the honest law-9 position for an un-fetchable coefficient.
+- **row 27 (swmm aquifer_baseflow, a SILENT row).** The two-zone [AQUIFERS]
+  moisture column (porosity=theta_s, wilting=theta_1500, field_capacity=theta_33,
+  conductivity=Ksat) DERIVED from `derive_soil_column` at a `location`/`lat`/`lon`
+  AOI, through a NEW `gate_input_review` call, or REFUSE. This row rode COMPLETELY
+  UNLABELED before (no provenance, no gate); it now surfaces `aquifer_provenance`
+  + the derived column and refuses (`SWMM_PHYSICS_INPUT_REQUIRED`) when neither a
+  site nor an explicit column is given / SoilGrids cannot serve.
+
+### Contract + build-spec + worker
+
+The 10 wired `LandlabRunArgs` fields (5 strength + Ksat + texture class + gwK +
+gwPorosity + k_bedrock) became `float|None` / `str|None` (no invented default); the
+10 physics `DEFAULT_*` constants are DELETED. `build_landlab_build_spec` merges each
+ONLY when the tool resolved it (a None never reaches the worker on the analysis that
+reads it - the tool refused first). The worker `component_chain.py` keeps its OWN
+inline `spec.get(k, literal)` mechanical fallbacks (worker-local, self-contained -
+NOT imported from the contract, so the contract deletion does not touch them):
+RETAINED as the direct-call/unit-test last resort, the SAME P4 precedent as
+`build_swmm_mesh`'s `DEFAULT_OVERLAND_N`.
+
+### The refusal-test premise fix
+
+`test_river_seepage.py::test_demo_aquifer_refuses_in_auto` asserted a law-9 refusal
+but the offline SoilGrids REST fetcher SERVES real texture (reachable without our
+infra), so the shared resolver DERIVED a K and the run PROCEEDED - the test never
+exercised the refusal it named. Fixed by monkeypatching `aquifer_resolve.derive_soil_k`
+to None (the proof-script pattern) so SoilGrids is forced unavailable and the refusal
+path runs.
+
+### The proving A/B -- swmm aquifer_baseflow (`scripts/proof_law9_soil_column_ab.py`)
+
+The cheapest wired template (in-process pyswmm, no DEM/worker image), at Ames, Iowa
+(deep agricultural soil - clear SoilGrids coverage):
+
+- **(A) SoilGrids ON** -> the two-zone column is DERIVED from AOI texture
+  (sand=16.9% / clay=32.1%, a silty clay loam): porosity=0.464, wilting=0.196,
+  field_capacity=0.357, **conductivity=0.132 in/hr** (`basis="derived"`,
+  `fetch_soilgrids (Saxton-Rawls 2006 two-zone column)`); the pyswmm baseflow solve
+  completes (routing error 0.0%, recession tau ~374 h, baseflow contribution
+  0.94 cfs).
+- **(B) SoilGrids force-failed** -> the typed `SWMM_PHYSICS_INPUT_REQUIRED` refusal
+  naming `aquifer_soil_column`, no solve.
+
+The derived conductivity **0.132 in/hr vs the deleted 0.8 in/hr demo (~6x LOWER)**:
+the Iowa silty clay loam drains far slower than the demo sand assumed, reshaping the
+between-storms recession - precisely the "silently ruin the simulation" outcome law 9
+forbids.

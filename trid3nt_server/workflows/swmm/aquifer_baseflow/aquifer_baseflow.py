@@ -46,15 +46,22 @@ field this tool returns - never free-generated.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import tempfile
 from pathlib import Path
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.data import register_tool, TOOL_REGISTRY
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import derive_soil_column
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
 
 logger = logging.getLogger(
@@ -76,10 +83,11 @@ TEMPLATE_CARD = TemplateCard(
         "drainage node between storms, and how does the groundwater pathway "
         "reshape the node hydrograph versus surface runoff alone"
     ),
-    required_inputs=[],
+    required_inputs=["location (or lat/lon) for the SoilGrids soil-column derivation"],
     knobs=(
-        "rainfall_series_in_hr, dt_min, area_ac, a1/b1 (groundwater flow "
-        "coefficients), aquifer porosity/wilting/field-capacity/conductivity, "
+        "location/lat/lon (AOI for the derived aquifer column), rainfall_series_in_hr, "
+        "dt_min, area_ac, a1/b1 (groundwater flow coefficients), aquifer "
+        "porosity/wilting/field-capacity/conductivity (else SoilGrids-derived), "
         "initial_water_table_ft, sim_days"
     ),
 )
@@ -92,6 +100,23 @@ _METADATA = AtomicToolMetadata(
     engine="swmm",
     tier="template",
 )
+
+
+def _geocode_site(location: str) -> tuple[float, float]:
+    """Resolve a place name to ``(lat, lon)`` via the ``geocode_location`` tool.
+
+    Raises on any lookup failure so the caller narrates a typed refusal (never a
+    fabricated site). Seam-1: resolves through ``TOOL_REGISTRY``.
+    """
+    entry = TOOL_REGISTRY.get("geocode_location")
+    if entry is None:
+        raise RuntimeError("geocode_location not registered")
+    r = entry.fn(location)
+    lat = r.get("latitude") if isinstance(r, dict) else getattr(r, "latitude", None)
+    lon = r.get("longitude") if isinstance(r, dict) else getattr(r, "longitude", None)
+    if lat is None or lon is None:
+        raise RuntimeError(f"geocode returned no coordinates for {location!r}")
+    return float(lat), float(lon)
 
 
 def default_two_storm_forcing(
@@ -116,12 +141,12 @@ def build_aquifer_inp(
     dt_min: int,
     area_ac: float,
     *,
+    porosity: float,
+    wilting_point: float,
+    field_capacity: float,
+    conductivity_in_hr: float,
     a1: float = 0.002,
     b1: float = 1.0,
-    porosity: float = 0.46,
-    wilting_point: float = 0.13,
-    field_capacity: float = 0.28,
-    conductivity_in_hr: float = 0.8,
     initial_water_table_ft: float = 4.0,
     surface_elev_ft: float = 10.0,
     sim_days: int = 24,
@@ -129,7 +154,10 @@ def build_aquifer_inp(
     """Author a SWMM 5 deck: one pervious subcatchment over an [AQUIFERS] two-zone
     column linked by [GROUNDWATER] (subcatchment -> aquifer -> node J1) with the
     A1/B1 baseflow coefficients, draining to an outfall. Returns the ``.inp`` text
-    (US units: feet, inches, in/hr). ``a1=0`` disables the baseflow pathway."""
+    (US units: feet, inches, in/hr). ``a1=0`` disables the baseflow pathway. The
+    two-zone column (porosity / wilting / field-capacity / conductivity) is
+    REQUIRED - law 9: the tool derives it from SoilGrids or refuses (no invented
+    column here)."""
     ts_rain = "\n".join(f"TSER_R {clk} {v:.4f}" for clk, v in rainfall_series_in_hr)
     end_date = 1 + int(sim_days)
     dd = end_date // 30 + 1
@@ -272,17 +300,21 @@ def _node_chart_spec(hours: list[float], with_gw: list[float],
     idempotent_hint=True,
 )
 async def swmm_aquifer_baseflow_to_node(
+    location: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
     rainfall_series_in_hr: list[list[Any]] | list[tuple[str, float]] | None = None,
     dt_min: int = 15,
     area_ac: float = 100.0,
     a1: float = 0.002,
     b1: float = 1.0,
-    porosity: float = 0.46,
-    wilting_point: float = 0.13,
-    field_capacity: float = 0.28,
-    conductivity_in_hr: float = 0.8,
+    porosity: float | None = None,
+    wilting_point: float | None = None,
+    field_capacity: float | None = None,
+    conductivity_in_hr: float | None = None,
     initial_water_table_ft: float = 4.0,
     sim_days: int = 24,
+    input_mode: str | None = None,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Two-zone aquifer baseflow to a node: how much sustained groundwater
@@ -299,6 +331,11 @@ async def swmm_aquifer_baseflow_to_node(
     (module docstring).
 
     Parameters:
+      location: place name (e.g. "Fort Myers, FL") geocoded to the AOI at which
+        the two-zone aquifer moisture column is DERIVED from SoilGrids texture
+        (law 9). Alternatively pass ``lat``/``lon`` directly.
+      lat, lon: explicit AOI coordinates (override ``location``) for the SoilGrids
+        soil-column derivation.
       rainfall_series_in_hr: rainfall intensity ``[["H:MM", in/hr], ...]``
         pairs. Default = a representative two-storm sequence (day 1 and day
         12) so the between-storms baseflow and the day-12 recharge bump are
@@ -310,8 +347,11 @@ async def swmm_aquifer_baseflow_to_node(
       b1: groundwater flow exponent. Default 1.0 (linear reservoir -> a clean
         exponential baseflow recession).
       porosity, wilting_point, field_capacity, conductivity_in_hr: two-zone
-        aquifer soil-moisture-balance properties.
-      initial_water_table_ft: initial saturated-zone water-table elevation (ft).
+        aquifer soil-moisture-balance properties. Unset -> DERIVED from SoilGrids
+        texture at the AOI (Saxton-Rawls); the run REFUSES in auto when neither a
+        site nor an explicit column is given, or SoilGrids cannot serve (law 9).
+      initial_water_table_ft: initial saturated-zone water-table elevation (ft),
+        a scenario initial state. Default 4.
       sim_days: simulation length, days. Default 24.
 
     Returns:
@@ -344,16 +384,91 @@ async def swmm_aquifer_baseflow_to_node(
 
     rain = _coerce(rainfall_series_in_hr) or default_two_storm_forcing(dt_min_i, days)
 
+    # --- law 9: two-zone aquifer soil column DERIVED from SoilGrids or REFUSE ---
+    # The [AQUIFERS] moisture column (porosity / wilting / field capacity /
+    # conductivity) is a physics-consequential material property that drives the
+    # baseflow recession directly. It is DERIVED from SoilGrids texture at the AOI
+    # (the Saxton-Rawls two-zone fit) or REFUSES in auto - never an invented column.
+    _user_column = (
+        porosity is not None and wilting_point is not None
+        and field_capacity is not None and conductivity_in_hr is not None
+    )
+    _lat, _lon, _geo_reason = lat, lon, None
+    if not _user_column and (_lat is None or _lon is None) and location:
+        try:
+            _lat, _lon = await asyncio.to_thread(_geocode_site, location)
+        except Exception as exc:  # noqa: BLE001 - a failed geocode -> typed refusal
+            _geo_reason = f"geocode failed for {location!r}: {exc}"
+    _col = None
+    _col_meta: dict[str, Any] = {}
+    if not _user_column and _lat is not None and _lon is not None:
+        _col, _col_meta = await asyncio.to_thread(derive_soil_column, _lat, _lon)
+    elif not _user_column:
+        _col_meta = {"reason": _geo_reason or "no site (location or lat/lon) supplied"}
+
+    if _user_column:
+        column = dict(
+            porosity=float(porosity), wilting_point=float(wilting_point),
+            field_capacity=float(field_capacity),
+            conductivity_in_hr=float(conductivity_in_hr),
+        )
+        _col_entry = SyntheticInput(
+            param="aquifer_soil_column", basis="user", consequence="physics",
+            value=(f"por={column['porosity']}, wp={column['wilting_point']}, "
+                   f"fc={column['field_capacity']}, K={column['conductivity_in_hr']} in/hr"),
+            note="caller-supplied two-zone aquifer moisture column.",
+        )
+    elif _col is not None:
+        column = dict(
+            porosity=_col.porosity, wilting_point=_col.wilting_point,
+            field_capacity=_col.field_capacity,
+            conductivity_in_hr=_col.conductivity_in_hr,
+        )
+        _col_entry = SyntheticInput(
+            param="aquifer_soil_column", basis="derived", consequence="physics",
+            real_source_if_any="fetch_soilgrids (Saxton-Rawls 2006 two-zone column)",
+            value=(f"por={_col.porosity}, wp={_col.wilting_point}, "
+                   f"fc={_col.field_capacity}, K={_col.conductivity_in_hr} in/hr"),
+            note=(f"two-zone aquifer moisture column DERIVED from SoilGrids texture "
+                  f"at the AOI (sand={_col.sand_pct}%, clay={_col.clay_pct}%). "
+                  "SCREENING near-surface proxy, NOT a measured column."),
+        )
+    else:
+        column = None
+        _col_entry = SyntheticInput(
+            param="aquifer_soil_column", value=None,
+            basis="default_demo", consequence="physics", real_source_if_any=None,
+            note=(f"the two-zone aquifer moisture column could not be resolved from "
+                  f"SoilGrids ({_col_meta.get('reason', 'unavailable')}). No invented "
+                  "default (law 9): supply a location / lat+lon within SoilGrids "
+                  "coverage, or explicit porosity/wilting_point/field_capacity/"
+                  "conductivity_in_hr."),
+        )
+
+    _review = await gate_input_review(
+        tool_name="swmm_aquifer_baseflow_to_node", mode=input_mode,
+        entries=[_col_entry], params={},
+    )
+    if _review.cancelled or column is None:
+        return {
+            "status": "error",
+            "error_code": "SWMM_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                _review.cancel_reason
+                or physics_refusal_reason(
+                    "swmm_aquifer_baseflow_to_node", [_col_entry]
+                )
+                or str(_col_entry.note)
+            ),
+        }
+    _col_basis = _col_entry.basis
+    _col_source = _col_entry.real_source_if_any
+
     common = dict(dt_min=dt_min_i, area_ac=area, b1=float(b1),
-                  porosity=float(porosity), wilting_point=float(wilting_point),
-                  field_capacity=float(field_capacity),
-                  conductivity_in_hr=float(conductivity_in_hr),
                   initial_water_table_ft=float(initial_water_table_ft),
-                  sim_days=days)
+                  sim_days=days, **column)
 
     try:
-        import asyncio
-
         inp_gw = build_aquifer_inp(rain, a1=float(a1), **common)
         hrs, node_gw, ro, cont = await asyncio.to_thread(solve_aquifer_deck, inp_gw)
         inp_no = build_aquifer_inp(rain, a1=0.0, **common)
@@ -422,6 +537,11 @@ async def swmm_aquifer_baseflow_to_node(
         "area_ac": area,
         "a1": float(a1),
         "b1": float(b1),
+        "aquifer_soil_column": {k: round(float(v), 4) for k, v in column.items()},
+        "aquifer_provenance": (
+            str(_col_entry.note)
+            + (f" [{_col_source}]" if _col_source else f" [basis={_col_basis}]")
+        ),
         "peak_node_inflow_with_gw_cfs": round(peak_gw, 5),
         "peak_node_inflow_with_gw_hr": round(hrs[peak_gw_i], 2) if hrs else 0.0,
         "peak_node_inflow_no_gw_cfs": round(peak_no, 5),

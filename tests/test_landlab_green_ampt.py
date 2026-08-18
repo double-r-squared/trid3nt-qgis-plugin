@@ -55,9 +55,13 @@ def test_green_ampt_defaults():
         bbox=(-105.37, 39.998, -105.33, 40.032),
         analysis="green_ampt_overland_flow",
     )
-    assert ra.soil_hydraulic_conductivity_m_s > 0.0
+    # law 9: the soil hydraulic block (Ksat + texture class) has NO invented
+    # default - it is DERIVED from SoilGrids texture at the tool layer or REFUSES.
+    # Unset on the bare RunArgs is None (the tool supplies a real value or refuses).
+    assert ra.soil_hydraulic_conductivity_m_s is None
+    assert ra.green_ampt_soil_type is None
+    # the initial soil moisture is a scenario initial state (retains its default).
     assert 0.0 <= ra.initial_soil_moisture_content < 1.0
-    assert ra.green_ampt_soil_type
 
 
 def test_green_ampt_layer_uri_is_layer_subtype():

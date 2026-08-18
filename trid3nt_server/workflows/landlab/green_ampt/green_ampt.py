@@ -35,15 +35,20 @@ from typing import Any
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.landlab_contracts import (
-    DEFAULT_GREEN_AMPT_K_M_S,
-    DEFAULT_GREEN_AMPT_SOIL_TYPE,
     DEFAULT_INITIAL_SOIL_MOISTURE,
     LandlabGreenAmptLayerURI,
     LandlabRunArgs,
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.gates.input_review import gate_input_review
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+)
+from trid3nt_server.workflows.shared.aquifer_resolve import (
+    derive_soil_scalars,
+    soil_derived_entry,
+)
 from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.data import register_tool
 from trid3nt_server.data.publish_layer.publish_layer import (
@@ -147,9 +152,9 @@ async def landlab_green_ampt_overland_flow(
     rainfall_intensity_mm_hr: float | None = None,
     storm_duration_hr: float = _DEFAULT_GREEN_AMPT_DURATION_HR,
     rainfall_return_period_yr: int = _DEFAULT_GREEN_AMPT_RETURN_PERIOD_YR,
-    soil_hydraulic_conductivity_m_s: float = DEFAULT_GREEN_AMPT_K_M_S,
+    soil_hydraulic_conductivity_m_s: float | None = None,
     initial_soil_moisture_content: float = DEFAULT_INITIAL_SOIL_MOISTURE,
-    green_ampt_soil_type: str = DEFAULT_GREEN_AMPT_SOIL_TYPE,
+    green_ampt_soil_type: str | None = None,
     target_resolution_m: float = 30.0,
     compute_class: str = "standard",
     input_mode: str | None = None,
@@ -165,9 +170,11 @@ async def landlab_green_ampt_overland_flow(
     Data: the DEM is REAL (USGS 3DEP via seam-1). The TRIGGERING RAINFALL is the
     real NOAA Atlas-14 design storm (rainfall_return_period_yr / storm_duration_hr)
     -- ``rainfall_intensity_mm_hr`` is DERIVED from it when unset; a failed lookup
-    STOPS with a typed gate (never a baked default). The SOIL hydraulic block
-    (hydraulic_conductivity / initial moisture / soil type) STAYS demo-defaulted
-    -- no SSURGO fetcher yet -- and is labeled in source_note.
+    STOPS with a typed gate (never a baked default). The Green-Ampt SOIL hydraulics
+    (saturated conductivity + texture class) are DERIVED from SoilGrids texture at
+    the AOI (Saxton-Rawls Ksat + the USDA texture class that selects the capillary
+    suction); when SoilGrids cannot serve, the run REFUSES in auto (law 9 -- no
+    invented soil default). The initial soil moisture is a scenario initial state.
     Off-scope: landslide susceptibility -> landlab_susceptibility; drainage
     area / channel network -> landlab_flow_accumulation; riverine/coastal
     inundation -> sfincs_flood; urban pluvial drainage -> swmm_urban_flood.
@@ -185,10 +192,12 @@ async def landlab_green_ampt_overland_flow(
             also the Atlas-14 lookup duration.
         rainfall_return_period_yr: design-storm return period, years (default 100).
         soil_hydraulic_conductivity_m_s: Green-Ampt saturated hydraulic
-            conductivity, m/s (default demo sandy-loam K).
+            conductivity, m/s. Unset -> DERIVED from SoilGrids texture at the AOI;
+            refuses in auto when SoilGrids cannot serve (law 9).
         initial_soil_moisture_content: initial volumetric soil moisture in [0, 1)
-            (default demo 0.15).
-        green_ampt_soil_type: soil texture class (default "sandy loam").
+            (default 0.15, a scenario initial state).
+        green_ampt_soil_type: USDA soil texture class (selects the Green-Ampt
+            suction). Unset -> DERIVED from SoilGrids texture at the AOI.
         target_resolution_m: grid cell size, m (default 30).
         compute_class: compute class (default "standard").
         input_mode: run-mode lever. "user_gated" presents the resolved
@@ -272,18 +281,63 @@ async def landlab_green_ampt_overland_flow(
         provenance.append(
             SyntheticInput(param="rainfall_intensity_mm_hr", basis="user")
         )
-    provenance.append(
-        SyntheticInput(
-            param="soil_hydraulic_properties",
-            value=f"K={soil_hydraulic_conductivity_m_s:.1e} m/s, {green_ampt_soil_type}",
-            basis="default_demo", consequence="physics",
-            note="no SSURGO soil fetcher yet; not site-calibrated",
-        )
+    # --- law 9: Green-Ampt soil hydraulics DERIVED from SoilGrids or REFUSE ---
+    # The saturated conductivity (Saxton-Rawls Ksat) AND the USDA texture class
+    # (which selects the Green-Ampt capillary suction) come from ONE SoilGrids
+    # texture read at the AOI centroid; when SoilGrids cannot serve, both stay
+    # unresolved (default_demo/physics) so the gate REFUSES in auto (no invented
+    # soil constant).
+    _need_soil = (
+        soil_hydraulic_conductivity_m_s is None or green_ampt_soil_type is None
+    )
+    _lat = 0.5 * (coerced[1] + coerced[3])
+    _lon = 0.5 * (coerced[0] + coerced[2])
+    _deriv = None
+    _soil_meta: dict[str, Any] = {}
+    if _need_soil:
+        _deriv, _soil_meta = await asyncio.to_thread(derive_soil_scalars, _lat, _lon)
+
+    soil_hydraulic_conductivity_m_s, _k_entry = soil_derived_entry(
+        param="soil_hydraulic_conductivity_m_s", units="m/s",
+        user_value=soil_hydraulic_conductivity_m_s,
+        derived_value=(_deriv.k_m_s if _deriv is not None else None),
+        meta=_soil_meta, need="Green-Ampt saturated hydraulic conductivity",
+        derived_note="Green-Ampt Ksat",
+    )
+    provenance.append(_k_entry)
+
+    if green_ampt_soil_type is not None:
+        provenance.append(SyntheticInput(
+            param="green_ampt_soil_type", value=str(green_ampt_soil_type),
+            basis="user", consequence="physics",
+            note="caller-supplied Green-Ampt texture class."))
+    elif _deriv is not None:
+        green_ampt_soil_type = _deriv.texture_class
+        provenance.append(SyntheticInput(
+            param="green_ampt_soil_type", value=green_ampt_soil_type,
+            basis="derived", consequence="physics",
+            real_source_if_any="fetch_soilgrids (USDA texture class)",
+            note=(f"USDA texture class DERIVED from SoilGrids at the AOI "
+                  f"(sand={_deriv.sand_pct}%, clay={_deriv.clay_pct}%); selects the "
+                  "Green-Ampt capillary suction. SCREENING near-surface proxy.")))
+    else:
+        provenance.append(SyntheticInput(
+            param="green_ampt_soil_type", value=None, basis="default_demo",
+            consequence="physics",
+            note=("Green-Ampt soil texture class could not be resolved from SoilGrids "
+                  f"at this AOI ({_soil_meta.get('reason', 'unavailable')}). No invented "
+                  "default (law 9): supply green_ampt_soil_type or run where SoilGrids "
+                  "has coverage.")))
+
+    _soil_prov = (
+        "DERIVED from SoilGrids texture at the AOI (Saxton-Rawls Ksat + USDA class)"
+        if _deriv is not None
+        else "user-supplied" if not _need_soil
+        else "UNRESOLVED - SoilGrids could not serve (law-9 refusal)"
     )
     source_note = (
         _rainfall_label
-        + "; SOIL hydraulic block (K / initial moisture / soil type) is a demo "
-        "default - no SSURGO soil fetcher yet, not site-calibrated."
+        + f"; Green-Ampt soil hydraulics (Ksat + texture class) {_soil_prov}."
     )
 
     _review = await gate_input_review(
@@ -297,25 +351,42 @@ async def landlab_green_ampt_overland_flow(
         },
     )
     if _review.cancelled:
+        _phys = physics_refusal_reason("landlab_green_ampt_overland_flow", provenance)
         return {
             "status": "error",
-            "error_code": "USER_INPUT_CANCELLED",
-            "error_message": f"landlab_green_ampt_overland_flow {_review.cancel_reason}",
+            "error_code": (
+                "LANDLAB_PHYSICS_INPUT_REQUIRED" if _phys else "USER_INPUT_CANCELLED"
+            ),
+            "error_message": (
+                _review.cancel_reason
+                or f"landlab_green_ampt_overland_flow {_review.cancel_reason}"
+            ),
         }
     provenance = _review.entries
     rainfall_intensity_mm_hr = float(
         _review.params.get("rainfall_intensity_mm_hr", rainfall_intensity_mm_hr)
     )
-    soil_hydraulic_conductivity_m_s = float(
-        _review.params.get(
-            "soil_hydraulic_conductivity_m_s", soil_hydraulic_conductivity_m_s
-        )
+    _rv_k = _review.params.get(
+        "soil_hydraulic_conductivity_m_s", soil_hydraulic_conductivity_m_s
     )
+    soil_hydraulic_conductivity_m_s = float(_rv_k) if _rv_k is not None else None
     initial_soil_moisture_content = float(
         _review.params.get(
             "initial_soil_moisture_content", initial_soil_moisture_content
         )
     )
+    # law-9 belt-and-suspenders: never build a deck on an unresolved soil value
+    # (e.g. the headless user_gated fail-open path that did not refuse).
+    if soil_hydraulic_conductivity_m_s is None or green_ampt_soil_type is None:
+        return {
+            "status": "error",
+            "error_code": "LANDLAB_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                physics_refusal_reason(
+                    "landlab_green_ampt_overland_flow", provenance
+                ) or "Green-Ampt soil hydraulics unresolved (law 9)."
+            ),
+        }
 
     try:
         run_args = LandlabRunArgs(

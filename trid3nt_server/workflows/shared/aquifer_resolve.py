@@ -59,12 +59,22 @@ __all__ = [
     "derive_soil_k",
     "SoilColumn",
     "derive_soil_column",
+    "usda_texture_class",
+    "SoilDerivation",
+    "derive_soil_scalars",
+    "soil_derived_entry",
+    "literature_offer_entry",
     "AquiferResolution",
     "resolve_aquifer_properties",
     "provenance_summary",
     "SOIL_TEXTURE_HALF_DEG",
     "SOIL_TEXTURE_DEPTH",
+    "PARTICLE_DENSITY_KG_M3",
 ]
+
+#: Mineral soil particle (grain) density (kg/m^3) - the Saxton-Rawls (2006)
+#: convention for the bulk-density closure rho_b = (1 - theta_s) * particle_density.
+PARTICLE_DENSITY_KG_M3: float = 2650.0
 
 
 def provenance_summary(resolution: "AquiferResolution") -> str:
@@ -291,6 +301,216 @@ def derive_soil_column(lat: float, lon: float) -> tuple[SoilColumn | None, dict[
          "basis": pk.basis, "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
     )
     return column, meta
+
+
+#: USDA soil-texture classes Landlab's SoilInfiltrationGreenAmpt tabulates
+#: (capillary-head + porosity per class). The classifier below returns one of
+#: these so the Green-Ampt suction is a texture-DERIVED selection, not a demo pick.
+_USDA_TEXTURE_CLASSES: frozenset[str] = frozenset({
+    "sand", "loamy sand", "sandy loam", "loam", "silt loam", "silt",
+    "sandy clay loam", "clay loam", "silty clay loam", "sandy clay",
+    "silty clay", "clay",
+})
+
+
+def usda_texture_class(sand_pct: float, clay_pct: float) -> str:
+    """Classify a (sand%, clay%) point into its USDA soil-texture-triangle class.
+
+    The standard USDA textural-triangle boundaries (silt = 100 - sand - clay).
+    Returns one of ``_USDA_TEXTURE_CLASSES`` - the label Landlab's Green-Ampt
+    table keys its capillary-head + porosity on, so the texture read SELECTS the
+    Green-Ampt parameters (a derived choice, not an invented default). Pure.
+    """
+    s = max(0.0, min(100.0, float(sand_pct)))
+    c = max(0.0, min(100.0, float(clay_pct)))
+    silt = max(0.0, 100.0 - s - c)
+    if c >= 40.0:
+        if silt >= 40.0:
+            return "silty clay"
+        if s <= 45.0:
+            return "clay"
+        return "sandy clay"
+    if c >= 27.0:
+        if s <= 20.0:
+            return "silty clay loam"
+        if s <= 45.0:
+            return "clay loam"
+        return "sandy clay loam"
+    if c >= 20.0:
+        if s > 45.0 and silt < 28.0:
+            return "sandy clay loam"
+        if silt < 50.0:
+            return "loam"
+        return "silt loam"
+    # clay < 20
+    if silt >= 80.0 and c < 12.0:
+        return "silt"
+    if silt >= 50.0:
+        if c >= 12.0 or s <= 52.0:
+            return "silt loam"
+    if c >= 7.0 and silt >= 28.0 and s <= 52.0:
+        return "loam"
+    # sandy end of the triangle
+    if s >= 85.0 and (silt + 1.5 * c) < 15.0:
+        return "sand"
+    if s >= 70.0 and (silt + 2.0 * c) < 30.0:
+        return "loamy sand"
+    return "sandy loam"
+
+
+@dataclass(frozen=True)
+class SoilDerivation:
+    """The full set of soil scalars a texture read serves + its provenance flags.
+
+    ONE SoilGrids texture read (sand + clay, AOI-window mean) drives the whole
+    Saxton-Rawls (2006) fit, so every scalar several Landlab chains need comes from
+    the same derivation, not N separate reads:
+
+    - ``k_m_s`` - saturated hydraulic conductivity (the Ksat closure).
+    - ``drainable_porosity`` - effective/drainable porosity.
+    - ``bulk_density_kg_m3`` - dry bulk density rho_b = (1 - theta_s) *
+      particle_density (Saxton-Rawls Eq. 6): the ONE soil-strength scalar texture
+      honestly serves (cohesion + internal friction are NOT texture-derivable ->
+      literature-range user-gated offers; soil mantle thickness is depth-to-bedrock,
+      not a texture output -> refuse).
+    - ``texture_class`` - the USDA class (selects the Green-Ampt suction table).
+
+    A NEAR-SURFACE soil proxy, NOT a measured column (the standing pedotransfer
+    limitation).
+    """
+
+    k_m_s: float
+    drainable_porosity: float
+    bulk_density_kg_m3: float
+    texture_class: str
+    sand_pct: float
+    clay_pct: float
+    clamped: bool
+
+
+def derive_soil_scalars(lat: float, lon: float) -> tuple[SoilDerivation | None, dict[str, Any]]:
+    """Derive the shared soil scalars at the AOI from SoilGrids texture.
+
+    Reuses the single texture read + Saxton-Rawls seam that serves the aquifer K
+    and the two-zone column: Ksat, drainable porosity, dry bulk density (from
+    theta_s), and the USDA texture class. Returns ``(SoilDerivation_or_None,
+    meta)``. NEVER raises: any fetch / pedotransfer failure returns ``(None,
+    meta_with_reason)`` so the caller REFUSES (law 9 - no invented default).
+    A NEAR-SURFACE proxy.
+    """
+    sand_pct, clay_pct, meta = _fetch_texture(lat, lon)
+    if sand_pct is None or clay_pct is None:
+        return None, meta
+    try:
+        pk = ksat_from_texture(
+            sand_pct / 100.0, clay_pct / 100.0, depth_label=SOIL_TEXTURE_DEPTH,
+        )
+    except SoilHydraulicsInputError as exc:
+        meta["reason"] = f"pedotransfer input invalid: {exc}"
+        return None, meta
+    theta_s = float(pk.intermediates["theta_s"])
+    bulk_density = round((1.0 - theta_s) * PARTICLE_DENSITY_KG_M3, 1)
+    derivation = SoilDerivation(
+        k_m_s=pk.k_m_s,
+        drainable_porosity=round(float(pk.porosity), 4),
+        bulk_density_kg_m3=bulk_density,
+        texture_class=usda_texture_class(sand_pct, clay_pct),
+        sand_pct=round(sand_pct, 1),
+        clay_pct=round(clay_pct, 1),
+        clamped=pk.clamped,
+    )
+    meta.update(
+        {"sand_pct": derivation.sand_pct, "clay_pct": derivation.clay_pct,
+         "k_m_s": derivation.k_m_s, "drainable_porosity": derivation.drainable_porosity,
+         "bulk_density_kg_m3": derivation.bulk_density_kg_m3,
+         "texture_class": derivation.texture_class,
+         "basis": pk.basis, "depth": SOIL_TEXTURE_DEPTH, "clamped": pk.clamped}
+    )
+    return derivation, meta
+
+
+def soil_derived_entry(
+    *,
+    param: str,
+    units: str | None,
+    user_value: float | None,
+    derived_value: float | None,
+    meta: dict[str, Any],
+    need: str,
+    derived_note: str,
+) -> tuple[float | None, SyntheticInput]:
+    """The user -> SoilGrids-derived -> REFUSE ladder for one texture-derived scalar.
+
+    Returns ``(effective_value_or_None, entry)``. ``user_value`` is used verbatim
+    (``basis="user"``); else ``derived_value`` from the SoilGrids texture fit
+    (``basis="derived"``, source named); else the value stays None and the entry
+    carries ``basis="default_demo", consequence="physics"`` so the input-review
+    gate REFUSES in auto (law 9 - no invented default). Shared by the Landlab
+    groundwater / Green-Ampt / susceptibility rows so one derivation serves all.
+    """
+    if user_value is not None:
+        return float(user_value), SyntheticInput(
+            param=param, value=user_value, units=units,
+            basis="user", consequence="physics", real_source_if_any=None,
+            note=f"caller-supplied {param}.",
+        )
+    if derived_value is not None:
+        clamp = " (clamped to the plausible-media span)" if meta.get("clamped") else ""
+        return float(derived_value), SyntheticInput(
+            param=param, value=derived_value, units=units,
+            basis="derived", consequence="physics",
+            real_source_if_any="fetch_soilgrids (Saxton-Rawls 2006 pedotransfer)",
+            note=(
+                f"{derived_note} DERIVED from SoilGrids texture at the AOI "
+                f"(sand={meta.get('sand_pct')}%, clay={meta.get('clay_pct')}%, "
+                f"{meta.get('depth')}){clamp}. SCREENING near-surface proxy, NOT a "
+                "measured value; supply a site value when one exists."
+            ),
+        )
+    return None, SyntheticInput(
+        param=param, value=None, units=units,
+        basis="default_demo", consequence="physics", real_source_if_any=None,
+        note=(
+            f"{need} could not be resolved from SoilGrids at this AOI "
+            f"({meta.get('reason', 'unavailable')}). No invented default (law 9): "
+            f"supply {param} or run where SoilGrids has coverage."
+        ),
+    )
+
+
+def literature_offer_entry(
+    *,
+    param: str,
+    units: str | None,
+    user_value: float | None,
+    need: str,
+    offer: str,
+) -> tuple[float | None, SyntheticInput]:
+    """The user -> REFUSE-with-literature-offer ladder for an UN-derivable physics
+    scalar (no fetchable real-world value: geotechnical strength, calibration
+    coefficients).
+
+    Returns ``(effective_value_or_None, entry)``. A caller value is used
+    (``basis="user"``); otherwise the value stays None and the entry carries
+    ``basis="default_demo", consequence="physics"`` so the gate REFUSES in auto,
+    with the literature-range ``offer`` in the note a ``user_gated`` session can
+    approve. Law 9: never solve on an invented strength/calibration value.
+    """
+    if user_value is not None:
+        return float(user_value), SyntheticInput(
+            param=param, value=user_value, units=units,
+            basis="user", consequence="physics", real_source_if_any=None,
+            note=f"caller-supplied {param}.",
+        )
+    return None, SyntheticInput(
+        param=param, value=None, units=units,
+        basis="default_demo", consequence="physics", real_source_if_any=None,
+        note=(
+            f"{need} has no fetchable real-world value and is not derivable from "
+            f"soil texture. No invented default (law 9): supply {param}, or re-run "
+            f"in user_gated mode to approve a literature-range value ({offer})."
+        ),
+    )
 
 
 @dataclass
