@@ -50,6 +50,7 @@ from trid3nt_server.workflows.schism import deck_authoring
 from trid3nt_server.workflows.schism import postprocess_schism as pp
 from trid3nt_server.workflows.schism._template_card import TemplateCard
 from trid3nt_server.workflows.schism.run_schism import SCHISM_BAROCLINIC_SOLVER_NAME
+from trid3nt_server.workflows.shared.discharge_resolve import resolve_dominant_discharge
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.schism.baroclinic_circulation.baroclinic_circulation"
@@ -126,7 +127,7 @@ _METADATA = AtomicToolMetadata(
 async def schism_baroclinic_circulation(
     location_query: str | None = None,
     bbox: tuple[float, float, float, float] | list[float] | None = None,
-    river_discharge_m3s: float = 500.0,
+    river_discharge_m3s: float | None = None,
     ocean_salinity_psu: float = 33.0,
     sim_days: float = 2.0,
     ocean_side: str = "south",
@@ -164,8 +165,10 @@ async def schism_baroclinic_circulation(
             omitted with no bbox, a labeled default (Delaware Bay) is used.
         bbox: explicit EPSG:4326 (min_lon, min_lat, max_lon, max_lat) estuary
             footprint (wins over location_query).
-        river_discharge_m3s: the freshwater river point-source discharge (m3/s,
-            default 500). Clamped (0, 50000].
+        river_discharge_m3s: the freshwater river point-source discharge (m3/s).
+            Default None -> DERIVED from the dominant NOAA National Water Model
+            reach over the AOI (the main-stem carrier); refuses in auto mode if NWM
+            cannot serve the AOI (no invented default - law 9). Clamped (0, 50000].
         ocean_salinity_psu: the seaward-end / ocean salinity (psu, default 33).
             Clamped (0, 40].
         sim_days: 3D baroclinic run length in days (default 2 -- a coarse spin-up
@@ -191,13 +194,17 @@ async def schism_baroclinic_circulation(
     ``source_class="workflow_dispatch"``.
     """
     try:
-        river_discharge_m3s = float(river_discharge_m3s)
+        # river_discharge_m3s is Optional: None -> derive-or-refuse in the composer
+        # (law 9); a supplied value is validated here.
+        river_discharge_m3s = (
+            float(river_discharge_m3s) if river_discharge_m3s is not None else None
+        )
         ocean_salinity_psu = float(ocean_salinity_psu)
         sim_days = float(sim_days)
     except (TypeError, ValueError):
         return {"status": "error", "error_code": SCHISM_INPUT_INVALID,
                 "error_message": "river_discharge_m3s / ocean_salinity_psu / sim_days must be numbers"}
-    if not (0.0 < river_discharge_m3s <= 50000.0):
+    if river_discharge_m3s is not None and not (0.0 < river_discharge_m3s <= 50000.0):
         return {"status": "error", "error_code": SCHISM_INPUT_INVALID,
                 "error_message": "river_discharge_m3s in (0, 50000]"}
     if not (0.0 < ocean_salinity_psu <= 40.0):
@@ -211,8 +218,10 @@ async def schism_baroclinic_circulation(
                 "error_message": "ocean_side must be one of south/north/east/west"}
 
     logger.info(
-        "schism_baroclinic_circulation loc=%s bbox=%s Q=%.0f Socean=%.1f days=%.2g side=%s",
-        location_query, bbox, river_discharge_m3s, ocean_salinity_psu, sim_days, ocean_side,
+        "schism_baroclinic_circulation loc=%s bbox=%s Q=%s Socean=%.1f days=%.2g side=%s",
+        location_query, bbox,
+        ("derive" if river_discharge_m3s is None else f"{river_discharge_m3s:.0f}"),
+        ocean_salinity_psu, sim_days, ocean_side,
     )
     try:
         result = await model_schism_baroclinic_circulation(
@@ -503,6 +512,18 @@ async def model_schism_baroclinic_circulation(
 
     aoi_bbox, aoi_label, aoi_basis = _resolve_bbox(location_query, bbox)
 
+    # law 9 (ADR 0285 P5): resolve the freshwater river inflow -- user -> dominant
+    # NWM reach over the AOI (the main-stem carrier) -> REFUSE. The discharge sets
+    # the salt-intrusion length; when unresolved the entry is consequence="physics"
+    # default_demo so the gate below refuses in auto (no invented inflow constant).
+    # deck_authoring keeps its 500 m3/s mechanical default as the direct-call/
+    # unit-test last resort; the composer resolves or refuses first.
+    _q_res = await asyncio.to_thread(
+        resolve_dominant_discharge, aoi_bbox, river_discharge_m3s,
+    )
+    deck_discharge_m3s = _q_res.discharge_m3s if _q_res.resolved else 500.0
+    logger.info("baroclinic discharge: %s m3/s (%s)", deck_discharge_m3s, _q_res.source)
+
     # Precondition gate: if this case holds a SCHISM-compatible mesh
     # (built explicitly by generate_mesh with an open boundary), offer to solve on
     # it -- real shoreline + real bathymetry replace the idealized lattice.
@@ -521,7 +542,7 @@ async def model_schism_baroclinic_circulation(
     deck = deck_authoring.author_baroclinic_estuary_deck(
         workdir, bbox=aoi_bbox, constituents=["M2"], tidal_amplitude_m=0.6,
         sim_days=sim_days, ocean_side=ocean_side,
-        river_discharge_m3s=river_discharge_m3s, ocean_salinity_psu=ocean_salinity_psu,
+        river_discharge_m3s=deck_discharge_m3s, ocean_salinity_psu=ocean_salinity_psu,
         water_mask_fn=water_mask_fn, supplied_mesh=supplied_mesh,
     )
     shoreline_clipped = bool(deck.get("shoreline_clipped"))
@@ -549,12 +570,13 @@ async def model_schism_baroclinic_circulation(
                              if shoreline_clipped else
                              "a graded lon/lat lattice + linearly-deepening idealized bathymetry -- "
                              "NOT surveyed (coastline clip unavailable for this AOI)")),
-        SyntheticInput(param="river_discharge", value=round(river_discharge_m3s, 1), units="m3/s",
-                       basis="user" if river_discharge_m3s != 500.0 else "default_demo", consequence="physics",
-                       note="freshwater point source at the landward edge (S=0)"),
+        _q_res.entry,
         SyntheticInput(param="ocean_salinity", value=round(ocean_salinity_psu, 1), units="psu",
                        basis="user" if ocean_salinity_psu != 33.0 else "default_demo", consequence="physics",
-                       note="seaward-end salinity (the estuarine gradient endpoint + boundary)"),
+                       note=("seaward-end salinity (the estuarine gradient endpoint + boundary). "
+                             "No open-ocean salinity fetcher wired (World Ocean Atlas climatology is "
+                             "QUEUED); supply ocean_salinity_psu, or approve the well-constrained "
+                             "open-shelf literature range 33-35 psu in user_gated mode.")),
         SyntheticInput(param="baroclinic_config", value="ibc=0 (3D baroclinic), SZ vgrid, TVD transport",
                        basis="default_demo", consequence="numerical",
                        note="the 3D density-driven pathway on the hydro-core binary"),
@@ -565,7 +587,7 @@ async def model_schism_baroclinic_circulation(
 
     review = await gate_input_review(
         tool_name="schism_baroclinic_circulation", mode=input_mode, entries=review_entries,
-        params={"river_discharge_m3s": river_discharge_m3s, "ocean_salinity_psu": ocean_salinity_psu,
+        params={"river_discharge_m3s": deck_discharge_m3s, "ocean_salinity_psu": ocean_salinity_psu,
                 "sim_days": sim_days, "ocean_side": ocean_side},
     )
     if not review.proceed:
@@ -621,7 +643,7 @@ async def model_schism_baroclinic_circulation(
             layers, metrics = await asyncio.to_thread(
                 pp.postprocess_schism_baroclinic, salt_local, mesh_uri,
                 run_id=batch_run_id, sim_days=sim_days,
-                river_discharge_m3s=river_discharge_m3s, out2d_path=out2d_local,
+                river_discharge_m3s=deck_discharge_m3s, out2d_path=out2d_local,
                 n_nodes_grid=deck["n_nodes"], n_elements_grid=deck["n_elements"],
                 n_layers=deck["n_layers"], fallback_note=_DEMO_NOTE,
             )

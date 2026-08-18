@@ -232,7 +232,14 @@ Grouped by family; sized S/M/L. The mechanism wave (P1) is the gate; it must lan
 first because every downstream wave keys on the consequence tag and the
 refuse-in-auto behavior.
 
-> **STATUS (2026-08-18): P1, P2, P3, P3-completion, P4 LANDED** (ADR 0285). P3-completion
+> **STATUS (2026-08-18): P1, P2, P3, P3-completion, P4, P5 LANDED** (ADR 0285). P5
+> (AFK-conservative) wired schism baroclinic river_discharge (#19) to the new shared
+> `discharge_resolve` NWM seam (derive-or-refuse; 500 demo constant deleted; live
+> A/B), made ocean_salinity (#20) a literature offer (WOA queued), and VERIFIED the
+> synthetic-bathy rows (#22) compliant (pahm_surge opt-in-gated; coupled_waves an
+> audit misread). Rows 21/28/29/30/33 carry per-row verdicts + a QUEUED-FOR-NATE list
+> (WOA / tidal-constituent boundary / wind consequence fork / NDBC / CO-OPS datums /
+> lake profiles). See ADR 0285 P5. P3-completion
 > wired the staged per-engine template conversions on the P3 substrate: landlab
 > **row 8** (susceptibility soil-strength: bulk density DERIVED from texture,
 > cohesion/friction/thickness/transmissivity REFUSE with literature offers -- law-6
@@ -295,11 +302,25 @@ refuse-in-auto behavior.
   NLCD Manning's n from `manning_mapping.csv` -> derive or refuse). #24's
   "curve_number=90" was an audit MISREAD (a demo rainfall depth; network_import uses
   Horton, not SCS-CN) -- no CN wiring is honest, QUEUED for a label-only pass.
-- **P5 -- Coastal/hydro forcing + boundaries (M-L).** schism river_discharge /
-  ocean_salinity / tidal_amplitude / synthetic bathy (#19-#22), telemac wind /
-  wave / thermocline / datum (#28-#30, #33). Wire the existing weather / ocean /
-  hydrology / NOAA-datum fetchers as defaults -> refuse when the AOI has no
-  station/coverage. Largest new-fetcher surface.
+- **P5 -- Coastal/hydro forcing + boundaries (M-L). [LANDED, ADR 0285 P5,
+  AFK-conservative]** Per the conservative rule (wire what EXISTS first; build a
+  new fetcher only where small+unambiguous; else refuse+queue). **row 19** WIRED:
+  schism baroclinic river_discharge -> the new shared `discharge_resolve` seam
+  derives the dominant NWM reach over the AOI (`fetch_noaa_nwm_streamflow`,
+  `basis="derived"`) or REFUSES; the 500 demo constant DELETED; live A/B.
+  **row 20** ocean_salinity -> literature offer (33-35 psu, refuse-in-auto), WOA
+  fetcher QUEUED (no ocean-salinity fetcher exists). **row 22** synthetic bathy
+  VERIFIED COMPLIANT (2 findings, no change): pahm_surge already hard-refuses
+  unless `allow_synthetic_domain=True`; coupled_waves = an AUDIT MISREAD (canonical
+  DUCK94 FRF validation mesh + real observed spectra, no synthetic terrain).
+  **row 21** tidal (STAGE: existing `fetch_noaa_coops_tides` but deep M2-boundary
+  deck surgery -> P6). **row 28** wind (DESIGN FORK -> NATE: gridMET gives ambient,
+  not the storm the param means; no time window; recommend re-tag scenario).
+  **row 29** agitation waves (QUEUE NDBC fetcher -- new-surface build). **row 30**
+  thermocline (QUEUE: no US lake-profile fetcher; do NOT build). **row 33** datum
+  (STAGE: NOAA CO-OPS datums = a new small fetcher). See the ADR P5 QUEUED-FOR-NATE
+  list. The bulk new-fetcher surface (WOA, NDBC, CO-OPS datums, Vs30, lake profiles)
+  is deferred to dedicated small builds per the conservative rule.
 - **P6 -- Seismic site response (M).** openquake vs30 (#18). Needs a Vs30 fetcher
   (USGS Vs30 service / topographic-slope Vs30) OR refuse; no existing seam.
 - **P7 -- Un-fetchable engineering + demo geometry (S).** hecras culvert MISLABEL

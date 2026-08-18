@@ -14,9 +14,13 @@ geoclaw-sibling findings reported). P3-COMPLETION LANDED (the staged per-engine
 template conversions on the P3 substrate: landlab susceptibility row 8 / groundwater
 row 9 / green_ampt row 10 / channel_incision row 11 + swmm aquifer_baseflow row 27;
 the demo constants deleted; the river_seepage refusal-test premise fixed; live
-aquifer-column A/B; see the P3-completion section). The remaining real-source
-conversions (P5-P8) are staged for their per-engine waves. Date: 2026-08-18. Source:
-`docs/design/demo-physics-defaults-audit.md`.
+aquifer-column A/B; see the P3-completion section). P5 LANDED (the SCHISM/TELEMAC
+coastal-forcing wave, AFK-conservative: the shared `discharge_resolve` NWM seam +
+SCHISM baroclinic river_discharge row 19 wired + the row-20 salinity literature
+offer + the row-22 synthetic-bathy verification (2 findings, no change); rows 21/28/
+29/30/33 analyzed with per-row verdicts + a QUEUED-FOR-NATE list; live baroclinic
+discharge A/B; see the P5 section). The remaining conversions (P6-P8) are staged.
+Date: 2026-08-18. Source: `docs/design/demo-physics-defaults-audit.md`.
 
 ## Context
 
@@ -464,3 +468,104 @@ The derived conductivity **0.132 in/hr vs the deleted 0.8 in/hr demo (~6x LOWER)
 the Iowa silty clay loam drains far slower than the demo sand assumed, reshaping the
 between-storms recession - precisely the "silently ruin the simulation" outcome law 9
 forbids.
+
+## P5 -- SCHISM/TELEMAC coastal forcing (LANDED, AFK-conservative)
+
+Audit rows 19-22 (SCHISM) + 28-30, 33 (TELEMAC). The conservative rule for this
+wave (binding): wire rows to fetchers that ALREADY EXIST first; build a new fetcher
+ONLY where small + unambiguous; anything needing a heavy new surface or a
+contestable source choice REFUSES in auto (typed) + gets a user-gated literature
+offer + is QUEUED for NATE. Never stretch. One row was wired to an existing fetcher
+as the landed exemplar; the rest are analyzed with per-row verdicts + a queue.
+
+### The shared seam
+
+`trid3nt_server/workflows/shared/discharge_resolve.py` (new) is the discharge
+analogue of `aquifer_resolve`/`roughness_resolve`. `resolve_dominant_discharge(bbox,
+user_value, *, param_name, note_role)` is the ladder: user (`basis="user"`) ->
+NWM-DOMINANT-REACH derived (`basis="derived"`, `real_source="fetch_noaa_nwm_
+streamflow (NWM analysis, dominant reach)"`) -> UNRESOLVED (`basis="default_demo",
+consequence="physics"`, value None -> the input-review gate REFUSES in auto). It
+reuses the SAME proven NWM reach-read machinery river_dye's `_resolve_reach_discharge`
+uses (fetch `fetch_noaa_nwm_streamflow` via TOOL_REGISTRY, read the reach FlatGeobuf,
+iterate `streamflow_cms`), but selects the DOMINANT (max-streamflow) reach over the
+AOI = the main-stem freshwater carrier feeding the estuary (river_dye selects the
+reach NEAREST a seed point; the estuary case wants the bulk inflow). The fetch +
+geopandas read are offloaded to a thread by the composer (never block the loop).
+
+### Per-row verdict
+
+| Row | Engine / param | Verdict | What landed / why |
+|---|---|---|---|
+| 19 | schism baroclinic `river_discharge` (=500) | **WIRED** | Existing fetcher (`fetch_noaa_nwm_streamflow`) + proven machinery. Composer resolves through the new seam -> derive-or-refuse; tool default `500.0` -> `None`; demo constant deleted (ledger). Live A/B below. |
+| 20 | schism baroclinic `ocean_salinity` (=33) | **REFUSE + literature offer; QUEUE WOA** | NO ocean-salinity fetcher in the registry (`fetch_noaa_sst` is temperature, not salinity). Stays `consequence="physics"` default_demo (refuses in auto); note enriched with the well-constrained open-shelf literature range 33-35 psu a `user_gated` session can approve. World Ocean Atlas climatology fetcher QUEUED for NATE. |
+| 21 | schism tidal_hydro `tidal_amplitude` + baked M2 boundary | **STAGE (existing fetcher, heavy composer surgery)** | `fetch_noaa_coops_tides` EXISTS (harmonic constituents ARE fetchable), so this is genuinely wire-able - BUT wiring real constituents into `tidal_hydro`'s baked M2 ANALYTICAL open-boundary is deep deck-authoring surgery (the boundary forcing is generated, not a scalar param). Not a "never stretch" one-liner. QUEUED as a dedicated schism-tidal wave (P6). |
+| 22 | schism synthetic bathymetry (coupled_waves, pahm_surge) | **VERIFIED COMPLIANT, no change (2 findings)** | (a) **pahm_surge**: the synthetic-shelf path ALREADY hard-refuses (`SCHISM_BATHYMETRY_UNAVAILABLE`) unless `allow_synthetic_domain=True` (default False). That opt-in bool IS the consent plumbing the row asks for, and it refuses in BOTH auto AND user_gated - STRONGER than a consequence tag. Re-tagging the consented entry to `physics` would BRICK the declared mechanism-demo mode. No change. (b) **coupled_waves = AUDIT MISREAD**: it has NO synthetic-bathy-when-no-COG path; it runs the canonical DUCK94 FRF validation mesh (bundled) + REAL observed 8m-array wave spectra -> per the ADR canonical-validation carve-out these are scenario/aoi and correctly proceed. No invented terrain exists. |
+| 28 | telemac wave_field `wind_speed_mps` (=20) | **DESIGN FORK -> NATE (do not silently wire)** | gridMET (`fetch_gridmet`, `vs`) serves real wind, BUT wave_field has NO time-window param and its wind is a "sustained STORM wind". gridMET gives a DAILY-MEAN AMBIENT wind (~3-6 m/s), which is NOT a 20 m/s storm - substituting it would MISREPRESENT the demo, and deriving "a storm wind" needs a storm date = a scenario choice, not a physics derivation. Two defensible readings (fork): (a) re-tag wind -> `scenario` (a storm IS the question, matching the ADR's own storm-climatology precedent, proceeds labeled); (b) keep `physics` and require a user storm-wind + a real hindcast source (HRRR/ERA5 at a storm time). Recommend (a). Surfaced for NATE per law 6. |
+| 29 | telemac agitation `wave_period/height/reflection` | **REFUSE + literature offer; QUEUE NDBC** | Incident boundary wave obs are NDBC-buoy-derivable, but NDBC is a NEW fetcher build (source.yaml + corpus + catalog pins move + retrieval check) = a heavy new surface mid-wave -> "never stretch". Stays `physics` default_demo (refuses in auto). NDBC buoy fetcher QUEUED for NATE (one build serves rows 28-offshore + 29 + a row-33 alternative). `reflection_coef` is a literature-range user-gated offer (already). |
+| 30 | telemac stratified_flow thermocline temps | **REFUSE + literature offer; QUEUE (do NOT build)** | Lake temperature profiles have NO obvious existing US fetcher. Stays `physics` default_demo (refuses in auto); user-gated literature offer. A lake-profile source (e.g. a GLTC/GLM class dataset) QUEUED for NATE - explicitly NOT built this wave per the kickoff. |
+| 33 | telemac coastal_tidal_surge `datum_offset_m` | **STAGE (small new fetcher); QUEUE NOAA datums** | Station-derivable via the NOAA CO-OPS **datums** API (the CO-OPS family we already speak in `fetch_noaa_coops_tides`), BUT the datums PRODUCT is a different endpoint than the water-levels fetcher, so it is a NEW small fetcher (catalog pins move). Small + unambiguous per the rule, but a build + registry checklist mid-wave is a stretch alongside the discharge landing. QUEUED as a build-small pass (P6). |
+
+### QUEUED FOR NATE (P5 outflow)
+
+1. **World Ocean Atlas ocean-salinity fetcher** (row 20) - climatological open-ocean
+   salinity boundary. Enables baroclinic to DERIVE `ocean_salinity` instead of the
+   literature offer. Single well-known source (NOAA NCEI WOA).
+2. **`schism_tidal_hydro` real-constituent boundary** (row 21) - wire
+   `fetch_noaa_coops_tides` harmonic constituents into the SCHISM open-boundary
+   forcing (replaces the baked M2 analytical boundary). Deep deck-authoring work =
+   a dedicated wave, not a "never stretch" one-liner.
+3. **wave_field wind consequence FORK** (row 28) - DECISION: re-tag wind ->
+   `scenario` (recommended, matches the storm-climatology precedent) vs keep
+   `physics` + require a real storm-wind hindcast source. NATE's call.
+4. **NDBC buoy-observation fetcher** (rows 28-offshore, 29, 33-alt) - a single
+   well-documented REST source; one build serves incident wave forcing
+   (period/height) + offshore wind + a datum-offset alternative. A registry-checklist
+   build = its own small wave.
+5. **NOAA CO-OPS datums fetcher** (row 33) - the datums-product endpoint of the
+   CO-OPS family; derives `datum_offset_m` (a wrong datum shifts the whole surge
+   vertically). Small build-small pass.
+6. **Lake temperature-profile source** (row 30) - thermocline warm/cold temps.
+   No obvious existing US fetcher; NATE to name a source before any build.
+7. **river_dye / discharge_resolve convergence** (hygiene) - river_dye keeps its
+   private `_resolve_reach_discharge` (NEAREST-reach, its own typed gate). The new
+   shared `discharge_resolve` (DOMINANT-reach) was NOT retro-fitted into river_dye
+   this wave (its 2 expected-failing offline tests + a different selection policy =
+   risk). Converge them (one seam, two selection modes) in a later cleanup.
+8. **NLDI upstream-navigation inflow refinement** (row 19 fidelity) - the current
+   "dominant reach within the AOI bbox" under-samples a wide estuary's true inflow
+   (the main stem enters upstream of the bay). `fetch_nhdplus_nldi_navigate` exists;
+   navigate upstream from the estuary head to the true main-stem inflow reach for a
+   representative (not screening-lower-bound) discharge.
+
+### Guard + tests + live A/B
+
+The P1 sweep guard holds (`test_law9_consequence_guard.py`). The new seam gets an
+offline ladder guard (`tests/test_discharge_resolve.py`: user / NWM-derived /
+UNRESOLVED-refuse). The schism suite is unchanged-green (the deck-authoring unit
+tests pass explicit discharge values; nothing depends on the deleted 500 tool
+default). Four-slice suite baseline preserved.
+
+The live A/B on the wired row (`scripts/proof_law9_discharge_ab.py`, SCHISM
+baroclinic river_discharge, Delaware Bay, local schism docker):
+- **(A) under-specified auto run, NWM force-unavailable** -> the input-review gate
+  REFUSES (`SCHISM_INPUT_REVIEW_CANCELLED` / `PHYSICS_INPUT_REQUIRED` naming
+  `river_discharge_m3s` AND `ocean_salinity` - both physics), no solve - law 9 live.
+- **(B) NWM available, salinity user-supplied** -> the dominant-reach discharge is
+  DERIVED (`basis="derived"`, `fetch_noaa_nwm_streamflow`, **Q=1.0 m3/s** vs the
+  deleted **500 m3/s** demo constant - a 500x delta) and the 3D SCHISM baroclinic
+  solve completes (run `01M0AF7195S9J9V3TBCJ53FJ3W`, surface salinity [26.06, 33.02]
+  psu, max stratification 1.708 psu, surface-salinity COG in `trid3nt-runs`) on the
+  DERIVED inflow. Salinity is supplied as a user value in (B) because row 20 has no
+  fetcher and refuses in auto (the WOA offer is the user_gated path) - so (B)
+  isolates the discharge wiring.
+
+**Honest fidelity finding (law 6, surfaced not buried):** the derived **Q=1.0 m3/s**
+over the WIDE Delaware Bay bbox is a real NWM reach but NOT the Delaware River main
+stem (which enters upstream of the bay footprint, outside the AOI) - "dominant reach
+within the estuary bbox" under-samples the true inflow for a wide tidal bay. This is
+law-9-COMPLIANT (a real, loudly-labeled screening value; the note states the caveat
+and points to a tighter river-mouth AOI / explicit discharge), but the derivation's
+selection policy is a screening lower bound, not a calibrated inflow. QUEUED: an
+NLDI upstream-navigation refinement (`fetch_nhdplus_nldi_navigate` exists) to find
+the true main-stem inflow reach from the estuary head.
