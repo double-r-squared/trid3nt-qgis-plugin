@@ -447,3 +447,31 @@ vs observed -> correct. Two tiers: re-run twin (cheap engines re-solve
 the window; buildable with today's machinery) vs BMI twin (state
 carried, assimilation possible). Natural sequence: series library ->
 single-engine BMI pilot -> twin loop -> cross-engine exchange.
+
+## 2026-08-19 - aquifer thickness goes derivable + two recon fronts
+
+- **Aquifer thickness fetcher (P5 queue, AHEAD of recharge - NATE ruling).**
+  Verified sources: USGS Zell & Sanford 2020 CONUS 1-km surficial
+  groundwater model - derived water-table depth / K / SATURATED THICKNESS
+  (ScienceBase item 631405c5d34e36012efa3190, data doi 10.5066/P91LFFN1,
+  paper doi 10.1029/2019WR026724; ships as Data_CONUS.zip model arrays ->
+  one-time convert-and-host to COG, the staged-dataset pattern). Cross-check
+  /fallback: ISRIC SoilGrids-2017 BDTICM absolute depth-to-bedrock, 250 m
+  global, range-reads verified live
+  (files.isric.org/soilgrids/former/2017-03-10/data/BDTICM_M_250m_ll.tif);
+  thickness ~= depth-to-bedrock - water-table depth. HONEST LIMIT: surficial
+  /unconfined only; confined-aquifer thickness keeps the scenario tag with a
+  typed message naming why.
+- **User-supplied data = TOP RUNG of every fallback ladder (NATE).** Onsite
+  surveys, well logs, measured K: basis="user_supplied" rides the existing
+  input-review basis machinery; ladder = user_supplied -> derived -> gate/
+  refuse. Generalizes to any surveyed input; no new envelope.
+- **SWMM ecosystem recon (NATE, queued after next-step kickoff).** Survey
+  new developments in the engine + ecosystem (EPA SWMM 5.2.x line, pyswmm
+  releases, swmmio/swmm-pandas, OWA activity) and what our SWMM surface
+  should adopt.
+- **3D aquifer visualization in QGIS (NATE, queued).** FloPy has 3D viz
+  export (VTK path, PyVista) we do not surface; recon what QGIS can honestly
+  render (3D map view, mesh layers, Qgis2threejs, voxel limits) and design
+  the MODFLOW 3D output story (layer-per-raster 2.5D vs VTK mesh vs
+  external viewer).
