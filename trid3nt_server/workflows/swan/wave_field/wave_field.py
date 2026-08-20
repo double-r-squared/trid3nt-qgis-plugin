@@ -523,14 +523,27 @@ class SwanComposerError(RuntimeError):
 # --------------------------------------------------------------------------- #
 # Bathy DEM acquisition (topobathy seamless -> fetch_dem fallback).
 # --------------------------------------------------------------------------- #
+#: The bathymetry rungs a SWAN wave field tolerates. CUDEM's 1/9" collection
+#: covers only part of the US coast, and where it stops the 3DEP land leg paints
+#: flat 0 m ocean -- a fake landmass SWAN excludes from its grid. The global
+#: ETOPO relief is coarse but REAL below-waterline bed, so the gap is filled from
+#: it, loudly labeled, rather than refused or faked.
+_SWAN_BATHY_FALLBACK = ("etopo_bathy_base",)
+
+
 def _fetch_bathy_for_swan(
     bbox: tuple[float, float, float, float],
+    *,
+    activation_sink: list[Any] | None = None,
 ) -> str:
     """Fetch a topo/bathy DEM for the AOI and return its ``s3://`` URI.
 
     SWAN needs a SEAMLESS land+bathymetry DEM (the bed for depth-induced shoaling /
     breaking): try ``fetch_topobathy`` first (the seamless coastal DEM -- the right
     substrate for a nearshore wave field).
+
+    ``activation_sink`` collects the fallback-ladder rows the fetch reported, so
+    the composer can stamp what actually painted the bed onto its own result.
 
     REQUIRES REAL BATHYMETRY: a coastal wave model run on a LAND-ONLY DEM (all
     positive NAVD88 elevations) renders an ALL-DRY SWAN bottom grid (every cell
@@ -554,12 +567,15 @@ def _fetch_bathy_for_swan(
         return getattr(layer, name, None)
 
     try:
-        layer = fetch_topobathy(bbox)
+        layer = fetch_topobathy(bbox, fallback=_SWAN_BATHY_FALLBACK)
     except Exception as exc:  # noqa: BLE001
         raise SwanComposerError(
             "SWAN_DEM_FETCH_FAILED",
             f"fetch_topobathy failed for bbox {bbox}: {exc}",
         ) from exc
+
+    if activation_sink is not None:
+        activation_sink.extend(_attr(layer, "fallbacks") or [])
 
     uri = _attr(layer, "uri")
     if not uri:
@@ -620,14 +636,21 @@ def _record_swan_batch_solve_telemetry(
     return record_solve_telemetry(row)
 
 
-def _stamp_swan_provenance(peak: WaveFieldLayerURI, run_args: SwanRunArgs) -> WaveFieldLayerURI:
-    """Surface SWAN's wave-physics calibration coefficients (law 9, audit row 34).
+def _stamp_swan_provenance(
+    peak: WaveFieldLayerURI,
+    run_args: SwanRunArgs,
+    bathy_activation: list[Any] | None = None,
+) -> WaveFieldLayerURI:
+    """Surface SWAN's wave-physics calibration coefficients (law 9, audit row 34)
+    and which rungs of the bathymetry ladder painted the bed.
 
-    They rode SILENT. They are literature-canonical SWAN constants (single
-    universally-accepted published values), so they carry a documented-default
-    label and PROCEED (numerical consequence, no refuse) -- they are not invented
-    site claims.
+    The coefficients rode SILENT. They are literature-canonical SWAN constants
+    (single universally-accepted published values), so they carry a
+    documented-default label and PROCEED (numerical consequence, no refuse) --
+    they are not invented site claims.
     """
+    from trid3nt_contracts.common import render_fallback_line
+
     entry = SyntheticInput(
         param="wave_physics_coefficients",
         value=(f"breaking_alpha={run_args.breaking_alpha:g}, "
@@ -639,9 +662,18 @@ def _stamp_swan_provenance(peak: WaveFieldLayerURI, run_args: SwanRunArgs) -> Wa
              "breaker index + JONSWAP bottom friction + triad closure); documented "
              "published values, not site-fit",
     )
-    return peak.model_copy(update={
+    update: dict[str, Any] = {
         "synthetic_inputs": list(peak.synthetic_inputs or []) + [entry],
-    })
+    }
+    if bathy_activation:
+        update["fallbacks"] = list(peak.fallbacks or []) + list(bathy_activation)
+        note = render_fallback_line(bathy_activation)
+        if note:
+            bed = f"Wave bed: {note}"
+            update["fallback_note"] = (
+                f"{peak.fallback_note} {bed}" if peak.fallback_note else bed
+            )
+    return peak.model_copy(update=update)
 
 
 async def model_swan_wave_field(
@@ -688,9 +720,12 @@ async def model_swan_wave_field(
     begin_substeps(emitter, 5)
 
     # --- Step 1: topo/bathy DEM (off-loop blocking I/O) ---------------------
+    bathy_activation: list[Any] = []
     if dem_uri is None:
         async with substep(emitter, "fetch_topobathy"):
-            resolved_dem_uri = await asyncio.to_thread(_fetch_bathy_for_swan, bbox)
+            resolved_dem_uri = await asyncio.to_thread(
+                lambda: _fetch_bathy_for_swan(bbox, activation_sink=bathy_activation)
+            )
     else:
         resolved_dem_uri = dem_uri
     logger.info("model_swan_wave_field: DEM=%s", resolved_dem_uri)
@@ -903,7 +938,7 @@ async def model_swan_wave_field(
                 logger.warning(
                     "model_swan_wave_field: seam zoom-to failed: %s", exc
                 )
-        return _stamp_swan_provenance(peak, run_args)
+        return _stamp_swan_provenance(peak, run_args, bathy_activation)
     if manifest is not None:
         logger.info(
             "model_swan_wave_field: REGISTER-ONLY path (worker postprocess offload) "
@@ -942,7 +977,7 @@ async def model_swan_wave_field(
                 logger.warning(
                     "model_swan_wave_field: register-only zoom-to failed: %s", exc
                 )
-        return _stamp_swan_provenance(peak, run_args)
+        return _stamp_swan_provenance(peak, run_args, bathy_activation)
 
     # --- Step 4: download the Batch SWAN output (ON-BOX FALLBACK) ----------
     batch_run_id = getattr(run_result, "run_id", None) or staging.run_id
@@ -1000,7 +1035,7 @@ async def model_swan_wave_field(
         except Exception as exc:  # noqa: BLE001
             logger.warning("model_swan_wave_field: authoritative zoom-to failed: %s", exc)
 
-    return _stamp_swan_provenance(peak, run_args)
+    return _stamp_swan_provenance(peak, run_args, bathy_activation)
 
 
 def _publish_peak_layer(

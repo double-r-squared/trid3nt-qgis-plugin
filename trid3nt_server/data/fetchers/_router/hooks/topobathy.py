@@ -47,6 +47,7 @@ import tempfile
 from typing import Any
 
 from trid3nt_server.data.cache import record_provenance
+from trid3nt_server.fallbacks import Ladder, LadderGap, Rung, register_ladder
 
 from ..._fetch_common import FetchError
 from . import register_hook
@@ -61,6 +62,9 @@ __all__ = [
     "TopobathyUpstreamError",
     "TopobathyEmptyError",
     "TopobathyDatumError",
+    "TopobathyCoverageGapError",
+    "BATHYMETRY_LADDER",
+    "cudem_coverage_fraction",
     "estimate_payload_mb",
     "estimate_payload_mb_detail",
     "validate_topobathy",
@@ -126,6 +130,24 @@ class TopobathyDatumError(TopobathyError):
 
     error_code = "TOPOBATHY_DATUM_MISMATCH"
     retryable = False
+
+
+class TopobathyCoverageGapError(TopobathyError, LadderGap):
+    """The CUDEM nearshore composite covers only PART of the AOI.
+
+    Also a :class:`LadderGap`, so the fallback walker reads the covered fraction
+    off it and fills the remainder from a permitted rung. Raised INSTEAD of
+    letting the 3DEP land leg's flat 0 m ocean fill paint the uncovered water:
+    that fill is a fake landmass the wave/surge solver treats as dry ground.
+    """
+
+    error_code = "TOPOBATHY_COVERAGE_GAP"
+    retryable = False
+
+    def __init__(self, message: str, *, covered_fraction: float, gap_note: str) -> None:
+        LadderGap.__init__(
+            self, message, covered_fraction=covered_fraction, gap_note=gap_note
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -429,9 +451,21 @@ def _tile_intersects_bbox(
     )
 
 
+#: Process memo for the tile manifest: the coverage gate and the merge each need
+#: the same static list, and the ladder walker may run the pipeline twice.
+_URLLIST_MEMO: dict[str, tuple[float, list[str]]] = {}
+_URLLIST_MEMO_TTL_S = 600.0
+
+
 def _fetch_cudem_urllist(timeout_s: float) -> list[str]:
     """Download the CUDEM per-tile URL manifest (urllist8483.txt)."""
+    import time
+
     import requests  # lazy -- keep module import cheap
+
+    memo = _URLLIST_MEMO.get(CUDEM_URLLIST_URL)
+    if memo is not None and (time.monotonic() - memo[0]) < _URLLIST_MEMO_TTL_S:
+        return list(memo[1])
 
     try:
         resp = requests.get(CUDEM_URLLIST_URL, timeout=timeout_s)
@@ -450,7 +484,39 @@ def _fetch_cudem_urllist(timeout_s: float) -> list[str]:
             f"CUDEM tile manifest {CUDEM_URLLIST_URL} parsed to zero .tif URLs "
             "(manifest format may have changed)"
         )
+    _URLLIST_MEMO[CUDEM_URLLIST_URL] = (time.monotonic(), list(lines))
     return lines
+
+
+def cudem_coverage_fraction(
+    bbox: tuple[float, float, float, float], tile_urls: list[str]
+) -> float | None:
+    """The fraction of ``bbox`` the selected CUDEM tiles cover, or None if unknown.
+
+    CUDEM tiles are non-overlapping 0.25-degree squares whose NW corner is encoded
+    in the filename, so the clipped areas sum exactly. Returns None when ANY
+    selected tile's footprint cannot be parsed: a coverage gap that cannot be
+    PROVEN is never claimed.
+    """
+    west, south, east, north = bbox
+    area = max(0.0, east - west) * max(0.0, north - south)
+    if area <= 0.0:
+        return None
+    corners: set[tuple[float, float]] = set()
+    for url in tile_urls:
+        corner = _parse_tile_nw_corner(url)
+        if corner is None:
+            return None
+        corners.add(corner)
+    covered = 0.0
+    for nw_lat, nw_lon in corners:
+        ow = max(west, nw_lon)
+        oe = min(east, nw_lon + _CUDEM_TILE_DEG)
+        os_ = max(south, nw_lat - _CUDEM_TILE_DEG)
+        on = min(north, nw_lat)
+        if oe > ow and on > os_:
+            covered += (oe - ow) * (on - os_)
+    return max(0.0, min(1.0, covered / area))
 
 
 def _select_cudem_tiles(
@@ -1384,12 +1450,16 @@ def _select_and_merge(
 
 @register_hook("topobathy.validate")
 def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
-    """Pre-cache input gate: US coastal envelope + finiteness (twin-identical).
+    """Pre-cache input gate: US coastal envelope + finiteness + CUDEM coverage.
 
     The router's generic bbox validation already stamps TOPOBATHY_INPUT_INVALID for
     shape / range / degenerate bboxes; this adds the topobathy-specific checks the
     declarative surface cannot express (the US-coastal envelope, the offset / timeout
-    / min_pixel finiteness), raising ``TopobathyInputError`` pre-network."""
+    / min_pixel finiteness), raising ``TopobathyInputError`` pre-network.
+
+    The coverage check runs HERE, before the cache, because a partial-coverage gap
+    is a property of the REQUEST: a cache hit would otherwise serve a stored
+    surface whose water is fake land without the ladder ever running."""
     bbox = tuple(float(v) for v in params["bbox"])
     _validate_bbox(bbox)  # US coastal envelope + degenerate (raises TopobathyInputError)
 
@@ -1402,6 +1472,65 @@ def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
     mpx = params.get("min_pixel_m")
     if mpx is not None and (not math.isfinite(float(mpx)) or float(mpx) <= 0):
         raise TopobathyInputError(f"min_pixel_m must be > 0 and finite; got {mpx!r}")
+
+    _assert_nearshore_coverage(bbox, params)
+
+
+#: Coverage at or above this counts as complete (a sliver of a tile edge is not
+#: a gap a coarser bathy base could meaningfully fill).
+_COVERAGE_COMPLETE = 0.999
+
+
+def _assert_nearshore_coverage(
+    bbox: tuple[float, float, float, float], params: dict[str, Any]
+) -> None:
+    """Raise the ladder gap when CUDEM covers only PART of the AOI.
+
+    The uncovered water would otherwise be painted by the 3DEP land leg's flat
+    ~0 m ocean fill -- a rectangle of fake land a wave or surge solver excludes
+    from its computational grid. Exempt: a request that already lays the global
+    ETOPO column down (its bathy base spans the AOI), a request pulling the NCEI
+    regional fine legs (whose footprints this check does not model), and the
+    zero-CUDEM AOI (no nearshore composite exists to have a gap in).
+    """
+    if bool(params.get("force_bathy_base")) or bool(params.get("skip_cudem")):
+        return
+    if bool(params.get("include_regional_fine")):
+        return
+    try:
+        tiles = _select_cudem_tiles(bbox, float(params.get("timeout_s") or 120.0))
+    except Exception as exc:  # noqa: BLE001 -- an unprovable gap is never claimed
+        logger.warning(
+            "fetch_topobathy: CUDEM coverage undeterminable for bbox=%s (%s); "
+            "the coverage ladder does not fire", bbox, exc,
+        )
+        return
+    if not tiles:
+        return
+    fraction = cudem_coverage_fraction(bbox, tiles)
+    if fraction is None or fraction >= _COVERAGE_COMPLETE:
+        return
+    corners = [c for c in (_parse_tile_nw_corner(u) for u in tiles) if c is not None]
+    cov_w = min(lon for _lat, lon in corners)
+    cov_e = max(lon + _CUDEM_TILE_DEG for _lat, lon in corners)
+    cov_s = min(lat - _CUDEM_TILE_DEG for lat, _lon in corners)
+    cov_n = max(lat for lat, _lon in corners)
+    note = (
+        f"the NOAA NCEI CUDEM 1/9\" nearshore composite covers "
+        f"{fraction * 100:.0f}% of AOI {bbox}: {len(tiles)} tile(s) spanning "
+        f"({cov_w:.2f},{cov_s:.2f},{cov_e:.2f},{cov_n:.2f}). The remaining "
+        f"{(1.0 - fraction) * 100:.0f}% of the AOI lies outside that footprint and "
+        "has NO nearshore bathymetry source"
+    )
+    raise TopobathyCoverageGapError(
+        f"TOPOBATHY_COVERAGE_GAP: {note}. Filling it from the 3DEP land DEM would "
+        "paint flat 0 m ocean -- a fake landmass a wave/surge solver excludes as "
+        "dry ground -- so this fetch refuses instead. Permit the "
+        "'etopo_bathy_base' rung (fallback=(\"etopo_bathy_base\",)) to fill the gap "
+        "from the global ETOPO 2022 relief model, loudly labeled.",
+        covered_fraction=fraction,
+        gap_note=note,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1476,3 +1605,89 @@ def envelope_topobathy(
         "cudem_tile_count": int(prov.get("cudem_tile_count", 0)),
         "regional_tile_count": int(prov.get("regional_tile_count", 0)),
     }
+
+
+# ---------------------------------------------------------------------------
+# The bathymetry fallback ladder (rung definitions live with the capability).
+# ---------------------------------------------------------------------------
+
+
+def serve_user_supplied_bed(
+    bbox: Any = None, dem_uri: Any = None, **_ignored: Any
+) -> Any:
+    """Serve the caller's OWN topo/bathy raster as the ladder's top rung.
+
+    No fetch, no merge: the URI the caller passed IS the bed, labeled
+    ``basis="user"`` so the input review reads it as user data rather than
+    anything this tool derived.
+    """
+    from trid3nt_contracts.common import SyntheticInput
+    from trid3nt_contracts.execution import TopobathyResult
+
+    b = tuple(float(v) for v in bbox)
+    return TopobathyResult(
+        layer_id=f"topobathy-user-{b[0]:.4f}-{b[1]:.4f}-{b[2]:.4f}-{b[3]:.4f}",
+        name=(
+            "Coastal topo-bathymetry DEM (USER-SUPPLIED) -- bbox "
+            f"({b[0]:.2f},{b[1]:.2f},{b[2]:.2f},{b[3]:.2f})"
+        ),
+        layer_type="raster",
+        uri=str(dem_uri),
+        style_preset="continuous_dem",
+        role="input",
+        units="meters",
+        bbox=(b[0], b[1], b[2], b[3]),
+        bathymetry_present=True,
+        synthetic_inputs=[
+            SyntheticInput(
+                param="dem_uri",
+                value=str(dem_uri),
+                basis="user",
+                real_source_if_any=None,
+                note="caller-supplied topo/bathy raster served in place of the "
+                     "CUDEM composite",
+            )
+        ],
+    )
+
+
+BATHYMETRY_LADDER = register_ladder(
+    Ladder(
+        capability="fetch_topobathy",
+        refuse_error_code="TOPOBATHY_COVERAGE_GAP",
+        rungs=(
+            Rung(
+                name="user_supplied",
+                consequence="user_supplied",
+                supplies_param="dem_uri",
+                call=(
+                    "trid3nt_server.data.fetchers._router.hooks.topobathy"
+                    ":serve_user_supplied_bed"
+                ),
+                describes=(
+                    "the caller's own topo/bathy raster (an onsite survey, an "
+                    "uploaded grid); user data outranks every derived rung"
+                ),
+            ),
+            Rung(
+                name="cudem_nearshore",
+                consequence="primary",
+                describes=(
+                    "NOAA NCEI CUDEM 1/9\" (~3 m) nearshore topo-bathy tiles, "
+                    "NAVD88, with USGS 3DEP painting the land"
+                ),
+            ),
+            Rung(
+                name="etopo_bathy_base",
+                consequence="cross_dataset",
+                params={"force_bathy_base": True},
+                describes=(
+                    "NOAA ETOPO 2022 15 arc-second global relief (~450 m, "
+                    "EGM2008/MSL not NAVD88) laid under the whole AOI as the "
+                    "bathy base -- a REAL below-waterline bed, far coarser than "
+                    "CUDEM and on a different vertical datum"
+                ),
+            ),
+        ),
+    )
+)

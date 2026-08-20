@@ -1,0 +1,39 @@
+"""Declared-degradation machinery: ladders as data + the one walker.
+
+Capability-neutral by design -- fetchers, mesh builders and worker legs all
+declare their ladders here and share one execution + recording path.
+"""
+
+from .ladder import (
+    DEGRADATION_CLASSES,
+    REFUSE,
+    Consequence,
+    Ladder,
+    Rung,
+    get_ladder,
+    register_ladder,
+    registered_ladders,
+)
+from .walker import (
+    Activation,
+    LadderGap,
+    LadderRefused,
+    RungRecord,
+    walk_ladder,
+)
+
+__all__ = [
+    "Consequence",
+    "DEGRADATION_CLASSES",
+    "Rung",
+    "REFUSE",
+    "Ladder",
+    "register_ladder",
+    "get_ladder",
+    "registered_ladders",
+    "LadderGap",
+    "LadderRefused",
+    "RungRecord",
+    "Activation",
+    "walk_ladder",
+]

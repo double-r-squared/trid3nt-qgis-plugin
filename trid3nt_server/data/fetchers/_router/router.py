@@ -741,7 +741,52 @@ def route(
 ) -> LayerURI | dict[str, Any] | list[LayerURI]:
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI (or a
     record dict for a ``shape: record`` source, or an ordered
-    ``list[LayerURI]`` for a ``shape: animation_frames`` source)."""
+    ``list[LayerURI]`` for a ``shape: animation_frames`` source).
+
+    Fallback-ladder control kwargs ride the same router-level absorber as
+    ``purpose=``: ``fallback=(rung, ...)`` names the alternatives THIS call site
+    tolerates and ``fallback_gate="auto"|"user_gated"`` picks the loudness mode.
+    Absent ``fallback=``, a source that declares a ladder gets primary-or-typed-
+    error; a source with no ladder is untouched.
+    """
+    from trid3nt_server.fallbacks import get_ladder, walk_ladder
+
+    raw_params = dict(raw_params)
+    allow = raw_params.pop("fallback", None) or ()
+    gate_mode = raw_params.pop("fallback_gate", None)
+    ladder = get_ladder(spec.name)
+    if ladder is None:
+        return _route_once(spec, raw_params)
+    if isinstance(allow, str):
+        allow = (allow,)
+    result, activation = walk_ladder(
+        ladder,
+        params=raw_params,
+        attempt=lambda _rung, params: _route_once(spec, params),
+        allow=tuple(allow),
+        gate_mode=gate_mode,
+    )
+    return _stamp_activation(result, activation)
+
+
+def _stamp_activation(result: Any, activation: Any) -> Any:
+    """Carry the ladder activation onto the result envelope + the narration."""
+    rows = activation.to_contract()
+    if not isinstance(result, LayerURI) or not rows:
+        return result
+    update: dict[str, Any] = {"fallbacks": rows}
+    note = activation.narration()
+    if note:
+        update["fallback_note"] = (
+            f"{result.fallback_note} {note}" if result.fallback_note else note
+        )
+    return result.model_copy(update=update)
+
+
+def _route_once(
+    spec: SourceSpec, raw_params: dict[str, Any]
+) -> LayerURI | dict[str, Any] | list[LayerURI]:
+    """ONE attempt at the pipeline: validate -> gate -> dispatch -> cache -> emit."""
     # Emit-on-fetch control kwargs: router-level, so EVERY spec inherits
     # them via the promoted signature's ``**_extra_ignored`` absorber. Popped here
     # so they never reach validation / the cache key -- ``visualize=False`` (probe

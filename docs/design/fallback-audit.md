@@ -41,9 +41,23 @@ unaffected) | cosmetic.
 | 2 | `data/fetchers/_router/hooks/dem_3dep.py` `coarsen_dem` | requested resolution finer than the pixel budget | delivered DEM coarser than asked | loud (coarsen stamp in layer name + `requested_res_m`) / data | OK-as-is (labeled degrade) |
 | 3 | `data/fetchers/_router/executors/http_json.py:70` `_fetch_endpoint_fallback` | a mirror returns 5xx/429/timeout | next mirror of the SAME dataset tried | logged-only / operational | OK-as-is (same-data mirror = silent-OK norm; all-fail -> honest typed error) |
 | 4 | `http_json.py:211` `_execute_parse_fallback` | USGS NWIS IV body empty/404 | IV WaterML-JSON -> Site-service RDB (same gauge, different endpoint) | logged-only / operational | OK-as-is (same measurement; all-empty -> honest EMPTY error, never a header-only FGB) |
-| 5 | `data/fetchers/_router/hooks/topobathy.py:1132` `_compose_fallback_warnings` | a topobathy source leg missing/short | mosaic assembled from remaining legs | loud (warnings composed onto the layer) / data | OK-as-is |
+| 5 | `data/fetchers/_router/hooks/topobathy.py` `_compose_fallback_warnings` + `_assert_nearshore_coverage` | a topobathy source leg missing/short | mosaic assembled from remaining legs | user-gated-capable (declared ladder + coverage on the envelope) / data | **WIRED** (ADR 0289 -- see below) |
 | 6 | `data/fetchers/_router/executors/raster_cog.py:1725` PC href sign | per-href sign endpoint fails | token-path signing | logged-only / operational | OK-as-is |
 | 7 | `data/fetchers/socioeconomic/geocode_location/...:792` | primary geocoder miss | secondary geocode source | loud (typed) / operational | OK-as-is |
+
+Row 5 -- the SWAN bathymetry exhibit, WIRED (wave F1, ADR 0289). The row's silent
+half was PARTIAL CUDEM coverage: `_compose_fallback_warnings` fires only when the
+1/9" composite is ENTIRELY absent, so an AOI CUDEM merely runs short of got no
+warning at all, and the 3DEP land leg's flat ~0 m ocean fill painted the
+uncovered water -- the fake-land rectangle in
+`docs/proof/templates/swan_bathy_forensics.png` (12.7% of the SWAN grid exactly
+0.0). `fetch_topobathy` now declares a ladder
+(`user_supplied -> cudem_nearshore -> etopo_bathy_base -> REFUSE`) walked by the
+shared walker: undeclared, a coverage gap is a typed `TOPOBATHY_COVERAGE_GAP`
+naming where CUDEM ends; declared, the ETOPO rung fills it loudly with the
+coverage split on the envelope (live A/B: 88.9% / 11.1%; exactly-0.0 cells
+12.99% -> 0.00%). The ZERO-CUDEM path (this row's original subject) keeps its
+loud warning unchanged and joins the ladder in wave F2.
 
 ### B. Cache / transport
 

@@ -194,7 +194,7 @@ def test_fetch_bathy_rejects_land_only_dem():
 
     with patch(
         "trid3nt_server.workflows.swan.wave_field.wave_field.fetch_topobathy",
-        lambda b: _LandOnlyLayer(),
+        lambda b, **_k: _LandOnlyLayer(),
     ):
         with pytest.raises(SwanComposerError) as ei:
             _fetch_bathy_for_swan(bbox)
@@ -214,7 +214,7 @@ def test_fetch_bathy_accepts_real_bathymetry():
 
     with patch(
         "trid3nt_server.workflows.swan.wave_field.wave_field.fetch_topobathy",
-        lambda b: _SeamlessLayer(),
+        lambda b, **_k: _SeamlessLayer(),
     ):
         uri = _fetch_bathy_for_swan(bbox)
     assert uri == "s3://cache/topobathy.tif"
@@ -228,7 +228,7 @@ def test_fetch_bathy_typed_error_when_topobathy_fails():
 
     bbox = (-85.55, 29.8, -85.25, 30.05)
 
-    def _boom(_b):
+    def _boom(_b, **_k):
         raise RuntimeError("CUDEM host unreachable")
 
     with patch(
@@ -565,7 +565,8 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     # they must be patched at the SOURCE module, not on the composer module.
     from trid3nt_server.data.simulation.solver import solver as solver_mod
 
-    with patch.object(comp, "_fetch_bathy_for_swan", lambda b: "s3://cache/topo.tif"), \
+    with patch.object(comp, "_fetch_bathy_for_swan",
+                      lambda b, **_k: "s3://cache/topo.tif"), \
          patch.object(comp, "stage_swan_manifest", _fake_stage), \
          patch.object(solver_mod, "run_solver", _fake_run_solver), \
          patch.object(solver_mod, "wait_for_completion", _fake_wait), \

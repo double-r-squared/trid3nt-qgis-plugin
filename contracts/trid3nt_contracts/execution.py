@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .common import GraceModel, SyntheticInput, ULIDStr, UTCDatetime
+from .common import FallbackActivation, GraceModel, SyntheticInput, ULIDStr, UTCDatetime
 from .envelope import TemporalConfig
 
 __all__ = [
@@ -275,6 +275,12 @@ class LayerURI(GraceModel):
     # (honesty floor). ``None`` => the layer is exactly the requested source.
     # Additive + optional per the GraceModel forward-compat rule.
     fallback_note: str | None = None
+    # Structured half of the same honesty: which rungs of a DECLARED fallback
+    # ladder served this layer, with the coverage share each painted. A mosaic
+    # several rungs built together carries one row per rung; an undegraded layer
+    # carries at most the ``primary`` row. ADDITIVE + default-empty -- ``[]``
+    # means no ladder governs this fetch, never "nothing was substituted".
+    fallbacks: list[FallbackActivation] = Field(default_factory=list)
     # Structured input provenance (provenance-chain wave): the physical model
     # inputs this layer was built from, each tagged with WHERE it came from
     # (fetched / user / default_demo / derived / prompt_interpreted). ADDITIVE +

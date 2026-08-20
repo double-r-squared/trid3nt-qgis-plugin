@@ -1,9 +1,12 @@
 # Fallback ladders - the declared-degradation design
 
-NATE-shaped design (2026-08-17 discussion), for redline before build.
+NATE-shaped design (2026-08-17 discussion), approved as written.
 Replaces hidden substitution everywhere with one declared, visible,
 gated mechanism. Proving case: the SWAN bathymetry rectangle
 (docs/design/fallback-audit.md, the mosaic land-fill exhibit).
+
+Wave F1 is LANDED (ADR 0289) - read "As built" at the bottom for the
+shipped shapes before touching the machinery.
 
 ## The contract in five rules
 
@@ -76,3 +79,32 @@ typed error naming the gap; declared -> ETOPO rung, loud, coverage
 reported). Wave F2: migrate the audit's data-bearing rows + deprecate
 the ad-hoc params, full-coverage law (inventory + verdicts + sweep
 guard against naked substitution).
+
+## As built (wave F1, ADR 0289)
+
+- `trid3nt_server/fallbacks/` - `ladder.py` (`Rung` / `Ladder` /
+  `REFUSE` / the registry) and `walker.py` (`walk_ladder`, `LadderGap`,
+  `LadderRefused`, `Activation`). Capability-neutral: F2's mesh and
+  worker rungs use the same walker.
+- `trid3nt_server/gates/fallback.py` - the loudness floor
+  (`gate_fires` / `labeled_default`) and the pause, on the existing
+  `_PENDING_CONFIRMATIONS` spine with a `tool-payload-warning`.
+- Rung definitions live with the capability owner; the bathymetry
+  ladder is in `data/fetchers/_router/hooks/topobathy.py` as
+  `BATHYMETRY_LADDER`.
+- A rung's SHARE of the request comes from the seam: a seam that can
+  measure its own coverage raises `LadderGap(covered_fraction,
+  gap_note)` rather than filling the hole itself.
+- Consequence classes are the spec's three degradation classes plus
+  three structural ones (`primary`, `user_supplied`, `refuse`). The
+  floor keys only on the degradation classes.
+- TOP RUNG (NATE, 2026-08-19): a ladder may declare one
+  `user_supplied` rung naming the request param that carries the
+  user's own data. Present -> it serves and the walk stops; it stamps
+  `SyntheticInput(basis="user")`. Not an upload feature.
+- Activation rides `LayerURI.fallbacks` (a new additive
+  `FallbackActivation` list) plus the existing `fallback_note`
+  narration channel - no new envelope, no plugin change.
+- REFUSE propagates the capability's own typed error verbatim; the
+  ladder only re-wraps when a recorded gap's filling rung failed for an
+  unrelated reason.
