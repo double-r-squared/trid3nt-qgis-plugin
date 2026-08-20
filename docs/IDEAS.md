@@ -475,3 +475,22 @@ single-engine BMI pilot -> twin loop -> cross-engine exchange.
   render (3D map view, mesh layers, Qgis2threejs, voxel limits) and design
   the MODFLOW 3D output story (layer-per-raster 2.5D vs VTK mesh vs
   external viewer).
+
+## 2026-08-20 - recharge fetcher sources verified (NATE: research + build)
+
+- **Recharge fetcher joins the build queue WITH thickness (NATE ruling).**
+  Primary: USGS Reitz et al. 2017 CONUS ~800m recharge grids, 2000-2013
+  (ScienceBase parent 56c49126e4b0946c65219231, data doi 10.5066/F7PN93P0,
+  paper doi 10.1111/1752-1688.12546; child item 55d383a9e4b0518e35468e58
+  carries EffRecharge_<year>.zip x14 + TotalRecharge_0013.zip mean - staged
+  COG conversion, same pattern as Zell-Sanford). Cross-check: Wolock 2003
+  baseflow-derived 1-km rech48grd (item 63140610d34e36012efa3838, 3.6 MB) -
+  methodologically independent (baseflow partition vs empirical regression),
+  the BDTICM-style sanity pair.
+- **network_import verdict evidence (NATE asked where the demo lives):**
+  storm depth resolves user -> NOAA Atlas-14 (real, AOI) -> labeled 90.0 mm
+  ONLY when the network has no AOI bbox (network_import.py:544), declared as
+  SyntheticInput basis=default_demo consequence=scenario at the gate; DEM-
+  interpolated inverts carry consequence=physics (auto-mode refuses). The
+  inline last-rung literal migrates into a declared ladder rung
+  (refuse-by-default) in fallback wave F2.
