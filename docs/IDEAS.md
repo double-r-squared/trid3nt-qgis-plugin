@@ -494,3 +494,15 @@ single-engine BMI pilot -> twin loop -> cross-engine exchange.
   interpolated inverts carry consequence=physics (auto-mode refuses). The
   inline last-rung literal migrates into a declared ladder rung
   (refuse-by-default) in fallback wave F2.
+
+## 2026-08-20 addendum - recharge serving-endpoint probe + audit close
+
+- Recharge live-service probe NEGATIVE (2026-08-20): the Reitz child item
+  advertises ArcGIS REST + WMS distribution links but gis.usgs.gov times
+  out and the sciencebase.gov OWS endpoint 404s (stale links); a MapServer
+  would serve rendered images, not values, regardless. VERDICT: staged-COG
+  import from the zips is the build path for both recharge and thickness.
+- network_import row ACCEPTED by NATE (storm-depth ladder user->Atlas-14->
+  labeled 90mm no-AOI rung, gate-declared; inline literal migrates to a
+  declared refuse-default ladder rung in F2). Demo-physics audit now FULLY
+  ADJUDICATED 34/34.
