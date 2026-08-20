@@ -44,6 +44,7 @@ unaffected) | cosmetic.
 | 5 | `data/fetchers/_router/hooks/topobathy.py` `_compose_fallback_warnings` + `_assert_nearshore_coverage` | a topobathy source leg missing/short | mosaic assembled from remaining legs | user-gated-capable (declared ladder + coverage on the envelope) / data | **WIRED** (ADR 0289 -- see below) |
 | 6 | `data/fetchers/_router/executors/raster_cog.py:1725` PC href sign | per-href sign endpoint fails | token-path signing | logged-only / operational | OK-as-is |
 | 7 | `data/fetchers/socioeconomic/geocode_location/...:792` | primary geocoder miss | secondary geocode source | loud (typed) / operational | OK-as-is |
+| 8 | `_router/registration.py:406` `spec.fallback` -> `executors/vector_fgb.py:537` + the `http_json` chain | the primary endpoint fails | the spec's NEXT named endpoint OR, for some specs, a SIBLING TOOL | logged-only / **mixed** | **F2 MIGRATION** (see below) |
 
 Row 5 -- the SWAN bathymetry exhibit, WIRED (wave F1, ADR 0289). The row's silent
 half was PARTIAL CUDEM coverage: `_compose_fallback_warnings` fires only when the
@@ -58,6 +59,30 @@ naming where CUDEM ends; declared, the ETOPO rung fills it loudly with the
 coverage split on the envelope (live A/B: 88.9% / 11.1%; exactly-0.0 cells
 12.99% -> 0.00%). The ZERO-CUDEM path (this row's original subject) keeps its
 loud warning unchanged and joins the ladder in wave F2.
+
+Wave F1b (ADR 0290) closed the panel's findings on this row: all four exposed
+`fetch_topobathy` callers now declare the rung (SFINCS coastal, GeoClaw
+non-tsunami and SCHISM tidal_hydro joined SWAN -- the first turned the gap into a
+failed envelope, the other two silently degraded to the LAND-ONLY `fetch_dem`);
+the merge reconciles its footprint PROMISE against the tiles that actually
+painted; and an exempted request (`force_bathy_base` / `skip_cudem` /
+`include_regional_fine`) stamps NO coverage claim, carrying a `PARTIAL-CUDEM
+BATHYMETRY` warning instead.
+
+Row 8 -- `spec.fallback`, a PRE-EXISTING NAME COLLISION, registered here and NOT
+touched by F1/F1b. It is a second, undeclared substitution mechanism that predates
+the ladders and shares their word: 32 source specs carry a top-level
+`fallback: [...]` list, resolved into an endpoint CHAIN by
+`vector_fgb._endpoint_chain` (and the equivalent `http_json` chain) and surfaced
+verbatim on the spec card by `registration.py:406`. Its consequence class is MIXED
+and undeclared: in `vector_fgb` the entries name alternate ENDPOINTS of the SAME
+dataset (a `same_data` rung, silent-OK by the floor), but `fetch_gridmet`'s
+`fallback: [fetch_era5_reanalysis]` names a SIBLING TOOL -- a genuine
+CROSS-DATASET swap (gridMET 4 km CONUS -> ERA5 ~31 km global reanalysis) riding
+silently with no rung, no gate and no activation row. F2 must inventory all 32,
+classify each entry, and migrate the cross-dataset ones onto declared rungs; the
+same-data ones can either become `same_data` rungs or keep the endpoint chain
+under a renamed key so the word `fallback` means exactly one thing.
 
 ### B. Cache / transport
 

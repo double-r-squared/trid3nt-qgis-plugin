@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts import new_ulid
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import SyntheticInput, render_fallback_line
 from trid3nt_contracts.schism_contracts import (
     SCHISM_BATHYMETRY_UNAVAILABLE,
     SCHISM_INPUT_INVALID,
@@ -44,6 +44,8 @@ from trid3nt_contracts.schism_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import register_tool
+from trid3nt_server.emission.layer_uri_emit import stamp_fallbacks
+from trid3nt_server.fallbacks import persist_run_activations
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.schism._template_card import TemplateCard
 
@@ -445,6 +447,7 @@ async def model_schism_tidal_hydro(
         ]
         n_nodes_grid = None
         n_elements_grid = None
+        bathy_activation: list = []
         ncompute, nscribe = 2, 2
     else:
         deck_info = await _build_coastal_tin_deck(
@@ -458,6 +461,7 @@ async def model_schism_tidal_hydro(
         review_entries = deck_info["review_entries"]
         n_nodes_grid = deck_info["n_nodes"]
         n_elements_grid = deck_info["n_elements"]
+        bathy_activation = deck_info["bathy_activation"]
         ncompute, nscribe = 3, 2
 
     # --- Stage 2: the input-review gate ---------------------------- #
@@ -558,6 +562,15 @@ async def model_schism_tidal_hydro(
     # --- Stage 5: publish the elevation COG (render chokepoint) --------------- #
     async with substep(emitter, "publish_layer"):
         elev = await asyncio.to_thread(_publish_elev_layer, elev, review.entries)
+
+    # Carry the bathymetry ladder onto the answer layer + into the bucket, so
+    # "what painted the bed?" survives the session.
+    if bathy_activation:
+        elev = stamp_fallbacks(elev, bathy_activation)
+        await asyncio.to_thread(
+            persist_run_activations, batch_run_id, bathy_activation,
+            capability_note="topo-bathymetry sampled onto the SCHISM TIN nodes",
+        )
 
     # --- Best-effort: the native out2d mesh via the emit-on-solve seam (0286) - #
     # The out2d netCDF (every timestep) IS the temporal artifact -- QGIS/MDAL
@@ -687,10 +700,13 @@ async def _build_coastal_tin_deck(
     # offline/test seam (a worker-visible local topobathy COG); else fetch it.
     bathy_override = os.environ.get("TRID3NT_SCHISM_BATHY_PATH")
     bathy_cog_uri: str | None = None
+    bathy_activation: list = []
     if bathy_override and Path(bathy_override).exists():
         dem_path, bathy_source = bathy_override, "local topobathy COG"
     else:
-        dem_path, bathy_source = await _fetch_bathymetry_cog(bbox)
+        dem_path, bathy_source = await _fetch_bathymetry_cog(
+            bbox, activation_sink=bathy_activation
+        )
     depths = deck_authoring.sample_bathymetry_on_nodes(points, dem_path)
 
     # 4. Author the deck.
@@ -704,6 +720,9 @@ async def _build_coastal_tin_deck(
         bathy_source=bathy_source, constituents="+".join(constituents),
         amp=f"{tidal_amplitude_m:g}",
     )
+    bed_line = render_fallback_line(bathy_activation)
+    if bed_line:
+        note = f"{note} Bed: {bed_line}"
     # An incompatible case mesh was loudly skipped by the gate: surface WHY in the
     # provenance too (the gate already logged one WARNING line).
     if mesh_gate_note:
@@ -722,6 +741,7 @@ async def _build_coastal_tin_deck(
     return {
         "deck_files": deck["files"], "fallback_note": note, "review_entries": review_entries,
         "n_nodes": deck["n_nodes"], "n_elements": deck["n_elements"],
+        "bathy_activation": bathy_activation,
     }
 
 
@@ -764,9 +784,16 @@ def _topobathy_fetch_kwargs(
     return topobathy_kw, dem_kw
 
 
+#: The bathymetry rungs a SCHISM coastal_tin tolerates. Where CUDEM's 1/9"
+#: collection stops mid-AOI the global ETOPO relief is a REAL below-waterline
+#: bed -- coarse, on a different vertical datum, and loudly labeled.
+_SCHISM_BATHY_FALLBACK = ("etopo_bathy_base",)
+
+
 async def _fetch_bathymetry_cog(
     bbox, *, resolution_m: float | None = None,
     force_bathy_base: bool = False, skip_land: bool = False,
+    activation_sink: list | None = None,
 ) -> tuple[str, str]:
     """Fetch a topobathy (else DEM) COG for the AOI; return
     (local_path, source_label).
@@ -791,12 +818,19 @@ async def _fetch_bathymetry_cog(
     precedence source, would CLOBBER the ETOPO negative bathy over the open water
     beyond CUDEM coverage, flattening the offshore domain to ~0 m -- CUDEM itself
     carries the nearshore topography above the waterline, so a surge mesh needs no
-    separate land DEM."""
+    separate land DEM.
+
+    ``activation_sink`` collects the fallback-ladder rows the fetch reported, so
+    the caller can stamp what actually painted the bed onto its own result. A
+    ladder REFUSAL is fatal here: the ``fetch_dem`` leg below is land-only and
+    would sample flat 0 m ocean onto every wet node."""
     from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.fallbacks import LadderGap, LadderRefused
 
     topobathy_kw, dem_kw = _topobathy_fetch_kwargs(
         resolution_m, force_bathy_base, skip_land
     )
+    topobathy_kw["fallback"] = _SCHISM_BATHY_FALLBACK
 
     for tool_name, label, kw in (("fetch_topobathy", "topobathy", topobathy_kw),
                                  ("fetch_dem", "DEM", dem_kw)):
@@ -813,12 +847,24 @@ async def _fetch_bathymetry_cog(
             else:
                 res = await asyncio.to_thread(
                     entry.fn, bbox=list(bbox), purpose="bathymetry", **kw)
+        except (LadderGap, LadderRefused) as exc:
+            # A nearshore coverage gap no permitted rung filled. ``fetch_dem`` is
+            # LAND-ONLY: it would sample flat 0 m ocean onto every wet node, which
+            # a tidal SCHISM run reads as dry ground. Refuse, never degrade.
+            raise SchismScenarioError(
+                SCHISM_BATHYMETRY_UNAVAILABLE,
+                f"the topo-bathymetry ladder refused for bbox {tuple(bbox)}: "
+                f"{exc}. The 3DEP land DEM is NOT an acceptable substitute for a "
+                "coastal_tin bed (flat 0 m ocean reads as dry ground).",
+            ) from exc
         except Exception as exc:  # noqa: BLE001
             logger.warning("schism bathymetry %s failed: %s", tool_name, exc)
             continue
         uri = getattr(res, "uri", None) or (res.get("uri") if isinstance(res, dict) else None)
         if not uri:
             continue
+        if activation_sink is not None:
+            activation_sink.extend(getattr(res, "fallbacks", None) or [])
         local = await asyncio.to_thread(_download_uri_to_tmp, uri)
         if local:
             return local, label

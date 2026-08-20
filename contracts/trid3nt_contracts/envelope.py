@@ -22,6 +22,7 @@ from pydantic import Field, model_validator
 
 from .common import (
     BBox,
+    FallbackActivation,
     GraceModel,
     Lat,
     Lon,
@@ -114,6 +115,10 @@ class ResultLayer(GraceModel):
     role: Literal["primary", "context", "input"]
     units: str | None = None  # e.g., "meters", "m/s", or None for categorical
     legend: "LegendKey | None" = None  # data-driven render key; None => legacy style_preset rendering
+    # Which rungs of a declared fallback ladder produced this layer's inputs.
+    # Empty means "no ladder governs this", never "nothing was substituted".
+    fallbacks: list[FallbackActivation] = Field(default_factory=list)
+    fallback_note: str | None = None  # one-line narration of what was swapped
 
 
 class DataSource(GraceModel):

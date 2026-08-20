@@ -64,6 +64,9 @@ class RungRecord:
     consequence: str
     coverage: float
     note: str | None = None
+    #: The gate said no. Kept on the contract even at coverage 0.0 -- a decline
+    #: that left no trace is indistinguishable from a rung nobody offered.
+    declined: bool = False
 
 
 @dataclass
@@ -72,6 +75,10 @@ class Activation:
 
     capability: str
     records: list[RungRecord] = field(default_factory=list)
+    #: The capability's coverage check was exempted by this request's own params,
+    #: so no rung's share was measured. Nothing is stamped: a 1.0 coverage claim
+    #: nobody verified is an affirmatively false row.
+    coverage_unverified: bool = False
 
     @property
     def degraded(self) -> bool:
@@ -81,6 +88,8 @@ class Activation:
         )
 
     def to_contract(self) -> list[FallbackActivation]:
+        if self.coverage_unverified:
+            return []
         return [
             FallbackActivation(
                 capability=self.capability,
@@ -90,7 +99,7 @@ class Activation:
                 note=r.note,
             )
             for r in self.records
-            if r.consequence != "refuse" and r.coverage > 0.0
+            if r.consequence != "refuse" and (r.coverage > 0.0 or r.declined)
         ]
 
     def narration(self) -> str | None:
@@ -144,6 +153,11 @@ def walk_ladder(
     invokes a rung that declares no source/call of its own (the primary, and any
     rung expressed as an override of the primary request). ``gate`` is the
     loudness gate; the default one rides the pending-confirmation spine.
+
+    On REFUSE the PRIMARY's typed error is what surfaces (later rung failures
+    chain through ``__cause__``), so no rung can launder the primary's
+    ``error_code`` / ``retryable`` into its own; a decline and an unmeasurable
+    gap each get their own typed refusal.
     """
     if gate is None:
         from trid3nt_server.gates.fallback import confirm_fallback as gate
@@ -164,8 +178,11 @@ def walk_ladder(
         plan.append(rung)
 
     activation = Activation(capability=ladder.capability)
+    unverified = any(bool(base.get(p)) for p in ladder.coverage_exempt_params)
     covered = 0.0
     last_exc: BaseException | None = None
+    primary_exc: BaseException | None = None
+    primary_attempted = False
     gap_note: str | None = None
 
     for rung in plan:
@@ -180,9 +197,11 @@ def walk_ladder(
             if not permitted:
                 activation.records.append(
                     RungRecord(rung.name, rung.consequence, 0.0,
-                               "declined at the fallback gate")
+                               "declined at the fallback gate", declined=True)
                 )
                 continue
+        if rung is ladder.primary_rung:
+            primary_attempted = True
         try:
             result = _invoke(rung, {**base, **dict(rung.params)}, attempt)
         except LadderGap as gap:
@@ -193,6 +212,8 @@ def walk_ladder(
             covered = max(covered, gap.covered_fraction)
             gap_note = gap.gap_note
             last_exc = gap
+            if rung is ladder.primary_rung:
+                primary_exc = gap
             if covered >= 1.0 - _COMPLETE_EPS:
                 # A gap that closed itself is a seam bug, not a degradation.
                 raise
@@ -203,31 +224,77 @@ def walk_ladder(
                            f"{type(exc).__name__}: {exc}")
             )
             last_exc = exc
+            if rung is ladder.primary_rung:
+                primary_exc = exc
             continue
         activation.records.append(
             RungRecord(rung.name, rung.consequence, max(0.0, 1.0 - covered),
                        rung.describes)
         )
+        if rung is ladder.primary_rung and unverified:
+            activation.coverage_unverified = True
         if activation.degraded:
             logger.warning(
                 "fallback ladder %s: %s", ladder.capability, activation.narration()
             )
         return result, activation
 
-    # The terminal REFUSE rung. The primary is always attempted, so a walk that
-    # reaches here always carries a failure.
-    setattr(last_exc, "fallback_activation", activation)
-    if gap_note is None or isinstance(last_exc, LadderGap):
-        # The failure IS the capability's own typed error -- a bad input, an
-        # unreachable upstream, or the gap error that already names what is
-        # missing and which rung would cover it. It propagates VERBATIM so the
-        # raw call surface behaves exactly as it did before a ladder existed.
-        raise last_exc  # type: ignore[misc]
+    # The terminal REFUSE rung.
     tried = ", ".join(f"{r.rung} ({r.note})" for r in activation.records)
-    raise LadderRefused(
-        f"{ladder.refuse_error_code}: {gap_note}, and no permitted rung of the "
-        f"{ladder.capability} fallback ladder could fill it. Rungs tried: {tried}. "
-        f"Declared alternatives: {[r.name for r in ladder.alternatives]}.",
-        error_code=ladder.refuse_error_code,
-        activation=activation,
-    ) from last_exc
+    if not primary_attempted or last_exc is None:
+        raise LadderRefused(
+            f"{ladder.refuse_error_code}: the {ladder.capability} ladder reached "
+            "REFUSE without attempting its primary rung -- a walker invariant "
+            f"was violated. Rungs tried: {tried or 'none'}.",
+            error_code=ladder.refuse_error_code,
+            activation=activation,
+        )
+
+    declined = [r.rung for r in activation.records if r.declined]
+    if declined:
+        # Re-raising the gap error verbatim here would instruct the user to
+        # permit the very rung they just declined.
+        raise LadderRefused(
+            f"{ladder.refuse_error_code}: declined at the fallback gate. "
+            + (f"{gap_note}. " if gap_note else "")
+            + f"The {', '.join(declined)} rung(s) of the {ladder.capability} "
+            "fallback ladder were DECLINED, so nothing filled the gap and the "
+            f"request refuses rather than degrading. Rungs tried: {tried}.",
+            error_code=ladder.refuse_error_code,
+            activation=activation,
+        ) from last_exc
+
+    if gap_note is not None and not isinstance(last_exc, LadderGap):
+        # A gap WAS recorded and the rung meant to fill it failed for its own
+        # unrelated reason, so the refusal has to name both.
+        raise LadderRefused(
+            f"{ladder.refuse_error_code}: {gap_note}, and no permitted rung of the "
+            f"{ladder.capability} fallback ladder could fill it. Rungs tried: {tried}. "
+            f"Declared alternatives: {[r.name for r in ladder.alternatives]}.",
+            error_code=ladder.refuse_error_code,
+            activation=activation,
+        ) from last_exc
+
+    # No gap was recorded (or the gap error IS the last failure): the PRIMARY's
+    # own typed error is the truth about this request -- a bad input, an
+    # unreachable upstream, or the gap error that already names what is missing.
+    # It propagates VERBATIM so the raw call surface behaves exactly as it did
+    # before a ladder existed, and a later rung's unrelated failure can never
+    # substitute its error_code / retryable for the primary's.
+    surfaced = last_exc if isinstance(last_exc, LadderGap) else (primary_exc or last_exc)
+    setattr(surfaced, "fallback_activation", activation)
+    if not isinstance(surfaced, (LadderGap, LadderRefused)) and (
+        getattr(surfaced, "error_code", None) is None
+    ):
+        # An UNTYPED failure never escapes the walker bare: callers dispatch on
+        # error_code, and a raw exception reads to them as an internal fault.
+        raise LadderRefused(
+            f"{ladder.refuse_error_code}: the {ladder.capability} primary rung "
+            f"failed with an untyped {type(surfaced).__name__}: {surfaced}. "
+            f"Rungs tried: {tried}.",
+            error_code=ladder.refuse_error_code,
+            activation=activation,
+        ) from surfaced
+    if surfaced is not last_exc:
+        raise surfaced from last_exc  # type: ignore[misc]
+    raise surfaced  # type: ignore[misc]

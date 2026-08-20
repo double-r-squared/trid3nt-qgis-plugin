@@ -32,8 +32,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Sequence
 
+from trid3nt_contracts.common import render_fallback_line
 from trid3nt_contracts.execution import LayerURI
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only import (no runtime cycle)
@@ -45,10 +46,45 @@ __all__ = [
     "emit_layer_uri",
     "publish_input_layer",
     "publish_raster_input_cog",
+    "stamp_fallbacks",
 ]
 
 
-def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
+def stamp_fallbacks(
+    layer: LayerURI, activations: Sequence[Any] | None
+) -> LayerURI:
+    """Merge fallback-ladder activation rows + their narration onto ``layer``.
+
+    THE ONE place a re-emitted layer regains the rows its source carried: a
+    layer rebuilt from a bare uri (``publish_raster_input_cog``, a worker
+    manifest row) starts with an empty ``fallbacks`` list, and an empty list
+    means "no ladder governs this" -- never "nothing was substituted". Rows
+    already on the layer are kept and not duplicated.
+    """
+    if not activations:
+        return layer
+
+    def _rung(a: Any) -> Any:
+        return a.get("rung") if isinstance(a, dict) else getattr(a, "rung", None)
+
+    existing = list(layer.fallbacks or [])
+    seen = {_rung(a) for a in existing}
+    added = [a for a in activations if _rung(a) not in seen]
+    if not added:
+        return layer
+    merged = existing + added
+    update: dict[str, Any] = {"fallbacks": merged}
+    note = render_fallback_line(merged)
+    if note and note not in (layer.fallback_note or ""):
+        update["fallback_note"] = (
+            f"{layer.fallback_note} {note}" if layer.fallback_note else note
+        )
+    return layer.model_copy(update=update)
+
+
+def emit_layer_uri(
+    layer: LayerURI, *, fallbacks: Sequence[Any] | None = None
+) -> LayerURI | None:
     """Validate a client-bound ``LayerURI`` at the single emission seam.
 
     Returns the ``LayerURI`` unchanged when it is safe to deliver to the client,
@@ -56,6 +92,10 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     ``None`` return as "do not call ``add_loaded_layer``"; the tool result the LLM
     sees is unaffected, so the failure is narrated honestly and the
     retry-on-failure loop can act.
+
+    ``fallbacks`` carries the activation rows of the ladder that produced this
+    layer's data; they are stamped here so a re-emitted layer never loses them
+    (see :func:`stamp_fallbacks`).
 
     Guardrail (the §1 fix promoted to an invariant -- Decision 11;
     relaxed for ``s3://`` rasters by the TiTiler exit / QGIS-native swap):
@@ -95,7 +135,7 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
         )
         return None
 
-    return layer
+    return stamp_fallbacks(layer, fallbacks)
 
 
 async def publish_input_layer(
@@ -103,6 +143,7 @@ async def publish_input_layer(
     layer_uri: LayerURI | None,
     *,
     role: str = "input",
+    fallbacks: Sequence[Any] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface an engine INPUT layer on the map (role="input").
 
@@ -141,7 +182,7 @@ async def publish_input_layer(
         # field actually differs so the common (already-correct) path is a no-op.
         if layer_uri.role != role or layer_uri.bbox is not None:
             layer_uri = layer_uri.model_copy(update={"role": role, "bbox": None})
-        safe = emit_layer_uri(layer_uri)
+        safe = emit_layer_uri(layer_uri, fallbacks=fallbacks)
         if safe is None:
             # The guardrail dropped it (e.g. a raw-object-store raster that never
             # round-tripped through publish_layer). Honest no-surface, not fatal.
@@ -181,6 +222,7 @@ async def publish_raster_input_cog(
     style_preset: str,
     role: str = "context",
     fallback_note: str | None = None,
+    fallbacks: Sequence[Any] | None = None,
 ) -> bool:
     """BEST-EFFORT: surface an EXISTING ``s3://`` raster COG as an input/context row.
 
@@ -255,4 +297,4 @@ async def publish_raster_input_cog(
         bbox=None,
         fallback_note=fallback_note,
     )
-    return await publish_input_layer(emitter, layer, role=role)
+    return await publish_input_layer(emitter, layer, role=role, fallbacks=fallbacks)

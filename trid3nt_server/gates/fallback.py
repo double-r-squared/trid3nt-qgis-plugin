@@ -11,8 +11,11 @@ The floor, by consequence class:
     runs unapproved).
 
 Declining is not a run-cancel: the walker treats a declined rung as one it may
-not take and descends to the next, ending at the ladder's typed REFUSE. AUTO and
-headless runs apply the labeled default, so a canary never hangs.
+not take and descends to the next, ending at the ladder's typed REFUSE. Labeled
+defaults apply ONLY where there is nobody to ask (AUTO/headless, no bound loop);
+once the card is on a live user_gated session an unanswered gate reads as a
+DECLINE, matching the input-review gate it rides. A canary never hangs either
+way.
 """
 
 from __future__ import annotations
@@ -57,16 +60,11 @@ def _recommendation(
         else ""
     )
     gap = f"{gap_note} " if gap_note else ""
-    default = (
-        "refuse (this alternative has no real data source)"
-        if rung.consequence == "synthetic"
-        else "proceed on the alternative, loudly labeled"
-    )
     return (
         f"{capability}: {served}{gap}Approve the fallback rung "
         f"'{rung.name}' [{rung.consequence}]? {rung.describes} "
         f"Declining does not cancel the run -- it refuses the substitution and "
-        f"the tool returns its typed error. Default if unanswered: {default}."
+        f"the tool returns its typed error. Unanswered counts as DECLINED."
     )[:512]
 
 
@@ -84,7 +82,8 @@ def confirm_fallback(
     (the fetch path is off-loaded): the coroutine is driven onto the emitter's
     bound loop, which is free while the composer is parked on the thread. On the
     loop thread itself a blocking wait would deadlock, so the labeled default
-    applies -- never a hang.
+    applies -- never a hang. Once the card IS on a live session, an unanswered
+    gate is a decline, not the labeled default.
     """
     if not gate_fires(rung.consequence, gate_mode):
         if rung.consequence == "cross_dataset":
@@ -127,6 +126,15 @@ def confirm_fallback(
     )
     try:
         return bool(fut.result(timeout=_TTL_SECONDS + 30))
+    except TimeoutError:
+        # The card reached a live session and the outer wait outran the inner
+        # TTL. Nobody approved the substitution -> decline (never the labeled
+        # default: that is for runs with nobody to ask).
+        logger.warning(
+            "fallback gate %s -> rung %s timed out on a live session; DECLINED",
+            capability, rung.name,
+        )
+        return False
     except Exception as exc:  # noqa: BLE001 -- a gate fault applies the default
         logger.warning(
             "fallback gate %s -> rung %s faulted (%s); applying the labeled "
@@ -149,9 +157,16 @@ async def _present_and_wait(
     _register_pending_confirmation(emitter.session_id, envelope.warning_id, fut)
     await emitter.send_envelope("tool-payload-warning", envelope)
     try:
-        # An unanswered gate raises out to the caller's labeled default rather
-        # than reading as a decline (a timeout is nobody answering, not a "no").
+        # An unanswered gate on a LIVE session is a DECLINE, not the labeled
+        # default: the card was delivered and nobody approved the substitution
+        # (input_review's timeout-is-cancel semantics, which this gate rides).
         decision = await asyncio.wait_for(fut, timeout=float(envelope.ttl_seconds))
+    except asyncio.TimeoutError:
+        logger.warning(
+            "fallback gate %s timed out unanswered (warning_id=%s); DECLINED",
+            envelope.tool_name, envelope.warning_id,
+        )
+        return False
     finally:
         _pop_pending_confirmation(envelope.warning_id)
     return getattr(decision, "decision", None) == "proceed"

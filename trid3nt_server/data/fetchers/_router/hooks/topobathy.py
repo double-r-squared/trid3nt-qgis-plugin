@@ -846,7 +846,7 @@ def _merge_topobathy_to_array(
             + adjusted_cudem
             + regional_paths
         )
-        array, transform, crs = _composite_sources_to_array(
+        array, transform, crs, _painted = _composite_sources_to_array(
             sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
         )
         logger.info(
@@ -973,7 +973,7 @@ def _merge_sources(
     ``bbox``; return a path to the merged float32 GTiff (per-source warp, no CLI)."""
     if not sources_in_precedence:
         raise TopobathyEmptyError("no sources to merge")
-    array, transform, crs = _composite_sources_to_array(
+    array, transform, crs, _painted = _composite_sources_to_array(
         sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
     )
     import rasterio
@@ -1122,13 +1122,21 @@ def _composite_sources_to_array(
     target_crs: str,
     bbox: tuple[float, float, float, float],
     min_pixel_m: float | None = None,
-) -> tuple[Any, Any, str]:
-    """Per-source warp + precedence composite -> ``(array, transform, target_crs)``.
+) -> tuple[Any, Any, str, list[bool]]:
+    """Per-source warp + precedence composite -> ``(array, transform, target_crs,
+    painted)``.
 
     NEVER ``rasterio.merge``s raw heterogeneous sources (the upside-down MergeError
     for the CUDEM-EPSG:4269 + 3DEP-EPSG:5070 mix): each source is reprojected from
     its OWN CRS onto the shared bbox-clipped grid (normalising CRS + orientation),
-    an unflagged |z|>=cap sentinel is masked to NaN, then composited LAST-wins."""
+    an unflagged |z|>=cap sentinel is masked to NaN, then composited LAST-wins.
+
+    ``painted`` is ONE FLAG PER INPUT SOURCE, in order: True when that source
+    contributed at least one valid cell. Sources drop out here silently
+    (unreadable, empty, no AOI intersect), so a caller that PROMISED coverage from
+    a footprint must reconcile the promise against these flags, not against the
+    input list. Positional (not by path) because a source path may be rewritten
+    between selection and merge."""
     import numpy as np
     import rasterio
     from rasterio.warp import Resampling, reproject
@@ -1141,11 +1149,11 @@ def _composite_sources_to_array(
     )
 
     composite = np.full((height, width), np.nan, dtype="float32")
-    any_painted = False
+    painted: list[bool] = [False] * len(sources_in_precedence)
 
     target_res_m = abs(dst_transform.a)
     with rasterio.Env(**_VSICURL_ENV_KW):
-        for src in sources_in_precedence:
+        for idx, src in enumerate(sources_in_precedence):
             try:
                 with rasterio.open(src) as ds:
                     src_arr, src_transform = _decimated_source_read(
@@ -1180,14 +1188,14 @@ def _composite_sources_to_array(
             valid = ~np.isnan(warped)
             if valid.any():
                 composite[valid] = warped[valid]
-                any_painted = True
+                painted[idx] = True
 
-    if not any_painted:
+    if not any(painted):
         raise TopobathyUpstreamError(
             "merge produced no valid cells -- all sources were empty / "
             "unreadable / outside the AOI"
         )
-    return composite, dst_transform, target_crs
+    return composite, dst_transform, target_crs, painted
 
 
 # ---------------------------------------------------------------------------
@@ -1204,6 +1212,7 @@ def _compose_fallback_warnings(
     has_etopo: bool,
     bathy_present: bool,
     land_absent: bool,
+    cudem_painted_fraction: float | None = None,
 ) -> str | None:
     """Build the LABELED fallback-warning string (data-source + loud-fallback norms).
 
@@ -1244,6 +1253,19 @@ def _compose_fallback_warnings(
             "sub-metre vertical offset). This provides a REAL below-waterline bed "
             "(so a tsunami/surge run produces actual inundation) but is COARSER than "
             "CUDEM; treat nearshore detail as approximate."
+        )
+    # PARTIAL CUDEM over a global ETOPO base: the AOI is part fine CUDEM and part
+    # coarse global relief. Under an exempting param (force_bathy_base /
+    # skip_cudem) nothing refused, so this warning is the ONLY loudness the split
+    # gets; it must not ride silent.
+    if cudem_painted_fraction is not None and has_etopo:
+        warnings.append(
+            "PARTIAL-CUDEM BATHYMETRY: the fine NOAA NCEI CUDEM 1/9\" nearshore "
+            f"tiles paint {cudem_painted_fraction * 100:.0f}% of AOI {bbox}; the "
+            f"remaining {(1.0 - cudem_painted_fraction) * 100:.0f}% is the GLOBAL "
+            "NOAA ETOPO 2022 15 arc-second relief model (~450 m, EGM2008/MSL rather "
+            "than NAVD88). A REAL below-waterline bed everywhere, but nearshore "
+            "detail is approximate outside the CUDEM footprint."
         )
     # LOUD-FALLBACK NORM (the 0091 follow-up): the 3DEP land leg's SILENT swallow is a
     # LABELED degrade -- when land failed but a bathy source is present the surface
@@ -1402,9 +1424,15 @@ def _select_and_merge(
             + adjusted_cudem
             + regional_vsicurl
         )
-        array, transform, crs = _composite_sources_to_array(
+        array, transform, crs, painted = _composite_sources_to_array(
             sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
         )
+        cudem_offset = len(etopo_vsicurl) + (1 if have_land else 0)
+        painted_cudem_urls = [
+            cudem_vsicurl[i][len("/vsicurl/"):]
+            for i in range(len(adjusted_cudem))
+            if painted[cudem_offset + i]
+        ]
     finally:
         for p in tmp_paths:
             try:
@@ -1420,6 +1448,34 @@ def _select_and_merge(
                 except OSError:
                     pass
 
+    # 4b) PROMISE vs PAINT. The pre-fetch coverage gate reads tile FOOTPRINTS, but
+    # a selected tile can still drop after that: the datum gate skips an unreadable
+    # header, and the compositor skips an unreadable / empty source. Promised and
+    # actual coverage may never diverge silently, so the merge reconciles the
+    # footprint promise against the tiles that ACTUALLY painted.
+    cudem_painted_fraction = (
+        cudem_coverage_fraction(bbox, painted_cudem_urls) if cudem_urls else None
+    )
+    cudem_short = (
+        cudem_painted_fraction is not None
+        and cudem_painted_fraction < _COVERAGE_COMPLETE
+    )
+    if cudem_short and not (force_bathy_base or skip_cudem or include_regional_fine):
+        if not etopo_vsicurl:
+            note = (
+                f"the NOAA NCEI CUDEM 1/9\" nearshore tiles PAINTED only "
+                f"{cudem_painted_fraction * 100:.0f}% of AOI {bbox}: "
+                f"{len(painted_cudem_urls)} of the {len(cudem_urls)} intersecting "
+                "tile(s) survived the datum gate and the merge. The remaining "
+                f"{(1.0 - cudem_painted_fraction) * 100:.0f}% of the AOI has NO "
+                "nearshore bathymetry source"
+            )
+            raise TopobathyCoverageGapError(
+                _coverage_gap_message(note, skip_land=skip_land),
+                covered_fraction=cudem_painted_fraction,
+                gap_note=note,
+            )
+
     cudem_count = len(cudem_vsicurl)
     regional_count = len(regional_vsicurl)
     bathy_present = bool(cudem_vsicurl or regional_vsicurl or etopo_vsicurl)
@@ -1429,6 +1485,7 @@ def _select_and_merge(
         bbox=bbox, cudem_status=cudem_status, cudem_count=cudem_count,
         regional_count=regional_count, has_etopo=bool(etopo_vsicurl),
         bathy_present=bathy_present, land_absent=land_absent,
+        cudem_painted_fraction=cudem_painted_fraction if cudem_short else None,
     )
     if fallback_warning:
         logger.warning("fetch_topobathy: %s", fallback_warning)
@@ -1457,7 +1514,9 @@ def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
     declarative surface cannot express (the US-coastal envelope, the offset / timeout
     / min_pixel finiteness), raising ``TopobathyInputError`` pre-network.
 
-    The coverage check runs HERE, before the cache, because a partial-coverage gap
+    PRE-CACHE, not pre-network: the coverage check needs the CUDEM tile manifest,
+    so this runs one memoized GET (``_fetch_cudem_urllist``, 10-minute process
+    memo). It runs here rather than in the delegate because a partial-coverage gap
     is a property of the REQUEST: a cache hit would otherwise serve a stored
     surface whose water is fake land without the ladder ever running."""
     bbox = tuple(float(v) for v in params["bbox"])
@@ -1481,10 +1540,36 @@ def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
 _COVERAGE_COMPLETE = 0.999
 
 
+def _coverage_gap_message(note: str, *, skip_land: bool) -> str:
+    """The TOPOBATHY_COVERAGE_GAP text: what the gap costs, and how to proceed.
+
+    ``skip_land`` changes what the gap COSTS: a refusal may not cite a land fill
+    the caller explicitly disabled.
+    """
+    consequence = (
+        "This request disabled the 3DEP land leg (skip_land), so nothing would "
+        "paint that water at all -- it would be NODATA and a wave/surge solver "
+        "would have no bed there"
+        if skip_land
+        else "Filling it from the 3DEP land DEM would paint flat 0 m ocean -- a "
+        "fake landmass a wave/surge solver excludes as dry ground"
+    )
+    return (
+        f"TOPOBATHY_COVERAGE_GAP: {note}. {consequence}, so this fetch refuses "
+        "instead. To proceed on a REAL but coarser bed, set force_bathy_base=true: "
+        "the global NOAA ETOPO 2022 15 arc-second relief model (~450 m, EGM2008/MSL "
+        "rather than NAVD88) is laid under the whole AOI and the result carries a "
+        "PARTIAL-CUDEM fallback_warning naming the share each source painted. A "
+        "composer can instead permit the 'etopo_bathy_base' rung of this tool's "
+        "fallback ladder (fallback=(\"etopo_bathy_base\",)), which lays the same "
+        "bed and additionally stamps the per-rung coverage onto the layer."
+    )
+
+
 def _assert_nearshore_coverage(
     bbox: tuple[float, float, float, float], params: dict[str, Any]
 ) -> None:
-    """Raise the ladder gap when CUDEM covers only PART of the AOI.
+    """Raise the ladder gap when CUDEM's FOOTPRINT covers only PART of the AOI.
 
     The uncovered water would otherwise be painted by the 3DEP land leg's flat
     ~0 m ocean fill -- a rectangle of fake land a wave or surge solver excludes
@@ -1492,6 +1577,13 @@ def _assert_nearshore_coverage(
     ETOPO column down (its bathy base spans the AOI), a request pulling the NCEI
     regional fine legs (whose footprints this check does not model), and the
     zero-CUDEM AOI (no nearshore composite exists to have a gap in).
+
+    BLIND SPOTS, stated so no caller over-reads a pass: this is a FOOTPRINT
+    union, so a tile counts as covering its whole 0.25-degree square even where
+    its own pixels are nodata (an interior hole reads as covered), and a tile can
+    still drop after this check runs. ``_select_and_merge`` reconciles the promise
+    against the tiles that actually PAINTED; interior nodata is measured by
+    neither and is the known open edge of this contract.
     """
     if bool(params.get("force_bathy_base")) or bool(params.get("skip_cudem")):
         return
@@ -1523,11 +1615,7 @@ def _assert_nearshore_coverage(
         "has NO nearshore bathymetry source"
     )
     raise TopobathyCoverageGapError(
-        f"TOPOBATHY_COVERAGE_GAP: {note}. Filling it from the 3DEP land DEM would "
-        "paint flat 0 m ocean -- a fake landmass a wave/surge solver excludes as "
-        "dry ground -- so this fetch refuses instead. Permit the "
-        "'etopo_bathy_base' rung (fallback=(\"etopo_bathy_base\",)) to fill the gap "
-        "from the global ETOPO 2022 relief model, loudly labeled.",
+        _coverage_gap_message(note, skip_land=bool(params.get("skip_land"))),
         covered_fraction=fraction,
         gap_note=note,
     )
@@ -1655,6 +1743,13 @@ BATHYMETRY_LADDER = register_ladder(
     Ladder(
         capability="fetch_topobathy",
         refuse_error_code="TOPOBATHY_COVERAGE_GAP",
+        # These params exempt the coverage check (``_assert_nearshore_coverage``),
+        # so no rung's share is measured and the walker must stamp no coverage
+        # claim. The composite is still labeled by the PARTIAL-CUDEM
+        # fallback_warning.
+        coverage_exempt_params=(
+            "force_bathy_base", "skip_cudem", "include_regional_fine",
+        ),
         rungs=(
             Rung(
                 name="user_supplied",

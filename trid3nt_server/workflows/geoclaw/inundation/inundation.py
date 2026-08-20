@@ -37,7 +37,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.common import SyntheticInput, render_fallback_line
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEPTH_STYLE_PRESET,
@@ -96,7 +96,9 @@ from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_prog
 from trid3nt_server.emission.layer_uri_emit import (
     emit_layer_uri,
     publish_input_layer,
+    stamp_fallbacks,
 )
+from trid3nt_server.fallbacks import persist_run_activations
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -921,11 +923,20 @@ class GeoClawComposerError(RuntimeError):
 # --------------------------------------------------------------------------- #
 # DEM acquisition (topobathy seamless -> fetch_dem fallback).
 # --------------------------------------------------------------------------- #
+#: The bathymetry rungs a GeoClaw domain tolerates. Where CUDEM's 1/9" collection
+#: stops mid-AOI the global ETOPO relief is a REAL below-waterline bed -- coarse,
+#: on a different vertical datum, and loudly labeled. Declared for the NON-tsunami
+#: path too: the tsunami path already forces the ETOPO base by param, but a
+#: non-offshore coastal run would otherwise refuse at the coverage gate.
+_GEOCLAW_BATHY_FALLBACK = ("etopo_bathy_base",)
+
+
 def _fetch_topo_for_geoclaw(
     bbox: tuple[float, float, float, float],
     *,
     force_bathy_base: bool = False,
     target_resolution_m: float | None = None,
+    activation_sink: list[Any] | None = None,
 ) -> tuple[str, str]:
     """Fetch a topo/bathy DEM for the AOI; return ``(s3_uri, source_label)``.
 
@@ -954,8 +965,14 @@ def _fetch_topo_for_geoclaw(
     the basin-scale default; a fine coastal AOI still nests its own fine SHORE topo
     separately (``_fetch_fine_nearshore_for_geoclaw``), so the run-up stays resolved.
 
+    ``activation_sink`` collects the fallback-ladder rows the fetch reported, so
+    the caller can stamp what actually painted the bed onto its own result.
+
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
-    downloads it directly). Raises ``GeoClawComposerError`` only when BOTH fail.
+    downloads it directly). Raises ``GeoClawComposerError`` when both sources fail
+    AND whenever the bathymetry ladder refuses: a nearshore coverage gap must
+    never fall through to the LAND-ONLY 3DEP DEM, which would paint flat 0 m ocean
+    over every wet cell -- worse than the gap it was meant to work around.
     """
     # fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
     from trid3nt_server.data import TOOL_REGISTRY
@@ -986,16 +1003,37 @@ def _fetch_topo_for_geoclaw(
                 f"~{target_resolution_m:.0f} m scenario scale)"
             )
 
+    from trid3nt_server.fallbacks import LadderGap, LadderRefused
+
     try:
-        layer = fetch_topobathy(bbox, purpose="bathymetry", **topo_kw)
+        layer = fetch_topobathy(
+            bbox, purpose="bathymetry",
+            fallback=_GEOCLAW_BATHY_FALLBACK, **topo_kw,
+        )
         uri = getattr(layer, "uri", None) or (
             layer.get("uri") if isinstance(layer, dict) else None
         )
+        rows = getattr(layer, "fallbacks", None) or []
         if uri:
-            return str(uri), label
+            if activation_sink is not None:
+                activation_sink.extend(rows)
+            note = render_fallback_line(rows)
+            return str(uri), (f"{label} -- {note}" if note else label)
+    except (LadderGap, LadderRefused) as exc:
+        # The nearshore has a coverage gap and no permitted rung filled it. The
+        # 3DEP fallback below is LAND-ONLY: it would paint flat 0 m ocean over
+        # every wet cell, which GeoClaw runs as dry ground. Refuse honestly.
+        raise GeoClawComposerError(
+            "GEOCLAW_NO_BATHYMETRY",
+            f"the topo-bathymetry ladder refused for bbox {bbox}: {exc}. The "
+            "3DEP land DEM is NOT an acceptable substitute for a GeoClaw bed "
+            "(flat 0 m ocean reads as dry ground), so this run stops here.",
+        ) from exc
     except Exception as exc:  # noqa: BLE001 - fall through to fetch_dem
-        logger.info(
-            "fetch_topobathy failed (%s); falling back to fetch_dem(10m)", exc
+        logger.warning(
+            "fetch_topobathy failed (%s); falling back to the LAND-ONLY "
+            "fetch_dem(10m) -- valid for an inland dam-break, never for a "
+            "coastal/tsunami bed", exc,
         )
 
     try:
@@ -1273,6 +1311,18 @@ async def model_geoclaw_inundation(
     # genuinely-negative bathymetry (the flat-ocean root-cause fix), not a flat
     # land-DEM fill.
     _force_bathy_base = run_args.scenario in GEOCLAW_OFFSHORE_SCENARIOS
+    bathy_activation: list[Any] = []
+
+    async def _stamp_bed_provenance(layer: Any, run_id: Any) -> Any:
+        """Carry the bathymetry ladder onto the answer layer + into the bucket."""
+        if not bathy_activation:
+            return layer
+        await asyncio.to_thread(
+            persist_run_activations, run_id, bathy_activation,
+            capability_note="topo-bathymetry bed for the GeoClaw domain",
+        )
+        return stamp_fallbacks(layer, bathy_activation)
+
     if dem_uri is None:
         async with substep(emitter, "fetch_topobathy"):
             resolved_dem_uri, bathy_source = await asyncio.to_thread(
@@ -1280,6 +1330,7 @@ async def model_geoclaw_inundation(
                 fetch_bbox,
                 force_bathy_base=_force_bathy_base,
                 target_resolution_m=bathy_target_resolution_m,
+                activation_sink=bathy_activation,
             )
     else:
         resolved_dem_uri = dem_uri
@@ -1668,7 +1719,7 @@ async def model_geoclaw_inundation(
                 logger.warning(
                     "model_geoclaw_inundation: zoom-to (seam path) failed: %s", _ze
                 )
-        return peak
+        return await _stamp_bed_provenance(peak, batch_run_id)
     if _gc_manifest is not None:
         async with substep(emitter, "postprocess_geoclaw"):
             _gc_reg = register_manifest_layers(
@@ -1732,7 +1783,7 @@ async def model_geoclaw_inundation(
                     "failed: %s",
                     _ze,
                 )
-        return peak
+        return await _stamp_bed_provenance(peak, batch_run_id)
 
     # --- Step 4: download the Batch fort.q outputs -------------------------
     batch_run_id = getattr(run_result, "run_id", None) or staging.run_id
@@ -1959,7 +2010,7 @@ async def model_geoclaw_inundation(
                 exc,
             )
 
-    return peak
+    return await _stamp_bed_provenance(peak, batch_run_id)
 
 
 async def _emit_deformation_layer(emitter: Any, layer: LayerURI) -> None:

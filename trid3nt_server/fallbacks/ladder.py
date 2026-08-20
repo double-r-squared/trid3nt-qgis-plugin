@@ -99,6 +99,12 @@ class Ladder:
     rungs: tuple[Rung, ...]
     refuse_error_code: str
     terminal: Rung = REFUSE
+    #: Request params whose presence EXEMPTS the capability's own coverage
+    #: check. With the check exempted nothing measures what each rung actually
+    #: painted, so the walker stamps NO activation rather than a coverage claim
+    #: it cannot stand behind. Declared here because promise and measurement
+    #: belong to the same owner.
+    coverage_exempt_params: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         names = [r.name for r in self.rungs]

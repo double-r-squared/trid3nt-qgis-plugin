@@ -5,8 +5,8 @@ Replaces hidden substitution everywhere with one declared, visible,
 gated mechanism. Proving case: the SWAN bathymetry rectangle
 (docs/design/fallback-audit.md, the mosaic land-fill exhibit).
 
-Wave F1 is LANDED (ADR 0289) - read "As built" at the bottom for the
-shipped shapes before touching the machinery.
+Waves F1 (ADR 0289) and F1b (ADR 0290) are LANDED - read "As built" at
+the bottom for the shipped shapes before touching the machinery.
 
 ## The contract in five rules
 
@@ -76,7 +76,13 @@ Wave F1: the fallbacks module (rung schema + walker + activation
 recording) + the gate + router kwarg plumbing + the SWAN bathymetry
 ladder as proving case (fixes the rectangle; live A/B: undeclared ->
 typed error naming the gap; declared -> ETOPO rung, loud, coverage
-reported). Wave F2: migrate the audit's data-bearing rows + deprecate
+reported). Wave F1b (ADR 0290): the adversarial panel's fixes - all
+four exposed `fetch_topobathy` callers migrated onto declared rungs, the
+merge reconciling its footprint PROMISE against what actually painted,
+the walker surfacing the PRIMARY's error at REFUSE, no coverage claim
+under an exemption, honest decline / skip_land / timeout semantics, and
+the visibility seams (emit param, run-prefix sidecar). Wave F2: migrate
+the audit's remaining data-bearing rows + `spec.fallback` + deprecate
 the ad-hoc params, full-coverage law (inventory + verdicts + sweep
 guard against naked substitution).
 
@@ -105,6 +111,34 @@ guard against naked substitution).
 - Activation rides `LayerURI.fallbacks` (a new additive
   `FallbackActivation` list) plus the existing `fallback_note`
   narration channel - no new envelope, no plugin change.
-- REFUSE propagates the capability's own typed error verbatim; the
-  ladder only re-wraps when a recorded gap's filling rung failed for an
-  unrelated reason.
+- REFUSE propagates the PRIMARY rung's own typed error verbatim (later
+  rung failures chain via `__cause__`); the ladder re-wraps only when a
+  recorded gap's filling rung failed for an unrelated reason, when a
+  rung was DECLINED at the gate, or when the failure carries no
+  `error_code` at all.
+
+## As built (wave F1b, ADR 0290)
+
+- ALL exposed `fetch_topobathy` callers declare a rung, not just SWAN:
+  `sfincs/flood` (coastal), `geoclaw/inundation` (non-tsunami),
+  `schism/tidal_hydro`. A gate that fires only for opt-in callers is not
+  a floor. GeoClaw's and SCHISM's broad `except` no longer let a
+  coverage gap degrade to the LAND-ONLY `fetch_dem` leg.
+- PROMISE vs PAINT: a coverage promise read from tile FOOTPRINTS must be
+  reconciled against what actually painted. `_composite_sources_to_array`
+  returns one painted flag per input source, positionally, and the merge
+  raises the same typed gap when the promise and the paint diverge.
+- A ladder declares `coverage_exempt_params`: request params that skip
+  the capability's own coverage check. Under one, the walk stamps NO
+  activation -- a coverage claim nobody measured is a false row.
+  Loudness moves to the capability's own labeled warning.
+- A DECLINE gets its own typed refusal text and a recorded, visible
+  activation row (`RungRecord.declined`, kept at coverage 0.0). Labeled
+  defaults apply only where there is nobody to ask; on a live user_gated
+  session an unanswered gate is a decline.
+- VISIBILITY: `emit_layer_uri(layer, fallbacks=...)` /
+  `stamp_fallbacks` re-stamp a layer rebuilt from a bare uri; `route()`
+  defers the emit-on-fetch surfacing until after the activation is
+  stamped; `persist_run_activations` writes
+  `s3://<runs>/<run_id>/fallback_activations.json` so a solved run is
+  auditable from the bucket.

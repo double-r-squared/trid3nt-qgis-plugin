@@ -82,7 +82,11 @@ from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, R
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec, LeverSpec, ResolutionSpec
 
 from trid3nt_server.data.resolution_declared import enforce_resolution
-from trid3nt_server.emission.layer_uri_emit import emit_layer_uri, publish_input_layer
+from trid3nt_server.emission.layer_uri_emit import (
+    emit_layer_uri,
+    publish_input_layer,
+    stamp_fallbacks,
+)
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -138,6 +142,7 @@ def fetch_topobathy(bbox: Any = None, **kwargs: Any):
 
 
 from trid3nt_server.data.fetchers._router.hooks.topobathy import TopobathyError
+from trid3nt_server.fallbacks import LadderRefused, persist_run_activations
 from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.data.simulation.solver.solver import (
     run_solver,
@@ -186,6 +191,13 @@ from trid3nt_server.workflows.sfincs.sfincs_builder import (
 )
 from trid3nt_server.workflows.shared.physics_registry import PhysicsRegistryError, validate_and_resolve_physics
 from trid3nt_server.workflows.sfincs.sfincs_forcing_adapter import SFINCSForcingAdapterError
+
+#: The bathymetry rungs a coastal SFINCS domain tolerates. CUDEM's 1/9"
+#: collection stops mid-AOI on much of the US coast; where it stops the 3DEP land
+#: leg paints flat 0 m ocean, which SFINCS reads as dry ground. The global ETOPO
+#: relief is coarse but a REAL below-waterline bed, so the gap is filled from it,
+#: loudly labeled, rather than refused or faked.
+_SFINCS_BATHY_FALLBACK = ("etopo_bathy_base",)
 
 __all__ = [
     "model_flood_scenario",
@@ -582,6 +594,8 @@ async def model_flood_scenario(
     sess_id = session_id or new_ulid()
     data_sources: list[DataSource] = []
     solver_run_ids: list[str] = []
+    #: Which rungs of the bathymetry ladder painted the coastal bed.
+    _bathy_activation: list[Any] = []
     grid_resolution_m = 30.0  # default; sec 4 immediate
 
     # RAIN LEVER normalization. "design_storm" (default) keeps the design-storm
@@ -960,16 +974,22 @@ async def model_flood_scenario(
         if is_coastal:
             # ``fetch_topobathy`` REUSES fetch_dem internally for the 3DEP land
             # DEM and merges NOAA NCEI CUDEM bathymetry on top (CUDEM wins on the
-            # coast). It DEGRADES internally to 3DEP-land-only with an honest
-            # fallback_warning if CUDEM is missing for the AOI (never a silent
-            # dead-end); a hard failure (no CUDEM AND no 3DEP, bad bbox, datum
-            # mismatch) raises a TopobathyError carrying an error_code that the
-            # outer handler threads into the failed envelope.
+            # coast). A hard failure (no bathy AND no 3DEP, bad bbox, datum
+            # mismatch) raises a TopobathyError carrying an error_code the outer
+            # handler threads into the failed envelope.
+            #
+            # PARTIAL CUDEM: where the 1/9" collection stops mid-AOI the tool
+            # refuses rather than let the 3DEP land leg paint flat 0 m ocean over
+            # the water. A coastal SFINCS domain needs a bed everywhere, so this
+            # call PERMITS the global ETOPO rung to fill the gap -- coarser and on
+            # a different vertical datum, loudly labeled on the layer.
             topobathy_layer = fetch_topobathy(
                 resolved_bbox, resolution_m=int(grid_resolution_m),
                 purpose="topo-bathymetry",
+                fallback=_SFINCS_BATHY_FALLBACK,
             )
             dem_layer = topobathy_layer
+            _bathy_activation.extend(getattr(topobathy_layer, "fallbacks", None) or [])
             _bathy_present = bool(getattr(topobathy_layer, "bathymetry_present", True))
             _tile_count = int(getattr(topobathy_layer, "cudem_tile_count", 0))
             _fallback_warning = getattr(topobathy_layer, "fallback_warning", None)
@@ -1229,12 +1249,13 @@ async def model_flood_scenario(
             duration_hours=float(duration_hr),
             grid_resolution_m=grid_resolution_m,
         )
-    except TopobathyError as exc:
-        # COASTAL DEM hard failure (no CUDEM AND no 3DEP, bad bbox, datum
-        # mismatch). The soft "CUDEM missing, 3DEP present" case does NOT reach
-        # here -- fetch_topobathy degrades internally and returns a result. This
-        # is the honest dead-end: thread the typed error_code into the failed
-        # envelope (Invariant 7 -- never a fabricated topobathy success).
+    except (TopobathyError, LadderRefused) as exc:
+        # COASTAL DEM hard failure (no bathy AND no 3DEP, bad bbox, datum
+        # mismatch), or a bathymetry ladder that reached REFUSE (its ETOPO rung
+        # declined at the fallback gate, or failed for its own reason). A merely
+        # PARTIAL CUDEM footprint does NOT reach here: this composer permits the
+        # ETOPO rung, which fills the gap and returns a labeled result. Thread the
+        # typed error_code into the failed envelope -- never a fabricated success.
         logger.warning(
             "model_flood_scenario: fetch_topobathy hard-failed for coastal "
             "bbox=%s (%s / %s) -- returning failed envelope.",
@@ -2351,6 +2372,18 @@ async def model_flood_scenario(
             else:
                 published_layers.append(lyr)
 
+        # Carry the bathymetry ladder onto the answer layer + into the bucket, so
+        # "what painted the bed?" is answerable from the map row AND from a
+        # spot-check of the run prefix long after the session is gone.
+        if _bathy_activation:
+            published_layers = [
+                stamp_fallbacks(lyr, _bathy_activation) for lyr in published_layers
+            ]
+            await asyncio.to_thread(
+                persist_run_activations, run_result.run_id, _bathy_activation,
+                capability_note="coastal topo-bathymetry bed for the SFINCS domain",
+            )
+
         # --- Step 9b: publish + emit the time-step animation frames (Phase 1) ---
         # Each frame is a DISTINCT COG (distinct runs-bucket key -> distinct TiTiler
         # url= -> distinct pipeline_emitter._layer_identity_key -> no dedup collapse).
@@ -2458,6 +2491,8 @@ async def model_flood_scenario(
             temporal=lyr.temporal,
             role=lyr.role,
             units=lyr.units,
+            fallbacks=list(lyr.fallbacks or []),
+            fallback_note=lyr.fallback_note,
         )
         for lyr in published_layers
     ]
@@ -2942,5 +2977,9 @@ async def sfincs_flood(
             role=primary.role,
             units=primary.units,
             bbox=envelope.bbox,
+            # What painted the coastal bed rides the ANSWER layer, not just the
+            # envelope: the emitter surfaces this object, and the LLM narrates it.
+            fallbacks=list(primary.fallbacks or []),
+            fallback_note=primary.fallback_note,
         )
     return envelope.model_dump(mode="json")

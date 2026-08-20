@@ -14,6 +14,7 @@ from .ladder import (
     register_ladder,
     registered_ladders,
 )
+from .persist import persist_run_activations
 from .walker import (
     Activation,
     LadderGap,
@@ -36,4 +37,5 @@ __all__ = [
     "RungRecord",
     "Activation",
     "walk_ladder",
+    "persist_run_activations",
 ]

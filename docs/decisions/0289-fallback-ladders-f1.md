@@ -2,6 +2,9 @@
 
 Status: LANDED (rung schema + walker + loudness gate + router plumbing + the
 `fetch_topobathy` ladder + 41 offline tests + the live A/B + a live SWAN solve).
+The "Consequences" claim that no existing caller changes behavior is SUPERSEDED
+BY ADR 0290 (wave F1b) -- it was false: the coverage gate fires for every
+`fetch_topobathy` caller, and the three that declared no rung each mishandled it.
 Date: 2026-08-19. Implements `docs/design/fallback-ladders.md` (NATE-approved as
 written) plus NATE's 2026-08-19 addition: user-supplied data is the TOP rung of
 every ladder. Proving case: the SWAN bathymetry rectangle

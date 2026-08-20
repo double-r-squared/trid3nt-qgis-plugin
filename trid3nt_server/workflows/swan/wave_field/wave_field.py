@@ -74,6 +74,7 @@ from trid3nt_server.workflows.swan.run_swan import (
 )
 from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+from trid3nt_server.fallbacks import persist_run_activations
 def fetch_topobathy(bbox: Any = None, **kwargs: Any):
     """Registry-closure indirection for the folded ``fetch_topobathy``:
     a module-level, patchable shim (the swan-chain tests patch this attribute). The
@@ -938,6 +939,10 @@ async def model_swan_wave_field(
                 logger.warning(
                     "model_swan_wave_field: seam zoom-to failed: %s", exc
                 )
+        await asyncio.to_thread(
+            persist_run_activations, staging.run_id, bathy_activation,
+            capability_note="topo-bathymetry bed for the SWAN wave grid",
+        )
         return _stamp_swan_provenance(peak, run_args, bathy_activation)
     if manifest is not None:
         logger.info(
@@ -977,6 +982,10 @@ async def model_swan_wave_field(
                 logger.warning(
                     "model_swan_wave_field: register-only zoom-to failed: %s", exc
                 )
+        await asyncio.to_thread(
+            persist_run_activations, staging.run_id, bathy_activation,
+            capability_note="topo-bathymetry bed for the SWAN wave grid",
+        )
         return _stamp_swan_provenance(peak, run_args, bathy_activation)
 
     # --- Step 4: download the Batch SWAN output (ON-BOX FALLBACK) ----------
@@ -1035,6 +1044,10 @@ async def model_swan_wave_field(
         except Exception as exc:  # noqa: BLE001
             logger.warning("model_swan_wave_field: authoritative zoom-to failed: %s", exc)
 
+    await asyncio.to_thread(
+        persist_run_activations, batch_run_id, bathy_activation,
+        capability_note="topo-bathymetry bed for the SWAN wave grid",
+    )
     return _stamp_swan_provenance(peak, run_args, bathy_activation)
 
 
