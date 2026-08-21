@@ -98,7 +98,12 @@ from trid3nt_server.emission.layer_uri_emit import (
     publish_input_layer,
     stamp_fallbacks,
 )
-from trid3nt_server.fallbacks import persist_run_activations
+from trid3nt_server.fallbacks import (
+    LADDER_ERROR_CODE,
+    LadderGap,
+    LadderRefused,
+    persist_run_activations,
+)
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,
@@ -855,14 +860,34 @@ async def geoclaw_inundation(
         GeoClawWorkflowError,
         PostprocessGeoClawError,
         GeoClawComposerError,
+        LadderRefused,
+        LadderGap,
     ) as exc:
+        # A genuine coverage gap is already wrapped into GeoClawComposerError
+        # (GEOCLAW_NO_BATHYMETRY) upstream in _fetch_topo_for_geoclaw and lands
+        # here unchanged. LadderRefused/LadderGap reaching this handler directly
+        # are the OTHER truth the ladder raises with: a transport/cache/upstream
+        # fault under a rung (FALLBACK_LADDER_ERROR) that is NOT a coverage
+        # verdict. Thread the exception's own error_code -- never the catch-all
+        # code below -- and say the retryability out loud in the message, since
+        # this envelope has no dedicated retryable field (mirrors flood.py's
+        # ladder_detail pattern).
+        error_code = getattr(exc, "error_code", None) or "GEOCLAW_INTERNAL_ERROR"
+        ladder_detail = (
+            " This is a TRANSIENT fault under a fallback rung, not a bathymetry "
+            "coverage verdict: RETRY the same request."
+            if isinstance(exc, LadderRefused)
+            and getattr(exc, "error_code", None) == LADDER_ERROR_CODE
+            and getattr(exc, "retryable", False)
+            else ""
+        )
         logger.warning(
-            "geoclaw_inundation failed: %s (%s)", exc.error_code, exc
+            "geoclaw_inundation failed: %s (%s)", error_code, exc
         )
         return {
             "status": "error",
-            "error_code": exc.error_code,
-            "error_message": str(exc),
+            "error_code": error_code,
+            "error_message": f"{exc}{ladder_detail}",
         }
     except Exception as exc:  # noqa: BLE001 -- defensive catch-all
         logger.exception("geoclaw_inundation unexpected failure")
@@ -1002,8 +1027,6 @@ def _fetch_topo_for_geoclaw(
                 f"topobathy (ETOPO 2022 deep-water column, CUDEM skipped @ "
                 f"~{target_resolution_m:.0f} m scenario scale)"
             )
-
-    from trid3nt_server.fallbacks import LADDER_ERROR_CODE, LadderGap, LadderRefused
 
     try:
         layer = fetch_topobathy(

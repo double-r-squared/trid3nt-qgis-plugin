@@ -45,7 +45,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import register_tool
 from trid3nt_server.emission.layer_uri_emit import stamp_fallbacks
-from trid3nt_server.fallbacks import persist_run_activations
+from trid3nt_server.fallbacks import (
+    LADDER_ERROR_CODE,
+    LadderGap,
+    LadderRefused,
+    persist_run_activations,
+)
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.schism._template_card import TemplateCard
 
@@ -246,6 +251,28 @@ async def schism_tidal_hydro(
     except SchismScenarioError as exc:
         logger.warning("schism_tidal_hydro failed: %s (%s)", exc.error_code, exc)
         return {"status": "error", "error_code": exc.error_code, "error_message": str(exc)}
+    except (LadderRefused, LadderGap) as exc:
+        # A genuine coverage gap is already wrapped into SchismScenarioError
+        # (SCHISM_BATHYMETRY_UNAVAILABLE) upstream in the bathymetry fetch and
+        # lands in the branch above unchanged. A LadderRefused/LadderGap reaching
+        # here directly is the OTHER truth the ladder raises with: a transport /
+        # cache / upstream fault under a rung (FALLBACK_LADDER_ERROR) that is NOT
+        # a coverage verdict. Thread the exception's own error_code -- never the
+        # catch-all SCHISM_INTERNAL_ERROR below -- and say the retryability out
+        # loud in the message, since this envelope has no dedicated retryable
+        # field (mirrors flood.py's ladder_detail pattern).
+        error_code = getattr(exc, "error_code", None) or "SCHISM_INTERNAL_ERROR"
+        ladder_detail = (
+            " This is a TRANSIENT fault under a fallback rung, not a bathymetry "
+            "coverage verdict: RETRY the same request."
+            if isinstance(exc, LadderRefused)
+            and getattr(exc, "error_code", None) == LADDER_ERROR_CODE
+            and getattr(exc, "retryable", False)
+            else ""
+        )
+        logger.warning("schism_tidal_hydro failed: %s (%s)", error_code, exc)
+        return {"status": "error", "error_code": error_code,
+                "error_message": f"{exc}{ladder_detail}"}
     except Exception as exc:  # noqa: BLE001
         logger.exception("schism_tidal_hydro unexpected failure")
         return {"status": "error", "error_code": "SCHISM_INTERNAL_ERROR", "error_message": str(exc)}
@@ -825,7 +852,6 @@ async def _fetch_bathymetry_cog(
     ladder REFUSAL is fatal here: the ``fetch_dem`` leg below is land-only and
     would sample flat 0 m ocean onto every wet node."""
     from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.fallbacks import LADDER_ERROR_CODE, LadderGap, LadderRefused
 
     topobathy_kw, dem_kw = _topobathy_fetch_kwargs(
         resolution_m, force_bathy_base, skip_land

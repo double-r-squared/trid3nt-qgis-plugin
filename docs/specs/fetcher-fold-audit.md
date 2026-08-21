@@ -267,7 +267,7 @@ multi-source DEM/bathy stitch (topobathy). The SLR trio share
 | fetch_noaa_slr_marsh | raster-COG (WMS/export via helper) | SPEC-EXPRESSIBLE | 111 | - | same shared helper; slr_ft (0.5-ft step) enum->service lookup |
 | fetch_noaa_slr_scenarios | vector-API-FGB (ArcGIS) | SPEC-EXPRESSIBLE | 603 | - | FeatureServer query per scenario_ft, looped + merged with scenario columns |
 | fetch_noaa_sst | raster-COG (OPeNDAP/ERDDAP griddap) | HYBRID | 363 | `_fetch_griddap_nc` L265-297 | ERDDAP griddap selector (lat-descending slice) + 404-body no-data disambiguation |
-| fetch_topobathy | raster-COG (multi-source stitch) | BESPOKE | 481 | `_build_merged_topobathy` L751-899 + `_merge_sources_rasterio` L1064-1163 | nested in flood/dambreak/wave; CUDEM manifest + ETOPO + NCEI-STAC + fetch_dem, NAVD88 gate, heterogeneous-CRS composite |
+| fetch_topobathy | raster-COG (multi-source stitch) | BESPOKE | 481 | `_composite_sources_to_array` L1002-1105 (`trid3nt_server/data/fetchers/_router/hooks/topobathy.py`, post-F1 fallback-ladder rewrite; supersedes the deleted `_build_merged_topobathy`/`_merge_sources_rasterio`) | nested in flood/dambreak/wave; CUDEM manifest + ETOPO + NCEI-STAC + fetch_dem, NAVD88 gate, heterogeneous-CRS composite |
 | fetch_gtsm_tide_surge | station-timeseries-FGB (CDS netCDF/ZIP) | BESPOKE | 323 | `_cds_retrieve_with_timeout` L425-489 + `_netcdf_to_gauge_records` L531-708 | nested in sfincs_forcing_autowire; CDS auth (4-path), ZIP of monthly netCDFs, station axis by exclusion |
 
 ### soil (4)

@@ -285,10 +285,12 @@ def walk_ladder(
     chain through ``__cause__``), so no rung can launder the primary's
     ``error_code`` / ``retryable`` into its own. The capability's own coverage
     code is reserved for GENUINE coverage refusals -- no rung permitted, a rung
-    declined while the gap it would fill was outstanding, or a filling rung that
-    gapped too. Every other failure under a rung wears ``LADDER_ERROR_CODE`` with
-    the failure's own retryability, so a transport fault is never read as a
-    terminal data gap.
+    declined while the gap it would fill was outstanding AND nothing tried after
+    it faulted for an unrelated reason, or a filling rung that gapped too. Every
+    other failure under a rung -- including a transport/cache/upstream fault on a
+    rung tried AFTER a decline -- wears ``LADDER_ERROR_CODE`` with the failure's
+    own retryability, so a transport fault is never read as a terminal data gap
+    or erased behind a decline verdict.
 
     Coverage rows report MEASURED paint whenever the result reports it
     (``rung_coverage``); a request that turned the capability's own coverage
@@ -412,10 +414,38 @@ def walk_ladder(
         )
 
     declined = [r.rung for r in activation.records if r.declined]
+
+    if gap_note is not None and not isinstance(last_exc, LadderGap):
+        # A gap WAS recorded and the LAST thing the walk attempted -- whether or
+        # not a decline also happened somewhere along the way -- failed for its
+        # OWN unrelated reason (transport, cache, a typed upstream fault). That is
+        # not a coverage refusal: wearing the capability's coverage code would
+        # tell a composer this request has NO source, when the truth is that one
+        # attempt faulted and the gap may still be fillable. This check runs
+        # BEFORE the decline verdict below on purpose (R1): a decline explains a
+        # refusal only when nothing AFTER it ever faulted for its own reason: a
+        # rung that transport-faulted post-decline is the actual cause, and a
+        # 'declined at the gate' verdict would erase both the fault and its
+        # retryability. The gap context and the cause both ride the message;
+        # retryability is the FAILING RUNG'S.
+        raise LadderRefused(
+            f"{LADDER_ERROR_CODE}: {gap_note}, and the rung permitted to fill it "
+            f"failed for an unrelated reason -- {type(last_exc).__name__}: "
+            f"{last_exc}. This is NOT a {ladder.refuse_error_code}: nothing proved "
+            f"the gap unfillable, so a retry or a re-permitted rung may still serve "
+            f"it. Rungs tried: {tried}. Declared alternatives: "
+            f"{[r.name for r in ladder.alternatives]}.",
+            error_code=LADDER_ERROR_CODE,
+            activation=activation,
+            retryable=bool(getattr(last_exc, "retryable", False)),
+        ) from last_exc
+
     if declined_over_gap:
         # A DECLINE only explains the refusal when the declined rung was standing
-        # in front of a gap ALREADY recorded. Re-raising the gap error verbatim
-        # here would instruct the user to permit the very rung they just declined.
+        # in front of a gap ALREADY recorded, AND nothing tried afterward faulted
+        # for its own reason (that case surfaced above instead). Re-raising the
+        # gap error verbatim here would instruct the user to permit the very rung
+        # they just declined.
         names = [name for name, _ in declined_over_gap]
         outstanding = declined_over_gap[0][1]
         raise LadderRefused(
@@ -438,25 +468,6 @@ def walk_ladder(
             "decline -- surfacing the primary's own error", ladder.capability,
             ", ".join(declined),
         )
-
-    if gap_note is not None and not isinstance(last_exc, LadderGap):
-        # A gap WAS recorded and the rung permitted to fill it failed for its OWN
-        # unrelated reason (transport, cache, a typed upstream fault). That is not
-        # a coverage refusal: wearing the capability's coverage code would tell a
-        # composer this request has NO source, when the truth is that one attempt
-        # faulted and the gap may still be fillable. The gap context and the cause
-        # both ride the message; retryability is the FAILING RUNG'S.
-        raise LadderRefused(
-            f"{LADDER_ERROR_CODE}: {gap_note}, and the rung permitted to fill it "
-            f"failed for an unrelated reason -- {type(last_exc).__name__}: "
-            f"{last_exc}. This is NOT a {ladder.refuse_error_code}: nothing proved "
-            f"the gap unfillable, so a retry or a re-permitted rung may still serve "
-            f"it. Rungs tried: {tried}. Declared alternatives: "
-            f"{[r.name for r in ladder.alternatives]}.",
-            error_code=LADDER_ERROR_CODE,
-            activation=activation,
-            retryable=bool(getattr(last_exc, "retryable", False)),
-        ) from last_exc
 
     # No gap was recorded (or the gap error IS the last failure): the PRIMARY's
     # own typed error is the truth about this request -- a bad input, an

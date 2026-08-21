@@ -1274,6 +1274,34 @@ def test_a_decline_in_front_of_an_outstanding_gap_still_owns_the_refusal() -> No
     assert "half the AOI" in str(ei.value)
 
 
+def test_a_transport_fault_after_a_decline_still_beats_the_decline_verdict(
+) -> None:
+    """F1e/R1: primary gaps -> alt1 is DECLINED while that gap is outstanding ->
+    alt2 is PERMITTED but transport-faults. The decline fired first in plan
+    order, but it is NOT why the gap went unfilled -- alt2's fault is. The
+    refusal must wear FALLBACK_LADDER_ERROR with alt2's own retryability, never
+    the coverage code with the decline's non-retryable verdict."""
+    class _Transient(Exception):
+        retryable = True
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise LadderGap("gap", covered_fraction=0.5, gap_note="primary 50%")
+        if rung.name == "alt1":
+            raise AssertionError("a declined rung must never be invoked")
+        raise _Transient("EndpointConnectionError: MinIO unreachable")
+
+    with pytest.raises(LadderRefused) as ei:
+        walk_ladder(_ladder(_rung("alt1", "cross_dataset"), _rung("alt2", "same_data")),
+                    params={}, attempt=_attempt, allow=("alt1", "alt2"),
+                    gate=lambda **kw: kw["rung"].name != "alt1")
+    assert ei.value.error_code == LADDER_ERROR_CODE != "TEST_REFUSED"
+    assert ei.value.retryable is True
+    assert "MinIO unreachable" in str(ei.value)
+    rows = {r.rung: r for r in ei.value.activation.records}
+    assert rows["alt1"].declined is True  # the decline still leaves its trace
+
+
 # --------------------------------------------------------------------------- #
 # An UNMEASURED serve carries no numbers anywhere on the envelope.
 # --------------------------------------------------------------------------- #
@@ -1556,6 +1584,113 @@ def test_schism_declining_the_rung_refuses_instead_of_land_filling(
         asyncio.run(sc._fetch_bathymetry_cog(list(_EXHIBIT_BBOX)))
     assert ei.value.error_code == "SCHISM_BATHYMETRY_UNAVAILABLE"
     assert dem_calls == []
+
+
+# --------------------------------------------------------------------------- #
+# F1e: the REGISTERED TOOL entrypoint's typed-exception tuple. A LadderRefused
+# escaping the composer (the retryable FALLBACK_LADDER_ERROR truth) must not
+# fall to the generic catch-all -- that reads it as GEOCLAW/SCHISM_INTERNAL_ERROR
+# and loses both the code and the retryability. A genuine coverage gap (already
+# wrapped into GeoClawComposerError/SchismScenarioError upstream) must keep
+# landing on the SAME terminal code as before this fix.
+# --------------------------------------------------------------------------- #
+
+
+def _stub_activation() -> Any:
+    return type("A", (), {"records": [], "to_contract": lambda s: [],
+                          "narration": lambda s: None, "capability": "c"})()
+
+
+def test_geoclaw_tool_entrypoint_threads_a_retryable_ladder_fault(monkeypatch) -> None:
+    import asyncio
+
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as gi
+
+    fault = LadderRefused(
+        f"{LADDER_ERROR_CODE}: primary 89%, and the rung permitted to fill it "
+        "failed for an unrelated reason -- EndpointConnectionError: MinIO "
+        "unreachable.",
+        error_code=LADDER_ERROR_CODE, activation=_stub_activation(), retryable=True,
+    )
+
+    async def _boom(*_a: Any, **_k: Any) -> Any:
+        raise fault
+
+    monkeypatch.setattr(gi, "model_geoclaw_inundation", _boom)
+    out = asyncio.run(TOOL_REGISTRY["geoclaw_inundation"].fn(
+        bbox=list(_EXHIBIT_BBOX), scenario="tsunami", sim_duration_s=60.0))
+    assert out["status"] == "error"
+    assert out["error_code"] == LADDER_ERROR_CODE != "GEOCLAW_INTERNAL_ERROR"
+    assert "MinIO unreachable" in out["error_message"]
+    assert "RETRY the same request" in out["error_message"]
+
+
+def test_geoclaw_tool_entrypoint_keeps_the_terminal_coverage_code_unchanged(
+    monkeypatch,
+) -> None:
+    """A genuine gap is already wrapped into GeoClawComposerError upstream --
+    this fix must not touch that path."""
+    import asyncio
+
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as gi
+
+    async def _boom(*_a: Any, **_k: Any) -> Any:
+        raise gi.GeoClawComposerError(
+            "GEOCLAW_NO_BATHYMETRY", "the topo-bathymetry ladder refused: gap")
+
+    monkeypatch.setattr(gi, "model_geoclaw_inundation", _boom)
+    out = asyncio.run(TOOL_REGISTRY["geoclaw_inundation"].fn(
+        bbox=list(_EXHIBIT_BBOX), scenario="tsunami", sim_duration_s=60.0))
+    assert out == {
+        "status": "error", "error_code": "GEOCLAW_NO_BATHYMETRY",
+        "error_message": "the topo-bathymetry ladder refused: gap",
+    }
+
+
+def test_schism_tool_entrypoint_threads_a_retryable_ladder_fault(monkeypatch) -> None:
+    import asyncio
+
+    from trid3nt_server.workflows.schism.tidal_hydro import tidal_hydro as sc
+
+    fault = LadderRefused(
+        f"{LADDER_ERROR_CODE}: primary 89%, and the rung permitted to fill it "
+        "failed for an unrelated reason -- EndpointConnectionError: MinIO "
+        "unreachable.",
+        error_code=LADDER_ERROR_CODE, activation=_stub_activation(), retryable=True,
+    )
+
+    async def _boom(*_a: Any, **_k: Any) -> Any:
+        raise fault
+
+    monkeypatch.setattr(sc, "model_schism_tidal_hydro", _boom)
+    out = asyncio.run(sc.schism_tidal_hydro(
+        mesh_source="coastal_tin", bbox=list(_EXHIBIT_BBOX)))
+    assert out["status"] == "error"
+    assert out["error_code"] == LADDER_ERROR_CODE != "SCHISM_INTERNAL_ERROR"
+    assert "MinIO unreachable" in out["error_message"]
+    assert "RETRY the same request" in out["error_message"]
+
+
+def test_schism_tool_entrypoint_keeps_the_terminal_coverage_code_unchanged(
+    monkeypatch,
+) -> None:
+    """A genuine gap is already wrapped into SchismScenarioError upstream --
+    this fix must not touch that path."""
+    import asyncio
+
+    from trid3nt_server.workflows.schism.tidal_hydro import tidal_hydro as sc
+
+    async def _boom(*_a: Any, **_k: Any) -> Any:
+        raise sc.SchismScenarioError(
+            "SCHISM_BATHYMETRY_UNAVAILABLE", "no real bathymetry")
+
+    monkeypatch.setattr(sc, "model_schism_tidal_hydro", _boom)
+    out = asyncio.run(sc.schism_tidal_hydro(
+        mesh_source="coastal_tin", bbox=list(_EXHIBIT_BBOX)))
+    assert out == {
+        "status": "error", "error_code": "SCHISM_BATHYMETRY_UNAVAILABLE",
+        "error_message": "no real bathymetry",
+    }
 
 
 def test_swan_stamps_the_bed_ladder_onto_its_result() -> None:
