@@ -89,7 +89,9 @@ source can serve it instead).
 
 | # | TEMPLATE | PARAM | DEFAULT + LOCATION | SURFACING | CONVERSION |
 |---|---|---|---|---|---|
-| 16 | storm_surge, regional_manning | `manning_n = 0.025` | `storm_surge.py:139`, `regional_manning.py` | **SILENT** (no provenance surface) | REFUSE or NLCD-derive: the sfincs NLCD->Manning table (`manning_mapping.csv`) already exists -- reuse it. A single 0.025 over a whole coast is invented friction; at minimum surface it, target NLCD-derived. |
+| 16 | storm_surge, regional_manning | `manning_n = 0.025` | `storm_surge.py:139`, `regional_manning.py` | **[WIRED, ADR 0285 P4]** storm_surge NLCD-derives (mixed coastal domain, unconditionally -- NLCD's own class 11 "Open Water" covers the water fraction). **[N/A, ADR 0296]** regional_manning: `manning_n` is DEAD CODE in this composer -- `manning_coefficients` is REQUIRED (the template's whole question is user-chosen banded friction) and the worker's setrun_builder writes `geo_data.manning_coefficient` as EITHER the banded list OR the scalar `manning_n`, never both (`setrun_builder.py:1813-1823`, proven by `workers/geoclaw/test_setrun_builder.py:799-803`); with `manning_coefficients` always set, the scalar never reaches the deck. No site to wire. | see ADR 0296 |
+| 16b | inundation (dam_break/surge legs) | `manning_n = 0.025` | `inundation.py` (pre-0296) | **[WIRED, ADR 0296]** dam_break/surge (land-dominated / mixed-coastal) NLCD-derive via `resolve_overland_manning`; tsunami (offshore, `GEOCLAW_OFFSHORE_SCENARIOS`) keeps 0.025, now labeled `consequence="numerical"` (Chow 1959 open-water standard, not an invented site-specific value) instead of silent. | see ADR 0296 |
+| 16c | amr_regions, gauge_timeseries | `manning_n = 0.025` | `amr_regions.py:103`, `gauge_timeseries.py:100` | **SILENT** (no provenance surface) -- PARKED, out of this kickoff's named scope (ADR 0296 names only inundation + regional_manning). amr_regions is scenario-selectable (tsunami/dam_break/surge, same shape as inundation pre-0296) -- structurally the identical fix. gauge_timeseries is ALWAYS scenario="tsunami" (offshore-only) -- needs a label-only pass (no NLCD derivation), mirroring inundation's tsunami branch. | RECOMMEND: a small follow-up job applies the ADR 0296 pattern to both (identical mechanism, no new design). |
 | 17 | inundation | `fault_geometry` = "generic synthetic Okada" | `inundation.py:704` | LABELED | Scenario source when the user names no fault -> REFUSE unless a real/scenario fault is named (couples to #18 magnitude). |
 
 ### OPENQUAKE
@@ -267,9 +269,14 @@ refuse-in-auto behavior.
 > imperviousness` literature constants, QUEUED for a label-only pass). fallback-audit
 > **row 17** (raster_cell_mesh `n_imperv/n_perv`) is a DIFFERENT value-path (SubArea
 > surface roughness, not the overland conduit n) -- NOT converted (reported, not
-> silently widened). Geoclaw siblings `inundation`/`amr_regions`/`gauge_timeseries`
-> share the 0.025 default (beyond the audit's named 2) -- QUEUED for NATE. P5-P8
-> remain staged for their per-engine waves.
+> silently widened). **[2026-08-19, ADR 0296]** `inundation`'s land-dominated legs
+> (dam_break/surge) now derive NLCD-Manning; its tsunami leg keeps 0.025, now
+> labeled non-refusing (`consequence="numerical"`). `regional_manning` verdict is
+> N/A (`manning_n` is dead code there -- `manning_coefficients` always wins).
+> `amr_regions`/`gauge_timeseries` remain the 0.025 default, still QUEUED for NATE
+> (ADR 0296 names only inundation + regional_manning; amr_regions/gauge_timeseries
+> are a straightforward follow-up of the identical pattern). P5-P8 remain staged
+> for their per-engine waves.
 
 - **P1 -- Mechanism + sweep guard (S). [LANDED]** Add `consequence` to `SyntheticInput`
   (contracts). Teach `gate_input_review` to REFUSE in auto mode when an entry is
@@ -388,7 +395,9 @@ cannot serve.
 - Landlab soil strength/groundwater/green_ampt/channel_incision #8-#11 (SoilGrids
   texture + literature offers, P3-completion).
 - GeoClaw storm_surge manning #16 + SWMM urban_flood overland_manning #23
-  (NLCD area-weighted Manning, P4).
+  (NLCD area-weighted Manning, P4). GeoClaw inundation dam_break/surge legs #16b
+  (NLCD area-weighted Manning, ADR 0296; tsunami leg keeps 0.025, labeled
+  non-refusing -- an established literature constant, not an invention).
 - SCHISM baroclinic river_discharge #19 (NWM dominant reach, P5).
 - SWMM aquifer_baseflow soil column #27 (SoilGrids two-zone column, P3-completion).
 

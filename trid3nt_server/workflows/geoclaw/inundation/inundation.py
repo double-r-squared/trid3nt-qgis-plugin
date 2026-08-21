@@ -92,6 +92,7 @@ from trid3nt_server.workflows.geoclaw.run_geoclaw import (
     stage_finite_fault_csv,
     stage_geoclaw_manifest,
 )
+from trid3nt_server.workflows.shared.roughness_resolve import resolve_overland_manning
 from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
 from trid3nt_server.emission.layer_uri_emit import (
     emit_layer_uri,
@@ -235,7 +236,7 @@ async def geoclaw_inundation(
     surge_forcing_uri: str | None = None,
     output_frames: int = 24,
     amr_levels: int = 2,
-    manning_n: float = 0.025,
+    manning_n: float | None = None,
     sea_level_m: float = 0.0,
     fault_strike_deg: float | None = None,
     fault_dip_deg: float | None = None,
@@ -329,7 +330,14 @@ async def geoclaw_inundation(
             vocabulary maps as ``round(sim_duration_min / output_interval_min)``).
             Every solver-written frame is published (never subsampled).
         amr_levels: AMR refinement levels (default 2).
-        manning_n: friction coefficient (default 0.025).
+        manning_n: bottom-friction coefficient. Default None -> for dam_break /
+            surge (land-dominated / mixed-coastal run-up), DERIVED from NLCD land
+            cover over the AOI (area-weighted mean of the SFINCS Manning table,
+            the same resolution ``geoclaw_storm_surge`` uses), or REFUSES if NLCD
+            cannot serve; for tsunami (offshore -- GEOCLAW_OFFSHORE_SCENARIOS,
+            deep-ocean propagation), the published Chow (1959) open-water
+            standard 0.025 is used (NLCD has no ocean coverage). Supply a value
+            for a calibrated run.
         sea_level_m: still-water datum (default 0.0).
         fault_strike_deg/fault_dip_deg/fault_rake_deg/fault_depth_km:
             optional user-gated Okada fault params (tsunami synthetic
@@ -728,6 +736,46 @@ async def geoclaw_inundation(
         # tsunami / surge ignore dam_break_depth_m; give the contract its default.
         effective_dam_depth = 10.0
 
+    # --- law 9 (ADR 0296): resolve bottom-friction Manning's n, split by domain
+    # character. dam_break / surge are LAND-DOMINATED / mixed-coastal (NLCD covers
+    # the real land cover the run-up crosses, including NLCD's own "Open Water"
+    # class over any coastal water inside the AOI) -> NLCD area-weighted
+    # derivation (the storm_surge precedent, roughness_resolve.resolve_overland_
+    # manning). tsunami is an OFFSHORE scenario (GEOCLAW_OFFSHORE_SCENARIOS): its
+    # deep-ocean propagation domain has no NLCD coverage, and 0.025 is the
+    # published Chow (1959) open-water friction standard -- the SAME value
+    # manning_mapping.csv assigns NLCD class 11 "Open Water" -- so it is kept, now
+    # loudly labeled (consequence="numerical", NOT "physics": a well-established
+    # universal constant, not an invented site-specific value, so it never
+    # triggers the auto-mode refuse) instead of riding silently.
+    _manning_offshore = _scenario_l in GEOCLAW_OFFSHORE_SCENARIOS
+    _manning_res = None
+    if _manning_offshore:
+        if manning_n is not None:
+            _manning_n_for_gate = float(manning_n)
+            provenance.append(SyntheticInput(
+                param="manning_n", value=_manning_n_for_gate, units="s/m^(1/3)",
+                basis="user", note="caller-supplied bottom-friction Manning's n.",
+            ))
+        else:
+            _manning_n_for_gate = 0.025
+            provenance.append(SyntheticInput(
+                param="manning_n", value=_manning_n_for_gate, units="s/m^(1/3)",
+                basis="default_demo", consequence="numerical",
+                note=(
+                    "offshore seabed friction: NLCD has no deep-ocean coverage; "
+                    "the published Chow (1959) open-water standard (n=0.025, the "
+                    "same value manning_mapping.csv assigns NLCD class 11 Open "
+                    "Water) is used. Supply manning_n for a calibrated value."
+                ),
+            ))
+    else:
+        _manning_res = await resolve_overland_manning(
+            coerced, manning_n, param_name="manning_n",
+        )
+        provenance.append(_manning_res.entry)
+        _manning_n_for_gate = _manning_res.manning_n  # may be None (unresolved)
+
     # --- two-mode input gate: review-before-run -----------------------
     # Inputs are RESOLVED (NID dam or user values / tsunami source); in
     # user_gated mode present them for review/adjust BEFORE the consequential
@@ -743,6 +791,7 @@ async def geoclaw_inundation(
             "source_magnitude": float(source_magnitude),
             "sim_duration_s": float(sim_duration_s),
             "amr_levels": int(amr_levels),
+            "manning_n": _manning_n_for_gate,
         },
     )
     if _review.cancelled:
@@ -760,6 +809,21 @@ async def geoclaw_inundation(
     )
     sim_duration_s = float(_review.params.get("sim_duration_s", sim_duration_s))
     amr_levels = int(_review.params.get("amr_levels", amr_levels))
+    _mn_reviewed = _review.params.get("manning_n")
+    effective_manning_n = float(_mn_reviewed) if _mn_reviewed is not None else None
+    if effective_manning_n is None:
+        # Unresolved land-dominated Manning's n (NLCD could not serve) survived
+        # to here -- auto mode already refuses via the physics-consequence gate
+        # above; this is the user_gated backstop (a "proceed" reply cannot make a
+        # None friction coefficient runnable). Mirrors the storm_surge precedent.
+        return {
+            "status": "error",
+            "error_code": "GEOCLAW_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                str(_manning_res.entry.note) if _manning_res is not None
+                else "geoclaw_inundation: manning_n could not be resolved."
+            ),
+        }
 
     try:
         kwargs: dict[str, Any] = dict(
@@ -770,7 +834,7 @@ async def geoclaw_inundation(
             source_magnitude=float(source_magnitude),
             output_frames=int(output_frames),
             amr_levels=int(amr_levels),
-            manning_n=float(manning_n),
+            manning_n=float(effective_manning_n),
             sea_level_m=float(sea_level_m),
         )
         if effective_source_lonlat is not None:
