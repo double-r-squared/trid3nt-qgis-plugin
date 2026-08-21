@@ -1,16 +1,15 @@
 """GeoClaw (Clawpack) AWS Batch worker entrypoint — shallow-water inundation.
 
-The GeoClaw analogue of ``workers/swmm/entrypoint.py`` /
-``workers/modflow/entrypoint.py``. Same OBJECT-STORE-IN -> RUN ->
-OBJECT-STORE-OUT envelope; SCHEME-AWARE (``s3://`` via boto3 when
-``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage otherwise). The
-worker contract is solver-agnostic, so the staging/upload/completion envelope is
-copied verbatim from the SWMM worker; only the SOLVER step + a deck-authoring
+The GeoClaw analogue of ``workers/modflow/entrypoint.py``. Same
+OBJECT-STORE-IN -> RUN -> OBJECT-STORE-OUT envelope; SCHEME-AWARE (``s3://`` via
+boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage
+otherwise). The worker contract is solver-agnostic, so the
+staging/upload/completion envelope is shared; only the SOLVER step + a deck-authoring
 step differ.
 
-The GeoClaw-specific differences from the SWMM shim:
+The GeoClaw-specific differences from a pre-staged-deck shim:
 
-  1. DECK AUTHORING. SWMM takes a ready ``.inp`` deck; GeoClaw is configured by a
+  1. DECK AUTHORING. Most engines take a ready deck; GeoClaw is configured by a
      Python ``setrun.py`` that the worker AUTHORS from a staged ``build_spec``
      (the agent stages a build_spec JSON + a topo DEM, NOT a ready deck). We call
      ``setrun_builder.build_geoclaw_deck`` (deterministic, clawpack-free) to write
@@ -27,7 +26,7 @@ The GeoClaw-specific differences from the SWMM shim:
      + ``_output/fort.h*`` (the headers postprocess needs) so the agent-side
      ``postprocess_geoclaw`` rasterizes each frame -> depth COG.
 
-Contract (IDENTICAL to the SWMM worker, only the solver + a
+Contract (IDENTICAL to the MODFLOW worker, only the solver + a
 ``build_spec`` manifest field + the output globs differ):
 
     Input  (env or CLI):
@@ -47,7 +46,7 @@ Contract (IDENTICAL to the SWMM worker, only the solver + a
     Output:
         <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/<every output file>
         <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
-            Terminal manifest (mirrors the SWMM completion schema; the
+            Terminal manifest (mirrors the shared completion schema; the
             stdout/stderr field names carry the ``geoclaw_`` prefix). Truthful:
             this image asserts only that Clawpack executed and produced fort.q
             output — NOT that the run is physically valid.
@@ -84,7 +83,7 @@ def _utc_now() -> str:
 
 # --------------------------------------------------------------------------- #
 # Object-store abstraction — dispatch BY URI SCHEME (s3:// via boto3, gs:// via
-# google-cloud-storage, both lazy-imported). Byte-identical to the SWMM/MODFLOW
+# google-cloud-storage, both lazy-imported). Byte-identical to the MODFLOW
 # worker: the worker contract is solver-agnostic.
 # --------------------------------------------------------------------------- #
 

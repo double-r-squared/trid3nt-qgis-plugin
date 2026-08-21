@@ -1,7 +1,7 @@
 """Landlab worker CLI shim -- run a build_spec against a staged DEM (local build).
 
 The out-of-process (local-exec) lane of the Landlab surface-process engine.
-Mirrors ``workers/swmm/run_inp.py``: a thin solver shim that accepts
+A thin solver shim that accepts
 a manifest JSON on the CLI, builds the Landlab grid from the staged DEM, runs
 the documented component chain, and writes the output field COG to CWD.
 

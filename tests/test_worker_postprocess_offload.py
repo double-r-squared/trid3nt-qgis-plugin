@@ -1,4 +1,4 @@
-"""Agent-side wiring for the GeoClaw / OpenQuake / SWMM / Landlab worker
+"""Agent-side wiring for the GeoClaw / OpenQuake / Landlab worker
 postprocess offload (mirror of ``test_sfincs_build_offload`` /
 ``test_publish_manifest_register_only_phase4``).
 
@@ -52,18 +52,6 @@ def test_openquake_composer_register_only_branch_and_fallback():
     # legacy on-box fallback preserved
     assert "_download_batch_hazard_csv" in body
     assert "postprocess_openquake," in body
-
-
-def test_swmm_composer_register_only_branch_and_fallback():
-    import trid3nt_server.workflows.swmm.urban_flood.urban_flood as m
-
-    body = inspect.getsource(m.model_swmm_urban_flood)
-    assert "read_publish_manifest" in body
-    assert "register_manifest_layers(" in body
-    assert "if _swmm_manifest is not None:" in body
-    # legacy on-box fallback preserved
-    assert "_download_batch_swmm_outputs" in body
-    assert "postprocess_swmm," in body
 
 
 def test_landlab_composer_register_only_branch_and_fallback():

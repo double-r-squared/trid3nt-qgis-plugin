@@ -181,11 +181,10 @@ dependencies = [
     # sprint-16 P2 (PySWMM quasi-2D urban-flood engine): pyswmm is the headless
     # SWMM5 runner (Simulation/Nodes/Links iteration) and swmm-api is the .inp
     # deck author (Storage/Conduit/Orifice has_flap_gate / Outfall / Timeseries /
-    # Raingage / XSection RECT_OPEN) — the exact pins proven by the P0 GO/NO-GO
-    # spike (workers/swmm/spike_quasi2d.py): pyswmm 2.1.0 + swmm-api
-    # 0.4.73. BOTH are lazy-imported inside swmm_mesh_builder.py (a top-level
+    # Raingage / XSection RECT_OPEN). Pinned at pyswmm 2.1.0 + swmm-api
+    # 0.4.73. BOTH are lazy-imported inside the mesh builder (a top-level
     # import would force every agent process to load SWMM5; the mesh build only
-    # happens inside the urban-flood worker path), so the agent service still
+    # happens inside the urban-flood path), so the agent service still
     # starts when these are absent. The FLAP GATE = an Orifice(has_flap_gate=True)
     # (a Conduit has NO flap kwarg in 0.4.73) and an OUTFALL takes exactly ONE
     # inlet link — both P0 carry-forwards encoded in the builder.

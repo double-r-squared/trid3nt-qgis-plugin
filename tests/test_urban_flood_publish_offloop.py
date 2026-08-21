@@ -273,8 +273,6 @@ def _install_pyswmm_free_chain(monkeypatch, *, solve_fn=None, n_buildings_droppe
         M, "build_and_stage_swmm_deck",
         lambda *a, **k: staging,
     )
-    # is_local_mode True so the run_solver out-of-process branch is skipped.
-    monkeypatch.setattr(M, "is_local_mode", lambda: True)
     # OFFLINE-SUITE HERMETICITY (ADR 0158): run_args carries no explicit
     # total_rain_depth_mm, so Step 3 of the composer calls the LIVE Atlas-14
     # lookup (lookup_precip_return_period) unless stubbed -- a fixed known

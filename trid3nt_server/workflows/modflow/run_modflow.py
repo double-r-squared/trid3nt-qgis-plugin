@@ -324,7 +324,7 @@ def is_local_mode() -> bool:
 def register_modflow_solver() -> None:
     """Register ``'modflow'`` in ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY``.
 
-    Mirrors ``run_swmm.register_swmm_solver`` (and the SFINCS registration): the
+    Mirrors the SFINCS registration: the
     registry maps the solver name to a workflow/dispatch sentinel; ``run_solver``
     only requires the KEY to be PRESENT to dispatch (an absent key raises
     ``SolverNotRegisteredError``). The backend seam then routes the run to the
@@ -339,8 +339,7 @@ def register_modflow_solver() -> None:
 
 
 # Register at import so ``run_solver(solver='modflow')`` is wired wherever this
-# module is imported (the composer + the tool wrapper both import it) - exactly
-# mirroring run_swmm's import-time ``register_swmm_solver()`` call.
+# module is imported (the composer + the tool wrapper both import it).
 register_modflow_solver()
 
 

@@ -800,7 +800,7 @@ def make_fault_sources_layer_uri(
 
 
 # --------------------------------------------------------------------------- #
-# build_spec staging (S3) -- mirror of stage_swmm_manifest.
+# build_spec staging (S3).
 # --------------------------------------------------------------------------- #
 def stage_openquake_build_spec(
     run_args: OpenQuakeRunArgs,
@@ -810,9 +810,9 @@ def stage_openquake_build_spec(
 ) -> str:
     """Upload the build_spec JSON to S3; return its ``s3://`` URI.
 
-    Mirrors ``run_swmm.stage_swmm_manifest`` EXACTLY (no new client): uses the
-    same ``cache.storage_scheme()`` scheme + the same ``solver._get_s3_client()``
-    boto3 client + the same ``TRID3NT_CACHE_BUCKET`` staging bucket. Feed the
+    No new client: uses the shared ``cache.storage_scheme()`` scheme + the
+    ``solver._get_s3_client()`` boto3 client + the ``TRID3NT_CACHE_BUCKET``
+    staging bucket every staged deck lands in. Feed the
     returned URI STRAIGHT to ``run_solver(solver='openquake',
     model_setup_uri=<this>, ...)``.
 
@@ -853,7 +853,7 @@ def stage_openquake_build_spec(
 
 
 # --------------------------------------------------------------------------- #
-# Batch hazard-map download -- mirror of _download_batch_swmm_outputs.
+# Batch hazard-map download.
 # --------------------------------------------------------------------------- #
 def _pick_hazard_map_uri(output_uris: list[str]) -> str | None:
     """Pick the hazard-MAP CSV from the uploaded output URIs (agent-side mirror
@@ -1775,8 +1775,7 @@ def openquake_local_spec() -> Any:
 def register_openquake_solver() -> None:
     """Register ``'openquake'`` local spec in ``tools.simulation.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
 
-    Mirrors ``run_swmm.register_swmm_solver``. Idempotent -- safe to call at
-    import. The factory (``openquake_local_spec``) is only called at dispatch
+    Idempotent -- safe to call at import. The factory (``openquake_local_spec``) is only called at dispatch
     time to avoid any circular-import hazard.
     """
     from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec

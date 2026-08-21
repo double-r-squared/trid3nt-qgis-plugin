@@ -289,9 +289,8 @@ frame fallback.
 REMAINING (post-campaign, not blocking): telemac3d + any further L-class module legs,
 the REST of the `publish_manifest` collapse (the file, the bespoke schema, and
 `register_published_manifest.py` -- still live as the metrics carrier + fallback,
-ledger row 19 narrowed), the PARKED `workers/_swmm_postprocess` docker-lane fork
-(it writes frames and no `outputs.json`; ADR 0294 names the options), and --
-separately, OPTION A -- the per-engine `output_quantities` scaffold migration
+ledger row 19 narrowed), and -- separately, OPTION A -- the per-engine
+`output_quantities` scaffold migration
 (MODFLOW's DEAD half is deleted; swmm/landlab/openquake halves are still LIVE,
 ADR 0284).
 

@@ -11,9 +11,7 @@ nested-hyetograph builder (``swmm_hyetograph.build_nested_hyetograph``); the run
 args / output layer shapes are the P1 ``swmm_contracts`` (``SWMMRunArgs`` /
 ``SWMMDepthLayerURI``).
 
-Quasi-2D representation (PROVEN by the P0 GO/NO-GO spike,
-``workers/swmm/spike_quasi2d.py`` -- every swmm-api signature here is
-reused from it):
+Quasi-2D representation:
 
 - One STORAGE node per ACTIVE cell. Invert = the resampled DEM elevation; a
   FUNCTIONAL storage curve ``data=[A1=0, A2=0, A0=cell_area]`` makes the surface

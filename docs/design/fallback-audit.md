@@ -226,10 +226,10 @@ build stops writing `crs`, every COG silently tags 3857 and the flood layer
 misplaces, logged-only. Not currently dead, but it is a candidate for a hard error
 (no CRS -> raise) rather than a guess.
 
-D-3. swmm / landlab / openquake worker IMAGES omit the postprocess COPY
+D-3. landlab / openquake worker IMAGES omit the postprocess COPY
 (SUSPICIOUS, currently DORMANT). Static check:
 
-- `workers/swmm/Dockerfile:85`, `workers/landlab/Dockerfile:85`,
+- `workers/landlab/Dockerfile:85`,
   `workers/openquake/Dockerfile:98` COPY ONLY their own `workers/<engine>/` dir --
   NOT `_<engine>_postprocess/` nor `_raster_postprocess/`. Their build-time smokes
   import only the solver chain, never the postprocess.

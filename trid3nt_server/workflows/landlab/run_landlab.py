@@ -271,7 +271,7 @@ def stage_landlab_manifest(
 ) -> LandlabStaging:
     """Upload the AOI DEM COG + a worker-contract ``manifest.json`` to S3.
 
-    Mirrors ``run_swmm.stage_swmm_manifest`` EXACTLY (no new client): the same
+    No new client: the same
     ``cache.storage_scheme()`` scheme + the same
     ``tools.simulation.solver._get_s3_client()`` boto3 client + the same
     ``TRID3NT_CACHE_BUCKET`` staging bucket the SFINCS/SWMM decks upload land in.
@@ -392,7 +392,7 @@ _TRID3NT_REPO_ROOT = str(Path(__file__).resolve().parents[3])
 def landlab_local_spec() -> Any:
     """Build the Landlab ``LocalSolverSpec`` for the local-docker backend.
 
-    Mirrors ``run_swmm.swmm_local_spec``: ``exec_kind="exec"`` (no public
+    ``exec_kind="exec"`` (no public
     Landlab container image -- the worker is a pip-dep entrypoint), the
     manifest carries ``build_spec`` + a staged DEM path, and the spec runs
     the entrypoint as ``sys.executable -m workers.landlab.entrypoint
@@ -470,7 +470,7 @@ def landlab_local_spec() -> Any:
 def register_landlab_solver() -> None:
     """Register ``'landlab'`` local spec in ``tools.simulation.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
 
-    Mirrors ``run_swmm.register_swmm_solver``. Idempotent -- safe to call at
+    Idempotent -- safe to call at
     module import. The factory is a zero-arg lambda wrapping ``landlab_local_spec``
     (deferred construction avoids any circular-import hazard at import time).
     """

@@ -39,19 +39,20 @@ local solver backend -- there is no live Cloud Run / AWS Batch deploy here.
   these directly on the host, not in a container:
   - MODFLOW: the `mf6` static binary via `TRID3NT_MF6_BIN` (a subprocess, no
     Docker at all).
-  - SWMM / Landlab / OpenQuake: pip packages already installed in the agent
-    venv (`pyswmm`, `landlab`, `openquake-engine`); run in-process (SWMM's
-    dev-primary path) or as an `exec` subprocess of a small runner script
-    (`run_inp.py` / `run_chain.py` / `run_oq.py`).
+  - SWMM: `pyswmm` in the agent venv, solved IN-PROCESS by the composer. There
+    is no SWMM worker image and no out-of-process SWMM lane.
+  - Landlab / OpenQuake: pip packages in the agent venv (`landlab`,
+    `openquake-engine`) run as an `exec` subprocess of a small runner script
+    (`run_chain.py` / `run_oq.py`).
 
 Env gates + measured runtimes for every engine: `docs/site/engines.md`.
 
 ## Cloud-lane Dockerfiles that are NOT part of local dispatch
 
-`modflow/`, `swmm/`, `landlab/`, `openquake/`, `elmfire/`, and `canopy/` also
+`modflow/`, `landlab/`, `openquake/`, `elmfire/`, and `canopy/` also
 carry a `Dockerfile`. Those build AWS Batch worker images (a scale-beyond-local
 path this repo does not deploy) -- read as "FILE-ONLY SCAFFOLD" / "AWS Batch
-worker" in their own header comments. Locally these four engines run exec-mode
+worker" in their own header comments. Locally these engines run exec-mode
 per above; `elmfire` runs its separately-built `trid3nt/elmfire:dev` dev image
 instead of `elmfire/Dockerfile`'s cloud build; `canopy` has no local dispatch
 wiring yet (no `LocalSolverSpec` registered). `qgis/Dockerfile` is a separate

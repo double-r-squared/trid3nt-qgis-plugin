@@ -16,9 +16,8 @@ downloads the GeoClaw ``fort.q`` frames and postprocesses them.
      ``manifest.json`` URI to feed ``run_solver(solver='geoclaw', ...)``.
 
   2. **GeoClaw solver registration** (``register_geoclaw_solver``). Adds
-     ``'geoclaw'`` to ``SOLVER_WORKFLOW_REGISTRY`` (idempotent ``setdefault``,
-     mirroring ``register_swmm_solver``) so ``run_solver(solver='geoclaw')``
-     dispatches. The orchestrator ALSO pins the registry entry in code (the
+     ``'geoclaw'`` to ``SOLVER_WORKFLOW_REGISTRY`` (idempotent ``setdefault``)
+     so ``run_solver(solver='geoclaw')`` dispatches. The orchestrator ALSO pins the registry entry in code (the
      shared-append line this lane returns) so the dispatch works even when this
      module is not imported first.
 
@@ -1161,10 +1160,9 @@ def stage_geoclaw_manifest(
 ) -> GeoClawStaging:
     """Stage the GeoClaw ``manifest.json`` (build_spec + input refs) to S3.
 
-    The GeoClaw analogue of ``stage_swmm_manifest``. Mirrors that path EXACTLY
-    (no new client): the same ``cache.storage_scheme()`` scheme + the same
+    No new client: the same ``cache.storage_scheme()`` scheme + the same
     ``tools.simulation.solver._get_s3_client()`` boto3 client + the same
-    ``TRID3NT_CACHE_BUCKET`` staging bucket the SWMM/SFINCS decks upload to.
+    ``TRID3NT_CACHE_BUCKET`` staging bucket the SFINCS deck uploads to.
 
     The worker downloads the topo DEM (and optional dtopo / surge) listed in
     ``inputs[]`` BY SCHEME and authors the deck from ``build_spec``. ``dem_uri``
@@ -1307,13 +1305,12 @@ def stage_geoclaw_manifest(
 
 
 # --------------------------------------------------------------------------- #
-# GeoClaw solver registration (mirrors register_swmm_solver).
+# GeoClaw solver registration.
 # --------------------------------------------------------------------------- #
 def register_geoclaw_solver() -> None:
     """Register ``'geoclaw'`` in ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY``.
 
-    Mirrors ``register_swmm_solver``. ``run_solver`` only requires the KEY to be
-    present to dispatch (the local-docker backend seam routes to
+    ``run_solver`` only requires the KEY to be present to dispatch (the local-docker backend seam routes to
     ``_run_solver_local_docker``). Idempotent ``setdefault`` — safe to call at
     import. The orchestrator ALSO pins this in code via the shared-append line so
     dispatch works regardless of import order. (The registry value is a

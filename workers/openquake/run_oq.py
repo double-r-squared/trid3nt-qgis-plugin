@@ -1,7 +1,7 @@
 """OpenQuake worker CLI shim -- materialize deck and run oq engine (local build).
 
 The out-of-process (local-exec) lane of the OpenQuake PSHA engine.
-Mirrors ``workers/swmm/run_inp.py``: a thin solver shim that reads a
+A thin solver shim that reads a
 build_spec (or manifest) JSON, renders the OpenQuake deck, runs
 ``oq engine --run job.ini``, and exits 0 on success.
 

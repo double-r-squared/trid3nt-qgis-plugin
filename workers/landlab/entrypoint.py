@@ -1,13 +1,12 @@
 """Landlab AWS Batch worker entrypoint — thin shim around the component chain.
 
-Sprint-17 — NEW engine. The Landlab analogue of
-``workers/swmm/entrypoint.py`` / ``workers/modflow/
-entrypoint.py``: the SAME OBJECT-STORE-IN -> RUN -> OBJECT-STORE-OUT envelope,
-SCHEME-AWARE (``s3://`` via boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via
-google-cloud-storage otherwise — byte-identical staging/upload envelope to the
-SWMM/MODFLOW shims; the worker contract is solver-agnostic).
+The Landlab analogue of ``workers/modflow/entrypoint.py``: the SAME
+OBJECT-STORE-IN -> RUN -> OBJECT-STORE-OUT envelope, SCHEME-AWARE (``s3://`` via
+boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage
+otherwise -- byte-identical staging/upload envelope to the MODFLOW shim; the
+worker contract is solver-agnostic).
 
-The Landlab-specific difference from SWMM (a pre-staged ``.inp`` deck) is that
+The Landlab-specific difference from a pre-staged deck is that
 Landlab BUILDS its grid inside the worker from a DEM COG + a ``build_spec`` (the
 same shape MODFLOW uses — the deck is authored in the worker, not staged): the
 manifest carries the run PARAMETERS (analysis + soil/rainfall) and points at a
@@ -16,7 +15,7 @@ AOI, runs the documented component chain (``component_chain.run_component_chain`
 — LandslideProbability or OverlandFlow), and writes the output field as a COG
 back to the runs bucket.
 
-Contract (IDENTICAL completion schema to SWMM/MODFLOW, only the
+Contract (IDENTICAL completion schema to the MODFLOW worker, only the
 solver + stdout/stderr field names carry the ``landlab_`` prefix):
 
     Input  (env or CLI):
@@ -47,7 +46,7 @@ solver + stdout/stderr field names carry the ``landlab_`` prefix):
     Output:
         <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/landlab_field.tif
         <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
-            Terminal manifest (mirrors the SWMM/MODFLOW completion schema; the
+            Terminal manifest (mirrors the MODFLOW completion schema; the
             stdout/stderr keys carry the ``landlab_`` prefix + a typed
             ``result`` block with the narration scalars the agent postprocess
             re-reads):
@@ -115,7 +114,7 @@ def _utc_now() -> str:
 
 # --------------------------------------------------------------------------- #
 # Object-store abstraction — dispatch BY URI SCHEME (s3:// via boto3, gs:// via
-# google-cloud-storage, both lazy-imported). Byte-identical to the SWMM/MODFLOW
+# google-cloud-storage, both lazy-imported). Byte-identical to the MODFLOW
 # workers: the worker contract is solver-agnostic, so the staging/upload
 # envelope is shared verbatim. The runs-bucket OUTPUT scheme follows
 # TRID3NT_OBJECT_STORE (s3 -> s3://, default gcs -> gs://).
@@ -582,7 +581,7 @@ def main(argv: list[str] | None = None) -> int:
     status = "error"
 
     # Capture chain stdout/stderr to files so a smoke run produces evidence
-    # (mirrors the SWMM worker's stdout/stderr upload).
+    # (mirrors the MODFLOW worker's stdout/stderr upload).
     import io
     from contextlib import redirect_stderr, redirect_stdout
 

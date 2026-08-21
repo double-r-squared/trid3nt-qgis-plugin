@@ -1,7 +1,6 @@
 """OpenQuake Engine PSHA AWS Batch worker entrypoint.
 
-Near-verbatim copy of ``workers/swmm/entrypoint.py`` (the worker
-contract is solver-agnostic): accept ``--run-id`` / ``--manifest-uri`` (env
+The worker contract is solver-agnostic: accept ``--run-id`` / ``--manifest-uri`` (env
 fallback), read the build_spec by URI SCHEME, render a classical-PSHA OpenQuake
 deck (``job.ini`` + source-model / GMPE logic-tree XML) into a scratch dir, run
 ``oq engine --run job.ini`` headless, glob + upload the exported hazard
@@ -9,12 +8,12 @@ curves/map CSVs, and ALWAYS write ``completion.json`` in the SAME schema so the
 agent's ``wait_for_completion`` reuses its S3 completion poll verbatim.
 
 This is the OpenQuake CLOUD LANE (a NEW engine — OpenQuake is RAM-hungry,
-~2 GB/thread, so it never runs in-process in the agent venv like SWMM; it is a
-containerized CLI on AWS Batch only). It mirrors the SWMM worker shape exactly,
+~2 GB/thread, so it never runs in-process in the agent venv; it is a
+containerized CLI on AWS Batch only). It mirrors the shared worker shape exactly,
 differing ONLY in the solver invoked + the deck authoring (an OpenQuake deck
 templated from a build_spec rather than a staged ``.inp``).
 
-Contract (IDENTICAL to the SWMM/SFINCS/MODFLOW workers; only the
+Contract (IDENTICAL to the SFINCS/MODFLOW workers; only the
 solver + field names differ):
 
     Input  (env or CLI):
@@ -42,7 +41,7 @@ solver + field names differ):
     Output:
         <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/<every output file>
         <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
-            Terminal manifest. Schema mirrors the SWMM completion schema — only
+            Terminal manifest. Schema mirrors the shared completion schema -- only
             the stdout/stderr field names carry the ``oq_`` prefix so the
             completion readers stay symmetric:
                 {
@@ -69,7 +68,7 @@ Design notes:
       it unit-tests in isolation. The entrypoint just materializes the rendered
       files + runs the CLI.
     - Object I/O is dispatched BY URI SCHEME (``s3://`` via boto3, ``gs://`` via
-      google-cloud-storage, lazy-imported) — byte-identical to the SWMM worker.
+      google-cloud-storage, lazy-imported) -- byte-identical to the MODFLOW worker.
     - The OpenQuake export step (``--export-outputs`` / engine ``[output]``
       ``export_dir = output``) writes hazard-curve + hazard-map CSVs into the
       ``output/`` subdir of the scratch dir; the output globs capture them.
@@ -123,9 +122,9 @@ def _utc_now() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Object-store abstraction — dispatch BY URI SCHEME (s3:// via boto3, gs:// via
-# google-cloud-storage, both lazy-imported). Byte-identical to the SWMM worker
-# (workers/swmm/entrypoint.py): the worker contract is solver-agnostic.
+# Object-store abstraction -- dispatch BY URI SCHEME (s3:// via boto3, gs:// via
+# google-cloud-storage, both lazy-imported). The worker contract is
+# solver-agnostic, so this block is identical across the worker entrypoints.
 # --------------------------------------------------------------------------- #
 
 

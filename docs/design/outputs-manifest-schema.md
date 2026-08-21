@@ -431,9 +431,7 @@ SWAN) now write the non-frame entries alone; `list_run_frames` reads
 `outputs.json` first and keeps a LEGACY-run `publish_manifest` frame fallback.
 Ledger row 19 is DELETED at that scope. What is written below stays QUEUED: the
 file, the bespoke schema, and `register_published_manifest.py` are still live and
-still carry non-frame entries. The `workers/_swmm_postprocess` docker lane is a
-PARKED fork -- it writes frames and NO `outputs.json`, so its frames are not
-superseded (ADR 0294 names the two options).
+still carry non-frame entries.
 
 Once every engine leg is migrated: delete `workers/_raster_postprocess/manifest.py`
 + `contracts/trid3nt_contracts/publish_manifest.py`'s bespoke schema (superseded

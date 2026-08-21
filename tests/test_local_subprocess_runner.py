@@ -4,7 +4,7 @@ Covers:
   1. Backend selection per solver: each pip-only engine dispatches to its own
      LocalSolverSpec factory via LOCAL_SOLVER_SPEC_REGISTRY.
   2. Command construction: build_argv returns the expected subprocess command
-     for SWMM (run_inp.py), Landlab (run_chain.py), and OpenQuake (run_oq.py).
+     for Landlab (run_chain.py) and OpenQuake (run_oq.py).
   3. PYTHONPATH injection: env_overrides prepends the repo root so worker
      imports resolve when the agent package is installed in an isolated venv.
   4. Manifest written to rundir: launch_local_solver writes manifest.json
@@ -136,18 +136,6 @@ def _wait_completion(
 # --------------------------------------------------------------------------- #
 
 
-def test_swmm_registered_in_local_spec_registry() -> None:
-    """run_swmm.register_swmm_solver() must populate LOCAL_SOLVER_SPEC_REGISTRY."""
-    # Force the registration by importing the module (idempotent).
-    import trid3nt_server.workflows.swmm.run_swmm as _swmm_mod  # noqa: F401
-    del _swmm_mod
-
-    assert "swmm" in LOCAL_SOLVER_SPEC_REGISTRY, (
-        "swmm missing from LOCAL_SOLVER_SPEC_REGISTRY; "
-        "run_swmm.register_swmm_solver() must call register_local_solver_spec"
-    )
-
-
 def test_landlab_registered_in_local_spec_registry() -> None:
     import trid3nt_server.workflows.landlab.run_landlab as _ll_mod
     del _ll_mod
@@ -169,22 +157,6 @@ def test_openquake_registered_in_local_spec_registry() -> None:
 # --------------------------------------------------------------------------- #
 # 2. Command construction: build_argv returns the correct subprocess command
 # --------------------------------------------------------------------------- #
-
-
-def test_swmm_build_argv_calls_run_inp_py() -> None:
-    from trid3nt_server.workflows.swmm.run_swmm import swmm_local_spec
-
-    spec = swmm_local_spec()
-    run_id = "TEST-001"
-    rundir = Path("/tmp/runs/TEST-001")
-    # SWMM takes bare .inp filenames (not --manifest); pass a sample filename.
-    argv = spec.build_argv(run_id, rundir, ["mesh.inp"])
-
-    assert argv[0] == sys.executable, f"expected sys.executable, got {argv[0]}"
-    # Second arg must be a path ending with run_inp.py.
-    assert argv[1].endswith("run_inp.py"), f"unexpected script: {argv[1]}"
-    # SWMM run_inp.py takes bare .inp filenames, not --manifest.
-    assert "mesh.inp" in argv, f"mesh.inp not in argv: {argv}"
 
 
 def test_landlab_build_argv_calls_run_chain_py() -> None:
@@ -216,19 +188,6 @@ def test_openquake_build_argv_calls_run_oq_py() -> None:
 # --------------------------------------------------------------------------- #
 # 3. PYTHONPATH injection: env_overrides prepends the repo root
 # --------------------------------------------------------------------------- #
-
-
-def test_swmm_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.workflows.swmm.run_swmm import swmm_local_spec
-
-    spec = swmm_local_spec()
-    assert spec.env_overrides is not None, "swmm spec must set env_overrides"
-    assert "PYTHONPATH" in spec.env_overrides, (
-        "swmm spec must inject PYTHONPATH so workers.* imports resolve"
-    )
-    # The repo root must be the first path element.
-    first_path = spec.env_overrides["PYTHONPATH"].split(":")[0]
-    assert Path(first_path).is_dir(), f"PYTHONPATH first element not a dir: {first_path}"
 
 
 def test_landlab_spec_has_pythonpath_override() -> None:
@@ -268,10 +227,10 @@ def test_launch_writes_manifest_to_rundir(
     s3 = FakeS3Client()
     set_s3_client(s3)
 
-    # Seed a minimal SWMM-style manifest.
+    # Seed a minimal manifest.
     manifest = {
         "inputs": [],
-        "build_spec": {"solver": "swmm", "test": True},
+        "build_spec": {"solver": "landlab", "test": True},
         "outputs": [],
     }
     s3.objects[("deck-bucket", "test/manifest.json")] = json.dumps(manifest).encode()
@@ -289,7 +248,7 @@ def test_launch_writes_manifest_to_rundir(
         return ("ok", exit_code, None, {})
 
     spec = LocalSolverSpec(
-        solver="swmm",
+        solver="landlab",
         workflow_name="local-exec",
         args_key="build_spec",
         build_argv=build_argv,
@@ -313,7 +272,7 @@ def test_launch_writes_manifest_to_rundir(
     manifest_path = rundir / "manifest.json"
     assert manifest_path.exists(), f"manifest.json not written to rundir {rundir}"
     written = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert written.get("build_spec", {}).get("solver") == "swmm"
+    assert written.get("build_spec", {}).get("solver") == "landlab"
 
 
 # --------------------------------------------------------------------------- #
@@ -455,7 +414,7 @@ def test_env_overrides_set_in_subprocess_environment(
         return ("ok" if exit_code == 0 else "error", exit_code, None, {})
 
     spec = LocalSolverSpec(
-        solver="swmm",
+        solver="landlab",
         workflow_name="local-exec",
         args_key="build_spec",
         build_argv=build_argv,

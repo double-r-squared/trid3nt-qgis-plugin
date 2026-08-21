@@ -46,8 +46,7 @@ log.info(
     "backend=%s runs_bucket=%s endpoint=%s",
     backend, runs_bucket, os.environ.get("AWS_ENDPOINT_URL"),
 )
-# SWMM uses in-process pyswmm regardless of TRID3NT_SOLVER_BACKEND
-# (TRID3NT_SWMM_LOCAL unset = local mode by default)
+# SWMM runs in-process pyswmm regardless of TRID3NT_SOLVER_BACKEND.
 
 # ---------------------------------------------------------------------------
 # Ensure MinIO buckets exist

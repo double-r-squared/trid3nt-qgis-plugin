@@ -4,13 +4,12 @@ The SWMM analogue of ``modflow_contracts.py``. Two shapes back the urban
 North-Star demo path (NATE's PCSWMM screenshot: animated depth around BUILDING
 OBSTRUCTIONS + a SOUND BARRIER with RED walls / GREEN flap gates):
 
-- ``SWMMRunArgs`` — the forcing/structure parameters the agent confirms with the
-  user before submitting a quasi-2D SWMM run. Consumed by the engine adapter /
-  worker (``workers/swmm/...``) that maps these onto a quasi-2D SWMM
-  deck (one STORAGE node per active cell, 4-connectivity overland CONDUITS, one
-  boundary OUTFALL, per-cell rainfall SUBCATCHMENTS fed by a single RAINGAGE +
-  the Atlas-14 nested hyetograph TIMESERIES) per the P0 spike
-  (``workers/swmm/spike_quasi2d.py``).
+- ``SWMMRunArgs`` -- the forcing/structure parameters the agent confirms with the
+  user before submitting a quasi-2D SWMM run. Consumed by the deck builder
+  (``mesh/raster_cell_mesh.py``) that maps these onto a quasi-2D SWMM deck (one
+  STORAGE node per active cell, 4-connectivity overland CONDUITS, one boundary
+  OUTFALL, per-cell rainfall SUBCATCHMENTS fed by a single RAINGAGE + the
+  Atlas-14 nested hyetograph TIMESERIES).
 - ``SWMMDepthLayerURI`` — the postprocess output layer. Extends ``LayerURI``
   field-for-field (so it still maps onto ``map-command load-layer`` with no
   translation, like every other layer) and adds the three depth scalars the
