@@ -540,3 +540,10 @@ SWMM API coverage: their discrete skills vs our playground-layer full
 pyswmm control - the real gap is calibration/uncertainty WORKFLOW
 classes, not API endpoints. MCP itself is orthogonal transport we could
 expose later (plugin-platform goal).
+
+## 2026-08-21 - F1d verifier side-observation (queued, not ladder work)
+
+- TARGET_CRS default EPSG:32616 applied to Pacific-coast AOIs leaves the
+  reprojected AOI covering only ~56% of its axis-aligned output grid
+  (vs 97% for Gulf AOIs) - ~44% of an 8.8M-pixel COG is off-AOI padding.
+  Candidate: pick UTM zone from AOI centroid. Worth a small wave.
