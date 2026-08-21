@@ -2497,6 +2497,13 @@ def summarize_tool_result(
         _fb_note = getattr(result, "fallback_note", None)
         if isinstance(_fb_note, str) and _fb_note:
             payload["fallback_note"] = _fb_note
+        # Same clipping hazard, second channel: ``fallback_warning`` is the
+        # LABELED degrade a fetcher writes about its own composite (which source
+        # painted what share). It is the ONLY loudness a request that bypassed a
+        # coverage gate gets, so it must not die in the 200-char repr either.
+        _fb_warning = getattr(result, "fallback_warning", None)
+        if isinstance(_fb_warning, str) and _fb_warning:
+            payload["fallback_warning"] = _fb_warning
 
     # provenance-chain wave: whichever branch built the payload, hoist any
     # structured input provenance the result carries (a demo default is buried in

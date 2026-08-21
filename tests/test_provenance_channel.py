@@ -14,6 +14,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import cache as cache_mod
 from trid3nt_server.data.cache import (
+    PROVENANCE_SCHEMA,
     ProvenanceRecorder,
     read_through,
     record_provenance,
@@ -41,6 +42,7 @@ def test_miss_records_sidecar_then_hit_replays_identical(fake_s3: Any) -> None:
     """MISS binds the recorder around fetch_fn (delegate records); the sidecar is
     persisted; a later HIT replays the SAME dict from the sidecar without re-fetch."""
     prov = {"bathymetry_present": False, "cudem_tile_count": 0, "warn": "land_absent"}
+    stamped = {**prov, "provenance_schema": PROVENANCE_SCHEMA}
 
     calls = {"n": 0}
 
@@ -54,8 +56,8 @@ def test_miss_records_sidecar_then_hit_replays_identical(fake_s3: Any) -> None:
     r1 = read_through(metadata=_md(), params={"bbox": [1, 2, 3, 4]}, ext="tif",
                       fetch_fn=_fetch, provenance=rec1)
     assert r1.hit is False
-    assert r1.provenance == prov
-    assert rec1.data == prov
+    assert r1.provenance == stamped
+    assert rec1.data == stamped
     assert calls["n"] == 1
     # The sidecar object sits next to the artifact.
     obj_key = r1.uri.split("/", 3)[3]
@@ -67,8 +69,8 @@ def test_miss_records_sidecar_then_hit_replays_identical(fake_s3: Any) -> None:
                       fetch_fn=_fetch, provenance=rec2)
     assert r2.hit is True
     assert calls["n"] == 1, "cache hit must NOT re-run fetch_fn"
-    assert r2.provenance == prov, "cache-hit replay must equal the original fetch provenance"
-    assert rec2.data == prov
+    assert r2.provenance == stamped, "cache-hit replay must equal the original fetch provenance"
+    assert rec2.data == stamped
 
 
 def test_no_recorder_is_byte_identical_no_sidecar(fake_s3: Any) -> None:
@@ -86,9 +88,11 @@ def test_no_recorder_is_byte_identical_no_sidecar(fake_s3: Any) -> None:
     assert list(fake_s3.store) == [obj_key]
 
 
-def test_legacy_object_without_sidecar_replays_none(fake_s3: Any) -> None:
-    """An object cached BEFORE the channel (no sidecar) -> provenance None on hit,
-    so the envelope hook falls back to its declared defaults (no regression)."""
+def test_legacy_object_without_a_current_sidecar_is_a_miss(fake_s3: Any) -> None:
+    """An object cached BEFORE the channel (or before a schema bump) has no
+    trustworthy account of its own bytes. Replaying the declared DEFAULTS over it
+    served a silently-degraded artifact for the rest of the TTL bucket, so the
+    object REFETCHES instead."""
     md = _md()
     from trid3nt_server.data.cache import cache_path, compute_cache_key
     key = compute_cache_key(md.source_class, {"k": 9}, md.ttl_class)
@@ -97,7 +101,7 @@ def test_legacy_object_without_sidecar_replays_none(fake_s3: Any) -> None:
 
     rec = ProvenanceRecorder()
     r = read_through(metadata=md, params={"k": 9}, ext="tif",
-                     fetch_fn=lambda: b"unused", provenance=rec)
-    assert r.hit is True
-    assert r.provenance is None
-    assert rec.data is None
+                     fetch_fn=lambda: b"REFETCHED", provenance=rec)
+    assert r.hit is False
+    assert r.data == b"REFETCHED"
+    assert fake_s3.store[path] == b"REFETCHED"

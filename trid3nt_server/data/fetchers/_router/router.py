@@ -774,13 +774,22 @@ def route(
         gate_mode=gate_mode,
     )
     result = _stamp_activation(result, activation)
-    if pending_emit and isinstance(result, LayerURI):
-        from .emit_on_fetch import maybe_emit_input_on_fetch
+    from .emit_on_fetch import maybe_emit_input_on_fetch
 
+    if pending_emit:
         params, visualize, purpose = pending_emit[-1]
-        maybe_emit_input_on_fetch(
-            spec, params, result, visualize=visualize, purpose=purpose
+    else:
+        # A rung with its own ``source`` / ``call`` served WITHOUT going through
+        # _route_once, so nothing recorded the emit arguments -- the request's own
+        # are the truth for it. Without this a user_supplied bed never surfaces.
+        params, visualize, purpose = (
+            raw_params, raw_params.get("visualize"), raw_params.get("purpose"),
         )
+    for layer in (result if isinstance(result, list) else [result]):
+        if isinstance(layer, LayerURI):
+            maybe_emit_input_on_fetch(
+                spec, params, layer, visualize=visualize, purpose=purpose
+            )
     return result
 
 
@@ -791,14 +800,19 @@ def _stamp_activation(result: Any, activation: Any) -> Any:
     fetch, so they share its provenance). A ``shape: record`` source has no
     envelope to stamp -- its rows are logged LOUDLY instead, because a silent
     drop is exactly the class of hole this machinery exists to close.
+
+    An exempted request has NO rows and still stamps: its narration is the
+    unverified note, which is the only visibility that serve gets.
     """
     rows = activation.to_contract()
-    if not rows:
-        return result
     note = activation.narration()
+    if not rows and not note:
+        return result
 
     def _one(layer: Any) -> Any:
-        update: dict[str, Any] = {"fallbacks": rows}
+        update: dict[str, Any] = {}
+        if rows:
+            update["fallbacks"] = rows
         if note:
             update["fallback_note"] = (
                 f"{layer.fallback_note} {note}" if layer.fallback_note else note

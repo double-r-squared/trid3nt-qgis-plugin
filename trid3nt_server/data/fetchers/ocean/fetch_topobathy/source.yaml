@@ -192,10 +192,16 @@ docstring: |-
         instead permit the ``etopo_bathy_base`` rung of this tool's fallback
         ladder, which lays the same bed and additionally stamps the per-rung
         coverage onto the layer.
-      - Only if CUDEM, ETOPO and 3DEP are ALL unavailable does the result
-        degrade to land-only (``bathymetry_present=False``, ``BATHYMETRY
-        ABSENT`` warning); only if there is no elevation at all does it raise
-        ``TopobathyEmptyError``.
+      - CUDEM tiles intersect the AOI but PAINT less than all of it (a tile
+        dropped at the datum gate or read empty) and nothing else painted the
+        rest: the tool REFUSES with ``TOPOBATHY_COVERAGE_GAP`` even under
+        ``force_bathy_base`` / ``skip_cudem``. Those params buy a COARSER bed,
+        never a fake one -- a nearshore request never returns 3DEP land fill
+        over water as a success.
+      - Only if CUDEM tiles never intersected the AOI and ETOPO and 3DEP are
+        ALL unavailable does the result degrade to land-only
+        (``bathymetry_present=False``, ``BATHYMETRY ABSENT`` warning); only if
+        there is no elevation at all does it raise ``TopobathyEmptyError``.
 
   **Errors:**
       - ``TopobathyInputError``: bad bbox / outside US coast (retryable=False).
@@ -209,6 +215,9 @@ docstring: |-
         (retryable=True).
       - ``TopobathyEmptyError``: no CUDEM AND no 3DEP for the AOI
         (retryable=False).
+      - ``FALLBACK_LADDER_ERROR``: an untyped failure under a ladder rung
+        (cache / transport / internal). NOT a coverage verdict -- retryability
+        is inherited from the original failure.
 
   **Cross-tool dependencies:**
       - REUSES ``fetch_dem`` for the 3DEP land DEM (does NOT reimplement 3DEP).

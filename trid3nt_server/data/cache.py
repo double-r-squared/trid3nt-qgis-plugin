@@ -65,6 +65,8 @@ __all__ = [
     "ReadThroughResult",
     "ProvenanceRecorder",
     "record_provenance",
+    "PROVENANCE_SCHEMA",
+    "sidecar_is_current",
 ]
 
 logger = logging.getLogger("trid3nt_server.data.cache")
@@ -212,6 +214,12 @@ def is_cacheable(metadata: AtomicToolMetadata) -> bool:
 # passes no recorder is byte-identical to before (no sidecar object, no extra I/O),
 # so every prior spec is unaffected. Size-bounded (a small dict) and NEVER
 # secret-bearing (source-attribution counts + honest warnings only).
+#
+# The sidecar carries a SCHEMA number (``PROVENANCE_SCHEMA``). A cached artifact
+# whose sidecar predates it is a MISS: an artifact's honesty lives in its
+# provenance, so a stale sidecar would keep serving a stale account of the bytes
+# for the rest of the TTL bucket -- the exact way a landed fix fails to reach an
+# already-cached AOI.
 # ---------------------------------------------------------------------------
 
 
@@ -237,6 +245,18 @@ _ACTIVE_RECORDER: contextvars.ContextVar[ProvenanceRecorder | None] = (
 )
 
 
+#: Stamped into every recorded provenance dict and REQUIRED of every replayed
+#: sidecar. A cached artifact whose sidecar predates the current schema is a
+#: cache MISS, not a silent replay of stale provenance: the artifact BYTES are
+#: only as trustworthy as the provenance that describes them, and a sidecar
+#: written before a fix cannot report what the fix measures. BUMP THIS whenever
+#: a provenance field becomes load-bearing for honesty.
+PROVENANCE_SCHEMA = 2
+
+#: The sidecar key carrying :data:`PROVENANCE_SCHEMA`.
+_SCHEMA_FIELD = "provenance_schema"
+
+
 def record_provenance(data: dict[str, Any]) -> None:
     """Record a fetch-time provenance dict for the artifact being produced.
 
@@ -246,7 +266,12 @@ def record_provenance(data: dict[str, Any]) -> None:
     """
     rec = _ACTIVE_RECORDER.get()
     if rec is not None:
-        rec.data = dict(data)
+        rec.data = {**data, _SCHEMA_FIELD: PROVENANCE_SCHEMA}
+
+
+def sidecar_is_current(prov: dict[str, Any] | None) -> bool:
+    """Whether a replayed provenance sidecar was written by the CURRENT schema."""
+    return isinstance(prov, dict) and prov.get(_SCHEMA_FIELD) == PROVENANCE_SCHEMA
 
 
 @contextlib.contextmanager
@@ -260,6 +285,10 @@ def _bind_recorder(recorder: ProvenanceRecorder | None) -> Iterator[None]:
         yield
     finally:
         _ACTIVE_RECORDER.reset(token)
+
+
+class _StaleProvenance(Exception):
+    """Internal: the cached object's sidecar predates :data:`PROVENANCE_SCHEMA`."""
 
 
 def _sidecar_key(obj_key: str) -> str:
@@ -401,11 +430,26 @@ def _read_through_s3(
         try:
             resp = s3.get_object(Bucket=bucket, Key=obj_key)
             data = resp["Body"].read()
-            logger.info("read_through hit (s3) tool=%s key=%s bytes=%d", metadata.name, key, len(data))
             prov = _read_sidecar_s3(s3, bucket, obj_key) if provenance is not None else None
+            if provenance is not None and not sidecar_is_current(prov):
+                # A provenance-bearing source whose sidecar predates the current
+                # schema: REFETCH. Replaying it would hand back the stale fetch's
+                # own claims about the bytes (which legs painted, which warning
+                # was owed) for the rest of the TTL bucket, so a fix to those
+                # claims would not reach a cached AOI at all.
+                logger.warning(
+                    "read_through provenance sidecar STALE (schema %r != %d) "
+                    "tool=%s key=%s -- treating the cached object as a MISS",
+                    (prov or {}).get(_SCHEMA_FIELD), PROVENANCE_SCHEMA,
+                    metadata.name, key,
+                )
+                raise _StaleProvenance
+            logger.info("read_through hit (s3) tool=%s key=%s bytes=%d", metadata.name, key, len(data))
             if provenance is not None:
                 provenance.data = prov
             return ReadThroughResult(uri=uri, data=data, hit=True, provenance=prov)
+        except _StaleProvenance:
+            pass
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "")
             if code not in ("NoSuchKey", "404", "NoSuchBucket"):

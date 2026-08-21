@@ -69,6 +69,17 @@ painted; and an exempted request (`force_bathy_base` / `skip_cudem` /
 `include_regional_fine`) stamps NO coverage claim, carrying a `PARTIAL-CUDEM
 BATHYMETRY` warning instead.
 
+Wave F1c (ADR 0291) closed what a SECOND panel found still open on this row. The
+merge read only CUDEM's paint flags, so ETOPO's were discarded; and on TOTAL
+CUDEM LOSS the auto-engaged ETOPO base was clobbered by the un-masked 3DEP land
+leg, returning a land-fill ocean as SUCCESS with a `cudem_nearshore / 1.0` row.
+Now: every leg's paint flag is consumed, the land leg is masked whenever an
+ETOPO base is present, a painted-short AOI with no ETOPO paint REFUSES even
+under an exempting param, and activation rows carry the MEASURED share
+(`rung_coverage`) rather than `1.0 - <promise>`. The exempted serve is visible
+(an UNMEASURED note on `fallback_note`, plus the hoisted `fallback_warning`)
+without ever being numeric.
+
 Row 8 -- `spec.fallback`, a PRE-EXISTING NAME COLLISION, registered here and NOT
 touched by F1/F1b. It is a second, undeclared substitution mechanism that predates
 the ladders and shares their word: 32 source specs carry a top-level

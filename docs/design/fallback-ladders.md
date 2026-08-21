@@ -5,8 +5,8 @@ Replaces hidden substitution everywhere with one declared, visible,
 gated mechanism. Proving case: the SWAN bathymetry rectangle
 (docs/design/fallback-audit.md, the mosaic land-fill exhibit).
 
-Waves F1 (ADR 0289) and F1b (ADR 0290) are LANDED - read "As built" at
-the bottom for the shipped shapes before touching the machinery.
+Waves F1 (ADR 0289), F1b (ADR 0290) and F1c (ADR 0291) are LANDED - read
+"As built" at the bottom for the shipped shapes before touching the machinery.
 
 ## The contract in five rules
 
@@ -142,3 +142,34 @@ guard against naked substitution).
   stamped; `persist_run_activations` writes
   `s3://<runs>/<run_id>/fallback_activations.json` so a solved run is
   auditable from the bucket.
+
+## As built (wave F1c, ADR 0291)
+
+- COVERAGE IS MEASURED, NOT PROMISED. A result may report `rung_coverage`
+  (rung name -> the fraction of the request that rung's source PAINTED); the
+  walker reconciles its own shares against it. Without that seam a serving
+  rung's coverage is only `1.0 - <what the previous rung promised>`, which is
+  arithmetic, not evidence.
+- EXEMPTION SEMANTICS. `coverage_exempt_params` is read from the CALLER's
+  params only -- a param a RUNG injects is the ladder exercising its own
+  declared alternative, and that attempt is accounted for like any other. Under
+  a caller's exemption the activation stamps no number for WHICHEVER rung serves
+  (not just the primary) and carries `Activation.unverified_note`, which rides
+  `fallback_note` so the serve is visible without being a claim. The adapter
+  hoists `fallback_warning` beside `fallback_note`, so the capability's own
+  labeled warning reaches the model too.
+- GATE MODE decides who is asked, never the presence of a channel: `user_gated`
+  asks; `auto` / headless applies the labeled default immediately (synthetic ->
+  refuse), matching the `input_review` sibling. A live session in auto is still
+  auto.
+- REFUSALS carry their own truth: the decline branch fires only when a gap was
+  recorded (otherwise the primary's typed error, retryability intact, is what
+  surfaces); an untyped failure under a rung wraps as `FALLBACK_LADDER_ERROR`,
+  never the capability's coverage code, with `retryable` inherited.
+- A capability may not hand back a substitute nobody verified: where NOTHING
+  painted the uncovered part of the request, the fetch refuses even under an
+  exempting param. An exemption buys a COARSER answer, never a fake one.
+- CACHE. The fetch-time provenance sidecar carries `PROVENANCE_SCHEMA`; a cached
+  object whose sidecar predates it is a MISS. Bump the constant when a
+  provenance field becomes load-bearing for honesty -- otherwise a fixed AOI
+  keeps serving the stale reading for the rest of its TTL bucket.

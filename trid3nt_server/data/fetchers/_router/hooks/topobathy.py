@@ -814,9 +814,9 @@ def _merge_topobathy_to_array(
     """Merge the sources onto one EPSG:32616 float32 grid; return the COMPOSITE
     ``(array, transform, crs, bathymetry_present, cudem_count, regional_count)``.
 
-    The delegate returns this array directly for the shared COG writer; the
-    ``_build_merged_topobathy`` byte helper wraps it into a COG (for the merge
-    tests + any live byte-shape caller)."""
+    Every returned count and flag reports what PAINTED, never what was selected:
+    a source can be handed in and still contribute nothing (unreadable, empty,
+    outside the AOI)."""
     etopo_paths = list(etopo_paths or [])
     regional_paths = list(regional_paths or [])
     have_cudem = len(cudem_vsicurl_paths) > 0
@@ -846,20 +846,26 @@ def _merge_topobathy_to_array(
             + adjusted_cudem
             + regional_paths
         )
-        array, transform, crs, _painted = _composite_sources_to_array(
+        array, transform, crs, painted = _composite_sources_to_array(
             sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
         )
+        cudem_offset = len(etopo_paths) + (1 if have_land else 0)
+        regional_offset = cudem_offset + len(adjusted_cudem)
+        etopo_painted = any(painted[:len(etopo_paths)])
+        cudem_painted = sum(1 for f in painted[cudem_offset:regional_offset] if f)
+        regional_painted = sum(1 for f in painted[regional_offset:] if f)
         logger.info(
-            "fetch_topobathy: merged %d CUDEM + %d regional-fine + %d ETOPO-global "
-            "+ %s land -> composite array (%s)",
-            len(cudem_vsicurl_paths), len(regional_paths), len(etopo_paths),
+            "fetch_topobathy: merged %d/%d CUDEM + %d/%d regional-fine + %d "
+            "ETOPO-global + %s land -> composite array (%s)",
+            cudem_painted, len(cudem_vsicurl_paths), regional_painted,
+            len(regional_paths), len(etopo_paths),
             "1" if have_land else "0", target_crs,
         )
         return (
             array, transform, crs,
-            (have_cudem or have_regional or have_etopo),
-            len(cudem_vsicurl_paths),
-            len(regional_paths),
+            bool(cudem_painted or regional_painted or etopo_painted),
+            cudem_painted,
+            regional_painted,
         )
     finally:
         for p in tmp_paths:
@@ -961,35 +967,6 @@ def _mask_land_leg_ocean_fill(land_local_path: str) -> str:
     with rasterio.open(out, "w", **profile) as dst:
         dst.write(arr, 1)
     return out
-
-
-def _merge_sources(
-    sources_in_precedence: list[str],
-    target_crs: str,
-    bbox: tuple[float, float, float, float],
-    min_pixel_m: float | None = None,
-) -> str:
-    """Mosaic ``sources_in_precedence`` (LAST wins) onto ``target_crs``, clipped to
-    ``bbox``; return a path to the merged float32 GTiff (per-source warp, no CLI)."""
-    if not sources_in_precedence:
-        raise TopobathyEmptyError("no sources to merge")
-    array, transform, crs, _painted = _composite_sources_to_array(
-        sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
-    )
-    import rasterio
-
-    with tempfile.NamedTemporaryFile(
-        suffix=".tif", delete=False, prefix="trid3nt_topobathy_merged_"
-    ) as f:
-        merged_path = f.name
-    profile = {
-        "driver": "GTiff", "dtype": "float32", "count": 1,
-        "height": array.shape[0], "width": array.shape[1],
-        "crs": crs, "transform": transform, "nodata": float("nan"),
-    }
-    with rasterio.open(merged_path, "w", **profile) as out:
-        out.write(array, 1)
-    return merged_path
 
 
 def _compute_target_grid(
@@ -1282,6 +1259,27 @@ def _compose_fallback_warnings(
     return " ".join(warnings) or None
 
 
+def _rung_coverage(
+    cudem_painted_fraction: float | None, etopo_painted: bool
+) -> dict[str, float] | None:
+    """The MEASURED share each BATHYMETRY_LADDER rung's source painted.
+
+    The fallback walker reconciles its promise arithmetic against this, so an
+    activation row reports paint rather than a tile-footprint promise. ``None``
+    when nothing measurable ran (no CUDEM tiles intersected AND no ETOPO base).
+    """
+    if cudem_painted_fraction is not None:
+        cudem = max(0.0, min(1.0, cudem_painted_fraction))
+        rest = max(0.0, 1.0 - cudem)
+        return {
+            "cudem_nearshore": cudem,
+            "etopo_bathy_base": rest if etopo_painted else 0.0,
+        }
+    if etopo_painted:
+        return {"cudem_nearshore": 0.0, "etopo_bathy_base": 1.0}
+    return None
+
+
 def _select_and_merge(
     bbox: tuple[float, float, float, float],
     resolution_m: int,
@@ -1383,14 +1381,14 @@ def _select_and_merge(
     # 3) 3DEP land DEM (REUSE fetch_dem) -- best-effort. Skipped for a screening
     # surge (its 0 m ocean fill would clobber the ETOPO negative bathy over water).
     land_local = None if skip_land else _fetch_3dep_land_to_file(bbox, resolution_m)
-    land_absent = land_local is None
-    # Deep-water rung: when the ETOPO bathy base is forced ON (the
-    # offshore/tsunami intent), the 3DEP land leg contributes ONLY genuine emergent
-    # terrain -- its flat ~0 m ocean fill is masked so the ETOPO full-column deep
-    # bathy shows through offshore instead of being clobbered to land-only. Onshore
-    # (positive) 3DEP detail is preserved; ETOPO/CUDEM paint the wet nearshore.
+    # Whenever an ETOPO base is in the merge -- forced ON, or auto-engaged because
+    # CUDEM produced nothing -- the 3DEP land leg contributes ONLY genuine emergent
+    # terrain: its flat ~0 m ocean fill sits at HIGHER precedence and would clobber
+    # the ETOPO column back to land-only, which is the exact fake-landmass the
+    # coverage gate exists to prevent. Onshore (positive) 3DEP detail is preserved;
+    # ETOPO/CUDEM paint the wet nearshore.
     land_raw_tmp: str | None = land_local  # the un-masked 3DEP staged file (cleanup)
-    if force_bathy_base and land_local is not None:
+    if etopo_vsicurl and land_local is not None:
         try:
             land_local = _mask_land_leg_ocean_fill(land_local)
         except Exception as exc:  # noqa: BLE001 -- best-effort; fall back to raw land
@@ -1427,7 +1425,15 @@ def _select_and_merge(
         array, transform, crs, painted = _composite_sources_to_array(
             sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
         )
+        # Every leg's paint flag is consumed, not just CUDEM's: a leg that was
+        # SELECTED but painted nothing must not appear in the provenance as if
+        # it had (the ETOPO base is the one whose absence turns the merge into
+        # a land-fill ocean).
         cudem_offset = len(etopo_vsicurl) + (1 if have_land else 0)
+        regional_offset = cudem_offset + len(adjusted_cudem)
+        etopo_painted = any(painted[:len(etopo_vsicurl)])
+        land_painted = bool(have_land and painted[len(etopo_vsicurl)])
+        regional_painted_count = sum(1 for f in painted[regional_offset:] if f)
         painted_cudem_urls = [
             cudem_vsicurl[i][len("/vsicurl/"):]
             for i in range(len(adjusted_cudem))
@@ -1460,30 +1466,35 @@ def _select_and_merge(
         cudem_painted_fraction is not None
         and cudem_painted_fraction < _COVERAGE_COMPLETE
     )
-    if cudem_short and not (force_bathy_base or skip_cudem or include_regional_fine):
-        if not etopo_vsicurl:
-            note = (
-                f"the NOAA NCEI CUDEM 1/9\" nearshore tiles PAINTED only "
-                f"{cudem_painted_fraction * 100:.0f}% of AOI {bbox}: "
-                f"{len(painted_cudem_urls)} of the {len(cudem_urls)} intersecting "
-                "tile(s) survived the datum gate and the merge. The remaining "
-                f"{(1.0 - cudem_painted_fraction) * 100:.0f}% of the AOI has NO "
-                "nearshore bathymetry source"
-            )
+    if cudem_short:
+        note = (
+            f"the NOAA NCEI CUDEM 1/9\" nearshore tiles PAINTED only "
+            f"{cudem_painted_fraction * 100:.0f}% of AOI {bbox}: "
+            f"{len(painted_cudem_urls)} of the {len(cudem_urls)} intersecting "
+            "tile(s) survived the datum gate and the merge. The remaining "
+            f"{(1.0 - cudem_painted_fraction) * 100:.0f}% of the AOI has NO "
+            "nearshore bathymetry source"
+        )
+        # Refuse unless a COARSER bed both painted the hole AND was permitted.
+        # An exempting param permits the substitution; it never permits the
+        # 3DEP land leg's flat 0 m fill to stand in for a bed nothing painted.
+        exempted = force_bathy_base or skip_cudem or include_regional_fine
+        if not (etopo_painted and exempted):
             raise TopobathyCoverageGapError(
                 _coverage_gap_message(note, skip_land=skip_land),
                 covered_fraction=cudem_painted_fraction,
                 gap_note=note,
             )
 
-    cudem_count = len(cudem_vsicurl)
-    regional_count = len(regional_vsicurl)
-    bathy_present = bool(cudem_vsicurl or regional_vsicurl or etopo_vsicurl)
+    cudem_count = len(painted_cudem_urls)
+    regional_count = regional_painted_count
+    bathy_present = bool(cudem_count or regional_count or etopo_painted)
+    land_absent = not land_painted
 
     # 5) Honest, LABELED fallback warnings (data-source + loud-fallback norms).
     fallback_warning = _compose_fallback_warnings(
         bbox=bbox, cudem_status=cudem_status, cudem_count=cudem_count,
-        regional_count=regional_count, has_etopo=bool(etopo_vsicurl),
+        regional_count=regional_count, has_etopo=etopo_painted,
         bathy_present=bathy_present, land_absent=land_absent,
         cudem_painted_fraction=cudem_painted_fraction if cudem_short else None,
     )
@@ -1496,6 +1507,7 @@ def _select_and_merge(
         "cudem_tile_count": cudem_count,
         "regional_tile_count": regional_count,
         "land_absent": land_absent,
+        "rung_coverage": _rung_coverage(cudem_painted_fraction, etopo_painted),
     }
     return array, transform, crs, provenance
 
@@ -1685,6 +1697,7 @@ def envelope_topobathy(
         f"({b[0]:.2f},{b[1]:.2f},{b[2]:.2f},{b[3]:.2f})"
     )
     prov = provenance or {}
+    coverage = prov.get("rung_coverage")
     return {
         "layer_id": layer_id,
         "name": name,
@@ -1692,6 +1705,11 @@ def envelope_topobathy(
         "fallback_warning": prov.get("fallback_warning"),
         "cudem_tile_count": int(prov.get("cudem_tile_count", 0)),
         "regional_tile_count": int(prov.get("regional_tile_count", 0)),
+        "rung_coverage": (
+            {str(k): float(v) for k, v in coverage.items()}
+            if isinstance(coverage, dict) and coverage
+            else None
+        ),
     }
 
 

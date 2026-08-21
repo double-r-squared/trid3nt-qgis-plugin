@@ -645,12 +645,13 @@ def _stamp_swan_provenance(
     """Surface SWAN's wave-physics calibration coefficients (law 9, audit row 34)
     and which rungs of the bathymetry ladder painted the bed.
 
-    The coefficients rode SILENT. They are literature-canonical SWAN constants
-    (single universally-accepted published values), so they carry a
-    documented-default label and PROCEED (numerical consequence, no refuse) --
-    they are not invented site claims.
+    The coefficients are literature-canonical SWAN constants (single
+    universally-accepted published values), so they carry a documented-default
+    label and PROCEED (numerical consequence, no refuse) -- they are not invented
+    site claims. The bed rows go through ``stamp_fallbacks``, the one merge seam,
+    so a re-stamp cannot duplicate a row or double the narration.
     """
-    from trid3nt_contracts.common import render_fallback_line
+    from trid3nt_server.emission.layer_uri_emit import stamp_fallbacks
 
     entry = SyntheticInput(
         param="wave_physics_coefficients",
@@ -663,18 +664,10 @@ def _stamp_swan_provenance(
              "breaker index + JONSWAP bottom friction + triad closure); documented "
              "published values, not site-fit",
     )
-    update: dict[str, Any] = {
-        "synthetic_inputs": list(peak.synthetic_inputs or []) + [entry],
-    }
-    if bathy_activation:
-        update["fallbacks"] = list(peak.fallbacks or []) + list(bathy_activation)
-        note = render_fallback_line(bathy_activation)
-        if note:
-            bed = f"Wave bed: {note}"
-            update["fallback_note"] = (
-                f"{peak.fallback_note} {bed}" if peak.fallback_note else bed
-            )
-    return peak.model_copy(update=update)
+    stamped = stamp_fallbacks(peak, bathy_activation)
+    return stamped.model_copy(
+        update={"synthetic_inputs": list(stamped.synthetic_inputs or []) + [entry]}
+    )
 
 
 async def model_swan_wave_field(

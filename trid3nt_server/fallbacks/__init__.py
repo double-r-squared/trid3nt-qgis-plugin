@@ -16,6 +16,7 @@ from .ladder import (
 )
 from .persist import persist_run_activations
 from .walker import (
+    LADDER_ERROR_CODE,
     Activation,
     LadderGap,
     LadderRefused,
@@ -32,6 +33,7 @@ __all__ = [
     "register_ladder",
     "get_ladder",
     "registered_ladders",
+    "LADDER_ERROR_CODE",
     "LadderGap",
     "LadderRefused",
     "RungRecord",

@@ -19,6 +19,7 @@ from trid3nt_contracts.execution import TopobathyResult
 from trid3nt_server.data import TOOL_REGISTRY
 from trid3nt_server.data.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.fallbacks import (
+    LADDER_ERROR_CODE,
     Ladder,
     LadderGap,
     LadderRefused,
@@ -108,11 +109,31 @@ def test_primary_serves_whole_request_and_is_recorded() -> None:
     assert act.narration() is None
 
 
-def test_undeclared_gap_propagates_the_typed_error_verbatim() -> None:
+def test_undeclared_gap_refuses_with_the_ladders_typed_code() -> None:
+    """A gap with no error_code of its own wears the ladder's terminal code --
+    it is a coverage refusal, and callers dispatch on error_code."""
     def _attempt(_r: Any, _p: Any) -> Any:
         raise LadderGap("gap!", covered_fraction=0.889, gap_note="CUDEM stops here")
 
-    with pytest.raises(LadderGap) as ei:
+    with pytest.raises(LadderRefused) as ei:
+        walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
+                    attempt=_attempt, gate=lambda **_k: True)
+    assert ei.value.error_code == "TEST_REFUSED"
+    assert "CUDEM stops here" in str(ei.value)
+    assert isinstance(ei.value.__cause__, LadderGap)
+    assert [r.rung for r in ei.value.activation.records] == ["primary"]
+
+
+def test_a_typed_gap_still_propagates_verbatim() -> None:
+    """The capability's OWN typed gap is untouched: same class, same code."""
+    class _TypedGap(LadderGap):
+        error_code = "CAP_GAP"
+        retryable = False
+
+    def _attempt(_r: Any, _p: Any) -> Any:
+        raise _TypedGap("gap!", covered_fraction=0.5, gap_note="half")
+
+    with pytest.raises(_TypedGap) as ei:
         walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
                     attempt=_attempt, gate=lambda **_k: True)
     assert "gap!" in str(ei.value)
@@ -160,6 +181,74 @@ def test_declining_refuses_in_its_own_words_and_leaves_a_visible_row() -> None:
     rows = {r.rung: r for r in ei.value.activation.to_contract()}
     assert rows["alt"].coverage == 0.0
     assert "declined" in (rows["alt"].note or "")
+
+
+def test_a_decline_over_a_retryable_primary_keeps_the_primarys_own_error() -> None:
+    """No gap was recorded: the primary failed for its OWN reason (a 503) and the
+    gate question was moot. Answering with a non-retryable coverage refusal would
+    tell the caller its transient upstream error is a terminal data gap."""
+    class _Upstream(Exception):
+        error_code = "CAP_UPSTREAM"
+        retryable = True
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        raise _Upstream("CUDEM 503")
+
+    with pytest.raises(_Upstream) as ei:
+        walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
+                    attempt=_attempt, allow=("alt",), gate=lambda **_k: False)
+    assert ei.value.error_code == "CAP_UPSTREAM"
+    assert ei.value.retryable is True
+    # The decline still left its trace on the activation.
+    rows = {r.rung: r for r in ei.value.fallback_activation.records}
+    assert rows["alt"].declined is True
+
+
+def test_measured_paint_overrides_the_promise_on_a_rung_attempt() -> None:
+    """The promise said 89/11; the rung's own fetch MEASURED 44/56. Rows report
+    what painted -- a rung-injected param never exempts its attempt from that."""
+    class _Result:
+        rung_coverage = {"primary": 0.44, "alt": 0.56}
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise LadderGap("gap", covered_fraction=0.89, gap_note="CUDEM stops")
+        return _Result()
+
+    ladder = Ladder(
+        capability="test_cap",
+        rungs=(_rung("primary", "primary"),
+               _rung("alt", "cross_dataset", params={"force_base": True})),
+        refuse_error_code="TEST_REFUSED",
+        coverage_exempt_params=("force_base",),
+    )
+    _res, act = walk_ladder(ladder, params={}, attempt=_attempt, allow=("alt",),
+                            gate=lambda **_k: True)
+    assert act.coverage_unverified is False
+    rows = {r.rung: r.coverage for r in act.to_contract()}
+    assert rows == pytest.approx({"primary": 0.44, "alt": 0.56})
+
+
+def test_an_alternative_serving_an_exempted_request_stamps_no_number() -> None:
+    """The exemption is the REQUEST's, so it applies to whichever rung serves --
+    not only the primary."""
+    ladder = Ladder(
+        capability="test_cap",
+        rungs=(_rung("primary", "primary"), _rung("alt", "cross_dataset")),
+        refuse_error_code="TEST_REFUSED",
+        coverage_exempt_params=("force_base",),
+    )
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise RuntimeError("primary unavailable")
+        return "served"
+
+    _res, act = walk_ladder(ladder, params={"force_base": True}, attempt=_attempt,
+                            allow=("alt",), gate=lambda **_k: True)
+    assert act.coverage_unverified is True
+    assert act.to_contract() == []
+    assert "UNMEASURED" in (act.narration() or "")
 
 
 def test_gap_that_no_rung_could_fill_refuses_naming_the_gap() -> None:
@@ -260,9 +349,26 @@ def test_untyped_failure_never_escapes_the_walker_bare() -> None:
 
     with pytest.raises(LadderRefused) as ei:
         walk_ladder(_ladder(), params={}, attempt=_attempt, gate=lambda **_k: True)
-    assert ei.value.error_code == "TEST_REFUSED"
+    assert ei.value.error_code == LADDER_ERROR_CODE
     assert "kaboom" in str(ei.value)
     assert isinstance(ei.value.__cause__, RuntimeError)
+
+
+def test_an_infra_error_is_not_dressed_as_a_coverage_gap() -> None:
+    """A bare ValueError from the cache / transport under a rung must not wear
+    the capability's coverage code -- a composer excepting on that code would
+    read a transient fault as a terminal data gap. Retryability rides through."""
+    class _Retryable(Exception):
+        retryable = True
+
+    def _attempt(_r: Any, _p: Any) -> Any:
+        raise _Retryable("cache bucket unreachable")
+
+    with pytest.raises(LadderRefused) as ei:
+        walk_ladder(_ladder(), params={}, attempt=_attempt, gate=lambda **_k: True)
+    assert ei.value.error_code == LADDER_ERROR_CODE != "TEST_REFUSED"
+    assert ei.value.retryable is True
+    assert "nothing measured a coverage gap" in str(ei.value)
 
 
 def test_exempt_request_stamps_no_coverage_claim() -> None:
@@ -277,7 +383,9 @@ def test_exempt_request_stamps_no_coverage_claim() -> None:
                           attempt=lambda _r, _p: "served", gate=lambda **_k: True)
     assert act.coverage_unverified is True
     assert act.to_contract() == []
-    assert act.narration() is None
+    # Not silent, though: the exempted serve narrates that nothing measured it.
+    assert "UNMEASURED" in (act.narration() or "")
+    assert "force_base" in (act.narration() or "")
 
     _r2, act2 = walk_ladder(ladder, params={"force_base": False},
                             attempt=lambda _r, _p: "served", gate=lambda **_k: True)
@@ -328,6 +436,41 @@ def test_headless_gate_applies_the_labeled_default() -> None:
 def test_same_data_rung_walks_without_asking() -> None:
     assert confirm_fallback(capability="c", rung=_rung("m", "same_data"),
                             gate_mode="user_gated") is True
+
+
+def test_auto_mode_refuses_a_synthetic_rung_without_asking_a_live_session(
+    monkeypatch,
+) -> None:
+    """AUTO means nobody is being asked, emitter or no emitter. Keying the ask on
+    the presence of a channel stalled an auto run for the whole gate TTL; the
+    labeled default (refuse, law 9) applies immediately -- the input-review
+    gate's auto semantics."""
+    import asyncio as _asyncio
+
+    from trid3nt_server.emission import pipeline_emitter as pe
+
+    class _Loop:
+        @staticmethod
+        def is_running() -> bool:
+            return True
+
+    class _Emitter:
+        session_id = "sess"
+        _bound_loop = _Loop()
+
+        async def send_envelope(self, kind: str, env: Any) -> None:
+            raise AssertionError("auto mode must never present a gate card")
+
+    def _never(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("auto mode must never wait on a gate answer")
+
+    monkeypatch.setattr(_asyncio, "run_coroutine_threadsafe", _never)
+    token = pe._CURRENT_EMITTER.set(_Emitter())
+    try:
+        assert confirm_fallback(capability="c", rung=_rung("s", "synthetic"),
+                                gate_mode="auto") is False
+    finally:
+        pe._CURRENT_EMITTER.reset(token)
 
 
 def test_unanswered_gate_on_a_live_session_is_a_decline() -> None:
@@ -572,6 +715,58 @@ def test_the_declared_rung_fills_a_mid_merge_drop_too(
     assert "PARTIAL-CUDEM BATHYMETRY" in (res.fallback_warning or "")
 
 
+def test_rows_report_measured_paint_not_the_footprint_promise(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The footprint PROMISE is 89/11. On the rung's own attempt the biggest tile
+    drops, so CUDEM actually paints 44%. The stamped rows must be the measured
+    44/56 -- a rung-injected param never exempts the rung's attempt from paint
+    accounting."""
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    real = tb._composite_sources_to_array
+    dropped = "ncei19_n30X00_w085X50_2019v1.tif"
+    gone = str(tmp_path / "gone.tif")
+
+    def _drop_one(sources, target_crs, bbox, **kw):
+        return real([gone if s.endswith(dropped) else s for s in sources],
+                    target_crs, bbox, **kw)
+
+    monkeypatch.setattr(tb, "_composite_sources_to_array", _drop_one)
+    res = TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
+    )
+    rows = {r.rung: r.coverage for r in res.fallbacks}
+    assert rows == pytest.approx(
+        {"cudem_nearshore": 4.0 / 9.0, "etopo_bathy_base": 5.0 / 9.0}, abs=1e-6
+    )
+
+
+def test_a_declined_rung_stays_on_the_contract_when_a_lower_rung_serves() -> None:
+    """The declined row's production reader: a walk that descends PAST a declined
+    rung stamps both -- what was refused and what actually served."""
+    ladder = Ladder(
+        capability="test_cap",
+        rungs=(_rung("primary", "primary"), _rung("alt", "cross_dataset"),
+               _rung("mirror", "same_data")),
+        refuse_error_code="TEST_REFUSED",
+    )
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise LadderGap("gap", covered_fraction=0.5, gap_note="half missing")
+        if rung.name == "alt":
+            raise AssertionError("a declined rung must never be invoked")
+        return "merged"
+
+    _res, act = walk_ladder(
+        ladder, params={}, attempt=_attempt, allow=("alt", "mirror"),
+        gate=lambda **kw: kw["rung"].name != "alt",
+    )
+    rows = {r.rung: r for r in act.to_contract()}
+    assert rows["alt"].coverage == 0.0 and "declined" in (rows["alt"].note or "")
+    assert rows["mirror"].coverage == pytest.approx(0.5)
+
+
 def test_an_exempted_request_never_stamps_a_positive_false_coverage_row(
     monkeypatch, tmp_path, fake_s3
 ) -> None:
@@ -583,6 +778,78 @@ def test_an_exempted_request_never_stamps_a_positive_false_coverage_row(
     )
     assert list(res.fallbacks or []) == []
     assert "PARTIAL-CUDEM BATHYMETRY" in (res.fallback_warning or "")
+    # ... but it is not SILENT: the model-followable remedy carries its own
+    # unverified note, and the adapter hoists the warning out of the repr clip.
+    assert "UNMEASURED" in (res.fallback_note or "")
+    assert "force_bathy_base" in (res.fallback_note or "")
+    from trid3nt_server.adapters.adapter import summarize_tool_result
+
+    payload = summarize_tool_result("fetch_topobathy", res)
+    assert "PARTIAL-CUDEM BATHYMETRY" in payload["fallback_warning"]
+    assert "UNMEASURED" in payload["fallback_note"]
+
+
+def _patch_total_cudem_loss(monkeypatch, tmp_path) -> None:
+    """Every intersecting CUDEM tile drops at the datum gate. ETOPO auto-engages
+    because zero tiles survive -- the window where the merge used to return
+    SUCCESS with a raw 3DEP land fill painting the water."""
+    etopo = str(tmp_path / "etopo.tif")
+    _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
+    monkeypatch.setattr(tb, "_select_cudem_tiles",
+                        lambda *_a, **_k: list(_FULL_COVER_TILES))
+    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
+
+    def _reject(*_a: Any, **_k: Any) -> float:
+        raise tb.TopobathyUpstreamError("header unreadable")
+
+    # The merge unlinks the staged land tif, so each attempt stages its own (as
+    # the real 3DEP leg does).
+    def _stage_land(*_a: Any, **_k: Any) -> str:
+        path = str(tmp_path / f"land-{len(list(tmp_path.glob('land-*.tif')))}.tif")
+        _synth_raster(path, _EXHIBIT_BBOX, 12.0)
+        return path
+
+    monkeypatch.setattr(tb, "_assert_navd88", _reject)
+    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", _stage_land)
+    real = tb._composite_sources_to_array
+
+    def _strip(sources, target_crs, bbox, **kw):
+        return real(
+            [(s[len("/vsicurl/"):] if s.startswith("/vsicurl/") else s)
+             for s in sources],
+            target_crs, bbox, **kw,
+        )
+
+    monkeypatch.setattr(tb, "_composite_sources_to_array", _strip)
+
+
+def test_total_cudem_loss_refuses_instead_of_returning_a_land_fill_success(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    _patch_total_cudem_loss(monkeypatch, tmp_path)
+    tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})  # footprint says OK
+    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
+        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
+    assert ei.value.covered_fraction == 0.0
+    assert "0 of the 4" in str(ei.value)
+
+
+def test_total_cudem_loss_serves_the_declared_rung_with_measured_paint(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The declared rung fills the whole AOI, and the rows say so -- 0% CUDEM /
+    100% ETOPO is MEASURED paint, not the walker's promise arithmetic."""
+    _patch_total_cudem_loss(monkeypatch, tmp_path)
+    res = TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
+    )
+    # cudem_nearshore painted NOTHING, so it carries no row at all (a 0% row is
+    # not a claim); ETOPO's row is the measured 100%.
+    rows = {r.rung: r.coverage for r in res.fallbacks}
+    assert rows == pytest.approx({"etopo_bathy_base": 1.0})
+    assert res.cudem_tile_count == 0
+    assert res.bathymetry_present is True
+    assert res.rung_coverage == {"cudem_nearshore": 0.0, "etopo_bathy_base": 1.0}
 
 
 def test_emit_seam_carries_activation_rows_onto_a_reemitted_layer() -> None:
@@ -619,6 +886,28 @@ def test_user_supplied_bed_wins_over_the_whole_ladder(monkeypatch, tmp_path) -> 
     assert [r.rung for r in res.fallbacks] == ["user_supplied"]
     assert res.fallbacks[0].consequence == "user_supplied"
     assert [e.basis for e in res.synthetic_inputs] == ["user"]
+
+
+def test_a_user_supplied_rung_still_surfaces_its_input_layer(
+    monkeypatch, tmp_path
+) -> None:
+    """A rung with its own ``call`` never reaches _route_once, so nothing records
+    the emit-on-fetch arguments -- the user's own bed would be the one input that
+    never appears on the map."""
+    from trid3nt_server.data.fetchers._router import emit_on_fetch
+
+    surfaced: list = []
+    monkeypatch.setattr(
+        emit_on_fetch, "maybe_emit_input_on_fetch",
+        lambda spec, params, layer, **kw: surfaced.append((layer.uri, kw)),
+    )
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), dem_uri="s3://mine/survey.tif",
+        purpose="survey bed",
+    )
+    assert surfaced == [("s3://mine/survey.tif", {"visualize": None,
+                                                  "purpose": "survey bed"})]
 
 
 def test_swan_declares_the_bathy_base_rung() -> None:
@@ -799,5 +1088,8 @@ def test_swan_stamps_the_bed_ladder_onto_its_result() -> None:
     ]
     out = wf._stamp_swan_provenance(peak, SwanRunArgs(bbox=_SMOKE_BBOX), rows)
     assert [r.rung for r in out.fallbacks] == ["cudem_nearshore", "etopo_bathy_base"]
-    assert "Wave bed:" in (out.fallback_note or "")
-    assert "11% etopo_bathy_base [cross_dataset]" in out.fallback_note
+    assert "11% etopo_bathy_base [cross_dataset]" in (out.fallback_note or "")
+    # Idempotent through the shared seam: a re-stamp duplicates nothing.
+    again = wf._stamp_swan_provenance(out, SwanRunArgs(bbox=_SMOKE_BBOX), rows)
+    assert [r.rung for r in again.fallbacks] == ["cudem_nearshore", "etopo_bathy_base"]
+    assert again.fallback_note == out.fallback_note

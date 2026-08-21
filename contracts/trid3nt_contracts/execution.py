@@ -447,20 +447,30 @@ class TopobathyResult(LayerURI):
     before the channel (no sidecar) yields ``None`` provenance, and these declared
     DEFAULTS then hold -- byte-identical to the twin's own cache-hit behaviour.
 
+    Every field below reports what actually PAINTED the merge, never what was
+    selected for it: a tile can drop between selection and merge (unreadable
+    header, empty read) and a claim keyed on selection would be false.
+
     - ``bathymetry_present`` -- True when CUDEM, the regional fine DEM, OR the ETOPO
-      global fallback contributed a real below-waterline bed; False on the
+      global fallback actually painted a real below-waterline bed; False on the
       3DEP-land-only degrade.
     - ``fallback_warning`` -- an honest human-readable warning when the surface
       degraded (bathymetry absent; global ETOPO fallback bathy; the land leg was
       absent). ``None`` on the clean CUDEM/regional path. NEVER a fabricated success.
-    - ``cudem_tile_count`` -- number of CUDEM 1/9" tiles merged (0 off the CUDEM path).
-    - ``regional_tile_count`` -- number of NCEI regional fine (~1 m) tiles merged.
+    - ``cudem_tile_count`` -- number of CUDEM 1/9" tiles that painted (0 off the
+      CUDEM path).
+    - ``regional_tile_count`` -- number of NCEI regional fine (~1 m) tiles that painted.
+    - ``rung_coverage`` -- the MEASURED share of the AOI each fallback-ladder rung's
+      source painted, keyed by rung name. The fallback walker reconciles its own
+      promise-derived shares against this, so an activation row reports measured
+      paint rather than a footprint promise. ``None`` when nothing measurable ran.
     """
 
     bathymetry_present: bool = True
     fallback_warning: str | None = None
     cudem_tile_count: int = 0
     regional_tile_count: int = 0
+    rung_coverage: dict[str, float] | None = None
 
 
 class StormTracksLayerURI(LayerURI):

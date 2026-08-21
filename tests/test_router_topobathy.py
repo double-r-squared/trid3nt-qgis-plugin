@@ -508,18 +508,23 @@ def test_deep_rung_restores_deep_column_under_land_fill(monkeypatch, tmp_path: A
     assert prov["bathymetry_present"] is True
 
 
-def test_deep_rung_off_leaves_land_fill_clobber(monkeypatch, tmp_path: Any) -> None:
-    """force_bathy_base=False (small-box / non-offshore path): behaviour is UNCHANGED
-    -- the 3DEP 0 m fill still wins by precedence, so no deep column (the guard is
-    scoped strictly to the forced-bathy-base offshore intent)."""
+def test_auto_etopo_base_is_masked_from_the_land_fill_too(
+    monkeypatch, tmp_path: Any
+) -> None:
+    """An ETOPO base that AUTO-engaged (no CUDEM for this AOI) gets the same land-leg
+    mask as a forced one. Without it the 3DEP 0 m ocean fill -- higher precedence --
+    clobbers the ETOPO column back to land-only while the result still claims a
+    below-waterline bed."""
     etopo_path, land_path = _deep_rung_rasters(tmp_path)
     _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path,
                             etopo_tiles=[etopo_path])
-    arr, _tf, _crs, _prov = tb._select_and_merge(
+    arr, _tf, _crs, prov = tb._select_and_merge(
         _SMOKE_BBOX, 10, TARGET_CRS, None, 30.0,
         force_bathy_base=False, include_regional_fine=False, min_pixel_m=None,
         skip_cudem=False, skip_land=False,
     )
     a = arr[np.isfinite(arr)]
-    assert a.min() > -100.0                       # ETOPO deep column clobbered by fill
-    assert not (a < -5.0).any()
+    assert a.min() < -2500.0                      # deep ETOPO column survived
+    assert (a > 40.0).any()                       # +50 m emergent land preserved
+    assert prov["bathymetry_present"] is True
+    assert prov["rung_coverage"] == {"cudem_nearshore": 0.0, "etopo_bathy_base": 1.0}

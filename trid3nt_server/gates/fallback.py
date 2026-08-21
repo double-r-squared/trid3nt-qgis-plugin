@@ -11,11 +11,14 @@ The floor, by consequence class:
     runs unapproved).
 
 Declining is not a run-cancel: the walker treats a declined rung as one it may
-not take and descends to the next, ending at the ladder's typed REFUSE. Labeled
-defaults apply ONLY where there is nobody to ask (AUTO/headless, no bound loop);
-once the card is on a live user_gated session an unanswered gate reads as a
-DECLINE, matching the input-review gate it rides. A canary never hangs either
-way.
+not take and descends to the next, ending at the ladder's typed REFUSE.
+
+WHO GETS ASKED is the gate MODE, not the presence of a channel: ``user_gated``
+asks, ``auto`` (and headless, and a run with no bound loop) applies the labeled
+default WITHOUT asking -- a synthetic rung therefore refuses in auto exactly as
+the input-review gate refuses a physics demo default in auto, on a live session
+or not. Once a card IS on a live user_gated session, an unanswered gate reads as
+a DECLINE. A canary never hangs either way.
 """
 
 from __future__ import annotations
@@ -78,12 +81,14 @@ def confirm_fallback(
 ) -> bool:
     """Ask (or apply the labeled default) before descending to ``rung``.
 
-    Returns True when the walker may take the rung. Callable from a worker thread
-    (the fetch path is off-loaded): the coroutine is driven onto the emitter's
-    bound loop, which is free while the composer is parked on the thread. On the
-    loop thread itself a blocking wait would deadlock, so the labeled default
-    applies -- never a hang. Once the card IS on a live session, an unanswered
-    gate is a decline, not the labeled default.
+    Returns True when the walker may take the rung. Only ``user_gated`` asks; in
+    auto the labeled default applies immediately, so a live emitter never turns
+    an auto run into a 5-minute stall. Callable from a worker thread (the fetch
+    path is off-loaded): the coroutine is driven onto the emitter's bound loop,
+    which is free while the composer is parked on the thread. On the loop thread
+    itself a blocking wait would deadlock, so the labeled default applies --
+    never a hang. Once the card IS on a live session, an unanswered gate is a
+    decline, not the labeled default.
     """
     if not gate_fires(rung.consequence, gate_mode):
         if rung.consequence == "cross_dataset":
@@ -94,6 +99,20 @@ def confirm_fallback(
         return True
 
     default = labeled_default(rung.consequence)
+    from trid3nt_server.gates.input_review import resolve_input_gate_mode
+
+    if resolve_input_gate_mode(gate_mode) != "user_gated":
+        # AUTO: nobody is being asked, whether or not a session happens to be
+        # attached. The labeled default is the answer -- for a synthetic rung
+        # that is REFUSE (law 9), the input-review gate's own auto semantics.
+        logger.warning(
+            "fallback gate %s -> rung %s [%s] in auto mode: applying the labeled "
+            "default (%s) without asking",
+            capability, rung.name, rung.consequence,
+            "proceed" if default else "refuse",
+        )
+        return default
+
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
     emitter = current_emitter()

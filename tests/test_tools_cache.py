@@ -32,10 +32,13 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data.cache import (
     CACHE_KEY_HEX_LEN,
+    PROVENANCE_SCHEMA,
+    ProvenanceRecorder,
     cache_path,
     compute_cache_key,
     is_cacheable,
     read_through,
+    record_provenance,
     ttl_bucket_vintage,
 )
 
@@ -352,6 +355,80 @@ def test_read_through_force_refresh_bypasses_hit(fake_s3):
     assert invoked["n"] == 1
     # Fresh data has overwritten the old entry.
     assert fake_s3.store[(_CACHE_BUCKET, path)] == b"fresh-payload"
+
+
+def _seed_with_sidecar(fake_s3, md, pinned, sidecar: dict[str, Any]) -> str:
+    import json
+
+    key = compute_cache_key(
+        md.source_class, {"bbox": [0, 0, 1, 1]}, md.ttl_class, now=pinned
+    )
+    path = cache_path(md.source_class, md.ttl_class, key, "tif")
+    fake_s3.store[(_CACHE_BUCKET, path)] = b"cached-payload"
+    fake_s3.store[(_CACHE_BUCKET, path.rsplit(".", 1)[0] + ".provenance.json")] = (
+        json.dumps(sidecar).encode("utf-8")
+    )
+    return path
+
+
+def test_stale_provenance_sidecar_is_a_cache_miss(fake_s3):
+    """An artifact is only as trustworthy as the provenance describing it. A
+    sidecar written before the current schema replays a stale ACCOUNT of the
+    bytes for the rest of the TTL bucket, so it must refetch instead."""
+    md = _cacheable_md()
+    pinned = datetime(2026, 6, 7, 3, 0, 0, tzinfo=timezone.utc)
+    path = _seed_with_sidecar(
+        fake_s3, md, pinned, {"bathymetry_present": True, "fallback_warning": None}
+    )
+
+    recorder = ProvenanceRecorder()
+
+    def fetch_fn() -> bytes:
+        record_provenance({"bathymetry_present": False, "fallback_warning": "loud"})
+        return b"REFETCHED"
+
+    result = read_through(
+        metadata=md, params={"bbox": [0, 0, 1, 1]}, ext="tif",
+        fetch_fn=fetch_fn, now=pinned, provenance=recorder,
+    )
+    assert result.hit is False
+    assert result.data == b"REFETCHED"
+    assert result.provenance["fallback_warning"] == "loud"
+    assert result.provenance["provenance_schema"] == PROVENANCE_SCHEMA
+    assert fake_s3.store[(_CACHE_BUCKET, path)] == b"REFETCHED"
+
+
+def test_current_provenance_sidecar_still_replays_on_a_hit(fake_s3):
+    md = _cacheable_md()
+    pinned = datetime(2026, 6, 7, 3, 0, 0, tzinfo=timezone.utc)
+    _seed_with_sidecar(
+        fake_s3, md, pinned,
+        {"bathymetry_present": True, "provenance_schema": PROVENANCE_SCHEMA},
+    )
+    invoked = {"n": 0}
+
+    def fetch_fn() -> bytes:
+        invoked["n"] += 1
+        return b"FRESH"
+
+    result = read_through(
+        metadata=md, params={"bbox": [0, 0, 1, 1]}, ext="tif",
+        fetch_fn=fetch_fn, now=pinned, provenance=ProvenanceRecorder(),
+    )
+    assert result.hit is True and invoked["n"] == 0
+    assert result.provenance["bathymetry_present"] is True
+
+
+def test_a_source_without_provenance_is_unaffected_by_the_schema(fake_s3):
+    """No recorder -> no sidecar read, no schema check: byte-identical to before."""
+    md = _cacheable_md()
+    pinned = datetime(2026, 6, 7, 3, 0, 0, tzinfo=timezone.utc)
+    _seed_with_sidecar(fake_s3, md, pinned, {"anything": 1})
+    result = read_through(
+        metadata=md, params={"bbox": [0, 0, 1, 1]}, ext="tif",
+        fetch_fn=lambda: b"FRESH", now=pinned,
+    )
+    assert result.hit is True and result.data == b"cached-payload"
 
 
 def test_read_through_fetch_failure_reraises_without_sentinel(fake_s3):
