@@ -18,7 +18,7 @@ This is the single entry point the SFINCS worker entrypoints call after the solv
 
 The orchestrator never imports cht_sfincs and never imports agent code. It does
 NOT itself upload (the entrypoint owns the bucket/scheme/run-id + the sweep) nor
-write completion.json — it RETURNS the manifest dict + the status the entrypoint
+write completion.json - it RETURNS the manifest dict + the status the entrypoint
 folds into completion.json (the manifest is written BEFORE completion.json so a
 Spot reclaim mid-postprocess leaves no completion.json -> the agent retries).
 """
@@ -142,7 +142,7 @@ def _run_encode(tasks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Encode all tasks; return {dest_filename: metrics}. Parallel or serial.
 
     A failure on the PEAK (first) task re-raises (it sinks the run). A failure on
-    a FRAME task is logged + that frame dropped (degrade to peak-only) — matching
+    a FRAME task is logged + that frame dropped (degrade to peak-only) - matching
     the agent's per-frame VALID-COG guard.
     """
     results: dict[str, dict[str, Any]] = {}
@@ -178,7 +178,7 @@ def _run_encode(tasks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     # context if 'spawn' is unavailable on the platform.
     try:
         mp_ctx = _mp.get_context("spawn")
-    except (ValueError, RuntimeError):  # pragma: no cover — platform fallback
+    except (ValueError, RuntimeError):  # pragma: no cover - platform fallback
         mp_ctx = None
     with ProcessPoolExecutor(max_workers=workers, mp_context=mp_ctx) as ex:
         futures = {ex.submit(_encode_one, t): t for t in frame_tasks}
@@ -191,7 +191,7 @@ def _run_encode(tasks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                     t["dest_filename"], exc.error_code,
                 )
                 continue
-            except Exception as exc:  # noqa: BLE001 — a subprocess crash drops the frame
+            except Exception as exc:  # noqa: BLE001 - a subprocess crash drops the frame
                 LOG.warning(
                     "raster_postprocess: frame %s encode crashed (%s); dropping.",
                     t["dest_filename"], exc,
@@ -237,7 +237,7 @@ def run_postprocess(
         run_id: the run identifier (for the manifest + the cog_uri keys).
         deck_dir: where the COGs are written (the entrypoint sweeps + uploads them).
         runs_uri_for: callable ``rel -> s3://.../run_id/rel`` (the entrypoint's
-            ``lambda rel: _runs_uri(run_id, rel)``) — used to fill ``cog_uri``.
+            ``lambda rel: _runs_uri(run_id, rel)``) - used to fill ``cog_uri``.
         kind: "depth" (flood) or "waves" (SnapWave). Waves return an OK manifest
             with NO layers when there is no wave field (honest depth-only degrade).
         engine: the manifest ``engine`` tag.
@@ -251,7 +251,7 @@ def run_postprocess(
             netcdf_path, bbox=bbox, resolution_m=resolution_m
         )
         if extract is None:
-            # Not a SnapWave run — honest empty manifest, NO layers, status ok
+            # Not a SnapWave run - honest empty manifest, NO layers, status ok
             # (the run is fine; it simply has no wave product). The depth pass
             # owns the honesty gate.
             return PostprocessResult(
@@ -376,7 +376,7 @@ def run_postprocess(
         layers=layers,
     )
     LOG.info(
-        "raster_postprocess: %s OK — peak + %d frame(s), max=%.3f flooded=%d",
+        "raster_postprocess: %s OK - peak + %d frame(s), max=%.3f flooded=%d",
         kind, frame_count,
         float(peak_metrics.get("max_depth_m", 0.0)),
         flooded,

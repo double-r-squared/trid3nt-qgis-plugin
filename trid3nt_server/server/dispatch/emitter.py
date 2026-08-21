@@ -287,9 +287,9 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # confirm card is emitted on the loop by _gate_on_code_exec; server.py
         # emits the result envelope), so the off-load is safe.
         "code_exec_request",
-        # list_run_frames reads the run's publish_manifest.json from S3
-        # (completion.json -> manifest_uri -> parse) -- sync network I/O. Emit-free
-        # (returns the listing dict), so off-load it for the same reason.
+        # list_run_frames reads the run's outputs.json from S3 (with a legacy
+        # publish_manifest fallback) -- sync network I/O. Emit-free (returns the
+        # listing dict), so off-load it for the same reason.
         "list_run_frames",
         # These heavy raster/vector
         # fetchers do multi-second sync work (STAC sign + windowed /vsicurl warp
