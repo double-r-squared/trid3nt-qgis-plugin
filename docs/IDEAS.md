@@ -506,3 +506,37 @@ single-engine BMI pilot -> twin loop -> cross-engine exchange.
   labeled 90mm no-AOI rung, gate-declared; inline literal migrates to a
   declared refuse-default ladder rung in F2). Demo-physics audit now FULLY
   ADJUDICATED 34/34.
+
+## 2026-08-21 - SWMM ecosystem recon: first concrete input (NATE: folded)
+
+Agentic SWMM (Zhonghao et al., MDPI AI for Engineering, 2026-06;
+github.com/Zhonghao1995/agentic-swmm-workflow, doi 10.3390/aieng1010005)
+= a serious convergent single-engine framework: MCP + Skills over EPA
+SWMM, QGIS preprocessing, verification-first provenance artifacts per run,
+byte-identical CLI-vs-MCP parity across 60 paired sims, calibration +
+Monte Carlo uncertainty.
+
+ADOPTION CANDIDATES (the shopping list):
+1. Calibration as a first-class workflow (calibrate, then batch
+   precipitation-scaled climate scenarios over the calibrated model) -
+   our V&V doctrine wants exactly this; unbuilt.
+2. Uncertainty envelopes (Monte Carlo parameter perturbation ->
+   hydrograph envelope) - echoes the uncertainty-pre-reasoning idea
+   from the GeoClaw_Claude recon.
+3. Climate scenario batching as a clean scenario lever.
+4. Per-run experiment notes (their experiment_note.md pattern) as a
+   lighter sibling of our ADRs.
+5. Their parity-proof pattern (byte-identical outputs across drive
+   paths) as an acceptance idiom.
+
+STRUCTURAL POSITION (why we are not obsoleted): they are a SWMM
+framework; TRID3NT is an engine framework (one contract - outputs.json,
+gates, ladders - across 10 engines, cross-engine coupling the goal).
+Their inputs = user files, one Canada 35-city network source, or
+SWMManywhere bbox SYNTHESIS (honestly labeled, but the invent-the-world
+path our law 9 refuses/gates); ours = the 95-spec real-data substrate.
+Their QGIS = preprocessing library; ours = the product surface. Raw
+SWMM API coverage: their discrete skills vs our playground-layer full
+pyswmm control - the real gap is calibration/uncertainty WORKFLOW
+classes, not API endpoints. MCP itself is orthogonal transport we could
+expose later (plugin-platform goal).
