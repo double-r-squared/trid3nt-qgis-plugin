@@ -238,3 +238,27 @@ still take rank 1 on 8 of 9 natural questions (rank 2 on the ninth).
   Both docstrings refuse it by name (Ogallala/High Plains, Floridan, Gulf
   Coast). That needs an aquifer-specific hydrogeologic framework, not this
   model, and has no tool.
+
+## Correction (post-landing review, same day)
+
+Two defects in the staging script, both found by inspecting what the first run
+actually produced. No design change to the decisions above.
+
+- **The derived product's provenance named no K mosaic.** `build_k_mosaic`
+  returned its report in memory only, so running `--step build` as a separate
+  invocation -- which the run length makes the normal case -- stamped
+  `derivation.k_mosaic: {}` into the sidecar. A derived raster whose provenance
+  cannot say what it was divided by is not auditable. The report now persists to
+  `conus_k_report.json` beside the mosaic, `--step kverify` folds its proof into
+  the same file, and a build of any `derived` dataset REFUSES to start without a
+  verified report rather than stamping an empty one. Re-staged: the sidecar now
+  carries the mosaic (124,884,583 cells, 278,964 in subdomain overlaps,
+  K 0.00348-1000.0 m/day) and the exactness proof. The rebuilt object is
+  byte-identical (`staged_sha256 a3b978b9d301...` unchanged), so staging is
+  deterministic.
+- **A failed download cached itself.** ScienceBase answers a migrated file URL
+  with HTTP 200 and an HTML app shell, so the first attempt at `models.03.zip`
+  left a 4,255-byte "zip" on disk that `download()` then SKIPPED as already
+  present on every later run. `download()` now checks the PK magic on a `.zip`
+  destination, discards a cached non-zip, and raises naming the auth-migration
+  cause when a fresh fetch is not a zip either.

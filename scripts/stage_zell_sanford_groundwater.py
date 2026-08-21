@@ -98,6 +98,11 @@ TARGET_RES_DEG = 1.0 / 450.0
 #: reachable by TTL eviction.
 STAGED_PREFIX = "staged/zell_sanford_groundwater"
 
+#: Where ``build_k_mosaic`` persists its report, so a separately-invoked
+#: ``--step build`` still stamps the real mosaic into the derived product's
+#: provenance sidecar instead of an empty dict.
+K_REPORT_PATH_NAME = "conus_k_report.json"
+
 USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -223,10 +228,22 @@ def _sha256(path: Path) -> str:
 
 
 def download(url: str, dest: Path) -> None:
-    """Fetch ``url`` to ``dest`` unless it is already there (resumable by hand)."""
+    """Fetch ``url`` to ``dest`` unless it is already there (resumable by hand).
+
+    A ``.zip`` destination is checked for the PK magic and deleted if it is
+    missing. ScienceBase answers a stale or migrated file URL with a 200 and an
+    HTML app shell, not an error, and a cached 4 KB "zip" of HTML would then be
+    SKIPPED as already present on every later run.
+    """
     if dest.exists() and dest.stat().st_size > 0:
-        print(f"  [skip] {dest.name} already present ({dest.stat().st_size:,} bytes)")
-        return
+        if dest.suffix == ".zip" and dest.open("rb").read(2) != b"PK":
+            print(f"  [bad ] {dest.name} is not a zip ({dest.stat().st_size:,} bytes) "
+                  "-- discarding and refetching")
+            dest.unlink()
+        else:
+            print(f"  [skip] {dest.name} already present "
+                  f"({dest.stat().st_size:,} bytes)")
+            return
     print(f"  [get ] {dest.name}")
     import httpx
 
@@ -238,6 +255,14 @@ def download(url: str, dest: Path) -> None:
                 for chunk in resp.iter_bytes(1 << 20):
                     fh.write(chunk)
             tmp.rename(dest)
+    if dest.suffix == ".zip" and dest.open("rb").read(2) != b"PK":
+        size = dest.stat().st_size
+        dest.unlink()
+        raise ValidationFailure(
+            f"{dest.name}: {url} served {size:,} bytes that are not a zip. "
+            "ScienceBase returns an HTML app shell for files migrated behind "
+            "its authenticated file manager -- this file needs a different route."
+        )
     print(f"  [ok  ] {dest.name} ({dest.stat().st_size:,} bytes)")
 
 
@@ -331,8 +356,14 @@ def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
     h, w = grid["height"], grid["width"]
     x0, res, y0 = grid["transform"][2], grid["transform"][0], grid["transform"][5]
 
+    if kpath.exists() and cpath.exists() and K_REPORT_PATH_NAME:
+        rp = work / K_REPORT_PATH_NAME
+        if rp.exists():
+            print(f"  [skip] K mosaic already built ({kpath.name})")
+            return json.loads(rp.read_text())
+
     if kpath.exists() and cpath.exists():
-        print(f"  [skip] K mosaic already built ({kpath.name})")
+        print(f"  [skip] K mosaic arrays present, recomputing the report")
         kmos = np.load(kpath, mmap_mode="r")
         counts = np.load(cpath, mmap_mode="r")
     else:
@@ -385,7 +416,7 @@ def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
     n_overlap = int((counts > 1).sum())
     kv = np.asarray(kmos)[np.isfinite(kmos)]
     print(f"  [kmos] cells with K: {n_written:,}   multiply-written: {n_overlap:,}")
-    return {
+    report = {
         "route": "hk_<zone> from {ID}_opt.par via {ID}_surfgeo_transformedID_huc4.tif",
         "subdomains": 75,
         "k_cells": n_written,
@@ -393,6 +424,11 @@ def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
         "k_min_m_day": round(float(kv.min()), 6) if kv.size else None,
         "k_max_m_day": round(float(kv.max()), 6) if kv.size else None,
     }
+    # Persisted so a later ``--step build`` records the real mosaic in the
+    # derived product's provenance. The build is too long to run in one go, and
+    # an in-memory-only report silently became {} in the sidecar.
+    (work / K_REPORT_PATH_NAME).write_text(json.dumps(report, indent=2))
+    return report
 
 
 def verify_k_reconstruction(work: Path) -> dict[str, Any]:
@@ -907,7 +943,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n  CONUS model grid: {grid['width']}x{grid['height']} @ "
           f"{grid['transform'][0]:.0f} m, bounds={tuple(round(v) for v in grid['bounds'])}")
 
-    kreport: dict[str, Any] = {}
+    kreport_path = work / K_REPORT_PATH_NAME
+    kreport: dict[str, Any] = (
+        json.loads(kreport_path.read_text()) if kreport_path.exists() else {}
+    )
     if args.step in ("kmosaic", "all"):
         print("\n=== K mosaic (75 subdomain parameter-zone maps) ===")
         kreport = build_k_mosaic(work, grid)
@@ -915,9 +954,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.step in ("kverify", "all"):
         print("\n=== K reconstruction proof (vs the shipped .hk array) ===")
         kreport["verification"] = verify_k_reconstruction(work)
+        kreport_path.write_text(json.dumps(kreport, indent=2))
 
     if args.step not in ("build", "all"):
         return 0
+
+    # A derived product's provenance is only honest if it names the mosaic it
+    # was divided by, so refuse to stamp an empty one.
+    if any(DATASETS[d]["derived"] for d in
+           (list(DATASETS) if args.dataset == "all" else [args.dataset])):
+        if not kreport.get("k_cells") or not kreport.get("verification"):
+            raise ValidationFailure(
+                "the derived saturated thickness needs a verified K mosaic report "
+                f"in {kreport_path} -- run --step kmosaic and --step kverify first"
+            )
 
     keys = list(DATASETS) if args.dataset == "all" else [args.dataset]
     results = []
