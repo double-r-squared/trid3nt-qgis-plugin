@@ -47,7 +47,11 @@ from trid3nt_server.workflows.geoclaw.inundation.inundation import (
 from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
     PostprocessGeoClawError,
 )
-from trid3nt_server.workflows.geoclaw.run_geoclaw import GeoClawWorkflowError
+from trid3nt_server.workflows.geoclaw.run_geoclaw import (
+    GEOCLAW_OFFSHORE_SCENARIOS,
+    GeoClawWorkflowError,
+)
+from trid3nt_server.workflows.shared.roughness_resolve import resolve_overland_manning
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.geoclaw.amr_regions.amr_regions"
@@ -100,7 +104,7 @@ async def geoclaw_amr_refinement_regions(
     sim_duration_s: float = 3600.0,
     output_frames: int = 24,
     amr_levels: int = 3,
-    manning_n: float = 0.025,
+    manning_n: float | None = None,
     sea_level_m: float = 0.0,
     compute_class: str = "standard",
     input_mode: str | None = None,
@@ -139,7 +143,14 @@ async def geoclaw_amr_refinement_regions(
         sim_duration_s: simulated time, seconds (default 3600).
         output_frames: animation frame count (default 24).
         amr_levels: maximum AMR levels available to the regions (default 3).
-        manning_n: single global friction coefficient (default 0.025).
+        manning_n: single global bottom-friction coefficient. Default None ->
+            for dam_break / surge (land-dominated / mixed-coastal run-up),
+            DERIVED from NLCD land cover over the AOI (area-weighted mean of the
+            SFINCS Manning table, the same resolution ``geoclaw_inundation`` /
+            ``geoclaw_storm_surge`` use), or REFUSES if NLCD cannot serve; for
+            tsunami (offshore -- GEOCLAW_OFFSHORE_SCENARIOS, deep-ocean
+            propagation), the published Chow (1959) open-water standard 0.025 is
+            used (NLCD has no ocean coverage). Supply a value for a calibrated run.
         sea_level_m: still-water datum (default 0.0).
         compute_class: compute class (default "standard").
         input_mode: review lever ("auto"|"user_gated"; None -> session
@@ -231,6 +242,45 @@ async def geoclaw_amr_refinement_regions(
             "error_message": f"invalid amr_regions window: {exc}",
         }
 
+    # --- law 9 (ADR 0296 completion): resolve bottom-friction Manning's n, split
+    # by domain character -- the IDENTICAL rule geoclaw_inundation applies (ADR
+    # 0296): dam_break / surge are LAND-DOMINATED / mixed-coastal (NLCD covers the
+    # real land cover, including its own "Open Water" class over any coastal water
+    # in the AOI) -> NLCD area-weighted derivation (resolve_overland_manning).
+    # tsunami is OFFSHORE (GEOCLAW_OFFSHORE_SCENARIOS): no NLCD coverage, so the
+    # published Chow (1959) 0.025 open-water standard is kept, now loudly labeled
+    # (consequence="numerical", not "physics" -- an established universal
+    # constant, not an invented site-specific value).
+    _scenario_l = str(scenario).strip().lower()
+    _manning_offshore = _scenario_l in GEOCLAW_OFFSHORE_SCENARIOS
+    _manning_res = None
+    _manning_provenance: list[SyntheticInput] = []
+    if _manning_offshore:
+        if manning_n is not None:
+            _manning_n_for_gate = float(manning_n)
+            _manning_provenance.append(SyntheticInput(
+                param="manning_n", value=_manning_n_for_gate, units="s/m^(1/3)",
+                basis="user", note="caller-supplied bottom-friction Manning's n.",
+            ))
+        else:
+            _manning_n_for_gate = 0.025
+            _manning_provenance.append(SyntheticInput(
+                param="manning_n", value=_manning_n_for_gate, units="s/m^(1/3)",
+                basis="default_demo", consequence="numerical",
+                note=(
+                    "offshore seabed friction: NLCD has no deep-ocean coverage; "
+                    "the published Chow (1959) open-water standard (n=0.025, the "
+                    "same value manning_mapping.csv assigns NLCD class 11 Open "
+                    "Water) is used. Supply manning_n for a calibrated value."
+                ),
+            ))
+    else:
+        _manning_res = await resolve_overland_manning(
+            coerced, manning_n, param_name="manning_n",
+        )
+        _manning_provenance.append(_manning_res.entry)
+        _manning_n_for_gate = _manning_res.manning_n  # may be None (unresolved)
+
     # --- input-review gate: the AMR windows are the consequential,
     # model-invented input on this template (they place WHERE the mesh refines), so
     # they must ride the review gate -- the LLM cannot silently invent window
@@ -257,8 +307,8 @@ async def geoclaw_amr_refinement_regions(
     _review = await gate_input_review(
         tool_name="geoclaw_amr_refinement_regions",
         mode=input_mode,
-        entries=_window_entries,
-        params={},
+        entries=_window_entries + _manning_provenance,
+        params={"manning_n": _manning_n_for_gate},
     )
     if _review.cancelled:
         return {
@@ -266,6 +316,22 @@ async def geoclaw_amr_refinement_regions(
             "error_code": "USER_INPUT_CANCELLED",
             "error_message": (
                 f"geoclaw_amr_refinement_regions {_review.cancel_reason}"
+            ),
+        }
+    _mn_reviewed = _review.params.get("manning_n")
+    effective_manning_n = float(_mn_reviewed) if _mn_reviewed is not None else None
+    if effective_manning_n is None:
+        # Unresolved land-dominated Manning's n (NLCD could not serve) survived to
+        # here -- auto mode already refuses via the physics-consequence gate
+        # above; this is the user_gated backstop (a "proceed" reply cannot make a
+        # None friction coefficient runnable). Mirrors the geoclaw_inundation
+        # precedent (ADR 0296).
+        return {
+            "status": "error",
+            "error_code": "GEOCLAW_PHYSICS_INPUT_REQUIRED",
+            "error_message": (
+                str(_manning_res.entry.note) if _manning_res is not None
+                else "geoclaw_amr_refinement_regions: manning_n could not be resolved."
             ),
         }
 
@@ -279,7 +345,7 @@ async def geoclaw_amr_refinement_regions(
             sim_duration_s=float(sim_duration_s),
             output_frames=int(output_frames),
             amr_levels=int(amr_levels),
-            manning_n=float(manning_n),
+            manning_n=float(effective_manning_n),
             sea_level_m=float(sea_level_m),
             amr_regions=windows,
         )

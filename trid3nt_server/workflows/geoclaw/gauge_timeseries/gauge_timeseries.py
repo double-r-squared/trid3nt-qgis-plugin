@@ -27,6 +27,7 @@ import asyncio
 import logging
 from typing import Any
 
+from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.geoclaw_contracts import GeoClawDepthLayerURI, GeoClawRunArgs
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
@@ -97,7 +98,7 @@ async def geoclaw_tsunami_gauge_timeseries(
     sim_duration_s: float = 3600.0,
     output_frames: int = 24,
     amr_levels: int = 2,
-    manning_n: float = 0.025,
+    manning_n: float | None = None,
     sea_level_m: float = 0.0,
     compute_class: str = "standard",
     # absorb LLM-invented kwargs (centralized at server.py via
@@ -131,7 +132,10 @@ async def geoclaw_tsunami_gauge_timeseries(
         sim_duration_s: simulated time, seconds (default 3600).
         output_frames: animation frame count (default 24).
         amr_levels: AMR refinement levels (default 2).
-        manning_n: friction coefficient (default 0.025).
+        manning_n: bottom-friction coefficient. Default None -> this template
+            is ALWAYS offshore (a tsunami gauge run), so the published Chow
+            (1959) open-water standard 0.025 is used (NLCD has no ocean
+            coverage; never derived). Supply a value for a calibrated run.
         sea_level_m: still-water datum (default 0.0).
         compute_class: compute class (default "standard").
 
@@ -178,6 +182,31 @@ async def geoclaw_tsunami_gauge_timeseries(
     if coastal_gauge_lonlat is not None:
         gauge = (float(coastal_gauge_lonlat[0]), float(coastal_gauge_lonlat[1]))
 
+    # --- law 9 (ADR 0296 completion): this template is ALWAYS offshore (a
+    # tsunami gauge run -- GEOCLAW_OFFSHORE_SCENARIOS), so there is no
+    # land-dominated leg to derive from NLCD. Label-only pass: the same
+    # basis="default_demo" consequence="numerical" Chow (1959) provenance entry
+    # geoclaw_inundation's tsunami branch carries, so the constant rides loudly
+    # instead of silently (it previously carried NO SyntheticInput at all).
+    if manning_n is not None:
+        effective_manning_n = float(manning_n)
+        _manning_entry = SyntheticInput(
+            param="manning_n", value=effective_manning_n, units="s/m^(1/3)",
+            basis="user", note="caller-supplied bottom-friction Manning's n.",
+        )
+    else:
+        effective_manning_n = 0.025
+        _manning_entry = SyntheticInput(
+            param="manning_n", value=effective_manning_n, units="s/m^(1/3)",
+            basis="default_demo", consequence="numerical",
+            note=(
+                "offshore seabed friction: NLCD has no deep-ocean coverage; "
+                "the published Chow (1959) open-water standard (n=0.025, the "
+                "same value manning_mapping.csv assigns NLCD class 11 Open "
+                "Water) is used. Supply manning_n for a calibrated value."
+            ),
+        )
+
     try:
         run_args = GeoClawRunArgs(
             bbox=tuple(coerced),  # type: ignore[arg-type]
@@ -188,7 +217,7 @@ async def geoclaw_tsunami_gauge_timeseries(
             sim_duration_s=float(sim_duration_s),
             output_frames=int(output_frames),
             amr_levels=int(amr_levels),
-            manning_n=float(manning_n),
+            manning_n=float(effective_manning_n),
             sea_level_m=float(sea_level_m),
             coastal_gauge_lonlat=gauge,
         )
@@ -215,6 +244,7 @@ async def geoclaw_tsunami_gauge_timeseries(
             run_args,
             compute_class=compute_class,
             emit_gauge_series=True,
+            synthetic_inputs=[_manning_entry],
         )
         logger.info(
             "geoclaw_tsunami_gauge_timeseries complete layer_id=%s "

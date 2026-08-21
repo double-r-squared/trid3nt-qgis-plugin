@@ -127,3 +127,50 @@ across the touched families (`test_geoclaw_finite_fault`,
   evidence so the record is accurate.
 - `amr_regions` / `gauge_timeseries` remain the pre-0296 state, explicitly
   parked (not silently forgotten) for a follow-up job.
+
+## Completion (2026-08-21): the two parked siblings
+
+The two forks this ADR explicitly parked (`amr_regions` PARKED FORK,
+`gauge_timeseries` PARKED FORK, inventory rows above) are landed -- the
+full-coverage law: a ruled paradigm does not ship with partial coverage.
+
+- `geoclaw_amr_refinement_regions` (`amr_regions.py`): structurally identical
+  to `geoclaw_inundation` pre-0296 (`manning_n: float = 0.025` unconditional,
+  scenario-selectable tsunami/dam_break/surge). Applied the IDENTICAL pattern,
+  copied verbatim (no new design): `manning_n: float = 0.025` ->
+  `manning_n: float | None = None`; a domain-character branch on
+  `GEOCLAW_OFFSHORE_SCENARIOS` -- offshore (tsunami) keeps the labeled 0.025
+  (`basis="default_demo", consequence="numerical"`, Chow 1959); land-dominated
+  (dam_break/surge) calls `resolve_overland_manning`. The one structural
+  difference from `inundation.py`: this composer already runs ONE
+  `gate_input_review` call for the AMR window provenance, so the Manning entry
+  folds into that SAME call (`params={"manning_n": ...}`, combined
+  `entries=_window_entries + _manning_provenance`) rather than adding a second
+  gate round -- the same "fold into the existing review" idiom `inundation.py`
+  itself uses for its other physics inputs. Post-gate backstop identical to
+  `inundation.py`: an unresolved Manning's n surviving to here ->
+  `GEOCLAW_PHYSICS_INPUT_REQUIRED`, never a silent invented run.
+- `geoclaw_tsunami_gauge_timeseries` (`gauge_timeseries.py`): ALWAYS offshore
+  (hardcoded `scenario="tsunami"`), so no derivation branch is needed or
+  possible -- a label-only pass, exactly as the original inventory
+  recommended. `manning_n: float = 0.025` -> `manning_n: float | None = None`;
+  when unset the literal 0.025 now carries the SAME `SyntheticInput`
+  (`basis="default_demo", consequence="numerical"`, Chow 1959 open-water
+  standard) `inundation.py`'s tsunami branch carries, threaded into
+  `model_geoclaw_inundation(..., synthetic_inputs=[_manning_entry])` so it
+  stamps onto the returned layer. This template had NO `SyntheticInput` at all
+  before (worse than `inundation.py`'s pre-0296 state, which at least ran a
+  solver that silently used the same constant) -- it now rides loudly instead
+  of completely unlabeled. No `gate_input_review` call exists in this composer
+  (it has never had a review gate) and none is added -- a label-only pass adds
+  no new review surface, per the kickoff's scope.
+
+New test file `tests/test_geoclaw_manning_domain_split_siblings.py` (10 tests,
+offline, mirrors `test_geoclaw_manning_domain_split.py`'s stub idiom) covers
+both composers' derive/user/refuse/offshore-skip legs plus the derived-vs-
+literature A/B for `amr_regions`, and the labeled-default/user-override split
+for `gauge_timeseries`. Gate evidence: the full `tests/test_[f-o]*.py` slice
+(which contains this new file, both touched composer files, and the pre-
+existing `amr_regions`/`gauge_timeseries` test files) re-run green alongside
+`test_geoclaw_manning_domain_split.py` -- composer-side only change; no
+`workers/` path touched.

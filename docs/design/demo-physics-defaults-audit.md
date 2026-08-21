@@ -91,7 +91,7 @@ source can serve it instead).
 |---|---|---|---|---|---|
 | 16 | storm_surge, regional_manning | `manning_n = 0.025` | `storm_surge.py:139`, `regional_manning.py` | **[WIRED, ADR 0285 P4]** storm_surge NLCD-derives (mixed coastal domain, unconditionally -- NLCD's own class 11 "Open Water" covers the water fraction). **[N/A, ADR 0296]** regional_manning: `manning_n` is DEAD CODE in this composer -- `manning_coefficients` is REQUIRED (the template's whole question is user-chosen banded friction) and the worker's setrun_builder writes `geo_data.manning_coefficient` as EITHER the banded list OR the scalar `manning_n`, never both (`setrun_builder.py:1813-1823`, proven by `workers/geoclaw/test_setrun_builder.py:799-803`); with `manning_coefficients` always set, the scalar never reaches the deck. No site to wire. | see ADR 0296 |
 | 16b | inundation (dam_break/surge legs) | `manning_n = 0.025` | `inundation.py` (pre-0296) | **[WIRED, ADR 0296]** dam_break/surge (land-dominated / mixed-coastal) NLCD-derive via `resolve_overland_manning`; tsunami (offshore, `GEOCLAW_OFFSHORE_SCENARIOS`) keeps 0.025, now labeled `consequence="numerical"` (Chow 1959 open-water standard, not an invented site-specific value) instead of silent. | see ADR 0296 |
-| 16c | amr_regions, gauge_timeseries | `manning_n = 0.025` | `amr_regions.py:103`, `gauge_timeseries.py:100` | **SILENT** (no provenance surface) -- PARKED, out of this kickoff's named scope (ADR 0296 names only inundation + regional_manning). amr_regions is scenario-selectable (tsunami/dam_break/surge, same shape as inundation pre-0296) -- structurally the identical fix. gauge_timeseries is ALWAYS scenario="tsunami" (offshore-only) -- needs a label-only pass (no NLCD derivation), mirroring inundation's tsunami branch. | RECOMMEND: a small follow-up job applies the ADR 0296 pattern to both (identical mechanism, no new design). |
+| 16c | amr_regions, gauge_timeseries | `manning_n = 0.025` | `amr_regions.py`, `gauge_timeseries.py` (pre-completion) | **[WIRED, ADR 0296 completion, 2026-08-21]** amr_regions: scenario-selectable (tsunami/dam_break/surge), converted with the IDENTICAL pattern as `inundation.py` -- dam_break/surge NLCD-derive via `resolve_overland_manning` (folded into the same window-review `gate_input_review` call), tsunami (`GEOCLAW_OFFSHORE_SCENARIOS`) keeps 0.025 labeled `consequence="numerical"`. gauge_timeseries: ALWAYS `scenario="tsunami"` (offshore-only) -- label-only pass, the same `basis="default_demo", consequence="numerical"` Chow (1959) `SyntheticInput` now rides `synthetic_inputs=` into `model_geoclaw_inundation` (previously silent, no provenance entry at all). | see ADR 0296 completion note |
 | 17 | inundation | `fault_geometry` = "generic synthetic Okada" | `inundation.py:704` | LABELED | Scenario source when the user names no fault -> REFUSE unless a real/scenario fault is named (couples to #18 magnitude). |
 
 ### OPENQUAKE
@@ -273,9 +273,14 @@ refuse-in-auto behavior.
 > (dam_break/surge) now derive NLCD-Manning; its tsunami leg keeps 0.025, now
 > labeled non-refusing (`consequence="numerical"`). `regional_manning` verdict is
 > N/A (`manning_n` is dead code there -- `manning_coefficients` always wins).
-> `amr_regions`/`gauge_timeseries` remain the 0.025 default, still QUEUED for NATE
+> `amr_regions`/`gauge_timeseries` remained the 0.025 default, QUEUED for NATE
 > (ADR 0296 names only inundation + regional_manning; amr_regions/gauge_timeseries
-> are a straightforward follow-up of the identical pattern). P5-P8 remain staged
+> were a straightforward follow-up of the identical pattern). **[2026-08-21, ADR
+> 0296 completion]** both siblings landed: `amr_regions` gets the full
+> domain-split (land-dominated legs NLCD-derive, offshore keeps the labeled
+> 0.025); `gauge_timeseries` (always offshore) gets the label-only Chow (1959)
+> provenance entry it previously lacked entirely. Full-coverage law satisfied --
+> no GeoClaw Manning site remains silent or unconverted. P5-P8 remain staged
 > for their per-engine waves.
 
 - **P1 -- Mechanism + sweep guard (S). [LANDED]** Add `consequence` to `SyntheticInput`
