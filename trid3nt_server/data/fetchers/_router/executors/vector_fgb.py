@@ -25,7 +25,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
 from ..shape_classifier import classify_response
-from ..transport import TransportError, get_bytes, get_client
+from ..transport import TransportError, get_bytes, get_client, is_staged_uri
 
 logger = logging.getLogger(
     "trid3nt_server.data.fetchers._router.executors.vector_fgb"
@@ -561,6 +561,16 @@ def build_query_params(
     if endpoint is None:
         endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url or endpoint.url_template or ""
+    # A staged s3:// object needs the raster_cog direct_window resolution
+    # (bucket/key -> the active endpoint); this executor hands its URL straight
+    # to an ArcGIS FeatureServer query over httpx, which cannot serve one. Full
+    # staged-vector support is future work -- this closes the trap with a typed
+    # error instead of a raw httpx failure on an s3:// scheme.
+    if is_staged_uri(url):
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"a staged s3:// uri is not readable by the vector query executor: {url!r}",
+        )
     page_size = int(ingest.get("pagination", {}).get("page_size", 2000))
     params: dict[str, str] = {
         "where": where,

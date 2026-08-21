@@ -34,9 +34,14 @@ import boto3
 from trid3nt_server.workflows.telemac import run_telemac as _rt  # noqa: F401
 from trid3nt_server.data.simulation.solver.solver import run_solver, wait_for_completion
 
+from _env_guard import require_local_endpoint
+
 
 def _s3():
-    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    return boto3.client(
+        "s3", endpoint_url=require_local_endpoint(),
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+    )
 
 
 def main() -> int:

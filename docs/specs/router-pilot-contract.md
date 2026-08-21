@@ -77,6 +77,7 @@ params:
   product:   {type: enum, values: [water_level, predictions], default: water_level}
 gates:
   conus_only: false                   # bbox-intersects-CONUS gate (gridmet: true)
+  conus_bbox: null                    # per-spec envelope override [w,s,e,n]; absent -> the shared gridmet-derived envelope (groundwater_recharge: its own staged-grid bounds)
   max_bbox_deg2: null                 # hard ceiling (esri_landcover: 8.0)
   max_stations: 50                    # station-timeseries only
   max_features: 30000                 # vector only (paging cap)

@@ -26,6 +26,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_empty_error, router_upstream_error
+from ..transport import is_staged_uri
 
 logger = logging.getLogger(
     "trid3nt_server.data.fetchers._router.executors.station_timeseries"
@@ -172,6 +173,22 @@ def stations_to_point_fgb(
 # --------------------------------------------------------------------------- #
 
 
+def _guard_not_staged(spec: SourceSpec, url: str) -> None:
+    """Refuse a staged s3:// uri before it reaches httpx.
+
+    This executor talks a station-catalog/timeseries REST API over httpx, which
+    cannot serve a staged object (that needs the raster_cog direct_window
+    bucket/key resolution). Full staged-vector/station support is future work
+    -- this closes the trap with a typed error instead of a raw httpx failure
+    on an unsupported scheme.
+    """
+    if is_staged_uri(url):
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"a staged s3:// uri is not readable by the station-timeseries executor: {url!r}",
+        )
+
+
 def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
     """Fetch the station catalog and bbox-filter it. Network."""
     import httpx
@@ -185,6 +202,7 @@ def _discover_stations(spec: SourceSpec, bbox: tuple[float, float, float, float]
     rows_key = cat.get("rows_key", "stations")
     endpoint = spec.endpoints.get("catalog") or next(iter(spec.endpoints.values()))
     url = endpoint.url or endpoint.url_template or ""
+    _guard_not_staged(spec, url)
     try:
         with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             resp = client.get(url, params=dict(endpoint.query or {}),
@@ -216,6 +234,7 @@ def _fetch_station_series(spec: SourceSpec, station: dict[str, Any], params: dic
     per = ingest.get("per_station", {})
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url_template or endpoint.url or ""
+    _guard_not_staged(spec, url)
     req_tmpl = dict(per.get("request", {}))
     # start/end are date objects so a "{start:%Y%m%d}" template strftimes to the
     # CO-OPS datagetter's required YYYYMMDD (a raw str would raise on %Y).
@@ -418,6 +437,7 @@ def _fetch_station_snapshot(
     d0, d1 = _snapshot_window(product, snap.get("window"), now)
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url_template or endpoint.url or ""
+    _guard_not_staged(spec, url)
     req: dict[str, Any] = {}
     fmt = {"id": station["station_id"], "product": product, "start": d0, "end": d1}
     for k, v in dict(per.get("request", {})).items():

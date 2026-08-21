@@ -20,6 +20,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_input_error, router_upstream_error
 from ..executors import vector_fgb
+from ..transport import is_staged_uri
 
 logger = logging.getLogger(
     "trid3nt_server.data.fetchers._router.transforms.join"
@@ -219,6 +220,15 @@ def fetch_values(
     if endpoint is None:
         raise router_upstream_error(spec.error_code_prefix, "missing values endpoint")
     url = endpoint.url or endpoint.url_template or ""
+    # A staged s3:// object needs the raster_cog direct_window resolution; the
+    # values leg hands its URL straight to httpx (a tabular API query), which
+    # cannot serve one. Full staged-vector support is future work -- this
+    # closes the trap with a typed error instead of a raw httpx failure.
+    if is_staged_uri(url):
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"a staged s3:// uri is not readable by the join values executor: {url!r}",
+        )
     null_floor = values_cfg.get("null_sentinel_below")
 
     # The codes to request for this variable.

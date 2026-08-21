@@ -178,7 +178,11 @@ def prefetch_chain(tools) -> None:
         print(f"[chain] entry_id failed: {exc}")
     try:
         import boto3, os
-        s3 = boto3.client("s3")
+        from _env_guard import local_endpoint_or_none
+        endpoint = local_endpoint_or_none()
+        if endpoint is None:
+            raise RuntimeError("no local AWS_ENDPOINT_URL configured")
+        s3 = boto3.client("s3", endpoint_url=endpoint)
         pages = s3.list_objects_v2(Bucket="trid3nt-runs", Delimiter="/", MaxKeys=50)
         runs = [p["Prefix"].strip("/") for p in pages.get("CommonPrefixes", [])]
         if runs:

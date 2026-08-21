@@ -28,9 +28,10 @@ YEAR = int(os.environ["SURGE_YEAR"]) if os.environ.get("SURGE_YEAR") else None
 SIM_DAYS = float(os.environ.get("SURGE_SIM_DAYS", "1.5"))
 
 import boto3
+from _env_guard import require_local_endpoint
 
 s3 = boto3.client(
-    "s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+    "s3", endpoint_url=require_local_endpoint(),
     aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     region_name=os.environ.get("AWS_REGION", "us-east-1"),

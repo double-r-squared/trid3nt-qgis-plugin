@@ -500,11 +500,12 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
     # BBOX_INVALID; gridmet/others INPUT_ERROR / INPUT_INVALID).
     bsfx = bbox_error_suffix(spec)
     if g.conus_only:
-        cw, cs, ce, cn = _CONUS_BBOX
+        envelope = g.conus_bbox or _CONUS_BBOX
+        cw, cs, ce, cn = envelope
         w, s, e, n = bbox
         if e < cw or w > ce or n < cs or s > cn:
             raise router_input_error(
-                spec.error_code_prefix, f"bbox {bbox} does not intersect CONUS {_CONUS_BBOX}", bsfx
+                spec.error_code_prefix, f"bbox {bbox} does not intersect CONUS {envelope}", bsfx
             )
     if g.max_bbox_deg2 is not None:
         area_deg2 = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])

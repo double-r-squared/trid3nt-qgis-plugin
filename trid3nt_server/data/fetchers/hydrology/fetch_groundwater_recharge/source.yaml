@@ -25,6 +25,14 @@ params:
 
 gates:
   conus_only: true
+  # The generic router._CONUS_BBOX is gridmet's native bounds (south 25.05),
+  # which false-refuses Key West (24.55) and easternmost Maine even though the
+  # staged Reitz grid covers south to 24.0625. This is the UNION of both staged
+  # grids' real bounds (reitz2017 west/south -125.02/24.06, wolock2003
+  # west/south -127.89/22.86; reitz2017 east/north -66.48/49.94, wolock2003
+  # east/north -65.35/51.61) so the cheap pre-fetch gate never rejects an AOI
+  # either staged source can actually serve.
+  conus_bbox: [-127.887748, 22.858133, -65.346082, 51.608133]
 
 ingest:
   access: direct_window
@@ -57,7 +65,8 @@ payload_estimate:
   floor_mb: 0.01
 
 caveats:
-  - "CONUS ONLY -- both grids stop at the conterminous US border; an AOI outside it raises RECHARGE_INPUT_INVALID naming the CONUS envelope, and an AOI inside the envelope but off the land grid (open ocean, the Great Lakes) raises RECHARGE_EMPTY"
+  - "CONUS ONLY -- both grids stop at the conterminous US border; an AOI outside it raises RECHARGE_INPUT_INVALID naming the CONUS envelope"
+  - "the two sources encode inland water DIFFERENTLY: reitz_2017 (the default) stamps it 0.0 mm/yr (a FINITE value, not a nodata sentinel), so an AOI entirely over the Great Lakes or a large reservoir serves a plausible-looking all-zero raster rather than an error; wolock_2003 stamps inland water as NaN, so the same AOI raises RECHARGE_EMPTY on that source. An all-ocean AOI (outside both grids' land extent) raises RECHARGE_EMPTY on either source."
   - "long-term MEAN annual rates, not a time series: reitz_2017 is the 2000-2013 average, wolock_2003 is a 1951-80 runoff climatology x base-flow index -- neither resolves a drought year, a season, or a storm"
   - "reitz_2017 is TOTAL recharge (it includes the return flow from groundwater-sourced irrigation), so in heavily irrigated areas it exceeds the natural rate; wolock_2003 estimates NATURAL recharge only, which is most of why the two disagree there"
   - "the two sources are methodologically independent (empirical water-budget regression vs base-flow partition of a runoff map) and disagree locally by tens of percent; that spread is a real uncertainty estimate, not an error in either"
@@ -110,8 +119,10 @@ docstring: |-
   **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket.
   ``layer_type="raster"``, ``role="primary"``, ``units="mm/yr"``,
   ``quantity="groundwater_recharge"``. EPSG:4326, float32, NaN nodata,
-  30 arc-second (~800 m) cells. Divide by 365250 for m/day if a solver wants
-  MODFLOW-style length/time units.
+  30 arc-second (~800 m) cells -- the native reitz_2017 posting; wolock_2003's
+  native 1 km grid is NEAREST-resampled onto this same 30 arc-second grid at
+  staging time so both sources share one cell geometry for a direct comparison.
+  Divide by 365250 for m/day if a solver wants MODFLOW-style length/time units.
 
   **Cross-tool dependencies:**
   - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.

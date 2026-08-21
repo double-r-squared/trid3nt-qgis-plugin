@@ -193,6 +193,13 @@ class GateSpec(GraceModel):
     """Pre-fetch gates (contract sec 1.1 ``gates``)."""
 
     conus_only: bool = False                 # bbox-intersects-CONUS (gridmet)
+    #: Per-spec CONUS envelope override ``(west, south, east, north)``. Absent
+    #: (None) -> the shared gridmet-derived envelope in ``router._CONUS_BBOX``.
+    #: A spec whose own staged/served grid extends further than that generic
+    #: envelope (groundwater_recharge's Reitz grid reaches south to 24.0625,
+    #: past gridmet's 25.05 -- false-refusing Key West) declares its own real
+    #: bounds here instead of borrowing an unrelated source's footprint.
+    conus_bbox: tuple[float, float, float, float] | None = None
     max_bbox_deg2: float | None = None       # hard ceiling (esri_landcover: 8.0)
     #: Hard ceiling on the bbox area in APPROXIMATE km^2 (WGS84, cos-lat scaled --
     #: the ``_fetch_common._bbox_area_km2`` model). Distinct from ``max_bbox_deg2``

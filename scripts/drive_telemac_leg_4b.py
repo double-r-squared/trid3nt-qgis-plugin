@@ -30,6 +30,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import boto3
 import websockets.asyncio.client as wsc
 
+from _env_guard import require_local_endpoint
+
 from scripts.seed_showcase_cases import (
     WS_URL,
     _auto_approve_request,
@@ -45,7 +47,10 @@ from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
 
 
 def _s3():
-    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    return boto3.client(
+        "s3", endpoint_url=require_local_endpoint(),
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+    )
 
 
 async def _drive(tool: str, args: dict, timeout_s: float) -> dict:

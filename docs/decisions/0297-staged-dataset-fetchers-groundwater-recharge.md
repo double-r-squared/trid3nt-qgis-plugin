@@ -131,3 +131,51 @@ still stands whichever route wins.
 - The recharge tool answers "how fast does groundwater recharge here" but NOT
   "how thick is the aquifer" -- until the fork above is decided, that question
   has no tool and must not be answered by proxy.
+
+## Correction (post-landing review, 2026-08-21)
+
+An adversarial review of the landing found three defects, all fixed in place
+(no design change to Decisions 1-3 above):
+
+- **The CONUS-water caveat was false.** The spec claimed an AOI "off the land
+  grid (open ocean, the Great Lakes)" raises `RECHARGE_EMPTY` on either source.
+  It does not: `reitz_2017` (the default) encodes inland water as a FINITE
+  0.0 mm/yr, not a nodata sentinel -- an AOI entirely over Lake Michigan reads
+  as a plausible all-zero raster. Only `wolock_2003` stamps inland water NaN
+  and raises `RECHARGE_EMPTY` there. Verified live against the staged rasters:
+  a mid-Lake-Michigan window is 144/144 finite pixels at 0.0 on `reitz_2017`
+  and 0/144 finite on `wolock_2003`. The caveat, the docstring, and the tests
+  now state the true per-source split instead of the uniform claim.
+- **A staged 404 was indistinguishable from honest no-coverage.** A missing or
+  misconfigured `AWS_ENDPOINT_URL` made `staged.staged_object_url` fall back
+  silently to real AWS (`endpoint_url=None` is "use the default AWS endpoint"
+  to boto3/GDAL, not "no override"), and the resulting 404 against a
+  nonexistent/foreign bucket surfaced as `RECHARGE_EMPTY` -- "no data for this
+  AOI" for a request fully inside declared CONUS coverage. `staged.py` now
+  raises `StagedEndpointNotConfigured` when no endpoint is configured (no
+  legitimate real-AWS fallback exists -- the account is decommissioned), and
+  `raster_cog._direct_window_to_array` maps both that and any `TransportNotFound`
+  against a staged url to a typed `STAGED_OBJECT_UNAVAILABLE` upstream error
+  (retryable, naming the endpoint resolution) instead of the coverage-empty
+  frame. The equivalent trap is closed in the other direct-network executors
+  (`vector_fgb`, `station_timeseries`, `join`) -- a staged `s3://` uri reaching
+  one of them now raises a typed error instead of hitting httpx with an
+  unsupported scheme; they carry no staged-source today, so this only forecloses
+  a future silent failure.
+- **Ambient AWS in `scripts/stage_groundwater_recharge.py`.** Its upload step
+  built `boto3.client("s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL"))`
+  -- an unset var resolves real AWS with ambient credentials. The same pattern
+  was present, unrelated to this ADR, in 24 other `scripts/` files; all now
+  route through a new shared `scripts/_env_guard.py` (`require_local_endpoint`
+  for a script whose primary job needs the object store -- exits with a clear
+  message when the endpoint is unset or AWS-hosted; `local_endpoint_or_none`
+  for a best-effort step that should skip rather than crash the script).
+
+Also, at lower stakes: the `conus_only` gate borrowed gridmet's envelope
+(south 25.05), false-refusing Key West (24.55) though the staged Reitz grid
+covers to 24.0625 -- `GateSpec.conus_bbox` is now a per-spec override, and this
+spec declares the union of both staged grids' real bounds. `validate()`'s
+unread `south`/`north`/`res_deg` publisher constants are deleted (`north` did
+not even match the staged bounds); `west`/`east`, which the spot check
+actually reads, are kept. The Returns block now states that `wolock_2003` is
+NEAREST-resampled onto the `reitz_2017` posting, not natively 30 arc-sec.

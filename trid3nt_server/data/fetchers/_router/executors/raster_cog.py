@@ -264,6 +264,7 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     from rasterio.windows import from_bounds as window_from_bounds
 
     from ..transport import (
+        StagedEndpointNotConfigured,
         TransportAuthError,
         TransportNotFound,
         is_staged_uri,
@@ -290,9 +291,19 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     if url.startswith("/vsicurl/"):
         url = url[len("/vsicurl/"):]
     # A staged dataset names its object by bucket/key; the host is deployment
-    # state, resolved here against the active endpoint.
-    if is_staged_uri(url):
-        url = staged_object_url(url)
+    # state, resolved here against the active endpoint. A staged object is known
+    # to exist (this repo uploaded it for full declared coverage), so any failure
+    # resolving or fetching it is a config/upstream defect, never a coverage
+    # answer -- distinguished from the ordinary 404->EMPTY path below.
+    was_staged = is_staged_uri(url)
+    if was_staged:
+        try:
+            url = staged_object_url(url)
+        except StagedEndpointNotConfigured as exc:
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"STAGED_OBJECT_UNAVAILABLE: {exc} (bbox={bbox})",
+            )
 
     round_pixel = bool(ingest.get("round_pixel_window", False))
     try:
@@ -313,6 +324,17 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     except RouterError:
         raise  # a typed router error (zero-size empty) propagates unwrapped
     except TransportNotFound as exc:
+        if was_staged:
+            # A staged object is uploaded for its declared coverage; a 404 here
+            # means the resolved endpoint points at the wrong deployment (or the
+            # upload is missing), NOT that the AOI lacks data.
+            raise router_upstream_error(
+                spec.error_code_prefix,
+                f"STAGED_OBJECT_UNAVAILABLE: staged object not found at resolved "
+                f"url={url} (checked AWS_ENDPOINT_URL_S3/AWS_ENDPOINT_URL) -- this "
+                f"object is staged for full declared coverage, so a 404 is a "
+                f"deployment/config defect, not an absence of data (bbox={bbox}): {exc}",
+            )
         raise router_empty_error(
             spec.error_code_prefix,
             f"direct-window object not found (bbox={bbox}): {exc}",

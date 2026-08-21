@@ -437,6 +437,20 @@ def test_fetch_features_paginates_and_caps(monkeypatch):
     assert len(feats) == 5  # capped at max_features
 
 
+def test_vector_fgb_staged_uri_is_typed_error_not_handed_to_httpx():
+    """A staged s3:// endpoint reaching the ArcGIS-query executor is a closed
+    trap (ADR 0297 follow-up): it needs the raster_cog direct_window bucket/key
+    resolution, which this executor does not have -- a typed error, never a raw
+    httpx failure on an unsupported scheme."""
+    spec = _vector_spec()
+    spec = spec.model_copy(update={
+        "endpoints": {"data": spec.endpoints["data"].model_copy(update={
+            "url": "s3://trid3nt-cache/staged/demo/x.fgb"})}
+    })
+    with pytest.raises(RouterUpstreamError):
+        vector_fgb.fetch_features(spec, {"bbox": [-101, 39, -100, 41]})
+
+
 # --------------------------------------------------------------------------- #
 # station_timeseries
 # --------------------------------------------------------------------------- #
@@ -492,6 +506,19 @@ def test_fetch_station_records_via_monkeypatch(monkeypatch):
     )
     recs = station_timeseries.fetch_station_records(spec, {"bbox": [-81, 25, -79, 27]})
     assert len(recs) == 1 and len(recs[0]["rows"]) == 2
+
+
+def test_station_catalog_staged_uri_is_typed_error_not_handed_to_httpx():
+    """A staged s3:// catalog endpoint is a closed trap (ADR 0297 follow-up):
+    this executor talks a station-catalog REST API over httpx, which cannot
+    serve a staged object."""
+    spec = _station_spec()
+    spec = spec.model_copy(update={
+        "endpoints": {**spec.endpoints, "catalog": spec.endpoints["catalog"].model_copy(
+            update={"url": "s3://trid3nt-cache/staged/demo/stations.json"})}
+    })
+    with pytest.raises(RouterUpstreamError):
+        station_timeseries._discover_stations(spec, (-81, 25, -79, 27))
 
 
 # --------------------------------------------------------------------------- #
@@ -623,6 +650,20 @@ def test_join_execute_via_monkeypatch(monkeypatch):
     gdf = gpd.read_file(io.BytesIO(data))
     assert len(gdf) == 1
     assert float(gdf.iloc[0]["value"]) == pytest.approx(72000.0)
+
+
+def test_join_values_staged_uri_is_typed_error_not_handed_to_httpx():
+    """A staged s3:// values endpoint is a closed trap (ADR 0297 follow-up):
+    the values leg queries a tabular API over httpx, which cannot serve a
+    staged object."""
+    spec = _join_spec()
+    spec = spec.model_copy(update={
+        "endpoints": {**spec.endpoints, "values": spec.endpoints["values"].model_copy(
+            update={"url": "s3://trid3nt-cache/staged/demo/values.json"})}
+    })
+    var_spec = spec.join["values"]["variables"]["median_income"]
+    with pytest.raises(RouterUpstreamError):
+        join.fetch_values(spec, [("48", "201")], var_spec, {"bbox": [-96, 29, -95, 30]})
 
 
 # --------------------------------------------------------------------------- #

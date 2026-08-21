@@ -228,13 +228,21 @@ def maybe_stage_manifest_to_minio(manifest_path: Path, run_tag: str) -> str | No
     ``prove_telemac_seam``). Best-effort -- returns the s3 uri or None."""
     try:
         import boto3
+        from _env_guard import local_endpoint_or_none
     except Exception:  # noqa: BLE001
         return None
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET")
     if not cache_bucket:
         return None
+    endpoint = local_endpoint_or_none()
+    if endpoint is None:
+        log.info("MinIO manifest staging smoke skipped: no local AWS_ENDPOINT_URL configured")
+        return None
     try:
-        s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+        s3 = boto3.client(
+            "s3", endpoint_url=endpoint,
+            region_name=os.environ.get("AWS_REGION", "us-east-1"),
+        )
         key = f"telemac/{run_tag}/manifest.json"
         s3.put_object(
             Bucket=cache_bucket,

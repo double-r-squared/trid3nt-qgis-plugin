@@ -93,11 +93,13 @@ DATASETS: dict[str, dict[str, Any]] = {
         "published": {
             "native_units": "m/yr",
             "unit_scale": 1000.0,
-            "res_deg": 0.0083333333,
             "west": -125.020833333,
             "east": -66.479166669,
-            "south": 24.062500001,
-            "north": 49.8041666667,
+            # No "south"/"north"/"res_deg" here: validate() checks the grid
+            # posting against TARGET_RES_DEG (this script's own target, not a
+            # publisher figure) and the CONUS extent generically -- it has no
+            # per-source south/north spot check, so declaring unverified
+            # publisher corner values nothing reads would be dead + misleading.
             # PAM statistics from 0013/RC_0013.tif.aux.xml, in m/yr.
             "stat_min_native": 0.0,
             "stat_max_native": 4.4557666778564,
@@ -435,7 +437,9 @@ def upload(
 ) -> None:
     import boto3
 
-    s3 = boto3.client("s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL"))
+    from _env_guard import require_local_endpoint
+
+    s3 = boto3.client("s3", endpoint_url=require_local_endpoint())
     s3.upload_file(str(out_path), bucket, key, ExtraArgs={"ContentType": "image/tiff"})
     sidecar = f"{key.rsplit('.', 1)[0]}.provenance.json"
     s3.put_object(

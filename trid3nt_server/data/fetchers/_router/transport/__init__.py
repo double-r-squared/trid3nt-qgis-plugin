@@ -20,7 +20,7 @@ from .errors import (
 )
 from .opener import open_windowed_cog, preflight
 from .range_file import BLOCK, MAX_PARALLEL, CoalescedRangeFile, TransportOpener
-from .staged import is_staged_uri, staged_object_url
+from .staged import StagedEndpointNotConfigured, is_staged_uri, staged_object_url
 from .zip_object import get_zip
 
 __all__ = [
@@ -32,6 +32,7 @@ __all__ = [
     "get_zip",
     "is_staged_uri",
     "staged_object_url",
+    "StagedEndpointNotConfigured",
     "preflight",
     "open_windowed_cog",
     "CoalescedRangeFile",

@@ -22,6 +22,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
+
+from _env_guard import require_local_endpoint
 from matplotlib.patches import Rectangle
 from pyproj import Transformer
 
@@ -41,7 +43,7 @@ def _dl(s3, key, dst):
 
 
 def main():
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", endpoint_url=require_local_endpoint())
 
     # ---- (1) peak-Hs map ----------------------------------------------------
     peak_tif = _dl(s3, "swan_wave_height_peak.tif", f"{TMP}/swan_peak.tif")

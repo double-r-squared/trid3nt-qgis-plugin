@@ -25,6 +25,7 @@ import os
 import sys
 
 import boto3
+from _env_guard import require_local_endpoint
 import matplotlib
 
 matplotlib.use("Agg")
@@ -50,7 +51,7 @@ TRACK_COLORS = ["#f5c518", "#20b2aa", "#ff6f3c"]
 bucket = os.environ["TRID3NT_RUNS_BUCKET"]
 s3 = boto3.client(
     "s3",
-    endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+    endpoint_url=require_local_endpoint(),
     aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     region_name=os.environ.get("AWS_REGION", "us-east-1"),

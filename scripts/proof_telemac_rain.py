@@ -25,6 +25,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import requests
+
+from _env_guard import require_local_endpoint
 from matplotlib.colors import Normalize
 from matplotlib.patches import Rectangle
 from matplotlib.tri import Triangulation
@@ -75,7 +77,7 @@ def _basemap(w, s, e, n, zoom):
 
 
 def _utm_epsg(run_id):
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", endpoint_url=require_local_endpoint())
     m = json.loads(s3.get_object(Bucket=os.environ["TRID3NT_RUNS_BUCKET"],
                                  Key=f"{run_id}/telemac_metrics.json")["Body"].read())
     return int(m.get("utm_epsg") or 32611)
