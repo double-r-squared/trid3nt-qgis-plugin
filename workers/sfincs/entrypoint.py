@@ -300,10 +300,9 @@ def run_raster_postprocess(
     has no SnapWave field).
 
     Returns ``(manifest_dict | None, status_override | None, error_code | None,
-    outputs_entries | None)``. The fourth element (ADR 0280) is the emit-on-solve
-    ``outputs.json`` entry list built from the SAME frames; the caller writes
-    outputs.json ALONGSIDE the legacy publish_manifest.json during the migration
-    window. NEVER raises: any failure logs + returns ``(None, None, None, None)``
+    outputs_entries | None)``. The fourth element is the emit-on-solve
+    ``outputs.json`` entry list -- peak + EVERY frame, the sole frame carrier; the
+    manifest dict holds the non-frame entries alone. NEVER raises: any failure logs + returns ``(None, None, None, None)``
     so the raw sfincs_map.nc still uploads and the agent's legacy on-box path can
     run (transition fallback).
     """
@@ -521,10 +520,10 @@ def _solve_postprocess_sweep(
         )
         if pp_manifest is not None:
             publish_manifest_uri = _write_publish_manifest(run_id, pp_manifest)
-        # Emit-on-solve outputs.json (ADR 0280) -- written ALONGSIDE the legacy
-        # publish_manifest during the migration window; the agent's seam consumes
-        # it. Best-effort: a write failure never sinks the run (the register path
-        # still works off publish_manifest.json).
+        # Emit-on-solve outputs.json -- the agent's seam consumes it, and it is
+        # the ONLY carrier of the temporal frames. Best-effort: a write failure
+        # never sinks the run, but it does degrade the run to peak-only (the
+        # register path off publish_manifest.json has the peak, not the frames).
         if pp_outputs_entries:
             try:
                 outputs_manifest_uri = _write_outputs_manifest(

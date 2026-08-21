@@ -116,8 +116,9 @@ def test_geoclaw_select_frame_indices_never_omits():
 def test_geoclaw_producer_emits_outputs_entries(tmp_path):
     res = _make_run(tmp_path)
     assert res.status == "ok", res.error_message
-    # peak + 3 frames = 4 layers/entries.
-    assert len(res.manifest["layers"]) == len(res.outputs_entries) >= 3
+    # peak + 3 frames = 4 outputs entries; publish_manifest keeps the peak alone.
+    assert len(res.manifest["layers"]) == 1
+    assert len(res.outputs_entries) >= 3
     peak_e = res.outputs_entries[0]
     assert peak_e["quantity"] == "flood_depth" and "t" not in peak_e
     frame_es = res.outputs_entries[1:]
@@ -128,9 +129,10 @@ def test_geoclaw_producer_emits_outputs_entries(tmp_path):
 
 
 def test_geoclaw_byte_equivalence_seam_vs_register(tmp_path):
-    """NEW outputs.json + seam == OLD publish_manifest + register on the render
-    stream; layer_id stem swap (geoclaw-depth -> flood-depth) is the sole
-    explained, non-rendering divergence."""
+    """The seam's PEAK row == the register path's on the render stream, and every
+    seam FRAME renders with that same resolved style; the layer_id stem swap
+    (geoclaw-depth -> flood-depth) is the sole explained, non-rendering
+    divergence. publish_manifest holds the peak alone (metrics carrier)."""
     res = _make_run(tmp_path)
     assert res.status == "ok", res.error_message
 
@@ -154,9 +156,15 @@ def test_geoclaw_byte_equivalence_seam_vs_register(tmp_path):
         for lyr in new.layers
     ]
 
-    assert new_stream == old_stream, (
-        "render stream diverged:\nOLD=%s\nNEW=%s" % (old_stream, new_stream)
+    new_peak = [r for r in new_stream if r["role"] == "primary"]
+    assert new_peak == old_stream, (
+        "peak render row diverged:\nOLD=%s\nNEW=%s" % (old_stream, new_peak)
     )
+    frame_rows = [r for r in new_stream if r["role"] != "primary"]
+    assert frame_rows
+    for row in frame_rows:
+        for field in ("style_preset", "units", "bbox", "rescale", "stashed_legend"):
+            assert row[field] == new_peak[0][field], field
 
     # The one EXPLAINED divergence: layer_id stem. OLD is engine-prefixed
     # (geoclaw-depth-*), NEW is physical-quantity (flood-depth-*).

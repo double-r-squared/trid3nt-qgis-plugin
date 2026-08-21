@@ -918,10 +918,10 @@ def main(argv: list[str] | None = None) -> int:
                 if pp.status == "ok" and pp.manifest is not None:
                     publish_manifest_uri = _write_publish_manifest(run_id, pp.manifest)
                     LOG.info("geoclaw postprocess ok: publish_manifest_uri=%s", publish_manifest_uri)
-                    # Emit-on-solve outputs.json (ADR 0281) -- written ALONGSIDE the
-                    # legacy publish_manifest during the migration window; the agent's
-                    # seam consumes it. Best-effort: a write failure never sinks the
-                    # run (the register path still works off publish_manifest.json).
+                    # Emit-on-solve outputs.json -- the agent's seam consumes it, and
+                    # it is the ONLY carrier of the temporal frames. Best-effort: a write
+                    # failure never sinks the run, but it does degrade it to peak-only
+                    # (publish_manifest.json carries the peak, not the frames).
                     if pp.outputs_entries:
                         try:
                             _write_outputs_manifest(run_id, pp.outputs_entries)

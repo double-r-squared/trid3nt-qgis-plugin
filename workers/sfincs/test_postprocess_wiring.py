@@ -62,9 +62,11 @@ def test_run_raster_postprocess_regular_grid(tmp_path: Path):
     with rasterio.open(tmp_path / "flood_depth_peak.tif") as src:
         assert str(src.crs) == "EPSG:32616"
         assert len(src.overviews(1)) >= 1
-    # ADR 0280: outputs.json entries parallel the manifest layers (peak + frames).
+    # outputs.json is the SOLE frame carrier (peak + every frame); the
+    # publish_manifest keeps the non-frame peak entry alone.
     assert outputs_entries is not None
-    assert len(outputs_entries) == len(manifest["layers"])
+    assert len(manifest["layers"]) == 1
+    assert len(outputs_entries) == 1 + manifest["frame_count"]
     assert outputs_entries[0]["quantity"] == "flood_depth"
     assert "t" not in outputs_entries[0]  # peak is non-temporal
     assert all("t" in e for e in outputs_entries[1:])  # frames carry seconds

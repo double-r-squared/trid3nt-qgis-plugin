@@ -228,7 +228,12 @@ def _row(layer, resolved):
 
 
 def test_byte_equivalence_seam_vs_register(tmp_path):
-    """NEW outputs.json + seam == OLD publish_manifest + register, field-for-field."""
+    """The seam's PEAK row == the register path's, field-for-field, and every seam
+    FRAME renders with that same resolved style.
+
+    publish_manifest.json carries the non-frame entries alone now (the metrics
+    carrier + legacy register-only fallback), so the register path has exactly the
+    peak to offer; the frames are the seam's alone."""
     from workers._raster_postprocess import outputs_manifest as om
     from workers._raster_postprocess import postprocess as pp
     from trid3nt_contracts.publish_manifest import parse_publish_manifest
@@ -246,7 +251,8 @@ def test_byte_equivalence_seam_vs_register(tmp_path):
         runs_uri_for=runs_uri_for, kind="depth", engine="sfincs",
     )
     assert res.status == "ok"
-    assert len(res.manifest["layers"]) == len(res.outputs_entries) >= 3
+    assert len(res.manifest["layers"]) == 1
+    assert len(res.outputs_entries) >= 3
 
     # OLD path.
     pm = parse_publish_manifest(json.dumps(res.manifest))
@@ -267,9 +273,17 @@ def test_byte_equivalence_seam_vs_register(tmp_path):
     for lyr in new.layers:
         new_stream.append(_row(lyr, _resolved_style(lyr.style_preset, None, lyr.uri)))
 
-    assert new_stream == old_stream, (
-        "layer-event stream diverged:\nOLD=%s\nNEW=%s" % (old_stream, new_stream)
+    new_peak = [r for r in new_stream if r["role"] == "primary"]
+    assert new_peak == old_stream, (
+        "peak layer-event row diverged:\nOLD=%s\nNEW=%s" % (old_stream, new_peak)
     )
+    # Every frame renders with the peak's resolved style/rescale/legend -- only
+    # the name, role and layer_id ordinal differ.
+    frame_rows = [r for r in new_stream if r["role"] != "primary"]
+    assert frame_rows
+    for row in frame_rows:
+        for field in ("style_preset", "units", "bbox", "rescale", "stashed_legend"):
+            assert row[field] == new_peak[0][field], field
     # The NEW path additionally carries per-frame t + group_id (additive item 7).
     temporal = [f for f in new.frames if f.t is not None]
     assert temporal and all(f.group_id == f"flood-depth-{RID}" for f in temporal)

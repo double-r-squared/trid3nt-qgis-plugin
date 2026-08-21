@@ -66,11 +66,10 @@ class SwanPostprocessResult:
     cog_paths: list[Path] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
-    #: The emit-on-solve outputs.json entries (ADR 0281) built from the SAME
-    #: ordered frames as ``manifest.layers`` -- carried alongside the legacy
-    #: publish_manifest so the entrypoint writes BOTH during the migration window
-    #: (the seam consumes outputs.json; the register path the publish_manifest).
-    #: Empty on the error/empty path.
+    #: The emit-on-solve outputs.json entries -- the ONLY carrier of the
+    #: temporal frames. ``manifest.layers`` holds the non-frame (peak) entry
+    #: alone: publish_manifest.json is the metrics carrier + the legacy
+    #: register-only fallback. Empty on the error/empty path.
     outputs_entries: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -339,8 +338,10 @@ def run_swan_postprocess(
     # --- Write COGs to scratch ---
     cog_paths: list[Path] = []
     layers: list[dict[str, Any]] = []
-    #: frame_no -> physical seconds-from-start, for the outputs.json ``t``.
-    frame_t_by_no: dict[int, float | None] = {}
+    #: The temporal frames, in order. They publish through outputs.json ALONE --
+    #: publish_manifest.json carries the non-frame (peak) entry only, as the
+    #: metrics carrier + the legacy register-only fallback.
+    frames: list[dict[str, Any]] = []
 
     peak_cog_path = scratch / _PEAK_COG
     try:
@@ -393,38 +394,27 @@ def run_swan_postprocess(
                 for extra in cog_paths[1:]:
                     extra.unlink(missing_ok=True)
                 cog_paths = cog_paths[:1]
-                layers = layers[:1]
+                frames = []
                 break
             cog_paths.append(frame_cog_path)
-            frame_t_by_no[frame_no] = (t_idx * _dt) if _dt > 0.0 else float(frame_no)
-            t_idx_tp = tp_frames[t_idx] if t_idx < len(tp_frames) else None
-            t_idx_dir = dir_frames[t_idx] if t_idx < len(dir_frames) else None
-            fm = _compute_wave_metrics(
-                hs_frames[t_idx], bbox=bbox, tp_grid=t_idx_tp, dir_grid=t_idx_dir
-            )
             try:
                 fbs = compute_band_stats(str(frame_cog_path))
             except Exception:  # noqa: BLE001
                 fbs = {"min": None, "max": None, "p2": None, "p98": None,
                        "is_categorical": False, "is_rgba": False}
-            layers.append(_manifest.build_layer_entry(
-                layer_id_stem=f"swan-wave-height-frame-{frame_no:02d}-{run_id}",
-                name=f"Wave height step {frame_no}",
-                role="context",
-                style_preset=SWAN_WAVE_HEIGHT_STYLE_PRESET,
-                units="meters",
-                cog_uri=runs_uri_for(fname),
-                frame_no=frame_no,
-                bbox=list(bbox),
-                band_stats=fbs,
-                metrics=fm,
-            ))
-        # Require >= 2 frame layers to form a real animation group.
-        if len(layers) < 3:  # peak + at least 2 frames
+            frames.append({
+                "name": f"Wave height step {frame_no}",
+                "uri": runs_uri_for(fname),
+                "t": (t_idx * _dt) if _dt > 0.0 else float(frame_no),
+                "bbox": list(bbox),
+                "band_stats": fbs,
+            })
+        # Require >= 2 frames to form a real animation group.
+        if len(frames) < 2:
             for extra in cog_paths[1:]:
                 extra.unlink(missing_ok=True)
             cog_paths = cog_paths[:1]
-            layers = layers[:1]
+            frames = []
 
     metrics["crs"] = "EPSG:4326"
     metrics["mode"] = mode
@@ -433,34 +423,44 @@ def run_swan_postprocess(
         engine="swan",
         run_id=run_id,
         status="ok",
-        frame_count=len(layers),
+        frame_count=len(frames),
         metrics=metrics,
         layers=layers,
     )
-    # Emit-on-solve outputs.json entries (ADR 0281), built from the FINAL layer
-    # set (after every degrade branch) so they stay in lockstep with the register
-    # manifest: flat {kind,quantity,name,uri,t?,units} + the render hints (bbox +
-    # band_stats) so the seam resolves the SAME bbox + rescale WITHOUT a COG
-    # re-read. The peak is non-temporal (t absent); frames carry seconds-from-start.
-    outputs_entries: list[dict[str, Any]] = []
-    for lyr in layers:
-        is_peak = lyr.get("role") == "primary"
-        outputs_entries.append(
-            _outputs.build_entry(
-                kind="raster",
-                quantity=SWAN_WAVE_HEIGHT_QUANTITY,
-                name=lyr["name"],
-                uri=lyr["cog_uri"],
-                t=None if is_peak else frame_t_by_no.get(lyr.get("frame_no")),
-                units="meters",
-                bbox=lyr.get("bbox"),
-                band_stats=lyr.get("band_stats"),
-            )
+    # Emit-on-solve outputs.json entries (ADR 0281), built after every degrade
+    # branch: flat {kind,quantity,name,uri,t?,units} + the render hints (bbox +
+    # band_stats) so the seam resolves the bbox + rescale WITHOUT a COG re-read.
+    # The peak is non-temporal (t absent); frames carry seconds-from-start.
+    outputs_entries: list[dict[str, Any]] = [
+        _outputs.build_entry(
+            kind="raster",
+            quantity=SWAN_WAVE_HEIGHT_QUANTITY,
+            name=lyr["name"],
+            uri=lyr["cog_uri"],
+            t=None,
+            units="meters",
+            bbox=lyr.get("bbox"),
+            band_stats=lyr.get("band_stats"),
         )
+        for lyr in layers
+    ]
+    outputs_entries.extend(
+        _outputs.build_entry(
+            kind="raster",
+            quantity=SWAN_WAVE_HEIGHT_QUANTITY,
+            name=fr["name"],
+            uri=fr["uri"],
+            t=fr["t"],
+            units="meters",
+            bbox=fr["bbox"],
+            band_stats=fr["band_stats"],
+        )
+        for fr in frames
+    )
     LOG.info(
         "swan postprocess run_id=%s mode=%s n_frames=%d max_hs_m=%.4g "
         "wave_area_km2=%.4g cog_count=%d outputs_entries=%d",
-        run_id, mode, len(layers), metrics["max_hs_m"],
+        run_id, mode, len(frames), metrics["max_hs_m"],
         metrics["wave_area_km2"], len(cog_paths), len(outputs_entries),
     )
     return SwanPostprocessResult(

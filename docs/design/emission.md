@@ -278,11 +278,22 @@ for the docker S-class); each frame quantity resolves to the peak's physical pre
 frame renders byte-consistently with the peak; a frame publish/read/emit miss degrades
 to peak-only, never sinking the run.
 
+FRAME COLLAPSE EXECUTED (ADR 0294, 2026-08-19): the three docker RASTER workers no
+longer dual-write their frames into `publish_manifest.json`. A frame now exists in
+exactly ONE manifest -- `outputs.json` -- so the two can never disagree.
+`publish_manifest.json` keeps the non-frame entries: it is the metrics carrier (the
+composers' narration scalars) + the legacy register-only fallback.
+`list_run_frames` reads `outputs.json` first, with a LEGACY-run `publish_manifest`
+frame fallback.
+
 REMAINING (post-campaign, not blocking): telemac3d + any further L-class module legs,
-the `publish_manifest` collapse (ledger row 19 -- its "gated on the LAST engine
-migrating" condition is now MET, queued for NATE), and -- separately, OPTION A -- the
-per-engine `output_quantities` scaffold migration (MODFLOW's DEAD half is deleted;
-swmm/landlab/openquake halves are still LIVE, ADR 0284).
+the REST of the `publish_manifest` collapse (the file, the bespoke schema, and
+`register_published_manifest.py` -- still live as the metrics carrier + fallback,
+ledger row 19 narrowed), the PARKED `workers/_swmm_postprocess` docker-lane fork
+(it writes frames and no `outputs.json`; ADR 0294 names the options), and --
+separately, OPTION A -- the per-engine `output_quantities` scaffold migration
+(MODFLOW's DEAD half is deleted; swmm/landlab/openquake halves are still LIVE,
+ADR 0284).
 
 ## Composition
 

@@ -2200,10 +2200,11 @@ async def model_flood_scenario(
                 manifest, run_id=run_result.run_id, bbox=resolved_bbox
             )
         depth_metrics = reg.metrics
-        # The merged manifest carries depth + wave layers. Primary layers (peak
-        # depth + peak wave) ride into the success envelope's ResultLayer set;
-        # context layers (the "... step N" frames) emit OUT-OF-BAND so the web
-        # scrubber groups form, exactly as the on-box path does.
+        # The merged manifest carries the depth + wave peaks. Primary layers ride
+        # into the success envelope's ResultLayer set; any context layers emit
+        # OUT-OF-BAND so the scrubber groups form. Only a LEGACY run reaches here
+        # with "... step N" frames -- a current worker writes its frames to
+        # outputs.json alone, which takes the seam branch above.
         published_layers = [lyr for lyr in reg.layers if lyr.role == "primary"]
         manifest_frames = [lyr for lyr in reg.layers if lyr.role != "primary"]
         if manifest_frames and emitter is not None:

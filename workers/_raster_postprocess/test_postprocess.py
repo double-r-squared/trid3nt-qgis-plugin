@@ -338,17 +338,21 @@ def test_run_postprocess_depth_regular_serial(tmp_path: Path, monkeypatch):
     assert (tmp_path / "flood_depth_frame_04.tif").exists()
     m = res.manifest
     assert m["frame_count"] == 4
-    assert len(m["layers"]) == 5
+    # publish_manifest carries the PEAK alone -- it is the metrics carrier + the
+    # legacy register-only fallback, never a second frame stream.
+    assert len(m["layers"]) == 1
     peak = m["layers"][0]
     assert peak["role"] == "primary"
+    assert peak["frame_no"] is None
     assert peak["has_overviews"] is True
     assert peak["band_stats"]["p2"] is not None
     assert peak["bbox"] is not None and len(peak["bbox"]) == 4
     assert peak["cog_uri"] == "s3://test-runs/RID/flood_depth_peak.tif"
     assert "metrics" in peak and peak["metrics"]["flooded_cell_count"] > 0
-    # frames carry frame_no + the web grouping token.
-    assert m["layers"][1]["frame_no"] == 1
-    assert m["layers"][1]["name"] == "Flood depth step 1"
+    # The frames live in outputs.json alone, with the web grouping token.
+    assert len(res.outputs_entries) == 5
+    assert res.outputs_entries[1]["name"] == "Flood depth step 1"
+    assert res.outputs_entries[1]["t"] is not None
 
 
 def test_run_postprocess_depth_quadtree_parallel(tmp_path: Path):

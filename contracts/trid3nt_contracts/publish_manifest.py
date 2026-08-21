@@ -83,9 +83,12 @@ class PublishManifestLayer(_ReaderModel):
     ``cog_uri`` is a BARE ``s3://`` key (the worker NEVER embeds a tile URL - the
     agent re-templates it onto ``TRID3NT_TILE_SERVER_BASE``). ``style_preset`` is a
     KEY into the agent-owned ``_TITILER_STYLE_REGISTRY`` (the preset -> rescale +
-    colormap table stays agent-side as the single source of truth). ``name`` MUST
-    be the EXACT web grouping token ("Peak flood depth" / "Flood depth step N" /
-    the wave equivalents) so the web ``detectSequentialGroups`` scrubber forms.
+    colormap table stays agent-side as the single source of truth). ``name`` is
+    the EXACT grouping token ("Peak flood depth" and the wave equivalents).
+
+    ``frame_no`` is the LEGACY temporal marker: the docker raster workers write
+    only non-frame entries now (their frames ride ``outputs.json``), so a
+    ``frame_no`` appears on a pre-collapse run or a producer that has not migrated.
     """
 
     layer_id_stem: str

@@ -72,11 +72,10 @@ class PostprocessResult:
     cog_paths: list[Path]  # local COGs written into the deck dir (for the sweep)
     error_code: str | None = None
     error_message: str | None = None
-    #: The emit-on-solve outputs.json entries (ADR 0280) built from the SAME
-    #: ordered frames as ``manifest.layers`` -- carried alongside the legacy
-    #: publish_manifest so the entrypoint can write BOTH during the migration
-    #: window (the seam consumes outputs.json; the register path consumes the
-    #: publish_manifest). Empty on the error/empty path.
+    #: The emit-on-solve outputs.json entries -- the ONLY carrier of the temporal
+    #: frames. ``manifest.layers`` holds the non-frame (peak) entries alone:
+    #: publish_manifest.json is the metrics carrier + the legacy register-only
+    #: fallback, never a second frame stream. Empty on the error/empty path.
     outputs_entries: list[dict[str, Any]] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -329,25 +328,27 @@ def run_postprocess(
         cog_paths.append(cog_path)
         bbox_4326 = _cog_bbox_4326(cog_path)
         stats = _band_stats.compute_band_stats(cog_path)
-        per_layer_metrics = metrics_by_dest.get(fr.dest_filename)
-        # Peak carries its metrics; frames carry only band_stats (lighter manifest).
-        layer_metrics = per_layer_metrics if fr.role == "primary" else None
         cog_uri = runs_uri_for(fr.dest_filename)
-        layers.append(
-            _manifest.build_layer_entry(
-                layer_id_stem=fr.layer_id_stem,
-                name=fr.name,
-                role=fr.role,
-                style_preset=fr.style_preset,
-                units="meters",
-                cog_uri=cog_uri,
-                frame_no=fr.frame_no,
-                bbox=bbox_4326,
-                band_stats=stats,
-                metrics=layer_metrics,
-                has_overviews=True,
+        # publish_manifest.json carries the NON-FRAME entries only (the peak):
+        # it is the metrics carrier + the legacy register-only fallback. The
+        # temporal frames publish through outputs.json alone -- one frame stream,
+        # never two.
+        if fr.role == "primary":
+            layers.append(
+                _manifest.build_layer_entry(
+                    layer_id_stem=fr.layer_id_stem,
+                    name=fr.name,
+                    role=fr.role,
+                    style_preset=fr.style_preset,
+                    units="meters",
+                    cog_uri=cog_uri,
+                    frame_no=fr.frame_no,
+                    bbox=bbox_4326,
+                    band_stats=stats,
+                    metrics=metrics_by_dest.get(fr.dest_filename),
+                    has_overviews=True,
+                )
             )
-        )
         # Emit-on-solve outputs.json entry (ADR 0280) from the SAME frame: flat
         # {kind,quantity,name,uri,t?,units} + the render hints (bbox + band_stats)
         # so the seam resolves the SAME bbox + rescale WITHOUT a COG re-read. The

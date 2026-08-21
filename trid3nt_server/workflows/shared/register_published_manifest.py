@@ -164,9 +164,11 @@ class RegisteredLayer:
 class ManifestRegisterResult:
     """The register-only outcome consumed by the workflow tails.
 
-    ``layers`` parallels ``postprocess_flood``'s return: ``layers[0]`` is the
-    PEAK primary, ``layers[1:]`` are the frame/context layers. ``metrics`` is
-    the manifest's top-level peak aggregates (the ``FloodMetrics`` source).
+    ``layers`` is in manifest order: ``layers[0]`` is the PEAK primary. A
+    manifest MAY carry frame/context layers after it (a legacy run, or a producer
+    that has not moved its frames onto ``outputs.json``); the docker raster
+    workers write the peak alone. ``metrics`` is the manifest's top-level peak
+    aggregates (the ``FloodMetrics`` source).
     TiTiler exit: rasters emit as their raw ``s3://`` COG uri (plugin
     /vsicurl/), so the no-tile-server drop path is gone -- ``dropped_count`` is
     always 0 and ``tile_publish_available`` is always True (both kept for the

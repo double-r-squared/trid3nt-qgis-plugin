@@ -2,24 +2,31 @@
 
 This is the LLM-facing companion to the Python sandbox's multi-frame
 ``layer_refs`` extension (sandbox-staging). A time-stepped solve (SFINCS flood
-depth per step, GLM lightning per minute, wave fields per step) writes a
-``publish_manifest.json`` whose ``layers[]`` carry one ``cog_uri`` per frame plus
-a ``frame_no``. To run a per-frame visualization in the sandbox (a gaussian glow
-over a flash sequence, a first/peak/last panel, a temporal max), the agent needs
-the ORDERED list of those frame COG URIs so it can hand them to
-``code_exec_request(layer_refs={"frames": [<uri>, ...]})``.
+depth per step, GeoClaw tsunami depth, wave fields per step) writes an
+``outputs.json`` under its run prefix — the emit-on-solve manifest
+(``trid3nt_contracts.outputs_manifest``) whose entries carry one ``uri`` per
+frame plus the physical time ``t`` (seconds from run start; absent on a
+non-temporal artifact like the PEAK layer). To run a per-frame visualization in
+the sandbox (a gaussian glow over a flash sequence, a first/peak/last panel, a
+temporal max), the agent needs the ORDERED list of those frame COG URIs so it
+can hand them to ``code_exec_request(layer_refs={"frames": [<uri>, ...]})``.
 
-``list_run_frames`` reads the run's manifest (the SAME schema-gated reader the
-register-only fast path uses), filters the layers to the requested ``layer``
-(matched on the web grouping ``name`` token OR the ``layer_id_stem``), drops the
-non-frame aggregate layers (those carry ``frame_no = None`` — e.g. the PEAK depth
-layer), orders the remainder by ``frame_no``, and returns the ordered
-``cog_uri`` list.
+``list_run_frames`` reads ``outputs.json`` FIRST (the seam's own contract, the
+single frame source of truth), keeps the entries carrying a ``t`` that match the
+requested ``layer`` (matched on the web grouping ``name`` token OR the physical
+``quantity``), orders them by ``t``, and returns the ordered ``uri`` list.
 
-Determinism (Invariant 1): the URIs are READ from the worker-written manifest,
-never invented. Honesty floor (data-source-fallback norm): a run with no manifest
-/ no matching frames returns an HONEST empty result with a typed ``reason`` — never
-a fabricated frame list.
+LEGACY FALLBACK: a run that PREDATES ``outputs.json`` has only the worker's
+``publish_manifest.json``, whose ``layers[]`` carried a per-frame ``frame_no``.
+When no ``outputs.json`` is readable, the frame layers are read from there and
+ordered by ``frame_no``. Runs written by a current worker carry NO frame entries
+in ``publish_manifest.json`` at all — it is the metrics carrier, not a second
+frame stream.
+
+Determinism (Invariant 1): the URIs are READ from the run's manifest, never
+invented. Honesty floor (data-source-fallback norm): a run with no manifest / no
+matching frames returns an HONEST empty result with a typed ``reason`` — never a
+fabricated frame list.
 
 Caching: ``ttl_class="live-no-cache"`` — a run's manifest is read once per ask and
 the result is small; the manifest itself is the source of truth, so caching the
@@ -48,9 +55,9 @@ class ListRunFramesError(RuntimeError):
 
     Codes:
     - ``MISSING_RUN_ID`` — no ``run_id`` was supplied.
-    - ``MANIFEST_UNAVAILABLE`` — the run's ``publish_manifest.json`` could not be
-      read or schema-gated (the agent narrates the limitation; it does NOT
-      fabricate frames).
+    - ``MANIFEST_UNAVAILABLE`` — neither the run's ``outputs.json`` nor its legacy
+      ``publish_manifest.json`` could be read or schema-gated (the agent narrates
+      the limitation; it does NOT fabricate frames).
     """
 
     error_code: str
@@ -64,10 +71,10 @@ class ListRunFramesError(RuntimeError):
 class _RunIdShim:
     """Minimal ``run_result``-shaped object carrying just ``run_id``.
 
-    ``register_published_manifest.read_publish_manifest`` resolves a run's
+    Both manifest readers (``outputs_seam.read_outputs_manifest`` and the legacy
+    ``register_published_manifest.read_publish_manifest``) resolve a run's
     manifest from ``getattr(run_result, "run_id", None)``; this shim lets us reuse
-    that exact reader (completion.json -> publish_manifest_uri -> schema-gated
-    parse) without duplicating the S3 path logic."""
+    those exact readers without duplicating the S3 path logic."""
 
     __slots__ = ("run_id",)
 
@@ -81,21 +88,24 @@ def _norm(s: str) -> str:
 
 
 def _matches_layer(entry: Any, layer: str) -> bool:
-    """True when a manifest layer entry belongs to the requested ``layer``.
+    """True when a manifest entry belongs to the requested ``layer``.
 
     Matched (case-insensitive, separator-insensitive — so ``"flood_depth"``
     matches ``"Flood depth step 3"``) on the web grouping ``name`` token (the value
-    the user/agent most naturally names) OR the ``layer_id_stem``. A blank
-    ``layer`` matches everything (return ALL frame layers). The frame-number
-    suffix in the name is tolerated by substring matching on the normalized
-    forms."""
+    the user/agent most naturally names) OR the entry's identity token: the
+    physical ``quantity`` on an ``outputs.json`` entry, the ``layer_id_stem`` on a
+    legacy ``publish_manifest`` layer. A blank ``layer`` matches everything
+    (return ALL frames). The frame-number suffix in the name is tolerated by
+    substring matching on the normalized forms."""
     if not layer:
         return True
     want = _norm(layer)
     if not want:
         return True
     name = _norm(getattr(entry, "name", "") or "")
-    stem = _norm(getattr(entry, "layer_id_stem", "") or "")
+    stem = _norm(
+        getattr(entry, "quantity", "") or getattr(entry, "layer_id_stem", "") or ""
+    )
     return want in name or want in stem or name.startswith(want) or stem.startswith(want)
 
 
@@ -118,72 +128,100 @@ def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
     GLM lightning sequence, a first/peak/last flood panel, a per-step max — and
     you need the ordered list of frame COG URIs to pass as a multi-frame
     ``layer_refs`` entry (``{"frames": [<uri>, ...]}``). The URIs come from the
-    run's ``publish_manifest.json`` (one ``cog_uri`` per ``frame_no``).
+    run's ``outputs.json`` (one entry per frame, ordered by the physical time
+    ``t``); a run predating that manifest falls back to its legacy
+    ``publish_manifest.json`` frame layers.
 
     Do NOT use this for: a single (non-animated) layer — pass that layer's URI to
     ``code_exec_request`` directly. Do NOT use it to fetch new data or to render a
-    standard scrubber (the web already groups sequential layers from the manifest).
+    standard scrubber (the plugin already groups the frames the seam publishes).
 
     Args:
         run_id: The completed run's id (the solve whose frames you want).
         layer: The frame layer to list, matched on the web grouping name token
-            (e.g. ``"flood_depth"``, ``"lightning"``) or the layer_id_stem.
+            (e.g. ``"flood_depth"``, ``"wave_height"``) or the physical quantity.
             Defaults to ``"flood_depth"``. Pass ``""`` to list ALL frame layers.
 
     Returns:
         ``{run_id, layer, frame_count, frame_uris: [<s3://...>, ...], frames:
-        [{frame_no, cog_uri, name}, ...]}`` ordered by ``frame_no``. An HONEST
-        empty result (``frame_count=0`` + a ``reason``) when the run has no
-        manifest or no matching frame layers — never a fabricated list. The
+        [{frame_no, cog_uri, name, t}, ...]}`` in frame order (``frame_no`` is the
+        1-based ordinal; ``t`` is seconds from run start, ``None`` on the legacy
+        path). An HONEST empty result (``frame_count=0`` + a ``reason``) when the
+        run has no manifest or no matching frames — never a fabricated list. The
         ``frame_uris`` list is exactly what ``code_exec_request`` accepts as a
         list-valued ``layer_refs`` entry.
     """
     if not run_id or not str(run_id).strip():
         raise ListRunFramesError("MISSING_RUN_ID", "list_run_frames requires a run_id")
 
-    # Reuse the schema-gated manifest reader (completion.json -> manifest_uri ->
-    # typed parse). It NEVER raises — it returns None on any failure — so a
-    # None here is the honest "no manifest" path, not a crash.
-    from trid3nt_server.workflows.shared.register_published_manifest import read_publish_manifest
+    # Both readers NEVER raise — they return None on any failure — so a None is
+    # the honest "no manifest" path, not a crash.
+    from trid3nt_server.emission.outputs_seam import read_outputs_manifest
+    from trid3nt_server.workflows.shared.register_published_manifest import (
+        read_publish_manifest,
+    )
 
-    manifest = read_publish_manifest(_RunIdShim(str(run_id)))
-    if manifest is None:
-        logger.info("list_run_frames: no manifest run_id=%s", run_id)
-        return {
-            "run_id": str(run_id),
-            "layer": layer,
-            "frame_count": 0,
-            "frame_uris": [],
-            "frames": [],
-            "reason": (
-                "no publish_manifest.json found for this run (the run may predate "
-                "the manifest, still be in flight, or have failed); no frames to list"
-            ),
-        }
+    shim = _RunIdShim(str(run_id))
+    frames: list[dict[str, Any]] = []
+    source = ""
+    layer_total = 0
 
-    # Collect the FRAME layers (frame_no is not None) that match the requested
-    # layer, ordered by frame_no. Aggregate/peak layers carry frame_no=None and
-    # are excluded — they are not part of an animation sequence.
-    matched = [
-        entry
-        for entry in manifest.layers
-        if getattr(entry, "frame_no", None) is not None and _matches_layer(entry, layer)
-    ]
-    matched.sort(key=lambda e: int(getattr(e, "frame_no")))
+    outputs = read_outputs_manifest(shim)
+    if outputs is not None:
+        source = "outputs.json"
+        layer_total = len(outputs.entries)
+        # A frame is a raster entry carrying a physical time. Non-temporal
+        # entries (the peak) have no ``t`` and are not part of a sequence.
+        matched = [
+            e
+            for e in outputs.entries
+            if e.kind == "raster" and e.t is not None and _matches_layer(e, layer)
+        ]
+        matched.sort(key=lambda e: float(e.t))
+        frames = [
+            {
+                "frame_no": i,
+                "cog_uri": e.uri,
+                "name": e.name,
+                "t": float(e.t),
+            }
+            for i, e in enumerate(matched, start=1)
+            if e.uri
+        ]
 
-    frames = [
-        {
-            "frame_no": int(getattr(e, "frame_no")),
-            "cog_uri": getattr(e, "cog_uri", ""),
-            "name": getattr(e, "name", ""),
-        }
-        for e in matched
-        if getattr(e, "cog_uri", "")
-    ]
+    if not frames:
+        # LEGACY runs (pre-outputs.json): the worker's publish_manifest carried a
+        # per-frame ``frame_no``. Current workers write NO frame entries there.
+        manifest = read_publish_manifest(shim)
+        if manifest is not None:
+            legacy = [
+                e
+                for e in manifest.layers
+                if getattr(e, "frame_no", None) is not None
+                and _matches_layer(e, layer)
+            ]
+            legacy.sort(key=lambda e: int(getattr(e, "frame_no")))
+            if legacy:
+                source = "publish_manifest.json (legacy)"
+                layer_total = len(manifest.layers)
+                frames = [
+                    {
+                        "frame_no": int(getattr(e, "frame_no")),
+                        "cog_uri": e.cog_uri,
+                        "name": e.name,
+                        "t": None,
+                    }
+                    for e in legacy
+                    if e.cog_uri
+                ]
+            elif not source:
+                source = "publish_manifest.json (legacy)"
+                layer_total = len(manifest.layers)
+
     frame_uris = [f["cog_uri"] for f in frames]
-
     logger.info(
-        "list_run_frames: run_id=%s layer=%r frames=%d", run_id, layer, len(frame_uris)
+        "list_run_frames: run_id=%s layer=%r frames=%d source=%s",
+        run_id, layer, len(frame_uris), source or "none",
     )
 
     result: dict[str, Any] = {
@@ -195,8 +233,13 @@ def list_run_frames(run_id: str, layer: str = "flood_depth") -> dict[str, Any]:
     }
     if not frame_uris:
         result["reason"] = (
-            f"the run manifest has no frame layers matching {layer!r} "
-            f"(it has {len(manifest.layers)} layer(s); none carried a frame_no for "
-            "this layer name). Pass layer='' to list all frame layers."
+            "no outputs.json or publish_manifest.json found for this run (the run "
+            "may still be in flight, or have failed); no frames to list"
+            if not source
+            else (
+                f"the run's {source} has no frames matching {layer!r} "
+                f"(it has {layer_total} entr(y/ies); none was a temporal frame for "
+                "this layer name). Pass layer='' to list all frames."
+            )
         )
     return result

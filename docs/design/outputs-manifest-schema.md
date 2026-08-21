@@ -422,6 +422,19 @@ change itself.
 
 ### 7.3 The collapse step
 
+**EXECUTED-NARROW (2026-08-19, ADR 0294).** NATE's ruling narrowed the collapse:
+`publish_manifest.json` SURVIVES as the metrics carrier (the composers read its
+top-level aggregates for their narration scalars; flat `outputs.json` entries
+carry none) and as the legacy register-only fallback. ONLY its FRAME entries
+died. The three docker RASTER workers (SFINCS `_raster_postprocess`, GeoClaw,
+SWAN) now write the non-frame entries alone; `list_run_frames` reads
+`outputs.json` first and keeps a LEGACY-run `publish_manifest` frame fallback.
+Ledger row 19 is DELETED at that scope. What is written below stays QUEUED: the
+file, the bespoke schema, and `register_published_manifest.py` are still live and
+still carry non-frame entries. The `workers/_swmm_postprocess` docker lane is a
+PARKED fork -- it writes frames and NO `outputs.json`, so its frames are not
+superseded (ADR 0294 names the two options).
+
 Once every engine leg is migrated: delete `workers/_raster_postprocess/manifest.py`
 + `contracts/trid3nt_contracts/publish_manifest.py`'s bespoke schema (superseded
 by `outputs.json`'s `schema_version`), delete each engine's bespoke
