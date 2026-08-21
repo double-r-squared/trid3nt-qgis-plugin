@@ -419,6 +419,26 @@ def _build_failed_envelope(
     )
 
 
+#: The depth scalars ``FloodMetrics`` narrates. They are physics-consequential
+#: (law 9), so an absent key REFUSES instead of defaulting to 0.0 -- confident
+#: zeros over a peak COG holding metres of water are the worst possible answer.
+NARRATED_DEPTH_METRIC_KEYS: tuple[str, ...] = (
+    "max_depth_m",
+    "mean_depth_m",
+    "p95_depth_m",
+    "flooded_cell_count",
+)
+
+
+def missing_depth_metric_keys(depth_metrics: dict[str, Any]) -> list[str]:
+    """Which narrated depth scalars the metrics carrier failed to supply.
+
+    Empty list -> narrate. A genuinely dry solve carries the keys with zero
+    VALUES and passes; only a missing key means "no data", never "no water".
+    """
+    return [k for k in NARRATED_DEPTH_METRIC_KEYS if k not in depth_metrics]
+
+
 def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
     """Approximate WGS84 bbox area in km^2 (matches data_fetch helper)."""
     import math

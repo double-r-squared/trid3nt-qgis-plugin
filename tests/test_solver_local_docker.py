@@ -89,6 +89,11 @@ class FakeS3Client:
         self.put_calls.append((Bucket, Key))
         return {}
 
+    def head_object(self, Bucket: str, Key: str) -> dict[str, Any]:  # noqa: N803
+        if (Bucket, Key) not in self.objects:
+            raise _no_such_key(Key)
+        return {"ContentLength": len(self.objects[(Bucket, Key)])}
+
 
 class _FakeGCSBlob:
     def __init__(self, payload: bytes | None) -> None:
@@ -815,3 +820,78 @@ def test_composer_default_runs_prefix_scheme_aware(
     assert _default_runs_prefix("R1") == "s3://trid3nt-runs/R1/"
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     assert _default_runs_prefix("R1") == "s3://test-runs-bucket/R1/"
+
+
+# --------------------------------------------------------------------------- #
+# publish_manifest_uri survives the supervisor's completion write
+# --------------------------------------------------------------------------- #
+
+
+def _write_completion(s3: FakeS3Client, run_id: str) -> dict:
+    solver_mod._write_local_completion(
+        s3,
+        runs_bucket="test-runs-bucket",
+        run_id=run_id,
+        status="ok",
+        exit_code=0,
+        output_uris=[],
+        stdout_uri=None,
+        stderr_uri=None,
+        started_at="2026-08-20T00:00:00Z",
+        error=None,
+        solver="sfincs-quadtree",
+    )
+    return json.loads(s3.objects[("test-runs-bucket", f"{run_id}/completion.json")])
+
+
+def test_completion_carries_publish_manifest_uri_when_worker_wrote_one() -> None:
+    """A self-S3 worker writes publish_manifest.json under the run prefix and its
+    own completion.json; the supervisor's write lands LAST and overwrites it. The
+    manifest POINTER must survive -- read_publish_manifest requires it and never
+    globs, so losing it strips every consumer's metrics carrier."""
+    s3 = FakeS3Client()
+    run_id = "RID-WITH-MANIFEST"
+    s3.objects[("test-runs-bucket", f"{run_id}/publish_manifest.json")] = (
+        b'{"schema_version": 1, "engine": "sfincs", "layers": []}'
+    )
+
+    completion = _write_completion(s3, run_id)
+
+    assert completion["publish_manifest_uri"] == (
+        f"s3://test-runs-bucket/{run_id}/publish_manifest.json"
+    )
+
+
+def test_completion_omits_publish_manifest_uri_when_absent() -> None:
+    """No worker manifest under the run prefix -> no invented pointer (the
+    mounted-rundir specs write no publish_manifest at all)."""
+    s3 = FakeS3Client()
+    completion = _write_completion(s3, "RID-NO-MANIFEST")
+
+    assert "publish_manifest_uri" not in completion
+
+
+def test_spec_supplied_publish_manifest_uri_is_not_clobbered() -> None:
+    """A classify_exit that already resolved the pointer wins over the probe."""
+    s3 = FakeS3Client()
+    run_id = "RID-SPEC-WINS"
+    s3.objects[("test-runs-bucket", f"{run_id}/publish_manifest.json")] = b"{}"
+
+    solver_mod._write_local_completion(
+        s3,
+        runs_bucket="test-runs-bucket",
+        run_id=run_id,
+        status="ok",
+        exit_code=0,
+        output_uris=[],
+        stdout_uri=None,
+        stderr_uri=None,
+        started_at="2026-08-20T00:00:00Z",
+        error=None,
+        extra={"publish_manifest_uri": "s3://elsewhere/manifest.json"},
+        solver="sfincs",
+    )
+    completion = json.loads(
+        s3.objects[("test-runs-bucket", f"{run_id}/completion.json")]
+    )
+    assert completion["publish_manifest_uri"] == "s3://elsewhere/manifest.json"

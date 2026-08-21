@@ -682,6 +682,26 @@ def _expand_local_outputs(patterns: list[str], rundir: Path) -> list[Path]:
     return sorted(seen)
 
 
+def _discover_publish_manifest_uri(
+    s3: Any, runs_bucket: str, run_id: str
+) -> str | None:
+    """The ``publish_manifest.json`` a self-S3 worker wrote under the run prefix.
+
+    A container that reaches the object store itself writes both its manifests
+    and its own completion.json; the supervisor's completion write lands LAST and
+    overwrites the worker's. Without this probe the pointer dies with it and
+    ``read_publish_manifest`` -- which requires the pointer, never globs -- hands
+    every consumer an empty metrics carrier. Returns ``None`` when the worker
+    wrote no manifest (the mounted-rundir specs).
+    """
+    key = f"{run_id}/publish_manifest.json"
+    try:
+        s3.head_object(Bucket=runs_bucket, Key=key)
+    except Exception:  # noqa: BLE001 -- absent or unreadable: no pointer to add
+        return None
+    return f"s3://{runs_bucket}/{key}"
+
+
 def _write_local_completion(
     s3: Any,
     *,
@@ -715,6 +735,10 @@ def _write_local_completion(
     no engine spec's ``extra`` carries a ``solver`` key, so it is never
     clobbered) and is forward-only: legacy completion.json objects lack it, so
     the reader falls back to the stdout-field-name inference.
+
+    ``publish_manifest_uri`` is discovered from the run prefix when the spec did
+    not supply one, so a self-S3 worker's manifest pointer survives this write
+    overwriting the worker's own completion.json.
     """
     payload = {
         "run_id": run_id,
@@ -729,6 +753,10 @@ def _write_local_completion(
         "finished_at": _utc_now_iso(),
         "error": error,
     }
+    if not payload.get("publish_manifest_uri"):
+        manifest_uri = _discover_publish_manifest_uri(s3, runs_bucket, run_id)
+        if manifest_uri is not None:
+            payload["publish_manifest_uri"] = manifest_uri
     s3.put_object(
         Bucket=runs_bucket,
         Key=f"{run_id}/completion.json",

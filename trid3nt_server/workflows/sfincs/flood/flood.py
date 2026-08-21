@@ -262,6 +262,7 @@ from trid3nt_server.workflows.sfincs.run_sfincs import (  # noqa: E402,F401
     _record_flood_batch_solve_telemetry,
     _resolve_bbox,
     _resolve_output_interval_min,
+    missing_depth_metric_keys,
 )
 from trid3nt_server.workflows.sfincs.sfincs_forcing_autowire import (  # noqa: E402,F401
     PrecipForcingError,
@@ -2501,6 +2502,33 @@ async def model_flood_scenario(
                 )
 
     # --- Step 10: build success envelope ---
+    _missing_metrics = missing_depth_metric_keys(depth_metrics)
+    if _missing_metrics:
+        logger.error(
+            "model_flood_scenario: depth metrics unavailable run_id=%s missing=%s "
+            "(seam=%s register_only=%s layers=%d) - refusing to narrate zeros",
+            run_result.run_id, _missing_metrics, seam_active, register_only,
+            len(published_layers),
+        )
+        return _build_failed_envelope(
+            bbox=resolved_bbox,
+            project_id=proj_id,
+            session_id=sess_id,
+            error_code="SFINCS_METRICS_UNAVAILABLE",
+            error_detail=(
+                f"the solve produced {len(published_layers)} layer(s) but no depth "
+                f"metrics (missing {', '.join(_missing_metrics)}); the worker's "
+                f"publish_manifest.json is the metrics carrier and it could not be "
+                f"read for run {run_result.run_id}"
+            ),
+            workflow_name=workflow_name,
+            data_sources=data_sources,
+            forcing=forcing_summary,
+            solver_run_ids=solver_run_ids,
+            return_period_years=return_period_yr,
+            duration_hours=float(duration_hr),
+            grid_resolution_m=grid_resolution_m,
+        )
     bbox_area_km2 = _bbox_area_km2(resolved_bbox)
     result_layers: list[ResultLayer] = [
         ResultLayer(

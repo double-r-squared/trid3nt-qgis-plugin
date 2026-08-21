@@ -139,3 +139,54 @@ def test_seam_owns_the_full_stream_with_replay_stamps(monkeypatch):
     assert frames[f"flood-depth-frame-01-{RID}"].t == 0.0
     assert frames[f"flood-depth-frame-02-{RID}"].t == 1800.0
     assert frames[f"flood-depth-frame-01-{RID}"].group_id == f"flood-depth-{RID}"
+
+
+# --------------------------------------------------------------------------- #
+# Honesty floor: no metrics carrier -> refuse, never narrate confident zeros
+# --------------------------------------------------------------------------- #
+
+
+def test_absent_metrics_carrier_is_a_refusal_not_zeros():
+    """When the run's completion.json carries no publish_manifest pointer,
+    ``read_publish_manifest`` returns None -> ``depth_metrics`` is {} -> the
+    composer must REFUSE (law 9). The four narrated depth scalars have no
+    default: 0.0 over a peak COG holding metres of water is the worst answer."""
+    from trid3nt_server.workflows.sfincs.run_sfincs import (
+        NARRATED_DEPTH_METRIC_KEYS,
+        missing_depth_metric_keys,
+    )
+
+    assert missing_depth_metric_keys({}) == list(NARRATED_DEPTH_METRIC_KEYS)
+    # A partial carrier is just as unnarratable as an empty one.
+    assert missing_depth_metric_keys({"max_depth_m": 19.9}) == [
+        "mean_depth_m", "p95_depth_m", "flooded_cell_count"
+    ]
+
+
+def test_genuinely_dry_solve_narrates_its_zeros():
+    """Zero VALUES are real data; only a missing KEY means "no data". A dry run
+    must still narrate, so the guard keys on presence, never on truthiness."""
+    from trid3nt_server.workflows.sfincs.run_sfincs import missing_depth_metric_keys
+
+    dry = {
+        "max_depth_m": 0.0,
+        "mean_depth_m": 0.0,
+        "p95_depth_m": 0.0,
+        "flooded_cell_count": 0,
+    }
+    assert missing_depth_metric_keys(dry) == []
+
+
+def test_composer_refuses_with_a_typed_code_when_metrics_are_missing():
+    """The refusal rides the documented failed-envelope seam (error_code threaded
+    into solver_version + the ``:FAILED:`` workflow_name infix), so the agent
+    surface narrates the failure instead of the zeros."""
+    import inspect
+
+    from trid3nt_server.workflows.sfincs.flood import flood as m
+
+    body = inspect.getsource(m.model_flood_scenario)
+    assert "missing_depth_metric_keys(depth_metrics)" in body
+    assert "SFINCS_METRICS_UNAVAILABLE" in body
+    # The refusal must come BEFORE the FloodMetrics build it guards.
+    assert body.index("SFINCS_METRICS_UNAVAILABLE") < body.index("metrics = FloodMetrics(")
