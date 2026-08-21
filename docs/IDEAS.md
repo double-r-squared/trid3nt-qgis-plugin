@@ -547,3 +547,18 @@ expose later (plugin-platform goal).
   reprojected AOI covering only ~56% of its axis-aligned output grid
   (vs 97% for Gulf AOIs) - ~44% of an 8.8M-pixel COG is off-AOI padding.
   Candidate: pick UTM zone from AOI centroid. Worth a small wave.
+
+## 2026-08-21 - honesty follow-up batch (from the ADR 0295 verify lens)
+
+- Supervisor completion writer folds ONLY the manifest pointer; the
+  worker's status/error_code verdict is still clobbered (empty-field
+  honesty-gate hit -> supervisor writes ok over error; caught downstream
+  as NO_RENDERABLE_LAYER, typed code lost). Fix shape: fold status/
+  error_code like the pointer, or gate flood.py on manifest.status.
+- GeoClaw inundation still narrates .get("max_depth_m", 0.0) - the
+  zeros-never-narrate doctrine is SFINCS-only; apply the presence guard.
+- test_composer_refuses_with_a_typed_code_when_metrics_are_missing
+  asserts on source text, not behavior - rewrite as a behavior test.
+- _discover_publish_manifest_uri bare except deserves a debug log.
+- Stale prose in urban_flood.py:857,1419 (deleted-lane references);
+  em dashes in emitter.py:738,799 narration strings.
