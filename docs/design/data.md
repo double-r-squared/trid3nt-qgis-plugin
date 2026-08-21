@@ -7,7 +7,7 @@ router, and the co-located data assets.
 ## What lives here
 
 - `__init__.py` -- the `register_tool` decorator + `TOOL_REGISTRY` (collects
-  every decorated function at import time; 254 tools after `main._import_tools_registry()`).
+  every decorated function at import time; 255 tools after `main._import_tools_registry()`).
 - `cache.py` -- the read-through cache shim mediating external-API calls.
 - `tool_arg_normalizer.py` -- argument coercion (`coerce_bbox_value`, shape
   normalization) applied before a tool wrapper runs.
@@ -32,6 +32,12 @@ The retrieval corpus is composed by walking `data/**/corpus.yaml` AND
 
 - Atomic tools are DATA fetchers + irreducible primitives ONLY -- never
   composed analyses.
+- A source with no live value API can be a STAGED DATASET (ADR 0297): a
+  committed `scripts/stage_*.py` converts the published archive to a COG,
+  proves it against the publisher's own numbers, and uploads it plus a
+  provenance sidecar under `s3://<cache-bucket>/staged/<capability>/<version>/`
+  -- outside the TTL-evicted `cache/` tree. The spec names the object by
+  `s3://bucket/key`; `transport/staged.py` resolves the host at read time.
 - A new tool completes the registry checklist: registration import, catalog
   pins, co-located `corpus.yaml`, retrieval top-8 check.
 - Gates on tools are DECLARED (GateSpec metadata), never hand-wired.

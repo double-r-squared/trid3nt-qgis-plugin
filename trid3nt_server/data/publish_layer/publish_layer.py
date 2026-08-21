@@ -489,6 +489,11 @@ _QGIS_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     "continuous_fire_arrival_hr": ("0,24", "inferno"),
     "continuous_flame_length_m": ("0,10", "ylorrd"),
     "continuous_fire_spread_rate": ("0,30", "oranges"),
+    # Staged CONUS groundwater recharge in mm/yr. The CONUS mean is ~148 mm/yr
+    # and the bulk of the country sits under 800; the wet-coast tail runs past
+    # 4000, so a 0-800 blues ramp keeps the arid/humid contrast readable instead
+    # of collapsing everything below the Olympic Peninsula into one flat hue.
+    "groundwater_recharge_mm_yr": ("0,800", "blues"),
 }
 
 #: Safe non-empty default - never let a continuous raster fall through to an

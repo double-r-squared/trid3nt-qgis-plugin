@@ -1,0 +1,11 @@
+fetch_groundwater_recharge:
+- how fast does groundwater recharge here
+- what is the annual groundwater recharge rate for this county
+- how much rainfall actually reaches the aquifer in this watershed
+- I need a recharge boundary condition for a MODFLOW model of this area
+- get me mean annual aquifer recharge in mm per year for this bbox
+- pull the USGS CONUS recharge grid over the study area
+- compare natural recharge against pumping for this aquifer
+- what recharge rate should I use for the groundwater model here
+- give me the baseflow-derived recharge estimate for this basin
+- map groundwater replenishment rates across this county

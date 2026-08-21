@@ -41,3 +41,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0051 - observability/retention batch: rotation, telemetry retention, error actionability, shape classifier](0051-observability-retention-batch.md)
 - [0271 - provider-neutral model-dispatch seam](0271-provider-neutral-seam.md)
 - [0272 - repo unnesting: server/src -> src (standard src-layout)](0272-repo-unnesting.md)
+- [0297 - staged-dataset fetchers; groundwater recharge lands, aquifer thickness parks](0297-staged-dataset-fetchers-groundwater-recharge.md)

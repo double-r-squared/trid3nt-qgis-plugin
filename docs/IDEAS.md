@@ -562,3 +562,25 @@ expose later (plugin-platform goal).
 - _discover_publish_manifest_uri bare except deserves a debug log.
 - Stale prose in urban_flood.py:857,1419 (deleted-lane references);
   em dashes in emitter.py:738,799 narration strings.
+
+## 2026-08-21 - aquifer thickness fork (ADR 0297); recharge landed
+
+- **Recharge SHIPPED** as `fetch_groundwater_recharge` (ADR 0297): the first
+  STAGED-DATASET fetcher. Reitz 2017 (~800 m, 2000-2013 total) and Wolock 2003
+  (1 km, baseflow-derived natural) are both staged as validated mm/yr COGs under
+  `s3://trid3nt-cache/staged/groundwater_recharge/`, selected by a `source`
+  enum; their disagreement IS the uncertainty estimate. Live cross-check over
+  Story County IA: reitz 166.7 vs wolock 62.3 mm/yr.
+- **Aquifer thickness PARKED - the queued premise is false.** Zell & Sanford
+  2020 ships NO saturated-thickness array. `Data_CONUS.zip` is five
+  unsaturated-zone ancillary files (c param, rooting depth, idomain, 2 CSVs);
+  the CONUS rasters live in `Output_CONUS_trans_dtw.zip` (918 MB) and are
+  depth-to-water + transmissivity. The model is 250 m, not 1 km. Three
+  derivation routes are open, all of them NATE's call (ADR 0297 Decision 3):
+  A1 serve the published depth-to-water as `fetch_water_table_depth`;
+  A2 thickness = SoilGrids BDTICM minus staged DTW (cheap, mixes an ML global
+  bedrock model with a calibrated US groundwater model); A3 recover the model's
+  own `b = T/K` or `top - dtw - bottom` from the 75 subdomain archives (~4 GB,
+  faithful, expensive).
+- Next staged dataset reuses `scripts/stage_groundwater_recharge.py`'s shape
+  rather than inventing a second staging idiom.

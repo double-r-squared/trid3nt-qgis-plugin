@@ -266,7 +266,9 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     from ..transport import (
         TransportAuthError,
         TransportNotFound,
+        is_staged_uri,
         open_windowed_cog,
+        staged_object_url,
     )
 
     ingest = spec.ingest or {}
@@ -287,6 +289,10 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
         url = endpoint.url or endpoint.url_template or ""
     if url.startswith("/vsicurl/"):
         url = url[len("/vsicurl/"):]
+    # A staged dataset names its object by bucket/key; the host is deployment
+    # state, resolved here against the active endpoint.
+    if is_staged_uri(url):
+        url = staged_object_url(url)
 
     round_pixel = bool(ingest.get("round_pixel_window", False))
     try:
@@ -326,7 +332,14 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     # fabricated layer. Absent `nodata_gate` -> no gate (every prior spec).
     if ingest.get("nodata_gate"):
         sentinel = src_nodata if src_nodata is not None else float(ingest.get("default_nodata", 255))
-        if not bool((arr != sentinel).any()):
+        # A NaN sentinel needs the finiteness test: ``arr != nan`` is True for
+        # every pixel INCLUDING the nodata ones, so the equality form would let an
+        # entirely-empty window through as a valid layer.
+        if sentinel != sentinel:
+            has_valid = bool(np.isfinite(arr).any())
+        else:
+            has_valid = bool((arr != sentinel).any())
+        if not has_valid:
             raise router_empty_error(
                 spec.error_code_prefix,
                 f"bbox={bbox} produced no valid pixels (all-nodata window -- over "

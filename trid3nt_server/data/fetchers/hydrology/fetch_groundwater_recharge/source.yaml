@@ -1,0 +1,122 @@
+# Router source spec: staged-dataset direct_window over TWO published CONUS
+# recharge grids converted to COGs by scripts/stage_groundwater_recharge.py.
+# The s3:// endpoints name bucket/key only -- the transport resolves the host
+# from the active object-store endpoint at read time.
+schema_version: v1
+
+name: fetch_groundwater_recharge
+source_class: groundwater_recharge
+error_prefix: RECHARGE
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "s3://trid3nt-cache/staged/groundwater_recharge/reitz2017-v1/recharge_total_2000_2013_mmyr.tif"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  source: {type: enum, default: reitz_2017, values: [reitz_2017, wolock_2003]}
+
+gates:
+  conus_only: true
+
+ingest:
+  access: direct_window
+  round_pixel_window: true
+  nodata_gate: true
+  url_by_param:
+    param: source
+    map:
+      reitz_2017: "s3://trid3nt-cache/staged/groundwater_recharge/reitz2017-v1/recharge_total_2000_2013_mmyr.tif"
+      wolock_2003: "s3://trid3nt-cache/staged/groundwater_recharge/wolock2003-v1/recharge_bfi_runoff_mmyr.tif"
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: mm/yr
+  quantity: groundwater_recharge
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style_preset: "groundwater_recharge_mm_yr"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 0.06
+  floor_mb: 0.01
+
+caveats:
+  - "CONUS ONLY -- both grids stop at the conterminous US border; an AOI outside it raises RECHARGE_INPUT_INVALID naming the CONUS envelope, and an AOI inside the envelope but off the land grid (open ocean, the Great Lakes) raises RECHARGE_EMPTY"
+  - "long-term MEAN annual rates, not a time series: reitz_2017 is the 2000-2013 average, wolock_2003 is a 1951-80 runoff climatology x base-flow index -- neither resolves a drought year, a season, or a storm"
+  - "reitz_2017 is TOTAL recharge (it includes the return flow from groundwater-sourced irrigation), so in heavily irrigated areas it exceeds the natural rate; wolock_2003 estimates NATURAL recharge only, which is most of why the two disagree there"
+  - "the two sources are methodologically independent (empirical water-budget regression vs base-flow partition of a runoff map) and disagree locally by tens of percent; that spread is a real uncertainty estimate, not an error in either"
+fallback: []
+
+docstring: |-
+  Long-term mean annual groundwater recharge rate over the contiguous US.
+
+  **What it does:** Windowed read of a staged CONUS recharge raster to a
+  CRS-tagged GeoTIFF over the requested bbox. Pixel values are the mean annual
+  recharge rate in MILLIMETRES PER YEAR (depth of water reaching the water
+  table per year). Two independent published grids are selectable:
+  ``reitz_2017`` (default) and ``wolock_2003``.
+
+  **When to use:**
+  - Setting the recharge boundary condition for a groundwater flow model
+    (MODFLOW RCH, a Landlab groundwater component, a SWMM aquifer) anywhere in
+    the contiguous US.
+  - Answering "how fast does groundwater recharge here", "how much rainfall
+    reaches the aquifer", "what is the annual recharge rate for this county".
+  - Water-budget and sustainable-yield work: comparing recharge against
+    pumping, irrigation demand, or baseflow.
+  - Uncertainty bracketing: fetch BOTH sources over the same AOI and use their
+    spread as an honest range, since they were derived by unrelated methods.
+
+  **When NOT to use:**
+  - DO NOT use outside the contiguous US -- Alaska, Hawaii, Puerto Rico and all
+    territories are off both grids and raise ``RECHARGE_INPUT_INVALID``.
+  - DO NOT use for a single year, season, storm, or drought. These are
+    long-term means; for event-scale infiltration use precipitation forcing
+    (``fetch_gridmet``, ``fetch_aorc_precip``) with an infiltration method.
+  - DO NOT read these as a water-table depth, an aquifer thickness, or a
+    storage volume -- recharge is a FLUX (depth per time), not a state.
+  - DO NOT treat a difference between the two sources as one being wrong; see
+    the caveats.
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
+    max_lon, max_lat)`` in EPSG:4326. Required. Example for Story County, Iowa:
+    ``(-93.70, 41.86, -93.20, 42.21)``.
+  - ``source`` (str, default ``"reitz_2017"``):
+    ``"reitz_2017"`` = USGS Reitz et al. 2017, ~800 m, 2000-2013 mean TOTAL
+    recharge from an empirical water-budget regression (precipitation minus
+    modelled evapotranspiration minus quick-flow runoff), CONUS mean
+    ~148 mm/yr. ``"wolock_2003"`` = USGS Wolock 2003, 1 km, mean annual NATURAL
+    recharge as base-flow index times 1951-80 mean annual runoff, CONUS mean
+    ~113 mm/yr. Prefer the default; switch to ``wolock_2003`` for an
+    independent second opinion or when irrigation return flow must be excluded.
+
+  **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket.
+  ``layer_type="raster"``, ``role="primary"``, ``units="mm/yr"``,
+  ``quantity="groundwater_recharge"``. EPSG:4326, float32, NaN nodata,
+  30 arc-second (~800 m) cells. Divide by 365250 for m/day if a solver wants
+  MODFLOW-style length/time units.
+
+  **Cross-tool dependencies:**
+  - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
+  - Downstream: MODFLOW recharge setup, Landlab groundwater workflows, and
+    water-budget analysis in the python playground.
+  - Pairs with: ``fetch_usgs_groundwater_levels`` (observed water levels),
+    ``fetch_soilgrids`` / ``fetch_statsgo_soils`` (soil properties controlling
+    infiltration), ``fetch_gridmet`` (the precipitation these rates came from).
