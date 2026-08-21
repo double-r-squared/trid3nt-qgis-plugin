@@ -2,9 +2,16 @@
 
 Rungs are tried in order; each attempt either serves the request, serves PART of
 it (:class:`LadderGap`), or fails outright. The walker records which rung served
-and the coverage share it painted, fires the loudness gate before any
-degradation, and raises :class:`LadderRefused` when the terminal REFUSE rung is
-reached. Guarantees live here so no seam re-implements them.
+and the coverage share it painted, fires the loudness gate before descending to
+a degradation rung, and raises :class:`LadderRefused` when the terminal REFUSE
+rung is reached. Guarantees live here so no seam re-implements them.
+
+The gate covers rungs the WALK descends to. A capability that lays one of its
+own declared alternatives down without being asked (a composite whose fallback
+leg auto-engages) reports that source's share through ``rung_coverage``; the
+reconcile stamps the row -- the data already served, so gating it is moot -- and
+marks it GATE-UNSEEN on the record and in the narration rather than pretending
+the floor saw it.
 """
 
 from __future__ import annotations
@@ -32,6 +39,11 @@ __all__ = [
 #: Coverage below this much of the request counts as complete: a rung that
 #: painted all but a rounding error of the AOI has no gap to fill.
 _COMPLETE_EPS = 1e-6
+
+#: How far the measured shares may sum from 1.0 before the walker says so. Over
+#: 1.0 is arithmetically impossible (double-counted paint); under it, part of the
+#: request was painted by something the ladder does not declare, or by nothing.
+_SHARE_SUM_TOL = 1e-3
 
 
 class LadderGap(Exception):
@@ -97,6 +109,10 @@ class Activation:
     #: What an unverified serve says instead of a number. Rides the narration so
     #: an exempted request is still VISIBLE to the model, never silent.
     unverified_note: str | None = None
+    #: Degradation rungs the CAPABILITY laid down itself: the walk never
+    #: descended to them, so the loudness gate never saw them. Their rows are
+    #: real (that source painted) and must say where they came from.
+    ungated: list[str] = field(default_factory=list)
 
     @property
     def degraded(self) -> bool:
@@ -120,8 +136,22 @@ class Activation:
             if r.consequence != "refuse" and (r.coverage > 0.0 or r.declined)
         ]
 
+    def ungated_note(self) -> str | None:
+        if not self.ungated:
+            return None
+        return (
+            f"GATE-UNSEEN: {', '.join(self.ungated)} was laid under this result by "
+            f"{self.capability} itself rather than by descending the ladder, so the "
+            "fallback loudness gate never saw it -- the substitution is reported "
+            "here, not approved."
+        )
+
     def narration(self) -> str | None:
-        return render_fallback_line(self.to_contract()) or self.unverified_note
+        line = render_fallback_line(self.to_contract())
+        ungated = self.ungated_note()
+        if line and ungated:
+            return f"{line} {ungated}"
+        return line or ungated or self.unverified_note
 
     def coverage_summary(self) -> str:
         return " / ".join(
@@ -181,10 +211,33 @@ def _reconcile_to_paint(
     """Replace promise-derived shares with the measured paint, in place.
 
     A row that survives a reconcile reports what the source PAINTED. Rungs the
-    capability measured but the walker never recorded (the request laid the
-    rung's source down without descending to it) are appended, so the raster's
-    real composition is on the contract.
+    capability measured but the walker never recorded (the capability laid the
+    rung's source down without the walk descending to it) are appended, so the
+    raster's real composition is on the contract -- marked GATE-UNSEEN, because
+    the loudness gate never had the chance to ask about them.
+
+    The measured map is VALIDATED, never trusted silently: a key naming no
+    declared rung means the ladder is not a complete account of what painted the
+    result, and shares that do not sum to 1.0 mean part of the request came from
+    outside the ladder or from nothing at all. Both are said out loud.
     """
+    declared = {r.name for r in ladder.rungs}
+    unknown = sorted(k for k in measured if k not in declared)
+    if unknown:
+        logger.warning(
+            "fallback ladder %s reports MEASURED coverage for %s, which the ladder "
+            "declares no rung for -- the ladder is not a complete account of what "
+            "painted this result; the walk's own rows stand for the declared rungs",
+            ladder.capability, ", ".join(unknown),
+        )
+    total = sum(measured.values())
+    if abs(total - 1.0) > _SHARE_SUM_TOL:
+        logger.warning(
+            "fallback ladder %s: the MEASURED rung shares sum to %.4f, not 1.0 -- "
+            "%.0f%% of the request was painted by a source outside the ladder or by "
+            "nothing at all (a sum ABOVE 1.0 is double-counted paint)",
+            ladder.capability, total, abs(1.0 - total) * 100.0,
+        )
     seen: set[str] = set()
     rebuilt: list[RungRecord] = []
     for record in activation.records:
@@ -196,11 +249,18 @@ def _reconcile_to_paint(
         rebuilt.append(
             RungRecord(record.rung, record.consequence, share, record.note)
         )
-    for rung in (ladder.primary_rung, *ladder.alternatives):
+    for rung in ladder.rungs:
         share = measured.get(rung.name)
         if rung.name in seen or not share:
             continue
-        rebuilt.append(RungRecord(rung.name, rung.consequence, share, rung.describes))
+        note = rung.describes
+        if rung.consequence in DEGRADATION_CLASSES:
+            activation.ungated.append(rung.name)
+            note = (
+                f"{rung.describes} -- laid down by {ladder.capability} itself; the "
+                "fallback gate never saw this rung"
+            )
+        rebuilt.append(RungRecord(rung.name, rung.consequence, share, note))
     activation.records = rebuilt
 
 
@@ -223,9 +283,12 @@ def walk_ladder(
 
     On REFUSE the PRIMARY's typed error is what surfaces (later rung failures
     chain through ``__cause__``), so no rung can launder the primary's
-    ``error_code`` / ``retryable`` into its own. A decline gets the ladder's own
-    refusal ONLY when a gap was actually recorded; an untyped failure gets
-    ``LADDER_ERROR_CODE``, never the capability's coverage code.
+    ``error_code`` / ``retryable`` into its own. The capability's own coverage
+    code is reserved for GENUINE coverage refusals -- no rung permitted, a rung
+    declined while the gap it would fill was outstanding, or a filling rung that
+    gapped too. Every other failure under a rung wears ``LADDER_ERROR_CODE`` with
+    the failure's own retryability, so a transport fault is never read as a
+    terminal data gap.
 
     Coverage rows report MEASURED paint whenever the result reports it
     (``rung_coverage``); a request that turned the capability's own coverage
@@ -260,6 +323,11 @@ def walk_ladder(
     primary_exc: BaseException | None = None
     primary_attempted = False
     gap_note: str | None = None
+    # (rung, the gap that was OUTSTANDING when it was declined). A decline only
+    # explains a refusal when the rung was declined while a gap it could have
+    # filled was already on the table -- a gap a LATER rung reports cannot
+    # retro-justify an EARLIER decline.
+    declined_over_gap: list[tuple[str, str]] = []
 
     for rung in plan:
         if rung.consequence in DEGRADATION_CLASSES:
@@ -275,6 +343,8 @@ def walk_ladder(
                     RungRecord(rung.name, rung.consequence, 0.0,
                                "declined at the fallback gate", declined=True)
                 )
+                if gap_note is not None:
+                    declined_over_gap.append((rung.name, gap_note))
                 continue
         if rung is ladder.primary_rung:
             primary_attempted = True
@@ -342,13 +412,15 @@ def walk_ladder(
         )
 
     declined = [r.rung for r in activation.records if r.declined]
-    if declined and gap_note is not None:
-        # A DECLINE only explains the refusal when there was a GAP to fill. Re-
-        # raising the gap error verbatim here would instruct the user to permit
-        # the very rung they just declined.
+    if declined_over_gap:
+        # A DECLINE only explains the refusal when the declined rung was standing
+        # in front of a gap ALREADY recorded. Re-raising the gap error verbatim
+        # here would instruct the user to permit the very rung they just declined.
+        names = [name for name, _ in declined_over_gap]
+        outstanding = declined_over_gap[0][1]
         raise LadderRefused(
             f"{ladder.refuse_error_code}: declined at the fallback gate. "
-            f"{gap_note}. The {', '.join(declined)} rung(s) of the "
+            f"{outstanding}. The {', '.join(names)} rung(s) of the "
             f"{ladder.capability} fallback ladder were DECLINED, so nothing "
             "filled the gap and the request refuses rather than degrading. "
             f"Rungs tried: {tried}.",
@@ -356,25 +428,34 @@ def walk_ladder(
             activation=activation,
         ) from last_exc
     if declined:
-        # No gap was ever recorded: the primary failed for its OWN reason (an
-        # unreachable upstream, a bad input) and the gate question was moot. The
-        # primary's typed error -- code and retryability intact -- is the truth
-        # about this request; the decline rides the activation, not the code.
+        # Every decline happened while NO gap was outstanding: the primary failed
+        # for its OWN reason (an unreachable upstream, a bad input) and the gate
+        # question was moot. The primary's typed error -- code and retryability
+        # intact -- is the truth about this request; the decline rides the
+        # activation, not the code.
         logger.info(
-            "fallback ladder %s: %s declined, but the primary recorded no gap -- "
-            "surfacing the primary's own error", ladder.capability,
+            "fallback ladder %s: %s declined, but no gap was recorded BEFORE the "
+            "decline -- surfacing the primary's own error", ladder.capability,
             ", ".join(declined),
         )
 
     if gap_note is not None and not isinstance(last_exc, LadderGap):
-        # A gap WAS recorded and the rung meant to fill it failed for its own
-        # unrelated reason, so the refusal has to name both.
+        # A gap WAS recorded and the rung permitted to fill it failed for its OWN
+        # unrelated reason (transport, cache, a typed upstream fault). That is not
+        # a coverage refusal: wearing the capability's coverage code would tell a
+        # composer this request has NO source, when the truth is that one attempt
+        # faulted and the gap may still be fillable. The gap context and the cause
+        # both ride the message; retryability is the FAILING RUNG'S.
         raise LadderRefused(
-            f"{ladder.refuse_error_code}: {gap_note}, and no permitted rung of the "
-            f"{ladder.capability} fallback ladder could fill it. Rungs tried: {tried}. "
-            f"Declared alternatives: {[r.name for r in ladder.alternatives]}.",
-            error_code=ladder.refuse_error_code,
+            f"{LADDER_ERROR_CODE}: {gap_note}, and the rung permitted to fill it "
+            f"failed for an unrelated reason -- {type(last_exc).__name__}: "
+            f"{last_exc}. This is NOT a {ladder.refuse_error_code}: nothing proved "
+            f"the gap unfillable, so a retry or a re-permitted rung may still serve "
+            f"it. Rungs tried: {tried}. Declared alternatives: "
+            f"{[r.name for r in ladder.alternatives]}.",
+            error_code=LADDER_ERROR_CODE,
             activation=activation,
+            retryable=bool(getattr(last_exc, "retryable", False)),
         ) from last_exc
 
     # No gap was recorded (or the gap error IS the last failure): the PRIMARY's

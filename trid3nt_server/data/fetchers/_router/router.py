@@ -802,17 +802,23 @@ def _stamp_activation(result: Any, activation: Any) -> Any:
     drop is exactly the class of hole this machinery exists to close.
 
     An exempted request has NO rows and still stamps: its narration is the
-    unverified note, which is the only visibility that serve gets.
+    unverified note, which is the only visibility that serve gets. It also
+    CLEARS the envelope's own ``rung_coverage`` -- the same measured-share seam
+    the walker reads -- because an envelope whose note says the shares are
+    UNMEASURED may not carry numbers beside it.
     """
     rows = activation.to_contract()
     note = activation.narration()
-    if not rows and not note:
+    unverified = bool(getattr(activation, "coverage_unverified", False))
+    if not rows and not note and not unverified:
         return result
 
     def _one(layer: Any) -> Any:
         update: dict[str, Any] = {}
         if rows:
             update["fallbacks"] = rows
+        if unverified and "rung_coverage" in type(layer).model_fields:
+            update["rung_coverage"] = None
         if note:
             update["fallback_note"] = (
                 f"{layer.fallback_note} {note}" if layer.fallback_note else note

@@ -1003,7 +1003,7 @@ def _fetch_topo_for_geoclaw(
                 f"~{target_resolution_m:.0f} m scenario scale)"
             )
 
-    from trid3nt_server.fallbacks import LadderGap, LadderRefused
+    from trid3nt_server.fallbacks import LADDER_ERROR_CODE, LadderGap, LadderRefused
 
     try:
         layer = fetch_topobathy(
@@ -1020,9 +1020,18 @@ def _fetch_topo_for_geoclaw(
             note = render_fallback_line(rows)
             return str(uri), (f"{label} -- {note}" if note else label)
     except (LadderGap, LadderRefused) as exc:
-        # The nearshore has a coverage gap and no permitted rung filled it. The
-        # 3DEP fallback below is LAND-ONLY: it would paint flat 0 m ocean over
-        # every wet cell, which GeoClaw runs as dry ground. Refuse honestly.
+        # Branch on the CODE, never the type: the ladder raises one exception type
+        # for two different truths.
+        if getattr(exc, "error_code", None) == LADDER_ERROR_CODE or getattr(
+            exc, "retryable", False
+        ):
+            # Not a coverage verdict -- a transport / cache / upstream fault under
+            # a rung. Propagating it keeps its retryability, so the turn can retry
+            # instead of being told this coast has no bathymetry.
+            raise
+        # A real coverage gap no permitted rung filled. The 3DEP fallback below is
+        # LAND-ONLY: it would paint flat 0 m ocean over every wet cell, which
+        # GeoClaw runs as dry ground. Refuse honestly.
         raise GeoClawComposerError(
             "GEOCLAW_NO_BATHYMETRY",
             f"the topo-bathymetry ladder refused for bbox {bbox}: {exc}. The "
@@ -1058,10 +1067,10 @@ def _fetch_topo_for_geoclaw(
 
 def _fetch_fine_nearshore_for_geoclaw(
     aoi_bbox: tuple[float, float, float, float],
-) -> str | None:
+) -> tuple[str | None, str | None]:
     """Fetch a FINE (~10 m) nearshore topo-bathy COG over JUST the AOI for use as a
-    GeoClaw nested SHORE topo; return its ``s3://`` URI, or ``None`` when no
-    genuinely-fine source covers the AOI.
+    GeoClaw nested SHORE topo; return ``(uri, degrade_note)`` -- the ``s3://`` URI,
+    or ``None`` with a note saying WHY when no fine source reached the AOI.
 
     The P2 dense-inundation fix. The PRIMARY topo (the coarse ETOPO base over the
     full offshore-extended domain) under-resolves the nearshore (~450 m), so a
@@ -1072,10 +1081,10 @@ def _fetch_fine_nearshore_for_geoclaw(
     AOI. GeoClaw layers it finest-last and picks finest-in-overlap, so the coast is
     sampled at ~10 m and the run-up resolves into a DENSE inundation sheet.
 
-    Returns ``None`` (skip the nested layer) when neither a regional fine DEM nor
-    CUDEM covers the AOI -- nesting another coarse ETOPO-over-ETOPO layer would add
-    nothing. Best-effort: any fetch failure returns ``None`` (the run proceeds on
-    the primary topo, exactly as before this fix).
+    The layer is an ENHANCEMENT, so its absence degrades the run rather than
+    stopping it -- but never silently: every path that returns no URI returns the
+    note that says why, and the caller carries it onto the answer layer. A run
+    whose run-up resolved at ~450 m instead of ~10 m must be able to say so.
     """
     from trid3nt_server.data import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
 
@@ -1086,12 +1095,15 @@ def _fetch_fine_nearshore_for_geoclaw(
             min_pixel_m=_GEOCLAW_FINE_NEARSHORE_PIXEL_M,
         )
     except Exception as exc:  # noqa: BLE001 - the nested fine layer is best-effort
-        logger.info(
-            "fine nearshore topo fetch failed for AOI %s (%s); skipping the nested "
-            "fine-topo layer (run proceeds on the coarse primary topo)",
-            aoi_bbox, exc,
+        note = (
+            "LABELED DEGRADE (fine nearshore topo): the ~10 m nested SHORE topo "
+            f"fetch FAILED for AOI {aoi_bbox} ({type(exc).__name__}: {exc}). The run "
+            "proceeds on the COARSE primary topo (global ETOPO ~450 m nearshore), so "
+            "run-up is resolved over far fewer cells and inundation extent is a "
+            "lower bound."
         )
-        return None
+        logger.warning("%s", note)
+        return None, note
     cudem_n = int(getattr(layer, "cudem_tile_count", 0) or 0)
     regional_n = int(getattr(layer, "regional_tile_count", 0) or 0)
     uri = getattr(layer, "uri", None) or (
@@ -1103,13 +1115,15 @@ def _fetch_fine_nearshore_for_geoclaw(
             "regional_tiles=%d, ~%g m)",
             aoi_bbox, uri, cudem_n, regional_n, _GEOCLAW_FINE_NEARSHORE_PIXEL_M,
         )
-        return str(uri)
-    logger.info(
-        "no genuinely-fine nearshore source (regional/CUDEM) covers AOI %s "
-        "(cudem_tiles=%d regional_tiles=%d); skipping the nested fine-topo layer",
-        aoi_bbox, cudem_n, regional_n,
+        return str(uri), None
+    note = (
+        "LABELED DEGRADE (fine nearshore topo): no genuinely-fine nearshore source "
+        f"(NCEI regional or CUDEM) covers AOI {aoi_bbox} (cudem_tiles={cudem_n} "
+        f"regional_tiles={regional_n}). The run proceeds on the COARSE primary topo "
+        "(global ETOPO ~450 m nearshore); run-up is resolved over far fewer cells."
     )
-    return None
+    logger.warning("%s", note)
+    return None, note
 
 
 def _rasterize_topo_to_depth_grid(
@@ -1312,16 +1326,29 @@ async def model_geoclaw_inundation(
     # land-DEM fill.
     _force_bathy_base = run_args.scenario in GEOCLAW_OFFSHORE_SCENARIOS
     bathy_activation: list[Any] = []
+    #: Labeled degrades of the BED that are not ladder rungs (the enhancement-only
+    #: fine nested shore topo). They ride the same note the ladder narration uses,
+    #: so a degraded bed is never invisible on the answer layer.
+    bed_notes: list[str] = []
 
     async def _stamp_bed_provenance(layer: Any, run_id: Any) -> Any:
-        """Carry the bathymetry ladder onto the answer layer + into the bucket."""
-        if not bathy_activation:
-            return layer
-        await asyncio.to_thread(
-            persist_run_activations, run_id, bathy_activation,
-            capability_note="topo-bathymetry bed for the GeoClaw domain",
-        )
-        return stamp_fallbacks(layer, bathy_activation)
+        """Carry the bathymetry ladder + bed degrades onto the answer layer."""
+        if bathy_activation:
+            await asyncio.to_thread(
+                persist_run_activations, run_id, bathy_activation,
+                capability_note="topo-bathymetry bed for the GeoClaw domain",
+            )
+            layer = stamp_fallbacks(layer, bathy_activation)
+        if bed_notes and hasattr(layer, "model_copy"):
+            joined = " ".join(bed_notes)
+            layer = layer.model_copy(update={
+                "fallback_note": (
+                    f"{layer.fallback_note} {joined}"
+                    if getattr(layer, "fallback_note", None)
+                    else joined
+                )
+            })
+        return layer
 
     if dem_uri is None:
         async with substep(emitter, "fetch_topobathy"):
@@ -1468,7 +1495,11 @@ async def model_geoclaw_inundation(
     # (tsunami) AUTO-fetch run; skipped when no genuinely-fine source covers the AOI
     # (returns None -> run proceeds on the coarse primary, as before).
     if dem_uri is None and run_args.scenario in GEOCLAW_OFFSHORE_SCENARIOS:
-        fine_uri = await asyncio.to_thread(_fetch_fine_nearshore_for_geoclaw, bbox)
+        fine_uri, fine_note = await asyncio.to_thread(
+            _fetch_fine_nearshore_for_geoclaw, bbox
+        )
+        if fine_note:
+            bed_notes.append(fine_note)
         if fine_uri:
             # GeoClaw runs in lon/lat (coordinate_system=2): reproject the fine COG
             # to EPSG:4326 too (same as the primary) so it overlaps the domain.

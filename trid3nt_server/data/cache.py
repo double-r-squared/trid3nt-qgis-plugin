@@ -251,7 +251,7 @@ _ACTIVE_RECORDER: contextvars.ContextVar[ProvenanceRecorder | None] = (
 #: only as trustworthy as the provenance that describes them, and a sidecar
 #: written before a fix cannot report what the fix measures. BUMP THIS whenever
 #: a provenance field becomes load-bearing for honesty.
-PROVENANCE_SCHEMA = 2
+PROVENANCE_SCHEMA = 3
 
 #: The sidecar key carrying :data:`PROVENANCE_SCHEMA`.
 _SCHEMA_FIELD = "provenance_schema"

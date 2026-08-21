@@ -34,7 +34,6 @@ from trid3nt_server.data.fetchers._router.hooks.topobathy import (
     TopobathyEmptyError,
     TopobathyInputError,
     TopobathyUpstreamError,
-    _build_merged_topobathy,
     _classify_vertical_datum,
     _etopo_url_for_corner,
     _parse_tile_nw_corner,
@@ -199,95 +198,6 @@ def test_datum_gate_applies_documented_offset() -> None:
 
 def test_datum_gate_absent_signal_defaults_to_navd88() -> None:
     assert _classify_vertical_datum("", None, "tile") == 0.0
-
-
-# --------------------------------------------------------------------------- #
-# Merge precedence + output contract (the merge helpers, unchanged).
-# --------------------------------------------------------------------------- #
-
-
-def test_merge_cudem_wins_on_coast_and_output_contract(tmp_path: Any) -> None:
-    land_path = str(tmp_path / "land.tif")
-    cudem_path = str(tmp_path / "cudem.tif")
-    _write_synth_raster(land_path, bbox=_SMOKE_BBOX, nx=40, ny=40, fill=50.0, nodata=-9999.0)
-    col = np.arange(40)[None, :].repeat(40, axis=0)
-    _write_synth_raster(cudem_path, bbox=_SMOKE_BBOX, nx=40, ny=40, fill=-8.0,
-                        nodata=-99999.0, nodata_mask=(col >= 20))
-    cog_bytes, bathy, count, regional = _build_merged_topobathy(
-        cudem_vsicurl_paths=[cudem_path], land_local_path=land_path,
-        datum_offsets=[0.0], bbox=_SMOKE_BBOX, target_crs=TARGET_CRS,
-    )
-    assert bathy is True and count == 1 and len(cog_bytes) > 0
-    out = str(tmp_path / "out.tif")
-    with open(out, "wb") as fh:
-        fh.write(cog_bytes)
-    with rasterio.open(out) as ds:
-        assert ds.count == 1 and str(ds.dtypes[0]) == "float32"
-        assert ds.crs.to_epsg() == 32616
-        finite = ds.read(1, masked=True).compressed()
-    assert finite.max() == pytest.approx(50.0, abs=1.5)
-    assert finite.min() == pytest.approx(-8.0, abs=1.5)
-    assert (finite < 0).any() and (finite > 40).any()
-
-
-def test_merge_masks_unflagged_9999_sentinel_and_sets_nodata(tmp_path: Any) -> None:
-    cudem_path = str(tmp_path / "cudem.tif")
-    col = np.arange(40)[None, :].repeat(40, axis=0)
-    arr_fill = np.full((40, 40), -8.0, dtype="float32")
-    arr_fill[col >= 20] = 9999.0
-    west, south, east, north = _SMOKE_BBOX
-    with rasterio.open(
-        cudem_path, "w", driver="GTiff", height=40, width=40, count=1, dtype="float32",
-        crs="EPSG:4326", transform=from_origin(west, north, (east - west) / 40, (north - south) / 40),
-        nodata=-99999.0,
-    ) as dst:
-        dst.write(arr_fill, 1)
-    cog_bytes, bathy, count, regional = _build_merged_topobathy(
-        cudem_vsicurl_paths=[cudem_path], land_local_path=None,
-        datum_offsets=[0.0], bbox=_SMOKE_BBOX, target_crs=TARGET_CRS,
-    )
-    out = str(tmp_path / "out.tif")
-    with open(out, "wb") as fh:
-        fh.write(cog_bytes)
-    with rasterio.open(out) as ds:
-        assert ds.nodata is not None and np.isnan(ds.nodata)
-        finite = ds.read(1, masked=True).compressed()
-    assert finite.max() < 9000.0
-    assert finite.min() == pytest.approx(-8.0, abs=1.5)
-
-
-def test_merge_raises_empty_when_no_sources() -> None:
-    with pytest.raises(TopobathyEmptyError):
-        _build_merged_topobathy(cudem_vsicurl_paths=[], land_local_path=None,
-                                datum_offsets=[], bbox=_SMOKE_BBOX, target_crs=TARGET_CRS)
-
-
-def test_merge_etopo_global_fallback_supplies_bathy(tmp_path: Any) -> None:
-    etopo_path = str(tmp_path / "etopo.tif")
-    land_path = str(tmp_path / "land.tif")
-    col = np.arange(40)[None, :].repeat(40, axis=0)
-    arr = np.full((40, 40), 30.0, dtype="float32")
-    arr[col < 20] = -15.0
-    west, south, east, north = _SMOKE_BBOX
-    with rasterio.open(
-        etopo_path, "w", driver="GTiff", height=40, width=40, count=1, dtype="float32",
-        crs="EPSG:4326", transform=from_origin(west, north, (east - west) / 40, (north - south) / 40),
-        nodata=-99999.0,
-    ) as dst:
-        dst.write(arr, 1)
-    land_arr = np.full((40, 40), 50.0, dtype="float32")
-    land_arr[col < 20] = -9999.0
-    with rasterio.open(
-        land_path, "w", driver="GTiff", height=40, width=40, count=1, dtype="float32",
-        crs="EPSG:4326", transform=from_origin(west, north, (east - west) / 40, (north - south) / 40),
-        nodata=-9999.0,
-    ) as dst:
-        dst.write(land_arr, 1)
-    cog_bytes, bathy, count, regional = _build_merged_topobathy(
-        cudem_vsicurl_paths=[], land_local_path=land_path, datum_offsets=[],
-        bbox=_SMOKE_BBOX, target_crs=TARGET_CRS, etopo_paths=[etopo_path],
-    )
-    assert bathy is True and count == 0
 
 
 # --------------------------------------------------------------------------- #

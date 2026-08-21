@@ -251,7 +251,10 @@ def test_an_alternative_serving_an_exempted_request_stamps_no_number() -> None:
     assert "UNMEASURED" in (act.narration() or "")
 
 
-def test_gap_that_no_rung_could_fill_refuses_naming_the_gap() -> None:
+def test_gap_plus_a_faulted_filling_rung_is_not_a_coverage_refusal() -> None:
+    """A recorded gap whose filling rung fell over for its OWN reason is a LADDER
+    error, not the capability's coverage code: nothing proved the gap unfillable,
+    and a composer excepting on the coverage code would call the AOI sourceless."""
     def _attempt(rung: Any, _p: Any) -> Any:
         if rung.name == "primary":
             raise LadderGap("gap", covered_fraction=0.5, gap_note="half the AOI")
@@ -260,10 +263,63 @@ def test_gap_that_no_rung_could_fill_refuses_naming_the_gap() -> None:
     with pytest.raises(LadderRefused) as ei:
         walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
                     attempt=_attempt, allow=("alt",), gate=lambda **_k: True)
-    assert ei.value.error_code == "TEST_REFUSED"
-    assert "half the AOI" in str(ei.value)
-    assert "ETOPO host unreachable" in str(ei.value)
+    assert ei.value.error_code == LADDER_ERROR_CODE != "TEST_REFUSED"
+    assert ei.value.retryable is False  # a bare RuntimeError claims no retry
+    assert "half the AOI" in str(ei.value)          # the gap context
+    assert "ETOPO host unreachable" in str(ei.value)  # AND the cause
     assert isinstance(ei.value.__cause__, RuntimeError)
+
+
+def test_gap_plus_a_RETRYABLE_fill_failure_stays_retryable() -> None:
+    """The production shape: CUDEM paints 89%, the permitted ETOPO rung hits a
+    MinIO hiccup. A transport fault must not read as 'this AOI has no bathymetry
+    source' -- it wears the ladder code and keeps its retryability."""
+    class _Transient(Exception):
+        retryable = True
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise LadderGap("gap", covered_fraction=0.89, gap_note="CUDEM stops")
+        raise _Transient("EndpointConnectionError: MinIO unreachable")
+
+    with pytest.raises(LadderRefused) as ei:
+        walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
+                    attempt=_attempt, allow=("alt",), gate=lambda **_k: True)
+    assert ei.value.error_code == LADDER_ERROR_CODE
+    assert ei.value.retryable is True
+    assert "CUDEM stops" in str(ei.value)
+    assert "MinIO unreachable" in str(ei.value)
+
+
+def test_gap_no_rung_permitted_keeps_the_capabilitys_coverage_code() -> None:
+    """The GENUINE coverage refusal: nothing was permitted to fill the gap, so the
+    capability's own typed gap error surfaces verbatim."""
+    gap = LadderGap("gap", covered_fraction=0.5, gap_note="half the AOI")
+    setattr(gap, "error_code", "TEST_REFUSED")
+
+    def _attempt(_r: Any, _p: Any) -> Any:
+        raise gap
+
+    with pytest.raises(LadderGap) as ei:
+        walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
+                    attempt=_attempt, gate=lambda **_k: True)
+    assert ei.value is gap and ei.value.error_code == "TEST_REFUSED"
+
+
+def test_a_filling_rung_that_also_gaps_keeps_the_coverage_code() -> None:
+    """Both rungs measured a gap, so the refusal IS about coverage."""
+    primary_gap = LadderGap("gap", covered_fraction=0.5, gap_note="half the AOI")
+    setattr(primary_gap, "error_code", "TEST_REFUSED")
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise primary_gap
+        raise LadderGap("gap2", covered_fraction=0.7, gap_note="still 30% short")
+
+    with pytest.raises(LadderGap) as ei:
+        walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
+                    attempt=_attempt, allow=("alt",), gate=lambda **_k: True)
+    assert ei.value.error_code == "TEST_REFUSED"
 
 
 def test_user_supplied_rung_outranks_every_derived_rung() -> None:
@@ -803,10 +859,13 @@ def _patch_total_cudem_loss(monkeypatch, tmp_path) -> None:
         raise tb.TopobathyUpstreamError("header unreadable")
 
     # The merge unlinks the staged land tif, so each attempt stages its own (as
-    # the real 3DEP leg does).
+    # the real 3DEP leg does). The fill is 0.0 -- the 3DEP land DEM's flat
+    # sea-level OCEAN fill, the value _mask_land_leg_ocean_fill exists to drop.
+    # Staging emergent land here would make the mask a no-op and leave the
+    # clobber-the-ETOPO-column fix unproven by its own evidence.
     def _stage_land(*_a: Any, **_k: Any) -> str:
         path = str(tmp_path / f"land-{len(list(tmp_path.glob('land-*.tif')))}.tif")
-        _synth_raster(path, _EXHIBIT_BBOX, 12.0)
+        _synth_raster(path, _EXHIBIT_BBOX, 0.0)
         return path
 
     monkeypatch.setattr(tb, "_assert_navd88", _reject)
@@ -850,6 +909,417 @@ def test_total_cudem_loss_serves_the_declared_rung_with_measured_paint(
     assert res.cudem_tile_count == 0
     assert res.bathymetry_present is True
     assert res.rung_coverage == {"cudem_nearshore": 0.0, "etopo_bathy_base": 1.0}
+
+
+def test_the_land_legs_flat_ocean_fill_never_reaches_the_served_bed(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """N5's evidence: the 3DEP leg is staged at its real 0 m OCEAN fill, sits at
+    higher precedence than ETOPO, and must be masked out of the composite. Every
+    served cell is the ETOPO bed (-30 m), not sea-level land fill."""
+    _patch_total_cudem_loss(monkeypatch, tmp_path)
+    seen: dict[str, Any] = {}
+    real = tb._composite_sources_to_array
+
+    def _spy(sources, target_crs, bbox, **kw):
+        out = real(sources, target_crs, bbox, **kw)
+        seen["arr"] = out[0]
+        return out
+
+    monkeypatch.setattr(tb, "_composite_sources_to_array", _spy)
+    TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
+    )
+    arr = seen["arr"]
+    assert float(np.nanmax(arr)) < 0.0, "the land leg's 0 m ocean fill survived"
+    assert float(np.nanmin(arr)) == pytest.approx(-30.0, abs=1.0)
+
+
+# --------------------------------------------------------------------------- #
+# A GAP + a faulted filling rung, end to end: what the composers actually see.
+# --------------------------------------------------------------------------- #
+
+
+class _Transient(Exception):
+    """A transport hiccup (MinIO/S3), the shape that must stay retryable."""
+
+    retryable = True
+
+
+def _fault_the_rungs_fetch(monkeypatch) -> None:
+    """CUDEM's footprint gap is measured PRE-fetch; the rung's own read then
+    faults on the cache/transport edge."""
+    from trid3nt_server.data.fetchers._router import router as router_mod
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise _Transient("EndpointConnectionError: could not connect to MinIO")
+
+    monkeypatch.setattr(router_mod, "read_through", _boom)
+
+
+def test_a_transport_fault_on_the_filling_rung_is_not_a_bathymetry_verdict(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    _fault_the_rungs_fetch(monkeypatch)
+    with pytest.raises(LadderRefused) as ei:
+        TOOL_REGISTRY["fetch_topobathy"].fn(
+            bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
+        )
+    assert ei.value.error_code == LADDER_ERROR_CODE != "TOPOBATHY_COVERAGE_GAP"
+    assert ei.value.retryable is True
+    assert "89% of AOI" in str(ei.value)             # the gap context
+    assert "MinIO" in str(ei.value)                  # AND the cause
+    assert isinstance(ei.value.__cause__, _Transient)
+
+
+def test_geoclaw_propagates_a_ladder_fault_instead_of_calling_the_coast_bedless(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as gi
+
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    _fault_the_rungs_fetch(monkeypatch)
+    with pytest.raises(LadderRefused) as ei:
+        gi._fetch_topo_for_geoclaw(_EXHIBIT_BBOX)
+    assert ei.value.error_code == LADDER_ERROR_CODE
+    assert ei.value.retryable is True
+
+
+def test_geoclaw_still_refuses_terminally_on_a_REAL_coverage_gap(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The other side of the branch: a coverage-coded refusal is still fatal --
+    the land-only fetch_dem leg is never reached."""
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as gi
+
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [])
+    with pytest.raises(gi.GeoClawComposerError) as ei:
+        gi._fetch_topo_for_geoclaw(_EXHIBIT_BBOX)
+    assert ei.value.error_code == "GEOCLAW_NO_BATHYMETRY"
+
+
+def test_schism_propagates_a_ladder_fault_with_its_retryability(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    import asyncio
+
+    from trid3nt_server.workflows.schism.tidal_hydro import tidal_hydro as sc
+
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    _fault_the_rungs_fetch(monkeypatch)
+    with pytest.raises(LadderRefused) as ei:
+        asyncio.run(sc._fetch_bathymetry_cog(list(_EXHIBIT_BBOX)))
+    assert ei.value.error_code == LADDER_ERROR_CODE
+    assert ei.value.retryable is True
+
+
+# --------------------------------------------------------------------------- #
+# MEASURED paint: a partial ETOPO base may not claim the whole remainder.
+# --------------------------------------------------------------------------- #
+
+
+def _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path) -> None:
+    """Every CUDEM tile drops AND the ETOPO base reaches only the west half (the
+    AOI straddles a 15-degree ETOPO tile boundary and one tile is unreadable)."""
+    _patch_total_cudem_loss(monkeypatch, tmp_path)
+    half = str(tmp_path / "etopo-half.tif")
+    _synth_raster(half, (-85.55, 29.70, -85.475, 29.85), -30.0)
+    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [half])
+
+
+def test_a_half_reaching_etopo_base_refuses_rather_than_claiming_a_bed_everywhere(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The ETOPO leg painted ~48% of the AOI. Stamping etopo/1.0 and a 'REAL
+    below-waterline bed everywhere' warning over a half-NaN raster is the exact
+    lie the coverage gate exists to prevent."""
+    _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path)
+    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
+        TOOL_REGISTRY["fetch_topobathy"].fn(
+            bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
+        )
+    exc = ei.value
+    assert "painted by nothing" in str(exc)
+    # ... and it does not advertise a remedy that was already tried and failed.
+    assert "force_bathy_base=true" not in str(exc)
+    assert "no param that makes this request honest" in str(exc)
+
+
+def test_a_half_reaching_etopo_base_refuses_under_force_bathy_base_too(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """An exemption buys a COARSER bed, never a bed with holes in it."""
+    _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path)
+    with pytest.raises(tb.TopobathyCoverageGapError):
+        TOOL_REGISTRY["fetch_topobathy"].fn(
+            bbox=list(_EXHIBIT_BBOX), force_bathy_base=True
+        )
+
+
+def test_a_partial_bed_with_no_cudem_gap_is_still_a_gap(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """CUDEM never intersected this AOI (no CUDEM gap to have), and the ETOPO base
+    that auto-engaged reaches half of it. The old code returned SUCCESS with
+    bathymetry_present=True over a 50%-NaN raster."""
+    etopo = str(tmp_path / "etopo-half.tif")
+    land = str(tmp_path / "land.tif")
+    _synth_raster(etopo, (-85.55, 29.70, -85.475, 29.85), -30.0)
+    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
+    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
+    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
+    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
+    real = tb._composite_sources_to_array
+    monkeypatch.setattr(
+        tb, "_composite_sources_to_array",
+        lambda s, c, b, **kw: real(
+            [(x[len("/vsicurl/"):] if x.startswith("/vsicurl/") else x) for x in s],
+            c, b, **kw,
+        ),
+    )
+    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
+        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
+    assert "PAINTS a real below-waterline bed over only" in str(ei.value)
+    assert ei.value.covered_fraction < 0.6
+
+
+# --------------------------------------------------------------------------- #
+# The NCEI regional FINE leg fills the hole -- and is not ignored.
+# --------------------------------------------------------------------------- #
+
+
+def _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path) -> None:
+    """CUDEM covers 89%; the FINER NCEI regional coastal DEM covers the AOI. No
+    ETOPO leg engages at all (include_regional_fine never forces the base on)."""
+    cudem = str(tmp_path / "cudem.tif")
+    regional = str(tmp_path / "regional.tif")
+    land = str(tmp_path / "land.tif")
+    _synth_raster(cudem, _EXHIBIT_BBOX, -5.0)
+    _synth_raster(regional, _EXHIBIT_BBOX, -7.0)
+    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
+    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: list(_EXHIBIT_TILES))
+    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [])
+    monkeypatch.setattr(tb, "_assert_navd88", lambda *_a, **_k: 0.0)
+    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
+    monkeypatch.setattr(
+        tb, "_select_regional_coastal_dem_tiles",
+        lambda *_a, **_k: (["https://x/regional_ncei.tif"], ["CoNED_test"]),
+    )
+    real = tb._composite_sources_to_array
+    remap = {t: cudem for t in _EXHIBIT_TILES}
+    remap["https://x/regional_ncei.tif"] = regional
+
+    def _strip(sources, target_crs, bbox, **kw):
+        out = []
+        for s in sources:
+            bare = s[len("/vsicurl/"):] if s.startswith("/vsicurl/") else s
+            out.append(remap.get(bare, bare))
+        return real(out, target_crs, bbox, **kw)
+
+    monkeypatch.setattr(tb, "_composite_sources_to_array", _strip)
+
+
+def test_a_finer_regional_bed_that_fills_the_hole_serves_instead_of_refusing(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The false refusal: the merge required an ETOPO base to accept an exempted
+    partial-CUDEM AOI, but include_regional_fine never engages ETOPO -- so a FINER
+    bed that fully painted the hole was refused as 'NO nearshore source'."""
+    _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
+    res = TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), include_regional_fine=True
+    )
+    assert isinstance(res, TopobathyResult)
+    assert res.regional_tile_count == 1
+    assert res.bathymetry_present is True
+    warning = res.fallback_warning or ""
+    assert "PARTIAL-CUDEM BATHYMETRY" in warning
+    assert "NCEI REGIONAL fine coastal DEM" in warning
+    assert "89%" in warning and "11%" in warning
+
+
+def test_the_regional_share_is_measured_not_credited_to_etopo(
+    monkeypatch, tmp_path
+) -> None:
+    """The share map is per-source paint: ETOPO gets 0 because ETOPO painted
+    nothing, even though 11% of the AOI is not CUDEM."""
+    _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
+    _arr, _t, _c, prov = tb._select_and_merge(
+        _EXHIBIT_BBOX, 10, tb.TARGET_CRS, None, 30.0,
+        False, True, None, False, False,
+    )
+    coverage = prov["rung_coverage"]
+    assert coverage["cudem_nearshore"] == pytest.approx(8.0 / 9.0, abs=1e-6)
+    assert coverage["etopo_bathy_base"] == 0.0
+    assert coverage["regional_fine"] == pytest.approx(1.0 / 9.0, abs=1e-6)
+
+
+def test_a_non_ladder_contributor_is_said_out_loud(monkeypatch, tmp_path, caplog) -> None:
+    """regional_fine is NOT a declared rung (it is finer than the primary, not a
+    degradation). The walker may not drop it silently: it says the ladder is not a
+    complete account of what painted the result."""
+    _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
+    ladder = get_ladder("fetch_topobathy")
+
+    class _Result:
+        rung_coverage = {
+            "cudem_nearshore": 8.0 / 9.0, "regional_fine": 1.0 / 9.0,
+            "etopo_bathy_base": 0.0,
+        }
+
+    with caplog.at_level("WARNING", logger="trid3nt_server.fallbacks.walker"):
+        _res, act = walk_ladder(ladder, params={}, attempt=lambda _r, _p: _Result(),
+                                gate=lambda **_k: True)
+    assert "regional_fine" in caplog.text
+    assert "does not declare a rung" in caplog.text or "declares no rung" in caplog.text
+    # the walk's own row for the declared primary still stands, at measured paint
+    assert {r.rung: r.coverage for r in act.to_contract()} == pytest.approx(
+        {"cudem_nearshore": 8.0 / 9.0}
+    )
+
+
+def test_shares_that_do_not_sum_to_one_are_said_out_loud(caplog) -> None:
+    class _Result:
+        rung_coverage = {"primary": 0.2}
+
+    with caplog.at_level("WARNING", logger="trid3nt_server.fallbacks.walker"):
+        walk_ladder(_ladder(), params={}, attempt=lambda _r, _p: _Result(),
+                    gate=lambda **_k: True)
+    assert "sum to 0.2000" in caplog.text
+    assert "painted by a source outside the ladder or by nothing at all" in caplog.text
+
+
+# --------------------------------------------------------------------------- #
+# The enhancement layer degrades LOUDLY.
+# --------------------------------------------------------------------------- #
+
+
+def test_the_geoclaw_fine_nearshore_layer_never_vanishes_silently(
+    monkeypatch, tmp_path, fake_s3, caplog
+) -> None:
+    """The nested ~10 m shore topo is an enhancement, so its loss degrades the run
+    rather than stopping it -- but it returns the note that says WHY, and the note
+    rides the answer layer's fallback_note."""
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as gi
+
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    _fault_the_rungs_fetch(monkeypatch)
+    with caplog.at_level("WARNING"):
+        uri, note = gi._fetch_fine_nearshore_for_geoclaw(_EXHIBIT_BBOX)
+    assert uri is None
+    assert note and "LABELED DEGRADE (fine nearshore topo)" in note
+    assert "COARSE primary topo" in note
+    assert "LABELED DEGRADE (fine nearshore topo)" in caplog.text
+
+
+def test_the_fine_nearshore_note_names_an_uncovered_aoi_too(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The other silent path: the fetch SUCCEEDS but no fine source covers the AOI.
+    Returning None with no note left the model unable to say the run-up was coarse."""
+    from trid3nt_server.workflows.geoclaw.inundation import inundation as gi
+
+    _patch_total_cudem_loss(monkeypatch, tmp_path)
+    uri, note = gi._fetch_fine_nearshore_for_geoclaw(_EXHIBIT_BBOX)
+    assert uri is None
+    assert note and "no genuinely-fine nearshore source" in note
+
+
+# --------------------------------------------------------------------------- #
+# Decline semantics: a LATER gap may not retro-justify an EARLIER decline.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_later_gap_never_retro_justifies_an_earlier_decline() -> None:
+    """Two alternatives. alt1 is declined while the primary's failure is a plain
+    retryable upstream error (no gap outstanding); alt2 then reports a gap. The
+    refusal must still be the PRIMARY's typed error, retryability intact -- not a
+    coverage refusal blamed on the decline."""
+    class _Upstream(Exception):
+        error_code = "CAP_UPSTREAM"
+        retryable = True
+
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise _Upstream("CUDEM 503")
+        if rung.name == "alt1":
+            raise AssertionError("a declined rung must never be invoked")
+        raise LadderGap("part", covered_fraction=0.4, gap_note="alt2 covers 40%")
+
+    ladder = _ladder(_rung("alt1", "cross_dataset"), _rung("alt2", "same_data"))
+    with pytest.raises(_Upstream) as ei:
+        walk_ladder(ladder, params={}, attempt=_attempt, allow=("alt1", "alt2"),
+                    gate=lambda **kw: kw["rung"].name != "alt1")
+    assert ei.value.error_code == "CAP_UPSTREAM"
+    assert ei.value.retryable is True
+    rows = {r.rung: r for r in ei.value.fallback_activation.records}
+    assert rows["alt1"].declined is True   # the decline still leaves its trace
+
+
+def test_a_decline_in_front_of_an_outstanding_gap_still_owns_the_refusal() -> None:
+    """The control: the gap came FIRST, so the decline really is why nothing
+    filled it, and the refusal wears the capability's coverage code."""
+    def _attempt(rung: Any, _p: Any) -> Any:
+        if rung.name == "primary":
+            raise LadderGap("gap", covered_fraction=0.5, gap_note="half the AOI")
+        raise AssertionError("a declined rung must never be invoked")
+
+    with pytest.raises(LadderRefused) as ei:
+        walk_ladder(_ladder(_rung("alt", "cross_dataset")), params={},
+                    attempt=_attempt, allow=("alt",), gate=lambda **_k: False)
+    assert ei.value.error_code == "TEST_REFUSED"
+    assert "declined at the fallback gate" in str(ei.value)
+    assert "half the AOI" in str(ei.value)
+
+
+# --------------------------------------------------------------------------- #
+# An UNMEASURED serve carries no numbers anywhere on the envelope.
+# --------------------------------------------------------------------------- #
+
+
+def test_an_exempted_envelope_carries_no_numeric_shares(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The note says the per-rung share is UNMEASURED; a rung_coverage map beside
+    it would make the envelope contradict itself."""
+    _patch_partial_cudem(monkeypatch, tmp_path)
+    res = TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), force_bathy_base=True
+    )
+    assert list(res.fallbacks or []) == []
+    assert "UNMEASURED" in (res.fallback_note or "")
+    assert res.rung_coverage is None
+
+
+def test_a_rung_the_gate_never_saw_says_so_on_the_row(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The capability auto-engages its ETOPO base when CUDEM does not intersect at
+    all -- no gap, no walk, no gate. The row is stamped because the data served,
+    and it says the gate never saw it rather than implying approval."""
+    etopo = str(tmp_path / "etopo.tif")
+    land = str(tmp_path / "land.tif")
+    _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
+    _synth_raster(land, _EXHIBIT_BBOX, 12.0)
+    monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
+    monkeypatch.setattr(tb, "_select_etopo_tiles", lambda *_a, **_k: [etopo])
+    monkeypatch.setattr(tb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land)
+    real = tb._composite_sources_to_array
+    monkeypatch.setattr(
+        tb, "_composite_sources_to_array",
+        lambda s, c, b, **kw: real(
+            [(x[len("/vsicurl/"):] if x.startswith("/vsicurl/") else x) for x in s],
+            c, b, **kw,
+        ),
+    )
+    # NO fallback= is declared: the caller permitted nothing.
+    res = TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
+    rows = {r.rung: r for r in (res.fallbacks or [])}
+    assert rows["etopo_bathy_base"].coverage == pytest.approx(1.0)
+    assert "the fallback gate never saw this rung" in (rows["etopo_bathy_base"].note or "")
+    assert "GATE-UNSEEN" in (res.fallback_note or "")
 
 
 def test_emit_seam_carries_activation_rows_onto_a_reemitted_layer() -> None:
@@ -973,6 +1443,25 @@ def test_sfincs_handles_a_ladder_refusal_as_a_failed_envelope() -> None:
 
     src = inspect.getsource(fl.model_flood_scenario)
     assert "except (TopobathyError, LadderRefused) as exc:" in src
+
+
+def test_sfincs_says_a_retryable_ladder_fault_is_retryable() -> None:
+    """``_build_failed_envelope`` threads an error_code but has NO retryable field,
+    and this composer's contract is an envelope rather than a raise. So the code
+    separates the two verdicts and the detail says the retryability out loud --
+    otherwise a MinIO hiccup reads to the model as a terminal modeling failure."""
+    import inspect
+
+    from trid3nt_server.workflows.sfincs.flood import flood as fl
+    from trid3nt_server.workflows.sfincs.run_sfincs import _build_failed_envelope
+
+    assert "retryable" not in inspect.signature(_build_failed_envelope).parameters
+    handler = inspect.getsource(fl.model_flood_scenario).split(
+        "except (TopobathyError, LadderRefused) as exc:"
+    )[1].split("except Exception")[0]
+    assert "LADDER_ERROR_CODE" in handler
+    assert "RETRY the same request" in handler
+    assert "error_detail=f\"{exc}{ladder_detail}\"" in handler
 
 
 def _stub_registry_entry(fn: Any) -> Any:

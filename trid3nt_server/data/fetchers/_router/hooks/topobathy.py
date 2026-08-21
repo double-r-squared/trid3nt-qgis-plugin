@@ -44,7 +44,7 @@ import math
 import os
 import re
 import tempfile
-from typing import Any
+from typing import Any, Sequence
 
 from trid3nt_server.data.cache import record_provenance
 from trid3nt_server.fallbacks import Ladder, LadderGap, Rung, register_ladder
@@ -432,6 +432,17 @@ def _parse_tile_nw_corner(url_or_name: str) -> tuple[float, float] | None:
     return (lat, -lon)
 
 
+def _cudem_tile_box(
+    url_or_name: str,
+) -> tuple[float, float, float, float] | None:
+    """A CUDEM tile's 0.25-deg footprint as ``(west, south, east, north)``."""
+    corner = _parse_tile_nw_corner(url_or_name)
+    if corner is None:
+        return None
+    nw_lat, nw_lon = corner
+    return (nw_lon, nw_lat - _CUDEM_TILE_DEG, nw_lon + _CUDEM_TILE_DEG, nw_lat)
+
+
 def _tile_intersects_bbox(
     nw_lat: float,
     nw_lon: float,
@@ -769,112 +780,6 @@ def _stage_uri_to_local(uri: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _build_merged_topobathy(
-    cudem_vsicurl_paths: list[str],
-    land_local_path: str | None,
-    datum_offsets: list[float],
-    bbox: tuple[float, float, float, float],
-    target_crs: str,
-    etopo_paths: list[str] | None = None,
-    regional_paths: list[str] | None = None,
-    min_pixel_m: float | None = None,
-) -> tuple[bytes, bool, int, int]:
-    """Merge bathymetry + 3DEP land into one EPSG:32616 float32 COG.
-
-    Precedence (LOW -> HIGH, last source WINS where it has valid data): ETOPO
-    global base -> 3DEP land -> CUDEM 1/9" -> NCEI regional 1 m. Returns
-    ``(cog_bytes, bathymetry_present, cudem_tile_count, regional_tile_count)``.
-    """
-    array, transform, crs, bathy_present, cudem_count, regional_count = (
-        _merge_topobathy_to_array(
-            cudem_vsicurl_paths,
-            land_local_path,
-            datum_offsets,
-            bbox,
-            target_crs,
-            etopo_paths=etopo_paths,
-            regional_paths=regional_paths,
-            min_pixel_m=min_pixel_m,
-        )
-    )
-    cog_bytes = _array_to_topobathy_cog_bytes(array, transform, crs)
-    return cog_bytes, bathy_present, cudem_count, regional_count
-
-
-def _merge_topobathy_to_array(
-    cudem_vsicurl_paths: list[str],
-    land_local_path: str | None,
-    datum_offsets: list[float],
-    bbox: tuple[float, float, float, float],
-    target_crs: str,
-    etopo_paths: list[str] | None = None,
-    regional_paths: list[str] | None = None,
-    min_pixel_m: float | None = None,
-) -> tuple[Any, Any, Any, bool, int, int]:
-    """Merge the sources onto one EPSG:32616 float32 grid; return the COMPOSITE
-    ``(array, transform, crs, bathymetry_present, cudem_count, regional_count)``.
-
-    Every returned count and flag reports what PAINTED, never what was selected:
-    a source can be handed in and still contribute nothing (unreadable, empty,
-    outside the AOI)."""
-    etopo_paths = list(etopo_paths or [])
-    regional_paths = list(regional_paths or [])
-    have_cudem = len(cudem_vsicurl_paths) > 0
-    have_etopo = len(etopo_paths) > 0
-    have_regional = len(regional_paths) > 0
-    have_land = land_local_path is not None
-    if not have_cudem and not have_etopo and not have_regional and not have_land:
-        raise TopobathyEmptyError(
-            f"no CUDEM tiles, no NCEI regional fine DEM, no ETOPO global fallback "
-            f"AND no 3DEP land DEM for bbox={bbox} -- no elevation data available "
-            "for this AOI"
-        )
-
-    tmp_paths: list[str] = []
-    try:
-        adjusted_cudem: list[str] = []
-        for path, offset in zip(cudem_vsicurl_paths, datum_offsets):
-            if offset and abs(offset) > 1e-9:
-                shifted = _apply_vertical_offset(path, offset)
-                tmp_paths.append(shifted)
-                adjusted_cudem.append(shifted)
-            else:
-                adjusted_cudem.append(path)
-        sources_in_precedence = (
-            etopo_paths
-            + ([land_local_path] if have_land else [])  # type: ignore[list-item]
-            + adjusted_cudem
-            + regional_paths
-        )
-        array, transform, crs, painted = _composite_sources_to_array(
-            sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
-        )
-        cudem_offset = len(etopo_paths) + (1 if have_land else 0)
-        regional_offset = cudem_offset + len(adjusted_cudem)
-        etopo_painted = any(painted[:len(etopo_paths)])
-        cudem_painted = sum(1 for f in painted[cudem_offset:regional_offset] if f)
-        regional_painted = sum(1 for f in painted[regional_offset:] if f)
-        logger.info(
-            "fetch_topobathy: merged %d/%d CUDEM + %d/%d regional-fine + %d "
-            "ETOPO-global + %s land -> composite array (%s)",
-            cudem_painted, len(cudem_vsicurl_paths), regional_painted,
-            len(regional_paths), len(etopo_paths),
-            "1" if have_land else "0", target_crs,
-        )
-        return (
-            array, transform, crs,
-            bool(cudem_painted or regional_painted or etopo_painted),
-            cudem_painted,
-            regional_painted,
-        )
-    finally:
-        for p in tmp_paths:
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
-
-
 def _array_to_topobathy_cog_bytes(array: Any, transform: Any, crs: Any) -> bytes:
     """Serialize the composite array to a single-band float32 NaN-nodata COG (LZW)."""
     import numpy as np
@@ -1099,9 +1004,9 @@ def _composite_sources_to_array(
     target_crs: str,
     bbox: tuple[float, float, float, float],
     min_pixel_m: float | None = None,
-) -> tuple[Any, Any, str, list[bool]]:
+) -> tuple[Any, Any, str, list[bool], list[tuple[float, float, float, float] | None]]:
     """Per-source warp + precedence composite -> ``(array, transform, target_crs,
-    painted)``.
+    painted, footprints)``.
 
     NEVER ``rasterio.merge``s raw heterogeneous sources (the upside-down MergeError
     for the CUDEM-EPSG:4269 + 3DEP-EPSG:5070 mix): each source is reprojected from
@@ -1113,10 +1018,16 @@ def _composite_sources_to_array(
     (unreadable, empty, no AOI intersect), so a caller that PROMISED coverage from
     a footprint must reconcile the promise against these flags, not against the
     input list. Positional (not by path) because a source path may be rewritten
-    between selection and merge."""
+    between selection and merge.
+
+    ``footprints`` is the same-length companion: the source's own georeferenced
+    extent in EPSG:4326, or None where it did not paint or its bounds could not be
+    projected. FOOTPRINT granularity -- a source that paints one corner of its
+    extent still reports the whole extent, the same limit the CUDEM tile-footprint
+    measure carries."""
     import numpy as np
     import rasterio
-    from rasterio.warp import Resampling, reproject
+    from rasterio.warp import Resampling, reproject, transform_bounds
 
     if not sources_in_precedence:
         raise TopobathyEmptyError("no sources to merge")
@@ -1127,6 +1038,9 @@ def _composite_sources_to_array(
 
     composite = np.full((height, width), np.nan, dtype="float32")
     painted: list[bool] = [False] * len(sources_in_precedence)
+    footprints: list[tuple[float, float, float, float] | None] = [
+        None
+    ] * len(sources_in_precedence)
 
     target_res_m = abs(dst_transform.a)
     with rasterio.Env(**_VSICURL_ENV_KW):
@@ -1144,6 +1058,14 @@ def _composite_sources_to_array(
                         src_arr,
                     )
                     src_crs = ds.crs
+                    try:
+                        extent = tuple(
+                            float(v) for v in transform_bounds(
+                                ds.crs, "EPSG:4326", *ds.bounds, densify_pts=21
+                            )
+                        )
+                    except Exception:  # noqa: BLE001 -- an unmeasurable extent
+                        extent = None
             except Exception as exc:  # noqa: BLE001 -- skip an unreadable source
                 logger.warning(
                     "fetch_topobathy: skipping unreadable merge source %s: %s", src, exc,
@@ -1166,13 +1088,14 @@ def _composite_sources_to_array(
             if valid.any():
                 composite[valid] = warped[valid]
                 painted[idx] = True
+                footprints[idx] = extent  # type: ignore[assignment]
 
     if not any(painted):
         raise TopobathyUpstreamError(
             "merge produced no valid cells -- all sources were empty / "
             "unreadable / outside the AOI"
         )
-    return composite, dst_transform, target_crs, painted
+    return composite, dst_transform, target_crs, painted, footprints
 
 
 # ---------------------------------------------------------------------------
@@ -1190,6 +1113,8 @@ def _compose_fallback_warnings(
     bathy_present: bool,
     land_absent: bool,
     cudem_painted_fraction: float | None = None,
+    etopo_share: float = 0.0,
+    regional_share: float = 0.0,
 ) -> str | None:
     """Build the LABELED fallback-warning string (data-source + loud-fallback norms).
 
@@ -1231,18 +1156,31 @@ def _compose_fallback_warnings(
             "(so a tsunami/surge run produces actual inundation) but is COARSER than "
             "CUDEM; treat nearshore detail as approximate."
         )
-    # PARTIAL CUDEM over a global ETOPO base: the AOI is part fine CUDEM and part
-    # coarse global relief. Under an exempting param (force_bathy_base /
-    # skip_cudem) nothing refused, so this warning is the ONLY loudness the split
-    # gets; it must not ride silent.
-    if cudem_painted_fraction is not None and has_etopo:
+    # PARTIAL CUDEM over another bed: the AOI is part fine CUDEM and part something
+    # else. Under an exempting param (force_bathy_base / skip_cudem /
+    # include_regional_fine) nothing refused, so this warning is the ONLY loudness
+    # the split gets; it must not ride silent. Every number here is MEASURED paint
+    # -- the fetch refuses outright when the shares do not add up to a bed
+    # everywhere, so the claim below is one the merge stood behind.
+    if cudem_painted_fraction is not None and (has_etopo or regional_share > 0.0):
+        parts = [
+            f"the fine NOAA NCEI CUDEM 1/9\" nearshore tiles paint "
+            f"{cudem_painted_fraction * 100:.0f}% of AOI {bbox}"
+        ]
+        if regional_share > 0.0:
+            parts.append(
+                f"{regional_share * 100:.0f}% is the NCEI REGIONAL fine coastal DEM "
+                "(~1 m, finer than CUDEM)"
+            )
+        if etopo_share > 0.0:
+            parts.append(
+                f"{etopo_share * 100:.0f}% is the GLOBAL NOAA ETOPO 2022 15 "
+                "arc-second relief model (~450 m, EGM2008/MSL rather than NAVD88)"
+            )
         warnings.append(
-            "PARTIAL-CUDEM BATHYMETRY: the fine NOAA NCEI CUDEM 1/9\" nearshore "
-            f"tiles paint {cudem_painted_fraction * 100:.0f}% of AOI {bbox}; the "
-            f"remaining {(1.0 - cudem_painted_fraction) * 100:.0f}% is the GLOBAL "
-            "NOAA ETOPO 2022 15 arc-second relief model (~450 m, EGM2008/MSL rather "
-            "than NAVD88). A REAL below-waterline bed everywhere, but nearshore "
-            "detail is approximate outside the CUDEM footprint."
+            "PARTIAL-CUDEM BATHYMETRY: " + "; ".join(parts) + ". A REAL "
+            "below-waterline bed over every measured share, but nearshore detail "
+            "is approximate outside the CUDEM footprint."
         )
     # LOUD-FALLBACK NORM (the 0091 follow-up): the 3DEP land leg's SILENT swallow is a
     # LABELED degrade -- when land failed but a bathy source is present the surface
@@ -1259,25 +1197,69 @@ def _compose_fallback_warnings(
     return " ".join(warnings) or None
 
 
+def _footprint_union(boxes: Sequence[Any]) -> Any:
+    """The union geometry of ``boxes`` (west, south, east, north), or None."""
+    from shapely.geometry import box as _box
+    from shapely.ops import unary_union
+
+    valid = [
+        _box(float(b[0]), float(b[1]), float(b[2]), float(b[3]))
+        for b in boxes
+        if b and float(b[2]) > float(b[0]) and float(b[3]) > float(b[1])
+    ]
+    if not valid:
+        return None
+    return unary_union(valid)
+
+
+def _share_of_aoi(geom: Any, aoi: Any, *, minus: Sequence[Any] = ()) -> float:
+    """The share of ``aoi`` that ``geom`` covers and nothing in ``minus`` does.
+
+    Footprint arithmetic over source EXTENTS, so the shares of disjoint sources
+    sum exactly. Interior nodata inside an extent is measured by neither this nor
+    the CUDEM tile-footprint fraction -- the documented open edge of the coverage
+    contract.
+    """
+    if geom is None or aoi.area <= 0.0:
+        return 0.0
+    for other in minus:
+        if other is not None:
+            geom = geom.difference(other)
+            if geom.is_empty:
+                return 0.0
+    return max(0.0, min(1.0, geom.intersection(aoi).area / aoi.area))
+
+
 def _rung_coverage(
-    cudem_painted_fraction: float | None, etopo_painted: bool
+    cudem_painted_fraction: float | None,
+    etopo_share: float,
+    regional_share: float,
 ) -> dict[str, float] | None:
-    """The MEASURED share each BATHYMETRY_LADDER rung's source painted.
+    """The MEASURED share each source painted, keyed by BATHYMETRY_LADDER rung.
 
     The fallback walker reconciles its promise arithmetic against this, so an
-    activation row reports paint rather than a tile-footprint promise. ``None``
-    when nothing measurable ran (no CUDEM tiles intersected AND no ETOPO base).
+    activation row reports paint rather than a tile-footprint promise. Every share
+    is measured independently -- an ETOPO base that reaches only part of the AOI
+    reports only that part, never "whatever CUDEM did not cover".
+
+    ``regional_fine`` is the NCEI fine coastal DEM the caller switched on. It is
+    NOT a ladder rung (it is finer than the primary, not a degradation), so the
+    walker says so out loud when it appears; it is reported because a model
+    reading the shares must be able to account for the whole raster.
+
+    ``None`` when nothing measurable painted a bed.
     """
-    if cudem_painted_fraction is not None:
-        cudem = max(0.0, min(1.0, cudem_painted_fraction))
-        rest = max(0.0, 1.0 - cudem)
-        return {
-            "cudem_nearshore": cudem,
-            "etopo_bathy_base": rest if etopo_painted else 0.0,
-        }
-    if etopo_painted:
-        return {"cudem_nearshore": 0.0, "etopo_bathy_base": 1.0}
-    return None
+    cudem = (
+        max(0.0, min(1.0, cudem_painted_fraction))
+        if cudem_painted_fraction is not None
+        else 0.0
+    )
+    shares = {"cudem_nearshore": cudem, "etopo_bathy_base": etopo_share}
+    if regional_share > 0.0:
+        shares["regional_fine"] = regional_share
+    if cudem_painted_fraction is None and not (etopo_share or regional_share):
+        return None
+    return shares
 
 
 def _select_and_merge(
@@ -1422,18 +1404,21 @@ def _select_and_merge(
             + adjusted_cudem
             + regional_vsicurl
         )
-        array, transform, crs, painted = _composite_sources_to_array(
+        array, transform, crs, painted, footprints = _composite_sources_to_array(
             sources_in_precedence, target_crs, bbox, min_pixel_m=min_pixel_m
         )
-        # Every leg's paint flag is consumed, not just CUDEM's: a leg that was
-        # SELECTED but painted nothing must not appear in the provenance as if
-        # it had (the ETOPO base is the one whose absence turns the merge into
-        # a land-fill ocean).
+        # Every leg's paint is consumed, not just CUDEM's: a leg that was SELECTED
+        # but painted nothing must not appear in the provenance as if it had (the
+        # ETOPO base is the one whose absence turns the merge into a land-fill
+        # ocean), and a leg that painted only PART of the AOI must not be credited
+        # with the rest.
         cudem_offset = len(etopo_vsicurl) + (1 if have_land else 0)
         regional_offset = cudem_offset + len(adjusted_cudem)
         etopo_painted = any(painted[:len(etopo_vsicurl)])
         land_painted = bool(have_land and painted[len(etopo_vsicurl)])
         regional_painted_count = sum(1 for f in painted[regional_offset:] if f)
+        etopo_boxes = list(footprints[:len(etopo_vsicurl)])
+        regional_boxes = list(footprints[regional_offset:])
         painted_cudem_urls = [
             cudem_vsicurl[i][len("/vsicurl/"):]
             for i in range(len(adjusted_cudem))
@@ -1462,6 +1447,31 @@ def _select_and_merge(
     cudem_painted_fraction = (
         cudem_coverage_fraction(bbox, painted_cudem_urls) if cudem_urls else None
     )
+    # Each bathy leg's share is measured from its OWN painted footprint, disjointly
+    # (regional and ETOPO are credited only where CUDEM -- and, for ETOPO, regional
+    # -- did not reach). Their sum is the share of the AOI carrying a real bed, so
+    # "a bed everywhere" is a measurement rather than a hope.
+    from shapely.geometry import box as _shapely_box
+
+    aoi_geom = _shapely_box(*bbox)
+    cudem_geom = _footprint_union(
+        [_cudem_tile_box(u) for u in painted_cudem_urls]
+    )
+    regional_geom = _footprint_union(regional_boxes)
+    etopo_geom = _footprint_union(etopo_boxes)
+    regional_share = _share_of_aoi(regional_geom, aoi_geom, minus=(cudem_geom,))
+    etopo_share = _share_of_aoi(
+        etopo_geom, aoi_geom, minus=(cudem_geom, regional_geom)
+    )
+    # The bed fraction is unmeasurable when CUDEM painted tiles whose footprints
+    # cannot be parsed: a gap that cannot be PROVEN is never claimed.
+    bed_fraction = (
+        None
+        if painted_cudem_urls and cudem_painted_fraction is None
+        else (cudem_painted_fraction or 0.0) + regional_share + etopo_share
+    )
+    bed_complete = bed_fraction is not None and bed_fraction >= _COVERAGE_COMPLETE
+
     cudem_short = (
         cudem_painted_fraction is not None
         and cudem_painted_fraction < _COVERAGE_COMPLETE
@@ -1475,16 +1485,50 @@ def _select_and_merge(
             f"{(1.0 - cudem_painted_fraction) * 100:.0f}% of the AOI has NO "
             "nearshore bathymetry source"
         )
-        # Refuse unless a COARSER bed both painted the hole AND was permitted.
-        # An exempting param permits the substitution; it never permits the
-        # 3DEP land leg's flat 0 m fill to stand in for a bed nothing painted.
+        if not bed_complete and (etopo_painted or regional_painted_count):
+            note += (
+                f"; the coarser/finer beds that WERE laid down reach only "
+                f"{(bed_fraction or 0.0) * 100:.0f}% of the AOI in total "
+                f"(regional fine {regional_share * 100:.0f}%, global ETOPO "
+                f"{etopo_share * 100:.0f}%), leaving "
+                f"{(1.0 - (bed_fraction or 0.0)) * 100:.0f}% painted by nothing"
+            )
+        # Refuse unless another bed both PAINTED the hole AND was permitted. An
+        # exempting param permits a coarser (or finer) source to stand in; it never
+        # permits the 3DEP land leg's flat 0 m fill, nor a source that reaches only
+        # part of the hole, to pass as a bed. The permitted set matches the
+        # pre-fetch gate's exemptions exactly, so the two gates agree on which
+        # requests may proceed and disagree only on what actually painted.
         exempted = force_bathy_base or skip_cudem or include_regional_fine
-        if not (etopo_painted and exempted):
+        if not (bed_complete and exempted):
             raise TopobathyCoverageGapError(
-                _coverage_gap_message(note, skip_land=skip_land),
+                _coverage_gap_message(
+                    note, skip_land=skip_land,
+                    coarser_bed_can_fill=not (etopo_painted and not bed_complete),
+                ),
                 covered_fraction=cudem_painted_fraction,
                 gap_note=note,
             )
+    elif bed_fraction is not None and 0.0 < bed_fraction < _COVERAGE_COMPLETE:
+        # CUDEM was complete or never intersected, and the sources that DID lay a
+        # bed reach only part of the AOI (an AOI straddling an ETOPO tile boundary
+        # with one tile unreadable). The rest is nodata or 3DEP land fill; either
+        # way it is not a bed, and no warning may say it is.
+        note = (
+            f"the merged topo-bathy composite PAINTS a real below-waterline bed "
+            f"over only {bed_fraction * 100:.0f}% of AOI {bbox} "
+            f"(CUDEM {(cudem_painted_fraction or 0.0) * 100:.0f}% + regional fine "
+            f"{regional_share * 100:.0f}% + global ETOPO {etopo_share * 100:.0f}%). "
+            f"The remaining {(1.0 - bed_fraction) * 100:.0f}% of the AOI has NO "
+            "bathymetry source of any kind"
+        )
+        raise TopobathyCoverageGapError(
+            _coverage_gap_message(
+                note, skip_land=skip_land, coarser_bed_can_fill=not etopo_painted
+            ),
+            covered_fraction=bed_fraction,
+            gap_note=note,
+        )
 
     cudem_count = len(painted_cudem_urls)
     regional_count = regional_painted_count
@@ -1497,6 +1541,7 @@ def _select_and_merge(
         regional_count=regional_count, has_etopo=etopo_painted,
         bathy_present=bathy_present, land_absent=land_absent,
         cudem_painted_fraction=cudem_painted_fraction if cudem_short else None,
+        etopo_share=etopo_share, regional_share=regional_share,
     )
     if fallback_warning:
         logger.warning("fetch_topobathy: %s", fallback_warning)
@@ -1507,7 +1552,9 @@ def _select_and_merge(
         "cudem_tile_count": cudem_count,
         "regional_tile_count": regional_count,
         "land_absent": land_absent,
-        "rung_coverage": _rung_coverage(cudem_painted_fraction, etopo_painted),
+        "rung_coverage": _rung_coverage(
+            cudem_painted_fraction, etopo_share, regional_share
+        ),
     }
     return array, transform, crs, provenance
 
@@ -1552,11 +1599,15 @@ def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
 _COVERAGE_COMPLETE = 0.999
 
 
-def _coverage_gap_message(note: str, *, skip_land: bool) -> str:
+def _coverage_gap_message(
+    note: str, *, skip_land: bool, coarser_bed_can_fill: bool = True
+) -> str:
     """The TOPOBATHY_COVERAGE_GAP text: what the gap costs, and how to proceed.
 
     ``skip_land`` changes what the gap COSTS: a refusal may not cite a land fill
-    the caller explicitly disabled.
+    the caller explicitly disabled. ``coarser_bed_can_fill`` is False once the
+    coarser bed has BEEN laid and still fell short -- advertising a remedy that
+    was already tried and did not work is the refusal lying about itself.
     """
     consequence = (
         "This request disabled the 3DEP land leg (skip_land), so nothing would "
@@ -1566,15 +1617,25 @@ def _coverage_gap_message(note: str, *, skip_land: bool) -> str:
         else "Filling it from the 3DEP land DEM would paint flat 0 m ocean -- a "
         "fake landmass a wave/surge solver excludes as dry ground"
     )
-    return (
-        f"TOPOBATHY_COVERAGE_GAP: {note}. {consequence}, so this fetch refuses "
-        "instead. To proceed on a REAL but coarser bed, set force_bathy_base=true: "
+    remedy = (
+        "To proceed on a REAL but coarser bed, set force_bathy_base=true: "
         "the global NOAA ETOPO 2022 15 arc-second relief model (~450 m, EGM2008/MSL "
         "rather than NAVD88) is laid under the whole AOI and the result carries a "
         "PARTIAL-CUDEM fallback_warning naming the share each source painted. A "
         "composer can instead permit the 'etopo_bathy_base' rung of this tool's "
         "fallback ladder (fallback=(\"etopo_bathy_base\",)), which lays the same "
         "bed and additionally stamps the per-rung coverage onto the layer."
+        if coarser_bed_can_fill
+        else "The coarser global ETOPO bed was ALREADY laid under this AOI and "
+        "still does not reach the whole of it, so force_bathy_base / the "
+        "'etopo_bathy_base' rung would refuse for the same reason -- there is no "
+        "param that makes this request honest. Narrow the AOI to the footprint "
+        "the sources actually cover, or run land-only and treat the result as "
+        "pluvial."
+    )
+    return (
+        f"TOPOBATHY_COVERAGE_GAP: {note}. {consequence}, so this fetch refuses "
+        f"instead. {remedy}"
     )
 
 
@@ -1588,7 +1649,10 @@ def _assert_nearshore_coverage(
     from its computational grid. Exempt: a request that already lays the global
     ETOPO column down (its bathy base spans the AOI), a request pulling the NCEI
     regional fine legs (whose footprints this check does not model), and the
-    zero-CUDEM AOI (no nearshore composite exists to have a gap in).
+    zero-CUDEM AOI (no nearshore composite exists to have a gap in). An exemption
+    only DEFERS the question: ``_select_and_merge`` measures what every leg
+    actually painted and refuses there when the exempted source did not reach the
+    hole, so the two gates permit exactly the same requests.
 
     BLIND SPOTS, stated so no caller over-reads a pass: this is a FOOTPRINT
     union, so a tile counts as covering its whole 0.25-degree square even where

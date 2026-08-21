@@ -5,8 +5,9 @@ Replaces hidden substitution everywhere with one declared, visible,
 gated mechanism. Proving case: the SWAN bathymetry rectangle
 (docs/design/fallback-audit.md, the mosaic land-fill exhibit).
 
-Waves F1 (ADR 0289), F1b (ADR 0290) and F1c (ADR 0291) are LANDED - read
-"As built" at the bottom for the shipped shapes before touching the machinery.
+Waves F1 (ADR 0289), F1b (ADR 0290), F1c (ADR 0291) and F1d (ADR 0292) are
+LANDED - read "As built" at the bottom for the shipped shapes before touching
+the machinery.
 
 ## The contract in five rules
 
@@ -173,3 +174,45 @@ guard against naked substitution).
   object whose sidecar predates it is a MISS. Bump the constant when a
   provenance field becomes load-bearing for honesty -- otherwise a fixed AOI
   keeps serving the stale reading for the rest of its TTL bucket.
+
+## As built (wave F1d, ADR 0292)
+
+- A FAULT IS NOT A VERDICT. The capability's `refuse_error_code` is reserved for
+  GENUINE coverage refusals: no rung permitted, a rung declined while the gap it
+  would fill was OUTSTANDING, or a filling rung that gapped too. Everything else
+  under a rung -- transport, cache, validation, a typed upstream fault -- wears
+  `FALLBACK_LADDER_ERROR` with the failing rung's own `retryable`, and the message
+  carries the gap context AND the cause. A recorded gap no longer converts a MinIO
+  hiccup into "this AOI has no source".
+- CALLERS DISPATCH ON `error_code`, NOT ON THE TYPE. `LadderGap` / `LadderRefused`
+  are one type for two truths. `geoclaw` and `schism` re-raise a ladder FAULT
+  unchanged (retryability intact) and keep their terminal typed refusal for a
+  coverage VERDICT. `sfincs/flood` is different by contract -- its promise is a
+  typed failed envelope, never a raise, and the envelope has no retryable field --
+  so it separates the two by code and says the retryability in `error_detail`.
+- EVERY LEG'S SHARE IS MEASURED, at FOOTPRINT granularity. The compositor returns
+  each source's own georeferenced extent beside its painted flag; the merge derives
+  disjoint shares (CUDEM tile footprints; regional minus CUDEM; ETOPO minus both).
+  Their sum is the share of the request carrying a real bed, and EVERY "bed
+  everywhere" claim keys on it -- a partial base refuses rather than stamping 1.0
+  over holes, including under an exempting param and including on an AOI that never
+  had a primary gap. Interior nodata inside an extent stays unmeasured (the
+  documented open edge).
+- A FINER LEG COUNTS TOO. The exempted-serve path keys on "something painted the
+  hole", not on "ETOPO painted", so the NCEI regional fine DEM fills a partial-CUDEM
+  AOI instead of being ignored while the fetch false-refuses. The merge gate and the
+  pre-fetch gate now permit exactly the same requests.
+- AN ENHANCEMENT LAYER MAY DEGRADE, NEVER SILENTLY. Every no-layer path of GeoClaw's
+  nested fine shore topo returns the note that says why, logs it at WARNING, and the
+  note rides the answer layer's `fallback_note`.
+- THE LADDER ADMITS WHAT IT DOES NOT DECLARE. The measured map is validated: an
+  unknown key and shares that do not sum to 1.0 are both said out loud. The
+  `regional_fine` share is reported precisely because a model reading only the
+  declared rungs would conclude the rest of its domain is unpainted -- the ladder
+  schema has no slot for a non-degrading contributor, and F2 owns that.
+- THE GATE COVERS WHAT THE WALK DESCENDS TO. A capability that lays one of its own
+  alternatives down unasked gets its row stamped (the data served) and marked
+  GATE-UNSEEN on the record and in the narration -- never implied approval.
+- AN UNMEASURED SERVE CARRIES NO NUMBERS. Under a caller's exemption the stamping
+  seam also clears the result's `rung_coverage`: an envelope may not contradict its
+  own UNMEASURED note.

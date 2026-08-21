@@ -142,7 +142,11 @@ def fetch_topobathy(bbox: Any = None, **kwargs: Any):
 
 
 from trid3nt_server.data.fetchers._router.hooks.topobathy import TopobathyError
-from trid3nt_server.fallbacks import LadderRefused, persist_run_activations
+from trid3nt_server.fallbacks import (
+    LADDER_ERROR_CODE,
+    LadderRefused,
+    persist_run_activations,
+)
 from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.data.simulation.solver.solver import (
     run_solver,
@@ -1252,10 +1256,26 @@ async def model_flood_scenario(
     except (TopobathyError, LadderRefused) as exc:
         # COASTAL DEM hard failure (no bathy AND no 3DEP, bad bbox, datum
         # mismatch), or a bathymetry ladder that reached REFUSE (its ETOPO rung
-        # declined at the fallback gate, or failed for its own reason). A merely
-        # PARTIAL CUDEM footprint does NOT reach here: this composer permits the
-        # ETOPO rung, which fills the gap and returns a labeled result. Thread the
-        # typed error_code into the failed envelope -- never a fabricated success.
+        # declined at the fallback gate, or the coverage gap was unfillable). A
+        # merely PARTIAL CUDEM footprint does NOT reach here: this composer permits
+        # the ETOPO rung, which fills the gap and returns a labeled result. Thread
+        # the typed error_code into the failed envelope -- never a fabricated
+        # success.
+        #
+        # A ladder fault is NOT a coverage verdict, and this composer's contract is
+        # an envelope rather than a raise -- but the envelope carries a code and no
+        # retryable flag, so a transient fault would read as a terminal modeling
+        # failure. The code already separates the two (FALLBACK_LADDER_ERROR vs
+        # TOPOBATHY_COVERAGE_GAP); the detail says the retryability out loud so the
+        # model can act on it.
+        ladder_detail = (
+            " This is a TRANSIENT fault under a fallback rung, not a bathymetry "
+            "coverage verdict: RETRY the same request."
+            if isinstance(exc, LadderRefused)
+            and getattr(exc, "error_code", None) == LADDER_ERROR_CODE
+            and getattr(exc, "retryable", False)
+            else ""
+        )
         logger.warning(
             "model_flood_scenario: fetch_topobathy hard-failed for coastal "
             "bbox=%s (%s / %s) -- returning failed envelope.",
@@ -1268,7 +1288,7 @@ async def model_flood_scenario(
             project_id=proj_id,
             session_id=sess_id,
             error_code=exc.error_code,
-            error_detail=str(exc),
+            error_detail=f"{exc}{ladder_detail}",
             workflow_name=workflow_name,
             data_sources=data_sources,
             forcing=forcing_summary,

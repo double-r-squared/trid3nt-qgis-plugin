@@ -825,7 +825,7 @@ async def _fetch_bathymetry_cog(
     ladder REFUSAL is fatal here: the ``fetch_dem`` leg below is land-only and
     would sample flat 0 m ocean onto every wet node."""
     from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.fallbacks import LadderGap, LadderRefused
+    from trid3nt_server.fallbacks import LADDER_ERROR_CODE, LadderGap, LadderRefused
 
     topobathy_kw, dem_kw = _topobathy_fetch_kwargs(
         resolution_m, force_bathy_base, skip_land
@@ -848,9 +848,17 @@ async def _fetch_bathymetry_cog(
                 res = await asyncio.to_thread(
                     entry.fn, bbox=list(bbox), purpose="bathymetry", **kw)
         except (LadderGap, LadderRefused) as exc:
-            # A nearshore coverage gap no permitted rung filled. ``fetch_dem`` is
-            # LAND-ONLY: it would sample flat 0 m ocean onto every wet node, which
-            # a tidal SCHISM run reads as dry ground. Refuse, never degrade.
+            # Branch on the CODE, never the type: a transport / cache fault under a
+            # rung wears LADDER_ERROR_CODE and keeps its retryability, and turning
+            # that into a terminal BATHYMETRY_UNAVAILABLE would tell the model this
+            # coast has no bed when one attempt merely faulted.
+            if getattr(exc, "error_code", None) == LADDER_ERROR_CODE or getattr(
+                exc, "retryable", False
+            ):
+                raise
+            # A real nearshore coverage gap no permitted rung filled. ``fetch_dem``
+            # is LAND-ONLY: it would sample flat 0 m ocean onto every wet node,
+            # which a tidal SCHISM run reads as dry ground. Refuse, never degrade.
             raise SchismScenarioError(
                 SCHISM_BATHYMETRY_UNAVAILABLE,
                 f"the topo-bathymetry ladder refused for bbox {tuple(bbox)}: "
