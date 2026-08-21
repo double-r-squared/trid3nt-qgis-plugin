@@ -1,0 +1,125 @@
+# Router source spec: staged-dataset direct_window over a raster DERIVED from
+# the Zell & Sanford 2020 release as b = T / K -- the published CONUS
+# transmissivity divided by a CONUS mosaic of the models' own hydraulic
+# conductivity. See scripts/stage_zell_sanford_groundwater.py and ADR 0298.
+schema_version: v1
+
+name: fetch_aquifer_thickness
+source_class: aquifer_thickness
+error_prefix: AQUIFER_THICKNESS
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "s3://trid3nt-cache/staged/zell_sanford_groundwater/zellsanford2020-v1/saturated_thickness_m.tif"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+
+gates:
+  conus_only: true
+  # The staged grid's REAL bounds, read off the object itself. Identical to
+  # fetch_water_table_depth's: both products come off the same model grid.
+  conus_bbox: [-127.873333, 23.235556, -65.362222, 51.546667]
+
+ingest:
+  access: direct_window
+  round_pixel_window: true
+  nodata_gate: true
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: m
+  quantity: aquifer_saturated_thickness
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style_preset: "aquifer_saturated_thickness_m"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  # 1/450 deg posting: 450*450 float32 cells per square degree = 0.81 MB.
+  mb_per_sq_deg: 0.81
+  floor_mb: 0.01
+
+caveats:
+  - "CONUS ONLY -- an AOI outside the staged envelope raises AQUIFER_THICKNESS_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
+  - "THIS IS NOT A MAPPED AQUIFER THICKNESS. It is the saturated thickness of the MODELLED SURFICIAL system: the base is the Zell-Sanford model bottom, a value PRESCRIBED per surficial-geology x HUC4 calibration zone (a few dozen round constants between 20 m and about 170 m below land surface), not a surveyed or interpreted hydrogeologic contact. Where the real aquifer is thicker than the modelled zone, this number is bounded by the modelling choice rather than by geology."
+  - "Cross-checked against an INDEPENDENT bedrock-depth product (ISRIC SoilGrids-2017 BDTICM) it runs systematically HIGH: over Story County IA, Maricopa County AZ and the Yazoo basin MS it exceeds (depth-to-bedrock minus water-table depth) in 88-99% of cells, by a median of 26-57 m. The two disagree because they define the aquifer base differently -- neither is a survey -- but do not present this as a drilled thickness."
+  - "DO NOT use it for a named confined aquifer. The Ogallala/High Plains, the Floridan, the Gulf Coast and every other deep or confined unit are outside the surficial system this model represents; for those, thickness must come from the aquifer-specific hydrogeologic framework, not from here."
+  - "DERIVED, not published: the release ships transmissivity and depth to water, not thickness. This is b = T / K, exact because the models are single-layer with ICELLTYPE=1, so MODFLOW-6 forms T = K x (head - bottom). Both factors are the release's own files and the identity was proved cell by cell (see the ADR); no term is invented. Its accuracy is the model's accuracy, and it inherits every limit of the calibrated transmissivity."
+  - "LONG-TERM AVERAGE steady state driven by 1985-2015 mean recharge -- it resolves no season, drought, or pumping drawdown. A thickness of 0 means the model cell is dry (0.003% of CONUS); 1.26% of cells are under 0.1 m, concentrated in arid interior-west basins."
+  - "Off the model's active domain the raster is NODATA and the read raises AQUIFER_THICKNESS_EMPTY -- verified for open ocean, the Gulf, the Great Lakes and the Florida Keys."
+fallback: []
+
+docstring: |-
+  Saturated thickness of the shallow (surficial, unconfined) groundwater system
+  across the contiguous US.
+
+  **What it does:** Windowed read of a staged CONUS raster to a CRS-tagged
+  GeoTIFF over the requested bbox. Pixel values are METRES of saturated
+  thickness -- the vertical distance from the water table down to the base of
+  the modelled surficial aquifer. Derived from the USGS Zell & Sanford (2020)
+  MODFLOW-6 CONUS simulation as transmissivity divided by hydraulic
+  conductivity, both taken from the release itself.
+
+  **READ THIS FIRST:** the base of this thickness is the MODEL's bottom, which
+  the authors PRESCRIBED per calibration zone (round constants from about 20 m
+  to 170 m below the land surface), not a mapped depth to bedrock or to a
+  confining unit. This is the thickness of the simulated shallow flow system,
+  useful as a screening and model-setup number. It is not a drilled or surveyed
+  aquifer thickness, and against an independent bedrock-depth product it reads
+  systematically high (see the caveats).
+
+  **When to use:**
+  - Screening questions: "how thick is the shallow aquifer here", "how much
+    saturated material is under this field", "is there enough saturated
+    thickness to matter for a shallow well".
+  - Estimating groundwater storage over an area: thickness times specific yield
+    times area gives a first-order volume.
+  - Setting up a regional groundwater model: layer thickness, or a consistency
+    check on transmissivity, since T = K times this.
+  - Comparing the shallow system's capacity between regions.
+
+  **When NOT to use:**
+  - DO NOT use outside the contiguous US -- raises
+    ``AQUIFER_THICKNESS_INPUT_INVALID``.
+  - DO NOT use for a NAMED or CONFINED aquifer (Ogallala/High Plains, Floridan,
+    Gulf Coast, any deep unit). This is the surficial system only; use the
+    aquifer-specific hydrogeologic framework instead.
+  - DO NOT present a value as a drilled thickness or a depth to bedrock.
+  - DO NOT use for a date, season, drought, or pumping response -- one
+    long-term-average steady state.
+  - DO NOT use it to site a production well on its own.
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
+    max_lon, max_lat)`` in EPSG:4326. Required. Example for Story County, Iowa:
+    ``(-93.70, 41.86, -93.20, 42.21)``.
+
+  **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket.
+  ``layer_type="raster"``, ``role="primary"``, ``units="m"``,
+  ``quantity="aquifer_saturated_thickness"``. EPSG:4326, float32, NaN nodata,
+  1/450 degree cells (about 247 m) from the native 250 m Albers model grid.
+  CONUS mean is about 54.9 m; the grid spans 0 m (a dry model cell) to 168.7 m.
+
+  **Cross-tool dependencies:**
+  - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
+  - Pairs with: ``fetch_water_table_depth`` (the top of this saturated column,
+    same model and same grid -- their sum recovers the model's prescribed zone
+    thickness), ``fetch_groundwater_recharge`` (the flux that sustains it),
+    ``fetch_usgs_groundwater_levels`` (observed water levels).
+  - Downstream: storage and sustainable-yield estimates, MODFLOW layer setup,
+    and water-budget analysis in the python playground.

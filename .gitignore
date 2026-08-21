@@ -39,3 +39,9 @@ scripts/sandbox/oceanmesh/shoreline/
 scripts/sandbox/pysheds_watershed/_work/
 # hecras rain-on-grid reference decks (re-downloadable USACE example projects; ADR 0199)
 scripts/sandbox/hecras/_ref/
+
+# Staged-dataset working directories (scripts/stage_*.py --work-dir default).
+# Multi-GB downloads, extracted source rasters and intermediate mosaics; the
+# staging scripts rebuild them and the product lives in the object store.
+# Narrow on purpose -- scratchpad/ itself carries tracked proof artifacts.
+scratchpad/staging/

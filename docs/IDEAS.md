@@ -584,3 +584,25 @@ expose later (plugin-platform goal).
   faithful, expensive).
 - Next staged dataset reuses `scripts/stage_groundwater_recharge.py`'s shape
   rather than inventing a second staging idiom.
+
+## 2026-08-21 (later) - the thickness fork is CLOSED (ADR 0298)
+
+- NATE ruled **A1 + A3**. Both shipped: `fetch_water_table_depth` (published
+  raster) and `fetch_aquifer_thickness` (derived `b = T / K`), staged under
+  `s3://trid3nt-cache/staged/zell_sanford_groundwater/`.
+- A3 turned out CHEAP, not the ~4 GB the fork assumed: K is piecewise constant
+  on the calibration zones, so `hk_<zone>` from `PEST_Subdomain.zip` (62 MB)
+  through the zone map in `Data_Subdomain.zip` (53 MB) reproduces the model's
+  `_1.hk` array EXACTLY. That also dodges an auth wall -- six of the eighteen
+  `models.NN.zip` moved to S3 behind an authenticated GraphQL endpoint.
+- A2 survives as a REPORTED cross-check, not a product: the derived thickness
+  exceeds BDTICM-implied available thickness in 88-99% of cells across three
+  AOIs, by 26-57 m. That is the clearest evidence that the model bottom is a
+  PRESCRIBED zonal constant (20-170 m) rather than geology -- the honest limit
+  is stronger than the "surficial/unconfined only" wording ADR 0297 recorded.
+- OPEN, still no tool: thickness of any NAMED or CONFINED aquifer (Ogallala,
+  Floridan, Gulf Coast). Needs an aquifer-specific hydrogeologic framework.
+- QUEUED, one spec away: `fetch_aquifer_transmissivity`. The staging script
+  already builds and validates the raster; it is not uploaded because
+  `NormalizeSpec.quantity` is a single static stamp, so transmissivity cannot
+  ride the thickness spec without mislabelling the layer.

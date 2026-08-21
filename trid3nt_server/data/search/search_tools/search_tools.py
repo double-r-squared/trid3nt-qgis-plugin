@@ -1130,6 +1130,16 @@ _STOPWORDS: set[str] = {
     "want",
     "need",
     "data",
+    # Demonstratives. They carry no routing signal and appear in most AOI
+    # phrasings ("in this county", "over this bbox", "for these sites"), but the
+    # name channel STEMS a trailing "s" before substring-matching, so "this"
+    # becomes "thi" and silently matches any tool whose name contains it --
+    # "fetch_aquifer_thickness" alone matched "thi", which handed it a
+    # one-entry name channel and the top RRF slot for unrelated queries.
+    "this",
+    "that",
+    "these",
+    "those",
 }
 
 

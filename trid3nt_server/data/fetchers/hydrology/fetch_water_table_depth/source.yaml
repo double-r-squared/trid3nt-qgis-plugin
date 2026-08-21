@@ -1,0 +1,132 @@
+# Router source spec: staged-dataset direct_window over the Zell & Sanford 2020
+# CONUS depth-to-water raster, converted to a COG by
+# scripts/stage_zell_sanford_groundwater.py. The s3:// endpoint names bucket/key
+# only -- the transport resolves the host from the active object-store endpoint
+# at read time.
+schema_version: v1
+
+name: fetch_water_table_depth
+source_class: water_table_depth
+error_prefix: WATER_TABLE
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "s3://trid3nt-cache/staged/zell_sanford_groundwater/zellsanford2020-v1/water_table_depth_m.tif"
+auth:
+  mode: none
+  user_agent: "trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+
+gates:
+  conus_only: true
+  # The staged grid's REAL bounds, read off the object itself -- not the generic
+  # router._CONUS_BBOX (gridmet's, south 25.05), which would false-refuse AOIs
+  # this grid covers. The envelope is the cheap pre-fetch reject for AOIs the
+  # object certainly cannot serve; an AOI inside it but off the model's active
+  # domain (the Florida Keys, the Great Lakes, open ocean) is not refused here,
+  # it reads as an honest WATER_TABLE_EMPTY.
+  conus_bbox: [-127.873333, 23.235556, -65.362222, 51.546667]
+
+ingest:
+  access: direct_window
+  round_pixel_window: true
+  nodata_gate: true
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: m
+  quantity: water_table_depth
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style_preset: "water_table_depth_m"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  # 1/450 deg posting: 450*450 float32 cells per square degree = 0.81 MB.
+  mb_per_sq_deg: 0.81
+  floor_mb: 0.01
+
+caveats:
+  - "CONUS ONLY -- the model stops at the conterminous US border; an AOI outside the staged envelope raises WATER_TABLE_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
+  - "SIMULATED, not measured: these are MODFLOW-6 steady-state heads from 75 calibrated subdomain models, not well readings. Verified against the release's own 38,316 NWIS observation wells the model was calibrated to: Pearson r=0.63, median absolute error 3.1 m, RMSE 19.4 m. Treat a single pixel as a regional estimate with metres of uncertainty, never as a water level for a specific well."
+  - "LONG-TERM AVERAGE, not a date: one steady-state solution driven by 1985-2015 average recharge. It resolves neither a season, a drought, a pumping response, nor any trend."
+  - "NEGATIVE values are real and meaningful: where the simulated water table stands ABOVE land surface (wetlands, stream corridors, discharge areas) the depth is negative, down to -25.7 m CONUS-wide. Do not clamp them to zero -- they mark groundwater discharge."
+  - "DEPTH SATURATES at the model's prescribed bottom. Each parameter zone was given a fixed model thickness (20-170 m below land surface), so a water table deeper than that zone's bottom is reported AT the bottom rather than at its true depth. 1.26% of CONUS cells sit within 0.1 m of their zone bottom, concentrated in arid interior-west basins; the release's own well set contains real depths to 296.8 m that the grid caps at 240.5 m. In the dry Southwest, read a deep value as a LOWER BOUND."
+  - "SURFICIAL/UNCONFINED system only: this is the shallow water table, not the potentiometric surface of a confined aquifer. It says nothing about the head in the Ogallala, the Floridan, or any deep confined unit."
+  - "Off the model's active domain the raster is NODATA and the read raises WATER_TABLE_EMPTY -- verified for open ocean, the Gulf, the Great Lakes and the Florida Keys. Inland water INSIDE the domain does carry values: Lake Okeechobee reads about 0.0 m (water table at the lake surface), which is the model's own boundary condition, not a land measurement."
+fallback: []
+
+docstring: |-
+  Depth from the land surface down to the water table, anywhere in the
+  contiguous US.
+
+  **What it does:** Windowed read of a staged CONUS depth-to-water raster to a
+  CRS-tagged GeoTIFF over the requested bbox. Pixel values are METRES BELOW
+  LAND SURFACE: positive means the water table is that far down, NEGATIVE means
+  the simulated water table stands above the ground (a wetland or a stream
+  corridor). The grid is the USGS Zell & Sanford (2020) simulation: 75
+  steady-state MODFLOW-6 models of the shallow groundwater system at 250 m,
+  driven by long-term average recharge and calibrated against long-term average
+  water levels in observation wells, perennial streams and mapped wetlands.
+
+  **When to use:**
+  - Answering "how deep is the water table here", "depth to groundwater under
+    this field", "how far down would I hit water", "is the water table near the
+    surface in this county".
+  - Setting an initial head or a starting water-table surface for a groundwater
+    model, or a boundary/initial condition for an unsaturated-zone calculation.
+  - Screening for shallow-groundwater hazards and constraints: basement and
+    foundation flooding, septic suitability, liquefaction susceptibility,
+    contaminant travel time from the surface to the water table.
+  - Finding groundwater discharge areas -- the negative and near-zero pixels are
+    where the water table intersects the land surface.
+
+  **When NOT to use:**
+  - DO NOT use outside the contiguous US -- Alaska, Hawaii, Puerto Rico and all
+    territories raise ``WATER_TABLE_INPUT_INVALID``.
+  - DO NOT report a pixel as the water level in a specific well. It is a
+    regional simulation with a median absolute error of about 3 m against the
+    wells it was calibrated to, and an RMSE near 19 m.
+  - DO NOT use for a date, a season, a drought year, or a pumping response --
+    this is one long-term average steady state. For observed time series use
+    ``fetch_usgs_groundwater_levels``.
+  - DO NOT trust a deep value in the arid west as an exact depth: it saturates
+    at the model's prescribed zone bottom (see the caveats) and is a lower
+    bound there.
+  - DO NOT read this as the head in a confined aquifer. It is the surficial,
+    unconfined water table only.
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
+    max_lon, max_lat)`` in EPSG:4326. Required. Example for Story County, Iowa:
+    ``(-93.70, 41.86, -93.20, 42.21)``.
+
+  **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket.
+  ``layer_type="raster"``, ``role="primary"``, ``units="m"``,
+  ``quantity="water_table_depth"``. EPSG:4326, float32, NaN nodata, 1/450
+  degree cells (about 247 m) resampled NEAREST from the native 250 m Albers
+  model grid, so every value is a model value. CONUS mean depth is about
+  19.9 m; the grid spans -25.7 m to 240.5 m.
+
+  **Cross-tool dependencies:**
+  - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
+  - Pairs with: ``fetch_aquifer_thickness`` (the saturated thickness beneath
+    this water table, from the same model), ``fetch_groundwater_recharge`` (the
+    recharge that drives it), ``fetch_usgs_groundwater_levels`` (observed water
+    levels for the same area), ``fetch_3dep_dem`` (land-surface elevation, so
+    that elevation minus this depth is the water-table elevation).
+  - Downstream: MODFLOW initial heads, unsaturated-zone travel-time work, and
+    water-budget analysis in the python playground.

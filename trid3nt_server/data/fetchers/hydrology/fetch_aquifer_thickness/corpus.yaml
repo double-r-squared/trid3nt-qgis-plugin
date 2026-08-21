@@ -1,0 +1,11 @@
+fetch_aquifer_thickness:
+- how thick is the aquifer here
+- what is the saturated thickness of the shallow aquifer in this county
+- how much saturated aquifer material is under this field
+- map aquifer thickness across this watershed
+- how thick is the shallow groundwater system for this bbox
+- estimate groundwater storage volume for this area
+- I need a layer thickness for a regional groundwater model here
+- how far does the surficial aquifer extend below the water table
+- give me saturated thickness so I can check transmissivity against conductivity
+- is there enough saturated thickness here for a shallow well

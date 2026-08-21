@@ -494,6 +494,15 @@ _QGIS_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # 4000, so a 0-800 blues ramp keeps the arid/humid contrast readable instead
     # of collapsing everything below the Olympic Peninsula into one flat hue.
     "groundwater_recharge_mm_yr": ("0,800", "blues"),
+    # Staged Zell-Sanford CONUS surficial groundwater. Depth to water is a
+    # WETNESS reading, so the ramp runs blue (at the surface) to red (deep):
+    # 0-50 m holds the CONUS mean of ~19.9 m and nearly all of the humid east,
+    # and the arid tail past 50 m clamps to the dry end rather than flattening
+    # everything east of the Rockies into one hue. Saturated thickness is a
+    # QUANTITY, so it takes a sequential ramp over 0-150 m (CONUS mean ~54.9 m,
+    # bounded by the model's prescribed zone bottoms near 170 m).
+    "water_table_depth_m": ("0,50", "rdylbu_r"),
+    "aquifer_saturated_thickness_m": ("0,150", "gnbu"),
 }
 
 #: Safe non-empty default - never let a continuous raster fall through to an

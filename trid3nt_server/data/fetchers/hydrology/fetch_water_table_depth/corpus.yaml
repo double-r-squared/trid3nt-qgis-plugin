@@ -1,0 +1,13 @@
+fetch_water_table_depth:
+- how deep is the water table here
+- depth to groundwater under this field
+- how far down would I hit water if I drilled here
+- what is the depth to the water table for this county
+- map depth to groundwater across this watershed
+- is the water table near the surface in this area
+- where does groundwater discharge to the surface around here
+- I need a starting water table surface for a MODFLOW model of this area
+- how deep is groundwater below this site
+- show me shallow groundwater depth for this bbox
+- what is the water table elevation under this parcel
+- is shallow groundwater a problem for basements in this county
