@@ -82,7 +82,6 @@ caveats:
   - "US + territories only (supports_global_query=False); pass EXACTLY ONE of state_code (no area limit) or bbox (<= ~25 deg^2)"
   - "OBSERVED gauge network; for MODELED reach flow use fetch_noaa_nwm_streamflow (US + territories only)"
   - "primary IV real-time -> Site-service location fallback -> honest NWIS_GAUGES_NO_STATIONS (never an empty-success layer)"
-fallback: [fetch_noaa_nwm_streamflow]
 
 # corpus lifted from sibling corpus.yaml.
 

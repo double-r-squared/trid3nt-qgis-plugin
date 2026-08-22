@@ -85,7 +85,6 @@ payload_estimate:                            # twin: n_scenarios * area * 0.3 cl
 caveats:
   - "NOAA OCM SLR Viewer dissolved bathtub-inundation polygons above MHHW; 0-10 ft in 0.5-ft steps, CONUS-only"
   - "one query per scenario level, merged; interior non-coastal bbox -> header-only FGB (honest-empty), never NOAA_SLR_SCENARIOS_EMPTY by default"
-fallback: []
 
 docstring: |-
   NOAA Sea Level Rise scenario inundation polygons as a FlatGeobuf vector layer.

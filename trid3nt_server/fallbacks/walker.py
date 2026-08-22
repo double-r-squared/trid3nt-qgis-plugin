@@ -6,12 +6,14 @@ and the coverage share it painted, fires the loudness gate before descending to
 a degradation rung, and raises :class:`LadderRefused` when the terminal REFUSE
 rung is reached. Guarantees live here so no seam re-implements them.
 
-The gate covers rungs the WALK descends to. A capability that lays one of its
-own declared alternatives down without being asked (a composite whose fallback
-leg auto-engages) reports that source's share through ``rung_coverage``; the
-reconcile stamps the row -- the data already served, so gating it is moot -- and
-marks it GATE-UNSEEN on the record and in the narration rather than pretending
-the floor saw it.
+The gate covers rungs the WALK descends to, and only DEGRADATION rungs are
+gated at all. A capability that lays one of its own declared degradations down
+without being asked (a composite whose fallback leg auto-engages) reports that
+source's share through ``rung_coverage``; the reconcile stamps the row -- the
+data already served, so gating it is moot -- and marks it GATE-UNSEEN on the
+record and in the narration rather than pretending the floor saw it. An
+``enhancement`` rung passes the gate untouched by construction: it is a BETTER
+source than the primary, so there is no cost for anyone to approve.
 """
 
 from __future__ import annotations
@@ -220,6 +222,11 @@ def _reconcile_to_paint(
     declared rung means the ladder is not a complete account of what painted the
     result, and shares that do not sum to 1.0 mean part of the request came from
     outside the ladder or from nothing at all. Both are said out loud.
+
+    A rung the capability laid down itself is GATE-UNSEEN only when it is a
+    DEGRADATION. An ``enhancement`` rung costs nothing, so its row says what
+    painted and stops there -- calling it ungated would invite a reader to
+    treat a better source as an unapproved substitution.
     """
     declared = {r.name for r in ladder.rungs}
     unknown = sorted(k for k in measured if k not in declared)

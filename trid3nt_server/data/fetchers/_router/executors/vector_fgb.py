@@ -512,9 +512,9 @@ def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
 
     ``ingest.endpoint_select`` chooses the primary by a param's presence (drought
     current layer /3 when ``date`` absent, archive layer /2 when present).
-    Absent -> the ``data`` endpoint (else the first). ``spec.fallback`` names
-    ordered sibling endpoints tried on the primary's upstream failure (nhd HR ->
-    medium-res).
+    Absent -> the ``data`` endpoint (else the first). ``spec.endpoint_fallback``
+    names ordered SAME-DATA mirrors of this spec's own ``endpoints`` block, tried
+    on the primary's upstream failure (nhd HR -> medium-res).
     """
     endpoints = spec.endpoints
     ingest = spec.ingest or {}
@@ -534,7 +534,7 @@ def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
     if primary is None:
         primary = next(iter(endpoints.values()))
     chain = [primary]
-    for fb in spec.fallback:
+    for fb in spec.endpoint_fallback:
         ep = endpoints.get(fb)
         if ep is not None and ep is not primary:
             chain.append(ep)
@@ -681,9 +681,10 @@ def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, A
     """Fetch features across the resolved endpoint chain (primary -> fallback).
 
     The primary is the selected/`data` endpoint; on an upstream failure each
-    ordered ``spec.fallback`` sibling is tried before the error is surfaced
-    (the data-source fallback norm -- nhd HR -> medium-res). A single endpoint
-    (the common case) is one call with no fallback.
+    ordered ``spec.endpoint_fallback`` mirror is tried before the error is
+    surfaced (nhd HR -> medium-res). Every mirror publishes the SAME dataset, so
+    the hop is silent by the loudness floor. A single endpoint (the common case)
+    is one call with no mirror.
     """
     chain = resolve_endpoints(spec, params)
     last_exc: Exception | None = None

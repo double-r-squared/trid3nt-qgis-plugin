@@ -85,7 +85,6 @@ caveats:
   - "NOAA OCM SLR Viewer marsh-migration overlay (marsh_* MapServer/export PNG32 -> 4-band RGBA COG); existing marsh / migrated marsh / open water symbology baked in"
   - "CONUS coastal product only; a bbox with no coverage at this level returns a valid transparent (empty) overlay, never fabricated content"
   - "marsh migration is published at 0..10 ft in 0.5-ft steps"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

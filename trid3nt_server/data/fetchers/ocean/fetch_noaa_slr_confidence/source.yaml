@@ -75,7 +75,6 @@ caveats:
   - "NOAA OCM SLR Viewer mapping-confidence overlay (conf_* MapServer/export PNG32 -> 4-band RGBA COG); blue = HIGH confidence inundated, orange = LOW, transparent = not inundated"
   - "CONUS coastal product only; a bbox with no coverage at this level returns a valid transparent (empty) overlay, never fabricated content"
   - "confidence is published at WHOLE-foot levels 0..10 only"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

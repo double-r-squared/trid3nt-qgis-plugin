@@ -78,7 +78,6 @@ payload_estimate:
 caveats:
   - "30 m LANDFIRE LF2022 CONUS fuels/vegetation via ImageServer exportImage; all-nodata raster (bbox outside CONUS) -> LANDFIRE_FUELS_EMPTY (never a fabricated layer)"
   - "CONUS-only at v0.1 (AK/HI/PRVI mosaics exist, regional dispatch deferred)"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

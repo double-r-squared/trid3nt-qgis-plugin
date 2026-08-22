@@ -63,7 +63,6 @@ payload_estimate:
 caveats:
   - "GLO-30 is a SURFACE model (ocean reads ~0 m; no bathymetry); an off-globe / all-nodata window -> COPERNICUS_DEM_NO_COVERAGE (never a fabricated layer)"
   - "AOI-scoped (<= 4 deg^2); elevations are meters (EGM2008-referenced); US AOIs prefer the finer 10 m 3DEP via fetch_dem"
-fallback: []
 
 # corpus re-homed onto fetch_dem (wave-11): this internal seam carries none.
 

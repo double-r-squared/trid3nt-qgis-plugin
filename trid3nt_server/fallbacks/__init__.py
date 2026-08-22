@@ -5,6 +5,7 @@ declare their ladders here and share one execution + recording path.
 """
 
 from .ladder import (
+    BELOW_PRIMARY_CLASSES,
     DEGRADATION_CLASSES,
     REFUSE,
     Consequence,
@@ -26,6 +27,7 @@ from .walker import (
 
 __all__ = [
     "Consequence",
+    "BELOW_PRIMARY_CLASSES",
     "DEGRADATION_CLASSES",
     "Rung",
     "REFUSE",

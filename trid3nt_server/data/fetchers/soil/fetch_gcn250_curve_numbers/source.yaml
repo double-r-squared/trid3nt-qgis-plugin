@@ -62,7 +62,6 @@ payload_estimate:
 caveats:
   - "global ~250 m SCS curve numbers (Jaafar 2019, 84 N to 57 S; no Antarctica/far-Arctic); an all-nodata window (over open water / off coverage) -> GCN250_EMPTY (never a fabricated layer)"
   - "CONUS work prefers NLCD-derived CNs (~30 m) via compute_impervious_surface + extract_landcover_class; CN is an SCS depth-loss method, NOT a rational-method runoff coefficient"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

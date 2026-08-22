@@ -61,7 +61,6 @@ payload_estimate:                            # twin: area*3.0 clamp[0.02,80]
 caveats:
   - "CDC/ATSDR SVI 2022 tract percentiles; -999 null sentinel normalized to null"
   - "US-only (50 states + DC); non-US bbox -> header-only FGB (honest-empty, never a fabricated error)"
-fallback: []
 
 docstring: |-
   CDC/ATSDR Social Vulnerability Index (SVI 2022) census-tract choropleth.

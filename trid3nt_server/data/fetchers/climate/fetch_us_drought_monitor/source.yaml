@@ -65,7 +65,6 @@ payload_estimate:                            # twin: area*0.6 clamp[0.05,60]
 caveats:
   - "USDM weekly drought-category (D0-D4) polygons; current week by default or a past release via date"
   - "US-only; out-of-coverage or off-cadence date -> header-only FGB (honest-empty, never a fabricated error)"
-fallback: []
 
 docstring: |-
   US Drought Monitor weekly drought-category polygons as a FlatGeobuf layer.

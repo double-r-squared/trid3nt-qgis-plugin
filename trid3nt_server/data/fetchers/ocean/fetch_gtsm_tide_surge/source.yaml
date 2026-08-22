@@ -59,7 +59,6 @@ caveats:
   - "GTSM v3.0 reanalysis is HISTORICAL only (1950 -> ~2024); a MODEL, not a gauge -- for CONUS use fetch_noaa_coops_tides"
   - "keyed: free Copernicus CDS key auto-requested via credential card on GTSM_MISSING_KEY; empty bbox -> GTSM_EMPTY (no gauges)"
   - "sparse global gauge network; composers interpolate to the SFINCS grid via bnd.bzs"
-fallback: [fetch_noaa_coops_tides]
 
 # corpus lifted from sibling corpus.yaml.
 

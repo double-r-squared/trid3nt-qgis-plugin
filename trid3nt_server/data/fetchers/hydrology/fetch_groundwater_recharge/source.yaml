@@ -70,7 +70,6 @@ caveats:
   - "long-term MEAN annual rates, not a time series: reitz_2017 is the 2000-2013 average, wolock_2003 is a 1951-80 runoff climatology x base-flow index -- neither resolves a drought year, a season, or a storm"
   - "reitz_2017 is TOTAL recharge (it includes the return flow from groundwater-sourced irrigation), so in heavily irrigated areas it exceeds the natural rate; wolock_2003 estimates NATURAL recharge only, which is most of why the two disagree there"
   - "the two sources are methodologically independent (empirical water-budget regression vs base-flow partition of a runoff map) and disagree locally by tens of percent; that spread is a real uncertainty estimate, not an error in either"
-fallback: []
 
 docstring: |-
   Long-term mean annual groundwater recharge rate over the contiguous US.

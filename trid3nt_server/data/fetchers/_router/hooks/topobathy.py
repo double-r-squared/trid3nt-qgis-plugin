@@ -1242,10 +1242,9 @@ def _rung_coverage(
     is measured independently -- an ETOPO base that reaches only part of the AOI
     reports only that part, never "whatever CUDEM did not cover".
 
-    ``regional_fine`` is the NCEI fine coastal DEM the caller switched on. It is
-    NOT a ladder rung (it is finer than the primary, not a degradation), so the
-    walker says so out loud when it appears; it is reported because a model
-    reading the shares must be able to account for the whole raster.
+    ``regional_fine`` is the NCEI fine coastal DEM the caller switched on: an
+    ``enhancement`` rung, declared so the walker can name it, gated by nobody
+    because a FINER source costs nothing to take.
 
     ``None`` when nothing measurable painted a bed.
     """
@@ -1618,13 +1617,14 @@ def _coverage_gap_message(
         "fake landmass a wave/surge solver excludes as dry ground"
     )
     remedy = (
-        "To proceed on a REAL but coarser bed, set force_bathy_base=true: "
-        "the global NOAA ETOPO 2022 15 arc-second relief model (~450 m, EGM2008/MSL "
-        "rather than NAVD88) is laid under the whole AOI and the result carries a "
-        "PARTIAL-CUDEM fallback_warning naming the share each source painted. A "
-        "composer can instead permit the 'etopo_bathy_base' rung of this tool's "
-        "fallback ladder (fallback=(\"etopo_bathy_base\",)), which lays the same "
-        "bed and additionally stamps the per-rung coverage onto the layer."
+        "To proceed on a REAL but coarser bed, permit the 'etopo_bathy_base' rung "
+        "of this tool's fallback ladder (fallback=(\"etopo_bathy_base\",)): the "
+        "global NOAA ETOPO 2022 15 arc-second relief model (~450 m, EGM2008/MSL "
+        "rather than NAVD88) is laid under the whole AOI, the result carries a "
+        "PARTIAL-CUDEM fallback_warning, and the MEASURED share each source "
+        "painted is stamped on the layer. The older force_bathy_base=true lays "
+        "the same bed but turns this tool's coverage question off, so the result "
+        "carries the warning WITHOUT any per-rung numbers -- prefer the rung."
         if coarser_bed_can_fill
         else "The coarser global ETOPO bed was ALREADY laid under this AOI and "
         "still does not reach the whole of it, so force_bathy_base / the "
@@ -1825,13 +1825,14 @@ BATHYMETRY_LADDER = register_ladder(
     Ladder(
         capability="fetch_topobathy",
         refuse_error_code="TOPOBATHY_COVERAGE_GAP",
-        # These params exempt the coverage check (``_assert_nearshore_coverage``),
-        # so no rung's share is measured and the walker must stamp no coverage
-        # claim. The composite is still labeled by the PARTIAL-CUDEM
-        # fallback_warning.
-        coverage_exempt_params=(
-            "force_bathy_base", "skip_cudem", "include_regional_fine",
-        ),
+        # These params turn the capability's own coverage question off: they
+        # declare up front which bed the caller wants under the AOI, so the
+        # CUDEM-gap verdict is moot and the walker stamps no coverage claim. The
+        # composite is still labeled by the PARTIAL-CUDEM fallback_warning.
+        # ``include_regional_fine`` is NOT here: it names the ``regional_fine``
+        # rung, whose share ``_rung_coverage`` measures like any other, so the
+        # rows it produces are evidence and belong on the envelope.
+        coverage_exempt_params=("force_bathy_base", "skip_cudem"),
         rungs=(
             Rung(
                 name="user_supplied",
@@ -1852,6 +1853,16 @@ BATHYMETRY_LADDER = register_ladder(
                 describes=(
                     "NOAA NCEI CUDEM 1/9\" (~3 m) nearshore topo-bathy tiles, "
                     "NAVD88, with USGS 3DEP painting the land"
+                ),
+            ),
+            Rung(
+                name="regional_fine",
+                consequence="enhancement",
+                params={"include_regional_fine": True},
+                describes=(
+                    "NOAA NCEI regional coastal DEM (CoNED, ~1 m) laid under the "
+                    "part of the AOI CUDEM's 1/9\" collection does not reach -- "
+                    "FINER than the primary, so taking it costs nothing"
                 ),
             ),
             Rung(

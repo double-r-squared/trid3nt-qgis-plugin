@@ -207,6 +207,21 @@ def _validate_hooks(spec: SourceSpec) -> None:
                     f"spec {spec.name!r} references unknown hook {point}={name!r}"
                 )
 
+    # endpoint_fallback: every entry must name a key in this spec's OWN endpoints.
+    # ``resolve_endpoints`` indexes ``spec.endpoints``, never the tool registry, so
+    # an entry naming a sibling TOOL silently resolves to nothing while the spec
+    # card advertises it to the model as a fallback this source has. A promise no
+    # code path can keep fails at load instead of shipping as catalog text.
+    for fb in spec.endpoint_fallback:
+        if fb not in spec.endpoints:
+            raise ValueError(
+                f"spec {spec.name!r} declares endpoint_fallback {fb!r}, which names "
+                f"no endpoint of this spec (has: {sorted(spec.endpoints)}). "
+                "endpoint_fallback is SAME-DATA mirrors of this source only; a "
+                "CROSS-DATASET alternative belongs on a declared fallback ladder "
+                "(trid3nt_server.fallbacks), which gates and stamps it."
+            )
+
     # variant_by_emptiness: the emptiness-switch hook name must resolve.
     vbe = spec.output.variant_by_emptiness
     if vbe and not has_hook(vbe):
@@ -403,7 +418,7 @@ def spec_card(spec: SourceSpec, relevance_score: float | None = None) -> dict[st
         "params": {pn: _param_schema_entry(ps) for pn, ps in spec.params.items()},
         "gates": spec.gates.model_dump(mode="json") if spec.gates is not None else {},
         "caveats": list(spec.caveats),
-        "fallback": list(spec.fallback),
+        "endpoint_fallback": list(spec.endpoint_fallback),
     }
     if relevance_score is not None:
         card["relevance_score"] = float(relevance_score)

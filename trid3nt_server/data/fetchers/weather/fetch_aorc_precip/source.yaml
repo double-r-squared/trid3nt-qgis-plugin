@@ -71,7 +71,6 @@ caveats:
   - "AORC v1.1: ~800 m (30 arc-second) hourly CONUS precip (APCP_surface, mm), 1979-02 to ~10 days ago; NOT real-time."
   - "Complements fetch_mrms_qpe (MRMS QPE Pass2 starts ~2020-10): AORC is the pre-2020 / any-historical-year forcing."
   - "Returns an AOI-MEAN hyetograph (a rain-on-grid forcing series), not a spatial raster; a large bbox x long window is a slow streamed read."
-fallback: [fetch_mrms_qpe, fetch_era5_reanalysis]
 
 # corpus lifted from sibling corpus.yaml.
 

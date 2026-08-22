@@ -209,7 +209,7 @@ def test_spec_card_content_fidelity(_registry_loaded):
         assert card["params"][pname]["type"] == pspec.type
         assert card["params"][pname]["required"] == bool(pspec.required)
     # Honesty context + score present.
-    for key in ("gates", "caveats", "fallback"):
+    for key in ("gates", "caveats", "endpoint_fallback"):
         assert key in card
     assert card["relevance_score"] == pytest.approx(1.23)
 

@@ -68,7 +68,6 @@ caveats:
   - "WorldPop gridded population persons/cell (Global_2000_2020 tree; vintage year MUST be in 2000..2020, e.g. 'worldpop_2020'). Default 1km-aggregated product (~50 MB/country download per cache miss); target_resolution_m<=100 opts into the native 100m UN-adjusted product (~4 GB/country, opt-in cost). WorldPop does not support HTTP range requests, so the whole country GeoTIFF is downloaded once then windowed."
   - "gridded residential estimate, NOT per-building occupancy or real-time/daytime population; combine fetch_buildings footprints for building-level counts. For US Census tract population use fetch_census_acs."
 
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

@@ -83,7 +83,6 @@ caveats:
   - "~300 US stations globally (US coastline + Great Lakes + territories); empty bbox -> COOPS_TIDES_EMPTY (retryable=false)"
   - "one bad station never aborts the bbox (swallowed to null); all-empty -> typed EMPTY, never fabricated"
   - "non-US coastal water level -> fetch_gtsm_tide_surge (GTSM v3.0 global reanalysis)"
-fallback: [fetch_gtsm_tide_surge]
 
 # corpus lifted from sibling corpus.yaml.
 

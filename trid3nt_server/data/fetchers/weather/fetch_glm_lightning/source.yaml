@@ -72,7 +72,6 @@ caveats:
   - Default output is a frames list (single accumulation = a one-frame list); accumulation_window_s fans the window into scrubber-steppable step-N frames. A bucket with no granules OR no in-AOI groups is skipped; a window where EVERY bucket is empty raises a typed GLM_EMPTY error (honesty floor, never a blank overlay).
   - bbox is required (a GLM full-disk bin is enormous); the single-frame window is capped at 20 min (use accumulation_window_s for longer spans).
 
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

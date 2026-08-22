@@ -362,9 +362,14 @@ class SyntheticInput(GraceModel):
 #: endpoint of the SAME dataset) walks silently, ``cross_dataset`` (a different
 #: dataset, method or resolution) narrates loudly and gates in user_gated mode,
 #: ``synthetic`` (a value with no real data source) ALWAYS gates with a labeled
-#: default of refuse.
+#: default of refuse. ``enhancement`` is the fourth non-degradation: a source
+#: BETTER than the primary (finer, more local) that the capability may lay under
+#: part of a request. It is reported for the same reason every other rung is --
+#: a reader must be able to account for the whole result -- but it costs nothing,
+#: so the floor ignores it and a call site cannot "permit" it.
 FallbackConsequence = Literal[
-    "primary", "user_supplied", "same_data", "cross_dataset", "synthetic"
+    "primary", "user_supplied", "enhancement",
+    "same_data", "cross_dataset", "synthetic",
 ]
 
 

@@ -370,7 +370,7 @@ def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
             "GENERATE_MESH_NO_WATER",
             f"no water polygon found for coastal AOI {aoi} (OSM coastline + NHD "
             "areal water both empty); is this an inland box?")
-    dem_path = _fetch_topobathy(aoi, Path(rundir))
+    dem_path, bed_layer = _fetch_coastal_bed(aoi, Path(rundir))
     # The in-container mesher reads the water polygon from a FILE (json.load(open(
     # ...))) under the /data mount, not an inline dict -- write it beside the config.
     (Path(rundir) / "water.geojson").write_text(json.dumps(_mapping(water)))
@@ -405,7 +405,8 @@ def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
         "local_slf": None,
         "sizing_source": "OSM natural=coastline + NHDPlus areal water domain; "
                          "distance-to-shore + wavelength-to-depth sizing",
-        "dem_source": "topobathy (3DEP + NOAA CoNED where available)",
+        "dem_source": _bed_provenance(bed_layer),
+        "bed_fallback_note": getattr(bed_layer, "fallback_note", None),
         "place": None,
     }
 
@@ -526,11 +527,17 @@ def _stage_and_record(
                        value=f"{node_count} nodes / {elem_count} elements",
                        basis="derived",
                        real_source_if_any=built.get("sizing_source")),
+        SyntheticInput(param="mesh_bed", value=str(built.get("dem_source")),
+                       basis="fetched", consequence="physics",
+                       real_source_if_any=built.get("dem_source"),
+                       note="the elevation every node carries; a solver reads it "
+                            "as the domain's bathymetry"),
     ]
     return LayerURI(
         layer_id=f"mesh-{mesh_id}", name=f"Mesh: {name}", layer_type="mesh",
         uri=twodm_uri, style_preset="mesh_wireframe", role="primary",
-        bbox=lonlat_bbox, crs_authid=crs_authid, synthetic_inputs=synthetic)
+        bbox=lonlat_bbox, crs_authid=crs_authid, synthetic_inputs=synthetic,
+        fallback_note=built.get("bed_fallback_note"))
 
 
 # --------------------------------------------------------------------------- #
@@ -652,18 +659,47 @@ def _run_mesh_container(rundir: Path, script: str, sandbox: Path) -> None:
             f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
 
 
-def _fetch_topobathy(aoi, rundir: Path) -> Path:
+#: The bathymetry rungs a coastal water-edge mesh tolerates. The mesh IS the wet
+#: domain, so every node needs a real below-waterline bed: where CUDEM's 1/9"
+#: collection stops mid-AOI, the global ETOPO relief is a REAL bed -- coarse, on a
+#: different vertical datum, loudly labeled. A refusal is the honest outcome; the
+#: alternative is meshing an ocean that has no depth.
+_COASTAL_BED_FALLBACK = ("etopo_bathy_base",)
+
+
+def _fetch_coastal_bed(aoi, rundir: Path) -> tuple[Path, Any]:
+    """Fetch the coastal topo-BATHY bed and return ``(path, layer)``.
+
+    EPSG:4326 on purpose. Two consumers read this raster and they disagree about
+    what a coordinate is: ``_sample_raster_at_nodes`` warps 4326 -> the raster's
+    own CRS, but the in-container wavelength sizer builds its interpolator from
+    the raster's transform and queries it with lon/lat, so a projected grid puts
+    every query out of bounds and the depth term silently reads its fill value.
+    """
     from trid3nt_server.data import TOOL_REGISTRY
     from trid3nt_server.data.cache import read_object_bytes_s3
 
-    layer = TOOL_REGISTRY["fetch_dem"].fn(
-        bbox=tuple(aoi), source="3dep", resolution_m=10)
+    layer = TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=tuple(aoi), target_crs="EPSG:4326",
+        fallback=_COASTAL_BED_FALLBACK,
+    )
     uri = layer.uri if hasattr(layer, "uri") else layer["uri"]
     dst = rundir / "topobathy.tif"
     dst.write_bytes(
         read_object_bytes_s3(uri) if str(uri).startswith("s3://")
         else Path(uri).read_bytes())
-    return dst
+    return dst, layer
+
+
+def _bed_provenance(layer: Any) -> str:
+    """What ACTUALLY painted the coastal bed, from the ladder's activation rows."""
+    rows = list(getattr(layer, "fallbacks", None) or [])
+    if rows:
+        return "topobathy: " + ", ".join(
+            f"{r.rung} {r.coverage * 100:.0f}%" for r in rows if r.coverage > 0.0
+        )
+    note = getattr(layer, "fallback_note", None)
+    return f"topobathy ({note})" if note else "topobathy: CUDEM 1/9\" + 3DEP land"
 
 
 def _sample_raster(raster_path: Path, points_lonlat: Any) -> Any:

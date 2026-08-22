@@ -52,7 +52,6 @@ payload_estimate:
 caveats:
   - "global ~30 m (1 arcsec) Meta HRSL persons/cell (about -56 to +72 latitude; excludes Antarctica + far Arctic); an all-nodata window (open water / off coverage) -> HRSL_EMPTY (never a fabricated layer)"
   - "gridded population, NOT per-building occupancy; combine fetch_buildings footprints with HRSL for building-level counts"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

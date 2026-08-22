@@ -14,6 +14,7 @@ from typing import Any, Literal, Mapping
 
 __all__ = [
     "Consequence",
+    "BELOW_PRIMARY_CLASSES",
     "DEGRADATION_CLASSES",
     "Rung",
     "REFUSE",
@@ -23,17 +24,25 @@ __all__ = [
     "registered_ladders",
 ]
 
-#: What descending to a rung costs. ``primary`` is the declared first choice and
-#: ``user_supplied`` the caller's own data -- neither is a degradation, so the
-#: loudness floor ignores them. ``refuse`` belongs to the terminal rung alone.
+#: What descending to a rung costs. ``primary`` is the declared first choice,
+#: ``user_supplied`` the caller's own data and ``enhancement`` a source BETTER
+#: than the primary -- none is a degradation, so the loudness floor ignores all
+#: three. ``refuse`` belongs to the terminal rung alone.
 Consequence = Literal[
-    "primary", "user_supplied", "same_data", "cross_dataset", "synthetic", "refuse"
+    "primary", "user_supplied", "enhancement",
+    "same_data", "cross_dataset", "synthetic", "refuse",
 ]
 
 #: The classes the loudness floor keys on (rule 4 of the ladder contract).
 DEGRADATION_CLASSES: frozenset[str] = frozenset(
     {"same_data", "cross_dataset", "synthetic"}
 )
+
+#: Classes a rung BELOW the primary may carry. An ``enhancement`` rung is not an
+#: alternative a call site permits through ``fallback=`` -- the capability
+#: switches it on through its own param. It is declared so the walker can name
+#: what painted a result instead of logging an unknown key.
+BELOW_PRIMARY_CLASSES: frozenset[str] = DEGRADATION_CLASSES | {"enhancement"}
 
 _EMPTY: Mapping[str, Any] = MappingProxyType({})
 
@@ -90,9 +99,11 @@ class Ladder:
     """A capability's declared degradation path.
 
     ``rungs`` is ordered top-down: an optional ``user_supplied`` rung first, then
-    exactly one ``primary``, then the alternatives a call site may permit by name
-    through ``fallback=``. ``refuse_error_code`` is the typed code the terminal
-    rung raises, so a refusal keeps the capability's own error vocabulary.
+    exactly one ``primary``, then the rungs below it -- the degradations a call
+    site may permit by name through ``fallback=``, and any ``enhancement`` rung
+    the capability switches on itself. ``refuse_error_code`` is the typed code the
+    terminal rung raises, so a refusal keeps the capability's own error
+    vocabulary.
     """
 
     capability: str
@@ -127,10 +138,11 @@ class Ladder:
                 "user_supplied rung and precede every alternative"
             )
         for r in self.rungs[primaries[0] + 1:]:
-            if r.consequence not in DEGRADATION_CLASSES:
+            if r.consequence not in BELOW_PRIMARY_CLASSES:
                 raise ValueError(
-                    f"ladder {self.capability!r} rung {r.name!r}: an alternative "
-                    f"must be {sorted(DEGRADATION_CLASSES)}, got {r.consequence!r}"
+                    f"ladder {self.capability!r} rung {r.name!r}: a rung below the "
+                    f"primary must be {sorted(BELOW_PRIMARY_CLASSES)}, got "
+                    f"{r.consequence!r}"
                 )
         if self.terminal.consequence != "refuse":
             raise ValueError(f"ladder {self.capability!r}: terminal rung must REFUSE")
@@ -145,6 +157,11 @@ class Ladder:
 
     @property
     def alternatives(self) -> tuple[Rung, ...]:
+        """The DEGRADATION rungs a call site may permit through ``fallback=``.
+
+        An ``enhancement`` rung is deliberately absent: permitting a rung is how
+        a caller accepts a cost, and this one has none to accept.
+        """
         return tuple(r for r in self.rungs if r.consequence in DEGRADATION_CLASSES)
 
     def alternative(self, name: str) -> Rung | None:

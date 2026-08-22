@@ -69,7 +69,6 @@ caveats:
   - "SURFICIAL/UNCONFINED system only: this is the shallow model's transmissivity, not the transmissivity of any deep or confined unit. It says nothing about the Ogallala, the Floridan, or any named confined aquifer."
   - "T = K x b: this is the numerator fetch_aquifer_thickness divides by the model's own hydraulic-conductivity mosaic to recover saturated thickness. A cell where this reads near zero is a near-dry or very-low-conductivity model cell, not a data gap."
   - "Off the model's active domain the raster is NODATA and the read raises AQUIFER_TRANSMISSIVITY_EMPTY -- the same masking as fetch_water_table_depth and fetch_aquifer_thickness (they share one cleaning rule): a cell whose published transmissivity is negative is masked in every product built from this release, since T = K * b with K > 0 and b >= 0 makes a negative T impossible."
-fallback: []
 
 docstring: |-
   Effective transmissivity of the shallow (surficial, unconfined) groundwater

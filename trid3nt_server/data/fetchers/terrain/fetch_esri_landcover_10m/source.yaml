@@ -84,7 +84,6 @@ caveats:
   - "global 10m (worldwide complement to US-only NLCD); no covering item or all-nodata mosaic -> ESRI_LANDCOVER_NO_COVERAGE (never a fabricated layer)"
   - "hard ceiling 8 deg^2; larger extents -> fetch_landcover (NLCD, CONUS, ~30m, no ceiling)"
   - "9-class categorical (1=Water 2=Trees 4=Flooded 5=Crops 7=Built 8=Bare 9=Snow/Ice 11=Rangeland; 0=NoData)"
-fallback: [fetch_landcover]
 
 # corpus lifted from sibling corpus.yaml.
 

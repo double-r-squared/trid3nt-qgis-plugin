@@ -98,7 +98,6 @@ payload_estimate:                            # twin: area*4.0 clamp[0.02,90]
 caveats:
   - "EPA EJScreen 2.x block-group environmental-justice percentiles; US-only, county-or-smaller bbox"
   - "empty bbox (ocean / outside US) -> header-only FGB (honest-empty), never EPA_EJSCREEN_EMPTY by default"
-fallback: []
 
 docstring: |-
   EPA EJScreen environmental-justice indices by census block group.

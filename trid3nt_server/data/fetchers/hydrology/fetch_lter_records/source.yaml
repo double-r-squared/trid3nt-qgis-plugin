@@ -72,7 +72,6 @@ caveats:
   - "US-LTER / EDI records via the public DataONE mirror (native PASTA API is 403 anonymously; identical bytes)."
   - "Generic package + entity reader: pass an EDI package_id (e.g. 'knb-lter-cwt.3037/19'); returns one data entity's parsed time series with per-column units."
   - "Coverage is whatever the package published; many LTER series predate the MRMS precip archive (align the forcing window before grading a replication)."
-fallback: [fetch_usgs_nwis_gauges]
 
 # corpus lifted from sibling corpus.yaml.
 

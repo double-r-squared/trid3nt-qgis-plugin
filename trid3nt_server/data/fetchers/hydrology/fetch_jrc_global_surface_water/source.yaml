@@ -82,7 +82,6 @@ payload_estimate:
 caveats:
   - "JRC 38-year (1984-2021) Landsat surface-water statistics at 30 m; no covering item / all-nodata mosaic (ocean / fully-dry AOI) -> JRC_GSW_NO_COVERAGE (never a fabricated layer)"
   - "AOI-scoped (<= 2.0 deg^2); the embedded per-band palette renders directly (occurrence/recurrence white->blue, seasonality 12-step blue, change red->white->blue diverging)"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

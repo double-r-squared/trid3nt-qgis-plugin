@@ -728,9 +728,18 @@ class SourceSpec(GraceModel):
     cache: CacheSpec
     payload_estimate: PayloadEstimateSpec
 
-    # --- honesty: caveats + fallback chain ---
+    # --- honesty: caveats + the same-data endpoint chain ---
     caveats: list[str] = Field(default_factory=list)
-    fallback: list[str] = Field(default_factory=list)
+    #: SAME-DATA ENDPOINT MIRRORS ONLY, in order. Every entry names a KEY in this
+    #: spec's own ``endpoints`` block -- an alternate service publishing the SAME
+    #: dataset (USGS NHDPlus HR -> the medium-resolution NHD service), which the
+    #: loudness floor lets walk silently. Registration REFUSES an entry that names
+    #: no such key, because such an entry cannot execute: ``resolve_endpoints``
+    #: indexes ``endpoints``, never the tool registry, so a SIBLING TOOL name here
+    #: is a promise printed onto the spec card that no code path can keep.
+    #: A CROSS-DATASET alternative is not this mechanism -- it is a declared rung
+    #: on a fallback ladder (``trid3nt_server.fallbacks``), gated and stamped.
+    endpoint_fallback: list[str] = Field(default_factory=list)
 
     # --- declared DATA-native resolutions (two-layer truth)
     # A source's native cell / tier facts live HERE (with the fetcher), so the

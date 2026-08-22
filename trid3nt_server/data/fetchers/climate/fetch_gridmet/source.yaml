@@ -80,7 +80,6 @@ caveats:
   - "CONUS-only (bbox must intersect ~-124.77,25.05,-67.06,49.40); non-CONUS -> fetch_era5_reanalysis"
   - "daily cadence; gridMET lags ~3 days from real time; 366-day hard cap per call"
   - "empty/out-of-coverage window -> GRIDMET_EMPTY (retryable=false); no fabricated pixels"
-fallback: [fetch_era5_reanalysis]
 
 # corpus omitted here -> loader lifts it verbatim from the sibling corpus.yaml.
 

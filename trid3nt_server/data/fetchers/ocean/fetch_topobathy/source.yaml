@@ -48,6 +48,12 @@ params:
   min_pixel_m:
     type: float
     schema_optional: true
+  # The bathymetry ladder's TOP rung (``user_supplied``): present -> the caller's
+  # own raster IS the bed and nothing is fetched. It is a declared param, not an
+  # absorbed one, because a rung the model cannot see is a rung nobody can take.
+  dem_uri:
+    type: str
+    schema_optional: true
 ingest:
   access: library_delegate
   delegate:
@@ -163,6 +169,11 @@ docstring: |-
           nested-topo COG (still far finer than the tens-of-metres finest AMR
           cell) instead of a hundreds-of-MB native-resolution grid. Default None
           (native finest-source resolution, the historical behaviour).
+      dem_uri: OPTIONAL -- YOUR OWN topo/bathy raster (an onsite survey, a grid
+          you already hold). Present, it IS the bed: nothing is fetched, nothing
+          is merged, and the layer is labeled ``basis="user"``. This is the TOP
+          rung of the bathymetry fallback ladder -- user data outranks CUDEM,
+          the regional DEM and ETOPO alike. Default None (build the composite).
 
   **Returns:**
       A ``TopobathyResult`` (a ``LayerURI`` subclass) pointing at the merged

@@ -280,8 +280,10 @@ def render_cards_context(plan: dict[str, Any]) -> str:
             lines.append(f"gates: {c['gates']}")
         if c.get("caveats"):
             lines.append("caveats: " + " ".join(c["caveats"]))
-        if c.get("fallback"):
-            lines.append("fallback: " + " ".join(c["fallback"]))
+        if c.get("endpoint_fallback"):
+            lines.append(
+                "same-data endpoint mirrors: " + " ".join(c["endpoint_fallback"])
+            )
     return "\n".join(lines)
 
 

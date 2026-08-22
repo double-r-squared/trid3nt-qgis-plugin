@@ -91,7 +91,6 @@ payload_estimate:
 caveats:
   - "global 8-day 1 km MODIS LST composite scaled to deg C (T = DN*0.02 - 273.15); no tile / all-fill window -> MODIS_LST_NO_DATA (never a fabricated layer)"
   - "AOI-scoped (<= 6 deg^2); LST is SURFACE skin temperature (much hotter than 2 m air on a sunny day)"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

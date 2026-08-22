@@ -80,7 +80,6 @@ caveats:
   - "ERA5 lags: ~5 days (ERA5T preliminary) / ~3 months (finalised); NOT real-time -- use fetch_hrrr_forecast"
   - "keyed: free Copernicus CDS key auto-requested via credential card on ERA5_MISSING_KEY; missing key is NOT a reason to route elsewhere"
   - "0.25 deg native (~27 km); for CONUS precip prefer fetch_mrms_qpe (1 km gauge-corrected)"
-fallback: [fetch_mrms_qpe, fetch_hrrr_forecast]
 
 # corpus lifted from sibling corpus.yaml.
 

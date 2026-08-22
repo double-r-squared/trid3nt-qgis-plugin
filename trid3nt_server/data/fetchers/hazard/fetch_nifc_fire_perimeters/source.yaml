@@ -53,7 +53,6 @@ payload_estimate:                           # twin has no estimator; a bbox-area
 caveats:
   - "current active NIFC WFIGS perimeters only (historic fires -> fetch_mtbs_burn_severity)"
   - "US-only; empty bbox (e.g. no active fires) -> header-only FGB (honest-empty, never a fabricated error)"
-fallback: []
 
 docstring: |-
   Fetch current NIFC WFIGS wildland fire perimeter polygons for the US.

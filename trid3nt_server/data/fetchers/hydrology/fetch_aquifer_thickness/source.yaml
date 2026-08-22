@@ -65,7 +65,6 @@ caveats:
   - "DERIVED, not published: the release ships transmissivity and depth to water, not thickness. This is b = T / K, exact because the models are single-layer with ICELLTYPE=1, so MODFLOW-6 forms T = K x (head - bottom). Both factors are the release's own files and the identity was proved cell by cell (see the ADR); no term is invented. Its accuracy is the model's accuracy, and it inherits every limit of the calibrated transmissivity."
   - "LONG-TERM AVERAGE steady state driven by 1985-2015 mean recharge -- it resolves no season, drought, or pumping drawdown. A thickness of 0 means the model cell is dry (0.003% of CONUS); 1.26% of cells are under 0.1 m, concentrated in arid interior-west basins."
   - "Off the model's active domain the raster is NODATA and the read raises AQUIFER_THICKNESS_EMPTY -- verified for open ocean, the Gulf, the Great Lakes and the Florida Keys."
-fallback: []
 
 docstring: |-
   Saturated thickness of the shallow (surficial, unconfined) groundwater system

@@ -752,7 +752,7 @@ def test_column_map_epoch_ms_iso_and_ci():
     assert out[0]["properties"]["ftype"] == 390                 # case-insensitive match
 
 
-def test_resolve_endpoints_select_and_fallback():
+def test_resolve_endpoints_select_and_endpoint_fallback():
     spec = _wave2_spec(
         endpoints={"current": {"url": "http://x/3/query"}, "archive": {"url": "http://x/2/query"}},
         params={"bbox": {"type": "bbox", "required": True},
@@ -761,10 +761,10 @@ def test_resolve_endpoints_select_and_fallback():
     )
     assert vector_fgb.resolve_endpoints(spec, {})[0].url == "http://x/3/query"
     assert vector_fgb.resolve_endpoints(spec, {"date": "20220802"})[0].url == "http://x/2/query"
-    # fallback chain
+    # same-data endpoint mirror chain
     spec2 = _wave2_spec(
         endpoints={"data": {"url": "http://a/query"}, "medium": {"url": "http://b/query"}},
-        fallback=["medium"],
+        endpoint_fallback=["medium"],
     )
     chain = vector_fgb.resolve_endpoints(spec2, {"bbox": [0, 0, 1, 1]})
     assert [e.url for e in chain] == ["http://a/query", "http://b/query"]

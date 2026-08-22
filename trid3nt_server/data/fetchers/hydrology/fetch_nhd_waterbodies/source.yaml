@@ -19,7 +19,7 @@ endpoints:
 auth:
   mode: none
   user_agent: trid3nt_default
-fallback: [medium]                           # tried in order on the primary's upstream failure
+endpoint_fallback: [medium]                           # tried in order on the primary's upstream failure
 
 params:
   bbox: {type: bbox, required: true, quantize: round_6dp}

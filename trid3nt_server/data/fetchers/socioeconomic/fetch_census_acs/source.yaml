@@ -92,7 +92,6 @@ caveats:
   - "US-only; a bbox over ocean / outside the US -> header-only FGB (honest-empty)"
   - "missing ACS estimate or jam sentinel (<= -666666000) -> value=null (NEVER fabricated)"
   - "keyless (data.census.gov backend); optional CENSUS_API_KEY uses classic Data API as primary"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

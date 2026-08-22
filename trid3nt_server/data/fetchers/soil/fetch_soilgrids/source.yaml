@@ -104,7 +104,6 @@ payload_estimate:
 caveats:
   - "ISRIC SoilGrids 2.0 global 250 m ML soil-property prediction; an all-NoData window (ocean / off the soil land surface) -> SOILGRIDS_EMPTY (never a fabricated layer)"
   - "AOI-scoped (<= 0.5 deg^2); a 250 m ML prediction, NOT a surveyed NRCS map unit -- for US work use fetch_statsgo_soils"
-fallback: []
 
 # corpus lifted from sibling corpus.yaml.
 

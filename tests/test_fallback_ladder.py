@@ -70,13 +70,29 @@ def test_user_supplied_rung_must_be_the_top_rung() -> None:
         )
 
 
-def test_alternative_must_carry_a_degradation_class() -> None:
-    with pytest.raises(ValueError, match="an alternative"):
+def test_a_rung_below_the_primary_must_carry_a_below_primary_class() -> None:
+    with pytest.raises(ValueError, match="below the"):
         Ladder(
             capability="c",
             rungs=(_rung("primary", "primary"), _rung("b", "refuse")),
             refuse_error_code="X",
         )
+
+
+def test_an_enhancement_rung_is_declarable_but_not_permittable() -> None:
+    """A source FINER than the primary is declared so the walker can name what
+    painted -- but ``fallback=`` is how a caller accepts a COST, and this rung
+    has none, so it must not be permittable by name."""
+    lad = Ladder(
+        capability="c",
+        rungs=(_rung("primary", "primary"), _rung("fine", "enhancement")),
+        refuse_error_code="X",
+    )
+    assert [r.name for r in lad.alternatives] == []
+    assert lad.alternative("fine") is None
+    with pytest.raises(ValueError, match="declares no alternative rung"):
+        walk_ladder(lad, params={}, attempt=lambda _r, _p: object(),
+                    allow=("fine",), gate=lambda **_k: True)
 
 
 def test_user_supplied_rung_needs_a_supplies_param() -> None:
@@ -1156,10 +1172,12 @@ def test_the_regional_share_is_measured_not_credited_to_etopo(
     assert coverage["regional_fine"] == pytest.approx(1.0 / 9.0, abs=1e-6)
 
 
-def test_a_non_ladder_contributor_is_said_out_loud(monkeypatch, tmp_path, caplog) -> None:
-    """regional_fine is NOT a declared rung (it is finer than the primary, not a
-    degradation). The walker may not drop it silently: it says the ladder is not a
-    complete account of what painted the result."""
+def test_the_finer_contributor_is_a_declared_row_not_a_warning(
+    monkeypatch, tmp_path, caplog
+) -> None:
+    """regional_fine is an ``enhancement`` rung: it lands on the contract as a
+    named row, with no unknown-key warning and no GATE-UNSEEN mark. A model
+    reading only the declared rungs can now account for the whole raster."""
     _patch_partial_cudem_plus_regional_fine(monkeypatch, tmp_path)
     ladder = get_ladder("fetch_topobathy")
 
@@ -1172,12 +1190,17 @@ def test_a_non_ladder_contributor_is_said_out_loud(monkeypatch, tmp_path, caplog
     with caplog.at_level("WARNING", logger="trid3nt_server.fallbacks.walker"):
         _res, act = walk_ladder(ladder, params={}, attempt=lambda _r, _p: _Result(),
                                 gate=lambda **_k: True)
-    assert "regional_fine" in caplog.text
-    assert "does not declare a rung" in caplog.text or "declares no rung" in caplog.text
-    # the walk's own row for the declared primary still stands, at measured paint
-    assert {r.rung: r.coverage for r in act.to_contract()} == pytest.approx(
-        {"cudem_nearshore": 8.0 / 9.0}
+    assert "declares no rung" not in caplog.text
+    assert "sum to" not in caplog.text
+    rows = {r.rung: r.coverage for r in act.to_contract()}
+    assert rows == pytest.approx(
+        {"cudem_nearshore": 8.0 / 9.0, "regional_fine": 1.0 / 9.0}
     )
+    assert act.ungated == []
+    assert not act.degraded
+    fine = next(r for r in act.records if r.rung == "regional_fine")
+    assert fine.consequence == "enhancement"
+    assert "FINER" in (fine.note or "")
 
 
 def test_shares_that_do_not_sum_to_one_are_said_out_loud(caplog) -> None:
