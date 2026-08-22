@@ -500,9 +500,20 @@ _QGIS_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # and the arid tail past 50 m clamps to the dry end rather than flattening
     # everything east of the Rockies into one hue. Saturated thickness is a
     # QUANTITY, so it takes a sequential ramp over 0-150 m (CONUS mean ~54.9 m,
-    # bounded by the model's prescribed zone bottoms near 170 m).
+    # bounded by the model's prescribed zone bottoms, 5-150 m CONUS-wide).
     "water_table_depth_m": ("0,50", "rdylbu_r"),
     "aquifer_saturated_thickness_m": ("0,150", "gnbu"),
+    # ADR 0298 Decision 7 -- transmissivity registered as its own spec
+    # (fetch_aquifer_transmissivity). M2/DAY, long-tailed (the paper's own
+    # west/east contrast is 14.05 vs 87.94 m2/day on the CONUS median, but a
+    # handful of western alluvial basins run past 100,000), so the rescale
+    # band is 1-1000 m2/day -- wide enough to hold the bulk of the CONUS
+    # distribution including the median-east tail, clamping only the rare
+    # hyper-transmissive alluvial-basin cells to the top of the ramp instead
+    # of collapsing the whole distribution below them. A viridis intensity
+    # ramp, visibly distinct from aquifer_saturated_thickness_m's gnbu --
+    # same model, different quantity.
+    "aquifer_transmissivity_m2_day": ("1,1000", "viridis"),
 }
 
 #: Safe non-empty default - never let a continuous raster fall through to an

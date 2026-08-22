@@ -56,7 +56,7 @@ payload_estimate:
 
 caveats:
   - "CONUS ONLY -- an AOI outside the staged envelope raises AQUIFER_THICKNESS_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
-  - "THIS IS NOT A MAPPED AQUIFER THICKNESS. It is the saturated thickness of the MODELLED SURFICIAL system: the base is the Zell-Sanford model bottom, a value PRESCRIBED per surficial-geology x HUC4 calibration zone (a few dozen round constants between 20 m and about 170 m below land surface), not a surveyed or interpreted hydrogeologic contact. Where the real aquifer is thicker than the modelled zone, this number is bounded by the modelling choice rather than by geology."
+  - "THIS IS NOT A MAPPED AQUIFER THICKNESS. It is the saturated thickness of the MODELLED SURFICIAL system: the base is the Zell-Sanford model bottom, a value PRESCRIBED per surficial-geology x HUC4 calibration zone (96 distinct round constants CONUS-wide, from 5 m -- a real coastal zone in LA/ME/NY/FL -- to 150 m below land surface), not a surveyed or interpreted hydrogeologic contact. Where the real aquifer is thicker than the modelled zone, this number is bounded by the modelling choice rather than by geology."
   - "Cross-checked against an INDEPENDENT bedrock-depth product (ISRIC SoilGrids-2017 BDTICM) it runs systematically HIGH: over Story County IA, Maricopa County AZ and the Yazoo basin MS it exceeds (depth-to-bedrock minus water-table depth) in 88-99% of cells, by a median of 26-57 m. The two disagree because they define the aquifer base differently -- neither is a survey -- but do not present this as a drilled thickness."
   - "DO NOT use it for a named confined aquifer. The Ogallala/High Plains, the Floridan, the Gulf Coast and every other deep or confined unit are outside the surficial system this model represents; for those, thickness must come from the aquifer-specific hydrogeologic framework, not from here."
   - "DERIVED, not published: the release ships transmissivity and depth to water, not thickness. This is b = T / K, exact because the models are single-layer with ICELLTYPE=1, so MODFLOW-6 forms T = K x (head - bottom). Both factors are the release's own files and the identity was proved cell by cell (see the ADR); no term is invented. Its accuracy is the model's accuracy, and it inherits every limit of the calibrated transmissivity."
@@ -76,9 +76,9 @@ docstring: |-
   conductivity, both taken from the release itself.
 
   **READ THIS FIRST:** the base of this thickness is the MODEL's bottom, which
-  the authors PRESCRIBED per calibration zone (round constants from about 20 m
-  to 170 m below the land surface), not a mapped depth to bedrock or to a
-  confining unit. This is the thickness of the simulated shallow flow system,
+  the authors PRESCRIBED per calibration zone (96 distinct round constants
+  CONUS-wide, from 5 m to 150 m below the land surface), not a mapped depth to
+  bedrock or to a confining unit. This is the thickness of the simulated shallow flow system,
   useful as a screening and model-setup number. It is not a drilled or surveyed
   aquifer thickness, and against an independent bedrock-depth product it reads
   systematically high (see the caveats).

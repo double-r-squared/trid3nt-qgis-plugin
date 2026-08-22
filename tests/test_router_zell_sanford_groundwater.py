@@ -1,21 +1,37 @@
-"""Router coverage for fetch_water_table_depth + fetch_aquifer_thickness (ADR 0298).
+"""Router coverage for fetch_water_table_depth + fetch_aquifer_thickness +
+fetch_aquifer_transmissivity (ADR 0298).
 
-Two staged-dataset fetchers over the Zell & Sanford 2020 CONUS surficial
+Three staged-dataset fetchers over the Zell & Sanford 2020 CONUS surficial
 groundwater release, built by ``scripts/stage_zell_sanford_groundwater.py``.
-Depth to water is the published raster; saturated thickness is DERIVED as
-``b = T / K`` from the release's own transmissivity and hydraulic conductivity.
+Depth to water and transmissivity are the published rasters; saturated
+thickness is DERIVED as ``b = T / K`` from the release's own transmissivity
+and hydraulic conductivity. Transmissivity was built and validated in the
+same landing but parked (ADR 0298 Decision 7: ``NormalizeSpec.quantity`` is a
+single static stamp, so it could not ride ``fetch_aquifer_thickness`` without
+mislabelling a m2/day layer as a saturated thickness); NATE ruled REGISTER,
+so it now has its own spec.
 
-These OFFLINE tests cover the two specs' identity and metadata, the staged-uri
-resolution (including the staged-404 / no-endpoint config-error split from a
-genuine EMPTY), the coverage envelope read off the real staged grid, the honest
-encodings the spec CLAIMS -- negative depths preserved rather than clamped, off
-domain reading EMPTY -- the payload estimate, and the retrieval corpora.
+These OFFLINE tests cover all three specs' identity and metadata, the
+staged-uri resolution (including the staged-404 / no-endpoint config-error
+split from a genuine EMPTY), the coverage envelope read off the real staged
+grid, the honest encodings the spec CLAIMS -- negative depths preserved rather
+than clamped, off domain reading EMPTY -- the payload estimate, and the
+retrieval corpora.
 
 The live values these pin came from the staged objects: Story County IA reads a
 median depth of 5.02 m and a median thickness of 93.09 m; Maricopa County AZ
-reads 9.34 m and 135.97 m; Oahu, Anchorage and San Juan refuse; mid-Lake-Michigan
-and Key West are inside the envelope but off the model's active domain and read
-EMPTY.
+(bbox [-113.3350468, 32.5049739, -111.0399049, 34.0481432]) reads a median
+depth of 43.939 m and a median thickness of 71.523 m; Oahu, Anchorage and San
+Juan refuse; mid-Lake-Michigan and Key West are inside the envelope but off the
+model's active domain and read EMPTY. Transmissivity's own live-staging
+validation (``--step build --dataset transmissivity``) reproduced the paper's
+west/east contrast exactly: CONUS median west of 100W 14.05 m2/day vs east
+87.94 m2/day.
+
+(Corrected 2026-08-21: an earlier draft of this docstring claimed 9.34 m /
+135.97 m for Maricopa County with no recorded bbox -- unreproducible from any
+discoverable county bbox. Re-run live against the county bbox above; see the
+ADR 0298 correction note.)
 """
 
 from __future__ import annotations
@@ -44,12 +60,16 @@ from trid3nt_server.data.fetchers._router.transport import staged as _staged
 _BBOX = [-93.70, 41.86, -93.20, 42.21]
 _STAGED_PREFIX = "s3://trid3nt-cache/staged/zell_sanford_groundwater/"
 
-#: Both specs are the same shape over the same grid, so every structural test
-#: runs against both.
-_NAMES = ["fetch_water_table_depth", "fetch_aquifer_thickness"]
+#: All three specs are the same shape over the same grid, so every structural
+#: test runs against all three.
+_NAMES = [
+    "fetch_water_table_depth", "fetch_aquifer_thickness",
+    "fetch_aquifer_transmissivity",
+]
 _PREFIX = {
     "fetch_water_table_depth": "WATER_TABLE",
     "fetch_aquifer_thickness": "AQUIFER_THICKNESS",
+    "fetch_aquifer_transmissivity": "AQUIFER_TRANSMISSIVITY",
 }
 
 
@@ -116,17 +136,22 @@ def test_spec_identity(spec):
     assert spec.empty_error_suffix == "EMPTY"
     assert spec.supports_global_query is False
     assert spec.cache.ttl_class == "static-30d"
-    assert spec.normalize.units == "m"
+    assert spec.normalize.units == (
+        "m2/day" if spec.name == "fetch_aquifer_transmissivity" else "m"
+    )
     assert spec.ingest["access"] == "direct_window"
     assert spec.ingest["nodata_gate"] is True
 
 
 def test_quantity_names_the_actual_measurement(specs):
-    """The emitted quantity must not blur the two: one is a DEPTH from the land
-    surface down, the other a THICKNESS of saturated material below that."""
+    """The emitted quantity must not blur the three: a DEPTH from the land
+    surface down, a THICKNESS of saturated material below that, and the
+    TRANSMISSIVITY (m2/day) their ratio and product relate them through."""
     assert specs["fetch_water_table_depth"].normalize.quantity == "water_table_depth"
     assert (specs["fetch_aquifer_thickness"].normalize.quantity
             == "aquifer_saturated_thickness")
+    assert (specs["fetch_aquifer_transmissivity"].normalize.quantity
+            == "aquifer_transmissivity")
 
 
 def test_metadata_flags(spec):
@@ -155,12 +180,12 @@ def test_style_preset_resolves_in_the_qgis_registry(spec):
     assert pl._registry_style_params(spec.output.style_preset) is not None
 
 
-def test_the_two_presets_are_distinct(specs):
-    """Depth and thickness must not share a ramp -- their ranges and their
-    meanings differ (one is a wetness reading, one a quantity)."""
-    a = specs["fetch_water_table_depth"].output.style_preset
-    b = specs["fetch_aquifer_thickness"].output.style_preset
-    assert a != b
+def test_the_three_presets_are_distinct(specs):
+    """Depth, thickness and transmissivity must not share a ramp -- their
+    ranges and their meanings differ (a wetness reading, a quantity, and a
+    long-tailed flow-capacity field)."""
+    presets = [specs[n].output.style_preset for n in _NAMES]
+    assert len(set(presets)) == len(presets)
 
 
 def test_corpus_carries_the_natural_question(spec):
@@ -169,9 +194,12 @@ def test_corpus_carries_the_natural_question(spec):
     if spec.name == "fetch_water_table_depth":
         assert "how deep is the water table here" in joined
         assert "depth to groundwater" in joined
-    else:
+    elif spec.name == "fetch_aquifer_thickness":
         assert "how thick is the aquifer here" in joined
         assert "saturated thickness" in joined
+    else:
+        assert "how transmissive is the shallow aquifer here" in joined
+        assert "transmissivity" in joined
 
 
 # --------------------------------------------------------------------------- #
@@ -361,9 +389,33 @@ def test_thickness_docstring_leads_with_the_limit(specs):
 
 
 def test_depth_and_thickness_declare_one_shared_grid(specs):
-    """They are two faces of one model solution; a divergent envelope would let
-    one answer where the other refuses."""
-    a, b = specs["fetch_water_table_depth"], specs["fetch_aquifer_thickness"]
-    assert a.gates.conus_bbox == b.gates.conus_bbox
-    assert a.normalize.crs == b.normalize.crs == "EPSG:4326"
-    assert a.payload_estimate.mb_per_sq_deg == b.payload_estimate.mb_per_sq_deg
+    """All three are faces of one model solution; a divergent envelope would let
+    one answer where another refuses."""
+    a, b, c = (specs[n] for n in _NAMES)
+    assert a.gates.conus_bbox == b.gates.conus_bbox == c.gates.conus_bbox
+    assert a.normalize.crs == b.normalize.crs == c.normalize.crs == "EPSG:4326"
+    assert (a.payload_estimate.mb_per_sq_deg == b.payload_estimate.mb_per_sq_deg
+            == c.payload_estimate.mb_per_sq_deg)
+
+
+def test_transmissivity_caveats_state_the_west_east_contrast(specs):
+    """The paper's headline regional finding must be stated, and stated on the
+    MEDIAN -- the mean reads backwards because a handful of western alluvial
+    basins run past 100,000 m2/day."""
+    joined = " ".join(specs["fetch_aquifer_transmissivity"].caveats).lower()
+    assert "conus only" in joined
+    assert "lower in the west" in joined
+    assert "median" in joined and "mean" in joined
+    assert "t = k x b" in joined or "t = k * b" in joined
+
+
+def test_transmissivity_units_and_quantity_are_its_own(specs):
+    """The whole reason this got its own spec: quantity/units must never be
+    borrowed from the thickness spec (a m2/day value stamped as metres of
+    saturated thickness would be a fabricated layer)."""
+    t = specs["fetch_aquifer_transmissivity"]
+    assert t.normalize.units == "m2/day"
+    assert t.normalize.quantity == "aquifer_transmissivity"
+    b = specs["fetch_aquifer_thickness"]
+    assert t.normalize.units != b.normalize.units
+    assert t.normalize.quantity != b.normalize.quantity

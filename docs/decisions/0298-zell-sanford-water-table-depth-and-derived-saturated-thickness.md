@@ -148,6 +148,10 @@ physical aquifer thickness.
 
 ## Decision 7 -- transmissivity is built and validated, but NOT shipped
 
+(AMENDED 2026-08-21: NATE ruled REGISTER. See "Amendment -- fetch_aquifer_
+transmissivity registered" at the end of this file. The decision below is left
+as written -- it is why the tool did not exist at first landing.)
+
 `NormalizeSpec` carries `units_by_param` and `OutputSpec` carries
 `style_preset_by_param`, but `quantity` is a single static stamp. So
 transmissivity cannot ride `fetch_aquifer_thickness`: a m2/day layer would go
@@ -262,3 +266,168 @@ actually produced. No design change to the decisions above.
   present on every later run. `download()` now checks the PK magic on a `.zip`
   destination, discards a cached non-zip, and raises naming the auth-migration
   cause when a fresh fetch is not a zip either.
+
+## Correction (verifier-refuted claim, 2026-08-21)
+
+A verifier reproduced the whole live-acceptance surface for this landing and
+refuted one claim: `tests/test_router_zell_sanford_groundwater.py`'s module
+docstring recorded Maricopa County, AZ as reading a median depth of 9.34 m and
+a median thickness of 135.97 m. That pair does not reproduce from any
+discoverable Maricopa County bbox and carried no bbox of its own -- the
+Story-County-style `_BBOX` precedent that would have let anyone check it was
+missing. NATE ruled the record be corrected rather than the commits rewritten
+(commit messages are history).
+
+Re-run live against `trid3nt_server.data.fetchers._router.executors.raster_cog
+._direct_window_to_array`, real MinIO endpoint, no mocks, over the county
+bbox `[-113.3350468, 32.5049739, -111.0399049, 34.0481432]` (TIGER cartographic
+boundary extent):
+
+    fetch_water_table_depth   716,902/716,902 finite  median 43.939 m
+    fetch_aquifer_thickness   716,902/716,902 finite  median 71.523 m
+
+The Story County IA pair the same docstring carries (median depth 5.02 m,
+median thickness 93.09 m, bbox `[-93.70, 41.86, -93.20, 42.21]`) was re-run the
+same way and reproduces exactly -- only the unaccompanied Maricopa pair was
+wrong. The test docstring now carries the corrected numbers with the bbox
+alongside them.
+
+One wording note, no behavior change, and one self-correction: the landing
+commit's summary line reads "Gates: four slices at the exact baseline (4
+fetch_resolution + 2 river_dye)", matching `CLAUDE.md`'s "Law 1" (also 4 + 2).
+A prior draft of this section, working from a stale cross-session memory note
+that said "9 failures (fetch_resolution x4 + river_dye x5)", asserted the
+commit undercounted river_dye and edited `CLAUDE.md` to say 5. That edit was
+WRONG and has been reverted. Re-run live, twice -- `tests/test_run_river_dye_
+scenario.py` in isolation and inside the full `[p-r]` alphabetical slice, both
+with and without `.env.local` sourced -- the count is deterministically 2
+(`test_tool_rejects_invalid_bbox` and `test_tool_rejects_both_location_and_
+bbox`, both a `TELEMAC_DISCHARGE_INPUT_REQUIRED`-vs-`TELEMAC_PARAMS_INCOMPLETE`
+error-code mismatch, unrelated to this landing). The commit message and
+`CLAUDE.md` were both already correct; the cross-session memory note was the
+stale one and needs its own correction outside this repo. The repo's own ADR
+trail confirms it: 2 river_dye is the extensively re-verified live baseline
+from ADR 0281 onward (`0281`, `0282`, `0284`, `0287`, `0288`, `0291`-`0293` all
+state "4 fetch_resolution + 2 river_dye" from live runs) -- "5 river_dye" was
+real, but only in the older ADRs (0041 through 0206ish), from before whatever
+fix dropped it to 2. Lesson: re-verify a baseline claim live before
+"correcting" a record from it -- a memory note can be stale in either
+direction.
+
+## Amendment (2026-08-21) -- fetch_aquifer_transmissivity registered
+
+NATE ruled REGISTER on Decision 7's parked transmissivity spec. It now ships
+as its own tool, `fetch_aquifer_transmissivity`, m2/day, its own quantity
+(`aquifer_transmissivity`) and its own style preset
+(`aquifer_transmissivity_m2_day`, a viridis ramp rescaled 1-1000 m2/day --
+wide enough for the median-east tail, clamping only the rare
+hyper-transmissive alluvial-basin cells).
+
+**Staging.** `--dataset transmissivity` was re-run against the same CONUS
+archive (re-downloaded, sha256 verified, no drift) and uploaded --
+`DATASETS["transmissivity"]["upload"]` no longer parks it. `validate()`
+re-confirmed the release's headline regional finding on the CONUS median:
+
+    median west of 100W  14.05 m2/day
+    median east of 100W  87.94 m2/day
+
+byte-for-byte the same as the parked build's numbers -- the pipeline was
+already correct, only shipping was withheld. `staged_sha256` and every other
+check (CRS, posting, COG layout, extent, value-range and coverage-area
+preservation, non-negativity) passed on the same run.
+
+**Retrieval.** All 10 `corpus.yaml` phrasings surface
+`fetch_aquifer_transmissivity` in the model-free `retrieve_visible_tools(text,
+None, 8)` top-8 (10/10). `test_search_tools.py` (31 cases, including the
+demonstrative-stopword typo gate Decision 7's sibling landing fixed) stays
+green with the third tool added to the registry.
+
+**Live acceptance**, direct `raster_cog._direct_window_to_array` calls against
+the real staged object (no mocks):
+
+    Story County, IA        (east of 100W)  median 183.590  mean  207.434 m2/day
+    Great Basin, central NV (west of 100W)  median  22.087  mean   27.913 m2/day
+    Maricopa County, AZ     (west of 100W)  median 1334.957 mean 7574.231 m2/day
+
+Story County (east) reads far higher than the Great Basin AOI (west), matching
+the paper's median-based claim at the local level too. Maricopa County is
+itself one of the "handful of western alluvial basins" the caveats warn about
+-- a Phoenix-basin alluvial aquifer with very high local transmissivity, whose
+huge mean (7574) versus its still-elevated median (1335) is exactly the
+median-vs-mean distortion Decision 7 recorded from the CONUS-wide numbers. It
+is cited here, not discarded, because it is a live demonstration of the
+caveat rather than a contradiction of it.
+
+**Offline tests.** `tests/test_router_zell_sanford_groundwater.py` was
+extended from two specs to three (`_NAMES` now includes
+`fetch_aquifer_transmissivity`) rather than duplicated: every generic
+structural test (identity, metadata, payload estimate, style-preset
+resolution, staged-uri resolution, missing-endpoint and staged-404 typed
+errors, CONUS-envelope refusal, Key West / off-domain EMPTY, partial-window
+non-gating, unscaled pass-through) now runs against all three by
+parametrization. Added: quantity/units distinctness from the thickness spec
+(the whole reason this spec exists), west/east-median caveat wording, and a
+three-way shared-grid check. 62 offline tests pass (was 31 before this
+amendment: parametrization change, not 1:1 new-test count).
+
+**Consequence.** Spec count 100 -> 101; registry 257 -> 258. Coded fetchers
+stay 0. `staged/zell_sanford_groundwater/zellsanford2020-v1/` gains
+`transmissivity_m2_day.tif` (626,704,756 bytes) with a `PROVENANCE_SCHEMA=3`
+sidecar.
+
+## Amendment (2026-08-21) -- hardening fixes from the same review
+
+All found by the verifier that refuted the Maricopa claim above; all
+non-blocking, all landed in the same pass:
+
+1. `saturated_thickness_m.provenance.json`'s `source_member` named the
+   depth-to-water raster as the derived product's numerator; it is the
+   transmissivity raster (`derivation.T` was already correct). Fixed in code
+   (`source_member` now keys off `water_table_depth` specifically, trans
+   otherwise) and the live sidecar was patched in place (metadata-only PUT;
+   the raster bytes are unchanged).
+2. `cleaning_rule`'s "517 of 124,884,786" was a literal string pasted from the
+   first run's console output. `compute_cleaning_report` now counts it fresh
+   at staging time from the extracted CONUS rasters and persists it
+   (`conus_cleaning_report.json`, mirroring `K_REPORT_PATH_NAME`'s pattern).
+   The freshly computed count on this run matched the old literal exactly
+   (517 of 124,884,786) -- the number was right, it just was not being
+   recomputed.
+3. `DATA_SUBDOMAIN`, `PEST_SUBDOMAIN` and `VERIFY_ARCHIVE` are now sha256-pinned
+   (`21b81935f52a...`, `a307154ad8dc...`, `1891d3a29f28...` respectively,
+   computed from the copies this run downloaded), through a new
+   `download_verified()` that CONUS_ARCHIVE's existing check is left riding
+   its own dedicated path. An unpinned zone-map re-issue could previously have
+   silently mis-assigned K for any of the 74 subdomains `verify_k_reconstruction`
+   does not directly check.
+4. `validate()`'s "b + dtw reproduces the model's prescribed zonal TOP-BOTM"
+   check was a hardcoded 2-degree Kansas window, labeled SPOT CHECK, while the
+   module docstring and this ADR both claimed it ran CONUS-wide. It now
+   block-iterates the FULL staged grid (same cost profile as the min/max/mean
+   and coverage-area passes already in `validate()`). Live CONUS-wide result
+   against the staged objects: 165,991,651 cells considered, 99.9992% within
+   0.02 m of an integer zone value, 96 distinct integer zone values, range
+   5-150 m.
+5. The zone-floor guard (`uniq.min() >= 15.0`) was window-dependent: the
+   Kansas window never touched the release's real 5 m coastal zone (LA/ME/NY/
+   FL), 1,033,239 of 165,990,406 near-round cells CONUS-wide (0.62%). The
+   guard is now `>= 5.0`, and the "20-170 m" band claimed in three places
+   (both fetchers' caveats/docstring and a `publish_layer.py` comment) is
+   corrected to the true "5-150 m" -- 168.7 m (the CONUS max of the staged
+   THICKNESS raster) is `b` alone at a 150 m zone under a negative `dtw`, not a
+   larger zone constant, and was never a zone-band number to begin with.
+6. `build_k_mosaic`'s cache-guard conjunct `and K_REPORT_PATH_NAME` was always
+   truthy (a module-level string constant) -- dead code, removed.
+7. See the offline-baseline self-correction above (`CLAUDE.md` + this ADR --
+   the wrong number was a stale cross-session memory note, not the repo).
+
+Gates re-run after all of the above: 62/62 `test_router_zell_sanford_
+groundwater.py`, 14/14 `test_catalog_surfacing.py`, the four-slice offline
+suite at the true 6-failure baseline (4 `fetch_resolution_gate` in `[f-o]` + 2
+`run_river_dye_scenario` in `[p-r]`, no new failures), `test_search_tools.py`
+31/31, `contracts/tests` 721/721, `scripts/ws_smoke.py` all_passed. `[f-o]`
+also carries 2 pre-existing `test_model_fire_spread_chain.py` failures
+(`AttributeError: 'FireSpreadLayerURI' object has no attribute 'get'`,
+reproduces in isolation, last touched by an unrelated ADR 0297 commit) --
+confirmed out of this landing's scope by `git status` (zero ELMFIRE/fire-spread
+files touched) and left to a separate job.

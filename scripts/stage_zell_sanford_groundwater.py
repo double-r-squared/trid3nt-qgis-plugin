@@ -103,6 +103,11 @@ STAGED_PREFIX = "staged/zell_sanford_groundwater"
 #: provenance sidecar instead of an empty dict.
 K_REPORT_PATH_NAME = "conus_k_report.json"
 
+#: Where ``compute_cleaning_report`` persists its count, so the ``cleaning_rule``
+#: provenance sentence states the actual number of cells the negative-T rule
+#: removed on THIS run rather than a count pasted in from the first run.
+CLEANING_REPORT_PATH_NAME = "conus_cleaning_report.json"
+
 USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
@@ -140,6 +145,7 @@ CONUS_ARCHIVE = {
 DATA_SUBDOMAIN = {
     "name": "Data_Subdomain.zip",
     "url": f"{_SB}?f=__disk__00%2Fb8%2Fd1%2F00b8d1c7d723395c38188727d83e2440adb2cb0b",
+    "sha256": "21b81935f52a177d879c44efecdb61e1c099ff03badfb06ae1fefcf48bb7f1ba",
 }
 
 #: PEST calibration output: ``{ID}_opt.par`` holds the optimized parameter
@@ -149,6 +155,7 @@ DATA_SUBDOMAIN = {
 PEST_SUBDOMAIN = {
     "name": "PEST_Subdomain.zip",
     "url": f"{_SB}?f=__disk__04%2F0e%2Fc7%2F040ec7e6d0db5d2007f35adc408a80f3c462cd75",
+    "sha256": "a307154ad8dcc3c9983a9823c974a35ca4469e0b994a7bdd34903375473f2681",
 }
 
 #: One HUC group of subdomain model inputs, downloaded ONLY to prove the K
@@ -166,6 +173,7 @@ VERIFY_ARCHIVE = {
     "name": "models.06.zip",
     "url": f"{_SB}?f=__disk__c2%2F13%2F2c%2Fc2132cd0503f16bc67bbdcd4439dde4560ee39ed",
     "subdomain": "0601_0602_0603_0604_MF6_SS_Unconfined_250",
+    "sha256": "1891d3a29f28b6dacc7803d1e767bdc0cd87641b589bdd75b6e66b1db229b0cc",
 }
 
 DATASETS: dict[str, dict[str, Any]] = {
@@ -176,20 +184,18 @@ DATASETS: dict[str, dict[str, Any]] = {
         "quantity": "water_table_depth",
         "derived": False,
     },
-    # Built and validated, NOT uploaded: it is the audited numerator of the
+    # ADR 0298 Decision 7 parked this: it is the audited numerator of the
     # thickness derivation and its west/east contrast proves the pipeline, but
-    # no tool reads it yet. NormalizeSpec carries units_by_param and OutputSpec
-    # carries style_preset_by_param, but ``quantity`` is a single static stamp,
-    # so transmissivity cannot ride fetch_aquifer_thickness without labelling a
-    # m2/day layer as a saturated thickness. Its own spec is the honest form and
-    # waits for a question that asks for it.
+    # NormalizeSpec.quantity is a single static stamp, so it could not ride
+    # fetch_aquifer_thickness without labelling a m2/day layer as a saturated
+    # thickness. NATE ruled REGISTER: it now has its own spec
+    # (fetch_aquifer_transmissivity) and ships as a real product.
     "transmissivity": {
         "version": "zellsanford2020-v1",
         "object": "transmissivity_m2_day.tif",
         "units": "m2/day",
         "quantity": "aquifer_transmissivity",
         "derived": False,
-        "upload": False,
     },
     "saturated_thickness": {
         "version": "zellsanford2020-v1",
@@ -264,6 +270,26 @@ def download(url: str, dest: Path) -> None:
             "its authenticated file manager -- this file needs a different route."
         )
     print(f"  [ok  ] {dest.name} ({dest.stat().st_size:,} bytes)")
+
+
+def download_verified(archive: dict[str, Any], dest: Path) -> None:
+    """``download`` plus a sha256 check against the archive's pinned hash.
+
+    Only ``CONUS_ARCHIVE`` used to be pinned. An unpinned ``DATA_SUBDOMAIN``,
+    ``PEST_SUBDOMAIN`` or ``VERIFY_ARCHIVE`` re-issue at the same ScienceBase
+    URL -- a corrected zone map, a re-run PEST calibration -- would silently
+    mis-assign K for some or all of the 74 downstream subdomains the K mosaic
+    was never re-verified against. Every archive this script consumes is
+    pinned; a mismatch fails loud before its bytes are trusted for anything.
+    """
+    download(archive["url"], dest)
+    got = _sha256(dest)
+    want = archive.get("sha256")
+    if want and got != want:
+        raise ValidationFailure(
+            f"{archive['name']}: sha256 {got} != pinned {want} -- the archive at "
+            f"{archive['url']} has changed since this script was written"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -356,7 +382,7 @@ def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
     h, w = grid["height"], grid["width"]
     x0, res, y0 = grid["transform"][2], grid["transform"][0], grid["transform"][5]
 
-    if kpath.exists() and cpath.exists() and K_REPORT_PATH_NAME:
+    if kpath.exists() and cpath.exists():
         rp = work / K_REPORT_PATH_NAME
         if rp.exists():
             print(f"  [skip] K mosaic already built ({kpath.name})")
@@ -369,8 +395,8 @@ def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
     else:
         dzp = work / DATA_SUBDOMAIN["name"]
         pzp = work / PEST_SUBDOMAIN["name"]
-        download(DATA_SUBDOMAIN["url"], dzp)
-        download(PEST_SUBDOMAIN["url"], pzp)
+        download_verified(DATA_SUBDOMAIN, dzp)
+        download_verified(PEST_SUBDOMAIN, pzp)
         kmos = np.lib.format.open_memmap(kpath, mode="w+", dtype="float32", shape=(h, w))
         kmos[:] = np.nan
         counts = np.lib.format.open_memmap(cpath, mode="w+", dtype="uint8", shape=(h, w))
@@ -447,7 +473,7 @@ def verify_k_reconstruction(work: Path) -> dict[str, Any]:
     sub = VERIFY_ARCHIVE["subdomain"]
     sid = sub.split("_MF6")[0]
     zp = work / VERIFY_ARCHIVE["name"]
-    download(VERIFY_ARCHIVE["url"], zp)
+    download_verified(VERIFY_ARCHIVE, zp)
     with zipfile.ZipFile(zp) as zf:
         truth = np.fromstring(zf.read(f"{sub}/{sub}_1.hk").decode(), sep=" ")
     with zipfile.ZipFile(work / PEST_SUBDOMAIN["name"]) as pz:
@@ -488,6 +514,42 @@ def verify_k_reconstruction(work: Path) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Build the three Albers products, then reproject each to an EPSG:4326 COG.
 # --------------------------------------------------------------------------- #
+
+
+def compute_cleaning_report(work: Path) -> dict[str, Any]:
+    """Count the cells the one cleaning rule removes, from the source rasters.
+
+    Every product shares one cleaning rule (negative published transmissivity
+    is masked everywhere), so this counts it once against the extracted CONUS
+    ``dtw``/``trans`` rasters and persists it -- the ``cleaning_rule``
+    provenance sentence then states a number this run actually computed, not
+    one pasted in from an earlier run's console output.
+    """
+    import numpy as np
+    import rasterio
+
+    rp = work / CLEANING_REPORT_PATH_NAME
+    if rp.exists():
+        return json.loads(rp.read_text())
+
+    src_dtw = work / CONUS_ARCHIVE["dtw"]
+    src_trn = work / CONUS_ARCHIVE["trans"]
+    n_considered = 0
+    n_removed = 0
+    with rasterio.open(src_dtw) as ds, rasterio.open(src_trn) as ts:
+        nd = ds.nodata
+        for _, win in ds.block_windows(1):
+            d = ds.read(1, window=win)
+            t = ts.read(1, window=win)
+            considered = (d != nd) & (t != nd)
+            n_considered += int(considered.sum())
+            n_removed += int(np.count_nonzero(considered & (t < 0)))
+    report = {
+        "considered_cells": n_considered,
+        "removed_negative_transmissivity_cells": n_removed,
+    }
+    rp.write_text(json.dumps(report, indent=2))
+    return report
 
 
 def build_albers(work: Path, dataset: str, grid: dict[str, Any]) -> Path:
@@ -655,7 +717,7 @@ def _calibration_observations(work: Path) -> tuple[Any, Any, Any, Any]:
     import rasterio.warp as rwarp
 
     zp = work / DATA_SUBDOMAIN["name"]
-    download(DATA_SUBDOMAIN["url"], zp)
+    download_verified(DATA_SUBDOMAIN, zp)
     xs: list[float] = []
     ys: list[float] = []
     obs: list[float] = []
@@ -821,34 +883,56 @@ def validate(out_path: Path, dataset: str, work: Path, grid: dict[str, Any]) -> 
         else:  # saturated_thickness
             _check("saturated thickness is non-negative", vmin >= 0.0,
                    f"min={vmin:.6f} m")
-            # SPOT CHECK -- the model's own geometry. b + dtw must reproduce the
-            # PRESCRIBED per-zone (TOP - BOTM), which takes only a few dozen
-            # round values. A misaligned K mosaic turns this into noise.
+            # CONUS-WIDE structural check, not a spot-check window: b + dtw
+            # must reproduce the model's PRESCRIBED per-zone TOP-BOTM. Block-
+            # iterated exactly like the min/max/mean pass above it, over BOTH
+            # staged rasters, so the claim in the module docstring and ADR 0298
+            # ("validate() re-runs the structural half CONUS-wide") is what the
+            # code actually runs, not a 2-degree Kansas window that happened to
+            # avoid the release's coastal 5 m zone (see the floor guard below).
+            n_zone, n_near_round = 0, 0
+            zone_cells: dict[int, int] = {}
             with rasterio.open(out_path.parent / DATASETS[
                     "water_table_depth"]["object"]) as ds:
-                win = rasterio.windows.from_bounds(
-                    -96.0, 38.0, -94.0, 40.0, transform=src.transform)
-                win = win.round_offsets().round_lengths()
-                bb = src.read(1, window=win)
-                dd = ds.read(1, window=win)
-            m = np.isfinite(bb) & np.isfinite(dd)
-            zone = np.round(bb[m] + dd[m], 2)
-            uniq = np.unique(zone)
-            near_round = float(np.mean(np.abs(zone - np.round(zone)) < 0.02))
+                for _, win in src.block_windows(1):
+                    bb = src.read(1, window=win)
+                    dd = ds.read(1, window=win)
+                    m = np.isfinite(bb) & np.isfinite(dd)
+                    if not m.any():
+                        continue
+                    zone = np.round(bb[m] + dd[m], 2)
+                    near = np.abs(zone - np.round(zone)) < 0.02
+                    n_zone += int(zone.size)
+                    n_near_round += int(near.sum())
+                    if near.any():
+                        u, c = np.unique(np.round(zone[near]).astype(int),
+                                          return_counts=True)
+                        for uu, cc in zip(u.tolist(), c.tolist()):
+                            zone_cells[uu] = zone_cells.get(uu, 0) + cc
+            near_round = (n_near_round / n_zone) if n_zone else 0.0
+            uniq = np.array(sorted(zone_cells), dtype=float)
             _check(
-                "b + dtw reproduces the model's prescribed zonal TOP-BOTM",
-                len(uniq) <= 60 and near_round >= 0.98,
-                f"{len(uniq)} distinct values over {int(m.sum()):,} cells, "
-                f"{100 * near_round:.2f}% within 0.02 m of an integer; "
-                f"range {uniq.min():.2f}-{uniq.max():.2f} m",
+                "b + dtw reproduces the model's prescribed zonal TOP-BOTM, CONUS-wide",
+                uniq.size > 0 and near_round >= 0.999,
+                f"{uniq.size} distinct integer zone values over {n_zone:,} cells, "
+                f"{100 * near_round:.4f}% within 0.02 m of an integer"
+                + (f"; range {uniq.min():.0f}-{uniq.max():.0f} m" if uniq.size else ""),
             )
+            # The floor is 5 m, not 20 m: a real coastal zone at 5 m exists (LA/
+            # ME/NY/FL, 1,033,239 of 165,990,406 near-round CONUS cells, 0.62%),
+            # invisible to the old Kansas-window check. The ceiling is 150 m --
+            # 168.7 m (the CONUS max of the staged THICKNESS raster itself,
+            # asserted above) is b alone at a 150 m zone with a negative dtw
+            # (water above land surface), not a larger zone constant.
             _check(
-                "prescribed zone thickness stays in the release's 20-150 m band",
-                uniq.min() >= 15.0 and uniq.max() <= 350.0,
-                f"observed zone thickness {uniq.min():.2f}-{uniq.max():.2f} m "
-                "(subdomain 0601 ships 22 values between 20 and 150 m)",
+                "prescribed zone thickness stays in the release's 5-150 m band",
+                uniq.size > 0 and uniq.min() >= 5.0 and uniq.max() <= 150.0,
+                f"observed zone thickness {uniq.min():.0f}-{uniq.max():.0f} m "
+                f"over {uniq.size} distinct integer values CONUS-wide (floor "
+                "5 m in coastal LA/ME/NY/FL, ceiling 150 m)" if uniq.size
+                else "no zone cells",
             )
-            stats["zone_thickness_values"] = [float(v) for v in uniq[:60]]
+            stats["zone_thickness_values"] = [float(v) for v in uniq[:200]]
 
         stats.update({
             "min": round(vmin, 4), "max": round(vmax, 4), "mean": round(vmean, 4),
@@ -969,6 +1053,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"in {kreport_path} -- run --step kmosaic and --step kverify first"
             )
 
+    creport = compute_cleaning_report(work)
+
     keys = list(DATASETS) if args.dataset == "all" else [args.dataset]
     results = []
     for ds in keys:
@@ -988,8 +1074,12 @@ def main(argv: list[str] | None = None) -> int:
             "paper_doi": PAPER_DOI,
             "source_archive": CONUS_ARCHIVE["name"],
             "source_archive_sha256": CONUS_ARCHIVE["sha256"],
-            "source_member": (CONUS_ARCHIVE["trans"] if ds == "transmissivity"
-                              else CONUS_ARCHIVE["dtw"]),
+            # water_table_depth reads dtw directly; transmissivity reads trans
+            # directly; saturated_thickness is DERIVED as b = T / K, so its
+            # numerator -- and thus its CONUS source member -- is trans too,
+            # never dtw.
+            "source_member": (CONUS_ARCHIVE["dtw"] if ds == "water_table_depth"
+                              else CONUS_ARCHIVE["trans"]),
             "retrieved_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(
                 timespec="seconds"),
             "conversion_commit": _commit(),
@@ -1004,7 +1094,8 @@ def main(argv: list[str] | None = None) -> int:
             "cleaning_rule": (
                 "cells with published transmissivity < 0 are masked in every "
                 "product: T = K * b with K > 0 and b >= 0 makes a negative T "
-                "impossible. 517 of 124,884,786 valid cells."
+                f"impossible. {creport['removed_negative_transmissivity_cells']:,} "
+                f"of {creport['considered_cells']:,} valid cells."
             ),
             "staged_statistics": stats,
             "staged_sha256": _sha256(out),

@@ -1,0 +1,11 @@
+fetch_aquifer_transmissivity:
+- how transmissive is the shallow aquifer here
+- what is the groundwater transmissivity for this county
+- how easily does groundwater move through this area
+- map aquifer transmissivity across this watershed
+- give me T so I can check it against hydraulic conductivity and thickness
+- is transmissivity higher in the eastern or western part of this region
+- I need a transmissivity value for a regional groundwater model here
+- how transmissive is the surficial groundwater system for this bbox
+- what is the shallow-aquifer flow capacity under this field
+- estimate transmissivity for groundwater contaminant transport screening here

@@ -606,3 +606,11 @@ expose later (plugin-platform goal).
   already builds and validates the raster; it is not uploaded because
   `NormalizeSpec.quantity` is a single static stamp, so transmissivity cannot
   ride the thickness spec without mislabelling the layer.
+- 2026-08-21 LANDED: NATE ruled REGISTER on the item above.
+  `fetch_aquifer_transmissivity` now ships (its own spec, units m2/day, its
+  own style preset). Same-run verifier review also found the "20-170 m" zone
+  band cited two entries up is wrong -- CONUS-wide the true range is 5-150 m
+  (a real 5 m coastal zone in LA/ME/NY/FL that a 2-degree spot-check window
+  never touched); the fetchers' caveats/docstrings and `validate()`'s
+  structural check are corrected in ADR 0298's amendment section, not here
+  (append-only).

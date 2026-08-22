@@ -3,7 +3,7 @@
 Covers the two arm prerequisites + the identity gate:
 
 - DEFAULT config (no arm flag): the 27 spec-served sources stay tier="general",
-  ambient-declarable; registry == 257 (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness staged Zell-Sanford CONUS surficial-groundwater specs) (ADR 0297 +fetch_groundwater_recharge staged CONUS recharge spec) (ADR 0276 -2 list_categories+list_tools_in_category browse-tool chop) (+1 ADR 0259 coastal_tidal_surge TELEMAC-2D coastal tidal/surge inundation template) (+1 ADR 0256 elmfire_crown_fire_active_ros_verification Cruz-2005 active crown-fire ROS exact-solution regression gate) (+1 ADR 0252 landlab_normal_fault_scarp_evolution NormalFault tectonic-forcing landscape-evolution template) (+1 ADR 0251 culvert_embankment_flow HEC-RAS 2025 2D culvert-through-embankment template) (+1 ADR 0247 pelicun_hazus_lifeline_seismic_dl_run HAZUS EQ lifeline-network bridge/pipe/substation template) (+1 ADR 0241 telemac3d_stratified_flow TELEMAC-3D three-dimensional baroclinic stratified-flow template) (+1 ADR 0239 elmfire_spot_fire_barrier_crossing ELMFIRE ember-spotting barrier-jump template) (+1 ADR 0237 artemis_harbor_agitation ARTEMIS phase-resolving harbour-agitation template) (+1 ADR 0236 tomawac_wave_field TOMAWAC spectral-wave template) (+2 ADR 0235 modflow_thermal_plume + modflow_thermal_storage GWE heat-transport templates) (+1 ADR 0228 modflow_vadose_transport UZF+UZT unsaturated-zone breakthrough) (+2 ADR 0218 swmm_snowmelt_degree_day + swmm_aquifer_baseflow_to_node) (+1 ADR 0217 schism_pahm_surge) (+2 ADR 0214 landlab_groundwater_water_table +
+  ambient-declarable; registry == 258 (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity staged Zell-Sanford CONUS surficial-groundwater specs) (ADR 0297 +fetch_groundwater_recharge staged CONUS recharge spec) (ADR 0276 -2 list_categories+list_tools_in_category browse-tool chop) (+1 ADR 0259 coastal_tidal_surge TELEMAC-2D coastal tidal/surge inundation template) (+1 ADR 0256 elmfire_crown_fire_active_ros_verification Cruz-2005 active crown-fire ROS exact-solution regression gate) (+1 ADR 0252 landlab_normal_fault_scarp_evolution NormalFault tectonic-forcing landscape-evolution template) (+1 ADR 0251 culvert_embankment_flow HEC-RAS 2025 2D culvert-through-embankment template) (+1 ADR 0247 pelicun_hazus_lifeline_seismic_dl_run HAZUS EQ lifeline-network bridge/pipe/substation template) (+1 ADR 0241 telemac3d_stratified_flow TELEMAC-3D three-dimensional baroclinic stratified-flow template) (+1 ADR 0239 elmfire_spot_fire_barrier_crossing ELMFIRE ember-spotting barrier-jump template) (+1 ADR 0237 artemis_harbor_agitation ARTEMIS phase-resolving harbour-agitation template) (+1 ADR 0236 tomawac_wave_field TOMAWAC spectral-wave template) (+2 ADR 0235 modflow_thermal_plume + modflow_thermal_storage GWE heat-transport templates) (+1 ADR 0228 modflow_vadose_transport UZF+UZT unsaturated-zone breakthrough) (+2 ADR 0218 swmm_snowmelt_degree_day + swmm_aquifer_baseflow_to_node) (+1 ADR 0217 schism_pahm_surge) (+2 ADR 0214 landlab_groundwater_water_table +
   landlab_groundwater_storm_recession GroundwaterDupuitPercolator templates;
   +2 ADR 0203 fetch_aorc_precip + fetch_lter_records;
   +1 generate_mesh mesh builder ADR 0200;
@@ -126,8 +126,8 @@ def _os_environ() -> dict:
 def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
-    assert r["registry_size"] == 257  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge (TELEMAC-2D coastal tidal/surge inundation); ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
-    assert r["n_specs"] == 100  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness (staged-dataset specs); ADR 0297 +fetch_groundwater_recharge (staged-dataset spec); ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records
+    assert r["registry_size"] == 258  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge (TELEMAC-2D coastal tidal/surge inundation); ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
+    assert r["n_specs"] == 101  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged-dataset specs); ADR 0297 +fetch_groundwater_recharge (staged-dataset spec); ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -144,7 +144,7 @@ def test_default_config_identity():
 def test_arm2_specs_leave_pool_but_stay_indexed():
     r = _run_arm("2")
     assert r["arm"] == "2"
-    assert r["registry_size"] == 257  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge; ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
+    assert r["registry_size"] == 258  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge; ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
@@ -158,7 +158,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     # + ADR 0076 wfigs record fold; + ADR 0077 movebank keyed-CSV fold; + ADR 0079
     # quick-folds firms / noaa_sst / sentinel1; + ADR 0080 STAC-composite trio
     # landsat / sentinel2 / naip; + ADR 0081 fault_sources constant-cache fold).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 99  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 100  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -174,7 +174,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
 def test_arm1_signature_and_pool():
     r = _run_arm("1")
     assert r["arm"] == "1"
-    assert r["registry_size"] == 257  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge (TELEMAC-2D coastal tidal/surge inundation); ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
+    assert r["registry_size"] == 258  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge (TELEMAC-2D coastal tidal/surge inundation); ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False
     assert r["gridmet_in_index"] is True
@@ -260,11 +260,11 @@ def test_arm3_specs_leave_pool_and_source_param():
     composed fetcher's real dispatch path)."""
     r = _run_arm("3")
     assert r["arm"] == "3"
-    assert r["registry_size"] == 257  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge; ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
+    assert r["registry_size"] == 258  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge; ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 99  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 100  # ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -293,7 +293,7 @@ def test_stratum_index_is_source_scoped(_stratum):
         if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
     }
     assert set(idx.tool_names) == model_facing
-    assert len(idx.tool_names) == 99  # 100 specs minus the internal copernicus seam (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness) (ADR 0297 +fetch_groundwater_recharge) (ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records)
+    assert len(idx.tool_names) == 100  # 101 specs minus the internal copernicus seam (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity) (ADR 0297 +fetch_groundwater_recharge) (ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records)
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):
