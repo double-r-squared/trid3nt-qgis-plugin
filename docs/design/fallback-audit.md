@@ -44,7 +44,7 @@ unaffected) | cosmetic.
 | 5 | `data/fetchers/_router/hooks/topobathy.py` `_compose_fallback_warnings` + `_assert_nearshore_coverage` | a topobathy source leg missing/short | mosaic assembled from remaining legs | user-gated-capable (declared ladder + coverage on the envelope) / data | **WIRED** (ADR 0289 -- see below) |
 | 6 | `data/fetchers/_router/executors/raster_cog.py:1725` PC href sign | per-href sign endpoint fails | token-path signing | logged-only / operational | OK-as-is |
 | 7 | `data/fetchers/socioeconomic/geocode_location/...:792` | primary geocoder miss | secondary geocode source | loud (typed) / operational | OK-as-is |
-| 8 | `_router/registration.py:406` `spec.fallback` -> `executors/vector_fgb.py:537` + the `http_json` chain | the primary endpoint fails | the spec's NEXT named endpoint OR, for some specs, a SIBLING TOOL | logged-only / **mixed** | **F2 MIGRATION** (see below) |
+| 8 | `_router/registration.py:406` `spec.endpoint_fallback` -> `executors/vector_fgb.py:537` | the primary endpoint fails | the spec's NEXT named endpoint of the SAME dataset | logged-only / operational | **RESOLVED** (ADR 0299 -- the row's premise was wrong; see below) |
 
 Row 5 -- the SWAN bathymetry exhibit, WIRED (wave F1, ADR 0289). The row's silent
 half was PARTIAL CUDEM coverage: `_compose_fallback_warnings` fires only when the
@@ -80,47 +80,59 @@ under an exempting param, and activation rows carry the MEASURED share
 (an UNMEASURED note on `fallback_note`, plus the hoisted `fallback_warning`)
 without ever being numeric.
 
-Row 8 -- `spec.fallback`, a PRE-EXISTING NAME COLLISION, registered here and NOT
-touched by F1/F1b. It is a second, undeclared substitution mechanism that predates
-the ladders and shares their word: 32 source specs carry a top-level
-`fallback: [...]` list, resolved into an endpoint CHAIN by
-`vector_fgb._endpoint_chain` (and the equivalent `http_json` chain) and surfaced
-verbatim on the spec card by `registration.py:406`. Its consequence class is MIXED
-and undeclared: in `vector_fgb` the entries name alternate ENDPOINTS of the SAME
-dataset (a `same_data` rung, silent-OK by the floor), but `fetch_gridmet`'s
-`fallback: [fetch_era5_reanalysis]` names a SIBLING TOOL -- a genuine
-CROSS-DATASET swap (gridMET 4 km CONUS -> ERA5 ~31 km global reanalysis) riding
-silently with no rung, no gate and no activation row. F2 must inventory all 32,
-classify each entry, and migrate the cross-dataset ones onto declared rungs; the
-same-data ones can either become `same_data` rungs or keep the endpoint chain
-under a renamed key so the word `fallback` means exactly one thing.
+Row 8 -- `spec.fallback`. The premise recorded here was WRONG, and wave F2
+(ADR 0299) corrected it before migrating. This row claimed a second, undeclared
+substitution mechanism in which `fetch_gridmet`'s `fallback: [fetch_era5_reanalysis]`
+was "a genuine CROSS-DATASET swap (gridMET 4 km CONUS -> ERA5 ~31 km global
+reanalysis) riding silently with no rung, no gate and no activation row". It was
+not. `spec.fallback` had exactly ONE reader, `vector_fgb.resolve_endpoints`, which
+resolves each entry as `spec.endpoints.get(fb)` -- a key in the spec's own
+endpoints block, never the tool registry -- and `http_json` never read the field
+at all. Every sibling-tool entry resolved to None and was dropped.
+
+The real count was 9 non-empty lists (11 entries) among 101 specs, not 32
+carriers. ONE entry resolved: `fetch_nhd_waterbodies -> medium` (USGS NHDPlus HR
+-> the medium-resolution NHD service -- same producer, same dataset, a resolution
+tier), a `same_data` mirror the floor lets walk silently. The other 8 were
+structurally unreachable, six of them because `select_executor` never routes their
+spec to `vector_fgb` in the first place.
+
+The HARM was real but inverted: `registration.spec_card` projected all nine lists
+verbatim and `stratified.py` rendered them into the composed fetcher declaration
+the model reads, so the model was told eight sources have fallbacks that no code
+path could provide. A promise nothing can keep is the same failure as a silent
+swap, told from the other side.
+
+RESOLVED: the eight dead lists are deleted (ledger), the field is renamed
+`endpoint_fallback` with a contract of SAME-DATA mirrors only, and registration
+REFUSES an entry naming no endpoint of its own spec.
 
 ### B. Cache / transport
 
 | # | WHERE | TRIGGER | WHAT DEGRADES | LOUDNESS / SEVERITY | VERDICT |
 |---|---|---|---|---|---|
-| 8 | `data/cache.py:343-429` read-through provenance sidecar + s3 read/write | any storage fault | returns uncached (re-fetch) | logged-only / operational | OK-as-is |
-| 9 | `emission/pipeline_emitter.py:755` s3fs anonymous | no creds resolved | anonymous S3 read | logged-only / operational | OK-as-is (documented boto3-not-s3fs lesson) |
+| 8b | `data/cache.py:343-429` read-through provenance sidecar + s3 read/write | any storage fault | returns uncached (re-fetch) | logged-only / operational | OK-as-is (this row and the ladder row above shared the number 8; disambiguated 2026-08-21) |
+| 9 | `emission/pipeline_emitter.py:755` | -- | -- | -- | **VOID** (ADR 0299): line 755 is a COMMENT; the file has no s3fs call, only boto3. The row described a mechanism that did not exist when it was written. The real anonymous reads are `data/fetchers/_public_s3.py:42 public_s3fs_kwargs()`, a deliberate `anon=True` for known-public NOAA buckets -- not a credential-failure fallback |
 
 ### C. Emission / styling
 
 | # | WHERE | TRIGGER | WHAT DEGRADES | LOUDNESS / SEVERITY | VERDICT |
 |---|---|---|---|---|---|
-| 10 | `emission/quantity_styles.py:90` `resolve_style_preset` -> `NEUTRAL_FALLBACK_PRESET` | quantity has no registered colormap | neutral ramp instead of a physical colormap | logged-only + process counter / cosmetic | OK-as-is (honest neutral, never a silently-WRONG physical map; counter is auditable) |
-| 11 | `workers/_raster_postprocess/cog.py:128` CRS -> `EPSG:3857` | no `crs` variable resolvable from the netCDF | COG CRS tag may not match pixel coords (misplacement) | logged-only / data | NEEDS-LOUDER + DEAD-PRIMARY-adjacent (see finding D-2) |
+| 10 | `emission/quantity_styles.py:115` `resolve_style_preset` -> `NEUTRAL_FALLBACK_PRESET` | quantity has no registered colormap | neutral ramp instead of a physical colormap | logged-only + process counter / cosmetic | OK-as-is (honest neutral, never a silently-WRONG physical map; counter is auditable) |
+| 11 | `workers/_raster_postprocess/cog.py:128` CRS -> `EPSG:3857`, and an UNAUDITED duplicate at `workflows/shared/cog_io.py:90` `_read_crs_from_dataset` | no `crs` variable resolvable from the netCDF | COG CRS tag may not match pixel coords (misplacement) | logged-only / data | NEEDS-LOUDER + DEAD-PRIMARY-adjacent (see finding D-2). PARKED for NATE (ADR 0299 fork 4): raise, or keep guessing? Two sites |
 
 ### D. Solve-time deck authors + mesh (physics-consequential)
 
 | # | WHERE | TRIGGER | WHAT DEGRADES | LOUDNESS / SEVERITY | VERDICT |
 |---|---|---|---|---|---|
-| 12 | `workers/_sfincs_build/deck.py:852-930` wide active-mask bounds; surfaced only at `workflows/sfincs/flood/flood.py:1748-1754` | DEM elevation range unreadable | active-cell mask widened -- domain includes cells a real DEM range would EXCLUDE; flooded-area answer changes | **SILENT to user (logger.warning only)** / **physics** | **NEEDS-LOUDER** (SILENT+physics -- see verbatim below) |
+| 12 | `workers/_sfincs_build/deck.py:852-930` wide active-mask bounds; surfaced only at `workflows/sfincs/flood/flood.py:1788-1796` (re-verified 2026-08-21: the envelope wiring still has NOT landed, and the agent-side `workflows/sfincs/sfincs_builder.py` carries an independent SECOND copy of the mask computation) | DEM elevation range unreadable | active-cell mask widened -- domain includes cells a real DEM range would EXCLUDE; flooded-area answer changes | **SILENT to user (logger.warning only)** / **physics** | **NEEDS-LOUDER** (SILENT+physics -- see verbatim below) |
 | 13 | `workers/_sfincs_build/deck.py:1324` `bbox-area-fallback` | DEM unreadable for the autoscaler | assumes whole bbox active for the SIZE estimate only | loud (`source=` stamped in estimate string) / operational | OK-as-is (sizing estimate, not the solved mask) |
-| 14 | `workers/_sfincs_build/deck_quadtree.py:384` `center_band_fallback` | no z=0 land-sea interface resolved in AOI | refinement follows a fixed cross-shore center band instead of the coastline -- resolution lands where waves may NOT be | logged-only (refine_source stamped in deck; log line) / physics | NEEDS-LOUDER |
-| 15 | `workers/_sfincs_build/deck.py:2006-2037` netamt rainfall fallback | precip accumulation path unavailable | rainfall magnitude derived from the netamt fallback formula | loud (locked + noted in deck) / physics | OK-as-is (documented, deck-visible) |
-| 16 | `mesh/swmm_network.py:71-77,632,750` synthetic diameters / topology / sub-area | imported GIS carries no size/topology/sub-catchment | demo-default pipe diameter, junction depth, fully-synthetic sub-area | loud (`SyntheticInput(basis=...)` labels) / physics+data | OK-as-is (declared synthetic) |
-| 17 | `mesh/raster_cell_mesh.py:1183` roughness/imperviousness demo defaults | user did not set the constitutive lever | Manning n / imperviousness fall to historical literals (drive routing) | logged-only (labeled demo default) / physics | NEEDS-LOUDER (demo-default physics knob, deck-only provenance) |
-| 18 | `mesh/raster_cell_mesh.py:1220,1433` outfall cell -> globally-lowest active | no lowest-boundary cell found | drainage outfall placed at the globally lowest cell | SILENT / physics | NEEDS-LOUDER (drainage point moves; no log, no note) |
-| 19 | `workers/modflow/gwt_adapter.py:179` `DEFAULT_SFR_STREAMBED_GRADIENT` linear profile | no DEM rbot supplied for the SFR reach | streambed slope = flat demo gradient (drives Manning flow) | loud (SyntheticInput label on the archetype deck) / physics | OK-as-is (archetype benchmark, "not a site") |
+| 14 | `workers/_sfincs_build/deck_quadtree.py:384` `center_band_fallback` | no z=0 land-sea interface resolved in AOI | refinement follows a fixed cross-shore center band instead of the coastline -- resolution lands where waves may NOT be | logged-only (refine_source stamped in deck; log line) / physics | NEEDS-LOUDER. Re-verified 2026-08-21: `refine_source` has three hits, ALL inside `deck_quadtree.py` -- nothing downstream reads it back |
+| 15 | `workers/_sfincs_build/deck.py:2022-2039` netamt rainfall fallback | precip accumulation path unavailable | rainfall magnitude derived from the netamt fallback formula | loud (locked + noted in deck) / physics | OK-as-is (documented, deck-visible) |
+| 16 | `mesh/swmm_network.py:70-81,358-361,~740-830` synthetic diameters / topology / sub-area | imported GIS carries no size/topology/sub-catchment | demo-default pipe diameter, junction depth, fully-synthetic sub-area | MIXED / physics+data | **PARTLY WRONG** (re-verified 2026-08-21): sub-area IS labeled `SyntheticInput`; diameter defaulting and `n_topology_snapped` are NOT -- they ride a free-text `label_suffix` on the layer name only, and `swmm_contracts` has no `n_diameters_defaulted` field. PARKED (ADR 0299) |
+| 17 | `mesh/raster_cell_mesh.py:1203-1211` roughness/imperviousness demo defaults | user did not set the constitutive lever | Manning n / imperviousness fall to historical literals (drive routing) | **SILENT** / physics | **WORSE THAN AUDITED** (re-verified 2026-08-21): the `run_swmm.py:184` log fires only when `resolved_physics` is truthy -- i.e. only when the user OVERRIDES. On the actual default path nothing logs, no field, no `SyntheticInput`. PARKED (ADR 0299) |
+| 18 | `mesh/raster_cell_mesh.py:1238-1242,1437,1453` outfall cell -> globally-lowest active | no lowest-boundary cell found | drainage outfall placed at the globally lowest cell | SILENT / physics | NEEDS-LOUDER (drainage point moves; no log, no note) |
+| 19 | `workers/modflow/gwt_adapter.py:181` `DEFAULT_SFR_STREAMBED_GRADIENT` linear profile | no DEM rbot supplied for the SFR reach | streambed slope = flat demo gradient (drives Manning flow) | **SILENT** / physics | **WRONG AS AUDITED** (re-verified 2026-08-21): `river_rbot_by_cell` is populated by NO live caller and is not a field on `MODFLOWRunArgs`, so the "primary" is dead from every path and the demo gradient is UNCONDITIONAL on `stream_depletion`. No `SyntheticInput` exists anywhere on this path. PARKED as a law-9 fork (ADR 0299 fork 3) |
 
 ### E. Worker postprocess (the SWAN class)
 
@@ -135,25 +147,46 @@ under a renamed key so the word `fallback` means exactly one thing.
 | # | WHERE | TRIGGER | WHAT DEGRADES | LOUDNESS / SEVERITY | VERDICT |
 |---|---|---|---|---|---|
 | 23 | `workflows/telemac/river_dye/river_dye.py:432` bank_source gate | real-bank mesh geometry unavailable | forces the user to explicitly retry `bank_source="constant_ribbon"` (assumed channel width) -- NEVER silently substituted | user-gated + `fallback_note` (idealized-bed) / physics | OK-as-is (GOLD -- gated + narrated) |
-| 24 | `workers/telemac/telemac_river_dye_build.py:839` NHDArea fetch fail -> constant width | NHDArea polygon fetch fails INSIDE the ribbon path | channel width becomes a constant | logged-only / physics | NEEDS-LOUDER (width assumption not surfaced beyond the gate note) |
-| 25 | `telemac_river_dye_build.py:1205` water-polygon domain fail -> ribbon | water-polygon domain build fails | domain shape reverts to the geometric ribbon | logged-only / physics | NEEDS-LOUDER |
-| 26 | `telemac_river_dye_build.py:1593-1703` 3DEP DEM fallback rung | primary DEM fetch fails after retries | USGS 3DEP ImageServer point-sample bed | loud (data-source norm: primary->fallback->honest typed) / data | OK-as-is |
+| 24 | `workers/telemac/telemac_river_dye_build.py:852-857` NHDArea fetch fail | NHDArea polygon fetch fails on the `bank_source="nhd_area"` path | (nothing -- the caller RAISES) | user-gated / physics | **RESOLVED, merged into row 23** (re-verified 2026-08-21): `entrypoint.py:356` raises `BanksUnavailableError`, surfacing the same retryable `TELEMAC_BANKS_UNAVAILABLE` gate. The `constant_ribbon` path never calls the fetch at all. Only the stale `LOG.warning` text still says "constant-width fallback" |
+| 25 | `telemac_river_dye_build.py:1216-1219` (+ a second silent branch at 1230-1234) water-polygon domain fail -> ribbon | water-polygon domain build fails | domain shape reverts to the geometric ribbon | logged-only / physics | NEEDS-LOUDER |
+| 26 | `telemac_river_dye_build.py:1576-1696` 3DEP DEM fallback rung | primary DEM fetch fails after retries | USGS 3DEP ImageServer point-sample bed | loud (data-source norm: primary->fallback->honest typed) / data | OK-as-is |
 
 ### G. HEC-RAS demonstration geometry
 
 | # | WHERE | TRIGGER | WHAT DEGRADES | LOUDNESS / SEVERITY | VERDICT |
 |---|---|---|---|---|---|
-| 27 | `workflows/hecras/{riverine_flood,levee_breach,flood_2d,culvert_embankment_flow}` `_DEMO_GEOMETRY_NOTE`/`_FIDELITY_NOTE` | off-scope arbitrary-AOI request | the solve runs on BAKED demonstration geometry (Muncie), not the user's AOI -- the answer is a demo, not the site | loud (`fallback_note` hoisted to the LLM) / physics | NEEDS-GATE (narrated but not user-CONFIRMED; a place-named request silently answers with foreign geometry) |
+| 27 | `workflows/hecras/{riverine_flood,levee_breach}` `_DEMO_GEOMETRY_NOTE` | off-scope arbitrary-AOI request | the solve runs on BAKED demonstration geometry (Muncie), not the user's AOI | user-gated / physics | **RESOLVED** (commit a2802c50, after this audit was written): `run_demo_geometry: bool = False` opt-in + typed `HECRAS_DEMO_GEOMETRY_REQUIRED` refusal + the geometry presented as a `SyntheticInput` for input review. **The `flood_2d` / `culvert_embankment_flow` half of this row was WRONG when written**: neither bakes Muncie -- both author real geometry at the user's AOI, and their `_FIDELITY_NOTE` is about solver maturity, not geometry substitution |
 
 ### H. Gates + registry (fail-open)
 
 | # | WHERE | TRIGGER | WHAT DEGRADES | LOUDNESS / SEVERITY | VERDICT |
 |---|---|---|---|---|---|
-| 28 | `gates/input_review.py:256` headless fail-open | direct-call/offline turn has no turn entry | INPUT_REQUIRED gate proceeds with labeled inputs | loud (labeled "fail-open") / operational | OK-as-is (live WS turns have a turn entry; gate fires) |
+| 28 | `gates/input_review.py:322-343` headless fail-open | direct-call/offline turn has no turn entry | INPUT_REQUIRED gate proceeds with labeled inputs -- UNLESS `physics_refusal_reason()` fires, which now refuses even headless (commit 7caa83a2, after this audit) | loud (labeled "fail-open") / operational | OK-as-is, and STRICTER than audited |
 | 29 | `gates/tool_gating.py:161` cold-index fail-open | empty/cold ranking or any fault | registry left ungated for the turn | logged-only / operational | OK-as-is (routing, not physics) |
-| 30 | `gates/cards/region_choice.py:93` headless fail-open | headless client, no confirm channel | keeps the whole-state bbox default | loud (labeled honest degrade) / operational | OK-as-is |
+| 30 | `gates/confirm.py:993` (headless, no log) / `:945-952` (timeout, logged) -- the logic MOVED out of `region_choice.py` | headless client, no confirm channel | keeps the whole-state bbox default | loud (labeled honest degrade) / operational | OK-as-is |
 | 31 | `gates/actionability.py:84` classify fault -> safe degrade | internal classification fault | safe default message | logged-only / operational | OK-as-is |
-| 32 | `emission/uri_registry.py:29,898` unknown-URI pass-through | non-registered storage URI | user-supplied/external URI passes untouched | logged-only / operational | OK-as-is (by design -- never block user sources) |
+| 32 | `emission/uri_registry.py:33,900-901` unknown-URI pass-through | non-registered storage URI | non-object-store strings (https, local paths) pass untouched; an unregistered `gs://`/`s3://` URI is now fuzzy-matched and, on no match, RAISES `URI_HANDLE_UNRESOLVED` | logged-only (pass) / loud typed (reject) / operational | OK-as-is, and STRICTER than audited -- the reject path supersedes the post-decommission fail-open |
+
+## Status after wave F2 (ADR 0299, 2026-08-21)
+
+Every row below was re-verified against the code on 2026-08-21 and the rows above
+carry the corrections inline. `docs/decisions/0299-fallback-ladders-f2.md` holds
+the authoritative per-row VERDICT table (MIGRATED / CONVERTED / HONEST / DEAD /
+PARKED / OUT-OF-SCOPE) and the parked forks for NATE.
+
+Three rows were WRONG when this document was written, not merely stale: row 8
+(no substitution mechanism existed), row 9 (no s3fs fallback exists at the cited
+site) and the `flood_2d` / `culvert_embankment_flow` half of row 27 (neither bakes
+demonstration geometry). Two rows are WORSE than graded here -- 17 and 19, both
+now SILENT rather than logged-only. Two are BETTER -- 24 (merged into row 23's
+gate) and 28/32 (both stricter than described).
+
+The "Mechanism options for NATE" section below is HISTORICAL. NATE chose a fourth
+option, the declared fallback ladder (`docs/design/fallback-ladders.md`), landed
+across ADRs 0289-0293 and 0299. Option 1's `fallback_note` universalisation
+survives as the still-open loudness wave for the physics rows the ladder cannot
+express (12, 14, 16, 17, 18, 20, 25 -- no alternative SOURCE to declare, only a
+default constant), registered in `tests/test_fallback_sweep_guard.py`.
 
 ## Summary by class
 

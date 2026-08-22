@@ -5,16 +5,17 @@ Replaces hidden substitution everywhere with one declared, visible,
 gated mechanism. Proving case: the SWAN bathymetry rectangle
 (docs/design/fallback-audit.md, the mosaic land-fill exhibit).
 
-Waves F1 (ADR 0289), F1b (ADR 0290), F1c (ADR 0291) and F1d (ADR 0292) are
-LANDED - read "As built" at the bottom for the shipped shapes before touching
-the machinery.
+Waves F1 (ADR 0289), F1b (ADR 0290), F1c (ADR 0291), F1d (ADR 0292), F1e (ADR
+0293) and F2 (ADR 0299) are LANDED - read "As built" at the bottom for the
+shipped shapes before touching the machinery.
 
 ## The contract in five rules
 
 1. LADDERS ARE DATA. A ladder is an ordered list of rungs; each rung is
    the ACTUAL alternative (a source ref from the fetcher specs, or a
    dotted-path callable for non-fetch alternatives) plus its
-   consequence class: same_data | cross_dataset | synthetic. The
+   consequence class: same_data | cross_dataset | synthetic, or
+   enhancement for a source BETTER than the primary (F2). The
    terminal rung is always REFUSE (the typed error), stated explicitly.
    Rung definitions live with the capability owner (source specs for
    fetch ladders; the owning module otherwise) in a fallbacks registry.
@@ -216,3 +217,34 @@ guard against naked substitution).
 - AN UNMEASURED SERVE CARRIES NO NUMBERS. Under a caller's exemption the stamping
   seam also clears the result's `rung_coverage`: an envelope may not contradict its
   own UNMEASURED note.
+
+## As built (wave F2, ADR 0299)
+
+- A NON-DEGRADING CONTRIBUTOR IS DECLARABLE. The `enhancement` consequence
+  closes 0292's parked schema gap. It is a rung so the walker can NAME what
+  painted; it is not in `DEGRADATION_CLASSES` (the floor ignores it, the
+  activation is not `degraded`), not in `Ladder.alternatives` (a call site
+  cannot permit it -- permitting a rung is how a caller accepts a COST, and
+  this one has none), and never marked GATE-UNSEEN (that text means an
+  unapproved substitution; a free upgrade is not one). `Ladder` validates rungs
+  below the primary against `BELOW_PRIMARY_CLASSES`. `regional_fine` is the
+  first, and `include_regional_fine` comes off `coverage_exempt_params`
+  accordingly -- its share has been measured since 0292, so its rows are
+  evidence.
+- A RUNG THE MODEL CANNOT SEE IS A RUNG NOBODY CAN TAKE. `dem_uri`, the
+  `user_supplied` top rung's param, is now declared in `fetch_topobathy`'s
+  spec params and docstring instead of being absorbed by `**_extra_ignored`.
+- `spec.fallback` IS DEAD; `spec.endpoint_fallback` MEANS ONE THING: ordered
+  SAME-DATA mirrors of the spec's OWN `endpoints` block. Registration refuses
+  an entry that names anything else and points at the ladder. The word
+  `fallback` on a spec no longer competes with the word on a ladder.
+- THE ESCAPE HATCHES SURVIVE, DEMOTED. `force_bathy_base` is also the
+  `etopo_bathy_base` rung's injected param, so it cannot be deleted while the
+  machinery is frozen; the refusal text now leads with the rung and states the
+  hatch's cost (it turns the coverage question off, so the result carries the
+  warning without per-rung numbers). `skip_cudem` (a cost lever) and
+  `skip_land` (which leg runs) were never fallback policy and are untouched.
+- A COMPOSER THAT NEEDS A BED DECLARES ITS RUNG. `generate_mesh`'s coastal
+  water-edge builder joined the four `fetch_topobathy` callers; a coastal mesh
+  is the wet domain, so a bed it cannot get honestly is a REFUSAL, not a land
+  DEM. `tests/test_fallback_sweep_guard.py` holds the call-site guard.
