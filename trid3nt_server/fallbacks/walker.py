@@ -308,6 +308,7 @@ def walk_ladder(
         from trid3nt_server.gates.fallback import confirm_fallback as gate
 
     base = dict(params)
+    activation = Activation(capability=ladder.capability)
     plan: list[Rung] = []
     user = ladder.user_rung
     if user is not None and base.get(str(user.supplies_param)) is not None:
@@ -316,13 +317,19 @@ def walk_ladder(
     for name in allow:
         rung = ladder.alternative(name)
         if rung is None:
-            raise ValueError(
+            # A caller naming a rung that does not exist is a bug, not a data
+            # condition -- but it must still leave the walker TYPED, or the
+            # composers' never-raise excepts (which catch LadderRefused/LadderGap)
+            # let a bare ValueError escape into their catch-all.
+            raise LadderRefused(
                 f"ladder {ladder.capability!r} declares no alternative rung "
-                f"{name!r}; declared: {[r.name for r in ladder.alternatives]}"
+                f"{name!r}; declared: {[r.name for r in ladder.alternatives]}",
+                error_code=LADDER_ERROR_CODE,
+                activation=activation,
+                retryable=False,
             )
         plan.append(rung)
 
-    activation = Activation(capability=ladder.capability)
     # ONLY the CALLER's own params exempt: a param a RUNG injects is the ladder
     # exercising its own declared alternative, and that attempt is accounted for
     # like any other (from measured paint, below).

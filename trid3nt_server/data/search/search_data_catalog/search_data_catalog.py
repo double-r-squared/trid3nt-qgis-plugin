@@ -211,7 +211,7 @@ def search_data_catalog(
         raise CatalogNotFoundError("search_data_catalog requires a non-empty topic string")
 
     # Catalog-surfacing Design 1 (arm-flagged): return spec-served source CARDS
-    # (full docstring + typed param schema + gates/caveats/fallback) instead of the
+    # (full docstring + typed param schema + gates/caveats/endpoint mirrors) instead of the
     # YAML catalog entries. The model then calls fetch_from_catalog(source=..., params=...).
     # DEFAULT config (no arm flag) is unaffected -- the YAML path below runs.
     from trid3nt_server.data.fetchers._router import registration as _reg

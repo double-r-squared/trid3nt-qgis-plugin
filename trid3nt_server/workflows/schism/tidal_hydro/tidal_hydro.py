@@ -387,15 +387,18 @@ def _parse_hgrid_nodes_cells(gr3_text: str) -> tuple[Any, Any, Any]:
 
 async def _schism_mesh_precondition_gate(
     input_mode: str | None,
-) -> tuple[tuple[Any, Any, Any] | None, str | None, str | None]:
+) -> tuple[tuple[Any, Any, Any] | None, str | None, str | None, dict[str, Any]]:
     """Offer this case's SCHISM mesh to the coastal_tin tidal solve.
 
-    Returns ``(supplied_mesh | None, open_boundary_side | None, note | None)``: a
-    parsed ``(points_lonlat, tris, depths_down)`` tuple when a case mesh was
-    discovered, SCHISM-compatible (a designated open boundary), and accepted; ``None``
-    when there is no usable mesh, an incompatible one was skipped, or the user
-    declined -- the caller then builds the internal oceanmesh TIN. ``open_boundary_side``
-    is taken from the mesh's designated open boundary. NEVER raises into the solve."""
+    Returns ``(supplied_mesh | None, open_boundary_side | None, note | None,
+    bed_provenance)``: a parsed ``(points_lonlat, tris, depths_down)`` tuple when a
+    case mesh was discovered, SCHISM-compatible (a designated open boundary), and
+    accepted; ``None`` when there is no usable mesh, an incompatible one was
+    skipped, or the user declined -- the caller then builds the internal oceanmesh
+    TIN. ``open_boundary_side`` is taken from the mesh's designated open boundary.
+    ``bed_provenance`` carries the artifact's ``dem_source`` / ``bed_fallback_note``
+    so a DEGRADED bed arrives at the solve labeled rather than as a bare "user"
+    basis. NEVER raises into the solve."""
     from trid3nt_server.workflows.mesh.precondition_gate import (
         gate_supplied_mesh, materialize_supplied_mesh,
     )
@@ -418,8 +421,13 @@ async def _schism_mesh_precondition_gate(
             tool_name="schism_tidal_hydro", engine="schism",
             input_mode=input_mode, loaded_mesh_uris=loaded_mesh_uris, s3_client=s3)
         if not decision.use or decision.artifact is None:
-            return None, None, decision.note
+            return None, None, decision.note, {}
         art = decision.artifact
+        art_prov = art.provenance or {}
+        bed_provenance = {
+            "dem_source": art_prov.get("dem_source"),
+            "bed_fallback_note": art_prov.get("bed_fallback_note"),
+        }
         open_side = str((art.open_boundary_info or {}).get("open_boundary_side")
                         or "").strip().lower() or None
 
@@ -432,12 +440,12 @@ async def _schism_mesh_precondition_gate(
         logger.info(
             "schism tidal_hydro: consuming case mesh %r (%d elements, open side=%s) "
             "instead of the internal coastal TIN", art.name, art.element_count, open_side)
-        return supplied_mesh, open_side, decision.note
+        return supplied_mesh, open_side, decision.note, bed_provenance
     except Exception as exc:  # noqa: BLE001 -- gate must never break the solve
         logger.warning(
             "schism tidal_hydro mesh precondition gate failed (%s); building the "
             "internal coastal TIN", exc, exc_info=True)
-        return None, None, None
+        return None, None, None, {}
 
 
 async def model_schism_tidal_hydro(
@@ -643,10 +651,15 @@ async def _build_coastal_tin_deck(
     # it -- real shoreline + real sampled bathymetry replace the internal oceanmesh
     # TIN, the tidal boundary re-keyed to the mesh's open side. Accepted -> the
     # supplied-mesh deck; declined/absent/incompatible -> the internal TIN below.
-    supplied_mesh, gate_open_side, mesh_gate_note = (
+    supplied_mesh, gate_open_side, mesh_gate_note, bed_prov = (
         await _schism_mesh_precondition_gate(input_mode))
     if supplied_mesh is not None:
         open_side = gate_open_side or open_boundary_side
+        # The bed is the physics. What the mesh's nodes carry was decided by the
+        # topo-bathymetry ladder at BUILD time, so the label the solve shows must
+        # come from the artifact, not from a template that assumes "user".
+        bed_source = bed_prov.get("dem_source")
+        bed_note = bed_prov.get("bed_fallback_note")
         deck = await asyncio.to_thread(
             deck_authoring.author_coastal_tin_deck, workdir / "case",
             supplied_mesh=supplied_mesh, constituents=constituents,
@@ -657,14 +670,21 @@ async def _build_coastal_tin_deck(
             constituents="+".join(constituents), amp=f"{tidal_amplitude_m:g}",
             open_side=open_side,
         )
+        if bed_note:
+            note += f" MESH BED: {bed_note}"
         review_entries = [
             SyntheticInput(param="mesh_source", value="coastal_tin (user-supplied mesh)",
                            basis="user",
                            note=(mesh_gate_note or "generate_mesh: real shoreline + real "
                                  "sampled bathymetry replaced the internal oceanmesh TIN") +
                                 f" -- {deck['n_nodes']} nodes / {deck['n_elements']} elements"),
-            SyntheticInput(param="bathymetry", value="user-supplied mesh (node-sampled)",
-                           basis="user", note="the case mesh's own node bathymetry (positive-down)"),
+            SyntheticInput(param="bathymetry",
+                           value=bed_source or "user-supplied mesh (node-sampled)",
+                           basis="fetched" if bed_source else "user",
+                           consequence="physics",
+                           real_source_if_any=bed_source,
+                           note="the case mesh's own node bathymetry (positive-down)"
+                                + (f" -- DEGRADED BED: {bed_note}" if bed_note else "")),
             SyntheticInput(param="tidal_amplitude_m", value=round(tidal_amplitude_m, 4), units="m",
                            basis="user" if tidal_amplitude_m != 0.5 else "default_demo", consequence="physics",
                            note=f"uniform {'+'.join(constituents)} boundary re-keyed to the mesh's open ({open_side}) side"),
@@ -849,8 +869,9 @@ async def _fetch_bathymetry_cog(
 
     ``activation_sink`` collects the fallback-ladder rows the fetch reported, so
     the caller can stamp what actually painted the bed onto its own result. A
-    ladder REFUSAL is fatal here: the ``fetch_dem`` leg below is land-only and
-    would sample flat 0 m ocean onto every wet node."""
+    ladder REFUSAL is fatal here, and so is any RETRYABLE typed fault: the
+    ``fetch_dem`` leg below is land-only and would sample flat 0 m ocean onto
+    every wet node."""
     from trid3nt_server.data import TOOL_REGISTRY
 
     topobathy_kw, dem_kw = _topobathy_fetch_kwargs(
@@ -892,6 +913,19 @@ async def _fetch_bathymetry_cog(
                 "coastal_tin bed (flat 0 m ocean reads as dry ground).",
             ) from exc
         except Exception as exc:  # noqa: BLE001
+            # A fault that declares itself RETRYABLE is transport, not geography.
+            # Continuing would step to the LAND-ONLY ``fetch_dem`` leg and sample
+            # flat 0 m ocean onto every wet node because one upstream call blipped.
+            # Surface the fault's own typed code + retryability instead.
+            code = getattr(exc, "error_code", None)
+            if code and getattr(exc, "retryable", False):
+                raise SchismScenarioError(
+                    str(code),
+                    f"topo-bathymetry fetch faulted for bbox {tuple(bbox)}: {exc}. "
+                    "This is a TRANSIENT upstream/transport fault, not a coverage "
+                    "verdict -- the 3DEP land DEM is not a substitute for a "
+                    "coastal_tin bed. RETRY the same request.",
+                ) from exc
             logger.warning("schism bathymetry %s failed: %s", tool_name, exc)
             continue
         uri = getattr(res, "uri", None) or (res.get("uri") if isinstance(res, dict) else None)

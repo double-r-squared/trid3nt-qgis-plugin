@@ -148,7 +148,7 @@ async def generate_mesh(
         refined by distance-to-river -> a triangular TIN (.2dm + bathymetric SELAFIN;
         TELEMAC-ready, SCHISM with an ``open_boundary_side``);
       * a coastal AOI (or ``mesh_mode="coastal"``) -> the OSM+NHD WATER polygon
-        refined by distance-to-shore + wavelength -> a coastal TIN;
+        refined by distance-to-shore -> a coastal TIN;
       * ``mesh_mode="hecras"`` (or ``engine="hecras"``) -> a channel-refined HEC-RAS
         rain-on-grid CELL mesh: a coarse hillslope background grading down to a fine
         cell along the delineated channel network (graded Poisson-disk seeds + channel
@@ -403,8 +403,7 @@ def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
         "open_boundary_info": {"source": "OSM coastline + NHD areal water union",
                                "provenance": water_prov},
         "local_slf": None,
-        "sizing_source": "OSM natural=coastline + NHDPlus areal water domain; "
-                         "distance-to-shore + wavelength-to-depth sizing",
+        "sizing_source": _sizing_source(Path(rundir)),
         "dem_source": _bed_provenance(bed_layer),
         "bed_fallback_note": getattr(bed_layer, "fallback_note", None),
         "place": None,
@@ -493,6 +492,9 @@ def _stage_and_record(
         "grade": float(grade),
         "sizing_source": built.get("sizing_source"),
         "dem_source": built.get("dem_source"),
+        # A degraded bed must travel WITH the mesh: a solver consuming this
+        # artifact months later reads its provenance, not this turn's narration.
+        "bed_fallback_note": built.get("bed_fallback_note"),
         "area_km2": built.get("area_km2"),
     }
     engine_compat: list[str] = ["telemac"] if has_bathymetry else []
@@ -691,15 +693,37 @@ def _fetch_coastal_bed(aoi, rundir: Path) -> tuple[Path, Any]:
     return dst, layer
 
 
+def _sizing_source(rundir: Path) -> str:
+    """What ACTUALLY sized the coastal mesh, from the mesher's own report.
+
+    The container records which sizing functions bound, including one that was
+    requested and never bound. Claiming a term the mesh does not carry is the same
+    class of false promise as an undeclared substitution, so the claim is copied,
+    never composed here.
+    """
+    domain = "OSM natural=coastline + NHDPlus areal water domain"
+    try:
+        stats = json.loads((rundir / "mesh_stats.json").read_text())
+        active = [str(s) for s in (stats.get("sizing_functions") or [])]
+    except Exception:  # noqa: BLE001 -- an unreadable report says so, never guesses
+        active = []
+    if not active:
+        return f"{domain}; sizing functions unreported by the mesher"
+    return f"{domain}; " + "; ".join(active)
+
+
 def _bed_provenance(layer: Any) -> str:
     """What ACTUALLY painted the coastal bed, from the ladder's activation rows."""
-    rows = list(getattr(layer, "fallbacks", None) or [])
+    rows = [r for r in (getattr(layer, "fallbacks", None) or []) if r.coverage > 0.0]
     if rows:
         return "topobathy: " + ", ".join(
-            f"{r.rung} {r.coverage * 100:.0f}%" for r in rows if r.coverage > 0.0
+            f"{r.rung} {r.coverage * 100:.0f}%" for r in rows
         )
     note = getattr(layer, "fallback_note", None)
-    return f"topobathy ({note})" if note else "topobathy: CUDEM 1/9\" + 3DEP land"
+    return (
+        f"topobathy ({note})" if note
+        else "topobathy (source UNMEASURED: the fetch reported no activation rows)"
+    )
 
 
 def _sample_raster(raster_path: Path, points_lonlat: Any) -> Any:

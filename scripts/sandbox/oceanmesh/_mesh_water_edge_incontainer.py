@@ -141,6 +141,12 @@ def main() -> int:
             inside[finite] = contains_xy(water_geom, xf[:, 0], xf[:, 1])
         return np.where(inside, -d, d)
 
+    # What the wavelength term ACTUALLY did. A sizing function that is switched on
+    # but never smaller than the feature size contributes nothing to the mesh, and
+    # ``sizing_functions`` must not claim it did: h_wl = T_M2*sqrt(g*h)/wl is ~9.9 km
+    # even in 0.5 m of water, so at any coastal max_edge_length it is clipped away.
+    wl_bind = {"n": 0, "total": 0, "h_wl_min_m": None}
+
     def edge_length(x):
         x = np.asarray(x, dtype=float)
         xq = np.nan_to_num(x, nan=1e9)
@@ -151,7 +157,13 @@ def main() -> int:
             elev = depth_interp(np.column_stack([xq[:, 1], xq[:, 0]]))
             depth = np.clip(-elev, 0.5, None)
             h_wl = (_T_M2 * np.sqrt(_G * depth) / float(cfg.get("wl", 10))) / mpd
-            h = np.minimum(h, np.clip(h_wl, min_deg, max_deg))
+            h_wl_clipped = np.clip(h_wl, min_deg, max_deg)
+            wl_bind["n"] += int(np.count_nonzero(h_wl_clipped < h))
+            wl_bind["total"] += int(np.size(h))
+            seen = float(np.min(h_wl)) * mpd
+            prev = wl_bind["h_wl_min_m"]
+            wl_bind["h_wl_min_m"] = seen if prev is None else min(prev, seen)
+            h = np.minimum(h, h_wl_clipped)
         return h
 
     points, cells = om.generate_mesh(
@@ -194,8 +206,19 @@ def main() -> int:
     ]))
     seg_m = seg * mpd
     active = ["feature_sizing(distance_to_shore)"]
+    wl_frac = wl_bind["n"] / max(1, wl_bind["total"])
     if depth_interp is not None:
-        active.append("wavelength_sizing(shallow_water,wl=%d)" % int(cfg.get("wl", 10)))
+        if wl_bind["n"]:
+            active.append(
+                "wavelength_sizing(shallow_water,wl=%d) bound %.1f%% of queries"
+                % (int(cfg.get("wl", 10)), 100.0 * wl_frac))
+        else:
+            active.append(
+                "wavelength_sizing(shallow_water,wl=%d) REQUESTED BUT NEVER BOUND "
+                "(smallest h_wl %.0f m >= max_edge_length %.0f m; the mesh size is "
+                "distance-to-shore alone)"
+                % (int(cfg.get("wl", 10)), wl_bind["h_wl_min_m"] or 0.0,
+                   float(cfg["max_edge_length_m"])))
     stats = {
         "engine": "oceanmesh(CHLNDDEV OceanMesh2D port) v%s" % getattr(om, "__version__", "?"),
         "sizing_functions": active,
@@ -204,6 +227,10 @@ def main() -> int:
         "grade": grade,
         "min_edge_length_m": cfg["min_edge_length_m"],
         "max_edge_length_m": cfg["max_edge_length_m"],
+        "wavelength_binding_fraction": round(wl_frac, 6),
+        "wavelength_h_wl_min_m": (
+            None if wl_bind["h_wl_min_m"] is None
+            else round(float(wl_bind["h_wl_min_m"]), 1)),
         "n_points": int(points.shape[0]), "n_cells": int(cells.shape[0]),
         "edge_min_m": round(float(seg_m.min()), 1),
         "edge_median_m": round(float(np.median(seg_m)), 1),

@@ -317,3 +317,96 @@ No `workers/` path touched, so no image rebuild.
 - `generate_mesh` coastal builds fetch `fetch_topobathy`, not `fetch_dem`. A
   coastal AOI where neither CUDEM nor ETOPO can lay a bed now REFUSES instead of
   meshing flat water.
+
+## Correction (verifier review, wave F2b, 2026-08-21)
+
+An adversarial review of F2 found the CODE sound and the RECORD wrong in three
+places. History is not rewritten; the corrections stand here.
+
+### C1. Row 19's "dead primary" claim was itself wrong
+
+The row says `river_rbot_by_cell`'s primary "is populated by NO live caller and
+is not on `MODFLOWRunArgs`". The second half is FALSE.
+
+`river_dem_uri` IS a field on `MODFLOWRunArgs`
+(`contracts/trid3nt_contracts/modflow_contracts.py:427`), documented at
+`:283-285` as "optional DEM COG URI used to sample streambed-bottom elevation
+(rbot) and stage along the reach. When None the adapter uses flat demo streambed
+values". It appears NOWHERE else in the repo: `run_modflow.py:1052-1064` builds
+`river_kwargs` from `river_stage_m`, `river_stage_depth_m`,
+`streambed_conductance_m2_day` and `along_river_source` -- and drops
+`river_dem_uri` on the floor.
+
+So the defect is not a primary with no field. It is the SAME class as row 8: a
+CONTRACT that advertises a path -- in a docstring the model reads -- which the
+composer silently declines to thread. A user or model that sets `river_dem_uri`
+gets the demo streambed and no word about it.
+
+The "UNCONDITIONAL" grade is likewise imprecise. There IS a real branch at
+`workers/modflow/gwt_adapter.py:1241` (`if rtp_by_cell:`); it is unconditional IN
+EFFECT because the predicate can never be true from any live path. And the
+constant is not confined to the untaken branch: it is the per-cell DEFAULT inside
+the taken branch at `:1243-1245` (any reach cell the DEM map misses falls to the
+demo profile) and the last reach's gradient at `:1268`. Correct grade:
+**unconditional in effect, dead predicate, and the constant also leaks into the
+DEM-supplied branch.**
+
+Corrected row 19 verdict: PARKED, and the fork is re-stated below.
+
+### C2. Row 17's citation pointed at a comment
+
+The audit row cites `run_swmm.py:184` for the advanced-physics log. Line 184 is a
+COMMENT; the `logger.info` is at `run_swmm.py:204`, inside `if resolved_physics:`.
+The finding is unchanged (the log fires only when the user OVERRIDES the
+constitutive levers, never on the default path) but citing a comment line is the
+exact defect class row 9 was deleted for. Corrected in
+`docs/design/fallback-audit.md`.
+
+### C3. The parked-SILENT register held three rows, not seven
+
+The Sweep-guard section above says the register keys "rows 12, 18, 20" while the
+Parked-forks section says the physics-loudness wave is "rows 12, 14, 16, 17, 18,
+20, 25" and claims the set is "registered in the sweep guard so it cannot grow
+quietly". Only three were registered. A register that holds three of nine cannot
+do the job it was built for.
+
+FIXED rather than re-documented (F2b): `_PARKED_SILENT_SUBSTITUTIONS` is now keyed
+by AUDIT ROW instead of by file -- the file key is what lost the entries, since
+rows 17 and 18 share `raster_cell_mesh.py` and rows 11 and 12 each span two files
+-- and holds all nine parked rows across eleven sites:
+
+| row | site |
+|---|---|
+| 11a / 11b | `workflows/shared/cog_io.py` + `workers/_raster_postprocess/cog.py` |
+| 12a / 12b | `workers/_sfincs_build/deck.py` + `workflows/sfincs/sfincs_builder.py` |
+| 14 | `workers/_sfincs_build/deck_quadtree.py` |
+| 16 | `mesh/swmm_network.py` |
+| 17 | `mesh/raster_cell_mesh.py` |
+| 18 | `mesh/raster_cell_mesh.py` |
+| 19 | `workers/modflow/gwt_adapter.py` |
+| 20 | `workers/_landlab_postprocess/postprocess.py` |
+| 25 | `workers/telemac/telemac_river_dye_build.py` |
+
+A third test asserts the register's row set equals the ADR's parked set, so the
+two documents cannot drift apart again. Markers are the tightest STABLE anchor at
+each site (a constant name, a counter increment, a log format string) rather than
+an exact-whitespace line, and a test refuses a marker carrying its own
+indentation or newline. HONEST LIMIT: a marker is an anchor, not a semantic
+check. It cannot tell a real fix from a rename, and a site could keep its
+constant while losing its defect. A failure means LOOK, not "broken".
+
+### Corrected parked fork 3
+
+**Row 19: `river_dem_uri` is advertised and dropped.** The fork is no longer
+"a dead primary hiding a demo constant" but:
+
+- **wire it** -- thread `river_dem_uri` through `run_modflow`'s `river_kwargs`,
+  sample rbot at the reach cells and pass `river_rbot_by_cell`, which makes the
+  contract's promise true and gives the branch at `gwt_adapter.py:1241` a live
+  caller; or
+- **delete the promise** -- drop the field and its docstring paragraph, so the
+  demo streambed is the only documented behaviour.
+
+Either way the demo gradient still needs its law-9 answer (refuse vs label), and
+the per-cell default at `:1243-1245` needs one too: even a wired DEM leaves cells
+it could not sample falling to the constant, silently. DECISION: NATE's.

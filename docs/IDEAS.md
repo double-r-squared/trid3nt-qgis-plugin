@@ -621,3 +621,46 @@ fetch_aquifer_thickness stays (question-class naming rule); the honest
 identity moves to the HUMAN surfaces: published layer name + legend read
 "Surficial saturated thickness (modelled)". Small labeling change, next
 batch. Same treatment check for water_table_depth/transmissivity layers.
+
+## 2026-08-21 - F2b verifier observations, queued not fixed
+
+Six non-blocking findings from the wave-F2 adversarial review, plus one stale
+sandbox driver. All confirmed against the code; none touched in F2b.
+
+- OBS 5 DEAD RUNG PARAMS: `BATHYMETRY_LADDER`'s `regional_fine` rung declares
+  `params={"include_regional_fine": True}` (`topobathy.py:1861`), but an
+  `enhancement` rung is never in `Ladder.alternatives` and can never be permitted
+  through `fallback=`, so the walker never invokes it and never applies those
+  params. Either the walker should apply an enhancement rung's params when the
+  capability switches it on, or the declaration should go - a param nobody reads
+  is the "no reader, no feature" rule applied to a rung.
+- OBS 6 TWO DISAGREEING EXEMPTION SETS: the fetch's own gates exempt THREE params
+  (`topobathy.py:1501` and `:1664-1667`: force_bathy_base, skip_cudem,
+  include_regional_fine) while the ladder's `coverage_exempt_params` is now TWO
+  (`:1835`, deliberately dropping include_regional_fine in F2). The two sets are
+  meant to agree; today a `include_regional_fine` request skips the capability's
+  coverage refusal but still gets measured rows from the walker. Decide which set
+  is authoritative and derive the other from it.
+- OBS 7 NAME COLLISION: `spec.endpoint_fallback` (the renamed same-data mirror
+  list) and `ingest.http_source.endpoint_fallback` (the hook-plan mirror chain,
+  audit row 3) are different mechanisms wearing one name. Neither is wrong; a
+  reader grepping the word gets both.
+- OBS 8 MARKER BRITTLENESS: the parked register's markers are string anchors.
+  F2b tightened them to stable identifiers and refused whitespace-bearing
+  markers, but an anchor still cannot tell a real fix from a rename, and a site
+  can keep its constant while losing its defect. A semantic check (AST: does this
+  default still reach a physics field with no SyntheticInput?) is the real
+  answer, and is a wave of its own.
+- OBS 11 OVERSIZED COASTAL BED: `generate_mesh._fetch_coastal_bed` fetches
+  topobathy at native resolution - 46 MB at ~3.43 m for a mesh whose finest edge
+  is 40 m and whose max is 150 m. Passing `min_pixel_m` (the geoclaw composer's
+  lever) would cut the fetch, the download and the sampling cost with no effect
+  on the sampled bed. Cost, not honesty.
+- OBS 12 ADR EVIDENCE HYGIENE: ADR 0299 presents some evidence as claims without
+  the command that produced it, and cites line numbers that shift. Convention
+  question for NATE: pin evidence to a rerunnable command + a stable anchor
+  (symbol name, test id) rather than a line number.
+- STALE DRIVER: `scripts/sandbox/oceanmesh/build_coastal_mesh.py:91` still has
+  the pre-F2 `fetch_dem`-shaped bed helper the product path deleted in ADR 0299.
+  It is a sandbox driver, not product code, but it now demonstrates the shape the
+  sweep guard exists to prevent.

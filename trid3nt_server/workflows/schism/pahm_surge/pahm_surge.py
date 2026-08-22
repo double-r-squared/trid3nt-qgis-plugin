@@ -1003,12 +1003,18 @@ def _synthetic_shelf_depths(points, bbox, open_side: str):
 
 
 async def _surge_mesh_gate(input_mode):
-    """Offer a case mesh to the surge solve; None -> the internal TIN."""
+    """Offer a case mesh to the surge solve; None -> the internal TIN.
+
+    Drops the gate's bed-provenance element: the surge review entries do not yet
+    carry a bathymetry row for it to label.
+    """
     try:
         from trid3nt_server.workflows.schism.tidal_hydro.tidal_hydro import (
             _schism_mesh_precondition_gate,
         )
-        return await _schism_mesh_precondition_gate(input_mode)
+        mesh, open_side, note, _bed_prov = await _schism_mesh_precondition_gate(
+            input_mode)
+        return mesh, open_side, note
     except Exception as exc:  # noqa: BLE001
         logger.warning("surge mesh gate failed (%s); internal TIN", exc)
         return None, None, None

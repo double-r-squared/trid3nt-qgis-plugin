@@ -104,8 +104,10 @@ guard against naked substitution).
   measure its own coverage raises `LadderGap(covered_fraction,
   gap_note)` rather than filling the hole itself.
 - Consequence classes are the spec's three degradation classes plus
-  three structural ones (`primary`, `user_supplied`, `refuse`). The
-  floor keys only on the degradation classes.
+  four structural ones (`primary`, `user_supplied`, `enhancement`,
+  `refuse`). The floor keys only on the degradation classes;
+  `enhancement` is a source BETTER than the primary, so it is declared
+  and reported but never gated (see ADR 0299).
 - TOP RUNG (NATE, 2026-08-19): a ladder may declare one
   `user_supplied` rung naming the request param that carries the
   user's own data. Present -> it serves and the walk stops; it stamps

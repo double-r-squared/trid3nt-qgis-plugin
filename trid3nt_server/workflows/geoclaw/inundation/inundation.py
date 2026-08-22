@@ -1058,10 +1058,11 @@ def _fetch_topo_for_geoclaw(
     the caller can stamp what actually painted the bed onto its own result.
 
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
-    downloads it directly). Raises ``GeoClawComposerError`` when both sources fail
-    AND whenever the bathymetry ladder refuses: a nearshore coverage gap must
-    never fall through to the LAND-ONLY 3DEP DEM, which would paint flat 0 m ocean
-    over every wet cell -- worse than the gap it was meant to work around.
+    downloads it directly). Raises ``GeoClawComposerError`` when both sources fail,
+    whenever the bathymetry ladder refuses, and whenever the topobathy fetch faults
+    with a RETRYABLE typed error: a nearshore coverage gap and a transient upstream
+    fault must both stop rather than fall through to the LAND-ONLY 3DEP DEM, which
+    would paint flat 0 m ocean over every wet cell.
     """
     # fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
     from trid3nt_server.data import TOOL_REGISTRY
@@ -1126,6 +1127,21 @@ def _fetch_topo_for_geoclaw(
             "(flat 0 m ocean reads as dry ground), so this run stops here.",
         ) from exc
     except Exception as exc:  # noqa: BLE001 - fall through to fetch_dem
+        # A fault that declares itself RETRYABLE is transport, not geography:
+        # an upstream 5xx, a wedged tile read, a cache miss that faulted. Falling
+        # through would hand a tsunami/surge run the LAND-ONLY 3DEP DEM (flat 0 m
+        # ocean) because one HTTP call blipped. Propagate the fault's own typed
+        # code and say the retryability out loud (this envelope has no retryable
+        # field), exactly as the LadderRefused branch above does.
+        code = getattr(exc, "error_code", None)
+        if code and getattr(exc, "retryable", False):
+            raise GeoClawComposerError(
+                str(code),
+                f"topo-bathymetry fetch faulted for bbox {bbox}: {exc}. This is a "
+                "TRANSIENT upstream/transport fault, not a coverage verdict -- the "
+                "LAND-ONLY 3DEP DEM is not a substitute for a coastal bed, so this "
+                "run stops here. RETRY the same request.",
+            ) from exc
         logger.warning(
             "fetch_topobathy failed (%s); falling back to the LAND-ONLY "
             "fetch_dem(10m) -- valid for an inland dam-break, never for a "

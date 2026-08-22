@@ -246,7 +246,7 @@ def render_cards_context(plan: dict[str, Any]) -> str:
     """Render the enum sources' full cards as a plain-text context block.
 
     The card (full untruncated docstring + typed param schema + gates/caveats/
-    fallback) is the model's per-source detail view -- it escapes the provider
+    endpoint mirrors) is the model's per-source detail view -- it escapes the provider
     ~1000-char tool-description limit by riding in context, not the declaration.
     """
     cards = plan.get("cards") or []

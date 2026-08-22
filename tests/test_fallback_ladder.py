@@ -90,7 +90,7 @@ def test_an_enhancement_rung_is_declarable_but_not_permittable() -> None:
     )
     assert [r.name for r in lad.alternatives] == []
     assert lad.alternative("fine") is None
-    with pytest.raises(ValueError, match="declares no alternative rung"):
+    with pytest.raises(LadderRefused, match="declares no alternative rung"):
         walk_ladder(lad, params={}, attempt=lambda _r, _p: object(),
                     allow=("fine",), gate=lambda **_k: True)
 
@@ -360,9 +360,13 @@ def test_user_rung_stands_aside_when_the_user_supplied_nothing() -> None:
 
 
 def test_permitting_an_undeclared_rung_is_a_call_site_bug() -> None:
-    with pytest.raises(ValueError, match="declares no alternative rung"):
+    """A call-site bug, but still TYPED: an untyped escape would slip past the
+    composers' LadderRefused/LadderGap excepts into their catch-all."""
+    with pytest.raises(LadderRefused, match="declares no alternative rung") as ei:
         walk_ladder(_ladder(), params={}, attempt=lambda _r, _p: "x",
                     allow=("nope",), gate=lambda **_k: True)
+    assert ei.value.error_code == LADDER_ERROR_CODE
+    assert ei.value.retryable is False
 
 
 def test_failed_rung_descends_and_records_the_failure() -> None:
