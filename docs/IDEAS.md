@@ -614,3 +614,10 @@ expose later (plugin-platform goal).
   never touched); the fetchers' caveats/docstrings and `validate()`'s
   structural check are corrected in ADR 0298's amendment section, not here
   (append-only).
+
+## 2026-08-21 - naming ruling (NATE): thickness keeps its name
+
+fetch_aquifer_thickness stays (question-class naming rule); the honest
+identity moves to the HUMAN surfaces: published layer name + legend read
+"Surficial saturated thickness (modelled)". Small labeling change, next
+batch. Same treatment check for water_table_depth/transmissivity layers.
