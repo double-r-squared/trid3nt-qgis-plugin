@@ -510,6 +510,31 @@ async def create_case(ws, session_id: str, title: str) -> str:
         # Drain stray frames (case-list etc.)
 
 
+async def delete_case(ws, session_id: str, case_id: str | None) -> None:
+    """Soft-delete a bench Case via case-command(delete) -- best-effort
+    cleanup so a bench/sweep run doesn't leave throwaway Cases (bench-p<N>,
+    usability-<tool>, routing-sweep-<id>) in the plugin's case picker.
+    """
+    if not case_id:
+        return
+    try:
+        await ws.send(mk(
+            "case-command", session_id,
+            {"command": "delete", "case_id": case_id}, case_id=case_id,
+        ))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            raw = await asyncio.wait_for(
+                ws.recv(), timeout=max(0.1, deadline - time.monotonic())
+            )
+            msg = json.loads(raw)
+            if msg["type"] in ("case-list", "error"):
+                log.debug("case %s delete -> %s", case_id, msg["type"])
+                return
+    except Exception:
+        log.exception("delete_case failed for case_id=%s", case_id)
+
+
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
@@ -728,8 +753,10 @@ async def run_bench() -> list[dict]:
             async with ws_client.connect(WS_URL, open_timeout=15, close_timeout=10) as ws:
                 await do_handshake(ws, session_id)
                 case_id = await create_case(ws, session_id, f"bench-p{pid}")
-
-                result = await run_one_prompt(ws, session_id, case_id, spec)
+                try:
+                    result = await run_one_prompt(ws, session_id, case_id, spec)
+                finally:
+                    await delete_case(ws, session_id, case_id)
 
         except asyncio.TimeoutError as e:
             log.error("P%d: timeout: %s", pid, e)

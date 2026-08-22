@@ -40,6 +40,7 @@ from scripts.seed_showcase_cases import (
     _create_case,
     _handshake,
     _parse_tool_status,
+    delete_case,
     mk,
     new_ulid,
 )
@@ -62,49 +63,54 @@ async def _drive(tool: str, args: dict, timeout_s: float) -> dict:
         await _handshake(ws, session_id)
         case_id = await _create_case(ws, session_id, f"4b live: {tool}")
         out["case_id"] = case_id
-        await ws.send(mk("dev-tool-invoke", session_id,
-                         {"name": tool, "args": args, "case_id": case_id,
-                          "raw_text": f"!run {tool}(...)"}, case_id=case_id))
-        deadline = time.monotonic() + timeout_s
-        latest_layers: list[dict] = []
-        activity = False
-        while time.monotonic() < deadline:
-            try:
-                raw = await asyncio.wait_for(
-                    ws.recv(), timeout=min(deadline - time.monotonic(), 45))
-            except asyncio.TimeoutError:
-                continue
-            msg = json.loads(raw)
-            mt = msg["type"]
-            if mt == "tool-payload-warning":
-                activity = True
-                await _auto_confirm_warning(ws, session_id, msg)
-            elif mt == "confirmation-request":
-                activity = True
-                await _auto_approve_request(ws, session_id, msg)
-            elif mt in _BLOCKING:
-                out["detail"] = f"BLOCKED by {mt}"
-                break
-            elif mt == "tool-io":
-                activity = True
-                out["tool_status"] = _parse_tool_status(msg["payload"])
-                if msg["payload"].get("is_error"):
-                    out["is_error"] = True
-                    out["detail"] = (msg["payload"].get("function_response", "")
-                                     or "")[:400]
-            elif mt == "session-state":
-                ll = msg["payload"].get("loaded_layers") or []
-                if ll:
-                    latest_layers = ll
-            elif mt == "error":
-                out["detail"] = (f"{msg['payload'].get('error_code')}: "
-                                 f"{msg['payload'].get('message')}")
-                break
-            elif mt == "turn-complete":
-                if activity:
-                    out["turn_complete"] = True
+        try:
+            await ws.send(mk("dev-tool-invoke", session_id,
+                             {"name": tool, "args": args, "case_id": case_id,
+                              "raw_text": f"!run {tool}(...)"}, case_id=case_id))
+            deadline = time.monotonic() + timeout_s
+            latest_layers: list[dict] = []
+            activity = False
+            while time.monotonic() < deadline:
+                try:
+                    raw = await asyncio.wait_for(
+                        ws.recv(), timeout=min(deadline - time.monotonic(), 45))
+                except asyncio.TimeoutError:
+                    continue
+                msg = json.loads(raw)
+                mt = msg["type"]
+                if mt == "tool-payload-warning":
+                    activity = True
+                    await _auto_confirm_warning(ws, session_id, msg)
+                elif mt == "confirmation-request":
+                    activity = True
+                    await _auto_approve_request(ws, session_id, msg)
+                elif mt in _BLOCKING:
+                    out["detail"] = f"BLOCKED by {mt}"
                     break
-        out["layers"] = latest_layers
+                elif mt == "tool-io":
+                    activity = True
+                    out["tool_status"] = _parse_tool_status(msg["payload"])
+                    if msg["payload"].get("is_error"):
+                        out["is_error"] = True
+                        out["detail"] = (msg["payload"].get("function_response", "")
+                                         or "")[:400]
+                elif mt == "session-state":
+                    ll = msg["payload"].get("loaded_layers") or []
+                    if ll:
+                        latest_layers = ll
+                elif mt == "error":
+                    out["detail"] = (f"{msg['payload'].get('error_code')}: "
+                                     f"{msg['payload'].get('message')}")
+                    break
+                elif mt == "turn-complete":
+                    if activity:
+                        out["turn_complete"] = True
+                        break
+            out["layers"] = latest_layers
+        finally:
+            # throwaway proof Case ("4b live: <tool>") -- never a product
+            # showcase entry, so it self-cleans regardless of outcome.
+            await delete_case(ws, session_id, case_id)
     return out
 
 

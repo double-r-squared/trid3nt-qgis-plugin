@@ -166,6 +166,7 @@ async def main() -> None:
             ran_on_conn = 0
         t0 = dt.datetime.now()
         t1_first = t2_first = ""
+        case_id = None
         try:
             # fresh case per tool: turn 2 must see ONLY its own turn 1
             case_id = await bench.create_case(
@@ -203,6 +204,11 @@ async def main() -> None:
             except Exception:
                 pass
             ws = None
+        finally:
+            # self-clean the per-tool Case (best-effort; a dead ws from the
+            # except branch above is already None, so this is a no-op then).
+            if case_id is not None and ws is not None:
+                await bench.delete_case(ws, session_id, case_id)
         rec = {
             "tool": spec["short"],
             "outcome": outcome,

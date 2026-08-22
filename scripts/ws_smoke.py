@@ -68,6 +68,42 @@ def mk(type_: str, session_id: str, payload: dict, case_id: str | None = None) -
     return json.dumps(env)
 
 
+async def _delete_case(
+    ws, session_id: str, case_id: str | None, label: str = "cleanup"
+) -> None:
+    """Soft-delete the smoke Case via case-command(delete) -- the SAME path
+    the plugin's delete button rides (Persistence.delete_case).
+
+    Called from a ``finally`` so the Case is removed whether the smoke test
+    passed or failed; a self-cleaning smoke run must not accumulate
+    'smoke-test' Cases in the plugin-facing case list on every CI/dev run.
+    Best-effort: logs and returns rather than raising, so a cleanup hiccup
+    never masks the smoke test's own pass/fail result.
+    """
+    if not case_id:
+        return
+    try:
+        await ws.send(mk(
+            "case-command", session_id,
+            {"command": "delete", "case_id": case_id}, case_id=case_id,
+        ))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            raw = await asyncio.wait_for(
+                ws.recv(), timeout=max(0.1, deadline - time.monotonic())
+            )
+            msg = json.loads(raw)
+            if msg["type"] == "case-list":
+                log.info("%s: case %s deleted -- case-list confirms", label, case_id)
+                return
+            if msg["type"] == "error":
+                log.warning("%s: case-command(delete) error: %s", label, msg["payload"])
+                return
+        log.warning("%s: no case-list confirmation within 15s for case %s", label, case_id)
+    except Exception:
+        log.exception("%s: case delete failed for case_id=%s", label, case_id)
+
+
 # ---------------------------------------------------------------------------
 # Core smoke coroutine
 # ---------------------------------------------------------------------------
@@ -133,58 +169,61 @@ async def run_smoke() -> bool:
                     log.warning("case-open had no session_state, draining...")
             # Drain any extra frames (case-list, turn-complete etc.)
 
-        # ------------------------------------------------------------------ #
-        # TEST A: plain chat                                                  #
-        # ------------------------------------------------------------------ #
-        log.info("--- TEST A: plain chat ---")
-        prompt_a = "Say hello in exactly five words."
-        await ws.send(mk("user-message", session_id,
-                         {"text": prompt_a, "case_id": case_id},
-                         case_id=case_id))
-        log.info("sent user-message: %r", prompt_a)
-
-        text_a = await _collect_turn(ws, session_id, label="TEST A", timeout=300)
-        if text_a:
-            log.info("TEST A PASS -- model reply: %r", text_a)
-        else:
-            log.error("TEST A FAIL -- no agent text received")
-            all_passed = False
-
-        # ------------------------------------------------------------------ #
-        # TEST B: tool call (geocode)                                        #
-        # ------------------------------------------------------------------ #
-        log.info("--- TEST B: tool call (geocode) ---")
-        prompt_b = "Geocode the city of Chattanooga, Tennessee and tell me its bounding box."
-        await ws.send(mk("user-message", session_id,
-                         {"text": prompt_b, "case_id": case_id},
-                         case_id=case_id))
-        log.info("sent user-message: %r", prompt_b)
-
-        text_b, tool_fired_b = await _collect_turn_with_tools(ws, session_id, label="TEST B", timeout=300)
-        if text_b:
-            log.info("TEST B reply: %r", text_b)
-        if tool_fired_b and text_b:
-            log.info("TEST B PASS -- tool call fired + model replied with text")
-        elif tool_fired_b:
-            log.info("TEST B PASS (tool only) -- tool call fired (no final text or text stripped)")
-        elif text_b:
-            log.warning("TEST B PARTIAL -- model answered but NO tool call fired (small-model flakiness)")
-            log.info("Retrying TEST B with more explicit prompt...")
-            prompt_b2 = "Use the geocode_location tool to find Chattanooga, Tennessee, USA and report the bounding box coordinates."
+        try:
+            # ------------------------------------------------------------------ #
+            # TEST A: plain chat                                                  #
+            # ------------------------------------------------------------------ #
+            log.info("--- TEST A: plain chat ---")
+            prompt_a = "Say hello in exactly five words."
             await ws.send(mk("user-message", session_id,
-                             {"text": prompt_b2, "case_id": case_id},
+                             {"text": prompt_a, "case_id": case_id},
                              case_id=case_id))
-            text_b2, tool_fired_b2 = await _collect_turn_with_tools(ws, session_id, label="TEST B retry", timeout=300)
-            if tool_fired_b2:
-                log.info("TEST B PASS (retry) -- tool call fired: %r", text_b2)
-                tool_fired_b = True
-                text_b = text_b2
+            log.info("sent user-message: %r", prompt_a)
+
+            text_a = await _collect_turn(ws, session_id, label="TEST A", timeout=300)
+            if text_a:
+                log.info("TEST A PASS -- model reply: %r", text_a)
             else:
-                log.warning("TEST B: tool call still did not fire on retry -- recording as FLAKY")
-                log.warning("TEST B FLAKY -- model text: %r", text_b2 or text_b)
-        else:
-            log.error("TEST B FAIL -- no agent text or tool call received")
-            all_passed = False
+                log.error("TEST A FAIL -- no agent text received")
+                all_passed = False
+
+            # ------------------------------------------------------------------ #
+            # TEST B: tool call (geocode)                                        #
+            # ------------------------------------------------------------------ #
+            log.info("--- TEST B: tool call (geocode) ---")
+            prompt_b = "Geocode the city of Chattanooga, Tennessee and tell me its bounding box."
+            await ws.send(mk("user-message", session_id,
+                             {"text": prompt_b, "case_id": case_id},
+                             case_id=case_id))
+            log.info("sent user-message: %r", prompt_b)
+
+            text_b, tool_fired_b = await _collect_turn_with_tools(ws, session_id, label="TEST B", timeout=300)
+            if text_b:
+                log.info("TEST B reply: %r", text_b)
+            if tool_fired_b and text_b:
+                log.info("TEST B PASS -- tool call fired + model replied with text")
+            elif tool_fired_b:
+                log.info("TEST B PASS (tool only) -- tool call fired (no final text or text stripped)")
+            elif text_b:
+                log.warning("TEST B PARTIAL -- model answered but NO tool call fired (small-model flakiness)")
+                log.info("Retrying TEST B with more explicit prompt...")
+                prompt_b2 = "Use the geocode_location tool to find Chattanooga, Tennessee, USA and report the bounding box coordinates."
+                await ws.send(mk("user-message", session_id,
+                                 {"text": prompt_b2, "case_id": case_id},
+                                 case_id=case_id))
+                text_b2, tool_fired_b2 = await _collect_turn_with_tools(ws, session_id, label="TEST B retry", timeout=300)
+                if tool_fired_b2:
+                    log.info("TEST B PASS (retry) -- tool call fired: %r", text_b2)
+                    tool_fired_b = True
+                    text_b = text_b2
+                else:
+                    log.warning("TEST B: tool call still did not fire on retry -- recording as FLAKY")
+                    log.warning("TEST B FLAKY -- model text: %r", text_b2 or text_b)
+            else:
+                log.error("TEST B FAIL -- no agent text or tool call received")
+                all_passed = False
+        finally:
+            await _delete_case(ws, session_id, case_id, label="ws_smoke cleanup")
 
     log.info("=== smoke complete: all_passed=%s ===", all_passed)
     return all_passed

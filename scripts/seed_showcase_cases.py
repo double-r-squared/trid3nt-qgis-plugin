@@ -495,7 +495,8 @@ SHOWCASE: list[Showcase] = [
     Showcase("tomawac_wave_field",
              {"bbox": [-89.0, 47.0, -86.5, 48.0], "wave_mode": "fetch_growth",
               "wind_speed_mps": 22.0, "wind_direction_deg": 270.0,
-              "target_resolution_m": 2000.0, "sim_duration_hours": 4.0},
+              "target_resolution_m": 2000.0, "sim_duration_hours": 4.0,
+              "input_mode": "user_gated"},
              "TOMAWAC third-generation SPECTRAL WAVE field, fetch-limited "
              "wind-wave growth on REAL Lake Superior lake-datum bathymetry (NOAA "
              "NGDC DEM_all; 4763 wet nodes, depths to 359 m). Physics asserts "
@@ -506,7 +507,9 @@ SHOWCASE: list[Showcase] = [
              "high-Hs shore to the west (~2.85 m), proving fetch physics tracks the "
              "wind, not a domain artifact. Refinement-grade wave tier, the "
              "complement to SFINCS/SnapWave coastal screening; prescribed steady "
-             "storm wind (no wave-forcing fetcher), not a calibrated hindcast.",
+             "storm wind (no wave-forcing fetcher), not a calibrated hindcast. "
+             "input_mode='user_gated' approves that labeled demo wind explicitly "
+             "(law 9 auto-mode REFUSES an unfetched physics-consequential input).",
              600, title_suffix="lake-superior-fetch"),
     # -- ARTEMIS (phase-resolving harbour agitation) --------------------------
     # CANONICAL real-marina case (norm #10 "a real marina with a real breaker"):
@@ -717,6 +720,33 @@ async def _create_case(ws, session_id: str, title: str) -> str:
             ss = msg["payload"].get("session_state")
             if ss:
                 return ss["case"]["case_id"]
+
+
+async def delete_case(ws, session_id: str, case_id: str | None) -> None:
+    """Soft-delete a Case via case-command(delete) -- best-effort cleanup.
+
+    NOT called anywhere in this module's own seeding path (this driver NEVER
+    deletes or mutates a showcase Case -- see the module docstring). Exists
+    here for OTHER one-shot proof drivers (e.g. drive_telemac_leg_4b.py) that
+    reuse this module's WS helpers and create a throwaway Case per run.
+    """
+    if not case_id:
+        return
+    try:
+        await ws.send(mk(
+            "case-command", session_id,
+            {"command": "delete", "case_id": case_id}, case_id=case_id,
+        ))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            raw = await asyncio.wait_for(
+                ws.recv(), timeout=max(0.1, deadline - time.monotonic())
+            )
+            msg = json.loads(raw)
+            if msg["type"] in ("case-list", "error"):
+                return
+    except Exception:
+        log.exception("delete_case failed for case_id=%s", case_id)
 
 
 async def _auto_confirm_warning(ws, session_id: str, msg: dict) -> None:

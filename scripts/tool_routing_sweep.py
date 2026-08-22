@@ -167,6 +167,10 @@ async def main() -> None:
     for spec in todo:
         if ws is None or ran_on_conn >= RECONNECT_EVERY:
             if ws is not None:
+                # self-clean the outgoing Case before rotating off it -- a
+                # periodic-reconnect sweep otherwise abandons one
+                # 'routing-sweep-<id>' Case per rotation in the picker.
+                await bench.delete_case(ws, session_id, case_id)
                 await ws.close()
             session_id = bench.new_id()
             # the agent can be mid-chain from an abandoned prompt (heavy sync
@@ -217,6 +221,7 @@ async def main() -> None:
         print(f"[{len(done)}/{len(specs)}] {spec['short']}: {outcome} ({first_call}) {rec['seconds']:.0f}s")
         write_report(done, len(specs))
     if ws is not None:
+        await bench.delete_case(ws, session_id, case_id)
         await ws.close()
     write_report(done, len(specs))
     print("routing sweep complete")
