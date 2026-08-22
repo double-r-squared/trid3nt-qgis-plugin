@@ -42,3 +42,5 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0271 - provider-neutral model-dispatch seam](0271-provider-neutral-seam.md)
 - [0272 - repo unnesting: server/src -> src (standard src-layout)](0272-repo-unnesting.md)
 - [0297 - staged-dataset fetchers; groundwater recharge lands, aquifer thickness parks](0297-staged-dataset-fetchers-groundwater-recharge.md)
+- [0301 - the Anthropic Messages API adapter](0301-anthropic-adapter.md)
+- [0302 - the tool registry as an MCP surface (v1, stdio)](0302-mcp-server-v1.md)
