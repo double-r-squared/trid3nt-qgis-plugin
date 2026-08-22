@@ -1048,6 +1048,17 @@ def legend_for_published_layer(
         return None
 
 
+#: Legend captions the preset name cannot derive honestly. The derived caption
+#: is the preset name with its underscores removed, so a MODELLED product reads
+#: as a measured one ("Aquifer saturated thickness m"). Where the distinction
+#: matters to whoever reads the legend, the caption is written out here.
+_LEGEND_LABEL_OVERRIDES: dict[str, str] = {
+    "water_table_depth_m": "Water table depth (modelled)",
+    "aquifer_saturated_thickness_m": "Surficial saturated thickness (modelled)",
+    "aquifer_transmissivity_m2_day": "Surficial aquifer transmissivity (modelled)",
+}
+
+
 def _legend_label_for(style_preset: str | None) -> str | None:
     """A short human-readable legend title from the preset, or ``None``.
 
@@ -1057,6 +1068,9 @@ def _legend_label_for(style_preset: str | None) -> str | None:
     """
     if not style_preset or style_preset == "auto":
         return None
+    override = _LEGEND_LABEL_OVERRIDES.get(style_preset)
+    if override is not None:
+        return override
     cleaned = style_preset
     for prefix in ("continuous_", "categorical_", "diverging_"):
         if cleaned.startswith(prefix):

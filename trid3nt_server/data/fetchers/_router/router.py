@@ -675,7 +675,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         role = (rbp.get("map") or {}).get(params.get(rbp.get("param")), role)
     return LayerURI(
         layer_id=layer_id,
-        name=f"{spec.source_class} {variable}",
+        name=spec.output.display_name or f"{spec.source_class} {variable}",
         layer_type=spec.output.layer_type,
         uri=uri,
         style_preset=style_preset,

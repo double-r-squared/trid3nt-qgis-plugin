@@ -50,6 +50,9 @@ output:
   role: primary
   emit_bbox: true
   style_preset: "water_table_depth_m"
+  # Simulated MODFLOW-6 steady-state heads, not well readings -- the layer name
+  # carries that identity onto the map.
+  display_name: "Water table depth (modelled)"
 
 cache:
   ttl_class: static-30d

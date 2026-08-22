@@ -265,6 +265,14 @@ class OutputSpec(GraceModel):
     #: (census/coops/hifld/esri set it); gridmet's twin omits it, so its spec
     #: sets ``emit_bbox: false`` to stay byte-identical (VERDICT round-2 tell).
     emit_bbox: bool = True
+    #: The HUMAN-facing layer name, verbatim. Overrides the router's default
+    #: ``"<source_class> <variable>"`` stamp on ``LayerURI.name``, which is a
+    #: machine identifier and reads as one in the QGIS layer tree. Set it where
+    #: the product's identity is not obvious from the tool name -- a MODELLED
+    #: product must say so here, because the layer name is what a person reads
+    #: off the map. Default (None) = the machine stamp (strict no-op for every
+    #: prior spec).
+    display_name: str | None = None
     #: Stamp ``LayerURI.bbox`` from the EXTENT of the emitted vector features
     #: rather than the request bbox (tier-3 hook wave). A dict
     #: ``{pad: <deg>}`` -- the point-event fetchers (earthquakes / tsunami /

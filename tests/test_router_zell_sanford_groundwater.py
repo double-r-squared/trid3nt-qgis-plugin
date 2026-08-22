@@ -188,6 +188,46 @@ def test_the_three_presets_are_distinct(specs):
     assert len(set(presets)) == len(presets)
 
 
+def test_every_layer_name_says_modelled(spec):
+    """The tool name is a question class; the LAYER name is what a person reads
+    off the map, and all three products are MODFLOW-6 model output, not survey
+    or well data. Without this the router stamps ``"<source_class>
+    <source_class>"``, which claims nothing and reads as a machine id."""
+    assert spec.output.display_name is not None
+    assert "modelled" in spec.output.display_name.lower()
+
+
+def test_the_router_stamps_the_declared_layer_name(specs):
+    """The spec field is inert unless emission reads it."""
+    layer = router.build_layer_uri(
+        specs["fetch_aquifer_thickness"], {"bbox": _BBOX}, "s3://b/k.tif"
+    )
+    assert layer.name == "Surficial saturated thickness (modelled)"
+    assert layer.name == specs["fetch_aquifer_thickness"].output.display_name
+
+
+def test_the_legend_caption_says_modelled_too(specs):
+    """The legend is the second human surface; derived from the preset name it
+    would read "Aquifer saturated thickness m" -- a measured-sounding caption
+    over a modelled raster."""
+    import trid3nt_server.data.publish_layer.publish_layer as pl
+
+    for name in _NAMES:
+        preset = specs[name].output.style_preset
+        assert "modelled" in (pl._legend_label_for(preset) or "").lower()
+
+
+def test_a_spec_without_a_display_name_keeps_the_router_default():
+    """The field is additive: every prior spec must stamp exactly what it did."""
+    from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
+
+    tree = compose_specs_from_tree()
+    dem = tree["fetch_copernicus_dem"]
+    assert dem.output.display_name is None
+    layer = router.build_layer_uri(dem, {"bbox": _BBOX}, "s3://b/k.tif")
+    assert layer.name == f"{dem.source_class} {dem.source_class}"
+
+
 def test_corpus_carries_the_natural_question(spec):
     assert len(spec.corpus) >= 6
     joined = " ".join(spec.corpus).lower()

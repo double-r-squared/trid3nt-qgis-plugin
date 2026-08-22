@@ -45,6 +45,9 @@ output:
   role: primary
   emit_bbox: true
   style_preset: "aquifer_saturated_thickness_m"
+  # The layer name says MODELLED because the base of this thickness is the
+  # Zell-Sanford model's prescribed zone bottom, not a mapped contact.
+  display_name: "Surficial saturated thickness (modelled)"
 
 cache:
   ttl_class: static-30d

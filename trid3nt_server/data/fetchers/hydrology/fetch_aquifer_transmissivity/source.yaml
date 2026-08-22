@@ -50,6 +50,8 @@ output:
   role: primary
   emit_bbox: true
   style_preset: "aquifer_transmissivity_m2_day"
+  # A calibrated model output, not a pumping-test measurement.
+  display_name: "Surficial aquifer transmissivity (modelled)"
 
 cache:
   ttl_class: static-30d
