@@ -5,7 +5,8 @@ representation (``Content`` / ``Part`` / ``FunctionCall`` / ``FunctionDeclaratio
 builders) every provider adapter shares. This module owns those genai-typed
 shapes and the multi-turn function_call -> function_response loop; the actual
 model call is delegated at ``stream_events_with_contents`` to the provider
-adapter selected by ``MODEL_PROVIDER`` (bedrock default; openai / scripted).
+adapter selected by ``MODEL_PROVIDER`` (bedrock default; anthropic / openai /
+scripted).
 The legacy raw google-genai / Vertex ``generate_content_stream`` client path is
 decommissioned and removed -- an unsupported ``MODEL_PROVIDER`` raises
 ``UnsupportedModelProviderError`` rather than silently emitting an empty turn.
@@ -242,7 +243,8 @@ class UnsupportedModelProviderError(RuntimeError):
     """``MODEL_PROVIDER`` names a provider the dispatch does not support.
 
     The provider dispatch in ``stream_events_with_contents`` is EXPLICIT:
-    scripted/replay/fake, bedrock, and openai each have a branch. Any OTHER
+    scripted/replay/fake, bedrock, anthropic, and openai each have a branch.
+    Any OTHER
     value -- including the decommissioned ``vertex``/``gemini`` google-genai
     generate path (removed) and the empty default -- raises this (never a
     silent fall-through), so a typo or a decommissioned provider fails loudly.
@@ -334,6 +336,23 @@ def classify_provider_error_class(exc: BaseException) -> str:
 
             return (
                 "upstream_provider" if _is_transient_upstream(exc) else "provider_request"
+            )
+    except ImportError:
+        pass
+    except Exception:  # noqa: BLE001 -- classification must never raise
+        pass
+
+    # Anthropic Messages API path (optional dep).
+    try:
+        import anthropic  # noqa: WPS433
+
+        if isinstance(exc, anthropic.APIError):
+            from .anthropic_adapter import _is_transient_anthropic_error
+
+            return (
+                "upstream_provider"
+                if _is_transient_anthropic_error(exc)
+                else "provider_request"
             )
     except ImportError:
         pass
@@ -2822,7 +2841,8 @@ async def stream_events_with_contents(
     re-calls this until the model emits no further function calls (only text →
     terminal turn). ``stream_events`` (the user-text variant) delegates here
     after building ``contents`` via ``build_contents_from_history``. Dispatch is
-    an EXPLICIT provider switch (scripted/replay/fake, bedrock, openai); any
+    an EXPLICIT provider switch (scripted/replay/fake, bedrock, anthropic,
+    openai); any
     other ``MODEL_PROVIDER`` (including the decommissioned vertex/gemini
     google-genai generate path) raises ``UnsupportedModelProviderError``.
 
@@ -2872,6 +2892,20 @@ async def stream_events_with_contents(
             yield _ev
         return
 
+    # MODEL_PROVIDER=anthropic: delegate to the Anthropic Messages API adapter
+    # (official ``anthropic`` SDK). Dormant unless selected.
+    if model_provider() == "anthropic":
+        from .anthropic_adapter import stream_anthropic
+
+        async for _ev in stream_anthropic(
+            contents=contents,
+            tool_declarations=tool_declarations,
+            system_prompt=system_prompt,
+            model=model_id,
+        ):
+            yield _ev
+        return
+
     # MODEL_PROVIDER=openai: delegate to the OpenAI-compatible adapter. Covers
     # Ollama, vLLM, llama.cpp server, LM Studio, OpenAI, Groq, DeepSeek,
     # OpenRouter -- any endpoint that speaks the chat.completions streaming API.
@@ -2897,8 +2931,8 @@ async def stream_events_with_contents(
     # ``generate_content_stream`` client path to fall through to.
     raise UnsupportedModelProviderError(
         f"MODEL_PROVIDER={model_provider()!r} is not supported. Valid providers: "
-        "scripted/replay/fake, bedrock, openai. The vertex/gemini google-genai "
-        "generate path is decommissioned and removed."
+        "scripted/replay/fake, bedrock, anthropic, openai. The vertex/gemini "
+        "google-genai generate path is decommissioned and removed."
     )
 
 

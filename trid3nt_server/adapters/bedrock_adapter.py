@@ -162,6 +162,11 @@ def resolve_selected_model(requested: str | None) -> tuple[str | None, str | Non
     """
     if requested is None:
         return None, None
+    if model_provider() == "anthropic":
+        # The Messages API validates the id itself (a wrong one is a 404), and
+        # ``anthropic_adapter.anthropic_model`` ignores an id shaped for another
+        # provider, so pass it through rather than gate on the Bedrock allowlist.
+        return (None, None) if requested == "local-default" else (requested, None)
     if model_provider() == "openai":
         if requested == "local-default":
             return None, None

@@ -11,6 +11,11 @@ surface the turn engine drives regardless of backend.
   `MAX_TURN_ITERATIONS`, `UsageMetadataEvent`, error classification. Reuses
   `google.genai.types` as the Content/Part containment layer.
 - `bedrock_adapter.py` -- the default cloud provider (`model_provider`).
+- `anthropic_adapter.py` -- the first-party Anthropic Messages API path
+  (`stream_anthropic`, `anthropic_model`, `anthropic_api_key`), selected by
+  `MODEL_PROVIDER=anthropic`. Claude Sonnet 5 by default
+  (`TRID3NT_ANTHROPIC_MODEL`), adaptive thinking, no sampling params, two
+  `cache_control` breakpoints on the tool catalog + system block. ADR 0301.
 - `openai_adapter.py` -- OpenRouter + local-model (Ollama) path
   (`stream_openai`, `FunctionCallEvent`, `openai_api_key`).
 - `model_discovery.py` -- the provider model-LIST surface behind
