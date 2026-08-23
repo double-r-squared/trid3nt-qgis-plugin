@@ -2629,7 +2629,7 @@ async def model_telemac_river_dye(
     # --- WAQTEL O2 do_sag: DISSOLVED-O2 field COG + sag curve (early return) --- #
     if do_sag_config is not None:
         do_layer = await _postprocess_and_publish_do_sag(
-            slf_path, batch_run_id, utm_epsg, reach_name, location_name,
+            slf_path, batch_run_id, utm_epsg, reach_name,
             do_sag_config, mesh_size_m, mesh_node_estimate, mesh_resolution_label,
             emitter,
         )
@@ -2891,13 +2891,13 @@ def _slug(name: str) -> str:
 
 async def _postprocess_and_publish_do_sag(
     slf_path: str, run_id: str, utm_epsg: int, reach_name: str,
-    location_name: str, do_sag_config: dict[str, Any],
+    do_sag_config: dict[str, Any],
     mesh_size_m: float | None, mesh_node_estimate: int | None,
     mesh_resolution_label: str | None, emitter: Any | None,
 ) -> "TelemacDoLayerURI":
     """Postprocess a WAQTEL O2 solve to the DISSOLVED-O2 field COG + sag curve,
-    publish the COG (render chokepoint), emit the sag-curve dock chart, and return
-    the enriched ``TelemacDoLayerURI``. The along-reach distance uses the
+    publish the COG (render chokepoint) and return the enriched
+    ``TelemacDoLayerURI``. The along-reach distance uses the
     principal-flow-axis proxy (no centerline is threaded to the postprocess; the
     honesty label states it)."""
     from trid3nt_server.workflows.telemac.postprocess_telemac import (
@@ -2951,10 +2951,6 @@ async def _postprocess_and_publish_do_sag(
             await publish_input_layer(emitter, published)
         except Exception as exc:  # noqa: BLE001
             logger.warning("do_sag layer emit failed: %s", exc)
-        try:
-            await _maybe_emit_do_sag_chart(emitter, metrics, location_name)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("do_sag sag-curve chart skipped: %s", exc)
         if published.bbox:
             try:
                 await emitter.emit_map_command("zoom-to", {"bbox": list(published.bbox)})
@@ -2968,56 +2964,6 @@ async def _postprocess_and_publish_do_sag(
         published.uri,
     )
     return published
-
-
-async def _maybe_emit_do_sag_chart(
-    emitter: Any, metrics: dict[str, Any], location_name: str
-) -> None:
-    """Best-effort DO-sag dock chart: DO + CBOD vs downstream distance, with the
-    DO standard as a reference rule. Non-blocking; the numbers are honest
-    postprocess scalars (the binned centerline curve), never a fabricated line."""
-    if not hasattr(emitter, "emit_chart"):
-        return
-    xs = metrics.get("sag_curve_distance_m")
-    do = metrics.get("sag_curve_do_mgl")
-    bod = metrics.get("sag_curve_bod_mgl")
-    if not xs or not do or len(xs) != len(do):
-        return
-    std = float(metrics.get("do_standard_mgl", 5.0))
-    from trid3nt_server.data.processing.charts_common import build_chart_payload  # type: ignore
-
-    do_vals = [{"x_km": round(xs[i] / 1000.0, 4), "v": do[i], "series": "Dissolved O2"}
-               for i in range(len(xs))]
-    bod_vals = ([{"x_km": round(xs[i] / 1000.0, 4), "v": bod[i], "series": "CBOD"}
-                 for i in range(len(xs))] if bod and len(bod) == len(xs) else [])
-    vega_lite_spec = {
-        "layer": [
-            {"mark": {"type": "line", "point": False},
-             "data": {"values": do_vals + bod_vals},
-             "encoding": {
-                 "x": {"field": "x_km", "type": "quantitative",
-                       "title": "Downstream distance (km)"},
-                 "y": {"field": "v", "type": "quantitative",
-                       "title": "Concentration (mg/L)"},
-                 "color": {"field": "series", "type": "nominal", "title": None}}},
-            {"mark": {"type": "rule", "strokeDash": [6, 4], "color": "#c0392b"},
-             "data": {"values": [{"y": std}]},
-             "encoding": {"y": {"field": "y", "type": "quantitative"}}},
-        ]
-    }
-    dmin = metrics.get("do_min_mgl")
-    dloc = metrics.get("do_min_distance_m")
-    verdict = ("violates" if metrics.get("do_violates_standard") else "meets")
-    payload = build_chart_payload(
-        vega_lite_spec=vega_lite_spec,
-        title=f"Dissolved-oxygen sag - {location_name}",
-        caption=(
-            f"Streeter-Phelps DO sag: minimum {dmin} mg/L at {dloc} m downstream "
-            f"({verdict} the {std:g} mg/L standard, dashed). CBOD decay drives the "
-            f"sag; reaeration recovers it. Screening/permit grade."
-        ),
-    )
-    await emitter.emit_chart(payload)
 
 
 def _publish_peak_layer(

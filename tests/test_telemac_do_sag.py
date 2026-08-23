@@ -6,8 +6,10 @@ is captured as a committed profile fixture; this test re-checks it against the
 Streeter-Phelps 1925 closed form deterministically (the 0163/0167 committed-V&V
 pattern), so a regression in the O2 machinery is caught without re-solving.
 """
+import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -68,9 +70,34 @@ def test_waqtel_o2_reproduces_streeter_phelps():
 
 # --- tool arg handling (no dispatch) ---------------------------------------- #
 def test_do_saturation_temperature_relation():
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import _do_saturation_mgl
-    assert _do_saturation_mgl(20.0) == pytest.approx(9.0, abs=0.2)   # ~9 mg/L at 20C
-    assert _do_saturation_mgl(5.0) > _do_saturation_mgl(25.0)        # colder holds more
+    from trid3nt_server.workflows.telemac.do_sag.steps import do_saturation_mgl
+
+    def sat(t):
+        return do_saturation_mgl(SimpleNamespace(water_temp_c=t))
+
+    assert sat(20.0) == pytest.approx(9.0, abs=0.2)   # ~9 mg/L at 20C
+    assert sat(5.0) > sat(25.0)                       # colder holds more
+
+
+def test_declared_params_and_plan_validate():
+    from trid3nt_server.declarative import resolve_params, validate_plan
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import DATA, PARAMS, plan
+
+    p = asyncio.run(resolve_params(PARAMS, {"location": "Eel River near Scotia, California"}))
+    validate_plan(plan(p, None), PARAMS, DATA)
+    assert p.do_saturation_mgl == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
+    assert p.upstream_do_mgl == p.do_saturation_mgl               # saturated inflow
+    assert p.row("k1_per_day").consequence == "numerical"         # never refuses in auto
+
+
+def test_declared_bounds_clamp_the_wq_knobs():
+    from trid3nt_server.declarative import resolve_params
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS
+
+    p = asyncio.run(resolve_params(PARAMS, {"location": "x", "reach_length_km": 900.0,
+                                            "k1_per_day": 0.0}))
+    assert p.reach_length_km == 15.0 and "CLAMPED" in p.row("reach_length_km").note
+    assert p.k1_per_day == 0.01
 
 
 @pytest.mark.asyncio

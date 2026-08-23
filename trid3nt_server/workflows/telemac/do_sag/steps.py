@@ -1,0 +1,165 @@
+"""The DO-sag step family: derivations, the WAQTEL-O2 reach solve, the sag chart.
+
+Engine knowledge stays in the engine - the plan names these by dotted path, the
+way a ``GateSpec`` names its estimate/pin providers.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from trid3nt_contracts.telemac_contracts import TelemacDoLayerURI
+
+from trid3nt_server.declarative import Step
+
+__all__ = [
+    "ReachSolve",
+    "build_sag_chart",
+    "do_saturation_mgl",
+    "upstream_do_mgl",
+]
+
+logger = logging.getLogger("trid3nt_server.workflows.telemac.do_sag.steps")
+
+
+def do_saturation_mgl(params: Any) -> float:
+    """Freshwater DO saturation Cs (mg/L) from water temperature (Elmore-Hayes, 1 atm).
+
+    A narrated literature relation, not a site value; ~9.0 mg/L at 20 C.
+    """
+    t = max(0.0, min(40.0, float(params.water_temp_c)))
+    return round(14.652 - 0.41022 * t + 0.0079910 * t * t - 0.000077774 * t ** 3, 3)
+
+
+def upstream_do_mgl(params: Any) -> float:
+    """Inflow DO when none is supplied: a stream at saturation upstream of the sag."""
+    return float(params.do_saturation_mgl)
+
+
+class ReachSolve:
+    """TELEMAC-2D reach solves. One constructor per water-quality process."""
+
+    @staticmethod
+    def telemac_waqtel_o2(**kwargs: Any) -> Step:
+        """The reach pipeline under WAQTEL O2: geocode -> banks -> mesh -> solve -> DO field."""
+        return Step(
+            runner="trid3nt_server.workflows.telemac.do_sag.steps.solve_waqtel_o2",
+            kwargs=kwargs, consequential=True,
+        )
+
+
+async def solve_waqtel_o2(
+    *,
+    location: str | None,
+    bbox: tuple[float, float, float, float] | None,
+    discharge_bod_mgl: float,
+    upstream_do_mgl: float,
+    do_saturation_mgl: float,
+    water_temp_c: float,
+    do_standard_mgl: float,
+    k1_per_day: float,
+    k2_per_day: float,
+    reach_length_km: float,
+    channel_width_m: float,
+    sim_duration_s: float,
+    discharge_m3s: float | None,
+    mesh_resolution: str,
+    mesh_resolution_m: float | None,
+    bank_source: str,
+    compute_class: str,
+    outfall_coords: tuple[float, float] | list[float] | None = None,
+    input_mode: str | None = None,
+) -> TelemacDoLayerURI:
+    """Solve the reach with WAQTEL O2 coupled and return the published DO-field layer."""
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import (
+        model_telemac_river_dye,
+        plausible_release_coords,
+    )
+
+    # DO cannot ride in above its own saturation - a physics coupling between two
+    # params, so it cannot be a declared static bound.
+    up_do = min(max(float(upstream_do_mgl), 0.0), float(do_saturation_mgl))
+    if up_do != float(upstream_do_mgl):
+        logger.info("do_sag upstream_do_mgl %.3g pinned to saturation %.3g mg/L",
+                    upstream_do_mgl, do_saturation_mgl)
+
+    seed = (plausible_release_coords(outfall_coords[0], outfall_coords[1])
+            if outfall_coords is not None and len(tuple(outfall_coords)) == 2 else None)
+
+    do_sag_config = {
+        "bod_mgl": float(discharge_bod_mgl),
+        "upstream_do_mgl": up_do,
+        "saturation_mgl": float(do_saturation_mgl),
+        "water_temp_c": float(water_temp_c),
+        "k1_per_day": float(k1_per_day),
+        "k2_per_day": float(k2_per_day),
+        "k2_formula": 0,      # constant k2 (the S-P idealization; the user sets k2)
+        "standard_mgl": float(do_standard_mgl),
+    }
+    return await model_telemac_river_dye(
+        location=location,
+        bbox=bbox,
+        reach_length_km=float(reach_length_km),
+        channel_width_m=float(channel_width_m),
+        sim_duration_s=float(sim_duration_s),
+        mesh_resolution=str(mesh_resolution or "auto"),
+        mesh_resolution_m=mesh_resolution_m,
+        compute_class=compute_class,
+        bank_source=bank_source,
+        discharge_m3s=discharge_m3s,
+        input_mode=input_mode,
+        do_sag_config=do_sag_config,
+        **({"release_seeds_reach": True,
+            "seed_release_lon": seed[0], "seed_release_lat": seed[1]}
+           if seed is not None else {}),
+    )
+
+
+def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
+    """The DO-sag chart SPEC: DO + CBOD vs downstream distance, standard as a rule.
+
+    Honest postprocess scalars off the published layer (the binned centerline
+    curve), never a fabricated line; ``None`` when the curve is absent.
+    """
+    xs = getattr(result, "sag_curve_distance_m", None)
+    do = getattr(result, "sag_curve_do_mgl", None)
+    bod = getattr(result, "sag_curve_bod_mgl", None)
+    if not xs or not do or len(xs) != len(do):
+        return None
+    std = float(getattr(result, "do_standard_mgl", None) or 5.0)
+
+    from trid3nt_server.data.processing.charts_common import build_chart_payload
+
+    do_vals = [{"x_km": round(xs[i] / 1000.0, 4), "v": do[i], "series": "Dissolved O2"}
+               for i in range(len(xs))]
+    bod_vals = ([{"x_km": round(xs[i] / 1000.0, 4), "v": bod[i], "series": "CBOD"}
+                 for i in range(len(xs))] if bod and len(bod) == len(xs) else [])
+    vega_lite_spec = {
+        "layer": [
+            {"mark": {"type": "line", "point": False},
+             "data": {"values": do_vals + bod_vals},
+             "encoding": {
+                 "x": {"field": "x_km", "type": "quantitative",
+                       "title": "Downstream distance (km)"},
+                 "y": {"field": "v", "type": "quantitative",
+                       "title": "Concentration (mg/L)"},
+                 "color": {"field": "series", "type": "nominal", "title": None}}},
+            {"mark": {"type": "rule", "strokeDash": [6, 4], "color": "#c0392b"},
+             "data": {"values": [{"y": std}]},
+             "encoding": {"y": {"field": "y", "type": "quantitative"}}},
+        ]
+    }
+    dmin = getattr(result, "do_min_mgl", None)
+    dloc = getattr(result, "do_min_distance_m", None)
+    verdict = "violates" if getattr(result, "do_violates_standard", False) else "meets"
+    where = params.get("location") or getattr(result, "name", "the reach")
+    return build_chart_payload(
+        vega_lite_spec=vega_lite_spec,
+        title=f"Dissolved-oxygen sag - {where}",
+        caption=(
+            f"Streeter-Phelps DO sag: minimum {dmin} mg/L at {dloc} m downstream "
+            f"({verdict} the {std:g} mg/L standard, dashed). CBOD decay drives the "
+            f"sag; reaeration recovers it. Screening/permit grade."
+        ),
+    )

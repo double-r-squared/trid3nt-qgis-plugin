@@ -1,7 +1,8 @@
 # Declarative workflows - the plan-value architecture
 
-NATE-shaped design (2026-08-21/23 discussion). REDLINE COMPLETE - all
-forks ruled. Proving order: telemac do_sag (314 lines, fast feedback),
+NATE-shaped design (2026-08-21/23 discussion). V1 LANDED (ADR 0303) -
+do_sag MIGRATED; plugin form/draw cards are wave 2. Proving order:
+telemac do_sag (314 lines, fast feedback),
 then telemac_river_dye (3,503 lines, the full-contact proof). Focus
 engines: SWMM + MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS
 (tail, skippable). One principle everywhere: DECLARE THE WHAT,
