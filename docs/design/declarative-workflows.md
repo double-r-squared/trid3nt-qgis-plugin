@@ -1,143 +1,211 @@
-# Declarative workflows - the step-list architecture
+# Declarative workflows - the plan-value architecture
 
-NATE-shaped design (2026-08-21/22 discussion), for redline before build.
-Proving case: telemac_river_dye (3,503 lines -> a ~25-line step list).
-Focus engines: SWMM + MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS
-(tail, skippable). One principle applied everywhere: DECLARE THE WHAT,
-CENTRALIZE THE HOW.
+NATE-shaped design (2026-08-21/23 discussion). REDLINE COMPLETE - all
+forks ruled. Proving order: telemac do_sag (314 lines, fast feedback),
+then telemac_river_dye (3,503 lines, the full-contact proof). Focus
+engines: SWMM + MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS
+(tail, skippable). One principle everywhere: DECLARE THE WHAT,
+CENTRALIZE THE HOW - and the what is a VALUE.
 
-## The two layers
+## The form: workflow = inputs + plan, both values
 
-A workflow is a Python file with two parts:
+A workflow file has three parts, none of which execute anything:
 
-1. A PARAM SHEET - frozen `Param` declarations (the GateSpec idiom).
-2. A STEP BODY - an async function whose lines are `s.run(...)` /
-   `s.gate(...)` / `s.chart(...)` calls. Plain Python: threading between
-   steps is ordinary variables; a domain override is a visible
-   rebinding (`aoi = shed.boundary`); an optional stage is a visible
-   `if p.delineate:`.
+1. PARAMS - frozen `Param` declarations (values: numbers, strings,
+   flags, drawn coordinates). Resolve through the doors; render as the
+   form; clamp by declared bounds.
+2. DATA - frozen `Data` declarations (artifacts: rasters, layers,
+   meshes, decks). Each carries its PRODUCER description
+   (`Fetch.dem()`, `BuildMesh.channel(...)`) which the runner executes
+   - or an explicit BYO artifact satisfies it instead.
+3. `plan(p, d)` - a PURE function returning the step tree. No awaits,
+   no side effects: real Python conditionals during construction, a
+   fully-inspectable plan value as the output (the declarative-UI
+   `body()` idiom).
 
-The step runner (`s`) wraps every call with what composers currently
-hand-roll: emit-on-fetch, substep progress, provenance stamping, typed
-error envelopes, gates. The intelligence lives in registered tools; the
-ceremony lives in the runner; the file is the contract you read.
+The runner INTERPRETS the plan: it can print it (the step list),
+render the form from it, step it in the dock, validate every `Ref`
+before execution, derive the dataflow DAG ("which params feed step
+6" is a graph query), parallelize independent Data producers, and
+serialize the plan as the run's provenance record.
 
-## Rulings in force (NATE, 2026-08-21/22)
+```python
+PARAMS = [
+    Param("location",       door=doors.QUESTION, desc="River reach, as a place name."),
+    Param("spill_fraction", door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
+          desc="Initial plume span as a fraction of reach width."),
+    Param("release_coords", door=doors.USER,
+          desc="Where the substance enters the water."),
+    Param("mesh_size_m",    door=doors.DERIVED, resolve="telemac.suggest_mesh_size",
+          user_lever=True, desc="Target element edge length."),
+]
+DATA = [
+    Data("terrain", Fetch.dem()),                       # reference: fetch-fresh, never byo
+    Data("rivers",  Fetch.river_geometry()),
+    Data("rain",    Fetch.rain().ladder("era5_domain_mean")),
+    Data("mesh",    BuildMesh.channel(banks=Ref("banks"), size=Ref("mesh_size_m"))
+                       .byo(validate=CoversAOI)),       # authored: byo-able, validated
+]
 
-- R1 GATE WAITS - HYBRID: v1 gates wait in-turn with TTL (timeout = a
-  typed refusal naming the unmet gate; rerun is cheap since fetches and
-  meshes cache). The runner's state is a RESUMABLE STEP LEDGER from day
-  one (ordered record of completed steps, resolved params, artifact
-  URIs) so full pause/walk-away/resume is an additive later feature,
-  not a redesign.
-- R2 IMMUTABLE RECIPES: the agent fills params and answers gates; it
-  NEVER alters the step list. A question the recipe cannot serve routes
-  to the playground or another workflow. What you read is what runs.
-- R3 MIGRATION ACCEPTANCE: (a) every incident-hardening behavior in the
-  old composer is inventoried and consciously re-homed (a declared
-  bound, a tool-level check, or a documented deliberate deletion -
-  never silently lost); (b) one reference run old-vs-new, same question
-  -> same physical answer within tolerance, QGIS-true renders side by
-  side.
-- R4 NET-LOC LAW: the campaign is measured by rolling net LOC per
-  landing; an engine family must finish NET-NEGATIVE (TELEMAC today:
-  12,139 lines across 8 templates). Moving mess around is failure.
-- PURITY RULE (charter-grade): tool/workflow code carries zero demo
-  constants and zero baked decks. Demo decks live in banner-labeled
-  demo scripts. Open per-engine fork: mechanism-compare templates
-  either take deck-as-input (fixtures script-side) or leave the
-  registry and become demo scripts.
+def plan(p, d):
+    return Workflow("telemac_river_dye", engine="telemac2d")[
+        Geocode.river(p.location).named("reach"),
+        When(p.delineate,
+             Delineate.watershed(dem=d.terrain).overrides_domain()),
+        BankReach(rivers=d.rivers, seed=Ref("reach.seed")).named("banks"),
+        DrawGate(param="release_coords", geometry="point",
+                 prompt="Click where the substance enters the river",
+                 constrain=Within(Ref("banks"))),
+        FormGate(),
+        WriteDeck.telemac(mesh=d.mesh, forcing=d.rain,
+                          substance=p.substance, release=p.release_coords),
+        Solve(),
+        Postprocess()
+            .render(preset="dye_concentration", zero=Transparent)
+            .chart("concentration_timeseries", x="t_min", y="mg_L"),
+    ]
+```
 
-## The param system
+## The Domain environment
 
-Each `Param` declares: name, `desc` (one sentence - rendered into the
-tool docstring for the LLM, the form label for the human, and read by
-nothing else: one source, no drift), `door`, optional default, bounds,
-units, `resolve` (dotted-path derivation), `user_lever`, `gate`.
+The current spatial domain (AOI) is an ENVIRONMENT value, not a
+threaded argument - spatial producers read it implicitly (no repeated
+`aoi=Ref("aoi")`); a step that refines it declares so
+(`.overrides_domain()` - delineation, clip-to-county, a drawn polygon,
+a byo mesh's footprint). The Case camera follows the final domain.
 
-DOORS, in resolution order per param:
+## Param vs Data
 
-1. BYO        - caller supplied it (uri or value): take it. Universal
-                "if it exists, use it" (dem_uri precedent).
-2. QUESTION   - the agent fills it from the ask (question-bearing).
-3. FETCHED /  - real data via fetchers, or a derivation seam
-   DERIVED      (roughness_resolve idiom). Fallback ladders apply.
-4. SCENARIO   - labeled default, declared bounds, surfaced at the gate.
-5. CONSTANT   - non-question physics (water viscosity): defaulted,
-                never asked, always inspectable in the sheet.
-6. GATE/REFUSE- whatever remains is asked for (form/draw) or refused
-                typed. Nothing is ever invented (law 9).
+Param = a VALUE (fits in a form cell; doors; bounds; form-editable).
+Data = an ARTIFACT (object store; produced or BYO'd; ladders +
+coverage validation; emitted to the canvas as it arrives). Boundary
+rule for drawn geometry: a handful of vertices parameterizing the
+question = Param (via draw gate); a feature layer participating as a
+dataset (obstruction geometry, clip zone) = Data with the draw gate
+as producer. Data producers consume params, which is what makes
+dataflow tracing cross the boundary.
 
-Coercion, clamping, and validation happen in the resolver from the
-declared bounds - the per-composer try/except/clamp/log blocks die.
+## The doors (Param resolution order)
+
+1. BYO/USER - explicitly passed this invocation. NEVER ambient: no
+   case-store lookup, ever (NATE ruling - kills the stale-DEM
+   collision class at the root).
+2. QUESTION - agent-filled from the ask (the user's words beat data).
+3. FETCHED/DERIVED - real data or derivation seams; ladders apply.
+4. SCENARIO - labeled default with declared bounds, surfaced at the gate.
+5. CONSTANT - non-question physics; defaulted, never asked, inspectable.
+6. GATE/REFUSE - asked for (form/draw) or refused typed. Never invented.
+
+BYO data rule (NATE, from the declarative-UI mutable/immutable axis):
+AUTHORED artifacts (meshes, networks, decks, edited layers, survey
+rasters) are byo-able; REFERENCE data (DEM, landcover, canonical
+rasters) is not - fetch-fresh for the domain - except the explicit
+survey-grade user_supplied ladder rung. EVERY byo input is
+coverage-validated against the domain at resolution (typed refusal on
+mismatch).
+
+## Rulings in force (NATE, 2026-08-21/23)
+
+- GATE WAITS - HYBRID: v1 waits in-turn with TTL (timeout = typed
+  refusal naming the unmet gate); the step ledger is resumable-shaped
+  from day one.
+- IMMUTABLE RECIPES: the agent fills params and answers gates, never
+  alters the plan - structurally enforced (it only supplies `p`).
+- FORM EDITS: every row editable; editing a derived value warns via
+  its source badge and stamps basis=user. No locks.
+- FAILURE/RERUN: RESUME FROM THE FAILED STEP - the ledger replays
+  completed steps from cached artifacts and re-executes from the
+  failure. Restart-clean is a flag, not the default.
+- MIGRATION ACCEPTANCE: (a) every incident-hardening behavior in the
+  old composer inventoried and consciously re-homed (bound, tool
+  check, or documented deletion); (b) reference run old-vs-new, same
+  question -> same physical answer within tolerance, QGIS-true renders
+  side by side.
+- NET-LOC LAW: rolling net LOC per landing; an engine family finishes
+  NET-NEGATIVE (TELEMAC baseline: 12,139 lines / 8 templates).
+- PURITY RULE (charter-grade): zero demo constants, zero baked decks
+  in tool/workflow code; demos live in banner-labeled demo scripts.
+  Mechanism-compare templates: per-engine fork at migration
+  (deck-as-input vs demoted to demo script).
 
 ## Gates
 
-All gates ride the existing pending-confirmation spine. Two modes
-preserved exactly (auto = labeled defaults / typed refusals, never
-hangs; user_gated = waits in-turn per R1).
+All on the existing pending-confirmation spine; two modes preserved
+(auto = labeled defaults / typed refusals, never hangs; user_gated =
+waits per the hybrid rule).
 
-- FORM GATE (`s.gate(gates.form)`): renders the resolved param sheet as
-  an editable form in the dock - name, value, unit, SOURCE BADGE
-  ("geocoded from your prompt" / "derived from NLCD" / "default"),
-  edit field. Editing flips the param's basis to user and revalidates;
-  derived params are editable-with-warning. The submitted sheet
-  snapshot persists as the run's input record. Question-bearing params
-  on top; constants under an "advanced" fold. This is the ModelMuse/
-  SWMM-GUI property grid, pre-filled by a sentence.
-- DRAW GATE (`s.gate(gates.draw, param=..., geometry=point|polyline|
-  polygon|rectangle, prompt=..., constrain=...)`): puts the pen in the
-  user's hand for required geometry (release point, dam line, zone).
-  Extends the existing AOI-rectangle machinery. No ghost suggestions
-  (NATE ruling): user_gated waits; auto refuses typed if the geometry
-  was not supplied as a param. Constraints validate at draw time
-  (within(reach), on-mesh).
-- Plugin cost: two new card types on the existing spine.
+- FORM GATE: the resolved param sheet as an editable form - name,
+  value, unit, SOURCE BADGE ("geocoded from your prompt" / "derived
+  from NLCD" / "default"), edit field; question-bearing on top,
+  constants under an "advanced" fold; the submitted snapshot persists
+  as the run's input record (and is what calibration will later read
+  and write). The ModelMuse/SWMM-GUI property grid, pre-filled by a
+  sentence.
+- DRAW GATE: point | polyline | polygon | rectangle, prompt text,
+  draw-time constraints (within(reach), on-mesh). No ghost
+  suggestions: user_gated waits; auto refuses typed. Extends the
+  existing AOI-rectangle machinery. Plugin cost: two card types.
 
 ## Steps beyond fetch/solve
 
-- PRE/POST/RENDER are first-class declared steps, not buried
-  implementation. `s.run("style_layers", preset=..., zero="transparent")`
-  - the render toolset formalizes the single existing styling seam
-  (publish_layer) into declared primitives; zero-as-transparent is a
-  RENDERING choice only (the raster keeps its zeros - law 9 applies to
-  pixels). Render steps are also agent-callable conversationally.
-- CHART STEPS (`s.chart(kind, series=..., x=..., y=...)`): the chart
-  SPEC (data + kind + axes) is the persisted product; the plugin chart
-  dock is the one renderer. Closes the chart-restore gap (case reopen
-  re-renders from specs); removes server-side figure generation
-  (matplotlib retirement, DELETION_LEDGER row queued); specs are JSON,
-  so MCP clients receive charts as readable data.
-- SENSOR EMISSION: station-shaped fetchers (gauges, buoys, tide
-  stations) publish their sensor POSITIONS as a context layer alongside
-  the data.
-- QGIS-TRUE PROOF RENDERER: a PyQGIS headless utility renders layers
-  through QGIS's own engine + the plugin's style presets + ESRI
-  basemap - pixel-identical to the canvas. Becomes the montage engine;
-  retires the matplotlib interpretation scripts (ledger row exists).
+- PRE/POST/RENDER as declared steps. The render toolset promotes the
+  single publish_layer styling seam into declared primitives;
+  zero-as-transparent is a RENDERING choice only (rasters keep their
+  zeros - law 9 applies to pixels). Render steps are agent-callable
+  conversationally.
+- CHART STEPS: the chart SPEC (kind + data + axes) is the persisted
+  product; the plugin chart dock is the ONE renderer. Closes the
+  chart-restore gap; ends server-side figure generation (matplotlib
+  retirement ledger row); specs are JSON, readable by MCP clients.
+- SENSOR EMISSION: station-shaped fetchers publish sensor POSITIONS
+  as a context layer alongside their data.
+- QGIS-TRUE PROOF RENDERER: PyQGIS headless rendering through QGIS's
+  own engine + plugin presets + ESRI basemap - pixel-identical to the
+  canvas; becomes the montage engine.
+
+## Patterns in play (GoF, kept explicit so extension follows the grain)
+
+- COMPOSITE: steps and named sub-plans form one tree; a step group
+  (e.g. CoastalBed: fetch -> validate -> clip) is a value reusable
+  across workflows.
+- INTERPRETER: the runner walks the plan; plans never run themselves.
+- BUILDER/FLUENT: modifiers (.byo(), .ladder(), .render(),
+  .overrides_domain()), each returning a new value; modifier LEGALITY
+  is the rule surface (reference fetchers simply lack .byo()).
+- STRATEGY: doors and fallback ladders - interchangeable resolution
+  policies.
+- TEMPLATE METHOD: per-engine step families (WriteDeck.telemac /
+  .swmm / .modflow) share the skeleton, override one serialization
+  hook each - the generalization checkpoint made structural.
+- MEMENTO: the step ledger (completed steps + resolved params +
+  artifact URIs) - powers resume-from-failure now, full pause/resume
+  later.
 
 ## Testing
 
-Declarative: a test is a declared invocation (`!run tool(args)` in the
-dock, a workflow stepped line by line, or the same over MCP). Offline
-pytest remains for CI; the scripts/ driver population shrinks.
+Declarative: a test is a declared invocation (!run in the dock, a
+plan stepped line by line, or the same over MCP). The plan validator
+(Ref integrity, modifier legality, gate placement) runs before any
+execution. Offline pytest remains for CI.
 
-## Migration order and the generalization checkpoint
+## Migration order
 
-1. Design doc redline (this file).
-2. telemac_river_dye migration (proving case; R3 acceptance; net-LOC
-   meter on).
-3. GENERALIZATION CHECKPOINT: one SWMM and one MODFLOW template migrate
-   before any mass conversion - the runner must not be TELEMAC-shaped.
-4. SWMM + MODFLOW engine-complete campaigns (purity + meshing + BYO
-   mesh adoption), TELEMAC family completion, HEC-RAS tail (skippable).
-   Row-19 wiring (river_dem_uri -> real streambeds) lands inside the
-   MODFLOW campaign.
+1. Library v1: Param/Data/plan value types, the interpreter with
+   ledger + resume, plan validator, form + draw cards (plugin), the
+   Domain environment.
+2. do_sag migration (314 lines - fast ergonomic feedback).
+3. river_dye migration (the full-contact proof; R3 acceptance;
+   net-LOC meter on).
+4. GENERALIZATION CHECKPOINT: one SWMM and one MODFLOW template
+   before any mass conversion.
+5. SWMM + MODFLOW engine-complete campaigns (purity + meshing + byo
+   mesh adoption; row-19 river_dem_uri wiring lands here), TELEMAC
+   family completion, HEC-RAS tail (skippable).
 
-## Open items deliberately NOT in v1
+## Deliberately not in v1
 
-- Full pause/resume persistence (R1 ledger enables it later).
-- Streaming emission through MCP; chart cards over MCP beyond specs.
+- Full pause/walk-away/resume persistence (the ledger enables it).
+- Streaming emission over MCP; chart rendering beyond specs.
 - The mechanism-template purity fork (per-engine call at migration).
-- Calibration capability (separate design; consumes the form snapshot
-  and basis machinery this campaign builds).
+- Calibration capability (separate design; consumes the form
+  snapshot + basis machinery this campaign builds).
