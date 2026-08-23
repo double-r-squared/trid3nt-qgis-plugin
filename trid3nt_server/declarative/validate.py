@@ -1,0 +1,120 @@
+"""The plan validator - runs BEFORE any execution.
+
+Ref integrity, modifier legality and gate placement, all as typed refusals.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Iterable, Sequence
+
+from .data import DataDecl
+from .errors import PlanValidationError
+from .params import Param, doors
+from .plan import Gate, Plan, Ref, Step, Within
+
+__all__ = ["validate_plan"]
+
+
+def validate_plan(plan: Plan, params: Sequence[Param],
+                  data: Sequence[DataDecl] = ()) -> None:
+    """Refuse a plan that cannot possibly execute. Raises :class:`PlanValidationError`."""
+    param_names = {p.name for p in params}
+    data_names = {d.name for d in data}
+    _check_duplicate_names(plan)
+    _check_gate_declarations(plan, {p.name: p for p in params})
+    _check_refs(plan, param_names, data_names)
+    _check_data_refs(data, param_names, data_names)
+
+
+def _check_duplicate_names(plan: Plan) -> None:
+    seen: set[str] = set()
+    for step in plan.declared():
+        if step.name is None:
+            continue
+        if step.name in seen:
+            raise PlanValidationError(
+                f"plan {plan.name!r}: two steps are .named({step.name!r})."
+            )
+        seen.add(step.name)
+
+
+def _check_gate_declarations(plan: Plan, params: dict[str, Param]) -> None:
+    form_gates = 0
+    consequential_seen: str | None = None
+    for step in plan.declared():
+        if isinstance(step, Gate):
+            if consequential_seen is not None:
+                raise PlanValidationError(
+                    f"plan {plan.name!r}: gate {step.label!r} is placed AFTER the "
+                    f"consequential step {consequential_seen!r} - a gate that cannot "
+                    "change the run is a dead gate."
+                )
+            if step.kind == "form":
+                form_gates += 1
+                if form_gates > 1:
+                    raise PlanValidationError(
+                        f"plan {plan.name!r}: more than one FormGate; the param sheet "
+                        "is reviewed once."
+                    )
+            else:
+                target = params.get(step.param or "")
+                if target is None:
+                    raise PlanValidationError(
+                        f"plan {plan.name!r}: DrawGate names undeclared param "
+                        f"{step.param!r}."
+                    )
+                if target.door != doors.USER:
+                    raise PlanValidationError(
+                        f"plan {plan.name!r}: DrawGate param {target.name!r} is "
+                        f"door={target.door}; a drawn value comes through the USER door."
+                    )
+        elif step.consequential and consequential_seen is None:
+            consequential_seen = step.label
+
+
+def _check_refs(plan: Plan, param_names: set[str], data_names: set[str]) -> None:
+    available: set[str] = set()
+    for step in plan.declared():
+        for ref in _refs_in(step):
+            _resolve_root(plan.name, step.label, ref, param_names, data_names, available)
+        if step.name is not None:
+            available.add(step.name)
+
+
+def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
+                     data_names: set[str]) -> None:
+    for decl in data:
+        for ref in _walk_refs(dict(decl.producer.kwargs)):
+            if ref.root not in param_names and ref.root not in data_names:
+                raise PlanValidationError(
+                    f"Data {decl.name!r} producer Refs {ref.path!r}, which is neither "
+                    "a declared param nor a declared Data."
+                )
+
+
+def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[str],
+                  data_names: set[str], available: set[str]) -> None:
+    if ref.root in param_names or ref.root in data_names or ref.root in available:
+        return
+    raise PlanValidationError(
+        f"plan {plan_name!r} step {step_label!r}: Ref({ref.path!r}) resolves to "
+        "nothing - it is not a declared param, not a declared Data, and not a step "
+        "named earlier in the plan."
+    )
+
+
+def _refs_in(step: Step) -> Iterable[Ref]:
+    yield from _walk_refs(dict(step.kwargs))
+    if isinstance(step, Gate) and isinstance(step.constrain, Within):
+        yield step.constrain.target
+
+
+def _walk_refs(value: Any) -> Iterable[Ref]:
+    if isinstance(value, Ref):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _walk_refs(v)
+    elif isinstance(value, (list, tuple, set)):
+        for v in value:
+            yield from _walk_refs(v)
