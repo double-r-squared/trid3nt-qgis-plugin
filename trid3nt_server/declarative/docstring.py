@@ -22,8 +22,13 @@ def render_docstring(
     params: Sequence[Param],
     returns: str,
     not_for: str = "",
+    controls: Sequence[tuple[str, str]] = (),
 ) -> str:
-    """Build the docstring: summary, routing, negative routing, params, returns."""
+    """Build the docstring: summary, routing, negative routing, params, returns.
+
+    ``controls`` documents the run levers that are NOT params (gate mode, restart)
+    - the tool accepts them, so the model has to be told they exist.
+    """
     head = [summary.strip(), "", routing.strip()]
     if not_for:
         head += ["", f"Do NOT use this for: {not_for.strip()}"]
@@ -37,6 +42,9 @@ def render_docstring(
     body = ["", "Params:"]
     for p in _ordered(params):
         body.append(f"    {p.name}: {_param_line(p)}")
+    if controls:
+        body += ["", "Run controls:"]
+        body += [f"    {name}: {desc.strip()}" for name, desc in controls]
     body += ["", f"Returns: {returns.strip()}", ""]
     return front + "\n" + "\n".join(body)
 

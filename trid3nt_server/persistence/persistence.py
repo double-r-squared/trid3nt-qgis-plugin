@@ -816,9 +816,9 @@ class Persistence:
 # per-collection ``asyncio.Lock`` serializes concurrent calls; writes go to a
 # sibling ``<collection>.json.tmp`` then ``os.replace`` (POSIX-atomic
 # rename). Scope matches the MCP tool subset Persistence actually invokes:
-# ``insert-one``/``update-one`` (``$set`` + optional ``upsert``)/``find-one``
-# /``find`` (optional single-key sort). Not a Mongo emulator -- just enough
-# query semantics to round-trip Persistence's calls.
+# ``insert-one``/``update-one`` (``$set`` + optional ``upsert``)/``delete-one``
+# /``find-one``/``find`` (optional single-key sort). Not a Mongo emulator -- just
+# enough query semantics to round-trip Persistence's calls.
 
 import asyncio as _asyncio
 import json as _json_for_file
@@ -853,9 +853,10 @@ def _default_dev_persistence_dir() -> _Path:
 class FileMCPClient:
     """File-backed shim that satisfies :class:`MCPClientProtocol`.
 
-    Implements the four MCP tool methods the :class:`Persistence` wrapper
-    actually invokes (``insert-one``, ``update-one``, ``find-one``, ``find``)
-    against a per-collection JSON file in ``base_dir / database / coll.json``.
+    Implements the MCP tool methods the :class:`Persistence` wrapper and the
+    declarative step ledger actually invoke (``insert-one``, ``update-one``,
+    ``delete-one``, ``find-one``, ``find``) against a per-collection JSON file in
+    ``base_dir / database / coll.json``.
 
     The return shape mirrors what ``Persistence._unwrap_mcp_result`` expects:
     we return a plain dict for single-document operations and a
@@ -1089,6 +1090,20 @@ class FileMCPClient:
                         return {"document": doc}
                 return {"document": None}
 
+        if name == "delete-one":
+            async with lock:
+                store = await _asyncio.to_thread(self._read_store, path)
+                filt = args.get("filter", {})
+                target_id = filt.get("_id")
+                doc_id = target_id if target_id in store else next(
+                    (k for k, d in store.items() if self._matches(d, filt)), None
+                )
+                if doc_id is None:
+                    return {"deletedCount": 0}
+                del store[doc_id]
+                await _asyncio.to_thread(self._atomic_write, path, store)
+                return {"deletedCount": 1}
+
         if name == "find":
             async with lock:
                 store = await _asyncio.to_thread(self._read_store, path)
@@ -1106,7 +1121,8 @@ class FileMCPClient:
 
         raise NotImplementedError(
             f"FileMCPClient: unsupported MCP tool {name!r} "
-            f"(supports insert-one / update-one / update-many / find-one / find)"
+            f"(supports insert-one / update-one / update-many / delete-one / "
+            f"find-one / find)"
         )
 
 

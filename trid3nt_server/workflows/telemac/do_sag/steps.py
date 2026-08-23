@@ -14,13 +14,43 @@ from trid3nt_contracts.telemac_contracts import TelemacDoLayerURI
 from trid3nt_server.declarative import Step
 
 __all__ = [
+    "OutfallCoordsInvalidError",
     "ReachSolve",
     "build_sag_chart",
+    "coerce_outfall_point",
     "do_saturation_mgl",
     "upstream_do_mgl",
 ]
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.do_sag.steps")
+
+
+class OutfallCoordsInvalidError(ValueError):
+    """``outfall_coords`` was supplied but is not a usable (lon, lat) point."""
+
+
+def coerce_outfall_point(value: Any) -> tuple[float, float] | None:
+    """``(lon, lat)`` from a wire value; ``None`` only when nothing was supplied.
+
+    A MALFORMED outfall refuses rather than falling back to the derived reach
+    point: silently modelling a different discharge location than the one asked
+    for is the swallow class.
+    """
+    if value is None:
+        return None
+    try:
+        lon, lat = (float(v) for v in tuple(value))  # type: ignore[misc]
+    except (TypeError, ValueError):
+        raise OutfallCoordsInvalidError(
+            f"outfall_coords={value!r} is not a (lon, lat) pair. Supply the "
+            "discharge point as two numbers in EPSG:4326, or omit it."
+        ) from None
+    if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+        raise OutfallCoordsInvalidError(
+            f"outfall_coords=({lon}, {lat}) is off the earth; it is (lon, lat) in "
+            "EPSG:4326, longitude first."
+        )
+    return (lon, lat)
 
 
 def do_saturation_mgl(params: Any) -> float:
@@ -84,8 +114,8 @@ async def solve_waqtel_o2(
         logger.info("do_sag upstream_do_mgl %.3g pinned to saturation %.3g mg/L",
                     upstream_do_mgl, do_saturation_mgl)
 
-    seed = (plausible_release_coords(outfall_coords[0], outfall_coords[1])
-            if outfall_coords is not None and len(tuple(outfall_coords)) == 2 else None)
+    point = coerce_outfall_point(outfall_coords)
+    seed = plausible_release_coords(point[0], point[1]) if point else None
 
     do_sag_config = {
         "bod_mgl": float(discharge_bod_mgl),
@@ -153,10 +183,14 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     dmin = getattr(result, "do_min_mgl", None)
     dloc = getattr(result, "do_min_distance_m", None)
     verdict = "violates" if getattr(result, "do_violates_standard", False) else "meets"
-    where = params.get("location") or getattr(result, "name", "the reach")
+    # With no location words the LAYER's own name is the title: it already reads
+    # "Dissolved oxygen sag (<reach>)", so prefixing it would say it twice.
+    where = params.get("location")
+    title = (f"Dissolved-oxygen sag - {where}" if where
+             else (getattr(result, "name", None) or "Dissolved-oxygen sag"))
     return build_chart_payload(
         vega_lite_spec=vega_lite_spec,
-        title=f"Dissolved-oxygen sag - {where}",
+        title=title,
         caption=(
             f"Streeter-Phelps DO sag: minimum {dmin} mg/L at {dloc} m downstream "
             f"({verdict} the {std:g} mg/L standard, dashed). CBOD decay drives the "

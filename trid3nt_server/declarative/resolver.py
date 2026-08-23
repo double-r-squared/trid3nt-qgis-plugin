@@ -13,9 +13,16 @@ from typing import Any, Mapping, Sequence
 from trid3nt_contracts.common import SyntheticInput
 
 from .errors import GateRefusedError
-from .params import Param, ResolvedParam, ResolvedParams, doors
+from .params import (
+    Param,
+    ParamNotResolved,
+    ResolvedParam,
+    ResolvedParams,
+    doors,
+    refuse_duplicate_params,
+)
 
-__all__ = ["provenance_entries", "resolve_params"]
+__all__ = ["merge_provenance", "provenance_entries", "resolve_params"]
 
 
 async def resolve_params(
@@ -34,6 +41,7 @@ async def resolve_params(
     other param, so labeled defaults are seated before derivations run and a
     derived param competes only with its own fallbacks, never another param's.
     """
+    refuse_duplicate_params(declared)
     rows: dict[str, ResolvedParam] = {}
 
     for param in declared:
@@ -45,7 +53,8 @@ async def resolve_params(
         if param.name in rows or param.door == doors.DERIVED or param.default is None:
             continue
         rows[param.name] = _finish(param, param.default, param.door,
-                                   f"declared {param.door} default")
+                                   f"declared {param.door} default",
+                                   basis=_BASIS_DEFAULT)
 
     # Derivations may read each other; resolve to a fixpoint rather than pinning
     # PARAMS to a dependency-sorted order.
@@ -55,7 +64,9 @@ async def resolve_params(
         for param in pending:
             try:
                 value = await _derive(param, rows)
-            except AttributeError:
+            except ParamNotResolved:
+                # ONLY a missing param means "wait for the next pass"; any other
+                # AttributeError is a bug inside the derivation and propagates.
                 continue
             progressed.append(param)
             if value is not None:
@@ -76,6 +87,7 @@ async def resolve_params(
             rows[param.name] = _finish(
                 param, param.default, param.door,
                 f"declared {param.door} default",
+                basis=_BASIS_DEFAULT,
             )
             continue
         # Door 6: a value with no door left is ASKED FOR (a gate) or REFUSED typed -
@@ -118,7 +130,13 @@ def _load(dotted: str) -> Any:
     return getattr(importlib.import_module(module_path), attr)
 
 
-def _finish(param: Param, value: Any, door: str, note: str) -> ResolvedParam:
+#: A value seated from its own DECLARED DEFAULT is a labeled default whatever door
+#: it hangs under - the door says who may override it, not where this value came from.
+_BASIS_DEFAULT = "default_demo"
+
+
+def _finish(param: Param, value: Any, door: str, note: str, *,
+            basis: str | None = None) -> ResolvedParam:
     clamped_from = None
     if param.bounds is not None:
         coerced = _as_float(value)
@@ -135,9 +153,10 @@ def _finish(param: Param, value: Any, door: str, note: str) -> ResolvedParam:
                     f"{'minimum' if pinned == lo else 'maximum'} {pinned:g}"
                     f"{' ' + param.units if param.units else ''}").lstrip("; ")
         value = pinned
+    if basis is None:
+        basis = "user" if door in (doors.USER, doors.GATE) else _basis(param, door)
     return ResolvedParam(
-        name=param.name, value=value, door=door,
-        basis="user" if door in (doors.USER, doors.GATE) else _basis(param, door),
+        name=param.name, value=value, door=door, basis=basis,
         units=param.units, consequence=param.consequence, note=note,
         clamped_from=clamped_from, real_source=param.real_source,
     )
@@ -152,6 +171,10 @@ def _basis(param: Param, door: str) -> str:
 
 
 def _as_float(value: Any) -> float | None:
+    # bool IS an int in Python, so True would coerce to 1.0 and slip past the
+    # refusal a bounded param exists to make. A flag is not a measurement.
+    if isinstance(value, bool):
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -162,16 +185,23 @@ def provenance_entries(resolved: ResolvedParams,
                        declared: Sequence[Param]) -> list[SyntheticInput]:
     """The run's provenance rows - what the input-review gate and the layer carry.
 
-    Only params the sheet actually resolved to a value appear; a ``default_demo``
-    + ``physics`` row is what makes the gate refuse in auto mode (law 9).
+    A ``default_demo`` + ``physics`` row is what makes the gate refuse in auto mode
+    (law 9). An absent param that declares ``derived_when_absent`` still leaves a
+    derived-basis row: the user has to see what the run measured against.
     """
     by_name = {p.name: p for p in declared}
     out: list[SyntheticInput] = []
     for row in resolved.rows():
-        if row.value is None:
-            continue
         param = by_name.get(row.name)
         if param is None:
+            continue
+        if row.value is None:
+            if param.derived_when_absent:
+                out.append(SyntheticInput(
+                    param=row.name, value="derived", units=row.units,
+                    basis="derived", consequence=row.consequence,
+                    note=f"not supplied; {param.derived_when_absent}",
+                ))
             continue
         out.append(SyntheticInput(
             param=row.name,
@@ -183,6 +213,21 @@ def provenance_entries(resolved: ResolvedParams,
             note=(f"{param.desc} [{row.note}]" if row.note else param.desc),
         ))
     return out
+
+
+def merge_provenance(existing: Sequence[SyntheticInput],
+                     declared: Sequence[SyntheticInput]) -> list[SyntheticInput]:
+    """Merge a composite step's own provenance rows with the plan's declared rows.
+
+    The composite's row WINS on a name collision: it stamped what actually
+    resolved (``basis=fetched`` once the data landed), while the declaration only
+    knows what was asked for. Two rows for one param is a contradiction, not a
+    record.
+    """
+    kept = list(existing)
+    taken = {row.param for row in kept}
+    kept.extend(row for row in declared if row.param not in taken)
+    return kept
 
 
 def _wire_value(value: Any) -> Any:

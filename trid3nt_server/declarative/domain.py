@@ -22,7 +22,24 @@ class Domain:
     label: str | None = None
 
     def as_doc(self) -> dict[str, Any]:
-        return {"bbox": list(self.bbox) if self.bbox else None, "label": self.label}
+        return {"bbox": list(self.bbox) if self.bbox else None,
+                "geometry": self.geometry, "label": self.label}
+
+    @classmethod
+    def from_doc(cls, doc: Any) -> "Domain | None":
+        """Rebuild a recorded domain; ``None`` when the record carries none."""
+        if not isinstance(doc, dict):
+            return None
+        bbox = doc.get("bbox")
+        geometry = doc.get("geometry")
+        if bbox is None and geometry is None:
+            return None
+        return cls(
+            bbox=(tuple(float(v) for v in bbox)  # type: ignore[arg-type]
+                  if bbox and len(tuple(bbox)) == 4 else None),
+            geometry=geometry if isinstance(geometry, dict) else None,
+            label=doc.get("label"),
+        )
 
 
 _DOMAIN: contextvars.ContextVar[Domain | None] = contextvars.ContextVar(

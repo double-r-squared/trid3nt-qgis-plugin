@@ -4,11 +4,19 @@ clamps to declared bounds). Frozen; construction validates the declaration."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 from .errors import PlanValidationError
 
-__all__ = ["Door", "Param", "ResolvedParam", "ResolvedParams", "doors"]
+__all__ = [
+    "Door",
+    "Param",
+    "ParamNotResolved",
+    "ResolvedParam",
+    "ResolvedParams",
+    "doors",
+    "refuse_duplicate_params",
+]
 
 
 #: Resolution doors, in the order the resolver walks them.
@@ -50,7 +58,9 @@ class Param:
     (the GateSpec provider idiom - the declaration stays serializable and engine
     knowledge stays in the engine). ``user_lever`` marks a derived/constant value
     the form lets the user override; ``optional`` marks a value whose absence is
-    legal (no gate, no refusal).
+    legal (no gate, no refusal). ``derived_when_absent`` names what stands in when
+    an optional param resolves to nothing, so the absence still leaves a
+    derived-basis provenance row instead of a silent hole.
     """
 
     name: str
@@ -64,6 +74,7 @@ class Param:
     optional: bool = False
     consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
     real_source: str | None = None
+    derived_when_absent: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.isidentifier():
@@ -88,10 +99,35 @@ class Param:
                 raise PlanValidationError(
                     f"Param {self.name!r} bounds {self.bounds} are inverted."
                 )
+        if self.derived_when_absent and not self.optional:
+            raise PlanValidationError(
+                f"Param {self.name!r} declares derived_when_absent but is not optional; "
+                "a required param has no absence to describe."
+            )
 
     @property
     def basis(self) -> str:
         return _BASIS_FOR_DOOR[self.door]
+
+
+def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
+    """Two declarations of one name silently last-wins; refuse the declaration."""
+    seen: set[str] = set()
+    for param in declared:
+        if param.name in seen:
+            raise PlanValidationError(
+                f"param {param.name!r} is declared twice; one name, one declaration."
+            )
+        seen.add(param.name)
+
+
+class ParamNotResolved(AttributeError):
+    """A derivation read a param the sheet has not seated yet.
+
+    An ``AttributeError`` so attribute semantics hold, but its own type so the
+    resolver's fixpoint can tell "wait for a dependency" from a real bug inside a
+    derivation - which is also an AttributeError and must never be swallowed.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +163,7 @@ class ResolvedParams:
     def __getattr__(self, name: str) -> Any:
         rows = object.__getattribute__(self, "_rows")
         if name not in rows:
-            raise AttributeError(
+            raise ParamNotResolved(
                 f"param {name!r} is not declared (declared: {sorted(rows)})"
             )
         return rows[name].value

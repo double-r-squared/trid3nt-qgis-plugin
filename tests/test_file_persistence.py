@@ -235,6 +235,34 @@ def test_file_mcp_atomic_writes_survive_partial_tmp(tmp_path: Path) -> None:
     assert fetched_b is not None
 
 
+def test_file_mcp_delete_one_removes_the_document(tmp_path: Path) -> None:
+    """The declarative step ledger REAPS a finished attempt, so the shim deletes."""
+    client = FileMCPClient(base_dir=tmp_path)
+    coll = "declarative_run_ledgers"
+
+    async def _drive() -> tuple[dict, dict, dict]:
+        await client.call_tool("update-one", {
+            "database": DEFAULT_DATABASE, "collection": coll,
+            "filter": {"_id": "k1"}, "update": {"$set": {"_id": "k1", "n": 1}},
+            "upsert": True,
+        })
+        gone = await client.call_tool("delete-one", {
+            "database": DEFAULT_DATABASE, "collection": coll, "filter": {"_id": "k1"},
+        })
+        after = await client.call_tool("find-one", {
+            "database": DEFAULT_DATABASE, "collection": coll, "filter": {"_id": "k1"},
+        })
+        again = await client.call_tool("delete-one", {
+            "database": DEFAULT_DATABASE, "collection": coll, "filter": {"_id": "k1"},
+        })
+        return gone, after, again
+
+    gone, after, again = asyncio.run(_drive())
+    assert gone["deletedCount"] == 1
+    assert after["document"] is None
+    assert again["deletedCount"] == 0          # deleting nothing is not an error
+
+
 # --------------------------------------------------------------------------- #
 # is_dev_persistence_enabled() precedence
 # --------------------------------------------------------------------------- #

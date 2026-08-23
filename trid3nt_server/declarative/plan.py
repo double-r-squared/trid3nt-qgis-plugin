@@ -21,6 +21,7 @@ __all__ = [
     "Plan",
     "Ref",
     "RenderSpec",
+    "RunMode",
     "Step",
     "Transparent",
     "When",
@@ -60,6 +61,17 @@ class _Transparent:
 Transparent = _Transparent()
 
 
+class _RunMode:
+    def __repr__(self) -> str:
+        return "RunMode"
+
+
+#: Declared read of the run's input-gate mode. A composite step that runs its OWN
+#: input-review gate takes ``input_mode=RunMode`` so the lever reaches it without
+#: becoming a Param - it governs whether the run pauses, it is not a physical value.
+RunMode = _RunMode()
+
+
 @dataclass(frozen=True, slots=True)
 class Within:
     """Draw-time constraint: the drawn geometry must fall inside the referenced feature."""
@@ -80,12 +92,12 @@ class ChartSpec:
     """A declared chart: the SPEC is the product; the plugin dock is the renderer.
 
     ``builder`` is a dotted import path to a pure ``(result, params) -> payload dict``.
+    The builder owns the axes: it writes the vega-lite encodings, so the spec
+    declares no x/y of its own.
     """
 
     name: str
     builder: str
-    x: str | None = None
-    y: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,11 +139,9 @@ class Step:
         """Declare how this step's raster result is styled when published."""
         return replace(self, renders=self.renders + (RenderSpec(preset=preset, zero=zero),))
 
-    def chart(self, name: str, *, builder: str, x: str | None = None,
-              y: str | None = None) -> "Step":
+    def chart(self, name: str, *, builder: str) -> "Step":
         """Declare a chart SPEC built from this step's result."""
-        return replace(self, charts=self.charts + (ChartSpec(name=name, builder=builder,
-                                                             x=x, y=y),))
+        return replace(self, charts=self.charts + (ChartSpec(name=name, builder=builder),))
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,22 +211,15 @@ class Plan:
     steps: tuple[Node, ...]
 
     def flat(self) -> tuple[Step, ...]:
-        """Every step in execution order, with untaken ``When`` bodies dropped."""
-        out: list[Step] = []
-        for node in self.steps:
-            if isinstance(node, When):
-                if node.taken:
-                    out.extend(_flatten(node.body))
-            else:
-                out.append(node)
-        return tuple(out)
+        """Every step in execution order, with untaken ``When`` bodies dropped.
+
+        Untaken at ANY depth: a nested branch is guarded by its own condition too.
+        """
+        return tuple(_flatten(self.steps, taken_only=True))
 
     def declared(self) -> tuple[Step, ...]:
         """Every step INCLUDING untaken branches - what the validator and printer read."""
-        out: list[Step] = []
-        for node in self.steps:
-            out.extend(_flatten((node,)))
-        return tuple(out)
+        return tuple(_flatten(self.steps, taken_only=False))
 
     def describe(self) -> list[str]:
         lines = [f"{self.name} (engine={self.engine or '-'})"]
@@ -232,11 +235,13 @@ class Plan:
         return lines
 
 
-def _flatten(nodes: tuple[Any, ...]) -> list[Step]:
+def _flatten(nodes: tuple[Any, ...], *, taken_only: bool) -> list[Step]:
     out: list[Step] = []
     for node in nodes:
         if isinstance(node, When):
-            out.extend(_flatten(node.body))
+            if taken_only and not node.taken:
+                continue
+            out.extend(_flatten(node.body, taken_only=taken_only))
         elif isinstance(node, Step):
             out.append(node)
         else:
@@ -259,5 +264,5 @@ class Workflow:
 
     def __getitem__(self, items: Any) -> Plan:
         nodes = items if isinstance(items, tuple) else (items,)
-        _flatten(nodes)  # shape check at construction
+        _flatten(nodes, taken_only=False)  # shape check at construction
         return Plan(name=self._name, engine=self._engine, steps=tuple(nodes))

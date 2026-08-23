@@ -9,8 +9,8 @@ from typing import Any, Iterable, Sequence
 
 from .data import DataDecl
 from .errors import PlanValidationError
-from .params import Param, doors
-from .plan import Gate, Plan, Ref, Step, Within
+from .params import Param, doors, refuse_duplicate_params
+from .plan import Gate, Plan, Ref, Step, When, Within
 
 __all__ = ["validate_plan"]
 
@@ -18,6 +18,7 @@ __all__ = ["validate_plan"]
 def validate_plan(plan: Plan, params: Sequence[Param],
                   data: Sequence[DataDecl] = ()) -> None:
     """Refuse a plan that cannot possibly execute. Raises :class:`PlanValidationError`."""
+    refuse_duplicate_params(params)
     param_names = {p.name for p in params}
     data_names = {d.name for d in data}
     _check_duplicate_names(plan)
@@ -73,12 +74,26 @@ def _check_gate_declarations(plan: Plan, params: dict[str, Param]) -> None:
 
 
 def _check_refs(plan: Plan, param_names: set[str], data_names: set[str]) -> None:
-    available: set[str] = set()
-    for step in plan.declared():
-        for ref in _refs_in(step):
-            _resolve_root(plan.name, step.label, ref, param_names, data_names, available)
-        if step.name is not None:
-            available.add(step.name)
+    _check_refs_in_scope(plan.name, plan.steps, param_names, data_names, set())
+
+
+def _check_refs_in_scope(plan_name: str, nodes: tuple[Any, ...], param_names: set[str],
+                         data_names: set[str], visible: set[str]) -> None:
+    """Ref integrity with BRANCH SCOPING.
+
+    A step named inside a ``When`` body is only visible inside that body: the
+    branch may not be taken, so a Ref to it from outside is a runtime
+    REF_UNRESOLVED waiting to happen, not a valid plan.
+    """
+    local = set(visible)
+    for node in nodes:
+        if isinstance(node, When):
+            _check_refs_in_scope(plan_name, node.body, param_names, data_names, local)
+            continue
+        for ref in _refs_in(node):
+            _resolve_root(plan_name, node.label, ref, param_names, data_names, local)
+        if node.name is not None:
+            local.add(node.name)
 
 
 def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
@@ -99,7 +114,7 @@ def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[st
     raise PlanValidationError(
         f"plan {plan_name!r} step {step_label!r}: Ref({ref.path!r}) resolves to "
         "nothing - it is not a declared param, not a declared Data, and not a step "
-        "named earlier in the plan."
+        "named earlier on this branch."
     )
 
 

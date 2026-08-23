@@ -108,6 +108,97 @@ async def test_do_sag_requires_location_or_bbox():
     assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
 
 
+# --- the outfall: absent DERIVES, malformed REFUSES -------------------------- #
+@pytest.mark.parametrize("bad", ["somewhere", [1.0], [1.0, 2.0, 3.0], {"lon": 1},
+                                 [200.0, 10.0], ["a", "b"]])
+@pytest.mark.asyncio
+async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
+    """A garbage discharge location must not silently become the reach seed."""
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    out = await telemac_do_sag(location="Eel River near Scotia, California",
+                               outfall_coords=bad)
+    assert isinstance(out, dict) and out["error_code"] == "TELEMAC_PARAMS_INVALID"
+    assert "outfall_coords" in out["error_message"]
+
+
+def test_an_absent_outfall_leaves_a_derived_provenance_row():
+    """The user has to see what the sag distance is measured FROM."""
+    from trid3nt_server.declarative import provenance_entries, resolve_params
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS
+
+    p = asyncio.run(resolve_params(PARAMS, {"location": "Eel River near Scotia"}))
+    row = next(r for r in provenance_entries(p, PARAMS) if r.param == "outfall_coords")
+    assert row.basis == "derived"
+    assert "mid-reach" in (row.note or "")
+
+
+def test_a_supplied_outfall_is_carried_as_a_user_row():
+    from trid3nt_server.declarative import provenance_entries, resolve_params
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS, _normalize
+
+    supplied, err = _normalize({"location": "x", "outfall_coords": ["-124.1", "40.5"]})
+    assert err is None and supplied["outfall_coords"] == (-124.1, 40.5)
+    p = asyncio.run(resolve_params(PARAMS, supplied))
+    row = next(r for r in provenance_entries(p, PARAMS) if r.param == "outfall_coords")
+    assert row.basis == "user"
+
+
+# --- the gate-mode lever reaches the reach pipeline -------------------------- #
+def test_the_plan_declares_the_run_mode_read_for_the_reach_pipeline():
+    """input_mode is the gate lever, not a Param: without this the user_gated
+    review of NWM discharge / bank_source is silently lost."""
+    from trid3nt_server.declarative import RunMode, resolve_params
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS, plan
+
+    p = asyncio.run(resolve_params(PARAMS, {"location": "x"}))
+    solve = next(s for s in plan(p, None).flat() if s.name == "do_field")
+    assert solve.kwargs["input_mode"] is RunMode
+
+
+@pytest.mark.asyncio
+async def test_input_mode_reaches_the_reach_solve(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
+    from trid3nt_contracts.telemac_contracts import (
+        TELEMAC_DO_STYLE_PRESET,
+        TelemacDoLayerURI,
+    )
+    from trid3nt_server.workflows.telemac.do_sag import steps as do_sag_steps
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+
+    seen: dict = {}
+
+    async def _fake_solve(**kwargs):
+        seen.update(kwargs)
+        return TelemacDoLayerURI(
+            layer_id="t", name="Dissolved oxygen sag (reach)", layer_type="raster",
+            uri="s3://b/k.tif", style_preset=TELEMAC_DO_STYLE_PRESET, role="primary",
+            do_min_mgl=8.0, do_min_distance_m=100.0, do_standard_mgl=5.0,
+            do_violates_standard=False,
+        )
+
+    monkeypatch.setattr(do_sag_steps, "solve_waqtel_o2", _fake_solve)
+    out = await telemac_do_sag(location="Eel River near Scotia, California",
+                               input_mode="user_gated")
+    assert not isinstance(out, dict), out
+    assert seen["input_mode"] == "user_gated"
+
+
+# --- the sag chart ----------------------------------------------------------- #
+def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
+    from trid3nt_server.declarative import ResolvedParams
+    from trid3nt_server.workflows.telemac.do_sag.steps import build_sag_chart
+
+    result = SimpleNamespace(
+        name="Dissolved oxygen sag (Eel_River_near_Scotia)",
+        sag_curve_distance_m=[0.0, 1000.0], sag_curve_do_mgl=[9.0, 8.0],
+        sag_curve_bod_mgl=[20.0, 18.0], do_standard_mgl=5.0, do_min_mgl=8.0,
+        do_min_distance_m=1000.0, do_violates_standard=False,
+    )
+    payload = build_sag_chart(result=result, params=ResolvedParams({}))
+    assert payload["title"] == "Dissolved oxygen sag (Eel_River_near_Scotia)"
+    assert payload["title"].count("sag") == 1
+
+
 def test_do_layer_contract_fields():
     from trid3nt_contracts.telemac_contracts import (
         TELEMAC_DO_STYLE_PRESET,

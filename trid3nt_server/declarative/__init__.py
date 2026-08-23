@@ -30,7 +30,7 @@ from .errors import (
 )
 from .interpret import RunResult, interpret
 from .ledger import LedgerRecord, StepLedger, invocation_key
-from .params import Param, ResolvedParam, ResolvedParams, doors
+from .params import Param, ParamNotResolved, ResolvedParam, ResolvedParams, doors
 from .plan import (
     ChartSpec,
     DrawGate,
@@ -39,23 +39,25 @@ from .plan import (
     Plan,
     Ref,
     RenderSpec,
+    RunMode,
     Step,
     Transparent,
     When,
     Within,
     Workflow,
 )
-from .resolver import provenance_entries, resolve_params
+from .resolver import merge_provenance, provenance_entries, resolve_params
 from .validate import validate_plan
 
 __all__ = [
     "AuthoredProducer", "Build", "ByoCoverageError", "ChartSpec", "CoversAOI",
     "Data", "DataDecl", "DeclarativeError", "Domain", "DrawGate", "Fetch",
     "FormGate", "Gate", "GateNotSupportedError", "GateRefusedError",
-    "LedgerRecord", "ModifierIllegalError", "Param", "ParamOutOfRangeError",
-    "Plan", "PlanValidationError", "Producer", "Ref", "ReferenceProducer",
-    "RenderSpec", "ResolvedParam", "ResolvedParams", "RunResult", "Step",
-    "StepFailedError", "StepLedger", "Transparent", "When", "Within",
-    "Workflow", "current_domain", "doors", "interpret", "invocation_key",
-    "provenance_entries", "render_docstring", "resolve_params", "validate_plan",
+    "LedgerRecord", "ModifierIllegalError", "Param", "ParamNotResolved",
+    "ParamOutOfRangeError", "Plan", "PlanValidationError", "Producer", "Ref",
+    "ReferenceProducer", "RenderSpec", "ResolvedParam", "ResolvedParams",
+    "RunMode", "RunResult", "Step", "StepFailedError", "StepLedger",
+    "Transparent", "When", "Within", "Workflow", "current_domain", "doors",
+    "interpret", "invocation_key", "merge_provenance", "provenance_entries",
+    "render_docstring", "resolve_params", "validate_plan",
 ]

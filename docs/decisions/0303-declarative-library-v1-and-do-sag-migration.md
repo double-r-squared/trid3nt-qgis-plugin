@@ -254,3 +254,141 @@ Plugin form/draw cards (wave 2 - the DrawGate raises a typed
 `GATE_NOT_YET_SUPPORTED` naming wave 2 when a REQUIRED drawn param is missing in
 `user_gated` mode, rather than silently skipping). Full pause/walk-away/resume.
 `Data` declarations for the reach pipeline (wave 3, with river_dye).
+
+---
+
+# Correction - wave 1b (adversarial review)
+
+Status: LANDED. An adversarial verifier REFUTED the wave-1 landing on five
+blockers and fourteen observations, all probe-proven. This section records what
+the corrections CHANGED about the decisions above; the sections before it are
+left as written, so the delta is readable.
+
+## The ledger is not a cache (blocker 1)
+
+Wave 1 wrote a ledger record per completed node and never marked the plan
+finished, so a SUCCESSFUL invocation replayed forever. The persisted proof: one
+document under `data/persistence/trid3nt_dev/declarative_run_ledgers.json` with
+BOTH of `do_field`'s nodes recorded and no completion state - which made
+`telemac_do_sag`, a `cacheable=False` / `live-no-cache` tool, hand back the same
+COG and the same NWM-derived discharge across sessions, and would hand back a
+dead `s3://` URI once the run objects were pruned.
+
+The ruling in force is resume-from-the-FAILED-step. That is now what the ledger
+holds, and only that:
+
+- **A plan that reaches its end reaps its own ledger** (`StepLedger.complete()`
+  deletes the invocation's document). The alternative - keep the records and
+  stamp `complete: true` - was rejected: a marker that is only ever read as "do
+  not use this" is a tombstone, and tombstones accumulate one document per
+  distinct question forever. Deleting IS the completion marker.
+- **Replay probes the artifact.** Before a cached record is adopted, every
+  `artifact_uris` entry is probed (`head_object` for `s3://`, `os.path.exists`
+  for a bare path, off-loop via `asyncio.to_thread`). A missing artifact logs a
+  warning and re-executes the node. A replay that returns a URI whose object is
+  gone is a dead handle wearing a success envelope.
+- **Eviction** (observation 14): the ledger collection is swept on every load -
+  documents of a superseded schema or older than the 7-day resume TTL are
+  deleted. Schema is at 2, so wave-1 documents are swept on first contact. The
+  file-persistence shim gained `delete-one` for this; it had insert/update/find
+  only.
+- **`restart_clean` is KEPT, not redundant.** Completion-clearing removes the
+  successful-run case; the flag still names the remaining one - a PREVIOUS
+  FAILED attempt whose cached artifact exists but is not wanted. It is now
+  documented in the generated docstring, under a new `Run controls:` block that
+  also carries `input_mode` (observation 13).
+
+Consequence worth stating plainly: **do_sag can never resume.** Its plan has one
+recordable node (the terminal solve) and one auxiliary node, and an auxiliary
+failure is no longer fatal (delta 4), so there is no failure that leaves a
+resumable ledger. `scripts/prove_declarative_resume.py`, which proved wave 1's
+resume by forcing the chart to raise, is DELETED - its premise is contradicted by
+delta 4. Resume/replay/probe/domain-restore are pinned offline in
+`tests/test_declarative_library.py`; the live proof rides wave 3, where
+river_dye's multi-step plan gives a failure with something behind it.
+
+## Data producers run after the gates, and are ledgered (observation 10)
+
+Wave 1 produced the independent `Data` set before the first node - i.e. before
+the plan's own gates - so a producer fetched against the very params the form
+gate exists to change, and refetched on every resume.
+
+v1 semantics, now: the eager batch fires at **the first node after the LAST
+gate**; anything an earlier step needs is still produced lazily on its first
+`Ref`; and every produced artifact is ledgered under its own `data:<name>` key,
+so a resumed attempt does not refetch it. do_sag declares `DATA = ()`, so this
+is inert here and load-bearing for wave 3.
+
+## Behavior deltas - REVISED
+
+Delta 1 (non-numeric bounded arg refuses) stands, and is now airtight:
+`bool` bypassed it (`float(True) == 1.0`), so a flag passed to a bounded param
+silently became a physics value. Bools are refused (observation 1).
+
+**Delta 2 is REVERTED.** Wave 1 converted `TelemacBanksUnavailableError` /
+`TelemacReachDegenerateError` into flat `status=error` envelopes, calling the old
+propagate-don't-catch "a special case for two of the five typed errors". It was
+not a special case - it was the channel. Both declare `retryable = True` and
+carry `.suggestions`, and `summarize_tool_result` harvests both off the RAISED
+exception. Flattening them stripped the retry flag and the recovery options
+(`bank_source="constant_ribbon"`, a longer reach, an explicit river name) and
+left the model an unactionable error string.
+
+The rule now, stated generally rather than by type name: **an exception
+declaring `retryable` propagates**; everything else becomes `StepFailedError`
+carrying the engine's own `error_code`. The interpreter re-raises it, and the
+tool body re-raises it ahead of its catch-all. The envelope conversion stays for
+genuinely terminal errors.
+
+Delta 3 (the chart title source) stands, with the bbox-only case fixed: falling
+back to the layer's `name` produced "Dissolved-oxygen sag - Dissolved oxygen sag
+(reach)". With no location words the layer's own name IS the title
+(observation 12).
+
+**Delta 4 - NEW: an auxiliary node failure is not fatal.** Wave 1 let a chart or
+render node kill the whole run: a 27-minute solve returned an error envelope
+because a chart builder threw. That contradicts the emission doctrine's failure
+retracts nothing. Chart and render nodes are AUXILIARY: a failure logs a loud
+warning, appends a note to `RunResult.notes`, and execution continues. The
+primary result stands, and the tool merges the notes into the layer's
+`fallback_note` so the miss is narrated rather than hidden. A failed auxiliary
+node is not ledgered, so a rerun retries it. Two silent holes close with it: a
+render whose source is not an object-store raster now raises
+`RENDER_SOURCE_UNRENDERABLE` instead of returning `{"published": False}` to
+nobody (observation 8), and a chart builder that produces nothing raises
+`CHART_NOT_BUILT` (the honest "there was no curve to draw", said out loud).
+
+## The rest of the observations
+
+| # | what was wrong | what it is now |
+|---|---|---|
+| 2 | garbage `outfall_coords` fell back to the derived reach seed - the swallow class this wave outlaws | `coerce_outfall_point` refuses malformed input typed (`TELEMAC_PARAMS_INVALID`); ABSENT still derives |
+| 3 | the derived outfall left NO provenance row (`provenance_entries` skipped value-None) | `Param.derived_when_absent` names the stand-in; an absent optional param emits a `basis=derived` row. do_sag's says the seed is mid-reach on the fetched flowline, else the geocoded centroid, and that the sag distance is measured from there |
+| 4 | the derivation fixpoint's bare `except AttributeError` masked real bugs inside derivations as dependency waits | `ResolvedParams.__getattr__` raises `ParamNotResolved`; only that continues the fixpoint, every other AttributeError propagates |
+| 5 | `LedgerRecord.domain` was written and never read | a replayed `.overrides_domain()` step restores the RECORDED domain (falling back to re-reading the result). Recording moved after adoption, so the record holds the domain the step LEFT, not the one it started under - the field's docstring was describing behavior it did not have |
+| 6 | a `Ref` into an untaken `When` branch validated and then failed at run time; duplicate `Param` names silently last-won | Ref checking is branch-scoped (a name defined inside a `When` body is visible only inside it); duplicate param declarations are refused by both `validate_plan` and `resolve_params` |
+| 7 | `ChartSpec.x` / `.y` were declared, stored, and never read | DELETED. The builder writes the vega-lite encodings; a spec field nothing reads is a lie about who owns the axes |
+| 9 | a USER-door param seated from its own declared default was stamped `basis=user` | a value seated from a DECLARED DEFAULT is stamped `default_demo` whatever door it hangs under. The door says who may override it, not where the value came from |
+| 11 | `bank_source` produced two contradictory provenance rows (do_sag's declared constant + river_dye's fetched row) | `merge_provenance` at the seam: the composite's own row wins on a name collision |
+
+## Blocker 2 - `input_mode` reached nothing
+
+`ReachSolve.telemac_waqtel_o2` omitted `input_mode`, so `model_telemac_river_dye`
+received `None` and the user_gated review of the NWM carrier discharge and the
+bank source - the physically dominant reviewable inputs, gated deliberately
+before a 27-minute solve - was silently lost.
+
+It is not a Param (it governs whether the run pauses; it is not a physical
+value), so the fix is a declared read of the run environment: **`RunMode`**, a
+plan-value sentinel the interpreter binds to the run's resolved gate mode. The
+plan says `input_mode=RunMode` and the lever arrives. Same shape as `Transparent`
+and `CoversAOI`: a sentinel that means something to the interpreter and stays
+inspectable in the plan value.
+
+## Blocker 5 - nested `When(False, ...)` executed
+
+`Plan.flat()` guarded only the TOP-level condition and then recursed into nested
+`When` bodies unconditionally, so `Workflow[When(True, When(False, inner))]`
+executed `inner`. One flatten now takes a `taken_only` flag: `flat()` drops
+untaken branches at every depth, `declared()` keeps them all. Foundation-critical
+for river_dye, whose plan is conditional throughout.

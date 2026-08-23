@@ -10,6 +10,7 @@ import asyncio
 import importlib
 import inspect
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Sequence
@@ -35,7 +36,7 @@ from .errors import (
 )
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import Param, ResolvedParams
-from .plan import ChartSpec, Gate, Plan, Ref, RenderSpec, Step
+from .plan import ChartSpec, Gate, Plan, Ref, RenderSpec, RunMode, Step
 from .resolver import provenance_entries
 from .validate import validate_plan
 
@@ -46,13 +47,18 @@ logger = logging.getLogger("trid3nt_server.declarative.interpret")
 
 @dataclass
 class RunResult:
-    """What a plan produced: the terminal result plus the run's provenance rows."""
+    """What a plan produced: the terminal result plus the run's provenance rows.
+
+    ``notes`` carries what the run could NOT produce - an auxiliary chart or
+    render that failed while the primary result stood. The caller narrates them.
+    """
 
     value: Any
     results: dict[str, Any] = field(default_factory=dict)
     entries: list[SyntheticInput] = field(default_factory=list)
     replayed: list[str] = field(default_factory=list)
     executed: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
     domain: Domain | None = None
 
 
@@ -91,12 +97,15 @@ async def interpret(
     emitter = current_emitter()
     begin_substeps(emitter, len(nodes))
 
-    env = _Env(params=params, data={d.name: d for d in data}, results={})
+    env = _Env(params=params, data={d.name: d for d in data}, results={},
+               input_mode=input_mode, ledger=ledger, resume=resume)
     out = RunResult(value=None, entries=entries)
     token = bind_domain(domain)
+    produce_at = _eager_data_index(nodes)
     try:
-        await _produce_independent_data(env)
         for node in nodes:
+            if node.index == produce_at:
+                await _produce_independent_data(env)
             if isinstance(node.step, Gate):
                 await _run_gate(node.step, params, declared_params, entries,
                                 input_mode=input_mode, tool_name=plan.name)
@@ -104,20 +113,53 @@ async def interpret(
             if node.step.consequential:
                 _refuse_missing_required(params, plan.name)
             cached = ledger.replay_for(node.index, node.label) if resume else None
-            if cached is not None:
+            if cached is not None and await _artifacts_live(cached):
                 value = _rehydrate(cached)
                 if value is not _UNREPLAYABLE:
-                    _adopt(env, node, value, out, replayed=True)
+                    _adopt(env, node, value, out, replayed=True, record=cached)
                     logger.info("plan %s node %d %s REPLAYED from ledger",
                                 plan.name, node.index, node.label)
                     continue
-            value = await _run_node(node, env, emitter)
-            await ledger.record(_record(node, value))
+            try:
+                value = await _run_node(node, env, emitter)
+            except Exception as exc:  # noqa: BLE001 - re-raised for the primary result
+                if node.kind == "step":
+                    raise
+                _note_aux_failure(out, plan.name, node, exc)
+                continue
+            # Adopt BEFORE recording: a domain-rebinding step must record the
+            # domain it LEAVES, not the one it started under.
             _adopt(env, node, value, out, replayed=False)
+            await ledger.record(_record(node, value))
         out.domain = current_domain()
+        await ledger.complete()
     finally:
         reset_domain(token)
     return out
+
+
+def _eager_data_index(nodes: Sequence[_Node]) -> int | None:
+    """Where the independent-Data batch fires: the first node AFTER the last gate.
+
+    A producer that ran before a gate would have fetched against params the gate
+    exists to change. Anything a pre-gate step needs is still produced lazily on
+    its first ``Ref``.
+    """
+    last_gate = max((n.index for n in nodes if isinstance(n.step, Gate)), default=-1)
+    return next((n.index for n in nodes if n.index > last_gate), None)
+
+
+def _note_aux_failure(out: RunResult, plan_name: str, node: _Node,
+                      exc: BaseException) -> None:
+    """An AUXILIARY node (chart/render) never kills the run - it says what is missing.
+
+    The primary result already exists; retracting a 27-minute solve because a
+    chart builder threw would be the failure-retracts-something anti-pattern.
+    """
+    kind = "chart" if node.kind == "chart" else "render"
+    logger.warning("plan %s: %s node %r FAILED (%s); the run's primary result stands",
+                   plan_name, kind, node.label, exc, exc_info=True)
+    out.notes.append(f"the {kind} {node.label!r} could not be produced: {exc}")
 
 
 def _expand(plan: Plan) -> tuple[_Node, ...]:
@@ -142,11 +184,14 @@ class _Env:
     params: ResolvedParams
     data: dict[str, DataDecl]
     results: dict[str, Any]
+    input_mode: str | None = None
+    ledger: StepLedger | None = None
+    resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
 
 
 async def _produce_independent_data(env: _Env) -> None:
-    """The initial independent Data set - producers that Ref no other Data, run together.
+    """The independent Data set - producers that Ref no other Data, run together.
 
     Everything else is produced lazily on first ``Ref``. Skipped until a domain is
     bound, because a spatial producer with no AOI would fetch the wrong world.
@@ -154,7 +199,8 @@ async def _produce_independent_data(env: _Env) -> None:
     if current_domain() is None:
         return
     ready = [d for d in env.data.values()
-             if not any(r.root in env.data for r in _refs(dict(d.producer.kwargs)))]
+             if d.name not in env.artifacts
+             and not any(r.root in env.data for r in _refs(dict(d.producer.kwargs)))]
     if not ready:
         return
     produced = await asyncio.gather(*(_produce(env, decl) for decl in ready))
@@ -167,11 +213,21 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     if isinstance(producer, AuthoredProducer) and producer.byo_uri:
         _validate_byo(decl, producer.byo_uri, producer.byo_validate)
         return producer.byo_uri
+    cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
+    if cached is not None and await _artifacts_live(cached):
+        value = _rehydrate(cached)
+        if value is not _UNREPLAYABLE:
+            logger.info("data %s REPLAYED from ledger", decl.name)
+            return value
     kwargs = await _bind(dict(producer.kwargs), env)
     if producer.ladder_rungs:
         kwargs.setdefault("fallback", tuple(producer.ladder_rungs))
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
-        return await _call(_load(producer.runner), kwargs)
+        value = await _call(_load(producer.runner), kwargs)
+    if env.ledger is not None:
+        await env.ledger.record_data(
+            decl.name, _record_for(decl.name, producer.runner, value))
+    return value
 
 
 def _validate_byo(decl: DataDecl, uri: str, validate: Any) -> None:
@@ -199,6 +255,12 @@ async def _run_node(node: _Node, env: _Env, emitter: Any) -> Any:
         except DeclarativeError:
             raise
         except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
+            if getattr(exc, "retryable", False):
+                # A RETRYABLE typed error is a GATE, not a failure: the adapter
+                # harvests its .suggestions off the raised exception so the model
+                # can retry with corrected args. Flattening it into an envelope
+                # destroys that channel.
+                raise
             raise StepFailedError(
                 f"step {node.label!r} failed: {exc}",
                 error_code=getattr(exc, "error_code", None) or "STEP_FAILED",
@@ -210,9 +272,13 @@ async def _run_chart(node: _Node, env: _Env) -> Any:
     spec: ChartSpec = node.spec
     source = env.results.get(node.step.name or node.step.label)
     payload = await _call(_load(spec.builder), {"result": source, "params": env.params})
-    if payload:
-        await emit_chart_payloads(payload)
-    return {"chart": spec.name, "emitted": bool(payload)}
+    if not payload:
+        raise StepFailedError(
+            f"chart {spec.name!r}: the builder produced no spec from the result.",
+            error_code="CHART_NOT_BUILT", step=node.label,
+        )
+    await emit_chart_payloads(payload)
+    return {"chart": spec.name, "emitted": True}
 
 
 async def _run_render(node: _Node, env: _Env) -> Any:
@@ -221,7 +287,11 @@ async def _run_render(node: _Node, env: _Env) -> Any:
     uri = getattr(source, "uri", None)
     layer_id = getattr(source, "layer_id", None)
     if not uri or not layer_id or not str(uri).startswith(("s3://", "gs://")):
-        return {"render": spec.preset, "published": False}
+        raise StepFailedError(
+            f"render {spec.preset!r}: step {node.step.label!r} produced no object-store "
+            f"raster to style (uri={uri!r}, layer_id={layer_id!r}).",
+            error_code="RENDER_SOURCE_UNRENDERABLE", step=node.label,
+        )
     from trid3nt_server.data.publish_layer import publish_layer
 
     published = await asyncio.to_thread(
@@ -275,14 +345,19 @@ def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
     )
 
 
-def _adopt(env: _Env, node: _Node, value: Any, out: RunResult, *, replayed: bool) -> None:
+def _adopt(env: _Env, node: _Node, value: Any, out: RunResult, *, replayed: bool,
+           record: LedgerRecord | None = None) -> None:
     name = node.step.name or node.step.label
     if node.kind == "step":
         env.results[name] = value
         out.results[name] = value
         out.value = value
         if node.step.rebinds_domain:
-            refined = domain_from_result(value)
+            # On replay the RECORDED domain wins: it is what the step actually left
+            # behind, rather than what re-reading its result happens to reproduce.
+            refined = Domain.from_doc(record.domain) if record else None
+            if refined is None:
+                refined = domain_from_result(value)
             if refined is not None:
                 bind_domain(refined)
     (out.replayed if replayed else out.executed).append(node.label)
@@ -293,6 +368,8 @@ async def _bind(kwargs: dict[str, Any], env: _Env) -> dict[str, Any]:
 
 
 async def _bind_value(value: Any, env: _Env) -> Any:
+    if value is RunMode:
+        return env.input_mode
     if isinstance(value, Ref):
         return await _deref(value, env)
     if isinstance(value, dict):
@@ -354,15 +431,51 @@ _UNREPLAYABLE = _Unreplayable()
 
 
 def _record(node: _Node, value: Any) -> LedgerRecord:
+    return _record_for(node.label, node.runner, value, index=node.index)
+
+
+def _record_for(label: str, runner: str, value: Any, *, index: int = 0) -> LedgerRecord:
     kind, payload, type_path = _serialize(value)
     dom = current_domain()
     return LedgerRecord(
-        index=node.index, node=node.label, runner=node.runner,
+        index=index, node=label, runner=runner,
         completed_at=datetime.now(timezone.utc).isoformat(),
         result_kind=kind, result=payload, result_type=type_path,
         artifact_uris=_artifact_uris(value),
         domain=dom.as_doc() if dom else None,
     )
+
+
+async def _artifacts_live(rec: LedgerRecord) -> bool:
+    """Probe every artifact the cached record points at.
+
+    A replay that hands back a URI whose object is gone is a dead handle wearing a
+    success envelope; the node re-executes instead.
+    """
+    for uri in rec.artifact_uris:
+        if not await asyncio.to_thread(_artifact_exists, uri):
+            logger.warning("ledger record %s points at a missing artifact (%s); "
+                           "re-executing", rec.node, uri)
+            return False
+    return True
+
+
+def _artifact_exists(uri: str) -> bool:
+    """``s3://`` objects are probed; a local path is stat'd; anything else is taken as live."""
+    if uri.startswith("s3://"):
+        bucket, _, key = uri[len("s3://"):].partition("/")
+        if not bucket or not key:
+            return False
+        try:
+            from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+
+            _get_s3_client().head_object(Bucket=bucket, Key=key)
+            return True
+        except Exception:  # noqa: BLE001 - absent, unreachable or unreadable: re-execute
+            return False
+    if "://" not in uri:
+        return os.path.exists(uri)
+    return True
 
 
 def _serialize(value: Any) -> tuple[str, Any, str | None]:

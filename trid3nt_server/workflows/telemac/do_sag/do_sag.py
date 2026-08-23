@@ -21,14 +21,20 @@ from trid3nt_server.declarative import (
     DrawGate,
     FormGate,
     Param,
+    RunMode,
     Workflow,
     doors,
     interpret,
+    merge_provenance,
     render_docstring,
     resolve_params,
 )
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
-from trid3nt_server.workflows.telemac.do_sag.steps import ReachSolve
+from trid3nt_server.workflows.telemac.do_sag.steps import (
+    OutfallCoordsInvalidError,
+    ReachSolve,
+    coerce_outfall_point,
+)
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.do_sag.do_sag")
 
@@ -61,8 +67,12 @@ PARAMS: tuple[Param, ...] = (
           desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place"),
     Param("outfall_coords", door=doors.USER, optional=True, consequence="scenario",
           user_lever=True,
+          derived_when_absent=(
+              "the release is seeded at the reach point the pipeline derives "
+              "(mid-reach on the fetched flowline, else the geocoded centroid); the "
+              "sag distance is measured downstream from there"),
           desc="Where the discharge enters the water, (lon, lat); unset seeds the "
-               "reach at the geocoded centre"),
+               "reach at the derived reach point"),
 
     Param("discharge_bod_mgl", door=doors.SCENARIO, default=20.0,
           bounds=(0.1, 5000.0), units="mg/L", consequence="scenario",
@@ -142,9 +152,9 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
             sim_duration_s=p.sim_duration_s, discharge_m3s=p.discharge_m3s,
             mesh_resolution=p.mesh_resolution, mesh_resolution_m=p.mesh_resolution_m,
             bank_source=p.bank_source, compute_class=p.compute_class,
+            input_mode=RunMode,
         ).named("do_field")
-         .chart("do_sag_curve", builder=f"{_STEPS}.build_sag_chart",
-                x="downstream_distance_km", y="concentration_mgl"),
+         .chart("do_sag_curve", builder=f"{_STEPS}.build_sag_chart"),
     ]
 
 
@@ -218,25 +228,41 @@ async def telemac_do_sag(
         return {"status": "error", "error_code": exc.error_code,
                 "error_message": str(exc)}
     except Exception as exc:  # noqa: BLE001
+        if getattr(exc, "retryable", False):
+            # The banks/reach gates carry .suggestions the adapter harvests off the
+            # RAISED exception, so the model can retry with corrected args.
+            raise
         logger.exception("telemac_do_sag unexpected failure")
         return {"status": "error", "error_code": "TELEMAC_INTERNAL_ERROR",
                 "error_message": str(exc)}
 
     layer = result.value
-    layer = layer.model_copy(update={
-        "synthetic_inputs": list(layer.synthetic_inputs or []) + result.entries,
-    })
+    update: dict[str, Any] = {
+        "synthetic_inputs": merge_provenance(layer.synthetic_inputs or [],
+                                             result.entries),
+    }
+    if result.notes:
+        parts = [layer.fallback_note] if layer.fallback_note else []
+        parts += [f"NOTE: {n}" for n in result.notes]
+        update["fallback_note"] = " ".join(parts)
+    layer = layer.model_copy(update=update)
     logger.info(
         "telemac_do_sag complete layer_id=%s do_min=%.3g mg/L at %sm violates=%s "
-        "executed=%s replayed=%s",
+        "executed=%s replayed=%s notes=%s",
         layer.layer_id, layer.do_min_mgl, layer.do_min_distance_m,
-        layer.do_violates_standard, result.executed, result.replayed,
+        layer.do_violates_standard, result.executed, result.replayed, result.notes,
     )
     return layer
 
 
 def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Coerce the wire args to the door-1 sheet: exactly one of location or bbox."""
+    try:
+        outfall = coerce_outfall_point(args.get("outfall_coords"))
+    except OutfallCoordsInvalidError as exc:
+        return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INVALID",
+                    "error_message": str(exc)}
+
     location, bbox = args.get("location"), args.get("bbox")
     coerced: tuple[float, float, float, float] | None = None
     if bbox is not None:
@@ -263,6 +289,7 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
     supplied = {k: v for k, v in args.items() if k in declared and v is not None}
     supplied["location"] = location if has_loc else None
     supplied["bbox"] = coerced
+    supplied["outfall_coords"] = outfall
     return {k: v for k, v in supplied.items() if v is not None}, None
 
 
@@ -285,6 +312,17 @@ telemac_do_sag.__doc__ = render_docstring(
         "(`sfincs_flood` / `hecras_riverine_flood`)"
     ),
     params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved carrier discharge and bank source for '
+         'review/edit before the solve and WAITS; "auto" (session default) proceeds '
+         "with every assumption labeled. Not a physical value."),
+        ("restart_clean",
+         "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
+         "left behind and re-runs every step from the top. Default False resumes at "
+         "the failed step. A run that completed leaves no ledger, so a fresh "
+         "invocation always re-solves against live upstream data."),
+    ),
     returns=(
         "On success a `TelemacDoLayerURI` (a `LayerURI` subtype) - the emitter loads "
         "the DISSOLVED-O2 field map and animates the SELAFIN sibling. It carries "
