@@ -176,6 +176,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 _PUBLISH_LAYER_TARGET = (
     "trid3nt_server.data.publish_layer.publish_layer.publish_layer"
 )
+_COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
 
 
 @pytest.mark.asyncio
@@ -194,7 +195,8 @@ async def test_publish_raster_input_cog_surfaces_with_provenance():
         return "s3://test-runs/RID/input-bathymetry.tif"
 
     emitter = _emitter()
-    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+    with patch(_COG_EXISTS_TARGET, return_value=True), \
+         patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
         ok = await publish_raster_input_cog(
             emitter,
             cog_uri="s3://test-cache/topobathy/aoi.tif",
@@ -232,13 +234,47 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
         raise PublishLayerError("PUBLISH_FAILED", "boom")
 
     emitter = _emitter()
-    with patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
+    with patch(_COG_EXISTS_TARGET, return_value=True), \
+         patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
         ok = await publish_raster_input_cog(
             emitter, cog_uri="s3://c/x.tif", layer_id="input-bathymetry-x",
             name="Input: bathymetry (x)", style_preset="continuous_dem",
         )
     assert ok is False
     assert emitter._loaded_layers == []
+
+
+@pytest.mark.asyncio
+async def test_publish_raster_input_cog_skips_missing_object_loudly(caplog):
+    """THE HONESTY FIX: the dead-COG class -- a manifest that recorded a
+    filename the store never actually received. head_object (mocked) reports
+    absent -> the object is SKIPPED before ever reaching publish_layer: no
+    404 layer registered, a LOUD warning naming the layer_id + uri, returns
+    False. NEVER raises."""
+    called = {"n": 0}
+
+    def _spy(*a, **k):  # pragma: no cover - must not run
+        called["n"] += 1
+        return "s3://x"
+
+    emitter = _emitter()
+    with patch(_COG_EXISTS_TARGET, return_value=False), \
+         patch(_PUBLISH_LAYER_TARGET, side_effect=_spy), \
+         caplog.at_level(
+             "WARNING", logger="trid3nt_server.emission.layer_uri_emit"):
+        ok = await publish_raster_input_cog(
+            emitter, cog_uri="s3://test-runs/RID/bed_bathymetry.tif",
+            layer_id="input-river-bed-DEAD", name="Input: river bed bathymetry",
+            style_preset="continuous_dem", role="context",
+        )
+
+    assert ok is False
+    assert emitter._loaded_layers == []
+    assert called["n"] == 0  # publish_layer never even called -- no upload race
+    msgs = "\n".join(r.getMessage() for r in caplog.records)
+    assert "SKIPPING" in msgs
+    assert "input-river-bed-DEAD" in msgs
+    assert "s3://test-runs/RID/bed_bathymetry.tif" in msgs
 
 
 @pytest.mark.asyncio
@@ -397,7 +433,8 @@ async def test_river_dye_surfaces_in_worker_bed_bathymetry_as_context(monkeypatc
         assert layer_uri == "s3://test-runs/RID/bed_bathymetry.tif"
         return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
 
-    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+    with patch(_COG_EXISTS_TARGET, return_value=True), \
+         patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
         ok = await river_dye._surface_bed_bathymetry_input(
             emitter,
             {"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "usgs-3dep"},
@@ -431,6 +468,31 @@ async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
     assert emitter._loaded_layers == []
 
 
+@pytest.mark.asyncio
+async def test_river_dye_bed_cog_recorded_but_object_missing_skips_loudly(
+    monkeypatch, caplog
+):
+    """THE FRESH-404 REPRO CLASS: telemac_metrics.json records bed_cog (the
+    worker wrote the filename) but the object was never uploaded (the
+    stage_manifest outputs-list gap). head_object (mocked) reports absent ->
+    no 404 layer, a loud skip, never raises."""
+    from trid3nt_server.data.simulation.solver import solver as solver_mod
+
+    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
+    emitter = _emitter()
+    with patch(_COG_EXISTS_TARGET, return_value=False), \
+         caplog.at_level(
+             "WARNING", logger="trid3nt_server.emission.layer_uri_emit"):
+        ok = await river_dye._surface_bed_bathymetry_input(
+            emitter,
+            {"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "usgs-3dep"},
+            "RID", "Snake River near Twin Falls, Idaho",
+        )
+    assert ok is False
+    assert emitter._loaded_layers == []
+    assert "SKIPPING" in "\n".join(r.getMessage() for r in caplog.records)
+
+
 # ===========================================================================
 # ADR 0244 S3: the shared in-worker lake-datum bed surface (tomawac + artemis).
 # The two TELEMAC wave workers sample a NOAA Great Lakes bed INSIDE the solver
@@ -458,7 +520,8 @@ async def test_surface_in_worker_bed_input_surfaces_lake_bed_as_context(monkeypa
         assert layer_uri == "s3://test-runs/RID/bed_bathymetry.tif"  # rode the object
         return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
 
-    with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+    with patch(_COG_EXISTS_TARGET, return_value=True), \
+         patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
         ok = await surface_in_worker_bed_input(
             emitter,
             run_metrics={"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "noaa_greatlakes"},
@@ -506,7 +569,8 @@ async def test_surface_in_worker_bed_input_publish_failure_non_fatal(monkeypatch
         raise PublishLayerError("PUBLISH_FAILED", "boom")
 
     emitter = _emitter()
-    with patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
+    with patch(_COG_EXISTS_TARGET, return_value=True), \
+         patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
         ok = await surface_in_worker_bed_input(
             emitter, run_metrics={"bed_cog": "bed_bathymetry.tif"}, run_id="RID",
             name="Input: lake bed bathymetry (x)",

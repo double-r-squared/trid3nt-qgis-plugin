@@ -213,6 +213,27 @@ async def publish_input_layer(
         return False
 
 
+def _cog_object_exists(cog_uri: str) -> bool:
+    """True when ``cog_uri`` names an object physically present in the store.
+
+    head_object via the established pattern (mirrors
+    ``telemac.steps.products._s3_object_exists``): any lookup failure -- a
+    malformed uri, an unreachable bucket, a 404 -- reads as absent, never
+    raises, so a fabricated URI is only ever registered once confirmed real.
+    """
+    from trid3nt_server.data.simulation.solver.solver import (
+        _get_s3_client,
+        _split_object_uri,
+    )
+
+    try:
+        _, bucket, key = _split_object_uri(cog_uri)
+        _get_s3_client().head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:  # noqa: BLE001 -- absent / unreachable == do not register
+        return False
+
+
 async def publish_raster_input_cog(
     emitter: "PipelineEmitter | None",
     *,
@@ -237,12 +258,23 @@ async def publish_raster_input_cog(
     same way.
 
     Best-effort contract: NEVER raises. Every failure (no emitter, a falsy uri,
+    an object the store does not actually have (the dead-COG class -- a
+    manifest that recorded the filename but whose upload never ran),
     a ``PublishLayerError`` on a non-``s3://`` / unregistered uri, the emit
     guardrail dropping it) is swallowed with a WARNING and returns ``False``; a
     failure to surface an input can NEVER fail the solve. Returns ``True`` only
     when the layer actually reached the emitter.
     """
     if emitter is None or not cog_uri:
+        return False
+    if not await asyncio.to_thread(_cog_object_exists, cog_uri):
+        logger.warning(
+            "publish_raster_input_cog: SKIPPING layer_id=%s -- %s is NOT present "
+            "in the object store (dead-COG: a worker/manifest recorded the "
+            "filename but never uploaded it). No 404 layer registered; the "
+            "input is honestly absent, not surfaced.",
+            layer_id, cog_uri,
+        )
         return False
     try:
         # Late import: keep this emission module free of a load-time dependency

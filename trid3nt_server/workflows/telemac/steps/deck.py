@@ -76,8 +76,12 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_STAGING_FAILED",
             "TRID3NT_CACHE_BUCKET must be set to stage the TELEMAC manifest.")
+    # bed_bathymetry.tif: the in-worker-sampled bed COG (_surface_bed_bathymetry_input
+    # reads its filename from telemac_metrics.json bed_cog and publishes it as a
+    # context input). The write is best-effort worker-side, so an absent file is
+    # a silent glob miss here, not an upload failure.
     outputs = ["r2d_river.slf", "river.slf", "river.cli", "t2d_river.cas",
-               "full_listing.log", "telemac_metrics.json"]
+               "full_listing.log", "telemac_metrics.json", "bed_bathymetry.tif"]
     # The GAIA deposition SELAFIN + its steering file ship for a sediment run so
     # the postprocess can build the bed-evolution COG. A non-sediment run never
     # produces them, so the supervisor's output glob simply skips them.
