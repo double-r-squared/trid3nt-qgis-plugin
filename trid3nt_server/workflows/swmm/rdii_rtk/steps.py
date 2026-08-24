@@ -350,6 +350,7 @@ async def rdii_metrics(
     total_peak = rdii_peak + runoff_peak
     rdii_frac = (rdii_peak / total_peak) if total_peak > 0 else 0.0
 
+    swmm_hours = list(solved["hours"])
     swmm_series = list(solved["nodes"][node]["total_inflow"])
     swmm_peak, _ = peak(swmm_series)
     swmm_ratio = (swmm_peak / rdii_peak) if rdii_peak > 0 else None
@@ -379,15 +380,25 @@ async def rdii_metrics(
             "times_hr": [round(t, 3) for t in times_hr],
             "rdii_cfs": [round(x, 4) for x in rdii],
             "runoff_cfs": [round(x, 4) for x in runoff],
+            # The native engine's OWN series on its OWN clock. The cross-check is
+            # this template's second acceptance check, so the whole curve is the
+            # evidence and the peak ratio is only its headline - and SWMM advances
+            # on a variable step, so its time axis is read off the run rather than
+            # assumed to be the closed form's grid.
+            "swmm_times_hr": [round(t, 3) for t in swmm_hours],
+            "swmm_rdii_cfs": [round(x, 4) for x in swmm_series],
         },
     }
 
 
 def build_rdii_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The RDII hydrograph against direct runoff at the node.
+    """The RDII hydrograph against direct runoff, with the native engine overlaid.
 
-    Honest engine output only: the two series the metrics step already reported.
-    ``None`` when there is nothing to draw.
+    Honest engine output only: the series the metrics step already reported. The
+    native-SWMM curve rides on the SAME picture because the cross-check is what
+    this template claims - a reader should be able to SEE the closed form track
+    the engine, not take a peak ratio's word for it. ``None`` when there is
+    nothing to draw.
     """
     curves = (result or {}).get("curves") or {}
     times = curves.get("times_hr") or []
@@ -398,11 +409,16 @@ def build_rdii_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
 
     from trid3nt_server.data.processing.charts_common import build_chart_payload
 
+    series = {"RDII (RTK closed form)": list(zip(times, rdii)),
+              "direct runoff": list(zip(times, runoff))}
+    swmm_times = curves.get("swmm_times_hr") or []
+    swmm_rdii = curves.get("swmm_rdii_cfs") or []
+    if len(swmm_times) >= 2 and len(swmm_rdii) == len(swmm_times):
+        series["RDII (native SWMM 5)"] = list(zip(swmm_times, swmm_rdii))
+
     title = "RDII (RTK unit hydrograph) vs direct runoff at the node"
     spec = line_chart_spec(
-        title=title,
-        series={"RDII (RTK)": list(zip(times, rdii)),
-                "direct runoff": list(zip(times, runoff))},
+        title=title, series=series,
         x_title="time (hr)", y_title="flow (cfs)",
         x_field="t_hr", y_field="flow_cfs", x_round=3, y_round=None,
     )

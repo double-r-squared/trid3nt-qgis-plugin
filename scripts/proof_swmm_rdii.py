@@ -25,7 +25,6 @@ from demo_swmm_rdii_epa_table_7_1 import (
     ARGS as EPA_ARGS,
     AREA_AC as AREA,
     PUBLISHED_RDII_BY_HOUR as _PUBLISHED,
-    RAINFALL_IN_PER_HR as EPA_RAINFALL_IN_PER_HR,
     UHS,
 )
 from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import (
@@ -56,16 +55,16 @@ def main():
     peak_ratio = res["swmm_vs_closed_form_peak_ratio"]
     rdii_frac = res["rdii_fraction_of_total"]
     identity = res["rtk_volume_identity_ratio"]
-    # the native-engine series is a SCALAR on the product (its peak); plot it at
-    # the closed form's peak time so the two are visibly the same number.
-    sw = np.array([res["swmm_rdii_peak_cfs"]])
-    tsw = np.array([float(t[int(np.argmax(rdii))])])
+    # the native engine's OWN series on its OWN clock, straight off the product -
+    # SWMM advances on a variable step, so its time axis is read, not assumed.
+    sw = np.array(curves["swmm_rdii_cfs"])
+    tsw = np.array(curves["swmm_times_hr"])
 
     # ---- (1) RDII vs runoff + SWMM overlay ---------------------------------
     fig, ax = plt.subplots(figsize=(6.0, 2.6), dpi=100)
     ax.plot(t, rdii, color="#1f78b4", lw=1.8, label="RDII (RTK closed form)")
     ax.plot(tsw, sw, color="#e31a1c", lw=0.0, marker="o", ms=2.4,
-            label="RDII peak (native SWMM 5)")
+            label="RDII (native SWMM 5)")
     ax.plot(t, runoff, color="#33a02c", lw=1.4, ls="--", label="direct runoff")
     # published EPA Figure 7-10 node RDII flows (the Table 7-1 replication target)
     px = list(_PUBLISHED.keys()); py = list(_PUBLISHED.values())
