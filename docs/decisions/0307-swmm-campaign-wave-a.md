@@ -23,3 +23,28 @@
   completion. Standing evidence: the wave diff touches no TELEMAC path
   (verified by the review lens) and test_telemac_do_sag is green. The
   pinned re-run remains one command when wanted.
+
+## do_sag parity spot-check - CLOSED, reproduced
+
+`scripts/run_do_sag_direct.py --discharge-m3s 2.0` (Eel River near Scotia,
+California; BOD 20, 20 C, standard 5, k1 0.3, k2 0.9, 12 km, mesh auto), run
+`01M0TB5Y4MW4B58DVA3889FKQ6`:
+
+| | ADR 0303 pinned reference | this run |
+|---|---|---|
+| DO sag minimum | 8.5772 mg/L | **8.5772 mg/L** |
+| sag location | 10631.7 m | **10631.7 m** |
+| violates the 5 mg/L standard | false | **false** |
+| points / first / last | 60 / 9.022 / 8.9623 | **60 / 9.022 / 8.9623** |
+
+Bit-identical. `executed=['do_field', 'do_field.chart:do_sag_curve']
+replayed=[] notes=[]`, layer
+`s3://trid3nt-runs/01M0TB5Y4MW4B58DVA3889FKQ6/telemac_do_field.tif`.
+
+The CARD drive is a different question and stays that way: a drawn outfall
+moves the release off the derived mid-reach seed, so
+`scripts/drive_do_sag_cards.py` answers with the USGS Scotia gage and lands
+**8.6542 mg/L at 546.1 m** (ADR 0304 recorded 8.6537 at the same 546.1 m for
+the same drawn point; the carrier discharge there resolves from NWM
+analysis-assim at 2 m3/s). Parity is the pinned DERIVED-seed run, not the
+drawn one.
