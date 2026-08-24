@@ -16,13 +16,19 @@ __all__ = ["validate_plan"]
 
 
 def validate_plan(plan: Plan, params: Sequence[Param],
-                  data: Sequence[DataDecl] = ()) -> None:
-    """Refuse a plan that cannot possibly execute. Raises :class:`PlanValidationError`."""
+                  data: Sequence[DataDecl] = (), *, sheet: Any = None) -> None:
+    """Refuse a plan that cannot possibly execute. Raises :class:`PlanValidationError`.
+
+    ``sheet`` is the resolved :class:`ResolvedParams` the plan was built from, when
+    the caller has it. It carries which params the plan read as CONCRETE values,
+    which is what makes the revisable-branch check (below) possible.
+    """
     refuse_duplicate_params(params)
     param_names = {p.name for p in params}
     data_names = {d.name for d in data}
     _check_duplicate_names(plan)
     _check_gate_declarations(plan, {p.name: p for p in params})
+    _check_revisable_branches(plan, {p.name: p for p in params}, sheet)
     _check_refs(plan, param_names, data_names)
     _check_param_refs(plan, param_names)
     _check_data_refs(data, param_names, data_names)
@@ -81,6 +87,53 @@ def _check_gate_declarations(plan: Plan, params: dict[str, Param]) -> None:
                     )
         elif step.consequential and consequential_seen is None:
             consequential_seen = step.label
+
+    declared = plan.declared()
+    if declared and isinstance(declared[-1], Gate):
+        raise PlanValidationError(
+            f"plan {plan.name!r}: gate {declared[-1].label!r} is the LAST node of the "
+            "plan - nothing runs after it, so there is nothing its answer could "
+            "change. A gate that cannot change the run is a dead gate."
+        )
+
+
+def _check_revisable_branches(plan: Plan, params: dict[str, Param], sheet: Any) -> None:
+    """A FormGate plan may not branch on a value that gate can revise.
+
+    ``When`` is decided when the plan VALUE is built, which is before any gate
+    runs, so the branch is frozen against the pre-review sheet. If the user then
+    revises the very param the branch was decided from, the plan shape cannot
+    honor the revision - the run would take one branch while its provenance claims
+    the other. That contradiction is refused at validation rather than executed.
+
+    Revisable == any door but CONSTANT: a constant is not on the form as an
+    editable value, so branching on one is stable across the review.
+    """
+    if sheet is None or not _declares_form_gate(plan) or not _has_when(plan.steps):
+        return
+    reads = getattr(sheet, "concrete_reads", None)
+    revisable = sorted(
+        name for name in (reads() if callable(reads) else ())
+        if name in params and params[name].door != doors.CONSTANT
+    )
+    if not revisable:
+        return
+    raise PlanValidationError(
+        f"plan {plan.name!r}: it declares a FormGate AND branches (When) on "
+        + ", ".join(revisable)
+        + " - values that gate can revise. A When is decided when the plan value is "
+        "built, i.e. BEFORE the review, so an approved revision could not change "
+        "which branch runs. Branch on a CONSTANT-door param, or drop the FormGate "
+        "and let the step that owns the decision review its own inputs."
+    )
+
+
+def _declares_form_gate(plan: Plan) -> bool:
+    return any(isinstance(s, Gate) and s.kind == "form" for s in plan.declared())
+
+
+def _has_when(nodes: tuple[Any, ...]) -> bool:
+    return any(isinstance(n, When) for n in nodes)
 
 
 def _check_refs(plan: Plan, param_names: set[str], data_names: set[str]) -> None:

@@ -36,13 +36,14 @@ from .errors import (
     DeclarativeError,
     GateNotSupportedError,
     GateRefusedError,
+    ParamRefLeakedError,
     RenderSourceMissingError,
     StepFailedError,
 )
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import Param, ResolvedParams
 from .plan import ChartSpec, Gate, ParamRef, Plan, Ref, RenderSpec, RunMode, Step
-from .resolver import provenance_entries, reseat_revised
+from .resolver import provenance_entries, rederive_revised, reseat_revised
 from .validate import validate_plan
 
 __all__ = ["RunResult", "interpret"]
@@ -90,7 +91,7 @@ async def interpret(
     resume: bool = True,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
-    validate_plan(plan, declared_params, data)
+    validate_plan(plan, declared_params, data, sheet=params)
 
     entries = provenance_entries(params, declared_params)
     key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode)
@@ -108,28 +109,28 @@ async def interpret(
     token = bind_domain(domain)
     produce_at = _eager_data_index(nodes)
     final_index = _final_recordable_index(nodes)
+    first_step = next((n.index for n in nodes if not isinstance(n.step, Gate)), None)
     reviewed = any(isinstance(n.step, Gate) and n.step.kind == "form" for n in nodes)
     try:
         for node in nodes:
-            if node.index == produce_at:
-                await _produce_independent_data(env)
             if isinstance(node.step, Gate):
                 revision = await _run_gate(node.step, env.params, declared_params,
                                            out.entries, input_mode=input_mode,
                                            tool_name=plan.name)
                 if revision is not None:
-                    env.params, out.entries = revision
-                    # The approved sheet is a DIFFERENT invocation: re-key so a
-                    # replay can only ever come from an attempt at these values.
-                    ledger = env.ledger = await StepLedger.load(
-                        invocation_key(plan.name, env.params.values_dict(),
-                                       input_mode=input_mode),
-                        plan.name)
+                    await _reseat_after_gate(env, revision, plan, input_mode, out)
+                    ledger = env.ledger
                 continue
+            if node.index == first_step and not reviewed:
+                # Law 9 fires before the FIRST step, not the first CONSEQUENTIAL
+                # one: an invented physics value poisons the prep work as surely as
+                # the solve, and a plan that tags nothing consequential would
+                # otherwise skip the floor entirely.
+                _refuse_invented_physics(out.entries, plan.name, input_mode)
+            if node.index == produce_at:
+                await _produce_independent_data(env)
             if node.step.consequential:
                 _refuse_missing_required(env.params, plan.name)
-                if not reviewed:
-                    _refuse_invented_physics(out.entries, plan.name, input_mode)
             cached = ledger.replay_for(node.index, node.label) if resume else None
             if cached is not None and await _artifacts_live(cached):
                 value = _rehydrate(cached)
@@ -151,9 +152,15 @@ async def interpret(
             _adopt(env, node, value, out, replayed=False)
             await ledger.record(_record(node, value), final=node.index == final_index)
         out.domain = current_domain()
-        await ledger.complete()
+        await env.ledger.complete()
     finally:
         reset_domain(token)
+    # The terminal leak guard: a ParamRef in what the caller receives is a
+    # declaration that escaped binding, never data. One scan over all three, so
+    # the cycle guard dedupes the value that is also a step result.
+    _refuse_leaked_param_refs(
+        {"value": out.value, "results": out.results, "entries": out.entries},
+        f"the result of plan {plan.name!r}")
     return out
 
 
@@ -243,6 +250,60 @@ async def _produce_independent_data(env: _Env) -> None:
         env.artifacts[decl.name] = value
 
 
+async def _reseat_after_gate(env: _Env, revision: "_Revision", plan: Plan,
+                             input_mode: str | None, out: RunResult) -> None:
+    """Adopt an approved revision: new sheet, stale data evicted, ledger re-keyed."""
+    env.params, out.entries = revision.params, revision.entries
+    _evict_revised_data(env, revision.changed)
+    # The attempt under the OLD key belongs to a run that continued somewhere
+    # else. Leaving it behind orphans a document nobody can ever resume from, and
+    # its records were computed from the very values the review replaced.
+    if env.ledger is not None:
+        await env.ledger.clear()
+    # The approved sheet is a DIFFERENT invocation: re-key so a replay can only
+    # ever come from an attempt at these values. Reaping the old key is what makes
+    # that a MOVE rather than a fork - including its `data:` records.
+    env.ledger = await StepLedger.load(
+        invocation_key(plan.name, env.params.values_dict(), input_mode=input_mode),
+        plan.name)
+
+
+def _evict_revised_data(env: _Env, changed: Sequence[str]) -> None:
+    """Drop artifacts produced from params the review changed - and their dependents.
+
+    A producer's kwargs carry the ``ParamRef``/``Ref`` reads it makes, so "did this
+    artifact consume a revised value" is a question the plan value can answer. One
+    fetched before the gate against the pre-review sheet is stale by construction;
+    keeping it would run the approved params over the un-approved world.
+    """
+    stale = _data_consuming(env.data, changed)
+    evicted = sorted(n for n in stale if env.artifacts.pop(n, None) is not None)
+    if evicted:
+        logger.info("input review revised %s; evicting produced data %s so it is "
+                    "re-produced against the approved sheet",
+                    sorted(changed), evicted)
+
+
+def _data_consuming(data: Mapping[str, DataDecl],
+                    changed: Sequence[str]) -> set[str]:
+    """Every declared Data that reads a changed param, transitively through Data."""
+    revised = set(changed)
+    stale: set[str] = set()
+    for _ in range(len(data) + 1):
+        grew = False
+        for name, decl in data.items():
+            if name in stale:
+                continue
+            kwargs = dict(decl.producer.kwargs)
+            if any(r.name in revised for r in _param_refs(kwargs)) or \
+                    any(r.root in revised or r.root in stale for r in _refs(kwargs)):
+                stale.add(name)
+                grew = True
+        if not grew:
+            break
+    return stale
+
+
 def _data_step_label(name: str) -> str:
     return f"data:{name}"
 
@@ -258,10 +319,10 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         if value is not _UNREPLAYABLE:
             logger.info("data %s REPLAYED from ledger", decl.name)
             return value
-    kwargs = await _bind(dict(producer.kwargs), env)
+    label = _data_step_label(decl.name)
+    kwargs = await _bind(dict(producer.kwargs), env, label)
     if producer.ladder_rungs:
         kwargs.setdefault("fallback", tuple(producer.ladder_rungs))
-    label = _data_step_label(decl.name)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
         # The eager batch runs outside any node's body, so a producer that raises
         # would otherwise escape the typed family entirely.
@@ -286,7 +347,7 @@ def _validate_byo(decl: DataDecl, uri: str, validate: Any) -> None:
 async def _run_node(node: _Node, env: _Env, emitter: Any) -> Any:
     async with substep(emitter, node.label):
         if node.kind == "step":
-            kwargs = await _bind(dict(node.step.kwargs), env)
+            kwargs = await _bind(dict(node.step.kwargs), env, node.label)
             return await _call_runner(node.runner, kwargs, node.label)
         if node.kind == "chart":
             return await _run_chart(node, env)
@@ -359,16 +420,33 @@ async def _run_render(node: _Node, env: _Env) -> Any:
     return {"render": spec.preset, "published": True, "uri": published}
 
 
+#: One code for law 9 whether the refusal came from a declared form gate or from
+#: the gateless floor below, so callers route on the reason and not on the shape of
+#: the plan that hit it.
+_PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
+
+
+@dataclass(frozen=True, slots=True)
+class _Revision:
+    """What a form gate's approved edits changed: the sheet, its provenance, the names."""
+
+    params: ResolvedParams
+    entries: list[SyntheticInput]
+    #: Every row the revision moved - the user's own edits AND the derived rows
+    #: that re-derived because of them. This is what dependent data is evicted on.
+    changed: tuple[str, ...]
+
+
 async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param],
                     entries: list[SyntheticInput], *, input_mode: str | None,
-                    tool_name: str
-                    ) -> tuple[ResolvedParams, list[SyntheticInput]] | None:
+                    tool_name: str) -> _Revision | None:
     """Run one declared gate. Returns the REVISED sheet when the user edited it.
 
     What was approved is what runs: the form gate's outcome carries the user's
     edits, and they are re-seated through the resolver (declared bounds still
     apply) so the steps after the gate read the approved values, not the ones the
-    sheet held when the plan value was built.
+    sheet held when the plan value was built. Derivations then re-run over the
+    approved sheet, so a derived row never contradicts the value it derives from.
     """
     mode = resolve_input_gate_mode(input_mode)
     if gate.kind == "draw":
@@ -393,10 +471,15 @@ async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param
         params=params.values_dict(),
     )
     if outcome.cancelled or not outcome.proceed:
+        # The gate refuses for TWO reasons, and callers route on them differently:
+        # law 9 (a physics value nobody approved) shares its code with the gateless
+        # floor, so a refusal reads the same whether a form card was declared.
+        law_nine = str(outcome.cancel_reason or "").startswith(
+            _PHYSICS_INPUT_REQUIRED)
         raise GateRefusedError(
             f"{tool_name} {outcome.cancel_reason or 'input review not approved'}; "
             "the plan did not run.",
-            error_code="INPUT_REVIEW_CANCELLED",
+            error_code=_PHYSICS_INPUT_REQUIRED if law_nine else "INPUT_REVIEW_CANCELLED",
         )
     revised, changed = reseat_revised(declared, params, outcome.params or {})
     undeclared = sorted(set(outcome.params or {}) - {p.name for p in declared})
@@ -406,9 +489,14 @@ async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param
                        tool_name, undeclared)
     if not changed:
         return None
-    logger.info("%s: input review revised %s; re-seated through the GATE door",
-                tool_name, changed)
-    return revised, provenance_entries(revised, declared)
+    revised, rederived, conflicts = await rederive_revised(declared, revised, changed)
+    for note in conflicts:
+        logger.info("%s: %s", tool_name, note)
+    logger.info("%s: input review revised %s; re-seated through the GATE door%s",
+                tool_name, changed,
+                f"; re-derived {rederived}" if rederived else "")
+    return _Revision(params=revised, entries=provenance_entries(revised, declared),
+                     changed=tuple(changed) + tuple(rederived))
 
 
 def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
@@ -430,12 +518,21 @@ def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
     A plan that declares a ``FormGate`` refuses through the gate; one that does not
     (because its step reviews its own inputs) still may not run a physics value
     that fell back to an invented default with nobody to approve it.
+
+    The floor is NOT weaker in ``user_gated`` mode. It refuses in auto mode, and it
+    refuses in user_gated mode when there is NO EMITTER - a headless direct call
+    has no session to present the default on, so "someone will approve it" is
+    false. Only a live user_gated session is exempt, because there the card the
+    user is looking at is what owns the approval. This mirrors
+    ``gate_input_review``'s own two arms exactly; a gateless plan must not be the
+    softer path.
     """
-    if resolve_input_gate_mode(input_mode) != "auto":
+    headless = resolve_input_gate_mode(input_mode) != "auto"
+    if headless and current_emitter() is not None:
         return
-    reason = physics_refusal_reason(tool_name, entries)
+    reason = physics_refusal_reason(tool_name, entries, no_session=headless)
     if reason:
-        raise GateRefusedError(reason, error_code="PHYSICS_INPUT_REQUIRED")
+        raise GateRefusedError(reason, error_code=_PHYSICS_INPUT_REQUIRED)
 
 
 def _adopt(env: _Env, node: _Node, value: Any, out: RunResult, *, replayed: bool,
@@ -456,8 +553,30 @@ def _adopt(env: _Env, node: _Node, value: Any, out: RunResult, *, replayed: bool
     (out.replayed if replayed else out.executed).append(node.label)
 
 
-async def _bind(kwargs: dict[str, Any], env: _Env) -> dict[str, Any]:
-    return {k: await _bind_value(v, env) for k, v in kwargs.items()}
+async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]:
+    """Substitute every declared plan value, inside the typed error family.
+
+    Binding is real work over author-supplied containers - a namedtuple kwarg, a
+    set whose bound members are unhashable - so it fails like a step fails and must
+    be reported like one. A raw ``TypeError`` escaping here would bypass the
+    envelope every other plan fault arrives in.
+    """
+    try:
+        bound = {k: await _bind_value(v, env) for k, v in kwargs.items()}
+    except asyncio.CancelledError:
+        raise
+    except DeclarativeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
+        if getattr(exc, "retryable", False):
+            raise
+        raise StepFailedError(
+            f"step {label!r}: its declared arguments could not be bound: {exc}",
+            error_code=getattr(exc, "error_code", None) or "STEP_ARGS_UNBINDABLE",
+            step=label, cause=exc,
+        ) from exc
+    _refuse_leaked_param_refs(bound, f"the arguments of {label!r}")
+    return bound
 
 
 async def _bind_value(value: Any, env: _Env) -> Any:
@@ -471,9 +590,25 @@ async def _bind_value(value: Any, env: _Env) -> Any:
         return await _deref(value, env)
     if isinstance(value, dict):
         return {k: await _bind_value(v, env) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return type(value)([await _bind_value(v, env) for v in value])
+    # sets and frozensets included: the VALIDATOR walks them, so a ref an author
+    # put in one is a declared read the binder has to honor or the two disagree
+    # about what the plan says.
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return _rebuild(value, [await _bind_value(v, env) for v in value])
     return value
+
+
+def _rebuild(original: Any, items: list[Any]) -> Any:
+    """Put bound members back into the container the author declared.
+
+    ``type(original)(items)`` is wrong for a namedtuple, whose fields are
+    positional, so that one is rebuilt through ``_make``. A subclass whose
+    constructor takes something else entirely still raises - and ``_bind`` turns
+    that into a typed plan error rather than letting it escape raw.
+    """
+    if isinstance(original, tuple) and hasattr(original, "_make"):
+        return original._make(items)          # a namedtuple keeps its field names
+    return type(original)(items)
 
 
 async def _deref(ref: Ref, env: _Env) -> Any:
@@ -494,14 +629,82 @@ async def _deref(ref: Ref, env: _Env) -> Any:
 
 
 def _refs(value: Any) -> Iterable[Ref]:
-    if isinstance(value, Ref):
+    yield from _declared_reads(value, Ref)
+
+
+def _param_refs(value: Any) -> Iterable[ParamRef]:
+    yield from _declared_reads(value, ParamRef)
+
+
+def _declared_reads(value: Any, kind: type) -> Iterable[Any]:
+    if isinstance(value, kind):
         yield value
     elif isinstance(value, dict):
         for v in value.values():
-            yield from _refs(v)
-    elif isinstance(value, (list, tuple, set)):
+            yield from _declared_reads(v, kind)
+    elif isinstance(value, (list, tuple, set, frozenset)):
         for v in value:
-            yield from _refs(v)
+            yield from _declared_reads(v, kind)
+
+
+#: How many nodes the leak scan walks before it stops looking. A leaked ref is a
+#: DECLARATION that escaped binding, so it sits in the argument/result shape an
+#: author wrote - never buried under a million-element numeric array. The bound is
+#: what keeps the guard off the critical path of a large payload.
+_LEAK_SCAN_BUDGET = 50_000
+
+
+def _refuse_leaked_param_refs(value: Any, where: str) -> None:
+    """Refuse an unsubstituted ``ParamRef`` before it becomes data.
+
+    The interpreter is the ONLY thing that substitutes a ref, so one that reaches a
+    runner's arguments, a persisted ledger record or the returned result means a
+    declaration escaped binding. That is always a bug - a ref is a description of a
+    read, and a description written to disk or handed to a solver is a lie about a
+    number. Loud and typed beats ``ParamRef('reach_km')`` in a layer title.
+    """
+    hit = _find_param_ref(value, set(), [_LEAK_SCAN_BUDGET], "")
+    if hit is None:
+        return
+    path, ref = hit
+    raise ParamRefLeakedError(
+        f"ParamRef({ref.name!r}) reached {where} at {path} without being bound. A "
+        "plan value describes a read; only the interpreter turns it into a number. "
+        "Pass the ref through a step kwarg (which the binder walks) rather than "
+        "storing it on an object or building it into a value by hand."
+    )
+
+
+def _find_param_ref(value: Any, seen: set[int], budget: list[int],
+                    path: str) -> tuple[str, ParamRef] | None:
+    """Depth-first hunt for an unbound ref; returns where it sits, or ``None``."""
+    if budget[0] <= 0:
+        return None
+    budget[0] -= 1
+    if isinstance(value, ParamRef):
+        return path or "<root>", value
+    if value is None or isinstance(value, (str, bytes, bool, int, float)):
+        return None
+    if id(value) in seen:
+        return None
+    seen.add(id(value))
+    if isinstance(value, Mapping):
+        items: Iterable[tuple[str, Any]] = ((f"[{k!r}]", v) for k, v in value.items())
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        items = ((f"[{i}]", v) for i, v in enumerate(value))
+    else:
+        # Object attributes, where they are CHEAP to read: a __dict__ is a plain
+        # dict. A __slots__ object is skipped rather than introspected - the guard
+        # is a floor, not a deep-object crawler.
+        attrs = getattr(value, "__dict__", None)
+        if not isinstance(attrs, dict):
+            return None
+        items = ((f".{k}", v) for k, v in attrs.items())
+    for suffix, item in items:
+        hit = _find_param_ref(item, seen, budget, f"{path}{suffix}")
+        if hit is not None:
+            return hit
+    return None
 
 
 def _load(dotted: str) -> Any:
@@ -532,6 +735,7 @@ def _record(node: _Node, value: Any) -> LedgerRecord:
 
 
 def _record_for(label: str, runner: str, value: Any, *, index: int = 0) -> LedgerRecord:
+    _refuse_leaked_param_refs(value, f"the ledger record for {label!r}")
     kind, payload, type_path = _serialize(value)
     dom = current_domain()
     return LedgerRecord(

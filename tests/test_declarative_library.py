@@ -4,6 +4,7 @@ Offline only - every runner here is a local stub; no solve, no network.
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import importlib
 
@@ -21,6 +22,7 @@ from trid3nt_server.declarative import (
     Param,
     ParamNotResolved,
     ParamRef,
+    ParamRefLeakedError,
     PlanValidationError,
     Ref,
     RenderSourceMissingError,
@@ -484,7 +486,10 @@ async def test_step_failure_is_typed_and_keeps_the_cause():
 @pytest.mark.asyncio
 async def test_draw_gate_refuses_typed_in_auto_when_the_param_is_required():
     decl = [Param("pt", desc="where it enters", door=doors.USER)]
-    plan = Workflow("w")[DrawGate(param="pt", geometry="point", prompt="click it")]
+    plan = Workflow("w")[
+        DrawGate(param="pt", geometry="point", prompt="click it"),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
     with pytest.raises(Exception, match="never invented"):
         await _run(plan, decl, {"pt": None}, resume=False)
 
@@ -492,7 +497,10 @@ async def test_draw_gate_refuses_typed_in_auto_when_the_param_is_required():
 @pytest.mark.asyncio
 async def test_draw_gate_names_wave_two_in_user_gated_mode():
     decl = [Param("pt", desc="where it enters", door=doors.USER)]
-    plan = Workflow("w")[DrawGate(param="pt", geometry="point")]
+    plan = Workflow("w")[
+        DrawGate(param="pt", geometry="point"),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
     with pytest.raises(Exception, match="wave 2"):
         await _run(plan, decl, {"pt": None}, input_mode="user_gated", resume=False)
 
@@ -809,9 +817,10 @@ def test_docstring_reports_bounds_units_and_labeled_defaults():
 @pytest.mark.asyncio
 async def test_a_plan_reads_params_as_late_bound_refs_not_baked_values():
     p = await resolve_params(_params(), {"base": 4.0})
-    assert p.base == ParamRef("base")
+    assert isinstance(p.base, ParamRef) and p.base.name == "base"
     step = Step(runner=f"{_HERE}.stub_step", kwargs={"x": p.base})
-    assert step.kwargs["x"] == ParamRef("base")     # the VALUE 4.0 is nowhere in it
+    baked = step.kwargs["x"]                        # the VALUE 4.0 is nowhere in it
+    assert isinstance(baked, ParamRef) and baked.name == "base"
 
 
 @pytest.mark.asyncio
@@ -1198,3 +1207,370 @@ def test_validator_refuses_a_param_ref_in_a_data_producer():
     data = [Data("mesh", Build.tool("b", size=ParamRef("ghost")))]
     with pytest.raises(PlanValidationError, match="not a declared param"):
         validate_plan(Workflow("w")[Step(runner=f"{_HERE}.stub_step")], _params(), data)
+
+
+# ============================================================================ #
+# wave 1d - revision coherence: leaks, re-derivation, eviction, the law-9 floor
+# ============================================================================ #
+
+# --- R3-1: a ParamRef may not leak past the late-binding seam ----------------- #
+def test_a_param_ref_refuses_every_silent_leak_path():
+    """Each of these used to answer QUIETLY: an f-string baked ``ParamRef(...)``
+    into a layer title, ``==`` answered False against the value the author meant,
+    and hashing let a ref sit in a set the binder did not walk."""
+    ref = ParamRef("reach_km")
+    with pytest.raises(PlanValidationError, match="str"):
+        str(ref)
+    with pytest.raises(PlanValidationError, match="f-string"):
+        _ = f"DO sag over {ref} km"
+    with pytest.raises(PlanValidationError, match="comparison"):
+        _ = ref == 12.0
+    with pytest.raises(PlanValidationError, match="comparison"):
+        _ = ref != 12.0
+    with pytest.raises(PlanValidationError, match="hashing"):
+        _ = {ref}
+    assert repr(ref) == "ParamRef('reach_km')"     # naming it is what repr is for
+
+
+@pytest.mark.asyncio
+async def test_the_binder_walks_sets_and_frozensets_like_the_validator_does():
+    """The validator has always walked sets for declared reads; a binder that did
+    not would hand the runner a set of DESCRIPTIONS."""
+    plan = Workflow("setbind")[
+        Step(runner=f"{_HERE}.stub_step").named("first"),
+        Step(runner=f"{_HERE}.stub_second", kwargs={
+            "s": {Ref("first.uri")},
+            "f": frozenset({Ref("first.uri")}),
+        }).named("second"),
+    ]
+    out = await _run(plan, _params(), {}, resume=False)
+    assert out.value["seen"]["s"] == {"s3://b/k.tif"}
+    assert out.value["seen"]["f"] == frozenset({"s3://b/k.tif"})
+
+
+class _Holder:
+    """A plan author's own object. The binder does not walk into it - the LEAK
+    GUARD is what refuses the ref it is hiding."""
+
+    def __init__(self, value):
+        self.value = value
+
+
+async def stub_returns_a_leaked_ref(**kwargs):
+    _CALLS.append("stub_returns_a_leaked_ref")
+    # A set of objects, each hiding a ref: the scan has to walk both arms.
+    return {"uri": "s3://b/k.tif", "bag": {_Holder(ParamRef("base"))}}
+
+
+@pytest.mark.asyncio
+async def test_a_ref_hidden_on_an_object_never_reaches_a_runner():
+    plan = Workflow("leak_args")[
+        Step(runner=f"{_HERE}.stub_step",
+             kwargs={"held": _Holder(ParamRef("base"))}).named("s"),
+    ]
+    with pytest.raises(ParamRefLeakedError, match="arguments"):
+        await _run(plan, _params(), {}, resume=False)
+    assert _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_a_ref_in_a_result_never_reaches_the_ledger_or_the_caller():
+    """A ref on disk is always a bug, never data - so the record is refused rather
+    than written, set and object arms included."""
+    plan = Workflow("leak_result")[
+        Step(runner=f"{_HERE}.stub_returns_a_leaked_ref").named("s"),
+    ]
+    with pytest.raises(ParamRefLeakedError, match="ledger record"):
+        await _run(plan, _params(), {}, resume=False)
+
+
+# --- R3-2: a revision re-derives what depends on it -------------------------- #
+def derive_saturation(params):
+    """The classic derived row: saturation from temperature."""
+    return 2.0 * float(params.water_temp_c)
+
+
+def _wq_params():
+    return [
+        Param("water_temp_c", desc="water temperature", door=doors.SCENARIO,
+              default=20.0, bounds=(0.0, 40.0), units="C"),
+        Param("sat_mgl", desc="DO saturation", door=doors.DERIVED,
+              resolve=f"{_HERE}.derive_saturation", bounds=(0.0, 200.0),
+              units="mg/L"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_revision_re_derives_the_rows_that_consume_it(monkeypatch):
+    """20 C derived 40 mg/L. The user approved 30 C, so the sheet that RUNS must
+    say 60 - a derived row left on its pre-revision value contradicts the very
+    value it is derived from."""
+    _review({"water_temp_c": 30.0}, monkeypatch)
+    decl = _wq_params()
+    p = await resolve_params(decl, {})
+    assert p.row("sat_mgl").value == 40.0
+    plan = Workflow("rederive")[
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"t": p.water_temp_c, "sat": p.sat_mgl}).named("solve"),
+    ]
+    out = await interpret(plan, p, decl, input_mode="user_gated", resume=False)
+    assert out.value["seen"] == {"t": 30.0, "sat": 60.0}
+    row = next(e for e in out.entries if e.param == "sat_mgl")
+    assert row.value == 60.0 and row.basis == "derived"
+    assert "re-derived" in (row.note or "") and "water_temp_c" in (row.note or "")
+
+
+@pytest.mark.asyncio
+async def test_a_user_pinned_derived_row_beats_the_re_derivation(monkeypatch):
+    """User wins. The re-derivation is REPORTED on the row, never applied over an
+    explicit value."""
+    _review({"water_temp_c": 30.0}, monkeypatch)
+    decl = _wq_params()
+    p = await resolve_params(decl, {"sat_mgl": 7.5})
+    plan = Workflow("rederive_pin")[
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"t": p.water_temp_c, "sat": p.sat_mgl}).named("solve"),
+    ]
+    out = await interpret(plan, p, decl, input_mode="user_gated", resume=False)
+    assert out.value["seen"] == {"t": 30.0, "sat": 7.5}
+    row = next(e for e in out.entries if e.param == "sat_mgl")
+    assert row.value == 7.5 and row.basis == "user"
+    assert "stands" in (row.note or "") and "60" in (row.note or "")
+
+
+# --- R3-3: a revision invalidates the data produced from the old values ------ #
+async def stub_dem(**kwargs):
+    _CALLS.append("stub_dem")
+    return {"uri": f"s3://b/dem-{kwargs['res']}.tif", "dem": f"dem@{kwargs['res']}"}
+
+
+@pytest.mark.asyncio
+async def test_a_revision_evicts_the_data_produced_from_the_old_values(monkeypatch):
+    """A producer's kwargs carry its reads, so "did this artifact consume a revised
+    param" is answerable. The pre-gate fetch at 30 m may not survive an approved
+    3 m."""
+    _review({"res_m": 3.0}, monkeypatch)
+    decl = [Param("res_m", desc="target resolution", door=doors.SCENARIO,
+                  default=30.0, bounds=(1.0, 100.0), units="m")]
+    p = await resolve_params(decl, {})
+    data = [Data("terrain", Fetch.tool(f"{_HERE}.stub_dem", res=p.res_m))]
+    plan = Workflow("evict")[
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"dem": Ref("terrain.dem")}).named("pre"),
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_step", consequential=True,
+             kwargs={"dem": Ref("terrain.dem")}).named("solve"),
+    ]
+    out = await interpret(plan, p, decl, data, input_mode="user_gated", resume=False)
+    assert _CALLS.count("stub_dem") == 2                     # refetched, not reused
+    assert out.results["solve"]["value"]["dem"] == "dem@3.0"
+    assert out.results["pre"]["seen"]["dem"] == "dem@30.0"
+
+
+@pytest.mark.asyncio
+async def test_data_that_reads_no_revised_param_is_not_evicted(monkeypatch):
+    """Eviction is targeted, not a blanket refetch: an artifact the revision
+    cannot have changed keeps its resume value."""
+    _review({"other": 9.0}, monkeypatch)
+    decl = [Param("res_m", desc="resolution", door=doors.CONSTANT, default=30.0),
+            Param("other", desc="unrelated", door=doors.SCENARIO, default=1.0)]
+    p = await resolve_params(decl, {})
+    data = [Data("terrain", Fetch.tool(f"{_HERE}.stub_dem", res=p.res_m))]
+    plan = Workflow("evict_none")[
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"dem": Ref("terrain.dem")}).named("pre"),
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_step", consequential=True,
+             kwargs={"dem": Ref("terrain.dem")}).named("solve"),
+    ]
+    await interpret(plan, p, decl, data, input_mode="user_gated", resume=False)
+    assert _CALLS.count("stub_dem") == 1
+
+
+# --- R3-4: the law-9 floor is not weaker in any mode ------------------------- #
+class _FakeEmitter:
+    """Just enough emitter for the interpreter: a live session to pause on."""
+
+    session_id = "sess-1d"
+
+    def begin_substeps(self, total):
+        return None
+
+    @contextlib.asynccontextmanager
+    async def substep(self, raw_name):
+        yield "child"
+
+
+def _physics_only():
+    return [Param("aquifer_k_ms", desc="hydraulic conductivity",
+                  door=doors.SCENARIO, default=1e-4, units="m/s",
+                  consequence="physics")]
+
+
+def _gateless_plan(*, consequential):
+    return Workflow("law9_mode")[
+        Step(runner=f"{_HERE}.stub_step", consequential=consequential).named("solve"),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["auto", None, "user_gated"])
+async def test_the_law9_floor_refuses_in_every_mode_without_a_live_session(mode):
+    """user_gated with NO emitter is the headless direct call: the caller asked for
+    review and there is nobody to review. That is not a licence to invent."""
+    with pytest.raises(Exception) as exc:
+        await _run(_gateless_plan(consequential=True), _physics_only(), {},
+                   input_mode=mode, resume=False)
+    assert exc.value.error_code == "PHYSICS_INPUT_REQUIRED"
+    assert _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_a_live_user_gated_session_owns_the_approval_instead(monkeypatch):
+    """With a card in front of the user the floor steps aside - that is where the
+    demo default gets approved or rejected."""
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
+    await _run(_gateless_plan(consequential=True), _physics_only(), {},
+               input_mode="user_gated", resume=False)
+    assert _CALLS == ["stub_step"]
+
+
+@pytest.mark.asyncio
+async def test_the_law9_floor_does_not_wait_for_a_consequential_step():
+    """An invented physics value poisons the prep as surely as the solve, and a
+    plan that tags nothing consequential would otherwise skip the floor."""
+    with pytest.raises(Exception, match="PHYSICS_INPUT_REQUIRED"):
+        await _run(_gateless_plan(consequential=False), _physics_only(), {},
+                   resume=False)
+    assert _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_no_step_runs_before_the_law9_refusal():
+    plan = Workflow("law9_prefix")[
+        Step(runner=f"{_HERE}.stub_second").named("prep"),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
+    with pytest.raises(Exception, match="PHYSICS_INPUT_REQUIRED"):
+        await _run(plan, _physics_only(), {}, resume=False)
+    assert _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_law9_refuses_under_one_code_whether_or_not_a_form_gate_declares_it():
+    """Callers route on the REASON. A gate refusal and the gateless floor are the
+    same refusal, so they carry the same code."""
+    decl = _physics_only()
+    gated = Workflow("law9_gated")[
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
+    with pytest.raises(Exception) as via_gate:
+        await _run(gated, decl, {}, resume=False)
+    with pytest.raises(Exception) as via_floor:
+        await _run(_gateless_plan(consequential=True), decl, {}, resume=False)
+    assert via_gate.value.error_code == via_floor.value.error_code \
+        == "PHYSICS_INPUT_REQUIRED"
+
+
+# --- R3-5: a re-key REAPS the key it moved away from ------------------------- #
+@pytest.mark.asyncio
+async def test_a_revision_reaps_the_ledger_it_re_keyed_away_from(monkeypatch):
+    """The pre-gate step recorded under the ORIGINAL key, then the run continued
+    under the approved one. Leaving that document behind orphans records nobody
+    can resume from, computed from the values the review replaced."""
+    _review({"base": 3.5}, monkeypatch)
+    decl = _params()
+    p = await resolve_params(decl, {"base": 1.0})
+    original = invocation_key("rekey_reap", p.values_dict(), input_mode="user_gated")
+    plan = Workflow("rekey_reap")[
+        Step(runner=f"{_HERE}.stub_second").named("pre"),
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
+    await interpret(plan, p, decl, input_mode="user_gated")
+    revised = invocation_key("rekey_reap", {**p.values_dict(), "base": 3.5},
+                             input_mode="user_gated")
+    assert await _raw_ledger_doc(original) is None
+    assert (await _raw_ledger_doc(revised))["complete"] is True
+
+
+# --- observations 1 and 2: plan shapes that cannot honor a revision ---------- #
+def test_validator_refuses_a_gate_as_the_last_node():
+    plan = Workflow("tail_gate")[
+        Step(runner=f"{_HERE}.stub_step").named("s"),
+        FormGate(),
+    ]
+    with pytest.raises(PlanValidationError, match="LAST node"):
+        validate_plan(plan, _params())
+
+
+@pytest.mark.asyncio
+async def test_validator_refuses_a_form_gate_over_a_branch_on_a_revisable_param():
+    """A When is decided when the plan VALUE is built, i.e. before the review, so
+    the plan shape cannot honor a revision of what it branched on."""
+    decl = _params()
+    p = await resolve_params(decl, {"base": 4.0})
+    plan = Workflow("branchy")[
+        FormGate(),
+        When(p.get("base") > 1.0,
+             Step(runner=f"{_HERE}.stub_step", consequential=True).named("hi")),
+    ]
+    with pytest.raises(PlanValidationError, match="branches"):
+        validate_plan(plan, decl, sheet=p)
+
+
+@pytest.mark.asyncio
+async def test_a_branch_on_a_constant_is_stable_across_a_review():
+    decl = [Param("mode", desc="sizing mode", door=doors.CONSTANT, default="fine"),
+            Param("temp", desc="temperature", door=doors.SCENARIO, default=20.0)]
+    p = await resolve_params(decl, {})
+    plan = Workflow("branchy_ok")[
+        FormGate(),
+        When(p.get("mode") == "fine",
+             Step(runner=f"{_HERE}.stub_step", kwargs={"t": p.temp},
+                  consequential=True).named("hi")),
+    ]
+    validate_plan(plan, decl, sheet=p)
+    # The reads the INTERPRETER makes binding refs are not branch decisions, so a
+    # second validation of the same sheet must reach the same verdict.
+    p.get("temp")
+    validate_plan(plan, decl, sheet=p)
+
+
+# --- observation 6: a binding fault is a typed plan error -------------------- #
+_Point = collections.namedtuple("_Point", "lon lat")
+
+
+class _HostileTuple(tuple):
+    """A tuple subclass whose constructor is NOT ``type(x)(iterable)``."""
+
+    def __new__(cls, a, b):
+        return super().__new__(cls, (a, b))
+
+
+@pytest.mark.asyncio
+async def test_a_namedtuple_kwarg_keeps_its_shape_through_binding():
+    plan = Workflow("nt")[
+        Step(runner=f"{_HERE}.stub_step").named("first"),
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"pt": _Point(Ref("first.uri"), 2.0)}).named("second"),
+    ]
+    out = await _run(plan, _params(), {}, resume=False)
+    assert out.value["seen"]["pt"] == _Point("s3://b/k.tif", 2.0)
+
+
+@pytest.mark.asyncio
+async def test_a_binding_fault_arrives_typed_not_raw():
+    plan = Workflow("bindfail")[
+        Step(runner=f"{_HERE}.stub_step").named("first"),
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"t": _HostileTuple(Ref("first.uri"), 1)}).named("second"),
+    ]
+    with pytest.raises(StepFailedError) as exc:
+        await _run(plan, _params(), {}, resume=False)
+    assert exc.value.error_code == "STEP_ARGS_UNBINDABLE"
+    assert exc.value.step == "second"

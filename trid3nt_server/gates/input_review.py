@@ -139,7 +139,8 @@ def _physics_demo_entries(entries: Any) -> list[Any]:
     return out
 
 
-def physics_refusal_reason(tool_name: str, entries: Any) -> str | None:
+def physics_refusal_reason(tool_name: str, entries: Any,
+                           *, no_session: bool = False) -> str | None:
     """The typed ``*_PHYSICS_INPUT_REQUIRED`` refusal text, or None if none refuse.
 
     Names every physics-consequential input that fell back to a demo default and
@@ -147,6 +148,11 @@ def physics_refusal_reason(tool_name: str, entries: Any) -> str | None:
     let a real fetcher resolve it, or re-run in ``user_gated`` mode to approve the
     demo default explicitly. Templates that resolve inputs outside the gate can
     raise on this directly; the gate returns it as the ``cancel_reason``.
+
+    ``no_session`` is for the headless ``user_gated`` arm - the caller ASKED for
+    review and there is no live session to present it on. Telling them to "re-run
+    in user_gated mode" there would name a lever they already pulled, so the
+    remedy sentence says what is actually true instead.
     """
     refusing = _physics_demo_entries(entries)
     if not refusing:
@@ -157,13 +163,17 @@ def physics_refusal_reason(tool_name: str, entries: Any) -> str | None:
         note = _entry_field(e, "note")
         need = f" ({note})" if note else ""
         needs.append(f"{param}{need}")
+    where = ("cannot run without a live session to approve these on" if no_session
+             else "cannot run in auto mode")
+    remedy = ("Supply real values, or ensure a fetcher can resolve them."
+              if no_session else
+              "Supply real values, ensure a fetcher can resolve them, or re-run in "
+              "user_gated mode to approve the demo defaults explicitly.")
     return (
-        f"PHYSICS_INPUT_REQUIRED: {tool_name} cannot run in auto mode -- these "
+        f"PHYSICS_INPUT_REQUIRED: {tool_name} {where} -- these "
         "physics-consequential inputs have no real data source and fell back to "
         "invented demo defaults, which would silently ruin the simulation (law 9): "
-        + "; ".join(needs)
-        + ". Supply real values, ensure a fetcher can resolve them, or re-run in "
-        "user_gated mode to approve the demo defaults explicitly."
+        + "; ".join(needs) + ". " + remedy
     )
 
 
@@ -332,7 +342,9 @@ async def gate_input_review(
             )
             return ReviewOutcome(
                 proceed=False, entries=list(entries), params=dict(params),
-                cancelled=True, cancel_reason=physics_refusal, mode="user_gated",
+                cancelled=True, mode="user_gated",
+                cancel_reason=physics_refusal_reason(tool_name, entries,
+                                                     no_session=True),
             )
         logger.info(
             "input-review gate: user_gated requested for %s but no live session "

@@ -10,6 +10,7 @@ __all__ = [
     "GateRefusedError",
     "ModifierIllegalError",
     "ParamOutOfRangeError",
+    "ParamRefLeakedError",
     "PlanValidationError",
     "RenderSourceMissingError",
     "StepFailedError",
@@ -37,6 +38,19 @@ class ModifierIllegalError(DeclarativeError):
 
 class ParamOutOfRangeError(DeclarativeError):
     error_code = "PARAM_OUT_OF_RANGE"
+
+
+class ParamRefLeakedError(DeclarativeError):
+    """An unsubstituted ``ParamRef`` reached a persisted record or a returned result.
+
+    Always a bug, never data: the interpreter is the only thing that substitutes a
+    ref, so one that survives to disk means a declaration escaped binding (a
+    container arm the binder does not walk, an object attribute, a ref an author
+    stored rather than passed). Refusing loudly beats shipping ``ParamRef('x')``
+    as a layer title or a provenance value.
+    """
+
+    error_code = "PARAM_REF_LEAKED"
 
 
 class GateRefusedError(DeclarativeError):

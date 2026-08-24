@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+from dataclasses import replace
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -23,7 +24,8 @@ from .params import (
     refuse_duplicate_params,
 )
 
-__all__ = ["merge_provenance", "provenance_entries", "reseat_revised", "resolve_params"]
+__all__ = ["merge_provenance", "provenance_entries", "rederive_revised",
+           "reseat_revised", "resolve_params"]
 
 
 async def resolve_params(
@@ -145,6 +147,90 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
         rows[name] = _finish(param, value, doors.GATE, "revised at input review")
         changed.append(name)
     return (resolved.replacing(rows) if rows else resolved), changed
+
+
+async def rederive_revised(
+    declared: Sequence[Param], resolved: ResolvedParams, changed: Sequence[str],
+) -> tuple[ResolvedParams, list[str], list[str]]:
+    """Re-run the derivations over an APPROVED sheet, to the same fixpoint.
+
+    A revision that leaves derived rows on their pre-revision values ships a sheet
+    that contradicts itself - saturation computed from 20 C beside an approved
+    30 C. Derived rows therefore re-derive against the approved values, with a
+    note naming the revision.
+
+    The user always wins: a row the user supplied or edited (``basis=user``) is
+    PINNED and never recomputed. When the revised sheet would now derive something
+    else for such a row, the pin stands and the row's note says so - a silent
+    overwrite of an explicit edit is the same swallow this library exists to
+    outlaw.
+
+    Returns the new sheet, the names that actually RE-DERIVED (they are revisions
+    too, so dependent data is evicted on them), and the conflict notes.
+    """
+    derived = [p for p in declared if p.door == doors.DERIVED]
+    if not changed or not derived:
+        return resolved, [], []
+
+    rows: dict[str, ResolvedParam] = {r.name: r for r in resolved.rows()}
+    pinned = {name for name, row in rows.items() if row.basis == "user"}
+    revision = ", ".join(sorted(changed))
+    updates: dict[str, ResolvedParam] = {}
+    rederived: list[str] = []
+
+    # Derivations may read each other, so re-run to a fixpoint exactly as the
+    # first resolution did - one pass would leave a chain half re-derived.
+    for _ in range(len(derived) + 1):
+        progressed = False
+        for param in derived:
+            current = rows.get(param.name)
+            if current is None or param.name in pinned:
+                continue
+            fresh = await _rederive_row(param, rows, current,
+                                        f"re-derived by {param.resolve} after "
+                                        f"input review revised {revision}")
+            if fresh is None:
+                continue
+            rows[param.name] = updates[param.name] = fresh
+            if param.name not in rederived:
+                rederived.append(param.name)
+            progressed = True
+        if not progressed:
+            break
+
+    notes: list[str] = []
+    for param in derived:
+        current = rows.get(param.name)
+        if current is None or param.name not in pinned:
+            continue
+        fresh = await _rederive_row(param, rows, current, "")
+        if fresh is None:
+            continue
+        note = (f"the sheet approved at input review would derive "
+                f"{_wire_value(fresh.value)}, but this value was set explicitly "
+                "and stands")
+        rows[param.name] = updates[param.name] = replace(
+            current, note=f"{current.note}; {note}" if current.note else note)
+        notes.append(f"{param.name}: {note}")
+
+    return (resolved.replacing(updates) if updates else resolved), rederived, notes
+
+
+async def _rederive_row(param: Param, rows: Mapping[str, ResolvedParam],
+                        current: ResolvedParam, note: str) -> ResolvedParam | None:
+    """Re-run one derivation; ``None`` when it cannot run yet or lands unchanged.
+
+    Compared AFTER ``_finish``, so a derivation whose raw value moves but clamps
+    back onto the same declared bound is correctly read as unchanged.
+    """
+    try:
+        value = await _derive(param, rows)
+    except ParamNotResolved:
+        return None
+    if value is None:
+        return None
+    fresh = _finish(param, value, doors.DERIVED, note)
+    return None if fresh.value == current.value else fresh
 
 
 def _load(dotted: str) -> Any:

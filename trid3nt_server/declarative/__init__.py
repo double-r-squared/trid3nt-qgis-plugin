@@ -25,6 +25,7 @@ from .errors import (
     GateRefusedError,
     ModifierIllegalError,
     ParamOutOfRangeError,
+    ParamRefLeakedError,
     PlanValidationError,
     RenderSourceMissingError,
     StepFailedError,
@@ -56,6 +57,7 @@ from .plan import (
 from .resolver import (
     merge_provenance,
     provenance_entries,
+    rederive_revised,
     reseat_revised,
     resolve_params,
 )
@@ -66,11 +68,12 @@ __all__ = [
     "Data", "DataDecl", "DeclarativeError", "Domain", "DrawGate", "Fetch",
     "FormGate", "Gate", "GateNotSupportedError", "GateRefusedError",
     "LedgerRecord", "ModifierIllegalError", "Param", "ParamNotResolved",
-    "ParamOutOfRangeError", "ParamRef", "ParamValues", "Plan",
+    "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
+    "ParamValues", "Plan",
     "PlanValidationError", "Producer", "Ref", "ReferenceProducer",
     "RenderSourceMissingError", "RenderSpec", "ResolvedParam", "ResolvedParams",
     "RunMode", "RunResult", "Step", "StepFailedError", "StepLedger", "When",
     "Workflow", "current_domain", "doors", "interpret", "invocation_key",
-    "merge_provenance", "provenance_entries", "render_docstring",
-    "reseat_revised", "resolve_params", "validate_plan",
+    "merge_provenance", "provenance_entries", "rederive_revised",
+    "render_docstring", "reseat_revised", "resolve_params", "validate_plan",
 ]

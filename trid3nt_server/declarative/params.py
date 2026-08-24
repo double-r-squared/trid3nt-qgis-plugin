@@ -163,10 +163,16 @@ class ResolvedParams:
     through the :class:`ParamValues` view handed to derivations and chart builders.
     """
 
-    __slots__ = ("_rows",)
+    __slots__ = ("_rows", "_reads", "_reads_frozen")
 
     def __init__(self, rows: dict[str, ResolvedParam]) -> None:
         object.__setattr__(self, "_rows", dict(rows))
+        # Names read as CONCRETE values through ``get``. ``plan(p, d)`` is the only
+        # code that runs before the plan is validated, so this set is exactly the
+        # plan's construction-time reads - which is how the validator can tell that
+        # a ``When`` branch was decided from a value a form gate may later revise.
+        object.__setattr__(self, "_reads", set())
+        object.__setattr__(self, "_reads_frozen", None)
 
     def __getattr__(self, name: str) -> ParamRef:
         rows = object.__getattribute__(self, "_rows")
@@ -186,8 +192,21 @@ class ResolvedParams:
         return iter(self._rows.values())
 
     def get(self, name: str, default: Any = None) -> Any:
+        self._reads.add(name)
         row = self._rows.get(name)
         return default if row is None else row.value
+
+    def concrete_reads(self) -> frozenset[str]:
+        """Names whose CONCRETE value has been read off this sheet through ``get``.
+
+        FROZEN on first call, which the validator makes: every read after that is
+        the interpreter binding a ref at run time, not the plan deciding a branch,
+        and counting those would make a second ``interpret`` over one sheet refuse
+        a plan the first accepted.
+        """
+        if self._reads_frozen is None:
+            object.__setattr__(self, "_reads_frozen", frozenset(self._reads))
+        return self._reads_frozen
 
     def row(self, name: str) -> ResolvedParam | None:
         return self._rows.get(name)

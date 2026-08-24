@@ -51,7 +51,7 @@ class Ref:
         return tuple(self.path.split(".")[1:])
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False, repr=False)
 class ParamRef:
     """A LATE-BOUND read of a declared param: what ``p.<name>`` yields in ``plan()``.
 
@@ -59,6 +59,13 @@ class ParamRef:
     ``Step.kwargs`` at construction time would freeze the sheet before the form
     gate the plan itself declares, so an approved revision could never reach the
     run. The interpreter resolves these against the CURRENT param state instead.
+
+    Every operation that would silently turn the description INTO data refuses:
+    truthiness, ``str``/``format``, equality and hashing. Each one is a real leak
+    path - an f-string bakes ``ParamRef(...)`` into a layer title, ``==`` answers
+    ``False`` against the value the author meant, and hashing lets a ref sit in a
+    set the binder used not to walk. ``repr`` stays live: naming the ref is what a
+    diagnostic is for.
     """
 
     name: str
@@ -67,12 +74,35 @@ class ParamRef:
         if not self.name or not self.name.isidentifier():
             raise PlanValidationError(f"ParamRef({self.name!r}) has no identifier name.")
 
+    def _refuse(self, operation: str) -> "PlanValidationError":
+        return PlanValidationError(
+            f"ParamRef({self.name!r}) does not support {operation} at "
+            "plan-construction time - it is a description of a late-bound read, not "
+            f"the value. Read the value explicitly with p.get({self.name!r}), or "
+            "leave the ref in the plan and let the interpreter substitute it."
+        )
+
     def __bool__(self) -> bool:
         raise PlanValidationError(
             f"ParamRef({self.name!r}) has no truth value at plan-construction time - "
             "it is a description, not the value. For a real construction-time branch "
             f"(When(...)), read the value explicitly with p.get({self.name!r})."
         )
+
+    def __str__(self) -> str:
+        raise self._refuse("str()")
+
+    def __format__(self, _spec: str) -> str:
+        raise self._refuse("f-string / format() interpolation")
+
+    def __eq__(self, _other: Any) -> bool:
+        raise self._refuse("==/!= comparison")
+
+    def __hash__(self) -> int:
+        raise self._refuse("hashing (set/dict membership)")
+
+    def __repr__(self) -> str:
+        return f"ParamRef({self.name!r})"
 
 
 class _RunMode:

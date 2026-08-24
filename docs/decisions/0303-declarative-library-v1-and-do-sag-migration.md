@@ -568,3 +568,214 @@ RE-SOLVED (`executed=['do_field', 'do_field.chart:do_sag_curve'] replayed=[]`,
 a fresh run id and a fresh solver container) rather than replaying run A. That
 is the B1 ghost refuted end to end. After both runs the collection still holds
 exactly one document, which is the accumulation bound in practice.
+
+---
+
+# Correction - wave 1d (third adversarial review)
+
+Status: LANDED. A third adversarial verifier REFUTED the wave-1c landing on five
+blockers and eight observations, all probe-proven. The theme is one sentence: a
+form-gate REVISION was only half-honored. The sheet moved; the derivations, the
+data fetched from the old values, and the ledger document the run moved away from
+did not. As before, the sections above are left as written and this one records
+the delta.
+
+## Blocker 1 - a ParamRef could leak past the late-binding seam
+
+`ParamRef` refused `bool()` and nothing else, so four operations turned a
+DESCRIPTION into data, quietly:
+
+| leak | what it did |
+|---|---|
+| `f"DO sag over {p.reach_km} km"` | baked the literal `ParamRef('reach_km')` into a layer title, which was then published and persisted |
+| `str(ref)` / `"{}".format(ref)` | same, one call earlier |
+| `p.alpha == 3.0` | answered `False` against the value the author meant - a silent wrong branch |
+| `{p.label}` | a ref in a set, which the binder did not walk (the VALIDATOR did), so the runner received the description |
+
+All four now refuse typed, naming `p.get(name)` and the late-binding contract.
+`__repr__` deliberately stays live: naming the ref is exactly what a diagnostic is
+for, and the leak guard's own message needs it.
+
+Two structural fixes ride with it:
+
+- **The binder and the validator agree on containers.** `_bind_value` gained
+  `set`/`frozenset` arms. The validator had always walked sets for declared reads,
+  so the two disagreed about what the plan said. Rebuilding a container also
+  stopped assuming `type(x)(iterable)`: a namedtuple is rebuilt through `_make`,
+  which keeps its field names.
+- **A terminal leak guard.** Before any ledger record is persisted, before any
+  runner is called with bound arguments, and before `interpret` returns, the
+  interpreter scans for surviving `ParamRef` instances - recursively through
+  mappings, sequences, sets and object `__dict__`s, under a node budget - and
+  raises `ParamRefLeakedError` / `PARAM_REF_LEAKED` naming the path it sits at.
+  A ref reaching disk is ALWAYS a bug, never data, so the honest answer is a typed
+  refusal rather than a published lie about a number. The guard is a floor, not a
+  deep-object crawler: `__slots__` objects are skipped (no cheap `__dict__`) and
+  the scan stops after 50k nodes.
+
+## Blocker 2 - a revision did not re-derive
+
+The probe: `sat = 2 * temp`, temp revised 20 -> 30 at the form gate. The run
+solved on `temp=30` and `sat=40` - a sheet contradicting itself, with the run's
+own provenance asserting both.
+
+`reseat_revised` is now followed by `rederive_revised`, which re-runs the
+derivation fixpoint over the APPROVED sheet. Derived rows that consume a revised
+value re-derive (60, with a note naming what was revised and by which resolver).
+
+**The user always wins.** A row the user supplied or edited (`basis=user`) is
+PINNED and never recomputed. Where the approved sheet would now derive something
+else for a pinned row, the pin stands and the row's note SAYS so - "the sheet
+approved at input review would derive 60, but this value was set explicitly and
+stands". Silently overwriting an explicit edit is the same swallow this library
+exists to outlaw; silently keeping it without saying why is the other half.
+
+## Blocker 3 - a revision did not invalidate the data produced from the old values
+
+A `Data` producer that ran lazily BEFORE the gate (because a pre-gate step
+`Ref`ed it) fetched against the pre-review sheet, and the post-gate steps then
+consumed it: terrain at 30 m surviving an approved 3 m, with the solve reading
+`res=3` and `dem=dem@30`.
+
+Dependency is knowable, because a producer's kwargs carry the `ParamRef`/`Ref`
+reads it makes. On revision the interpreter evicts every `env.artifacts` entry
+whose producer consumed a revised param - transitively through Data-to-Data
+`Ref`s - and the eager batch (which fires at the first node after the last gate)
+re-produces it against the approved sheet. Eviction is TARGETED: an artifact the
+revision cannot have changed keeps its value, so this is not a blanket refetch.
+
+The ledger side is subsumed by blocker 5: the old key's document, `data:` records
+included, is reaped. The document at the RE-KEYED key is keyed by the approved
+values, so anything in it was produced at those values and is legitimately
+replayable.
+
+## Blocker 4 - the law-9 floor was mode-weaker than the gate it replaced
+
+Wave 1c re-homed the law-9 refusal for gateless plans but wrote it `auto`-only.
+`gate_input_review` has always had TWO refusing arms - auto, and user_gated with
+NO EMITTER - so a gateless plan in headless user_gated mode was the SOFTER path:
+the caller asked for review, there was no session to review on, and the run
+proceeded on an invented physics value anyway.
+
+Restored, and it now mirrors the gate exactly: refuse in auto; refuse in
+user_gated with no emitter ("no one to approve"); step aside only for a LIVE
+user_gated session, where the card in front of the user is what owns the
+approval.
+
+Two more things closed with it:
+
+- **The check no longer waits for a `consequential` flag** (observation 3). It
+  fires before the FIRST step. An invented physics value poisons the prep work as
+  surely as the solve, and a plan that tags nothing consequential skipped the
+  floor entirely. Probe-proven: cases E (no consequential step) and F (a cheap
+  prep step ahead of the solve) both ran to completion before; both now refuse
+  with zero steps executed.
+- **One error code** (observation 5). The gateless floor and the gate's own
+  law-9 cancel both raise `PHYSICS_INPUT_REQUIRED`; only a non-law-9 cancel stays
+  `INPUT_REVIEW_CANCELLED`. Callers route on the REASON, not on whether the plan
+  happened to declare a form card. The gate's refusal TEXT also stopped telling a
+  headless user_gated caller to "re-run in user_gated mode" - a lever they had
+  already pulled; `physics_refusal_reason(..., no_session=True)` says what is
+  actually true.
+
+Observation 4, recorded as asked: **the prep steps that run before the door-6
+refusal are by design.** `_refuse_missing_required` fires at the first
+CONSEQUENTIAL step - the last honest moment - because a value can still arrive
+from a gate or from a step that resolves it, and refusing earlier would fire
+before the very thing that fills it. The law-9 floor is the opposite case (nothing
+downstream can supply a real source for an invented default), which is why it
+moved to the front.
+
+## Blocker 5 - a re-key orphaned the key it moved away from
+
+The re-key made the approved sheet a different invocation, correctly - but left
+the ORIGINAL key's document on disk holding the records of a run that continued
+somewhere else. Nobody can ever resume from it (no invocation will hash to those
+values again with those results), and its records were computed from the very
+values the review replaced. The probe's end state was two documents.
+
+At re-key time the original document is now reaped. One run, one tombstone: the
+probe's end state is a single `complete: true` document at the approved key.
+
+## The observations
+
+| # | what was wrong | what it is now |
+|---|---|---|
+| 1 | a gate could be the LAST node of a plan - nothing after it, so nothing its answer could change | the validator refuses it, alongside the existing gate-after-the-consequential-step rule. Both are the dead-gate rule |
+| 2 | a plan could declare a FormGate AND branch (`When`) on a param that gate can revise. `When` is decided when the plan VALUE is built, i.e. before the review, so the branch was frozen against the pre-review sheet - the run would take one branch while its provenance claimed the other | REFUSED at validation. `ResolvedParams` records which names were read as CONCRETE values (`get`), which at validation time is exactly the plan's construction-time reads; a FormGate plus a `When` plus a read of any non-CONSTANT-door param is a shape that cannot honor a revision. Branching on a CONSTANT is still fine - it is not on the form as an editable value |
+| 3 | folded into blocker 4 | |
+| 4 | (the door-6 "last honest moment" question) | answered above, in blocker 4 |
+| 5 | folded into blocker 4 | |
+| 6 | `_bind` ran OUTSIDE the typed-error path, so a raw `TypeError` from rebuilding an author's container escaped the envelope every other plan fault arrives in | binding runs in the same typed path as `_call_runner`: retryable errors propagate, everything else becomes `StepFailedError` / `STEP_ARGS_UNBINDABLE` carrying the step label and the cause. The namedtuple case that motivated it is also FIXED rather than merely reported |
+| 7 | the wave-1c text called the NWM outage standing | CORRECTED: it was TRANSIENT. `fetch_noaa_nwm_streamflow` serves `analysis_assim` again - verified in isolation and end to end (below) |
+| 8 | no live evidence for the NWM resolution path itself | supplied below |
+
+## Live evidence
+
+**The NWM path, end to end.** One `telemac_do_sag` run with `discharge_m3s`
+UNPINNED, so the carrier discharge resolves from the upstream that wave 1c could
+not reach:
+
+- `fetch_noaa_nwm_streamflow` downloaded
+  `nwm.20260824/analysis_assim/nwm.t01z.analysis_assim.channel_rt.tm00.conus.nc`
+  (resolved `valid_time=2026-08-24T01:00:00+00:00`), loaded 2,776,734 feature
+  streamflow values, discovered 16 COMIDs in the reach bbox via NLDI and built 16
+  feature rows (min 0.0000 / max 3.0600 / mean 1.0231 m3/s).
+- `model_telemac_river_dye` resolved the **carrier discharge from the NOAA
+  National Water Model, nearest reach to the seed** `-124.09228, 40.49559`. The
+  value that reached the solver is **2.1 m3/s** - read back off the staged deck,
+  `data/runs/01M0RRMQTSS21TXBSNJ42THTH9/t2d_river.cas`:
+  `PRESCRIBED FLOWRATES = 2.1;0.0`.
+- Gate provenance: the run's `discharge_m3s` row carries `value=2.1`,
+  `units=m3/s`, **`basis=fetched`**,
+  `real_source_if_any="fetch_noaa_nwm_streamflow (NOAA National Water Model)"`.
+  A real source, so law 9 has nothing to refuse: `gate_input_review` (auto mode,
+  at river_dye's own review) proceeded with the inputs labeled.
+- Result: run `01M0RRMQTSS21TXBSNJ42THTH9`, DO sag minimum **8.5768 mg/L at
+  10631.7 m**, does not violate the 5 mg/L standard, 60 curve points
+  (first 9.022 / last 8.9635), layer
+  `s3://trid3nt-runs/01M0RRMQTSS21TXBSNJ42THTH9/telemac_do_field.tif`,
+  `executed=['do_field', 'do_field.chart:do_sag_curve'] replayed=[] notes=[]`.
+
+That is observation 7 refuted at the source and observation 8's evidence gap
+closed. It is recorded as the NWM-PATH proof, NOT a parity run: the upstream
+resolved 2.1 m3/s where the reference pins 2.0, so the physics differs in the
+fourth digit (8.5768 vs 8.5772; last point 8.9635 vs 8.9623). A different
+discharge producing slightly different physics is the path WORKING.
+
+**Parity, separately.** One pinned run (`--discharge-m3s 2.0`, logged as
+`carrier discharge 2 m3/s (user-supplied)`) confirms the reference physics still
+holds bit-for-bit:
+
+| | wave 1 | wave 1c (A / B) | wave 1d pinned |
+|---|---|---|---|
+| run id | `01M0RA0RCXW4S40PN1RBSSPJ6M` | `01M0RKE53944J2TNCPYCADGB1X` / `01M0RN1FR6CY0A2Y572HFX271Q` | `01M0RT86QGPRFKEMDT9MZVC5PK` |
+| DO sag minimum | 8.5772 mg/L | 8.5772 / 8.5772 | **8.5772 mg/L** |
+| sag location | 10631.7 m | 10631.7 / 10631.7 | **10631.7 m** |
+| violates the 5 mg/L standard | false | false / false | **false** |
+| points / first / last | 60 / 9.022 / 8.9623 | same / same | **60 / 9.022 / 8.9623** |
+
+## Gates
+
+| gate | result |
+|---|---|
+| `tests/test_[a-e]*.py` | 1604 passed, 5 skipped, 0 failed (baseline 0) |
+| `tests/test_[f-o]*.py` | 6646 passed, 3 skipped, 1 xfailed, **4 failed** - all `test_fetch_resolution_gate.py` (baseline) |
+| `tests/test_[p-r]*.py` | 2102 passed, 2 skipped, **2 failed** - both `test_run_river_dye_scenario.py` (baseline) |
+| `tests/test_[s-z]*.py` | 1418 passed, 6 skipped, 0 failed (baseline 0) |
+| `contracts/tests` | 721 passed (no delta) |
+| `scripts/ws_smoke.py` | `all_passed=True`, case self-cleaned |
+| `scripts/run_sfincs_direct.py` (flood canary) | PASSED, `status=ok`, depth COG published |
+| live `telemac_do_sag` - NWM path, unpinned | ok, discharge 2.1 m3/s `basis=fetched`, DO min 8.5768 @ 10631.7 m |
+| live `telemac_do_sag` - pinned 2.0 | ok, DO min 8.5772 @ 10631.7 m - parity with wave 1 and wave 1c |
+
+Exactly the 4 + 2 baseline failures. No `workers/` path touched, so no image
+rebuild is in play.
+
+## Not in wave 1d
+
+The wave-2 plugin form/draw cards, which is what would make the LIVE user_gated
+arm of the law-9 floor (the one exemption the floor grants) a card a user can
+actually answer. Until then the exemption is only reachable through a live
+session that has no card to show, which is why the no-emitter arm is the one
+that had to be restored.
