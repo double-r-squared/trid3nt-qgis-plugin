@@ -867,3 +867,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   moves OUT of the tool file into emission/ as the single home; the
   registered publish_layer tool is then DELETED (NATE: "something I've
   been wanting to do for a while but always somehow survives").
+
+- MESH RULING COMPLETE (NATE 2026-08-24): mesh = BYO-optional DATA -
+  AUTHORED (user-supplied, e.g. 2dm import; top ladder rung) or GENERATED
+  (shared front workflows/mesh/, default). Default generated policy =
+  OPINIONATED TOWARD SPEED (fast normal baseline, never a slow optimized
+  guess); mesh-economy A/B calibrates it. BOTH paths converge at the MESH
+  GATE (pending-confirmation spine, preview surface) where USER-DRIVEN
+  refinement happens via atomic mesh tools (refine-region, densify,
+  coarsen) acting on the ENGINE-NEUTRAL artifact (ESMF-shaped: neutral
+  artifact + thin per-solver writers). Cross-engine translation = writer
+  within a mesh SPECIES (unstructured tri: TELEMAC/SCHISM/HEC-RAS 2D);
+  across species (structured MODFLOW grids, SWMM node-link) = typed
+  refusal, never silent conversion. EngineOps.build_mesh(domain, policy)
+  is the frozen interface; strategies/writers evolve behind it. TELEMAC
+  campaign folds the private corridor mesher into the shared front as a
+  generation strategy; private ladder dies (ledger).
