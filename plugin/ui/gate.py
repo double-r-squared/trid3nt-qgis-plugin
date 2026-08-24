@@ -160,6 +160,166 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
 
 
 # --------------------------------------------------------------------------- #
+# The param SHEET -- the declarative FormGate's card.
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+# ``contracts/trid3nt_contracts/payload_warning.py`` (``ParamSheet`` /
+# ``ParamSheetRow``), carried on the OPTIONAL ``param_sheet`` field of
+# ``tool-payload-warning``. Its presence is what turns the gate card into an
+# editable property grid; the edits ride back on the SAME
+# ``tool-payload-confirmation`` (``narrow_scope`` + ``revised_args``), and a
+# submit-with-edits is the approval -- the server does not re-present the sheet.
+
+
+@dataclass
+class ParamRow:
+    """One editable row of a resolved param sheet."""
+
+    name: str
+    value: object = None
+    units: Optional[str] = None
+    desc: str = ""
+    door: str = "scenario"
+    basis: str = "default_demo"
+    source_badge: str = ""
+    bounds: Optional[tuple] = None
+    user_lever: bool = False
+    editable: bool = True
+    advanced: bool = False
+    note: Optional[str] = None
+
+    @property
+    def is_numeric(self) -> bool:
+        """A bounded row is a MEASUREMENT; its editor parses numbers.
+
+        ``bool`` is excluded on purpose: it is an ``int`` in Python and a flag is
+        not a measurement.
+        """
+        return isinstance(self.value, (int, float)) and not isinstance(self.value, bool)
+
+    @property
+    def label(self) -> str:
+        return f"{self.name} ({self.units})" if self.units else self.name
+
+    def display(self) -> str:
+        """The value as the editor shows it -- never ``None`` spelled out."""
+        if self.value is None:
+            return ""
+        if isinstance(self.value, float):
+            return f"{self.value:g}"
+        if isinstance(self.value, (list, tuple)):
+            return ", ".join(str(v) for v in self.value)
+        return str(self.value)
+
+
+@dataclass
+class ParamSheetRequest:
+    """Parsed ``param_sheet`` (defensive; raw kept)."""
+
+    workflow: str
+    title: str = ""
+    rows: list = field(default_factory=list)
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def basic(self) -> list:
+        return [r for r in self.rows if not r.advanced]
+
+    @property
+    def advanced(self) -> list:
+        return [r for r in self.rows if r.advanced]
+
+
+def parse_param_sheet(payload: dict) -> Optional[ParamSheetRequest]:
+    """Parse the ``param_sheet`` off a ``tool-payload-warning``; None when absent.
+
+    A malformed sheet is also None: the gate card then renders its existing
+    provenance text, which is a worse form but never a broken one.
+    """
+    if not isinstance(payload, dict):
+        return None
+    sheet = payload.get("param_sheet")
+    if not isinstance(sheet, dict):
+        return None
+    raw_rows = sheet.get("rows")
+    if not isinstance(raw_rows, list) or not raw_rows:
+        return None
+    rows = [_parse_param_row(r) for r in raw_rows if isinstance(r, dict)]
+    rows = [r for r in rows if r is not None]
+    if not rows:
+        return None
+    return ParamSheetRequest(
+        workflow=str(sheet.get("workflow") or payload.get("tool_name") or "this run"),
+        title=str(sheet.get("title") or ""),
+        rows=rows,
+        raw=sheet,
+    )
+
+
+def _parse_param_row(raw: dict) -> Optional[ParamRow]:
+    name = raw.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+    bounds = raw.get("bounds")
+    pair = None
+    if isinstance(bounds, (list, tuple)) and len(bounds) == 2:
+        try:
+            pair = (float(bounds[0]), float(bounds[1]))
+        except (TypeError, ValueError):
+            pair = None
+    return ParamRow(
+        name=name,
+        value=raw.get("value"),
+        units=raw.get("units") if isinstance(raw.get("units"), str) else None,
+        desc=str(raw.get("desc") or ""),
+        door=str(raw.get("door") or "scenario"),
+        basis=str(raw.get("basis") or "default_demo"),
+        source_badge=str(raw.get("source_badge") or ""),
+        bounds=pair,
+        user_lever=bool(raw.get("user_lever")),
+        editable=bool(raw.get("editable", True)),
+        advanced=bool(raw.get("advanced")),
+        note=raw.get("note") if isinstance(raw.get("note"), str) else None,
+    )
+
+
+def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
+    """The ``revised_args`` for a submitted sheet: the rows that actually MOVED.
+
+    ``edited`` maps row name -> the editor's text. A numeric row parses back to a
+    number (an unparseable edit is DROPPED rather than sent as a string the
+    server would refuse); a text row travels verbatim. Rows whose text still
+    matches what was rendered are not edits, and sending them would re-stamp
+    ``basis=user`` on values the user never touched.
+    """
+    by_name = {r.name: r for r in rows}
+    revised = {}
+    for name, text in (edited or {}).items():
+        row = by_name.get(name)
+        if row is None or not row.editable:
+            continue
+        text = "" if text is None else str(text).strip()
+        if text == row.display().strip():
+            continue
+        if row.is_numeric or row.bounds is not None:
+            try:
+                revised[name] = float(text)
+            except (TypeError, ValueError):
+                continue
+        elif text:
+            revised[name] = text
+    return revised
+
+
+def param_sheet_summary(sheet: ParamSheetRequest, revised: dict) -> str:
+    """The folded chip line for an ANSWERED form card."""
+    if not revised:
+        return f"Inputs approved as resolved ({len(sheet.rows)} rows)"
+    return "Inputs approved with edits: " + ", ".join(sorted(revised))
+
+
+# --------------------------------------------------------------------------- #
 # Client-side live estimates (ResolutionPickerCard math, mirrored)
 # --------------------------------------------------------------------------- #
 
@@ -914,11 +1074,24 @@ class SpatialInputRequest:
 
     @property
     def supported(self) -> bool:
-        """True when the QGIS plugin can capture this mode's geometry (point /
-        bbox via the canvas tools). ``vector_draw`` is a web terra-draw
-        affordance the plugin cannot reproduce -- the card degrades honestly
-        (Cancel closes the gate) rather than pretending to draw."""
-        return self.mode in ("point", "bbox")
+        """True when the QGIS plugin can capture this mode's geometry.
+
+        ``point`` / ``bbox`` ride the stock canvas tools. ``vector_draw`` rides
+        the vertex-capture tool for the two SHAPE purposes -- ``aoi`` (a polygon)
+        and ``line`` (a polyline). The ``barrier`` purpose is the web terra-draw
+        surface with per-segment wall / flap-gate TAGGING, which this plugin has
+        no affordance for, so that one degrades honestly (Cancel closes the gate)
+        rather than pretending to draw."""
+        if self.mode in ("point", "bbox"):
+            return True
+        return self.mode == "vector_draw" and self.purpose in ("aoi", "line")
+
+    @property
+    def draw_kind(self) -> str:
+        """``"polygon"`` / ``"polyline"`` for a drawable vector_draw, else ``""``."""
+        if self.mode != "vector_draw":
+            return ""
+        return {"aoi": "polygon", "line": "polyline"}.get(self.purpose, "")
 
 
 def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
@@ -973,6 +1146,44 @@ def resolve_spatial_input_bbox(request_id: str, bbox) -> dict:
     }
 
 
+def resolve_spatial_input_features(request_id: str, draw_kind: str,
+                                   vertices: list) -> dict:
+    """Build the ``spatial-input-response`` wire dict for a DRAWN shape.
+
+    ``draw_kind`` is ``"polygon"`` or ``"polyline"``; ``vertices`` is
+    ``[[lon, lat], ...]`` in draw order. A polygon's ring is CLOSED here (the
+    contract validator and every downstream parser read a ring, and a capture
+    tool has no reason to make the user click the first vertex twice). The
+    ``role`` mirrors the request's purpose exactly -- ``aoi`` for a polygon,
+    ``line`` for a polyline -- so no barrier tagging is implied.
+    """
+    pts = [[round(float(v[0]), 6), round(float(v[1]), 6)] for v in vertices]
+    if draw_kind == "polygon":
+        if len(pts) >= 3 and pts[0] != pts[-1]:
+            pts = pts + [pts[0]]
+        geometry = {"type": "Polygon", "coordinates": [pts]}
+        role = "aoi"
+    else:
+        geometry = {"type": "LineString", "coordinates": pts}
+        role = "line"
+    return {
+        "request_id": request_id,
+        "geometry_type": "vector_draw",
+        "coordinates": None,
+        "features": {
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature", "properties": {"role": role},
+                          "geometry": geometry}],
+        },
+        "cancelled": False,
+    }
+
+
+def spatial_input_vertices_ready(draw_kind: str, vertices: list) -> bool:
+    """Enough vertices to submit: 3 for a polygon ring, 2 for a polyline."""
+    return len(vertices) >= (3 if draw_kind == "polygon" else 2)
+
+
 def resolve_spatial_input_cancel(request_id: str) -> dict:
     """Build the ``spatial-input-response`` wire dict for a CANCEL (contract
     SpatialInputResponsePayload): ``cancelled=True`` with every geometry field
@@ -1001,6 +1212,12 @@ def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
             f"picked bbox [{coords[0]:.4f}, {coords[1]:.4f}, "
             f"{coords[2]:.4f}, {coords[3]:.4f}]"
         )
+    if request.mode == "vector_draw":
+        drawn = ((wire.get("features") or {}).get("features") or [{}])[0]
+        geom = drawn.get("geometry") or {}
+        coords = geom.get("coordinates") or []
+        ring = coords[0] if geom.get("type") == "Polygon" and coords else coords
+        return f"drew a {request.draw_kind or 'shape'} ({len(ring)} vertices)"
     return "spatial input sent"
 
 

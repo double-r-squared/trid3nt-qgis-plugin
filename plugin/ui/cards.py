@@ -258,6 +258,23 @@ _SPATIAL_CARD_STYLE = (
     "background-color: rgba(45, 212, 191, 7%); }"
 )
 _SPATIAL_TITLE_STYLE = "color: #2dd4bf; font-weight: bold; border: none;"
+#: The pick-affordance button label per capture kind. Keyed by ``draw_kind`` when
+#: the request declares one, else by ``mode``.
+_SPATIAL_PICK_LABEL = {
+    "point": "Click a point on the map",
+    "bbox": "Draw a box on the map",
+    "polygon": "Draw a polygon on the map",
+    "polyline": "Draw a line on the map",
+}
+
+#: The FORM card (the declarative FormGate's param sheet). Its own accent so an
+#: input REVIEW never reads as the amber payload/resolution gate beside it.
+_FORM_CARD_STYLE = (
+    "QFrame#formcard { border: 1px solid #a78bfa; border-radius: 8px; "
+    "background-color: rgba(167, 139, 250, 7%); }"
+)
+_FORM_TITLE_STYLE = "color: #a78bfa; font-weight: bold; border: none;"
+_FORM_BADGE_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
 
 
 class _WrapLabel(QLabel):
@@ -2559,10 +2576,14 @@ class SpatialInputCard(QFrame):
     - ``bbox``: a ``QgsMapToolExtent`` -- a drag rectangle, transformed via the
       injected ``to_bbox`` callable, replies ``coordinates=[minLon, minLat,
       maxLon, maxLat]``.
-    - ``vector_draw``: the web terra-draw barrier surface the plugin cannot
-      reproduce -- the card degrades HONESTLY (it says so and offers only
-      Cancel, which sends ``cancelled=True`` and CLOSES the gate rather than
-      hanging the turn).
+    - ``vector_draw`` with purpose ``aoi`` / ``line``: a ``VertexCaptureTool``
+      -- click per vertex, right-click to finish -- replying ``features`` with a
+      single ``role``-tagged Polygon / LineString.
+    - ``vector_draw`` with purpose ``barrier``: the web terra-draw surface with
+      per-segment wall / flap-gate TAGGING, which this plugin has no affordance
+      for -- the card degrades HONESTLY (it says so and offers only Cancel,
+      which sends ``cancelled=True`` and CLOSES the gate rather than hanging the
+      turn).
 
     Submit is disabled until a geometry is captured; Cancel is always
     available (the decline path). The decision maps through the pure
@@ -2639,12 +2660,9 @@ class SpatialInputCard(QFrame):
         self.status_lbl.setStyleSheet(_GATE_NOTE_STYLE)
 
         if request.supported:
-            # point / bbox: the "click the map" affordance.
             pick_row = QHBoxLayout()
-            self.pick_btn = QPushButton(
-                "Click a point on the map" if request.mode == "point"
-                else "Draw a box on the map"
-            )
+            self.pick_btn = QPushButton(_SPATIAL_PICK_LABEL[
+                request.draw_kind or request.mode])
             self.pick_btn.setCheckable(True)
             self.pick_btn.toggled.connect(self._toggle_pick)
             pick_row.addWidget(self.pick_btn)
@@ -2652,12 +2670,13 @@ class SpatialInputCard(QFrame):
             pick_row.addWidget(self.status_lbl, 1)
             lay.addLayout(pick_row)
         else:
-            # vector_draw: honest degrade -- the plugin cannot draw tagged
-            # barriers; say so and let Cancel close the gate.
+            # vector_draw/barrier: honest degrade -- the plugin has no per-segment
+            # wall/flap-gate tagging affordance; say so and let Cancel close the
+            # gate.
             self.status_lbl.setText(
-                "Drawing tagged barriers/geometry is not available in the "
-                "QGIS plugin yet -- use the web client for this, or Cancel to "
-                "let the agent proceed without it."
+                "Drawing TAGGED barriers (walls / flap gates) is not available "
+                "in the QGIS plugin yet -- use the web client for this, or "
+                "Cancel to let the agent proceed without it."
             )
             lay.addWidget(self.status_lbl)
 
@@ -2688,22 +2707,94 @@ class SpatialInputCard(QFrame):
             return
         if checked:
             if self._tool is None:
-                if self._request.mode == "point":
-                    from qgis.gui import QgsMapToolEmitPoint
-
-                    self._tool = QgsMapToolEmitPoint(canvas)
-                    self._tool.canvasClicked.connect(self._on_point_clicked)
-                else:
-                    from qgis.gui import QgsMapToolExtent
-
-                    self._tool = QgsMapToolExtent(canvas)
-                    self._tool.extentChanged.connect(self._on_extent_chosen)
+                self._tool = self._build_tool(canvas)
             self._prev_tool = canvas.mapTool()
             canvas.setMapTool(self._tool)
         else:
             if canvas.mapTool() is self._tool:
                 canvas.setMapTool(self._prev_tool)
             self._prev_tool = None
+
+    def _build_tool(self, canvas):
+        if self._request.mode == "point":
+            from qgis.gui import QgsMapToolEmitPoint
+
+            tool = QgsMapToolEmitPoint(canvas)
+            tool.canvasClicked.connect(self._on_point_clicked)
+            return tool
+        if self._request.mode == "bbox":
+            from qgis.gui import QgsMapToolExtent
+
+            tool = QgsMapToolExtent(canvas)
+            tool.extentChanged.connect(self._on_extent_chosen)
+            return tool
+        from .draw_tools import VertexCaptureTool
+
+        tool = VertexCaptureTool(canvas, self._request.draw_kind)
+        tool.captured.connect(self._on_shape_captured)
+        tool.changed.connect(self._on_vertex_added)
+        tool.cancelled.connect(self._on_shape_abandoned)
+        return tool
+
+    # -- multi-vertex capture (polygon / polyline) -------------------------- #
+
+    def _on_vertex_added(self, count: int) -> None:
+        need = 3 if self._request.draw_kind == "polygon" else 2
+        more = max(0, need - count)
+        self.status_lbl.setText(
+            f"{count} vertices - right-click to finish"
+            if more == 0 else
+            f"{count} vertices - {more} more, then right-click to finish"
+        )
+
+    def _on_shape_abandoned(self) -> None:
+        self.status_lbl.setText("drawing abandoned - click the button to start over")
+
+    def _on_shape_captured(self, points: list) -> None:
+        lonlats = self._to_lonlats(points)
+        kind = self._request.draw_kind
+        if not gate.spatial_input_vertices_ready(kind, lonlats):
+            self.status_lbl.setText(
+                f"a {kind} needs at least {3 if kind == 'polygon' else 2} "
+                "vertices - draw it again"
+            )
+            return
+        self._captured = gate.resolve_spatial_input_features(
+            self._request.request_id, kind, lonlats
+        )
+        self.status_lbl.setText(
+            f"{kind}: {len(lonlats)} vertices - redraw to change, then Submit"
+        )
+        self.submit_btn.setEnabled(True)
+        if self.pick_btn is not None and self.pick_btn.isChecked():
+            self.pick_btn.setChecked(False)   # restores the previous map tool
+
+    def _to_lonlats(self, points: list) -> list:
+        """Canvas-CRS vertices -> ``[[lon, lat], ...]``, dropping what cannot map.
+
+        A vertex that will not transform is DROPPED rather than guessed at; the
+        vertex-count gate above then refuses a shape that lost too many, so a
+        partial transform can never become a smaller shape the user did not draw.
+        """
+        try:
+            authid = self._iface.mapCanvas().mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- headless / no iface
+            return []
+        out = []
+        for point in points:
+            try:
+                lonlat = self._to_lonlat(point, authid) if self._to_lonlat else None
+            except Exception:  # noqa: BLE001
+                lonlat = None
+            if lonlat is not None:
+                out.append([lonlat[0], lonlat[1]])
+        if len(out) != len(points):
+            self.status_lbl.setText(
+                f"{len(points) - len(out)} of {len(points)} vertices could not be "
+                "read in lon/lat - draw the shape again"
+            )
+            return []
+        return out
 
     def _on_point_clicked(self, point, _button) -> None:
         try:
@@ -2812,3 +2903,198 @@ class SpatialInputCard(QFrame):
         self._body.setVisible(False)
         self.details_toggle.setChecked(False)
         self.details_toggle.setText("show details")
+
+
+class FormCard(QFrame):
+    """The declarative FORM gate: the resolved param sheet, editable in place.
+
+    A ``tool-payload-warning`` carrying a ``param_sheet`` is a run asking to be
+    REVIEWED before it starts. The card renders one row per declared param -
+    label, units, the value in an editor, and the SOURCE BADGE saying where the
+    value came from - with the solver's own constants folded under "advanced".
+
+    Every row is editable. Editing a derived value does not unlock anything; the
+    badge is the warning, and the server re-stamps the row as user-supplied and
+    re-derives whatever read it. Declared bounds ride along as the editor's
+    placeholder and the server re-clamps on submit, so the form is an edit
+    surface and never a bypass of the declaration.
+
+    Submit IS the approval: the whole sheet was on screen, so the edits ride back
+    as ``narrow_scope`` + ``revised_args`` and the run proceeds. Cancel declines
+    (``cancel``) and the run does not start. Same lock-once + fold-to-a-chip
+    behaviour as every other gate card.
+    """
+
+    def __init__(self, warning: gate.PayloadWarning, sheet: gate.ParamSheetRequest,
+                 on_decide, parent=None):
+        super().__init__(parent)
+        self._warning = warning
+        self._sheet = sheet
+        self._on_decide = on_decide
+        self._decided: Optional[str] = None
+        self._editors: Dict[str, QLineEdit] = {}
+        self.setObjectName("formcard")  # STYLE-1: scope the fill to the frame
+        self.setStyleSheet(_FORM_CARD_STYLE)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line summary (hidden until answered) + "show details" --
+        # the GateCard affordance verbatim.
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.TextFormat.PlainText)
+        self.summary_lbl.setStyleSheet(_FORM_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        title_lbl = QLabel(sheet.title or f"Review the inputs for {sheet.workflow}")
+        title_lbl.setWordWrap(True)
+        title_lbl.setTextFormat(Qt.TextFormat.PlainText)
+        title_lbl.setStyleSheet(_FORM_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        lay.addWidget(self._grid(sheet.basic))
+
+        self._advanced = None
+        if sheet.advanced:
+            self.advanced_toggle = QPushButton(
+                f"show advanced ({len(sheet.advanced)})")
+            self.advanced_toggle.setFlat(True)
+            self.advanced_toggle.setCheckable(True)
+            self.advanced_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+            self.advanced_toggle.clicked.connect(self._toggle_advanced)
+            lay.addWidget(self.advanced_toggle)
+            self._advanced = self._grid(sheet.advanced)
+            self._advanced.setVisible(False)
+            lay.addWidget(self._advanced)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.submit_btn = QPushButton("Run with these inputs")
+        self.submit_btn.clicked.connect(self._submit)
+        btn_row.addWidget(self.submit_btn)
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._cancel)
+        btn_row.addWidget(self.cancel_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setWordWrap(True)
+        self.result_lbl.setTextFormat(Qt.TextFormat.PlainText)
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+    # -- rows ---------------------------------------------------------------- #
+
+    def _grid(self, rows: List[gate.ParamRow]) -> QWidget:
+        """One property-grid block: label | editor | source badge, per row."""
+        holder = QWidget()
+        grid = QGridLayout(holder)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(2)
+        for i, row in enumerate(rows):
+            name_lbl = QLabel(row.label)
+            name_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            name_lbl.setToolTip(row.desc)
+            grid.addWidget(name_lbl, i, 0)
+
+            editor = QLineEdit(row.display())
+            editor.setEnabled(row.editable)
+            editor.setToolTip(self._editor_tooltip(row))
+            if row.bounds is not None:
+                editor.setPlaceholderText(
+                    f"{row.bounds[0]:g} to {row.bounds[1]:g}")
+            grid.addWidget(editor, i, 1)
+            self._editors[row.name] = editor
+
+            badge = QLabel(row.source_badge)
+            badge.setWordWrap(True)
+            badge.setStyleSheet(_FORM_BADGE_STYLE)
+            badge.setToolTip(row.note or "")
+            grid.addWidget(badge, i, 2)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
+        return holder
+
+    @staticmethod
+    def _editor_tooltip(row: gate.ParamRow) -> str:
+        bits = [row.desc] if row.desc else []
+        if row.bounds is not None:
+            bits.append(f"allowed range {row.bounds[0]:g} to {row.bounds[1]:g}"
+                        f"{' ' + row.units if row.units else ''}")
+        if row.basis == "derived":
+            bits.append("editing this overrides the derivation; the values "
+                        "computed from it are re-derived server-side")
+        if row.note:
+            bits.append(row.note)
+        return "\n".join(bits)
+
+    # -- actions ------------------------------------------------------------- #
+
+    def _edits(self) -> dict:
+        return gate.resolve_param_sheet_edits(
+            self._sheet.rows,
+            {name: editor.text() for name, editor in self._editors.items()},
+        )
+
+    def _submit(self) -> None:
+        if self._decided is not None:
+            return  # locked -- a gate is answered exactly once
+        revised = self._edits()
+        self._decided = "narrow_scope" if revised else "proceed"
+        # A sheet with no edits is an APPROVAL, not a revision: sending an empty
+        # revised_args would say the user re-supplied every value they only read.
+        self._commit(self._decided, revised or None,
+                     gate.param_sheet_summary(self._sheet, revised))
+
+    def _cancel(self) -> None:
+        if self._decided is not None:
+            return
+        self._decided = "cancel"
+        self._commit("cancel", None, "Inputs declined -- the run did not start")
+
+    def _commit(self, decision: str, revised: Optional[dict], summary: str) -> None:
+        for widget in [self.submit_btn, self.cancel_btn, *self._editors.values()]:
+            widget.setEnabled(False)
+        self._on_decide(self._warning.warning_id, decision, revised)
+        self.result_lbl.setText(summary)
+        self.result_lbl.setVisible(True)
+        self.summary_lbl.setText(summary)
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
+
+    # -- toggles -------------------------------------------------------------- #
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+    def _toggle_advanced(self, checked: bool) -> None:
+        if self._advanced is None:
+            return
+        self._advanced.setVisible(checked)
+        self.advanced_toggle.setText(
+            ("hide" if checked else "show") + f" advanced ({len(self._sheet.advanced)})")
