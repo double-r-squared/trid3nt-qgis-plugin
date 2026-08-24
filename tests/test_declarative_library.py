@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import collections
 import contextlib
+import dataclasses
 import importlib
+import warnings
 
 import pytest
 
@@ -18,6 +20,7 @@ from trid3nt_server.declarative import (
     DrawGate,
     Fetch,
     FormGate,
+    LeakScanTruncated,
     ModifierIllegalError,
     Param,
     ParamNotResolved,
@@ -135,6 +138,22 @@ def stub_chart(*, result, params):
     if "stub_chart" in _FAIL_AT:
         raise RuntimeError("chart-boom")
     return {"chart_id": "c1", "title": "t"}
+
+
+def stub_chart_leaks(*, result, params):
+    """A builder that puts a DESCRIPTION in the title - the f-string leak, one call
+    later, where only the emitted payload can catch it."""
+    _CALLS.append("stub_chart_leaks")
+    return {"chart_id": "c1", "title": ParamRef("base")}
+
+
+async def stub_deep(**kwargs):
+    """A clean result deep enough to exhaust a shrunken scan budget."""
+    _CALLS.append("stub_deep")
+    node = {"leaf": 1.0}
+    for i in range(40):
+        node = {"n": node, "i": i}
+    return {"uri": "s3://b/k.tif", "deep": node}
 
 
 def derive_double(params):
@@ -1248,9 +1267,26 @@ async def test_the_binder_walks_sets_and_frozensets_like_the_validator_does():
     assert out.value["seen"]["f"] == frozenset({"s3://b/k.tif"})
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
 class _Holder:
-    """A plan author's own object. The binder does not walk into it - the LEAK
-    GUARD is what refuses the ref it is hiding."""
+    """A plan author's own value type in the HOUSE idiom: frozen + slots, so it has
+    no ``__dict__`` at all. The binder does not walk into it - the LEAK GUARD is
+    what refuses the ref it is hiding, and it has to read slots to see one."""
+
+    value: object
+
+
+class _DictHolder:
+    """The plain ``__dict__`` object, kept so the slots arm does not cost this one."""
+
+    def __init__(self, value):
+        self.value = value
+
+
+class _SlotsNoDataclass:
+    """``__slots__`` without the dataclass decorator - the other half of that arm."""
+
+    __slots__ = ("value",)
 
     def __init__(self, value):
         self.value = value
@@ -1258,12 +1294,17 @@ class _Holder:
 
 async def stub_returns_a_leaked_ref(**kwargs):
     _CALLS.append("stub_returns_a_leaked_ref")
-    # A set of objects, each hiding a ref: the scan has to walk both arms.
-    return {"uri": "s3://b/k.tif", "bag": {_Holder(ParamRef("base"))}}
+    # A set arm and a slotted-object arm, each hiding a ref: the scan walks both.
+    # The set holds a _DictHolder, which hashes by identity - a frozen dataclass
+    # would hash its fields and ParamRef refuses hashing.
+    return {"uri": "s3://b/k.tif", "bag": {_DictHolder(ParamRef("base"))},
+            "held": _Holder(ParamRef("base"))}
 
 
 @pytest.mark.asyncio
-async def test_a_ref_hidden_on_an_object_never_reaches_a_runner():
+async def test_a_ref_hidden_on_a_slotted_object_never_reaches_a_runner():
+    """frozen+slots has no __dict__; a guard that read only __dict__ handed the
+    runner a description and json.dumps(default=str) put it on the wire as text."""
     plan = Workflow("leak_args")[
         Step(runner=f"{_HERE}.stub_step",
              kwargs={"held": _Holder(ParamRef("base"))}).named("s"),
@@ -1274,14 +1315,36 @@ async def test_a_ref_hidden_on_an_object_never_reaches_a_runner():
 
 
 @pytest.mark.asyncio
+async def test_a_ref_hidden_on_a_dict_object_never_reaches_a_runner():
+    plan = Workflow("leak_args_dict")[
+        Step(runner=f"{_HERE}.stub_step",
+             kwargs={"held": _DictHolder(ParamRef("base"))}).named("s"),
+    ]
+    with pytest.raises(ParamRefLeakedError, match="arguments"):
+        await _run(plan, _params(), {}, resume=False)
+    assert _CALLS == []
+
+
+@pytest.mark.asyncio
 async def test_a_ref_in_a_result_never_reaches_the_ledger_or_the_caller():
     """A ref on disk is always a bug, never data - so the record is refused rather
-    than written, set and object arms included."""
+    than written, sequence and slotted-object arms included."""
     plan = Workflow("leak_result")[
         Step(runner=f"{_HERE}.stub_returns_a_leaked_ref").named("s"),
     ]
     with pytest.raises(ParamRefLeakedError, match="ledger record"):
         await _run(plan, _params(), {}, resume=False)
+
+
+def test_the_guard_reads_slots_dataclass_fields_and_dict_alike():
+    """The three attribute shapes an author can hand the guard, at the seam itself."""
+    from trid3nt_server.declarative.interpret import _refuse_leaked_param_refs
+
+    for holder in (_Holder(ParamRef("base")), _DictHolder(ParamRef("base")),
+                   _SlotsNoDataclass(ParamRef("base"))):
+        with pytest.raises(ParamRefLeakedError, match=r"ParamRef\('base'\)") as exc:
+            _refuse_leaked_param_refs({"result": {"deep": [holder]}}, "a test surface")
+        assert "['result']['deep'][0].value" in str(exc.value)
 
 
 # --- R3-2: a revision re-derives what depends on it -------------------------- #
@@ -1389,7 +1452,7 @@ async def test_data_that_reads_no_revised_param_is_not_evicted(monkeypatch):
     assert _CALLS.count("stub_dem") == 1
 
 
-# --- R3-4: the law-9 floor is not weaker in any mode ------------------------- #
+# --- R3-4 / R4-3: the law-9 floor needs a review SURFACE, not just a session -- #
 class _FakeEmitter:
     """Just enough emitter for the interpreter: a live session to pause on."""
 
@@ -1409,9 +1472,10 @@ def _physics_only():
                   consequence="physics")]
 
 
-def _gateless_plan(*, consequential):
+def _gateless_plan(*, consequential, self_gating=False):
     return Workflow("law9_mode")[
-        Step(runner=f"{_HERE}.stub_step", consequential=consequential).named("solve"),
+        Step(runner=f"{_HERE}.stub_step", consequential=consequential,
+             self_gating=self_gating).named("solve"),
     ]
 
 
@@ -1428,14 +1492,29 @@ async def test_the_law9_floor_refuses_in_every_mode_without_a_live_session(mode)
 
 
 @pytest.mark.asyncio
-async def test_a_live_user_gated_session_owns_the_approval_instead(monkeypatch):
-    """With a card in front of the user the floor steps aside - that is where the
-    demo default gets approved or rejected."""
+async def test_a_self_gating_step_owns_the_approval_instead(monkeypatch):
+    """The exemption needs a REVIEW SURFACE, and a self-gating step is one: it puts
+    its own card in front of the live session. Then the floor steps aside."""
     _interp = importlib.import_module("trid3nt_server.declarative.interpret")
     monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
-    await _run(_gateless_plan(consequential=True), _physics_only(), {},
-               input_mode="user_gated", resume=False)
+    await _run(_gateless_plan(consequential=True, self_gating=True), _physics_only(),
+               {}, input_mode="user_gated", resume=False)
     assert _CALLS == ["stub_step"]
+
+
+@pytest.mark.asyncio
+async def test_a_live_session_with_no_card_anywhere_still_refuses(monkeypatch):
+    """An emitter is where a card COULD be shown, never evidence that one was. A
+    gateless plan whose step does not review its own inputs has no review surface
+    at all, so a live user_gated session must not be the softer path."""
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
+    with pytest.raises(Exception) as exc:
+        await _run(_gateless_plan(consequential=True), _physics_only(), {},
+                   input_mode="user_gated", resume=False)
+    assert exc.value.error_code == "PHYSICS_INPUT_REQUIRED"
+    assert "nothing in this workflow reviews these values" in str(exc.value)
+    assert _CALLS == []
 
 
 @pytest.mark.asyncio
@@ -1574,3 +1653,197 @@ async def test_a_binding_fault_arrives_typed_not_raw():
         await _run(plan, _params(), {}, resume=False)
     assert exc.value.error_code == "STEP_ARGS_UNBINDABLE"
     assert exc.value.step == "second"
+
+
+# --- R4-1: the leak guard never passes on an exhausted budget ---------------- #
+def _deep_clean(depth):
+    """A clean nested structure whose node count the scan budget can be set under."""
+    node = {"leaf": 1.0}
+    for i in range(depth):
+        node = {"n": node, "i": i}
+    return node
+
+
+def test_a_budget_exhausted_leak_scan_warns_and_names_the_surface(monkeypatch):
+    """A scan that stopped looking has NOT found the surface clean. Silence there
+    let a leak behind a large value pass as verified."""
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 8)
+    with pytest.warns(LeakScanTruncated, match="'value'"):
+        _interp._refuse_leaked_param_refs(
+            {"value": _deep_clean(50)}, "a test surface")
+
+
+def test_a_clean_scan_inside_the_budget_warns_about_nothing(monkeypatch):
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 500)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", LeakScanTruncated)
+        _interp._refuse_leaked_param_refs({"value": _deep_clean(50)}, "a test surface")
+
+
+def test_a_large_value_cannot_starve_the_entries_scan(monkeypatch):
+    """Per-surface budgets: one shared budget let a 60k-node value spend it all and
+    leave the entries - where the leak actually was - never looked at."""
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 20)
+    with pytest.warns(LeakScanTruncated, match="'value'"):
+        with pytest.raises(ParamRefLeakedError, match=r"ParamRef\('base'\)"):
+            _interp._refuse_leaked_param_refs(
+                {"value": _deep_clean(200), "entries": [{"param": ParamRef("base")}]},
+                "a test surface")
+
+
+@pytest.mark.asyncio
+async def test_the_run_warns_rather_than_silently_passing_a_truncated_scan(monkeypatch):
+    """The guard is a floor, not a gate: an over-budget surface still runs, but the
+    partial check is said out loud rather than reported as clean."""
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 4)
+    plan = Workflow("truncated")[Step(runner=f"{_HERE}.stub_deep").named("a")]
+    with pytest.warns(LeakScanTruncated):
+        out = await _run(plan, _params(), {}, resume=False)
+    assert out.value["uri"] == "s3://b/k.tif"
+
+
+# --- R4-4: every public read path records a concrete read ------------------- #
+@pytest.mark.asyncio
+async def test_every_public_read_path_records_a_concrete_read():
+    """The revisable-branch check reads this set, so a path that did not record was
+    a way to branch on a revisable value invisibly."""
+    for read in (lambda p: p.get("base"),
+                 lambda p: p.row("base"),
+                 lambda p: p.values_dict(),
+                 lambda p: p.rows(),
+                 lambda p: p.values_view().base,
+                 lambda p: p.values_view().get("base")):
+        p = await resolve_params(_params(), {})
+        read(p)
+        assert "base" in p.concrete_reads()
+
+
+@pytest.mark.asyncio
+async def test_a_late_bound_attribute_read_is_not_a_concrete_read():
+    p = await resolve_params(_params(), {})
+    assert isinstance(p.base, ParamRef)
+    assert p.concrete_reads() == frozenset()
+
+
+@pytest.mark.asyncio
+async def test_the_revisable_branch_check_sees_a_values_view_read():
+    """The branch was decided from the pre-review sheet whichever door the value
+    came out of - the view is not a side entrance."""
+    decl = _params()
+    p = await resolve_params(decl, {})
+    branch = p.values_view().base > 0.0
+    plan = Workflow("view_branch")[
+        FormGate(),
+        When(branch, Step(runner=f"{_HERE}.stub_second").named("t")),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
+    with pytest.raises(PlanValidationError, match="branches"):
+        validate_plan(plan, decl, sheet=p)
+
+
+@pytest.mark.asyncio
+async def test_the_read_set_freezes_at_validation_even_with_no_branch_check():
+    """A conditional freeze let a REUSED sheet carry the first run's run-time reads
+    into the second validation and refuse a plan the first accepted."""
+    decl = _params()
+    p = await resolve_params(decl, {})
+    plain = Workflow("freeze_a")[
+        Step(runner=f"{_HERE}.stub_step", kwargs={"q": p.base}).named("s"),
+    ]
+    await interpret(plain, p, decl, resume=False)
+    assert p.concrete_reads() == frozenset()
+    gated = Workflow("freeze_b")[
+        FormGate(),
+        When(True, Step(runner=f"{_HERE}.stub_second").named("t")),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("s"),
+    ]
+    validate_plan(gated, decl, sheet=p)
+
+
+# --- R4-5: a re-key leaves a TOMBSTONE, not a replayable orphan ------------- #
+@pytest.mark.asyncio
+async def test_a_failed_reap_at_re_key_leaves_a_non_replayable_marker(monkeypatch):
+    """Deleting was enough only when the delete SUCCEEDED. A swallowed failure left
+    the abandoned key's records complete:false and replayable for the whole TTL -
+    the wave-1b replay ghost, back through the re-key door."""
+    _review({"base": 3.5}, monkeypatch)
+    _ledger = importlib.import_module("trid3nt_server.declarative.ledger")
+
+    async def _boom(client, key):
+        raise RuntimeError("delete-one is down")
+
+    decl = _params()
+    p = await resolve_params(decl, {"base": 1.0})
+    original = invocation_key("rekey_fail", p.values_dict(), input_mode="user_gated")
+    plan = Workflow("rekey_fail")[
+        Step(runner=f"{_HERE}.stub_second").named("pre"),
+        FormGate(),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ]
+    monkeypatch.setattr(_ledger, "_reap", _boom)
+    await interpret(plan, p, decl, input_mode="user_gated")
+    orphan = await _raw_ledger_doc(original)
+    assert orphan is not None, "the reap failed, so the document is still there"
+    assert orphan["complete"] is True
+    assert orphan["records"] == [] and orphan["data_records"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
+    """What the marker BUYS: the abandoned key hands nothing back to a rerun."""
+    _ledger = importlib.import_module("trid3nt_server.declarative.ledger")
+
+    async def _boom(client, key):
+        raise RuntimeError("delete-one is down")
+
+    ledger = await _ledger.StepLedger.load("orphan_key", "w")
+    await ledger.record(_ledger.LedgerRecord(index=0, node="a", runner="r",
+                                             completed_at="2026-08-23T00:00:00+00:00"))
+    monkeypatch.setattr(_ledger, "_reap", _boom)
+    await ledger.clear()
+    reloaded = await _ledger.StepLedger.load("orphan_key", "w")
+    assert reloaded.replay_for(0, "a") is None
+
+
+# --- the chart PAYLOAD is the surface, not the node's return dict ------------ #
+@pytest.mark.asyncio
+async def test_a_leaked_ref_in_a_chart_payload_never_reaches_the_wire(monkeypatch):
+    """The node returns a small marker dict; the PAYLOAD is what goes over the WS.
+    Guarding only the marker let a ref in a chart title through."""
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    emitted = []
+
+    async def _emit(payload):
+        emitted.append(payload)
+
+    monkeypatch.setattr(_interp, "emit_chart_payloads", _emit)
+    plan = Workflow("chart_leak")[
+        Step(runner=f"{_HERE}.stub_step").named("a")
+        .chart("c", builder=f"{_HERE}.stub_chart_leaks"),
+    ]
+    out = await _run(plan, _params(), {}, resume=False)
+    assert emitted == []
+    assert out.value["uri"] == "s3://b/k.tif"       # the primary result stands
+    assert len(out.notes) == 1 and "ParamRef('base')" in out.notes[0]
+
+
+@pytest.mark.asyncio
+async def test_a_clean_chart_payload_still_reaches_the_wire(monkeypatch):
+    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    emitted = []
+
+    async def _emit(payload):
+        emitted.append(payload)
+
+    monkeypatch.setattr(_interp, "emit_chart_payloads", _emit)
+    plan = Workflow("chart_ok")[
+        Step(runner=f"{_HERE}.stub_step").named("a")
+        .chart("c", builder=f"{_HERE}.stub_chart"),
+    ]
+    out = await _run(plan, _params(), {}, resume=False)
+    assert emitted == [{"chart_id": "c1", "title": "t"}]
+    assert out.notes == []

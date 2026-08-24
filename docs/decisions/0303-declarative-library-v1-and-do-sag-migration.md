@@ -779,3 +779,181 @@ arm of the law-9 floor (the one exemption the floor grants) a card a user can
 actually answer. Until then the exemption is only reachable through a live
 session that has no card to show, which is why the no-emitter arm is the one
 that had to be restored.
+
+---
+
+# Correction - wave 1e (fourth adversarial review)
+
+Status: LANDED. A fourth adversarial verifier found the wave-1d foundation SOUND
+and named five GUARD-EDGE defects, all probe-proven: the guards were right about
+what they refuse and wrong about where they stop looking. As before, the sections
+above are left as written and this one records the delta.
+
+## R1 - the leak guard passed silently when it ran out of budget
+
+`_find_param_ref` returned `None` - indistinguishable from CLEAN - once the 50k
+node budget was spent, and ONE budget was shared across `{value, results,
+entries}`. A leak sitting behind a 60k-node value therefore passed twice over: the
+value's own scan gave up, and the entries were never reached at all.
+
+Two changes, one rule: **a scan that stopped looking has not found the surface
+clean.**
+
+- **Per-surface budgets.** Each named surface gets its own `_LEAK_SCAN_BUDGET`;
+  the cycle guard (`seen`) is still shared across the sweep, so the value that is
+  also a step result is walked once. A large surface can no longer starve the ones
+  after it.
+- **Exhaustion is WARNED, never passed.** A truncated surface raises a typed
+  `LeakScanTruncated` warning naming it, and logs at WARNING, before the sweep
+  continues. It is not a refusal: the surface may well be clean, and refusing a
+  legitimately large payload would retract a real result over a guard's own bound.
+  Silence was the defect; a loud partial answer is the fix.
+
+Measured cost is unchanged at 27.5 ms/scan for a 48k-node surface (the shared
+`seen` means three surfaces over the same object cost the same as one), inside the
+23-40 ms band the guard has always carried.
+
+## R2 - `__slots__` objects were invisible to the guard
+
+The guard read `__dict__` and skipped anything without one, calling itself "a
+floor, not a deep-object crawler". But frozen+slots dataclasses are the HOUSE
+idiom for a value type and have no `__dict__` at all, so `Slotted(value=ParamRef)`
+walked straight through and reached the wire as literal `"ParamRef('base')"` text
+through `json.dumps(default=str)`. The floor had a hole exactly where the
+convention puts things.
+
+`_object_attrs` now reads `__dict__`, every `__slots__` name up the MRO, and a
+dataclass's own fields. The test's `__dict__`-based `_Holder` became a
+frozen+slots dataclass so the pinned case is the arm that was BROKEN, with the
+`__dict__` arm and a plain non-dataclass `__slots__` arm kept alongside it.
+
+Deliberately NOT changed: `_bind_value` still does not walk into an author's own
+object. Binding into one would mean rebuilding it, which is not generally
+possible, and the wave-1d doctrine is that the binder walks CONTAINERS while the
+guard refuses what an author hid on an object. A ref on a slotted object is now
+refused at the binder (through the guard `_bind` runs) and at the record, which is
+the same contract the `__dict__` case always had.
+
+## R3 - the law-9 exemption keyed on the EMITTER, not on a card
+
+The floor stepped aside for any live `user_gated` session. But approval needs
+something to happen ON, and a gateless plan whose consequential step is not
+self-gating has no card anywhere - so a run in that shape proceeded on an invented
+`default_demo` physics value with a session present and nobody ever asked.
+
+The exemption now requires an actual REVIEW SURFACE: the plan declares a
+`FormGate` (whose presence routes the refusal through the gate instead), or a step
+in the plan is `self_gating`. An emitter is where a card could be shown, never
+evidence that one was. The three refusing arms are now auto mode, headless
+user_gated (nobody to approve), and live user_gated with no review surface
+(nothing to approve on) - each with its own honest remedy sentence, so
+`physics_refusal_reason` gained a `no_review_surface` arm rather than telling a
+live caller there is no session.
+
+do_sag is unaffected: its consequential step is `self_gating=True`.
+
+The wave-1d test that claimed "a live user_gated session owns the approval" was
+asserting this defect - its plan had no card. It is now two honest tests: a
+self-gating plan that runs, and a card-less plan that refuses.
+
+## R4 - three read paths bypassed the revisable-branch refusal
+
+`concrete_reads` - which is how the validator refuses a plan that declares a
+`FormGate` and also branches on a value that gate can revise - recorded only
+`p.get()`. `row()`, `values_dict()` and `values_view()` handed out the same
+concrete values and recorded nothing, so a branch decided through any of them was
+invisible to the check.
+
+Every public read path on `ResolvedParams` records now: `get`, `row`, `rows`,
+`values_dict` (all names - the caller holds them all), and `values_view()`, whose
+returned view reports each name back to the sheet as it hands it over.
+
+The freeze is also **unconditional at validation** rather than lazy on first
+`concrete_reads()` call. `_check_revisable_branches` returns early for a plan with
+no `FormGate` or no `When`, so the lazy freeze never fired for those - and a sheet
+reused for a second `interpret` then carried the FIRST run's run-time binding
+reads into the second validation and refused a plan the first had accepted.
+
+## R5 - a re-key's orphan was reaped, and a failed reap left it replayable
+
+Wave 1d reaped the abandoned key at re-key time, but `StepLedger._reap` swallows
+its failures by design (the ledger is an optimisation, never a gate). A swallowed
+delete therefore left the OLD key holding `complete: false` plus the pre-gate
+records of a run that continued somewhere else - replayable for the whole 7-day
+TTL. That is the wave-1b replay ghost re-entering through the re-key door.
+
+`clear()` now TOMBSTONES before it reaps: `complete: true`, records emptied,
+persisted through the same atomic path, and only then the delete. A failed delete
+degrades to a marker nobody can resume from instead of a replayable orphan. When
+the delete succeeds the end state is unchanged - one document, at the approved key
+- so the wave-1d accumulation bound still holds, and the TTL sweep reaps any
+tombstone a failed delete leaves behind.
+
+## The riders
+
+- **Chart payloads pass the leak guard.** The chart node returns a small marker
+  dict (`{"chart": name, "emitted": true}`), and that was the only thing the guard
+  saw - while the PAYLOAD, which is what crosses the WS, went unscanned. A ref in a
+  chart title is exactly the wave-1d blocker-1 leak, one call later. The payload is
+  now scanned before `emit_chart_payloads`. A leak there is an AUXILIARY failure
+  (delta 4): nothing is emitted, the primary result stands, and the note names the
+  ref.
+
+- **The surviving-artifact re-record gap, stated honestly.** When the FINAL
+  recordable node REPLAYS from the ledger, `record(..., final=True)` is never
+  called, so the completion tombstone is not stamped in the same write as the last
+  record and falls back to `complete()` at the end - which reopens, for that one
+  shape, the crash/cancel window wave 1c closed for the executed case.
+
+- **The rederive fixpoint's bound, stated honestly.** `rederive_revised` iterates
+  at most `len(derived) + 1` passes and keeps whatever the last pass produced; a
+  mutually oscillating set of derivations is cut off at the bound rather than
+  detected, so the approved sheet ships the last iterate without saying that it
+  never converged.
+
+## Gates
+
+| gate | result |
+|---|---|
+| `tests/test_[a-e]*.py` | 1619 passed, 5 skipped, 0 failed (baseline 0) |
+| `tests/test_[f-o]*.py` | 6646 passed, 3 skipped, 1 xfailed, **4 failed** - all `test_fetch_resolution_gate.py` (baseline) |
+| `tests/test_[p-r]*.py` | 2102 passed, 2 skipped, **2 failed** - both `test_run_river_dye_scenario.py` (baseline) |
+| `tests/test_[s-z]*.py` | 1418 passed, 6 skipped, 0 failed (baseline 0) |
+| `contracts/tests` | 721 passed (no delta) |
+| `scripts/ws_smoke.py` | `all_passed=True`, case self-cleaned |
+| `scripts/run_sfincs_direct.py` (flood canary) | PASSED, `status=ok`, depth COG published |
+| live `telemac_do_sag` - pinned 2.0 | ok, DO min 8.5772 @ 10631.7 m - parity, see below |
+
+Exactly the 4 + 2 baseline failures. No `workers/` path touched, so no image
+rebuild is in play.
+
+## Live evidence
+
+One pinned reference run (`--discharge-m3s 2.0`, logged as `carrier discharge
+2 m3/s (user-supplied)`; Eel River near Scotia, California; BOD 20, 20 C, standard
+5, k1 0.3, k2 0.9, 12 km, mesh auto), through the whole guard-edge change:
+
+| | wave 1 | wave 1c (A / B) | wave 1d pinned | wave 1e pinned |
+|---|---|---|---|---|
+| run id | `01M0RA0RCXW4S40PN1RBSSPJ6M` | `01M0RKE53944J2TNCPYCADGB1X` / `01M0RN1FR6CY0A2Y572HFX271Q` | `01M0RT86QGPRFKEMDT9MZVC5PK` | `01M0RZHKT92S560HG5067QW7FR` |
+| DO sag minimum | 8.5772 mg/L | 8.5772 / 8.5772 | 8.5772 mg/L | **8.5772 mg/L** |
+| sag location | 10631.7 m | 10631.7 / 10631.7 | 10631.7 m | **10631.7 m** |
+| violates the 5 mg/L standard | false | false / false | false | **false** |
+| points / first / last | 60 / 9.022 / 8.9623 | same / same | same | **60 / 9.022 / 8.9623** |
+
+`executed=['do_field', 'do_field.chart:do_sag_curve'] replayed=[] notes=[]`, layer
+`s3://trid3nt-runs/01M0RZHKT92S560HG5067QW7FR/telemac_do_field.tif`. The chart
+node's payload passed the new payload-side leak guard on the way to the wire.
+
+The defect probes, re-run against the pre-fix behavior and then the landed one:
+
+- **R2** pre-fix: `{"title": Slotted(value=ParamRef('reach_km'))}` passed the guard
+  and `json.dumps(default=str)` serialized it as
+  `{"title": "Slotted(value=ParamRef('reach_km'))"}`. Post-fix: `ParamRefLeakedError`
+  at `['result']['title'].value`.
+- **R1** pre-fix (one shared budget, exhaustion as clean): a ref sitting in
+  `entries` behind an over-budget `value` produced NO leak report and NO warning.
+  Post-fix: `LeakScanTruncated` naming `'value'`, then `ParamRefLeakedError` at
+  `['entries'][0]['param']`.
+- Guard cost, measured: 27.5 ms/scan over a 48k-node surface, unchanged whether
+  one surface or three, and 27.8 ms over 36k nodes of frozen+slots dataclasses.

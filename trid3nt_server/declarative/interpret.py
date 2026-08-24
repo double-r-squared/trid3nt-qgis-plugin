@@ -7,12 +7,15 @@ the ledger can replay an expensive solve while a cheap chart re-executes.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import importlib
 import inspect
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -36,6 +39,7 @@ from .errors import (
     DeclarativeError,
     GateNotSupportedError,
     GateRefusedError,
+    LeakScanTruncated,
     ParamRefLeakedError,
     RenderSourceMissingError,
     StepFailedError,
@@ -111,6 +115,8 @@ async def interpret(
     final_index = _final_recordable_index(nodes)
     first_step = next((n.index for n in nodes if not isinstance(n.step, Gate)), None)
     reviewed = any(isinstance(n.step, Gate) and n.step.kind == "form" for n in nodes)
+    self_reviewed = any(not isinstance(n.step, Gate) and n.step.self_gating
+                        for n in nodes)
     try:
         for node in nodes:
             if isinstance(node.step, Gate):
@@ -126,7 +132,8 @@ async def interpret(
                 # one: an invented physics value poisons the prep work as surely as
                 # the solve, and a plan that tags nothing consequential would
                 # otherwise skip the floor entirely.
-                _refuse_invented_physics(out.entries, plan.name, input_mode)
+                _refuse_invented_physics(out.entries, plan.name, input_mode,
+                                         self_reviewed=self_reviewed)
             if node.index == produce_at:
                 await _produce_independent_data(env)
             if node.step.consequential:
@@ -156,8 +163,9 @@ async def interpret(
     finally:
         reset_domain(token)
     # The terminal leak guard: a ParamRef in what the caller receives is a
-    # declaration that escaped binding, never data. One scan over all three, so
-    # the cycle guard dedupes the value that is also a step result.
+    # declaration that escaped binding, never data. Three surfaces, three budgets,
+    # one shared cycle guard - so the value that is also a step result is walked
+    # once, and a large value cannot leave the entries unscanned.
     _refuse_leaked_param_refs(
         {"value": out.value, "results": out.results, "entries": out.entries},
         f"the result of plan {plan.name!r}")
@@ -387,6 +395,10 @@ async def _run_chart(node: _Node, env: _Env) -> Any:
             f"chart {spec.name!r}: the builder produced no spec from the result.",
             error_code="CHART_NOT_BUILT", step=node.label,
         )
+    # The PAYLOAD is what goes over the wire, not the small dict this node returns,
+    # so it is the surface a ref in a chart title would leak through.
+    _refuse_leaked_param_refs({"payload": payload},
+                              f"the chart payload for {spec.name!r}")
     await emit_chart_payloads(payload)
     return {"chart": spec.name, "emitted": True}
 
@@ -512,25 +524,35 @@ def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
 
 
 def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
-                             input_mode: str | None) -> None:
+                             input_mode: str | None, *,
+                             self_reviewed: bool) -> None:
     """Law 9, for a plan whose declared rows no form card will present.
 
     A plan that declares a ``FormGate`` refuses through the gate; one that does not
     (because its step reviews its own inputs) still may not run a physics value
     that fell back to an invented default with nobody to approve it.
 
-    The floor is NOT weaker in ``user_gated`` mode. It refuses in auto mode, and it
-    refuses in user_gated mode when there is NO EMITTER - a headless direct call
-    has no session to present the default on, so "someone will approve it" is
-    false. Only a live user_gated session is exempt, because there the card the
-    user is looking at is what owns the approval. This mirrors
-    ``gate_input_review``'s own two arms exactly; a gateless plan must not be the
-    softer path.
+    The exemption keys on a REVIEW SURFACE, not on a session. Approval needs a card
+    to happen on, and only two things put one in front of the user: the plan's own
+    ``FormGate`` (whose caller skips this floor entirely) or a ``self_gating`` step
+    that runs its own input review. A live session with neither is a session that
+    will never be asked, so it refuses like a headless one - an emitter is where a
+    card COULD be shown, never evidence that one was.
+
+    So: refuse in auto mode; refuse in user_gated mode with no emitter (nobody to
+    approve); refuse in user_gated mode with an emitter but no review surface
+    (nothing to approve on). Step aside only for a live user_gated session whose
+    plan actually reviews these values.
     """
     headless = resolve_input_gate_mode(input_mode) != "auto"
-    if headless and current_emitter() is not None:
+    live = current_emitter() is not None
+    if headless and live and self_reviewed:
         return
-    reason = physics_refusal_reason(tool_name, entries, no_session=headless)
+    reason = physics_refusal_reason(
+        tool_name, entries,
+        no_session=headless and not live,
+        no_review_surface=headless and live,
+    )
     if reason:
         raise GateRefusedError(reason, error_code=_PHYSICS_INPUT_REQUIRED)
 
@@ -575,6 +597,8 @@ async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]
             error_code=getattr(exc, "error_code", None) or "STEP_ARGS_UNBINDABLE",
             step=label, cause=exc,
         ) from exc
+    # Per-kwarg surfaces: one huge argument must not spend the budget the others
+    # need.
     _refuse_leaked_param_refs(bound, f"the arguments of {label!r}")
     return bound
 
@@ -647,14 +671,29 @@ def _declared_reads(value: Any, kind: type) -> Iterable[Any]:
             yield from _declared_reads(v, kind)
 
 
-#: How many nodes the leak scan walks before it stops looking. A leaked ref is a
-#: DECLARATION that escaped binding, so it sits in the argument/result shape an
-#: author wrote - never buried under a million-element numeric array. The bound is
-#: what keeps the guard off the critical path of a large payload.
+#: How many nodes the leak scan walks PER SURFACE before it stops looking. A leaked
+#: ref is a DECLARATION that escaped binding, so it sits in the argument/result
+#: shape an author wrote - never buried under a million-element numeric array. The
+#: bound is what keeps the guard off the critical path of a large payload; running
+#: out of it is reported, never read as "clean".
 _LEAK_SCAN_BUDGET = 50_000
 
 
-def _refuse_leaked_param_refs(value: Any, where: str) -> None:
+@dataclass
+class _Scan:
+    """One leak sweep: the cycle guard, the remaining budget, whether it ran out.
+
+    ``seen`` is shared across the surfaces of one sweep so a value that is both the
+    plan's result and a step result is walked once; ``budget`` is NOT, so a large
+    surface cannot starve the ones scanned after it.
+    """
+
+    seen: set[int]
+    budget: int
+    truncated: bool = False
+
+
+def _refuse_leaked_param_refs(surfaces: Mapping[str, Any], where: str) -> None:
     """Refuse an unsubstituted ``ParamRef`` before it becomes data.
 
     The interpreter is the ONLY thing that substitutes a ref, so one that reaches a
@@ -662,49 +701,108 @@ def _refuse_leaked_param_refs(value: Any, where: str) -> None:
     declaration escaped binding. That is always a bug - a ref is a description of a
     read, and a description written to disk or handed to a solver is a lie about a
     number. Loud and typed beats ``ParamRef('reach_km')`` in a layer title.
+
+    Each named surface gets its OWN budget, and exhausting one is WARNED rather
+    than passed: a scan that stopped looking has not found the surface clean.
     """
-    hit = _find_param_ref(value, set(), [_LEAK_SCAN_BUDGET], "")
-    if hit is None:
-        return
-    path, ref = hit
-    raise ParamRefLeakedError(
-        f"ParamRef({ref.name!r}) reached {where} at {path} without being bound. A "
-        "plan value describes a read; only the interpreter turns it into a number. "
-        "Pass the ref through a step kwarg (which the binder walks) rather than "
-        "storing it on an object or building it into a value by hand."
+    seen: set[int] = set()
+    for name, surface in surfaces.items():
+        scan = _Scan(seen=seen, budget=_LEAK_SCAN_BUDGET)
+        hit = _find_param_ref(surface, scan, f"[{name!r}]")
+        # Warn BEFORE the refusal below: a truncated surface is a fact about this
+        # sweep, and a leak found on a later surface must not swallow it.
+        if scan.truncated:
+            _warn_scan_truncated(name, where)
+        if hit is not None:
+            path, ref = hit
+            raise ParamRefLeakedError(
+                f"ParamRef({ref.name!r}) reached {where} at {path} without being "
+                "bound. A plan value describes a read; only the interpreter turns it "
+                "into a number. Pass the ref through a step kwarg (which the binder "
+                "walks) rather than storing it on an object or building it into a "
+                "value by hand."
+            )
+
+
+def _warn_scan_truncated(unscanned: str, where: str) -> None:
+    message = (
+        f"the ParamRef leak scan of {where} ran out of its {_LEAK_SCAN_BUDGET}-node "
+        f"budget on {unscanned!r}: that surface is only PARTLY checked, so an unbound "
+        "ref could still be sitting in it. A scan that stopped looking is not a clean "
+        "scan. Shrink what the plan carries through this surface, or raise the budget."
     )
+    logger.warning(message)
+    warnings.warn(message, LeakScanTruncated, stacklevel=3)
 
 
-def _find_param_ref(value: Any, seen: set[int], budget: list[int],
+def _find_param_ref(value: Any, scan: _Scan,
                     path: str) -> tuple[str, ParamRef] | None:
     """Depth-first hunt for an unbound ref; returns where it sits, or ``None``."""
-    if budget[0] <= 0:
+    if scan.budget <= 0:
+        scan.truncated = True
         return None
-    budget[0] -= 1
+    scan.budget -= 1
     if isinstance(value, ParamRef):
         return path or "<root>", value
     if value is None or isinstance(value, (str, bytes, bool, int, float)):
         return None
-    if id(value) in seen:
+    if id(value) in scan.seen:
         return None
-    seen.add(id(value))
+    scan.seen.add(id(value))
     if isinstance(value, Mapping):
         items: Iterable[tuple[str, Any]] = ((f"[{k!r}]", v) for k, v in value.items())
     elif isinstance(value, (list, tuple, set, frozenset)):
         items = ((f"[{i}]", v) for i, v in enumerate(value))
     else:
-        # Object attributes, where they are CHEAP to read: a __dict__ is a plain
-        # dict. A __slots__ object is skipped rather than introspected - the guard
-        # is a floor, not a deep-object crawler.
-        attrs = getattr(value, "__dict__", None)
-        if not isinstance(attrs, dict):
+        attrs = _object_attrs(value)
+        if attrs is None:
             return None
-        items = ((f".{k}", v) for k, v in attrs.items())
+        items = ((f".{k}", v) for k, v in attrs)
     for suffix, item in items:
-        hit = _find_param_ref(item, seen, budget, f"{path}{suffix}")
+        hit = _find_param_ref(item, scan, f"{path}{suffix}")
         if hit is not None:
             return hit
     return None
+
+
+def _object_attrs(obj: Any) -> list[tuple[str, Any]] | None:
+    """The attributes of a plain object: ``__dict__``, ``__slots__`` and fields.
+
+    A frozen+slots dataclass has NO ``__dict__``, and it is the house idiom for a
+    value type - so a guard that read only ``__dict__`` could not see a ref held on
+    one, and the ref reached the wire as ``str()`` text through a serializer's
+    ``default=``.
+    """
+    pairs: list[tuple[str, Any]] = []
+    attrs = getattr(obj, "__dict__", None)
+    if isinstance(attrs, dict):
+        pairs.extend(attrs.items())
+    taken = {name for name, _ in pairs}
+    for name in _declared_attribute_names(type(obj)):
+        if name in taken:
+            continue
+        try:
+            pairs.append((name, getattr(obj, name)))
+        except AttributeError:      # an unset slot holds nothing to leak
+            continue
+        taken.add(name)
+    return pairs or None
+
+
+@lru_cache(maxsize=1024)
+def _declared_attribute_names(cls: type) -> tuple[str, ...]:
+    """Every ``__slots__`` name up the MRO, plus a dataclass's own field names."""
+    names: list[str] = []
+    for klass in getattr(cls, "__mro__", ()):
+        declared = klass.__dict__.get("__slots__")
+        if isinstance(declared, str):
+            declared = (declared,)
+        for name in declared or ():
+            if name not in ("__dict__", "__weakref__") and name not in names:
+                names.append(name)
+    if dataclasses.is_dataclass(cls):
+        names.extend(f.name for f in dataclasses.fields(cls) if f.name not in names)
+    return tuple(names)
 
 
 def _load(dotted: str) -> Any:
@@ -735,7 +833,8 @@ def _record(node: _Node, value: Any) -> LedgerRecord:
 
 
 def _record_for(label: str, runner: str, value: Any, *, index: int = 0) -> LedgerRecord:
-    _refuse_leaked_param_refs(value, f"the ledger record for {label!r}")
+    _refuse_leaked_param_refs({"result": value},
+                              f"the ledger record for {label!r}")
     kind, payload, type_path = _serialize(value)
     dom = current_domain()
     return LedgerRecord(

@@ -23,6 +23,12 @@ def validate_plan(plan: Plan, params: Sequence[Param],
     the caller has it. It carries which params the plan read as CONCRETE values,
     which is what makes the revisable-branch check (below) possible.
     """
+    # UNCONDITIONAL: the read set closes here whether or not the revisable-branch
+    # check below needs it. A conditional freeze let a sheet reused for a second
+    # interpret carry the first run's run-time reads into the second validation.
+    freeze = getattr(sheet, "freeze_reads", None)
+    if callable(freeze):
+        freeze()
     refuse_duplicate_params(params)
     param_names = {p.name for p in params}
     data_names = {d.name for d in data}

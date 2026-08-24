@@ -8,6 +8,7 @@ __all__ = [
     "DeclarativeError",
     "GateNotSupportedError",
     "GateRefusedError",
+    "LeakScanTruncated",
     "ModifierIllegalError",
     "ParamOutOfRangeError",
     "ParamRefLeakedError",
@@ -51,6 +52,15 @@ class ParamRefLeakedError(DeclarativeError):
     """
 
     error_code = "PARAM_REF_LEAKED"
+
+
+class LeakScanTruncated(UserWarning):
+    """The ParamRef leak scan hit its node budget, so a surface is only PART checked.
+
+    Not an error - the surface may well be clean - but never silence either: a
+    guard that ran out of budget and returned "clean" would be indistinguishable
+    from one that looked. The warning names the surfaces it could not finish.
+    """
 
 
 class GateRefusedError(DeclarativeError):

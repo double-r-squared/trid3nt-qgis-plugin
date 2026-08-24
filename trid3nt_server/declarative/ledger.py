@@ -80,6 +80,9 @@ class StepLedger:
     records: list[LedgerRecord] = field(default_factory=list)
     data_records: list[LedgerRecord] = field(default_factory=list)
     completed: bool = False
+    #: A document for this key was on disk when the ledger loaded - so abandoning
+    #: the key has something to tombstone rather than a no-op write to make.
+    existed: bool = False
     _client: Any = None
 
     @classmethod
@@ -87,6 +90,7 @@ class StepLedger:
         client = FileMCPClient()
         records: list[LedgerRecord] = []
         data_records: list[LedgerRecord] = []
+        existed = False
         try:
             await _sweep(client)
             doc = await client.call_tool("find-one", {
@@ -94,6 +98,7 @@ class StepLedger:
                 "filter": {"_id": key},
             })
             raw = _unwrap(doc)
+            existed = bool(raw)
             # Replay requires the document to be PRESENT and NOT complete. A
             # tombstone is present-and-complete, so a finished run cannot replay
             # even though its document survives to be swept.
@@ -103,7 +108,7 @@ class StepLedger:
         except Exception as exc:  # noqa: BLE001 - a missing/corrupt ledger only costs a replay
             logger.warning("step ledger %s unreadable (%s); starting fresh", key, exc)
         return cls(key=key, workflow=workflow, records=records,
-                   data_records=data_records, _client=client)
+                   data_records=data_records, existed=existed, _client=client)
 
     def replay_for(self, index: int, node: str) -> LedgerRecord | None:
         """The cached record for this node position, when the plan still matches."""
@@ -137,11 +142,22 @@ class StepLedger:
         await self._persist()
 
     async def clear(self) -> None:
-        """Forget the attempt entirely - the document goes, nothing left to replay."""
+        """Abandon this key: TOMBSTONE the document, then reap it.
+
+        Reaping alone was enough only when the delete SUCCEEDED. A swallowed reap
+        failure left the abandoned key's records sitting there ``complete: false``
+        and replayable for the whole TTL window - a re-key's orphan, or a
+        restart_clean's discarded attempt, back as a replay ghost. Writing the
+        tombstone first degrades a failed delete into a marker that refuses replay.
+        """
         self.records = []
         self.data_records = []
+        if self.existed:
+            self.completed = True
+            await self._persist(completion=True)
         self.completed = False
-        await self._reap()
+        if await self._reap():
+            self.existed = False
 
     async def complete(self) -> None:
         """The plan reached its end: its records are replaced by a completion tombstone.
@@ -161,13 +177,16 @@ class StepLedger:
         self.records = []
         self.data_records = []
 
-    async def _reap(self) -> None:
+    async def _reap(self) -> bool:
+        """Delete the document. Answers whether it actually went."""
         if self._client is None:
-            return
+            return False
         try:
             await _reap(self._client, self.key)
+            return True
         except Exception as exc:  # noqa: BLE001 - the ledger is an optimisation, never a gate
             logger.warning("step ledger %s not reaped: %s", self.key, exc)
+            return False
 
     async def _persist(self, *, completion: bool = False) -> None:
         if self._client is None:
@@ -187,6 +206,7 @@ class StepLedger:
                 }},
                 "upsert": True,
             })
+            self.existed = True
         except Exception as exc:  # noqa: BLE001 - the ledger is an optimisation, never a gate
             if not completion:
                 logger.warning("step ledger %s not persisted: %s", self.key, exc)

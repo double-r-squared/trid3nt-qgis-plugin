@@ -139,8 +139,9 @@ def _physics_demo_entries(entries: Any) -> list[Any]:
     return out
 
 
-def physics_refusal_reason(tool_name: str, entries: Any,
-                           *, no_session: bool = False) -> str | None:
+def physics_refusal_reason(tool_name: str, entries: Any, *,
+                           no_session: bool = False,
+                           no_review_surface: bool = False) -> str | None:
     """The typed ``*_PHYSICS_INPUT_REQUIRED`` refusal text, or None if none refuse.
 
     Names every physics-consequential input that fell back to a demo default and
@@ -150,9 +151,11 @@ def physics_refusal_reason(tool_name: str, entries: Any,
     raise on this directly; the gate returns it as the ``cancel_reason``.
 
     ``no_session`` is for the headless ``user_gated`` arm - the caller ASKED for
-    review and there is no live session to present it on. Telling them to "re-run
-    in user_gated mode" there would name a lever they already pulled, so the
-    remedy sentence says what is actually true instead.
+    review and there is no live session to present it on. ``no_review_surface`` is
+    the other half: a live session that will never be asked, because the workflow
+    declares no card and no step that reviews its own inputs. Both remedies name
+    what is actually missing, rather than a ``user_gated`` lever the caller has
+    already pulled.
     """
     refusing = _physics_demo_entries(entries)
     if not refusing:
@@ -163,12 +166,18 @@ def physics_refusal_reason(tool_name: str, entries: Any,
         note = _entry_field(e, "note")
         need = f" ({note})" if note else ""
         needs.append(f"{param}{need}")
-    where = ("cannot run without a live session to approve these on" if no_session
-             else "cannot run in auto mode")
-    remedy = ("Supply real values, or ensure a fetcher can resolve them."
-              if no_session else
-              "Supply real values, ensure a fetcher can resolve them, or re-run in "
-              "user_gated mode to approve the demo defaults explicitly.")
+    if no_review_surface:
+        where = "cannot run: nothing in this workflow reviews these values"
+        remedy = ("Supply real values, ensure a fetcher can resolve them, or give "
+                  "the workflow a review surface (a form gate, or a step that "
+                  "reviews its own inputs).")
+    elif no_session:
+        where = "cannot run without a live session to approve these on"
+        remedy = "Supply real values, or ensure a fetcher can resolve them."
+    else:
+        where = "cannot run in auto mode"
+        remedy = ("Supply real values, ensure a fetcher can resolve them, or re-run "
+                  "in user_gated mode to approve the demo defaults explicitly.")
     return (
         f"PHYSICS_INPUT_REQUIRED: {tool_name} {where} -- these "
         "physics-consequential inputs have no real data source and fell back to "

@@ -73,9 +73,20 @@ form-gate revision reach the run (what-was-approved == what-ran). A real
 construction-time branch reads the value explicitly - `When(p.get("delineate"),
 ...)` - and `bool(ParamRef)` refuses rather than silently reading True.
 
+Every CONCRETE read path on the sheet records the name it hands over -
+`get`, `row`, `rows`, `values_dict`, and the `values_view()` view's attribute
+access alike. That record is what lets the validator refuse a plan that declares
+a `FormGate` and also branches on a value that gate can revise; a read path that
+did not record was a side entrance to the same frozen branch. The set closes at
+validation, so a sheet reused for a second run carries no run-time reads into it.
+
 A step that runs its OWN input review declares `self_gating=True`; a plan may
 not put a `FormGate` in front of one, because the composite reads its own
-resolved sheet and never sees the plan's.
+resolved sheet and never sees the plan's. `self_gating` is also one of the two
+REVIEW SURFACES the law-9 floor recognises (the other is a declared `FormGate`):
+a plan with neither refuses an invented physics default in every mode, live
+session or not. An emitter is where a card COULD be shown, never evidence that
+one was.
 
 ## The Domain environment
 
