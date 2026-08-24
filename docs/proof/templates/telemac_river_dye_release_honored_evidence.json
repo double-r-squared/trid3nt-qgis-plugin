@@ -6,10 +6,11 @@
       40.509617
     ],
     "tool_status": null,
+    "dispatched": true,
     "is_error": false,
     "turn_complete": true,
     "draw_card": {
-      "request_id": "01M0SJFTZD35R07SE4NQJKT728",
+      "request_id": "01M0TAZN0X0GD1YX86F4TY0TFS",
       "mode": "point",
       "purpose": "barrier",
       "title": "Draw release coords",
@@ -27,10 +28,10 @@
     },
     "release_layers": [
       {
-        "layer_id": "telemac-release-01M0SJFVQ2P4112C6MJ5TFG23E",
+        "layer_id": "telemac-release-01M0TAZNFBS568ADBZKNEF389H",
         "name": "Release point (user) - scotia_humboldt_county_california_95562_united_s",
         "layer_type": "vector",
-        "uri": "s3://trid3nt-runs/inputs/01M0SJFVPN3H8M6GT7532K1NNR/release_point.geojson",
+        "uri": "s3://trid3nt-runs/inputs/01M0TAZNF3QT502KASF04KTQMG/release_point.geojson",
         "style_preset": "release_point",
         "visible": true,
         "role": "context",
@@ -70,10 +71,10 @@
       "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
     ],
-    "run_id": "01M0SJFVRS1W71S4XDZDH29JW2",
+    "run_id": "01M0TAZNJDSTTSEQZ39GRZZP67",
     "product_uris": {
-      "chart_spec": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/chart_spec.json",
-      "metrics": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/metrics.json"
+      "chart_spec": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/metrics.json"
     },
     "product_errors": {},
     "charts_emitted": 1,
@@ -113,20 +114,61 @@
       "discharge_m3s": 2.2,
       "input_mode": "user_gated"
     },
-    "session_id": "01M0SJEBP8VEHS61PV73JEQ2SA",
-    "case_id": "01M0SJEBTCQT6S1WR8KK8RX7DJ",
+    "session_id": "01M0TAY4GEVH0VEFW7PED7XERM",
+    "case_id": "01M0TAY4QTTBR09TEVACPQZ36G",
     "tool_status": null,
     "dispatched": true,
     "is_error": false,
     "detail": "",
     "turn_complete": true,
     "charts": 1,
+    "chart_payloads": [
+      {
+        "envelope_type": "chart-emission",
+        "chart_id": "01M0TB3ZXXAQ3DMKMHTSJCBH9G",
+        "vega_lite_spec": {
+          "mark": {
+            "type": "line",
+            "point": true
+          },
+          "data": {
+            "values": [
+              {
+                "t_s": 0.0,
+                "dye_mgl": 0.0
+              },
+              {
+                "t_s": 140.0,
+                "dye_mgl": 42.22323226928711
+              }
+            ]
+          },
+          "encoding": {
+            "x": {
+              "field": "t_s",
+              "type": "quantitative",
+              "title": "Time (s)"
+            },
+            "y": {
+              "field": "dye_mgl",
+              "type": "quantitative",
+              "title": "Dye concentration (mg/L)"
+            }
+          },
+          "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+        },
+        "title": "Peak dye concentration - Eel River near Scotia, California",
+        "caption": "Reach peak dye concentration 42.2 mg/L, arriving 140 s after release (idealized-bed demo).",
+        "source_layer_uri": null,
+        "created_turn_id": "01M0TAZN0SJYEB4XP3H88CS0CG"
+      }
+    ],
     "layers": [
       {
-        "layer_id": "telemac-mesh-preview-01M0SJEERNRVN0Y69AZQ8JEMD4",
+        "layer_id": "telemac-mesh-preview-01M0TAY5W6ZJAPGVWQPZ2M4R68",
         "name": "Mesh preview (14 m edges, 8,778 nodes)",
         "layer_type": "vector",
-        "uri": "s3://trid3nt-runs/01M0SJEERNRVN0Y69AZQ8JEMD4/mesh_preview.geojson",
+        "uri": "s3://trid3nt-runs/01M0TAY5W6ZJAPGVWQPZ2M4R68/mesh_preview.geojson",
         "style_preset": "nhdplus_flowlines",
         "visible": true,
         "role": "input",
@@ -155,10 +197,10 @@
         "inline_geojson": "<dropped, 162816 bytes>"
       },
       {
-        "layer_id": "telemac-release-01M0SJFVQ2P4112C6MJ5TFG23E",
+        "layer_id": "telemac-release-01M0TAZNFBS568ADBZKNEF389H",
         "name": "Release point (user) - scotia_humboldt_county_california_95562_united_s",
         "layer_type": "vector",
-        "uri": "s3://trid3nt-runs/inputs/01M0SJFVPN3H8M6GT7532K1NNR/release_point.geojson",
+        "uri": "s3://trid3nt-runs/inputs/01M0TAZNF3QT502KASF04KTQMG/release_point.geojson",
         "style_preset": "release_point",
         "visible": true,
         "role": "context",
@@ -190,10 +232,10 @@
         }
       },
       {
-        "layer_id": "input-river-bed-01M0SJKVMW2E8Q4DXYHWBYX52Y",
+        "layer_id": "input-river-bed-01M0TB3ZBC2TDZ29W3RWWY9G64",
         "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
         "layer_type": "raster",
-        "uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/bed_bathymetry.tif",
+        "uri": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/bed_bathymetry.tif",
         "style_preset": "continuous_dem",
         "visible": true,
         "role": "context",
@@ -205,10 +247,10 @@
         "legend": null
       },
       {
-        "layer_id": "model-results-mesh-01M0SJFVRS1W71S4XDZDH29JW2",
+        "layer_id": "model-results-mesh-01M0TAZNJDSTTSEQZ39GRZZP67",
         "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
         "layer_type": "mesh",
-        "uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/r2d_river.slf",
+        "uri": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/r2d_river.slf",
         "style_preset": "mesh_grid",
         "visible": true,
         "role": "context",
@@ -220,10 +262,10 @@
         "legend": null
       },
       {
-        "layer_id": "01M0SJKWB8G1JWEW6M0P025ND8",
+        "layer_id": "01M0TB4041C66W2RAMHTTHJV4B",
         "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
         "layer_type": "raster",
-        "uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/telemac_dye_peak.tif",
+        "uri": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/telemac_dye_peak.tif",
         "style_preset": "continuous_dye_concentration",
         "visible": true,
         "role": "primary",
@@ -245,7 +287,7 @@
       }
     ],
     "draw_card": {
-      "request_id": "01M0SJFTZD35R07SE4NQJKT728",
+      "request_id": "01M0TAZN0X0GD1YX86F4TY0TFS",
       "mode": "point",
       "purpose": "barrier",
       "title": "Draw release coords",
@@ -816,11 +858,11 @@
     "plain_warnings": [
       "telemac_river_dye"
     ],
-    "run_id": "01M0SJFVRS1W71S4XDZDH29JW2",
+    "run_id": "01M0TAZNJDSTTSEQZ39GRZZP67",
     "chart_spec": {
       "dye_concentration": {
         "envelope_type": "chart-emission",
-        "chart_id": "01M0SJKW7WFMNQDQ3VPH44XVRN",
+        "chart_id": "01M0TB3ZXXAQ3DMKMHTSJCBH9G",
         "vega_lite_spec": {
           "mark": {
             "type": "line",
@@ -870,11 +912,11 @@
       "sediment_surface_d50_range_um": null,
       "mesh_size_m": 14.0,
       "mesh_node_estimate": 4271,
-      "layer_uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/telemac_dye_peak.tif"
+      "layer_uri": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/telemac_dye_peak.tif"
     },
     "product_uris": {
-      "chart_spec": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/chart_spec.json",
-      "metrics": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/metrics.json"
+      "chart_spec": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0TAZNJDSTTSEQZ39GRZZP67/metrics.json"
     },
     "product_errors": {}
   }

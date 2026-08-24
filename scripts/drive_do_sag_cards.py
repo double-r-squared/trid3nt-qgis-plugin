@@ -16,6 +16,7 @@ The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage: drive_do_sag_cards.py [--timeout 1800] [--out evidence.json]
+                             [--no-render-proof]
 """
 from __future__ import annotations
 
@@ -26,7 +27,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa: E402
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
+
+EVIDENCE = os.path.join(os.path.dirname(__file__), "..", "docs", "proof",
+                        "templates", "telemac_do_sag_cards_evidence.json")
 
 #: A real NHDPlus reach WITH NHDArea polygon coverage (the bank_source precondition).
 LOCATION = "Eel River near Scotia, California"
@@ -55,14 +60,17 @@ RUN = LiveRun(
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--timeout", type=float, default=1800.0)
-    ap.add_argument("--out", default="/tmp/do_sag_cards_evidence.json")
+    ap.add_argument("--out", default=EVIDENCE)
+    add_render_proof_flag(ap)
     ns = ap.parse_args()
 
     ev = run_live(LiveRun(**{**RUN.__dict__, "timeout_s": ns.timeout}))
     with open(ns.out, "w", encoding="utf-8") as fh:
         json.dump(ev.as_dict(), fh, indent=2, default=str)
+    sheet = render_proof(ns.out) if ns.render_proof else None
 
     print(json.dumps({
+        "canvas_layers_sheet": sheet,
         "tool_status": ev.tool_status,
         "turn_complete": ev.turn_complete,
         "draw_card": ev.draw_card,

@@ -717,6 +717,23 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   NATE in QGIS - plugin-UI coverage only (A+B own the logic). SWMM
   campaign executes the fork resolution per template.
 
+- 2026-08-24 BED BATHYMETRY INPUT LAYER 404s ON THE RIVER FAMILY (queued
+  defect, found by the all-layers contact sheet): the TELEMAC worker writes
+  `bed_bathymetry.tif` into its DATA dir and records `bed_cog` in
+  `telemac_metrics.json`, and `steps/products._surface_bed_bathymetry_input`
+  publishes a `role=context` layer at
+  `s3://<runs>/<run_id>/bed_bathymetry.tif` off that record - but
+  `steps/deck.stage_manifest`'s `outputs` list does not name the file, so
+  the supervisor never uploads it. Both `telemac_river_dye` and
+  `telemac_do_sag` therefore put a layer on the canvas whose object 404s
+  (verified on fresh runs `01M0TAZNJDSTTSEQZ39GRZZP67` and
+  `01M0TA46JPHRNB14FT068ZC6AM`). `coastal_tidal_surge` and `wave_field` name
+  it in their own outputs lists and are unaffected; the pre-migration
+  river_dye composer omitted it too, so this predates the declarative
+  migration. Two parts: the one-line manifest fix, and the honesty question
+  underneath it - `publish_raster_input_cog` returns True for an object that
+  is not there, so an unloadable layer reads as a published one.
+
 - dev-tool-invoke flattens raised typed errors to INTERNAL_ERROR
   (pre-existing, exposed by 3b's refused drive; the banks gate suffers
   the same) - the envelope should carry the exception's own error_code.

@@ -17,6 +17,7 @@ emitted, cited rather than rebuilt.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage: drive_aquifer_baseflow_cards.py [--timeout 900] [--out evidence.json]
+                                       [--no-render-proof]
 
 The evidence lands in ``docs/proof/`` by default: this template publishes no
 raster, so the JSON the drive writes IS the record that the run happened.
@@ -30,6 +31,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa: E402
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
 
 #: Deep agricultural soil with clear SoilGrids texture coverage.
@@ -59,15 +61,18 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--timeout", type=float, default=900.0)
     ap.add_argument("--out", default=EVIDENCE)
+    add_render_proof_flag(ap)
     ns = ap.parse_args()
 
     ev = run_live(LiveRun(**{**RUN.__dict__, "timeout_s": ns.timeout}))
     with open(ns.out, "w", encoding="utf-8") as fh:
         json.dump(ev.as_dict(), fh, indent=2, default=str)
+    sheet = render_proof(ns.out) if ns.render_proof else None
 
     form = ev.form_card or {}
     rows = {r["name"]: r for r in form.get("rows", [])}
     print(json.dumps({
+        "canvas_layers_sheet": sheet,
         "tool_status": ev.tool_status,
         "turn_complete": ev.turn_complete,
         "form_card_title": form.get("title"),

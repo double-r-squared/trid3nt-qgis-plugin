@@ -267,6 +267,11 @@ async def _pump(ws: Any, session_id: str, run: LiveRun, ev: RunEvidence) -> None
         elif kind == "turn-complete" and activity:
             ev.turn_complete = True
             break
+    # EMISSION ORDER, recorded: ``loaded_layers`` is the emitter's append-ordered
+    # list (a re-publish replaces in place, so a layer keeps its first-emission
+    # slot) and each row carries its ``z_index``. The last non-empty snapshot is
+    # therefore the whole canvas in the order the seams delivered it - which is
+    # what an order-faithful proof render reads.
     ev.layers = latest_layers
 
 

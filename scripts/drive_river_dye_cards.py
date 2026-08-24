@@ -19,7 +19,8 @@ The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
 rederived.
 
 Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_river_dye_cards.py [--case honored|refused] [--timeout 1800] [--out F]
+Usage: drive_river_dye_cards.py [--case honored|refused] [--timeout 1800]
+                                [--out F] [--no-render-proof]
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa: E402
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
 
 #: A real NHDPlus reach WITH NHDArea polygon coverage (the bank_source precondition).
@@ -135,6 +137,7 @@ def main() -> int:
     ap.add_argument("--case", choices=sorted(CASES), default="honored")
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--out", default=None)
+    add_render_proof_flag(ap)
     ns = ap.parse_args()
     out_path = ns.out or os.path.join(
         os.path.dirname(__file__), "..", "docs", "proof", "templates",
@@ -173,6 +176,9 @@ def main() -> int:
         json.dump({"report": report, "evidence": _compact(ev.as_dict())}, fh,
                   indent=2, default=str)
     print(f"evidence -> {os.path.abspath(out_path)}")
+    if ns.render_proof:
+        print(f"canvas layers -> "
+              f"{json.dumps(render_proof(out_path), indent=2, default=str)}")
 
     if ns.case == "refused":
         # The run REFUSES a release point the solver could not honor: no relocated
