@@ -458,7 +458,30 @@ the module import rather than ship a tool the model cannot route to.
   **9.298176e-07**, `porosity` **0.156917**, layer bbox
   `(-93.62921267786774, 42.01767770074262, -93.60465753416545, 42.03582715478343)`.
   BIT-IDENTICAL to ADR 0306.
-- **`telemac_do_sag`**: `scripts/run_do_sag_direct.py` re-run at this commit.
+- **`telemac_do_sag`**: **BLOCKED BY DISK, not by this wave.**
+  `scripts/run_do_sag_direct.py` was re-run at this commit and the TELEMAC solve
+  itself COMPLETED (`probe solve CORRECT_END=True`, then the main solve, ~31
+  minutes in `trid3nt-local/telemac:latest`); the run then failed on
+  `TELEMAC_DYE_RUN_FAILED -> SOLVER_FAILED: output upload to
+  s3://trid3nt-runs/01M0T1Q8WP41DGX6GKF6GQEGQ4/ failed: An error occurred
+  (XMinioStorageFull) ... Storage backend has reached its minimum free drive
+  threshold.` The machine is at **99% (4.2 GB free of 423 GB)**, with 14 GB in
+  `data/runs/` and 27 GB in `data/minio/` accumulated across sessions.
+
+  What that leaves as evidence, stated rather than glossed: this wave's diff
+  touches NO TELEMAC path at all (`git diff --name-only c884ab73..HEAD | grep -i
+  telemac` is empty - every changed file is under `workflows/swmm/`, `scripts/`,
+  `tests/` or `docs/`), and `tests/test_telemac_do_sag.py` is green in the
+  `[s-z]` slice. The physical-answer re-run is the evidence this ADR wanted and
+  did not get; it is recorded as MISSING rather than substituted for.
+
+  Not fixed here on purpose: reclaiming meaningful space means deleting run
+  artifacts that earlier ADRs cite by run id (ADR 0306's
+  `01M0SXCN3JYK98ZHA95NEV5AK7`, `01M0SQTZP1KVZ2GKGK1WM8XG86`, and the rest), and
+  deleting NATE's pinned reference runs so that one of this wave's spot-checks
+  can pass is exactly the wrong trade. Only this session's own three
+  failed/killed do_sag run directories (~213 MB) were removed. **The disk is
+  NATE's call and it will block the next TELEMAC or SFINCS run too.**
 - **`telemac_river_dye`**: untouched. `tests/test_run_river_dye_scenario.py` green
   in the `[p-r]` slice.
 
