@@ -61,13 +61,26 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--out", default=EVIDENCE)
+    # The storm/event moment to read the carrier discharge cycle at (ADR 0309).
+    # Unset (the committed showcase run) reads the most recent published NWM
+    # cycle; an explicit ISO date/datetime pins an older cycle for the A/B
+    # comparison - pass --no-render-proof alongside it so the B run never
+    # overwrites the canonical (latest-cycle) proof set.
+    ap.add_argument("--event-time", default=None)
     add_render_proof_flag(ap)
     ns = ap.parse_args()
 
-    ev = run_live(LiveRun(**{**RUN.__dict__, "timeout_s": ns.timeout}))
+    run = RUN
+    if ns.event_time:
+        run = LiveRun(**{**RUN.__dict__, "args": {**RUN.args, "event_time": ns.event_time}})
+
+    ev = run_live(LiveRun(**{**run.__dict__, "timeout_s": ns.timeout}))
     with open(ns.out, "w", encoding="utf-8") as fh:
         json.dump(ev.as_dict(), fh, indent=2, default=str)
     sheet = render_proof(ns.out) if ns.render_proof else None
+
+    station_layers = [l for l in ev.layers
+                      if "discharge station" in str(l.get("name", "")).lower()]
 
     print(json.dumps({
         "canvas_layers_sheet": sheet,
@@ -78,12 +91,15 @@ def main() -> int:
         "plain_warnings": ev.plain_warnings,
         "outfall_layers": [l for l in ev.layers
                            if "outfall" in str(l.get("name", "")).lower()],
+        "station_layers": station_layers,
         "run_id": ev.run_id,
         "product_uris": ev.product_uris,
         "product_errors": ev.product_errors,
         "do_min_mgl": (ev.metrics or {}).get("do_min_mgl"),
         "do_min_distance_m": (ev.metrics or {}).get("do_min_distance_m"),
         "do_violates_standard": (ev.metrics or {}).get("do_violates_standard"),
+        "discharge_m3s": (ev.metrics or {}).get("discharge_m3s"),
+        "discharge_note": (ev.metrics or {}).get("discharge_note"),
         "detail": ev.detail,
         "evidence": ns.out,
     }, indent=2, default=str))

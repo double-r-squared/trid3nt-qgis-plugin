@@ -351,7 +351,9 @@ def _install_step_mocks(captured: dict):
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
         patch.object(forcing_steps, "_nwm_nearest_streamflow",
-                     lambda lon, lat: 312.0),
+                     lambda lon, lat, valid_time=None: {
+                         "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
+                         "product": "analysis_assim", "layer": None}),
         patch.object(solve_steps, "stage_manifest", _fake_stage),
         patch.object(solve_steps, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611, "bank_source": "nhd_area"}),

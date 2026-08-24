@@ -105,6 +105,7 @@ async def solve_waqtel_o2(
     bank_source: str,
     compute_class: str,
     outfall_coords: tuple[float, float] | list[float] | None = None,
+    event_time: str | None = None,
     input_mode: str | None = None,
 ) -> TelemacDoLayerURI:
     """Solve the reach with WAQTEL O2 coupled and return the published DO-field layer.
@@ -153,8 +154,8 @@ async def solve_waqtel_o2(
     try:
         rivers = await fetch_reach_flowline(prefetched=None)
         seed = await reach_seed(reach=reach, rivers=rivers)
-        discharge = await resolve_carrier_discharge(seed=seed,
-                                                    explicit=discharge_m3s)
+        discharge = await resolve_carrier_discharge(seed=seed, explicit=discharge_m3s,
+                                                    event_time=event_time)
         logger.info("do_sag: %s (seed=%.5f,%.5f)", discharge["note"],
                     seed["lon"], seed["lat"])
 
@@ -173,7 +174,8 @@ async def solve_waqtel_o2(
             do_sag_config=do_sag_config)
         solve = await solve_reach(deck=deck, compute_class=compute_class)
         return await publish_do_products(deck=deck, solve=solve,
-                                         do_sag_config=do_sag_config)
+                                         do_sag_config=do_sag_config,
+                                         carrier_discharge=discharge)
     finally:
         reset_domain(token)
 
@@ -202,7 +204,7 @@ async def _review_resolved_inputs(discharge: dict[str, Any], *, bank_source: Any
                   units="m^3/s", basis=discharge.get("basis") or "fetched",
                   real_source_if_any=(None if discharge.get("basis") == "user"
                                       else "NOAA National Water Model streamflow"),
-                  note="carrier discharge governing dilution"),
+                  note=discharge.get("note") or "carrier discharge governing dilution"),
             entry(param="bank_source", value=banks,
                   basis="fetched" if banks == "nhd_area" else "default_demo",
                   consequence="physics",
@@ -215,7 +217,10 @@ async def _review_resolved_inputs(discharge: dict[str, Any], *, bank_source: Any
                                       f"telemac_do_sag {outcome.cancel_reason}")
     revised = float(outcome.params.get("discharge_m3s", discharge["m3s"]))
     if revised != float(discharge["m3s"]):
+        # A user-revised value is no longer the fetched cycle it started from -
+        # the reference_time/product it carried would misdescribe this row.
         return {**discharge, "m3s": revised, "basis": "user", "real_source": None,
+                "reference_time": None, "product": None,
                 "note": f"carrier discharge {revised:.0f} m3/s (revised at review)"}
     return discharge
 

@@ -102,7 +102,7 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",
             real_source_if_any=discharge.get("real_source"),
-            note="carrier discharge governs dilution/transport"),
+            note=discharge.get("note") or "carrier discharge governs dilution/transport"),
         SyntheticInput(
             param="bank_geometry", value=banks,
             basis="fetched" if banks == "nhd_area" else "default_demo",
@@ -391,8 +391,24 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     return peak
 
 
+def _do_sag_provenance(carrier_discharge: dict[str, Any] | None) -> list[SyntheticInput]:
+    """The carrier discharge governing dilution, as the DO-sag layer's own record.
+
+    Mirrors ``_provenance``'s dye row: the layer must carry which cycle it read,
+    never leave the reader to trust an unrecorded "latest".
+    """
+    if not carrier_discharge:
+        return []
+    return [SyntheticInput(
+        param="discharge_m3s", value=round(float(carrier_discharge["m3s"]), 1),
+        units="m3/s", basis=carrier_discharge.get("basis") or "fetched",
+        real_source_if_any=carrier_discharge.get("real_source"),
+        note=carrier_discharge.get("note") or "carrier discharge governs dilution")]
+
+
 async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
-                              do_sag_config: dict[str, Any]) -> Any:
+                              do_sag_config: dict[str, Any],
+                              carrier_discharge: dict[str, Any] | None = None) -> Any:
     """Postprocess a WAQTEL O2 solve into the DISSOLVED-O2 field COG + the sag curve.
 
     The along-reach distance uses the principal-flow-axis proxy (no centerline is
@@ -429,6 +445,7 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
         # The run prefix travels WITH the layer: the caller writes this run's own
         # chart spec + metrics there once the chart has been built.
         "run_id": run_id,
+        "synthetic_inputs": _do_sag_provenance(carrier_discharge),
     }
     published = raw.model_copy(update=mesh_meta)
     if raw.uri.startswith(("s3://", "gs://")):

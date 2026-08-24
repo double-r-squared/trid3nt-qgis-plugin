@@ -15,7 +15,12 @@ from .errors import (
     TelemacReachDegenerateError,
     TelemacReleasePointRejectedError,
 )
-from .forcing import CarrierDischarge, resolve_carrier_discharge, resolve_rain_forcing
+from .forcing import (
+    CarrierDischarge,
+    coerce_event_time,
+    resolve_carrier_discharge,
+    resolve_rain_forcing,
+)
 from .mesh_preview import preview_telemac_mesh
 from .products import Products, build_dye_chart, publish_do_products, publish_dye_products
 from .reach import (
@@ -52,11 +57,11 @@ __all__ = [
     "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
     "TelemacReleasePointRejectedError", "WriteDeck",
     "arm_sediment_modules", "build_dye_chart", "classify_substance",
-    "coerce_lonlat_point", "estimate_telemac_solve_seconds", "fetch_reach_flowline",
-    "geocode_reach", "named_watercourse", "normalize_bank_source",
-    "preview_telemac_mesh", "publish_do_products", "publish_dye_products",
-    "reach_seed", "read_run_metrics", "resolve_carrier_discharge",
-    "resolve_gradation", "resolve_rain_forcing", "sanitize_substance", "slug",
-    "solve_reach", "stage_manifest", "suggest_mesh_size_m", "suggest_time_step_s",
-    "write_reach_deck",
+    "coerce_event_time", "coerce_lonlat_point", "estimate_telemac_solve_seconds",
+    "fetch_reach_flowline", "geocode_reach", "named_watercourse",
+    "normalize_bank_source", "preview_telemac_mesh", "publish_do_products",
+    "publish_dye_products", "reach_seed", "read_run_metrics",
+    "resolve_carrier_discharge", "resolve_gradation", "resolve_rain_forcing",
+    "sanitize_substance", "slug", "solve_reach", "stage_manifest",
+    "suggest_mesh_size_m", "suggest_time_step_s", "write_reach_deck",
 ]

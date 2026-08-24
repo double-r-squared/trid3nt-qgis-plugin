@@ -11,8 +11,8 @@
     "mesh_resolution": "auto",
     "input_mode": "user_gated"
   },
-  "session_id": "01M0TA3J5BXCH7G7PZMXK73FRC",
-  "case_id": "01M0TA3JCNSKYH3JPPTQ82RRZ9",
+  "session_id": "01M0TP1PH2BWS1J9T1693FXYAS",
+  "case_id": "01M0TP1PRB2TJYAFD0N0MX3TPB",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -22,7 +22,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0TAT9QG937T34N1NKHFJ0B5",
+      "chart_id": "01M0TPSBRPZB0NHM0AMJ240B7Z",
       "vega_lite_spec": {
         "layer": [
           {
@@ -681,7 +681,7 @@
       "title": "Dissolved-oxygen sag - Eel River near Scotia, California",
       "caption": "Streeter-Phelps DO sag: minimum 8.6542 mg/L at 546.1 m downstream (meets the 5 mg/L standard, dashed). CBOD decay drives the sag; reaeration recovers it. Screening/permit grade.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0TA3K0W3D7JZM0H6KNQDEEZ"
+      "created_turn_id": "01M0TP1QD2MBZYB2G8PC24N95N"
     }
   ],
   "layers": [
@@ -21682,10 +21682,10 @@
       }
     },
     {
-      "layer_id": "input-nwm_streamflow-c4425988b9db",
-      "name": "Input: analysis assim (nwm_streamflow)",
+      "layer_id": "input-nwm-streamflow-station-nwm-streamflow-analysis_assim-b7b86aec",
+      "name": "Input: NWM discharge station (analysis_assim @ 2026-08-24T16:00Z)",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-cache/cache/dynamic-1h/nwm_streamflow/12f5c9fabe53964aeaa99e835121a04b.fgb",
+      "uri": "s3://trid3nt-cache/cache/dynamic-1h/nwm_streamflow/8e40e06e2fe9792c0a4ed81a9f87cc60.fgb",
       "style_preset": "nwm_streamflow",
       "visible": true,
       "role": "context",
@@ -21704,7 +21704,7 @@
             "properties": {
               "feature_id": 2704767,
               "streamflow_cms": 3.009999932721257,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21721,7 +21721,7 @@
             "properties": {
               "feature_id": 2704071,
               "streamflow_cms": 0.0,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21738,7 +21738,7 @@
             "properties": {
               "feature_id": 2704053,
               "streamflow_cms": 0.0,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21755,7 +21755,7 @@
             "properties": {
               "feature_id": 2704061,
               "streamflow_cms": 0.0,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21772,7 +21772,7 @@
             "properties": {
               "feature_id": 2704025,
               "streamflow_cms": 0.0,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21789,7 +21789,7 @@
             "properties": {
               "feature_id": 2702283,
               "streamflow_cms": 0.0,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21806,7 +21806,7 @@
             "properties": {
               "feature_id": 2702267,
               "streamflow_cms": 0.4599999897181988,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21823,7 +21823,7 @@
             "properties": {
               "feature_id": 2702295,
               "streamflow_cms": 0.009999999776482582,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21839,8 +21839,8 @@
             "type": "Feature",
             "properties": {
               "feature_id": 2704731,
-              "streamflow_cms": 2.029999954625964,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "streamflow_cms": 2.0499999541789293,
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21856,8 +21856,8 @@
             "type": "Feature",
             "properties": {
               "feature_id": 2702675,
-              "streamflow_cms": 2.0999999530613422,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "streamflow_cms": 2.0899999532848597,
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21874,7 +21874,7 @@
             "properties": {
               "feature_id": 2702255,
               "streamflow_cms": 1.2799999713897705,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21891,7 +21891,7 @@
             "properties": {
               "feature_id": 2702281,
               "streamflow_cms": 0.0,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21907,8 +21907,8 @@
             "type": "Feature",
             "properties": {
               "feature_id": 2702293,
-              "streamflow_cms": 2.1199999526143074,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "streamflow_cms": 2.109999952837825,
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21924,8 +21924,8 @@
             "type": "Feature",
             "properties": {
               "feature_id": 2704735,
-              "streamflow_cms": 1.9799999557435513,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "streamflow_cms": 2.029999954625964,
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21942,7 +21942,7 @@
             "properties": {
               "feature_id": 2704741,
               "streamflow_cms": 3.0499999318271875,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21959,7 +21959,7 @@
             "properties": {
               "feature_id": 2704077,
               "streamflow_cms": 0.019999999552965164,
-              "valid_time": "2026-08-24T16:37:01.467544+00:00",
+              "valid_time": "2026-08-24T16:00:00+00:00",
               "product": "analysis_assim"
             },
             "geometry": {
@@ -21974,10 +21974,10 @@
       }
     },
     {
-      "layer_id": "telemac-release-01M0TA46J3DHFTZ636G5JYDDEK",
+      "layer_id": "telemac-release-01M0TP2B9MTYNBPCCYPY5AKYGB",
       "name": "Outfall (user) - scotia_humboldt_county_california_95562_united_s",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/inputs/01M0TA46HR407VE883VKGF3MV0/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M0TP2B96B73BFWVNJHKYXQHP/release_point.geojson",
       "style_preset": "release_point",
       "visible": true,
       "role": "context",
@@ -22009,10 +22009,10 @@
       }
     },
     {
-      "layer_id": "input-river-bed-01M0TAT7GZK80M0F53VZTBPM7T",
+      "layer_id": "input-river-bed-01M0TPS9EY0TC1QBPW3N1KQRV3",
       "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0TA46JPHRNB14FT068ZC6AM/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0TP2BA95K1ZY6WRKP45TSFE/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -22024,10 +22024,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0TAT9ZM6H5RE3DA12R1VQEZ",
+      "layer_id": "01M0TPSBYVQJCP8YHY85C428XW",
       "name": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0TA46JPHRNB14FT068ZC6AM/telemac_do_field.tif",
+      "uri": "s3://trid3nt-runs/01M0TP2BA95K1ZY6WRKP45TSFE/telemac_do_field.tif",
       "style_preset": "continuous_dissolved_oxygen",
       "visible": true,
       "role": "primary",
@@ -22049,7 +22049,7 @@
     }
   ],
   "draw_card": {
-    "request_id": "01M0TA3K0Y5DHDJS0JFRXQ2QW7",
+    "request_id": "01M0TP1QD3KW1FNF3HWQ9BSCRK",
     "mode": "point",
     "purpose": "barrier",
     "title": "Draw outfall coords",
@@ -22064,11 +22064,11 @@
   "plain_warnings": [
     "telemac_do_sag"
   ],
-  "run_id": "01M0TA46JPHRNB14FT068ZC6AM",
+  "run_id": "01M0TP2BA95K1ZY6WRKP45TSFE",
   "chart_spec": {
     "do_sag_curve": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0TAT9QG937T34N1NKHFJ0B5",
+      "chart_id": "01M0TPSBRPZB0NHM0AMJ240B7Z",
       "vega_lite_spec": {
         "layer": [
           {
@@ -22925,11 +22925,13 @@
       0.0
     ],
     "mesh_size_m": 14.0,
-    "layer_uri": "s3://trid3nt-runs/01M0TA46JPHRNB14FT068ZC6AM/telemac_do_field.tif"
+    "layer_uri": "s3://trid3nt-runs/01M0TP2BA95K1ZY6WRKP45TSFE/telemac_do_field.tif",
+    "discharge_m3s": 2.0,
+    "discharge_note": "carrier discharge 2 m3/s (NOAA National Water Model, nearest reach to the seed, analysis_assim @ 2026-08-24T16:00Z)"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0TA46JPHRNB14FT068ZC6AM/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0TA46JPHRNB14FT068ZC6AM/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0TP2BA95K1ZY6WRKP45TSFE/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0TP2BA95K1ZY6WRKP45TSFE/metrics.json"
   },
   "product_errors": {}
 }

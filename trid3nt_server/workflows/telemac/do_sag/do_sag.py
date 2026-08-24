@@ -35,6 +35,10 @@ from trid3nt_server.workflows.telemac.do_sag.steps import (
     ReachSolve,
     coerce_outfall_point,
 )
+from trid3nt_server.workflows.telemac.steps import (
+    TelemacDyeScenarioError,
+    coerce_event_time,
+)
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.do_sag.do_sag")
 
@@ -54,8 +58,8 @@ TEMPLATE_CARD = TemplateCard(
     required_inputs=["location OR bbox"],
     knobs=(
         "discharge_bod_mgl, upstream_do_mgl, water_temp_c, do_standard_mgl, "
-        "k1_per_day, k2_per_day, reach_length_km, discharge_m3s, mesh_resolution, "
-        "bank_source, outfall_coords"
+        "k1_per_day, k2_per_day, reach_length_km, discharge_m3s, event_time, "
+        "mesh_resolution, bank_source, outfall_coords"
     ),
 )
 
@@ -125,6 +129,17 @@ PARAMS: tuple[Param, ...] = (
           bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
           desc="Steady carrier discharge; unset resolves from the NOAA National "
                "Water Model at the reach"),
+    Param("event_time", door=doors.QUESTION, optional=True, consequence="scenario",
+          derived_when_absent=(
+              "the carrier discharge is read at the MOST RECENT published NWM "
+              "cycle"),
+          desc="The storm/event moment to read the carrier discharge cycle at - "
+               "from phrasing like 'during last Tuesday's storm'; an ISO date "
+               "or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). "
+               "Unset reads the most recent published NWM cycle. The NWM PDS "
+               "bucket retains only the last ~30 days of history; a deeper "
+               "request refuses typed rather than silently reading a "
+               "different cycle."),
     Param("compute_class", door=doors.CONSTANT, default="medium",
           consequence="numerical", desc="Solve sizing class"),
 )
@@ -151,7 +166,7 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
             sim_duration_s=p.sim_duration_s, discharge_m3s=p.discharge_m3s,
             mesh_resolution=p.mesh_resolution, mesh_resolution_m=p.mesh_resolution_m,
             bank_source=p.bank_source, compute_class=p.compute_class,
-            input_mode=RunMode,
+            event_time=p.event_time, input_mode=RunMode,
         ).named("do_field")
          .chart("do_sag_curve", builder=f"{_STEPS}.build_sag_chart"),
     ]
@@ -207,6 +222,7 @@ async def telemac_do_sag(
     mesh_resolution_m: float | None = None,
     bank_source: str | None = None,
     compute_class: str | None = None,
+    event_time: str | None = None,
     input_mode: str | None = None,
     restart_clean: bool = False,
     **_extra_ignored: Any,
@@ -262,8 +278,12 @@ def _physical_answer(layer: TelemacDoLayerURI) -> dict[str, Any]:
     """The run's ANSWER, as the numbers a reader has to be able to check.
 
     Persisted beside the chart spec so verification cites the run's own figures
-    rather than recomputing them from the raster.
+    rather than recomputing them from the raster. ``discharge_m3s``/``discharge_note``
+    ride the carrier-discharge provenance row when the layer carries one, so the
+    RESOLVED NWM cycle (never a bare "latest") is pinned here too.
     """
+    disc = next((r for r in (layer.synthetic_inputs or [])
+                if r.param == "discharge_m3s"), None)
     return {
         "do_min_mgl": layer.do_min_mgl,
         "do_min_distance_m": layer.do_min_distance_m,
@@ -277,6 +297,8 @@ def _physical_answer(layer: TelemacDoLayerURI) -> dict[str, Any]:
         "sag_curve_bod_mgl": layer.sag_curve_bod_mgl,
         "mesh_size_m": layer.mesh_size_m,
         "layer_uri": layer.uri,
+        "discharge_m3s": disc.value if disc else None,
+        "discharge_note": disc.note if disc else None,
     }
 
 
@@ -292,6 +314,11 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
         outfall = coerce_outfall_point(args.get("outfall_coords"))
     except OutfallCoordsInvalidError as exc:
         return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INVALID",
+                    "error_message": str(exc)}
+    try:
+        event_time = coerce_event_time(args.get("event_time"))
+    except TelemacDyeScenarioError as exc:
+        return {}, {"status": "error", "error_code": exc.error_code,
                     "error_message": str(exc)}
 
     location, bbox = args.get("location"), args.get("bbox")
@@ -321,6 +348,7 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
     supplied["location"] = location if has_loc else None
     supplied["bbox"] = coerced
     supplied["outfall_coords"] = outfall
+    supplied["event_time"] = event_time
     return {k: v for k, v in supplied.items() if v is not None}, None
 
 

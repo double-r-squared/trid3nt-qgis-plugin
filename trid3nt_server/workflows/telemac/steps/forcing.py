@@ -7,12 +7,16 @@ Neither ever invents a number. The rain producer walks a DECLARED LADDER (a real
 gridMET storm total supersedes a user rate) and a gridMET failure REFUSES typed -
 degrading a requested real storm to zero rain would be a silent no-rain solve.
 The discharge producer refuses typed when the National Water Model has no
-coverage, so the value that governs dilution is never a baked constant.
+coverage (at ``event_time`` when one was asked for, else the latest cycle), so
+the value that governs dilution is never a baked constant, and the cycle it
+actually read is pinned onto the note/provenance rather than left as an
+unpinned "latest".
 """
 
 from __future__ import annotations
 
 import asyncio
+import datetime as _dt
 import logging
 import os
 import tempfile
@@ -24,7 +28,8 @@ from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.forcing")
 
-__all__ = ["CarrierDischarge", "resolve_carrier_discharge", "resolve_rain_forcing"]
+__all__ = ["CarrierDischarge", "coerce_event_time", "resolve_carrier_discharge",
+           "resolve_rain_forcing"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
@@ -168,56 +173,163 @@ def _rain_forcing(rainfall_mm_per_day: float | None,
     return {"mm_per_day": net, "note": note, "rung": rung, "ladder": list(fallback)}
 
 
+def coerce_event_time(value: Any) -> str | None:
+    """A UTC ISO-8601 timestamp from a date/datetime wire value; ``None`` reads
+    the MOST RECENT published NWM cycle.
+
+    Accepts a bare date (midnight UTC) or a full ISO datetime, with or without a
+    ``Z``/offset. A MALFORMED value REFUSES rather than silently falling back to
+    the latest cycle - which discharge cycle governs dilution is a physically
+    consequential choice, and silently reading a different one than the one
+    asked for is the swallow class (the outfall-coordinate precedent). The NWM
+    PDS bucket retains only the last ~30 days; a request outside that window
+    still parses here and refuses later, typed, at the fetch itself.
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    iso = s[:-1] + "+00:00" if s.endswith("Z") else s
+    try:
+        dt = _dt.datetime.fromisoformat(iso)
+    except ValueError:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_PARAMS_INVALID",
+            f"event_time={value!r} is not a parseable ISO-8601 date or datetime "
+            "(e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). Omit it to read the "
+            "most recent published NWM cycle.",
+        ) from None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_dt.timezone.utc)
+    return dt.astimezone(_dt.timezone.utc).isoformat()
+
+
+def _fmt_cycle(reference_time: str | None) -> str:
+    """A short display form of a resolved cycle ISO string, for names/notes."""
+    if not reference_time:
+        return "unresolved cycle"
+    try:
+        dt = _dt.datetime.fromisoformat(str(reference_time).replace("Z", "+00:00"))
+        return dt.strftime("%Y-%m-%dT%H:%MZ")
+    except ValueError:
+        return str(reference_time)
+
+
 async def resolve_carrier_discharge(*, seed: dict[str, Any],
-                                    explicit: float | None) -> dict[str, Any]:
+                                    explicit: float | None,
+                                    event_time: str | None = None) -> dict[str, Any]:
     """The reach CARRIER discharge (m3/s) - real NWM streamflow, or a typed gate.
 
     The carrier discharge governs dilution and transport. An explicit value
-    short-circuits the fetch; otherwise the NHDPlus reach nearest the seed in the
-    NOAA National Water Model is the carrier. A fetch/read miss REFUSES typed
+    short-circuits the fetch; otherwise the NHDPlus reach nearest the seed in
+    the NOAA National Water Model is the carrier, read at ``event_time`` when
+    set (else the most recent published cycle). A fetch/read miss REFUSES typed
     naming ``discharge_m3s`` - it is never reverted to a baked constant.
+
+    The returned ``note`` (and ``reference_time``) PIN the cycle the fetch
+    actually served, never the bare request word: a "latest" request resolves
+    to a real timestamp before it ever reaches provenance or the run's metrics
+    (replayability-by-declaration).
     """
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
     if explicit is not None:
         return {"m3s": float(explicit), "basis": "user", "real_source": None,
+                "reference_time": None, "product": None,
                 "note": f"carrier discharge {float(explicit):.0f} m3/s (user-supplied)"}
 
-    best_q = await asyncio.to_thread(_nwm_nearest_streamflow, seed_lon, seed_lat)
-    if best_q is None:
+    found = await asyncio.to_thread(_nwm_nearest_streamflow, seed_lon, seed_lat, event_time)
+    if found is None:
+        retention_txt = (
+            f" for event_time={event_time!r} (the NWM PDS bucket retains only "
+            "the last ~30 days; a request outside that window is not "
+            "available - deeper history is a documented gap, not a source we "
+            "carry)" if event_time else " for this reach"
+        )
         raise TelemacDyeScenarioError(
             "TELEMAC_DISCHARGE_INPUT_REQUIRED",
             "The NOAA National Water Model streamflow lookup found no carrier "
-            "discharge for this river reach, so the discharge that governs "
-            "dilution is not fabricated. Retry with an explicit discharge_m3s "
-            "(steady upstream carrier discharge, m3/s) for the reach - or name a "
-            "reach with NWM (CONUS) coverage.",
+            f"discharge{retention_txt}, so the discharge that governs dilution "
+            "is not fabricated. Retry with an explicit discharge_m3s (steady "
+            "upstream carrier discharge, m3/s) for the reach, a different "
+            "event_time within the retention window, or omit event_time for "
+            "the latest cycle.",
         )
+    await _surface_discharge_station_layer(found.get("layer"))
+    reference_time = found.get("reference_time")
+    product = found.get("product") or "analysis_assim"
+    cycle_txt = f"{product} @ {_fmt_cycle(reference_time)}"
     return {
-        "m3s": round(best_q, 1), "basis": "fetched",
+        "m3s": round(found["m3s"], 1), "basis": "fetched",
         "real_source": "fetch_noaa_nwm_streamflow (NOAA National Water Model)",
-        "note": (f"carrier discharge {best_q:.0f} m3/s (NOAA National Water Model, "
-                 "nearest reach to the seed)"),
+        "reference_time": reference_time, "product": product,
+        "note": (f"carrier discharge {found['m3s']:.0f} m3/s (NOAA National "
+                 f"Water Model, nearest reach to the seed, {cycle_txt})"),
     }
 
 
-def CarrierDischarge(*, seed: Any, explicit: Any) -> Step:  # noqa: N802
+def CarrierDischarge(*, seed: Any, explicit: Any, event_time: Any = None) -> Step:  # noqa: N802
     """The reach's carrier discharge. A STEP, not Data: it reads the resolved seed,
     which is a step result rather than a declaration a producer could name."""
     return Step(runner=f"{_STEPS}.forcing.resolve_carrier_discharge",
-                kwargs={"seed": seed, "explicit": explicit})
+                kwargs={"seed": seed, "explicit": explicit, "event_time": event_time})
 
 
-def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float) -> float | None:
-    """Streamflow (m3/s) of the NWM reach nearest the seed, or None on any miss."""
+async def _surface_discharge_station_layer(layer: Any) -> None:
+    """Publish the NWM point layer as a context input, its name PINNED to the
+    cycle actually served - never the bare request word.
+
+    ``_nwm_nearest_streamflow`` fetches with ``visualize=False`` (suppressing
+    the generic auto-emission, which would only know the REQUESTED time, not
+    the resolved one), so this is the only station layer that reaches the
+    canvas: exactly one, honestly captioned. BEST-EFFORT (mirrors
+    ``products._surface_bed_bathymetry_input``): never raises, and a missing
+    station layer never voids the discharge resolution.
+    """
+    if layer is None:
+        return
+    try:
+        from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+        from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+        emitter = current_emitter()
+        if emitter is None:
+            return
+        reference_time = getattr(layer, "reference_time", None)
+        product = getattr(layer, "product", None) or "analysis_assim"
+        station = layer.model_copy(update={
+            "layer_id": f"input-nwm-streamflow-station-{layer.layer_id}",
+            "name": f"Input: NWM discharge station ({product} @ "
+                    f"{_fmt_cycle(reference_time)})",
+            "role": "context", "bbox": None,
+        })
+        await publish_input_layer(emitter, station, role="context")
+    except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
+        logger.warning("telemac: NWM station layer surfacing failed (non-fatal, "
+                       "the discharge resolution is unaffected): %s", exc)
+
+
+def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
+                            valid_time: str | None = None) -> dict[str, Any] | None:
+    """The NWM reach nearest the seed: its discharge + the RESOLVED cycle served.
+
+    ``None`` on any miss - offline, no NHDPlus coverage at the seed, or
+    ``valid_time`` falling outside the ~30-day NWM PDS retention window. The
+    typed gate in ``resolve_carrier_discharge`` narrates the difference.
+    """
     from trid3nt_server.data import TOOL_REGISTRY
 
     box = (seed_lon - _DISCHARGE_QUERY_HALF_DEG, seed_lat - _DISCHARGE_QUERY_HALF_DEG,
            seed_lon + _DISCHARGE_QUERY_HALF_DEG, seed_lat + _DISCHARGE_QUERY_HALF_DEG)
     try:
-        layer = TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(bbox=box)
+        # visualize=False: this is a probe fetch for ONE scalar, not the
+        # engine's own input - resolve_carrier_discharge surfaces its own
+        # cycle-pinned station layer once the resolved reference_time is known.
+        layer = TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(
+            bbox=box, valid_time=valid_time, visualize=False)
     except Exception as exc:  # noqa: BLE001 - a fetch miss => the typed gate above
-        logger.info("telemac: NWM streamflow fetch failed for seed %s (%s)",
-                    (seed_lon, seed_lat), exc)
+        logger.info("telemac: NWM streamflow fetch failed for seed %s valid_time=%s "
+                    "(%s)", (seed_lon, seed_lat), valid_time, exc)
         return None
     uri = getattr(layer, "uri", None) or (
         layer.get("uri") if isinstance(layer, dict) else None)
@@ -265,4 +377,11 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float) -> float | None:
             d = 0.0
         if d < best_d and q > 0.0:
             best_d, best_q = d, q
-    return best_q
+    if best_q is None:
+        return None
+    return {
+        "m3s": best_q,
+        "reference_time": getattr(layer, "reference_time", None),
+        "product": getattr(layer, "product", None) or "analysis_assim",
+        "layer": layer,
+    }

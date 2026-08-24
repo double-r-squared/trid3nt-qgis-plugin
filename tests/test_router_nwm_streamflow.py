@@ -166,6 +166,37 @@ def test_resolve_nwm_key_not_available_raises(monkeypatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# netCDF -> streamflow lookup: the real datetime64[ns] round-trip (ADR 0309).
+# --------------------------------------------------------------------------- #
+
+
+def test_load_streamflow_reads_the_real_nc_time_coordinate(tmp_path) -> None:
+    """A real NWM channel_rt file's 'time' coord is datetime64[ns]; ``.item(0)``
+    on that dtype degrades to a plain int (no ``.astype``), which used to make
+    the old ``hasattr(t0, "astype")`` guard silently skip the whole block and
+    fall through to the ``datetime.now()`` fallback - so a HISTORICAL
+    ``event_time`` request always reported "now" as its resolved cycle. No
+    network: a real xarray Dataset round-tripped through netcdf4 reproduces the
+    exact dtype a downloaded NWM file carries.
+    """
+    import numpy as np
+    import xarray as xr
+
+    ds = xr.Dataset(
+        {"streamflow": (["feature_id"], np.array([1.5, 2.5], dtype="float64"))},
+        coords={"feature_id": np.array([100, 200], dtype="int64"),
+               "time": np.array(["2026-08-19T00:00:00"], dtype="datetime64[ns]")},
+    )
+    nc_path = str(tmp_path / "channel_rt.nc")
+    ds.to_netcdf(nc_path, engine="netcdf4")
+    ds.close()
+
+    flows, valid_time = ns._load_streamflow_by_feature(nc_path)
+    assert flows == {100: 1.5, 200: 2.5}
+    assert valid_time == _dt.datetime(2026, 8, 19, 0, 0, 0, tzinfo=_dt.timezone.utc)
+
+
+# --------------------------------------------------------------------------- #
 # The composite fetch + join (network leaves mocked).
 # --------------------------------------------------------------------------- #
 

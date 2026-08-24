@@ -460,15 +460,20 @@ def _load_streamflow_by_feature(nc_path: str) -> tuple[dict[int, float], _dt.dat
             raise NWMStreamflowUpstreamError(
                 f"streamflow shape {flows.shape} != feature_id shape {feature_ids.shape}"
             )
-        valid_time = _dt.datetime.now(_dt.timezone.utc)  # fallback
+        valid_time = _dt.datetime.now(_dt.timezone.utc)  # fallback, an unparseable time only
         if "time" in ds.coords:
             try:
-                t = ds["time"].values
-                t0 = t.item(0) if hasattr(t, "item") else t[0]
-                if hasattr(t0, "astype"):
-                    valid_time = _dt.datetime(
-                        1970, 1, 1, tzinfo=_dt.timezone.utc
-                    ) + _dt.timedelta(seconds=int(t0.astype("int64") / 1_000_000_000))
+                t = np.asarray(ds["time"].values)
+                t0 = t.reshape(-1)[0] if t.shape else t
+                # datetime64[ns].item() degrades to a plain int (nanoseconds since
+                # epoch - Python's datetime has no ns resolution), which silently
+                # skipped this whole block before: neither an int nor the coarser
+                # numpy scalars .item() DOES return has a uniform conversion path.
+                # 'datetime64[us]' is the precision Python's datetime always
+                # supports, so re-casting through it (regardless of the source
+                # precision) -> .astype(object) is the one robust round-trip.
+                py_dt = np.datetime64(t0, "us").astype("datetime64[us]").astype(object)
+                valid_time = py_dt.replace(tzinfo=_dt.timezone.utc)
             except Exception:
                 pass
         return dict(zip(feature_ids.tolist(), flows.tolist())), valid_time

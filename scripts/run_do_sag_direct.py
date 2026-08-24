@@ -49,6 +49,15 @@ def _physical_answer(layer) -> dict:
     get = (lambda f: getattr(layer, f, None)) if not isinstance(layer, dict) \
         else layer.get
     curve = get("sag_curve_do_mgl") or []
+    synthetic_inputs = get("synthetic_inputs") or []
+    disc_row = next((r for r in synthetic_inputs
+                     if getattr(r, "param", None) == "discharge_m3s"
+                     or (isinstance(r, dict) and r.get("param") == "discharge_m3s")),
+                    None)
+
+    def _field(row, name):
+        return row.get(name) if isinstance(row, dict) else getattr(row, name, None)
+
     return {
         "do_min_mgl": get("do_min_mgl"),
         "do_min_distance_m": get("do_min_distance_m"),
@@ -59,6 +68,12 @@ def _physical_answer(layer) -> dict:
         "sag_curve_last_mgl": curve[-1] if curve else None,
         "uri": get("uri"),
         "layer_id": get("layer_id"),
+        "run_id": get("run_id"),
+        # The carrier-discharge provenance row - the pinned NWM cycle, never a
+        # bare "latest" (ADR 0309).
+        "discharge_m3s": _field(disc_row, "value") if disc_row else None,
+        "discharge_basis": _field(disc_row, "basis") if disc_row else None,
+        "discharge_note": _field(disc_row, "note") if disc_row else None,
     }
 
 
@@ -71,6 +86,10 @@ async def main() -> int:
     # cycle for today is not published the template REFUSES typed and names this
     # lever - pinning it is what keeps the reference run comparable.
     ap.add_argument("--discharge-m3s", type=float, default=None)
+    # The storm/event moment to read the carrier discharge cycle at (ADR 0309).
+    # Unset reads the most recent published NWM cycle; an explicit ISO date or
+    # datetime pins an older cycle within the ~30-day NWM PDS retention window.
+    ap.add_argument("--event-time", default=None)
     args = ap.parse_args()
 
     log.info("backend=%s telemac_image=%s runs_bucket=%s endpoint=%s",
@@ -84,6 +103,8 @@ async def main() -> int:
     call = dict(ARGS)
     if args.discharge_m3s is not None:
         call["discharge_m3s"] = args.discharge_m3s
+    if args.event_time is not None:
+        call["event_time"] = args.event_time
 
     fn = TOOL_REGISTRY["telemac_do_sag"].fn
     log.info("invoking telemac_do_sag %s", call)

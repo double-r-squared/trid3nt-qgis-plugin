@@ -50,6 +50,7 @@ from trid3nt_server.workflows.telemac.steps import (
     TelemacDyeScenarioError,
     WriteDeck,
     classify_substance,
+    coerce_event_time,
     coerce_lonlat_point,
     sanitize_substance,
 )
@@ -79,7 +80,7 @@ TEMPLATE_CARD = TemplateCard(
         "spill_fraction, spill_duration_s, dye_concentration_mgl, "
         "reach_length_km, sim_duration_s, source_q_m3s, channel_width_m, "
         "substance (dye / oil / sewage / sediment / scour / graded), mesh_resolution, "
-        "release_coords, decay_half_life_hours, grain_size_um, erodible_bed, "
+        "release_coords, event_time, decay_half_life_hours, grain_size_um, erodible_bed, "
         "bed_thickness_m, bedload_formula, morphological_factor, sediment_gradation, "
         "dredging, dredge_mode (scheduled/criterion), dredge_volume_m3, "
         "dredge_disposal, dredge_crit_depth_m, dredge_dig_depth_m, friction_coefficient, "
@@ -144,6 +145,17 @@ PARAMS: tuple[Param, ...] = (
               "than falling back to a constant"),
           desc="Steady upstream CARRIER discharge - the river flow that dilutes "
                "and transports the release"),
+    Param("event_time", door=doors.QUESTION, optional=True, consequence="scenario",
+          derived_when_absent=(
+              "the carrier discharge is read at the MOST RECENT published NWM "
+              "cycle"),
+          desc="The storm/event moment to read the carrier discharge cycle at - "
+               "from phrasing like 'during last Tuesday's storm'; an ISO date "
+               "or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). "
+               "Unset reads the most recent published NWM cycle. The NWM PDS "
+               "bucket retains only the last ~30 days of history; a deeper "
+               "request refuses typed rather than silently reading a "
+               "different cycle."),
     Param("rainfall_mm_per_day", door=doors.USER, optional=True, bounds=(0.0, 2000.0),
           units="mm/day", consequence="scenario",
           desc="Distributed ON-MESH rainfall applied at every wet node, independent "
@@ -288,8 +300,8 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
                  prompt="Click where the substance enters the river"),
         Geocode.reach(p.location, p.bbox).named("reach"),
         ReachSeed(reach=Ref("reach"), rivers=Ref("rivers")).named("seed"),
-        CarrierDischarge(seed=Ref("seed"),
-                         explicit=p.discharge_m3s).named("carrier_discharge"),
+        CarrierDischarge(seed=Ref("seed"), explicit=p.discharge_m3s,
+                         event_time=p.event_time).named("carrier_discharge"),
         WriteDeck.telemac(
             reach=Ref("reach"), seed=Ref("seed"),
             carrier_discharge=Ref("carrier_discharge"), rain=Ref("rain"),
@@ -390,6 +402,7 @@ async def telemac_river_dye(
     mesh_resolution: str | None = None,
     mesh_resolution_m: float | None = None,
     discharge_m3s: float | None = None,
+    event_time: str | None = None,
     decay_half_life_hours: float | None = None,
     decay_rate_per_day: float | None = None,
     grain_size_um: float | None = None,
@@ -480,8 +493,12 @@ def _physical_answer(layer: TelemacDyeLayerURI) -> dict[str, Any]:
     """The run's ANSWER, as the numbers a reader has to be able to check.
 
     Persisted beside the chart spec so verification cites the run's own figures
-    rather than recomputing them from the raster.
+    rather than recomputing them from the raster. ``discharge_m3s``/``discharge_note``
+    ride the carrier-discharge provenance row, so the RESOLVED NWM cycle (never a
+    bare "latest") is pinned here too.
     """
+    disc = next((r for r in (layer.synthetic_inputs or [])
+                if r.param == "discharge_m3s"), None)
     return {
         "dye_cmax_mgl": layer.dye_cmax_mgl,
         "dye_peak_time_s": layer.dye_peak_time_s,
@@ -495,6 +512,8 @@ def _physical_answer(layer: TelemacDyeLayerURI) -> dict[str, Any]:
         "mesh_size_m": layer.mesh_size_m,
         "mesh_node_estimate": layer.mesh_node_estimate,
         "layer_uri": layer.uri,
+        "discharge_m3s": disc.value if disc else None,
+        "discharge_note": disc.note if disc else None,
     }
 
 
@@ -580,6 +599,7 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
     try:
         release = coerce_lonlat_point(_release_point(args))
         seed_point = coerce_lonlat_point(_reach_seed_point(args, release))
+        event_time = coerce_event_time(args.get("event_time"))
     except TelemacDyeScenarioError as exc:
         return {}, {"status": "error", "error_code": exc.error_code,
                     "error_message": str(exc)}
@@ -611,6 +631,7 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
         "bbox": coerced,
         "release_coords": release,
         "reach_seed_coords": seed_point,
+        "event_time": event_time,
         "substance": substance,
         "compute_class": compute,
     })
