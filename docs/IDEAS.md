@@ -808,3 +808,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   interpolation = refinement, across-gap = invention (refuse/gate);
   unit/datum normalization = same declared family, zero invention.
   Lands with the temporal-inventory adoption waves.
+
+- TEMPORAL TRANSFORMS v1 BLESSED (NATE 2026-08-25): the modifier form
+  (.resample(to=, method=, max_gap=) / .normalize(units=)) as designed
+  - all four dials as proposed: modifier not step-line; per-quantity
+  method defaults (rates=conservative, states=linear, categorical=
+  nearest) overridable; max_gap default native*3; temporal-only v1.
+  One shared library implementation (temporal.py), three surfaces
+  (form badge, provenance transform stamp, typed gap refusal). First
+  consumer: the migrated SWMM templates' declared forcing (the wave-A
+  clock-mismatch site becomes the proving case). Queue: behind
+  event_time + the beacon kill.
