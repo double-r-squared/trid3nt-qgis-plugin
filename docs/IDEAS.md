@@ -664,3 +664,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the pre-F2 `fetch_dem`-shaped bed helper the product path deleted in ADR 0299.
   It is a sandbox driver, not product code, but it now demonstrates the shape the
   sweep guard exists to prevent.
+
+## 2026-08-24 - wave-2 riders (NATE)
+
+- Emit the RELEASE/OUTFALL POINT as a context vector layer (derived seed
+  today, the drawn point when the draw card lands) - the source is
+  physics + provenance but invisible on the map.
+- Persist the chart SPEC + physical-answer metrics (do_min etc) to the
+  run prefix - verification shows the product's own chart, NEVER a
+  rederivation (NATE ruling 2026-08-24; the do_sag verification had to
+  rederive because the payload was chat-turn-only).
+- Verification/showcase runs surface as PERSISTENT showcase cases (no
+  auto-cleanup - they are showcases, not smoke tests); the do_sag pair
+  landed as "showcase: telemac do sag (Eel River near Scotia,
+  declarative v1)" by hand - the seed driver should own this shape.

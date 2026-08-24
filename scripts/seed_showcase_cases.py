@@ -426,7 +426,7 @@ SHOWCASE: list[Showcase] = [
              "nearshore Hs frames for the scrubber + a peak-Hs field (native "
              "solver).", 1200, title_suffix="nonstationary storm"),
     # -- TELEMAC water quality / transport -----------------------------------
-    Showcase("telemac_do_sag", {"location": "Sacramento River near Colusa, California"},
+    Showcase("telemac_do_sag", {"location": "Eel River near Scotia, California"},
              "TELEMAC-WAQTEL DO-sag, real NHDPlus reach nr Colusa CA", 600),
     Showcase("generate_mesh",
              {"location": "Coweeta Creek, North Carolina",
