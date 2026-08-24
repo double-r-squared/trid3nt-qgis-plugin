@@ -841,3 +841,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   PHYSICS ANSWERS still owe parity (R3 stands: same question -> same
   answer; "no back compat" is about API shape, never about results
   drifting). Ledger rows tell each removal's story.
+
+- NO-DOUBLE-MIDDLEWARE LAW (NATE 2026-08-24, skeleton discussion): fetcher
+  tool invocations are treated as DATA; the fetcher router's existing
+  middleware (cache, fallback ladders, provenance, staleness, typed
+  refusals) is authoritative and lives ONCE. No step tier, engine facade,
+  or skeleton stage re-implements or re-wraps it at a different level of
+  abstraction - the acquire stage INTERPRETS DATA declarations, it never
+  fetches.
