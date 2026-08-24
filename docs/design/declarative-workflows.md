@@ -1,7 +1,8 @@
 # Declarative workflows - the plan-value architecture
 
 NATE-shaped design (2026-08-21/23 discussion). V1 LANDED (ADR 0303) -
-do_sag MIGRATED; plugin form/draw cards are wave 2. Proving order:
+do_sag MIGRATED. WAVE 2 LANDED (ADR 0304) - the FORM and DRAW cards, on
+the existing spines, plugin 0.3.17. Proving order:
 telemac do_sag (314 lines, fast feedback),
 then telemac_river_dye (3,503 lines, the full-contact proof). Focus
 engines: SWMM + MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS
@@ -88,6 +89,18 @@ a plan with neither refuses an invented physics default in every mode, live
 session or not. An emitter is where a card COULD be shown, never evidence that
 one was.
 
+## One declaration, three surfaces
+
+The `Param` list is written once and rendered wherever someone has to
+read it. Which VIEW a surface gets is the surface's job, not the
+author's:
+
+| surface | view | why |
+|---|---|---|
+| the model's tool docstring | `render_docstring(view="full")` | it fills the params, so it needs the sheet in prose |
+| the catalog / choose-a-tool page | `render_docstring(view="routing")` (via `fn.routing_doc`) | it only helps someone PICK the tool, and it must fit the 1000-char truncation budget |
+| the FORM CARD | the `ParamSheet` itself | an edit surface needs the declaration structurally - bounds to clamp to, units to label with, a badge saying where the value came from - not a paragraph about it |
+
 ## The Domain environment
 
 The current spatial domain (AOI) is an ENVIRONMENT value, not a
@@ -162,14 +175,30 @@ waits per the hybrid rule).
   constants under an "advanced" fold; the submitted snapshot persists
   as the run's input record (and is what calibration will later read
   and write). The ModelMuse/SWMM-GUI property grid, pre-filled by a
-  sentence.
+  sentence. Wire: the OPTIONAL `param_sheet` field on the existing
+  `tool-payload-warning`; edits ride back on `tool-payload-confirmation`
+  (`narrow_scope` + `revised_args`). SUBMIT IS THE APPROVAL - the whole
+  sheet was on screen, so the gate does not re-present it; the text card
+  without a sheet keeps its adjust-and-re-present rounds.
 - DRAW GATE: point | polyline | polygon | rectangle, prompt text. No
   ghost suggestions: user_gated waits; auto refuses typed. Extends the
-  existing AOI-rectangle machinery. Plugin cost: two card types.
-  Draw-time constraints (within(reach), on-mesh) land WITH the wave-2
-  draw card that can enforce them - the geometry to constrain against
-  is produced after the gates, so there is nothing to check at gate
-  time and a declared-but-unread constraint is a dead promise.
+  existing AOI-rectangle machinery. Wire: the existing
+  `spatial-input-request` pair - `point`/`bbox` ride the stock pick
+  tools, `polygon`/`polyline` ride purposes `aoi`/`line` and the
+  plugin's vertex-capture tool. Draw-time constraints (within(reach),
+  on-mesh) are still OUT - the geometry to constrain against is produced
+  after the gates, so there is nothing to check at gate time and a
+  declared-but-unread constraint is a dead promise.
+- WHAT A GATE ASKS FOR, per mode: `auto` never shows a card - an
+  OPTIONAL param's `derived_when_absent` describes its own absence, and
+  a required one refuses typed. `user_gated` ASKS in both cases, because
+  declaring the gate is the request to ask. The DECLINE is what differs:
+  an optional param falls back to its declared absence, a required one
+  refuses naming the unmet gate.
+- SEATING: form edits and drawn values take the SAME path - re-seated
+  through the GATE door (declared bounds still apply, `basis=user`),
+  derivations re-run, dependent Data evicted, the ledger re-keyed. The
+  cards are new FRONT ENDS to that machinery, not new semantics.
 
 ## Steps beyond fetch/solve
 
@@ -184,7 +213,10 @@ waits per the hybrid rule).
 - CHART STEPS: the chart SPEC (kind + data + axes) is the persisted
   product; the plugin chart dock is the ONE renderer. Closes the
   chart-restore gap; ends server-side figure generation (matplotlib
-  retirement ledger row); specs are JSON, readable by MCP clients.
+  retirement ledger row); specs are JSON, readable by MCP clients. The
+  run carries its built specs out on `RunResult.charts` and writes them
+  to its own object-store prefix beside the physical-answer metrics, so
+  VERIFICATION cites the product's chart rather than rebuilding one.
 - SENSOR EMISSION: station-shaped fetchers publish sensor POSITIONS
   as a context layer alongside their data.
 - QGIS-TRUE PROOF RENDERER: PyQGIS headless rendering through QGIS's
