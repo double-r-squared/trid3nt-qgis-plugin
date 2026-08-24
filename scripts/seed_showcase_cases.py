@@ -53,7 +53,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Product parser lives in the plugin tree; reuse it for the offline round-trip.
 sys.path.insert(0, str(REPO_ROOT))
 
-WS_URL = "ws://127.0.0.1:8765/ws"
+from trid3nt_contracts import new_ulid  # noqa: E402
+from trid3nt_server.testing.ws_client import (  # noqa: E402
+    BLOCKING_EVENTS,
+    WS_URL,
+    approve_confirmation,
+    create_case,
+    delete_case,
+    handshake,
+    mk,
+    parse_tool_status,
+)
 LOG_FILE = Path("/tmp/seed_showcase_cases.log")
 
 # --------------------------------------------------------------------------- #
@@ -656,23 +666,6 @@ def run_line(tool: str, args: dict) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# WS envelope helper
-# --------------------------------------------------------------------------- #
-from trid3nt_contracts import new_ulid  # noqa: E402
-
-
-def mk(type_: str, session_id: str, payload: dict, case_id: str | None = None) -> str:
-    return json.dumps({
-        "type": type_,
-        "id": new_ulid(),
-        "ts": "2026-08-07T00:00:00Z",
-        "session_id": session_id,
-        "case_id": case_id,
-        "payload": payload,
-    })
-
-
-# --------------------------------------------------------------------------- #
 # Per-entry result record
 # --------------------------------------------------------------------------- #
 @dataclass
@@ -707,55 +700,13 @@ class Result:
 
 
 # --------------------------------------------------------------------------- #
-# WS client core
+# WS client core - the protocol primitives live in the shared driver harness.
 # --------------------------------------------------------------------------- #
-async def _handshake(ws, session_id: str) -> None:
-    await ws.send(mk("auth-token", session_id, {"token": ""}))
-    ack = json.loads(await asyncio.wait_for(ws.recv(), timeout=15))
-    assert ack["type"] == "auth-ack", f"expected auth-ack, got {ack['type']}"
-    await ws.send(mk("session-resume", session_id, {"case_id": None}))
-    while True:
-        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=15))
-        if msg["type"] == "session-state":
-            return
-
-
-async def _create_case(ws, session_id: str, title: str) -> str:
-    await ws.send(mk("case-command", session_id,
-                     {"command": "create", "args": {"title": title}}))
-    while True:
-        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
-        if msg["type"] == "case-open":
-            ss = msg["payload"].get("session_state")
-            if ss:
-                return ss["case"]["case_id"]
-
-
-async def delete_case(ws, session_id: str, case_id: str | None) -> None:
-    """Soft-delete a Case via case-command(delete) -- best-effort cleanup.
-
-    NOT called anywhere in this module's own seeding path (this driver NEVER
-    deletes or mutates a showcase Case -- see the module docstring). Exists
-    here for OTHER one-shot proof drivers (e.g. drive_telemac_leg_4b.py) that
-    reuse this module's WS helpers and create a throwaway Case per run.
-    """
-    if not case_id:
-        return
-    try:
-        await ws.send(mk(
-            "case-command", session_id,
-            {"command": "delete", "case_id": case_id}, case_id=case_id,
-        ))
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            raw = await asyncio.wait_for(
-                ws.recv(), timeout=max(0.1, deadline - time.monotonic())
-            )
-            msg = json.loads(raw)
-            if msg["type"] in ("case-list", "error"):
-                return
-    except Exception:
-        log.exception("delete_case failed for case_id=%s", case_id)
+_handshake = handshake
+_create_case = create_case
+_auto_approve_request = approve_confirmation
+_parse_tool_status = parse_tool_status
+_BLOCKING = BLOCKING_EVENTS
 
 
 async def _auto_confirm_warning(ws, session_id: str, msg: dict) -> None:
@@ -793,19 +744,6 @@ async def _auto_confirm_warning(ws, session_id: str, msg: dict) -> None:
              "(proceed removed, no coarsening suggestion parseable)", wid)
     await ws.send(mk("tool-payload-confirmation", session_id,
                      {"warning_id": wid, "decision": "cancel", "revised_args": None}))
-
-
-async def _auto_approve_request(ws, session_id: str, msg: dict) -> None:
-    rid = msg["payload"].get("request_id")
-    log.info("    auto-approve confirmation-request request_id=%s -> approved", rid)
-    await ws.send(mk("confirm-response", session_id,
-                     {"request_id": rid, "approved": True}))
-
-
-_BLOCKING = {
-    "spatial-input-request", "disambiguation-request",
-    "clarification-request", "recovery-choice",
-}
 
 
 async def _seed_one(ws, session_id: str, sc: Showcase) -> Result:
@@ -900,19 +838,6 @@ async def _seed_one(ws, session_id: str, sc: Showcase) -> Result:
         res.detail = res.detail or "turn completed with no tool dispatch"
     log.info("    -> %s :: %s", res.status.upper(), res.detail)
     return res
-
-
-def _parse_tool_status(payload: dict) -> str | None:
-    raw = payload.get("function_response") or ""
-    try:
-        obj = json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
-        return "error" if payload.get("is_error") else None
-    if isinstance(obj, dict):
-        st = obj.get("status")
-        if isinstance(st, str):
-            return st
-    return "error" if payload.get("is_error") else None
 
 
 def _first_line(s: str, n: int = 240) -> str:
