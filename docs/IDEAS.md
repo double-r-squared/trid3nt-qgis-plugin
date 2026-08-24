@@ -745,3 +745,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Data producer (the DEM then surfaces as a canvas layer - NATE wants
   to SEE it - and gains ladder/coverage protection), worker consumes
   the staged raster. Also queue: bank polygons as a publishable layer.
+
+- ESCALATED (NATE spot-check 2026-08-25): the in-worker Copernicus fetch
+  is one instance of a CLASS - all FIVE telemac worker builders
+  (river_dye, coastal, telemac3d, tomawac, artemis) make external
+  fetches from inside containers (NOAA NGDC exportImage, nationalmap
+  3DEP/NHD, USGS water API, Planetary Computer STAC), incl. at least
+  one PRIVATE in-worker fallback ladder ("the ladder still works
+  without it" - telemac_river_dye_build.py:1560ff) - all outside
+  emit-on-fetch, declared ladders, cache, provenance, and the F2
+  audit's denominator (server-tree only; workers were never audited).
+  This is why the tomawac showcase died raw on NGDC 500s. THE TELEMAC
+  FAMILY WAVE's core scope: migrate every builder fetch agent-side as
+  declared Data (staged into the container), delete the private
+  ladders, then a workers-wide external-fetch sweep guard. openquake/
+  opengis URL hits look like doc headers - verify in the recon.
