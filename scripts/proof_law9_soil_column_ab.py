@@ -18,6 +18,7 @@ import asyncio
 import sys
 
 from trid3nt_server.workflows.swmm.aquifer_baseflow import aquifer_baseflow as mod
+from trid3nt_server.workflows.swmm.steps import soil
 
 PLACE = "Ames, Iowa"  # deep agricultural soil - clear SoilGrids texture coverage
 
@@ -54,8 +55,8 @@ async def main() -> int:
     print("\n" + "-" * 78)
     print("(B) SoilGrids force-failed -> typed refusal, no solve")
     print("-" * 78)
-    orig = mod.derive_soil_column
-    mod.derive_soil_column = (  # type: ignore[assignment]
+    orig = soil._column
+    soil._column = (  # type: ignore[assignment]
         lambda lat, lon: (None, {"reason": "AOI off SoilGrids coverage (A/B forced)"})
     )
     b_ok = False
@@ -64,13 +65,13 @@ async def main() -> int:
             location=PLACE, input_mode="auto", sim_days=24,
         )
     finally:
-        mod.derive_soil_column = orig  # type: ignore[assignment]
+        soil._column = orig  # type: ignore[assignment]
     print(f"(B) status={refusal.get('status')} code={refusal.get('error_code')}")
     print(f"    message: {str(refusal.get('error_message'))[:220]}")
     b_ok = (
         refusal.get("status") == "error"
         and refusal.get("error_code") == "SWMM_PHYSICS_INPUT_REQUIRED"
-        and "aquifer_soil_column" in str(refusal.get("error_message"))
+        and "off SoilGrids coverage" in str(refusal.get("error_message"))
     )
     print(f"\n(B) verdict: {'PASS' if b_ok else 'FAIL'} "
           f"(typed SWMM_PHYSICS_INPUT_REQUIRED, no invented column)")

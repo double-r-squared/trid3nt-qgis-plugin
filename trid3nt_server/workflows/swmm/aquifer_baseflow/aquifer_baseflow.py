@@ -1,80 +1,66 @@
 """Engine template ``swmm_aquifer_baseflow_to_node`` - two-zone aquifer baseflow.
 
-How much steady BASEFLOW does a shallow unconfined aquifer beneath a pervious
-subcatchment contribute to a receiving drainage node BETWEEN storms, and how does
-adding that groundwater pathway reshape the node's total hydrograph versus surface
-runoff alone? This is the SWMM analogue of the subsurface return-flow theme that
-the Landlab GroundwaterDupuitPercolator templates and the TELEMAC
-rain-on-grid recession tail approach from the surface-hydrology side:
-a slow, sustained groundwater discharge that keeps a channel flowing after the
-storm runoff has drained -- WITHOUT overclaiming a shared solver (these are
-independent engines answering the same question class).
+How much steady BASEFLOW a shallow unconfined aquifer beneath a pervious
+subcatchment contributes to a receiving drainage node BETWEEN storms, and how
+that groundwater pathway reshapes the node hydrograph versus surface runoff
+alone. The deck authors a real SWMM 5 ``[AQUIFERS]`` two-zone moisture column and
+a ``[GROUNDWATER]`` link whose lateral outflow follows
 
-The deck authors a real SWMM 5 [AQUIFERS] object (the two-zone unsaturated /
-saturated moisture-balance column: porosity, wilting point, field capacity,
-conductivity, seepage, initial water-table elevation) and a [GROUNDWATER] link
-(subcatchment -> aquifer -> node) whose lateral outflow follows the SWMM
-groundwater flow equation
+    q_gw = A1 * (Hgw - Hstar)^B1 - A2 * (Hsw - Hstar)^B2 + A3 * Hgw * Hsw
 
-    q_gw = A1 * (Hgw - Hstar)^B1  -  A2 * (Hsw - Hstar)^B2  +  A3 * Hgw * Hsw
+and solves it headless through the native engine (pyswmm, in-process). TWO
+variants run on the SAME forcing: the baseflow pathway active (A1 > 0), and the
+surface-runoff-only control (A1 = 0) that isolates the contribution.
 
-with A1/B1 the groundwater-to-node coefficients (the baseflow term), and solves
-it headless through the native SWMM 5 engine (pyswmm, in-process). Storm
-infiltration recharges the aquifer; the risen water table then discharges the A1
-baseflow term to the node and recedes slowly between storms. TWO variants run on
-the SAME two-storm forcing:
-
-  1. with_gw - the [GROUNDWATER] baseflow pathway active (A1 > 0);
-  2. no_gw   - A1 = 0 (surface runoff ONLY; the node returns to zero between
-     storms), the control that isolates the groundwater contribution.
+Chart-first validation class: the deliverable is the node-hydrograph chart plus
+typed scalars, on a SCHEMATIC deck - there is no georeferenced raster here. The
+site is real and so is the soil column derived at it.
 
 Citations (NATE-verified template source):
-  * EPA SWMM Reference Manual Volume I - Hydrology (Rossman & Huber),
-    Groundwater chapter (the two-zone AQUIFER moisture balance + the
-    GROUNDWATER flow-equation coefficients A1/B1/A2/B2/A3).
-  * "Aquifer and Groundwater Objects in SWMM 5" (swmm5.org, CHI) - the
-    two-object structure (Aquifer spans subcatchments; Groundwater is per
-    subcatchment) and the flow-coefficient editor.
+  * EPA SWMM Reference Manual Volume I - Hydrology (Rossman & Huber), Groundwater
+    chapter (the two-zone AQUIFER moisture balance + the GROUNDWATER flow-equation
+    coefficients A1/B1/A2/B2/A3).
+  * "Aquifer and Groundwater Objects in SWMM 5" (swmm5.org, CHI) - the two-object
+    structure and the flow-coefficient editor.
 
-Chart-first validation class (the RDII template precedent): the
-deliverable is CHARTS (node hydrograph with-GW vs no-GW + the baseflow recession)
-plus typed scalars, no georeferenced raster. Host-side pyswmm, no worker image.
-
-Determinism boundary (Invariant 1): every number the agent narrates is a typed
-field this tool returns - never free-generated.
+Declared as PARAMS + ``plan(p, d)``; see ``docs/design/declarative-workflows.md``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import math
-import tempfile
-from pathlib import Path
 from typing import Any
 
-from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool, TOOL_REGISTRY
-from trid3nt_server.gates.input_review import (
-    gate_input_review,
-    physics_refusal_reason,
+from trid3nt_server.data import register_tool
+from trid3nt_server.declarative import (
+    DeclarativeError,
+    FormGate,
+    Param,
+    Ref,
+    Workflow,
+    doors,
+    interpret,
+    render_docstring,
+    resolve_params,
 )
-from trid3nt_server.workflows.shared.aquifer_resolve import derive_soil_column
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
+from trid3nt_server.workflows.swmm.aquifer_baseflow.steps import Deck, Metrics
+from trid3nt_server.workflows.swmm.steps import Solve, SwmmStepError
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.swmm.aquifer_baseflow.aquifer_baseflow"
 )
 
-__all__ = [
-    "swmm_aquifer_baseflow_to_node",
-    "build_aquifer_inp",
-    "solve_aquifer_deck",
-    "default_two_storm_forcing",
-    "TEMPLATE_CARD",
-]
+__all__ = ["DATA", "PARAMS", "plan", "swmm_aquifer_baseflow_to_node"]
+
+_SHARED = "trid3nt_server.workflows.swmm.steps"
+_STEPS = "trid3nt_server.workflows.swmm.aquifer_baseflow.steps"
+
+#: The receiving node the [GROUNDWATER] link discharges to in this deck.
+_NODE = "J1"
 
 
 TEMPLATE_CARD = TemplateCard(
@@ -85,12 +71,188 @@ TEMPLATE_CARD = TemplateCard(
     ),
     required_inputs=["location (or lat/lon) for the SoilGrids soil-column derivation"],
     knobs=(
-        "location/lat/lon (AOI for the derived aquifer column), rainfall_series_in_hr, "
-        "dt_min, area_ac, a1/b1 (groundwater flow coefficients), aquifer "
-        "porosity/wilting/field-capacity/conductivity (else SoilGrids-derived), "
-        "initial_water_table_ft, sim_days"
+        "location/lat/lon (site of the derived aquifer column), a1/b1 (groundwater "
+        "flow coefficients), area_ac, storm_intensity_in_hr / storm_duration_hr / "
+        "second_storm_day (the two-storm forcing), rainfall_series_in_hr (an "
+        "explicit hyetograph), aquifer porosity/wilting/field-capacity/conductivity "
+        "(else SoilGrids-derived), initial_water_table_ft, sim_days"
     ),
 )
+
+
+PARAMS: tuple[Param, ...] = (
+    # -- the site ----------------------------------------------------------- #
+    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
+          desc="Place name for the site whose soil column the deck is built from"),
+    Param("lat", door=doors.USER, optional=True, bounds=(-90.0, 90.0),
+          units="deg", consequence="aoi",
+          desc="Explicit site latitude, instead of a place name"),
+    Param("lon", door=doors.USER, optional=True, bounds=(-180.0, 180.0),
+          units="deg", consequence="aoi",
+          desc="Explicit site longitude, instead of a place name"),
+    Param("site_latlon", door=doors.DERIVED, resolve=f"{_SHARED}.site.site_latlon",
+          consequence="aoi",
+          desc="The (lat, lon) the soil column is sampled at"),
+
+    # -- the two-zone column (law 9: derived from real soil, never invented) -- #
+    Param("porosity", door=doors.DERIVED, resolve=f"{_SHARED}.soil.porosity",
+          user_lever=True, bounds=(0.05, 0.8), consequence="physics",
+          desc="Aquifer porosity (saturated water content); SoilGrids-derived at "
+               "the site via the Saxton-Rawls two-zone fit unless supplied - a "
+               "SCREENING near-surface proxy, NOT a measured column"),
+    Param("wilting_point", door=doors.DERIVED,
+          resolve=f"{_SHARED}.soil.wilting_point", user_lever=True,
+          bounds=(0.0, 0.5), consequence="physics",
+          desc="Soil wilting point (water content at -1500 kPa), from the same "
+               "SoilGrids texture fit unless supplied"),
+    Param("field_capacity", door=doors.DERIVED,
+          resolve=f"{_SHARED}.soil.field_capacity", user_lever=True,
+          bounds=(0.0, 0.7), consequence="physics",
+          desc="Soil field capacity (water content at -33 kPa), from the same "
+               "SoilGrids texture fit unless supplied"),
+    Param("conductivity_in_hr", door=doors.DERIVED,
+          resolve=f"{_SHARED}.soil.conductivity_in_hr", user_lever=True,
+          bounds=(0.001, 50.0), units="in/hr", consequence="physics",
+          desc="Aquifer saturated conductivity governing percolation to the water "
+               "table, from the same SoilGrids texture fit unless supplied"),
+
+    # -- the groundwater pathway -------------------------------------------- #
+    Param("a1", door=doors.SCENARIO, default=0.002, bounds=(0.0, 10.0),
+          user_lever=True, consequence="scenario",
+          desc="Groundwater-to-node flow coefficient - the baseflow term; 0 is the "
+               "surface-runoff-only control"),
+    Param("b1", door=doors.SCENARIO, default=1.0, bounds=(0.1, 3.0),
+          consequence="scenario",
+          desc="Groundwater flow exponent; 1 is a linear reservoir, giving a clean "
+               "exponential baseflow recession"),
+    Param("initial_water_table_ft", door=doors.SCENARIO, default=4.0,
+          bounds=(0.0, 100.0), units="ft", consequence="scenario",
+          desc="Initial saturated-zone water-table elevation - the antecedent state "
+               "the recession starts from"),
+
+    # -- the storm forcing --------------------------------------------------- #
+    Param("rainfall_series_in_hr", door=doors.USER, optional=True,
+          consequence="scenario",
+          derived_when_absent=(
+              "the two declared storms are used: one at storm_start_hr on day 0 and "
+              "one on second_storm_day, dry between"),
+          desc="An explicit hyetograph [[\"H:MM\", in/hr], ...], superseding the "
+               "declared two-storm pattern"),
+    Param("storm_intensity_in_hr", door=doors.SCENARIO, default=0.3,
+          bounds=(0.01, 10.0), units="in/hr", consequence="scenario",
+          desc="Rainfall intensity during each declared storm"),
+    Param("storm_start_hr", door=doors.SCENARIO, default=6.0, bounds=(0.0, 23.0),
+          units="h", consequence="scenario",
+          desc="Hour of the day each declared storm begins"),
+    Param("storm_duration_hr", door=doors.SCENARIO, default=8.0, bounds=(0.5, 48.0),
+          units="h", consequence="scenario",
+          desc="Length of each declared storm"),
+    Param("second_storm_day", door=doors.SCENARIO, default=12.0, bounds=(1.0, 60.0),
+          units="day", consequence="scenario",
+          desc="Day the second storm falls; it re-recharges the receding aquifer"),
+    Param("sim_days", door=doors.SCENARIO, default=24, bounds=(2.0, 365.0),
+          units="day", consequence="numerical",
+          desc="Simulation length; it must outlast the second storm for the "
+               "recharge bump to be visible"),
+
+    # -- the subcatchment (the recharge pathway) ----------------------------- #
+    Param("area_ac", door=doors.SCENARIO, default=100.0, bounds=(0.01, 1.0e5),
+          units="acre", consequence="scenario",
+          desc="Pervious subcatchment area draining to the node"),
+    Param("imperviousness_pct", door=doors.SCENARIO, default=5.0,
+          bounds=(0.0, 100.0), units="%", consequence="scenario",
+          desc="Impervious fraction of the modeled subcatchment; the pervious "
+               "remainder is what infiltrates and recharges the aquifer"),
+    Param("soil_suction_in", door=doors.CONSTANT, default=3.5, bounds=(0.1, 30.0),
+          units="in", consequence="numerical",
+          desc="Green-Ampt capillary suction head at the wetting front - a typical "
+               "medium-textured value for the schematic subcatchment, NOT fitted "
+               "to the site texture the aquifer column is derived from"),
+    Param("infiltration_ksat_in_hr", door=doors.CONSTANT, default=0.5,
+          bounds=(0.001, 50.0), units="in/hr", consequence="numerical",
+          desc="Green-Ampt SURFACE saturated conductivity - the infiltration "
+               "capacity of the subcatchment surface, deliberately separate from "
+               "the aquifer column's own conductivity"),
+    Param("initial_moisture_deficit", door=doors.CONSTANT, default=0.30,
+          bounds=(0.0, 0.6), consequence="numerical",
+          desc="Green-Ampt initial soil-moisture deficit at the storm start - the "
+               "antecedent dryness the first storm infiltrates into"),
+    Param("aquifer_seepage_in_hr", door=doors.SCENARIO, default=0.002,
+          bounds=(0.0, 5.0), units="in/hr", consequence="scenario",
+          desc="Deep seepage rate out of the saturated zone - water that leaves "
+               "the modeled aquifer rather than reaching the node"),
+    Param("evaporation_in_day", door=doors.SCENARIO, default=0.02,
+          bounds=(0.0, 1.0), units="in/day", consequence="scenario",
+          desc="Constant pan evaporation applied through the simulation"),
+    Param("surface_elev_ft", door=doors.CONSTANT, default=10.0, bounds=(0.0, 500.0),
+          units="ft", consequence="numerical",
+          desc="Ground-surface elevation above the node invert; the head the water "
+               "table rises within"),
+    Param("dt_min", door=doors.CONSTANT, default=15, bounds=(1.0, 60.0),
+          units="min", consequence="numerical",
+          desc="Wet-weather timestep the hyetograph is written on"),
+
+    # -- how the answer is measured ------------------------------------------ #
+    Param("dry_window_start_day", door=doors.CONSTANT, default=6.0,
+          bounds=(0.0, 365.0), units="day", consequence="numerical",
+          desc="Start of the dry window the between-storms baseflow is averaged "
+               "over; it must sit inside the dry spell between the two storms"),
+    Param("dry_window_end_day", door=doors.CONSTANT, default=11.0,
+          bounds=(0.0, 365.0), units="day", consequence="numerical",
+          desc="End of that dry window, before the second storm arrives"),
+)
+
+#: This deck is schematic - one subcatchment, one node - so nothing it consumes is
+#: a spatial artifact. Its one real-world input is the soil column, which is a
+#: point SAMPLE and therefore resolves through the doors as declared params.
+DATA: tuple = ()
+
+
+def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+    """The aquifer-baseflow recipe. Pure: constructs the plan value, executes nothing.
+
+    Two decks, two solves, one comparison. The control run is DECLARED rather than
+    hidden inside a composite, so the ledger can replay the expensive half while
+    the chart re-executes.
+    """
+    forcing = dict(
+        rainfall_series_in_hr=p.rainfall_series_in_hr, dt_min=p.dt_min,
+        sim_days=p.sim_days, storm_intensity_in_hr=p.storm_intensity_in_hr,
+        storm_start_hr=p.storm_start_hr, storm_duration_hr=p.storm_duration_hr,
+        second_storm_day=p.second_storm_day,
+    )
+    column = dict(
+        porosity=p.porosity, wilting_point=p.wilting_point,
+        field_capacity=p.field_capacity, conductivity_in_hr=p.conductivity_in_hr,
+    )
+    site = dict(
+        area_ac=p.area_ac, imperviousness_pct=p.imperviousness_pct,
+        soil_suction_in=p.soil_suction_in,
+        infiltration_ksat_in_hr=p.infiltration_ksat_in_hr,
+        initial_moisture_deficit=p.initial_moisture_deficit,
+        aquifer_seepage_in_hr=p.aquifer_seepage_in_hr,
+        evaporation_in_day=p.evaporation_in_day,
+        surface_elev_ft=p.surface_elev_ft,
+        initial_water_table_ft=p.initial_water_table_ft,
+    )
+    return Workflow("swmm_aquifer_baseflow_to_node", engine="swmm5")[
+        FormGate(title="Review the aquifer-baseflow scenario"),
+        Deck.aquifer(a1=p.a1, b1=p.b1, **forcing, **column, **site).named("deck_gw"),
+        Solve.pyswmm(inp_text=Ref("deck_gw.inp_text"), nodes=(_NODE,),
+                     label="aquifer-with-gw").named("solve_gw"),
+        Deck.aquifer(a1=0.0, b1=p.b1, **forcing, **column, **site).named("deck_no_gw"),
+        Solve.pyswmm(inp_text=Ref("deck_no_gw.inp_text"), nodes=(_NODE,),
+                     label="aquifer-no-gw").named("solve_no_gw"),
+        Metrics.baseflow(
+            with_gw=Ref("solve_gw"), no_gw=Ref("solve_no_gw"), node=_NODE,
+            dry_window_start_day=p.dry_window_start_day,
+            dry_window_end_day=p.dry_window_end_day,
+            second_storm_day=p.second_storm_day, area_ac=p.area_ac,
+            a1=p.a1, b1=p.b1,
+        ).named("baseflow")
+         .chart("node_hydrograph", builder=f"{_STEPS}.build_baseflow_chart"),
+    ]
+
 
 _METADATA = AtomicToolMetadata(
     name="swmm_aquifer_baseflow_to_node",
@@ -100,196 +262,6 @@ _METADATA = AtomicToolMetadata(
     engine="swmm",
     tier="template",
 )
-
-
-def _geocode_site(location: str) -> tuple[float, float]:
-    """Resolve a place name to ``(lat, lon)`` via the ``geocode_location`` tool.
-
-    Raises on any lookup failure so the caller narrates a typed refusal (never a
-    fabricated site). Seam-1: resolves through ``TOOL_REGISTRY``.
-    """
-    entry = TOOL_REGISTRY.get("geocode_location")
-    if entry is None:
-        raise RuntimeError("geocode_location not registered")
-    r = entry.fn(location)
-    lat = r.get("latitude") if isinstance(r, dict) else getattr(r, "latitude", None)
-    lon = r.get("longitude") if isinstance(r, dict) else getattr(r, "longitude", None)
-    if lat is None or lon is None:
-        raise RuntimeError(f"geocode returned no coordinates for {location!r}")
-    return float(lat), float(lon)
-
-
-def default_two_storm_forcing(
-    dt_min: int = 15, sim_days: int = 24,
-) -> list[tuple[str, float]]:
-    """Representative two-storm forcing ``[("H:MM", in/hr), ...]``: an 8-hour
-    storm on day 1 and another on day 12, dry between, so the between-storms
-    baseflow (and the day-12 recharge bump) are explicit."""
-    rain: list[tuple[str, float]] = []
-    n = int(round(sim_days * 24 * 60 / dt_min))
-    for i in range(n):
-        mins = i * dt_min
-        h = mins / 60.0
-        clock = f"{mins // 60}:{mins % 60:02d}"
-        wet = (6 <= h < 14) or (12 * 24 + 6 <= h < 12 * 24 + 14)
-        rain.append((clock, 0.3 if wet else 0.0))
-    return rain
-
-
-def build_aquifer_inp(
-    rainfall_series_in_hr: list[tuple[str, float]],
-    dt_min: int,
-    area_ac: float,
-    *,
-    porosity: float,
-    wilting_point: float,
-    field_capacity: float,
-    conductivity_in_hr: float,
-    a1: float = 0.002,
-    b1: float = 1.0,
-    initial_water_table_ft: float = 4.0,
-    surface_elev_ft: float = 10.0,
-    sim_days: int = 24,
-) -> str:
-    """Author a SWMM 5 deck: one pervious subcatchment over an [AQUIFERS] two-zone
-    column linked by [GROUNDWATER] (subcatchment -> aquifer -> node J1) with the
-    A1/B1 baseflow coefficients, draining to an outfall. Returns the ``.inp`` text
-    (US units: feet, inches, in/hr). ``a1=0`` disables the baseflow pathway. The
-    two-zone column (porosity / wilting / field-capacity / conductivity) is
-    REQUIRED - law 9: the tool derives it from SoilGrids or refuses (no invented
-    column here)."""
-    ts_rain = "\n".join(f"TSER_R {clk} {v:.4f}" for clk, v in rainfall_series_in_hr)
-    end_date = 1 + int(sim_days)
-    dd = end_date // 30 + 1
-    mm = end_date % 30 or 30
-    return f"""[TITLE]
-two-zone aquifer groundwater baseflow-to-node; A1={a1}
-
-[OPTIONS]
-FLOW_UNITS CFS
-INFILTRATION GREEN_AMPT
-FLOW_ROUTING KINWAVE
-START_DATE 01/01/2020
-START_TIME 00:00:00
-END_DATE {dd:02d}/{mm:02d}/2020
-END_TIME 00:00:00
-REPORT_STEP 01:00:00
-WET_STEP 00:{dt_min:02d}:00
-DRY_STEP 01:00:00
-ROUTING_STEP 300
-
-[EVAPORATION]
-CONSTANT 0.02
-DRY_ONLY NO
-
-[RAINGAGES]
-RG1 INTENSITY 0:{dt_min:02d} 1.0 TIMESERIES TSER_R
-
-[SUBCATCHMENTS]
-S1 RG1 J1 {area_ac} 5 800 0.5 0
-
-[SUBAREAS]
-S1 0.02 0.15 0.05 0.05 25 OUTLET
-
-[INFILTRATION]
-S1 3.5 0.5 0.30
-
-[AQUIFERS]
-;;Name Por WP FC Ksat Kslope Tslope ETu ETs Seep Ebot Egw Umc
-AQ1 {porosity} {wilting_point} {field_capacity} {conductivity_in_hr} 10 15 0.35 14 0.002 0 {initial_water_table_ft} 0.30
-
-[GROUNDWATER]
-;;Subcat Aquifer Node Esurf A1 B1 A2 B2 A3 Dsw Egwt
-S1 AQ1 J1 {surface_elev_ft} {a1} {b1} 0 0 0 0 *
-
-[JUNCTIONS]
-J1 0.0 0 0 0 0
-
-[OUTFALLS]
-OUT -1.0 FREE NO
-
-[CONDUITS]
-C1 J1 OUT 400 0.01 0 0 0 0
-
-[XSECTIONS]
-C1 CIRCULAR 3 0 0 0 1
-
-[TIMESERIES]
-{ts_rain}
-
-[REPORT]
-INPUT NO
-SUBCATCHMENTS ALL
-NODES ALL
-"""
-
-
-def solve_aquifer_deck(
-    inp_text: str,
-) -> tuple[list[float], list[float], list[float], float]:
-    """Solve an aquifer deck headless (pyswmm, in-process) and return
-    ``(hours, node_inflow_cfs, runoff_cfs, flow_routing_error_pct)``.
-
-    ``hours`` is real elapsed time from ``sim.current_time`` (SWMM steps at the
-    variable wet/dry step). ``node_inflow_cfs`` is the receiving node J1's total
-    inflow (surface runoff + groundwater baseflow)."""
-    import pyswmm
-
-    base = Path(tempfile.mkdtemp(prefix="swmm-aquifer-"))
-    inp = base / "gw.inp"
-    inp.write_text(inp_text, encoding="utf-8")
-    hours: list[float] = []
-    node_in: list[float] = []
-    runoff: list[float] = []
-    with pyswmm.Simulation(str(inp)) as sim:
-        j1 = pyswmm.Nodes(sim)["J1"]
-        s1 = pyswmm.Subcatchments(sim)["S1"]
-        t0 = None
-        for _ in sim:
-            now = sim.current_time
-            if t0 is None:
-                t0 = now
-            hours.append((now - t0).total_seconds() / 3600.0)
-            node_in.append(float(j1.total_inflow))
-            runoff.append(float(s1.runoff))
-        cont = float(sim.flow_routing_error) * 100.0
-    return hours, node_in, runoff, cont
-
-
-def _mean_between(hours: list[float], series: list[float],
-                  lo_day: float, hi_day: float) -> float:
-    """Mean of ``series`` over the day window ``[lo_day, hi_day)``."""
-    window = [q for h, q in zip(hours, series) if lo_day * 24 <= h < hi_day * 24]
-    return sum(window) / len(window) if window else 0.0
-
-
-def _peak(series: list[float]) -> tuple[float, int]:
-    if not series:
-        return 0.0, 0
-    i = max(range(len(series)), key=lambda k: series[k])
-    return series[i], i
-
-
-def _node_chart_spec(hours: list[float], with_gw: list[float],
-                     no_gw: list[float]) -> dict[str, Any]:
-    rows: list[dict[str, Any]] = []
-    for t, v in zip(hours, with_gw):
-        rows.append({"t_hr": round(t, 2), "q_cfs": round(v, 5),
-                     "series": "with groundwater (baseflow)"})
-    for t, v in zip(hours, no_gw):
-        rows.append({"t_hr": round(t, 2), "q_cfs": round(v, 5),
-                     "series": "surface runoff only"})
-    return {
-        "title": "node hydrograph: groundwater baseflow vs surface runoff only",
-        "data": {"values": rows},
-        "mark": {"type": "line"},
-        "encoding": {
-            "x": {"field": "t_hr", "type": "quantitative", "title": "time (hr)"},
-            "y": {"field": "q_cfs", "type": "quantitative",
-                  "title": "node inflow (cfs)"},
-            "color": {"field": "series", "type": "nominal", "title": ""},
-        },
-    }
 
 
 @register_tool(
@@ -304,257 +276,130 @@ async def swmm_aquifer_baseflow_to_node(
     lat: float | None = None,
     lon: float | None = None,
     rainfall_series_in_hr: list[list[Any]] | list[tuple[str, float]] | None = None,
-    dt_min: int = 15,
-    area_ac: float = 100.0,
-    a1: float = 0.002,
-    b1: float = 1.0,
+    dt_min: int | None = None,
+    area_ac: float | None = None,
+    a1: float | None = None,
+    b1: float | None = None,
     porosity: float | None = None,
     wilting_point: float | None = None,
     field_capacity: float | None = None,
     conductivity_in_hr: float | None = None,
-    initial_water_table_ft: float = 4.0,
-    sim_days: int = 24,
+    initial_water_table_ft: float | None = None,
+    sim_days: int | None = None,
+    storm_intensity_in_hr: float | None = None,
+    storm_start_hr: float | None = None,
+    storm_duration_hr: float | None = None,
+    second_storm_day: float | None = None,
     input_mode: str | None = None,
+    restart_clean: bool = False,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Two-zone aquifer baseflow to a node: how much sustained groundwater
-    baseflow a shallow aquifer contributes between storms, and how it reshapes
-    the node hydrograph vs surface runoff alone.
-
-    Authors a native SWMM 5 [AQUIFERS]/[GROUNDWATER] deck on one pervious
-    subcatchment and solves it headless (pyswmm, in-process) in two variants on
-    the SAME two-storm forcing: (1) with the groundwater baseflow pathway active
-    (A1 > 0) and (2) a surface-runoff-only control (A1 = 0). Emits a node
-    hydrograph chart (baseflow tail vs none) and returns typed scalars. No engine
-    RASTER (chart-first validation class). Two-zone aquifer + groundwater flow
-    coefficients per the EPA SWMM Reference Manual Vol. I groundwater chapter
-    (module docstring).
-
-    Parameters:
-      location: place name (e.g. "Fort Myers, FL") geocoded to the AOI at which
-        the two-zone aquifer moisture column is DERIVED from SoilGrids texture
-        (law 9). Alternatively pass ``lat``/``lon`` directly.
-      lat, lon: explicit AOI coordinates (override ``location``) for the SoilGrids
-        soil-column derivation.
-      rainfall_series_in_hr: rainfall intensity ``[["H:MM", in/hr], ...]``
-        pairs. Default = a representative two-storm sequence (day 1 and day
-        12) so the between-storms baseflow and the day-12 recharge bump are
-        explicit.
-      dt_min: wet-weather timestep, minutes. Default 15.
-      area_ac: subcatchment area, acres. Default 100.
-      a1: groundwater-to-node flow coefficient (the baseflow term). Default
-        0.002. ``a1=0`` is the surface-only control.
-      b1: groundwater flow exponent. Default 1.0 (linear reservoir -> a clean
-        exponential baseflow recession).
-      porosity, wilting_point, field_capacity, conductivity_in_hr: two-zone
-        aquifer soil-moisture-balance properties. Unset -> DERIVED from SoilGrids
-        texture at the AOI (Saxton-Rawls); the run REFUSES in auto when neither a
-        site nor an explicit column is given, or SoilGrids cannot serve (law 9).
-      initial_water_table_ft: initial saturated-zone water-table elevation (ft),
-        a scenario initial state. Default 4.
-      sim_days: simulation length, days. Default 24.
-
-    Returns:
-      A dict of scalars: ``peak_node_inflow_with_gw_cfs`` (+ ``_hr``),
-      ``peak_node_inflow_no_gw_cfs``, ``between_storms_baseflow_with_gw_cfs``
-      and ``_no_gw_cfs`` (mean node inflow over the dry days 6-11),
-      ``baseflow_contribution_cfs`` (the with-minus-without difference),
-      ``recession_tau_hr`` (exponential recession time constant of the
-      between-storms tail), ``storm2_recharge_bump_cfs`` (baseflow rise after
-      the day-12 storm re-recharges the aquifer), ``flow_routing_error_pct``,
-      and ``curves``.
-    """
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
-
-    def _coerce(series: Any) -> list[tuple[str, float]] | None:
-        if not series:
-            return None
-        try:
-            return [(str(c), float(v)) for c, v in series]
-        except (TypeError, ValueError):
-            return None
-
+    supplied = {k: v for k, v in locals().items()
+                if k in {p.name for p in PARAMS} and v is not None}
     try:
-        dt_min_i = max(int(dt_min), 1)
-        area = max(float(area_ac), 0.01)
-        days = max(int(sim_days), 2)
-    except (TypeError, ValueError) as exc:
-        return {"status": "error", "error_code": "SWMM_AQUIFER_INVALID",
-                "error_message": f"bad numeric input: {exc}"}
-
-    rain = _coerce(rainfall_series_in_hr) or default_two_storm_forcing(dt_min_i, days)
-
-    # --- law 9: two-zone aquifer soil column DERIVED from SoilGrids or REFUSE ---
-    # The [AQUIFERS] moisture column (porosity / wilting / field capacity /
-    # conductivity) is a physics-consequential material property that drives the
-    # baseflow recession directly. It is DERIVED from SoilGrids texture at the AOI
-    # (the Saxton-Rawls two-zone fit) or REFUSES in auto - never an invented column.
-    _user_column = (
-        porosity is not None and wilting_point is not None
-        and field_capacity is not None and conductivity_in_hr is not None
-    )
-    _lat, _lon, _geo_reason = lat, lon, None
-    if not _user_column and (_lat is None or _lon is None) and location:
-        try:
-            _lat, _lon = await asyncio.to_thread(_geocode_site, location)
-        except Exception as exc:  # noqa: BLE001 - a failed geocode -> typed refusal
-            _geo_reason = f"geocode failed for {location!r}: {exc}"
-    _col = None
-    _col_meta: dict[str, Any] = {}
-    if not _user_column and _lat is not None and _lon is not None:
-        _col, _col_meta = await asyncio.to_thread(derive_soil_column, _lat, _lon)
-    elif not _user_column:
-        _col_meta = {"reason": _geo_reason or "no site (location or lat/lon) supplied"}
-
-    if _user_column:
-        column = dict(
-            porosity=float(porosity), wilting_point=float(wilting_point),
-            field_capacity=float(field_capacity),
-            conductivity_in_hr=float(conductivity_in_hr),
+        p = await resolve_params(PARAMS, supplied)
+        result = await interpret(
+            plan(p, None), p, PARAMS, DATA,
+            input_mode=input_mode, resume=not restart_clean,
         )
-        _col_entry = SyntheticInput(
-            param="aquifer_soil_column", basis="user", consequence="physics",
-            value=(f"por={column['porosity']}, wp={column['wilting_point']}, "
-                   f"fc={column['field_capacity']}, K={column['conductivity_in_hr']} in/hr"),
-            note="caller-supplied two-zone aquifer moisture column.",
-        )
-    elif _col is not None:
-        column = dict(
-            porosity=_col.porosity, wilting_point=_col.wilting_point,
-            field_capacity=_col.field_capacity,
-            conductivity_in_hr=_col.conductivity_in_hr,
-        )
-        _col_entry = SyntheticInput(
-            param="aquifer_soil_column", basis="derived", consequence="physics",
-            real_source_if_any="fetch_soilgrids (Saxton-Rawls 2006 two-zone column)",
-            value=(f"por={_col.porosity}, wp={_col.wilting_point}, "
-                   f"fc={_col.field_capacity}, K={_col.conductivity_in_hr} in/hr"),
-            note=(f"two-zone aquifer moisture column DERIVED from SoilGrids texture "
-                  f"at the AOI (sand={_col.sand_pct}%, clay={_col.clay_pct}%). "
-                  "SCREENING near-surface proxy, NOT a measured column."),
-        )
-    else:
-        column = None
-        _col_entry = SyntheticInput(
-            param="aquifer_soil_column", value=None,
-            basis="default_demo", consequence="physics", real_source_if_any=None,
-            note=(f"the two-zone aquifer moisture column could not be resolved from "
-                  f"SoilGrids ({_col_meta.get('reason', 'unavailable')}). No invented "
-                  "default (law 9): supply a location / lat+lon within SoilGrids "
-                  "coverage, or explicit porosity/wilting_point/field_capacity/"
-                  "conductivity_in_hr."),
-        )
-
-    _review = await gate_input_review(
-        tool_name="swmm_aquifer_baseflow_to_node", mode=input_mode,
-        entries=[_col_entry], params={},
-    )
-    if _review.cancelled or column is None:
-        return {
-            "status": "error",
-            "error_code": "SWMM_PHYSICS_INPUT_REQUIRED",
-            "error_message": (
-                _review.cancel_reason
-                or physics_refusal_reason(
-                    "swmm_aquifer_baseflow_to_node", [_col_entry]
-                )
-                or str(_col_entry.note)
-            ),
-        }
-    _col_basis = _col_entry.basis
-    _col_source = _col_entry.real_source_if_any
-
-    common = dict(dt_min=dt_min_i, area_ac=area, b1=float(b1),
-                  initial_water_table_ft=float(initial_water_table_ft),
-                  sim_days=days, **column)
-
-    try:
-        inp_gw = build_aquifer_inp(rain, a1=float(a1), **common)
-        hrs, node_gw, ro, cont = await asyncio.to_thread(solve_aquifer_deck, inp_gw)
-        inp_no = build_aquifer_inp(rain, a1=0.0, **common)
-        _, node_no, _, _ = await asyncio.to_thread(solve_aquifer_deck, inp_no)
+    except asyncio.CancelledError:
+        raise
+    except DeclarativeError as exc:
+        logger.warning("swmm_aquifer_baseflow_to_node %s: %s", exc.error_code, exc)
+        return {"status": "error", "error_code": exc.error_code,
+                "error_message": str(exc)}
+    except SwmmStepError as exc:
+        # A DERIVATION refuses before the plan is ever built (the site, the law-9
+        # soil column), so its typed code never passes through a step.
+        logger.warning("swmm_aquifer_baseflow_to_node %s: %s", exc.error_code, exc)
+        return {"status": "error", "error_code": exc.error_code,
+                "error_message": str(exc)}
     except Exception as exc:  # noqa: BLE001
-        logger.exception("swmm aquifer baseflow solve failed")
-        return {"status": "error", "error_code": "SWMM_AQUIFER_SOLVE_FAILED",
+        if getattr(exc, "retryable", False):
+            raise
+        logger.exception("swmm_aquifer_baseflow_to_node unexpected failure")
+        return {"status": "error", "error_code": "SWMM_AQUIFER_INTERNAL_ERROR",
                 "error_message": str(exc)}
 
-    peak_gw, peak_gw_i = _peak(node_gw)
-    peak_no, _ = _peak(node_no)
-    # between-storms baseflow = mean node inflow over the dry days 6-11.
-    base_gw = _mean_between(hrs, node_gw, 6, 11)
-    base_no = _mean_between(hrs, node_no, 6, 11)
-    contribution = base_gw - base_no
-
-    # exponential recession time constant of the between-storms tail (days 6-11).
-    tail = [(h, q) for h, q in zip(hrs, node_gw) if 6 * 24 <= h < 11 * 24 and q > 1e-6]
-    tau = None
-    if len(tail) >= 2 and tail[0][1] > tail[-1][1] > 0:
-        dt_span = tail[-1][0] - tail[0][0]
-        tau = dt_span / math.log(tail[0][1] / tail[-1][1])
-
-    # storm-2 recharge bump: the baseflow rise from just-before day 12 to its
-    # post-recharge peak in days 12-14 (recharge revives the receding baseflow).
-    pre = _mean_between(hrs, node_gw, 11.5, 12.0)
-    post = _peak([q for h, q in zip(hrs, node_gw) if 12 * 24 <= h < 14 * 24])[0]
-    bump = post - pre
-
-    logger.info(
-        "swmm aquifer baseflow: peak_gw=%.4f cfs peak_no_gw=%.4f cfs "
-        "between_storms base_gw=%.4f no_gw=%.4f contrib=%.4f tau=%s bump=%.4f cont=%.3f%%",
-        peak_gw, peak_no, base_gw, base_no, contribution,
-        None if tau is None else round(tau, 1), bump, cont,
-    )
-
-    emitter = current_emitter()
-    charts_emitted = 0
-    if emitter is not None and hasattr(emitter, "emit_chart"):
-        try:
-            from trid3nt_server.data.processing.charts_common import build_chart_payload
-            spec = _node_chart_spec(hrs, node_gw, node_no)
-            payload = build_chart_payload(
-                vega_lite_spec=spec,
-                title="node hydrograph: groundwater baseflow vs surface runoff only",
-                caption=(
-                    f"Two-zone aquifer baseflow over {area:.0f} ac: with groundwater the "
-                    f"node sustains {base_gw:.3f} cfs baseflow between storms (surface-only "
-                    f"{base_no:.3f} cfs)"
-                    + (f", receding with tau ~{tau:.0f} h" if tau is not None else "")
-                    + f"; the day-12 storm re-recharges the aquifer (+{bump:.3f} cfs). "
-                      f"EPA SWMM two-zone [AQUIFERS]/[GROUNDWATER] flow equation."
-                ),
-            )
-            await emitter.emit_chart(payload)
-            charts_emitted += 1
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("swmm aquifer chart emit failed: %s", exc)
-
+    answer: dict[str, Any] = dict(result.value)
+    # The run's OWN sheet, not the one this call resolved: a form gate may have
+    # revised it, and what is narrated has to be what ran.
+    ran = result.params or p
     return {
         "status": "ok",
         "model": "swmm_two_zone_aquifer_baseflow",
         "citation": ("EPA SWMM Reference Manual Vol. I (Hydrology), Groundwater "
                      "chapter (two-zone aquifer + A1/B1 flow coefficients); "
                      "swmm5.org Aquifer/Groundwater objects"),
-        "area_ac": area,
-        "a1": float(a1),
-        "b1": float(b1),
-        "aquifer_soil_column": {k: round(float(v), 4) for k, v in column.items()},
-        "aquifer_provenance": (
-            str(_col_entry.note)
-            + (f" [{_col_source}]" if _col_source else f" [basis={_col_basis}]")
-        ),
-        "peak_node_inflow_with_gw_cfs": round(peak_gw, 5),
-        "peak_node_inflow_with_gw_hr": round(hrs[peak_gw_i], 2) if hrs else 0.0,
-        "peak_node_inflow_no_gw_cfs": round(peak_no, 5),
-        "between_storms_baseflow_with_gw_cfs": round(base_gw, 5),
-        "between_storms_baseflow_no_gw_cfs": round(base_no, 5),
-        "baseflow_contribution_cfs": round(contribution, 5),
-        "recession_tau_hr": (round(tau, 2) if tau is not None else None),
-        "storm2_recharge_bump_cfs": round(bump, 5),
-        "flow_routing_error_pct": round(cont, 4),
-        "curves": {
-            "hours": [round(t, 3) for t in hrs],
-            "node_inflow_with_gw_cfs": [round(v, 5) for v in node_gw],
-            "node_inflow_no_gw_cfs": [round(v, 5) for v in node_no],
+        "aquifer_soil_column": {
+            name: round(float(ran.get(name)), 4)
+            for name in ("porosity", "wilting_point", "field_capacity",
+                         "conductivity_in_hr")
         },
-        "charts_emitted": charts_emitted,
+        "aquifer_provenance": _column_provenance(ran),
+        **answer,
+        # The SPEC is the product and the dock is the renderer, so what this
+        # reports is what the run BUILT - never a claim about a card it cannot see.
+        "chart_specs": sorted(result.charts),
+        "notes": result.notes,
     }
+
+
+def _column_provenance(p: Any) -> str:
+    """What the narration says about where the two-zone column came from.
+
+    Read off the run's OWN resolved rows, so the prose cannot drift from the
+    machine-readable provenance the run carries.
+    """
+    row = p.row("porosity")
+    if row is None:
+        return "the two-zone aquifer column was not resolved."
+    source = f" [{row.real_source}]" if row.real_source else f" [basis={row.basis}]"
+    return f"two-zone aquifer moisture column {row.note}.{source}"
+
+
+_DOC = dict(
+    summary="BASEFLOW a shallow two-zone AQUIFER adds to a drainage node BETWEEN storms.",
+    routing=(
+        "THE tool for \"how much baseflow does groundwater add to this node between "
+        "storms\", \"does the channel keep flowing after the runoff drains\", \"how "
+        "does the water table reshape the node hydrograph\", \"subsurface return "
+        "flow to the drainage network\", \"SWMM aquifer and groundwater objects\". "
+        "Authors a real SWMM 5 [AQUIFERS] two-zone column + [GROUNDWATER] link on "
+        "one pervious subcatchment and solves it headless (pyswmm) in TWO variants "
+        "on the same two-storm forcing: baseflow active (A1 > 0) and a "
+        "surface-runoff-only control (A1 = 0). SCHEMATIC deck - the product is the "
+        "node-hydrograph CHART + typed scalars, never a map. The column is "
+        "SoilGrids-derived at a real site or REFUSED (law 9)."
+    ),
+    not_for=(
+        "regional groundwater budgets or drawdown (`modflow_*`); urban pipe or "
+        "street flooding (`swmm_urban_flood`); sewer RDII "
+        "(`swmm_rdii_rtk_unit_hydrograph`); hillslope water tables "
+        "(`landlab_groundwater_water_table`)"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved param sheet - including the '
+         "SoilGrids-derived two-zone column - for review/edit before the solves and "
+         'WAITS; "auto" (session default) proceeds with every assumption labeled. '
+         "Not a physical value."),
+        ("restart_clean",
+         "True discards the ledger a PREVIOUS FAILED attempt at this same "
+         "invocation left behind and re-runs every step from the top. Default "
+         "False resumes at the failed step."),
+    ),
+    returns=(
+        "On success a dict of scalars: `baseflow_contribution_cfs` (the "
+        "with-minus-without difference), `between_storms_baseflow_with_gw_cfs` and "
+        "`_no_gw_cfs`, `peak_node_inflow_with_gw_cfs` (+ `_hr`) and "
+        "`peak_node_inflow_no_gw_cfs`, `recession_tau_hr`, "
+        "`storm2_recharge_bump_cfs`, `flow_routing_error_pct`, "
+        "`aquifer_soil_column` + `aquifer_provenance`, and `curves`. Narrate those "
+        "typed numbers. On failure a dict with `status=\"error\"` + `error_code`."
+    ),
+)
+
+swmm_aquifer_baseflow_to_node.__doc__ = render_docstring(**_DOC)
+swmm_aquifer_baseflow_to_node.routing_doc = render_docstring(**_DOC, view="routing")

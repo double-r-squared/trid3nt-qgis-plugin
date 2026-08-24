@@ -20,10 +20,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.workflows.swmm.aquifer_baseflow.aquifer_baseflow import (
-    build_aquifer_inp, solve_aquifer_deck, default_two_storm_forcing,
-    _mean_between, _peak,
+from trid3nt_server.workflows.swmm.aquifer_baseflow.steps import (
+    _mean_between, _peak, build_aquifer_inp, two_storm_forcing,
 )
+from trid3nt_server.workflows.swmm.steps.solve import _run as solve_deck  # noqa: PLC2701
 
 OUT = "/home/nate/Documents/trid3nt-local/docs/proof/templates"
 STEM = "swmm_aquifer_baseflow_to_node"
@@ -32,13 +32,27 @@ AREA_AC = 100.0
 SIM_DAYS = 24
 A1 = 0.002
 B1 = 1.0
+#: The deck values the template DECLARES; the proof runs the declared defaults.
+COLUMN = dict(porosity=0.4637, wilting_point=0.1963, field_capacity=0.3568,
+              conductivity_in_hr=0.1318)
+DECK = dict(initial_water_table_ft=4.0, surface_elev_ft=10.0,
+            imperviousness_pct=5.0, soil_suction_in=3.5,
+            infiltration_ksat_in_hr=0.5, initial_moisture_deficit=0.30,
+            aquifer_seepage_in_hr=0.002, evaporation_in_day=0.02)
+STORM = dict(intensity_in_hr=0.3, storm_start_hr=6.0, storm_duration_hr=8.0,
+             second_storm_day=12.0)
 
 
 def main():
-    rain = default_two_storm_forcing(DT_MIN, SIM_DAYS)
-    common = dict(dt_min=DT_MIN, area_ac=AREA_AC, b1=B1, sim_days=SIM_DAYS)
-    hrs, node_gw, ro, cont = solve_aquifer_deck(build_aquifer_inp(rain, a1=A1, **common))
-    _, node_no, _, _ = solve_aquifer_deck(build_aquifer_inp(rain, a1=0.0, **common))
+    rain = two_storm_forcing(dt_min=DT_MIN, sim_days=SIM_DAYS, **STORM)
+    common = dict(dt_min=DT_MIN, area_ac=AREA_AC, b1=B1, sim_days=SIM_DAYS,
+                  **COLUMN, **DECK)
+    gw = solve_deck(build_aquifer_inp(rain, a1=A1, **common), ("J1",), (),
+                    "total_inflow", "runoff", "proof-gw")
+    no = solve_deck(build_aquifer_inp(rain, a1=0.0, **common), ("J1",), (),
+                    "total_inflow", "runoff", "proof-no-gw")
+    hrs, node_gw, cont = gw["hours"], gw["nodes"]["J1"], gw["flow_routing_error_pct"]
+    node_no = no["nodes"]["J1"]
 
     hrs = np.array(hrs); node_gw = np.array(node_gw); node_no = np.array(node_no)
     base_gw = _mean_between(list(hrs), list(node_gw), 6, 11)
