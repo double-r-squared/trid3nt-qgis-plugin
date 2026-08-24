@@ -786,3 +786,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   both halves together; the external-fetch audit's migration plan
   targets this end state; per-engine constant inventories ride the
   engine campaigns.
+
+- TEMPORAL DOCTRINE (NATE 2026-08-25, generalizes event_time): every
+  regularly-updated/timestamped source gets (1) a time param, default
+  latest, ALWAYS pinned in provenance; (2) declared temporal metadata
+  (cadence, retention window, snap granularity) on the source spec;
+  (3) two-tier invalid-interval resolution - in-window off-cycle SNAPS
+  to nearest w/ a provenance note; out-of-retention REFUSES typed
+  naming the window + the archive gap. Never a silently different
+  time. Shared resolution seam (the doors idiom), not per-fetcher
+  code. Dataset VINTAGE (NLCD year, DEM release) noted as the adjacent
+  cousin - selectable where sources version, same pinning rule.
