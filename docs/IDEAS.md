@@ -829,3 +829,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   templates onto shared steps (family net-LOC verdict due). SWMM
   B/C/D after. --network none endorsement still open - pose at the
   TELEMAC kickoff (it is the natural definition-of-done).
+
+- SKELETON REFACTOR DEMOLITION CLAUSE (NATE 2026-08-25): this is a
+  GENERALIZATION refactor - absorbed functionality is DELETED outright,
+  NO backward compatibility: no dual paths, no deprecation shims, no
+  transition aliases. The composite dies (not deprecated); pass-through
+  signatures deleted; old tool bodies replaced by the registration
+  factory and removed; dotted-string chart builders -> function refs
+  with no string fallback; data/simulation shims deleted as engines
+  migrate. DISTINCTION: interfaces/wiring owe nothing to the past -
+  PHYSICS ANSWERS still owe parity (R3 stands: same question -> same
+  answer; "no back compat" is about API shape, never about results
+  drifting). Ledger rows tell each removal's story.
