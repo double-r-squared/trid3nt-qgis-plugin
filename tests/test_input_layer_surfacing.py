@@ -567,6 +567,7 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "sfincs/flood/flood.py": (1, "mesh preview"),
     "swan/wave_field/wave_field.py": (1, "in-worker bathymetry COG"),
     "telemac/agitation/agitation.py": (1, "bare-OSM breakwaters (router-bypass, S3 loose end)"),
+    "telemac/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
     "telemac/river_dye/river_dye.py": (5, "deposition/slick/preview results + in-worker bed COG"),
     "telemac/stratified_flow/stratified_flow.py": (1, "in-worker telemac3d bottom COG"),

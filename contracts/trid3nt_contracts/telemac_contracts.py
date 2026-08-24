@@ -264,6 +264,10 @@ class TelemacDoLayerURI(LayerURI):
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_node_estimate: int | None = Field(default=None, ge=0)
     mesh_resolution_label: str | None = Field(default=None)
+    #: The solver run this layer came out of - i.e. its object-store prefix. The
+    #: run's own chart spec + metrics are written there, so a reader can pull the
+    #: product's chart instead of rebuilding one from the scalars above.
+    run_id: str | None = Field(default=None)
 
 
 class TelemacSedimentLayerURI(LayerURI):

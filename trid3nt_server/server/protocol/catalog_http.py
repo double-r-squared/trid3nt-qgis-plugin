@@ -213,7 +213,11 @@ def build_catalog_payload(
     for name in sorted(TOOL_REGISTRY.keys()):
         entry = TOOL_REGISTRY[name]
         meta = entry.metadata
-        doc_full = (entry.fn.__doc__ or "").strip()
+        # A declared tool renders TWO views of its docstring; this page is a
+        # CHOOSE-the-tool surface, so it takes the routing one. Everything else
+        # has only its written docstring.
+        doc_full = (getattr(entry.fn, "routing_doc", None)
+                    or entry.fn.__doc__ or "").strip()
         # Cap to 3 sample queries -- the page shows 2-3; sending all 5-10 wastes
         # bandwidth on a discovery surface.
         sample_queries = list(corpus_map.get(name, []))[:3]

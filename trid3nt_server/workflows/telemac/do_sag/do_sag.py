@@ -29,6 +29,7 @@ from trid3nt_server.declarative import (
     resolve_params,
 )
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
+from trid3nt_server.workflows.telemac.run_products import persist_run_products
 from trid3nt_server.workflows.telemac.do_sag.steps import (
     OutfallCoordsInvalidError,
     ReachSolve,
@@ -244,6 +245,10 @@ async def telemac_do_sag(
         parts += [f"NOTE: {n}" for n in result.notes]
         update["fallback_note"] = " ".join(parts)
     layer = layer.model_copy(update=update)
+    await persist_run_products(
+        getattr(layer, "run_id", None),
+        charts=result.charts, metrics=_physical_answer(layer),
+    )
     logger.info(
         "telemac_do_sag complete layer_id=%s do_min=%.3g mg/L at %sm violates=%s "
         "executed=%s replayed=%s notes=%s",
@@ -251,6 +256,28 @@ async def telemac_do_sag(
         layer.do_violates_standard, result.executed, result.replayed, result.notes,
     )
     return layer
+
+
+def _physical_answer(layer: TelemacDoLayerURI) -> dict[str, Any]:
+    """The run's ANSWER, as the numbers a reader has to be able to check.
+
+    Persisted beside the chart spec so verification cites the run's own figures
+    rather than recomputing them from the raster.
+    """
+    return {
+        "do_min_mgl": layer.do_min_mgl,
+        "do_min_distance_m": layer.do_min_distance_m,
+        "do_standard_mgl": layer.do_standard_mgl,
+        "do_violates_standard": layer.do_violates_standard,
+        "do_upstream_mgl": layer.do_upstream_mgl,
+        "do_saturation_mgl": layer.do_saturation_mgl,
+        "bod_upstream_mgl": layer.bod_upstream_mgl,
+        "sag_curve_distance_m": layer.sag_curve_distance_m,
+        "sag_curve_do_mgl": layer.sag_curve_do_mgl,
+        "sag_curve_bod_mgl": layer.sag_curve_bod_mgl,
+        "mesh_size_m": layer.mesh_size_m,
+        "layer_uri": layer.uri,
+    }
 
 
 def _with_notes(exc: BaseException) -> str:
@@ -297,7 +324,7 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
     return {k: v for k, v in supplied.items() if v is not None}, None
 
 
-telemac_do_sag.__doc__ = render_docstring(
+_DOC = dict(
     summary="DISSOLVED-OXYGEN SAG below a discharge in a river (US TMDL / permit question).",
     routing=(
         "THE tool for \"where does dissolved oxygen bottom out below this discharge\", "
@@ -336,3 +363,9 @@ telemac_do_sag.__doc__ = render_docstring(
         "`error_code`."
     ),
 )
+
+#: The full sheet is what the MODEL needs (it fills the params); the routing view
+#: is what a surface that only helps someone CHOOSE the tool needs, and it fits
+#: the truncation budget by construction.
+telemac_do_sag.__doc__ = render_docstring(**_DOC)
+telemac_do_sag.routing_doc = render_docstring(**_DOC, view="routing")

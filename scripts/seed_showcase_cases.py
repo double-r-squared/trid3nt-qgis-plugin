@@ -31,7 +31,10 @@ round-trips every reconstructed ``!run`` line back through the PRODUCT parser
 to the SAME (name, args) -- a hermetic contract check that reuses product code.
 
 This driver NEVER deletes or mutates an existing Case; it only CREATES new
-``showcase:``-prefixed Cases. It NEVER touches a template file.
+``showcase:``-prefixed Cases, and it never cleans one up afterwards - a showcase
+is a durable artifact a human opens, not a smoke test's scratch space. Cases
+carry no TTL stamp, so nothing expires them out from under that. It NEVER
+touches a template file.
 """
 
 from __future__ import annotations
@@ -427,7 +430,13 @@ SHOWCASE: list[Showcase] = [
              "solver).", 1200, title_suffix="nonstationary storm"),
     # -- TELEMAC water quality / transport -----------------------------------
     Showcase("telemac_do_sag", {"location": "Eel River near Scotia, California"},
-             "TELEMAC-WAQTEL DO-sag, real NHDPlus reach nr Colusa CA", 600),
+             "TELEMAC-WAQTEL DO-sag on the Eel River nr Scotia, CA - a real "
+             "NHDPlus reach with NHDArea bank polygons (the bank_source="
+             "\"nhd_area\" precondition). The declarative-v1 reference run: the "
+             "sag minimum, its downstream location and the standard verdict come "
+             "back as typed scalars, and the run's own chart spec + metrics land "
+             "in its object-store prefix.", 600,
+             title_suffix="Eel River near Scotia, declarative v1"),
     Showcase("generate_mesh",
              {"location": "Coweeta Creek, North Carolina",
               "pour_point": (-83.40402, 35.05746),

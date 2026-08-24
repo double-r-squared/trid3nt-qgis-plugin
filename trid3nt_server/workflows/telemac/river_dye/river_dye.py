@@ -2381,6 +2381,23 @@ async def model_telemac_river_dye(
     seeds_reach = bool(release_seeds_reach) and (
         release_pair is not None or seed_release_pair is not None
     )
+
+    # The source term's LOCATION on the map. Where the substance enters is what
+    # the downstream distance is measured from, so it is a physical input, not
+    # decoration - and it says out loud whether the user placed it or the reach
+    # pipeline derived it.
+    _release_point = release_pair or seed_release_pair
+    from trid3nt_server.workflows.telemac.release_layer import publish_release_point
+
+    await publish_release_point(
+        emitter,
+        lon=(_release_point or (seed_lon, seed_lat))[0],
+        lat=(_release_point or (seed_lon, seed_lat))[1],
+        user_supplied=_release_point is not None,
+        reach_name=reach_name,
+        label="Outfall" if do_sag_config else "Release point",
+    )
+
     # TELEMAC-PHYS-1 constitutive-physics overrides (advanced / demo-default
     # levers). Only the keys the user/LLM explicitly set are validated + carried
     # onto the manifest; anything unset is absent from `reach`, so the worker
@@ -2925,6 +2942,9 @@ async def _postprocess_and_publish_do_sag(
         "mesh_size_m": mesh_size_m,
         "mesh_node_estimate": mesh_node_estimate,
         "mesh_resolution_label": mesh_resolution_label,
+        # The run prefix travels WITH the layer: the caller writes this run's own
+        # chart spec + metrics there once the chart has been built.
+        "run_id": run_id,
     }
 
     async with substep(emitter, "publish_layer"):
