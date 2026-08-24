@@ -358,3 +358,183 @@ A-green with B-red isolates a fault to the interaction machinery.
 - The mechanism-template purity fork (per-engine call at migration).
 - Calibration capability (separate design; consumes the form
   snapshot + basis machinery this campaign builds).
+
+## The Workflow Skeleton (Template Method) - PROPOSED, FOR NATE REDLINE
+
+Agreed in the 2026-08-24 architecture discussion (rulings recorded in
+docs/IDEAS.md, 2026-08-24/25 entries); this section is the contract the
+family campaign builds. Status: PROPOSED until NATE redlines.
+
+### The placement rule
+
+A capability lives at the highest layer where it needs no
+specialization; it drops one layer only when variation is genuine; and
+it drops all the way to the workflow only when the variation is
+per-question. Every placement below is an application of this rule, and
+any future placement argument is settled by it.
+
+### The abstract Workflow class
+
+Base class name RULED: `Workflow`. A template file DECLARES a workflow;
+the class IS one - the apparent name collision with the species is
+coherence, not conflict. Analysis-only templates ride the same skeleton
+and simply leave the solve-family slots unfilled.
+
+`Workflow` owns everything that never varies:
+
+- the stage sequence: acquire -> prep -> mesh -> gates -> author ->
+  solve -> post -> publish;
+- gate mechanics (form/draw/select on the pending-confirmation spine);
+- chart scaffolding (display/persist/emit - invisible to templates);
+- the emission seam (automatic publish; see Emission unification);
+- solve supervision (the shared solver supervisor);
+- ledger + resume, provenance, the leak guard;
+- the registration factory (see below).
+
+Two slot kinds, distinguished per slot:
+
+- **hooks** - SILENT defaults: charts, sensor/context layers,
+  validation checks. Unfilled = nothing happens; no engine subtype ever
+  restates them (chart scaffolding exists ONLY in `Workflow`).
+- **abstract slots** - must-fill: physics and the EngineOps five. The
+  library refuses to register a template that leaves one empty.
+
+### EngineOps - the engine facade
+
+Each engine subtype realizes exactly five abstract operations, and
+nothing else:
+
+    acquire_domain(p, d)          build_mesh(domain, policy)
+    author(mesh, physics, forcing)  solver_spec() -> image/limits
+    read_results(run) -> result
+
+Facades are named by engine ONLY: `TelemacWorkflow`, `SwmmWorkflow`,
+`ModflowWorkflow`. Domain qualifiers are BANNED ("Reach" rejected: it
+welded a domain assumption into the engine facade; domain shape arrives
+through `acquire_domain` slots and shared domain steps). The facade's
+value is stability: the interface never changes while the mechanisms
+behind it - meshers, writers, readers - evolve freely.
+
+### Three step tiers
+
+- `workflows/shared/` - DOMAIN steps, engine-agnostic: forcing
+  resolvers, reach acquisition, soil/roughness derivations, temporal
+  transforms. Unifies the world's interface. (Filed by what varies,
+  never by who happened to build it - forcing is not TELEMAC mechanism.)
+- `workflows/<engine>/steps/` - ENGINE steps: deck writers, meshers,
+  result readers. The engine's weirdness ends here, normalized behind
+  EngineOps.
+- the skeleton + library plane both tiers plug into.
+
+### Slots are value objects
+
+Slot payloads (physics, forcing, mesh policy) are VALUE objects, never
+kwarg chains. The do_sag composite - one plan step funneling seventeen
+explicitly-named kwargs through three files - is the named disease
+exhibit and DIES. Runners take the params view or a slot value; no
+signature exists whose only job is forwarding.
+
+### The chart contract
+
+A chart is a plain, standalone-runnable function
+`(result, params) -> spec`, COLOCATED in the template file beside
+`plan()`, and referenced as a FUNCTION OBJECT - never a dotted string.
+The skeleton hook owns display, persistence, and emission invisibly.
+There is no Builder DSL (rejected twice); optional plain helpers only.
+
+### The registration factory
+
+The ~70-line `_normalize` / `_with_notes` / `_physical_answer` +
+try/except tool-body tails repeated in do_sag.py and river_dye.py are
+absorbed into library-generated registration:
+`register_workflow(metadata, PARAMS, plan, answer=(...))`. Template
+file end state: PARAMS + plan + answer + chart - four declarations and
+a chart. The old tool bodies are deleted, not wrapped.
+
+### Acceptance criterion (falsifiable)
+
+The skeleton ADR must enumerate the workflow-only change list: every
+meaning-level edit - values, bounds, doors, composition, gates, charts,
+answer - achievable in the template file with ZERO other touches. A
+meaning-level change that turns out to require touching steps/ is a
+defect BY DEFINITION. Mechanism changes touch exactly one runner. The
+skeleton wave demonstrates at least two workflow-only changes live.
+
+### The demolition clause
+
+This is a GENERALIZATION refactor: absorbed functionality is DELETED
+outright - no backward compatibility, no dual paths, no deprecation
+shims, no transition aliases. The composite dies; pass-through
+signatures are deleted; old tool bodies are replaced by the factory and
+removed; dotted-string chart builders become function refs with no
+string fallback. DISTINCTION: interfaces and wiring owe nothing to the
+past - PHYSICS ANSWERS still owe parity (R3 stands: same question ->
+same answer; "no back compat" is about API shape, never about results
+drifting). Every removal gets a DELETION_LEDGER row.
+
+### The no-double-middleware law
+
+Fetcher invocations are DATA. The fetcher router's middleware - cache,
+fallback ladders, provenance, staleness, typed refusals - lives ONCE
+and is authoritative. No step tier, engine facade, or skeleton stage
+re-implements or re-wraps it at another level of abstraction: the
+acquire stage INTERPRETS `Data` declarations; it never fetches.
+
+### Emission unification (publish_layer dies)
+
+Emission becomes automatic on ALL three paths: fetchers (already),
+declarative workflows (the skeleton's publish stage), and
+processing-primitive rasters (NEW - hillshade/NDVI/slope and playground
+outputs auto-emit, intermediates included: they are useful input
+checks, and the user hides what they don't want). The mechanism -
+styling seam (`_resolve_qgis_style_params`), overview enforcement,
+layer registration - moves OUT of the publish_layer tool file into
+`emission/` as its single home. The registered `publish_layer` tool is
+then DELETED (DELETION_LEDGER entry QUEUED 2026-08-24; condition: a
+live case shows a processing raster on the map with zero publish call,
+plus flood canary green).
+
+### Mesh
+
+Mesh is BYO-optional `Data`: AUTHORED (user-supplied - e.g. the 2dm
+import path - the top ladder rung) or GENERATED (the shared front in
+`workflows/mesh/`, the default). The default generation policy is
+opinionated toward SPEED - a fast, normal-quality baseline, never a
+slow optimized guess; the mesh-economy A/B calibrates it. Both paths
+converge at the MESH GATE on the pending-confirmation spine, where
+refinement is USER-DRIVEN via atomic mesh tools (refine-region,
+densify-along-channel, coarsen) acting on the ENGINE-NEUTRAL mesh
+artifact. The shared front is neutral artifact + thin per-solver
+writers (the hecras_build pattern); cross-engine translation is a
+writer WITHIN a mesh species (unstructured tri: TELEMAC / SCHISM /
+HEC-RAS 2D) and a TYPED REFUSAL across species (MODFLOW structured
+grids, SWMM node-link networks) - never a silent conversion.
+`EngineOps.build_mesh(domain, policy)` is the frozen interface;
+generation strategies and writers evolve behind it. The TELEMAC private
+corridor mesher folds into the shared front as a generation strategy;
+the private ladder dies (ledger row).
+
+### Layout map and campaign sequencing
+
+Destinations (extends the Migration order section above; where they
+conflict, this table governs):
+
+| today | destiny |
+|---|---|
+| `data/fetchers/` | `tools/fetchers/` (pure rename - the substrate) |
+| `data/processing/` | `tools/processing/` + misdirection audit (workflow verbs -> `workflows/shared/`; dead web-era code -> delete) |
+| `data/search/` | `tools/search/` |
+| `data/publish_layer/` | `tools/publish_layer/` interim; dissolved by emission unification |
+| `data/simulation/` engine shims | STAY PUT; die engine-by-engine as the factory absorbs them (moving a thing scheduled to die is double work) |
+| `data/simulation/solver/` | `workflows/solver/` |
+| `data/simulation/diagnostics/`, `_setter_envelope.py` | scripts/ diagnostic lane; envelope helper -> `workflows/lib/` |
+| `data/meta/`, `data/display/` | audit, then fold or delete |
+| `declarative/` | `workflows/lib/` |
+| per-template `steps.py` | dissolves during skeleton migration |
+
+Sequence: (1) the mechanical move wave - git mv + import rewrites, zero
+behavior change, offline suite + flood canary green as the gate, so the
+skeleton is born at its permanent address; (2) skeleton +
+`TelemacWorkflow` on the new homes; (3) engine migration and shim
+deaths, one ledger row each; (4) `rmdir data/`. Milestone, falsifiable:
+**the campaign is done when `data/` does not exist.**
