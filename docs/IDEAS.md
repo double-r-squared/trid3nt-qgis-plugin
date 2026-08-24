@@ -687,3 +687,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the chat proof channel exists for NATE diagnosing from afar, and
   stays out of the workflow library. First use: river_dye's plume
   frames (wave 3 acceptance).
+
+- Context-budget seam (NATE 2026-08-24): per-model context window
+  DISCOVERED at adapter startup (OpenRouter /models context_length;
+  Anthropic Models API max_input_tokens), never hardcoded; the turn
+  engine manages history against the budget CLIENT-SIDE (trim/summarize
+  before overflow - generic hosts do nothing for you); the anthropic
+  adapter additionally opts into HOST-SIDE compaction (beta - append
+  compaction blocks back). Interim: point TRID3NT_OPENAI_MODEL at a
+  larger-context free model. Closes the overload class permanently.
