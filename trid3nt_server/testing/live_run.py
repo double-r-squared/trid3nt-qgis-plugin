@@ -84,6 +84,11 @@ class RunEvidence:
     detail: str = ""
     turn_complete: bool = False
     charts: int = 0
+    #: The chart payloads that crossed the wire. For a template whose product IS
+    #: the chart (a schematic deck publishes no raster, so there is no run prefix
+    #: to read back), this is the run's own persisted product and the only honest
+    #: thing an assertion can cite.
+    chart_payloads: list[dict[str, Any]] = field(default_factory=list)
     layers: list[dict[str, Any]] = field(default_factory=list)
     draw_card: dict[str, Any] | None = None
     form_card: dict[str, Any] | None = None
@@ -135,6 +140,17 @@ class RunEvidence:
             f"{self.tool}: no layer matching name~{name_contains!r} "
             f"type={layer_type!r} role={role!r} among "
             f"{[l.get('name') for l in self.layers]}")
+
+    def require_chart(self, *, title_contains: str = "") -> dict[str, Any]:
+        """A chart the run actually emitted - the product, not a rebuild of it."""
+        for payload in self.chart_payloads:
+            if title_contains and title_contains.lower() not in str(
+                    payload.get("title", "")).lower():
+                continue
+            return payload
+        raise LiveRunError(
+            f"{self.tool}: no chart matching title~{title_contains!r} among "
+            f"{[p.get('title') for p in self.chart_payloads]}")
 
     def require_run_products(self) -> "RunEvidence":
         if not self.run_id:
@@ -227,6 +243,9 @@ async def _pump(ws: Any, session_id: str, run: LiveRun, ev: RunEvidence) -> None
             await approve_confirmation(ws, session_id, msg)
         elif kind == "chart-emission":
             ev.charts += 1
+            payload = msg["payload"]
+            if isinstance(payload, dict):
+                ev.chart_payloads.append(payload)
         elif kind in BLOCKING_EVENTS:
             ev.detail = f"BLOCKED by {kind} - the run declares no answer for it"
             break
@@ -337,9 +356,14 @@ def _check_declared_cards(answers: GateAnswers, ev: RunEvidence) -> None:
 
 def _read_run_products(ev: RunEvidence) -> None:
     """Pull the run's OWN artifacts off its prefix - never a rederivation."""
-    raster = next((l for l in ev.layers
-                   if l.get("layer_type") == "raster"
-                   and str(l.get("uri", "")).startswith("s3://")), None)
+    # The PRIMARY raster, not merely the first one: a run that surfaces its fetched
+    # inputs through the emit-on-fetch seam puts context rasters on the canvas
+    # ahead of its result, and those live under the cache bucket - so the first
+    # raster locates a prefix the run never wrote to.
+    rasters = [l for l in ev.layers if l.get("layer_type") == "raster"
+               and str(l.get("uri", "")).startswith("s3://")]
+    raster = next((l for l in rasters if l.get("role") == "primary"),
+                  rasters[0] if rasters else None)
     if raster is None:
         ev.product_errors["run_id"] = "no published raster to locate the run prefix"
         return

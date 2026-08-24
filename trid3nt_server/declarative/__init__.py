@@ -33,6 +33,7 @@ from .errors import (
 from .interpreter import RunResult, interpret
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import (
+    Derived,
     Param,
     ParamNotResolved,
     ParamValues,
@@ -65,7 +66,8 @@ from .validate import validate_plan
 
 __all__ = [
     "AuthoredProducer", "Build", "ByoCoverageError", "ChartSpec", "CoversAOI",
-    "Data", "DataDecl", "DeclarativeError", "Domain", "DrawGate", "Fetch",
+    "Data", "DataDecl", "DeclarativeError", "Derived", "Domain", "DrawGate",
+    "Fetch",
     "FormGate", "Gate", "GateRefusedError",
     "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError", "Param",
     "ParamNotResolved",

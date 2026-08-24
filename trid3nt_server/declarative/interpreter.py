@@ -71,6 +71,11 @@ class RunResult:
     executed: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     domain: Domain | None = None
+    #: The sheet the run ACTUALLY RAN ON - the caller's own sheet once a form gate
+    #: has revised it. A caller that narrates from the sheet it passed in would
+    #: report the values the user replaced, while the solver used the approved
+    #: ones: the same what-was-approved-is-what-ran promise, on the way out.
+    params: ResolvedParams | None = None
     #: The chart SPECS this run built, by declared chart name. The spec IS the
     #: product, so the caller can persist the run's own chart rather than leaving
     #: a verifier to rebuild one from the scalars and hope it matches.
@@ -114,7 +119,7 @@ async def interpret(
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
                input_mode=input_mode, ledger=ledger, resume=resume)
-    out = RunResult(value=None, entries=entries)
+    out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
     produce_at = _eager_data_index(nodes)
     final_index = _final_recordable_index(nodes)
@@ -268,7 +273,8 @@ async def _produce_independent_data(env: _Env) -> None:
 async def _reseat_after_gate(env: _Env, revision: "_Revision", plan: Plan,
                              input_mode: str | None, out: RunResult) -> None:
     """Adopt an approved revision: new sheet, stale data evicted, ledger re-keyed."""
-    env.params, out.entries = revision.params, revision.entries
+    env.params, out.entries, out.params = (revision.params, revision.entries,
+                                           revision.params)
     _evict_revised_data(env, revision.changed)
     # The attempt under the OLD key belongs to a run that continued somewhere
     # else. Leaving it behind orphans a document nobody can ever resume from, and

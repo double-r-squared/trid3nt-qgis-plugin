@@ -10,6 +10,7 @@ from .errors import PlanValidationError
 from .plan import ParamRef
 
 __all__ = [
+    "Derived",
     "Door",
     "Param",
     "ParamNotResolved",
@@ -19,6 +20,22 @@ __all__ = [
     "doors",
     "refuse_duplicate_params",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class Derived:
+    """What a derivation returns when it has EVIDENCE to record beside the value.
+
+    A pure arithmetic derivation just returns the number. One that READ THE WORLD
+    knows something the declaration cannot: which texture it sampled, which rung
+    answered, whether the fit was clamped. Returning that with the value is what
+    keeps it on the row - the form card's badge and the run's provenance both read
+    it - instead of leaving it in a log line.
+    """
+
+    value: Any
+    note: str = ""
+    real_source: str | None = None
 
 
 #: Resolution doors, in the order the resolver walks them.

@@ -29,7 +29,7 @@ from trid3nt_server.declarative import (
     resolve_params,
 )
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
-from trid3nt_server.workflows.telemac.run_products import persist_run_products
+from trid3nt_server.workflows.shared.run_products import persist_run_products
 from trid3nt_server.workflows.telemac.do_sag.steps import (
     OutfallCoordsInvalidError,
     ReachSolve,

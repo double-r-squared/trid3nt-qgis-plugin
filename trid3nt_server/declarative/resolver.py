@@ -15,6 +15,7 @@ from trid3nt_contracts.common import SyntheticInput
 
 from .errors import GateRefusedError
 from .params import (
+    Derived,
     Param,
     ParamNotResolved,
     ParamValues,
@@ -73,8 +74,8 @@ async def resolve_params(
                 continue
             progressed.append(param)
             if value is not None:
-                rows[param.name] = _finish(param, value, doors.DERIVED,
-                                           f"derived by {param.resolve}")
+                rows[param.name] = _seat_derived(
+                    param, value, f"derived by {param.resolve}")
         if not progressed:
             raise GateRefusedError(
                 "derivations "
@@ -123,6 +124,19 @@ async def _derive(param: Param, rows: Mapping[str, ResolvedParam]) -> Any:
     if inspect.isawaitable(out):
         out = await out
     return out
+
+
+def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedParam:
+    """Seat a derivation's output, keeping whatever EVIDENCE it returned with it.
+
+    A derivation that read the world returns :class:`Derived`; a pure one returns
+    the bare value and the declaration's own note stands.
+    """
+    if isinstance(produced, Derived):
+        return _finish(param, produced.value, doors.DERIVED,
+                       produced.note or default_note,
+                       real_source=produced.real_source)
+    return _finish(param, produced, doors.DERIVED, default_note)
 
 
 def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
@@ -233,7 +247,7 @@ async def _rederive_row(param: Param, rows: Mapping[str, ResolvedParam],
         return None
     if value is None:
         return None
-    fresh = _finish(param, value, doors.DERIVED, note)
+    fresh = _seat_derived(param, value, note)
     return None if fresh.value == current.value else fresh
 
 
@@ -249,8 +263,15 @@ def _load(dotted: str) -> Any:
 _BASIS_DEFAULT = "default_demo"
 
 
+#: The only two bases that HAVE a real source. A value the caller typed, or one
+#: seated from a declared default, did not come from the data the declaration
+#: names - claiming otherwise on the row would be the provenance lying.
+_SOURCED_BASES = frozenset({"derived", "fetched"})
+
+
 def _finish(param: Param, value: Any, door: str, note: str, *,
-            basis: str | None = None) -> ResolvedParam:
+            basis: str | None = None,
+            real_source: str | None = None) -> ResolvedParam:
     clamped_from = None
     if param.bounds is not None:
         coerced = _as_float(value)
@@ -269,10 +290,12 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
         value = pinned
     if basis is None:
         basis = "user" if door in (doors.USER, doors.GATE) else _basis(param, door)
+    source = real_source if real_source is not None else param.real_source
     return ResolvedParam(
         name=param.name, value=value, door=door, basis=basis,
         units=param.units, consequence=param.consequence, note=note,
-        clamped_from=clamped_from, real_source=param.real_source,
+        clamped_from=clamped_from,
+        real_source=source if basis in _SOURCED_BASES else None,
     )
 
 
@@ -348,5 +371,8 @@ def _wire_value(value: Any) -> Any:
     if isinstance(value, (int, str)) and not isinstance(value, bool):
         return value
     if isinstance(value, float):
-        return round(value, 4)
+        # SIGNIFICANT figures, not decimal places: a hydraulic conductivity of
+        # 9.3e-07 rounded to four decimals is 0.0, and a provenance row that
+        # reports a physics value as zero is worse than no row at all.
+        return float(f"{value:.6g}")
     return str(value)

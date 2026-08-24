@@ -295,7 +295,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac import postprocess_telemac as pp_mod
     from trid3nt_server.workflows.telemac import release_layer as rel_mod
     from trid3nt_server.workflows.telemac import results_mesh_seam as seam_mod
-    from trid3nt_server.workflows.telemac import run_products as products_mod
+    from trid3nt_server.workflows.shared import run_products as products_mod
     from trid3nt_server.workflows.telemac.river_dye import river_dye as tool_mod
     from trid3nt_server.workflows.telemac.steps import products as prod_steps
     from trid3nt_server.workflows.telemac.steps import reach as reach_steps
