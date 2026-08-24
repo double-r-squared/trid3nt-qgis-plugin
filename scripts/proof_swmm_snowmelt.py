@@ -10,6 +10,9 @@ sub-freezing, a rain burst during the warm-up); AORC hourly extraction over the
 14-day window is the available upgrade path (documented, not required for the
 mechanism proof).
 
+The three variants come from ONE declared invocation of the tool (ADR 0307) - the
+proof cites the product's own curves rather than re-solving the decks beside it.
+
 Two panels into docs/proof/templates/ (named after the tool):
   * ..._swe_series.png    -- snow water equivalent: accumulation then degree-day
     melt, with the plowed (snow-removal) variant overlaid, and the real KBUF
@@ -19,6 +22,7 @@ Two panels into docs/proof/templates/ (named after the tool):
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 from datetime import datetime
@@ -29,7 +33,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from trid3nt_server.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day import (
-    build_snowmelt_inp, solve_snowmelt_deck, _total_melt_in, _peak,
+    swmm_snowmelt_degree_day,
 )
 
 OUT = "/home/nate/Documents/trid3nt-local/docs/proof/templates"
@@ -92,25 +96,31 @@ def build_precip_from_temperature(temp_f: list[float]) -> list[tuple[str, float]
 def main():
     temp_series, hours_t, temp_f = fetch_real_kbuf_temperature()
     rain_series = build_precip_from_temperature(temp_f)
-    common = dict(dt_min=DT_MIN, area_ac=AREA_AC, base_temp_f=32.0,
-                  percent_impervious=80.0, plow_fraction=0.90)
 
-    hrs, swe, ro_snow, rn, cont = solve_snowmelt_deck(
-        build_snowmelt_inp(temp_series, rain_series, dividing_temp_f=DIVIDE_F,
-                           removal=False, **common))
-    _, _, ro_rain, _, _ = solve_snowmelt_deck(
-        build_snowmelt_inp(temp_series, rain_series, dividing_temp_f=-99.0,
-                           removal=False, **common))
-    _, swe_rem, ro_rem, _, _ = solve_snowmelt_deck(
-        build_snowmelt_inp(temp_series, rain_series, dividing_temp_f=DIVIDE_F,
-                           removal=True, plow_threshold_in=0.3, **common))
+    # ONE declared invocation of the tool - the proof cites the product, it does
+    # not re-implement the three variants beside it.
+    res = asyncio.run(swmm_snowmelt_degree_day(
+        temperature_series_f=[list(row) for row in temp_series],
+        rainfall_series_in_hr=[list(row) for row in rain_series],
+        dt_min=DT_MIN, area_ac=AREA_AC, dividing_temp_f=DIVIDE_F,
+        base_temp_f=32.0, percent_impervious=80.0, plow_fraction=0.90,
+        plow_threshold_in=0.3,
+    ))
+    assert res["status"] == "ok", res
 
-    hrs = np.array(hrs); swe = np.array(swe); swe_rem = np.array(swe_rem)
-    ro_snow = np.array(ro_snow); ro_rain = np.array(ro_rain)
-    peak_swe = float(swe.max()); melt = _total_melt_in(list(swe))
-    snow_peak, snow_i = _peak(list(ro_snow)); rain_peak, _ = _peak(list(ro_rain))
-    amp = snow_peak / rain_peak if rain_peak > 0 else 0.0
-    rem_swe = float(swe_rem.max())
+    curves = res["curves"]
+    hrs = np.array(curves["hours"])
+    swe = np.array(curves["swe_in"])
+    swe_rem = np.array(curves["swe_removal_in"])
+    ro_snow = np.array(curves["runoff_snowmelt_cfs"])
+    ro_rain = np.array(curves["runoff_rain_only_cfs"])
+    peak_swe = res["peak_swe_in"]; melt = res["total_melt_in"]
+    snow_peak = res["snowmelt_runoff_peak_cfs"]
+    snow_i = int(np.argmax(ro_snow))
+    rain_peak = res["rain_only_runoff_peak_cfs"]
+    amp = res["rain_on_snow_peak_amplification"]
+    rem_swe = res["removal_peak_swe_in"]
+    cont = res["continuity_error_pct"]
 
     # ---- (1) SWE series + real temperature twin axis --------------------------
     fig, ax = plt.subplots(figsize=(6.0, 2.8), dpi=100)

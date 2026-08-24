@@ -12,8 +12,8 @@ The deck authors a real SWMM 5 [SNOWPACKS] object (PLOWABLE / IMPERVIOUS /
 PERVIOUS surfaces) assigned to one subcatchment, forced by a TEMPERATURE time
 series (the degree-day driver + the [TEMPERATURE] SNOWMELT rain/snow dividing
 temperature) and a rainfall time series, and solves it headless through the
-native SWMM 5 snowmelt engine (pyswmm, in-process). THREE variants run on the
-SAME forcing:
+native SWMM 5 snowmelt engine (pyswmm, in-process). THREE variants run on ONE
+declared forcing, and the plan says so - one forcing step, three decks:
 
   1. snowmelt   - Snow Pack + degree-day melt (the physical winter run);
   2. rain_only  - the dividing temperature dropped below all temperatures so
@@ -34,56 +34,324 @@ Citations (NATE-verified template source):
     Snowmelt chapter (degree-day method; SNOWPACK surfaces; areal depletion).
   * "Example SWMM 5 Snowmelt Model" and "Snowmelt in SWMM5" (swmm5.org, CHI
     re-publication of the EPA SWMM5 snowmelt help) - the worked mechanism deck.
-Temperature forcing for the live demonstration is REAL hourly ASOS/METAR air
-temperature (fetch_asos_metar ``tmpf``) at a snowbelt station; the default
-forcing is a representative Buffalo NY rain-on-snow event (cited climatology).
+The declared forcing defaults describe a representative Buffalo NY rain-on-snow
+event (cited climatology), as LABELED, BOUNDED params rather than a baked demo
+series; the live proof supplies REAL hourly ASOS/METAR air temperature
+(fetch_asos_metar ``tmpf``) at a snowbelt station instead.
 
-Chart-first validation class (the RDII template precedent): the
-deliverable is CHARTS (SWE series + runoff hydrograph snowmelt-vs-rain-only) plus
-typed scalars, no georeferenced raster. Host-side pyswmm, no worker image.
+Chart-first validation class (the RDII template precedent): the deliverable is
+CHARTS (SWE series + runoff hydrograph snowmelt-vs-rain-only) plus typed scalars,
+no georeferenced raster. Host-side pyswmm, no worker image.
 
-Determinism boundary (Invariant 1): every number the agent narrates is a typed
-field this tool returns - never free-generated.
+Declared as PARAMS + ``plan(p, d)``; see ``docs/design/declarative-workflows.md``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import tempfile
-from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.data import register_tool
+from trid3nt_server.declarative import (
+    DeclarativeError,
+    FormGate,
+    Param,
+    Ref,
+    Workflow,
+    doors,
+    interpret,
+    render_docstring,
+    resolve_params,
+)
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
+from trid3nt_server.workflows.swmm.snowmelt_degree_day.steps import (
+    RAIN_ONLY_DIVIDING_TEMP_F,
+    SUBCATCHMENT,
+    Deck,
+    Forcing,
+    Metrics,
+)
+from trid3nt_server.workflows.swmm.steps import Solve, SwmmStepError
 
 logger = logging.getLogger(
-    "trid3nt_server.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day"
-)
+    "trid3nt_server.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day")
 
-__all__ = [
-    "swmm_snowmelt_degree_day",
-    "build_snowmelt_inp",
-    "solve_snowmelt_deck",
-    "default_rain_on_snow_forcing",
-    "TEMPLATE_CARD",
-]
+__all__ = ["DATA", "PARAMS", "plan", "swmm_snowmelt_degree_day"]
+
+_STEPS = "trid3nt_server.workflows.swmm.snowmelt_degree_day.steps"
+
+#: The three subcatchment attributes one solve samples: the snowpack, the runoff
+#: it produces, and the precipitation that drove it.
+_SAMPLED = ("snow_depth", "runoff", "rainfall")
 
 
 TEMPLATE_CARD = TemplateCard(
     question=(
         "how does snowpack accumulation and degree-day melt reshape the winter "
         "runoff hydrograph versus treating all precipitation as rain -- the "
-        "rain-on-snow flood driver, with an optional snow-removal (plowing) knob"
+        "rain-on-snow flood driver, with the snow-removal (plowing) variant"
     ),
     required_inputs=[],
     knobs=(
-        "temperature_series_f, rainfall_series_in_hr, dt_min, area_ac, "
+        "temperature_series_f, rainfall_series_in_hr (or the declared cold-spell / "
+        "warm-up / snowfall / rain-burst forcing shape), dt_min, area_ac, "
         "cmin/cmax (degree-day melt coefficients), base_temp_f, dividing_temp_f, "
-        "snow_removal (plowing), plow_threshold_in, plow_fraction"
+        "plow_threshold_in, plow_fraction"
     ),
 )
+
+
+PARAMS: tuple[Param, ...] = (
+    # -- the forcing, supplied or declared ----------------------------------- #
+    Param("temperature_series_f", door=doors.USER, optional=True,
+          consequence="scenario",
+          derived_when_absent=(
+              "the declared cold-spell / warm-up temperature shape is used: "
+              "cold_temp_f until warmup_start_hr, ramping to warm_temp_f by "
+              "warmup_end_hr"),
+          desc="Explicit hourly air temperature [[\"H:MM\", degF], ...] - the "
+               "degree-day driver AND the rain/snow split; the live proof passes "
+               "REAL ASOS observations here"),
+    Param("rainfall_series_in_hr", door=doors.USER, optional=True,
+          consequence="scenario",
+          derived_when_absent=(
+              "the declared precipitation phasing is used: snowfall through the "
+              "cold spell, then a rain burst on the ripe snowpack"),
+          desc="Explicit rainfall intensity [[\"H:MM\", in/hr], ...], superseding "
+               "the declared snowfall and rain-burst windows"),
+    Param("sim_days", door=doors.SCENARIO, default=5.0, bounds=(0.5, 180.0),
+          units="day", consequence="numerical",
+          desc="Length of the declared forcing window; it must outlast the "
+               "warm-up for the melt to complete"),
+    Param("cold_temp_f", door=doors.SCENARIO, default=20.0, bounds=(-60.0, 32.0),
+          units="degF", consequence="scenario",
+          desc="Air temperature through the cold spell that builds the snowpack; "
+               "sub-freezing, so precipitation falls as snow"),
+    Param("warm_temp_f", door=doors.SCENARIO, default=45.0, bounds=(-20.0, 100.0),
+          units="degF", consequence="scenario",
+          desc="Air temperature after the warm-up; above the base melt "
+               "temperature, which is what drives the degree-day melt"),
+    Param("warmup_start_hr", door=doors.SCENARIO, default=48.0,
+          bounds=(0.0, 4320.0), units="h", consequence="scenario",
+          desc="Hour the warm-up ramp begins - the end of the accumulation spell"),
+    Param("warmup_end_hr", door=doors.SCENARIO, default=60.0, bounds=(0.0, 4320.0),
+          units="h", consequence="scenario",
+          desc="Hour the warm-up ramp reaches warm_temp_f"),
+    Param("snowfall_start_hr", door=doors.SCENARIO, default=12.0,
+          bounds=(0.0, 4320.0), units="h", consequence="scenario",
+          desc="Hour the steady snowfall begins, inside the cold spell"),
+    Param("snowfall_end_hr", door=doors.SCENARIO, default=36.0,
+          bounds=(0.0, 4320.0), units="h", consequence="scenario",
+          desc="Hour the snowfall stops, before the warm-up"),
+    Param("snowfall_intensity_in_hr", door=doors.SCENARIO, default=0.05,
+          bounds=(0.0, 5.0), units="in/hr", consequence="scenario",
+          desc="Precipitation intensity through the snowfall window; it falls as "
+               "snow because the air is below the dividing temperature"),
+    Param("rain_start_hr", door=doors.SCENARIO, default=60.0, bounds=(0.0, 4320.0),
+          units="h", consequence="scenario",
+          desc="Hour the warm rain burst begins - the rain-ON-SNOW moment"),
+    Param("rain_end_hr", door=doors.SCENARIO, default=72.0, bounds=(0.0, 4320.0),
+          units="h", consequence="scenario",
+          desc="Hour the rain burst ends"),
+    Param("rain_intensity_in_hr", door=doors.SCENARIO, default=0.15,
+          bounds=(0.0, 10.0), units="in/hr", consequence="scenario",
+          desc="Intensity of the warm rain burst that falls on the ripe snowpack"),
+
+    # -- the subcatchment ----------------------------------------------------- #
+    Param("area_ac", door=doors.SCENARIO, default=50.0, bounds=(0.01, 1.0e5),
+          units="acre", consequence="scenario",
+          desc="Subcatchment area the Snow Pack covers"),
+    Param("percent_impervious", door=doors.SCENARIO, default=80.0,
+          bounds=(0.0, 100.0), units="%", consequence="scenario",
+          desc="Impervious fraction of the subcatchment; the plowable surface is "
+               "a share of it, and impervious area is what routes melt fastest"),
+
+    # -- the degree-day melt -------------------------------------------------- #
+    Param("cmin", door=doors.SCENARIO, default=0.001, bounds=(0.0, 1.0),
+          units="in/hr/degF", user_lever=True, consequence="scenario",
+          desc="Minimum degree-day melt coefficient (the winter-solstice end of "
+               "the seasonal ramp) - a labeled literature value, not a "
+               "site calibration"),
+    Param("cmax", door=doors.SCENARIO, default=0.01, bounds=(0.0, 1.0),
+          units="in/hr/degF", user_lever=True, consequence="scenario",
+          desc="Maximum degree-day melt coefficient (the summer-solstice end of "
+               "the seasonal ramp) - a labeled literature value"),
+    Param("base_temp_f", door=doors.SCENARIO, default=32.0, bounds=(-20.0, 60.0),
+          units="degF", consequence="scenario",
+          desc="Base melt temperature: melt runs at C*(T - Tbase) while the air "
+               "is above it"),
+    Param("dividing_temp_f", door=doors.SCENARIO, default=32.0,
+          bounds=(-20.0, 60.0), units="degF", consequence="scenario",
+          desc="Rain/snow dividing temperature: precipitation falls as snow at or "
+               "below it and as rain above it - the single switch the rain-only "
+               "control drops below every temperature"),
+
+    # -- the snow-removal (plowing) variant ----------------------------------- #
+    Param("plow_threshold_in", door=doors.SCENARIO, default=0.3,
+          bounds=(0.0, 100.0), units="in", consequence="scenario",
+          desc="Snow depth above which plowing removes snow from the plowable "
+               "surface"),
+    Param("plow_fraction", door=doors.SCENARIO, default=0.90, bounds=(0.0, 1.0),
+          consequence="scenario",
+          desc="Fraction of the impervious area that is plowable (streets and "
+               "lots rather than roofs)"),
+    Param("plow_out_fraction", door=doors.CONSTANT, default=1.0, bounds=(0.0, 1.0),
+          consequence="numerical",
+          desc="Share of the plowed snow transferred OUT of the watershed rather "
+               "than to another surface; 1.0 is the trucked-away case"),
+
+    # -- the snow pack surfaces ----------------------------------------------- #
+    Param("free_water_fraction", door=doors.CONSTANT, default=0.10,
+          bounds=(0.0, 1.0), consequence="numerical",
+          desc="Free-water holding capacity of the pack as a fraction of its "
+               "depth - meltwater the pack retains before it releases any"),
+    Param("initial_snow_depth_in", door=doors.SCENARIO, default=0.0,
+          bounds=(0.0, 200.0), units="in", consequence="scenario",
+          desc="Snow water equivalent already on the ground when the window "
+               "opens; zero means the pack is built entirely by the declared "
+               "snowfall"),
+    Param("initial_free_water_in", door=doors.CONSTANT, default=0.0,
+          bounds=(0.0, 50.0), units="in", consequence="numerical",
+          desc="Liquid water already held in the initial pack"),
+    Param("depth_at_full_cover_in", door=doors.CONSTANT, default=2.0,
+          bounds=(0.01, 100.0), units="in", consequence="numerical",
+          desc="Snow depth at which the non-plowable surfaces are 100% covered - "
+               "the areal-depletion scale"),
+    Param("ati_weight", door=doors.CONSTANT, default=0.5, bounds=(0.0, 1.0),
+          consequence="numerical",
+          desc="Antecedent temperature index weight in the SNOWMELT block - how "
+               "much the pack remembers yesterday's air temperature"),
+    Param("negative_melt_ratio", door=doors.CONSTANT, default=0.6,
+          bounds=(0.0, 1.0), consequence="numerical",
+          desc="Negative melt ratio: the rate the pack REFREEZES relative to its "
+               "melt rate once the air drops back below base_temp_f"),
+    Param("site_elevation_ft", door=doors.SCENARIO, default=500.0,
+          bounds=(-300.0, 15000.0), units="ft", consequence="scenario",
+          desc="Average elevation above mean sea level, used by the SNOWMELT "
+               "block's pressure correction; the default is the Buffalo NY "
+               "snowbelt the declared forcing describes"),
+    Param("site_latitude_deg", door=doors.SCENARIO, default=43.0,
+          bounds=(-90.0, 90.0), units="deg", consequence="aoi",
+          desc="Latitude driving the seasonal melt-coefficient ramp between cmin "
+               "and cmax; the default is the Buffalo NY snowbelt"),
+    Param("longitude_correction_min", door=doors.CONSTANT, default=0.0,
+          bounds=(-120.0, 120.0), units="min", consequence="numerical",
+          desc="Correction between standard and local time in the SNOWMELT "
+               "block"),
+
+    # -- the surface the melt runs over --------------------------------------- #
+    Param("evaporation_in_day", door=doors.SCENARIO, default=0.0,
+          bounds=(0.0, 1.0), units="in/day", consequence="scenario",
+          desc="Constant pan evaporation through the window; zero is the winter "
+               "case this template is about"),
+    Param("horton_max_rate_in_hr", door=doors.CONSTANT, default=3.0,
+          bounds=(0.0, 50.0), units="in/hr", consequence="numerical",
+          desc="Horton maximum infiltration rate on the pervious area - a typical "
+               "medium-textured literature value for the schematic subcatchment, "
+               "NOT fitted to any site"),
+    Param("horton_min_rate_in_hr", door=doors.CONSTANT, default=0.5,
+          bounds=(0.0, 50.0), units="in/hr", consequence="numerical",
+          desc="Horton minimum (saturated) infiltration rate; melt above it "
+               "becomes runoff"),
+    Param("horton_decay_per_hr", door=doors.CONSTANT, default=4.0,
+          bounds=(0.0, 20.0), units="1/hr", consequence="numerical",
+          desc="Horton decay constant - how fast infiltration capacity falls "
+               "toward the minimum during a wet spell"),
+    Param("horton_dry_time_days", door=doors.CONSTANT, default=7.0,
+          bounds=(0.0, 100.0), units="day", consequence="numerical",
+          desc="Days of dry weather needed for the infiltration capacity to "
+               "recover fully"),
+
+    # -- how the answer is computed -------------------------------------------- #
+    Param("dt_min", door=doors.CONSTANT, default=60, bounds=(1.0, 1440.0),
+          units="min", consequence="numerical",
+          desc="Timestep the forcing series are written on and the engine reports "
+               "at; the degree-day method is an hourly method"),
+)
+
+#: One subcatchment, one outfall, forcing declared as values - nothing this plan
+#: consumes is a spatial artifact.
+DATA: tuple = ()
+
+
+def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+    """The rain-on-snow recipe. Pure: constructs the plan value, executes nothing.
+
+    ONE forcing step and THREE decks: "three variants on the same forcing" is a
+    shape of the plan rather than a promise in prose, and the rain-only control
+    differs from the physical run in exactly one declared argument.
+    """
+    forcing = dict(
+        temperature_series_f=Ref("forcing.temperature"),
+        rainfall_series_in_hr=Ref("forcing.rainfall"),
+    )
+    pack = dict(
+        dt_min=p.dt_min, area_ac=p.area_ac, cmin=p.cmin, cmax=p.cmax,
+        base_temp_f=p.base_temp_f, percent_impervious=p.percent_impervious,
+        plow_fraction=p.plow_fraction, plow_threshold_in=p.plow_threshold_in,
+        plow_out_fraction=p.plow_out_fraction,
+        free_water_fraction=p.free_water_fraction,
+        initial_snow_depth_in=p.initial_snow_depth_in,
+        initial_free_water_in=p.initial_free_water_in,
+        depth_at_full_cover_in=p.depth_at_full_cover_in,
+        ati_weight=p.ati_weight, negative_melt_ratio=p.negative_melt_ratio,
+        site_elevation_ft=p.site_elevation_ft,
+        site_latitude_deg=p.site_latitude_deg,
+        longitude_correction_min=p.longitude_correction_min,
+        evaporation_in_day=p.evaporation_in_day,
+        horton_max_rate_in_hr=p.horton_max_rate_in_hr,
+        horton_min_rate_in_hr=p.horton_min_rate_in_hr,
+        horton_decay_per_hr=p.horton_decay_per_hr,
+        horton_dry_time_days=p.horton_dry_time_days,
+    )
+    solve = dict(subcatchments=(SUBCATCHMENT,), subcatchment_attrs=_SAMPLED)
+    return Workflow("swmm_snowmelt_degree_day", engine="swmm5")[
+        FormGate(title="Review the rain-on-snow snowmelt scenario"),
+        Forcing.rain_on_snow(
+            dt_min=p.dt_min, sim_days=p.sim_days, cold_temp_f=p.cold_temp_f,
+            warm_temp_f=p.warm_temp_f, warmup_start_hr=p.warmup_start_hr,
+            warmup_end_hr=p.warmup_end_hr,
+            snowfall_start_hr=p.snowfall_start_hr,
+            snowfall_end_hr=p.snowfall_end_hr,
+            snowfall_intensity_in_hr=p.snowfall_intensity_in_hr,
+            rain_start_hr=p.rain_start_hr, rain_end_hr=p.rain_end_hr,
+            rain_intensity_in_hr=p.rain_intensity_in_hr,
+            temperature_series_f=p.temperature_series_f,
+            rainfall_series_in_hr=p.rainfall_series_in_hr,
+        ).named("forcing"),
+
+        Deck.snowmelt(**forcing, **pack, dividing_temp_f=p.dividing_temp_f,
+                      removal=False).named("deck_snow"),
+        Solve.pyswmm(inp_text=Ref("deck_snow.inp_text"), label="snowmelt",
+                     **solve).named("solve_snow"),
+
+        # The climate-naive CONTROL: one argument different, so what it isolates
+        # is unambiguous.
+        Deck.snowmelt(**forcing, **pack,
+                      dividing_temp_f=RAIN_ONLY_DIVIDING_TEMP_F,
+                      removal=False).named("deck_rain"),
+        Solve.pyswmm(inp_text=Ref("deck_rain.inp_text"), label="rain-only",
+                     **solve).named("solve_rain"),
+
+        Deck.snowmelt(**forcing, **pack, dividing_temp_f=p.dividing_temp_f,
+                      removal=True).named("deck_plow"),
+        Solve.pyswmm(inp_text=Ref("deck_plow.inp_text"), label="plowed",
+                     **solve).named("solve_plow"),
+
+        Metrics.snowmelt(
+            snowmelt=Ref("solve_snow"), rain_only=Ref("solve_rain"),
+            plowed=Ref("solve_plow"), temperature=Ref("forcing.temperature"),
+            subcatchment=SUBCATCHMENT, area_ac=p.area_ac,
+            dividing_temp_f=p.dividing_temp_f,
+        ).named("snowmelt")
+         .chart("swe_series", builder=f"{_STEPS}.build_swe_chart")
+         .chart("runoff_snowmelt_vs_rain_only",
+                builder=f"{_STEPS}.build_runoff_chart"),
+    ]
+
 
 _METADATA = AtomicToolMetadata(
     name="swmm_snowmelt_degree_day",
@@ -95,225 +363,6 @@ _METADATA = AtomicToolMetadata(
 )
 
 
-# --------------------------------------------------------------------------- #
-# Default forcing: a representative Buffalo NY rain-on-snow event.
-# A ~5-day window: a cold spell (T < 32 F) with steady light snowfall builds a
-# snowpack, then a warm-up (T rising through 32 F to the mid-40s F) with a rain
-# burst melts it -- the classic snowbelt rain-on-snow flood driver.
-# --------------------------------------------------------------------------- #
-def default_rain_on_snow_forcing(
-    dt_min: int = 60,
-) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
-    """Representative rain-on-snow forcing: ``(temperature_series, rain_series)``
-    each as ``[("H:MM", value), ...]`` (degF, in/hr) at ``dt_min`` spacing.
-
-    Cited climatology: Buffalo NY (KBUF) mid-January - a sub-freezing snowfall
-    spell followed by a warm rain. The live proof/showcase overrides the
-    temperature series with REAL KBUF ASOS observations."""
-    temp: list[tuple[str, float]] = []
-    rain: list[tuple[str, float]] = []
-    steps = int(round(120 * 60 / dt_min))  # 5 days
-    for i in range(steps):
-        mins = i * dt_min
-        h = mins / 60.0
-        clock = f"{mins // 60}:{mins % 60:02d}"
-        if h < 48:
-            t_f = 20.0                                   # cold spell
-        elif h < 60:
-            t_f = 20.0 + (h - 48.0) * (45.0 - 20.0) / 12.0  # warm-up ramp
-        else:
-            t_f = 45.0                                   # warm
-        temp.append((clock, round(t_f, 2)))
-        if 12 <= h < 36:
-            r = 0.05        # steady snowfall through the cold spell (falls as snow)
-        elif 60 <= h < 72:
-            r = 0.15        # warm rain burst on the ripe snowpack
-        else:
-            r = 0.0
-        rain.append((clock, r))
-    return temp, rain
-
-
-# --------------------------------------------------------------------------- #
-# Native SWMM 5 snowmelt deck
-# --------------------------------------------------------------------------- #
-def build_snowmelt_inp(
-    temperature_series_f: list[tuple[str, float]],
-    rainfall_series_in_hr: list[tuple[str, float]],
-    dt_min: int,
-    area_ac: float,
-    *,
-    cmin: float = 0.001,
-    cmax: float = 0.01,
-    base_temp_f: float = 32.0,
-    dividing_temp_f: float = 32.0,
-    percent_impervious: float = 80.0,
-    plow_fraction: float = 0.90,
-    removal: bool = False,
-    plow_threshold_in: float = 0.3,
-    plow_out_fraction: float = 1.0,
-) -> str:
-    """Author a SWMM 5 deck: one subcatchment with a [SNOWPACKS] Snow Pack, a
-    [TEMPERATURE] SNOWMELT block (dividing temperature = the rain/snow split), and
-    the temperature + rainfall time series. ``removal=True`` adds a plow REMOVAL
-    line. Returns the ``.inp`` text (US units: degF, inches, in/hr/degF)."""
-    ts_temp = "\n".join(f"TSER_T {clk} {v:.3f}" for clk, v in temperature_series_f)
-    ts_rain = "\n".join(f"TSER_R {clk} {v:.4f}" for clk, v in rainfall_series_in_hr)
-    snow = (
-        f"SP1 PLOWABLE   {cmin} {cmax} {base_temp_f} 0.10 0 0 {plow_fraction}\n"
-        f"SP1 IMPERVIOUS {cmin} {cmax} {base_temp_f} 0.10 0 0 2.0\n"
-        f"SP1 PERVIOUS   {cmin} {cmax} {base_temp_f} 0.10 0 0 2.0\n"
-    )
-    if removal:
-        # Dplow Fout Fimp Fperv Fimelt Fsub -- transfer plowable snow OUT of the
-        # watershed above the plow-trigger depth.
-        snow += f"SP1 REMOVAL {plow_threshold_in} {plow_out_fraction} 0 0 0 0\n"
-    n_steps = max(len(rainfall_series_in_hr), len(temperature_series_f))
-    end_days = int(n_steps * dt_min / 1440) + 2
-    return f"""[TITLE]
-snowpack degree-day melt (rain-on-snow); removal={removal}
-
-[OPTIONS]
-FLOW_UNITS CFS
-INFILTRATION HORTON
-FLOW_ROUTING KINWAVE
-START_DATE 01/01/2020
-START_TIME 00:00:00
-END_DATE 01/{1 + end_days:02d}/2020
-END_TIME 00:00:00
-REPORT_STEP 00:{dt_min:02d}:00
-WET_STEP 00:{dt_min:02d}:00
-DRY_STEP 00:{dt_min:02d}:00
-ROUTING_STEP {dt_min * 60}
-
-[EVAPORATION]
-CONSTANT 0.0
-DRY_ONLY NO
-
-[TEMPERATURE]
-TIMESERIES TSER_T
-SNOWMELT {dividing_temp_f} 0.5 0.6 500 43.0 0
-
-[RAINGAGES]
-RG1 INTENSITY 0:{dt_min:02d} 1.0 TIMESERIES TSER_R
-
-[SUBCATCHMENTS]
-S1 RG1 OUT {area_ac} {percent_impervious} 500 0.5 0 SP1
-
-[SUBAREAS]
-S1 0.01 0.10 0.05 0.05 25 OUTLET
-
-[INFILTRATION]
-S1 3.0 0.5 4 7 0
-
-[SNOWPACKS]
-{snow}
-[OUTFALLS]
-OUT 0.0 FREE NO
-
-[TIMESERIES]
-{ts_temp}
-{ts_rain}
-
-[REPORT]
-INPUT NO
-SUBCATCHMENTS ALL
-"""
-
-
-def solve_snowmelt_deck(
-    inp_text: str,
-) -> tuple[list[float], list[float], list[float], list[float], float]:
-    """Solve a snowmelt deck headless (pyswmm, in-process) and return
-    ``(hours, swe_in, runoff_cfs, rainfall_in_hr, continuity_error_pct)``.
-
-    ``hours`` is real elapsed time from ``sim.current_time`` (SWMM steps at the
-    variable wet/dry step, NOT a fixed count). ``swe_in`` is the subcatchment
-    snow depth (snow water equivalent, inches)."""
-    import pyswmm
-
-    base = Path(tempfile.mkdtemp(prefix="swmm-snowmelt-"))
-    inp = base / "snow.inp"
-    inp.write_text(inp_text, encoding="utf-8")
-    hours: list[float] = []
-    swe: list[float] = []
-    runoff: list[float] = []
-    rain: list[float] = []
-    with pyswmm.Simulation(str(inp)) as sim:
-        s1 = pyswmm.Subcatchments(sim)["S1"]
-        t0 = None
-        for _ in sim:
-            now = sim.current_time
-            if t0 is None:
-                t0 = now
-            hours.append((now - t0).total_seconds() / 3600.0)
-            swe.append(float(s1.snow_depth))
-            runoff.append(float(s1.runoff))
-            rain.append(float(s1.rainfall))
-        cont = float(sim.runoff_error) * 100.0
-    return hours, swe, runoff, rain, cont
-
-
-def _total_melt_in(swe: list[float]) -> float:
-    """Total melted depth (inches): the sum of per-step SWE decreases."""
-    return sum(max(0.0, swe[i - 1] - swe[i]) for i in range(1, len(swe)))
-
-
-def _peak(series: list[float]) -> tuple[float, int]:
-    if not series:
-        return 0.0, 0
-    i = max(range(len(series)), key=lambda k: series[k])
-    return series[i], i
-
-
-# --------------------------------------------------------------------------- #
-# Chart specs (Vega-Lite; chart-first validation class, no raster)
-# --------------------------------------------------------------------------- #
-def _swe_chart_spec(hours: list[float], swe: list[float],
-                    swe_removal: list[float] | None) -> dict[str, Any]:
-    rows: list[dict[str, Any]] = []
-    for t, v in zip(hours, swe):
-        rows.append({"t_hr": round(t, 2), "swe_in": round(v, 4),
-                     "series": "snowpack (no removal)"})
-    if swe_removal is not None:
-        for t, v in zip(hours, swe_removal):
-            rows.append({"t_hr": round(t, 2), "swe_in": round(v, 4),
-                         "series": "snowpack (plowed)"})
-    return {
-        "title": "snow water equivalent: accumulation then degree-day melt",
-        "data": {"values": rows},
-        "mark": {"type": "line"},
-        "encoding": {
-            "x": {"field": "t_hr", "type": "quantitative", "title": "time (hr)"},
-            "y": {"field": "swe_in", "type": "quantitative",
-                  "title": "snow water equivalent (in)"},
-            "color": {"field": "series", "type": "nominal", "title": ""},
-        },
-    }
-
-
-def _runoff_chart_spec(hours: list[float], snowmelt: list[float],
-                       rain_only: list[float]) -> dict[str, Any]:
-    rows: list[dict[str, Any]] = []
-    for t, v in zip(hours, snowmelt):
-        rows.append({"t_hr": round(t, 2), "q_cfs": round(v, 4),
-                     "series": "snowmelt physics"})
-    for t, v in zip(hours, rain_only):
-        rows.append({"t_hr": round(t, 2), "q_cfs": round(v, 4),
-                     "series": "rain-only (climate-naive)"})
-    return {
-        "title": "runoff hydrograph: snowmelt vs rain-only",
-        "data": {"values": rows},
-        "mark": {"type": "line"},
-        "encoding": {
-            "x": {"field": "t_hr", "type": "quantitative", "title": "time (hr)"},
-            "y": {"field": "q_cfs", "type": "quantitative",
-                  "title": "runoff (cfs)"},
-            "color": {"field": "series", "type": "nominal", "title": ""},
-        },
-    }
-
-
 @register_tool(
     _METADATA,
     read_only_hint=True,
@@ -322,191 +371,116 @@ def _runoff_chart_spec(hours: list[float], snowmelt: list[float],
     idempotent_hint=True,
 )
 async def swmm_snowmelt_degree_day(
-    temperature_series_f: list[list[Any]] | list[tuple[str, float]] | None = None,
-    rainfall_series_in_hr: list[list[Any]] | list[tuple[str, float]] | None = None,
-    dt_min: int = 60,
-    area_ac: float = 50.0,
-    cmin: float = 0.001,
-    cmax: float = 0.01,
-    base_temp_f: float = 32.0,
-    dividing_temp_f: float = 32.0,
-    percent_impervious: float = 80.0,
-    snow_removal: bool = True,
-    plow_threshold_in: float = 0.3,
-    plow_fraction: float = 0.90,
+    temperature_series_f: list[list[Any]] | None = None,
+    rainfall_series_in_hr: list[list[Any]] | None = None,
+    sim_days: float | None = None,
+    dt_min: int | None = None,
+    area_ac: float | None = None,
+    percent_impervious: float | None = None,
+    cmin: float | None = None,
+    cmax: float | None = None,
+    base_temp_f: float | None = None,
+    dividing_temp_f: float | None = None,
+    cold_temp_f: float | None = None,
+    warm_temp_f: float | None = None,
+    warmup_start_hr: float | None = None,
+    warmup_end_hr: float | None = None,
+    snowfall_start_hr: float | None = None,
+    snowfall_end_hr: float | None = None,
+    snowfall_intensity_in_hr: float | None = None,
+    rain_start_hr: float | None = None,
+    rain_end_hr: float | None = None,
+    rain_intensity_in_hr: float | None = None,
+    plow_threshold_in: float | None = None,
+    plow_fraction: float | None = None,
+    initial_snow_depth_in: float | None = None,
+    site_elevation_ft: float | None = None,
+    site_latitude_deg: float | None = None,
+    input_mode: str | None = None,
+    restart_clean: bool = False,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Snowpack degree-day melt (rain-on-snow): how snow accumulation + melt
-    reshape the winter runoff hydrograph vs treating all precipitation as rain.
-
-    Authors a native SWMM 5 [SNOWPACKS] deck on one subcatchment forced by a
-    temperature + rainfall series and solves it headless (pyswmm, in-process) in
-    three variants on the SAME forcing: (1) snowmelt physics, (2) a rain-only
-    climate-naive control (dividing temperature dropped below all temperatures),
-    and (3) -- when ``snow_removal`` -- a plow REMOVAL variant that transfers
-    plowable snow out of the watershed. Emits an SWE-series chart and a
-    snowmelt-vs-rain-only runoff chart; returns typed scalars. No engine RASTER
-    (chart-first validation class). Degree-day method per the EPA SWMM Reference
-    Manual Vol. I snowmelt chapter (module docstring).
-
-    Parameters:
-      temperature_series_f: hourly air temperature as
-        ``[["H:MM", degF], ...]`` pairs (the degree-day driver + rain/snow
-        split). Default = a representative Buffalo NY rain-on-snow event; the
-        live proof passes REAL ASOS ``tmpf``.
-      rainfall_series_in_hr: rainfall intensity ``[["H:MM", in/hr], ...]``
-        pairs. Default pairs with the temperature default (snowfall in the
-        cold spell, a warm rain burst on the ripe snowpack).
-      dt_min: timestep, minutes. Default 60.
-      area_ac: subcatchment area, acres. Default 50.
-      cmin, cmax: degree-day melt coefficients (in/hr/degF), seasonally ramped.
-      base_temp_f: snow-melt base temperature (degF). Default 32.
-      dividing_temp_f: rain/snow dividing temperature (degF). Default 32.
-      percent_impervious: subcatchment imperviousness (percent). Default 80.
-      snow_removal: also run the plow-removal variant (default True) -- the
-        snow-removal / plowing management knob.
-      plow_threshold_in: snow depth (in) above which plowing removes snow.
-      plow_fraction: fraction of the impervious area that is plowable.
-
-    Returns:
-      A dict of scalars: ``peak_swe_in``, ``total_melt_in``,
-      ``snowmelt_runoff_peak_cfs`` (+ its ``_hr`` timing),
-      ``rain_only_runoff_peak_cfs`` (+ ``_hr``),
-      ``rain_on_snow_peak_amplification`` (snowmelt peak / rain-only peak),
-      ``cold_period_runoff_fraction_rain_only`` (share of rain-only runoff that
-      falls DURING the cold accumulation window -- the climate-naive artifact),
-      ``removal_peak_swe_in`` + ``removal_runoff_peak_cfs`` (when snow_removal),
-      ``continuity_error_pct``, and ``curves``.
-    """
-    from trid3nt_server.emission.pipeline_emitter import current_emitter
-
-    def _coerce(series: Any) -> list[tuple[str, float]] | None:
-        if not series:
-            return None
-        try:
-            return [(str(c), float(v)) for c, v in series]
-        except (TypeError, ValueError):
-            return None
-
-    temp = _coerce(temperature_series_f)
-    rain = _coerce(rainfall_series_in_hr)
-    if temp is None or rain is None:
-        dtemp, drain = default_rain_on_snow_forcing(dt_min)
-        temp = temp or dtemp
-        rain = rain or drain
-
+    supplied = {k: v for k, v in locals().items()
+                if k in {q.name for q in PARAMS} and v is not None}
     try:
-        dt_min_i = max(int(dt_min), 1)
-        area = max(float(area_ac), 0.01)
-    except (TypeError, ValueError) as exc:
-        return {"status": "error", "error_code": "SWMM_SNOWMELT_INVALID",
-                "error_message": f"bad numeric input: {exc}"}
-
-    common = dict(dt_min=dt_min_i, area_ac=area, cmin=float(cmin),
-                  cmax=float(cmax), base_temp_f=float(base_temp_f),
-                  percent_impervious=float(percent_impervious),
-                  plow_fraction=float(plow_fraction))
-
-    try:
-        import asyncio
-
-        # (1) snowmelt physics
-        inp_snow = build_snowmelt_inp(temp, rain, dividing_temp_f=float(dividing_temp_f),
-                                      removal=False, **common)
-        hrs, swe, ro_snow, rn, cont = await asyncio.to_thread(solve_snowmelt_deck, inp_snow)
-        # (2) rain-only control: dividing temperature below all temperatures
-        inp_rain = build_snowmelt_inp(temp, rain, dividing_temp_f=-99.0,
-                                      removal=False, **common)
-        _, _, ro_rain, _, _ = await asyncio.to_thread(solve_snowmelt_deck, inp_rain)
-        # (3) plow-removal variant
-        swe_rem: list[float] | None = None
-        ro_rem: list[float] | None = None
-        if snow_removal:
-            inp_rem = build_snowmelt_inp(temp, rain, dividing_temp_f=float(dividing_temp_f),
-                                         removal=True, plow_threshold_in=float(plow_threshold_in),
-                                         **common)
-            _, swe_rem, ro_rem, _, _ = await asyncio.to_thread(solve_snowmelt_deck, inp_rem)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("swmm snowmelt solve failed")
-        return {"status": "error", "error_code": "SWMM_SNOWMELT_SOLVE_FAILED",
+        p = await resolve_params(PARAMS, supplied)
+        result = await interpret(
+            plan(p, None), p, PARAMS, DATA,
+            input_mode=input_mode, resume=not restart_clean,
+        )
+    except asyncio.CancelledError:
+        raise
+    except DeclarativeError as exc:
+        logger.warning("swmm_snowmelt_degree_day %s: %s", exc.error_code, exc)
+        return {"status": "error", "error_code": exc.error_code,
                 "error_message": str(exc)}
-
-    peak_swe, _ = _peak(swe)
-    total_melt = _total_melt_in(swe)
-    snow_peak, snow_i = _peak(ro_snow)
-    rain_peak, rain_i = _peak(ro_rain)
-    amplification = (snow_peak / rain_peak) if rain_peak > 0 else 0.0
-
-    # cold-period artifact: share of rain-only runoff volume falling during the
-    # cold accumulation window (temperature <= dividing_temp) -- runoff a
-    # climate-naive model fabricates because it treats the snowfall as rain.
-    cold_flags = [v <= float(dividing_temp_f) for _, v in temp]
-    rain_total = sum(ro_rain) or 1.0
-    cold_rain_only = sum(q for q, cold in zip(ro_rain, cold_flags[:len(ro_rain)]) if cold)
-    cold_frac = cold_rain_only / rain_total
-
-    removal_peak_swe = _peak(swe_rem)[0] if swe_rem else None
-    removal_runoff_peak = _peak(ro_rem)[0] if ro_rem else None
-
-    logger.info(
-        "swmm snowmelt: peak_SWE=%.3f in total_melt=%.3f in snowmelt_peak=%.3f cfs "
-        "rain_only_peak=%.3f cfs amp=%.3f cold_frac_rain_only=%.3f removal_swe=%s cont=%.3f%%",
-        peak_swe, total_melt, snow_peak, rain_peak, amplification, cold_frac,
-        None if removal_peak_swe is None else round(removal_peak_swe, 3), cont,
-    )
-
-    emitter = current_emitter()
-    charts_emitted = 0
-    if emitter is not None and hasattr(emitter, "emit_chart"):
-        try:
-            from trid3nt_server.data.processing.charts_common import build_chart_payload
-            for spec, title, cap in (
-                (_swe_chart_spec(hrs, swe, swe_rem),
-                 "snow water equivalent: accumulation then degree-day melt",
-                 f"Snow Pack degree-day melt over {area:.0f} ac: peak SWE {peak_swe:.2f} in, "
-                 f"total melt {total_melt:.2f} in"
-                 + (f"; plowing cuts peak SWE to {removal_peak_swe:.2f} in."
-                    if removal_peak_swe is not None else ".")),
-                (_runoff_chart_spec(hrs, ro_snow, ro_rain),
-                 "runoff hydrograph: snowmelt vs rain-only (rain-on-snow)",
-                 f"Rain-on-snow: snowmelt physics peaks {snow_peak:.2f} cfs at "
-                 f"{hrs[snow_i]:.0f} h vs rain-only {rain_peak:.2f} cfs "
-                 f"({amplification:.2f}x); the rain-only model also fabricates "
-                 f"{cold_frac*100:.0f}% of its runoff during the cold spell "
-                 f"(EPA SWMM degree-day snowmelt)."),
-            ):
-                payload = build_chart_payload(vega_lite_spec=spec, title=title, caption=cap)
-                await emitter.emit_chart(payload)
-                charts_emitted += 1
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("swmm snowmelt chart emit failed: %s", exc)
+    except SwmmStepError as exc:
+        logger.warning("swmm_snowmelt_degree_day %s: %s", exc.error_code, exc)
+        return {"status": "error", "error_code": exc.error_code,
+                "error_message": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        if getattr(exc, "retryable", False):
+            raise
+        logger.exception("swmm_snowmelt_degree_day unexpected failure")
+        return {"status": "error", "error_code": "SWMM_SNOWMELT_INTERNAL_ERROR",
+                "error_message": str(exc)}
 
     return {
         "status": "ok",
         "model": "swmm_snowpack_degree_day_melt",
         "citation": ("EPA SWMM Reference Manual Vol. I (Hydrology), Snowmelt "
                      "chapter (degree-day method); swmm5.org snowmelt example"),
-        "area_ac": area,
-        "peak_swe_in": round(peak_swe, 4),
-        "total_melt_in": round(total_melt, 4),
-        "final_swe_in": round(swe[-1], 4) if swe else 0.0,
-        "snowmelt_runoff_peak_cfs": round(snow_peak, 4),
-        "snowmelt_runoff_peak_hr": round(hrs[snow_i], 2) if hrs else 0.0,
-        "rain_only_runoff_peak_cfs": round(rain_peak, 4),
-        "rain_only_runoff_peak_hr": round(hrs[rain_i], 2) if hrs else 0.0,
-        "rain_on_snow_peak_amplification": round(amplification, 4),
-        "cold_period_runoff_fraction_rain_only": round(cold_frac, 4),
-        "removal_peak_swe_in": (round(removal_peak_swe, 4)
-                                if removal_peak_swe is not None else None),
-        "removal_runoff_peak_cfs": (round(removal_runoff_peak, 4)
-                                    if removal_runoff_peak is not None else None),
-        "continuity_error_pct": round(cont, 4),
-        "curves": {
-            "hours": [round(t, 3) for t in hrs],
-            "swe_in": [round(v, 4) for v in swe],
-            "runoff_snowmelt_cfs": [round(v, 4) for v in ro_snow],
-            "runoff_rain_only_cfs": [round(v, 4) for v in ro_rain],
-            "swe_removal_in": ([round(v, 4) for v in swe_rem] if swe_rem else None),
-        },
-        "charts_emitted": charts_emitted,
+        **dict(result.value),
+        # The SPEC is the product and the dock is the renderer, so what this
+        # reports is what the run BUILT - never a claim about a card it cannot see.
+        "chart_specs": sorted(result.charts),
+        "notes": result.notes,
     }
+
+
+_DOC = dict(
+    summary="SNOWPACK accumulation + degree-day MELT reshaping a winter runoff hydrograph.",
+    routing=(
+        "THE tool for \"rain-on-snow flooding\", \"how much runoff comes from "
+        "snowmelt\", \"snowpack accumulation and melt\", \"winter/spring melt "
+        "flood driver\", \"does plowing change the melt runoff\", \"SWMM snow pack "
+        "degree-day method\". Authors a real SWMM 5 [SNOWPACKS] + [TEMPERATURE] "
+        "SNOWMELT deck on one subcatchment and solves it headless (pyswmm) in "
+        "THREE variants on ONE declared forcing: snowmelt physics, a rain-only "
+        "climate-naive control, and a plow-removal variant. SCHEMATIC deck - the "
+        "product is the SWE and runoff CHARTS + typed scalars, never a map."
+    ),
+    not_for=(
+        "snow WATER SUPPLY or basin SWE mapping from remote sensing; urban pipe or "
+        "street flooding (`swmm_urban_flood`); groundwater baseflow "
+        "(`swmm_aquifer_baseflow_to_node`); sewer RDII "
+        "(`swmm_rdii_rtk_unit_hydrograph`); landscape snow-driven erosion "
+        "(`landlab_*`)"
+    ),
+    params=PARAMS,
+    controls=(
+        ("input_mode",
+         '"user_gated" presents the resolved param sheet - the forcing shape, the '
+         "degree-day coefficients and the pack surfaces - for review/edit before "
+         'the three solves, and WAITS; "auto" (session default) proceeds with '
+         "every assumption labeled. Not a physical value."),
+        ("restart_clean",
+         "True discards the ledger a PREVIOUS FAILED attempt at this same "
+         "invocation left behind and re-runs every step from the top. Default "
+         "False resumes at the failed step."),
+    ),
+    returns=(
+        "On success a dict of scalars: `peak_swe_in`, `total_melt_in`, "
+        "`final_swe_in`, `snowmelt_runoff_peak_cfs` (+ `_hr`), "
+        "`rain_only_runoff_peak_cfs` (+ `_hr`), "
+        "`rain_on_snow_peak_amplification` (snowmelt peak / rain-only peak), "
+        "`cold_period_runoff_fraction_rain_only` (the runoff a climate-naive model "
+        "fabricates during the cold spell), `removal_peak_swe_in` + "
+        "`removal_runoff_peak_cfs` (the plowed variant), `continuity_error_pct` "
+        "and `curves`. Narrate those typed numbers. On failure a dict with "
+        "`status=\"error\"` + `error_code`."
+    ),
+)
+
+swmm_snowmelt_degree_day.__doc__ = render_docstring(**_DOC)
+swmm_snowmelt_degree_day.routing_doc = render_docstring(**_DOC, view="routing")
