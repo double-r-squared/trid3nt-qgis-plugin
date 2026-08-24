@@ -45,8 +45,8 @@ from trid3nt_server.mesh.modflow_package_validation import (
     SolvedValidation,
     run_validation_case,
 )
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.processing.charts_common import build_chart_payload
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.processing.charts_common import build_chart_payload
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,

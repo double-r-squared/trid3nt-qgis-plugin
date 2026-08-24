@@ -20,7 +20,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from .deck import stage_manifest
 from .errors import (
@@ -59,7 +59,7 @@ def read_run_metrics(run_id: str) -> dict[str, Any]:
     completion.json is written), so it is the channel through which a worker-side
     typed error_code reaches the server.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -113,7 +113,7 @@ def download_result_selafin(run_id: str) -> tuple[str, int]:
     the metrics' UTM zone - which makes a missing zone a typed failure, not a
     guess.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -159,7 +159,7 @@ async def solve_reach(*, deck: dict[str, Any],
     ledger replay probes, so a resumed rerun can only skip the solve while the
     solved artifact is still there.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -241,7 +241,7 @@ async def solve_reach(*, deck: dict[str, Any],
             "TELEMAC_DYE_OUTPUT_MISSING",
             f"TELEMAC run {batch_run_id} produced no utm_epsg in "
             "telemac_metrics.json; cannot georeference the SELAFIN mesh.")
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     # No local path travels out of this step: it is the ledger's record of the
     # solve, and a replayed record must not hand back a temp file that a later

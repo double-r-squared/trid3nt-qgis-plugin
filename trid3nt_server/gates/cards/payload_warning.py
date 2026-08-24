@@ -62,7 +62,7 @@ def _resolve_payload_estimator(tool_name: str, estimator_name: str) -> Any | Non
     try:
         from importlib import import_module
 
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         entry = TOOL_REGISTRY.get(tool_name)
         if entry is None:

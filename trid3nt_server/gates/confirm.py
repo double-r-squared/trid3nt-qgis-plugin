@@ -14,7 +14,7 @@ from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
 from trid3nt_contracts.ws import SpatialInputResponsePayload
 from trid3nt_server.credentials.credential_registry import CredentialProvider, generic_provider_for_tool, is_credential_error, is_credential_shaped_error, provider_for_tool
 from trid3nt_server.credentials.resolver import resolve_credential
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.gates.cards import _build_credential_request_payload, _build_region_choice_request_payload, _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _local_compute_lane, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.gates.cards.estimate import call_provider
 from trid3nt_server.gates.pending import _pop_pending_confirmation, _register_pending_confirmation

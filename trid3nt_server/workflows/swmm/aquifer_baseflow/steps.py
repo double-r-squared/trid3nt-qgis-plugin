@@ -13,7 +13,7 @@ import logging
 import math
 from typing import Any, Sequence
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from trid3nt_server.workflows.swmm.steps import (
     clock,
@@ -322,7 +322,7 @@ def build_baseflow_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     if len(hours) < 2 or len(gw) != len(hours) or len(dry) != len(hours):
         return None
 
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     spec = line_chart_spec(
         title="node hydrograph: groundwater baseflow vs surface runoff only",

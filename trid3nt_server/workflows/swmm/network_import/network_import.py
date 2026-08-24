@@ -34,8 +34,8 @@ from trid3nt_contracts.swmm_contracts import SWMMNetworkLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.mesh.swmm_network import (
     MAX_NETWORK_NODES,
     SWMMNetworkError,
@@ -361,7 +361,7 @@ async def model_swmm_network_import(
     run_id: str | None = None,
 ) -> SWMMNetworkLayerURI:
     """Compose the network-import chain: load -> parse -> build -> solve -> publish."""
-    from trid3nt_server.data.simulation.solver.solver import new_ulid
+    from trid3nt_server.workflows.solver.solver import new_ulid
 
     emitter = current_emitter()
     rid = run_id or new_ulid()
@@ -627,7 +627,7 @@ def _publish_network_layer(
 
 
 def _upload_network_geojson(fc: dict[str, Any], rid: str) -> str:
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket, _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
 
     bucket = _get_runs_bucket()
     key = f"{rid}/network.geojson"

@@ -49,7 +49,7 @@ from trid3nt_server.workflows.modflow._input_review import (
     resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 # Reuse the shared archetype-run + AOI-resolve + emit helpers from the
 # sustainable_yield composer (one implementation, three composers).

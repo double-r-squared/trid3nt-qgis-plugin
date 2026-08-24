@@ -64,7 +64,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 
 logger = logging.getLogger(
@@ -247,7 +247,7 @@ def _coerce_optional_latlon(value: Any) -> tuple[float, float] | None:
     """Coerce an optional lat/lon arg (str / list / tuple) -> (lat, lon) or None."""
     if value is None:
         return None
-    from trid3nt_server.data.tool_arg_normalizer import coerce_latlon
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_latlon
 
     return tuple(coerce_latlon(value))  # type: ignore[return-value]
 
@@ -329,7 +329,7 @@ async def _emit_plume_chart(plumes: list[PlumeLayerURI]) -> None:
     ``max_concentration_mgl`` + ``plume_area_km2`` (Invariant 1: never fabricated).
     Emits nothing when every plume is empty (the honesty floor).
     """
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     rows: list[dict[str, Any]] = []
     for p in plumes:

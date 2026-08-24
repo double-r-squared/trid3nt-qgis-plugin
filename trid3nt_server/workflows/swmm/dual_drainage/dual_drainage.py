@@ -31,8 +31,8 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.swmm_contracts import SWMMDualDrainageLayerURI, SWMMRunArgs
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.mesh.swmm_network import (
     SWMMNetworkError,
     build_dual_drainage_inp,
@@ -221,7 +221,7 @@ async def model_swmm_dual_drainage(
 ) -> SWMMDualDrainageLayerURI:
     """Compose the coupled dual-drainage chain: overland mesh + imported pipes ->
     one deck, solve, publish overland depth + pipe overlay."""
-    from trid3nt_server.data.simulation.solver.solver import new_ulid
+    from trid3nt_server.workflows.solver.solver import new_ulid
     from trid3nt_server.workflows.swmm.run_swmm import (
         build_and_stage_swmm_deck, run_swmm_local, SWMMStaging,
     )
@@ -428,7 +428,7 @@ def _build_coupled_deck(
 
 
 def _publish_pipe_overlay(dd, resp, rid) -> LayerURI | None:
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket, _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
 
     fc = dual_drainage_network_to_geojson_4326(dd, resp)
     if not fc.get("features"):

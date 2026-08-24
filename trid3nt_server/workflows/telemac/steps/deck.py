@@ -17,7 +17,7 @@ from typing import Any
 
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 from .reach import (
@@ -69,7 +69,7 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
     ``mesh_only`` flags the fast mesh-preview mode: build the mesh, write the
     wireframe + gate stats, skip the solve.
     """
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:

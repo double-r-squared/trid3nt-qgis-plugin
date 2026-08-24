@@ -44,8 +44,8 @@ from trid3nt_contracts.openquake_contracts import ScenarioGmfLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.openquake._local_oq import VS30_DEMO_NOTE
 from trid3nt_server.workflows.openquake._template_card import TemplateCard
 from trid3nt_server.emission.pipeline_emitter import (
@@ -420,8 +420,8 @@ def resolve_scenario_rupture(
 
     # 2) longest real GEM active fault in the AOI (best-effort).
     try:
-        from trid3nt_server.data import TOOL_REGISTRY
-        from trid3nt_server.data.fetchers._fetch_common import FetchError
+        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.tools.fetchers._fetch_common import FetchError
 
         fetch_fault_sources = TOOL_REGISTRY["fetch_fault_sources"].fn
         try:
@@ -884,7 +884,7 @@ def _write_publish_cog(
     final_uri = cog_uri
     if cog_uri.startswith("s3://") or cog_uri.startswith("gs://"):
         try:
-            from trid3nt_server.data.publish_layer.publish_layer import publish_layer
+            from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
 
             wms = publish_layer(
                 layer_uri=cog_uri, layer_id=f"scenario-gmf-{tag}-{run_id}",
@@ -958,7 +958,7 @@ async def _emit_scenario_spread_chart(
                 "lo": round(float(mean) / g, 6),
                 "hi": round(float(mean) * g, 6),
             })
-        from trid3nt_server.data.processing.charts_common import build_chart_payload
+        from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
         spec = {
             "data": {"values": rows},

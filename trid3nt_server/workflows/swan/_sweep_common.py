@@ -199,7 +199,7 @@ async def emit_chart_if_live(
     emitter = current_emitter()
     if emitter is None or not hasattr(emitter, "emit_chart"):
         return False
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     try:
         payload = build_chart_payload(

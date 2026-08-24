@@ -1005,7 +1005,7 @@ def make_geoclaw_mesh_layer_uri(
             run_id,
         )
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _get_s3_client,
         )
@@ -1934,7 +1934,7 @@ def make_geoclaw_particle_track_layer_uri(
         return None
     body = _json.dumps(fc, separators=(",", ":")).encode("utf-8")
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _get_s3_client,
         )

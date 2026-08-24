@@ -689,7 +689,7 @@ def _upload_geojson_to_runs_bucket(
     vector ``LayerURI`` inline from this GeoJSON URI (no TiTiler tiling)."""
     import json as _json
 
-    from trid3nt_server.data.cache import storage_scheme
+    from trid3nt_server.tools.cache import storage_scheme
 
     body = _json.dumps(geojson).encode("utf-8")
     scheme = storage_scheme()
@@ -700,7 +700,7 @@ def _upload_geojson_to_runs_bucket(
     uri = f"{scheme}://{bucket}/{key}"
     try:
         if scheme == "s3":
-            from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+            from trid3nt_server.workflows.solver.solver import _get_s3_client
 
             _get_s3_client().put_object(
                 Bucket=bucket, Key=key, Body=body, ContentType="application/geo+json"

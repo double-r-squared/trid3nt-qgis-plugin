@@ -51,7 +51,7 @@ from trid3nt_contracts.hecras_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.hecras._template_card import TemplateCard
 
@@ -266,7 +266,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -292,7 +292,7 @@ def _stage_manifest(
     The Muncie deck is BAKED in the worker image (frozen demonstration geometry),
     so ``inputs`` is empty -- the manifest carries only the archetype + the breach
     toggle + the flow knobs."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -325,7 +325,7 @@ def _read_run_metrics(run_id: str) -> dict[str, Any]:
     """Best-effort read of ``<run_id>/hecras_metrics.json`` from the runs bucket.
 
     Returns ``{}`` on any miss."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -345,7 +345,7 @@ def _download_plan_hdf(run_id: str) -> str:
 
     Raises ``HecrasLeveeBreachError`` when the plan HDF is missing (a completed run
     with no result is a failure, not an empty success)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -471,7 +471,7 @@ async def model_hecras_levee_breach(
     )
 
     # --- Stage 3: dispatch to the solver (generic run_solver seam) ------------- #
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver,
         wait_for_completion,
     )
@@ -629,7 +629,7 @@ async def _maybe_emit_inflow_chart(
     series = metrics.get("inflow_hydrograph") or []
     if not series:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     scenario = "levee fails" if breach_enabled else "levee holds"
     values = [{"time_hr": p["t_hr"], "inflow_cfs": p["q_cfs"]} for p in series]

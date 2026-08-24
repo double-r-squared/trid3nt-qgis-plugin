@@ -46,8 +46,8 @@ from trid3nt_contracts.elmfire_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.workflows.elmfire._frame_emit import (
     read_and_emit_elmfire_frames,
 )
@@ -343,7 +343,7 @@ def _download_elmfire_outputs(run_id: str) -> tuple[str, bool]:
     Raises ``ElmfireWorkflowError("ELMFIRE_OUTPUT_MISSING")`` when a
     'complete' run yields no downloadable raster (never a silent dead-end).
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         DEFAULT_LOCAL_RUNS_DIR,
         _get_runs_bucket,
         _get_s3_client,
@@ -586,7 +586,7 @@ async def model_elmfire_fire_spread(
         effective_compute_class = compute_class
 
         # --- Step 4: dispatch via the generic run_solver seam. ----------------
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             EmitterBinding,
             run_solver,
             set_emitter_binding,

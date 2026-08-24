@@ -84,7 +84,7 @@ def register_hecras_solver() -> None:
     comes from the backend sentinel. HEC-RAS is local-docker only, so every name
     maps to the local-docker workflow-name sentinel. Idempotent ``setdefault``.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -146,7 +146,7 @@ def hecras_local_spec(solver_name: str = HECRAS_SOLVER_NAME) -> "Any":
     drive the SAME worker image (the archetype + knobs ride in the manifest)."""
     import os
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         LocalSolverSpec,
     )
@@ -187,7 +187,7 @@ def hecras_local_spec(solver_name: str = HECRAS_SOLVER_NAME) -> "Any":
 
 def register_hecras_local_spec() -> None:
     """Register the HEC-RAS LocalSolverSpec factory for every capability name."""
-    from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec
+    from trid3nt_server.workflows.solver.solver import register_local_solver_spec
 
     for name in HECRAS_SOLVER_NAMES:
         register_local_solver_spec(name, lambda n=name: hecras_local_spec(n))

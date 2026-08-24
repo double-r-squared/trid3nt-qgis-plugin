@@ -23,8 +23,8 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.swan._sweep_common import (
     SwanSweepError,
     emit_chart_if_live,

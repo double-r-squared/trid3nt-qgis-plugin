@@ -39,8 +39,8 @@ from trid3nt_contracts.geoclaw_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.shared.roughness_resolve import resolve_overland_manning
 from trid3nt_server.workflows.geoclaw._template_card import TemplateCard

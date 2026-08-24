@@ -818,7 +818,7 @@ def _stage_gcs_local(uri: str) -> str:
         return str(local)
 
     tmp = local.with_suffix(local.suffix + ".part")
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     bucket_name, _, obj_key = uri[len("s3://"):].partition("/")
     resp = _get_s3_client().get_object(Bucket=bucket_name, Key=obj_key)
@@ -970,7 +970,7 @@ def _extract_unique_nlcd_classes(landcover_uri: str) -> set[int]:
         if landcover_uri.startswith("s3://"):
             from rasterio.io import MemoryFile  # type: ignore[import-not-found]
 
-            from trid3nt_server.data.cache import read_object_bytes_s3
+            from trid3nt_server.tools.cache import read_object_bytes_s3
 
             # keep the MemoryFile ALIVE for the dataset's whole
             # lifetime. The prior ``MemoryFile(...).open()`` orphaned the
@@ -1133,7 +1133,7 @@ def _default_setup_uri(bbox: tuple[float, float, float, float]) -> str:
     enforced via a ULID; HydroMT-determinism would let us cache by content
     hash but the v0.1 smoke skips that.
     """
-    from trid3nt_server.data.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.tools.cache import CACHE_BUCKET, storage_scheme
 
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
     setup_id = new_ulid()
@@ -2949,7 +2949,7 @@ def build_sfincs_model(
         final_setup_uri = manifest_uri
         try:
             if manifest_uri.startswith("s3://"):
-                from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+                from trid3nt_server.workflows.solver.solver import _get_s3_client
 
                 s3 = _get_s3_client()
                 s3_bucket, _, manifest_key = (

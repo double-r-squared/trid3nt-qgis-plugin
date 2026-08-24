@@ -45,8 +45,8 @@ from trid3nt_contracts.hecras_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.resolution_declared import (
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.resolution_declared import (
     ResolutionOutOfRangeError,
     resolve_resolution,
 )
@@ -420,7 +420,7 @@ def _coerce_bbox(bbox: Any) -> list[float] | None:
 def _geocode_bbox(location: str) -> list[float] | None:
     """Best-effort geocode of a place name to a bbox via ``geocode_location``."""
     try:
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         res = TOOL_REGISTRY["geocode_location"].fn(query=location)
         bb = getattr(res, "bbox", None) or (res.get("bbox") if isinstance(res, dict) else None)
@@ -440,7 +440,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -463,14 +463,14 @@ def _fetch_dem_local(bbox: list[float]) -> tuple[str, str]:
     Returns ``(local_path, s3_uri)`` -- the s3 uri rides the cache COG so the
     composer can surface the fetched terrain as a role=context input.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     layer = TOOL_REGISTRY["fetch_dem"].fn(
         bbox=list(bbox), resolution_m=10, purpose="terrain")
     uri = getattr(layer, "uri", None) or (layer.get("uri") if isinstance(layer, dict) else None)
     if not uri:
         raise HecrasFlood2dError(HECRAS_SOLVE_FAILED, f"fetch_dem returned no uri for bbox {bbox}")
-    from trid3nt_server.data.simulation.solver.solver import _download_object
+    from trid3nt_server.workflows.solver.solver import _download_object
 
     tmp = Path(tempfile.mkdtemp(prefix="flood2d-dem-")) / "dem.tif"
     _download_object(str(uri), tmp)
@@ -492,7 +492,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
         import numpy as np
         import rasterio
         from shapely.geometry import mapping
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
         from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
             _delineate_catchment,
         )
@@ -507,7 +507,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
             bbox=list(bbox), resolution_m=30, source="copernicus")
         dem_uri = getattr(dem_layer, "uri", None) or (
             dem_layer.get("uri") if isinstance(dem_layer, dict) else None)
-        from trid3nt_server.data.simulation.solver.solver import _download_object
+        from trid3nt_server.workflows.solver.solver import _download_object
         dem_local = rundir / "dem.tif"
         _download_object(str(dem_uri), dem_local)
         if pour_point is not None:
@@ -530,7 +530,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
             {"type": "Feature", "properties": {}, "geometry": mapping(catch)}]}))
 
         rv = TOOL_REGISTRY["fetch_river_geometry"].fn(bbox=tuple(bbox), source="nhdplus_hr")
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
         fl_path = rundir / "flowlines.fgb"
         fl_path.write_bytes(
             read_object_bytes_s3(rv.uri) if str(rv.uri).startswith("s3://")
@@ -570,7 +570,7 @@ def _author_and_compose(dem_tif: str, workdir: str, *, peak_cfs: float,
 def _stage_deck_manifest(deck_dir: str, run_tag: str) -> str:
     """Upload the composed deck files to the cache bucket + write the run_solver
     manifest (M3-gate no-archetype path: plan_hdf + geom_suffix on staged inputs)."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -605,7 +605,7 @@ def _stage_deck_manifest(deck_dir: str, run_tag: str) -> str:
 
 
 def _download_plan_hdf(run_id: str) -> str:
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
 
@@ -720,7 +720,7 @@ async def model_hecras_flood_2d(
 
     # --- Stage 2: dispatch the composed deck to run_solver --------------------- #
     manifest_uri = await asyncio.to_thread(_stage_deck_manifest, result.deck_dir, run_tag)
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
 
@@ -859,7 +859,7 @@ async def model_hecras_flood_2d_rog(
     # an accepted mesh is re-realized + solved directly (no fresh delineation / seeding
     # / channel acquisition). Declined / absent / incompatible -> unchanged 0209/0210. --
     from trid3nt_server.workflows.mesh.precondition_gate import gate_supplied_mesh
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     supplied_note: str | None = None
     supplied_art = None
@@ -977,7 +977,7 @@ async def model_hecras_flood_2d_rog(
     from trid3nt_contracts.execution import LegendKey
     from trid3nt_contracts.hecras_contracts import HECRAS_DEPTH_STYLE_PRESET
     from trid3nt_server.workflows.shared import cog_io
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     async with substep(emitter, "publish"):
         cog_tif = str(Path(workdir) / "rog_depth.tif")
@@ -1050,7 +1050,7 @@ def _write_rog_frame_manifest(
     from rog2025_pipeline import build_depth_frames  # type: ignore
     from trid3nt_contracts.outputs_manifest import build_entry
 
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
     from trid3nt_server.workflows.shared import cog_io
     from trid3nt_server.workflows.shared.outputs_manifest_io import (
         write_outputs_manifest,
@@ -1099,7 +1099,7 @@ def _write_rog_frame_manifest(
 
 
 def _read_run_metrics(run_id: str) -> dict[str, Any]:
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
 
@@ -1138,7 +1138,7 @@ async def _maybe_emit_inflow_chart(emitter: Any, metrics: dict[str, Any], bbox: 
     series = metrics.get("inflow_hydrograph") or []
     if not series:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     values = [{"time_hr": p["t_hr"], "inflow_cfs": p["q_cfs"]} for p in series]
     spec = {

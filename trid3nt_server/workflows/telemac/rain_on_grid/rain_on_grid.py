@@ -58,8 +58,8 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
@@ -207,7 +207,7 @@ async def model_telemac_rain_on_grid(
     import asyncio
 
     from trid3nt_contracts import new_ulid
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as MA
     from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
         select_runoff_path,
@@ -376,7 +376,7 @@ async def _mesh_precondition_gate(pp, rundir):
             if emitter is not None else [])
         s3 = None
         try:
-            from trid3nt_server.data.simulation.solver.solver import (
+            from trid3nt_server.workflows.solver.solver import (
                 _get_s3_client,
             )
             s3 = _get_s3_client()
@@ -453,8 +453,8 @@ def _sample_node_fields(mesh: Any, aoi: tuple, curve_number: float | None):
     """
     import numpy as np
 
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.cache import read_object_bytes_s3
     from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
         _sample_raster_at_nodes, assemble_node_fields,
     )
@@ -483,7 +483,7 @@ def _fetch_hyetograph_blocks(aoi, window: str, sim_s_hint: float):
     product; MRMS only covers ~2020-10+), builds one 3600-s block per hour, and
     returns (blocks, per-hour mm list, sim_seconds). The sim length is the
     hyetograph span unless ``sim_s_hint`` is larger."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     sep = "/" if "/" in window else (".." if ".." in window else None)
     if not sep:
@@ -516,7 +516,7 @@ def _spin_up_soil_v0(aoi, window: str, capacity_mm: float, recovery_h: float,
     import datetime as _dt
     import math as _math
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     sep = "/" if "/" in window else (".." if ".." in window else None)
     if not sep:
@@ -550,7 +550,7 @@ async def _stage_solve_postprocess(
     depth COG. Mirrors the ``telemac_river_dye`` run_solver seam."""
     import asyncio
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
     from trid3nt_server.workflows.telemac.postprocess_telemac import (
@@ -569,7 +569,7 @@ async def _stage_solve_postprocess(
         raise TelemacRainOnGridError(
             "TELEMAC_ROG_STAGING_FAILED",
             "TRID3NT_CACHE_BUCKET must be set to stage the rain-on-grid inputs.")
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
     s3 = _get_s3_client()
     inputs = []
     for name, src in (("watershed.slf", mesh.slf_path),
@@ -671,7 +671,7 @@ def _download_rog_result(run_id: str) -> str:
     """Download r2d_rog.slf from the runs bucket to a local temp path."""
     import tempfile
 
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     runs_bucket = (os.environ.get("TRID3NT_RUNS_BUCKET") or "").strip()
     s3 = _get_s3_client()

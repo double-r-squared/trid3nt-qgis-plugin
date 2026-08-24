@@ -46,7 +46,7 @@ from trid3nt_contracts.landlab_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import (
     gate_input_review,
     physics_refusal_reason,
@@ -56,8 +56,8 @@ from trid3nt_server.workflows.shared.aquifer_resolve import (
     literature_offer_entry,
     soil_derived_entry,
 )
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.workflows.landlab._template_card import TemplateCard
 from trid3nt_server.workflows.landlab.run_landlab import LANDLAB_RES_SPEC
 from trid3nt_server.workflows.landlab.postprocess_landlab import (
@@ -124,7 +124,7 @@ def _atlas14_design_storm_mm(
     a module internal). Returns the total storm depth in mm, or ``None`` on lookup
     failure (the caller then raises a typed rainfall gate - never a silent baked
     default)."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["lookup_precip_return_period"].fn
     lat = 0.5 * (bbox[1] + bbox[3])
@@ -662,7 +662,7 @@ def _localize_to_dem_path(uri: str) -> str:
     if local.exists() and local.stat().st_size > 0:
         return str(local)
     tmp = local.with_suffix(local.suffix + ".part")
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     bucket_name, _, obj_key = uri[len("s3://"):].partition("/")
     resp = _get_s3_client().get_object(Bucket=bucket_name, Key=obj_key)
@@ -680,7 +680,7 @@ def _fetch_dem_for_landslide(
     10 m fallback (the data-source fallback norm). Returns ``(local_dem_path,
     source_label)``; raises ``LandslideWorkflowError("LANDLAB_DEM_FETCH_FAILED")``
     only when BOTH fail."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     # fetch_3dep_extra + fetch_dem are spec-driven tools:
     # resolve through the registry seam (keyword-only) rather than deleted twins.
@@ -728,7 +728,7 @@ def _download_batch_landlab_outputs(
     'complete' run produced no downloadable field COG (a real failure, never a
     silent dead-end).
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,
@@ -855,7 +855,7 @@ async def model_landlab_susceptibility(
         a fatal stage failure (the tool wrapper catches these and returns a typed
         error dict so the agent narrates honestly).
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         new_ulid,
         run_solver,

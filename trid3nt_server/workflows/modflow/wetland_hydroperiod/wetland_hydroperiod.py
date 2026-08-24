@@ -50,7 +50,7 @@ from trid3nt_server.workflows.modflow._input_review import (
     resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 from trid3nt_server.workflows.modflow.mine_dewatering.mine_dewatering import _normalize_pit_footprint
 from trid3nt_server.workflows.modflow.sustainable_yield.sustainable_yield import (
@@ -123,7 +123,7 @@ async def _emit_hydroperiod_chart(layer: HydroperiodLayerURI) -> None:
     (real solver output  -  the water table under the wetland over the seasons). The
     builder emits nothing for an absent / single-point series (the honesty floor).
     """
-    from trid3nt_server.data.processing.charts_common import build_head_series_chart
+    from trid3nt_server.tools.processing.charts_common import build_head_series_chart
 
     series = getattr(layer, "head_timeseries", None)
     if not series:

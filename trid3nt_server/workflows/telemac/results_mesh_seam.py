@@ -97,7 +97,7 @@ def _write_and_read_mesh_layers(
     artifacts -- for a TELEMAC leg that is the mesh layer (the peak entry is
     skipped, the composer keeps its typed peak). Returns ``[]`` on any miss.
     """
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
     from trid3nt_server.emission.outputs_seam import (
         build_layers_from_outputs,
         read_outputs_manifest,

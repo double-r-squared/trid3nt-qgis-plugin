@@ -21,7 +21,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from .errors import SwmmSolveError
 

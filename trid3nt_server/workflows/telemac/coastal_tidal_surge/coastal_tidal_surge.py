@@ -50,8 +50,8 @@ from trid3nt_contracts.telemac_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.workflows.telemac.postprocess_telemac import (
     PostprocessTelemacError,
@@ -364,7 +364,7 @@ def _read_station_series(
     parse its inline ``time_series_csv`` -> ([[t_seconds_from_start, sl_m], ...],
     station_meta). Raises ``CoastalTidalSurgeError`` on any read/empty failure."""
     import geopandas as gpd
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools.cache import read_object_bytes_s3
 
     tmp = tempfile.mkdtemp(prefix="coops-")
     local = os.path.join(tmp, "coops.fgb")
@@ -458,7 +458,7 @@ def _read_station_series(
 
 def _stage_coastal_manifest(coastal: dict[str, Any], run_tag: str) -> str:
     """Write the coastal ``coastal`` worker manifest to the cache bucket; return uri."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -486,7 +486,7 @@ def _stage_coastal_manifest(coastal: dict[str, Any], run_tag: str) -> str:
 
 def _download_coastal_result(run_id: str) -> tuple[str, dict[str, Any]]:
     """Download ``res_coastal.slf`` + read telemac_metrics.json. Returns (path, metrics)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -556,8 +556,8 @@ async def model_coastal_tidal_surge(
         substep,
     )
     from trid3nt_server.gates.input_review import gate_input_review
-    from trid3nt_server.data.publish_layer.publish_layer import publish_layer
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -766,7 +766,7 @@ async def model_coastal_tidal_surge(
             + (" (coarsened under node budget)" if metrics.get("coarsened") else "")),
     })
 
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 
     async with substep(emitter, "publish_layer"):
         published = enriched

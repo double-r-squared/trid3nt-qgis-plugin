@@ -8,7 +8,7 @@ import re
 import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, SessionStatePayload
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.emission.pipeline_emitter import current_turn_case
 from trid3nt_server.main import MAX_TURNS_PER_SESSION
 from trid3nt_server.server.config import _ambiguity_margin_threshold, _tool_choice_timeout_s
@@ -282,7 +282,7 @@ async def _maybe_emit_tool_candidates(
     if mode != "ask" and threshold <= 0.0:
         return None, []
 
-    from trid3nt_server.data.search.tool_retrieval import retrieve_ranked_tools
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_ranked_tools
 
     ranked = retrieve_ranked_tools(user_text, k=8)
     if exclude_tools:

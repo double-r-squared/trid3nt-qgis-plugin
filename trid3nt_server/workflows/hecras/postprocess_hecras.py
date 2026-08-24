@@ -691,7 +691,7 @@ def make_hecras_mesh_layer_uri(
     if not features:
         return None
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _get_s3_client,
         )

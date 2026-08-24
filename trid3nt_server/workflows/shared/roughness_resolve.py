@@ -42,7 +42,7 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.shared.manning import (
     MANNING_MAPPING_VERSION,
     ManningMappingError,
@@ -80,7 +80,7 @@ def nlcd_class_histogram(landcover_uri: str) -> dict[int, int]:
         import numpy as np
         import rasterio
 
-        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+        from trid3nt_server.tools.processing._gdal_runner import read_raster_bytes
 
         read_uri = (
             landcover_uri[len("file://"):]

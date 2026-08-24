@@ -38,7 +38,7 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.envelope import AssessmentEnvelope
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.sfincs._template_card import TemplateCard
 from trid3nt_server.workflows.shared.physics_registry import (

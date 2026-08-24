@@ -32,7 +32,7 @@ from trid3nt_server.mesh.swmm_mechanism_compare import (
     SolvedVariant,
     solve_variants,
 )
-from trid3nt_server.data.processing.charts_common import build_chart_payload
+from trid3nt_server.tools.processing.charts_common import build_chart_payload
 from trid3nt_server.emission.pipeline_emitter import (
     begin_substeps,
     current_emitter,

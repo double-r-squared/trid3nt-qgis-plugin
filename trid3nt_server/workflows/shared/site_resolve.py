@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 
 logger = logging.getLogger("trid3nt_server.workflows.shared.site_resolve")
 

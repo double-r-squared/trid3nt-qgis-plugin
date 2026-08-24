@@ -47,8 +47,8 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
-from trid3nt_server.data.processing.extract_timeseries_at_point.extract_timeseries_at_point import detect_frame_sequences
-from trid3nt_server.data.processing.query_point_hazard.query_point_hazard import (
+from trid3nt_server.tools.processing.extract_timeseries_at_point.extract_timeseries_at_point import detect_frame_sequences
+from trid3nt_server.tools.processing.query_point_hazard.query_point_hazard import (
     layers_from_case,
     resolve_point,
     sample_raster_at_point,

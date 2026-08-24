@@ -37,8 +37,8 @@ from trid3nt_contracts.openquake_contracts import DisaggregationLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.openquake._local_oq import (
     DEFAULT_IMLS_G,
     LocalOqError,
@@ -515,7 +515,7 @@ def _upload_disagg_site_geojson(
         }],
     }
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket, _get_s3_client,
         )
 
@@ -588,7 +588,7 @@ async def _emit_disagg_heatmap_chart(
             },
             "width": "container",
         }
-        from trid3nt_server.data.processing.charts_common import (
+        from trid3nt_server.tools.processing.charts_common import (
             build_chart_payload,
         )
 

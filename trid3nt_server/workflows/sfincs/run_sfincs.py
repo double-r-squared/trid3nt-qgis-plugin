@@ -28,7 +28,7 @@ from trid3nt_contracts.envelope import (
     Provenance,
 )
 from trid3nt_contracts.execution import ExecutionHandle, ModelSetup, RunResult
-from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
+from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
 
 logger = logging.getLogger("trid3nt_server.workflows.sfincs.flood.flood")
 

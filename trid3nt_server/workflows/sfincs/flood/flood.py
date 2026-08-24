@@ -81,7 +81,7 @@ from trid3nt_contracts.envelope import (
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec, LeverSpec, ResolutionSpec
 
-from trid3nt_server.data.resolution_declared import enforce_resolution
+from trid3nt_server.tools.resolution_declared import enforce_resolution
 from trid3nt_server.emission.layer_uri_emit import (
     emit_layer_uri,
     publish_input_layer,
@@ -94,10 +94,10 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.sfincs._template_card import TemplateCard
-from trid3nt_server.data.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import lookup_precip_return_period
-from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
+from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import lookup_precip_return_period
+from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
 
 
 def fetch_dem(**kwargs):
@@ -108,7 +108,7 @@ def fetch_dem(**kwargs):
     preserves the ``flood.fetch_dem`` module-attribute patch seam the flood tests
     monkeypatch. Keyword-only -- the promoted router closure takes ``**kwargs``.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["fetch_dem"].fn(**kwargs)
 
@@ -119,7 +119,7 @@ def fetch_landcover(*args: Any, **kwargs: Any):
     name. Kept as a patchable module symbol for the flood-scenario consumer tests. It
     returns a LandcoverResult (a LayerURI subclass carrying the nlcd_vintage_year
     sidecar) -- the call site tolerates that object OR the twin's legacy dict shape."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     return TOOL_REGISTRY["fetch_landcover"].fn(*args, **kwargs)
 
@@ -134,21 +134,21 @@ def fetch_topobathy(bbox: Any = None, **kwargs: Any):
     positional args), so this shim maps the historical positional ``bbox`` back to
     the keyword the closure expects.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     if bbox is not None:
         kwargs["bbox"] = bbox
     return TOOL_REGISTRY["fetch_topobathy"].fn(**kwargs)
 
 
-from trid3nt_server.data.fetchers._router.hooks.topobathy import TopobathyError
+from trid3nt_server.tools.fetchers._router.hooks.topobathy import TopobathyError
 from trid3nt_server.fallbacks import (
     LADDER_ERROR_CODE,
     LadderRefused,
     persist_run_activations,
 )
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
-from trid3nt_server.data.simulation.solver.solver import (
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.workflows.solver.solver import (
     run_solver,
     wait_for_completion,
 )
@@ -1063,7 +1063,7 @@ async def model_flood_scenario(
             # Registry seam: fetch_river_geometry is now a spec-driven
             # router tool (OSM Overpass waterways), resolved by name rather than a
             # direct twin import (the twin was deleted with the NHDPlus HR leg).
-            from trid3nt_server.data import TOOL_REGISTRY as _TR
+            from trid3nt_server.tools import TOOL_REGISTRY as _TR
 
             _river_fn = _TR["fetch_river_geometry"].fn
             river_layer = _river_fn(
@@ -1990,7 +1990,7 @@ async def model_flood_scenario(
     # ephemeral SFINCS Batch worker has NO inbound WS; status flows agent-side
     # over the EXISTING WS via the poller. Best-effort: emitter None / emit
     # failure -> no cards, solve proceeds unchanged.
-    from trid3nt_server.data.simulation.solver.solver import EmitterBinding, set_emitter_binding
+    from trid3nt_server.workflows.solver.solver import EmitterBinding, set_emitter_binding
 
     _sim_step_id = await mint_dispatch_and_sim_cards(
         emitter=emitter,

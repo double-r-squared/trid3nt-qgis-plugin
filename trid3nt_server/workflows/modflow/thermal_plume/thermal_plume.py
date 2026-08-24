@@ -57,7 +57,7 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.modflow._input_review import (
     AquiferRefusal,
     gate_and_stamp_modflow_inputs,

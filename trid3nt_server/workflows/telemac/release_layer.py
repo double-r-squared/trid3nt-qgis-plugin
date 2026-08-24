@@ -70,7 +70,7 @@ async def publish_release_point(emitter: Any, *, lon: float, lat: float,
 def _upload_point(lon: float, lat: float, basis: str, reach_name: str) -> str | None:
     import boto3
 
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     body = json.dumps({
         "type": "FeatureCollection",

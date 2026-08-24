@@ -44,7 +44,7 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.shared.soil_hydraulics import (
     MM_PER_HR_TO_M_PER_S,
     SoilHydraulicsInputError,
@@ -105,7 +105,7 @@ def sample_raster_at_points(
         import rasterio
         from pyproj import Transformer
 
-        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+        from trid3nt_server.tools.processing._gdal_runner import read_raster_bytes
 
         read_uri = dem_uri[len("file://"):] if dem_uri.startswith("file://") else dem_uri
         dem_bytes = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))
@@ -147,7 +147,7 @@ def mean_valid_raster(uri: str) -> float | None:
         import numpy as np
         import rasterio
 
-        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+        from trid3nt_server.tools.processing._gdal_runner import read_raster_bytes
 
         read_uri = uri[len("file://"):] if uri.startswith("file://") else uri
         data = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))

@@ -53,7 +53,7 @@ def build_and_record_hecras_mesh(
     from trid3nt_server.workflows.mesh.artifact import (
         MeshArtifact, stash_mesh_artifact, write_mesh_artifact_sidecar,
     )
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     mesh_id = new_ulid()
     workdir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"hecmesh-{mesh_id}"

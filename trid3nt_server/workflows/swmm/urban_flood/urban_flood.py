@@ -39,9 +39,9 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec, LeverSpec
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
 from trid3nt_server.workflows.swmm.postprocess_swmm import PostprocessSWMMError
 from trid3nt_server.workflows.swmm.run_swmm import SWMMWorkflowError
@@ -386,7 +386,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.emission.outputs_seam import (
     build_layers_from_outputs,
     read_outputs_manifest,
@@ -517,7 +517,7 @@ def _localize_to_dem_path(uri: str) -> str:
     if local.exists() and local.stat().st_size > 0:
         return str(local)
     tmp = local.with_suffix(local.suffix + ".part")
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     bucket_name, _, obj_key = uri[len("s3://"):].partition("/")
     resp = _get_s3_client().get_object(Bucket=bucket_name, Key=obj_key)
@@ -538,7 +538,7 @@ def _fetch_dem_for_urban(
     Returns ``(local_dem_path, source_label)``. Raises
     ``UrbanFloodWorkflowError("SWMM_DEM_FETCH_FAILED")`` only when BOTH fail.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     # fetch_3dep_extra + fetch_dem are spec-driven tools:
     # resolve through the registry seam (keyword-only) rather than deleted twins.
@@ -577,7 +577,7 @@ def _fetch_buildings_for_urban(
     per memory project_building_footprints_source). Returns the GeoJSON
     FeatureCollection dict, or ``None`` on failure (footprints are an enhancement,
     not a hard gate - the mesh still builds without obstructions)."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
     # Keyword-only: the post-fold registry closure takes ZERO positional args, so
@@ -614,7 +614,7 @@ def _buildings_uri_to_feature_collection(uri: str) -> Any:
     import tempfile
 
     try:
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         if uri.startswith("s3://"):
             data = read_object_bytes_s3(uri)
@@ -740,7 +740,7 @@ def _atlas14_total_depth_mm(
     """
     # Seam-1: resolve the registered fetcher via TOOL_REGISTRY, never a module
     # internal (spec-driven surface).
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     lookup_precip_return_period = TOOL_REGISTRY["lookup_precip_return_period"].fn
 
@@ -1576,7 +1576,7 @@ async def _publish_and_emit_wq(
 
     # Emit the outfall pollutograph chart (best-effort; None when < 2 points).
     try:
-        from trid3nt_server.data.processing.charts_common import build_pollutograph_chart
+        from trid3nt_server.tools.processing.charts_common import build_pollutograph_chart
 
         units_by = {
             n: str(m.get("pollutant_units", "")) for n, m in (metrics or {}).items()

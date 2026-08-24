@@ -42,8 +42,8 @@ from trid3nt_contracts.hecras_contracts import (
 from trid3nt_contracts.execution import LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.resolution_declared import (
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.resolution_declared import (
     ResolutionOutOfRangeError,
     resolve_resolution,
 )
@@ -259,8 +259,8 @@ async def culvert_embankment_flow(
 def _fetch_dem_local(bbox: list[float]) -> str:
     """Fetch the crossing DEM (3DEP) and download it to a local GeoTIFF (emit-on-fetch
     surfaces it as a role=context terrain input via ``purpose=``)."""
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.simulation.solver.solver import _download_object
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.solver.solver import _download_object
 
     layer = TOOL_REGISTRY["fetch_dem"].fn(bbox=list(bbox), resolution_m=10, purpose="terrain")
     uri = getattr(layer, "uri", None) or (layer.get("uri") if isinstance(layer, dict) else None)
@@ -274,7 +274,7 @@ def _fetch_dem_local(bbox: list[float]) -> str:
 def _surface_reach(bbox: list[float]) -> None:
     """Fetch the NHD reach for the crossing so it surfaces as an input layer (purpose=)."""
     try:
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
         TOOL_REGISTRY["fetch_river_geometry"].fn(
             bbox=tuple(bbox), source="nhdplus_hr", purpose="reach")
     except Exception as exc:  # noqa: BLE001 -- surfacing is best-effort
@@ -392,8 +392,8 @@ async def model_culvert_embankment_flow(
 
     # --- rasterize + publish the WITH-culvert (A) peak-depth COG (feet) ---------------- #
     from trid3nt_server.workflows.shared import cog_io
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
-    from trid3nt_server.data.publish_layer.publish_layer import (
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+    from trid3nt_server.tools.publish_layer.publish_layer import (
         PublishLayerError, publish_layer,
     )
 

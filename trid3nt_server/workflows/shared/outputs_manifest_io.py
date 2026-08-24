@@ -53,7 +53,7 @@ def write_outputs_manifest(
     """
     from trid3nt_contracts.outputs_manifest import append_entries
 
-    from trid3nt_server.data.cache import storage_scheme
+    from trid3nt_server.tools.cache import storage_scheme
 
     text = append_entries(None, engine=engine, run_id=run_id, new=list(entries))
     body = text.encode("utf-8")
@@ -62,7 +62,7 @@ def write_outputs_manifest(
     bucket = runs_bucket
     if not bucket:
         try:
-            from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+            from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
             bucket = _get_runs_bucket()
         except Exception:  # noqa: BLE001 -- fall back to the env/default
@@ -71,7 +71,7 @@ def write_outputs_manifest(
     uri = f"{scheme}://{bucket}/{key}"
 
     if scheme == "s3":
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         _get_s3_client().put_object(
             Bucket=bucket, Key=key, Body=body, ContentType="application/json"

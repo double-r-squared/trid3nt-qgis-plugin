@@ -79,7 +79,7 @@ def register_schism_solver() -> None:
     local-docker only, so it maps to the local-docker workflow-name sentinel.
     Idempotent ``setdefault``.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -138,7 +138,7 @@ def schism_local_spec(solver_name: str = SCHISM_SOLVER_NAME) -> "Any":
     Parametrized by ``solver_name`` so both the tidal-hydro and coupled-waves
     solvers share the ONE worker image (they differ only by the manifest
     ``variant`` the entrypoint selects)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         LocalSolverSpec,
     )
@@ -180,7 +180,7 @@ def schism_local_spec(solver_name: str = SCHISM_SOLVER_NAME) -> "Any":
 
 def register_schism_local_spec() -> None:
     """Register the SCHISM LocalSolverSpec factories for the local-docker backend."""
-    from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec
+    from trid3nt_server.workflows.solver.solver import register_local_solver_spec
 
     register_local_solver_spec(SCHISM_SOLVER_NAME, schism_local_spec)
     register_local_solver_spec(

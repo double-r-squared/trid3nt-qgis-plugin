@@ -60,7 +60,7 @@ def load_registry() -> dict[str, Any]:
     Uses the daemon's own registration import, so the spec-driven and
     late-bound tools (fetchers, QGIS discovery, solver, workflows) register
     here exactly as they do at daemon startup -- importing
-    ``trid3nt_server.data`` alone would silently under-register. The
+    ``trid3nt_server.tools`` alone would silently under-register. The
     qgis_process submitter and the file-backed persistence singleton are bound
     for the same reason: without them the QGIS and Case-writing tools would be
     advertised but fail on every call.
@@ -78,7 +78,7 @@ def load_registry() -> dict[str, Any]:
         except Exception:  # noqa: BLE001 -- a missing substrate is not fatal
             logger.warning("mcp: %s failed", bind.__name__, exc_info=True)
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     logger.info("mcp: registry loaded with %d tools", count)
     return TOOL_REGISTRY
@@ -157,7 +157,7 @@ async def payload_verdict(tool_name: str, params: dict[str, Any]) -> tuple[str, 
     no channel to ask for confirmation, proceeding would be the dishonest
     option). Reuses the declared-gate estimator seam; no new gate machinery.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.gates.cards.payload_warning import (
         _get_hard_cap_mb,
         _get_warning_threshold_mb,
@@ -221,7 +221,7 @@ async def dispatch_tool(tool_name: str, params: dict[str, Any]) -> dict[str, Any
     raw geometry never reaches the wire.
     """
     from trid3nt_server.adapters.adapter import summarize_tool_result
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get(tool_name)
     if entry is None:

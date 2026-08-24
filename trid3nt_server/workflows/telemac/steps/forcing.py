@@ -22,7 +22,7 @@ import os
 import tempfile
 from typing import Any
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 
@@ -45,7 +45,7 @@ _NET_RAIN_MIN_MM_DAY, _NET_RAIN_MAX_MM_DAY = -50.0, 2000.0
 
 
 def _domain_bbox() -> tuple[float, float, float, float]:
-    from trid3nt_server.declarative import current_domain
+    from trid3nt_server.workflows.lib import current_domain
 
     domain = current_domain()
     if domain is None or domain.bbox is None:
@@ -85,8 +85,8 @@ def _gridmet_domain_mean_pr(bbox: tuple[float, float, float, float],
     import rasterio
     from rasterio.io import MemoryFile
 
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     try:
         layer = TOOL_REGISTRY["fetch_gridmet"].fn(
@@ -317,7 +317,7 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
     ``valid_time`` falling outside the ~30-day NWM PDS retention window. The
     typed gate in ``resolve_carrier_discharge`` narrates the difference.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     box = (seed_lon - _DISCHARGE_QUERY_HALF_DEG, seed_lat - _DISCHARGE_QUERY_HALF_DEG,
            seed_lon + _DISCHARGE_QUERY_HALF_DEG, seed_lat + _DISCHARGE_QUERY_HALF_DEG)
@@ -340,7 +340,7 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
     try:
         import geopandas as gpd  # lazy: never imported on the offline path
 
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_s3_client,
             _split_object_uri,
         )

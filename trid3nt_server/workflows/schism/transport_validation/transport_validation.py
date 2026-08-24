@@ -44,7 +44,7 @@ from trid3nt_contracts.schism_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.schism import deck_authoring
 from trid3nt_server.workflows.schism import postprocess_schism as pp
 from trid3nt_server.workflows.schism._template_card import TemplateCard
@@ -205,7 +205,7 @@ def _cache_bucket() -> str:
 
 def _stage_manifest(deck_files: list[Path], run_tag: str, *, nscribe: int) -> str:
     """Upload the deck files as manifest inputs[]; return the manifest s3 uri."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = _cache_bucket()
     s3 = _get_s3_client()
@@ -232,7 +232,7 @@ def _stage_manifest(deck_files: list[Path], run_tag: str, *, nscribe: int) -> st
 
 
 def _download_run_output(run_id: str, rel_key: str) -> str | None:
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
     try:
@@ -265,7 +265,7 @@ async def _run_one_scheme(
     logger.info("transport scheme=%s staged manifest run_tag=%s uri=%s",
                 scheme, run_tag, manifest_uri)
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
     handle = run_solver(solver=SCHISM_SOLVER_NAME, model_setup_uri=manifest_uri,
@@ -395,7 +395,7 @@ async def _emit_transport_charts(
     tvd: dict[str, Any], upwind: dict[str, Any], contrast: dict[str, Any]
 ) -> list[str]:
     """Emit the two comparison charts through the dock; return their titles."""
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     titles: list[str] = []
 

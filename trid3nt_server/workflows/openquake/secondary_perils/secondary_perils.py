@@ -42,8 +42,8 @@ from trid3nt_contracts.openquake_contracts import SecondaryPerilLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.openquake._template_card import TemplateCard
 from trid3nt_server.workflows.openquake.scenario_gmf.scenario_gmf import (
     DEFAULT_NUM_GMFS,
@@ -469,13 +469,13 @@ def _fetch_dem_local(
     a role=context input by the emit-on-fetch router seam; the
     ``purpose="terrain"`` fetch carries the name.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(
         bbox=list(bbox), purpose="terrain")
     uri = layer.uri
     if uri.startswith("s3://"):
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         local = os.path.join(tmpdir, "dem.tif")
         Path(local).write_bytes(read_object_bytes_s3(uri))
@@ -699,7 +699,7 @@ async def _emit_peril_distribution_chart(
         rows = _sorted_rows(liq, "liquefaction") + _sorted_rows(lsl, "landslide")
         if not rows:
             return
-        from trid3nt_server.data.processing.charts_common import build_chart_payload
+        from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
         spec = {
             "data": {"values": rows},

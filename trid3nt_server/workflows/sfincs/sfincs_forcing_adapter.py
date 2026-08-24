@@ -251,7 +251,7 @@ def _read_fetcher_bytes(uri_or_bytes: str | bytes) -> bytes:
     uri = str(uri_or_bytes)
     try:
         if uri.startswith("s3://"):
-            from trid3nt_server.data.cache import read_object_bytes_s3
+            from trid3nt_server.tools.cache import read_object_bytes_s3
 
             return read_object_bytes_s3(uri)
         path = uri[len("file://"):] if uri.startswith("file://") else uri

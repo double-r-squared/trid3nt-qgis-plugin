@@ -26,7 +26,7 @@ from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 # already imports); re-exported here for the templates that import via this module.
 from trid3nt_server.workflows.landlab.run_landlab import LANDLAB_RES_SPEC  # noqa: F401
 
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -99,7 +99,7 @@ async def stage_solve_download(
     two-card Sim observability. Raises ``LandlabWorkflowError`` on a solve that
     does not complete. The caller owns postprocess + publish + cleanup.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         new_ulid,
         run_solver,
@@ -249,7 +249,7 @@ async def emit_landlab_chart(
     """Emit a Vega-Lite chart to the charts window (non-fatal; None spec skips)."""
     if emitter is None or spec is None or not hasattr(emitter, "emit_chart"):
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,

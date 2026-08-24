@@ -872,7 +872,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # delays serving.
     async def _warm_discover_index() -> None:
         try:
-            from trid3nt_server.data.search.search_tools import search_tools as _dd_warm
+            from trid3nt_server.tools.search.search_tools import search_tools as _dd_warm
             await asyncio.to_thread(_dd_warm._get_index)
             logger.info("tool_retrieval: discover index warmed at startup")
         except Exception:  # noqa: BLE001 -- warm is best-effort

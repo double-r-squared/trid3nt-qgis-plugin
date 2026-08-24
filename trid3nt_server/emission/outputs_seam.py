@@ -53,7 +53,7 @@ from trid3nt_contracts.outputs_manifest import (
     parse_outputs_manifest,
 )
 
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     _band1_percentile_rescale,
     _read_raster_bytes,
     _stash_legend_for_uri,
@@ -127,7 +127,7 @@ def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
     if not run_id:
         return None
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _read_object_bytes,
         )
@@ -211,7 +211,7 @@ def _style_and_legend(
                 # Reuse the generic path: hand the parsed lo/hi back through
                 # style_params_from_band_stats as p2/p98 so the resulting string
                 # is byte-identical to the register path's generic fallback.
-                from trid3nt_server.data.publish_layer.publish_layer import (
+                from trid3nt_server.tools.publish_layer.publish_layer import (
                     _parse_style_params,
                 )
 

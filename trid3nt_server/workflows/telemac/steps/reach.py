@@ -23,7 +23,7 @@ import re
 import tempfile
 from typing import Any
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from .errors import TelemacDyeScenarioError
 
@@ -219,7 +219,7 @@ def layer_field(result: Any, field: str) -> Any:
 
 
 def registry_fn(name: str) -> Any:
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get(name)
     if entry is None:
@@ -336,7 +336,7 @@ def river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
     which the worker snaps regardless.
     """
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_s3_client,
             _split_object_uri,
         )
@@ -418,7 +418,7 @@ async def fetch_reach_flowline(*, prefetched: str | None = None,
     if prefetched:
         logger.warning("telemac: river_geometry_uri %r is not an object URI - ignoring",
                        prefetched)
-    from trid3nt_server.declarative import current_domain
+    from trid3nt_server.workflows.lib import current_domain
 
     domain = current_domain()
     if domain is None or domain.bbox is None:

@@ -67,7 +67,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 
 logger = logging.getLogger(
@@ -489,7 +489,7 @@ async def _emit_head_decline_chart(
     builder: an absent / single-point series yields no chart. The x axis is in
     elapsed days when ``sim_years`` + ``n_periods`` give a per-step day count,
     else the bare timestep index."""
-    from trid3nt_server.data.processing.charts_common import build_head_decline_chart
+    from trid3nt_server.tools.processing.charts_common import build_head_decline_chart
 
     series = getattr(layer, "head_decline_timeseries", None)
     if not series:
@@ -1087,6 +1087,6 @@ def _coerce_optional_latlon(value: Any) -> tuple[float, float] | None:
     """Coerce an optional lat/lon arg (str / list / tuple) -> (lat, lon) or None."""
     if value is None:
         return None
-    from trid3nt_server.data.tool_arg_normalizer import coerce_latlon
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_latlon
 
     return tuple(coerce_latlon(value))  # type: ignore[return-value]

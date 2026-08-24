@@ -43,7 +43,7 @@ async def surface_in_worker_bed_input(
         return False  # worker wrote none (idealized bed / older image / write failed)
     try:
         from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-        from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
         cog_uri = f"s3://{_get_runs_bucket()}/{run_id}/{bed_cog}"
         return await publish_raster_input_cog(

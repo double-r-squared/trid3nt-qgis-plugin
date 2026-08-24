@@ -7,7 +7,7 @@ import math
 import logging
 from trid3nt_contracts import now_utc
 from trid3nt_server.credentials.auth_handshake import AuthResult
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.emission.pipeline_emitter import _FLOOD_FRAME_NAME_RE
 from trid3nt_server.emission.uri_registry import get_uri_registry
 from trid3nt_server.server.session.persistence_ref import get_persistence

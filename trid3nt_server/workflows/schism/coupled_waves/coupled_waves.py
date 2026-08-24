@@ -39,7 +39,7 @@ from trid3nt_contracts.schism_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.schism._template_card import TemplateCard
 
@@ -290,7 +290,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -316,7 +316,7 @@ def _stage_wave_manifest(
 ) -> str:
     """Upload the staged Duck deck as manifest inputs[] (variant='wwm'); return its uri."""
     import json as _json
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = _cache_bucket()
     s3 = _get_s3_client()
@@ -343,7 +343,7 @@ def _stage_wave_manifest(
 
 
 def _download_run_output(run_id: str, rel_key: str) -> str | None:
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
     try:
@@ -359,7 +359,7 @@ def _download_run_output(run_id: str, rel_key: str) -> str | None:
 
 
 def _runs_uri(run_id: str, rel_key: str) -> str:
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
     return f"s3://{_get_runs_bucket()}/{run_id}/{rel_key}"
 
 
@@ -422,7 +422,7 @@ async def model_schism_coupled_waves(
     logger.info("model_schism_coupled_waves staged manifest run_tag=%s files=%d uri=%s",
                 run_tag, len(deck_files), manifest_uri)
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
     handle = run_solver(solver=SCHISM_WAVE_SOLVER_NAME, model_setup_uri=manifest_uri,
@@ -563,7 +563,7 @@ async def _maybe_emit_cross_shore_chart(emitter: Any, vv: dict[str, Any]) -> Non
     """The cross-shore Hs verification chart -- modeled vs measured gauges (THE artifact)."""
     if not hasattr(emitter, "emit_chart"):
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     values: list[dict[str, Any]] = []
     for g in vv["gauges"]:

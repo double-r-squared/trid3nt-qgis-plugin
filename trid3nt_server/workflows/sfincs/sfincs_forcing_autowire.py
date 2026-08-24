@@ -132,7 +132,7 @@ def compute_precip_area_mean_mm_per_hr(
         if forcing_raster_uri.startswith("s3://"):
             from rasterio.io import MemoryFile  # type: ignore[import-not-found]
 
-            from trid3nt_server.data.cache import read_object_bytes_s3
+            from trid3nt_server.tools.cache import read_object_bytes_s3
 
             with MemoryFile(read_object_bytes_s3(forcing_raster_uri)) as mf:
                 with mf.open() as src:
@@ -646,7 +646,7 @@ def _autowire_coastal_surge_forcing(
     try:
         # data-router fold: fetch_noaa_coops_tides is now a promoted spec-driven
         # tool -- resolve the callable seam by registry name (same envelope).
-        from trid3nt_server.data import TOOL_REGISTRY as _TR
+        from trid3nt_server.tools import TOOL_REGISTRY as _TR
 
         _coops = _TR.get("fetch_noaa_coops_tides")
         if _coops is None:
@@ -681,7 +681,7 @@ def _autowire_coastal_surge_forcing(
 
     # --- 2) FALLBACK: GTSM tide+surge (global, needs a CDS key) ------------- #
     try:
-        from trid3nt_server.data import TOOL_REGISTRY  # local: keep top imports lean
+        from trid3nt_server.tools import TOOL_REGISTRY  # local: keep top imports lean
 
         fetch_gtsm_tide_surge = TOOL_REGISTRY["fetch_gtsm_tide_surge"].fn  # spec-driven
         layer = fetch_gtsm_tide_surge(
@@ -831,7 +831,7 @@ def _resolve_spiderweb_forcing(
 
     # fetch_storm_tracks FOLDED to a spec-driven surface: resolve the promoted
     # router closure from the registry (keyword-only), the standard fold re-point.
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fetch_storm_tracks = TOOL_REGISTRY["fetch_storm_tracks"].fn
     from trid3nt_server.workflows.sfincs.sfincs_builder import _stage_gcs_local
@@ -935,7 +935,7 @@ def _resolve_building_obstacle_uri(
         return building_obstacles
     # building_obstacles is True → fetch OSM footprints (best-effort).
     try:
-        from trid3nt_server.data import TOOL_REGISTRY  # local: keep top imports lean
+        from trid3nt_server.tools import TOOL_REGISTRY  # local: keep top imports lean
 
         fetch_buildings = TOOL_REGISTRY["fetch_buildings"].fn
         # Keyword-only: the post-fold registry closure takes ZERO positional
@@ -1017,7 +1017,7 @@ def _autowire_river_discharge_forcing(
         # Seam-1 registry closure (fold): fetch_noaa_nwm_streamflow is now the
         # spec-driven router tool under its twin name; resolve it via TOOL_REGISTRY (never
         # a module internal, which no longer exists). Keyword-only, envelope unchanged.
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         layer = TOOL_REGISTRY["fetch_noaa_nwm_streamflow"].fn(bbox=bbox)
         uri = getattr(layer, "uri", None)
@@ -1055,7 +1055,7 @@ def _autowire_river_discharge_forcing(
     try:
         import math as _math
 
-        from trid3nt_server.data import TOOL_REGISTRY  # local: keep top imports lean
+        from trid3nt_server.tools import TOOL_REGISTRY  # local: keep top imports lean
 
         fetch_usgs_nwis_gauges = TOOL_REGISTRY["fetch_usgs_nwis_gauges"].fn  # spec-driven
         period_days = max(1, int(_math.ceil(win_hr / 24.0)))
@@ -1126,7 +1126,7 @@ def _resolve_infiltration_uri(
         return infiltration
     # infiltration is True -> fetch the GCN250 CN raster (best-effort).
     try:
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         layer = TOOL_REGISTRY["fetch_gcn250_curve_numbers"].fn(bbox, antecedent_moisture="average")
         uri = getattr(layer, "uri", None)

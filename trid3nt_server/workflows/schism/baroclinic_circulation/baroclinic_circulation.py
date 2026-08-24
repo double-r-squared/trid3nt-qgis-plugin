@@ -44,7 +44,7 @@ from trid3nt_contracts.schism_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.schism import deck_authoring
 from trid3nt_server.workflows.schism import postprocess_schism as pp
@@ -260,7 +260,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -289,7 +289,7 @@ def _resolve_bbox(
             raise SchismBaroclinicError(SCHISM_INPUT_INVALID, "bbox must be 4 floats (min_lon,min_lat,max_lon,max_lat)")
         return bb, f"bbox {bb}", "user"
     if location_query:
-        from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import (
+        from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
             geocode_location,
         )
         geo = geocode_location(location_query)
@@ -303,7 +303,7 @@ def _resolve_bbox(
 
 def _stage_manifest(deck_files: list[Path], run_tag: str, *, ncompute: int, nscribe: int) -> str:
     """Upload the deck as manifest inputs[] (variant='hydro'); return its uri."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = _cache_bucket()
     s3 = _get_s3_client()
@@ -409,7 +409,7 @@ def _build_water_mask(bbox: tuple[float, float, float, float]) -> Any:
 
 
 def _download_run_output(run_id: str, rel_key: str) -> str | None:
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
     try:
@@ -425,7 +425,7 @@ def _download_run_output(run_id: str, rel_key: str) -> str | None:
 
 
 def _runs_uri(run_id: str, rel_key: str) -> str:
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
     return f"s3://{_get_runs_bucket()}/{run_id}/{rel_key}"
 
 
@@ -475,7 +475,7 @@ async def _schism_mesh_precondition_gate(
             if emitter is not None else [])
         s3 = None
         try:
-            from trid3nt_server.data.simulation.solver.solver import (
+            from trid3nt_server.workflows.solver.solver import (
                 _get_s3_client,
             )
             s3 = _get_s3_client()
@@ -610,7 +610,7 @@ async def model_schism_baroclinic_circulation(
     logger.info("model_schism_baroclinic_circulation staged manifest run_tag=%s files=%d uri=%s",
                 run_tag, len(deck["files"]), manifest_uri)
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
     handle = run_solver(solver=SCHISM_BAROCLINIC_SOLVER_NAME, model_setup_uri=manifest_uri,

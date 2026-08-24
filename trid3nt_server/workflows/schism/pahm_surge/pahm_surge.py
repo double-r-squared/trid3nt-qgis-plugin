@@ -44,7 +44,7 @@ from trid3nt_contracts.schism_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.schism._template_card import TemplateCard
 
@@ -273,11 +273,11 @@ def _surge_payload_estimate(
     (``None`` = native). Shares fetch_topobathy's sampled-density cache + acquisition
     profile (the surge fetch IS a fetch_topobathy call), so this is never a parallel
     threshold check -- it is the SAME measurement the fetch will emit."""
-    from trid3nt_server.data.fetchers._router.hooks.topobathy import (
+    from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
         _analytic_payload_mb,
         _sample_topobathy_density,
     )
-    from trid3nt_server.data.payload_sampling import estimate_mb
+    from trid3nt_server.tools.payload_sampling import estimate_mb
 
     return estimate_mb(
         "topobathy", bbox, analytic_mb=_analytic_payload_mb(bbox),
@@ -514,7 +514,7 @@ def _stage_surge_manifest(deck_files: list[Path], case_dir: Path, run_tag: str) 
     creates dest parents + guards against rundir escape)."""
     import json
 
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = _cache_bucket()
     s3 = _get_s3_client()
@@ -596,7 +596,7 @@ async def _resolve_track(
         return fixes, base, label, "published_default"
     # Named-storm fetch (best-effort; a slow/absent IBTrACS falls back honestly).
     try:
-        from trid3nt_server.data.fetchers._router.hooks import storm_tracks as _st
+        from trid3nt_server.tools.fetchers._router.hooks import storm_tracks as _st
 
         fb = bbox or _IKE_BBOX
         raw_storms = await asyncio.wait_for(
@@ -686,7 +686,7 @@ async def model_schism_pahm_surge(
 
     # --- Stage 2: AOI bbox --------------------------------------------------- #
     if bbox is None and location_query:
-        from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import (
+        from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
             geocode_location,
         )
         geo = geocode_location(location_query)
@@ -870,7 +870,7 @@ async def model_schism_pahm_surge(
     logger.info("model_schism_pahm_surge staged manifest run_tag=%s files=%d storm=%s",
                 run_tag, len(deck["files"]), storm_label)
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
     handle = run_solver(solver=SCHISM_SURGE_SOLVER_NAME, model_setup_uri=manifest_uri,
@@ -1030,7 +1030,7 @@ async def _emit_track_overlay(emitter, fixes: list[_H.TrackFix], storm_label: st
     import json as _json
 
     from trid3nt_contracts.execution import LayerURI
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
 

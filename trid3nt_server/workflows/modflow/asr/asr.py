@@ -49,7 +49,7 @@ from trid3nt_server.workflows.shared.aquifer_resolve import (
     provenance_summary,
     resolve_aquifer_properties,
 )
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 from trid3nt_server.workflows.modflow.sustainable_yield.sustainable_yield import (
     _aquifer_overrides,
@@ -119,7 +119,7 @@ async def _emit_asr_chart(layer: ASRLayerURI) -> None:
     (real solver output  -  the well head over the inject/recover cycle). The
     builder emits nothing for an absent / single-point series (the honesty floor).
     """
-    from trid3nt_server.data.processing.charts_common import build_head_series_chart
+    from trid3nt_server.tools.processing.charts_common import build_head_series_chart
 
     series = getattr(layer, "head_timeseries", None)
     if not series:

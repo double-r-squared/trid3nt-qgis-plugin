@@ -97,9 +97,9 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
-from trid3nt_server.data.cache import read_through
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools.cache import read_through
 from trid3nt_server.workflows.pelicun._template_card import TemplateCard
 
 __all__ = [
@@ -227,7 +227,7 @@ def _stage_cog_to_local(cog_uri: str) -> tuple[str, bool]:
         # Local path (unit-test fixture / already-staged file) -- open in place.
         return cog_uri, False
 
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools.cache import read_object_bytes_s3
 
     try:
         data = read_object_bytes_s3(cog_uri)
@@ -945,7 +945,7 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
     # NamedTemporaryFile the caller unlinks, with the last-two-segment
     # retry for LLM path-mangled URIs.
     if uri.startswith("s3://"):
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         try:
             try:

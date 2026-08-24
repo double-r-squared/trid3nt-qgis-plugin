@@ -25,8 +25,8 @@ from trid3nt_contracts.telemac_contracts import (
     TelemacDyeLayerURI,
 )
 
-from trid3nt_server.declarative import Step
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.workflows.lib import Step
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 
 from .errors import TelemacDyeScenarioError
 from .solve import download_result_selafin
@@ -177,7 +177,7 @@ async def _surface_bed_bathymetry_input(emitter: Any, metrics: dict[str, Any],
     if emitter is None or not bed_cog:
         return False
     try:
-        from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
         from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
 
         source_label = _BED_DEM_SOURCE_LABELS.get(
@@ -195,7 +195,7 @@ async def _surface_bed_bathymetry_input(emitter: Any, metrics: dict[str, Any],
 
 def _download_gaia(run_id: str) -> str | None:
     """Download ``gaia_river.slf``; ``None`` when the run wrote none (fail-open)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -293,7 +293,7 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str, reach_name: 
     try:
         from trid3nt_contracts.execution import LayerURI
 
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _get_s3_client,
         )
@@ -489,7 +489,7 @@ def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     peak_t = getattr(result, "dye_peak_time_s", None)
     if cmax is None or peak_t is None:
         return None
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     where = params.get("location") or getattr(result, "name", None) or "the reach"
     substance = params.get("substance") or "dye"

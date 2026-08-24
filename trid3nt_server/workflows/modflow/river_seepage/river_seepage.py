@@ -55,7 +55,7 @@ from trid3nt_server.workflows.modflow._input_review import (
     review_modflow_entries,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, substep
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 
 logger = logging.getLogger("trid3nt_server.workflows.modflow.river_seepage.river_seepage")
@@ -545,7 +545,7 @@ async def modflow_river_seepage(
     point: tuple[float, float] | None = None
     if spill_location_latlon is not None:
         try:
-            from trid3nt_server.data.tool_arg_normalizer import coerce_latlon
+            from trid3nt_server.tools.tool_arg_normalizer import coerce_latlon
 
             point = tuple(coerce_latlon(spill_location_latlon))  # type: ignore[assignment]
         except Exception as exc:  # noqa: BLE001

@@ -105,8 +105,8 @@ def _ensure_dem_s3_uri(dem_uri: str, cache_bucket: str, staging_prefix: str) -> 
     is uploaded to the cache bucket so the ``--network host`` container reaches
     it over MinIO/S3.
     """
-    from trid3nt_server.data.cache import storage_scheme
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.tools.cache import storage_scheme
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     if dem_uri.startswith(("s3://", "gs://")):
         return dem_uri
@@ -153,8 +153,8 @@ def stage_quadtree_build_solve(
     ``QuadtreeDispatchError`` on any staging failure (the composer maps it into a
     typed failed envelope, never a silent regular-grid fallback).
     """
-    from trid3nt_server.data.cache import CACHE_BUCKET, storage_scheme
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.tools.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
     prefix = f"cache/live-no-cache/sfincs_quadtree/{staging_id}/"
@@ -219,7 +219,7 @@ def sfincs_quadtree_local_spec():
     staged args is rewritten to the launcher's run_id so the container's output
     prefix matches the prefix ``wait_for_completion`` polls.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         LocalSolverSpec,
     )
@@ -274,7 +274,7 @@ def sfincs_quadtree_local_spec():
 
 def register_sfincs_quadtree_local_spec() -> None:
     """Register the ``sfincs-quadtree`` LocalSolverSpec factory (import-time)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         register_local_solver_spec,
     )
 

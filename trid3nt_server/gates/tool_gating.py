@@ -38,7 +38,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
+from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 
 __all__ = [
     "TOOL_GATING_TOPK_DEFAULT",

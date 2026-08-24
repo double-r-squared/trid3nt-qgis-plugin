@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from trid3nt_server.workflows.swmm.steps import (
     clock,
@@ -398,7 +398,7 @@ def build_swe_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     if len(hours) < 2 or len(swe) != len(hours):
         return None
 
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     series = {"snowpack (no removal)": list(zip(hours, swe))}
     if len(plowed) == len(hours):
@@ -431,7 +431,7 @@ def build_runoff_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     if len(hours) < 2 or len(snow) != len(hours) or len(rain) != len(hours):
         return None
 
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     title = "runoff hydrograph: snowmelt vs rain-only"
     spec = line_chart_spec(

@@ -107,7 +107,7 @@ def register_telemac_solver() -> None:
     only (the engine lives in the worker image, never the agent venv), so it maps
     to the local-docker workflow-name sentinel. Idempotent ``setdefault``.
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(TELEMAC_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
@@ -169,7 +169,7 @@ def _classify_exit(
 def telemac_local_spec() -> "Any":
     """Build the TELEMAC river-dye ``LocalSolverSpec`` for the local-docker backend."""
     import os
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
@@ -209,7 +209,7 @@ def telemac_local_spec() -> "Any":
 
 def register_telemac_local_spec() -> None:
     """Register the TELEMAC LocalSolverSpec factory for the local-docker backend."""
-    from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec
+    from trid3nt_server.workflows.solver.solver import register_local_solver_spec
 
     register_local_solver_spec(TELEMAC_SOLVER_NAME, telemac_local_spec)
 
@@ -270,7 +270,7 @@ def tomawac_local_spec() -> "Any":
     """Build the TOMAWAC ``LocalSolverSpec`` -- same image + volume mount as the
     river-dye spec (identical build_argv), a wave-specific classify_exit."""
     import os
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
@@ -296,7 +296,7 @@ def tomawac_local_spec() -> "Any":
 
 def register_tomawac_solver() -> None:
     """Register ``'tomawac_wave'`` in the solver + local-spec registries."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
         register_local_solver_spec,
@@ -363,7 +363,7 @@ def artemis_local_spec() -> "Any":
     """Build the ARTEMIS ``LocalSolverSpec`` -- same image + volume mount as the
     river-dye/tomawac specs (identical build_argv), an agitation classify_exit."""
     import os
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
@@ -389,7 +389,7 @@ def artemis_local_spec() -> "Any":
 
 def register_artemis_solver() -> None:
     """Register ``'artemis_agitation'`` in the solver + local-spec registries."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
         register_local_solver_spec,
@@ -457,7 +457,7 @@ def telemac3d_local_spec() -> "Any":
     """Build the TELEMAC-3D ``LocalSolverSpec`` -- same image + volume mount as the
     river-dye/tomawac/artemis specs (identical build_argv), a 3D classify_exit."""
     import os
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
@@ -483,7 +483,7 @@ def telemac3d_local_spec() -> "Any":
 
 def register_telemac3d_solver() -> None:
     """Register ``'telemac3d_strat'`` in the solver + local-spec registries."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
         register_local_solver_spec,
@@ -552,7 +552,7 @@ def coastal_local_spec() -> "Any":
     """Build the COASTAL ``LocalSolverSpec`` -- same image + volume mount as the
     river-dye/tomawac/artemis/3D specs (identical build_argv), a coastal classify_exit."""
     import os
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
@@ -578,7 +578,7 @@ def coastal_local_spec() -> "Any":
 
 def register_coastal_solver() -> None:
     """Register ``'telemac_coastal'`` in the solver + local-spec registries."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
         register_local_solver_spec,

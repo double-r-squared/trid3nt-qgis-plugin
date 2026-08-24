@@ -7,10 +7,10 @@ import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.ws import AgentMessageChunkPayload, AgentThinkingChunkPayload, PipelineStatePayload, PipelineStep
 from trid3nt_server.adapters.adapter import CompactionCompleteEvent, CompactionStartEvent, FunctionCallEvent, MAX_TURN_ITERATIONS, ModelSettings, SYSTEM_PROMPT, TextDeltaEvent, ThinkingDeltaEvent, UpstreamProviderError, UsageMetadataEvent, build_contents_from_history, build_function_call_content, build_function_response_content, build_layers_present_note, build_tool_declarations, build_user_text_content, classify_provider_error_class, classify_result_usable, stream_events_with_contents, summarize_tool_result
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.meta.code_exec_tool.code_exec_tool import is_code_exec_result
-from trid3nt_server.data.processing.charts_common import is_chart_emission_result
-from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.meta.code_exec_tool.code_exec_tool import is_code_exec_result
+from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.emission.pipeline_emitter import bind_turn_case, bind_turn_drawn_geometry, complete_compaction_card, mint_compaction_card
 from trid3nt_server.emission.uri_registry import get_uri_registry
 from trid3nt_server.gates.circuit_breaker import CircuitBreakerError
@@ -209,7 +209,7 @@ async def _stream_model_reply(
     # directly, no concierge. See _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
     try:
-        from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools
+        from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
         _retrieval_k = _tool_retrieval_k()
         _visible = retrieve_visible_tools(
@@ -296,7 +296,7 @@ async def _stream_model_reply(
                 gating_widen_threshold,
                 should_widen_for_poor_fit,
             )
-            from trid3nt_server.data.search.tool_retrieval import retrieve_ranked_tools
+            from trid3nt_server.tools.search.tool_retrieval import retrieve_ranked_tools
 
             _gate_k = gating_topk()
             if _gate_k > 0:

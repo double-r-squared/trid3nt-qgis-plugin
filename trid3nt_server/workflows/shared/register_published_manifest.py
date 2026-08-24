@@ -45,7 +45,7 @@ from trid3nt_contracts.publish_manifest import (
     parse_publish_manifest,
 )
 
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     _stash_legend_for_uri,
     legend_for_published_layer,
     style_params_from_band_stats,
@@ -83,7 +83,7 @@ def read_publish_manifest(run_result: Any) -> PublishManifest | None:
     if not run_id:
         return None
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _read_object_bytes,
             _try_get_completion_s3,

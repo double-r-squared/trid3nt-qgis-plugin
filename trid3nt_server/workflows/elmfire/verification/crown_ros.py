@@ -48,7 +48,7 @@ from trid3nt_contracts.elmfire_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.elmfire._template_card import TemplateCard
 from trid3nt_server.workflows.elmfire.cruz_crown_fire import (
     cruz_active_crown_ros_m_min,
@@ -424,7 +424,7 @@ async def _maybe_emit_crown_ros_chart(
             "color": {"field": "source", "type": "nominal", "legend": None},
         },
     }
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,

@@ -47,7 +47,7 @@ from typing import Any, Literal
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.pelicun._dl_calculation import (
     DLCalculationError,
     run_dl_calculation,

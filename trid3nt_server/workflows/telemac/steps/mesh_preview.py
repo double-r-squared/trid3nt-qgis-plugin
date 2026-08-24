@@ -19,8 +19,8 @@ from typing import Any
 
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.declarative import Domain
-from trid3nt_server.declarative.domain import bind_domain, reset_domain
+from trid3nt_server.workflows.lib import Domain
+from trid3nt_server.workflows.lib.domain import bind_domain, reset_domain
 
 from .deck import normalize_bank_source, stage_manifest
 from .errors import TelemacDyeScenarioError
@@ -68,12 +68,12 @@ async def preview_telemac_mesh(params: dict[str, Any], *,
     """
     from trid3nt_contracts.execution import LayerURI
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         run_solver,
         wait_for_completion,
     )
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
     from trid3nt_server.emission.layer_uri_emit import publish_input_layer
     from trid3nt_server.emission.pipeline_emitter import current_emitter
     from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_SOLVER_NAME
@@ -239,7 +239,7 @@ async def preview_telemac_mesh(params: dict[str, Any], *,
 
 
 def _read_mesh_metrics(run_id: str) -> dict[str, Any]:
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )

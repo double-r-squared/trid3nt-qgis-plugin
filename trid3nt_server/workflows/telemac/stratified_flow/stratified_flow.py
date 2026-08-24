@@ -60,8 +60,8 @@ from trid3nt_contracts.telemac_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.workflows.telemac.postprocess_telemac import (
     PostprocessTelemacError,
@@ -389,7 +389,7 @@ def _bbox_center(bbox) -> tuple[float, float]:
 
 def _stage_stratified_manifest(stratified: dict[str, Any], run_tag: str) -> str:
     """Write the telemac3d ``stratified`` worker manifest to the cache bucket."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -418,7 +418,7 @@ def _stage_stratified_manifest(stratified: dict[str, Any], run_tag: str) -> str:
 def _download_stratified_result(run_id: str) -> tuple[str, str, dict[str, Any]]:
     """Download ``t3d_surface.slf`` + ``t3d_bottom.slf`` + telemac_metrics.json.
     Returns (surface_path, bottom_path, metrics)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -485,8 +485,8 @@ async def model_telemac3d_stratified_flow(
         substep,
     )
     from trid3nt_server.gates.input_review import gate_input_review
-    from trid3nt_server.data.publish_layer.publish_layer import publish_layer
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -663,7 +663,7 @@ async def model_telemac3d_stratified_flow(
     surface_raw = layers[0]
     bottom_raw = layers[1] if len(layers) > 1 else None
 
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 
     # publish + emit the BOTTOM companion (the surface-vs-bottom contrast is the
     # discriminant), then publish + RETURN the surface layer.

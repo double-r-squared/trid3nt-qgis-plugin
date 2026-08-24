@@ -33,7 +33,7 @@ from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs
 from trid3nt_contracts.geoclaw_thacker import thacker_reference
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.geoclaw._template_card import TemplateCard
 from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (
     build_thacker_validation_chart_spec,
@@ -249,7 +249,7 @@ async def model_geoclaw_thacker_validation(
         )
 
     # --- Dispatch the local-docker solve -------------------------------------
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver,
         wait_for_completion,
     )
@@ -318,7 +318,7 @@ async def _maybe_emit_thacker_chart(emitter: Any, vandv: dict[str, Any]) -> None
     spec = build_thacker_validation_chart_spec(vandv)
     if spec is None:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     caption = (
         "Center surface elevation eta(0,t): GeoClaw (numerical) vs Thacker 1981 "

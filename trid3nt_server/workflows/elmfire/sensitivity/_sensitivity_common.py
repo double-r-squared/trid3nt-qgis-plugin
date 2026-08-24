@@ -108,7 +108,7 @@ async def _dispatch_and_wait(
     Returns the solve ``run_id``. Raises ``ElmfireWorkflowError`` when the solve
     does not complete (no silent dead-ends).
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,

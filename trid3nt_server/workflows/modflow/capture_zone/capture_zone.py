@@ -70,7 +70,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     current_emitter,
     substep,
 )
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.gates.input_review import physics_refusal_reason
 from trid3nt_server.workflows.shared.aquifer_resolve import (
     provenance_summary,
@@ -181,7 +181,7 @@ def _planar_gradient_from_dem(
         import rasterio
         from pyproj import Transformer
 
-        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+        from trid3nt_server.tools.processing._gdal_runner import read_raster_bytes
 
         # read_raster_bytes accepts s3:// or a bare local path; normalise file://.
         read_uri = dem_uri[len("file://"):] if dem_uri.startswith("file://") else dem_uri
@@ -345,7 +345,7 @@ def _sample_dem_at_points(
         import rasterio
         from pyproj import Transformer
 
-        from trid3nt_server.data.processing._gdal_runner import read_raster_bytes
+        from trid3nt_server.tools.processing._gdal_runner import read_raster_bytes
 
         read_uri = dem_uri[len("file://"):] if dem_uri.startswith("file://") else dem_uri
         dem_bytes = read_raster_bytes(read_uri, on_error=lambda msg: RuntimeError(msg))

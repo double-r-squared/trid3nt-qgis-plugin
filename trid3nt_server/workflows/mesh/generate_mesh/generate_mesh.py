@@ -43,8 +43,8 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 
 logger = logging.getLogger(
     "trid3nt_server.workflows.mesh.generate_mesh.generate_mesh")
@@ -218,7 +218,7 @@ async def model_generate_mesh(
     mesh objects to the case -> emit the mesh layer + persist the artifact."""
     import asyncio
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     if isinstance(pour_point, str):
         pour_point = coerce_bbox_value(pour_point)
@@ -421,7 +421,7 @@ def _stage_and_record(
 ) -> LayerURI:
     import numpy as np
 
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
     from trid3nt_server.emission.pipeline_emitter import current_turn_case
     from trid3nt_server.workflows.mesh.artifact import (
         MeshArtifact, stash_mesh_artifact, write_mesh_artifact_sidecar,
@@ -678,8 +678,8 @@ def _fetch_coastal_bed(aoi, rundir: Path) -> tuple[Path, Any]:
     the raster's transform and queries it with lon/lat, so a projected grid puts
     every query out of bounds and the depth term silently reads its fill value.
     """
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.cache import read_object_bytes_s3
 
     layer = TOOL_REGISTRY["fetch_topobathy"].fn(
         bbox=tuple(aoi), target_crs="EPSG:4326",

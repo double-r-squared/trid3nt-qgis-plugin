@@ -34,8 +34,8 @@ from trid3nt_contracts.landlab_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.landlab._composer_common import (
     LANDLAB_RES_SPEC,
     cleanup_solve,

@@ -49,9 +49,9 @@ from trid3nt_server.workflows.shared.aquifer_resolve import (
     derive_soil_scalars,
     soil_derived_entry,
 )
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -485,7 +485,7 @@ async def model_landlab_green_ampt_overland_flow(
     the runoff-depth context raster + the partition chart as side effects on the
     bound emitter.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         new_ulid,
         run_solver,
@@ -724,7 +724,7 @@ async def _maybe_emit_partition_chart(
     )
     if spec is None:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,

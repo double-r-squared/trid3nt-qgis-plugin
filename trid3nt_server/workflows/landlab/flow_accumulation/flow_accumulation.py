@@ -42,9 +42,9 @@ from trid3nt_contracts.landlab_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -327,7 +327,7 @@ async def model_landlab_flow_accumulation(
     the channel-network vector + the routing-comparison chart as side effects on
     the bound emitter.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         new_ulid,
         run_solver,
@@ -525,7 +525,7 @@ async def _maybe_emit_routing_chart(
     spec = build_routing_comparison_chart_spec(routing_comparison)
     if spec is None:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,

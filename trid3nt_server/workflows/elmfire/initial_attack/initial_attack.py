@@ -52,7 +52,7 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.elmfire._template_card import TemplateCard
 
 logger = logging.getLogger(
@@ -309,7 +309,7 @@ async def elmfire_initial_attack_containment_probability(
     chart_emitted = False
     if emitter is not None and hasattr(emitter, "emit_chart"):
         try:
-            from trid3nt_server.data.processing.charts_common import build_chart_payload
+            from trid3nt_server.tools.processing.charts_common import build_chart_payload
             spec = build_poc_chart_spec(curves)
             payload = build_chart_payload(
                 vega_lite_spec=spec,

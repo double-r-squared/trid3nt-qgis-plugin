@@ -248,7 +248,7 @@ def upload_layer_file(filename: str, data: bytes) -> str:
 
 
 def _default_cache_bucket() -> str:
-    from trid3nt_server.data.cache import CACHE_BUCKET
+    from trid3nt_server.tools.cache import CACHE_BUCKET
 
     return CACHE_BUCKET
 
@@ -362,7 +362,7 @@ async def _ingest_vector(
 
     fgb_bytes = await asyncio.to_thread(_write_fgb_bytes, gdf)
 
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     runs_bucket = _get_runs_bucket()
     fgb_key = f"case-data/{case_id}/{layer_id}.fgb"
@@ -376,7 +376,7 @@ async def _ingest_vector(
     # frozen key. Fail-open (None) is honored: the layer still registers, just
     # without a cold-view display asset (the live inline-GeoJSON path still works
     # while the agent box is awake).
-    from trid3nt_server.data.publish_layer.publish_layer import _write_durable_vector_geojson
+    from trid3nt_server.tools.publish_layer.publish_layer import _write_durable_vector_geojson
 
     geojson_uri = await asyncio.to_thread(
         _write_durable_vector_geojson, fgb_uri, layer_id, case_id
@@ -465,7 +465,7 @@ async def _ingest_raster(
     # resolution, and TiTiler tile-template minting for an s3:// raster. It is a
     # blocking (sync) call (boto3 + rasterio internally); run it off the event
     # loop.
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 
     try:
         tile_template = await asyncio.to_thread(
@@ -478,7 +478,7 @@ async def _ingest_raster(
         ) from exc
 
     from trid3nt_server.server import _resolve_publish_wrap_style_preset
-    from trid3nt_server.data.publish_layer.publish_layer import derive_readable_layer_name
+    from trid3nt_server.tools.publish_layer.publish_layer import derive_readable_layer_name
 
     resolved_style = _resolve_publish_wrap_style_preset(
         style_preset=None, layer_uri=tile_template, layer_id=layer_id

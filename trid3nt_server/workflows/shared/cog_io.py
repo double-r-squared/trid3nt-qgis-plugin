@@ -563,7 +563,7 @@ def upload_cog(
 
     Raises :class:`CogIoError` (stage ``UPLOAD``). Returns the object URI.
     """
-    from trid3nt_server.data.cache import storage_scheme
+    from trid3nt_server.tools.cache import storage_scheme
 
     scheme = storage_scheme()
     if scheme == "s3":
@@ -579,7 +579,7 @@ def upload_cog(
             )
         dest = f"s3://{bucket}/{run_id}/{dest_filename}"
         try:
-            from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+            from trid3nt_server.workflows.solver.solver import _get_s3_client
 
             kwargs: dict[str, Any] = {
                 "Bucket": bucket,

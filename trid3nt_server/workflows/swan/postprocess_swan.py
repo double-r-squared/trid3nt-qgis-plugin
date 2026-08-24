@@ -453,7 +453,7 @@ def _upload_cog_to_runs_bucket(
     url / identity key -> no dedup collapse). Mirrors
     ``postprocess_geoclaw._upload_cog_to_runs_bucket`` exactly.
     """
-    from trid3nt_server.data.cache import storage_scheme
+    from trid3nt_server.tools.cache import storage_scheme
 
     scheme = storage_scheme()
     if scheme == "s3":
@@ -469,7 +469,7 @@ def _upload_cog_to_runs_bucket(
             )
         dest = f"s3://{bucket}/{run_id}/{dest_filename}"
         try:
-            from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+            from trid3nt_server.workflows.solver.solver import _get_s3_client
 
             with local_cog.open("rb") as fh:
                 _get_s3_client().put_object(

@@ -66,7 +66,7 @@ from trid3nt_contracts.impact_envelope import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 
 __all__ = [
     "postprocess_pelicun",
@@ -228,7 +228,7 @@ def _download_uri_to_local(
     # (NOT s3fs - instance-role lesson). Stage to a
     # NamedTemporaryFile the caller unlinks.
     if uri.startswith("s3://"):
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         try:
             data = read_object_bytes_s3(uri)

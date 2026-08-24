@@ -48,7 +48,7 @@ from trid3nt_server.workflows.modflow._input_review import (
     resolve_and_gate_aquifer,
 )
 from trid3nt_server.emission.pipeline_emitter import begin_substeps, current_emitter, emit_chart_payloads
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
 # Reuse the shared archetype-run + AOI-resolve helpers from the sustainable_yield
 # composer (one implementation, all archetypes) + the footprint normalizer from
@@ -123,7 +123,7 @@ class MARInputError(MARScenarioError):
 
 async def _emit_mounding_chart(layer: MoundingLayerURI) -> None:
     """Side-emit the MAR mounding summary chart (best-effort, no-op safe)."""
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     rows: list[dict[str, Any]] = []
     peak = getattr(layer, "max_mounding_m", None)

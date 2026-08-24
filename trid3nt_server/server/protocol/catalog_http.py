@@ -23,7 +23,7 @@ WebSocket server in ``server.run_server``, NOT in its own process -- single
 process, single asyncio loop, no thread sharing.
 
 Backed entirely by:
-- ``trid3nt_server.data.TOOL_REGISTRY`` -- every registered tool's
+- ``trid3nt_server.tools.TOOL_REGISTRY`` -- every registered tool's
   docstring (the same text the model sees) + its ``AtomicToolMetadata``
   facets (``engine``, ``tier``, ``source_class``, the MCP annotation hints,
   ``supports_global_query``). No hand-maintained taxonomy: every facet is
@@ -73,10 +73,10 @@ _PAYLOAD_CACHE: dict[str, Any] | None = None
 
 
 def _default_corpus_path() -> Path:
-    """Resolve the residual ``data/tool_query_corpus.yaml`` under the package.
+    """Resolve the residual ``tools/tool_query_corpus.yaml`` under the package.
 
     Post engine-door restructure this is the RESIDUAL corpus (tools registered
-    outside the ``tools/`` tree). The composed corpus is assembled by
+    outside a co-located folder). The composed corpus is assembled by
     ``_compose_corpus_from_tree``. Mirrors ``search_tools._default_corpus_path``
     so both consumers read the same residual by default. Honours the
     ``TRID3NT_TOOL_CORPUS_YAML`` env override for test/dev pinning.
@@ -84,12 +84,20 @@ def _default_corpus_path() -> Path:
     env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
-    return _package_data_dir() / "tool_query_corpus.yaml"
+    return _package_tools_dir() / "tool_query_corpus.yaml"
+
+
+def _package_tools_dir() -> Path:
+    """The ``trid3nt_server/tools`` directory, anchored on the package root so the
+    corpus resolves regardless of this module's depth in the package tree."""
+    import trid3nt_server
+
+    return Path(trid3nt_server.__file__).resolve().parent / "tools"
 
 
 def _package_data_dir() -> Path:
-    """The ``trid3nt_server/data`` directory, anchored on the package root so the
-    corpus resolves regardless of this module's depth in the package tree."""
+    """The ``trid3nt_server/data`` directory - category-era fossil, still holds the
+    per-engine simulation shims and their co-located corpus files."""
     import trid3nt_server
 
     return Path(trid3nt_server.__file__).resolve().parent / "data"
@@ -115,14 +123,16 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
-    """Compose the flat corpus: every ``tools/**/corpus.yaml`` merged with the
-    residual ``data/tool_query_corpus.yaml``. Same shape/content as the
+    """Compose the flat corpus: every ``tools/**/corpus.yaml`` and every
+    ``data/**/corpus.yaml`` (the per-engine simulation shims) merged with the
+    residual ``tools/tool_query_corpus.yaml``. Same shape/content as the
     pre-restructure monolith (flat composition, no tiers).
     """
-    tools_dir = _package_data_dir()
+    tools_dir = _package_tools_dir()
     composed: dict[str, list[str]] = {}
-    for cpath in sorted(tools_dir.rglob("corpus.yaml")):
-        composed.update(_read_corpus_yaml(cpath))
+    for base in (tools_dir, _package_data_dir()):
+        for cpath in sorted(base.rglob("corpus.yaml")):
+            composed.update(_read_corpus_yaml(cpath))
     composed.update(_read_corpus_yaml(tools_dir / "tool_query_corpus.yaml"))
     return composed
 
@@ -201,7 +211,7 @@ def build_catalog_payload(
           ]
         }
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
     if use_cache and _PAYLOAD_CACHE is not None:
@@ -1287,12 +1297,12 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     try:
         import boto3
 
-        from trid3nt_server.data.cache import CACHE_BUCKET, cache_path
+        from trid3nt_server.tools.cache import CACHE_BUCKET, cache_path
         # fetch_buildings is folded to the router: the sidecar identity
         # (source_class / ttl / .tags.json ext) now lives in the promoted spec, not a
         # coded twin. Read it from the spec, falling back to the load-bearing literals
         # so a cold spec registry never breaks the enrich read.
-        from trid3nt_server.data.fetchers._router.registration import get_spec
+        from trid3nt_server.tools.fetchers._router.registration import get_spec
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None

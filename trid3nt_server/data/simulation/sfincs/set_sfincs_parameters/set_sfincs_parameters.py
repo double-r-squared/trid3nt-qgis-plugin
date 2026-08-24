@@ -21,8 +21,8 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.simulation._setter_envelope import (
+from trid3nt_server.tools import register_tool
+from trid3nt_server.workflows.lib._setter_envelope import (
     PhysicalBound,
     SetterInputError,
     SetterUpstreamError,

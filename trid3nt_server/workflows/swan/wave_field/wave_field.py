@@ -54,9 +54,9 @@ from trid3nt_contracts.swan_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.workflows.swan._template_card import TemplateCard
 from trid3nt_server.workflows.swan.postprocess_swan import PostprocessSwanError, postprocess_swan
 from trid3nt_server.workflows.shared.register_published_manifest import (
@@ -80,7 +80,7 @@ def fetch_topobathy(bbox: Any = None, **kwargs: Any):
     a module-level, patchable shim (the swan-chain tests patch this attribute). The
     promoted router closure is ``**kwargs``-only, so the positional ``bbox`` is
     mapped to the keyword the closure expects."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     if bbox is not None:
         kwargs["bbox"] = bbox
@@ -756,7 +756,7 @@ async def model_swan_wave_field(
     effective_compute_class = compute_class
 
     # --- Step 3: dispatch via the generic run_solver seam -------------------
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -1194,7 +1194,7 @@ def _download_batch_swan_outputs(run_id: str) -> str:
             no downloadable swan_out.mat (a 'complete' solve with no wave output is
             a real failure -- never a silent dead-end).
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,

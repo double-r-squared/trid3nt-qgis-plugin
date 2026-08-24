@@ -71,7 +71,7 @@ def _local_compute_lane() -> bool:
     confirm-card wording (compute labels / "cloud solve" prose); it never
     changes dispatch. Cloud wording stays byte-identical when this is False.
     """
-    from trid3nt_server.data.simulation.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+    from trid3nt_server.workflows.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
 
     return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
@@ -112,8 +112,8 @@ async def _build_fetch_resolution_envelope(
     )
     from types import SimpleNamespace
 
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-    from trid3nt_server.data.fetchers.imagery._pc_stac import bbox_pixel_dims
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.fetchers.imagery._pc_stac import bbox_pixel_dims
 
     coerced = coerce_bbox_value(params.get("bbox"))
     if coerced is None or len(coerced) != 4:
@@ -275,7 +275,7 @@ async def _build_flood_run_settings_envelope(
         PayloadWarningEnvelopePayload,
         TimeScaleSuggestion,
     )
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
     from trid3nt_server.workflows.sfincs.flood.flood import (
         _estimate_frame_count,
         _resolve_output_interval_min,
@@ -483,7 +483,7 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
     import math
 
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 
     imt = str(params.get("imt", "PGA"))
     try:
@@ -577,7 +577,7 @@ def _build_scenario_confirm_envelope(params: dict, tool_name: str) -> Any:
     import math
 
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 
     try:
         magnitude = float(params.get("magnitude", 6.7))
@@ -651,7 +651,7 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
     """
     from trid3nt_contracts.elmfire_contracts import FUEL_MOISTURE_PRESETS
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
     from trid3nt_server.workflows.elmfire.run_elmfire import (
         estimate_elmfire_grid,
         estimate_elmfire_runtime_s,
@@ -753,7 +753,7 @@ def _build_geoclaw_confirm_envelope(params: dict) -> Any:
     import math
 
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 
     scenario = str(params.get("scenario", "dam_break")).strip().lower() or "dam_break"
     try:
@@ -1032,7 +1032,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         PayloadWarningEnvelopePayload,
     )
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
-    from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
     from trid3nt_server.workflows.swmm.urban_flood.urban_flood import (
         _enforce_min_urban_aoi,
         _fetch_dem_for_urban,

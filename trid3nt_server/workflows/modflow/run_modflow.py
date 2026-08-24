@@ -289,7 +289,7 @@ def set_mf6_binary(path: str | None) -> None:
 def _cache_bucket() -> str:
     if _CACHE_BUCKET is not None:
         return _CACHE_BUCKET
-    from trid3nt_server.data.cache import CACHE_BUCKET
+    from trid3nt_server.tools.cache import CACHE_BUCKET
 
     return os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
 
@@ -333,7 +333,7 @@ def register_modflow_solver() -> None:
     - the value is only a default tag; the per-call handle pins the real backend.
     Idempotent (``setdefault``) - safe to call at import.
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_EXEC_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.solver.solver import LOCAL_EXEC_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(MODFLOW_SOLVER_NAME, LOCAL_EXEC_WORKFLOW_NAME)
 
@@ -464,7 +464,7 @@ def _reorganize_into_subdirs(
 def _read_vector_bytes(uri: str) -> bytes:
     """Read a vector artifact's bytes from s3:// / gs:// / file:// / local path."""
     if uri.startswith("s3://"):
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         return read_object_bytes_s3(uri)
     if uri.startswith("gs://"):
@@ -1278,7 +1278,7 @@ def build_and_stage_modflow_deck(
     # under TRID3NT_STORAGE_BACKEND=s3 - the manifest's input VALUES then carry
     # s3:// so the local-backend staging resolves them by scheme (the field
     # NAME stays the legacy ``gs_uri``, convention).
-    from trid3nt_server.data.cache import storage_scheme
+    from trid3nt_server.tools.cache import storage_scheme
 
     deck_base_uri = f"{storage_scheme()}://{_cache_bucket()}/modflow/{rid}/"
     manifest_uri = deck_base_uri + "manifest.json"
@@ -1295,7 +1295,7 @@ def build_and_stage_modflow_deck(
             # credentials lesson) through the solver module's shared S3
             # client seam, mirroring sfincs_builder's deck upload.
             try:
-                from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+                from trid3nt_server.workflows.solver.solver import _get_s3_client
 
                 s3 = _get_s3_client()
                 bucket, _, base_key = (
@@ -1520,7 +1520,7 @@ def compose_and_upload_modflow_build_spec(
 
     Raises ``MODFLOWWorkflowError`` (kwargs resolution / storage-backend / upload).
     """
-    from trid3nt_server.data.cache import storage_scheme
+    from trid3nt_server.tools.cache import storage_scheme
 
     rid = run_id or new_ulid()
     deck_kwargs = _run_args_to_deck_kwargs(run_args)
@@ -1550,7 +1550,7 @@ def compose_and_upload_modflow_build_spec(
     }
     payload = json.dumps(job_spec, indent=2).encode("utf-8")
     try:
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         s3 = _get_s3_client()
         s3_bucket, _, key = job_spec_uri[len("s3://"):].partition("/")
@@ -1577,7 +1577,7 @@ def compose_and_upload_modflow_build_spec(
 def _read_object_text(uri: str) -> str:
     """Read a small text object (the publish_manifest.json) by scheme."""
     if uri.startswith("s3://"):
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         return read_object_bytes_s3(uri).decode("utf-8")
     if uri.startswith("gs://"):
@@ -1649,7 +1649,7 @@ def read_modflow_build_manifest(
         cog_uri.startswith("s3://") or cog_uri.startswith("gs://")
     ):
         try:
-            from trid3nt_server.data.publish_layer.publish_layer import publish_layer
+            from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
 
             wms_url = publish_layer(
                 layer_uri=cog_uri,
@@ -1762,7 +1762,7 @@ def read_modflow_archetype_manifest(
         cog_uri.startswith("s3://") or cog_uri.startswith("gs://")
     ):
         try:
-            from trid3nt_server.data.publish_layer.publish_layer import publish_layer
+            from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
 
             wms_url = publish_layer(
                 layer_uri=cog_uri,
@@ -1852,7 +1852,7 @@ def _modflow_local_spec(staging: DeckStaging) -> Any:
     and supplies the entrypoint-schema ``converged`` + ``model_crs``
     completion fields.
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
 
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
         return [_mf6_binary(), *args]
@@ -1926,7 +1926,7 @@ def submit_modflow_run(
         MODFLOWWorkflowError("MODFLOW_DISPATCH_FAILED"): the dispatch (Batch
             submit or local-backend staging/launch) failed.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         SolverDispatchError,
         launch_local_solver,
     )
@@ -1991,7 +1991,7 @@ def _mirror_local_run_to_s3(
     ``asyncio.to_thread``), so the sync boto3 I/O is safe.
     """
     try:
-        from trid3nt_server.data.simulation.solver import solver as _solver
+        from trid3nt_server.workflows.solver import solver as _solver
 
         s3 = _solver._get_s3_client()
         runs_bucket = _solver._get_runs_bucket()

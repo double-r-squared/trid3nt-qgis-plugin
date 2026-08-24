@@ -39,7 +39,7 @@ from typing import Any
 
 from trid3nt_contracts.common import SyntheticInput
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 
 logger = logging.getLogger("trid3nt_server.workflows.shared.discharge_resolve")
 
@@ -82,7 +82,7 @@ def dominant_reach_discharge(bbox: Any) -> tuple[float | None, dict[str, Any]]:
     try:
         import geopandas as gpd  # lazy: never imported on the offline path
 
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_s3_client,
             _split_object_uri,
         )

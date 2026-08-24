@@ -7,8 +7,8 @@ import os
 import logging
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.tool_arg_normalizer import autofill_missing_bbox, normalize_args
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
 from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, bind_turn_case, bind_turn_drawn_geometry
 from trid3nt_server.emission.uri_registry import activate_registry, deactivate_registry, get_uri_registry
@@ -859,7 +859,7 @@ async def _invoke_tool_via_emitter(
     if tool_name == "publish_layer" and not params.get("layer_id"):
         _pl_uri = params.get("layer_uri")
         if isinstance(_pl_uri, str) and _pl_uri:
-            from trid3nt_server.data.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
+            from trid3nt_server.tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
 
             params = dict(params)
             params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
@@ -1297,7 +1297,7 @@ async def _invoke_tool_via_emitter(
                     # name (params carries it even though publish_layer's own
                     # signature only uses it for logging), else the resolved
                     # style_preset, else the published URI's path segment.
-                    from trid3nt_server.data.publish_layer.publish_layer import derive_readable_layer_name
+                    from trid3nt_server.tools.publish_layer.publish_layer import derive_readable_layer_name
 
                     _layer_name = derive_readable_layer_name(
                         params.get("name"),

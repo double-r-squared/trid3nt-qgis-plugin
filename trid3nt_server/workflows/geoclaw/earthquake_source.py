@@ -160,7 +160,7 @@ def select_largest_event(features: list[Any]) -> ResolvedEarthquake | None:
 
 def _region_bbox(region: str) -> tuple[float, float, float, float]:
     """Geocode a seismic-region name -> an EPSG:4326 search bbox (buffered)."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     geo = TOOL_REGISTRY["geocode_location"].fn(query=region)
     bbox = getattr(geo, "bbox", None) or (geo.get("bbox") if isinstance(geo, dict) else None)
@@ -183,7 +183,7 @@ def _read_fgb_features(uri: str) -> list[dict[str, Any]]:
     Mirrors ``nid_dams._download_fgb_to_local`` (the solver's boto3 client honors
     ``AWS_ENDPOINT_URL`` for MinIO). Returns FDSN-shaped feature dicts so
     ``select_largest_event`` consumes them uniformly."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_s3_client,
         _split_object_uri,
     )
@@ -232,7 +232,7 @@ def resolve_earthquake_source(
     the largest-Mw ``ResolvedEarthquake``. Raises a typed ``EarthquakeSourceError``
     on an ungeocodable region, a fetch failure, or an empty catalog (never a silent
     fabricated source)."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     bbox = _region_bbox(region)
     try:

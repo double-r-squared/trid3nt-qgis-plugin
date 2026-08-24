@@ -87,7 +87,7 @@ import numpy as np
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 
 __all__ = [
     "model_debris_flow",
@@ -314,7 +314,7 @@ def _validate_intensity(value: Any) -> float:
 def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
     """Return a local file path for ``uri`` (s3:// download or local path)."""
     if uri.startswith("s3://"):
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         name = uri.rstrip("/").rsplit("/", 1)[-1] or f"{label}.bin"
         local = os.path.join(tmpdir, f"{label}_{name}")
@@ -350,7 +350,7 @@ def _load_dem(
         source_note = f"DEM from caller-supplied dem_uri ({dem_uri})."
     else:
         try:
-            from trid3nt_server.data import TOOL_REGISTRY
+            from trid3nt_server.tools import TOOL_REGISTRY
 
             layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
         except DebrisFlowError:
@@ -475,8 +475,8 @@ def _severity_from_mtbs(
     # wave-2): resolve it through the registry seam (indistinguishable callable)
     # and catch the router's shared FetchError base (was the twin's MTBSError).
     try:
-        from trid3nt_server.data import TOOL_REGISTRY
-        from trid3nt_server.data.fetchers._fetch_common import FetchError
+        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.tools.fetchers._fetch_common import FetchError
         _fetch_mtbs = TOOL_REGISTRY["fetch_mtbs_burn_severity"].fn
     except Exception as exc:  # noqa: BLE001
         raise DebrisFlowDependencyError(
@@ -571,7 +571,7 @@ def _load_kf(
     try:
         # Registry seam: fetch_statsgo_soils is now a spec-driven
         # library-delegate router tool (pfdf), resolved by name (twin deleted).
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
         fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn
 
         layer = fetch_statsgo_soils(bbox=bbox, field="KFFACT")
@@ -616,7 +616,7 @@ def _write_segments_geojson(
             f.write(payload)
         return path
     try:
-        from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
 
         bucket = _get_runs_bucket()
         key = f"debris-flow-{seed}/{filename}"

@@ -358,7 +358,7 @@ def acquire_watershed_mesh(
     import numpy as np
     from shapely.geometry import mapping
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     rundir = Path(output_dir)
     rundir.mkdir(parents=True, exist_ok=True)
@@ -389,7 +389,7 @@ def acquire_watershed_mesh(
     try:
         rv = TOOL_REGISTRY["fetch_river_geometry"].fn(
             bbox=tuple(bbox), source="nhdplus_hr", purpose="river geometry")
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
         fl_path = rundir / "flowlines.fgb"
         fl_path.write_bytes(
             read_object_bytes_s3(rv.uri) if str(rv.uri).startswith("s3://")
@@ -583,7 +583,7 @@ def _delineate_catchment(
     the coordinate path). This wrapper keeps the workflow's geodesic-area
     convention (equal-area cast) and its typed off-DEM error. The polygon is
     EPSG:4326."""
-    from trid3nt_server.data.processing._hydrology_common import (
+    from trid3nt_server.tools.processing._hydrology_common import (
         HydrologyInputError,
         _condition_dem,
         _stage_dem,
@@ -637,8 +637,8 @@ def _resolve_bare_earth_dem(
     honored."""
     if dem_uri and Path(dem_uri).exists():
         return Path(dem_uri)
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.cache import read_object_bytes_s3
 
     try:
         layer = TOOL_REGISTRY["fetch_dem"].fn(

@@ -66,7 +66,7 @@ def _admin_boundaries_fgb_bytes(
     in-process counterpart to the published tool the twin's ``_fetch_admin_boundaries_bytes``
     used to be. Validates + quantizes the params exactly as the tool does.
     """
-    from trid3nt_server.data.fetchers._router import registration, router
+    from trid3nt_server.tools.fetchers._router import registration, router
 
     spec = registration.get_spec("fetch_administrative_boundaries")
     if spec is None:
@@ -186,7 +186,7 @@ def _build_region_choice_request_payload(
     Returns ``None`` when the state cannot be resolved or the result is not a
     valid state-snap shape — the caller then leaves the state bbox unchanged.
     """
-    from trid3nt_server.data.fetchers.us_states import resolve_state_code, state_display_name
+    from trid3nt_server.tools.fetchers.us_states import resolve_state_code, state_display_name
 
     bbox = geocode_result.get("bbox")
     if not (isinstance(bbox, (list, tuple)) and len(bbox) == 4):

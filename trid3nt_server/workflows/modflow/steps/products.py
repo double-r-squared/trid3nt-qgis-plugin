@@ -22,7 +22,7 @@ def build_budget_chart(*, result: Any, params: Any) -> dict[str, Any] | None:  #
     if not partition:
         return None
 
-    from trid3nt_server.data.processing.charts_common import (
+    from trid3nt_server.tools.processing.charts_common import (
         build_budget_partition_chart,
     )
 

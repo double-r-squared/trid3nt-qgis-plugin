@@ -863,7 +863,7 @@ def _resolve_ucn_path(run_outputs_uri: str) -> Path:
     local-mode live-evidence path always passes a local dir.
     """
     if run_outputs_uri.startswith("s3://"):
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="modflow-output-"))
         local_target = tmpdir / GWT_UCN_FILENAME
@@ -1222,7 +1222,7 @@ def _dispatch_publish_layer(
         )
         return None
     try:
-        from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+        from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 
         wms_url = publish_layer(
             layer_uri=cog_uri,
@@ -1814,7 +1814,7 @@ def _resolve_gwf_cbc_path(run_outputs_uri: str) -> Path:
     fsspec seams the UCN resolver uses.
     """
     if run_outputs_uri.startswith("s3://"):
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="modflow-cbc-"))
         local_target = tmpdir / GWF_CBC_FILENAME
@@ -2026,7 +2026,7 @@ def _resolve_gwf_hds_path(run_outputs_uri: str) -> Path:
     the head file cannot be located / fetched.
     """
     if run_outputs_uri.startswith("s3://"):
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="modflow-hds-"))
         local_target = tmpdir / GWF_HDS_FILENAME
@@ -2832,7 +2832,7 @@ def postprocess_subsidence(
     # Stash the subsidence-vs-time chart (composer emits it; private attr so the
     # Pydantic model ignores it).
     try:
-        from trid3nt_server.data.processing.charts_common import build_subsidence_timeseries_chart
+        from trid3nt_server.tools.processing.charts_common import build_subsidence_timeseries_chart
 
         chart = build_subsidence_timeseries_chart(
             days=list(metrics["days"]),
@@ -3624,7 +3624,7 @@ def postprocess_gwe_thermal(
     chart_payload: dict[str, Any] | None = None
     if recovery_series:
         try:
-            from trid3nt_server.data.processing.charts_common import (
+            from trid3nt_server.tools.processing.charts_common import (
                 build_ates_recovery_chart,
             )
 
@@ -4807,7 +4807,7 @@ def postprocess_stream_reaches(
 
     # --- Step 5: build + stash the two charts (composer emits them) ---------- #
     try:
-        from trid3nt_server.data.processing.charts_common import build_depletion_timeseries_chart, build_reach_profile_chart
+        from trid3nt_server.tools.processing.charts_common import build_depletion_timeseries_chart, build_reach_profile_chart
 
         dep_chart = build_depletion_timeseries_chart(
             days=metrics["days"],
@@ -5412,7 +5412,7 @@ def postprocess_saltwater_intrusion(
     # a Pydantic field) so the composer can emit it without a second UCN read.
     chart_payload: dict[str, Any] | None = None
     try:
-        from trid3nt_server.data.processing.charts_common import build_saltwater_wedge_chart
+        from trid3nt_server.tools.processing.charts_common import build_saltwater_wedge_chart
 
         chart_payload = build_saltwater_wedge_chart(
             salinity_grid=salinity_2d,
@@ -5781,7 +5781,7 @@ def postprocess_vadose(
 
     chart_payload: dict[str, Any] | None = None
     try:
-        from trid3nt_server.data.processing.charts_common import (
+        from trid3nt_server.tools.processing.charts_common import (
             build_vadose_breakthrough_chart,
         )
 

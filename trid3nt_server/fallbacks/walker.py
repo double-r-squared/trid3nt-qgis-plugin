@@ -178,7 +178,7 @@ def _invoke(
     if rung.call:
         return _resolve_call(rung.call)(**params)
     if rung.source:
-        from trid3nt_server.data import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         entry = TOOL_REGISTRY.get(rung.source)
         if entry is None:

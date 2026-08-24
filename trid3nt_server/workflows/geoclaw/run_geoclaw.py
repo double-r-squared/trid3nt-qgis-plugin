@@ -638,7 +638,7 @@ def _dem_uri_to_local(dem_uri: str) -> tuple[str, bool]:
     if "://" not in dem_uri:
         return dem_uri, False
     if dem_uri.startswith("s3://"):
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client, _split_object_uri
+        from trid3nt_server.workflows.solver.solver import _get_s3_client, _split_object_uri
 
         _scheme, bucket, key = _split_object_uri(dem_uri)
         s3 = _get_s3_client()
@@ -1056,8 +1056,8 @@ def reproject_dem_to_4326(dem_uri: str, *, run_id: str | None = None) -> str:
 
         # Re-stage the reprojected raster by the SAME scheme as the source.
         if dem_uri.startswith("s3://"):
-            from trid3nt_server.data.cache import CACHE_BUCKET, storage_scheme
-            from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+            from trid3nt_server.tools.cache import CACHE_BUCKET, storage_scheme
+            from trid3nt_server.workflows.solver.solver import _get_s3_client
 
             scheme = storage_scheme()
             cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
@@ -1120,8 +1120,8 @@ def stage_finite_fault_csv(csv_text: str, run_id: str | None = None) -> str:
     scheme + boto3 client + cache bucket as ``stage_geoclaw_manifest`` (no new
     client). Returns the ``{scheme}://<bucket>/<key>`` URI. Raises
     ``GeoClawWorkflowError`` on an upload failure (never a silent dead-end)."""
-    from trid3nt_server.data.cache import CACHE_BUCKET, storage_scheme
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.tools.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     rid = run_id or new_ulid()
     scheme = storage_scheme()
@@ -1191,8 +1191,8 @@ def stage_geoclaw_manifest(
             complete (the Batch lane cannot dispatch without a reachable
             manifest — fail loudly, never a silent dead-end).
     """
-    from trid3nt_server.data.cache import CACHE_BUCKET, storage_scheme
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.tools.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     rid = run_id or new_ulid()
     bbox = tuple(run_args.bbox)
@@ -1317,7 +1317,7 @@ def register_geoclaw_solver() -> None:
     presence-gate only; the local sentinel is used since the AWS Batch arm was
     removed.)
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(GEOCLAW_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
@@ -1347,7 +1347,7 @@ def geoclaw_local_spec() -> "Any":
     """Build the GeoClaw LocalSolverSpec for the local-docker backend."""
     import os
     from pathlib import Path
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_GEOCLAW_IMAGE") or DEFAULT_GEOCLAW_IMAGE
     aws_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
@@ -1407,7 +1407,7 @@ def geoclaw_local_spec() -> "Any":
 
 def register_geoclaw_local_spec() -> None:
     """Register the GeoClaw LocalSolverSpec factory for the local-docker backend."""
-    from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec
+    from trid3nt_server.workflows.solver.solver import register_local_solver_spec
     register_local_solver_spec(GEOCLAW_SOLVER_NAME, geoclaw_local_spec)
 
 

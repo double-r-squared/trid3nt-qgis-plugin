@@ -50,8 +50,8 @@ from trid3nt_contracts.telemac_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.data import TOOL_REGISTRY, register_tool
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.workflows.telemac.postprocess_telemac import (
     PostprocessTelemacError,
@@ -360,7 +360,7 @@ def _bbox_center(bbox) -> tuple[float, float]:
 
 def _stage_wave_manifest(wave: dict[str, Any], run_tag: str) -> str:
     """Write the tomawac ``wave`` worker manifest to the cache bucket; return uri."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -388,7 +388,7 @@ def _stage_wave_manifest(wave: dict[str, Any], run_tag: str) -> str:
 
 def _download_wave_result(run_id: str) -> tuple[str, dict[str, Any]]:
     """Download ``res_wave.slf`` + read telemac_metrics.json. Returns (path, metrics)."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
@@ -455,8 +455,8 @@ async def model_tomawac_wave_field(
         substep,
     )
     from trid3nt_server.gates.input_review import gate_input_review
-    from trid3nt_server.data.publish_layer.publish_layer import publish_layer
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -633,7 +633,7 @@ async def model_tomawac_wave_field(
             + (" (coarsened under node budget)" if metrics.get("coarsened") else "")),
     })
 
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 
     async with substep(emitter, "publish_layer"):
         published = enriched

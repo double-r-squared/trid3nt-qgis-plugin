@@ -23,7 +23,7 @@ from trid3nt_contracts.swmm_contracts import SWMMDeckRunResult
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.mesh.swmm_deck_runner import SWMMDeckError
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
 from trid3nt_server.workflows.swmm.deck_runner.deck_runner import model_published_deck
 

@@ -14,7 +14,7 @@ from typing import Any
 
 from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 from trid3nt_server.emission.pipeline_emitter import current_emitter
 
 from .errors import ModflowArchetypeRunError

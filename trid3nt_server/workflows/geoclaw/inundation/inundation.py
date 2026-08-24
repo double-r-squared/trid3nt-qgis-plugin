@@ -46,11 +46,11 @@ from trid3nt_contracts.geoclaw_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec, GateSpec
 
-from trid3nt_server.data import register_tool
-from trid3nt_server.data.resolution_declared import enforce_resolution
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.resolution_declared import enforce_resolution
 from trid3nt_server.gates.input_review import gate_input_review
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
 from trid3nt_server.workflows.geoclaw._template_card import TemplateCard
 from trid3nt_server.workflows.geoclaw.earthquake_source import (
     SUBDUCTION_INTERFACE_DIP_DEG,
@@ -1065,8 +1065,8 @@ def _fetch_topo_for_geoclaw(
     would paint flat 0 m ocean over every wet cell.
     """
     # fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
 
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
 
@@ -1189,7 +1189,7 @@ def _fetch_fine_nearshore_for_geoclaw(
     note that says why, and the caller carries it onto the answer layer. A run
     whose run-up resolved at ~450 m instead of ~10 m must be able to say so.
     """
-    from trid3nt_server.data import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
+    from trid3nt_server.tools import TOOL_REGISTRY as _TR; fetch_topobathy = lambda bbox=None, **_kw: _TR["fetch_topobathy"].fn(bbox=bbox, **_kw)
 
     try:
         layer = fetch_topobathy(
@@ -1654,7 +1654,7 @@ async def model_geoclaw_inundation(
     effective_compute_class = compute_class
 
     # --- Step 3: dispatch via the generic run_solver seam -------------------
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -2239,7 +2239,7 @@ async def _maybe_emit_gauge_chart(
     spec = build_gauge_timeseries_chart_spec(gauge_series)
     if spec is None:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,
@@ -2266,7 +2266,7 @@ async def _maybe_emit_particle_chart(
     spec = build_particle_track_chart_spec(tracks)
     if spec is None:
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,
@@ -2400,7 +2400,7 @@ def _download_batch_geoclaw_outputs(run_id: str) -> str:
             produced no downloadable fort.q (a 'complete' solve with no output is
             a real failure - never a silent dead-end).
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,

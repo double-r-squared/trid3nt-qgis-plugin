@@ -48,7 +48,7 @@ def persist_run_activations(
     if not run_id or not activations:
         return None
     try:
-        from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
         import boto3
 

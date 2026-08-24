@@ -17,7 +17,7 @@ import logging
 import math
 from typing import Any, Sequence
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 from trid3nt_server.workflows.swmm.steps import (
     clock,
@@ -407,7 +407,7 @@ def build_rdii_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     if len(times) < 2 or len(rdii) != len(times) or len(runoff) != len(times):
         return None
 
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     series = {"RDII (RTK closed form)": list(zip(times, rdii)),
               "direct runoff": list(zip(times, runoff))}

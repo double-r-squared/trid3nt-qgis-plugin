@@ -53,10 +53,10 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, GateSpec
 
 from trid3nt_contracts.common import SyntheticInput
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.workflows.openquake._local_oq import VS30_DEMO_NOTE
-from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.openquake._template_card import TemplateCard
 from trid3nt_server.workflows.openquake.postprocess_openquake import (
     PostprocessOpenQuakeError,
@@ -598,8 +598,8 @@ def resolve_fault_sources(
     # fetch_fault_sources is now spec-driven: resolve the router closure
     # off the registry seam (TOOL_REGISTRY[name].fn) and catch the router's typed
     # FetchError base -- byte-identical A.6 codes (FAULT_SOURCES_*), zero twin import.
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.fetchers._fetch_common import FetchError
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._fetch_common import FetchError
 
     fetch_fault_sources = TOOL_REGISTRY["fetch_fault_sources"].fn
 
@@ -760,7 +760,7 @@ def make_fault_sources_layer_uri(
     # boto3 instance-role + bucket convention the mesh layer + every run artifact
     # uses). A put failure -> the input is simply absent, never breaks the solve.
     try:
-        from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
 
         bucket = runs_bucket or _get_runs_bucket()
         key = f"{run_id}/fault_sources.geojson"
@@ -823,8 +823,8 @@ def stage_openquake_build_spec(
     Raises:
         OpenQuakeWorkflowError("OQ_STAGING_FAILED"): the upload could not complete.
     """
-    from trid3nt_server.data.cache import CACHE_BUCKET, storage_scheme
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.tools.cache import CACHE_BUCKET, storage_scheme
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     scheme = storage_scheme()  # "s3" on AWS
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
@@ -885,7 +885,7 @@ def _download_batch_hazard_csv(run_result: Any, run_id: str) -> str:
         OpenQuakeWorkflowError("OQ_BATCH_OUTPUT_MISSING"): the completed run did
             not produce a downloadable hazard-map CSV.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,
@@ -962,7 +962,7 @@ def _download_batch_curve_csvs(
     was not exported / not readable (no chart for it). NEVER raises: a curve
     download wobble must not fail the hazard run (the map layer already landed)."""
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _get_s3_client,
             _split_object_uri,
@@ -1006,7 +1006,7 @@ def _download_batch_quantile_curve_csvs(
     exported. NEVER raises (charts are non-fatal): an empty dict yields no band."""
     out: dict[str, str] = {}
     try:
-        from trid3nt_server.data.simulation.solver.solver import (
+        from trid3nt_server.workflows.solver.solver import (
             _get_runs_bucket,
             _get_s3_client,
             _split_object_uri,
@@ -1055,7 +1055,7 @@ async def _emit_oq_curve_charts(
     For an epistemic logic-tree run (``logic_tree`` != "single") the mean curve is
     upgraded to a 5/50/95 quantile-BAND chart (the epistemic spread across
     realizations) when the ``quantile_curve-*`` exports are present."""
-    from trid3nt_server.data.processing.charts_common import (
+    from trid3nt_server.tools.processing.charts_common import (
         build_hazard_curve_chart,
         build_hazard_quantile_band_chart,
         build_uhs_chart,
@@ -1138,7 +1138,7 @@ async def _emit_vs30_ab_chart(
 ) -> None:
     """Emit the Vs30 rock-vs-soil hazard-curve A/B overlay (best-effort, no-op safe)."""
     try:
-        from trid3nt_server.data.processing.charts_common import (
+        from trid3nt_server.tools.processing.charts_common import (
             build_chart_payload,
         )
         from trid3nt_server.workflows.openquake._local_oq import (
@@ -1265,7 +1265,7 @@ async def _emit_nehrp_amp_chart(
     the highlighted class in the caption strip.
     """
     try:
-        from trid3nt_server.data.processing.charts_common import (
+        from trid3nt_server.tools.processing.charts_common import (
             build_chart_payload,
         )
         from trid3nt_server.workflows.openquake._local_oq import (
@@ -1439,7 +1439,7 @@ async def model_openquake_psha(
     Raises:
         OpenQuakeWorkflowError: any staging / dispatch / postprocess step failed.
     """
-    from trid3nt_server.data.simulation.solver.solver import run_solver, wait_for_completion
+    from trid3nt_server.workflows.solver.solver import run_solver, wait_for_completion
 
     run_id = new_ulid()
     logger.info(
@@ -1733,7 +1733,7 @@ def openquake_local_spec() -> Any:
     This spec is the SUBPROCESS RUNNER for the offline / local build. The
     cloud Batch path is unchanged.
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
 
     repo_root = _TRID3NT_REPO_ROOT_OQ
     # Prepend the repo root to PYTHONPATH so the shim can import
@@ -1778,7 +1778,7 @@ def register_openquake_solver() -> None:
     Idempotent -- safe to call at import. The factory (``openquake_local_spec``) is only called at dispatch
     time to avoid any circular-import hazard.
     """
-    from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec
+    from trid3nt_server.workflows.solver.solver import register_local_solver_spec
 
     register_local_solver_spec(OPENQUAKE_SOLVER_NAME, openquake_local_spec)
 

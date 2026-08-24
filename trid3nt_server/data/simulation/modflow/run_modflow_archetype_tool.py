@@ -272,7 +272,7 @@ async def run_modflow_archetype_job(
             handle = await asyncio.to_thread(
                 submit_modflow_run, staging, compute_class=compute_class
             )
-            from trid3nt_server.data.simulation.solver.solver import wait_for_completion
+            from trid3nt_server.workflows.solver.solver import wait_for_completion
 
             try:
                 run_result: RunResult = await wait_for_completion(handle)

@@ -127,7 +127,7 @@ def _resolve_run_output_to_local(run_outputs_uri: str) -> Path:
     shared S3 client seam - boto3 NOT s3fs (instance-role lesson).
     """
     if run_outputs_uri.startswith("s3://"):
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="sfincs-output-"))
         local_target = tmpdir / "sfincs_map.nc"
@@ -910,7 +910,7 @@ def _upload_cog_to_runs_bucket(
         )
     dest = f"s3://{bucket}/{run_id}/{dest_filename}"
     try:
-        from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
 
         with local_cog.open("rb") as fh:
             _get_s3_client().put_object(

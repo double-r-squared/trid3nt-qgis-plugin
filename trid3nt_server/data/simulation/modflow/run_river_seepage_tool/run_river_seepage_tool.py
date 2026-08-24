@@ -55,7 +55,7 @@ from trid3nt_contracts.modflow_contracts import (
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.emission.pipeline_emitter import current_emitter
-from trid3nt_server.data.tool_arg_normalizer import LatLonCoercionError, coerce_latlon
+from trid3nt_server.tools.tool_arg_normalizer import LatLonCoercionError, coerce_latlon
 from trid3nt_server.workflows.modflow.postprocess_modflow import (
     PostprocessMODFLOWError,
     postprocess_modflow,
@@ -256,7 +256,7 @@ async def run_river_seepage_job(
             handle = await asyncio.to_thread(
                 submit_modflow_run, staging, compute_class=compute_class
             )
-            from trid3nt_server.data.simulation.solver.solver import wait_for_completion
+            from trid3nt_server.workflows.solver.solver import wait_for_completion
 
             try:
                 run_result: RunResult = await wait_for_completion(handle)

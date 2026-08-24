@@ -11,7 +11,7 @@ from typing import Any
 
 from trid3nt_contracts.telemac_contracts import TelemacDoLayerURI
 
-from trid3nt_server.declarative import Step
+from trid3nt_server.workflows.lib import Step
 
 __all__ = [
     "OutfallCoordsInvalidError",
@@ -117,8 +117,8 @@ async def solve_waqtel_o2(
     no plan-level form could show because they do not exist until the fetch has
     run.
     """
-    from trid3nt_server.declarative import Domain
-    from trid3nt_server.declarative.domain import bind_domain, reset_domain
+    from trid3nt_server.workflows.lib import Domain
+    from trid3nt_server.workflows.lib.domain import bind_domain, reset_domain
     from trid3nt_server.workflows.telemac.steps import (
         fetch_reach_flowline,
         geocode_reach,
@@ -238,7 +238,7 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
         return None
     std = float(getattr(result, "do_standard_mgl", None) or 5.0)
 
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     do_vals = [{"x_km": round(xs[i] / 1000.0, 4), "v": do[i], "series": "Dissolved O2"}
                for i in range(len(xs))]

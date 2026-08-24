@@ -28,7 +28,7 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.pelicun._template_card import TemplateCard
 from trid3nt_server.workflows.pelicun._validation_common import (
     PelicunValidationError,

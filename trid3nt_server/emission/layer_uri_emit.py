@@ -221,7 +221,7 @@ def _cog_object_exists(cog_uri: str) -> bool:
     malformed uri, an unreachable bucket, a 404 -- reads as absent, never
     raises, so a fabricated URI is only ever registered once confirmed real.
     """
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_s3_client,
         _split_object_uri,
     )
@@ -280,7 +280,7 @@ async def publish_raster_input_cog(
         # Late import: keep this emission module free of a load-time dependency
         # on the heavy publish_layer tool (rasterio / TiTiler), mirroring how the
         # composers import it inline.
-        from trid3nt_server.data.publish_layer.publish_layer import (
+        from trid3nt_server.tools.publish_layer.publish_layer import (
             PublishLayerError,
             publish_layer,
         )

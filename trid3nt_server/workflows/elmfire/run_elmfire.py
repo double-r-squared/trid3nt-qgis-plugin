@@ -241,11 +241,11 @@ def fetch_elmfire_inputs(
     wrapping the failing fetcher's error with the raster name — the honest
     data-source norm (primary -> typed error; no silent constant substitute).
     """
-    from trid3nt_server.data.processing.compute_aspect.compute_aspect import compute_aspect
-    from trid3nt_server.data.processing.compute_slope.compute_slope import compute_slope
+    from trid3nt_server.tools.processing.compute_aspect.compute_aspect import compute_aspect
+    from trid3nt_server.tools.processing.compute_slope.compute_slope import compute_slope
     # fetch_landfire_fuels + fetch_dem are spec-driven promoted tools:
     # resolve them through the registry seam (keyword-only), not direct twin imports.
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fetch_landfire_fuels = TOOL_REGISTRY["fetch_landfire_fuels"].fn
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
@@ -817,7 +817,7 @@ def elmfire_local_spec() -> Any:
     cancel seam (``docker kill <run_id>``). DOCKER_HOST is threaded through
     ``env_overrides`` (rootless-docker aware — see ``_resolve_docker_host``).
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_ELMFIRE_IMAGE") or DEFAULT_ELMFIRE_IMAGE
     binary = os.environ.get("TRID3NT_ELMFIRE_BINARY") or DEFAULT_ELMFIRE_BINARY
@@ -868,7 +868,7 @@ def register_elmfire_solver() -> None:
     is a presence-gate only; the local sentinel is used since the AWS Batch arm
     was removed.)
     """
-    from trid3nt_server.data.simulation.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(
         ELMFIRE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME
@@ -877,7 +877,7 @@ def register_elmfire_solver() -> None:
 
 def register_elmfire_local_spec() -> None:
     """Register the ELMFIRE LocalSolverSpec factory (local-docker backend)."""
-    from trid3nt_server.data.simulation.solver.solver import register_local_solver_spec
+    from trid3nt_server.workflows.solver.solver import register_local_solver_spec
 
     register_local_solver_spec(ELMFIRE_SOLVER_NAME, elmfire_local_spec)
 

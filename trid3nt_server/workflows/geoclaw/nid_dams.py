@@ -63,7 +63,7 @@ class ResolvedDam:
 def _download_fgb_to_local(uri: str) -> str:
     """Download an ``s3://`` FlatGeobuf to a temp file via the solver's boto3
     client (honours ``AWS_ENDPOINT_URL`` for MinIO); return the local path."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_s3_client,
         _split_object_uri,
     )
@@ -123,7 +123,7 @@ def resolve_nid_dam(
     Never raises for a data miss; a fetch/read exception also degrades to ``None``
     (the gate names the manual params, never a silent invented dam).
     """
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     cx = 0.5 * (bbox[0] + bbox[2])
     cy = 0.5 * (bbox[1] + bbox[3])

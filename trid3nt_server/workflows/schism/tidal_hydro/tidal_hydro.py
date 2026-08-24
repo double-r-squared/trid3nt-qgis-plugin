@@ -43,7 +43,7 @@ from trid3nt_contracts.schism_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.emission.layer_uri_emit import stamp_fallbacks
 from trid3nt_server.fallbacks import (
     LADDER_ERROR_CODE,
@@ -288,7 +288,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     publish_layer,
 )
@@ -316,7 +316,7 @@ def _stage_manifest(deck_files: list[Path], run_tag: str, *, ncompute: int, nscr
     -> an ``{"gs_uri": ..., "dest": ...}`` input entry (dest is the basename so the
     worker sees it at ``/data/<name>``). The manifest also carries the entrypoint's
     variant/ncompute/nscribe knobs + the outputs glob."""
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     cache_bucket = _cache_bucket()
     s3 = _get_s3_client()
@@ -345,7 +345,7 @@ def _stage_manifest(deck_files: list[Path], run_tag: str, *, ncompute: int, nscr
 
 def _download_run_output(run_id: str, rel_key: str) -> str | None:
     """Download ``<run_id>/<rel_key>`` from the runs bucket to a temp file; None on miss."""
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket, _get_s3_client,
     )
     try:
@@ -361,7 +361,7 @@ def _download_run_output(run_id: str, rel_key: str) -> str | None:
 
 
 def _runs_uri(run_id: str, rel_key: str) -> str:
-    from trid3nt_server.data.simulation.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
     return f"s3://{_get_runs_bucket()}/{run_id}/{rel_key}"
 
 
@@ -411,7 +411,7 @@ async def _schism_mesh_precondition_gate(
             if emitter is not None else [])
         s3 = None
         try:
-            from trid3nt_server.data.simulation.solver.solver import (
+            from trid3nt_server.workflows.solver.solver import (
                 _get_s3_client,
             )
             s3 = _get_s3_client()
@@ -517,7 +517,7 @@ async def model_schism_tidal_hydro(
     logger.info("model_schism_tidal_hydro staged manifest run_tag=%s files=%d uri=%s",
                 run_tag, len(deck_files), manifest_uri)
 
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         run_solver, wait_for_completion,
     )
     handle = run_solver(solver=SCHISM_SOLVER_NAME, model_setup_uri=manifest_uri,
@@ -703,7 +703,7 @@ async def _build_coastal_tin_deck(
                 SCHISM_INPUT_INVALID,
                 "coastal_tin needs a coastal AOI: pass location_query (a place name) or bbox",
             )
-        from trid3nt_server.data.fetchers.socioeconomic.geocode_location.geocode_location import (
+        from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
             geocode_location,
         )
         geo = geocode_location(location_query)
@@ -872,7 +872,7 @@ async def _fetch_bathymetry_cog(
     ladder REFUSAL is fatal here, and so is any RETRYABLE typed fault: the
     ``fetch_dem`` leg below is land-only and would sample flat 0 m ocean onto
     every wet node."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     topobathy_kw, dem_kw = _topobathy_fetch_kwargs(
         resolution_m, force_bathy_base, skip_land
@@ -949,7 +949,7 @@ def _download_uri_to_tmp(uri: str) -> str | None:
     """Download an s3:// COG uri to a temp file for rasterio sampling."""
     if not uri.startswith("s3://"):
         return uri if Path(uri).exists() else None
-    from trid3nt_server.data.simulation.solver.solver import _get_s3_client
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
     try:
         bucket, _, key = uri[len("s3://"):].partition("/")
         obj = _get_s3_client().get_object(Bucket=bucket, Key=key)
@@ -989,7 +989,7 @@ async def _maybe_emit_station_chart(
     """Station elevation-timeseries chart (the QuarterAnnulus station output is the spec)."""
     if not hasattr(emitter, "emit_chart"):
         return
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     spec = {
         "data": {"values": series},

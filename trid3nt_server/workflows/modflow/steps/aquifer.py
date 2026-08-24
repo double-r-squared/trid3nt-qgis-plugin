@@ -15,7 +15,7 @@ import asyncio
 import logging
 from typing import Any
 
-from trid3nt_server.declarative import Derived
+from trid3nt_server.workflows.lib import Derived
 from trid3nt_server.workflows.shared.aquifer_resolve import derive_soil_k
 from trid3nt_server.workflows.shared.point_memo import memo_on_success
 

@@ -54,7 +54,7 @@ from trid3nt_contracts.elmfire_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import register_tool
+from trid3nt_server.tools import register_tool
 from trid3nt_server.workflows.elmfire._frame_emit import (
     read_and_emit_elmfire_frames,
 )
@@ -1147,7 +1147,7 @@ async def _maybe_emit_chart(
         },
         "title": title,
     }
-    from trid3nt_server.data.processing.charts_common import build_chart_payload
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     payload = build_chart_payload(
         vega_lite_spec=spec,
