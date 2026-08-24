@@ -380,9 +380,9 @@ JSON there); what is COMMITTED is the drive that writes them.
 | `rdii_rtk/rdii_rtk.py` | 461 | 310 | **-151** |
 | `rdii_rtk/steps.py` (new) | 0 | 427 | +427 |
 | **RDII total** | **461** | **737** | **+276** |
-| `snowmelt_degree_day/snowmelt_degree_day.py` | 512 | 486 | **-26** |
+| `snowmelt_degree_day/snowmelt_degree_day.py` | 512 | 487 | **-25** |
 | `snowmelt_degree_day/steps.py` (new) | 0 | 459 | +459 |
-| **snowmelt total** | **512** | **945** | **+433** |
+| **snowmelt total** | **512** | **946** | **+434** |
 | `swmm/steps/solve.py` | 95 | 110 | +15 |
 | `swmm/steps/series.py` (new) | 0 | 64 | +64 |
 | `swmm/steps/charts.py` (new) | 0 | 73 | +73 |
@@ -393,7 +393,7 @@ JSON there); what is COMMITTED is the drive that writes them.
 | `scripts/` (2 new card drives) | 0 | 217 | +217 |
 | `scripts/` (2 proofs repointed) | 306 | 316 | +10 |
 | `tests/` (1 repointed + 1 new) | 123 | 369 | +246 |
-| **everything touched** | **1,899** | **3,307** | **+1,408** |
+| **everything touched** | **1,899** | **3,308** | **+1,409** |
 
 **The SWMM family running total, against the baseline the net-LOC law measures:**
 
@@ -401,7 +401,7 @@ JSON there); what is COMMITTED is the drive that writes them.
 |---|---|---|---|
 | baseline (`b7e898f3`, pre-declarative) | **7,723** | 0 of 15 | - |
 | after the checkpoint (ADR 0306) | 8,280 | 1 of 15 | +557 |
-| **after wave A (this)** | **9,127** | **3 of 15** | **+1,404** |
+| **after wave A (this)** | **9,128** | **3 of 15** | **+1,405** |
 
 Read it straight, the same way ADR 0306 did:
 
@@ -410,7 +410,7 @@ Read it straight, the same way ADR 0306 did:
   over - once at the checkpoint, once here. The TELEMAC precedent is the honest
   comparison: ADR 0303's wave was +1,613 and the family did not reach
   net-negative until ADR 0305.
-- **The template files themselves shrank** (-151 and -26) while gaining bounds,
+- **The template files themselves shrank** (-151 and -25) while gaining bounds,
   doors, editable rows, generated docstrings and a form gate for 52 values that
   were previously unreachable literals or bare signature defaults. `rdii_rtk.py`
   lost a third of its length outright.
@@ -471,9 +471,11 @@ the module import rather than ship a tool the model cannot route to.
 | `scripts/drive_rdii_rtk_cards.py` | exit 0; sum R 0.29 on the run's own chart, volume ratio 1.5263 |
 | `scripts/drive_snowmelt_cards.py` | exit 0; peak SWE 2.40 in at the revised snowfall |
 
-`[s-z]` is +16 against ADR 0306's corrected 1420 - the 16 new snowmelt tests. The
-other three slices are unchanged, which is what a migration that moves no number
-should look like.
+`[s-z]` is +16 against ADR 0306's corrected 1420: the 12 new snowmelt tests plus
+the 4 net-new RDII ones (10 -> 14). The other three slices are unchanged, which is
+what a migration that moves no number should look like. `[s-z]` was re-run AFTER
+the `dt_min` bound fix that landed on top of the migration commits, so the count
+is at the final tree rather than at the wave's midpoint.
 
 No `workers/` path changed: both templates are host-exec (pyswmm in-process), so
 no image rebuild was needed and none was done.
@@ -493,8 +495,8 @@ deliverables unchanged:
   the physics line recorded in `scripts/seed_showcase_cases.py`. Its five physics
   assertions pass.
 
-New offline coverage: `tests/test_swmm_snowmelt_degree_day.py` (16 tests, new) and
-`tests/test_swmm_rdii_rtk.py` (14 tests, +6) - the declared forcing, both deck
+New offline coverage: `tests/test_swmm_snowmelt_degree_day.py` (12 tests, new) and
+`tests/test_swmm_rdii_rtk.py` (14 tests, 10 before) - the declared forcing, both deck
 variants, the plan shapes, the structural law-9 check per template, the refusals
 that replaced the swallows, the bounds clamp, and the physics (a pack forms and
 melts; rain-on-snow amplifies; plowing reduces the pack; a dividing temperature
