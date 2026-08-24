@@ -143,7 +143,7 @@ ev.require_layer(name_contains="release", role="context")
 | module | lines | what it owns |
 |---|---|---|
 | `ws_client.py` | 111 | the protocol primitives: envelopes, handshake, cases, tool status |
-| `live_run.py` | 333 | `LiveRun` / `GateAnswers` / `RunEvidence`, the turn pump, the gate answering, the run-prefix read-back |
+| `live_run.py` | 349 | `LiveRun` / `GateAnswers` / `RunEvidence`, the turn pump, the gate answering, the run-prefix read-back |
 | `__init__.py` | 27 | the public surface |
 
 Three properties are load-bearing:
@@ -161,7 +161,7 @@ Three properties are load-bearing:
   here rather than defining its own copy, so there is ONE implementation of the
   wire shapes.
 
-It is offline-covered in `tests/test_live_run_harness.py` (12 tests): the point
+It is offline-covered in `tests/test_live_run_harness.py` (13 tests): the point
 and multi-vertex answer shapes, the decline, submit-is-the-approval, the
 back-compatible sheet-less path, the blocking-event report, and every refusal.
 
