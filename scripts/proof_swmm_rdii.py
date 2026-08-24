@@ -10,62 +10,62 @@ docs/proof/templates/ (named after the tool):
 """
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import (
-    rtk_unit_hydrograph, rdii_hydrograph, build_rtk_rdii_inp,
-    _solve_swmm_node_rdii, _rdii_volume_cf, _rtk_expected_volume_cf,
-    EPA_TABLE_7_1_RAINFALL_IN_PER_HR, EPA_TABLE_7_1_PUBLISHED_RDII_CFS,
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from demo_swmm_rdii_epa_table_7_1 import (
+    ARGS as EPA_ARGS,
+    AREA_AC as AREA,
+    PUBLISHED_RDII_BY_HOUR as _PUBLISHED,
+    RAINFALL_IN_PER_HR as EPA_RAINFALL_IN_PER_HR,
+    UHS,
 )
+from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import (
+    swmm_rdii_rtk_unit_hydrograph,
+)
+from trid3nt_server.workflows.swmm.rdii_rtk.steps import rtk_unit_hydrograph
 
 OUT = "/home/nate/Documents/trid3nt-local/docs/proof/templates"
 STEM = "swmm_rdii_rtk_unit_hydrograph"
-# EPA SWMM 5 Ch.7 Table 7-1 worked example: 10 ac, R sum 0.36, representative
-# per-UH R/T/K (exact split lives in Fig 7-8, not text).
-UHS = [(0.12, 1.0, 2.0), (0.15, 3.0, 3.0), (0.09, 8.0, 3.0)]
-AREA = 10.0
 DT_MIN = 15
 C_RUNOFF = 0.30
-_PUBLISHED = {1.5: 0.204195, 2.0: 0.554604, 3.0: 1.021479, 4.0: 1.001312, 5.0: 0.703842}
 
 
 def main():
     dt_hr = DT_MIN / 60.0
-    steps_per_hr = int(round(60 / DT_MIN))
-    # expand the EPA hourly rainfall to 15-min steps (intensity = hourly depth)
-    rain_int = []
-    for hourly in EPA_TABLE_7_1_RAINFALL_IN_PER_HR:
-        rain_int += [hourly] * steps_per_hr
-    rain = [i * dt_hr for i in rain_int]
-    DEPTH = sum(EPA_TABLE_7_1_RAINFALL_IN_PER_HR)
-    rdii = np.array(rdii_hydrograph(UHS, rain, dt_hr, AREA))
-    t = np.arange(len(rdii)) * dt_hr
+    # ONE declared invocation of the tool on the EPA Table 7-1 case - the proof
+    # cites the product's own curves rather than re-implementing the method.
+    res = asyncio.run(swmm_rdii_rtk_unit_hydrograph(
+        **EPA_ARGS, direct_runoff_coeff=C_RUNOFF, dt_min=DT_MIN))
+    assert res["status"] == "ok", res
 
-    # native SWMM cross-check
-    inp = build_rtk_rdii_inp(UHS, rain_int, DT_MIN, AREA, float(t[-1]))
-    sw = np.array(_solve_swmm_node_rdii(inp))
-    tsw = np.arange(len(sw)) * dt_hr
-
-    # direct runoff (rational: Q=C*i*A per step)
-    runoff = np.array([C_RUNOFF * rain_int[i] * AREA if i < len(rain_int) else 0.0
-                       for i in range(len(rdii))])
-    runoff_peak = float(runoff.max())
-
-    vol = _rdii_volume_cf(list(rdii), dt_hr)
-    exp = _rtk_expected_volume_cf(UHS, DEPTH, AREA)
-    peak_ratio = float(sw.max()) / float(rdii.max())
-    rdii_frac = float(rdii.max()) / (float(rdii.max()) + runoff_peak)
+    curves = res["curves"]
+    t = np.array(curves["times_hr"])
+    rdii = np.array(curves["rdii_cfs"])
+    runoff = np.array(curves["runoff_cfs"])
+    runoff_peak = res["direct_runoff_peak_cfs"]
+    DEPTH = res["rainfall_depth_in"]
+    peak_ratio = res["swmm_vs_closed_form_peak_ratio"]
+    rdii_frac = res["rdii_fraction_of_total"]
+    identity = res["rtk_volume_identity_ratio"]
+    # the native-engine series is a SCALAR on the product (its peak); plot it at
+    # the closed form's peak time so the two are visibly the same number.
+    sw = np.array([res["swmm_rdii_peak_cfs"]])
+    tsw = np.array([float(t[int(np.argmax(rdii))])])
 
     # ---- (1) RDII vs runoff + SWMM overlay ---------------------------------
     fig, ax = plt.subplots(figsize=(6.0, 2.6), dpi=100)
     ax.plot(t, rdii, color="#1f78b4", lw=1.8, label="RDII (RTK closed form)")
     ax.plot(tsw, sw, color="#e31a1c", lw=0.0, marker="o", ms=2.4,
-            label="RDII (native SWMM 5)")
+            label="RDII peak (native SWMM 5)")
     ax.plot(t, runoff, color="#33a02c", lw=1.4, ls="--", label="direct runoff")
     # published EPA Figure 7-10 node RDII flows (the Table 7-1 replication target)
     px = list(_PUBLISHED.keys()); py = list(_PUBLISHED.values())
@@ -82,8 +82,8 @@ def main():
     pub_peak = max(_PUBLISHED.values())
     fig.text(0.5, 0.005,
              f"swmm_rdii_rtk_unit_hydrograph on the EPA SWMM 5 Ch.7 Table 7-1 "
-             f"example (10 ac, sum R={sum(R for R,_,_ in UHS):.2f}, published "
-             f"hourly rainfall). Volume identity {vol/exp:.4f}; closed form matches "
+             f"example ({AREA:.0f} ac, sum R={res['sum_R']:.2f}, published "
+             f"hourly rainfall). Volume identity {identity:.4f}; closed form matches "
              f"native SWMM to {abs(1-peak_ratio)*100:.1f}%; peak {rdii.max():.3f} cfs "
              f"vs published {pub_peak:.3f} cfs ({abs(rdii.max()-pub_peak)/pub_peak*100:.0f}% "
              f"- exact per-UH R/T/K in Fig 7-8 only). RDII is {rdii_frac*100:.0f}% of "
@@ -96,7 +96,7 @@ def main():
     print("wrote", p1)
     print(f"  closed-form peak {rdii.max():.4f} cfs, SWMM peak {sw.max():.4f} cfs, "
           f"ratio {peak_ratio:.4f}")
-    print(f"  volume identity {vol/exp:.5f}; RDII fraction of node peak {rdii_frac:.3f}")
+    print(f"  volume identity {identity:.5f}; RDII fraction of node peak {rdii_frac:.3f}")
 
     # ---- (2) the three unit hydrographs ------------------------------------
     fig, ax = plt.subplots(figsize=(6.0, 2.4), dpi=100)

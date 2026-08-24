@@ -140,8 +140,7 @@ SHOWCASE: list[Showcase] = [
     Showcase("swmm_rdii_rtk_unit_hydrograph",
              {"R1": 0.12, "T1": 1.0, "K1": 2.0, "R2": 0.15, "T2": 3.0, "K2": 3.0,
               "R3": 0.09, "T3": 8.0, "K3": 3.0, "sewershed_area_ac": 10.0,
-              "rainfall_series_in_per_hr": [0.0, 0.25, 0.5, 0.8, 0.4, 0.1, 0.0],
-              "cross_check_swmm": True},
+              "rainfall_series_in_per_hr": [0.0, 0.25, 0.5, 0.8, 0.4, 0.1, 0.0]},
              "row 4 SWMM RTK unit-hydrograph RDII on the EPA SWMM 5 Ch.7 "
              "Table 7-1 worked example (10-acre sewershed, R sum 0.36, published "
              "hourly rainfall): RDII at a node vs direct runoff, closed form "
