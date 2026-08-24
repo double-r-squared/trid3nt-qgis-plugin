@@ -107,10 +107,26 @@ async def solve_waqtel_o2(
     outfall_coords: tuple[float, float] | list[float] | None = None,
     input_mode: str | None = None,
 ) -> TelemacDoLayerURI:
-    """Solve the reach with WAQTEL O2 coupled and return the published DO-field layer."""
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import (
-        model_telemac_river_dye,
-        plausible_release_coords,
+    """Solve the reach with WAQTEL O2 coupled and return the published DO-field layer.
+
+    Composes the SHARED TELEMAC step family directly - geocode, flowline, seed,
+    carrier discharge, deck, solve, products - rather than delegating to another
+    template's plan. The review below is the composite's own: it presents the
+    values this pipeline RESOLVED (the carrier discharge, the bank source), which
+    no plan-level form could show because they do not exist until the fetch has
+    run.
+    """
+    from trid3nt_server.declarative import Domain
+    from trid3nt_server.declarative.domain import bind_domain, reset_domain
+    from trid3nt_server.workflows.telemac.steps import (
+        fetch_reach_flowline,
+        geocode_reach,
+        normalize_bank_source,
+        publish_do_products,
+        reach_seed,
+        resolve_carrier_discharge,
+        solve_reach,
+        write_reach_deck,
     )
 
     # DO cannot ride in above its own saturation - a physics coupling between two
@@ -120,9 +136,7 @@ async def solve_waqtel_o2(
         logger.info("do_sag upstream_do_mgl %.3g pinned to saturation %.3g mg/L",
                     upstream_do_mgl, do_saturation_mgl)
 
-    point = coerce_outfall_point(outfall_coords)
-    seed = plausible_release_coords(point[0], point[1]) if point else None
-
+    outfall = coerce_outfall_point(outfall_coords)
     do_sag_config = {
         "bod_mgl": float(discharge_bod_mgl),
         "upstream_do_mgl": up_do,
@@ -133,23 +147,77 @@ async def solve_waqtel_o2(
         "k2_formula": 0,      # constant k2 (the S-P idealization; the user sets k2)
         "standard_mgl": float(do_standard_mgl),
     }
-    return await model_telemac_river_dye(
-        location=location,
-        bbox=bbox,
-        reach_length_km=float(reach_length_km),
-        channel_width_m=float(channel_width_m),
-        sim_duration_s=float(sim_duration_s),
-        mesh_resolution=str(mesh_resolution or "auto"),
-        mesh_resolution_m=mesh_resolution_m,
-        compute_class=compute_class,
-        bank_source=bank_source,
-        discharge_m3s=discharge_m3s,
-        input_mode=input_mode,
-        do_sag_config=do_sag_config,
-        **({"release_seeds_reach": True,
-            "seed_release_lon": seed[0], "seed_release_lat": seed[1]}
-           if seed is not None else {}),
+
+    reach = await geocode_reach(location=location, bbox=bbox)
+    token = bind_domain(Domain(bbox=reach["bbox"], label=reach["name"]))
+    try:
+        rivers = await fetch_reach_flowline(prefetched=None)
+        seed = await reach_seed(reach=reach, rivers=rivers)
+        discharge = await resolve_carrier_discharge(seed=seed,
+                                                    explicit=discharge_m3s)
+        logger.info("do_sag: %s (seed=%.5f,%.5f)", discharge["note"],
+                    seed["lon"], seed["lat"])
+
+        discharge = await _review_resolved_inputs(
+            discharge, bank_source=bank_source, input_mode=input_mode)
+
+        deck = await write_reach_deck(
+            reach=reach, seed=seed, carrier_discharge=discharge, rain=None,
+            reach_seed_coords=list(outfall) if outfall else None,
+            reach_length_km=float(reach_length_km),
+            channel_width_m=float(channel_width_m),
+            sim_duration_s=float(sim_duration_s),
+            mesh_resolution=str(mesh_resolution or "auto"),
+            mesh_resolution_m=mesh_resolution_m,
+            bank_source=normalize_bank_source(bank_source),
+            do_sag_config=do_sag_config)
+        solve = await solve_reach(deck=deck, compute_class=compute_class)
+        return await publish_do_products(deck=deck, solve=solve,
+                                         do_sag_config=do_sag_config)
+    finally:
+        reset_domain(token)
+
+
+async def _review_resolved_inputs(discharge: dict[str, Any], *, bank_source: Any,
+                                  input_mode: str | None) -> dict[str, Any]:
+    """Present the RESOLVED carrier discharge + bank source before the solve.
+
+    The carrier discharge governs dilution and is the physically dominant
+    reviewable input, so ``user_gated`` pauses on it here - after the fetch that
+    produced it and before the expensive solve. ``auto`` proceeds labeled.
+    """
+    from trid3nt_contracts.common import SyntheticInput as entry
+
+    from trid3nt_server.gates.input_review import gate_input_review
+    from trid3nt_server.workflows.telemac.steps import (
+        TelemacDyeScenarioError,
+        normalize_bank_source,
     )
+
+    banks = normalize_bank_source(bank_source)
+    outcome = await gate_input_review(
+        tool_name="telemac_do_sag", mode=input_mode,
+        entries=[
+            entry(param="discharge_m3s", value=round(float(discharge["m3s"]), 2),
+                  units="m^3/s", basis=discharge.get("basis") or "fetched",
+                  real_source_if_any=(None if discharge.get("basis") == "user"
+                                      else "NOAA National Water Model streamflow"),
+                  note="carrier discharge governing dilution"),
+            entry(param="bank_source", value=banks,
+                  basis="fetched" if banks == "nhd_area" else "default_demo",
+                  consequence="physics",
+                  note=("real NHDArea banks" if banks == "nhd_area"
+                        else "assumed constant-width ribbon")),
+        ],
+        params={"discharge_m3s": float(discharge["m3s"])})
+    if outcome.cancelled:
+        raise TelemacDyeScenarioError("USER_INPUT_CANCELLED",
+                                      f"telemac_do_sag {outcome.cancel_reason}")
+    revised = float(outcome.params.get("discharge_m3s", discharge["m3s"]))
+    if revised != float(discharge["m3s"]):
+        return {**discharge, "m3s": revised, "basis": "user", "real_source": None,
+                "note": f"carrier discharge {revised:.0f} m3/s (revised at review)"}
+    return discharge
 
 
 def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:

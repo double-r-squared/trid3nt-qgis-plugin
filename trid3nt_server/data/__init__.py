@@ -677,17 +677,15 @@ from trid3nt_server.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day impor
 # baseflow to a drainage node BETWEEN storms; charted with-GW vs no-GW. The SWMM
 # analogue of the Landlab groundwater / RoG return-flow theme. tier=template.
 from trid3nt_server.workflows.swmm.aquifer_baseflow.aquifer_baseflow import swmm_aquifer_baseflow_to_node as _swmm_aquifer_baseflow_to_node  # noqa: E402,F401 - two-zone aquifer baseflow (engine=swmm, tier=template)
-# telemac_river_dye TEMPLATE (engine="telemac", tier="template"), one folder
-# under workflows/telemac/river_dye/; EXCLUDED from the default retrieval
-# pool, surfaced only by the run_telemac door's gate expansion. The composer
-# chain (model_telemac_river_dye) is inlined in the template module;
-# workflows/telemac/run_telemac.py is the local solve seam
-# (the door holds the run_telemac name; the template submits the solver).
+# telemac_river_dye TEMPLATE (engine="telemac", tier="template"),
+# workflows/telemac/river_dye/: declared PARAMS + DATA + plan(p, d) over the
+# shared reach step family in workflows/telemac/steps/.
+# workflows/telemac/run_telemac.py is the local solve seam.
 from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
 # telemac_do_sag TEMPLATE (engine="telemac", tier="template"), workflows/telemac/
-# do_sag/: the WAQTEL O2 dissolved-oxygen sag (US TMDL/permit). Reuses the
-# river_dye reach-seeding + solve via model_telemac_river_dye(do_sag_config=...);
-# WATER QUALITY PROCESS = 2, V&V to Streeter-Phelps 0.011 mg/L.
+# do_sag/: the WAQTEL O2 dissolved-oxygen sag (US TMDL/permit). Composes the same
+# shared reach steps with a do_sag deck; WATER QUALITY PROCESS = 2, V&V to
+# Streeter-Phelps 0.011 mg/L.
 from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - WAQTEL O2 front (engine=telemac, tier=template)
 # telemac_rain_on_grid TEMPLATE (engine="telemac", tier="template"), workflows/
 # telemac/rain_on_grid/: SCS-CN rainfall-runoff on a delineated watershed.

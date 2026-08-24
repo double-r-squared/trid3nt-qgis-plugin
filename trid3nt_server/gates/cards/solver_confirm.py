@@ -877,10 +877,11 @@ async def _build_telemac_mesh_envelope(
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
     )
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import (
+    from trid3nt_server.workflows.telemac.steps import (
         MESH_H_FLOOR_M,
         MESH_NODE_CAP,
-        plausible_release_coords,
+        TelemacDyeScenarioError,
+        coerce_lonlat_point,
         preview_telemac_mesh,
     )
 
@@ -907,9 +908,16 @@ async def _build_telemac_mesh_envelope(
     # never silently mesh elsewhere. The tri-state pin below lets the
     # decision tail tell call-provided coords (seed the reach) apart from
     # the gate-picked click (source only).
-    _rel = plausible_release_coords(
-        params.get("release_lon"), params.get("release_lat")
-    )
+    # Pre-gate params are RAW model args and this builder's contract is fail-open,
+    # so a malformed release point reads as absent here; the tool refuses it typed
+    # a moment later.
+    try:
+        _rel = coerce_lonlat_point(
+            [params.get("release_lon"), params.get("release_lat")]
+            if params.get("release_lon") is not None
+            or params.get("release_lat") is not None else None)
+    except TelemacDyeScenarioError:
+        _rel = None
     stats["release_seeds_reach"] = _rel is not None
     # decouple: keep the EXACT pair the preview seeded the reach from so
     # the decision tail can thread it as separate seed keys - the click
