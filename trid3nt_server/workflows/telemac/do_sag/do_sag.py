@@ -122,7 +122,7 @@ PARAMS: tuple[Param, ...] = (
           desc="Bank geometry source: nhd_area (real polygons, else a typed refusal) "
                "| constant_ribbon (assumed width)"),
     Param("discharge_m3s", door=doors.USER, optional=True, units="m^3/s",
-          consequence="physics", user_lever=True,
+          bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
           desc="Steady carrier discharge; unset resolves from the NOAA National "
                "Water Model at the reach"),
     Param("compute_class", door=doors.CONSTANT, default="medium",

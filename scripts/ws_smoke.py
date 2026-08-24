@@ -45,70 +45,18 @@ log = logging.getLogger("ws_smoke")
 
 
 # ---------------------------------------------------------------------------
-# Tiny ULID-ish generator (we just need unique IDs, not real ULIDs)
+# Protocol primitives: ONE implementation of the wire shapes, in the server
+# package (trid3nt_server.testing.ws_client), shared with the live-run harness.
 # ---------------------------------------------------------------------------
 from trid3nt_contracts import new_ulid
-
-def new_id() -> str:
-    return new_ulid()
-
-
-# ---------------------------------------------------------------------------
-# Envelope helpers
-# ---------------------------------------------------------------------------
-def mk(type_: str, session_id: str, payload: dict, case_id: str | None = None) -> str:
-    env = {
-        "type": type_,
-        "id": new_id(),
-        "ts": "2026-07-04T00:00:00Z",
-        "session_id": session_id,
-        "case_id": case_id,
-        "payload": payload,
-    }
-    return json.dumps(env)
-
-
-async def _delete_case(
-    ws, session_id: str, case_id: str | None, label: str = "cleanup"
-) -> None:
-    """Soft-delete the smoke Case via case-command(delete) -- the SAME path
-    the plugin's delete button rides (Persistence.delete_case).
-
-    Called from a ``finally`` so the Case is removed whether the smoke test
-    passed or failed; a self-cleaning smoke run must not accumulate
-    'smoke-test' Cases in the plugin-facing case list on every CI/dev run.
-    Best-effort: logs and returns rather than raising, so a cleanup hiccup
-    never masks the smoke test's own pass/fail result.
-    """
-    if not case_id:
-        return
-    try:
-        await ws.send(mk(
-            "case-command", session_id,
-            {"command": "delete", "case_id": case_id}, case_id=case_id,
-        ))
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            raw = await asyncio.wait_for(
-                ws.recv(), timeout=max(0.1, deadline - time.monotonic())
-            )
-            msg = json.loads(raw)
-            if msg["type"] == "case-list":
-                log.info("%s: case %s deleted -- case-list confirms", label, case_id)
-                return
-            if msg["type"] == "error":
-                log.warning("%s: case-command(delete) error: %s", label, msg["payload"])
-                return
-        log.warning("%s: no case-list confirmation within 15s for case %s", label, case_id)
-    except Exception:
-        log.exception("%s: case delete failed for case_id=%s", label, case_id)
+from trid3nt_server.testing.ws_client import create_case, delete_case, handshake, mk
 
 
 # ---------------------------------------------------------------------------
 # Core smoke coroutine
 # ---------------------------------------------------------------------------
 async def run_smoke() -> bool:
-    session_id = new_id()
+    session_id = new_ulid()
     log.info("=== TRID3NT WS smoke test ===")
     log.info("connecting to %s  session_id=%s", WS_URL, session_id)
 
@@ -117,57 +65,10 @@ async def run_smoke() -> bool:
     async with ws_client.connect(WS_URL) as ws:
         log.info("connected")
 
-        # ------------------------------------------------------------------ #
-        # HANDSHAKE: send auth-token with empty token -> anonymous fallback   #
-        # ------------------------------------------------------------------ #
-        await ws.send(mk("auth-token", session_id, {"token": ""}))
-        log.info("sent auth-token (anonymous)")
-
-        # Wait for auth-ack
-        ack_raw = await asyncio.wait_for(ws.recv(), timeout=10)
-        ack = json.loads(ack_raw)
-        log.info("recv  type=%-30s  %s", ack["type"], json.dumps(ack["payload"]))
-        assert ack["type"] == "auth-ack", f"expected auth-ack, got {ack['type']}"
-        log.info("auth-ack OK -- user_id=%s is_anonymous=%s",
-                 ack["payload"].get("user_id"), ack["payload"].get("is_anonymous"))
-
-        # ------------------------------------------------------------------ #
-        # SESSION-RESUME                                                      #
-        # ------------------------------------------------------------------ #
-        await ws.send(mk("session-resume", session_id, {"case_id": None}))
-        log.info("sent session-resume")
-
-        # Drain until session-state
-        while True:
-            raw = await asyncio.wait_for(ws.recv(), timeout=10)
-            msg = json.loads(raw)
-            log.info("recv  type=%-30s", msg["type"])
-            if msg["type"] == "session-state":
-                log.info("session-state OK")
-                break
-
-        # ------------------------------------------------------------------ #
-        # CASE CREATE                                                         #
-        # ------------------------------------------------------------------ #
-        await ws.send(mk("case-command", session_id, {"command": "create", "args": {"title": "smoke-test"}}))
-        log.info("sent case-command create")
-
-        # Drain until case-open
-        case_id: str | None = None
-        while True:
-            raw = await asyncio.wait_for(ws.recv(), timeout=10)
-            msg = json.loads(raw)
-            log.info("recv  type=%-30s", msg["type"])
-            if msg["type"] == "case-open":
-                # payload = CaseOpenEnvelopePayload -> session_state.case.case_id
-                ss = msg["payload"].get("session_state")
-                if ss:
-                    case_id = ss["case"]["case_id"]
-                    log.info("case-open OK -- case_id=%s", case_id)
-                    break
-                else:
-                    log.warning("case-open had no session_state, draining...")
-            # Drain any extra frames (case-list, turn-complete etc.)
+        await handshake(ws, session_id)
+        log.info("handshake OK -- auth-ack + session-state")
+        case_id = await create_case(ws, session_id, "smoke-test")
+        log.info("case-open OK -- case_id=%s", case_id)
 
         try:
             # ------------------------------------------------------------------ #
@@ -223,7 +124,9 @@ async def run_smoke() -> bool:
                 log.error("TEST B FAIL -- no agent text or tool call received")
                 all_passed = False
         finally:
-            await _delete_case(ws, session_id, case_id, label="ws_smoke cleanup")
+            # A self-cleaning smoke run: the throwaway Case never accumulates in
+            # the plugin-facing case list.
+            await delete_case(ws, session_id, case_id)
 
     log.info("=== smoke complete: all_passed=%s ===", all_passed)
     return all_passed

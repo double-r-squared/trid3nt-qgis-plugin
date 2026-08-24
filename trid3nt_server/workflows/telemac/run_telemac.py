@@ -89,6 +89,10 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     # completion so run_result carries it (the composer also reads it directly).
     "error_code",
     "assumed_channel_width_m",
+    # the worker's verdict on a supplied release point: honored, or relocated to
+    # the spill_fraction walk and by how far. The solve step reconciles these.
+    "release_point_used",
+    "release_point_rejected_dist_m",
 )
 
 

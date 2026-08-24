@@ -13,6 +13,7 @@ from .errors import (
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
     TelemacReachDegenerateError,
+    TelemacReleasePointRejectedError,
 )
 from .forcing import CarrierDischarge, resolve_carrier_discharge, resolve_rain_forcing
 from .mesh_preview import preview_telemac_mesh
@@ -48,7 +49,8 @@ __all__ = [
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
     "MESH_NODE_CAP", "Products", "ReachSeed", "SCOUR_KEYWORDS", "Solve",
     "TelemacBanksUnavailableError", "TelemacDyeScenarioError",
-    "TelemacDyeScenarioInputError", "TelemacReachDegenerateError", "WriteDeck",
+    "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
+    "TelemacReleasePointRejectedError", "WriteDeck",
     "arm_sediment_modules", "build_dye_chart", "classify_substance",
     "coerce_lonlat_point", "estimate_telemac_solve_seconds", "fetch_reach_flowline",
     "geocode_reach", "named_watercourse", "normalize_bank_source",

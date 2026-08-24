@@ -559,3 +559,243 @@ No `workers/` path was touched, so no image rebuild is in play.
 - **`Data("terrain")`.** The bed DEM is fetched inside the worker; see decision 3.
 - **The five unmigrated TELEMAC templates**, which is where the family's net-LOC
   verdict actually gets decided.
+
+---
+
+## Correction - wave 3b (adversarial verification)
+
+A verifier REFUTED this landing on three items. They are answered here rather
+than by editing the account above, so the record shows what was claimed and what
+was actually true.
+
+### B1. The preview clamp was documented, not landed
+
+Row 86, delta 3 and the deletion ledger all said the approve-mesh preview now
+clamps `reach_length_km` to `[0.5, 15.0]`. The code still clamped to `[0.5, 8.0]`
+(`steps/mesh_preview.py`), so `do_sag`'s default 12 km reach PREVIEWED an 8 km
+mesh and SOLVED a 12 km one - the exact drift the row claimed was fixed. The
+window is now the declared Param bound, in one line, with the reason on it.
+
+### B2/B3. The release point: the tool refused, the WORKER relocated
+
+Delta 5 said "a malformed release point REFUSES". That was true and too narrow.
+`coerce_lonlat_point` refuses a point that is not a (lon, lat) pair on the earth.
+A perfectly well-formed point that simply is not ON the meshed reach took a
+different path: the worker accept-radius-tests it against the built mesh
+(`telemac_river_dye_build.spill_point`, 2 stated channel widths or 1.5x the
+widest real bank span) and, on a miss, walks `spill_fraction` instead. It records
+the miss - `release_point_used` / `release_point_rejected_dist_m` - but NOTHING
+agent-side read those keys. So the run completed, published its plume, and left
+`Release point (user)` on the canvas at a point the solve never used.
+
+This is not hypothetical: it is what acceptance run `01M0SD12B88HDT976HPAXJB8CP`
+above did. Its `telemac_metrics.json` reads `release_point_used: false,
+release_point_rejected_dist_m: 777.3`. The USGS Eel River at Scotia gage sits
+777 m off the 6 km meshed reach, and the marker in that evidence is 777 m from
+where the plume actually seeded. The card drive was reported as proof that "the
+plume starts where the user clicked". It was not.
+
+**What the 2.5000x form-card comparison actually proves.** It stands, and the
+reason is uncomfortable: BOTH runs (the 100 mg/L reference and the 250 mg/L card
+drive) released at `spill_fraction = 0.25` on the identical mesh, because the
+drawn point was rejected in the card run and never supplied in the reference. The
+only difference between them was the source concentration, so the ratio is a
+clean source-strength test. Had the point been honored, the comparison would have
+been confounded by a moved source and the 2.5000x would NOT have appeared. The
+number was right; the sentence around it ("the release is a USER value and the
+plume starts where the user clicked") was wrong.
+
+**The fix, agent-side only** - no `workers/` path is touched, so no image rebuild
+is in play:
+
+1. `release_point_used` / `release_point_rejected_dist_m` join
+   `_COMPLETION_METRIC_KEYS`, and `steps/products.py` reads them.
+2. `solve_reach` reconciles the verdict the moment the metrics land, BEFORE the
+   postprocess: a release point the deck ASKED for and the worker did not honor
+   raises the new retryable `TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN`, naming the
+   rejected distance, the meshed reach's length and mean width, and three
+   corrective retries (a point on the reach, a longer `reach_length_km`, or no
+   `release_coords` at all). A user's explicit click silently relocated is the
+   law-9 swallow class; refusing is the only honest answer, and the fallback walk
+   stays exactly what it always was for a run that asked for no point.
+3. The peak layer carries a `release_point` provenance row: the supplied point
+   (`basis=user`, "honored by the solver") or the derived `spill_fraction`
+   position. A supplied-but-unhonored row is unreachable by construction, because
+   the run refuses before products.
+
+**The marker's ordering, stated.** The marker still publishes BEFORE the solve,
+in `write_reach_deck`. Deferring it would hide the user's own input for the whole
+run, which is the thing it exists to show. What makes that honest is the
+reconciliation on the other side: no COMPLETED run can carry a user-placed marker
+the plume disagrees with, because the disagreement refuses. A refused run does
+leave the marker on the canvas beside a typed error that names the distance - the
+input you asked for, and why it could not be used.
+
+**Why the test is not duplicated agent-side.** The accept radius is a property of
+the BUILT MESH (the widest real bank span), which the server does not have until
+the worker has written its metrics. A second, differently-defined proximity test
+in the composer would be a second law, and the two would drift. One test, in the
+worker; the verdict reconciled where it lands. The cost is that a rejected point
+is learned after the solve rather than before it.
+
+### Acceptance evidence, redone
+
+Both drives are the harness, `scripts/drive_river_dye_cards.py --case
+{honored,refused}`, same args as the run above (`dye_concentration_mgl` 100 ->
+250 on the form card, `discharge_m3s` pinned at 2.2). Evidence JSONs are
+persisted, not left in `/tmp`:
+`docs/proof/templates/telemac_river_dye_release_{honored,refused}_evidence.json`.
+
+**(c1) HONORED** - run `01M0SJFVRS1W71S4XDZDH29JW2`, exit 0. The drawn point
+`[-124.106759, 40.509617]` is a node ON the meshed Eel reach (read off the
+earlier run's `river.slf` and reprojected from UTM 10N, so it is a real point on
+the modeled water body, not a guess).
+
+| | |
+|---|---|
+| draw card | `mode=point`, "Draw release coords", answered with the in-domain point |
+| form card | 43 rows, "Review the river-tracer scenario", one row edited |
+| `release_point_used` (worker metrics) | **true**, `release_point_rejected_dist_m: null` |
+| source the SOLVER wrote (`t2d_river.cas` ABSCISSAE/ORDINATES OF SOURCES) | 406232.496, 4484910.433 UTM 32610 -> `[-124.106759, 40.509616]` |
+| drawn point -> actual source | **0.1 m** |
+| `dye_cmax_mgl` / `dye_peak_time_s` / `plume_reach_m` / `active_frames` | 42.2232 / 140.0 / 3229.4 / 18 |
+| layers | mesh preview, river geometry, `Release point (user)`, bed bathymetry, results-mesh SELAFIN, peak concentration |
+
+The marker and the plume agree by MEASUREMENT: the driver reads the source
+coordinate out of the deck the solver actually wrote and compares it to the point
+the card was answered with. And the physics moved with the point - 42.2232 mg/L
+over 3229.4 m in 18 frames, against the `spill_fraction` fallback's 36.7137 mg/L
+over 3570.1 m in 25 frames at the same 250 mg/L source. An honored release is a
+different run, which is the whole reason relocating it silently was a defect.
+
+**(c2) REFUSED** - the same drive with the Scotia gage `[-124.0983, 40.4921]`,
+exit 0 on the refusal assertions. Both cards fired and were answered; the run
+then refused:
+
+```
+INTERNAL_ERROR: [TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN] The release point you gave
+sits 777 m from the nearest meshed node, so the solver could not put the source
+there. The meshed reach is 7019 m long and 211 m wide on average. Nothing was
+relocated for you: releasing the substance somewhere else would answer a
+different question. Retry with a point ON the modeled reach, with a longer
+reach_length_km so the point falls inside it, or without release_coords to
+release at spill_fraction along the reach.
+```
+
+No run prefix, no products, no peak layer, no chart. The 777 m is the worker's
+own measurement, not a recomputation.
+
+Two things this run exposed, both recorded rather than absorbed:
+
+- **The envelope's `error_code` reads `INTERNAL_ERROR`** while the message
+  carries `[TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN]`. That is the `dev-tool-invoke`
+  path flattening any raised typed exception, and it predates this wave (the
+  banks gate surfaces the same way). The conversational path is unaffected - the
+  adapter harvests `.suggestions` off the raised exception. Not fixed here.
+- **The old `require_ok` would have PASSED this refused run.** Its evidence is
+  `dispatched=True, is_error=False, tool_status=None, turn_complete=False`, which
+  the harness read as "a typed result carries no status, and that IS success".
+  The rider below closes it, and this run is the proof it was needed.
+
+### Riders (verifier non-blockers, all landed)
+
+| # | item |
+|---|---|
+| 1 | `discharge_m3s` gains declared bounds `(0.01, 1.0e5)` in BOTH templates - the form-card edit was unclamped, and a non-numeric edit died as a generic `STEP_FAILED` instead of the typed bound refusal |
+| 2 | The house baseline text is now "EXACTLY 4 fetch_resolution in [f-o] + 0 in [p-r]" (CLAUDE.md law 1), matching what this wave actually left behind |
+| 3 | The harness cross-checks `form_edits` against the sheet's ROWS: an edit naming a row the card does not carry is a `LiveRunError` before it is submitted, instead of a silently-ignored revision the test then asserts about |
+| 4 | `require_ok` fails a turn that never completed (see the refused run above) |
+| 5 | `scripts/ws_smoke.py` (-97 lines) and `scripts/tool_routing_bench.py` (-83) now import the protocol primitives from `trid3nt_server.testing.ws_client`; the last two `mk` copies are gone, and the wire shapes have ONE implementation |
+| 6 | `solve_waqtel_o2` - the function wave 3 rewrote - is now offline-covered for REAL: two tests drive the actual composition (order of the eight steps, the outfall riding as `reach_seed_coords`, the saturation clamp, the review's mode, and a cancelled review refusing before the solve) instead of monkeypatching it away |
+| 7 | `declarative/docstring.py` states the budget precisely: it guards the PRE-`Returns:` front, not the rendered routing view |
+
+### The five do_sag deltas the inventory did not list
+
+Decision 5 said do_sag's behavior is identical and pointed at its parity run. The
+physics is identical - the parity numbers below are bit-identical again - but
+"identical" was too strong for the seams around it. Composing the shared steps
+instead of delegating to `model_telemac_river_dye` changed five things:
+
+1. **The review names the right tool.** `gate_input_review(tool_name=...)` was
+   `telemac_river_dye` (the composer's name, for a run the user started as
+   `telemac_do_sag`); it is now `telemac_do_sag`, and so is the
+   `USER_INPUT_CANCELLED` message.
+2. **`plausible_release_coords` no longer filters the outfall.** The old path ran
+   the coerced point through it and silently dropped an implausible one to
+   "no outfall"; that symbol is deleted, so `coerce_outfall_point`'s
+   on-the-earth check is the whole test - and it REFUSES rather than dropping.
+3. **The outfall rides a declared Param.** `release_seeds_reach=True` +
+   `seed_release_lon` + `seed_release_lat` (three private kwargs) collapsed into
+   `reach_seed_coords`.
+4. **The five hand-placed substep brackets are gone.** The interpreter accounts
+   the composite as ONE node, so do_sag's progress narration is coarser than the
+   composer's was.
+5. **do_sag no longer travels through the dye branch at all** - no substance
+   classification, no gradation/erodible/decay arming, no rain resolution
+   (`rain=None`). The staged deck is unchanged, but nothing on do_sag's path can
+   arm a GAIA or WAQTEL-decay module by accident any more.
+
+A sixth, from 3b: the release-point reconciliation runs inside `solve_reach`, so
+do_sag inherits it - and it is a no-op there, because do_sag's outfall seeds the
+CENTERLINE (`reach_seed_coords`) and never writes `release_lon`/`release_lat`, so
+no point is ever "asked for" in the sense the guard tests.
+
+### The fire-spread gate rows were wrong
+
+The gates table blamed two `test_model_fire_spread_chain.py` failures on the
+tests running a real ELMFIRE solve and called them environment-sensitive. The
+file MOCKS its solves; the stated cause is wrong. Both tests PASS on the
+verifier's box and passed on every 3b run of the [f-o] slice (6661 passed, 4
+failed - the four `test_fetch_resolution_gate` baseline rows and nothing else).
+Whatever failed them on the wave-3 box, it was not an ELMFIRE solve, and no red
+outside the documented baseline stands today.
+
+### The net-LOC table put a non-family file in the family total
+
+`gates/cards/solver_confirm.py` is the shared solver-confirmation card, not a
+TELEMAC-family file, and it was inside the block that footed to "TELEMAC family
+total". Corrected:
+
+| | before | after | delta |
+|---|---|---|---|
+| `river_dye/river_dye.py` | 3,469 | 671 | -2,798 |
+| `telemac/steps/` | 0 | 2,563 | +2,563 |
+| `do_sag/steps.py` | 205 | 273 | +68 |
+| **TELEMAC family total** | **11,117** | **10,941** | **-176** |
+| `gates/cards/solver_confirm.py` (shared, not family) | 1,400 | 1,408 | +8 |
+
+The family is still net-negative, by 176 lines rather than 168, and the
+conclusion is unchanged: the verdict is due when the five unmigrated templates
+land.
+
+### 3b's own arithmetic
+
+| file | before | after | delta |
+|---|---|---|---|
+| `steps/errors.py` | 118 | 166 | +48 |
+| `steps/solve.py` | 240 | 267 | +27 |
+| `steps/products.py` | 474 | 504 | +30 |
+| `testing/live_run.py` | 349 | 365 | +16 |
+| `scripts/ws_smoke.py` | 380 | 283 | **-97** |
+| `scripts/tool_routing_bench.py` | 824 | 741 | **-83** |
+| `scripts/drive_river_dye_cards.py` | 105 | 184 | +79 |
+| `tests/test_run_river_dye_scenario.py` | 562 | 640 | +78 |
+| `tests/test_telemac_do_sag.py` | 215 | 334 | +119 |
+| `tests/test_live_run_harness.py` | 210 | 237 | +27 |
+| the four one-line/one-comment touches (`docstring.py`, `run_telemac.py`, `deck.py`, `mesh_preview.py`, the two Param bounds, `steps/__init__.py`) | | | +17 |
+| **3b total** | | | **+260** |
+
+### Gates (3b)
+
+| gate | result |
+|---|---|
+| `tests/test_[a-e]*.py` | 1639 passed, 5 skipped, **0 failed** |
+| `tests/test_[f-o]*.py` | 6661 passed, 3 skipped, 1 xfailed, **4 failed** - the documented `test_fetch_resolution_gate` baseline, nothing else |
+| `tests/test_[p-r]*.py` | 2122 passed, 2 skipped, **0 failed** |
+| `tests/test_[s-z]*.py` | 1420 passed, 6 skipped, **0 failed** |
+| `contracts/tests` | 729 passed |
+| `scripts/ws_smoke.py` (after the primitives swap) | `all_passed=True` |
+| `scripts/run_sfincs_direct.py` (flood canary) | PASSED, `status=ok`, depth COG published |
+| live drive, honored release point | run `01M0SJFVRS1W71S4XDZDH29JW2`, exit 0 |
+| live drive, refused release point | typed `TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN`, exit 0 |
+| do_sag parity, pinned at 2.0 m3/s | run `01M0SK16B14WRRT9JYEM7JAZ1K`, **8.5772 mg/L at 10631.7 m**, violates=false, 60 points, first 9.022 / last 8.9623 - bit-identical to the ADR 0303 reference, so nothing in 3b moved the physics |

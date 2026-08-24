@@ -4,9 +4,12 @@ The routing block is emitted FIRST: Bedrock truncates a tool docstring at 1000
 characters, so whatever the model needs to ROUTE has to survive the cut. The two
 views are that split made explicit -
 
-* ``routing`` - which question this tool answers and which it does not, inside
-  the truncation budget. What a surface that only has to help someone CHOOSE the
-  tool needs.
+* ``routing`` - which question this tool answers and which it does not. What a
+  surface that only has to help someone CHOOSE the tool needs. The enforced
+  budget covers the PRE-``Returns:`` front (summary + routing + negative
+  routing), not the rendered view: the returns line rides after it and may run
+  the whole string past 1000 characters, which is the point - what the cut can
+  take is the part the model does not need to route.
 * ``full`` (default) - the routing block plus the param sheet in prose. What the
   model calling the tool needs, because it has to fill those params.
 

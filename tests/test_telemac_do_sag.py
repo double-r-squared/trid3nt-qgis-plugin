@@ -213,3 +213,122 @@ def test_do_layer_contract_fields():
     )
     assert lay.do_violates_standard is True
     assert lay.style_preset == "continuous_dissolved_oxygen"
+
+
+# --- the REAL composition over the shared step family ------------------------ #
+@pytest.mark.asyncio
+async def test_the_reach_solve_composes_the_shared_steps_in_order(monkeypatch):
+    """The wave-3 rewrite itself, not a stand-in for it: solve_waqtel_o2 composes
+    geocode -> flowline -> seed -> discharge -> review -> deck -> solve -> DO
+    products, and the outfall rides as the reach SEED (it pins which water body
+    is meshed), never as a dye release point."""
+    from trid3nt_contracts.telemac_contracts import (
+        TELEMAC_DO_STYLE_PRESET,
+        TelemacDoLayerURI,
+    )
+    from trid3nt_server.gates import input_review as gate_mod
+    from trid3nt_server.workflows.telemac import steps as shared
+    from trid3nt_server.workflows.telemac.do_sag.steps import solve_waqtel_o2
+
+    order: list[str] = []
+    seen: dict = {}
+
+    def _step(name, ret):
+        async def _inner(**kwargs):
+            order.append(name)
+            seen[name] = kwargs
+            return ret
+        return _inner
+
+    reach = {"bbox": (-124.2, 40.4, -124.0, 40.6), "name": "Eel", "slug": "eel",
+             "river_name": "Eel River"}
+    seed = {"lon": -124.1, "lat": 40.5, "source": "flowline"}
+    layer = TelemacDoLayerURI(
+        layer_id="t", name="Dissolved oxygen sag (eel)", layer_type="raster",
+        uri="s3://b/k.tif", style_preset=TELEMAC_DO_STYLE_PRESET, role="primary",
+        do_min_mgl=8.0, do_min_distance_m=100.0, do_standard_mgl=5.0,
+        do_violates_standard=False)
+
+    monkeypatch.setattr(shared, "geocode_reach", _step("geocode", reach))
+    monkeypatch.setattr(shared, "fetch_reach_flowline", _step("rivers", {"uri": "s3://r"}))
+    monkeypatch.setattr(shared, "reach_seed", _step("seed", seed))
+    monkeypatch.setattr(shared, "resolve_carrier_discharge",
+                        _step("discharge", {"m3s": 2.0, "basis": "fetched",
+                                            "note": "NWM 2.0 m3/s"}))
+    monkeypatch.setattr(shared, "write_reach_deck",
+                        _step("deck", {"deck": {"name": "eel"}, "run_tag": "T"}))
+    monkeypatch.setattr(shared, "solve_reach", _step("solve", {"run_id": "R"}))
+    monkeypatch.setattr(shared, "publish_do_products", _step("products", layer))
+
+    async def _review(**kwargs):
+        order.append("review")
+        seen["review"] = kwargs
+        from trid3nt_server.gates.input_review import ReviewOutcome
+
+        return ReviewOutcome(proceed=True, entries=list(kwargs["entries"]),
+                             params=dict(kwargs["params"]))
+
+    monkeypatch.setattr(gate_mod, "gate_input_review", _review)
+
+    out = await solve_waqtel_o2(
+        location="Eel River near Scotia, California", bbox=None,
+        discharge_bod_mgl=20.0, upstream_do_mgl=99.0, do_saturation_mgl=9.022,
+        water_temp_c=20.0, do_standard_mgl=5.0, k1_per_day=0.3, k2_per_day=0.9,
+        reach_length_km=12.0, channel_width_m=60.0, sim_duration_s=3600.0,
+        discharge_m3s=None, mesh_resolution="auto", mesh_resolution_m=None,
+        bank_source="nhd_area", compute_class="medium",
+        outfall_coords=[-124.11, 40.51], input_mode="user_gated")
+
+    assert out is layer
+    assert order == ["geocode", "rivers", "seed", "discharge", "review", "deck",
+                     "solve", "products"]
+    # the outfall pins the MESHED water body, so it rides as the reach seed
+    assert seen["deck"]["reach_seed_coords"] == [-124.11, 40.51]
+    assert "release_coords" not in seen["deck"]
+    # DO cannot ride in above its own saturation - the one coupled clamp
+    assert seen["deck"]["do_sag_config"]["upstream_do_mgl"] == pytest.approx(9.022)
+    assert seen["deck"]["do_sag_config"]["k2_formula"] == 0
+    assert seen["review"]["mode"] == "user_gated"
+    assert seen["solve"]["deck"] is seen["products"]["deck"]
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch):
+    from trid3nt_server.gates import input_review as gate_mod
+    from trid3nt_server.workflows.telemac import steps as shared
+    from trid3nt_server.workflows.telemac.do_sag.steps import solve_waqtel_o2
+
+    def _step(ret):
+        async def _inner(**kwargs):
+            return ret
+        return _inner
+
+    monkeypatch.setattr(shared, "geocode_reach",
+                        _step({"bbox": (-1, 1, 1, 2), "name": "n", "slug": "s"}))
+    monkeypatch.setattr(shared, "fetch_reach_flowline", _step({}))
+    monkeypatch.setattr(shared, "reach_seed", _step({"lon": 0.0, "lat": 1.5}))
+    monkeypatch.setattr(shared, "resolve_carrier_discharge",
+                        _step({"m3s": 2.0, "basis": "fetched", "note": "n"}))
+
+    async def _solve_must_not_run(**_kw):
+        raise AssertionError("the solve ran past a cancelled review")
+
+    monkeypatch.setattr(shared, "solve_reach", _solve_must_not_run)
+
+    async def _cancelled(**_kw):
+        from trid3nt_server.gates.input_review import ReviewOutcome
+
+        return ReviewOutcome(proceed=False, entries=[], params={},
+                             cancelled=True, cancel_reason="user declined")
+
+    monkeypatch.setattr(gate_mod, "gate_input_review", _cancelled)
+
+    with pytest.raises(shared.TelemacDyeScenarioError) as ei:
+        await solve_waqtel_o2(
+            location="x", bbox=None, discharge_bod_mgl=20.0, upstream_do_mgl=9.0,
+            do_saturation_mgl=9.0, water_temp_c=20.0, do_standard_mgl=5.0,
+            k1_per_day=0.3, k2_per_day=0.9, reach_length_km=12.0,
+            channel_width_m=60.0, sim_duration_s=3600.0, discharge_m3s=None,
+            mesh_resolution="auto", mesh_resolution_m=None, bank_source="nhd_area",
+            compute_class="medium", outfall_coords=None, input_mode="user_gated")
+    assert ei.value.error_code == "USER_INPUT_CANCELLED"

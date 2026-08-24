@@ -58,16 +58,46 @@ def _s3_object_exists(s3: Any, bucket: str, key: str) -> bool:
         return False
 
 
-def _provenance(solve: dict[str, Any],
-                discharge: dict[str, Any]) -> list[SyntheticInput]:
-    """The two physically dominant inputs, as rows the layer carries.
+def _release_provenance(deck: dict[str, Any],
+                        metrics: dict[str, Any]) -> SyntheticInput:
+    """Where the source actually entered the water, as the layer's own record.
+
+    The downstream distance is measured from here, so the row states which point
+    the SOLVER used: the supplied one (honored, snapped to the nearest interior
+    mesh node) or the ``spill_fraction`` walk along the modeled centerline. A
+    supplied point that was not honored never reaches this step - the solve
+    refuses it - so the row can never read "user" over a relocated release.
+    """
+    reach = deck["deck"]
+    lon, lat = reach.get("release_lon"), reach.get("release_lat")
+    if lon is None or lat is None:
+        return SyntheticInput(
+            param="release_point", value=f"spill_fraction {reach.get('spill_frac')}",
+            basis="derived", consequence="scenario",
+            real_source_if_any="NHDPlus flowline centerline",
+            note="no release point was supplied; the source sits at spill_fraction "
+                 "along the modeled reach")
+    honored = bool(metrics.get("release_point_used"))
+    return SyntheticInput(
+        param="release_point", value=f"({lon}, {lat})", basis="user",
+        consequence="scenario",
+        note=("supplied point, honored by the solver (snapped to the nearest "
+              "interior mesh node)" if honored else
+              "supplied point; the solver reported no verdict on it"))
+
+
+def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
+                deck: dict[str, Any]) -> list[SyntheticInput]:
+    """The physically dominant inputs, as rows the layer carries.
 
     The carrier discharge that governs dilution (real NWM streamflow or
-    user-supplied) and the bank geometry the worker actually sampled (real
-    NHDArea polygons vs an assumed constant-width ribbon).
+    user-supplied), the bank geometry the worker actually sampled (real NHDArea
+    polygons vs an assumed constant-width ribbon), and the release point the
+    solver used.
     """
     banks = solve.get("bank_provenance") or "constant_ribbon"
     return [
+        _release_provenance(deck, solve.get("metrics") or {}),
         SyntheticInput(
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",
@@ -324,7 +354,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     peak = await asyncio.to_thread(
         _publish_peak_layer, raw_peak, run_id, deck["location_name"], mesh_meta,
         substance, solve.get("bank_provenance") or "constant_ribbon",
-        _provenance(solve, carrier_discharge))
+        _provenance(solve, carrier_discharge, deck))
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry (the whole-run record)
     # plus the SELAFIN mesh entry, and the seam owns publication of the temporal

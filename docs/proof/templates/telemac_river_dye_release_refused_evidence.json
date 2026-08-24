@@ -1,0 +1,667 @@
+{
+  "report": {
+    "case": "refused",
+    "drawn_point": [
+      -124.0983,
+      40.4921
+    ],
+    "tool_status": null,
+    "dispatched": true,
+    "is_error": false,
+    "turn_complete": false,
+    "draw_card": {
+      "request_id": "01M0SJW2A7FEJNPZ0VNRDR0NRS",
+      "mode": "point",
+      "purpose": "barrier",
+      "title": "Draw release coords",
+      "description": "Click where the substance enters the river",
+      "answered_with": [
+        -124.0983,
+        40.4921
+      ],
+      "declined": false
+    },
+    "form_card_rows": 43,
+    "form_card_title": "Review the river-tracer scenario",
+    "form_edit": {
+      "dye_concentration_mgl": 250.0
+    },
+    "release_layers": [],
+    "layers": [
+      "Mesh preview (14 m edges, 8,778 nodes)"
+    ],
+    "run_id": null,
+    "product_uris": {},
+    "product_errors": {
+      "run_id": "no published raster to locate the run prefix"
+    },
+    "charts_emitted": 0,
+    "dye_cmax_mgl": null,
+    "dye_peak_time_s": null,
+    "plume_reach_m": null,
+    "active_frames": null,
+    "detail": "INTERNAL_ERROR: [TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN] The release point you gave sits 777 m from the nearest meshed node, so the solver could not put the source there. The meshed reach is 7019 m long and 211 m wide on average. Nothing was relocated for you: releasing the substance somewhere else would answer a different question. Retry with a point ON the modeled reach, with a longer reach_length_km so the point falls inside it, or without release_coords to release at spill_fraction along the reach."
+  },
+  "evidence": {
+    "tool": "telemac_river_dye",
+    "args": {
+      "location": "Eel River near Scotia, California",
+      "substance": "dye",
+      "spill_fraction": 0.25,
+      "spill_duration_s": 300.0,
+      "dye_concentration_mgl": 100.0,
+      "reach_length_km": 6.0,
+      "sim_duration_s": 3600.0,
+      "source_q_m3s": 8.0,
+      "channel_width_m": 60.0,
+      "mesh_resolution": "auto",
+      "discharge_m3s": 2.2,
+      "input_mode": "user_gated"
+    },
+    "session_id": "01M0SJTTS7APM8EBHSM6HKZV58",
+    "case_id": "01M0SJTTX9Y3ZC1HA9SYVNG0K4",
+    "tool_status": null,
+    "dispatched": true,
+    "is_error": false,
+    "detail": "INTERNAL_ERROR: [TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN] The release point you gave sits 777 m from the nearest meshed node, so the solver could not put the source there. The meshed reach is 7019 m long and 211 m wide on average. Nothing was relocated for you: releasing the substance somewhere else would answer a different question. Retry with a point ON the modeled reach, with a longer reach_length_km so the point falls inside it, or without release_coords to release at spill_fraction along the reach.",
+    "turn_complete": false,
+    "charts": 0,
+    "layers": [
+      {
+        "layer_id": "telemac-mesh-preview-01M0SJTVZS09NRXV1MM1Q1HX0Z",
+        "name": "Mesh preview (14 m edges, 8,778 nodes)",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-runs/01M0SJTVZS09NRXV1MM1Q1HX0Z/mesh_preview.geojson",
+        "style_preset": "nhdplus_flowlines",
+        "visible": true,
+        "role": "input",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 0,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": "<dropped, 2128127 bytes>"
+      }
+    ],
+    "draw_card": {
+      "request_id": "01M0SJW2A7FEJNPZ0VNRDR0NRS",
+      "mode": "point",
+      "purpose": "barrier",
+      "title": "Draw release coords",
+      "description": "Click where the substance enters the river",
+      "answered_with": [
+        -124.0983,
+        40.4921
+      ],
+      "declined": false
+    },
+    "form_card": {
+      "workflow": "telemac_river_dye",
+      "title": "Review the river-tracer scenario",
+      "rows": [
+        {
+          "name": "bbox",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "bed_thickness_m",
+          "value": null,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.05,
+            50.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "bedload_formula",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "decay_half_life_hours",
+          "value": null,
+          "units": "h",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.1,
+            720.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "decay_rate_per_day",
+          "value": null,
+          "units": "1/day",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.01,
+            100.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "discharge_m3s",
+          "value": 2.2,
+          "units": "m^3/s",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.01,
+            100000.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "dredge_crit_depth_m",
+          "value": null,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.01,
+            20.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredge_dig_depth_m",
+          "value": null,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.05,
+            30.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredge_disposal",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredge_volume_m3",
+          "value": null,
+          "units": "m^3",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            1.0,
+            10000000.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredging",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "erodible_bed",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "evaporation_mm_per_day",
+          "value": null,
+          "units": "mm/day",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.0,
+            50.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "friction_coefficient",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            10.0,
+            90.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "friction_law",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "grain_size_um",
+          "value": null,
+          "units": "um",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            5.0,
+            2000.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "location",
+          "value": "Eel River near Scotia, California",
+          "units": null,
+          "door": "question",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "mesh_resolution_m",
+          "value": 14.0,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            3.0,
+            5000.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "morphological_factor",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            1.0,
+            100.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "output_interval_min",
+          "value": null,
+          "units": "min",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.1,
+            1440.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "rainfall_gridmet_window",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "rainfall_mm_per_day",
+          "value": null,
+          "units": "mm/day",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.0,
+            2000.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "reach_seed_coords",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "release_coords",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "river_geometry_uri",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "sediment_gradation",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "sediment_type",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "substance",
+          "value": "dye",
+          "units": null,
+          "door": "question",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "tracer_diffusivity",
+          "value": null,
+          "units": "m^2/s",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.001,
+            10.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "velocity_diffusivity",
+          "value": null,
+          "units": "m^2/s",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.001,
+            10.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dye_concentration_mgl",
+          "value": 100.0,
+          "units": "mg/L",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.0,
+            1000000.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "reach_length_km",
+          "value": 6.0,
+          "units": "km",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.5,
+            15.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "sim_duration_s",
+          "value": 3600.0,
+          "units": "s",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            600.0,
+            14400.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "source_q_m3s",
+          "value": 8.0,
+          "units": "m^3/s",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.5,
+            30.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "spill_duration_s",
+          "value": 300.0,
+          "units": "s",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            1.0,
+            86400.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "spill_fraction",
+          "value": 0.25,
+          "units": null,
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.05,
+            0.9
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "wind_direction_deg",
+          "value": 0.0,
+          "units": "deg",
+          "door": "scenario",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": [
+            0.0,
+            360.0
+          ],
+          "advanced": false,
+          "note": "declared scenario default"
+        },
+        {
+          "name": "wind_speed_mps",
+          "value": 0.0,
+          "units": "m/s",
+          "door": "scenario",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": [
+            0.0,
+            60.0
+          ],
+          "advanced": false,
+          "note": "declared scenario default"
+        },
+        {
+          "name": "bank_source",
+          "value": "nhd_area",
+          "units": null,
+          "door": "constant",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": null,
+          "advanced": true,
+          "note": "declared constant default"
+        },
+        {
+          "name": "channel_width_m",
+          "value": 60.0,
+          "units": "m",
+          "door": "constant",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            10.0,
+            1500.0
+          ],
+          "advanced": true,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "compute_class",
+          "value": "medium",
+          "units": null,
+          "door": "constant",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": true,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "dredge_mode",
+          "value": "scheduled",
+          "units": null,
+          "door": "constant",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": null,
+          "advanced": true,
+          "note": "declared constant default"
+        },
+        {
+          "name": "mesh_resolution",
+          "value": "auto",
+          "units": null,
+          "door": "constant",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": true,
+          "note": "supplied on this invocation"
+        }
+      ],
+      "edited": {
+        "dye_concentration_mgl": 250.0
+      }
+    },
+    "plain_warnings": [
+      "telemac_river_dye"
+    ],
+    "run_id": null,
+    "chart_spec": null,
+    "metrics": null,
+    "product_uris": {},
+    "product_errors": {
+      "run_id": "no published raster to locate the run prefix"
+    }
+  }
+}

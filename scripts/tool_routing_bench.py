@@ -59,16 +59,11 @@ def _setup_logging() -> None:
     logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, stdout_handler])
 
 # ---------------------------------------------------------------------------
-# ULID / ID helper
+# Protocol primitives: ONE implementation of the wire shapes, in the server
+# package (trid3nt_server.testing.ws_client), shared with the live-run harness.
 # ---------------------------------------------------------------------------
-try:
-    from trid3nt_contracts import new_ulid
-    def new_id() -> str:
-        return new_ulid()
-except ImportError:
-    import uuid
-    def new_id() -> str:
-        return str(uuid.uuid4()).replace("-", "").upper()[:26]
+from trid3nt_contracts import new_ulid
+from trid3nt_server.testing.ws_client import create_case, delete_case, handshake, mk
 
 # ---------------------------------------------------------------------------
 # LLM step names to ignore when extracting tool names (bookkeeping)
@@ -275,22 +270,6 @@ PROMPTS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Envelope builder
-# ---------------------------------------------------------------------------
-def mk(type_: str, session_id: str, payload: dict, case_id: str | None = None) -> str:
-    env = {
-        "type": type_,
-        "id": new_id(),
-        "ts": "2026-07-05T00:00:00Z",
-        "session_id": session_id,
-        "case_id": case_id,
-        "payload": payload,
-    }
-    raw = json.dumps(env)
-    log.debug("SEND type=%-30s %s", type_, raw[:200])
-    return raw
-
-# ---------------------------------------------------------------------------
 # Per-prompt driver
 # ---------------------------------------------------------------------------
 SOLVER_CANCEL_TIMEOUT = 240  # max seconds to wait for solver start before cancel
@@ -471,68 +450,6 @@ async def _drain_after_cancel(ws, label: str, timeout: float = 5.0) -> None:
             break
         except Exception:
             break
-
-
-# ---------------------------------------------------------------------------
-# Handshake helpers
-# ---------------------------------------------------------------------------
-async def do_handshake(ws, session_id: str) -> None:
-    """Auth + session-resume + drain until session-state."""
-    await ws.send(mk("auth-token", session_id, {"token": ""}))
-    ack_raw = await asyncio.wait_for(ws.recv(), timeout=15)
-    ack = json.loads(ack_raw)
-    assert ack["type"] == "auth-ack", f"expected auth-ack got {ack['type']}"
-    log.info("auth-ack OK user_id=%s", ack["payload"].get("user_id"))
-
-    await ws.send(mk("session-resume", session_id, {"case_id": None}))
-    while True:
-        raw = await asyncio.wait_for(ws.recv(), timeout=15)
-        msg = json.loads(raw)
-        log.debug("HANDSHAKE type=%s", msg["type"])
-        if msg["type"] == "session-state":
-            log.info("session-state OK")
-            break
-
-
-async def create_case(ws, session_id: str, title: str) -> str:
-    """Create a new case and return its case_id."""
-    await ws.send(mk("case-command", session_id, {"command": "create", "args": {"title": title}}))
-    while True:
-        raw = await asyncio.wait_for(ws.recv(), timeout=15)
-        msg = json.loads(raw)
-        log.debug("CASE_CREATE type=%s", msg["type"])
-        if msg["type"] == "case-open":
-            ss = msg["payload"].get("session_state")
-            if ss:
-                case_id = ss["case"]["case_id"]
-                log.info("case-open OK case_id=%s", case_id)
-                return case_id
-        # Drain stray frames (case-list etc.)
-
-
-async def delete_case(ws, session_id: str, case_id: str | None) -> None:
-    """Soft-delete a bench Case via case-command(delete) -- best-effort
-    cleanup so a bench/sweep run doesn't leave throwaway Cases (bench-p<N>,
-    usability-<tool>, routing-sweep-<id>) in the plugin's case picker.
-    """
-    if not case_id:
-        return
-    try:
-        await ws.send(mk(
-            "case-command", session_id,
-            {"command": "delete", "case_id": case_id}, case_id=case_id,
-        ))
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            raw = await asyncio.wait_for(
-                ws.recv(), timeout=max(0.1, deadline - time.monotonic())
-            )
-            msg = json.loads(raw)
-            if msg["type"] in ("case-list", "error"):
-                log.debug("case %s delete -> %s", case_id, msg["type"])
-                return
-    except Exception:
-        log.exception("delete_case failed for case_id=%s", case_id)
 
 
 # ---------------------------------------------------------------------------
@@ -749,9 +666,9 @@ async def run_bench() -> list[dict]:
 
         try:
             # Fresh session + case per prompt
-            session_id = new_id()
+            session_id = new_ulid()
             async with ws_client.connect(WS_URL, open_timeout=15, close_timeout=10) as ws:
-                await do_handshake(ws, session_id)
+                await handshake(ws, session_id)
                 case_id = await create_case(ws, session_id, f"bench-p{pid}")
                 try:
                     result = await run_one_prompt(ws, session_id, case_id, spec)

@@ -93,8 +93,10 @@ async def preview_telemac_mesh(params: dict[str, Any], *,
     elif coerced_bbox is None:
         raise ValueError("preview_telemac_mesh: no location/bbox in params")
 
+    # The window is the tool's declared reach_length_km bound. A narrower one here
+    # would preview a DIFFERENT reach than the approved solve builds.
     reach_length_km = _float_or(params.get("reach_length_km"), _DEFAULT_REACH_KM,
-                                0.5, 8.0)
+                                0.5, 15.0)
     channel_width_m = _float_or(params.get("channel_width_m"), _DEFAULT_WIDTH_M,
                                 10.0, 1500.0)
     sim_duration_s = _float_or(params.get("sim_duration_s"), _DEFAULT_SIM_S,

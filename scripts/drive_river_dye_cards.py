@@ -1,21 +1,25 @@
 #!/usr/bin/env python
 """Live driver: a user_gated ``telemac_river_dye`` answered through the CARDS.
 
-The FORM card's first live proof. ``telemac_river_dye`` declares a ``FormGate``
-over its own param sheet and a ``DrawGate`` for the release point, so this run
-exercises both:
+The FORM card's live proof, and the release point's. ``telemac_river_dye``
+declares a ``FormGate`` over its own param sheet and a ``DrawGate`` for the
+release point, so this run exercises both:
 
   * the FORM card fires with the resolved sheet and ONE row is edited
     (``dye_concentration_mgl``), and the run's persisted metrics have to show the
     edited value reached the physics;
-  * the DRAW card is answered with a real point on the Eel River reach, so the
-    release is a USER value and the plume starts where the user clicked.
+  * the DRAW card is answered with a real point, and the run has to AGREE with
+    it - either the solver puts the source there (``--case honored``, which the
+    driver verifies against the deck the solver actually wrote), or the run
+    REFUSES typed rather than quietly releasing somewhere else
+    (``--case refused``, a point off the meshed reach).
 
 The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
-``metrics.json``). Nothing here is rederived.
+``metrics.json``, ``t2d_river.cas``, ``telemac_metrics.json``). Nothing here is
+rederived.
 
 Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_river_dye_cards.py [--timeout 1800] [--out evidence.json]
+Usage: drive_river_dye_cards.py [--case honored|refused] [--timeout 1800] [--out F]
 """
 from __future__ import annotations
 
@@ -30,58 +34,128 @@ from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
 
 #: A real NHDPlus reach WITH NHDArea polygon coverage (the bank_source precondition).
 LOCATION = "Eel River near Scotia, California"
-#: The USGS Eel River at Scotia gage (11477000) - a real point on the reach.
-RELEASE_LONLAT = [-124.0983, 40.4921]
+#: A node ON the meshed Eel reach, read off an earlier run's ``river.slf`` and
+#: reprojected from UTM 10N: a point the solver CAN put the source at.
+IN_DOMAIN_LONLAT = [-124.106759, 40.509617]
+#: The USGS Eel River at Scotia gage (11477000). Real, and 777 m off the meshed
+#: 6 km reach - the point the worker cannot honor.
+OFF_REACH_LONLAT = [-124.0983, 40.4921]
 #: The one row the form card edits. The source concentration is the cleanest
 #: check that an edit REACHED the physics: the peak concentration scales with it.
 FORM_EDIT = {"dye_concentration_mgl": 250.0}
 
-RUN = LiveRun(
-    tool="telemac_river_dye",
-    args={
-        "location": LOCATION,
-        "substance": "dye",
-        "spill_fraction": 0.25,
-        "spill_duration_s": 300.0,
-        "dye_concentration_mgl": 100.0,
-        "reach_length_km": 6.0,
-        "sim_duration_s": 3600.0,
-        "source_q_m3s": 8.0,
-        "channel_width_m": 60.0,
-        "mesh_resolution": "auto",
-        "discharge_m3s": 2.2,
-        "input_mode": "user_gated",
-    },
-    case_title="proof: telemac river dye (Eel River near Scotia, cards)",
-    answers=GateAnswers(draw=RELEASE_LONLAT, draw_geometry="point",
-                        form_edits=FORM_EDIT, require_draw=True,
-                        require_form=True),
-    cleanup_case=True,
-)
+ARGS = {
+    "location": LOCATION,
+    "substance": "dye",
+    "spill_fraction": 0.25,
+    "spill_duration_s": 300.0,
+    "dye_concentration_mgl": 100.0,
+    "reach_length_km": 6.0,
+    "sim_duration_s": 3600.0,
+    "source_q_m3s": 8.0,
+    "channel_width_m": 60.0,
+    "mesh_resolution": "auto",
+    "discharge_m3s": 2.2,
+    "input_mode": "user_gated",
+}
+
+CASES = {"honored": IN_DOMAIN_LONLAT, "refused": OFF_REACH_LONLAT}
+REFUSAL_CODE = "TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN"
+
+
+def _run(case: str, timeout: float):
+    return run_live(LiveRun(
+        tool="telemac_river_dye", args=ARGS,
+        case_title=f"proof: telemac river dye (Eel River, release {case})",
+        answers=GateAnswers(draw=CASES[case], draw_geometry="point",
+                            form_edits=FORM_EDIT, require_draw=True,
+                            require_form=True),
+        timeout_s=timeout, cleanup_case=True))
+
+
+def _where_the_source_went(run_id: str) -> dict:
+    """The source coordinate the SOLVER wrote, off the run's own TELEMAC deck.
+
+    ``ABSCISSAE/ORDINATES OF SOURCES`` in ``t2d_river.cas`` is the point the
+    solve released from, in the run's UTM zone. Reading it back is what makes
+    "the marker and the plume agree" a measurement instead of a claim.
+    """
+    import boto3
+    from pyproj import Transformer
+
+    s3 = boto3.client("s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+                      region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    bucket = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
+
+    def _get(name):
+        return s3.get_object(Bucket=bucket,
+                             Key=f"{run_id}/{name}")["Body"].read().decode("utf-8")
+
+    metrics = json.loads(_get("telemac_metrics.json"))
+    x = y = None
+    for line in _get("t2d_river.cas").splitlines():
+        if line.startswith("ABSCISSAE OF SOURCES"):
+            x = float(line.split("=", 1)[1])
+        elif line.startswith("ORDINATES OF SOURCES"):
+            y = float(line.split("=", 1)[1])
+    out = {"release_point_used": metrics.get("release_point_used"),
+           "release_point_rejected_dist_m": metrics.get(
+               "release_point_rejected_dist_m"),
+           "utm_epsg": metrics.get("utm_epsg"),
+           "source_utm": [x, y]}
+    if x is not None and y is not None and metrics.get("utm_epsg"):
+        lon, lat = Transformer.from_crs(int(metrics["utm_epsg"]), 4326,
+                                        always_xy=True).transform(x, y)
+        out["source_lonlat"] = [round(lon, 6), round(lat, 6)]
+        dx = (lon - IN_DOMAIN_LONLAT[0]) * 111320.0 * 0.76  # cos(40.5)
+        dy = (lat - IN_DOMAIN_LONLAT[1]) * 110570.0
+        out["drawn_to_source_m"] = round((dx * dx + dy * dy) ** 0.5, 1)
+    return out
+
+
+#: A layer's inline GeoJSON above this is bulk, not evidence: the mesh preview
+#: alone carries ~2 MB of triangle edges. Small ones (the release marker) stay,
+#: because the point they carry IS the claim being proven.
+_INLINE_GEOJSON_KEEP_BYTES = 4096
+
+
+def _compact(evidence: dict) -> dict:
+    layers = []
+    for layer in evidence.get("layers") or []:
+        layer = dict(layer)
+        blob = json.dumps(layer.get("inline_geojson") or "", default=str)
+        if len(blob) > _INLINE_GEOJSON_KEEP_BYTES:
+            layer["inline_geojson"] = f"<dropped, {len(blob)} bytes>"
+        layers.append(layer)
+    return {**evidence, "layers": layers}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--case", choices=sorted(CASES), default="honored")
     ap.add_argument("--timeout", type=float, default=1800.0)
-    ap.add_argument("--out", default="/tmp/river_dye_cards_evidence.json")
+    ap.add_argument("--out", default=None)
     ns = ap.parse_args()
+    out_path = ns.out or os.path.join(
+        os.path.dirname(__file__), "..", "docs", "proof", "templates",
+        f"telemac_river_dye_release_{ns.case}_evidence.json")
 
-    ev = run_live(LiveRun(**{**RUN.__dict__, "timeout_s": ns.timeout}))
-    with open(ns.out, "w", encoding="utf-8") as fh:
-        json.dump(ev.as_dict(), fh, indent=2, default=str)
-
+    ev = _run(ns.case, ns.timeout)
     form = ev.form_card or {}
-    print(json.dumps({
+    report = {
+        "case": ns.case,
+        "drawn_point": CASES[ns.case],
         "tool_status": ev.tool_status,
+        "dispatched": ev.dispatched,
+        "is_error": ev.is_error,
         "turn_complete": ev.turn_complete,
         "draw_card": ev.draw_card,
         "form_card_rows": len(form.get("rows", [])),
         "form_card_title": form.get("title"),
         "form_edit": form.get("edited"),
-        "form_rows": form.get("rows"),
         "release_layers": [l for l in ev.layers
                            if "release" in str(l.get("name", "")).lower()],
-        "mesh_layers": [l for l in ev.layers if l.get("layer_type") == "mesh"],
+        "layers": [l.get("name") for l in ev.layers],
         "run_id": ev.run_id,
         "product_uris": ev.product_uris,
         "product_errors": ev.product_errors,
@@ -91,13 +165,35 @@ def main() -> int:
         "plume_reach_m": (ev.metrics or {}).get("plume_reach_m"),
         "active_frames": (ev.metrics or {}).get("active_frames"),
         "detail": ev.detail,
-        "evidence": ns.out,
-    }, indent=2, default=str))
+    }
+    if ns.case == "honored" and ev.run_id:
+        report["release_reconciliation"] = _where_the_source_went(ev.run_id)
+    print(json.dumps(report, indent=2, default=str))
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump({"report": report, "evidence": _compact(ev.as_dict())}, fh,
+                  indent=2, default=str)
+    print(f"evidence -> {os.path.abspath(out_path)}")
+
+    if ns.case == "refused":
+        # The run REFUSES a release point the solver could not honor: no relocated
+        # source, no published plume, and the typed code names what to fix. The
+        # refusal reaches the socket as an ERROR envelope carrying the code (the
+        # tool-io frame ahead of it carries no status), so the detail plus the
+        # absent products are what prove it.
+        assert REFUSAL_CODE in ev.detail, f"not the release-point refusal: {ev.detail}"
+        assert ev.form_card and ev.draw_card, "the cards did not both fire"
+        assert not ev.run_id and not ev.product_uris, "a refused run published products"
+        assert not [l for l in ev.layers
+                    if "peak" in str(l.get("name", "")).lower()], ev.layers
+        return 0
 
     ev.require_ok()
     ev.require_run_products()
     ev.require_layer(name_contains="release", role="context")
     ev.require_layer(layer_type="mesh")
+    rec = report["release_reconciliation"]
+    assert rec["release_point_used"] is True, rec
+    assert rec["drawn_to_source_m"] < 25.0, rec  # the marker IS where it released
     return 0
 
 

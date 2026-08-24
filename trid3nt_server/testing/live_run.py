@@ -111,6 +111,13 @@ class RunEvidence:
             raise LiveRunError(
                 f"{self.tool} failed (status={self.tool_status!r}): "
                 f"{self.detail or '(no detail)'}")
+        if not self.turn_complete:
+            # A turn that stopped on an unanswered blocking event or ran out the
+            # clock left the run unfinished; the tool-io frame it did emit is not
+            # a completed run, and reading it as one is how a half-run passes.
+            raise LiveRunError(
+                f"{self.tool}: the turn never completed - "
+                f"{self.detail or 'no turn-complete frame arrived'}")
         return self
 
     def require_layer(self, *, name_contains: str = "", layer_type: str = "",
@@ -288,6 +295,15 @@ async def _answer_warning(ws: Any, session_id: str, msg: dict[str, Any],
     payload = msg["payload"]
     sheet = payload.get("param_sheet")
     if isinstance(sheet, dict) and sheet.get("rows"):
+        # An edit for a row the card does not carry would be submitted, silently
+        # ignored by the re-seat, and then asserted about - so it is a declaration
+        # error, caught against the sheet the server actually rendered.
+        unknown = sorted(set(answers.form_edits)
+                         - {str(row.get("name")) for row in sheet["rows"]})
+        if unknown:
+            raise LiveRunError(
+                f"{ev.tool}: form_edits name {unknown}, which the card does not "
+                f"carry (rows: {sorted(str(r.get('name')) for r in sheet['rows'])})")
         ev.form_card = {
             "workflow": sheet.get("workflow"),
             "title": sheet.get("title"),

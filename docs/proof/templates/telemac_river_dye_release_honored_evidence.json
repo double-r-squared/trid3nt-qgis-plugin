@@ -1,0 +1,881 @@
+{
+  "report": {
+    "case": "honored",
+    "drawn_point": [
+      -124.106759,
+      40.509617
+    ],
+    "tool_status": null,
+    "is_error": false,
+    "turn_complete": true,
+    "draw_card": {
+      "request_id": "01M0SJFTZD35R07SE4NQJKT728",
+      "mode": "point",
+      "purpose": "barrier",
+      "title": "Draw release coords",
+      "description": "Click where the substance enters the river",
+      "answered_with": [
+        -124.106759,
+        40.509617
+      ],
+      "declined": false
+    },
+    "form_card_rows": 43,
+    "form_card_title": "Review the river-tracer scenario",
+    "form_edit": {
+      "dye_concentration_mgl": 250.0
+    },
+    "release_layers": [
+      {
+        "layer_id": "telemac-release-01M0SJFVQ2P4112C6MJ5TFG23E",
+        "name": "Release point (user) - scotia_humboldt_county_california_95562_united_s",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-runs/inputs/01M0SJFVPN3H8M6GT7532K1NNR/release_point.geojson",
+        "style_preset": "release_point",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 2,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {
+                "role": "point",
+                "basis": "user",
+                "reach": "scotia_humboldt_county_california_95562_united_s"
+              },
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  -124.106759,
+                  40.509617
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "layers": [
+      "Mesh preview (14 m edges, 8,778 nodes)",
+      "Input: river geometry (river_geometry)",
+      "Release point (user) - scotia_humboldt_county_california_95562_united_s",
+      "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
+      "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
+    ],
+    "run_id": "01M0SJFVRS1W71S4XDZDH29JW2",
+    "product_uris": {
+      "chart_spec": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/metrics.json"
+    },
+    "product_errors": {},
+    "charts_emitted": 1,
+    "dye_cmax_mgl": 42.22323226928711,
+    "dye_peak_time_s": 140.0,
+    "plume_reach_m": 3229.4,
+    "active_frames": 18,
+    "detail": "",
+    "release_reconciliation": {
+      "release_point_used": true,
+      "release_point_rejected_dist_m": null,
+      "utm_epsg": 32610,
+      "source_utm": [
+        406232.496,
+        4484910.433
+      ],
+      "source_lonlat": [
+        -124.106759,
+        40.509616
+      ],
+      "drawn_to_source_m": 0.1
+    }
+  },
+  "evidence": {
+    "tool": "telemac_river_dye",
+    "args": {
+      "location": "Eel River near Scotia, California",
+      "substance": "dye",
+      "spill_fraction": 0.25,
+      "spill_duration_s": 300.0,
+      "dye_concentration_mgl": 100.0,
+      "reach_length_km": 6.0,
+      "sim_duration_s": 3600.0,
+      "source_q_m3s": 8.0,
+      "channel_width_m": 60.0,
+      "mesh_resolution": "auto",
+      "discharge_m3s": 2.2,
+      "input_mode": "user_gated"
+    },
+    "session_id": "01M0SJEBP8VEHS61PV73JEQ2SA",
+    "case_id": "01M0SJEBTCQT6S1WR8KK8RX7DJ",
+    "tool_status": null,
+    "dispatched": true,
+    "is_error": false,
+    "detail": "",
+    "turn_complete": true,
+    "charts": 1,
+    "layers": [
+      {
+        "layer_id": "telemac-mesh-preview-01M0SJEERNRVN0Y69AZQ8JEMD4",
+        "name": "Mesh preview (14 m edges, 8,778 nodes)",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-runs/01M0SJEERNRVN0Y69AZQ8JEMD4/mesh_preview.geojson",
+        "style_preset": "nhdplus_flowlines",
+        "visible": true,
+        "role": "input",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 0,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": "<dropped, 2128127 bytes>"
+      },
+      {
+        "layer_id": "input-river_geometry-c08198e815b0",
+        "name": "Input: river geometry (river_geometry)",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-cache/cache/static-30d/river_geometry/e3039853850c4b03d8c7bbfaf25e1edc.fgb",
+        "style_preset": "osm_waterways",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 1,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": "<dropped, 162816 bytes>"
+      },
+      {
+        "layer_id": "telemac-release-01M0SJFVQ2P4112C6MJ5TFG23E",
+        "name": "Release point (user) - scotia_humboldt_county_california_95562_united_s",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-runs/inputs/01M0SJFVPN3H8M6GT7532K1NNR/release_point.geojson",
+        "style_preset": "release_point",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 2,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {
+                "role": "point",
+                "basis": "user",
+                "reach": "scotia_humboldt_county_california_95562_united_s"
+              },
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  -124.106759,
+                  40.509617
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "layer_id": "input-river-bed-01M0SJKVMW2E8Q4DXYHWBYX52Y",
+        "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
+        "layer_type": "raster",
+        "uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/bed_bathymetry.tif",
+        "style_preset": "continuous_dem",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 3,
+        "crs_authid": null,
+        "legend": null
+      },
+      {
+        "layer_id": "model-results-mesh-01M0SJFVRS1W71S4XDZDH29JW2",
+        "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+        "layer_type": "mesh",
+        "uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/r2d_river.slf",
+        "style_preset": "mesh_grid",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 4,
+        "crs_authid": "EPSG:32610",
+        "legend": null
+      },
+      {
+        "layer_id": "01M0SJKWB8G1JWEW6M0P025ND8",
+        "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+        "layer_type": "raster",
+        "uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/telemac_dye_peak.tif",
+        "style_preset": "continuous_dye_concentration",
+        "visible": true,
+        "role": "primary",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 5,
+        "crs_authid": null,
+        "legend": {
+          "kind": "continuous",
+          "colormap": "viridis",
+          "vmin": 2.12978,
+          "vmax": 14.7209,
+          "classes": null,
+          "value_field": null,
+          "units": null,
+          "label": "Dye concentration"
+        }
+      }
+    ],
+    "draw_card": {
+      "request_id": "01M0SJFTZD35R07SE4NQJKT728",
+      "mode": "point",
+      "purpose": "barrier",
+      "title": "Draw release coords",
+      "description": "Click where the substance enters the river",
+      "answered_with": [
+        -124.106759,
+        40.509617
+      ],
+      "declined": false
+    },
+    "form_card": {
+      "workflow": "telemac_river_dye",
+      "title": "Review the river-tracer scenario",
+      "rows": [
+        {
+          "name": "bbox",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "bed_thickness_m",
+          "value": null,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.05,
+            50.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "bedload_formula",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "decay_half_life_hours",
+          "value": null,
+          "units": "h",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.1,
+            720.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "decay_rate_per_day",
+          "value": null,
+          "units": "1/day",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.01,
+            100.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "discharge_m3s",
+          "value": 2.2,
+          "units": "m^3/s",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.01,
+            100000.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "dredge_crit_depth_m",
+          "value": null,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.01,
+            20.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredge_dig_depth_m",
+          "value": null,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.05,
+            30.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredge_disposal",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredge_volume_m3",
+          "value": null,
+          "units": "m^3",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            1.0,
+            10000000.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dredging",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "erodible_bed",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "evaporation_mm_per_day",
+          "value": null,
+          "units": "mm/day",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.0,
+            50.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "friction_coefficient",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            10.0,
+            90.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "friction_law",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "grain_size_um",
+          "value": null,
+          "units": "um",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            5.0,
+            2000.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "location",
+          "value": "Eel River near Scotia, California",
+          "units": null,
+          "door": "question",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "mesh_resolution_m",
+          "value": 14.0,
+          "units": "m",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            3.0,
+            5000.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "morphological_factor",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            1.0,
+            100.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "output_interval_min",
+          "value": null,
+          "units": "min",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.1,
+            1440.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "rainfall_gridmet_window",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "rainfall_mm_per_day",
+          "value": null,
+          "units": "mm/day",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.0,
+            2000.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "reach_seed_coords",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "release_coords",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "river_geometry_uri",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "sediment_gradation",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "sediment_type",
+          "value": null,
+          "units": null,
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": null,
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "substance",
+          "value": "dye",
+          "units": null,
+          "door": "question",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "tracer_diffusivity",
+          "value": null,
+          "units": "m^2/s",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.001,
+            10.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "velocity_diffusivity",
+          "value": null,
+          "units": "m^2/s",
+          "door": "user",
+          "basis": "user",
+          "source_badge": "not supplied",
+          "bounds": [
+            0.001,
+            10.0
+          ],
+          "advanced": false,
+          "note": "not supplied (declared optional)"
+        },
+        {
+          "name": "dye_concentration_mgl",
+          "value": 100.0,
+          "units": "mg/L",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.0,
+            1000000.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "reach_length_km",
+          "value": 6.0,
+          "units": "km",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.5,
+            15.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "sim_duration_s",
+          "value": 3600.0,
+          "units": "s",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            600.0,
+            14400.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "source_q_m3s",
+          "value": 8.0,
+          "units": "m^3/s",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.5,
+            30.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "spill_duration_s",
+          "value": 300.0,
+          "units": "s",
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            1.0,
+            86400.0
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "spill_fraction",
+          "value": 0.25,
+          "units": null,
+          "door": "scenario",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            0.05,
+            0.9
+          ],
+          "advanced": false,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "wind_direction_deg",
+          "value": 0.0,
+          "units": "deg",
+          "door": "scenario",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": [
+            0.0,
+            360.0
+          ],
+          "advanced": false,
+          "note": "declared scenario default"
+        },
+        {
+          "name": "wind_speed_mps",
+          "value": 0.0,
+          "units": "m/s",
+          "door": "scenario",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": [
+            0.0,
+            60.0
+          ],
+          "advanced": false,
+          "note": "declared scenario default"
+        },
+        {
+          "name": "bank_source",
+          "value": "nhd_area",
+          "units": null,
+          "door": "constant",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": null,
+          "advanced": true,
+          "note": "declared constant default"
+        },
+        {
+          "name": "channel_width_m",
+          "value": 60.0,
+          "units": "m",
+          "door": "constant",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": [
+            10.0,
+            1500.0
+          ],
+          "advanced": true,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "compute_class",
+          "value": "medium",
+          "units": null,
+          "door": "constant",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": true,
+          "note": "supplied on this invocation"
+        },
+        {
+          "name": "dredge_mode",
+          "value": "scheduled",
+          "units": null,
+          "door": "constant",
+          "basis": "default_demo",
+          "source_badge": "labeled default",
+          "bounds": null,
+          "advanced": true,
+          "note": "declared constant default"
+        },
+        {
+          "name": "mesh_resolution",
+          "value": "auto",
+          "units": null,
+          "door": "constant",
+          "basis": "user",
+          "source_badge": "you supplied this",
+          "bounds": null,
+          "advanced": true,
+          "note": "supplied on this invocation"
+        }
+      ],
+      "edited": {
+        "dye_concentration_mgl": 250.0
+      }
+    },
+    "plain_warnings": [
+      "telemac_river_dye"
+    ],
+    "run_id": "01M0SJFVRS1W71S4XDZDH29JW2",
+    "chart_spec": {
+      "dye_concentration": {
+        "envelope_type": "chart-emission",
+        "chart_id": "01M0SJKW7WFMNQDQ3VPH44XVRN",
+        "vega_lite_spec": {
+          "mark": {
+            "type": "line",
+            "point": true
+          },
+          "data": {
+            "values": [
+              {
+                "t_s": 0.0,
+                "dye_mgl": 0.0
+              },
+              {
+                "t_s": 140.0,
+                "dye_mgl": 42.22323226928711
+              }
+            ]
+          },
+          "encoding": {
+            "x": {
+              "field": "t_s",
+              "type": "quantitative",
+              "title": "Time (s)"
+            },
+            "y": {
+              "field": "dye_mgl",
+              "type": "quantitative",
+              "title": "Dye concentration (mg/L)"
+            }
+          },
+          "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+        },
+        "title": "Peak dye concentration - Eel River near Scotia, California",
+        "caption": "Reach peak dye concentration 42.2 mg/L, arriving 140 s after release (idealized-bed demo).",
+        "source_layer_uri": null,
+        "created_turn_id": null
+      }
+    },
+    "metrics": {
+      "dye_cmax_mgl": 42.22323226928711,
+      "dye_peak_time_s": 140.0,
+      "plume_reach_m": 3229.4,
+      "active_frames": 18,
+      "max_deposition_mm": null,
+      "max_scour_mm": null,
+      "deposited_mass_kg": null,
+      "deposit_fraction": null,
+      "sediment_surface_d50_range_um": null,
+      "mesh_size_m": 14.0,
+      "mesh_node_estimate": 4271,
+      "layer_uri": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/telemac_dye_peak.tif"
+    },
+    "product_uris": {
+      "chart_spec": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0SJFVRS1W71S4XDZDH29JW2/metrics.json"
+    },
+    "product_errors": {}
+  }
+}

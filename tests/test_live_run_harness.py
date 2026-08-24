@@ -124,6 +124,17 @@ def test_an_unedited_sheet_submits_as_a_plain_proceed():
     assert ws.sent[0]["payload"]["revised_args"] is None
 
 
+def test_an_edit_the_card_does_not_carry_refuses_before_it_is_submitted():
+    """A misspelled edit would be submitted, ignored by the re-seat, and then
+    asserted about - a green run that changed nothing."""
+    ws, ev = _FakeWS([]), _env()
+    with pytest.raises(LiveRunError, match="which the card does not carry"):
+        asyncio.run(_answer_warning(ws, "S", _msg("tool-payload-warning", {
+            "warning_id": "W", "param_sheet": _SHEET}),
+            GateAnswers(form_edits={"dye_concentration": 250.0}), ev))
+    assert ws.sent == []
+
+
 def test_a_sheetless_warning_takes_the_back_compatible_path():
     """A client that knows nothing about param sheets still answers the review."""
     ws, ev = _FakeWS([]), _env()
@@ -179,10 +190,26 @@ def test_the_pump_reports_a_blocking_event_it_cannot_answer():
 def test_a_typed_result_carries_no_status_and_that_IS_success():
     """A tool returning a LayerURI has no ``status`` field; requiring the literal
     "ok" would only ever pass for tools that answer with a status dict."""
-    _env(dispatched=True, tool_status=None).require_ok()
-    _env(dispatched=True, tool_status="ok").require_ok()
+    _env(dispatched=True, tool_status=None, turn_complete=True).require_ok()
+    _env(dispatched=True, tool_status="ok", turn_complete=True).require_ok()
     with pytest.raises(LiveRunError, match="never dispatched"):
         _env(tool_status=None).require_ok()
+
+
+def test_a_turn_that_never_completed_is_not_an_ok_run():
+    """A run stopped by an unanswered blocking event delivered a tool-io frame and
+    then went nowhere; reading that as success is how a half-run passes."""
+    ws = _FakeWS([
+        _msg("tool-io", {"function_response": json.dumps({"status": "ok"}),
+                         "is_error": False}),
+        _msg("recovery-choice", {"question": "retry?"}),
+    ])
+    ev = _env()
+    asyncio.run(_pump(ws, "S", LiveRun(tool="t", args={}, case_title="c",
+                                       timeout_s=5), ev))
+    assert ev.dispatched is True and ev.turn_complete is False
+    with pytest.raises(LiveRunError, match="never completed"):
+        ev.require_ok()
 
 
 def test_the_assertions_refuse_a_run_that_did_not_deliver():

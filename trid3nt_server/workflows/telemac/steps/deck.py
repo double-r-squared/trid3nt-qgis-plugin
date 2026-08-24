@@ -330,6 +330,11 @@ async def write_reach_deck(
     from trid3nt_server.workflows.telemac.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
+    # The marker rides BEFORE the solve, so the user sees the input against the
+    # mesh rather than only in the results. What keeps it honest is the
+    # reconciliation on the other side: solve_reach REFUSES when the worker could
+    # not put the source at a supplied point, so no COMPLETED run carries a
+    # user-placed marker the plume disagrees with.
     release_point = release_pair or seed_pair
     await publish_release_point(
         current_emitter(),

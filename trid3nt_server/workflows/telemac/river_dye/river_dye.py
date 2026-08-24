@@ -137,7 +137,7 @@ PARAMS: tuple[Param, ...] = (
 
     # -- forcing levers ----------------------------------------------------- #
     Param("discharge_m3s", door=doors.USER, optional=True, units="m^3/s",
-          consequence="physics", user_lever=True,
+          bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
           derived_when_absent=(
               "the steady carrier discharge is resolved from the NOAA National "
               "Water Model at the reach; no NWM coverage refuses typed rather "

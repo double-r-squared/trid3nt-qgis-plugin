@@ -31,8 +31,8 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    `env -u TRID3NT_CACHE_BUCKET python -m pytest tests/test_[a-e]*.py
    -p no:cacheprovider --timeout=300 -q` (then `[f-o]`, `[p-r]`,
    `[s-z]`). Baseline failures are EXACTLY 4 fetch_resolution in
-   [f-o] + 2 river_dye in [p-r]. Anything else: investigate - a flake
-   claim requires an isolation rerun as proof.
+   [f-o] + 0 in [p-r]. Anything else: investigate - a flake claim
+   requires an isolation rerun as proof.
 2. Run gates FOREGROUND and wait for each summary line. Never
    background a gate and exit - your run dies with your process, and
    unverified work is not done work.
