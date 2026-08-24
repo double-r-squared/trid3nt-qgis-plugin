@@ -5,11 +5,15 @@ do_sag MIGRATED. WAVE 2 LANDED (ADR 0304) - the FORM and DRAW cards, on
 the existing spines, plugin 0.3.17. WAVE 3 LANDED (ADR 0305) -
 telemac_river_dye MIGRATED (3,469 -> 671 lines over a shared
 `workflows/telemac/steps/` family), the form card's first live proof,
-and the live-run harness (`trid3nt_server/testing/`). Next: the
-GENERALIZATION CHECKPOINT - one SWMM and one MODFLOW template. Focus
-engines: SWMM + MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS
-(tail, skippable). One principle everywhere: DECLARE THE WHAT,
-CENTRALIZE THE HOW - and the what is a VALUE.
+and the live-run harness (`trid3nt_server/testing/`). WAVE 4 LANDED
+(ADR 0306) - the GENERALIZATION CHECKPOINT PASSED:
+`modflow_regional_water_budget` and `swmm_aquifer_baseflow_to_node`
+migrated onto shared `workflows/<engine>/steps/` families, both
+bit-identical, on four small library additions and no redesign. Next:
+the SWMM + MODFLOW engine-complete campaigns. Focus engines: SWMM +
+MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS (tail, skippable).
+One principle everywhere: DECLARE THE WHAT, CENTRALIZE THE HOW - and
+the what is a VALUE.
 
 ## The form: workflow = inputs + plan, both values
 
@@ -121,6 +125,19 @@ question = Param (via draw gate); a feature layer participating as a
 dataset (obstruction geometry, clip zone) = Data with the draw gate
 as producer. Data producers consume params, which is what makes
 dataflow tracing cross the boundary.
+
+AN ARTIFACT IS DATA; A POINT SAMPLE IS A DERIVED PARAM (ADR 0306). A
+`Data` producer may `Ref` a param or another `Data`, never a step, so a
+fetch that depends on a resolved LOCATION cannot be declared as `Data` -
+`Data` reads the DOMAIN environment, which carries an extent, and that
+fits rasters and layers. A value SAMPLED at a point fits a form cell,
+wants bounds, and wants to be editable: declare it `door=DERIVED`.
+Derivations run inside `resolve_params`, BEFORE the plan is built and
+therefore before the form gate, and they may be `async` - so a
+derivation can geocode and can fetch, and the card shows the REAL
+derived number with its source badge rather than an empty row the user
+pins by hand. A derivation that read the world returns
+`Derived(value, note, real_source)` so its evidence rides on the row.
 
 ## The doors (Param resolution order)
 
@@ -281,10 +298,14 @@ A-green with B-red isolates a fault to the interaction machinery.
 3. river_dye migration (the full-contact proof; R3 acceptance;
    net-LOC meter on).
 4. GENERALIZATION CHECKPOINT: one SWMM and one MODFLOW template
-   before any mass conversion.
+   before any mass conversion. DONE (ADR 0306) - PASSED.
 5. SWMM + MODFLOW engine-complete campaigns (purity + meshing + byo
    mesh adoption; row-19 river_dem_uri wiring lands here), TELEMAC
-   family completion, HEC-RAS tail (skippable).
+   family completion, HEC-RAS tail (skippable). Two items queued out
+   of the checkpoint: the SWMM Green-Ampt trio derived from the same
+   texture fit as the aquifer column (a physics change, NATE's), and
+   river_dye's carrier discharge adopting the DERIVED door, which
+   closes ADR 0305's delta 1 with no library change.
 
 ## Deliberately not in v1
 
