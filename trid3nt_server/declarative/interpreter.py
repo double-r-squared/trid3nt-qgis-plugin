@@ -26,6 +26,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
+from trid3nt_server.gates.draw_input import gate_draw_input
 from trid3nt_server.gates.input_review import (
     gate_input_review,
     physics_refusal_reason,
@@ -37,13 +38,13 @@ from .domain import Domain, bind_domain, current_domain, domain_from_result, res
 from .errors import (
     ByoCoverageError,
     DeclarativeError,
-    GateNotSupportedError,
     GateRefusedError,
     LeakScanTruncated,
     ParamRefLeakedError,
     RenderSourceMissingError,
     StepFailedError,
 )
+from .form import build_param_sheet
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import Param, ResolvedParams
 from .plan import ChartSpec, Gate, ParamRef, Plan, Ref, RenderSpec, RunMode, Step
@@ -52,7 +53,7 @@ from .validate import validate_plan
 
 __all__ = ["RunResult", "interpret"]
 
-logger = logging.getLogger("trid3nt_server.declarative.interpret")
+logger = logging.getLogger("trid3nt_server.declarative.interpreter")
 
 
 @dataclass
@@ -70,6 +71,10 @@ class RunResult:
     executed: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     domain: Domain | None = None
+    #: The chart SPECS this run built, by declared chart name. The spec IS the
+    #: product, so the caller can persist the run's own chart rather than leaving
+    #: a verifier to rebuild one from the scalars and hope it matches.
+    charts: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +164,7 @@ async def interpret(
             _adopt(env, node, value, out, replayed=False)
             await ledger.record(_record(node, value), final=node.index == final_index)
         out.domain = current_domain()
+        out.charts = dict(env.charts)
         await env.ledger.complete()
     finally:
         reset_domain(token)
@@ -238,6 +244,7 @@ class _Env:
     ledger: StepLedger | None = None
     resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
+    charts: dict[str, Any] = field(default_factory=dict)
 
 
 async def _produce_independent_data(env: _Env) -> None:
@@ -399,6 +406,7 @@ async def _run_chart(node: _Node, env: _Env) -> Any:
     # so it is the surface a ref in a chart title would leak through.
     _refuse_leaked_param_refs({"payload": payload},
                               f"the chart payload for {spec.name!r}")
+    env.charts[spec.name] = payload
     await emit_chart_payloads(payload)
     return {"chart": spec.name, "emitted": True}
 
@@ -452,35 +460,23 @@ class _Revision:
 async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param],
                     entries: list[SyntheticInput], *, input_mode: str | None,
                     tool_name: str) -> _Revision | None:
-    """Run one declared gate. Returns the REVISED sheet when the user edited it.
+    """Run one declared gate. Returns the REVISED sheet when the user answered it.
 
     What was approved is what runs: the form gate's outcome carries the user's
     edits, and they are re-seated through the resolver (declared bounds still
     apply) so the steps after the gate read the approved values, not the ones the
     sheet held when the plan value was built. Derivations then re-run over the
     approved sheet, so a derived row never contradicts the value it derives from.
+    A drawn value takes exactly the same path - the card differs, the seating does
+    not.
     """
-    mode = resolve_input_gate_mode(input_mode)
     if gate.kind == "draw":
-        row = params.row(gate.param or "")
-        if row is not None and row.value is not None:
-            return None
-        target = next((p for p in declared if p.name == gate.param), None)
-        if target is not None and target.optional:
-            return None
-        if mode == "user_gated":
-            raise GateNotSupportedError(
-                f"{tool_name}: the draw gate for {gate.param!r} ({gate.prompt or gate.geometry}) "
-                "needs the plugin draw card, which lands in wave 2 of the declarative "
-                "campaign. Pass the value explicitly, or re-run in auto mode."
-            )
-        raise GateRefusedError(
-            f"{tool_name} needs {gate.param!r}: {gate.prompt or 'draw it on the canvas'}. "
-            "In auto mode it must be passed explicitly - it is never invented."
-        )
+        return await _run_draw_gate(gate, params, declared, input_mode=input_mode,
+                                    tool_name=tool_name)
     outcome = await gate_input_review(
         tool_name=tool_name, mode=input_mode, entries=entries,
         params=params.values_dict(),
+        param_sheet=build_param_sheet(tool_name, gate.prompt, declared, params),
     )
     if outcome.cancelled or not outcome.proceed:
         # The gate refuses for TWO reasons, and callers route on them differently:
@@ -493,19 +489,76 @@ async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param
             "the plan did not run.",
             error_code=_PHYSICS_INPUT_REQUIRED if law_nine else "INPUT_REVIEW_CANCELLED",
         )
-    revised, changed = reseat_revised(declared, params, outcome.params or {})
     undeclared = sorted(set(outcome.params or {}) - {p.name for p in declared})
     if undeclared:
         logger.warning("%s: the input review revised %s, which this workflow "
                        "declares no param for; those edits cannot be seated",
                        tool_name, undeclared)
+    return await _seat(declared, params, outcome.params or {},
+                       note="revised at input review", tool_name=tool_name,
+                       what="input review")
+
+
+async def _run_draw_gate(gate: Gate, params: ResolvedParams,
+                         declared: Sequence[Param], *, input_mode: str | None,
+                         tool_name: str) -> _Revision | None:
+    """Ask for ONE param on the canvas; ``None`` when nothing needed asking.
+
+    A value already on the sheet answers the gate - the user passed it, so there
+    is nothing to draw.
+
+    Otherwise the two modes differ on what an OPTIONAL param means. ``auto``
+    never asks: an optional param's ``derived_when_absent`` describes its own
+    absence, and a required one refuses typed rather than being invented.
+    ``user_gated`` ASKS in both cases, because declaring the gate is the request
+    to ask and the whole point of the mode is that the user gets to answer. What
+    differs is the DECLINE: an optional param falls back to its declared absence,
+    a required one refuses.
+    """
+    row = params.row(gate.param or "")
+    if row is not None and row.value is not None:
+        return None
+    target = next((p for p in declared if p.name == gate.param), None)
+    optional = target is not None and target.optional
+    if resolve_input_gate_mode(input_mode) != "user_gated":
+        if optional:
+            return None
+        raise GateRefusedError(
+            f"{tool_name} needs {gate.param!r}: {gate.prompt or 'draw it on the canvas'}. "
+            "In auto mode it must be passed explicitly - it is never invented."
+        )
+    outcome = await gate_draw_input(
+        tool_name=tool_name, param=gate.param or "", geometry=gate.geometry or "point",
+        prompt=gate.prompt,
+    )
+    if not outcome.drawn:
+        if optional:
+            logger.info("%s: the draw gate for %r was not answered (%s); the "
+                        "declared absence stands", tool_name, gate.param,
+                        outcome.reason)
+            return None
+        raise GateRefusedError(
+            f"{tool_name} needs {gate.param!r} drawn on the canvas "
+            f"({gate.prompt or gate.geometry}), and {outcome.reason}. It is not "
+            "invented - supply the value explicitly or draw it and re-run."
+        )
+    return await _seat(declared, params, {gate.param: outcome.value},
+                       note="drawn on the canvas", tool_name=tool_name,
+                       what="draw gate")
+
+
+async def _seat(declared: Sequence[Param], params: ResolvedParams,
+                answered: Mapping[str, Any], *, note: str, tool_name: str,
+                what: str) -> _Revision | None:
+    """Seat a gate's answer through the GATE door and re-derive what reads it."""
+    revised, changed = reseat_revised(declared, params, answered, note=note)
     if not changed:
         return None
     revised, rederived, conflicts = await rederive_revised(declared, revised, changed)
-    for note in conflicts:
-        logger.info("%s: %s", tool_name, note)
-    logger.info("%s: input review revised %s; re-seated through the GATE door%s",
-                tool_name, changed,
+    for conflict in conflicts:
+        logger.info("%s: %s", tool_name, conflict)
+    logger.info("%s: the %s set %s; re-seated through the GATE door%s",
+                tool_name, what, changed,
                 f"; re-derived {rederived}" if rederived else "")
     return _Revision(params=revised, entries=provenance_entries(revised, declared),
                      changed=tuple(changed) + tuple(rederived))

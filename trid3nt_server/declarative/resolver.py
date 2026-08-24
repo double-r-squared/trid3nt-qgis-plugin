@@ -126,12 +126,16 @@ async def _derive(param: Param, rows: Mapping[str, ResolvedParam]) -> Any:
 
 
 def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
-                   revised: Mapping[str, Any]) -> tuple[ResolvedParams, list[str]]:
-    """Re-seat values a user approved at the form gate, through the GATE door.
+                   revised: Mapping[str, Any],
+                   *, note: str = "revised at input review",
+                   ) -> tuple[ResolvedParams, list[str]]:
+    """Re-seat values a user gave at a gate, through the GATE door.
 
-    The declared bounds and the non-numeric refusal still apply - the form is an
-    edit surface, not a bypass - and every genuinely changed row is re-stamped
-    ``basis=user`` so the run's provenance says the user set it. Returns the new
+    The declared bounds and the non-numeric refusal still apply - a gate is an
+    answer surface, not a bypass - and every genuinely changed row is re-stamped
+    ``basis=user`` so the run's provenance says the user set it. ``note`` is what
+    the row records about HOW it was answered (edited on the form, drawn on the
+    canvas); it reaches the provenance entry the result carries. Returns the new
     sheet plus the names that actually changed. Names that are not declared params
     cannot be seated and are reported by the caller, never silently absorbed.
     """
@@ -144,7 +148,7 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
             continue
         if resolved.get(name) == value:
             continue
-        rows[name] = _finish(param, value, doors.GATE, "revised at input review")
+        rows[name] = _finish(param, value, doors.GATE, note)
         changed.append(name)
     return (resolved.replacing(rows) if rows else resolved), changed
 

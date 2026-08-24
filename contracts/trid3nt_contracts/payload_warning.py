@@ -49,7 +49,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from .common import GraceModel, SyntheticInput, ULIDStr
+from .common import GraceModel, InputBasis, SyntheticInput, ULIDStr
 
 __all__ = [
     "PayloadWarningOption",
@@ -57,6 +57,9 @@ __all__ = [
     "PayloadConfirmationDecision",
     "PayloadConfirmationEnvelopePayload",
     "GranularitySuggestion",
+    "ParamDoor",
+    "ParamSheet",
+    "ParamSheetRow",
     "TimeScaleSuggestion",
     "WARNING_THRESHOLD_MB_DEFAULT",
     "HARD_CAP_MB_DEFAULT",
@@ -353,6 +356,92 @@ class TimeScaleSuggestion(GraceModel):
         return value
 
 
+#: Which resolution door a declared param came through, in the resolver's order.
+#: The form card ranks its rows by this and folds ``constant`` under "advanced".
+ParamDoor = Literal["user", "question", "derived", "scenario", "constant", "gate"]
+
+
+class ParamSheetRow(GraceModel):
+    """One row of the resolved param sheet the FORM CARD renders.
+
+    Richer than the :class:`~trid3nt_contracts.common.SyntheticInput` line beside
+    it: provenance narration needs a value and a basis, while an EDIT SURFACE also
+    needs the declaration -- what the value means (``desc``), what it may become
+    (``bounds``), and how loudly to warn that editing it overrides a derivation
+    (``source_badge`` + ``user_lever``).
+
+    Fields:
+
+    - ``name`` -- the declared param name; the key the edit rides back under in
+      ``revised_args``.
+    - ``value`` -- the resolved value. ``None`` means the row resolved to nothing
+      (an optional param, or one waiting on a gate).
+    - ``units`` -- physical units, when applicable.
+    - ``desc`` -- the param's one-line declaration; the row LABEL.
+    - ``door`` -- which door served the value.
+    - ``basis`` -- the provenance class (shared vocabulary with ``SyntheticInput``).
+    - ``source_badge`` -- the short human phrase the card shows beside the value
+      ("read from your prompt" / "derived from water_temp_c" / "labeled default").
+      Rendered, never re-derived by the client from ``basis`` + ``door``.
+    - ``bounds`` -- the declared ``(min, max)``; the card clamps its editor to it
+      and the server re-clamps on submit (the form is an edit surface, not a
+      bypass of the declaration).
+    - ``user_lever`` -- the declaration marks this derived/constant value as one
+      the user is expected to override.
+    - ``editable`` -- whether the card offers an editor. Every row is editable
+      today; editing a derived row is WARNED through ``source_badge``, not locked.
+    - ``advanced`` -- render under the "advanced" fold (constant-door physics that
+      is inspectable but not the question).
+    - ``note`` -- the resolution note (a clamp, a derivation, a conflict).
+    """
+
+    name: str = Field(min_length=1)
+    value: float | int | str | bool | list[Any] | None = None
+    units: str | None = None
+    desc: str = Field(default="", max_length=512)
+    door: ParamDoor
+    basis: InputBasis
+    source_badge: str = Field(default="", max_length=200)
+    bounds: tuple[float, float] | None = None
+    user_lever: bool = False
+    editable: bool = True
+    advanced: bool = False
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> "ParamSheetRow":
+        """Inverted bounds would render an editor no value can satisfy."""
+        if self.bounds is not None and self.bounds[0] > self.bounds[1]:
+            raise ValueError(
+                f"bounds {self.bounds!r} are inverted for row {self.name!r}"
+            )
+        return self
+
+
+class ParamSheet(GraceModel):
+    """The resolved param sheet a declared ``FormGate`` presents for review.
+
+    The rows arrive in RENDER order (question-bearing first, ``advanced`` last) --
+    the server owns the ordering because it owns the doors. The user's edits ride
+    back on the existing ``tool-payload-confirmation``
+    (``decision="narrow_scope"`` + ``revised_args`` keyed by ``row.name``), and a
+    submit-with-edits IS the approval: the sheet was fully visible, so there is
+    nothing left to re-present.
+    """
+
+    workflow: str = Field(min_length=1)
+    title: str = Field(default="", max_length=200)
+    rows: list[ParamSheetRow] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_unique_names(self) -> "ParamSheet":
+        """Two rows for one param would render two editors writing one key."""
+        names = [row.name for row in self.rows]
+        if len(names) != len(set(names)):
+            raise ValueError(f"param sheet rows must be unique; got {names!r}")
+        return self
+
+
 class PayloadWarningEnvelopePayload(GraceModel):
     """``tool-payload-warning`` (amendment).
 
@@ -444,6 +533,14 @@ class PayloadWarningEnvelopePayload(GraceModel):
     #: what-was-approved == what-ran. None on ordinary payload / cost / mesh
     #: gates -- fully back-compatible.
     synthetic_inputs: list[SyntheticInput] | None = None
+    #: OPTIONAL resolved param SHEET (the declarative FormGate's card). When
+    #: present the client renders an editable property grid -- one row per declared
+    #: param, with its source badge, declared bounds and advanced fold -- instead of
+    #: the plain provenance table. Submit rides back as ``narrow_scope`` +
+    #: ``revised_args`` keyed by row name, and a submit-with-edits is the approval:
+    #: the whole sheet was on screen, so the gate does not re-present it. None on
+    #: every other gate -- fully back-compatible.
+    param_sheet: ParamSheet | None = None
 
     @model_validator(mode="after")
     def _validate_options_unique(self) -> "PayloadWarningEnvelopePayload":

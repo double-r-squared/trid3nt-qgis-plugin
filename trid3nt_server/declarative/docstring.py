@@ -1,18 +1,32 @@
-"""Render a registered tool's LLM-facing docstring from its declarations.
+"""Render a registered tool's docstring from its declarations, in TWO views.
 
 The routing block is emitted FIRST: Bedrock truncates a tool docstring at 1000
-characters, so whatever the model needs to ROUTE has to survive the cut.
+characters, so whatever the model needs to ROUTE has to survive the cut. The two
+views are that split made explicit -
+
+* ``routing`` - which question this tool answers and which it does not, inside
+  the truncation budget. What a surface that only has to help someone CHOOSE the
+  tool needs.
+* ``full`` (default) - the routing block plus the param sheet in prose. What the
+  model calling the tool needs, because it has to fill those params.
+
+The form card carries the SAME sheet structurally (``declarative.form``), so a
+user reviewing a run reads the declaration itself - bounds, units and source
+badge - rather than this prose rendering of it.
 """
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Literal, Sequence
 
 from .params import Param, doors
 
 __all__ = ["render_docstring"]
 
 _FRONT_BUDGET = 1000
+
+#: Which rendering a surface asks for. See the module docstring for who reads which.
+DocstringView = Literal["full", "routing"]
 
 
 def render_docstring(
@@ -23,11 +37,13 @@ def render_docstring(
     returns: str,
     not_for: str = "",
     controls: Sequence[tuple[str, str]] = (),
+    view: DocstringView = "full",
 ) -> str:
     """Build the docstring: summary, routing, negative routing, params, returns.
 
     ``controls`` documents the run levers that are NOT params (gate mode, restart)
-    - the tool accepts them, so the model has to be told they exist.
+    - the tool accepts them, so the model has to be told they exist. ``view``
+    selects the rendering; ``routing`` stops after the returns line.
     """
     head = [summary.strip(), "", routing.strip()]
     if not_for:
@@ -38,6 +54,8 @@ def render_docstring(
             f"routing block is {len(front)} chars; it must fit the {_FRONT_BUDGET}-char "
             "truncation budget or the model never sees the routing."
         )
+    if view == "routing":
+        return front + "\n" + "\n".join(["", f"Returns: {returns.strip()}", ""])
 
     body = ["", "Params:"]
     for p in _ordered(params):

@@ -21,7 +21,6 @@ from .domain import Domain, current_domain
 from .errors import (
     ByoCoverageError,
     DeclarativeError,
-    GateNotSupportedError,
     GateRefusedError,
     LeakScanTruncated,
     ModifierIllegalError,
@@ -31,7 +30,7 @@ from .errors import (
     RenderSourceMissingError,
     StepFailedError,
 )
-from .interpret import RunResult, interpret
+from .interpreter import RunResult, interpret
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import (
     Param,
@@ -67,7 +66,7 @@ from .validate import validate_plan
 __all__ = [
     "AuthoredProducer", "Build", "ByoCoverageError", "ChartSpec", "CoversAOI",
     "Data", "DataDecl", "DeclarativeError", "Domain", "DrawGate", "Fetch",
-    "FormGate", "Gate", "GateNotSupportedError", "GateRefusedError",
+    "FormGate", "Gate", "GateRefusedError",
     "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError", "Param",
     "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",

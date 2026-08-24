@@ -41,7 +41,7 @@ from typing import Any, Awaitable, Callable, Literal
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
-from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
+from trid3nt_contracts.payload_warning import ParamSheet, PayloadWarningEnvelopePayload
 
 logger = logging.getLogger("trid3nt_server.gates.input_review")
 
@@ -193,14 +193,16 @@ def _build_review_envelope(
     round_idx: int,
     max_rounds: int,
     ttl_seconds: int,
+    param_sheet: "ParamSheet | None" = None,
 ) -> PayloadWarningEnvelopePayload:
     """Build the input-review ``tool-payload-warning`` (rides the #154 spine).
 
-    The provenance is rendered into ``recommendation`` (so the plugin's existing
-    card surfaces the table with NO new UI) AND carried structured on
-    ``synthetic_inputs`` (for the narration seam + future rich rendering). The
-    ``narrow_scope`` option is the "provide values" action -- a reply with
-    ``revised_args`` re-resolves the run.
+    The provenance is rendered into ``recommendation`` (so a client with no rich
+    renderer still surfaces the table) AND carried structured on
+    ``synthetic_inputs`` (for the narration seam). A declared FormGate adds
+    ``param_sheet`` -- the resolved sheet as an EDIT SURFACE, which is what the
+    plugin's form card renders. The ``narrow_scope`` option is the "provide
+    values" action -- a reply with ``revised_args`` carries the edits.
     """
     lines = render_input_review_lines(entries)
     header = (
@@ -227,6 +229,7 @@ def _build_review_envelope(
         options=["proceed", "narrow_scope", "cancel"],
         ttl_seconds=int(ttl_seconds),
         synthetic_inputs=list(entries),
+        param_sheet=param_sheet,
     )
 
 
@@ -297,6 +300,7 @@ async def gate_input_review(
         tuple[list[SyntheticInput], dict[str, Any]]]] | None = None,
     max_rounds: int = _DEFAULT_MAX_ROUNDS,
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
+    param_sheet: "ParamSheet | None" = None,
 ) -> ReviewOutcome:
     """Present resolved inputs for review before solver dispatch.
 
@@ -307,6 +311,13 @@ async def gate_input_review(
     when a ``provide values`` reply should re-run fetchers (e.g. a revised dam
     name -> a new NID lookup). When absent, a revision updates the affected
     entries to user-basis without re-fetching.
+
+    ``param_sheet`` turns the card into the declarative FORM: every declared row
+    with its bounds, badge and advanced fold, editable in place. It also changes
+    what a ``narrow_scope`` reply MEANS -- submitting an edited sheet IS the
+    approval, because the whole sheet was on screen, so the gate proceeds instead
+    of re-presenting. Without it the text card keeps its adjust-and-re-present
+    rounds, where a revision the user could not see in full deserves another look.
 
     Returns a :class:`ReviewOutcome`. In ``auto`` mode (or with no live session)
     it returns ``proceed=True`` immediately with the inputs unchanged UNLESS a
@@ -369,6 +380,7 @@ async def gate_input_review(
         envelope = _build_review_envelope(
             tool_name=tool_name, entries=cur_entries, round_idx=round_idx,
             max_rounds=max_rounds, ttl_seconds=ttl_seconds,
+            param_sheet=param_sheet,
         )
         warning_id = envelope.warning_id
         loop = asyncio.get_running_loop()
@@ -415,6 +427,18 @@ async def gate_input_review(
         cur_entries, cur_params = _apply_revision(
             cur_entries, cur_params, decision.revised_args
         )
+        if param_sheet is not None:
+            # The form card showed the WHOLE sheet, so submitting it is the
+            # approval. Re-presenting would ask the user to confirm a table they
+            # just filled in, and the edits go on to re-seat + re-derive anyway.
+            logger.info(
+                "input-review gate submit-with-edits session=%s tool=%s revised=%s",
+                emitter.session_id, tool_name,
+                sorted(decision.revised_args or {}),
+            )
+            return ReviewOutcome(proceed=True, entries=cur_entries,
+                                 params=cur_params, mode="user_gated",
+                                 rounds_used=round_idx)
         if reresolve is not None:
             try:
                 cur_entries, cur_params = await reresolve(cur_params)

@@ -140,6 +140,12 @@ def stub_chart(*, result, params):
     return {"chart_id": "c1", "title": "t"}
 
 
+def stub_chart_empty(*, result, params):
+    """A builder with nothing to plot - the curve the result should carry is absent."""
+    _CALLS.append("stub_chart_empty")
+    return None
+
+
 def stub_chart_leaks(*, result, params):
     """A builder that puts a DESCRIPTION in the title - the f-string leak, one call
     later, where only the emitted payload can catch it."""
@@ -174,7 +180,7 @@ def _reset(tmp_path, monkeypatch):
     # the replay probe is answered from _MISSING_ARTIFACTS instead of boto3.
     # import_module, not `import ... as`: the package re-exports `interpret` the
     # FUNCTION, which shadows the submodule attribute of the same name.
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "_artifact_state",
                         lambda uri: "absent" if uri in _MISSING_ARTIFACTS else "live")
     _CALLS.clear()
@@ -514,14 +520,17 @@ async def test_draw_gate_refuses_typed_in_auto_when_the_param_is_required():
 
 
 @pytest.mark.asyncio
-async def test_draw_gate_names_wave_two_in_user_gated_mode():
+async def test_draw_gate_refuses_typed_when_there_is_no_session_to_draw_on():
+    """user_gated with no live map is the headless direct call: the caller asked
+    for a drawing and there is nowhere to draw. That is not a licence to invent."""
     decl = [Param("pt", desc="where it enters", door=doors.USER)]
     plan = Workflow("w")[
         DrawGate(param="pt", geometry="point"),
         Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
     ]
-    with pytest.raises(Exception, match="wave 2"):
+    with pytest.raises(Exception, match="no live map session"):
         await _run(plan, decl, {"pt": None}, input_mode="user_gated", resume=False)
+    assert _CALLS == []
 
 
 @pytest.mark.asyncio
@@ -822,6 +831,27 @@ def test_docstring_refuses_a_routing_block_over_the_budget():
                          returns="a layer")
 
 
+def test_the_routing_view_stops_before_the_param_sheet():
+    """Two views, one declaration: a surface that only helps someone CHOOSE the
+    tool takes the routing block; the model filling the params takes the sheet."""
+    kwargs = dict(summary="S.", routing="R.", params=_params(), returns="a layer",
+                  not_for="something else")
+    routing = render_docstring(**kwargs, view="routing")
+    full = render_docstring(**kwargs)
+    assert "Params:" not in routing and "Params:" in full
+    assert routing.startswith("S.") and "Do NOT use this for" in routing
+    assert "Returns: a layer" in routing
+    assert len(routing) < len(full)
+
+
+def test_do_sag_publishes_both_docstring_views():
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+
+    assert "Params:" in (telemac_do_sag.__doc__ or "")
+    assert "Params:" not in telemac_do_sag.routing_doc
+    assert len(telemac_do_sag.routing_doc) < 1400
+
+
 def test_docstring_reports_bounds_units_and_labeled_defaults():
     doc = render_docstring(
         summary="S.", routing="R.",
@@ -880,7 +910,7 @@ def _review(revised, monkeypatch):
     """Patch the review spine so it approves, carrying ``revised`` back."""
     from trid3nt_server.gates.input_review import ReviewOutcome, _apply_revision
 
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
 
     async def _fake(*, tool_name, mode, entries, params, **kw):
         merged_e, merged_p = _apply_revision(list(entries), dict(params), revised)
@@ -1338,7 +1368,7 @@ async def test_a_ref_in_a_result_never_reaches_the_ledger_or_the_caller():
 
 def test_the_guard_reads_slots_dataclass_fields_and_dict_alike():
     """The three attribute shapes an author can hand the guard, at the seam itself."""
-    from trid3nt_server.declarative.interpret import _refuse_leaked_param_refs
+    from trid3nt_server.declarative.interpreter import _refuse_leaked_param_refs
 
     for holder in (_Holder(ParamRef("base")), _DictHolder(ParamRef("base")),
                    _SlotsNoDataclass(ParamRef("base"))):
@@ -1495,7 +1525,7 @@ async def test_the_law9_floor_refuses_in_every_mode_without_a_live_session(mode)
 async def test_a_self_gating_step_owns_the_approval_instead(monkeypatch):
     """The exemption needs a REVIEW SURFACE, and a self-gating step is one: it puts
     its own card in front of the live session. Then the floor steps aside."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
     await _run(_gateless_plan(consequential=True, self_gating=True), _physics_only(),
                {}, input_mode="user_gated", resume=False)
@@ -1507,7 +1537,7 @@ async def test_a_live_session_with_no_card_anywhere_still_refuses(monkeypatch):
     """An emitter is where a card COULD be shown, never evidence that one was. A
     gateless plan whose step does not review its own inputs has no review surface
     at all, so a live user_gated session must not be the softer path."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
     with pytest.raises(Exception) as exc:
         await _run(_gateless_plan(consequential=True), _physics_only(), {},
@@ -1667,7 +1697,7 @@ def _deep_clean(depth):
 def test_a_budget_exhausted_leak_scan_warns_and_names_the_surface(monkeypatch):
     """A scan that stopped looking has NOT found the surface clean. Silence there
     let a leak behind a large value pass as verified."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 8)
     with pytest.warns(LeakScanTruncated, match="'value'"):
         _interp._refuse_leaked_param_refs(
@@ -1675,7 +1705,7 @@ def test_a_budget_exhausted_leak_scan_warns_and_names_the_surface(monkeypatch):
 
 
 def test_a_clean_scan_inside_the_budget_warns_about_nothing(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 500)
     with warnings.catch_warnings():
         warnings.simplefilter("error", LeakScanTruncated)
@@ -1685,7 +1715,7 @@ def test_a_clean_scan_inside_the_budget_warns_about_nothing(monkeypatch):
 def test_a_large_value_cannot_starve_the_entries_scan(monkeypatch):
     """Per-surface budgets: one shared budget let a 60k-node value spend it all and
     leave the entries - where the leak actually was - never looked at."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 20)
     with pytest.warns(LeakScanTruncated, match="'value'"):
         with pytest.raises(ParamRefLeakedError, match=r"ParamRef\('base'\)"):
@@ -1698,7 +1728,7 @@ def test_a_large_value_cannot_starve_the_entries_scan(monkeypatch):
 async def test_the_run_warns_rather_than_silently_passing_a_truncated_scan(monkeypatch):
     """The guard is a floor, not a gate: an over-budget surface still runs, but the
     partial check is said out loud rather than reported as clean."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 4)
     plan = Workflow("truncated")[Step(runner=f"{_HERE}.stub_deep").named("a")]
     with pytest.warns(LeakScanTruncated):
@@ -1814,7 +1844,7 @@ async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
 async def test_a_leaked_ref_in_a_chart_payload_never_reaches_the_wire(monkeypatch):
     """The node returns a small marker dict; the PAYLOAD is what goes over the WS.
     Guarding only the marker let a ref in a chart title through."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     emitted = []
 
     async def _emit(payload):
@@ -1833,7 +1863,7 @@ async def test_a_leaked_ref_in_a_chart_payload_never_reaches_the_wire(monkeypatc
 
 @pytest.mark.asyncio
 async def test_a_clean_chart_payload_still_reaches_the_wire(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.declarative.interpret")
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
     emitted = []
 
     async def _emit(payload):
@@ -1847,3 +1877,22 @@ async def test_a_clean_chart_payload_still_reaches_the_wire(monkeypatch):
     out = await _run(plan, _params(), {}, resume=False)
     assert emitted == [{"chart_id": "c1", "title": "t"}]
     assert out.notes == []
+    # The SPEC is the product: the run carries its own chart out so the caller can
+    # persist it, rather than leaving a reader to rebuild one from the scalars.
+    assert out.charts == {"c": {"chart_id": "c1", "title": "t"}}
+
+
+@pytest.mark.asyncio
+async def test_a_chart_that_failed_leaves_no_spec_to_persist(monkeypatch):
+    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    monkeypatch.setattr(_interp, "emit_chart_payloads", lambda payload: _noop())
+    plan = Workflow("chart_none")[
+        Step(runner=f"{_HERE}.stub_step").named("a")
+        .chart("c", builder=f"{_HERE}.stub_chart_empty"),
+    ]
+    out = await _run(plan, _params(), {}, resume=False)
+    assert out.charts == {} and len(out.notes) == 1
+
+
+async def _noop():
+    return None

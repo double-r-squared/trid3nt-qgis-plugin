@@ -25,6 +25,8 @@ from trid3nt_contracts.payload_warning import (
     HARD_CAP_MB_DEFAULT,
     WARNING_THRESHOLD_MB_DEFAULT,
     GranularitySuggestion,
+    ParamSheet,
+    ParamSheetRow,
     PayloadConfirmationEnvelopePayload,
     PayloadWarningEnvelopePayload,
     TimeScaleSuggestion,
@@ -360,3 +362,74 @@ def test_default_thresholds_are_sane() -> None:
     assert 0.0 < WARNING_THRESHOLD_MB_DEFAULT < HARD_CAP_MB_DEFAULT
     assert WARNING_THRESHOLD_MB_DEFAULT == 25.0
     assert HARD_CAP_MB_DEFAULT == 250.0
+
+
+# --- Param sheet (the declarative form card) -------------------------------- #
+
+
+def _row(**over) -> ParamSheetRow:
+    base = dict(name="water_temp_c", value=20.0, units="C",
+                desc="Water temperature", door="scenario", basis="default_demo",
+                source_badge="labeled default", bounds=(0.0, 40.0))
+    base.update(over)
+    return ParamSheetRow(**base)
+
+
+def test_param_sheet_row_defaults_to_editable_and_unfolded() -> None:
+    """Every row is editable (a derived row warns through its badge, never locks);
+    only a constant is folded under the advanced section."""
+    row = _row()
+    assert row.editable is True
+    assert row.advanced is False and row.user_lever is False
+
+
+def test_param_sheet_row_rejects_inverted_bounds() -> None:
+    """Inverted bounds would render an editor no value can satisfy."""
+    with pytest.raises(ValidationError):
+        _row(bounds=(40.0, 0.0))
+
+
+def test_param_sheet_row_rejects_an_unknown_door() -> None:
+    with pytest.raises(ValidationError):
+        _row(door="telepathy")
+
+
+def test_param_sheet_rejects_duplicate_rows() -> None:
+    """Two rows for one param would render two editors writing one key."""
+    with pytest.raises(ValidationError):
+        ParamSheet(workflow="w", rows=[_row(), _row()])
+
+
+def test_param_sheet_rejects_an_empty_sheet() -> None:
+    with pytest.raises(ValidationError):
+        ParamSheet(workflow="w", rows=[])
+
+
+def test_param_sheet_round_trips_through_json() -> None:
+    sheet = ParamSheet(workflow="telemac_do_sag", title="Review the inputs",
+                       rows=[_row(), _row(name="sim_s", value=3600.0, units="s",
+                                          door="constant", advanced=True,
+                                          bounds=None)])
+    again = ParamSheet.model_validate(json.loads(sheet.model_dump_json()))
+    assert again == sheet
+
+
+def test_a_warning_envelope_carries_no_param_sheet_by_default() -> None:
+    """Back-compatible: every non-form gate is unchanged."""
+    env = PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(), tool_name="fetch_dem", estimated_mb=30.0,
+        threshold_mb=25.0, recommendation="narrow the bbox",
+    )
+    assert env.param_sheet is None
+
+
+def test_a_form_gate_envelope_carries_its_sheet() -> None:
+    env = PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(), tool_name="telemac_do_sag", estimated_mb=0.0,
+        threshold_mb=0.0, recommendation="review the inputs",
+        param_sheet=ParamSheet(workflow="telemac_do_sag", rows=[_row()]),
+    )
+    again = PayloadWarningEnvelopePayload.model_validate(
+        json.loads(env.model_dump_json()))
+    assert again.param_sheet.rows[0].name == "water_temp_c"
+    assert again.param_sheet.rows[0].bounds == (0.0, 40.0)

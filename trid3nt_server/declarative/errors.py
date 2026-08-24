@@ -6,7 +6,6 @@ from __future__ import annotations
 __all__ = [
     "ByoCoverageError",
     "DeclarativeError",
-    "GateNotSupportedError",
     "GateRefusedError",
     "LeakScanTruncated",
     "ModifierIllegalError",
@@ -65,10 +64,6 @@ class LeakScanTruncated(UserWarning):
 
 class GateRefusedError(DeclarativeError):
     error_code = "GATE_INPUT_REQUIRED"
-
-
-class GateNotSupportedError(DeclarativeError):
-    error_code = "GATE_NOT_YET_SUPPORTED"
 
 
 class ByoCoverageError(DeclarativeError):
