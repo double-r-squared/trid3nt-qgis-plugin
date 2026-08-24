@@ -774,3 +774,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   line; later the calibration objective). Plus: nearest-to-seed
   replaces largest-in-bbox in discharge_resolve; mesh-economy A/B
   (do_sag coarsening) rides the same wave.
+
+- WORKER PURITY PRINCIPLE (NATE 2026-08-25): "the image holds
+  MECHANISMS, never VALUES." All tunable worker-side constants (mesh
+  target edge, accept radius, smoothing passes, node budgets, bed
+  treatment...) become declared Params threaded via the deck/config -
+  tunable per question class (the opinionated-mesh lever), no rebuild
+  for a default change, visible on the form. Combined w/ the in-worker
+  fetch migration the worker end state = A PURE EXECUTOR (data staged
+  in, values fed in, mechanism only). The TELEMAC family wave executes
+  both halves together; the external-fetch audit's migration plan
+  targets this end state; per-engine constant inventories ride the
+  engine campaigns.
