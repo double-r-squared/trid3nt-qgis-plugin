@@ -716,3 +716,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   supplying them. Path B = gate-by-gate walkthrough (harness). Path C =
   NATE in QGIS - plugin-UI coverage only (A+B own the logic). SWMM
   campaign executes the fork resolution per template.
+
+- dev-tool-invoke flattens raised typed errors to INTERNAL_ERROR
+  (pre-existing, exposed by 3b's refused drive; the banks gate suffers
+  the same) - the envelope should carry the exception's own error_code.
+  Small dispatch fix, queue for the next server-touching wave.
