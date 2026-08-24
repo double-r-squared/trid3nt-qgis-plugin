@@ -527,8 +527,8 @@ conflict, this table governs):
 | `data/publish_layer/` | `tools/publish_layer/` interim; dissolved by emission unification |
 | `data/simulation/` engine shims | STAY PUT; die engine-by-engine as the factory absorbs them (moving a thing scheduled to die is double work) |
 | `data/simulation/solver/` | `workflows/solver/` |
-| `data/simulation/diagnostics/`, `_setter_envelope.py` | scripts/ diagnostic lane; envelope helper -> `workflows/lib/` |
-| `data/meta/`, `data/display/` | audit, then fold or delete |
+| `data/simulation/diagnostics/`, `_setter_envelope.py` | `workflows/solver/diagnostics/` (server runtime imports it - registered tool read_run_diagnostics; scripts/ routing was wrong); envelope helper -> `workflows/lib/` |
+| `data/meta/`, `data/display/` | `tools/meta/`, `tools/display/` - NOT dead (meta holds 5 registered tools incl code_exec + spatial_input; display holds show_nexrad_radar) |
 | `declarative/` | `workflows/lib/` |
 | per-template `steps.py` | dissolves during skeleton migration |
 
