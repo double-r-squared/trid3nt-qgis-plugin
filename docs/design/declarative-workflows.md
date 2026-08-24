@@ -9,9 +9,18 @@ and the live-run harness (`trid3nt_server/testing/`). WAVE 4 LANDED
 (ADR 0306) - the GENERALIZATION CHECKPOINT PASSED:
 `modflow_regional_water_budget` and `swmm_aquifer_baseflow_to_node`
 migrated onto shared `workflows/<engine>/steps/` families, both
-bit-identical, on four small library additions and no redesign. Next:
-the SWMM + MODFLOW engine-complete campaigns. Focus engines: SWMM +
-MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS (tail, skippable).
+bit-identical, on four small library additions and no redesign. WAVE 5
+LANDED (ADR 0307) - SWMM ENGINE CAMPAIGN WAVE A: the two standalone
+solve templates (`swmm_rdii_rtk_unit_hydrograph`,
+`swmm_snowmelt_degree_day`) declared, both bit-identical INCLUDING their
+deck text, on NO library change at all; the shared SWMM family grew
+multi-attribute sampling, the one line-chart spec and the deck
+time-series helpers, and paid back its first 18 lines into the
+checkpoint's own template. SWMM is 3 of 15; the remaining twelve are two
+composer families (published-deck, mechanism-comparison) and three AOI
+giants, and the wave boundaries follow the shared machinery rather than
+the file sizes (ADR 0307's tranche plan). Focus engines: SWMM + MODFLOW
+(top priority, EPA/USGS), TELEMAC, HEC-RAS (tail, skippable).
 One principle everywhere: DECLARE THE WHAT, CENTRALIZE THE HOW - and
 the what is a VALUE.
 
@@ -86,6 +95,17 @@ access alike. That record is what lets the validator refuse a plan that declares
 a `FormGate` and also branches on a value that gate can revise; a read path that
 did not record was a side entrance to the same frozen branch. The set closes at
 validation, so a sheet reused for a second run carries no run-time reads into it.
+
+A `When` body is a SCOPE: a step named inside it is Ref-able only from inside it,
+because the branch may not be taken and a Ref from outside would be a runtime
+`REF_UNRESOLVED` waiting to happen. That has a consequence worth stating, since
+it decides plan shapes (ADR 0307): an OPTIONAL VARIANT whose result the answer
+step must read cannot be `When`-guarded. Either the variant is declared
+unconditionally, or the branch and everything that reads it move inside one
+composite - and hiding a solve inside a composite is what this library exists to
+undo. Both SWMM wave-A templates chose to declare: the RDII cross-check and the
+snowmelt plow variant are always-on plan nodes, and both were things the template
+claimed to be about anyway.
 
 A step that runs its OWN input review declares `self_gating=True`; a plan may
 not put a `FormGate` in front of one, because the composite reads its own
@@ -321,6 +341,15 @@ A-green with B-red isolates a fault to the interaction machinery.
    texture fit as the aquifer column (a physics change, NATE's), and
    river_dye's carrier discharge adopting the DERIVED door, which
    closes ADR 0305's delta 1 with no library change.
+   SWMM waves, per ADR 0307's tranche plan: **A - the standalone solve
+   templates (LANDED)**; B - the published-deck trio, where a fetched
+   deck becomes the family's first `Data` (authored, therefore
+   `.byo()`-able); C - the mechanism-comparison five, where the purity
+   fork gets its per-engine answer over the SHARED deck-authoring core,
+   all five at once; D - the AOI giants (`urban_flood`,
+   `network_import`, `dual_drainage`), where the `Data` producers, the
+   byo-mesh adoption and the declared render steps land and where the
+   family's net-LOC return is realised.
 
 ## Deliberately not in v1
 
