@@ -34,7 +34,7 @@ _BBOX = (-77.052, 38.802, -77.044, 38.808)
 
 
 def _resolved_style(preset, uri):
-    from trid3nt_server.data.publish_layer.publish_layer import (
+    from trid3nt_server.tools.publish_layer.publish_layer import (
         style_params_from_band_stats,
     )
 

@@ -63,9 +63,9 @@ from trid3nt_server.adapters.adapter import (  # noqa: E402
     build_tool_declarations,
 )
 from trid3nt_server.adapters.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.data.search.search_tools import search_tools as _dd  # noqa: E402
-from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.tools.search.search_tools import search_tools as _dd  # noqa: E402
+from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools  # noqa: E402
 
 RETRIEVAL_K = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 

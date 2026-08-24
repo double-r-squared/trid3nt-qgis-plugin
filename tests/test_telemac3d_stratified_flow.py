@@ -11,7 +11,7 @@ import asyncio
 
 
 def test_telemac3d_registered_as_engine_template():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     entry = TOOL_REGISTRY.get("telemac3d_stratified_flow")
     assert entry is not None, "telemac3d_stratified_flow must be registered"
     m = entry.metadata
@@ -22,7 +22,7 @@ def test_telemac3d_registered_as_engine_template():
 
 
 def test_telemac3d_solver_registered():
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )

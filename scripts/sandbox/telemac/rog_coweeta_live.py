@@ -56,7 +56,7 @@ def phase_mesh() -> None:
     from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as MA
     from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
         _sample_raster_at_nodes)
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     RUNDIR.mkdir(parents=True, exist_ok=True)
     print(f"[mesh] acquiring Coweeta watershed mesh at {POUR_POINT} ...", flush=True)
@@ -74,7 +74,7 @@ def phase_mesh() -> None:
     lc = TOOL_REGISTRY["fetch_landcover"].fn(bbox=list(BBOX), dataset="nlcd_2021",
                                              resolution_m=30)
     lc_uri = lc["uri"] if isinstance(lc, dict) else getattr(lc, "uri")
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools.cache import read_object_bytes_s3
     lc_path = RUNDIR / "nlcd.tif"
     lc_path.write_bytes(
         read_object_bytes_s3(lc_uri) if str(lc_uri).startswith("s3://")

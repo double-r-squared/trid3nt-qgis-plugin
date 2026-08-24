@@ -62,7 +62,7 @@ def _non_template_names() -> set[str]:
     the default config) are withheld. The object passed to build_tool_declarations
     is a NEW filtered dict (server._default_declarable_registry), not the live
     registry identity."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     return {
         name
@@ -125,7 +125,7 @@ async def _drive_one_turn(
 @pytest.mark.asyncio
 async def test_enforce_emits_selection_event(fake_llm):
     from trid3nt_server import server as agent_server
-    import trid3nt_server.data.search.tool_retrieval as tr
+    import trid3nt_server.tools.search.tool_retrieval as tr
 
     visible = {"geocode_location", "fetch_dem"}
     shadow_calls: list = []
@@ -147,8 +147,8 @@ async def test_enforce_emits_selection_event(fake_llm):
 @pytest.mark.asyncio
 async def test_fail_open_on_retrieval_error(fake_llm):
     from trid3nt_server import server as agent_server
-    from trid3nt_server.data import TOOL_REGISTRY
-    import trid3nt_server.data.search.tool_retrieval as tr
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.search.tool_retrieval as tr
 
     def _boom(*_a, **_k):
         raise RuntimeError("index exploded")
@@ -166,8 +166,8 @@ async def test_fail_open_on_retrieval_error(fake_llm):
 @pytest.mark.asyncio
 async def test_fail_open_on_empty_result(fake_llm):
     from trid3nt_server import server as agent_server
-    from trid3nt_server.data import TOOL_REGISTRY
-    import trid3nt_server.data.search.tool_retrieval as tr
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.search.tool_retrieval as tr
 
     # An empty would-be set must FAIL-OPEN (never empty / core-only catalog).
     with patch.object(tr, "retrieve_visible_tools", return_value=set()), \
@@ -185,9 +185,9 @@ async def test_fail_open_on_empty_result(fake_llm):
 @pytest.mark.asyncio
 async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
     from trid3nt_server import server as agent_server
-    from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
-    from trid3nt_server.data import TOOL_REGISTRY
-    import trid3nt_server.data.search.tool_retrieval as tr
+    from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.search.tool_retrieval as tr
 
     # Pick a small real subset of registered tools that includes the core floor.
     floor = {t for t in CORE_FLOOR if t in TOOL_REGISTRY}
@@ -217,8 +217,8 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(fake_llm):
 async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.data import TOOL_REGISTRY
-    import trid3nt_server.data.search.tool_retrieval as tr
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.search.tool_retrieval as tr
 
     state = SessionState(session_id=new_ulid())
 

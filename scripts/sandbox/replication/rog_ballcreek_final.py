@@ -27,7 +27,7 @@ CAL = dict(cn=55.0, manning=1.0, amc=2, ia=1)  # ia_option 1 == Ia ratio 0.2
 
 
 def analyze(key: str, tag: str) -> dict:
-    from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
+    from trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics import (
         nash_sutcliffe_efficiency as NSE, pearson_r2 as R2)
     f = json.loads((FORCING / f"{key}.json").read_text())
     h = json.loads((LIVE.RUNDIR / f"solve_{tag}" / "rog_outlet_hydrograph.json").read_text())

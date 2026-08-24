@@ -225,11 +225,11 @@ def test_build_geoclaw_mesh_layer_from_fort_q(tmp_path, monkeypatch):
             captured.update(kw)
 
     monkeypatch.setattr(
-        "trid3nt_server.data.simulation.solver.solver._get_s3_client",
+        "trid3nt_server.workflows.solver.solver._get_s3_client",
         lambda: _FakeS3(),
     )
     monkeypatch.setattr(
-        "trid3nt_server.data.simulation.solver.solver._get_runs_bucket",
+        "trid3nt_server.workflows.solver.solver._get_runs_bucket",
         lambda: "trid3nt-runs",
     )
 

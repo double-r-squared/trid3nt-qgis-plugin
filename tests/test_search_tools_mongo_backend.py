@@ -34,16 +34,16 @@ import pytest
 
 # Trigger full tool surface registration so the index includes a realistic
 # universe of candidates (mirrors test_search_tools.py setup).
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: F401
-from trid3nt_server.data.publish_layer import publish_layer  # noqa: F401 — registration side-effect
-from trid3nt_server.data.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.data.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.data.search.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
-from trid3nt_server.data.search.search_tools import search_tools as discover_module
-from trid3nt_server.data.simulation.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_server.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.search.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.search.search_tools import search_tools as discover_module
+from trid3nt_server.workflows.solver import solver  # noqa: F401 — registration side-effect
 from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
 
-from trid3nt_server.data.search.search_tools.search_tools import (
+from trid3nt_server.tools.search.search_tools.search_tools import (
     _build_cooccurrence_from_docs,
     _reset_cooccurrence_cache_for_tests,
     _reset_index_for_tests,
@@ -251,7 +251,7 @@ def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> 
     )
 
     # Past the window: backdate the cached index, then verify a third call refreshes.
-    from trid3nt_server.data.search.search_tools import search_tools as discover_mod
+    from trid3nt_server.tools.search.search_tools import search_tools as discover_mod
 
     with discover_mod._COOCCURRENCE_LOCK:
         cached = discover_mod._COOCCURRENCE_INDEX

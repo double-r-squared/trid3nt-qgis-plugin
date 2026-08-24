@@ -33,7 +33,7 @@ log = logging.getLogger("run_hecras_rog_coweeta_native_res")
 BBOX = (-83.4482, 35.0538, -83.4131, 35.0664)
 RESOLUTION_M = 20.0  # solver-floor (mesh generator MIN); 3DEP source is 10 m native
 
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
 
 PROOF_DIR = Path(__file__).parent.parent / "docs" / "proof"
 PROOF_DIR.mkdir(parents=True, exist_ok=True)

@@ -141,7 +141,7 @@ def test_inp_has_hydrographs_and_rdii_sections():
 @pytest.mark.asyncio
 async def test_plan_declares_the_native_cross_check_as_a_step():
     """The cross-check is not optional: it is one of the two acceptance checks."""
-    from trid3nt_server.declarative import resolve_params, validate_plan
+    from trid3nt_server.workflows.lib import resolve_params, validate_plan
 
     p = await resolve_params(PARAMS, {})
     built = plan(p, None)
@@ -155,7 +155,7 @@ async def test_plan_declares_the_native_cross_check_as_a_step():
 @pytest.mark.asyncio
 async def test_no_physics_param_rests_on_a_labeled_default():
     """Law 9, structurally: R/T/K are calibration SCENARIO values, not physics."""
-    from trid3nt_server.declarative.params import doors
+    from trid3nt_server.workflows.lib.params import doors
 
     offenders = [q.name for q in PARAMS
                  if q.consequence == "physics"
@@ -193,5 +193,5 @@ async def test_epa_table_7_1_replication():
 
 
 def test_registered():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     assert "swmm_rdii_rtk_unit_hydrograph" in TOOL_REGISTRY

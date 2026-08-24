@@ -36,7 +36,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     PipelineEmitter,
     emit_chart_payloads,
 )
-from trid3nt_server.data.processing.charts_common import build_budget_partition_chart, build_hazard_curve_chart, build_head_decline_chart, build_uhs_chart, is_chart_emission_result
+from trid3nt_server.tools.processing.charts_common import build_budget_partition_chart, build_hazard_curve_chart, build_head_decline_chart, build_uhs_chart, is_chart_emission_result
 
 
 # --------------------------------------------------------------------------- #

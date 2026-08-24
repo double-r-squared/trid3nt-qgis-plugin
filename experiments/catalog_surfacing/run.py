@@ -95,9 +95,9 @@ def _load_stack():
 
 
 def _reachability(arm: int, records: list[dict]) -> dict:
-    from trid3nt_server.data.fetchers._router import registration as reg
-    from trid3nt_server.data.search.search_tools import search_tools as st
-    from trid3nt_server.data.search.tool_retrieval import (
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.tools.search.search_tools import search_tools as st
+    from trid3nt_server.tools.search.tool_retrieval import (
         MAX_K,
         retrieve_ranked_tools,
         retrieve_visible_tools,
@@ -120,7 +120,7 @@ def _reachability(arm: int, records: list[dict]) -> dict:
             names = [c["name"] for c in reg.search_spec_cards(prompt, MAX_K)]
             ok = target in names
         elif arm == 3:
-            from trid3nt_server.data.fetchers._router import stratified as strat
+            from trid3nt_server.tools.fetchers._router import stratified as strat
             ranked, _cos = strat.rank_source_stratum(prompt, MAX_K)
             names = [n for n, _ in ranked]
             ok = target in names
@@ -150,9 +150,9 @@ def _reachability(arm: int, records: list[dict]) -> dict:
 
 def _validate_source_args(source: str, args: dict) -> tuple[bool, str, str]:
     """(ok, error_msg, error_code) from router.validate_params against the spec."""
-    from trid3nt_server.data.fetchers._router import registration as reg
-    from trid3nt_server.data.fetchers._router import router
-    from trid3nt_server.data.fetchers._router.errors import RouterInputError
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.tools.fetchers._router import router
+    from trid3nt_server.tools.fetchers._router.errors import RouterInputError
 
     spec = reg._SPEC_REGISTRY.get(source)
     if spec is None:
@@ -373,7 +373,7 @@ async def _drive_record_arm3(rec, adapter, reg, TOOL_REGISTRY, visible_names, de
         build_layers_present_note,
         build_tool_declarations,
     )
-    from trid3nt_server.data.fetchers._router import stratified as strat
+    from trid3nt_server.tools.fetchers._router import stratified as strat
 
     prompt = rec["prompt"]
     is_control = rec["group"] == "control"
@@ -525,11 +525,11 @@ async def _rerun_controls(ids, controls, n):
     from collections import Counter
 
     import trid3nt_server.adapters.adapter as adapter
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.fetchers._router import registration as reg
-    from trid3nt_server.data.fetchers._router import stratified as strat
-    from trid3nt_server.data.search.search_tools import search_tools as st
-    from trid3nt_server.data.search.tool_retrieval import (
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.tools.fetchers._router import stratified as strat
+    from trid3nt_server.tools.search.search_tools import search_tools as st
+    from trid3nt_server.tools.search.tool_retrieval import (
         MAX_K,
         retrieve_visible_tools,
     )
@@ -567,10 +567,10 @@ async def _rerun_controls(ids, controls, n):
 
 async def _run_drive(arm, records, out_jsonl):
     import trid3nt_server.adapters.adapter as adapter
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.fetchers._router import registration as reg
-    from trid3nt_server.data.search.search_tools import search_tools as st
-    from trid3nt_server.data.search.tool_retrieval import (
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.tools.search.search_tools import search_tools as st
+    from trid3nt_server.tools.search.tool_retrieval import (
         MAX_K,
         retrieve_visible_tools,
     )
@@ -580,7 +580,7 @@ async def _run_drive(arm, records, out_jsonl):
     st._reset_index_for_tests()
     st._get_index()  # warm the retrieval index once
     if arm == 3:
-        from trid3nt_server.data.fetchers._router import stratified as strat
+        from trid3nt_server.tools.fetchers._router import stratified as strat
         strat.reset_source_stratum_index_for_tests()
         strat.source_stratum_index()  # warm the source-stratum index once
     declarable_floor = set(srv._default_declarable_registry())
@@ -643,8 +643,8 @@ def main() -> int:
         os.environ[ARM_ENV] = str(arm)
 
     _load_stack()
-    from trid3nt_server.data.fetchers._router import registration as reg
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.tools import TOOL_REGISTRY
     import trid3nt_server.server as srv
 
     assert reg.catalog_arm() == (None if arm == 0 else str(arm)), "arm env not seen"

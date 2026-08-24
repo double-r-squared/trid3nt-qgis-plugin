@@ -33,8 +33,8 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
-from trid3nt_server.data import vector_tiles
-from trid3nt_server.data.vector_tiles import (
+from trid3nt_server.tools import vector_tiles
+from trid3nt_server.tools.vector_tiles import (
     DENSE_VECTOR_THRESHOLD,
     MAX_INLINE_FEATURES,
     DensifyMeta,
@@ -300,7 +300,7 @@ async def test_dense_vector_emits_simplified_inline_plus_density_tag(
 
     async def _fake_read(uri: str) -> dict[str, Any]:
         # Mirror the real function: read raw, then densify at the choke point.
-        from trid3nt_server.data.vector_tiles import densify_if_needed as _dn
+        from trid3nt_server.tools.vector_tiles import densify_if_needed as _dn
 
         obj, meta = _dn(dense, layer_id=uri)
         if meta is not None:
@@ -342,7 +342,7 @@ async def test_small_vector_stays_inline_with_no_density_tag(
     import trid3nt_server.emission.pipeline_emitter as pe
 
     async def _fake_read(uri: str) -> dict[str, Any]:
-        from trid3nt_server.data.vector_tiles import densify_if_needed as _dn
+        from trid3nt_server.tools.vector_tiles import densify_if_needed as _dn
 
         obj, meta = _dn(small, layer_id=uri)
         if meta is not None:

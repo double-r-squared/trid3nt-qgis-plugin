@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs
 from trid3nt_server.workflows.openquake.psha.psha import assemble_build_spec
-from trid3nt_server.data.processing.charts_common import (
+from trid3nt_server.tools.processing.charts_common import (
     build_hazard_quantile_band_chart,
 )
 from workers.openquake.job_ini import render_openquake_deck

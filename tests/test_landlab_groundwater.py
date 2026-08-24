@@ -250,7 +250,7 @@ def test_groundwater_templates_registered_as_landlab_templates():
     import trid3nt_server.main as m
 
     m._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in (
         "landlab_groundwater_water_table",

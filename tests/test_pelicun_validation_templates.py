@@ -29,7 +29,7 @@ import pytest
 import trid3nt_server.main as _main
 
 _main._import_tools_registry()
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
 
 
 def _call(name: str, **kw):

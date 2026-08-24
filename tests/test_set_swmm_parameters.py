@@ -43,8 +43,8 @@ swmm_api = pytest.importorskip("swmm_api")
 from swmm_api import read_inp_file  # noqa: E402
 from swmm_api.input_file.sections import InfiltrationHorton  # noqa: E402
 
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.data.simulation._setter_envelope import (  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.workflows.lib._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )

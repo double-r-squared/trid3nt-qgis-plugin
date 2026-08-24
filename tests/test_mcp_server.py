@@ -17,7 +17,7 @@ import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import RegisteredTool
+from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.mcp_server import build_server, dispatch_tool, load_registry
 
 
@@ -91,7 +91,7 @@ def stub_registry(monkeypatch):
         "stub_fetch_gated": _entry(stub_fetch_gated, estimator="estimate_payload_mb"),
     }
     # dispatch + the payload gate both read the live registry by name.
-    monkeypatch.setattr("trid3nt_server.data.TOOL_REGISTRY", registry)
+    monkeypatch.setattr("trid3nt_server.tools.TOOL_REGISTRY", registry)
     OBSERVED_THREADS.clear()
     return registry
 

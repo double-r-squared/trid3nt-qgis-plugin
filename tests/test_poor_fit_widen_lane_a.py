@@ -115,7 +115,7 @@ async def _drive_and_record_ks(top_score: float, monkeypatch) -> list[int]:
     ), patch.object(
         agent_server, "stream_events_with_contents", _fake_stream
     ), patch(
-        "trid3nt_server.data.search.tool_retrieval.retrieve_ranked_tools",
+        "trid3nt_server.tools.search.tool_retrieval.retrieve_ranked_tools",
         _fake_ranked,
     ):
         await agent_server._stream_model_reply(

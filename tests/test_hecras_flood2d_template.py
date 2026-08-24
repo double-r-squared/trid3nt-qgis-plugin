@@ -19,7 +19,7 @@ def test_fresh_aoi_archetype_present():
 
 
 def test_template_registered_engine_tier():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "hecras_flood_2d" in TOOL_REGISTRY
     m = TOOL_REGISTRY["hecras_flood_2d"].metadata
@@ -70,7 +70,7 @@ def test_resolution_out_of_range_is_quoted_back_not_clamped():
         _autoscale_resolution,
         _RES_SPEC,
     )
-    from trid3nt_server.data.resolution_declared import (
+    from trid3nt_server.tools.resolution_declared import (
         ResolutionOutOfRangeError,
         resolve_resolution,
     )

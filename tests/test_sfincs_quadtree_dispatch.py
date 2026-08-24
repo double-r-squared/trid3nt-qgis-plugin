@@ -73,7 +73,7 @@ def test_compose_build_spec_omits_coast_band_when_none():
 
 
 def test_solver_registered():
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )

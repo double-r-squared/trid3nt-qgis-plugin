@@ -31,13 +31,13 @@ from harness import (  # noqa: E402
 )
 
 try:
-    from trid3nt_server.data.fetchers.socioeconomic.fetch_hrsl_population import (  # noqa: E402
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population import (  # noqa: E402
         fetch_hrsl_population as hrsl_mod,
     )
 except ImportError:
     hrsl_mod = None
 try:
-    from trid3nt_server.data.fetchers.climate.fetch_chirps_precipitation import (  # noqa: E402
+    from trid3nt_server.tools.fetchers.climate.fetch_chirps_precipitation import (  # noqa: E402
         fetch_chirps_precipitation as chirps_mod,
     )
 except ImportError:
@@ -123,7 +123,7 @@ def run_hrsl(specs) -> SourceResult:
         _cmp_error(res, "error.empty", tw_e, rt_e)
 
         # --- forced upstream: twin rasterio.open raises; router transport get_bytes raises ---
-        from trid3nt_server.data.fetchers._router import transport as _tp
+        from trid3nt_server.tools.fetchers._router import transport as _tp
         def _boom_open(*a, **k):
             raise OSError("forced upstream")
         def _boom_bytes(*a, **k):
@@ -156,7 +156,7 @@ _WG = (72.0, 15.0, 78.0, 21.0)            # Western Ghats -- strong monsoon CHIR
 def run_chirps(specs) -> SourceResult:
     res = SourceResult("fetch_chirps_precipitation")
     spec = specs["fetch_chirps_precipitation"]
-    from trid3nt_server.data.fetchers._router import transport as _tp
+    from trid3nt_server.tools.fetchers._router import transport as _tp
     try:
         res.add("schema.docstring_verbatim",
                 spec.docstring == inspect.getdoc(chirps_mod.fetch_chirps_precipitation),

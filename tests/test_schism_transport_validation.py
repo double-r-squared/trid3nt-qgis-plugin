@@ -118,7 +118,7 @@ async def test_sim_days_out_of_range_returns_typed_error():
 
 
 def test_registered():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     e = TOOL_REGISTRY.get("schism_transport_validation")
     assert e is not None
@@ -126,7 +126,7 @@ def test_registered():
 
 
 def test_corpus_surfaces_the_template():
-    from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
     visible = retrieve_visible_tools(
         "compare SCHISM transport schemes upwind vs TVD numerical mixing", None, 8
     )

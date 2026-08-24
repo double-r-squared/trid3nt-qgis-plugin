@@ -48,7 +48,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_server.workflows.sfincs.flood.flood import (
     model_flood_scenario,
     sfincs_flood,
@@ -1417,7 +1417,7 @@ def test_build_sfincs_model_emits_manifest_json_with_input_list(
 
     # Inject an in-memory S3 client (the boto3 put_object seam the deck upload
     # uses via tools.simulation.solver._get_s3_client). Capture the manifest.json body.
-    from trid3nt_server.data.simulation.solver.solver import set_s3_client
+    from trid3nt_server.workflows.solver.solver import set_s3_client
 
     uploaded_files: dict[str, Any] = {}
 
@@ -2562,7 +2562,7 @@ async def test_model_flood_scenario_publish_layer_failure_drops_layer() -> None:
     (Supersedes the prior "falls back to gs://" contract, which codified the
     leak this job closes.)
     """
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 
     run_id = new_ulid()
     handle = _make_handle(run_id=run_id)
@@ -2678,7 +2678,7 @@ async def test_wrapper_publish_failure_returns_truthful_dict_not_layer_uri() -> 
       * The dict carries the depth metrics + provenance so the agent narrates
         the publish failure honestly and can retry.
     """
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 
     run_id = new_ulid()
     handle = _make_handle(run_id=run_id)
@@ -3509,7 +3509,7 @@ def test_nlcd_gate_s3_read_extracts_classes_via_boto3() -> None:
             return raster_bytes
 
         with patch(
-            "trid3nt_server.data.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             side_effect=_fake_read_object_bytes_s3,
         ) as mock_s3:
             classes = sfincs_builder._extract_unique_nlcd_classes(
@@ -3529,7 +3529,7 @@ def test_nlcd_gate_s3_read_boto3_failure_raises_landcover_read_failed() -> None:
     from trid3nt_server.workflows.sfincs import sfincs_builder
 
     with patch(
-        "trid3nt_server.data.cache.read_object_bytes_s3",
+        "trid3nt_server.tools.cache.read_object_bytes_s3",
         side_effect=RuntimeError("boto3 get_object failed: AccessDenied"),
     ):
         # Re-fetch off the live module (already imported above) at call time
@@ -3556,7 +3556,7 @@ def test_nlcd_gate_gs_read_unchanged_does_not_call_boto3() -> None:
     gs_uri = "gs://test-cache/cache/landcover/nlcd.tif"
     with (
         patch(
-            "trid3nt_server.data.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             side_effect=AssertionError("boto3 reader must not be called for gs://"),
         ),
         patch.object(

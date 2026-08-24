@@ -22,19 +22,19 @@ import numpy as np
 import pytest
 import rasterio.transform as rtransform
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.errors import (
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.data.fetchers._router.executors import raster_cog
-from trid3nt_server.data.fetchers._router.router import (
+from trid3nt_server.tools.fetchers._router.executors import raster_cog
+from trid3nt_server.tools.fetchers._router.router import (
     synthesize_metadata,
     synthesize_payload_estimator,
 )
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.data.fetchers._router.transport import staged as _staged
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router.transport import staged as _staged
 
 #: Story County, Iowa -- the live-acceptance AOI.
 _BBOX = [-93.70, 41.86, -93.20, 42.21]
@@ -75,7 +75,7 @@ def _patch_open(monkeypatch, arr, seen: dict | None = None):
         yield _FakeSrc(arr)
 
     monkeypatch.setattr(
-        "trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open
+        "trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open
     )
     # The staged bucket/key -> url resolution now happens (and refuses to fall
     # back to real AWS -- B2) BEFORE this open is reached, so every mocked-read
@@ -124,7 +124,7 @@ def test_payload_estimate_declared(spec):
 
 def test_style_preset_resolves_in_the_qgis_registry(spec):
     """A preset absent from the registry silently renders a wrong colormap."""
-    from trid3nt_server.data.publish_layer import publish_layer as pl
+    from trid3nt_server.tools.publish_layer import publish_layer as pl
 
     assert pl._registry_style_params(spec.output.style_preset) is not None
 
@@ -299,7 +299,7 @@ def test_configured_endpoint_with_404_raises_typed_config_error_not_empty(spec, 
     monkeypatch.setenv("AWS_ENDPOINT_URL", "http://minio.local:9000")
     import contextlib
 
-    from trid3nt_server.data.fetchers._router.transport.errors import TransportNotFound
+    from trid3nt_server.tools.fetchers._router.transport.errors import TransportNotFound
 
     @contextlib.contextmanager
     def _fake_open_404(url):
@@ -307,7 +307,7 @@ def test_configured_endpoint_with_404_raises_typed_config_error_not_empty(spec, 
         yield  # pragma: no cover
 
     monkeypatch.setattr(
-        "trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open_404
+        "trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open_404
     )
     with pytest.raises(RouterUpstreamError) as ei:
         raster_cog._direct_window_to_array(spec, {"bbox": _BBOX, "source": "reitz_2017"})

@@ -29,7 +29,7 @@ def _patch_3dep_unavailable(monkeypatch, tmp_path: Path) -> Path:
         "fetch_dem": types.SimpleNamespace(fn=staticmethod(_boom_3dep)),
         "fetch_copernicus_dem": types.SimpleNamespace(fn=staticmethod(_fake_copernicus)),
     }
-    import trid3nt_server.data as _tools
+    import trid3nt_server.tools as _tools
     monkeypatch.setattr(_tools, "TOOL_REGISTRY", fake_registry)
     return cop_tif
 

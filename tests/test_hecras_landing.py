@@ -265,7 +265,7 @@ def test_solver_registered():
         HECRAS_SOLVER_NAME,
         HECRAS_LEVEE_BREACH_SOLVER_NAME,
     )
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY,
         LOCAL_SOLVER_SPEC_REGISTRY,
     )

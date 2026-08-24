@@ -124,7 +124,7 @@ def _patch_no_fault(monkeypatch) -> None:
     """Force the GEM fault fetch to return no intersecting faults (offline)."""
     import types as _t
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     monkeypatch.setitem(
         TOOL_REGISTRY, "fetch_fault_sources",
@@ -237,7 +237,7 @@ def test_templates_registered_engine_openquake():
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in ("openquake_scenario_gmf", "openquake_secondary_perils"):
         e = TOOL_REGISTRY[name]

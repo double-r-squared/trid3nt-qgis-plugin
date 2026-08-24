@@ -14,7 +14,7 @@ the F-arc swept `trid3nt_server/` only, so no worker was ever in scope.
 
 ## The visibility contract
 
-The universal fetcher router (`trid3nt_server/data/fetchers/`) gives a fetch five
+The universal fetcher router (`trid3nt_server/tools/fetchers/`) gives a fetch five
 properties. Every row below is graded against these five, not against a vague
 sense of "hidden":
 
@@ -34,7 +34,7 @@ sense of "hidden":
 Two structural greps fix the frame for the whole table:
 
 - `maybe_emit_input_on_fetch` / `emit_on_fetch` -- **zero callers outside
-  `trid3nt_server/data/fetchers/`**.
+  `trid3nt_server/tools/fetchers/`**.
 - `record_provenance` -- **zero callers outside `data/fetchers/` and
   `data/cache.py`**.
 - `get_ladder` / `walk_ladder` -- exactly one production caller,
@@ -61,7 +61,7 @@ Denominator, stated:
 |---|---|---|---|
 | `workers/` | 107 .py (non-test) + 14 Dockerfiles across 23 dirs | all | 8 fetch sites in our own worker code, ALL in `workers/telemac/`; 2 more inside solver libraries (sfincs/hydromt, openquake engine) |
 | `trid3nt_server/` outside `data/fetchers/` | 595 .py | all | 14 distinct egress paths |
-| `trid3nt_server/data/fetchers/` | 211 .py | excluded | the substrate itself |
+| `trid3nt_server/tools/fetchers/` | 211 .py | excluded | the substrate itself |
 | `scripts/sandbox/` + every bind-mounted host dir | 45 .py | all | 1 promoted-to-product module, rest dev-only |
 | `plugin/` | 73 .py | all | clean beyond daemon + basemaps |
 | `contracts/` | 65 .py | all | clean |
@@ -476,7 +476,7 @@ _EXTERNAL_FETCH_ALLOWLIST: dict[str, tuple[str, str, str]] = {
         'xmlns:gml="http://www.opengis.net/gml"', "INERT",
         "XML namespace identifiers written INTO generated NRML; never "
         "dereferenced, no schema validation is enabled in the worker."),
-    "trid3nt_server/data/search/web_fetch/web_fetch.py": (
+    "trid3nt_server/tools/search/web_fetch/web_fetch.py": (
         "httpx", "LEGITIMATE",
         "the declared open-web tool: reaching a model-named URL IS its "
         "contract."),

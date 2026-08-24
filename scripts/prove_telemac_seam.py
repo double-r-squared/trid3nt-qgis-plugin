@@ -32,7 +32,7 @@ import boto3
 
 # Register the telemac spec (imports run_telemac -> SOLVER/LOCAL registries).
 from trid3nt_server.workflows.telemac import run_telemac as _rt  # noqa: F401
-from trid3nt_server.data.simulation.solver.solver import run_solver, wait_for_completion
+from trid3nt_server.workflows.solver.solver import run_solver, wait_for_completion
 
 from _env_guard import require_local_endpoint
 

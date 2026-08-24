@@ -12,14 +12,14 @@ Purpose:
 
 What this test does:
   1. Imports every tool in TOOL_REGISTRY (via the same eager-import path that
-     ``trid3nt_server.data`` uses at startup, so no tool is missed).
+     ``trid3nt_server.tools`` uses at startup, so no tool is missed).
   2. For each tool, iterates 20 invented Gemini kwarg patterns drawn from the
      real-world set that caused failures (run_name, scenario_id, description,
      durationHours, rainfall_event, etc.) plus realistic valid minimal params
      for that tool's required parameters.
   3. Calls each (valid_params | invented_kwargs) combination through the
      normalizer path:
-       - If ``trid3nt_server.data.tool_arg_normalizer.normalize_args`` is available
+       - If ``trid3nt_server.tools.tool_arg_normalizer.normalize_args`` is available
          (job-0164 landed): use it, assert no TypeError on the normalised call.
        - Otherwise (job-0164 not yet merged): fall back to
          ``_inspect_strip_unknown`` which uses ``inspect.signature`` to filter
@@ -55,7 +55,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 
 # ---------------------------------------------------------------------------
 # Eager-import all workflow modules that add to TOOL_REGISTRY at import time.
@@ -79,7 +79,7 @@ logger = logging.getLogger(__name__)
 def _get_normalizer():
     """Return a (tool_name, raw_args, fn) -> dict callable.
 
-    If ``trid3nt_server.data.tool_arg_normalizer.normalize_args`` is available
+    If ``trid3nt_server.tools.tool_arg_normalizer.normalize_args`` is available
     (job-0164 landed), return it directly.  Otherwise return
     ``_inspect_strip_unknown`` which uses inspect.signature to achieve the
     same effect.
@@ -89,7 +89,7 @@ def _get_normalizer():
         when the production normalizer is in use.
     """
     try:
-        from trid3nt_server.data.tool_arg_normalizer import normalize_args  # type: ignore[import]
+        from trid3nt_server.tools.tool_arg_normalizer import normalize_args  # type: ignore[import]
         return normalize_args, True
     except ImportError:
         return _inspect_strip_unknown, False
@@ -485,7 +485,7 @@ def test_normalizer_presence_logged() -> None:
     if is_real:
         logger.info(
             "OQ-0168-NORMALIZER-DEPENDENCY resolved: "
-            "trid3nt_server.data.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
+            "trid3nt_server.tools.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
         )
     else:
         logger.warning(

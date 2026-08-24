@@ -40,7 +40,7 @@ def test_swmm_urban_flood_registered_and_typed_error():
     raises) on a missing/invalid bbox."""
     import asyncio
 
-    import trid3nt_server.data as T
+    import trid3nt_server.tools as T
     from trid3nt_server.workflows.swmm.urban_flood.urban_flood import swmm_urban_flood
 
     assert "swmm_urban_flood" in T.TOOL_REGISTRY
@@ -330,7 +330,7 @@ def _install_mesh_upload_s3(monkeypatch) -> "_MeshUploadS3":
 
     Uses monkeypatch.setattr on the solver module global so the bound client +
     runs bucket are auto-restored at test teardown (no global leak)."""
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     fake = _MeshUploadS3()
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")

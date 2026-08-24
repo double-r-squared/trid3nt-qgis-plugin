@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,

@@ -101,7 +101,7 @@ def test_rain_only_control_drops_the_dividing_temperature_below_everything():
 # --- the declared plan ------------------------------------------------------ #
 @pytest.mark.asyncio
 async def test_plan_is_one_forcing_and_three_variants():
-    from trid3nt_server.declarative import resolve_params, validate_plan
+    from trid3nt_server.workflows.lib import resolve_params, validate_plan
 
     p = await resolve_params(PARAMS, {})
     built = plan(p, None)
@@ -117,7 +117,7 @@ async def test_plan_is_one_forcing_and_three_variants():
 @pytest.mark.asyncio
 async def test_no_physics_param_rests_on_a_labeled_default():
     """Law 9, structurally: nothing here claims to be a site measurement."""
-    from trid3nt_server.declarative.params import doors
+    from trid3nt_server.workflows.lib.params import doors
 
     offenders = [q.name for q in PARAMS
                  if q.consequence == "physics"
@@ -158,7 +158,7 @@ async def test_a_dividing_temperature_below_the_cold_spell_builds_no_pack():
 @pytest.mark.asyncio
 async def test_a_cold_spell_above_freezing_is_clamped_by_the_declaration():
     """``cold_temp_f`` is the SUB-FREEZING spell; its bound says so and holds."""
-    from trid3nt_server.declarative import resolve_params
+    from trid3nt_server.workflows.lib import resolve_params
 
     p = await resolve_params(PARAMS, {"cold_temp_f": 40.0})
     row = p.row("cold_temp_f")
@@ -168,5 +168,5 @@ async def test_a_cold_spell_above_freezing_is_clamped_by_the_declaration():
 
 
 def test_registered():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     assert "swmm_snowmelt_degree_day" in TOOL_REGISTRY

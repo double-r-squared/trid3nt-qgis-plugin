@@ -27,7 +27,7 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.data.fetchers._router.emit_on_fetch import (
+from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
     maybe_emit_input_on_fetch,
 )
@@ -38,7 +38,7 @@ from trid3nt_server.emission.pipeline_emitter import (
 )
 
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.data.publish_layer.publish_layer.publish_layer"
+    "trid3nt_server.tools.publish_layer.publish_layer.publish_layer"
 )
 
 

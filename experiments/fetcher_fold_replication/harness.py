@@ -121,7 +121,7 @@ def _make_stub_read_through(sink: dict[str, bytes]):
     the twin and router build their LayerURI identically -- only the fetched
     bytes come from the synthetic upstream, no S3/MinIO round-trip.
     """
-    from trid3nt_server.data.cache import ReadThroughResult
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     def _stub(metadata, params, ext, fetch_fn):  # noqa: ANN001
         data = fetch_fn()
@@ -206,14 +206,14 @@ def _patched(*patchers):
 
 
 def load_specs():
-    from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
+    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
     return compose_specs_from_tree()
 
 
 def route_layer(spec, params, sink):
     """Run router.route with read_through stubbed; return the LayerURI."""
-    from trid3nt_server.data.fetchers._router import router as router_mod
+    from trid3nt_server.tools.fetchers._router import router as router_mod
 
     stub = _make_stub_read_through(sink)
     with _patched(mock.patch.object(router_mod, "read_through", stub)):

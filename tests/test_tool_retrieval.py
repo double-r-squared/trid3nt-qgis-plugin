@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.data.search.search_tools.search_tools as dd
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.search import tool_retrieval as trmod
-from trid3nt_server.data.search.tool_retrieval import (
+import trid3nt_server.tools.search.search_tools.search_tools as dd
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.search import tool_retrieval as trmod
+from trid3nt_server.tools.search.tool_retrieval import (
     CORE_FLOOR,
     DEFAULT_K,
     MAX_K,
@@ -124,7 +124,7 @@ def _pool_hidden_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY as _full
+    from trid3nt_server.tools import TOOL_REGISTRY as _full
 
     return {
         n for n, e in _full.items()
@@ -226,7 +226,7 @@ def _full_registry_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY as _full
+    from trid3nt_server.tools import TOOL_REGISTRY as _full
 
     return set(_full)
 

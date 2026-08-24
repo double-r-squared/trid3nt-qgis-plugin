@@ -80,7 +80,7 @@ def _publish_manifest_dict():
 
 def _patch_both_present(monkeypatch):
     """Serve BOTH outputs.json and publish_manifest.json for the run prefix."""
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     outputs_uri = f"s3://runs/{RID}/outputs.json"
     manifest_uri = f"s3://runs/{RID}/publish_manifest.json"

@@ -24,8 +24,8 @@ import pytest
 import rasterio
 import rasterio.transform as rtransform
 
-from trid3nt_server.data.fetchers._router import transport
-from trid3nt_server.data.fetchers._router.transport import (
+from trid3nt_server.tools.fetchers._router import transport
+from trid3nt_server.tools.fetchers._router.transport import (
     CoalescedRangeFile,
     TransportAuthError,
     TransportError,
@@ -320,11 +320,11 @@ def test_block_completeness_assertion(range_server):
 # --------------------------------------------------------------------------- #
 
 from trid3nt_contracts.source_spec import SourceSpec  # noqa: E402
-from trid3nt_server.data.fetchers._router.errors import (  # noqa: E402
+from trid3nt_server.tools.fetchers._router.errors import (  # noqa: E402
     RouterEmptyError,
     RouterUpstreamError,
 )
-from trid3nt_server.data.fetchers._router.executors import raster_cog  # noqa: E402
+from trid3nt_server.tools.fetchers._router.executors import raster_cog  # noqa: E402
 
 
 def _direct_window_spec(url: str) -> SourceSpec:

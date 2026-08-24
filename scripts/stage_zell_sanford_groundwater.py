@@ -86,7 +86,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from trid3nt_server.data.cache import PROVENANCE_SCHEMA  # noqa: E402
+from trid3nt_server.tools.cache import PROVENANCE_SCHEMA  # noqa: E402
 
 #: Staged posting, degrees. 1/450 deg is 246.7 m of latitude -- deliberately
 #: FINER than the 250 m source cell, so the nearest-neighbour reprojection never

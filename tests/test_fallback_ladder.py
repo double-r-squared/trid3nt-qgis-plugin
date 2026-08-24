@@ -16,8 +16,8 @@ from rasterio.transform import from_origin
 
 from trid3nt_contracts.common import render_fallback_line
 from trid3nt_contracts.execution import TopobathyResult
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.fetchers._router.hooks import topobathy as tb
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.fallbacks import (
     LADDER_ERROR_CODE,
     Ladder,
@@ -969,7 +969,7 @@ class _Transient(Exception):
 def _fault_the_rungs_fetch(monkeypatch) -> None:
     """CUDEM's footprint gap is measured PRE-fetch; the rung's own read then
     faults on the cache/transport edge."""
-    from trid3nt_server.data.fetchers._router import router as router_mod
+    from trid3nt_server.tools.fetchers._router import router as router_mod
 
     def _boom(*_a: Any, **_k: Any) -> Any:
         raise _Transient("EndpointConnectionError: could not connect to MinIO")
@@ -1419,7 +1419,7 @@ def test_a_user_supplied_rung_still_surfaces_its_input_layer(
     """A rung with its own ``call`` never reaches _route_once, so nothing records
     the emit-on-fetch arguments -- the user's own bed would be the one input that
     never appears on the map."""
-    from trid3nt_server.data.fetchers._router import emit_on_fetch
+    from trid3nt_server.tools.fetchers._router import emit_on_fetch
 
     surfaced: list = []
     monkeypatch.setattr(

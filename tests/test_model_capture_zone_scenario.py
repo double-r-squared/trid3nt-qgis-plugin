@@ -29,7 +29,7 @@ import pytest
 
 from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.modflow.capture_zone import capture_zone as cz_mod
 from trid3nt_server.workflows.modflow.wellhead_protection import wellhead_protection as whpa_mod
 from trid3nt_server.workflows.modflow.capture_zone.capture_zone import (
@@ -264,7 +264,7 @@ async def test_whpa_wrapper_missing_well_returns_user_input_required() -> None:
 
 
 def test_capture_zone_registered_uncacheable() -> None:
-    import trid3nt_server.data  # noqa: F401 - fires registration side-effects
+    import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
 
     entry = TOOL_REGISTRY.get("modflow_capture_zone")
     assert entry is not None, "modflow_capture_zone not in TOOL_REGISTRY"
@@ -274,7 +274,7 @@ def test_capture_zone_registered_uncacheable() -> None:
 
 
 def test_wellhead_protection_registered_uncacheable() -> None:
-    import trid3nt_server.data  # noqa: F401
+    import trid3nt_server.tools  # noqa: F401
 
     entry = TOOL_REGISTRY.get("modflow_wellhead_protection")
     assert entry is not None, "modflow_wellhead_protection not in TOOL_REGISTRY"

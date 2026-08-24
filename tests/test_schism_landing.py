@@ -400,9 +400,9 @@ def test_schism_local_spec_and_classify_exit(tmp_path: Path):
 # 7. Registration pins
 # --------------------------------------------------------------------------- #
 def test_registered_and_solver_wired():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     import trid3nt_server.workflows  # noqa: F401 -- trigger solver reg
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY, LOCAL_SOLVER_SPEC_REGISTRY,
     )
 

@@ -188,7 +188,7 @@ def test_publish_swmm_quantities_emits_four_layers() -> None:
 
 
 def test_swmm_step3_style_presets_resolve() -> None:
-    from trid3nt_server.data.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
+    from trid3nt_server.tools.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
     from trid3nt_contracts.output_quantities import get_output_registry
 
     for spec in get_output_registry("swmm"):

@@ -38,8 +38,8 @@ import pytest
 
 flopy = pytest.importorskip("flopy")
 
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.data.simulation._setter_envelope import (  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.workflows.lib._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )

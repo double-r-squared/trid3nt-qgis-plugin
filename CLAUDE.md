@@ -9,8 +9,12 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 ## The map
 
 - `trid3nt_server/` - the framework package, by feature:
-  `data/` (fetcher specs + router + emit-on-fetch), `mesh/` (shared
-  mesh layer), `workflows/` (engine composers), `gates/` (GateSpec
+  `tools/` (the atomic-tool registry: fetcher specs + router +
+  emit-on-fetch, processing, search, publish_layer), `data/`
+  (category-era fossil - only the per-engine simulation shims remain),
+  `mesh/` (shared mesh layer), `workflows/` (engine composers, plus
+  `lib/` the declarative library and `solver/` the solve seam),
+  `gates/` (GateSpec
   engine + cards + pending registries), `adapters/` (LLM providers -
   the ONLY place provider nouns appear), `server/` (session/ turn/
   dispatch/ protocol/), `emission/` (layer publication + the

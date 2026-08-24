@@ -18,11 +18,11 @@ import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_contracts.execution import LandcoverResult
-from trid3nt_server.data.fetchers._fetch_common import round_bbox_to_resolution
-from trid3nt_server.data.fetchers._router import router as _router
-from trid3nt_server.data.fetchers._router.hooks import landcover as lch
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.data.search import ogc_adapter
+from trid3nt_server.tools.fetchers._fetch_common import round_bbox_to_resolution
+from trid3nt_server.tools.fetchers._router import router as _router
+from trid3nt_server.tools.fetchers._router.hooks import landcover as lch
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.search import ogc_adapter
 
 _FORT_MYERS = [-81.95, 26.55, -81.80, 26.70]
 
@@ -76,7 +76,7 @@ def _patch_ogc(monkeypatch, tile_bytes: bytes):
 
 
 def _patch_router_cache(monkeypatch, store):
-    from trid3nt_server.data.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key as ck, is_cacheable,
     )
 

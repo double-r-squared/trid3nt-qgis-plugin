@@ -41,7 +41,7 @@ from trid3nt_server.adapters.adapter import (  # noqa: E402
     _strip_private_params,
     build_tool_declarations,
 )
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
 
 
 # ---------------------------------------------------------------------------

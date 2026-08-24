@@ -18,12 +18,12 @@ import zipfile
 import numpy as np
 import pytest
 
-from trid3nt_server.data.fetchers._router.errors import RouterError
-from trid3nt_server.data.fetchers._router.executors import raster_cog, zip_vector
-from trid3nt_server.data.fetchers._router.hooks import admin_boundaries as adm
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.data.fetchers._router.transport import TransportNotFound
+from trid3nt_server.tools.fetchers._router.errors import RouterError
+from trid3nt_server.tools.fetchers._router.executors import raster_cog, zip_vector
+from trid3nt_server.tools.fetchers._router.hooks import admin_boundaries as adm
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router.transport import TransportNotFound
 
 
 @pytest.fixture(scope="module")
@@ -83,7 +83,7 @@ def _make_tile_zip(r, c, g, value):
 
 def _patch_get_zip(monkeypatch, fn):
     monkeypatch.setattr(
-        "trid3nt_server.data.fetchers._router.transport.get_zip", fn
+        "trid3nt_server.tools.fetchers._router.transport.get_zip", fn
     )
 
 

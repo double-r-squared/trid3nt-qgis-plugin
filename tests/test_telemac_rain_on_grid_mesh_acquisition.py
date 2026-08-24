@@ -280,7 +280,7 @@ def test_resolve_bare_earth_dem_pins_3dep(tmp_path, monkeypatch):
     Copernicus DSM (canopy inflates node elevations under tree cover)."""
     import types
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     src_dem = tmp_path / "src_dem.tif"
     src_dem.write_bytes(b"GTIFF-bare-earth")
@@ -309,7 +309,7 @@ def test_resolve_bare_earth_dem_loud_fallback(tmp_path, monkeypatch, caplog):
     import logging
     import types
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     cop_dem = tmp_path / "cop_dem.tif"
     cop_dem.write_bytes(b"GTIFF-copernicus-dsm")

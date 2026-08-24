@@ -18,8 +18,8 @@ import re
 
 import pytest
 
-from trid3nt_server.data.fetchers._router.registration import _validate_hooks
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router.registration import _validate_hooks
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.fallbacks import (
     BELOW_PRIMARY_CLASSES,
     DEGRADATION_CLASSES,
@@ -87,7 +87,7 @@ def test_registration_refuses_a_cross_dataset_endpoint_fallback(specs):
 def test_the_spec_card_key_says_what_the_mechanism_is():
     """``fallback`` on a card is ambiguous between a mirror hop and a ladder
     rung; the model reads this text and must not conflate them."""
-    from trid3nt_server.data.fetchers._router import registration, stratified
+    from trid3nt_server.tools.fetchers._router import registration, stratified
 
     card_src = inspect.getsource(registration.spec_card)
     assert '"endpoint_fallback": list(spec.endpoint_fallback)' in card_src
@@ -274,8 +274,8 @@ def test_geoclaw_propagates_a_transport_fault_instead_of_the_land_dem():
     import importlib
     from dataclasses import replace
 
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.fetchers._router.hooks.topobathy import (
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
         TopobathyUpstreamError,
     )
 
@@ -307,8 +307,8 @@ async def test_schism_propagates_a_transport_fault_instead_of_the_land_dem():
     import importlib
     from dataclasses import replace
 
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.fetchers._router.hooks.topobathy import (
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
         TopobathyUpstreamError,
     )
 
@@ -359,7 +359,7 @@ def test_every_ladder_is_a_complete_account_of_its_own_rungs():
 def test_the_bathymetry_ladder_declares_every_source_that_can_paint():
     """The four sources ``_rung_coverage`` can report must each be a rung, or the
     walker logs an unknown key and a model cannot account for the raster."""
-    from trid3nt_server.data.fetchers._router.hooks import topobathy as tb
+    from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 
     declared = {r.name for r in get_ladder("fetch_topobathy").rungs}
     measured = set(tb._rung_coverage(0.5, 0.25, 0.25) or {})

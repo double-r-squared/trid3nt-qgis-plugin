@@ -20,10 +20,10 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import data as agent_tools
+from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import ModelSettings
-from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
-from trid3nt_server.data import RegisteredTool
+from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
+from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -137,7 +137,7 @@ async def _drive_with_trimmed_gate(state, monkeypatch, decl_registries, fake_llm
     # already visible and the union is a no-op).
     visible = set(CORE_FLOOR) | {"search_tools"}
     monkeypatch.setattr(
-        "trid3nt_server.data.search.tool_retrieval.retrieve_visible_tools",
+        "trid3nt_server.tools.search.tool_retrieval.retrieve_visible_tools",
         lambda *_a, **_k: set(visible),
     )
 
@@ -191,7 +191,7 @@ async def test_discovery_expand_noop_when_gate_untrimmed(_stub_search, monkeypat
     """With the FULL registry visible (retrieval surfaces everything), the
     discovered tools are already present -> no rebuild, no cap consumed."""
     monkeypatch.setattr(
-        "trid3nt_server.data.search.tool_retrieval.retrieve_visible_tools",
+        "trid3nt_server.tools.search.tool_retrieval.retrieve_visible_tools",
         lambda *_a, **_k: set(agent_tools.TOOL_REGISTRY),
     )
     decl_registries: list[set] = []

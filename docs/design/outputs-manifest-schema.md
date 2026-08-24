@@ -136,7 +136,7 @@ different lifecycles: `outputs.json` grows monotonically during the run;
 existence is the terminal signal (`wait_for_completion`'s existing
 contract, unchanged).
 
-Today's poll loop (`trid3nt_server/data/simulation/solver/solver.py`,
+Today's poll loop (`trid3nt_server/workflows/solver/solver.py`,
 `DEFAULT_POLL_INTERVAL_S = 10`) already polls for `completion.json` every
 10 s alongside a SEPARATE 10 s live-progress heartbeat
 (`workflows/shared/solve_progress.py`, elapsed/ETA only, no real solver

@@ -20,7 +20,7 @@ from tests.card_client import (  # noqa: F401 - card_client is a fixture
     answer_form_card,
     card_client,
 )
-from trid3nt_server.declarative import (
+from trid3nt_server.workflows.lib import (
     Derived,
     Param,
     doors,
@@ -122,7 +122,7 @@ async def test_a_user_supplied_value_claims_no_real_source() -> None:
 @pytest.mark.asyncio
 async def test_a_tiny_physics_value_survives_the_provenance_row() -> None:
     """Significant figures, not decimals: 9.3e-07 must not be reported as 0."""
-    from trid3nt_server.declarative import provenance_entries
+    from trid3nt_server.workflows.lib import provenance_entries
 
     declared = (
         Param("k", door=doors.SCENARIO, default=9.298175630928423e-07,
@@ -142,7 +142,7 @@ async def test_the_run_hands_back_the_sheet_it_actually_ran_on(card_client) -> N
     whole defect: without ``RunResult.params`` the only sheet a narrator can reach
     reports the number the user REPLACED, while the solver ran on the approved one.
     """
-    from trid3nt_server.declarative import FormGate, Workflow, interpret
+    from trid3nt_server.workflows.lib import FormGate, Workflow, interpret
 
     declared = (
         Param("q", door=doors.SCENARIO, default=1.0, bounds=(0.0, 100.0),
@@ -167,7 +167,7 @@ async def test_the_run_hands_back_the_sheet_it_actually_ran_on(card_client) -> N
 
 
 def _echo_step(**kwargs: Any) -> Any:
-    from trid3nt_server.declarative import Step
+    from trid3nt_server.workflows.lib import Step
 
     return Step(runner=f"{__name__}._echo", kwargs=kwargs)
 

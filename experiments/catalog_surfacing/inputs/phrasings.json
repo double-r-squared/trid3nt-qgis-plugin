@@ -17,7 +17,7 @@
     {
       "source": "fetch_gridmet",
       "family": "climate",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/climate/fetch_gridmet/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/climate/fetch_gridmet/source.yaml",
       "origin_group": "REUSED_SIGNED",
       "acceptable": ["fetch_gridmet"],
       "phrasings": [
@@ -38,7 +38,7 @@
     {
       "source": "fetch_hifld_critical_infrastructure",
       "family": "hazard",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hazard/fetch_hifld_critical_infrastructure/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hazard/fetch_hifld_critical_infrastructure/source.yaml",
       "origin_group": "REUSED_SIGNED",
       "acceptable": ["fetch_hifld_critical_infrastructure"],
       "phrasings": [
@@ -59,7 +59,7 @@
     {
       "source": "fetch_noaa_coops_tides",
       "family": "ocean",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/ocean/fetch_noaa_coops_tides/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/ocean/fetch_noaa_coops_tides/source.yaml",
       "origin_group": "REUSED_SIGNED",
       "acceptable": ["fetch_noaa_coops_tides"],
       "phrasings": [
@@ -79,7 +79,7 @@
     {
       "source": "fetch_esri_landcover_10m",
       "family": "terrain",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/terrain/fetch_esri_landcover_10m/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/terrain/fetch_esri_landcover_10m/source.yaml",
       "origin_group": "REUSED_SIGNED",
       "acceptable": ["fetch_esri_landcover_10m"],
       "phrasings": [
@@ -100,7 +100,7 @@
     {
       "source": "fetch_census_acs",
       "family": "socioeconomic",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/socioeconomic/fetch_census_acs/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/socioeconomic/fetch_census_acs/source.yaml",
       "origin_group": "REUSED_SIGNED",
       "acceptable": ["fetch_census_acs"],
       "phrasings": [
@@ -121,7 +121,7 @@
     {
       "source": "fetch_us_drought_monitor",
       "family": "climate",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/climate/fetch_us_drought_monitor/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/climate/fetch_us_drought_monitor/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_us_drought_monitor"],
       "phrasings": [
@@ -135,7 +135,7 @@
     {
       "source": "fetch_hifld_transmission_lines",
       "family": "hazard",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hazard/fetch_hifld_transmission_lines/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hazard/fetch_hifld_transmission_lines/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_hifld_transmission_lines"],
       "phrasings": [
@@ -149,7 +149,7 @@
     {
       "source": "fetch_mtbs_burn_severity",
       "family": "hazard",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hazard/fetch_mtbs_burn_severity/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hazard/fetch_mtbs_burn_severity/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_mtbs_burn_severity"],
       "phrasings": [
@@ -163,7 +163,7 @@
     {
       "source": "fetch_nifc_fire_perimeters",
       "family": "hazard",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hazard/fetch_nifc_fire_perimeters/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hazard/fetch_nifc_fire_perimeters/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_nifc_fire_perimeters"],
       "phrasings": [
@@ -177,7 +177,7 @@
     {
       "source": "fetch_nhdplus_nldi_navigate",
       "family": "hydrology",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hydrology/fetch_nhdplus_nldi_navigate/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hydrology/fetch_nhdplus_nldi_navigate/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_nhdplus_nldi_navigate"],
       "phrasings": [
@@ -191,7 +191,7 @@
     {
       "source": "fetch_nhd_waterbodies",
       "family": "hydrology",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hydrology/fetch_nhd_waterbodies/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hydrology/fetch_nhd_waterbodies/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_nhd_waterbodies"],
       "phrasings": [
@@ -205,7 +205,7 @@
     {
       "source": "fetch_usgs_water_quality",
       "family": "hydrology",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/hydrology/fetch_usgs_water_quality/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/hydrology/fetch_usgs_water_quality/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_usgs_water_quality"],
       "phrasings": [
@@ -219,7 +219,7 @@
     {
       "source": "fetch_noaa_coops_currents",
       "family": "ocean",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/ocean/fetch_noaa_coops_currents/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/ocean/fetch_noaa_coops_currents/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_noaa_coops_currents"],
       "phrasings": [
@@ -233,7 +233,7 @@
     {
       "source": "fetch_cdc_svi",
       "family": "socioeconomic",
-      "source_yaml": "server/src/trid3nt_server/data/fetchers/socioeconomic/fetch_cdc_svi/source.yaml",
+      "source_yaml": "server/src/trid3nt_server/tools/fetchers/socioeconomic/fetch_cdc_svi/source.yaml",
       "origin_group": "SIGNED_NATE_2026-07-30",
       "acceptable": ["fetch_cdc_svi"],
       "phrasings": [

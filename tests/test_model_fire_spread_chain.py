@@ -156,7 +156,7 @@ def test_build_elmfire_deck_spec_maps_args():
 # (3) Solver registration + local docker spec.
 # ===========================================================================
 def test_elmfire_registered_in_solver_registries():
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -567,7 +567,7 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
     """Fetches mocked (synthetic rasters), docker/solver mocked, synthetic
     solver outputs -> REAL deck build + REAL postprocess -> the primary
     FireSpreadLayerURI + frames + aux COGs as LayerURIs. No AWS, no docker."""
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.elmfire.fire_spread import fire_spread as comp
     from trid3nt_server.workflows.elmfire import postprocess_elmfire as pe
     from trid3nt_server.workflows.elmfire.run_elmfire import load_deck_builder

@@ -37,7 +37,7 @@ import pytest
 
 # Force the template module to register before we inspect TOOL_REGISTRY.
 import trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.pelicun.damage_assessment import (
     damage_assessment as _pelicun_mod,
 )

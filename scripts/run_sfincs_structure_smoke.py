@@ -175,7 +175,7 @@ import numpy as np  # noqa: E402
 import rasterio  # noqa: E402
 from rasterio.io import MemoryFile  # noqa: E402
 from rasterio.warp import reproject, Resampling, transform  # noqa: E402
-from trid3nt_server.data.cache import read_object_bytes_s3  # noqa: E402
+from trid3nt_server.tools.cache import read_object_bytes_s3  # noqa: E402
 
 
 def _read_depth(uri: str):

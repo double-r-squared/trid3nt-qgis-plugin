@@ -53,8 +53,8 @@ from trid3nt_server.workflows.sfincs.sfincs_builder import (  # noqa: E402
     ForcingSpec,
     build_sfincs_model,
 )
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.data.simulation._setter_envelope import (  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.workflows.lib._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )

@@ -40,8 +40,8 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, Point
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.processing.compute_home_range_kde.compute_home_range_kde import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.processing.compute_home_range_kde.compute_home_range_kde import (
     HomeRangeKDEError,
     _compute_home_range_bytes,
     _local_utm_epsg,

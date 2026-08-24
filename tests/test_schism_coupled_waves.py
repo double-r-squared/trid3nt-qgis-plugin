@@ -219,9 +219,9 @@ def test_verify_cross_shore_waves(tmp_path: Path):
 # 5. Registration pins + corpus retrieval seed
 # --------------------------------------------------------------------------- #
 def test_coupled_waves_registered_and_solver_wired():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     import trid3nt_server.workflows  # noqa: F401 -- trigger solver reg
-    from trid3nt_server.data.simulation.solver.solver import (
+    from trid3nt_server.workflows.solver.solver import (
         SOLVER_WORKFLOW_REGISTRY, LOCAL_SOLVER_SPEC_REGISTRY,
     )
 

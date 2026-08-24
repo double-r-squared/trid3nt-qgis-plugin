@@ -31,7 +31,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
     PelicunDamageError,
     PelicunFragilityDataError,
@@ -703,7 +703,7 @@ def test_live_pelicun_fort_myers_e2e(tmp_path) -> None:
     consensus damage state is strictly positive (Fort Myers proper sits well
     within the Ian flood footprint).
     """
-    from trid3nt_server.data.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
         fetch_administrative_boundaries,
     )
 
@@ -769,7 +769,7 @@ def test_download_repairs_llm_mangled_prefix(monkeypatch, tmp_path):
             raise RuntimeError("404 No such object")
         return b"cog"
 
-    import trid3nt_server.data.cache as cache_mod
+    import trid3nt_server.tools.cache as cache_mod
 
     monkeypatch.setattr(cache_mod, "read_object_bytes_s3", _fake_read_object_bytes_s3)
 

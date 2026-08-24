@@ -276,6 +276,6 @@ def test_postprocess_baroclinic_metrics(tmp_path: Path, monkeypatch):
 # 4. Registration pin
 # --------------------------------------------------------------------------- #
 def test_baroclinic_tool_registered():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "schism_baroclinic_circulation" in TOOL_REGISTRY

@@ -142,7 +142,7 @@ def test_emit_track_overlay_layer_uri_validates(monkeypatch):
     end (S3 upload stubbed) and asserts the overlay actually reaches the
     emitter, fully validated, instead of raising loudly here if the
     construction ever breaks again."""
-    from trid3nt_server.data.simulation.solver import solver as _solver
+    from trid3nt_server.workflows.solver import solver as _solver
 
     monkeypatch.setattr(_solver, "_get_runs_bucket", lambda: "test-runs-bucket")
 
@@ -445,7 +445,7 @@ def test_estimate_payload_mb_native_default_and_coarsening(monkeypatch):
     sampled model. With sampling unavailable it falls back to the analytic model
     (labeled), which stays resolution-aware: a smaller AOI or an explicit COARSER
     resolution both LOWER the estimate below the native default."""
-    import trid3nt_server.data.fetchers._router.hooks.topobathy as tbh
+    import trid3nt_server.tools.fetchers._router.hooks.topobathy as tbh
     import trid3nt_server.workflows.schism.pahm_surge.pahm_surge as P
 
     monkeypatch.setattr(tbh, "_sample_topobathy_density", lambda b: None)  # analytic path

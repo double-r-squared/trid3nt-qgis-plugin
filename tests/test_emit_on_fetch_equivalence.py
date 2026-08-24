@@ -21,7 +21,7 @@ import pathlib
 import re
 from types import SimpleNamespace
 
-from trid3nt_server.data.fetchers._router.emit_on_fetch import (
+from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
     input_layer_name,
 )
 

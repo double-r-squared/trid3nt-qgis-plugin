@@ -17,8 +17,8 @@ import json
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.data.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.data.fetchers._router.hooks import (
+from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
+from trid3nt_server.tools.fetchers._router.hooks import (
     fema_nfhl_zones as nfhl,
     nwi_wetlands as nwi,
     wdpa_protected_areas as wdpa,
@@ -224,7 +224,7 @@ def test_frs_superfund_drops_bad_latlon():
 # ------------------------------- chained tolerate_page_error ------------------------------- #
 
 def test_tolerate_page_error_returns_partial():
-    from trid3nt_server.data.fetchers._router.executors import chained_resolution as ch
+    from trid3nt_server.tools.fetchers._router.executors import chained_resolution as ch
     s = SourceSpec.model_validate({
         "schema_version": "v1", "name": "t", "source_class": "sc", "shape": "vector-fgb",
         "endpoints": {"data": {"url": "https://x"}}, "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "s"},
@@ -241,7 +241,7 @@ def test_tolerate_page_error_returns_partial():
             return _fc([_poly(i) for i in range(1, ch.__dict__.get("_PAGE", 0) or 1001)])
         raise RouterUpstreamError("boom")
 
-    import trid3nt_server.data.fetchers._router.executors.chained_resolution as CH
+    import trid3nt_server.tools.fetchers._router.executors.chained_resolution as CH
     orig = CH._get
     CH._get = fake_get
     try:

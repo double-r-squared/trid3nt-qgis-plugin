@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_contracts.output_quantities import OUTPUT_QUANTITIES
-from trid3nt_server.data.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
+from trid3nt_server.tools.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
 
 
 def _all_specs():

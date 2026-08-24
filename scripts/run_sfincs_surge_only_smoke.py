@@ -83,7 +83,7 @@ import rasterio  # noqa: E402
 from rasterio.io import MemoryFile  # noqa: E402
 from rasterio.warp import Resampling, reproject, transform  # noqa: E402
 
-from trid3nt_server.data.cache import read_object_bytes_s3  # noqa: E402
+from trid3nt_server.tools.cache import read_object_bytes_s3  # noqa: E402
 from trid3nt_server.workflows.sfincs.flood.flood import sfincs_flood  # noqa: E402
 from trid3nt_server.workflows.sfincs.sfincs_forcing_autowire import (  # noqa: E402
     _synthesize_parametric_surge_forcing,

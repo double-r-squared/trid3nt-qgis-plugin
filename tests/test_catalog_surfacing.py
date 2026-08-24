@@ -69,10 +69,10 @@ import json, inspect, os
 import trid3nt_server.main as m
 m._import_tools_registry()
 import trid3nt_server.server as srv
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.fetchers._router import registration as reg
-from trid3nt_server.data.search.search_tools import search_tools as st
-from trid3nt_server.data.search.tool_retrieval import retrieve_ranked_tools
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetchers._router import registration as reg
+from trid3nt_server.tools.search.search_tools import search_tools as st
+from trid3nt_server.tools.search.tool_retrieval import retrieve_ranked_tools
 
 specs = sorted(reg.registered_spec_names())
 dd = srv._default_declarable_registry()
@@ -195,7 +195,7 @@ def _registry_loaded():
     
 
 def test_spec_card_content_fidelity(_registry_loaded):
-    from trid3nt_server.data.fetchers._router import registration as reg
+    from trid3nt_server.tools.fetchers._router import registration as reg
 
     spec = reg._SPEC_REGISTRY["fetch_gridmet"]
     card = reg.spec_card(spec, relevance_score=1.23)
@@ -215,8 +215,8 @@ def test_spec_card_content_fidelity(_registry_loaded):
 
 
 def test_search_spec_cards_ranks_expected_source(_registry_loaded):
-    from trid3nt_server.data.search.search_tools import search_tools as st
-    from trid3nt_server.data.fetchers._router import registration as reg
+    from trid3nt_server.tools.search.search_tools import search_tools as st
+    from trid3nt_server.tools.fetchers._router import registration as reg
 
     st._reset_index_for_tests()
     st._get_index()  # warm
@@ -229,8 +229,8 @@ def test_search_spec_cards_ranks_expected_source(_registry_loaded):
 
 
 def test_fetch_via_spec_bad_args_raise_router_input_error(_registry_loaded):
-    from trid3nt_server.data.fetchers._router.errors import RouterInputError
-    from trid3nt_server.data.search.fetch_from_catalog.fetch_from_catalog import (
+    from trid3nt_server.tools.fetchers._router.errors import RouterInputError
+    from trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog import (
         _fetch_from_catalog_via_spec,
     )
 
@@ -240,8 +240,8 @@ def test_fetch_via_spec_bad_args_raise_router_input_error(_registry_loaded):
 
 
 def test_fetch_via_spec_unknown_source_raises(_registry_loaded):
-    from trid3nt_server.data.search.catalog_common import CatalogNotFoundError
-    from trid3nt_server.data.search.fetch_from_catalog.fetch_from_catalog import (
+    from trid3nt_server.tools.search.catalog_common import CatalogNotFoundError
+    from trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog import (
         _fetch_from_catalog_via_spec,
     )
 
@@ -272,8 +272,8 @@ def test_arm3_specs_leave_pool_and_source_param():
 
 @pytest.fixture()
 def _stratum(_registry_loaded):
-    from trid3nt_server.data.fetchers._router import stratified as strat
-    from trid3nt_server.data.search.search_tools import search_tools as st
+    from trid3nt_server.tools.fetchers._router import stratified as strat
+    from trid3nt_server.tools.search.search_tools import search_tools as st
 
     st._reset_index_for_tests()
     strat.reset_source_stratum_index_for_tests()
@@ -284,8 +284,8 @@ def test_stratum_index_is_source_scoped(_stratum):
     """Stratum split: the pool index ranks over the spec-served sources, MINUS any
     tier="internal" seam (fetch_copernicus_dem is absorbed into fetch_dem and never
     faces the model, so the search index -- and thus the stratum -- excludes it)."""
-    from trid3nt_server.data.fetchers._router import registration as reg
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools.fetchers._router import registration as reg
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     idx = _stratum.source_stratum_index()
     model_facing = {
@@ -305,7 +305,7 @@ def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):
     assert 1 <= len(plan["sources"]) <= _stratum.SOURCE_ENUM_K
     # cards parallel the enum, in the same order, carrying the FULL docstring.
     assert [c["name"] for c in plan["cards"]] == plan["sources"]
-    from trid3nt_server.data.fetchers._router import registration as reg
+    from trid3nt_server.tools.fetchers._router import registration as reg
 
     spec = reg._SPEC_REGISTRY["fetch_gridmet"]
     top_card = plan["cards"][0]
@@ -355,7 +355,7 @@ def test_default_declarable_excludes_catalog_tier(_registry_loaded):
     }
     names = srv._tool_names_from_search_result(fake_search_result)
     assert names == ["fetch_gridmet", "fetch_census_acs"]
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     for n in names:
         assert n in TOOL_REGISTRY  # real + registered -> expander can declare it

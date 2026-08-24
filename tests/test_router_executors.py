@@ -26,18 +26,18 @@ import rasterio
 import rasterio.transform as rtransform
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.data.fetchers._router.errors import (
+from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterNotAvailableError,
     RouterUpstreamError,
 )
-from trid3nt_server.data.fetchers._router.executors import (
+from trid3nt_server.tools.fetchers._router.executors import (
     raster_cog,
     station_timeseries,
     vector_fgb,
 )
-from trid3nt_server.data.fetchers._router.transforms import join, tiled_mosaic
+from trid3nt_server.tools.fetchers._router.transforms import join, tiled_mosaic
 
 
 # --------------------------------------------------------------------------- #
@@ -242,7 +242,7 @@ def test_imageserver_size_formula_and_clamp():
 
 
 def _patch_transport(monkeypatch, body: bytes, ct: str = "image/tiff"):
-    tp = "trid3nt_server.data.fetchers._router.transport"
+    tp = "trid3nt_server.tools.fetchers._router.transport"
     monkeypatch.setattr(f"{tp}.get_client", lambda: object())
     monkeypatch.setattr(f"{tp}.get_bytes", lambda *a, **k: (body, ct, "x"))
 
@@ -287,7 +287,7 @@ def test_imageserver_export_all_zero_is_empty(monkeypatch):
 
 
 def test_imageserver_layer_uri_param_keyed_style_and_units():
-    from trid3nt_server.data.fetchers._router import router as rmod
+    from trid3nt_server.tools.fetchers._router import router as rmod
     spec = _imageserver_spec()
     # layer "a": categorical preset, units None (absent from units map), no bbox.
     la = rmod.build_layer_uri(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"}, "s3://x.tif")
@@ -374,7 +374,7 @@ def test_fetch_source_array_dispatches_stac_float(monkeypatch):
 
 def test_payload_ceil_mb_clips():
     spec = _imageserver_spec()
-    from trid3nt_server.data.fetchers._router import router as rmod
+    from trid3nt_server.tools.fetchers._router import router as rmod
     est = rmod.synthesize_payload_estimator(spec)
     # 0.5 MB/deg^2 * huge bbox would exceed 50 but ceil clips to 50.
     assert est(bbox=[-125.0, 25.0, -67.0, 49.0]) == 50.0
@@ -771,8 +771,8 @@ def test_resolve_endpoints_select_and_endpoint_fallback():
 
 
 def test_validate_int_range_and_date_compact():
-    from trid3nt_server.data.fetchers._router import router as router_mod
-    from trid3nt_server.data.fetchers._router.errors import RouterInputError
+    from trid3nt_server.tools.fetchers._router import router as router_mod
+    from trid3nt_server.tools.fetchers._router.errors import RouterInputError
 
     spec = _wave2_spec(params={
         "bbox": {"type": "bbox", "required": True},
@@ -890,7 +890,7 @@ def test_direct_window_url_by_param_selects_endpoint(monkeypatch):
     def _fake_open(url):
         seen["url"] = url
         yield _FakeSrc(np.array([[70, 71], [72, 73]], dtype="uint8"), 255.0)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(url_by_param={"param": "amc", "map": {"dry": "https://h/d.tif", "wet": "https://h/w.tif"}})
     raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "wet"})
     assert seen["url"] == "https://h/w.tif"
@@ -902,7 +902,7 @@ def test_direct_window_nodata_gate_raises_empty(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url):
         yield _FakeSrc(np.full((3, 3), 255, dtype="uint8"), 255.0)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(nodata_gate=True, default_nodata=255)
     with pytest.raises(RouterEmptyError) as ei:
         raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
@@ -915,7 +915,7 @@ def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url):
         yield _FakeSrc(np.array([[255, 80], [255, 255]], dtype="uint8"), 255.0)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     spec = _dw_spec(nodata_gate=True)
     arr, _tf, _crs = raster_cog._direct_window_to_array(spec, {"bbox": [0, 0, 1, 1], "amc": "average"})
     assert 80.0 in arr  # the one valid pixel survived; the gate did NOT fire
@@ -970,7 +970,7 @@ def test_multi_url_mosaic_pastes_members(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url):
         yield _FakeMember(A if url == "A" else B)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     arr, tf, crs = raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
     assert arr.shape == (4, 4) and str(crs) == "EPSG:4326"
     assert list(arr[0]) == [1.0, 2.0, 3.0, 4.0]        # A pasted left, B pasted right
@@ -985,7 +985,7 @@ def test_multi_url_all_nodata_window_is_empty(monkeypatch):
     @contextlib.contextmanager
     def _fake_open(url):
         yield _FakeMember(nan2)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _fake_open)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _fake_open)
     with pytest.raises(RouterEmptyError) as ei:
         raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
     assert ei.value.error_code == "DEMO_MU_EMPTY"
@@ -993,7 +993,7 @@ def test_multi_url_all_nodata_window_is_empty(monkeypatch):
 
 def test_multi_url_member_read_failure_is_upstream(monkeypatch):
     """ANY intersecting-member read failure -> typed UPSTREAM (never a silent partial)."""
-    from trid3nt_server.data.fetchers._router import transport as _tp
+    from trid3nt_server.tools.fetchers._router import transport as _tp
     A = np.ones((4, 2), dtype="float64")
     monkeypatch.setattr(raster_cog, "_resolve_multi_url_members", lambda s, p: _two_tile_grid(A, A))
     import contextlib
@@ -1001,7 +1001,7 @@ def test_multi_url_member_read_failure_is_upstream(monkeypatch):
     def _boom_open(url):
         raise _tp.TransportNotFound("member 404")
         yield  # pragma: no cover
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.open_windowed_cog", _boom_open)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.open_windowed_cog", _boom_open)
     with pytest.raises(RouterUpstreamError) as ei:
         raster_cog._multi_url_to_array(_mu_spec(), {"bbox": [0, 0, 4, 4]})
     assert ei.value.error_code == "DEMO_MU_UPSTREAM_ERROR"
@@ -1095,8 +1095,8 @@ def test_gzip_object_windows_and_collapses_sentinel(monkeypatch):
     """gunzip + window + sentinel(<=-9000)->NaN; the serialize path stamps -9999 nodata."""
     arr = np.array([[5.0, 10.0], [-9999.0, 20.0]], dtype="float32")  # one sentinel pixel
     gz = _gz_tif(arr)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.get_client", lambda: None)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.get_bytes",
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.get_client", lambda: None)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.get_bytes",
                         lambda *a, **k: (gz, "application/gzip", "u"))
     out = raster_cog.execute(_gz_spec(), {"date": "2023-07", "period": "monthly"})
     got, nodata, dtype = _read_cog(out)
@@ -1108,8 +1108,8 @@ def test_gzip_object_windows_and_collapses_sentinel(monkeypatch):
 def test_gzip_object_all_nodata_is_empty(monkeypatch):
     """A whole-nodata grid is honest no-coverage -> typed EMPTY."""
     gz = _gz_tif(np.full((2, 2), -9999.0, dtype="float32"))
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.get_client", lambda: None)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.get_bytes",
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.get_client", lambda: None)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.get_bytes",
                         lambda *a, **k: (gz, "application/gzip", "u"))
     with pytest.raises(RouterEmptyError) as ei:
         raster_cog._gzip_object_to_array(_gz_spec(), {"date": "2023-07", "period": "monthly"})
@@ -1118,12 +1118,12 @@ def test_gzip_object_all_nodata_is_empty(monkeypatch):
 
 def test_gzip_object_404_is_not_available(monkeypatch):
     """A 404 for an unpublished date -> typed NOT_AVAILABLE (non-retryable)."""
-    from trid3nt_server.data.fetchers._router import transport as _tp
+    from trid3nt_server.tools.fetchers._router import transport as _tp
 
     def _nf(*a, **k):
         raise _tp.TransportNotFound("forced 404")
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.get_client", lambda: None)
-    monkeypatch.setattr("trid3nt_server.data.fetchers._router.transport.get_bytes", _nf)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.get_client", lambda: None)
+    monkeypatch.setattr("trid3nt_server.tools.fetchers._router.transport.get_bytes", _nf)
     with pytest.raises(RouterNotAvailableError) as ei:
         raster_cog._gzip_object_to_array(_gz_spec(), {"date": "2023-07", "period": "monthly"})
     assert ei.value.error_code == "DEMO_GZ_NOT_AVAILABLE"

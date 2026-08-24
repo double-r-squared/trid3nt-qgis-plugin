@@ -121,5 +121,5 @@ def test_chart_spec_shape():
 
 
 def test_registered():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     assert "elmfire_initial_attack_containment_probability" in TOOL_REGISTRY

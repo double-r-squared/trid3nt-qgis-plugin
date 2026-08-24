@@ -32,7 +32,7 @@ from trid3nt_server.server import (
     _invoke_tool_via_emitter,
     _maybe_gate_on_payload_warning,
 )
-from trid3nt_server.data import (
+from trid3nt_server.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,

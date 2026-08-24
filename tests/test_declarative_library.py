@@ -12,7 +12,7 @@ import warnings
 
 import pytest
 
-from trid3nt_server.declarative import (
+from trid3nt_server.workflows.lib import (
     Build,
     CoversAOI,
     Data,
@@ -65,7 +65,7 @@ def _patched(target, name, value):
 
 async def _raw_ledger_doc(key: str) -> dict | None:
     """The ledger document as it sits on disk - a tombstone is invisible above."""
-    from trid3nt_server.declarative.ledger import _COLLECTION
+    from trid3nt_server.workflows.lib.ledger import _COLLECTION
     from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
 
     result = await FileMCPClient().call_tool("find-one", {
@@ -180,7 +180,7 @@ def _reset(tmp_path, monkeypatch):
     # the replay probe is answered from _MISSING_ARTIFACTS instead of boto3.
     # import_module, not `import ... as`: the package re-exports `interpret` the
     # FUNCTION, which shadows the submodule attribute of the same name.
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "_artifact_state",
                         lambda uri: "absent" if uri in _MISSING_ARTIFACTS else "live")
     _CALLS.clear()
@@ -690,7 +690,7 @@ async def test_a_completed_invocation_re_executes_it_is_not_a_cache():
 
 @pytest.mark.asyncio
 async def test_a_completed_run_leaves_a_tombstone_not_a_replayable_ledger():
-    from trid3nt_server.declarative import StepLedger, invocation_key as _key
+    from trid3nt_server.workflows.lib import StepLedger, invocation_key as _key
 
     plan = Workflow("reaped_w")[Step(runner=f"{_HERE}.stub_step").named("a")]
     p = await resolve_params(_params(), {"base": 6.0})
@@ -774,7 +774,7 @@ async def test_a_step_that_produced_no_raster_to_render_is_FATAL():
 @pytest.mark.asyncio
 async def test_a_styling_failure_over_a_real_raster_is_only_a_note(monkeypatch):
     """The other half of the split: there IS a raster, the styling of it failed."""
-    import trid3nt_server.data.publish_layer as _pl
+    import trid3nt_server.tools.publish_layer as _pl
 
     def _boom(**kwargs):
         raise RuntimeError("titiler-style-boom")
@@ -910,7 +910,7 @@ def _review(revised, monkeypatch):
     """Patch the review spine so it approves, carrying ``revised`` back."""
     from trid3nt_server.gates.input_review import ReviewOutcome, _apply_revision
 
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
 
     async def _fake(*, tool_name, mode, entries, params, **kw):
         merged_e, merged_p = _apply_revision(list(entries), dict(params), revised)
@@ -1032,7 +1032,7 @@ async def test_a_finished_run_whose_reap_would_fail_is_still_marked_complete(mon
 
 @pytest.mark.asyncio
 async def test_a_crash_between_the_last_record_and_completion_leaves_no_ghost():
-    from trid3nt_server.declarative import StepLedger
+    from trid3nt_server.workflows.lib import StepLedger
 
     async def _die(self):
         raise KeyboardInterrupt("SIGINT before the completion call")
@@ -1052,7 +1052,7 @@ async def test_a_crash_between_the_last_record_and_completion_leaves_no_ghost():
 async def test_a_cancel_after_the_last_record_leaves_no_ghost():
     import asyncio
 
-    from trid3nt_server.declarative import StepLedger
+    from trid3nt_server.workflows.lib import StepLedger
 
     async def _cancel(self):
         raise asyncio.CancelledError()
@@ -1095,8 +1095,8 @@ async def test_a_cancel_MID_plan_stays_resumable_that_is_resume_working():
 @pytest.mark.asyncio
 async def test_the_sweep_reaps_tombstones_past_the_ttl(monkeypatch):
     """Tombstones are bounded: they are reaped on AGE, not kept forever."""
-    from trid3nt_server.declarative import StepLedger, invocation_key as _key
-    import trid3nt_server.declarative.ledger as _led
+    from trid3nt_server.workflows.lib import StepLedger, invocation_key as _key
+    import trid3nt_server.workflows.lib.ledger as _led
 
     plan = Workflow("ttl_w")[Step(runner=f"{_HERE}.stub_step").named("a")]
     p = await resolve_params(_params(), {"base": 25.0})
@@ -1153,8 +1153,8 @@ class _DataDown(RuntimeError):
 # --- the ledger under concurrency --------------------------------------------- #
 @pytest.mark.asyncio
 async def test_two_ledgers_over_one_store_share_a_lock():
-    from trid3nt_server.declarative import StepLedger
-    from trid3nt_server.declarative.ledger import _COLLECTION
+    from trid3nt_server.workflows.lib import StepLedger
+    from trid3nt_server.workflows.lib.ledger import _COLLECTION
     from trid3nt_server.persistence import DEFAULT_DATABASE
 
     a = await StepLedger.load("KEY_A", "wf")
@@ -1171,8 +1171,8 @@ async def test_a_concurrent_ledger_cannot_resurrect_a_completed_one():
     import asyncio
     import time
 
-    from trid3nt_server.declarative import StepLedger
-    from trid3nt_server.declarative.ledger import LedgerRecord
+    from trid3nt_server.workflows.lib import StepLedger
+    from trid3nt_server.workflows.lib.ledger import LedgerRecord
     from trid3nt_server.persistence import FileMCPClient
 
     real_read = FileMCPClient._read_store
@@ -1368,7 +1368,7 @@ async def test_a_ref_in_a_result_never_reaches_the_ledger_or_the_caller():
 
 def test_the_guard_reads_slots_dataclass_fields_and_dict_alike():
     """The three attribute shapes an author can hand the guard, at the seam itself."""
-    from trid3nt_server.declarative.interpreter import _refuse_leaked_param_refs
+    from trid3nt_server.workflows.lib.interpreter import _refuse_leaked_param_refs
 
     for holder in (_Holder(ParamRef("base")), _DictHolder(ParamRef("base")),
                    _SlotsNoDataclass(ParamRef("base"))):
@@ -1525,7 +1525,7 @@ async def test_the_law9_floor_refuses_in_every_mode_without_a_live_session(mode)
 async def test_a_self_gating_step_owns_the_approval_instead(monkeypatch):
     """The exemption needs a REVIEW SURFACE, and a self-gating step is one: it puts
     its own card in front of the live session. Then the floor steps aside."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
     await _run(_gateless_plan(consequential=True, self_gating=True), _physics_only(),
                {}, input_mode="user_gated", resume=False)
@@ -1537,7 +1537,7 @@ async def test_a_live_session_with_no_card_anywhere_still_refuses(monkeypatch):
     """An emitter is where a card COULD be shown, never evidence that one was. A
     gateless plan whose step does not review its own inputs has no review surface
     at all, so a live user_gated session must not be the softer path."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "current_emitter", lambda: _FakeEmitter())
     with pytest.raises(Exception) as exc:
         await _run(_gateless_plan(consequential=True), _physics_only(), {},
@@ -1697,7 +1697,7 @@ def _deep_clean(depth):
 def test_a_budget_exhausted_leak_scan_warns_and_names_the_surface(monkeypatch):
     """A scan that stopped looking has NOT found the surface clean. Silence there
     let a leak behind a large value pass as verified."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 8)
     with pytest.warns(LeakScanTruncated, match="'value'"):
         _interp._refuse_leaked_param_refs(
@@ -1705,7 +1705,7 @@ def test_a_budget_exhausted_leak_scan_warns_and_names_the_surface(monkeypatch):
 
 
 def test_a_clean_scan_inside_the_budget_warns_about_nothing(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 500)
     with warnings.catch_warnings():
         warnings.simplefilter("error", LeakScanTruncated)
@@ -1715,7 +1715,7 @@ def test_a_clean_scan_inside_the_budget_warns_about_nothing(monkeypatch):
 def test_a_large_value_cannot_starve_the_entries_scan(monkeypatch):
     """Per-surface budgets: one shared budget let a 60k-node value spend it all and
     leave the entries - where the leak actually was - never looked at."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 20)
     with pytest.warns(LeakScanTruncated, match="'value'"):
         with pytest.raises(ParamRefLeakedError, match=r"ParamRef\('base'\)"):
@@ -1728,7 +1728,7 @@ def test_a_large_value_cannot_starve_the_entries_scan(monkeypatch):
 async def test_the_run_warns_rather_than_silently_passing_a_truncated_scan(monkeypatch):
     """The guard is a floor, not a gate: an over-budget surface still runs, but the
     partial check is said out loud rather than reported as clean."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "_LEAK_SCAN_BUDGET", 4)
     plan = Workflow("truncated")[Step(runner=f"{_HERE}.stub_deep").named("a")]
     with pytest.warns(LeakScanTruncated):
@@ -1801,7 +1801,7 @@ async def test_a_failed_reap_at_re_key_leaves_a_non_replayable_marker(monkeypatc
     the abandoned key's records complete:false and replayable for the whole TTL -
     the wave-1b replay ghost, back through the re-key door."""
     _review({"base": 3.5}, monkeypatch)
-    _ledger = importlib.import_module("trid3nt_server.declarative.ledger")
+    _ledger = importlib.import_module("trid3nt_server.workflows.lib.ledger")
 
     async def _boom(client, key):
         raise RuntimeError("delete-one is down")
@@ -1825,7 +1825,7 @@ async def test_a_failed_reap_at_re_key_leaves_a_non_replayable_marker(monkeypatc
 @pytest.mark.asyncio
 async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
     """What the marker BUYS: the abandoned key hands nothing back to a rerun."""
-    _ledger = importlib.import_module("trid3nt_server.declarative.ledger")
+    _ledger = importlib.import_module("trid3nt_server.workflows.lib.ledger")
 
     async def _boom(client, key):
         raise RuntimeError("delete-one is down")
@@ -1844,7 +1844,7 @@ async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
 async def test_a_leaked_ref_in_a_chart_payload_never_reaches_the_wire(monkeypatch):
     """The node returns a small marker dict; the PAYLOAD is what goes over the WS.
     Guarding only the marker let a ref in a chart title through."""
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     emitted = []
 
     async def _emit(payload):
@@ -1863,7 +1863,7 @@ async def test_a_leaked_ref_in_a_chart_payload_never_reaches_the_wire(monkeypatc
 
 @pytest.mark.asyncio
 async def test_a_clean_chart_payload_still_reaches_the_wire(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     emitted = []
 
     async def _emit(payload):
@@ -1884,7 +1884,7 @@ async def test_a_clean_chart_payload_still_reaches_the_wire(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_chart_that_failed_leaves_no_spec_to_persist(monkeypatch):
-    _interp = importlib.import_module("trid3nt_server.declarative.interpreter")
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
     monkeypatch.setattr(_interp, "emit_chart_payloads", lambda payload: _noop())
     plan = Workflow("chart_none")[
         Step(runner=f"{_HERE}.stub_step").named("a")

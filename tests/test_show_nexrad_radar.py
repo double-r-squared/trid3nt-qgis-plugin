@@ -26,8 +26,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.display.show_nexrad_radar.show_nexrad_radar import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.display.show_nexrad_radar.show_nexrad_radar import (
     NexradBboxError,
     NexradProductError,
     _build_wms_url,

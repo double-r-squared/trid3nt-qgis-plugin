@@ -221,7 +221,7 @@ async def test_model_openquake_psha_mocked_dispatch(monkeypatch):
     # RegisteredTool for one carrying the synthetic-fallback stub fn.
     import dataclasses
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     _stub = lambda bbox=None, **_k: {
         "catalog": "gem",
@@ -259,7 +259,7 @@ async def test_model_openquake_psha_mocked_dispatch(monkeypatch):
 
     # run_solver / wait_for_completion are imported INSIDE the composer from
     # ..tools.simulation.solver; patch them at that module so the import resolves to stubs.
-    import trid3nt_server.data.simulation.solver.solver as solver_mod
+    import trid3nt_server.workflows.solver.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "run_solver", _fake_run_solver, raising=False)
     monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)

@@ -96,8 +96,8 @@ _COMMUNITY_ENTRIES = [
 @pytest.fixture()
 def la_catalogs(tmp_path, monkeypatch):
     """Write the two fixture catalogs and point the loader at them (cache reset)."""
-    from trid3nt_server.data.search import living_atlas_common as lac
-    from trid3nt_server.data.search import living_atlas_index as lai
+    from trid3nt_server.tools.search import living_atlas_common as lac
+    from trid3nt_server.tools.search import living_atlas_index as lai
 
     auth = tmp_path / "living_atlas_authoritative.yaml"
     comm = tmp_path / "living_atlas_community.yaml"
@@ -118,7 +118,7 @@ def la_catalogs(tmp_path, monkeypatch):
 
 
 def test_loader_splits_and_validates(la_catalogs):
-    from trid3nt_server.data.search.living_atlas_common import (
+    from trid3nt_server.tools.search.living_atlas_common import (
         get_entry,
         load_living_atlas,
     )
@@ -144,7 +144,7 @@ def test_loader_splits_and_validates(la_catalogs):
 
 
 def test_search_authoritative_only_by_default(la_catalogs):
-    from trid3nt_server.data.search.search_living_atlas import search_living_atlas
+    from trid3nt_server.tools.search.search_living_atlas import search_living_atlas
 
     res = search_living_atlas("wetlands")
     assert res, "expected an authoritative wetlands hit"
@@ -155,7 +155,7 @@ def test_search_authoritative_only_by_default(la_catalogs):
 
 
 def test_search_include_community_labels(la_catalogs):
-    from trid3nt_server.data.search.search_living_atlas import search_living_atlas
+    from trid3nt_server.tools.search.search_living_atlas import search_living_atlas
 
     res = search_living_atlas("wetlands", include_community=True)
     curations = {r["curation"] for r in res}
@@ -168,9 +168,9 @@ def test_search_include_community_labels(la_catalogs):
 
 def test_search_last_resort_community(tmp_path, monkeypatch):
     """When the authoritative stratum is empty, community surfaces as LABELLED last resort."""
-    from trid3nt_server.data.search import living_atlas_common as lac
-    from trid3nt_server.data.search import living_atlas_index as lai
-    from trid3nt_server.data.search.search_living_atlas import search_living_atlas
+    from trid3nt_server.tools.search import living_atlas_common as lac
+    from trid3nt_server.tools.search import living_atlas_index as lai
+    from trid3nt_server.tools.search.search_living_atlas import search_living_atlas
 
     auth = tmp_path / "auth.yaml"
     comm = tmp_path / "comm.yaml"
@@ -199,15 +199,15 @@ def no_probe(monkeypatch):
     import importlib
 
     fmod = importlib.import_module(
-        "trid3nt_server.data.search.fetch_living_atlas_layer.fetch_living_atlas_layer"
+        "trid3nt_server.tools.search.fetch_living_atlas_layer.fetch_living_atlas_layer"
     )
     monkeypatch.setattr(fmod, "_probe_service", lambda url: {})
     return fmod
 
 
 def test_fetch_image_service_dynamic_spec(la_catalogs, no_probe, monkeypatch):
-    from trid3nt_server.data.fetchers._router import router
-    from trid3nt_server.data.search.fetch_living_atlas_layer import (
+    from trid3nt_server.tools.fetchers._router import router
+    from trid3nt_server.tools.search.fetch_living_atlas_layer import (
         fetch_living_atlas_layer,
     )
 
@@ -240,8 +240,8 @@ def test_fetch_image_service_dynamic_spec(la_catalogs, no_probe, monkeypatch):
 
 
 def test_fetch_feature_service_dynamic_spec(la_catalogs, no_probe, monkeypatch):
-    from trid3nt_server.data.fetchers._router import router
-    from trid3nt_server.data.search.fetch_living_atlas_layer import (
+    from trid3nt_server.tools.fetchers._router import router
+    from trid3nt_server.tools.search.fetch_living_atlas_layer import (
         fetch_living_atlas_layer,
     )
 
@@ -265,7 +265,7 @@ def test_fetch_feature_service_dynamic_spec(la_catalogs, no_probe, monkeypatch):
 
 
 def test_fetch_premium_is_honest_subscription_error(la_catalogs, no_probe):
-    from trid3nt_server.data.search.fetch_living_atlas_layer import (
+    from trid3nt_server.tools.search.fetch_living_atlas_layer import (
         LivingAtlasSubscriptionError,
         fetch_living_atlas_layer,
     )
@@ -277,7 +277,7 @@ def test_fetch_premium_is_honest_subscription_error(la_catalogs, no_probe):
 
 
 def test_fetch_unknown_item_is_typed_input_error(la_catalogs, no_probe):
-    from trid3nt_server.data.search.fetch_living_atlas_layer import (
+    from trid3nt_server.tools.search.fetch_living_atlas_layer import (
         LivingAtlasInputError,
         fetch_living_atlas_layer,
     )
@@ -289,7 +289,7 @@ def test_fetch_unknown_item_is_typed_input_error(la_catalogs, no_probe):
 
 def test_probe_raises_subscription_on_token_required(la_catalogs, monkeypatch):
     """A token-required error envelope on the probe -> honest subscription error."""
-    from trid3nt_server.data.search.fetch_living_atlas_layer import (
+    from trid3nt_server.tools.search.fetch_living_atlas_layer import (
         LivingAtlasSubscriptionError,
         fetch_living_atlas_layer,
     )
@@ -299,7 +299,7 @@ def test_probe_raises_subscription_on_token_required(la_catalogs, monkeypatch):
         return body, "application/json", url
 
     # Patch the transport import target inside _probe_service.
-    import trid3nt_server.data.fetchers._router.transport as tp
+    import trid3nt_server.tools.fetchers._router.transport as tp
     monkeypatch.setattr(tp, "get_bytes", fake_get_bytes)
     with pytest.raises(LivingAtlasSubscriptionError):
         # auth_wetlands_img is not premium-flagged, so the probe is what gates it.
@@ -362,8 +362,8 @@ def test_harvest_normalizes_and_splits(tmp_path):
 
 def test_new_tools_surface_in_top8():
     import trid3nt_server.main as _main  # noqa: F401 -- full daemon registry
-    from trid3nt_server.data.search.search_tools import search_tools as dd
-    from trid3nt_server.data.search.tool_retrieval import retrieve_visible_tools
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
     _main._import_tools_registry()
     dd._get_index()

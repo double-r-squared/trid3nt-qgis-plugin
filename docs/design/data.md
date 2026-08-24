@@ -1,6 +1,6 @@
 # data/ -- the fetcher and tool surface
 
-`trid3nt_server/data/` (was `agent/tools/`, renamed in ADR 0277) is the
+`trid3nt_server/tools/` (was `agent/tools/`, renamed in ADR 0277) is the
 LLM-facing tool surface: the atomic-tool registry, the spec-driven fetcher
 router, and the co-located data assets.
 
@@ -23,7 +23,7 @@ router, and the co-located data assets.
 ## Composition
 
 `workflows/` composers and `gates/cards/` import tool primitives from here
-(absolute `trid3nt_server.data.*`). Fetchers surface input layers via the
+(absolute `trid3nt_server.tools.*`). Fetchers surface input layers via the
 emit-on-fetch seam (`purpose=` on router fetches), consumed by `emission/`.
 The retrieval corpus is composed by walking `data/**/corpus.yaml` AND
 `workflows/**/corpus.yaml` plus the residual `tool_query_corpus.yaml`.

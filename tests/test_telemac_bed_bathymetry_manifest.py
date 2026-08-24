@@ -27,7 +27,7 @@ class _FakeS3:
 
 
 def _stage(monkeypatch, reach: dict, *, mesh_only: bool = False) -> dict:
-    import trid3nt_server.data.simulation.solver.solver as solver_mod
+    import trid3nt_server.workflows.solver.solver as solver_mod
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
@@ -70,7 +70,7 @@ def test_mesh_only_manifest_omits_bed_cog(monkeypatch):
 
 
 def test_stage_manifest_requires_cache_bucket(monkeypatch):
-    import trid3nt_server.data.simulation.solver.solver as solver_mod
+    import trid3nt_server.workflows.solver.solver as solver_mod
 
     from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
 

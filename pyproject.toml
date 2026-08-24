@@ -269,7 +269,8 @@ include = ["trid3nt_server*"]
 # loaded via Path(__file__).parent (2026-06-30).
 [tool.setuptools.package-data]
 trid3nt_server = [
-    "agent/workflows/sfincs/manning_mapping.csv",
-    "agent/data/tool_query_corpus.yaml",
-    "agent/tools/README.md",
+    "workflows/sfincs/manning_mapping.csv",
+    "tools/tool_query_corpus.yaml",
+    "tools/duckdb_spatial_functions.json",
+    "tools/README.md",
 ]

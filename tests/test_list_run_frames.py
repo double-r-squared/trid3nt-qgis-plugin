@@ -25,7 +25,7 @@ import json
 
 import pytest
 
-from trid3nt_server.data.meta.list_run_frames.list_run_frames import (
+from trid3nt_server.tools.meta.list_run_frames.list_run_frames import (
     ListRunFramesError,
     list_run_frames,
 )
@@ -82,7 +82,7 @@ def _patch_run(monkeypatch):
     in-memory bodies (no network). A ``None`` body = that object is absent."""
 
     def _install(*, outputs_text: str | None = None, publish_text: str | None = None):
-        from trid3nt_server.data.simulation.solver import solver
+        from trid3nt_server.workflows.solver import solver
 
         monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bucket")
         monkeypatch.setattr(
@@ -246,7 +246,7 @@ def test_missing_run_id_raises() -> None:
 
 def test_list_run_frames_is_registered() -> None:
     """The tool is wired into the registry (import-time @register_tool)."""
-    import trid3nt_server.data as tools
+    import trid3nt_server.tools as tools
 
     assert "list_run_frames" in tools.TOOL_REGISTRY
 

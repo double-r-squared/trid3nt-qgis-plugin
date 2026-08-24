@@ -20,16 +20,16 @@ from typing import Any
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.errors import RouterEmptyError, RouterInputError
-from trid3nt_server.data.fetchers._router.executors import overpass_sidecar
-from trid3nt_server.data.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
-from trid3nt_server.data.fetchers._router.hooks import buildings as BH
-from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
+from trid3nt_server.tools.fetchers._router.executors import overpass_sidecar
+from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
+from trid3nt_server.tools.fetchers._router.hooks import buildings as BH
+from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/data/fetchers/socioeconomic/fetch_buildings/source.yaml"
+    / "trid3nt_server/tools/fetchers/socioeconomic/fetch_buildings/source.yaml"
 )
 
 # An AOI wide enough to contain the synthetic footprints (~26.60-26.63, -81.87..-81.84).
@@ -105,7 +105,7 @@ def test_executor_is_overpass_sidecar():
 
 
 def test_promoted_signature_matches_twin():
-    from trid3nt_server.data.fetchers._router import registration
+    from trid3nt_server.tools.fetchers._router import registration
     sig, _ = registration.promoted_signature(SPEC)
     assert list(sig.parameters) == ["bbox", "source", "_extra_ignored"]
     assert sig.parameters["source"].default == "osm"
@@ -168,11 +168,11 @@ def test_parse_serializes_to_slim_fgb():
 
 
 def test_empty_features_raise_buildings_empty():
-    from trid3nt_server.data.fetchers._router.executors import http_json
+    from trid3nt_server.tools.fetchers._router.executors import http_json
 
     # Monkeypatch the transport at the executor's fetch seam to return an empty
     # Overpass body, so execute() reaches the empty-features gate without a network hit.
-    import trid3nt_server.data.fetchers._router.executors.overpass_sidecar as osx
+    import trid3nt_server.tools.fetchers._router.executors.overpass_sidecar as osx
     orig = osx._fetch_endpoint_fallback
     osx._fetch_endpoint_fallback = lambda spec, plans: [_payload_bytes([])]
     try:
@@ -189,7 +189,7 @@ def test_empty_features_raise_buildings_empty():
 
 
 def test_sidecar_uri_is_sibling_of_fgb():
-    from trid3nt_server.data.cache import cache_path, compute_cache_key
+    from trid3nt_server.tools.cache import cache_path, compute_cache_key
     params = _vp(bbox=list(_AOI), source="osm")
     key = compute_cache_key(SPEC.source_class, params, SPEC.cache.ttl_class)
     fgb = cache_path(SPEC.source_class, SPEC.cache.ttl_class, key, "fgb")

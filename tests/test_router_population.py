@@ -27,19 +27,19 @@ from typing import Any
 import numpy as np
 import pytest
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.errors import (
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.data.fetchers._router.executors import library_delegate, raster_cog
-from trid3nt_server.data.fetchers._router.hooks import worldpop
-from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.tools.fetchers._router.executors import library_delegate, raster_cog
+from trid3nt_server.tools.fetchers._router.hooks import worldpop
+from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 POP_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/data/fetchers/socioeconomic/fetch_population/source.yaml"
+    / "trid3nt_server/tools/fetchers/socioeconomic/fetch_population/source.yaml"
 )
 
 FORT_MYERS_BBOX = (-81.92, 26.55, -81.80, 26.68)  # small in-USA AOI
@@ -106,7 +106,7 @@ def _patch_worldpop_download(monkeypatch, status: int = 200, data: bytes | None 
 
 
 def test_population_promoted_as_library_delegate_spec():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_population"]
     assert entry.metadata.source_class == "population"
@@ -123,7 +123,7 @@ def test_population_promoted_as_library_delegate_spec():
 def test_population_signature_matches_twin():
     import inspect
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     p = inspect.signature(TOOL_REGISTRY["fetch_population"].fn).parameters
     assert list(p) == ["bbox", "dataset", "target_resolution_m", "_extra_ignored"]
@@ -132,7 +132,7 @@ def test_population_signature_matches_twin():
 
 
 def test_population_docstring_is_worldpop_only():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     doc = TOOL_REGISTRY["fetch_population"].fn.__doc__ or ""
     assert "WorldPop" in doc
@@ -154,7 +154,7 @@ def test_acs_dataset_rejected_as_input_error():
 
 def test_acs_request_never_reaches_network(monkeypatch):
     """A full acs_2022 call raises pre-network (validate runs before read_through)."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     def _no_net(*_a, **_kw):  # pragma: no cover -- must not be reached
         raise AssertionError("requests.get must NOT be called for an acs_* dataset")

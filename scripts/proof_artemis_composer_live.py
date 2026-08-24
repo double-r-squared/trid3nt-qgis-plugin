@@ -14,7 +14,7 @@ import asyncio
 
 
 async def _run():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
     aoi = [-87.392, 46.528, -87.368, 46.55]
     out = await fn(

@@ -44,8 +44,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.data.simulation.solver.solver as solver_mod
-from trid3nt_server.data.simulation.solver.solver import (
+import trid3nt_server.workflows.solver.solver as solver_mod
+from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SOLVER_BACKEND_LOCAL_DOCKER,
     SolverDispatchError,

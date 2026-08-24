@@ -18,9 +18,9 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.processing.compute_canopy_height import compute_canopy_height as cch
-from trid3nt_server.data.processing.compute_canopy_height.compute_canopy_height import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.processing.compute_canopy_height import compute_canopy_height as cch
+from trid3nt_server.tools.processing.compute_canopy_height.compute_canopy_height import (
     assemble_canopy_build_spec,
     compute_canopy_height,
     estimate_canopy_tiles,
@@ -42,13 +42,13 @@ def test_compute_canopy_height_registered():
 
 
 def test_canopy_registered_in_solver_workflow_registry():
-    from trid3nt_server.data.simulation.solver.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.solver.solver import SOLVER_WORKFLOW_REGISTRY
 
     assert "canopy" in SOLVER_WORKFLOW_REGISTRY
 
 
 def test_canopy_style_preset_resolves_to_titiler_rescale_colormap():
-    from trid3nt_server.data.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
 
     params = _registry_style_params("canopy_height_m")
     assert params is not None
@@ -113,7 +113,7 @@ class _FakeS3:
 
 
 def test_stage_canopy_build_spec_uploads_to_cache(monkeypatch):
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     fake = _FakeS3()
     solver_mod.set_s3_client(fake)
@@ -200,9 +200,9 @@ def _patch_chain(monkeypatch, *, captured: dict, naip_uri="s3://cache/naip-rgb.t
                  cog_uri="s3://runs/BATCHRID/canopy_height.tif", run_result=None):
     """Patch the chain seams at their SOURCE modules (the tool imports them
     inside the function body, so patch the source, not the tool module)."""
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.publish_layer import publish_layer as publish_mod
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.publish_layer import publish_layer as publish_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     rr = run_result if run_result is not None else _FakeRunResult()
 

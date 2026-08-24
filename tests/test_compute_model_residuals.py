@@ -53,8 +53,8 @@ from shapely.geometry import Point
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.processing.compute_model_residuals.compute_model_residuals import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.processing.compute_model_residuals.compute_model_residuals import (
     ModelResidualsLayerURI,
     ResidualsAllNodataError,
     ResidualsInputError,
@@ -392,7 +392,7 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     # fetch_usgs_groundwater_levels is spec-driven (ADR 0071); the composer resolves
     # its FGB bytes via the router seam (get_spec + validate_params + executor), so
     # mock the executor the re-point calls.
-    from trid3nt_server.data.fetchers._router import router as gw_router
+    from trid3nt_server.tools.fetchers._router import router as gw_router
 
     captured: dict = {}
 
@@ -426,7 +426,7 @@ def test_bad_model_uri_raises(tmp_path) -> None:
 
 
 def test_corpus() -> None:
-    from trid3nt_server.data.search.search_tools import search_tools as dd
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
 
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_model_residuals", [])) >= 5

@@ -24,7 +24,7 @@ log = logging.getLogger("run_landlab_groundwater_native_res")
 BBOX = (-84.18, 33.60, -84.14, 33.64)
 TARGET_RESOLUTION_M = 10.0  # 3DEP native (template default is 30.0)
 
-from trid3nt_server.data import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
 
 PROOF_DIR = Path(__file__).parent.parent / "docs" / "proof"
 PROOF_DIR.mkdir(parents=True, exist_ok=True)

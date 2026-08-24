@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.geoclaw.inundation import inundation as I
 
 

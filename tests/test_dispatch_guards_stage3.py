@@ -31,14 +31,14 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import data as agent_tools
+from trid3nt_server import tools as agent_tools
 from trid3nt_server.adapters.adapter import ModelSettings
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
-from trid3nt_server.data.tool_arg_normalizer import (
+from trid3nt_server.tools.tool_arg_normalizer import (
     fuzzy_correct_enum_args,
     normalize_args,
 )
-from trid3nt_server.data import RegisteredTool
+from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI

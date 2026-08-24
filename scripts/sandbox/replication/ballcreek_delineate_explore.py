@@ -49,7 +49,7 @@ def _inflow_neighbors(fdir, acc, r, c):
 
 
 def main() -> None:
-    from trid3nt_server.data.processing._hydrology_common import (
+    from trid3nt_server.tools.processing._hydrology_common import (
         _condition_dem, _stage_dem, snap_and_delineate_index_space)
     import geopandas as gpd
 

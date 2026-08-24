@@ -351,7 +351,7 @@ def step_wse(result_slf: Path, run_id: str, out_dir: Path) -> Any:
 def step_diagnostics(run_handle: str) -> dict[str, Any] | None:
     """Read TELEMAC run diagnostics -- only meaningful after a REAL solve (a
     completion.json exists). Returns None (with an honest record) offline."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["read_run_diagnostics"].fn
     try:
@@ -374,7 +374,7 @@ def step_diagnostics(run_handle: str) -> dict[str, Any] | None:
 
 def step_pairing(model_uri: str, obs_path: str, model_datum: str,
                  out_dir: str | None = None) -> Any:
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["extract_model_at_observations"].fn
     paired = fn(
@@ -405,7 +405,7 @@ def step_pairing(model_uri: str, obs_path: str, model_datum: str,
 
 
 def step_skill(paired_table_uri: str) -> dict[str, Any]:
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["compute_skill_metrics"].fn
     m = fn(paired_table_uri=paired_table_uri, variable="head")
@@ -430,7 +430,7 @@ def _read_paired_pairs(paired_table_uri: str) -> dict[str, tuple[float, float]]:
         # boto3 read (GDAL /vsis3/ does not use the boto3 MinIO env) -> temp file.
         import tempfile
 
-        from trid3nt_server.data.cache import read_object_bytes_s3
+        from trid3nt_server.tools.cache import read_object_bytes_s3
 
         data = read_object_bytes_s3(paired_table_uri)
         tf = tempfile.NamedTemporaryFile(suffix=".fgb", delete=False)

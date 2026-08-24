@@ -18,10 +18,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.data.fetchers._router import hooks
-from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.tools.fetchers._router import hooks
+from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
-_BASE = Path(__file__).resolve().parents[1] / "trid3nt_server/data/fetchers"
+_BASE = Path(__file__).resolve().parents[1] / "trid3nt_server/tools/fetchers"
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +93,7 @@ def _write_synthetic_gtsm_netcdf(out_path, station_lons, station_lats, n=24):
 
 
 def test_both_cds_specs_load_and_register():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     for name in ("fetch_era5_reanalysis", "fetch_gtsm_tide_surge"):
         assert name in TOOL_REGISTRY, f"{name} not registered (spec fold)"

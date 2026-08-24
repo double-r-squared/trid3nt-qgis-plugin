@@ -134,7 +134,7 @@ def test_build_spec_respects_explicit_boundary_and_wind():
 # (3) Solver registration + bridge tool registered.
 # ===========================================================================
 def test_swan_registered_in_solver_workflow_registry():
-    from trid3nt_server.data.simulation.solver.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.solver.solver import SOLVER_WORKFLOW_REGISTRY
     from trid3nt_server.workflows.swan.run_swan import (
         SWAN_SOLVER_NAME,
         register_swan_solver,
@@ -145,8 +145,8 @@ def test_swan_registered_in_solver_workflow_registry():
 
 
 def test_swan_wave_field_registered_in_tool_registry():
-    import trid3nt_server.data  # noqa: F401 -- fire eager imports
-    from trid3nt_server.data import TOOL_REGISTRY
+    import trid3nt_server.tools  # noqa: F401 -- fire eager imports
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     # swan_wave_field is the registered SWAN template. Door dissolution
     # (ADR 0094): the run_swan door is DELETED and the older run_swan_waves name
@@ -449,7 +449,7 @@ def test_swan_wave_height_preset_resolves_to_titiler_rescale_colormap():
     """The SWAN wave-height preset must resolve to a TiTiler /tiles URL with a
     valid rescale + colormap (gnbu over 0..6 m) -- never a washed-out empty style
     or a raw s3://. This is the publish-side half of the render contract."""
-    from trid3nt_server.data.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
 
     assert SWAN_WAVE_HEIGHT_STYLE_PRESET == "continuous_wave_height"
     params = _registry_style_params("continuous_wave_height")
@@ -563,7 +563,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     # The composer imports run_solver / wait_for_completion / EmitterBinding /
     # set_emitter_binding INSIDE the function (from ..tools.simulation.solver import ...), so
     # they must be patched at the SOURCE module, not on the composer module.
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     with patch.object(comp, "_fetch_bathy_for_swan",
                       lambda b, **_k: "s3://cache/topo.tif"), \

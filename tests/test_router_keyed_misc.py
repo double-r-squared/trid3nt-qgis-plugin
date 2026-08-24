@@ -25,14 +25,14 @@ from pathlib import Path
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.hooks import resolve_hook
-from trid3nt_server.data.fetchers._router.registration import _SPEC_REGISTRY
-from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.hooks import resolve_hook
+from trid3nt_server.tools.fetchers._router.registration import _SPEC_REGISTRY
+from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 from trid3nt_server.credentials.credential_registry import is_credential_shaped_error
 
-_F = Path("trid3nt_server/data/fetchers")
+_F = Path("trid3nt_server/tools/fetchers")
 _SPECS = {
     "fetch_mobi": _F / "biodiversity/fetch_mobi/source.yaml",
     "fetch_climate_normals": _F / "climate/fetch_climate_normals/source.yaml",

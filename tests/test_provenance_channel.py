@@ -12,8 +12,8 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data import cache as cache_mod
-from trid3nt_server.data.cache import (
+from trid3nt_server.tools import cache as cache_mod
+from trid3nt_server.tools.cache import (
     PROVENANCE_SCHEMA,
     ProvenanceRecorder,
     read_through,
@@ -94,7 +94,7 @@ def test_legacy_object_without_a_current_sidecar_is_a_miss(fake_s3: Any) -> None
     served a silently-degraded artifact for the rest of the TTL bucket, so the
     object REFETCHES instead."""
     md = _md()
-    from trid3nt_server.data.cache import cache_path, compute_cache_key
+    from trid3nt_server.tools.cache import cache_path, compute_cache_key
     key = compute_cache_key(md.source_class, {"k": 9}, md.ttl_class)
     path = cache_path(md.source_class, md.ttl_class, key, "tif")
     fake_s3.store[path] = b"LEGACY"  # artifact present, NO sidecar

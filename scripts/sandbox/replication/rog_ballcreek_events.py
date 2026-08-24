@@ -50,7 +50,7 @@ EVENTS = {
 
 
 def _aorc(a: str, b: str) -> pd.Series:
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
     d = TOOL_REGISTRY["fetch_aorc_precip"].fn(bbox=BC_BBOX, start_date=a, end_date=b)
     d = d if isinstance(d, dict) else d.__dict__
     return pd.Series(d["precip_mm"], index=pd.to_datetime(d["times"])).astype(float)
@@ -113,7 +113,7 @@ def build_forcing(key: str) -> dict:
 def run_event(key: str, *, cn: float | None, manning_scale: float,
               amc: int | None = None, tag: str | None = None) -> dict:
     """Solve one event with given params; align to observed; return metrics+NSE/R2."""
-    from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
+    from trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics import (
         nash_sutcliffe_efficiency, pearson_r2)
 
     f = json.loads((FORCING_DIR / f"{key}.json").read_text())

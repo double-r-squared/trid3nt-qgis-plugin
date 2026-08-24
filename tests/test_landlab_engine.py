@@ -148,10 +148,10 @@ def test_stage_landlab_manifest_uploads_dem_and_manifest(tmp_path, monkeypatch):
     monkeypatch.setattr(RL, "_get_s3_client", lambda: _FakeS3(), raising=False)
     # _get_s3_client is imported lazily inside stage_landlab_manifest from
     # ..tools.simulation.solver; patch it there.
-    from trid3nt_server.data.simulation.solver import solver as _solver
+    from trid3nt_server.workflows.solver import solver as _solver
 
     monkeypatch.setattr(_solver, "_get_s3_client", lambda: _FakeS3())
-    from trid3nt_server.data import cache as _cache
+    from trid3nt_server.tools import cache as _cache
 
     monkeypatch.setattr(_cache, "storage_scheme", lambda: "s3")
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache-bucket")
@@ -187,8 +187,8 @@ def test_stage_landlab_manifest_typed_error_on_upload_failure(tmp_path, monkeypa
         def put_object(self, **kw):  # noqa: ANN003
             raise RuntimeError("s3 down")
 
-    from trid3nt_server.data.simulation.solver import solver as _solver
-    from trid3nt_server.data import cache as _cache
+    from trid3nt_server.workflows.solver import solver as _solver
+    from trid3nt_server.tools import cache as _cache
 
     monkeypatch.setattr(_solver, "_get_s3_client", lambda: _BoomS3())
     monkeypatch.setattr(_cache, "storage_scheme", lambda: "s3")
@@ -355,7 +355,7 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
     """The composer drives fetch -> stage -> run_solver -> wait -> download ->
     postprocess -> publish with ALL external calls mocked and returns a
     LandlabSusceptibilityLayerURI carrying the narration scalars."""
-    from trid3nt_server.data.simulation.solver import solver as _solver
+    from trid3nt_server.workflows.solver import solver as _solver
     from trid3nt_server.workflows.landlab.susceptibility import susceptibility as M
     from trid3nt_server.workflows.landlab.run_landlab import LandlabStaging
 
@@ -454,7 +454,7 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
 
 def test_model_landslide_scenario_run_failure_raises_typed(tmp_path, monkeypatch):
     """A non-complete Batch solve surfaces a typed LANDLAB_RUN_FAILED."""
-    from trid3nt_server.data.simulation.solver import solver as _solver
+    from trid3nt_server.workflows.solver import solver as _solver
     from trid3nt_server.workflows.landlab.susceptibility import susceptibility as M
     from trid3nt_server.workflows.landlab.run_landlab import LandlabStaging, LandlabWorkflowError
 
@@ -513,7 +513,7 @@ def test_download_batch_landlab_outputs_picks_field_cog_not_dem(tmp_path, monkey
     the local-exec supervisor re-uploads the staged DEM alongside the worker
     outputs); _download_batch_landlab_outputs must still download
     landlab_field.tif, not whichever .tif key happens to sort/list first."""
-    from trid3nt_server.data.simulation.solver import solver as _solver
+    from trid3nt_server.workflows.solver import solver as _solver
     from trid3nt_server.workflows.landlab.susceptibility import susceptibility as M
 
     run_id = "field-select-rid"

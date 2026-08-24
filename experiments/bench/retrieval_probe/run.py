@@ -2,7 +2,7 @@
 """retrieval_probe -- model-free tool-retrieval probe engine (experiments/bench).
 
 NO daemon, NO LLM, ZERO external calls: imports the retrieval seam directly
-(trid3nt_server.data.search.search_tools index +
+(trid3nt_server.tools.search.search_tools index +
 tool_retrieval.retrieve_ranked_tools) and, per record, runs
 query -> top-k tool names + RRF scores + turnaround ms.
 
@@ -78,7 +78,7 @@ def load_live_catalog() -> set[str]:
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     return set(TOOL_REGISTRY)
 
@@ -229,8 +229,8 @@ def grade_topk(record: ProbeRecord, topk_names: list[str], k: int) -> dict:
 
 def run_probe(records: list[ProbeRecord], runs: int, k: int, out_dir: Path,
               meta: dict) -> None:
-    from trid3nt_server.data.search.search_tools import search_tools as dd
-    from trid3nt_server.data.search.tool_retrieval import retrieve_ranked_tools
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_ranked_tools
 
     # Warm the index EXPLICITLY (timed, reported separately -- retrieve_ranked_
     # tools returns [] on a cold index rather than building it).

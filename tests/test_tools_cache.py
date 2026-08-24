@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.data.cache import (
+from trid3nt_server.tools.cache import (
     CACHE_KEY_HEX_LEN,
     PROVENANCE_SCHEMA,
     ProvenanceRecorder,

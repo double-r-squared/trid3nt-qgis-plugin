@@ -24,13 +24,13 @@ import geopandas as gpd
 import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.errors import (
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.data.fetchers._router.executors import vector_fgb
-from trid3nt_server.data.fetchers._router.transforms import fan_out
+from trid3nt_server.tools.fetchers._router.executors import vector_fgb
+from trid3nt_server.tools.fetchers._router.transforms import fan_out
 
 
 # --------------------------------------------------------------------------- #

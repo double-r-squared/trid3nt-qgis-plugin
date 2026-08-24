@@ -16,18 +16,18 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.errors import (
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.errors import (
     RouterEmptyError,
     RouterInputError,
 )
-from trid3nt_server.data.fetchers._router.executors import http_json
-from trid3nt_server.data.fetchers._router.hooks import lter_records as lr
-from trid3nt_server.data.fetchers._router.spec import load_spec_from_path
+from trid3nt_server.tools.fetchers._router.executors import http_json
+from trid3nt_server.tools.fetchers._router.hooks import lter_records as lr
+from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 LTER_SPEC = load_spec_from_path(
     Path(__file__).resolve().parents[1]
-    / "trid3nt_server/data/fetchers/hydrology/fetch_lter_records/source.yaml"
+    / "trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/source.yaml"
 )
 
 # A minimal EML with one dataTable (tab-delimited, 1 header line) carrying a Date,
@@ -82,7 +82,7 @@ _DATA_URL = lr._dataone_resolve_url(
 
 
 def _inject_read_through(monkeypatch, store: dict[str, bytes]):
-    from trid3nt_server.data.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path, compute_cache_key, is_cacheable,
     )
     now = _dt.datetime(2026, 8, 8, 12, 0, 0, tzinfo=_dt.timezone.utc)
@@ -106,7 +106,7 @@ def _inject_read_through(monkeypatch, store: dict[str, bytes]):
 def _inject_transport(monkeypatch):
     """Route the metadata + data resolve URLs to the synthetic bodies (both the
     resolve-phase _get and the record-phase _get share http_json._get_raw)."""
-    from trid3nt_server.data.fetchers._router.executors import chained_resolution
+    from trid3nt_server.tools.fetchers._router.executors import chained_resolution
 
     def fake(plan):
         if plan.url == _META_URL:
@@ -125,7 +125,7 @@ def _inject_transport(monkeypatch):
 
 
 def test_lter_promoted_as_record_spec():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_lter_records"]
     assert entry.metadata.source_class == "lter_records"

@@ -23,8 +23,8 @@ import re
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.resolution_declared import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.resolution_declared import (
     ResolutionOutOfRangeError,
     enforce_resolution,
     resolution_review_note,

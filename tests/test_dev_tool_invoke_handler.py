@@ -25,8 +25,8 @@ import threading
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import data as agent_tools
-from trid3nt_server.data import RegisteredTool
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import RegisteredTool
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 

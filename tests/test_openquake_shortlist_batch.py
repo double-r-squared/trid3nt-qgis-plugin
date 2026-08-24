@@ -139,7 +139,7 @@ def test_consistency_median_verdict():
 # --------------------------------------------------------------------------- #
 def test_new_tools_registered():
     _main._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     for n in ("openquake_disaggregation", "openquake_event_based"):
         e = TOOL_REGISTRY[n]

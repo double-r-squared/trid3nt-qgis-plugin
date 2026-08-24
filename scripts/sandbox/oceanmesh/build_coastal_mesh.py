@@ -95,7 +95,7 @@ def fetch_dem(bbox, rundir: Path) -> Path:
         return dem_path
     import rasterio
     from rasterio.crs import CRS
-    from trid3nt_server.data.fetchers._router.hooks import topobathy as T
+    from trid3nt_server.tools.fetchers._router.hooks import topobathy as T
 
     array, transform, _crs, prov = T._select_and_merge(
         tuple(float(v) for v in bbox), 30, "EPSG:4326", None, 180.0, True, False, None

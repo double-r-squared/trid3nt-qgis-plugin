@@ -16,7 +16,7 @@ BBOX = (-95.05, 29.2, -94.6, 29.65)
 # --------------------------------------------------------------------------- #
 # R-C: honest GLOBAL-FALLBACK warning cause.
 # --------------------------------------------------------------------------- #
-from trid3nt_server.data.fetchers._router.hooks.topobathy import (  # noqa: E402
+from trid3nt_server.tools.fetchers._router.hooks.topobathy import (  # noqa: E402
     _compose_fallback_warnings,
 )
 
@@ -113,8 +113,8 @@ def test_ra_cudem_skip_threshold(res, skip):
 # --------------------------------------------------------------------------- #
 # R-B: sampled payload estimator.
 # --------------------------------------------------------------------------- #
-from trid3nt_server.data import payload_sampling as ps  # noqa: E402
-from trid3nt_server.data.payload_sampling import (  # noqa: E402
+from trid3nt_server.tools import payload_sampling as ps  # noqa: E402
+from trid3nt_server.tools.payload_sampling import (  # noqa: E402
     SampledDensity,
     estimate_mb,
 )
@@ -177,7 +177,7 @@ from trid3nt_server.workflows.schism.pahm_surge import pahm_surge as surge  # no
 
 @pytest.fixture
 def _no_sample(monkeypatch):
-    import trid3nt_server.data.fetchers._router.hooks.topobathy as tbh
+    import trid3nt_server.tools.fetchers._router.hooks.topobathy as tbh
     monkeypatch.setattr(tbh, "_sample_topobathy_density", lambda b: None)
 
 

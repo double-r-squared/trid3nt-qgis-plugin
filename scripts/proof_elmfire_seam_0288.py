@@ -32,7 +32,7 @@ import types as _t
 
 logging.basicConfig(level=logging.WARNING)
 
-import trid3nt_server.data as _bootstrap  # noqa: F401 -- init the tool registry first
+import trid3nt_server.tools as _bootstrap  # noqa: F401 -- init the tool registry first
 from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, _CURRENT_EMITTER
 from trid3nt_server.emission.outputs_seam import (

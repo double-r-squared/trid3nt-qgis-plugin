@@ -25,10 +25,10 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router import transport as _tp
-from trid3nt_server.data.fetchers._router.executors import raster_cog
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router import transport as _tp
+from trid3nt_server.tools.fetchers._router.executors import raster_cog
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _BBOX = (-95.40, 29.70, -95.30, 29.80)
 _SW = _SH = 160

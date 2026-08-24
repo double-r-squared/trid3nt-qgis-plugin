@@ -27,8 +27,8 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.data.simulation.solver.solver as solver_mod
-from trid3nt_server.data.simulation.solver.solver import (
+import trid3nt_server.workflows.solver.solver as solver_mod
+from trid3nt_server.workflows.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     set_emitter_binding,
     set_runs_bucket,
@@ -222,7 +222,7 @@ def test_launch_writes_manifest_to_rundir(
 ) -> None:
     """launch_local_solver must write manifest.json to the rundir so the shim
     can read it via the ``--manifest manifest.json`` flag."""
-    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -287,7 +287,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
 ) -> None:
     """With a real subprocess that exits 0, the supervisor must write
     completion.json with status='ok' and upload it to the runs bucket."""
-    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -340,7 +340,7 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
 ) -> None:
     """A subprocess that exits non-zero must produce status='error' in
     completion.json."""
-    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -388,7 +388,7 @@ def test_env_overrides_set_in_subprocess_environment(
     """env_overrides must appear in the subprocess environment.
     We verify by having the subprocess write os.environ['TRID3NT_TEST_PYPATH']
     to a file and checking the file contents."""
-    from trid3nt_server.data.simulation.solver.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.workflows.solver.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)

@@ -39,7 +39,7 @@ from harness import (  # noqa: E402
 )
 
 # Twin module (present until promotion; this gate runs BEFORE the cut).
-from trid3nt_server.data.fetchers.ocean.fetch_noaa_coops_currents import (  # noqa: E402
+from trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents import (  # noqa: E402
     fetch_noaa_coops_currents as cur_mod,
 )
 

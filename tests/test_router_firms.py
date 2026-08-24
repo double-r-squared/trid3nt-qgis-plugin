@@ -17,11 +17,11 @@ import tempfile
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.data.fetchers._router.executors.vector_fgb import (
+from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.data.fetchers._router.hooks import firms_active_fire as fh
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router.hooks import firms_active_fire as fh
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _HEADER = (
     "latitude,longitude,brightness,scan,track,acq_date,acq_time,"

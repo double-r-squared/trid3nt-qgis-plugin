@@ -15,7 +15,7 @@ import types
 import pytest
 
 import trid3nt_server.workflows.sfincs.flood.flood as flood_mod
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.sfincs.numerical_physics.numerical_physics import (
     sfincs_advanced_numerical_physics_knobs,
 )

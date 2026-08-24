@@ -19,7 +19,7 @@ import pytest
 
 from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 
-from trid3nt_server.data.resolution_declared import (
+from trid3nt_server.tools.resolution_declared import (
     ResolutionOutOfRangeError,
     enforce_resolution,
 )

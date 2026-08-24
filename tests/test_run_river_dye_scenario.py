@@ -73,7 +73,7 @@ def _fake_peak(run_id: str, reach_name: str) -> TelemacDyeLayerURI:
 # (1) Tool registration + metadata.
 # ===========================================================================
 def test_telemac_river_dye_registered_as_engine_template():
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("telemac_river_dye")
     assert entry is not None
@@ -207,7 +207,7 @@ def test_a_wind_bearing_wraps_rather_than_clamping():
 # (3) Declared bounds replace the inline clamps.
 # ===========================================================================
 def _resolve(**supplied):
-    from trid3nt_server.declarative import resolve_params
+    from trid3nt_server.workflows.lib import resolve_params
     from trid3nt_server.workflows.telemac.river_dye.river_dye import PARAMS
 
     return asyncio.run(resolve_params(PARAMS, {"location": "X", **supplied}))
@@ -234,7 +234,7 @@ def test_declared_bounds_keep_the_source_inside_the_reach():
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
-    from trid3nt_server.declarative import GateRefusedError
+    from trid3nt_server.workflows.lib import GateRefusedError
 
     with pytest.raises(GateRefusedError):
         _resolve(reach_length_km="a lot")
@@ -242,7 +242,7 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
 
 def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
     """The user has to see that dilution is governed by a fetched value."""
-    from trid3nt_server.declarative import provenance_entries
+    from trid3nt_server.workflows.lib import provenance_entries
     from trid3nt_server.workflows.telemac.river_dye.river_dye import PARAMS
 
     row = next(r for r in provenance_entries(_resolve(), PARAMS)
@@ -255,8 +255,8 @@ def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
 # (4) The plan value.
 # ===========================================================================
 def test_the_plan_validates_and_gates_before_the_solve():
-    from trid3nt_server.declarative import validate_plan
-    from trid3nt_server.declarative.plan import Gate
+    from trid3nt_server.workflows.lib import validate_plan
+    from trid3nt_server.workflows.lib.plan import Gate
     from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA, PARAMS, plan
 
     p = _resolve()
@@ -276,7 +276,7 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
 
 def test_the_declared_data_is_reference_data_with_the_rain_ladder():
-    from trid3nt_server.declarative import ReferenceProducer
+    from trid3nt_server.workflows.lib import ReferenceProducer
     from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
 
     by_name = {d.name: d for d in DATA}
@@ -291,7 +291,7 @@ def test_the_declared_data_is_reference_data_with_the_rain_ladder():
 # (5) The chain: dispatch + manifest overrides + layer return.
 # ===========================================================================
 def _install_step_mocks(captured: dict):
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.telemac import postprocess_telemac as pp_mod
     from trid3nt_server.workflows.telemac import release_layer as rel_mod
     from trid3nt_server.workflows.telemac import results_mesh_seam as seam_mod

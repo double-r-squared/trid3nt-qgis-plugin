@@ -13,7 +13,7 @@ from pathlib import Path
 SOLVER_RUN = "01KZW4N9RDHKECRF8C1JHP9T3C"   # has _output/deformation_dz.asc
 SETUP_RUN = "01KZW4N9PDXEGPKJXA5WTTFJD9"    # inundation run_id (proof --setup-id)
 
-from trid3nt_server.data.simulation.solver.solver import (
+from trid3nt_server.workflows.solver.solver import (
     _get_runs_bucket, _get_s3_client,
 )
 from trid3nt_server.workflows.geoclaw.postprocess_geoclaw import (

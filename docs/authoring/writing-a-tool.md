@@ -38,7 +38,7 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 3. An **eager import** in `trid3nt_server/tools/__init__.py`
    (so the decorator actually fires at startup).
 4. **Corpus queries** in
-   `trid3nt_server/data/tool_query_corpus.yaml` (the retrieval
+   `trid3nt_server/tools/tool_query_corpus.yaml` (the retrieval
    index) + the mandatory `retrieve_visible_tools(prompt, None, 8)` check.
 5. A **test** under `services/agent/tests/`.
 6. Observe the **1000-char docstring rule** (front-load routing).

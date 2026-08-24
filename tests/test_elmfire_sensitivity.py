@@ -116,7 +116,7 @@ def test_templates_registered(name):
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY[name]
     assert callable(entry.fn)

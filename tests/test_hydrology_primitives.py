@@ -38,10 +38,10 @@ from shapely.ops import unary_union
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.processing._hydrology_common import HydrologyAoiTooLargeError, HydrologyInputError
-from trid3nt_server.data.processing.delineate_watershed.delineate_watershed import WatershedLayerURI, _auto_bbox, delineate_watershed
-from trid3nt_server.data.processing.extract_stream_network.extract_stream_network import NoStreamsError, StreamNetworkLayerURI, extract_stream_network
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.processing._hydrology_common import HydrologyAoiTooLargeError, HydrologyInputError
+from trid3nt_server.tools.processing.delineate_watershed.delineate_watershed import WatershedLayerURI, _auto_bbox, delineate_watershed
+from trid3nt_server.tools.processing.extract_stream_network.extract_stream_network import NoStreamsError, StreamNetworkLayerURI, extract_stream_network
 
 # Synthetic geographic grid: 60x60 cells of 0.001 deg.
 N = 60
@@ -251,7 +251,7 @@ def test_index_space_beats_coordinate_path_on_convergent_dem(tmp_path) -> None:
     collapses the basin to a sliver. On a convergent bowl the OLD coordinate path
     returns a handful of cells while the FIXED index-space delineation (what
     ``delineate_watershed`` now uses) captures the whole convergent interior."""
-    from trid3nt_server.data.processing._hydrology_common import _condition_dem
+    from trid3nt_server.tools.processing._hydrology_common import _condition_dem
 
     dem = str(tmp_path / "bowl.tif")
     pour, bbox = _bowl_dem(dem, -83.50, 35.10, 0.001, 40)

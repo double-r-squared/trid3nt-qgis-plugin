@@ -28,8 +28,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.simulation.solver.solver import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.workflows.solver.solver import (
     NFR_P_4_TARGET_SECONDS,
     PROGRESS_CLAMP_MAX,
     SOLVER_WORKFLOW_REGISTRY,

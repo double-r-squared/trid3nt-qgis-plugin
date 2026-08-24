@@ -16,10 +16,10 @@ import tempfile
 import numpy as np
 import pytest
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.executors import raster_cog
-from trid3nt_server.data.fetchers._router.spec import compose_specs_from_tree
-from trid3nt_server.data.fetchers._router import transport as _transport
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.executors import raster_cog
+from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+from trid3nt_server.tools.fetchers._router import transport as _transport
 
 
 @pytest.fixture(scope="module")

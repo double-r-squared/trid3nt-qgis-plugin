@@ -174,7 +174,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 #      fetched topobathy the same way the flood DEM path does).
 # ===========================================================================
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.data.publish_layer.publish_layer.publish_layer"
+    "trid3nt_server.tools.publish_layer.publish_layer.publish_layer"
 )
 _COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
 
@@ -226,7 +226,7 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
     """A publish_layer PublishLayerError is swallowed (best-effort): returns
     False, surfaces nothing, NEVER raises -- a failed input can never fail the
     solve."""
-    from trid3nt_server.data.publish_layer.publish_layer import (
+    from trid3nt_server.tools.publish_layer.publish_layer import (
         PublishLayerError,
     )
 
@@ -356,7 +356,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
         def put_object(self, **kw):
             puts.append(kw)
 
-    import trid3nt_server.data.simulation.solver.solver as solver_mod
+    import trid3nt_server.workflows.solver.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
@@ -376,7 +376,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
 
 def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
     """No drawable traces => None (best-effort, no upload)."""
-    import trid3nt_server.data.simulation.solver.solver as solver_mod
+    import trid3nt_server.workflows.solver.solver as solver_mod
 
     called = {"put": False}
 
@@ -397,7 +397,7 @@ def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
 def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
     """An S3 put failure returns None (the fault input is simply absent), NEVER
     raises."""
-    import trid3nt_server.data.simulation.solver.solver as solver_mod
+    import trid3nt_server.workflows.solver.solver as solver_mod
 
     class _BoomS3:
         def put_object(self, **kw):
@@ -424,7 +424,7 @@ async def test_river_dye_surfaces_in_worker_bed_bathymetry_as_context(monkeypatc
     """The bed COG the worker recorded in the result envelope reaches the emitter
     as a role="context" continuous_dem raster with a provenance name (cannot
     silently drop the in-worker bed NATE asked to visualize)."""
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
     emitter = _emitter()
@@ -476,7 +476,7 @@ async def test_river_dye_bed_cog_recorded_but_object_missing_skips_loudly(
     worker wrote the filename) but the object was never uploaded (the
     stage_manifest outputs-list gap). head_object (mocked) reports absent ->
     no 404 layer, a loud skip, never raises."""
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
     emitter = _emitter()
@@ -511,7 +511,7 @@ async def test_surface_in_worker_bed_input_surfaces_lake_bed_as_context(monkeypa
     continuous_dem raster carrying the caller's provenance name, riding the
     EXISTING s3 object (no re-upload) -- the in-worker lake bed cannot silently
     drop."""
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
     emitter = _emitter()
@@ -558,10 +558,10 @@ async def test_surface_in_worker_bed_input_absent_key_and_none_emitter_noop():
 async def test_surface_in_worker_bed_input_publish_failure_non_fatal(monkeypatch):
     """A publish_layer failure is swallowed (best-effort): the emitter-drop cannot
     be silent-crashing -- returns False, surfaces nothing, NEVER raises."""
-    from trid3nt_server.data.publish_layer.publish_layer import (
+    from trid3nt_server.tools.publish_layer.publish_layer import (
         PublishLayerError,
     )
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
 

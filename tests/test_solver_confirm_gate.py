@@ -118,7 +118,7 @@ def test_code_exec_request_in_hot_set() -> None:
     """code_exec_request must be in the always-visible retrieval floor so it is
     never retrieved out (round-4 live showed a false 'cannot run Python'
     narration when it was not reachable)."""
-    from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
+    from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 
     assert "code_exec_request" in CORE_FLOOR
 

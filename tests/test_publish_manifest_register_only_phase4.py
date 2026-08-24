@@ -27,7 +27,7 @@ import json
 
 import pytest
 
-from trid3nt_server.data.publish_layer import publish_layer as pl
+from trid3nt_server.tools.publish_layer import publish_layer as pl
 from trid3nt_server.emission.uri_registry import (
     SessionUriRegistry,
     activate_registry,
@@ -328,7 +328,7 @@ class _RR:
 
 
 def _patch_solver(monkeypatch, *, completion, manifest_bytes=None):
-    from trid3nt_server.data.simulation.solver import solver as solver_mod
+    from trid3nt_server.workflows.solver import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
     monkeypatch.setattr(

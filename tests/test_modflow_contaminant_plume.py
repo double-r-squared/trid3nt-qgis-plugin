@@ -37,7 +37,7 @@ from trid3nt_contracts.modflow_contracts import (
     SpeciesSpec,
 )
 
-from trid3nt_server.data import RegisteredTool, TOOL_REGISTRY
+from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
 from trid3nt_server.workflows.modflow import postprocess_modflow as pp
 from trid3nt_server.workflows.modflow.contaminant_plume import contaminant_plume as ms
 from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import (
@@ -467,7 +467,7 @@ async def test_wrapper_missing_species_returns_user_input_required(
 
 
 def test_template_registered_uncacheable() -> None:
-    import trid3nt_server.data  # noqa: F401 - fire registration
+    import trid3nt_server.tools  # noqa: F401 - fire registration
 
     entry = TOOL_REGISTRY.get("modflow_contaminant_plume")
     assert entry is not None
@@ -478,7 +478,7 @@ def test_template_registered_uncacheable() -> None:
 
 def test_template_tagged_engine_and_tier() -> None:
     """The FOLD template carries engine=modflow, tier=template (door-surfaced)."""
-    import trid3nt_server.data  # noqa: F401 - fire registration
+    import trid3nt_server.tools  # noqa: F401 - fire registration
 
     entry = TOOL_REGISTRY.get("modflow_contaminant_plume")
     assert entry is not None

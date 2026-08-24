@@ -9,7 +9,7 @@ the publish_layer resolver knows (no silent physically-wrong colormap).
 from __future__ import annotations
 
 from trid3nt_server.emission import quantity_styles as qs
-from trid3nt_server.data.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
+from trid3nt_server.tools.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
 
 
 def test_registered_quantity_resolves_to_physical_preset():

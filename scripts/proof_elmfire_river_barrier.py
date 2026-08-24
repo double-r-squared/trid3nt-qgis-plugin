@@ -44,7 +44,7 @@ import numpy as np
 import rasterio
 
 from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.elmfire.postprocess_elmfire import (
     discover_elmfire_rasters, read_fire_raster,
 )

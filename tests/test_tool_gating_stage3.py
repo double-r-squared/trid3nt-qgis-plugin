@@ -25,7 +25,7 @@ import pytest
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
 from trid3nt_server.adapters.adapter import ModelSettings, TextDeltaEvent
-from trid3nt_server.data.search.tool_retrieval import CORE_FLOOR
+from trid3nt_server.tools.search.tool_retrieval import CORE_FLOOR
 from trid3nt_server.gates.tool_gating import (
     META_TOOL_FLOOR,
     TOOL_GATING_TOPK_DEFAULT,
@@ -33,7 +33,7 @@ from trid3nt_server.gates.tool_gating import (
     gating_topk,
     named_tools_in_text,
 )
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_contracts import new_ulid
 
 # The gating tests rank/keep REAL registry names -- make sure the full
@@ -212,7 +212,7 @@ async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
     """Run one no-tool turn and capture the registry handed to
     build_tool_declarations. Enforce (the built-in surfacing path) is neutralized
     to the full declarable set so the openai gate is measured in isolation."""
-    from trid3nt_server.data.search import tool_retrieval as tr
+    from trid3nt_server.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(
         tr, "retrieve_ranked_tools", lambda text, k=25: _ranked(30)[: max(k, 2)]
@@ -277,7 +277,7 @@ async def test_scripted_provider_turn_is_never_gated(monkeypatch):
 async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.delenv("TRID3NT_TOOL_GATING_TOPK", raising=False)
-    from trid3nt_server.data.search import tool_retrieval as tr
+    from trid3nt_server.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: [])
     monkeypatch.setattr(

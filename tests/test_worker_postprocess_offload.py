@@ -75,7 +75,7 @@ def test_read_publish_manifest_absent_pointer_returns_none(monkeypatch):
     gate default-off) -> read_publish_manifest returns None -> composer falls
     through to the legacy on-box postprocess."""
     import trid3nt_server.workflows.shared.register_published_manifest as rpm
-    import trid3nt_server.data.simulation.solver.solver as solver
+    import trid3nt_server.workflows.solver.solver as solver
 
     monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bkt")
     monkeypatch.setattr(

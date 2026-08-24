@@ -31,19 +31,19 @@ from harness import (  # noqa: E402
 )
 
 try:
-    from trid3nt_server.data.fetchers.hazard.fetch_landfire_fuels import (  # noqa: E402
+    from trid3nt_server.tools.fetchers.hazard.fetch_landfire_fuels import (  # noqa: E402
         fetch_landfire_fuels as lf_mod,
     )
 except ImportError:
     lf_mod = None
 try:
-    from trid3nt_server.data.fetchers.hazard.fetch_usfs_canopy_fuels import (  # noqa: E402
+    from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import (  # noqa: E402
         fetch_usfs_canopy_fuels as us_mod,
     )
 except ImportError:
     us_mod = None
 try:
-    from trid3nt_server.data.fetchers.climate.fetch_modis_lst import (  # noqa: E402
+    from trid3nt_server.tools.fetchers.climate.fetch_modis_lst import (  # noqa: E402
         fetch_modis_lst as modis_mod,
     )
 except ImportError:
@@ -145,7 +145,7 @@ def _run_source(specs, mod, fn_name, spec_name, layers, empty_code) -> SourceRes
             _cmp_layer(res, layer, tl, rl)
 
         # --- empty (synthetic all-nodata TIFF fed to BOTH sides): typed EMPTY ---
-        from trid3nt_server.data.fetchers._router import transport as _tp
+        from trid3nt_server.tools.fetchers._router import transport as _tp
         nod = _all_nodata_tiff()
 
         class _FakeResp:

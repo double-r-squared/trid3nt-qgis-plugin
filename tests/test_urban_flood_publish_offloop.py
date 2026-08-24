@@ -31,7 +31,7 @@ from contextlib import asynccontextmanager
 import pytest
 
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 from trid3nt_server.workflows.swmm.urban_flood import urban_flood as M
 
 

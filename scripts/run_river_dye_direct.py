@@ -85,7 +85,7 @@ async def main() -> int:
              os.environ.get("TRID3NT_RUNS_BUCKET"),
              os.environ.get("AWS_ENDPOINT_URL"))
 
-    from trid3nt_server.data import TOOL_REGISTRY  # import populates the registry
+    from trid3nt_server.tools import TOOL_REGISTRY  # import populates the registry
 
     call = dict(ARGS)
     if args.discharge_m3s is not None:

@@ -39,7 +39,7 @@ from trid3nt_server.server import (
 )
 from trid3nt_server.credentials import credential_registry as cr
 from trid3nt_server.credentials import resolver as cred_resolver
-from trid3nt_server.data import (
+from trid3nt_server.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,

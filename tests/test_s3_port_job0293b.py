@@ -59,10 +59,10 @@ def _bind_fake_reader(monkeypatch, payload: bytes = b"S3-BYTES"):
     """Bind a fake over the shared cache.read_object_bytes_s3 seam.
 
     Every per-tool s3 branch imports the reader lazily from
-    ``trid3nt_server.data.cache`` at call time, so one setattr covers all
+    ``trid3nt_server.tools.cache`` at call time, so one setattr covers all
     modules. Returns the list of URIs requested.
     """
-    from trid3nt_server.data import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     calls: list[str] = []
 
@@ -75,7 +75,7 @@ def _bind_fake_reader(monkeypatch, payload: bytes = b"S3-BYTES"):
 
 
 def _bind_failing_reader(monkeypatch, exc: Exception):
-    from trid3nt_server.data import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     def fake_reader(uri: str) -> bytes:
         raise exc
@@ -107,7 +107,7 @@ def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
 
 def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch):
     """LLM path-mangle guard (job-0253) mirrored for s3:// URIs."""
-    from trid3nt_server.data import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
     from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _download_uri_to_local,
     )
@@ -326,7 +326,7 @@ def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
 
 
 def test_chart_tools_download_and_materialize_s3(monkeypatch):
-    from trid3nt_server.data.processing.charts_common import ChartToolError, _download_uri_bytes, _materialize_uri
+    from trid3nt_server.tools.processing.charts_common import ChartToolError, _download_uri_bytes, _materialize_uri
 
     calls = _bind_fake_reader(monkeypatch, b"CHART-BYTES")
     assert _download_uri_bytes("s3://bkt/damage.fgb", None) == b"CHART-BYTES"
@@ -358,8 +358,8 @@ def _tiny_tif_bytes(crs="EPSG:32613"):
 
 
 def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
-    from trid3nt_server.data import cache as cache_mod
-    from trid3nt_server.data.processing.clip_raster_to_polygon.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt_server.tools.processing.clip_raster_to_polygon.clip_raster_to_polygon import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -371,8 +371,8 @@ def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
 
 def test_extract_landcover_open_source_s3_stages_via_boto3(monkeypatch):
     import os
-    from trid3nt_server.data import cache as cache_mod
-    from trid3nt_server.data.processing.extract_landcover_class import extract_landcover_class as elc
+    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt_server.tools.processing.extract_landcover_class import extract_landcover_class as elc
 
     calls: list[str] = []
     data = _tiny_tif_bytes()

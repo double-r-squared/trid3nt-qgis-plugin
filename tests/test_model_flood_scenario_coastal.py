@@ -29,7 +29,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_contracts.execution import TopobathyResult
-from trid3nt_server.data.fetchers._router.hooks.topobathy import (
+from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
     TopobathyUpstreamError,
 )
 from trid3nt_server.workflows.sfincs.flood.flood import (
@@ -237,12 +237,12 @@ def _patched_chain(
     async def _wfc(_h):  # noqa: ANN001
         return _run_result_ok(run_id, handle.handle_id)
 
-    from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 
     # data-router fold: fetch_noaa_coops_tides is a promoted spec-driven tool
     # resolved by the auto-wire via TOOL_REGISTRY[name].fn (not a twin module
     # import). Stub it OFFLINE by swapping the registry entry for a raising one.
-    from trid3nt_server.data import RegisteredTool, TOOL_REGISTRY as _TR
+    from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY as _TR
 
     def _coops_offline(**_kw):  # noqa: ANN003
         raise RuntimeError("offline test - no live CO-OPS")

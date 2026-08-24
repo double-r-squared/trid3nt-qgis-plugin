@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.shared import aquifer_resolve
 from trid3nt_server.workflows.shared.aquifer_resolve import (
     resolve_aquifer_properties,

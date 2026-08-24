@@ -596,7 +596,7 @@ class MockWebSocket:
 def _dummy_uri_tool():
     """Register two dummy tools: a producer (returns LayerURI) + a consumer."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 
     captured: dict[str, Any] = {}
 

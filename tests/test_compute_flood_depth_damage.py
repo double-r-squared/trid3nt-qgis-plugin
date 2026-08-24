@@ -38,8 +38,8 @@ from rasterio.warp import transform_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.data import TOOL_REGISTRY
-from trid3nt_server.data.processing.compute_flood_depth_damage.compute_flood_depth_damage import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.processing.compute_flood_depth_damage.compute_flood_depth_damage import (
     DEPTH_DAMAGE_CURVE_FT,
     FloodDamageInputError,
     FloodDamageNoStructuresError,
@@ -267,7 +267,7 @@ def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) 
     # registry, so patch the (frozen) RegisteredTool's fn there.
     import dataclasses
 
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     captured: dict = {}
 
@@ -313,7 +313,7 @@ def test_bad_units_raises(depth_and_assets, tmp_path) -> None:
 
 
 def test_corpus() -> None:
-    from trid3nt_server.data.search.search_tools import search_tools as dd
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
 
     corpus = dd._load_corpus()
     assert len(corpus.get("compute_flood_depth_damage", [])) >= 5

@@ -41,7 +41,7 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_server.workflows.sfincs.flood.flood import (
     PrecipForcingError,
     compute_precip_area_mean_mm_per_hr,
@@ -54,7 +54,7 @@ from trid3nt_server.workflows.sfincs.sfincs_builder import (
     _generate_hydromt_yaml_config,
     build_sfincs_model,
 )
-from trid3nt_server.data.publish_layer.publish_layer import PublishLayerError
+from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.envelope import AssessmentEnvelope
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
@@ -618,7 +618,7 @@ def test_s3_forcing_read_computes_area_mean_via_boto3() -> None:
         p_uniform = _write_precip_raster(tmp / "uniform.tif", uniform)
         raster_bytes = p_uniform.read_bytes()
 
-        # The s3 branch imports read_object_bytes_s3 from trid3nt_server.data.cache
+        # The s3 branch imports read_object_bytes_s3 from trid3nt_server.tools.cache
         # at call time; patch it there so it returns our synthetic COG bytes and
         # asserts it received the s3:// URI verbatim.
         def _fake_read_object_bytes_s3(uri: str) -> bytes:
@@ -626,7 +626,7 @@ def test_s3_forcing_read_computes_area_mean_via_boto3() -> None:
             return raster_bytes
 
         with patch(
-            "trid3nt_server.data.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             side_effect=_fake_read_object_bytes_s3,
         ) as mock_s3:
             mag, mean_mm = compute_precip_area_mean_mm_per_hr(
@@ -653,7 +653,7 @@ def test_s3_forcing_read_empty_raster_raises_precip_forcing_error() -> None:
         raster_bytes = p.read_bytes()
 
         with patch(
-            "trid3nt_server.data.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             return_value=raster_bytes,
         ):
             with pytest.raises(PrecipForcingError) as excinfo:
@@ -672,7 +672,7 @@ def test_s3_forcing_read_boto3_failure_raises_read_failed() -> None:
     local-file test) rather than crashing the workflow.
     """
     with patch(
-        "trid3nt_server.data.cache.read_object_bytes_s3",
+        "trid3nt_server.tools.cache.read_object_bytes_s3",
         side_effect=RuntimeError("boto3 get_object failed: AccessDenied"),
     ):
         with pytest.raises(PrecipForcingError) as excinfo:
@@ -694,7 +694,7 @@ def test_gs_forcing_read_path_unchanged_does_not_call_boto3() -> None:
     gs_uri = "gs://test-cache/cache/mrms/precip.tif"
     with (
         patch(
-            "trid3nt_server.data.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             side_effect=AssertionError("boto3 reader must not be called for gs://"),
         ),
         patch(

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     _looks_like_unresolved_handle,
     _unknown_handle_error,

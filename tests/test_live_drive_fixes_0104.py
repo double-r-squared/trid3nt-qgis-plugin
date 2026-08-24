@@ -143,7 +143,7 @@ def test_fetch_buildings_uses_keyword_bbox(monkeypatch):
     """_fetch_buildings_for_urban must call the registry closure with a KEYWORD
     bbox (the post-fold closure is keyword-only; a positional arg TypeErrored and
     was swallowed -> zero footprints)."""
-    import trid3nt_server.data as T
+    import trid3nt_server.tools as T
     from trid3nt_server.workflows.swmm.urban_flood.urban_flood import (  # noqa: E501
         _fetch_buildings_for_urban,
     )

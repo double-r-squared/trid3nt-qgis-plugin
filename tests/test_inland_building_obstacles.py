@@ -43,7 +43,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 def _registry_fetch_buildings_patch(mock):
     """fetch_buildings folded to the router (ADR 0084): the consumer resolves it via
     ``TOOL_REGISTRY['fetch_buildings'].fn``, so swap that entry's ``fn`` with ``mock``."""
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY["fetch_buildings"]
     return patch.dict(
@@ -52,7 +52,7 @@ def _registry_fetch_buildings_patch(mock):
 
 import pytest
 
-from trid3nt_server.data import TOOL_REGISTRY, RegisteredTool
+from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_server.workflows.sfincs.flood.flood import (
     model_flood_scenario,
     sfincs_flood,

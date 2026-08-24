@@ -53,7 +53,7 @@ def _align(key: str, tag: str):
 def render(key: str, tag: str, out_name: str, title: str, cause: str,
            second_tag: str | None = None, second_label: str = "",
            computed_label: str = "computed (TELEMAC RoG)") -> None:
-    from trid3nt_server.data.processing.compute_skill_metrics.compute_skill_metrics import (
+    from trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics import (
         nash_sutcliffe_efficiency, pearson_r2)
     f, rel_h, obs_q, comp, baseflow = _align(key, tag)
     nse = nash_sutcliffe_efficiency(obs_q, comp)

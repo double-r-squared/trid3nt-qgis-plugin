@@ -137,7 +137,7 @@ def load_live_catalog() -> set[str]:
     import trid3nt_server.main as _main
 
     _main._import_tools_registry()
-    from trid3nt_server.data import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     return set(TOOL_REGISTRY)
 
@@ -388,7 +388,7 @@ async def _handshake_and_case(ws, rec: RawRecorder, run_index: int, record_id: s
 def _mechanism_tool_names() -> frozenset[str]:
     names = set(META_TOOLS)
     try:
-        from trid3nt_server.data.search.search_tools.search_tools import (
+        from trid3nt_server.tools.search.search_tools.search_tools import (
             _SEARCH_TOOLS_METADATA,
         )
         if getattr(_SEARCH_TOOLS_METADATA, "name", None):

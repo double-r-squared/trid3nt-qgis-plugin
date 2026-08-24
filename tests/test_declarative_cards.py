@@ -19,7 +19,7 @@ from tests.card_client import (  # noqa: F401 - card_client is a fixture
 )
 from trid3nt_contracts.payload_warning import ParamSheet
 from trid3nt_server.server import spatial as server_spatial
-from trid3nt_server.declarative import (
+from trid3nt_server.workflows.lib import (
     DrawGate,
     FormGate,
     Param,

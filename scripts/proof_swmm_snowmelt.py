@@ -49,8 +49,8 @@ DIVIDE_F = 32.0
 def fetch_real_kbuf_temperature() -> tuple[list[tuple[str, float]], list[float], list[float]]:
     """REAL hourly KBUF ASOS temperature resampled to a regular hourly grid.
     Returns (temperature_series [(clock, degF)], hours[], temp_f[])."""
-    from trid3nt_server.data import TOOL_REGISTRY
-    from trid3nt_server.data.cache import read_object_bytes_s3
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.tools.cache import read_object_bytes_s3
     import fiona
 
     r = TOOL_REGISTRY["fetch_asos_metar"].fn(

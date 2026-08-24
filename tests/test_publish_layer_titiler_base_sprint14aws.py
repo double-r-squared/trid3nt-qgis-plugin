@@ -31,8 +31,8 @@ from urllib.parse import quote
 
 import pytest
 
-from trid3nt_server.data.publish_layer import publish_layer as pl
-from trid3nt_server.data.publish_layer.publish_layer import (
+from trid3nt_server.tools.publish_layer import publish_layer as pl
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     pop_legend_for_uri,
     publish_layer,
@@ -107,7 +107,7 @@ def test_observe_registers_data_uri_without_display_face(
     separate wms/display face any more (the raw COG IS the envelope uri)."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "trid3nt_server.data.publish_layer.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
     publish_layer(layer_uri=S3_URI, layer_id="flood-demo")

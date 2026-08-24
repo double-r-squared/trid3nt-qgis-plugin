@@ -20,10 +20,10 @@ import numpy as np
 import pytest
 from trid3nt_contracts.source_spec import SourceSpec
 
-from trid3nt_server.data.fetchers._router import router
-from trid3nt_server.data.fetchers._router.errors import RouterUpstreamError
-from trid3nt_server.data.fetchers._router.executors import library_delegate
-from trid3nt_server.data.fetchers._router.hooks import register_hook, HOOK_REGISTRY
+from trid3nt_server.tools.fetchers._router import router
+from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
+from trid3nt_server.tools.fetchers._router.executors import library_delegate
+from trid3nt_server.tools.fetchers._router.hooks import register_hook, HOOK_REGISTRY
 
 
 # --- stub hooks (registered once; register_hook raises on a dup of a DIFFERENT fn) --
@@ -112,7 +112,7 @@ def test_resolve_rejects_non_dict_return():
 
 def _capture_read_through(monkeypatch) -> dict:
     seen: dict = {}
-    from trid3nt_server.data.cache import ReadThroughResult
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     def patched(metadata, params, ext, fetch_fn, **kw):
         seen["params"] = dict(params)
@@ -143,8 +143,8 @@ def test_route_noop_without_resolve_leaves_params(monkeypatch):
 
 
 def test_registration_rejects_resolve_without_delegate():
-    from trid3nt_server.data.fetchers._router.registration import _validate_hooks
-    from trid3nt_server.data.fetchers._router.hooks import HookResolutionError
+    from trid3nt_server.tools.fetchers._router.registration import _validate_hooks
+    from trid3nt_server.tools.fetchers._router.hooks import HookResolutionError
 
     spec = SourceSpec.model_validate(
         {

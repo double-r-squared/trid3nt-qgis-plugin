@@ -310,10 +310,10 @@ def main() -> None:
     ap.add_argument("--retry", action="store_true", help="re-run non-PASS tools too")
     args = ap.parse_args()
 
-    import trid3nt_server.data as pkg
-    from trid3nt_server.data import get_registered_tools
+    import trid3nt_server.tools as pkg
+    from trid3nt_server.tools import get_registered_tools
     for m in pkgutil.iter_modules(pkg.__path__):
-        importlib.import_module(f"trid3nt_server.data.{m.name}")
+        importlib.import_module(f"trid3nt_server.tools.{m.name}")
     try:
         import trid3nt_server.workflows as wpkg
         for m in pkgutil.iter_modules(wpkg.__path__):

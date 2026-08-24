@@ -50,7 +50,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from trid3nt_server.data.cache import PROVENANCE_SCHEMA  # noqa: E402
+from trid3nt_server.tools.cache import PROVENANCE_SCHEMA  # noqa: E402
 
 #: Target grid: 30 arc-sec (1/120 deg), the native Reitz posting. wolock2003 is
 #: resampled ONTO this grid so both staged rasters share one cell geometry and a

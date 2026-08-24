@@ -35,7 +35,7 @@ import pytest
 
 from trid3nt_contracts.modflow_contracts import SaltwaterWedgeLayerURI
 
-from trid3nt_server.data import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.modflow.saltwater_intrusion import saltwater_intrusion as si_mod
 from trid3nt_server.workflows.modflow.saltwater_intrusion.saltwater_intrusion import (
     SaltwaterIntrusionInputError,
@@ -335,7 +335,7 @@ async def test_wrapper_invalid_transect_shape_returns_user_input_required() -> N
 
 
 def test_saltwater_intrusion_registered_uncacheable() -> None:
-    import trid3nt_server.data  # noqa: F401 - fires registration side-effects
+    import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
 
     entry = TOOL_REGISTRY.get("modflow_saltwater_intrusion")
     assert entry is not None, (
