@@ -849,3 +849,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   or skeleton stage re-implements or re-wraps it at a different level of
   abstraction - the acquire stage INTERPRETS DATA declarations, it never
   fetches.
+
+- SKELETON NAMING RULING (NATE 2026-08-24): base class = Workflow (the
+  abstract skeleton); engine facades = TelemacWorkflow / SwmmWorkflow /
+  ModflowWorkflow - engine name only, NO domain qualifiers ever ("Reach"
+  rejected: it welded a domain assumption into the engine facade; domain
+  shape arrives through acquire_domain slots + shared domain steps).
+  Template files DECLARE workflows; the class IS one - the apparent name
+  collision is coherence. Analysis-only templates ride the same skeleton
+  and simply leave solve-family slots unfilled.
