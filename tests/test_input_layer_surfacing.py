@@ -380,7 +380,7 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
 # telemac_metrics.json; the composer rides that object through
 # publish_raster_input_cog as a role=context input.
 # ===========================================================================
-import trid3nt_server.workflows.telemac.river_dye.river_dye as river_dye  # noqa: E402
+import trid3nt_server.workflows.telemac.steps.products as river_dye  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -569,7 +569,8 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "telemac/agitation/agitation.py": (1, "bare-OSM breakwaters (router-bypass, S3 loose end)"),
     "telemac/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
-    "telemac/river_dye/river_dye.py": (5, "deposition/slick/preview results + in-worker bed COG"),
+    "telemac/steps/mesh_preview.py": (1, "the approve-mesh wireframe preview"),
+    "telemac/steps/products.py": (4, "deposition + oil-slick + DO-field results + in-worker bed COG"),
     "telemac/stratified_flow/stratified_flow.py": (1, "in-worker telemac3d bottom COG"),
 }
 

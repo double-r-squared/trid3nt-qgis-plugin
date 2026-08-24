@@ -70,15 +70,15 @@ def test_guarded_build_fast_fails_degenerate_without_forking():
 def test_server_maps_reach_degenerate_metrics_to_typed_gate():
     """The worker's TELEMAC_REACH_DEGENERATE metrics surface as the typed,
     retryable server error with .suggestions."""
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import (  # noqa: E501
+    from trid3nt_server.workflows.telemac.steps import (  # noqa: E501
         TelemacReachDegenerateError,
-        _raise_if_reach_degenerate,
     )
+    from trid3nt_server.workflows.telemac.steps.solve import raise_if_reach_degenerate
 
-    _raise_if_reach_degenerate({"error_code": "SOMETHING_ELSE"})  # no-op
+    raise_if_reach_degenerate({"error_code": "SOMETHING_ELSE"})  # no-op
 
     with pytest.raises(TelemacReachDegenerateError) as ei:
-        _raise_if_reach_degenerate({
+        raise_if_reach_degenerate({
             "error_code": "TELEMAC_REACH_DEGENERATE",
             "reach_length_m": 292.0,
             "degenerate_channel_width_m": 500.0,
@@ -169,7 +169,7 @@ def test_fetch_buildings_uses_keyword_bbox(monkeypatch):
 # Bug 6 -- oil-slick upload-before-register (no dangling handle)
 # ===================================================================== #
 def test_s3_object_exists_guard():
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import (  # noqa: E501
+    from trid3nt_server.workflows.telemac.steps.products import (  # noqa: E501
         _s3_object_exists,
     )
 
