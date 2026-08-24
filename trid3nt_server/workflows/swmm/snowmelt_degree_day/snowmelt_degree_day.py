@@ -266,10 +266,11 @@ PARAMS: tuple[Param, ...] = (
                "recover fully"),
 
     # -- how the answer is computed -------------------------------------------- #
-    Param("dt_min", door=doors.CONSTANT, default=60, bounds=(1.0, 1440.0),
+    Param("dt_min", door=doors.CONSTANT, default=60, bounds=(1.0, 60.0),
           units="min", consequence="numerical",
           desc="Timestep the forcing series are written on and the engine reports "
-               "at; the degree-day method is an hourly method"),
+               "at; the degree-day method is an hourly method. The upper bound is "
+               "the deck's own MM field - a longer step cannot be written"),
 )
 
 #: One subcatchment, one outfall, forcing declared as values - nothing this plan
