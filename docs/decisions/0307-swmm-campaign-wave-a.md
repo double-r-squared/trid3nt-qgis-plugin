@@ -17,3 +17,9 @@
   the C family too and cannot retire at wave B - the group-boundary
   argument strengthens; the wave-B sentence was wrong.
 - Board nit: the snow_removal knobs line updated with the row.
+
+- do_sag parity spot-check: re-attempted 2026-08-25 post disk-reclaim
+  (96%, 18 GB free); the background solve was stopped externally before
+  completion. Standing evidence: the wave diff touches no TELEMAC path
+  (verified by the review lens) and test_telemac_do_sag is green. The
+  pinned re-run remains one command when wanted.
