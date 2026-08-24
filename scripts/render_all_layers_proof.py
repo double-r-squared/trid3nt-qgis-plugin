@@ -74,6 +74,14 @@ _WIREFRAME_VERTICES = 5000
 #: stacked layers are still separable. A sheet-side choice, stated on the panel -
 #: the product declares no vector colour to read.
 _VECTOR_CYCLE = ("#ff2fa0", "#00e5ff", "#ffe600", "#7cff4f", "#ff8a3d", "#c08cff")
+#: A composite sheet's panels are too small for NATE to spot-check by eye - each
+#: one is also saved full-size on its own. Width/dpi chosen so a panel this size
+#: reads clearly at normal zoom, distinct from the grid's cramped ~800px cells.
+_SINGLE_PANEL_W = 10.5
+_SINGLE_DPI = 150
+#: Strips the composite sheet's own suffix off its filename to get the shared
+#: prefix every per-panel file is named from.
+_CANVAS_SUFFIX_RE = re.compile(r"_canvas_layers$")
 
 
 class RenderProofError(RuntimeError):
@@ -397,8 +405,86 @@ def _wrap(lines: list[str]) -> str:
     return "\n".join(out)
 
 
+def _panel_slug(name: str) -> str:
+    """Filesystem-safe slug for a layer name, used in the per-panel filename."""
+    slug = re.sub(r"[^a-z0-9]+", "-", str(name or "layer").lower()).strip("-")
+    return slug or "layer"
+
+
+def _panel_base(out_path: Path) -> str:
+    """Shared filename prefix the per-panel files are named from."""
+    return _CANVAS_SUFFIX_RE.sub("", out_path.stem)
+
+
+def _single_panel_h(bbox_ll: tuple) -> float:
+    xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
+                           np.array([bbox_ll[1], bbox_ll[3]]))
+    return (float(np.clip((yw[1] - yw[0]) / (xw[1] - xw[0]), 0.45, 1.6))
+            * _SINGLE_PANEL_W + 1.6)
+
+
+def _save_full_panel(out_path: Path, *, mosaic, extent, bbox_ll, panel_h: float,
+                     title: str, caption: str, draw_fn, colorbar: bool) -> Path:
+    """One panel, full-size, its own file - same framing/basemap/caption as its
+    grid cell, just legible at NATE's screen size instead of squeezed 3-up."""
+    fig, ax = plt.subplots(figsize=(_SINGLE_PANEL_W, panel_h), dpi=_SINGLE_DPI)
+    _frame_axes(ax, mosaic, extent, bbox_ll)
+    artist = draw_fn(ax)
+    if artist is not None and colorbar:
+        cbar = fig.colorbar(artist, ax=ax, fraction=0.030, pad=0.01)
+        cbar.ax.tick_params(labelsize=8)
+    ax.set_title(caption, fontsize=10, loc="left", linespacing=1.4)
+    fig.suptitle(title, fontsize=9, y=0.998)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def _save_layer_panels(renderable: list[tuple[dict, dict]], out_path: Path, *,
+                       mosaic, extent, bbox_ll, title: str) -> list[dict]:
+    """Every renderable layer PLUS the stacked composite view, each its own
+    full-size PNG, in emission order: ``<base>_panel_01_<layer-slug>.png``."""
+    base = _panel_base(out_path)
+    panel_h = _single_panel_h(bbox_ll)
+    saved: list[dict] = []
+    for i, (layer, payload) in enumerate(renderable):
+        color = _VECTOR_CYCLE[i % len(_VECTOR_CYCLE)]
+        path = out_path.parent / (
+            f"{base}_panel_{i + 1:02d}_{_panel_slug(layer.get('name'))}.png")
+        _save_full_panel(
+            path, mosaic=mosaic, extent=extent, bbox_ll=bbox_ll, panel_h=panel_h,
+            title=title, caption=_panel_caption(i + 1, layer, payload),
+            draw_fn=lambda ax, layer=layer, payload=payload, color=color:
+                _draw(ax, layer, payload, color=color, zorder=3, alpha=0.9),
+            colorbar=payload.get("bands", 1) == 1)
+        saved.append({"path": str(path), "layer": layer.get("name")})
+
+    composite_index = len(renderable) + 1
+    composite_path = out_path.parent / f"{base}_panel_{composite_index:02d}_canvas-view.png"
+    composite_caption = _wrap([
+        f"{composite_index}. CANVAS VIEW - all {len(renderable)} layers "
+        f"stacked in emission order",
+        "(vector colours cycle per layer so the stack stays separable; rasters "
+        "keep their product styling)"])
+
+    def _draw_composite(ax):
+        for i, (layer, payload) in enumerate(renderable):
+            _draw(ax, layer, payload, color=_VECTOR_CYCLE[i % len(_VECTOR_CYCLE)],
+                 zorder=3 + i, alpha=0.75)
+        return None
+
+    _save_full_panel(
+        composite_path, mosaic=mosaic, extent=extent, bbox_ll=bbox_ll,
+        panel_h=panel_h, title=title, caption=composite_caption,
+        draw_fn=_draw_composite, colorbar=False)
+    saved.append({"path": str(composite_path), "layer": "CANVAS VIEW"})
+    return saved
+
+
 def render_sheet(layers: list[dict], out_path: Path, *, title: str,
-                 max_tiles: int) -> dict:
+                 max_tiles: int, composite_only: bool = False) -> dict:
     renderable, skipped = [], []
     for layer in layers:
         try:
@@ -466,24 +552,29 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
 
+    panel_pngs = [] if composite_only else _save_layer_panels(
+        renderable, out_path, mosaic=mosaic, extent=extent, bbox_ll=bbox_ll,
+        title=title)
+
     return {"sheet": str(out_path), "bytes": out_path.stat().st_size,
             "panels": panels, "layers": [l.get("name") for l, _ in renderable],
-            "not_rendered": skipped}
+            "not_rendered": skipped, "panel_pngs": panel_pngs}
 
 
 def render_from_evidence(evidence_path: str | os.PathLike[str], *,
                          out_path: str | os.PathLike[str] | None = None,
-                         max_tiles: int = 6) -> dict:
+                         max_tiles: int = 6, composite_only: bool = False) -> dict:
     """Sheet from a drive script's evidence JSON. The drives' ``--render-proof``."""
     src = Path(evidence_path).resolve()
     layers, title = _layers_from_evidence(src)
     out = Path(out_path) if out_path else src.with_name(
         re.sub(r"_evidence$", "", src.stem) + "_canvas_layers.png")
     return render_sheet(_collapse_frames(layers), out, title=title,
-                        max_tiles=max_tiles)
+                        max_tiles=max_tiles, composite_only=composite_only)
 
 
-def render_proof(evidence_path: str | os.PathLike[str]) -> dict:
+def render_proof(evidence_path: str | os.PathLike[str], *,
+                 composite_only: bool = False) -> dict:
     """``--render-proof`` for a drive script: the sheet, or why there is none.
 
     Never raises. A refused run publishes no layers and a drive that asserts on
@@ -491,7 +582,7 @@ def render_proof(evidence_path: str | os.PathLike[str]) -> dict:
     REPORTED rather than thrown.
     """
     try:
-        return render_from_evidence(evidence_path)
+        return render_from_evidence(evidence_path, composite_only=composite_only)
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         return {"sheet": None, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -513,18 +604,23 @@ def main() -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--title", default=None)
     ap.add_argument("--max-tiles", type=int, default=6)
+    ap.add_argument("--composite-only", action="store_true", default=False,
+                    help="skip the per-layer full-size PNGs, sheet only "
+                         "(old behavior)")
     ns = ap.parse_args()
 
     try:
         if ns.evidence:
             result = render_from_evidence(ns.evidence, out_path=ns.out,
-                                          max_tiles=ns.max_tiles)
+                                          max_tiles=ns.max_tiles,
+                                          composite_only=ns.composite_only)
         else:
             layers, title = _layers_from_case(ns.case_id)
             out = Path(ns.out or (REPO / "docs" / "proof" / "templates"
                                   / f"case_{ns.case_id}_canvas_layers.png"))
             result = render_sheet(_collapse_frames(layers), out,
-                                  title=ns.title or title, max_tiles=ns.max_tiles)
+                                  title=ns.title or title, max_tiles=ns.max_tiles,
+                                  composite_only=ns.composite_only)
     except RenderProofError as exc:
         print(f"no sheet: {exc}")
         return 1
