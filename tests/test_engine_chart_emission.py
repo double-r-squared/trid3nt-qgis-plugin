@@ -370,12 +370,17 @@ async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> N
     sink = _CapturingSink()
     emitter = PipelineEmitter(session_id=new_ulid(), sink=sink)
 
+    async def _noop(run_id, *, charts=None, metrics=None):  # noqa: ANN001
+        return []
+
+    monkeypatch.setattr(mod, "persist_run_products", _noop)
+
     async def run() -> Any:
         # aquifer_k_ms + porosity supplied explicitly: under law 9 an unresolved
         # demo K/porosity refuses in auto; this test exercises the chart-emission
         # seam, so it provides the physics inputs to let the run proceed.
-        return await mod.model_regional_water_budget_scenario(
-            aoi_latlon=(40.0, -100.0), aquifer_k_ms=1e-4, porosity=0.3,
+        return await mod.modflow_regional_water_budget(
+            aoi_latlon=[40.0, -100.0], aquifer_k_ms=1e-4, porosity=0.3,
         )
 
     # emit_tool_call binds current_emitter() so the composer's side-emit fires.

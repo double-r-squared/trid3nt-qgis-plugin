@@ -156,6 +156,19 @@ def _patch_archetype_run(monkeypatch: Any, captured: dict[str, Any], layer: Any)
     monkeypatch.setattr(run_tool, "run_modflow_archetype_job", _fake_run)
 
 
+def _patch_run_products(monkeypatch: Any) -> None:
+    """Silence the run-prefix write: an offline test has no object store."""
+    import trid3nt_server.workflows.shared.run_products as products
+
+    async def _noop(run_id, *, charts=None, metrics=None):  # noqa: ANN001
+        return []
+
+    monkeypatch.setattr(products, "persist_run_products", _noop)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.modflow.regional_water_budget."
+        "regional_water_budget.persist_run_products", _noop)
+
+
 def _patch_geocode(monkeypatch: Any, mod: Any, lat: float, lon: float) -> None:
     """Patch the geocode_location registry entry on a composer module."""
 
@@ -310,6 +323,8 @@ async def test_mine_dewatering_no_pit_is_user_input_required() -> None:
 
 @pytest.mark.asyncio
 async def test_regional_water_budget_assembles_args_and_threads_result(monkeypatch) -> None:
+    """The DECLARED template: the plan's one step assembles the args and the tool
+    threads the typed layer + its provenance back out (ADR 0306)."""
     from trid3nt_server.workflows.modflow.regional_water_budget import regional_water_budget as mod
 
     captured: dict[str, Any] = {}
@@ -324,17 +339,34 @@ async def test_regional_water_budget_assembles_args_and_threads_result(monkeypat
         budget_partition_m3_day={"chd_in": 1063.4, "chd_out": -1063.4},
     )
     _patch_archetype_run(monkeypatch, captured, layer)
+    _patch_run_products(monkeypatch)
 
-    result = await mod.model_regional_water_budget_scenario(
+    result = await mod.modflow_regional_water_budget(
         aquifer_k_ms=1e-4,
         porosity=0.3,
-        aoi_latlon=(40.0, -100.0), zone_partition="upgradient_downgradient"
+        aoi_latlon=[40.0, -100.0], zone_partition="upgradient_downgradient",
     )
     run_args = captured["run_args"]
     assert run_args.archetype == "regional_water_budget"
     assert run_args.zone_partition == "upgradient_downgradient"
-    assert result.summary["budget_partition_m3_day"]["chd_in"] == pytest.approx(1063.4)
-    assert result.budget_layer.budget_partition_m3_day["chd_out"] == pytest.approx(-1063.4)
+    assert run_args.aquifer_k_ms == pytest.approx(1e-4)
+    assert run_args.porosity == pytest.approx(0.3)
+    assert result["summary"]["budget_partition_m3_day"]["chd_in"] == pytest.approx(1063.4)
+    assert result["budget_layer"]["budget_partition_m3_day"]["chd_out"] == pytest.approx(-1063.4)
+    # A caller-supplied physics value is USER basis, and a user value has no
+    # real source to claim.
+    rows = {e["param"]: e for e in result["budget_layer"]["synthetic_inputs"]}
+    assert rows["aquifer_k_ms"]["basis"] == "user"
+    assert rows["aquifer_k_ms"]["real_source_if_any"] is None
+
+
+@pytest.mark.asyncio
+async def test_regional_water_budget_refuses_without_an_aoi() -> None:
+    from trid3nt_server.workflows.modflow.regional_water_budget import regional_water_budget as mod
+
+    out = await mod.modflow_regional_water_budget()
+    assert out["status"] == "error"
+    assert out["error_code"] == "REGIONAL_WATER_BUDGET_INPUT_INVALID"
 
 
 @pytest.mark.asyncio
