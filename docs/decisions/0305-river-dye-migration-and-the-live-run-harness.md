@@ -331,16 +331,16 @@ is the raw truth rather than the flattering slice of it.
 | `do_sag/steps.py` | 205 | 273 | +68 |
 | `gates/cards/solver_confirm.py` | 1,400 | 1,408 | +8 |
 | **TELEMAC family total** | **12,517** | **12,349** | **-168** |
-| `trid3nt_server/testing/` (the harness) | 0 | 471 | +471 |
+| `trid3nt_server/testing/` (the harness) | 0 | 487 | +487 |
 | `scripts/seed_showcase_cases.py` | 1,042 | 967 | -75 |
 | `scripts/drive_do_sag_cards.py` | 254 | 90 | -164 |
 | `scripts/drive_river_dye_cards.py` | 0 | 105 | +105 |
 | `scripts/run_river_dye_direct.py` | 0 | 118 | +118 |
-| `scripts/proof_river_dye_frames.py` | 0 | 239 | +239 |
+| `scripts/proof_river_dye_frames.py` | 0 | 245 | +245 |
 | `tests/test_run_river_dye_scenario.py` | 505 | 562 | +57 |
-| `tests/test_live_run_harness.py` | 0 | 199 | +199 |
+| `tests/test_live_run_harness.py` | 0 | 210 | +210 |
 | tests (repointed) | 966 | 972 | +6 |
-| **everything touched** | **7,841** | **8,638** | **+797** |
+| **everything touched** | **7,841** | **8,671** | **+830** |
 
 Read it straight:
 
@@ -355,7 +355,7 @@ Read it straight:
   is a 200-line `PARAMS` declaration that three surfaces now read (the model's
   docstring, the form card, the provenance rows) where previously each was
   written separately.
-- **Counting the harness and the drivers, the wave is +797.** The harness is new
+- **Counting the harness and the drivers, the wave is +830.** The harness is new
   capability, not migration; saying otherwise would be picking the denominator.
 
 Where the family's real net-negative lives, stated so it can be checked rather
