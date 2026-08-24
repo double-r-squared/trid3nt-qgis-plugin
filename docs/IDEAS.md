@@ -679,8 +679,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   landed as "showcase: telemac do sag (Eel River near Scotia,
   declarative v1)" by hand - the seed driver should own this shape.
 
-- Render toolset rider (NATE 2026-08-24): an ANIMATION-EXPORT primitive
-  (frames -> GIF/MP4, basemap + preset styling) as a declared render
-  step - serves proof delivery (GIF + peak to chat) and becomes a
-  user-facing export later. First consumer: river_dye's plume frames
-  (wave 3).
+- Proof-script rider (NATE 2026-08-24, scope CORRECTED same day): the
+  ANIMATION-EXPORT (frames -> GIF, basemap + the product's presets) is
+  DIAGNOSTIC TOOLING ONLY - a scripts/ proof utility (eventually
+  PyQGIS-true), NEVER a workflow/plan step. Product animation UX =
+  QGIS Temporal Controller, unchanged. Same for layer-montage renders:
+  the chat proof channel exists for NATE diagnosing from afar, and
+  stays out of the workflow library. First use: river_dye's plume
+  frames (wave 3 acceptance).
