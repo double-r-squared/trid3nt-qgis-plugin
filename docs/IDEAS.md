@@ -760,3 +760,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   declared Data (staged into the container), delete the private
   ladders, then a workers-wide external-fetch sweep guard. openquake/
   opengis URL hits look like doc headers - verify in the recon.
+
+- NATE spot-check trio (2026-08-25, TELEMAC family wave items):
+  (1) used_in_sim highlight - the NWM station layer marks the ingested
+  dominant-reach gauge (distinct styling + discharge label), context
+  gauges muted - the map says what drove the physics.
+  (2) SELECT GATE - a new gate species: pick a FEATURE from a published
+  layer (gauge vertex, NPDES outfall, well) -> basis=user w/ feature
+  identity as provenance; auto mode = labeled default (nearest-to-seed
+  refinement for discharge). Same spine as form/draw.
+  (3) downstream-gauge VALIDATION check - solved outflow vs the
+  downstream NWM reach per run (free computed-vs-reference honesty
+  line; later the calibration objective). Plus: nearest-to-seed
+  replaces largest-in-bbox in discharge_resolve; mesh-economy A/B
+  (do_sag coarsening) rides the same wave.
