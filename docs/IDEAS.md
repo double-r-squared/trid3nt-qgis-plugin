@@ -858,3 +858,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Template files DECLARE workflows; the class IS one - the apparent name
   collision is coherence. Analysis-only templates ride the same skeleton
   and simply leave solve-family slots unfilled.
+
+- PUBLISH_LAYER TOOL KILLED (NATE 2026-08-24, ruling b): emission becomes
+  automatic on ALL three paths - processing-primitive rasters auto-emit
+  their outputs (intermediates included: they are useful input checks;
+  the user hides what they don't want). Mechanism (styling seam,
+  _resolve_titiler_style_params, overview enforcement, registration)
+  moves OUT of the tool file into emission/ as the single home; the
+  registered publish_layer tool is then DELETED (NATE: "something I've
+  been wanting to do for a while but always somehow survives").
