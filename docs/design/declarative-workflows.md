@@ -2,9 +2,11 @@
 
 NATE-shaped design (2026-08-21/23 discussion). V1 LANDED (ADR 0303) -
 do_sag MIGRATED. WAVE 2 LANDED (ADR 0304) - the FORM and DRAW cards, on
-the existing spines, plugin 0.3.17. Proving order:
-telemac do_sag (314 lines, fast feedback),
-then telemac_river_dye (3,503 lines, the full-contact proof). Focus
+the existing spines, plugin 0.3.17. WAVE 3 LANDED (ADR 0305) -
+telemac_river_dye MIGRATED (3,469 -> 671 lines over a shared
+`workflows/telemac/steps/` family), the form card's first live proof,
+and the live-run harness (`trid3nt_server/testing/`). Next: the
+GENERALIZATION CHECKPOINT - one SWMM and one MODFLOW template. Focus
 engines: SWMM + MODFLOW (top priority, EPA/USGS), TELEMAC, HEC-RAS
 (tail, skippable). One principle everywhere: DECLARE THE WHAT,
 CENTRALIZE THE HOW - and the what is a VALUE.
@@ -247,6 +249,28 @@ Declarative: a test is a declared invocation (!run in the dock, a
 plan stepped line by line, or the same over MCP). The plan validator
 (Ref integrity, modifier legality, gate placement) runs before any
 execution. Offline pytest remains for CI.
+
+THREE PATHS, and the split is itself diagnostic (NATE, 2026-08-24):
+
+- **A - the all-params-upfront `!run`.** Every unfilled param supplied
+  on the call, so the gates are SATISFIED rather than skipped: each row
+  arrives through the USER door and there is nothing left to ask. The
+  mechanical contract/physics check, one declared line, run often. Demo
+  VALUES live in the declaration - a demo script IS a saved,
+  banner-labeled path-A invocation, never a constant in workflow code.
+- **B - the gate-by-gate walkthrough**, over the real socket
+  (`trid3nt_server/testing`, ADR 0305): the tool, its args, the answers
+  its gates get, and the assertions - `LiveRun(tool, args, answers=
+  GateAnswers(draw=..., form_edits=..., require_draw=True))`. The full
+  product-path audit, run at wave acceptance. Three rules make it
+  evidence rather than a script: a declared answer is also an
+  EXPECTATION (a card that never fired is a failure, not a silent
+  pass); the assertions read the run's OWN persisted products off its
+  prefix rather than recomputing the answer; and the harness is product
+  code beside the server, because drivers are.
+- **C - NATE in QGIS.** Plugin-UI coverage only; A and B own the logic.
+
+A-green with B-red isolates a fault to the interaction machinery.
 
 ## Migration order
 
