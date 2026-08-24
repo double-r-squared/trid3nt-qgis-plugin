@@ -696,3 +696,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   adapter additionally opts into HOST-SIDE compaction (beta - append
   compaction blocks back). Interim: point TRID3NT_OPENAI_MODEL at a
   larger-context free model. Closes the overload class permanently.
+
+- Two-tier testing doctrine (NATE 2026-08-24): TIER A = !run with all
+  unfilled params supplied - gates SATISFIED not skipped (every row
+  arrives door-USER; nothing unresolved to ask) - the mechanical
+  contract/physics check, one declared line, run frequently. TIER B =
+  the harness walkthrough (declared gate answers + assertions) - the
+  full product-path audit, run at wave acceptance/push gates. A-green +
+  B-red isolates faults to the interaction machinery; the split is
+  itself diagnostic. Wave 3's design-doc touch states this in the
+  Testing section.
