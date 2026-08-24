@@ -797,3 +797,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   time. Shared resolution seam (the doors idiom), not per-fetcher
   code. Dataset VINTAGE (NLCD year, DEM release) noted as the adjacent
   cousin - selectable where sources version, same pinning rule.
+
+- TEMPORAL DOCTRINE EXTENSION (NATE 2026-08-25): cadence MISMATCH
+  (6-min tides vs hourly NWM vs solver dt) -> INTERPOLATION/
+  NORMALIZATION as DECLARED prep steps/modifiers (.resample(to=,
+  method=)), never implicit consumer-side alignment (the wave-A
+  clocks-align bug class). Rules: method + source cadence stamped in
+  provenance ("6-min CO-OPS linearly interpolated to 60 s" - observed
+  vs manufactured values distinguishable); within-resolution
+  interpolation = refinement, across-gap = invention (refuse/gate);
+  unit/datum normalization = same declared family, zero invention.
+  Lands with the temporal-inventory adoption waves.
