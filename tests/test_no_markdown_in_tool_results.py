@@ -38,12 +38,12 @@ import re
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parents[1] / "trid3nt_server"
-SCAN_DIRS = ("data", "workflows")
+SCAN_DIRS = ("tools", "data", "workflows")
 
 #: Repo-relative (to SRC_ROOT) files allowed to build markdown strings.
 #: Every entry MUST document why in the module docstring above.
 ALLOWLIST = {
-    "data/meta/compose_case_report/compose_case_report.py",  # user-facing .md artifact on disk
+    "tools/meta/compose_case_report/compose_case_report.py",  # user-facing .md artifact on disk
 }
 
 _MARKERS: list[tuple[str, re.Pattern[str]]] = [
@@ -135,7 +135,7 @@ def test_compose_case_report_llm_result_is_markdown_free() -> None:
     the ``return`` statement of the registered coroutine must be a dict
     literal whose string values carry no markdown markers.
     """
-    path = SRC_ROOT / "data" / "meta" / "compose_case_report" / "compose_case_report.py"
+    path = SRC_ROOT / "tools" / "meta" / "compose_case_report" / "compose_case_report.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     fn = next(
         node
