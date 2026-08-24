@@ -738,3 +738,10 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (pre-existing, exposed by 3b's refused drive; the banks gate suffers
   the same) - the envelope should carry the exception's own error_code.
   Small dispatch fix, queue for the next server-touching wave.
+
+- TELEMAC family item (NATE spot-check 2026-08-25): the bed-sampling
+  Copernicus GLO-30 fetch happens IN-WORKER - outside emit-on-fetch,
+  ladders, cache, and provenance. Migrate it to a declared agent-side
+  Data producer (the DEM then surfaces as a canvas layer - NATE wants
+  to SEE it - and gains ladder/coverage protection), worker consumes
+  the staged raster. Also queue: bank polygons as a publishable layer.
