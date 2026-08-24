@@ -706,3 +706,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   B-red isolates faults to the interaction machinery; the split is
   itself diagnostic. Wave 3's design-doc touch states this in the
   Testing section.
+
+- Three-path testing model FINAL (NATE 2026-08-24) + the mechanism-
+  template fork RESOLVED: Path A = all-params-upfront !run; DEMO VALUES
+  LIVE IN THE DECLARATION (a demo script IS a saved, banner-labeled
+  Tier-A invocation) - never hardcoded in workflow code. This resolves
+  the parked purity fork: mechanism-compare templates take deck/params
+  AS INPUT, their canonical decks become demo-script declarations
+  supplying them. Path B = gate-by-gate walkthrough (harness). Path C =
+  NATE in QGIS - plugin-UI coverage only (A+B own the logic). SWMM
+  campaign executes the fork resolution per template.
