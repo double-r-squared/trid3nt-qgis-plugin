@@ -15,7 +15,13 @@ from typing import Any, Sequence
 
 from trid3nt_server.declarative import Step
 
-from trid3nt_server.workflows.swmm.steps.errors import SwmmDeckError
+from trid3nt_server.workflows.swmm.steps import (
+    clock,
+    coerce_series,
+    line_chart_spec,
+    peak,
+    timeseries_block,
+)
 
 __all__ = [
     "Deck",
@@ -78,10 +84,9 @@ def two_storm_forcing(
     for i in range(steps):
         mins = i * dt_min
         hour = mins / 60.0
-        clock = f"{mins // 60}:{mins % 60:02d}"
         wet = (storm_start_hr <= hour < storm_start_hr + storm_duration_hr
                or second_start <= hour < second_start + storm_duration_hr)
-        rain.append((clock, intensity_in_hr if wet else 0.0))
+        rain.append((clock(mins), intensity_in_hr if wet else 0.0))
     return rain
 
 
@@ -116,7 +121,8 @@ async def write_aquifer_deck(
     groundwater-to-node pathway switched off, which is what isolates the
     baseflow contribution.
     """
-    rain = _coerce_series(rainfall_series_in_hr) or two_storm_forcing(
+    rain = coerce_series(rainfall_series_in_hr,
+                         what="rainfall_series_in_hr") or two_storm_forcing(
         dt_min=dt_min, sim_days=sim_days, intensity_in_hr=storm_intensity_in_hr,
         storm_start_hr=storm_start_hr, storm_duration_hr=storm_duration_hr,
         second_storm_day=second_storm_day,
@@ -134,17 +140,6 @@ async def write_aquifer_deck(
         evaporation_in_day=evaporation_in_day,
     )
     return {"inp_text": inp, "a1": float(a1), "rain_steps": len(rain)}
-
-
-def _coerce_series(series: Any) -> list[tuple[str, float]] | None:
-    if not series:
-        return None
-    try:
-        return [(str(clock), float(value)) for clock, value in series]
-    except (TypeError, ValueError) as exc:
-        raise SwmmDeckError(
-            f"rainfall_series_in_hr is not a list of [\"H:MM\", in/hr] pairs: {exc}"
-        ) from exc
 
 
 def build_aquifer_inp(
@@ -178,7 +173,7 @@ def build_aquifer_inp(
     # The deck's clock fields are integers; the declared params carry bounds, so
     # the resolver hands them over as floats.
     dt_min, sim_days = int(dt_min), int(sim_days)
-    ts_rain = "\n".join(f"TSER_R {clk} {v:.4f}" for clk, v in rainfall_series_in_hr)
+    ts_rain = timeseries_block("TSER_R", rainfall_series_in_hr, precision=4)
     end_date = 1 + int(sim_days)
     dd = end_date // 30 + 1
     mm = end_date % 30 or 30
@@ -262,11 +257,11 @@ async def baseflow_metrics(
     control that isolates the contribution.
     """
     hours = list(with_gw["hours"])
-    gw = list(with_gw["nodes"][node])
-    dry = list(no_gw["nodes"][node])
+    gw = list(with_gw["nodes"][node]["total_inflow"])
+    dry = list(no_gw["nodes"][node]["total_inflow"])
 
-    peak_gw, peak_index = _peak(gw)
-    peak_no, _ = _peak(dry)
+    peak_gw, peak_index = peak(gw)
+    peak_no, _ = peak(dry)
     base_gw = _mean_between(hours, gw, dry_window_start_day, dry_window_end_day)
     base_no = _mean_between(hours, dry, dry_window_start_day, dry_window_end_day)
 
@@ -278,9 +273,9 @@ async def baseflow_metrics(
 
     pre = _mean_between(hours, gw, second_storm_day - _PRE_STORM_WINDOW_D,
                         second_storm_day)
-    post = _peak([q for h, q in zip(hours, gw)
-                  if second_storm_day * 24 <= h
-                  < (second_storm_day + _RECHARGE_WINDOW_D) * 24])[0]
+    post = peak([q for h, q in zip(hours, gw)
+                 if second_storm_day * 24 <= h
+                 < (second_storm_day + _RECHARGE_WINDOW_D) * 24])[0]
 
     logger.info("swmm aquifer baseflow: peak_gw=%.4f no_gw=%.4f base_gw=%.4f "
                 "base_no=%.4f contrib=%.4f tau=%s bump=%.4f cont=%.3f%%",
@@ -314,13 +309,6 @@ def _mean_between(hours: Sequence[float], series: Sequence[float],
     return sum(window) / len(window) if window else 0.0
 
 
-def _peak(series: Sequence[float]) -> tuple[float, int]:
-    if not series:
-        return 0.0, 0
-    index = max(range(len(series)), key=lambda k: series[k])
-    return series[index], index
-
-
 def build_baseflow_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The node hydrograph with the groundwater pathway against the control.
 
@@ -336,21 +324,15 @@ def build_baseflow_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
 
     from trid3nt_server.data.processing.charts_common import build_chart_payload
 
-    rows = [{"t_hr": round(h, 2), "q_cfs": v,
-             "series": "with groundwater (baseflow)"} for h, v in zip(hours, gw)]
-    rows += [{"t_hr": round(h, 2), "q_cfs": v, "series": "surface runoff only"}
-             for h, v in zip(hours, dry)]
-    spec = {
-        "title": "node hydrograph: groundwater baseflow vs surface runoff only",
-        "data": {"values": rows},
-        "mark": {"type": "line"},
-        "encoding": {
-            "x": {"field": "t_hr", "type": "quantitative", "title": "time (hr)"},
-            "y": {"field": "q_cfs", "type": "quantitative",
-                  "title": "node inflow (cfs)"},
-            "color": {"field": "series", "type": "nominal", "title": ""},
-        },
-    }
+    spec = line_chart_spec(
+        title="node hydrograph: groundwater baseflow vs surface runoff only",
+        series={"with groundwater (baseflow)": list(zip(hours, gw)),
+                "surface runoff only": list(zip(hours, dry))},
+        x_title="time (hr)", y_title="node inflow (cfs)",
+        x_field="t_hr", y_field="q_cfs", x_round=2, y_round=None,
+    )
+    if spec is None:
+        return None
     base_gw = result["between_storms_baseflow_with_gw_cfs"]
     base_no = result["between_storms_baseflow_no_gw_cfs"]
     tau = result.get("recession_tau_hr")
