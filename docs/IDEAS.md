@@ -819,3 +819,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   consumer: the migrated SWMM templates' declared forcing (the wave-A
   clock-mismatch site becomes the proving case). Queue: behind
   event_time + the beacon kill.
+
+- SEQUENCING RULED (NATE 2026-08-25): after temporal transforms v1 ->
+  THE TELEMAC FAMILY WAVE(S): in-worker fetch migration to declared
+  Data via manifest staging, private DEM ladder deleted, worker-purity
+  constants, false-surface river fix, mesh economy + coarsening A/B,
+  the gauge trio (used_in_sim / select gate / downstream validation),
+  discharge DERIVED-door, event_time family-wide, remaining 4
+  templates onto shared steps (family net-LOC verdict due). SWMM
+  B/C/D after. --network none endorsement still open - pose at the
+  TELEMAC kickoff (it is the natural definition-of-done).
