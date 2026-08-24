@@ -11,6 +11,7 @@ __all__ = [
     "ModifierIllegalError",
     "ParamOutOfRangeError",
     "PlanValidationError",
+    "RenderSourceMissingError",
     "StepFailedError",
 ]
 
@@ -48,6 +49,17 @@ class GateNotSupportedError(DeclarativeError):
 
 class ByoCoverageError(DeclarativeError):
     error_code = "BYO_COVERAGE_MISMATCH"
+
+
+class RenderSourceMissingError(DeclarativeError):
+    """The step a render declares produced NO raster to style.
+
+    The honesty floor, not a styling miss: the render node is auxiliary, but its
+    SOURCE is the primary product, so this one is fatal while a styling failure
+    downstream of a real raster is only a note.
+    """
+
+    error_code = "RENDER_SOURCE_MISSING"
 
 
 class StepFailedError(DeclarativeError):

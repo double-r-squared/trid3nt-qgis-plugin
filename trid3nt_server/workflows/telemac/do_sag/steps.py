@@ -72,10 +72,16 @@ class ReachSolve:
 
     @staticmethod
     def telemac_waqtel_o2(**kwargs: Any) -> Step:
-        """The reach pipeline under WAQTEL O2: geocode -> banks -> mesh -> solve -> DO field."""
+        """The reach pipeline under WAQTEL O2: geocode -> banks -> mesh -> solve -> DO field.
+
+        ``self_gating``: the composite runs its OWN input review over the values it
+        resolves (the NWM carrier discharge, the bank source) - values no plan-level
+        form can show, because they do not exist until the composite has fetched
+        them. A plan may not put a second form gate in front of it.
+        """
         return Step(
             runner="trid3nt_server.workflows.telemac.do_sag.steps.solve_waqtel_o2",
-            kwargs=kwargs, consequential=True,
+            kwargs=kwargs, consequential=True, self_gating=True,
         )
 
 

@@ -821,12 +821,57 @@ class Persistence:
 # enough query semantics to round-trip Persistence's calls.
 
 import asyncio as _asyncio
+import contextlib as _contextlib
 import json as _json_for_file
 import os as _os_for_file
+import weakref as _weakref
 from pathlib import Path as _Path
+
+try:  # POSIX advisory locking; absent on Windows, where the flock is a no-op.
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - this box is Linux
+    _fcntl = None  # type: ignore[assignment]
 
 DEV_PERSISTENCE_DIR_ENV = "TRID3NT_DEV_PERSISTENCE_DIR"
 DEV_PERSISTENCE_ENABLED_ENV = "TRID3NT_DEV_PERSISTENCE"
+
+#: running loop -> {collection path -> asyncio.Lock}, shared by EVERY
+#: FileMCPClient. The store is the FILE, not the instance: two clients over one
+#: collection must serialize, or a read-modify-write from one resurrects what the
+#: other deleted. Keyed by loop because a Lock can only ever be waited on from the
+#: loop that first suspended on it, and weakly so a finished loop's locks go too.
+_COLLECTION_LOCKS: "_weakref.WeakKeyDictionary[Any, dict[str, _asyncio.Lock]]" = \
+    _weakref.WeakKeyDictionary()
+
+
+def _collection_lock(path: _Path) -> _asyncio.Lock:
+    locks = _COLLECTION_LOCKS.setdefault(_asyncio.get_running_loop(), {})
+    key = str(path)
+    lock = locks.get(key)
+    if lock is None:
+        lock = _asyncio.Lock()
+        locks[key] = lock
+    return lock
+
+
+@_contextlib.contextmanager
+def _file_lock(path: _Path):
+    """Exclusive advisory lock on a sidecar, held across one read-modify-write.
+
+    BLOCKING - runs inside ``to_thread``. The sidecar rather than the store itself
+    because ``_atomic_write`` replaces the store's inode, which would drop a lock
+    taken on it. Cross-PROCESS only; in-process serialization is the asyncio lock.
+    """
+    if _fcntl is None:  # pragma: no cover - this box is Linux
+        yield
+        return
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with lock_path.open("a+") as fh:
+        _fcntl.flock(fh.fileno(), _fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            _fcntl.flock(fh.fileno(), _fcntl.LOCK_UN)
 
 
 def _default_dev_persistence_dir() -> _Path:
@@ -881,9 +926,6 @@ class FileMCPClient:
                 _legacy_db_dir,
                 _new_db_dir,
             )
-        # collection-path -> asyncio.Lock, lazily allocated. Per-collection
-        # rather than global so reads from one collection don't block another.
-        self._locks: dict[str, _asyncio.Lock] = {}
 
     # ------------------------------------------------------------------ #
     # Storage helpers
@@ -895,19 +937,27 @@ class FileMCPClient:
         return db_dir / f"{collection}.json"
 
     def _lock_for(self, path: _Path) -> _asyncio.Lock:
-        key = str(path)
-        lock = self._locks.get(key)
-        if lock is None:
-            lock = _asyncio.Lock()
-            self._locks[key] = lock
-        return lock
+        """The PROCESS-WIDE lock for this collection - never a per-instance one."""
+        return _collection_lock(path)
+
+    def _cycle(self, path: _Path, apply: Any) -> Any:
+        """BLOCKING: one flocked read-modify-write over the CURRENT store.
+
+        The read happens inside the lock, so a mutation is never computed from a
+        snapshot another writer has already superseded - a whole-store write from
+        a stale read resurrects documents that were deleted in between.
+        """
+        with _file_lock(path):
+            store = self._read_store(path)
+            result, dirty = apply(store)
+            if dirty:
+                self._atomic_write(path, store)
+        return result
 
     @staticmethod
     def _read_store(path: _Path) -> dict[str, dict]:
-        # OFF-LOOP CONTRACT: this is a BLOCKING body. Callers in ``call_tool``
-        # run it via ``await _asyncio.to_thread(self._read_store, path)`` so the
-        # blocking read never stalls the asyncio WS loop. The per-collection
-        # async lock is still held across the await, preserving serialization.
+        # OFF-LOOP CONTRACT: this is a BLOCKING body, reached through
+        # ``_cycle`` inside ``to_thread`` so it never stalls the asyncio WS loop.
         if not path.exists():
             return {}
         try:
@@ -1038,86 +1088,90 @@ class FileMCPClient:
         path = self._collection_path(database, collection)
         lock = self._lock_for(path)
 
+        apply = self._operation(name, args)
+        async with lock:
+            return await _asyncio.to_thread(self._cycle, path, apply)
+
+    def _operation(self, name: str, args: dict[str, Any]) -> Any:
+        """The mutation for one MCP tool call: ``(store) -> (result, dirty)``.
+
+        Built OUTSIDE the lock, applied INSIDE it against the store as it is then.
+        """
         if name == "insert-one":
-            async with lock:
-                store = await _asyncio.to_thread(self._read_store, path)
-                doc = args["document"]
-                doc_id = doc.get("_id")
-                if doc_id is None:
-                    raise ValueError(
-                        "FileMCPClient insert-one: document missing '_id'"
-                    )
-                store[doc_id] = doc
-                await _asyncio.to_thread(self._atomic_write, path, store)
-                return {"insertedId": doc_id}
+            doc = args["document"]
+            if doc.get("_id") is None:
+                raise ValueError("FileMCPClient insert-one: document missing '_id'")
+
+            def _insert(store: dict[str, dict]):
+                store[doc["_id"]] = doc
+                return {"insertedId": doc["_id"]}, True
+
+            return _insert
 
         if name == "update-one":
-            async with lock:
-                store = await _asyncio.to_thread(self._read_store, path)
-                filt = args.get("filter", {})
-                update = args.get("update", {})
-                upsert = bool(args.get("upsert", False))
-                target_id = filt.get("_id")
-                matched = 0
-                modified = 0
+            filt = args.get("filter", {})
+            update = args.get("update", {})
+            upsert = bool(args.get("upsert", False))
+            target_id = filt.get("_id")
+
+            def _update(store: dict[str, dict]):
                 if target_id and target_id in store:
                     self._apply_update(store[target_id], update, inserting=False)
-                    matched = 1
-                    modified = 1
                 elif upsert and target_id:
                     fresh: dict[str, Any] = {"_id": target_id}
                     self._apply_update(fresh, update, inserting=True)
                     store[target_id] = fresh
-                    matched = 1
-                    modified = 1
                 else:
                     # Update by a non-``_id`` filter. First match wins.
                     for doc in store.values():
                         if self._matches(doc, filt):
                             self._apply_update(doc, update, inserting=False)
-                            matched = 1
-                            modified = 1
                             break
-                await _asyncio.to_thread(self._atomic_write, path, store)
-                return {"matchedCount": matched, "modifiedCount": modified}
+                    else:
+                        return {"matchedCount": 0, "modifiedCount": 0}, False
+                return {"matchedCount": 1, "modifiedCount": 1}, True
+
+            return _update
 
         if name == "find-one":
-            async with lock:
-                store = await _asyncio.to_thread(self._read_store, path)
-                filt = args.get("filter", {})
+            filt = args.get("filter", {})
+
+            def _find_one(store: dict[str, dict]):
                 for doc in store.values():
                     if self._matches(doc, filt):
-                        return {"document": doc}
-                return {"document": None}
+                        return {"document": doc}, False
+                return {"document": None}, False
+
+            return _find_one
 
         if name == "delete-one":
-            async with lock:
-                store = await _asyncio.to_thread(self._read_store, path)
-                filt = args.get("filter", {})
-                target_id = filt.get("_id")
+            filt = args.get("filter", {})
+            target_id = filt.get("_id")
+
+            def _delete_one(store: dict[str, dict]):
                 doc_id = target_id if target_id in store else next(
                     (k for k, d in store.items() if self._matches(d, filt)), None
                 )
                 if doc_id is None:
-                    return {"deletedCount": 0}
+                    return {"deletedCount": 0}, False
                 del store[doc_id]
-                await _asyncio.to_thread(self._atomic_write, path, store)
-                return {"deletedCount": 1}
+                return {"deletedCount": 1}, True
+
+            return _delete_one
 
         if name == "find":
-            async with lock:
-                store = await _asyncio.to_thread(self._read_store, path)
-                filt = args.get("filter", {})
-                sort = args.get("sort", {})
+            filt = args.get("filter", {})
+            sort = args.get("sort", {})
+
+            def _find(store: dict[str, dict]):
                 results = [d for d in store.values() if self._matches(d, filt)]
                 if sort:
                     key = next(iter(sort.keys()))
-                    direction = sort[key]
-                    results.sort(
-                        key=lambda d: d.get(key, ""),
-                        reverse=(direction == -1),
-                    )
-                return {"documents": results}
+                    results.sort(key=lambda d: d.get(key, ""),
+                                 reverse=(sort[key] == -1))
+                return {"documents": results}, False
+
+            return _find
 
         raise NotImplementedError(
             f"FileMCPClient: unsupported MCP tool {name!r} "

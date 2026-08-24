@@ -16,13 +16,14 @@ from .errors import GateRefusedError
 from .params import (
     Param,
     ParamNotResolved,
+    ParamValues,
     ResolvedParam,
     ResolvedParams,
     doors,
     refuse_duplicate_params,
 )
 
-__all__ = ["merge_provenance", "provenance_entries", "resolve_params"]
+__all__ = ["merge_provenance", "provenance_entries", "reseat_revised", "resolve_params"]
 
 
 async def resolve_params(
@@ -116,11 +117,34 @@ def _door_1_2(param: Param, supplied: Mapping[str, Any],
 
 async def _derive(param: Param, rows: Mapping[str, ResolvedParam]) -> Any:
     fn = _load(param.resolve or "")
-    view = ResolvedParams(dict(rows))
-    out = fn(view)
+    out = fn(ParamValues(dict(rows)))
     if inspect.isawaitable(out):
         out = await out
     return out
+
+
+def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
+                   revised: Mapping[str, Any]) -> tuple[ResolvedParams, list[str]]:
+    """Re-seat values a user approved at the form gate, through the GATE door.
+
+    The declared bounds and the non-numeric refusal still apply - the form is an
+    edit surface, not a bypass - and every genuinely changed row is re-stamped
+    ``basis=user`` so the run's provenance says the user set it. Returns the new
+    sheet plus the names that actually changed. Names that are not declared params
+    cannot be seated and are reported by the caller, never silently absorbed.
+    """
+    by_name = {p.name: p for p in declared}
+    rows: dict[str, ResolvedParam] = {}
+    changed: list[str] = []
+    for name, value in revised.items():
+        param = by_name.get(name)
+        if param is None or resolved.row(name) is None:
+            continue
+        if resolved.get(name) == value:
+            continue
+        rows[name] = _finish(param, value, doors.GATE, "revised at input review")
+        changed.append(name)
+    return (resolved.replacing(rows) if rows else resolved), changed
 
 
 def _load(dotted: str) -> Any:

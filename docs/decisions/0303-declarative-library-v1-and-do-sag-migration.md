@@ -392,3 +392,179 @@ inspectable in the plan value.
 executed `inner`. One flatten now takes a `taken_only` flag: `flat()` drops
 untaken branches at every depth, `declared()` keeps them all. Foundation-critical
 for river_dye, whose plan is conditional throughout.
+
+---
+
+# Correction - wave 1c (second adversarial review)
+
+Status: LANDED. A second adversarial verifier REFUTED the wave-1b landing on
+three blockers and eight observations, all probe-proven. As before, the sections
+above are left as written and this one records the delta.
+
+## Blocker 1 - a form-gate revision could not reach the run
+
+`ResolvedParams.__getattr__` returned the concrete VALUE, so `plan(p, d)` baked
+floats into `Step.kwargs` at construction - which happens BEFORE the gates the
+plan itself declares. The approved edits on `gate_input_review`'s outcome were
+then dropped on the floor: the step ran on the pre-review sheet while the result
+was stamped with the reviewed one. What-was-approved == what-ran was false.
+
+**LATE BINDING.** `p.<name>` now yields a `ParamRef` - a plan value in the same
+family as `Ref`, `RunMode` and `CoversAOI`. The declarative purity actually
+demanded it: a plan DESCRIBES, the interpreter SUBSTITUTES. `plan()` stays pure
+(a `ParamRef` is a value, constructed and inspected, never executed), and the
+interpreter resolves each one at node execution from the CURRENT param state.
+
+- A `FormGate` outcome's revisions are re-seated through the resolver
+  (`reseat_revised`), so DECLARED BOUNDS AND THE NON-NUMERIC REFUSAL STILL
+  APPLY - the form is an edit surface, not a bypass - and every genuinely
+  changed row is re-stamped `basis=user` with a `revised at input review` note.
+  The run's provenance rows are then rebuilt from the approved sheet.
+- An approved revision is a DIFFERENT invocation, so the ledger is re-keyed on
+  the revised values: a replay can only ever come from an attempt at the values
+  that were approved.
+- Derivations and chart builders receive a `ParamValues` view instead, whose
+  `v.<name>` IS the value. Two types rather than one flag, so a
+  plan-construction read cannot silently collapse into an early-bound value.
+- `bool(ParamRef)` REFUSES, naming `p.get(name)`, and `When(ParamRef, ...)`
+  refuses at construction. A construction-time branch reads the value
+  explicitly; it never silently branches on a description being truthy.
+- The validator checks every `ParamRef` names a declared param.
+
+### The double-gating half
+
+`do_sag`'s plan declared a `FormGate` in FRONT of a composite
+(`model_telemac_river_dye`) that runs its own input review. The composite's gate
+is the one that works - and the one that matters, since the reviewable inputs
+(the NWM carrier discharge, the resolved bank source) do not exist until the
+composite has fetched them. The plan-level card was a second review whose edits
+died.
+
+`do_sag`'s plan `FormGate` is REMOVED; `input_mode=RunMode` threads the lever to
+the composite's own gate (the wave-1b B2 fix). `Step.self_gating` declares the
+property, and `_check_gate_declarations` REFUSES a plan that puts a `FormGate` in
+front of a self-gating step. `FormGate` stays in the library for wave-3
+workflows whose steps are library-native - and is now revision-capable.
+
+One thing the removed gate was also doing had to be re-homed: `gate_input_review`
+runs the law-9 physics refusal over the entries it is handed, so a plan with no
+form card would have lost that check on its OWN declared rows. The interpreter
+now runs it directly before the first consequential step whenever the plan
+declares no `FormGate` (auto mode - which is the mode the refusal's own text
+addresses; user_gated pauses at the composite's gate with the user present).
+Vacuous for do_sag today, since its only physics-consequence param is
+user-supplied-or-absent, but the floor no longer depends on a gate being
+declared.
+
+## Blocker 2 - reap-as-completion could not express FINISHED
+
+Wave 1b made completion a DELETE. Three proven paths left a finished run's
+ledger replayable anyway: a swallowed delete failure (it only warned), a crash
+between the last record and `complete()`, and a `CancelledError` skipping
+`complete()`. Each resurrects the B1 replay ghost - a `cacheable=False` tool
+handing back a stale COG.
+
+**A COMPLETION TOMBSTONE.** `complete: true` is written as a marker document
+through the same atomic path as the records, and replay now requires the
+document to be PRESENT AND NOT COMPLETE. Two details make it airtight:
+
+- The tombstone is stamped IN THE SAME WRITE as the LAST recordable node's
+  record, which is what closes the crash/cancel window - there is no interval in
+  which a finished plan's records exist un-marked.
+- If the completion write itself fails, that is logged at ERROR (not warning)
+  and falls back to deleting the document, which says the same thing.
+
+This answers wave 1b's own anti-tombstone objection ("a marker only ever read as
+do-not-use is a tombstone, and tombstones accumulate forever"): the TTL sweep,
+which wave 1b built, reaps tombstones on AGE. Accumulation is bounded by the
+7-day window, not unbounded.
+
+Two corrections to the wave-1b text:
+
+- **"do_sag can never resume" is FALSE.** Its chart node makes a WS round trip
+  (`emit_chart_payloads`); a cancel there is a `BaseException`, so it is not
+  swallowed by the auxiliary-failure path and it leaves the recorded solve
+  behind. That is a real resume window on a 27-minute solve.
+- **A CANCELLED run correctly stays resumable.** Cancel mid-plan is not
+  completion; keeping the completed steps IS resume working. Only the window
+  AFTER the final record needed closing, and the tombstone closes it.
+
+## Blocker 3 - the ledger was not concurrency-safe
+
+`FileMCPClient` allocated its locks PER INSTANCE, and `update-one` rewrote the
+whole store. Two ledgers over one collection therefore did not serialize, and a
+write computed from a stale snapshot resurrected documents another ledger had
+just reaped - a finished run replayable again.
+
+Scoped to `FileMCPClient`, no new backend:
+
+- The lock registry is module-level, keyed by resolved collection path, so every
+  client shares one lock per store. It is keyed by RUNNING LOOP as well (weakly,
+  so a finished loop's locks go with it), because an `asyncio.Lock` can only be
+  waited on from the loop that first suspended on it.
+- Every operation is now one `_cycle`: an advisory `fcntl` lock on a sidecar
+  file (the store's own inode is replaced by `_atomic_write`, so a lock on it
+  would be dropped), then READ, then mutate, then write - all inside the lock.
+  The read-merge-write rule is structural: no operation can write a store it
+  read before the lock was held.
+
+## The observations
+
+| # | what was wrong | what it is now |
+|---|---|---|
+| 1 | an eager `Data` producer ran outside any node's body, so its exception escaped the typed family entirely (no `StepFailedError`, no preserved `error_code`) | producers go through the same `_call_runner` seam as steps: retryable errors propagate, everything else becomes `StepFailedError` with the producer's own `error_code` and `step="data:<name>"` |
+| 2 | accumulated auxiliary notes died when a later consequential step raised - the failure narration never mentioned the products also missing | the notes are attached to the raised exception (`add_note`), and the tool body renders them into the error envelope's message |
+| 3 | `RENDER_SOURCE_UNRENDERABLE` conflated "the styling failed" (auxiliary, fine) with "the step produced no raster at all" (a primary defect) | SPLIT. `RenderSourceMissingError` / `RENDER_SOURCE_MISSING` is FATAL even though the render node is auxiliary - a declared render with no raster behind it means the step did not make the map layer it promised (honesty floor). A `publish_layer` failure over a real raster stays an auxiliary note (`RENDER_STYLE_FAILED`) |
+| 4 | `Gate.constrain` / `Within` were declared, validated, and never read | REMOVED from the v1 surface. Enforcement is not possible at gate time - the geometry to constrain against is produced AFTER the gates (wave 1b, observation 10) - and the wave-2 draw card is what will both collect and constrain the drawn value. No dead declarations in the foundation |
+| 5 | `RenderSpec.zero` / `Transparent`: same class - a declared no-op | REMOVED. `publish_layer`, the one styling chokepoint, has no zero-handling knob to declare against; zero-as-transparent returns with the render toolset that adds one |
+| 6 | `_artifact_exists` answered one bool for "gone" and "the store is down", so a MinIO blip silently discarded a 27-minute resume with the same log line as a pruned object | `_artifact_state` answers `live` / `absent` / `unreachable`. Both non-live answers still re-execute (a replay must never hand back a dead handle, and a probe fault must never become a typed error about the RUN), but an unreachable store logs a WARNING naming the outage |
+| 7 | `invocation_key` ignored `input_mode`, so a failed AUTO attempt could seed a `user_gated` replay - the gated run replaying steps computed from params it exists to revise | the RESOLVED gate mode is part of the key (`None` and `"auto"` hash the same, since they resolve the same) |
+| 8 | the wave-1b ADR text | corrected above (blocker 2) |
+
+## Gates
+
+| gate | result |
+|---|---|
+| `tests/test_[a-e]*.py` | 1583 passed, 5 skipped, 0 failed (baseline 0) |
+| `tests/test_[f-o]*.py` | 6646 passed, 3 skipped, 1 xfailed, **4 failed** - all `test_fetch_resolution_gate.py` (baseline) |
+| `tests/test_[p-r]*.py` | 2102 passed, 2 skipped, **2 failed** - both `test_run_river_dye_scenario.py` (baseline) |
+| `tests/test_[s-z]*.py` | 1418 passed, 6 skipped, 0 failed (baseline 0) |
+| `contracts/tests` | 721 passed (no delta) |
+| `scripts/ws_smoke.py` | `all_passed=True` |
+| `scripts/run_sfincs_direct.py` (flood canary) | PASSED, `status=ok`, depth COG published |
+| live `telemac_do_sag` reference run (x2) | DO min 8.5772 mg/L @ 10631.7 m - parity with the wave-1 landing |
+
+Exactly the 4 + 2 baseline failures. No `workers/` path touched, so no image
+rebuild is in play.
+
+## Live evidence
+
+The reference question is unchanged (Eel River near Scotia, California; BOD 20,
+20 C, standard 5, k1 0.3, k2 0.9, 12 km, mesh auto), with ONE difference forced
+by the upstream: the NOAA National Water Model publishes only recent
+`analysis_assim` cycles and has none for the current date, so the carrier
+discharge cannot be fetched. The template refuses typed
+(`TELEMAC_DISCHARGE_INPUT_REQUIRED`) and names the lever, which is the honest
+path working - verified in isolation against `fetch_noaa_nwm_streamflow`, i.e.
+upstream, not a regression. The reference run therefore PINS
+`discharge_m3s=2.0`, the value wave 1 resolved from NWM, so the physics is
+identical. `scripts/run_do_sag_direct.py` gained a `--discharge-m3s` flag for
+exactly this.
+
+**Parity** - two independent runs, bit-identical to the wave-1 landing:
+
+| | wave 1 | wave 1c run A | wave 1c run B |
+|---|---|---|---|
+| run id | `01M0RA0RCXW4S40PN1RBSSPJ6M` | `01M0RKE53944J2TNCPYCADGB1X` | `01M0RN1FR6CY0A2Y572HFX271Q` |
+| DO sag minimum | 8.5772 mg/L | 8.5772 mg/L | 8.5772 mg/L |
+| sag location | 10631.7 m | 10631.7 m | 10631.7 m |
+| violates the 5 mg/L standard | false | false | false |
+| sag-curve points / first / last | 60 / 9.022 / 8.9623 | 60 / 9.022 / 8.9623 | 60 / 9.022 / 8.9623 |
+
+**Tombstone, on the live store.** After run A the ledger collection holds ONE
+document: `complete: true`, `records: []`, `schema_version: 3`. Run B is the
+SAME question at the SAME params - the invocation key is identical - and it
+RE-SOLVED (`executed=['do_field', 'do_field.chart:do_sag_curve'] replayed=[]`,
+a fresh run id and a fresh solver container) rather than replaying run A. That
+is the B1 ghost refuted end to end. After both runs the collection still holds
+exactly one document, which is the accumulation bound in practice.

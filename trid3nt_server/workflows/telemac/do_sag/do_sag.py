@@ -19,7 +19,6 @@ from trid3nt_server.data.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.declarative import (
     DeclarativeError,
     DrawGate,
-    FormGate,
     Param,
     RunMode,
     Workflow,
@@ -140,7 +139,6 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
     return Workflow("telemac_do_sag", engine="telemac2d")[
         DrawGate(param="outfall_coords", geometry="point",
                  prompt="Click where the discharge enters the river"),
-        FormGate(),
         ReachSolve.telemac_waqtel_o2(
             location=p.location, bbox=p.bbox, outfall_coords=p.outfall_coords,
             discharge_bod_mgl=p.discharge_bod_mgl,
@@ -226,7 +224,7 @@ async def telemac_do_sag(
     except DeclarativeError as exc:
         logger.warning("telemac_do_sag %s: %s", exc.error_code, exc)
         return {"status": "error", "error_code": exc.error_code,
-                "error_message": str(exc)}
+                "error_message": _with_notes(exc)}
     except Exception as exc:  # noqa: BLE001
         if getattr(exc, "retryable", False):
             # The banks/reach gates carry .suggestions the adapter harvests off the
@@ -234,7 +232,7 @@ async def telemac_do_sag(
             raise
         logger.exception("telemac_do_sag unexpected failure")
         return {"status": "error", "error_code": "TELEMAC_INTERNAL_ERROR",
-                "error_message": str(exc)}
+                "error_message": _with_notes(exc)}
 
     layer = result.value
     update: dict[str, Any] = {
@@ -253,6 +251,12 @@ async def telemac_do_sag(
         layer.do_violates_standard, result.executed, result.replayed, result.notes,
     )
     return layer
+
+
+def _with_notes(exc: BaseException) -> str:
+    """The failure, plus whatever auxiliary products the run also lost on the way."""
+    notes = getattr(exc, "__notes__", ()) or ()
+    return " ".join([str(exc), *notes])
 
 
 def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
@@ -320,8 +324,9 @@ telemac_do_sag.__doc__ = render_docstring(
         ("restart_clean",
          "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
          "left behind and re-runs every step from the top. Default False resumes at "
-         "the failed step. A run that completed leaves no ledger, so a fresh "
-         "invocation always re-solves against live upstream data."),
+         "the failed step. A run that completed is marked complete and is never "
+         "replayed, so a fresh invocation always re-solves against live upstream "
+         "data."),
     ),
     returns=(
         "On success a `TelemacDoLayerURI` (a `LayerURI` subtype) - the emitter loads "

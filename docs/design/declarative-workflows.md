@@ -55,17 +55,27 @@ def plan(p, d):
              Delineate.watershed(dem=d.terrain).overrides_domain()),
         BankReach(rivers=d.rivers, seed=Ref("reach.seed")).named("banks"),
         DrawGate(param="release_coords", geometry="point",
-                 prompt="Click where the substance enters the river",
-                 constrain=Within(Ref("banks"))),
+                 prompt="Click where the substance enters the river"),
         FormGate(),
         WriteDeck.telemac(mesh=d.mesh, forcing=d.rain,
                           substance=p.substance, release=p.release_coords),
         Solve(),
         Postprocess()
-            .render(preset="dye_concentration", zero=Transparent)
-            .chart("concentration_timeseries", x="t_min", y="mg_L"),
+            .render(preset="dye_concentration")
+            .chart("concentration_timeseries", builder="telemac.steps.dye_chart"),
     ]
 ```
+
+`p.<name>` yields a LATE-BOUND `ParamRef`, not the value: the plan is built
+once, before the gates it declares have run, so it must DESCRIBE the read and
+let the interpreter perform it against the current sheet. That is what makes a
+form-gate revision reach the run (what-was-approved == what-ran). A real
+construction-time branch reads the value explicitly - `When(p.get("delineate"),
+...)` - and `bool(ParamRef)` refuses rather than silently reading True.
+
+A step that runs its OWN input review declares `self_gating=True`; a plan may
+not put a `FormGate` in front of one, because the composite reads its own
+resolved sheet and never sees the plan's.
 
 ## The Domain environment
 
@@ -142,18 +152,24 @@ waits per the hybrid rule).
   as the run's input record (and is what calibration will later read
   and write). The ModelMuse/SWMM-GUI property grid, pre-filled by a
   sentence.
-- DRAW GATE: point | polyline | polygon | rectangle, prompt text,
-  draw-time constraints (within(reach), on-mesh). No ghost
-  suggestions: user_gated waits; auto refuses typed. Extends the
+- DRAW GATE: point | polyline | polygon | rectangle, prompt text. No
+  ghost suggestions: user_gated waits; auto refuses typed. Extends the
   existing AOI-rectangle machinery. Plugin cost: two card types.
+  Draw-time constraints (within(reach), on-mesh) land WITH the wave-2
+  draw card that can enforce them - the geometry to constrain against
+  is produced after the gates, so there is nothing to check at gate
+  time and a declared-but-unread constraint is a dead promise.
 
 ## Steps beyond fetch/solve
 
 - PRE/POST/RENDER as declared steps. The render toolset promotes the
   single publish_layer styling seam into declared primitives;
   zero-as-transparent is a RENDERING choice only (rasters keep their
-  zeros - law 9 applies to pixels). Render steps are agent-callable
-  conversationally.
+  zeros - law 9 applies to pixels) and arrives WITH that toolset, since
+  publish_layer has no zero-handling knob to declare against today.
+  Render steps are agent-callable conversationally. A render's SOURCE
+  is not auxiliary: a step that declared a render and produced no
+  raster failed, and says so.
 - CHART STEPS: the chart SPEC (kind + data + axes) is the persisted
   product; the plugin chart dock is the ONE renderer. Closes the
   chart-restore gap; ends server-side figure generation (matplotlib

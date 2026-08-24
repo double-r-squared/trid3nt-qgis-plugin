@@ -23,7 +23,11 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
-from trid3nt_server.gates.input_review import gate_input_review, resolve_input_gate_mode
+from trid3nt_server.gates.input_review import (
+    gate_input_review,
+    physics_refusal_reason,
+    resolve_input_gate_mode,
+)
 
 from .data import AuthoredProducer, CoversAOI, DataDecl
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
@@ -32,12 +36,13 @@ from .errors import (
     DeclarativeError,
     GateNotSupportedError,
     GateRefusedError,
+    RenderSourceMissingError,
     StepFailedError,
 )
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import Param, ResolvedParams
-from .plan import ChartSpec, Gate, Plan, Ref, RenderSpec, RunMode, Step
-from .resolver import provenance_entries
+from .plan import ChartSpec, Gate, ParamRef, Plan, Ref, RenderSpec, RunMode, Step
+from .resolver import provenance_entries, reseat_revised
 from .validate import validate_plan
 
 __all__ = ["RunResult", "interpret"]
@@ -88,7 +93,7 @@ async def interpret(
     validate_plan(plan, declared_params, data)
 
     entries = provenance_entries(params, declared_params)
-    key = invocation_key(plan.name, params.values_dict())
+    key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode)
     ledger = await StepLedger.load(key, plan.name)
     if not resume:
         await ledger.clear()
@@ -102,16 +107,29 @@ async def interpret(
     out = RunResult(value=None, entries=entries)
     token = bind_domain(domain)
     produce_at = _eager_data_index(nodes)
+    final_index = _final_recordable_index(nodes)
+    reviewed = any(isinstance(n.step, Gate) and n.step.kind == "form" for n in nodes)
     try:
         for node in nodes:
             if node.index == produce_at:
                 await _produce_independent_data(env)
             if isinstance(node.step, Gate):
-                await _run_gate(node.step, params, declared_params, entries,
-                                input_mode=input_mode, tool_name=plan.name)
+                revision = await _run_gate(node.step, env.params, declared_params,
+                                           out.entries, input_mode=input_mode,
+                                           tool_name=plan.name)
+                if revision is not None:
+                    env.params, out.entries = revision
+                    # The approved sheet is a DIFFERENT invocation: re-key so a
+                    # replay can only ever come from an attempt at these values.
+                    ledger = env.ledger = await StepLedger.load(
+                        invocation_key(plan.name, env.params.values_dict(),
+                                       input_mode=input_mode),
+                        plan.name)
                 continue
             if node.step.consequential:
-                _refuse_missing_required(params, plan.name)
+                _refuse_missing_required(env.params, plan.name)
+                if not reviewed:
+                    _refuse_invented_physics(out.entries, plan.name, input_mode)
             cached = ledger.replay_for(node.index, node.label) if resume else None
             if cached is not None and await _artifacts_live(cached):
                 value = _rehydrate(cached)
@@ -123,19 +141,36 @@ async def interpret(
             try:
                 value = await _run_node(node, env, emitter)
             except Exception as exc:  # noqa: BLE001 - re-raised for the primary result
-                if node.kind == "step":
+                if node.kind == "step" or isinstance(exc, RenderSourceMissingError):
+                    _carry_notes(exc, out.notes)
                     raise
                 _note_aux_failure(out, plan.name, node, exc)
                 continue
             # Adopt BEFORE recording: a domain-rebinding step must record the
             # domain it LEAVES, not the one it started under.
             _adopt(env, node, value, out, replayed=False)
-            await ledger.record(_record(node, value))
+            await ledger.record(_record(node, value), final=node.index == final_index)
         out.domain = current_domain()
         await ledger.complete()
     finally:
         reset_domain(token)
     return out
+
+
+def _final_recordable_index(nodes: Sequence[_Node]) -> int | None:
+    """The LAST node whose completion is ledgered - gates leave no record."""
+    return max((n.index for n in nodes if not isinstance(n.step, Gate)), default=None)
+
+
+def _carry_notes(exc: BaseException, notes: Sequence[str]) -> None:
+    """Attach what the run could not produce to the failure that ends it.
+
+    Auxiliary misses are collected on the ``RunResult``, which a raising step
+    never returns - so without this the narration would report the failure and
+    silently drop the products the user was also promised.
+    """
+    for note in notes:
+        exc.add_note(f"also missing from this run: {note}")
 
 
 def _eager_data_index(nodes: Sequence[_Node]) -> int | None:
@@ -208,6 +243,10 @@ async def _produce_independent_data(env: _Env) -> None:
         env.artifacts[decl.name] = value
 
 
+def _data_step_label(name: str) -> str:
+    return f"data:{name}"
+
+
 async def _produce(env: _Env, decl: DataDecl) -> Any:
     producer = decl.producer
     if isinstance(producer, AuthoredProducer) and producer.byo_uri:
@@ -222,8 +261,11 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     kwargs = await _bind(dict(producer.kwargs), env)
     if producer.ladder_rungs:
         kwargs.setdefault("fallback", tuple(producer.ladder_rungs))
+    label = _data_step_label(decl.name)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
-        value = await _call(_load(producer.runner), kwargs)
+        # The eager batch runs outside any node's body, so a producer that raises
+        # would otherwise escape the typed family entirely.
+        value = await _call_runner(producer.runner, kwargs, label)
     if env.ledger is not None:
         await env.ledger.record_data(
             decl.name, _record_for(decl.name, producer.runner, value))
@@ -243,35 +285,42 @@ def _validate_byo(decl: DataDecl, uri: str, validate: Any) -> None:
 
 async def _run_node(node: _Node, env: _Env, emitter: Any) -> Any:
     async with substep(emitter, node.label):
-        try:
-            if node.kind == "step":
-                return await _call(_load(node.runner),
-                                   await _bind(dict(node.step.kwargs), env))
-            if node.kind == "chart":
-                return await _run_chart(node, env)
-            return await _run_render(node, env)
-        except asyncio.CancelledError:
+        if node.kind == "step":
+            kwargs = await _bind(dict(node.step.kwargs), env)
+            return await _call_runner(node.runner, kwargs, node.label)
+        if node.kind == "chart":
+            return await _run_chart(node, env)
+        return await _run_render(node, env)
+
+
+async def _call_runner(runner: str, kwargs: dict[str, Any], label: str) -> Any:
+    """Call a declared runner, converting whatever it raises into the typed family."""
+    try:
+        return await _call(_load(runner), kwargs)
+    except asyncio.CancelledError:
+        raise
+    except DeclarativeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
+        if getattr(exc, "retryable", False):
+            # A RETRYABLE typed error is a GATE, not a failure: the adapter
+            # harvests its .suggestions off the raised exception so the model can
+            # retry with corrected args. Flattening it into an envelope destroys
+            # that channel.
             raise
-        except DeclarativeError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - re-raised typed, cause preserved
-            if getattr(exc, "retryable", False):
-                # A RETRYABLE typed error is a GATE, not a failure: the adapter
-                # harvests its .suggestions off the raised exception so the model
-                # can retry with corrected args. Flattening it into an envelope
-                # destroys that channel.
-                raise
-            raise StepFailedError(
-                f"step {node.label!r} failed: {exc}",
-                error_code=getattr(exc, "error_code", None) or "STEP_FAILED",
-                step=node.label, cause=exc,
-            ) from exc
+        raise StepFailedError(
+            f"step {label!r} failed: {exc}",
+            error_code=getattr(exc, "error_code", None) or "STEP_FAILED",
+            step=label, cause=exc,
+        ) from exc
 
 
 async def _run_chart(node: _Node, env: _Env) -> Any:
     spec: ChartSpec = node.spec
     source = env.results.get(node.step.name or node.step.label)
-    payload = await _call(_load(spec.builder), {"result": source, "params": env.params})
+    payload = await _call_runner(
+        spec.builder, {"result": source, "params": env.params.values_view()},
+        node.label)
     if not payload:
         raise StepFailedError(
             f"chart {spec.name!r}: the builder produced no spec from the result.",
@@ -282,35 +331,53 @@ async def _run_chart(node: _Node, env: _Env) -> Any:
 
 
 async def _run_render(node: _Node, env: _Env) -> Any:
+    """Style a step's raster. NO raster is the step's defect; bad styling is a note."""
     spec: RenderSpec = node.spec
     source = env.results.get(node.step.name or node.step.label)
     uri = getattr(source, "uri", None)
     layer_id = getattr(source, "layer_id", None)
     if not uri or not layer_id or not str(uri).startswith(("s3://", "gs://")):
-        raise StepFailedError(
-            f"render {spec.preset!r}: step {node.step.label!r} produced no object-store "
-            f"raster to style (uri={uri!r}, layer_id={layer_id!r}).",
-            error_code="RENDER_SOURCE_UNRENDERABLE", step=node.label,
+        raise RenderSourceMissingError(
+            f"step {node.step.label!r} declares a {spec.preset!r} render but produced "
+            f"no object-store raster to style (uri={uri!r}, layer_id={layer_id!r}); "
+            "there is no map layer behind this result."
         )
     from trid3nt_server.data.publish_layer import publish_layer
 
-    published = await asyncio.to_thread(
-        publish_layer, layer_uri=uri, layer_id=layer_id, style_preset=spec.preset
-    )
+    try:
+        published = await asyncio.to_thread(
+            publish_layer, layer_uri=uri, layer_id=layer_id, style_preset=spec.preset
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - a styling miss is auxiliary, not the result
+        raise StepFailedError(
+            f"render {spec.preset!r}: styling {uri} failed: {exc}",
+            error_code=getattr(exc, "error_code", None) or "RENDER_STYLE_FAILED",
+            step=node.label, cause=exc,
+        ) from exc
     return {"render": spec.preset, "published": True, "uri": published}
 
 
 async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param],
                     entries: list[SyntheticInput], *, input_mode: str | None,
-                    tool_name: str) -> None:
+                    tool_name: str
+                    ) -> tuple[ResolvedParams, list[SyntheticInput]] | None:
+    """Run one declared gate. Returns the REVISED sheet when the user edited it.
+
+    What was approved is what runs: the form gate's outcome carries the user's
+    edits, and they are re-seated through the resolver (declared bounds still
+    apply) so the steps after the gate read the approved values, not the ones the
+    sheet held when the plan value was built.
+    """
     mode = resolve_input_gate_mode(input_mode)
     if gate.kind == "draw":
         row = params.row(gate.param or "")
         if row is not None and row.value is not None:
-            return
+            return None
         target = next((p for p in declared if p.name == gate.param), None)
         if target is not None and target.optional:
-            return
+            return None
         if mode == "user_gated":
             raise GateNotSupportedError(
                 f"{tool_name}: the draw gate for {gate.param!r} ({gate.prompt or gate.geometry}) "
@@ -331,6 +398,17 @@ async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param
             "the plan did not run.",
             error_code="INPUT_REVIEW_CANCELLED",
         )
+    revised, changed = reseat_revised(declared, params, outcome.params or {})
+    undeclared = sorted(set(outcome.params or {}) - {p.name for p in declared})
+    if undeclared:
+        logger.warning("%s: the input review revised %s, which this workflow "
+                       "declares no param for; those edits cannot be seated",
+                       tool_name, undeclared)
+    if not changed:
+        return None
+    logger.info("%s: input review revised %s; re-seated through the GATE door",
+                tool_name, changed)
+    return revised, provenance_entries(revised, declared)
 
 
 def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
@@ -343,6 +421,21 @@ def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
             f"{r.name} was not supplied and has no door to come through" for r in missing
         ) + ". Supply the values explicitly - they are never invented."
     )
+
+
+def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
+                             input_mode: str | None) -> None:
+    """Law 9, for a plan whose declared rows no form card will present.
+
+    A plan that declares a ``FormGate`` refuses through the gate; one that does not
+    (because its step reviews its own inputs) still may not run a physics value
+    that fell back to an invented default with nobody to approve it.
+    """
+    if resolve_input_gate_mode(input_mode) != "auto":
+        return
+    reason = physics_refusal_reason(tool_name, entries)
+    if reason:
+        raise GateRefusedError(reason, error_code="PHYSICS_INPUT_REQUIRED")
 
 
 def _adopt(env: _Env, node: _Node, value: Any, out: RunResult, *, replayed: bool,
@@ -370,6 +463,10 @@ async def _bind(kwargs: dict[str, Any], env: _Env) -> dict[str, Any]:
 async def _bind_value(value: Any, env: _Env) -> Any:
     if value is RunMode:
         return env.input_mode
+    if isinstance(value, ParamRef):
+        # LATE binding: the sheet a gate may have revised, not the one the plan
+        # value was built from.
+        return env.params.get(value.name)
     if isinstance(value, Ref):
         return await _deref(value, env)
     if isinstance(value, dict):
@@ -446,6 +543,11 @@ def _record_for(label: str, runner: str, value: Any, *, index: int = 0) -> Ledge
     )
 
 
+#: Answers ``_artifact_state`` can give. Both non-live answers re-execute the
+#: node; they differ in what they MEAN, which is what the log has to say.
+_LIVE, _ABSENT, _UNREACHABLE = "live", "absent", "unreachable"
+
+
 async def _artifacts_live(rec: LedgerRecord) -> bool:
     """Probe every artifact the cached record points at.
 
@@ -453,29 +555,55 @@ async def _artifacts_live(rec: LedgerRecord) -> bool:
     success envelope; the node re-executes instead.
     """
     for uri in rec.artifact_uris:
-        if not await asyncio.to_thread(_artifact_exists, uri):
-            logger.warning("ledger record %s points at a missing artifact (%s); "
-                           "re-executing", rec.node, uri)
-            return False
+        state = await asyncio.to_thread(_artifact_state, uri)
+        if state == _LIVE:
+            continue
+        if state == _UNREACHABLE:
+            logger.warning(
+                "ledger record %s: the object store is UNREACHABLE for %s, so a "
+                "replayable step is being re-executed because of an outage rather "
+                "than because its artifact is gone", rec.node, uri)
+        else:
+            logger.info("ledger record %s points at an artifact that no longer "
+                        "exists (%s); re-executing", rec.node, uri)
+        return False
     return True
 
 
-def _artifact_exists(uri: str) -> bool:
-    """``s3://`` objects are probed; a local path is stat'd; anything else is taken as live."""
+def _artifact_state(uri: str) -> str:
+    """Is the cached artifact there, gone, or merely unreachable right now?
+
+    ``s3://`` objects are probed; a local path is stat'd; anything else is taken as
+    live. Never raises: a probe that cannot answer must not become a typed error
+    about the RUN - it only means the node re-executes.
+    """
     if uri.startswith("s3://"):
         bucket, _, key = uri[len("s3://"):].partition("/")
         if not bucket or not key:
-            return False
+            return _ABSENT
         try:
             from trid3nt_server.data.simulation.solver.solver import _get_s3_client
 
             _get_s3_client().head_object(Bucket=bucket, Key=key)
-            return True
-        except Exception:  # noqa: BLE001 - absent, unreachable or unreadable: re-execute
-            return False
+            return _LIVE
+        except Exception as exc:  # noqa: BLE001 - answered, never propagated
+            return _ABSENT if _is_not_found(exc) else _UNREACHABLE
     if "://" not in uri:
-        return os.path.exists(uri)
-    return True
+        return _LIVE if os.path.exists(uri) else _ABSENT
+    return _LIVE
+
+
+def _is_not_found(exc: BaseException) -> bool:
+    """A botocore 404/NoSuchKey means GONE; every other fault means UNREACHABLE."""
+    response = getattr(exc, "response", None)
+    code = ""
+    if isinstance(response, dict):
+        code = str((response.get("Error") or {}).get("Code") or "")
+        status = (response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+        if status == 404:
+            return True
+    return code in ("404", "NoSuchKey", "NotFound") or \
+        type(exc).__name__ in ("NoSuchKey", "NotFound")
 
 
 def _serialize(value: Any) -> tuple[str, Any, str | None]:

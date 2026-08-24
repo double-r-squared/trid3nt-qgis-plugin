@@ -26,27 +26,39 @@ from .errors import (
     ModifierIllegalError,
     ParamOutOfRangeError,
     PlanValidationError,
+    RenderSourceMissingError,
     StepFailedError,
 )
 from .interpret import RunResult, interpret
 from .ledger import LedgerRecord, StepLedger, invocation_key
-from .params import Param, ParamNotResolved, ResolvedParam, ResolvedParams, doors
+from .params import (
+    Param,
+    ParamNotResolved,
+    ParamValues,
+    ResolvedParam,
+    ResolvedParams,
+    doors,
+)
 from .plan import (
     ChartSpec,
     DrawGate,
     FormGate,
     Gate,
+    ParamRef,
     Plan,
     Ref,
     RenderSpec,
     RunMode,
     Step,
-    Transparent,
     When,
-    Within,
     Workflow,
 )
-from .resolver import merge_provenance, provenance_entries, resolve_params
+from .resolver import (
+    merge_provenance,
+    provenance_entries,
+    reseat_revised,
+    resolve_params,
+)
 from .validate import validate_plan
 
 __all__ = [
@@ -54,10 +66,11 @@ __all__ = [
     "Data", "DataDecl", "DeclarativeError", "Domain", "DrawGate", "Fetch",
     "FormGate", "Gate", "GateNotSupportedError", "GateRefusedError",
     "LedgerRecord", "ModifierIllegalError", "Param", "ParamNotResolved",
-    "ParamOutOfRangeError", "Plan", "PlanValidationError", "Producer", "Ref",
-    "ReferenceProducer", "RenderSpec", "ResolvedParam", "ResolvedParams",
-    "RunMode", "RunResult", "Step", "StepFailedError", "StepLedger",
-    "Transparent", "When", "Within", "Workflow", "current_domain", "doors",
-    "interpret", "invocation_key", "merge_provenance", "provenance_entries",
-    "render_docstring", "resolve_params", "validate_plan",
+    "ParamOutOfRangeError", "ParamRef", "ParamValues", "Plan",
+    "PlanValidationError", "Producer", "Ref", "ReferenceProducer",
+    "RenderSourceMissingError", "RenderSpec", "ResolvedParam", "ResolvedParams",
+    "RunMode", "RunResult", "Step", "StepFailedError", "StepLedger", "When",
+    "Workflow", "current_domain", "doors", "interpret", "invocation_key",
+    "merge_provenance", "provenance_entries", "render_docstring",
+    "reseat_revised", "resolve_params", "validate_plan",
 ]

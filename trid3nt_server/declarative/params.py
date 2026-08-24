@@ -7,11 +7,13 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, Sequence
 
 from .errors import PlanValidationError
+from .plan import ParamRef
 
 __all__ = [
     "Door",
     "Param",
     "ParamNotResolved",
+    "ParamValues",
     "ResolvedParam",
     "ResolvedParams",
     "doors",
@@ -153,20 +155,26 @@ class ResolvedParam:
 
 
 class ResolvedParams:
-    """The resolved param sheet: ``p.name`` attribute access plus the provenance rows."""
+    """The resolved param sheet. ``p.name`` yields a LATE-BOUND :class:`ParamRef`.
+
+    Attribute access is what ``plan(p, d)`` uses, and a plan is built once, before
+    the gates it declares have run - so it must describe the read rather than
+    perform it. The concrete value is reached through ``get``/``values_dict``, or
+    through the :class:`ParamValues` view handed to derivations and chart builders.
+    """
 
     __slots__ = ("_rows",)
 
     def __init__(self, rows: dict[str, ResolvedParam]) -> None:
         object.__setattr__(self, "_rows", dict(rows))
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> ParamRef:
         rows = object.__getattribute__(self, "_rows")
         if name not in rows:
             raise ParamNotResolved(
                 f"param {name!r} is not declared (declared: {sorted(rows)})"
             )
-        return rows[name].value
+        return ParamRef(name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError("ResolvedParams is frozen; resolve a new sheet instead.")
@@ -189,3 +197,40 @@ class ResolvedParams:
 
     def rows(self) -> tuple[ResolvedParam, ...]:
         return tuple(self._rows.values())
+
+    def values_view(self) -> "ParamValues":
+        """The concrete-value view, for code that runs WITH the sheet, not on it."""
+        return ParamValues(self._rows)
+
+    def replacing(self, rows: dict[str, ResolvedParam]) -> "ResolvedParams":
+        """A new sheet with these rows overlaid - the sheet itself stays frozen."""
+        return ResolvedParams({**self._rows, **rows})
+
+
+class ParamValues:
+    """Concrete-value view of a resolved sheet: ``v.name`` IS the value.
+
+    Handed to derivations and chart builders, which run at a moment when the value
+    exists and is what they need. Distinct from :class:`ResolvedParams` so a
+    plan-construction read cannot silently collapse into an early-bound value.
+    """
+
+    __slots__ = ("_rows",)
+
+    def __init__(self, rows: dict[str, ResolvedParam]) -> None:
+        self._rows = dict(rows)
+
+    def __getattr__(self, name: str) -> Any:
+        rows = object.__getattribute__(self, "_rows")
+        if name not in rows:
+            raise ParamNotResolved(
+                f"param {name!r} is not declared (declared: {sorted(rows)})"
+            )
+        return rows[name].value
+
+    def __contains__(self, name: str) -> bool:
+        return name in self._rows
+
+    def get(self, name: str, default: Any = None) -> Any:
+        row = self._rows.get(name)
+        return default if row is None else row.value

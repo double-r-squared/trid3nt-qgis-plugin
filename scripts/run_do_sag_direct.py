@@ -66,6 +66,11 @@ async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tag", default="run")
     ap.add_argument("--out", default=None)
+    # The carrier discharge normally resolves from the NOAA National Water Model
+    # at the reach. NWM serves only recent analysis_assim cycles, so when the
+    # cycle for today is not published the template REFUSES typed and names this
+    # lever - pinning it is what keeps the reference run comparable.
+    ap.add_argument("--discharge-m3s", type=float, default=None)
     args = ap.parse_args()
 
     log.info("backend=%s telemac_image=%s runs_bucket=%s endpoint=%s",
@@ -76,9 +81,13 @@ async def main() -> int:
 
     from trid3nt_server.data import TOOL_REGISTRY  # import populates the registry
 
+    call = dict(ARGS)
+    if args.discharge_m3s is not None:
+        call["discharge_m3s"] = args.discharge_m3s
+
     fn = TOOL_REGISTRY["telemac_do_sag"].fn
-    log.info("invoking telemac_do_sag %s", ARGS)
-    out = await fn(**ARGS)
+    log.info("invoking telemac_do_sag %s", call)
+    out = await fn(**call)
 
     if isinstance(out, dict) and out.get("status") == "error":
         log.error("FAILED %s: %s", out.get("error_code"), out.get("error_message"))

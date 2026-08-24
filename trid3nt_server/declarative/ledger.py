@@ -1,9 +1,10 @@
 """The step ledger: the record of an INCOMPLETE attempt, per invocation.
 
 Resume-from-failed-step: a rerun of the SAME invocation replays nodes the failed
-attempt completed. It is NOT a result cache - a plan that runs to the end reaps
-its own ledger, so the next invocation of a live-no-cache tool refetches the
-world. Only an attempt that died mid-plan leaves anything behind.
+attempt completed. It is NOT a result cache - a plan that runs to the end leaves a
+completion TOMBSTONE in place of its records, so the next invocation of a
+live-no-cache tool refetches the world. Only an attempt that died mid-plan leaves
+anything replayable behind.
 """
 
 from __future__ import annotations
@@ -22,10 +23,11 @@ __all__ = ["LedgerRecord", "StepLedger", "invocation_key"]
 logger = logging.getLogger("trid3nt_server.declarative.ledger")
 
 _COLLECTION = "declarative_run_ledgers"
-_SCHEMA = 2
+_SCHEMA = 3
 
-#: How long an abandoned attempt stays resumable. Past this the world it cached
-#: has moved on, so the records are reaped rather than replayed.
+#: How long an abandoned attempt stays resumable, and how long a completion
+#: tombstone survives. Past this the world it cached has moved on, so the document
+#: is reaped rather than replayed - which is what bounds tombstone accumulation.
 _TTL = timedelta(days=7)
 
 #: The ledger index reserved for Data production, which is lazy and therefore has
@@ -33,9 +35,19 @@ _TTL = timedelta(days=7)
 _DATA_INDEX = -1
 
 
-def invocation_key(workflow: str, values: dict[str, Any]) -> str:
-    """Identity of THIS invocation - the same question with the same params rehashes."""
-    blob = json.dumps({"w": workflow, "v": values}, sort_keys=True, default=str)
+def invocation_key(workflow: str, values: dict[str, Any],
+                   *, input_mode: str | None = None) -> str:
+    """Identity of THIS invocation - the same question with the same params rehashes.
+
+    ``input_mode`` is part of the identity: an auto-mode attempt and a user_gated
+    one are different runs (the gated one may revise the very params the auto
+    attempt cached), so a failed auto attempt must not seed a user_gated replay.
+    """
+    from trid3nt_server.gates.input_review import resolve_input_gate_mode
+
+    blob = json.dumps({"w": workflow, "v": values,
+                       "m": resolve_input_gate_mode(input_mode)},
+                      sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
@@ -67,6 +79,7 @@ class StepLedger:
     workflow: str
     records: list[LedgerRecord] = field(default_factory=list)
     data_records: list[LedgerRecord] = field(default_factory=list)
+    completed: bool = False
     _client: Any = None
 
     @classmethod
@@ -81,7 +94,10 @@ class StepLedger:
                 "filter": {"_id": key},
             })
             raw = _unwrap(doc)
-            if raw and _resumable(raw):
+            # Replay requires the document to be PRESENT and NOT complete. A
+            # tombstone is present-and-complete, so a finished run cannot replay
+            # even though its document survives to be swept.
+            if raw and _fresh(raw) and not raw.get("complete"):
                 records = _read_records(raw.get("records"))
                 data_records = _read_records(raw.get("data_records"))
         except Exception as exc:  # noqa: BLE001 - a missing/corrupt ledger only costs a replay
@@ -101,10 +117,18 @@ class StepLedger:
         label = _data_label(name)
         return next((r for r in self.data_records if r.node == label), None)
 
-    async def record(self, rec: LedgerRecord) -> None:
+    async def record(self, rec: LedgerRecord, *, final: bool = False) -> None:
+        """Record one completed node; ``final`` TOMBSTONES the run in the same write.
+
+        Stamping completion together with the last node's record is what closes the
+        crash window: a process that dies (or is cancelled) between the last record
+        and :meth:`complete` would otherwise leave a FINISHED run looking resumable.
+        """
         self.records = [r for r in self.records if r.index != rec.index] + [rec]
         self.records.sort(key=lambda r: r.index)
-        await self._persist()
+        if final:
+            self._tombstone()
+        await self._persist(completion=final)
 
     async def record_data(self, name: str, rec: LedgerRecord) -> None:
         label = _data_label(name)
@@ -113,19 +137,29 @@ class StepLedger:
         await self._persist()
 
     async def clear(self) -> None:
-        """Forget the attempt entirely - nothing left to replay."""
+        """Forget the attempt entirely - the document goes, nothing left to replay."""
         self.records = []
         self.data_records = []
+        self.completed = False
         await self._reap()
 
     async def complete(self) -> None:
-        """The plan reached its end, so its ledger goes.
+        """The plan reached its end: its records are replaced by a completion tombstone.
 
-        Keeping it would turn resume into a permanent result cache - a
-        ``cacheable=False`` tool replaying a dead artifact URI forever.
+        Deleting instead would make every swallowed delete failure a permanent
+        result cache for a ``cacheable=False`` tool. The tombstone is a positive
+        marker written through the same atomic path as the records, and the TTL
+        sweep reaps it, so accumulation is bounded rather than forever.
         """
-        logger.debug("step ledger %s complete; reaping", self.key)
-        await self.clear()
+        if self.completed:
+            return
+        self._tombstone()
+        await self._persist(completion=True)
+
+    def _tombstone(self) -> None:
+        self.completed = True
+        self.records = []
+        self.data_records = []
 
     async def _reap(self) -> None:
         if self._client is None:
@@ -135,7 +169,7 @@ class StepLedger:
         except Exception as exc:  # noqa: BLE001 - the ledger is an optimisation, never a gate
             logger.warning("step ledger %s not reaped: %s", self.key, exc)
 
-    async def _persist(self) -> None:
+    async def _persist(self, *, completion: bool = False) -> None:
         if self._client is None:
             return
         try:
@@ -146,6 +180,7 @@ class StepLedger:
                     "_id": self.key,
                     "schema_version": _SCHEMA,
                     "workflow": self.workflow,
+                    "complete": self.completed,
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                     "records": [r.to_doc() for r in self.records],
                     "data_records": [r.to_doc() for r in self.data_records],
@@ -153,7 +188,15 @@ class StepLedger:
                 "upsert": True,
             })
         except Exception as exc:  # noqa: BLE001 - the ledger is an optimisation, never a gate
-            logger.warning("step ledger %s not persisted: %s", self.key, exc)
+            if not completion:
+                logger.warning("step ledger %s not persisted: %s", self.key, exc)
+                return
+            # A LOST completion marker is the ghost class: the records already on
+            # disk would make a finished run replayable. Fall back to deleting the
+            # document, which says the same thing.
+            logger.error("step ledger %s completion marker not persisted (%s); "
+                         "falling back to deleting the document", self.key, exc)
+            await self._reap()
 
 
 def _data_label(name: str) -> str:
@@ -167,7 +210,8 @@ def _read_records(raw: Any) -> list[LedgerRecord]:
             for r in raw]
 
 
-def _resumable(raw: dict[str, Any]) -> bool:
+def _fresh(raw: dict[str, Any]) -> bool:
+    """Still of this schema and inside the TTL - i.e. not yet sweepable."""
     return raw.get("schema_version") == _SCHEMA and not _aged(raw)
 
 
@@ -192,12 +236,16 @@ async def _reap(client: Any, key: str) -> None:
 
 
 async def _sweep(client: Any) -> None:
-    """Evict abandoned attempts: stale schema, or older than the resume TTL."""
+    """Evict spent documents: stale schema, or older than the TTL.
+
+    This is what bounds completion tombstones: they are reaped on AGE, so a
+    finished run stays un-replayable for the whole TTL window and then goes.
+    """
     doc = await client.call_tool("find", {
         "database": DEFAULT_DATABASE, "collection": _COLLECTION, "filter": {},
     })
     for raw in (doc or {}).get("documents") or []:
-        if isinstance(raw, dict) and raw.get("_id") and not _resumable(raw):
+        if isinstance(raw, dict) and raw.get("_id") and not _fresh(raw):
             await _reap(client, str(raw["_id"]))
 
 

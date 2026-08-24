@@ -10,7 +10,7 @@ from typing import Any, Iterable, Sequence
 from .data import DataDecl
 from .errors import PlanValidationError
 from .params import Param, doors, refuse_duplicate_params
-from .plan import Gate, Plan, Ref, Step, When, Within
+from .plan import Gate, ParamRef, Plan, Ref, When
 
 __all__ = ["validate_plan"]
 
@@ -24,6 +24,7 @@ def validate_plan(plan: Plan, params: Sequence[Param],
     _check_duplicate_names(plan)
     _check_gate_declarations(plan, {p.name: p for p in params})
     _check_refs(plan, param_names, data_names)
+    _check_param_refs(plan, param_names)
     _check_data_refs(data, param_names, data_names)
 
 
@@ -42,8 +43,17 @@ def _check_duplicate_names(plan: Plan) -> None:
 def _check_gate_declarations(plan: Plan, params: dict[str, Param]) -> None:
     form_gates = 0
     consequential_seen: str | None = None
+    self_gating = next((s.label for s in plan.declared()
+                        if not isinstance(s, Gate) and s.self_gating), None)
     for step in plan.declared():
         if isinstance(step, Gate):
+            if step.kind == "form" and self_gating is not None:
+                raise PlanValidationError(
+                    f"plan {plan.name!r}: step {self_gating!r} reviews its own inputs, "
+                    "so the plan must not declare a FormGate in front of it - the "
+                    "composite's own review IS the review, and a second card's edits "
+                    "would land on a sheet the composite never reads."
+                )
             if consequential_seen is not None:
                 raise PlanValidationError(
                     f"plan {plan.name!r}: gate {step.label!r} is placed AFTER the "
@@ -90,10 +100,21 @@ def _check_refs_in_scope(plan_name: str, nodes: tuple[Any, ...], param_names: se
         if isinstance(node, When):
             _check_refs_in_scope(plan_name, node.body, param_names, data_names, local)
             continue
-        for ref in _refs_in(node):
+        for ref in _walk_refs(dict(node.kwargs)):
             _resolve_root(plan_name, node.label, ref, param_names, data_names, local)
         if node.name is not None:
             local.add(node.name)
+
+
+def _check_param_refs(plan: Plan, param_names: set[str]) -> None:
+    """A late-bound ``p.<name>`` read must name a param the workflow declares."""
+    for step in plan.declared():
+        for ref in _walk_param_refs(dict(step.kwargs)):
+            if ref.name not in param_names:
+                raise PlanValidationError(
+                    f"plan {plan.name!r} step {step.label!r}: ParamRef({ref.name!r}) "
+                    "is not a declared param."
+                )
 
 
 def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
@@ -104,6 +125,12 @@ def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
                 raise PlanValidationError(
                     f"Data {decl.name!r} producer Refs {ref.path!r}, which is neither "
                     "a declared param nor a declared Data."
+                )
+        for pref in _walk_param_refs(dict(decl.producer.kwargs)):
+            if pref.name not in param_names:
+                raise PlanValidationError(
+                    f"Data {decl.name!r} producer reads ParamRef({pref.name!r}), "
+                    "which is not a declared param."
                 )
 
 
@@ -118,18 +145,20 @@ def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[st
     )
 
 
-def _refs_in(step: Step) -> Iterable[Ref]:
-    yield from _walk_refs(dict(step.kwargs))
-    if isinstance(step, Gate) and isinstance(step.constrain, Within):
-        yield step.constrain.target
-
-
 def _walk_refs(value: Any) -> Iterable[Ref]:
-    if isinstance(value, Ref):
+    yield from _walk(value, Ref)
+
+
+def _walk_param_refs(value: Any) -> Iterable[ParamRef]:
+    yield from _walk(value, ParamRef)
+
+
+def _walk(value: Any, kind: type) -> Iterable[Any]:
+    if isinstance(value, kind):
         yield value
     elif isinstance(value, dict):
         for v in value.values():
-            yield from _walk_refs(v)
+            yield from _walk(v, kind)
     elif isinstance(value, (list, tuple, set)):
         for v in value:
-            yield from _walk_refs(v)
+            yield from _walk(v, kind)

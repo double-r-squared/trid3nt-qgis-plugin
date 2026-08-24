@@ -18,14 +18,13 @@ __all__ = [
     "FormGate",
     "Gate",
     "Node",
+    "ParamRef",
     "Plan",
     "Ref",
     "RenderSpec",
     "RunMode",
     "Step",
-    "Transparent",
     "When",
-    "Within",
     "Workflow",
 ]
 
@@ -52,13 +51,28 @@ class Ref:
         return tuple(self.path.split(".")[1:])
 
 
-class _Transparent:
-    def __repr__(self) -> str:
-        return "Transparent"
+@dataclass(frozen=True, slots=True)
+class ParamRef:
+    """A LATE-BOUND read of a declared param: what ``p.<name>`` yields in ``plan()``.
 
+    A plan DESCRIBES; the interpreter SUBSTITUTES. Baking the concrete value into
+    ``Step.kwargs`` at construction time would freeze the sheet before the form
+    gate the plan itself declares, so an approved revision could never reach the
+    run. The interpreter resolves these against the CURRENT param state instead.
+    """
 
-#: Render-only zero handling. Rasters keep their zeros (law 9 applies to pixels).
-Transparent = _Transparent()
+    name: str
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.name.isidentifier():
+            raise PlanValidationError(f"ParamRef({self.name!r}) has no identifier name.")
+
+    def __bool__(self) -> bool:
+        raise PlanValidationError(
+            f"ParamRef({self.name!r}) has no truth value at plan-construction time - "
+            "it is a description, not the value. For a real construction-time branch "
+            f"(When(...)), read the value explicitly with p.get({self.name!r})."
+        )
 
 
 class _RunMode:
@@ -73,18 +87,10 @@ RunMode = _RunMode()
 
 
 @dataclass(frozen=True, slots=True)
-class Within:
-    """Draw-time constraint: the drawn geometry must fall inside the referenced feature."""
-
-    target: Ref
-
-
-@dataclass(frozen=True, slots=True)
 class RenderSpec:
     """A declared styling of a step's raster result through the one publish seam."""
 
     preset: str
-    zero: Any = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +115,9 @@ class Step:
     name: str | None = None
     consequential: bool = False
     rebinds_domain: bool = False
+    #: This step runs its OWN input-review gate (a migrated composite does), so the
+    #: plan must not declare a second one in front of it - the validator refuses it.
+    self_gating: bool = False
     renders: tuple[RenderSpec, ...] = ()
     charts: tuple[ChartSpec, ...] = ()
 
@@ -135,9 +144,9 @@ class Step:
         """Declare that this step REFINES the current domain for every step after it."""
         return replace(self, rebinds_domain=True)
 
-    def render(self, *, preset: str, zero: Any = None) -> "Step":
+    def render(self, *, preset: str) -> "Step":
         """Declare how this step's raster result is styled when published."""
-        return replace(self, renders=self.renders + (RenderSpec(preset=preset, zero=zero),))
+        return replace(self, renders=self.renders + (RenderSpec(preset=preset),))
 
     def chart(self, name: str, *, builder: str) -> "Step":
         """Declare a chart SPEC built from this step's result."""
@@ -152,7 +161,6 @@ class Gate(Step):
     param: str | None = None
     geometry: str | None = None
     prompt: str = ""
-    constrain: Any = None
 
     def named(self, name: str) -> "Gate":
         raise ModifierIllegalError("a gate is not Ref-able; .named() is illegal on a gate.")
@@ -172,13 +180,12 @@ def FormGate(*, title: str = "") -> Gate:  # noqa: N802 - a value constructor
     return Gate(runner="declarative.gate.form", kind="form", prompt=title)
 
 
-def DrawGate(*, param: str, geometry: str = "point", prompt: str = "",  # noqa: N802
-             constrain: Any = None) -> Gate:
+def DrawGate(*, param: str, geometry: str = "point", prompt: str = "") -> Gate:  # noqa: N802
     """Ask the user to draw the value of one USER-door param on the canvas."""
     if geometry not in ("point", "polyline", "polygon", "rectangle"):
         raise PlanValidationError(f"DrawGate geometry {geometry!r} is not a draw kind.")
     return Gate(runner="declarative.gate.draw", kind="draw", param=param,
-                geometry=geometry, prompt=prompt, constrain=constrain)
+                geometry=geometry, prompt=prompt)
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -189,6 +196,12 @@ class When:
     body: tuple[Any, ...]
 
     def __init__(self, condition: Any, *body: Any) -> None:
+        if isinstance(condition, ParamRef):
+            raise PlanValidationError(
+                f"When({condition!r}) branches on a description, not a value. A "
+                "construction-time branch reads the param explicitly: "
+                f"p.get({condition.name!r})."
+            )
         object.__setattr__(self, "condition", condition)
         object.__setattr__(self, "body", tuple(body))
         if not self.body:

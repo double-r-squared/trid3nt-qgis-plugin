@@ -85,8 +85,8 @@ def test_declared_params_and_plan_validate():
 
     p = asyncio.run(resolve_params(PARAMS, {"location": "Eel River near Scotia, California"}))
     validate_plan(plan(p, None), PARAMS, DATA)
-    assert p.do_saturation_mgl == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
-    assert p.upstream_do_mgl == p.do_saturation_mgl               # saturated inflow
+    assert p.get("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
+    assert p.get("upstream_do_mgl") == p.get("do_saturation_mgl")               # saturated inflow
     assert p.row("k1_per_day").consequence == "numerical"         # never refuses in auto
 
 
@@ -96,8 +96,8 @@ def test_declared_bounds_clamp_the_wq_knobs():
 
     p = asyncio.run(resolve_params(PARAMS, {"location": "x", "reach_length_km": 900.0,
                                             "k1_per_day": 0.0}))
-    assert p.reach_length_km == 15.0 and "CLAMPED" in p.row("reach_length_km").note
-    assert p.k1_per_day == 0.01
+    assert p.get("reach_length_km") == 15.0 and "CLAMPED" in p.row("reach_length_km").note
+    assert p.get("k1_per_day") == 0.01
 
 
 @pytest.mark.asyncio
