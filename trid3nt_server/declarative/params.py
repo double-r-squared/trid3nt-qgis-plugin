@@ -19,6 +19,7 @@ __all__ = [
     "ResolvedParams",
     "doors",
     "refuse_duplicate_params",
+    "wire_value",
 ]
 
 
@@ -304,3 +305,25 @@ class ParamValues:
         self._read(name)
         row = self._rows.get(name)
         return default if row is None else row.value
+
+
+def wire_value(value: Any) -> Any:
+    """Render a resolved value for the wire - ONE rule for every surface.
+
+    The form card and the provenance row describe the same param, so they round
+    the same way: six SIGNIFICANT figures, not decimal places. A hydraulic
+    conductivity of 9.3e-07 rounded to four decimals is 0.0, and a row that
+    reports a physics value as zero is worse than no row at all.
+
+    The trade, stated: six significant figures also shorten a LARGE value - a
+    latitude of 42.0176777 renders as 42.0177, about 10 m. This is DISPLAY: the
+    run reads the sheet, never this rendering, and a row the user did not edit is
+    never re-seated from what the card showed.
+    """
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return float(f"{value:.6g}")
+    if isinstance(value, (list, tuple)):
+        return [wire_value(v) for v in value]
+    return str(value)

@@ -534,3 +534,186 @@ library seam added here.
 - Two shared step families exist for the two priority engines, each sized for the
   templates that come next.
 - One physics fork is open and belongs to NATE (the Green-Ampt trio).
+
+## CORRECTION (2026-08-24, post-review)
+
+An adversarial review refuted this wave NARROWLY: the checkpoint verdict stands
+(the library is not TELEMAC-shaped and mass conversion may proceed), two blocking
+defects in what it landed did not, and several claims above were wrong or
+imprecise. Corrections live here rather than in the text above - an ADR records
+what was decided and what was found, so the original stays readable and this
+section is what supersedes it. Every item below is landed and gated; nothing here
+is a plan.
+
+### B1 - the memo cached FAILURES (blocking, fixed)
+
+`modflow/steps/aquifer._texture_fit` and `swmm/steps/soil._column` were
+`lru_cache` wrappers over derivations that NEVER RAISE: `derive_soil_k` /
+`derive_soil_column` return `(None, {"reason": ...})` when SoilGrids cannot
+serve. So an upstream 503, timeout or rate-limit entered the cache as if it were
+a fact about the site, and every later run at that point inherited the refusal
+for the life of the daemon - an upstream provider error internalized as our own
+verdict, which is precisely what the repo forbids.
+
+Both now memoize ON SUCCESS ONLY, through one shared helper
+(`workflows/shared/point_memo.memo_on_success`: bounded FIFO, keyed on the EXACT
+point so the five-decimal-rounding fix recorded above still holds). Two tests pin
+the retry: a flaky derivation refuses on attempt 1 and attempt 2 FETCHES AGAIN
+and resolves, while a second param off the same resolved point still costs no
+third fetch (`calls == 2` after all three reads). Reverting the helper to cache
+every result turns both tests red, which is what makes them a pin.
+
+For contrast, and because it is the reason the defect was easy to miss:
+`shared/site_resolve._geocode` is also `lru_cache`d and was already correct - it
+RAISES on failure, and `lru_cache` never caches an exception. The two soil
+derivations differed only in returning their failure instead of raising it.
+
+### B2 - the sheet-handback test could not fail (blocking, fixed)
+
+`test_the_run_hands_back_the_sheet_it_actually_ran_on` ran in AUTO mode with no
+revision, so `result.params` and the sheet passed in were the same values and
+deleting `RunResult.params` would not have failed it - a test for the wave's
+first library addition that could not observe it. It now drives a REVISING form
+gate through the scripted card client, and asserts the three things that make the
+seam real: the sheet the caller passed IN still reads the pre-review `1.0`, the
+run hands back `7.5` with `basis=user`, and the step downstream of the gate ran on
+`7.5`. Probe: removing `out.params` from `_reseat_after_gate` fails it with
+`assert 1.0 == 7.5`.
+
+The scripted client itself moved to `tests/card_client.py` (it was private to
+`tests/test_declarative_cards.py`), so a second file driving a card reuses the
+wire round trip rather than restating it.
+
+### N1 - the derived badge now reads the EVIDENCE
+
+Item 3 above says a `Derived`'s `real_source` reaches "the row the form card
+renders", and the (c) drive recorded the badge as `derived by aquifer_k_ms`.
+Both were true and neither was what the user needed: `form.source_badge` read
+`real_source` only on `basis == "fetched"`, so a derived row's badge named the
+function - which is the name of the row the user is already looking at.
+A derived row with evidence now badges `derived from <real_source>`; without
+evidence it still falls back to `derived by <fn>`. Live, at Ames:
+`derived from fetch_soilgrids (Saxton-Rawls 2006 pedotransfer)` on both MODFLOW
+rows and `... (Saxton-Rawls 2006 two-zone column)` on all four SWMM rows.
+
+### N2 - one rendering rule for the card and the provenance row
+
+The provenance row rounded floats to six significant figures (item 4); the form
+card did not round at all. Two surfaces described the same param and disagreed
+about it. Both now render through `declarative.params.wire_value`, whose
+docstring states the trade the rule makes: six significant figures keep
+`9.298176e-07` honest and shorten a LARGE value (a latitude of `42.0176777`
+renders `42.0177`, about 10 m). It is DISPLAY only - the run reads the sheet, and
+`metrics.json` from the pinned parity re-run below still carries
+`0.15691653512022236` in full.
+
+### N3 - no fabricated run prefix
+
+`testing/live_run._read_run_products` preferred `role="primary"` but FELL BACK to
+the first raster, so a run whose only rasters are emit-on-fetch context layers
+reported `run_id = "cache"` and then "the run's products are missing" - a
+fabricated prefix dressed as a missing product. The fallback is gone: no primary
+raster is now the same honest sentence as no raster at all, plus the count of
+context rasters that were there. Both shapes are pinned offline
+(`tests/test_live_run_harness.py`), and both appear in the re-run evidence: the
+SWMM run reports `no published PRIMARY raster to locate the run prefix (2 context
+raster(s) on the canvas)`, while the MODFLOW run locates
+`01M0SXN4J5B285T5DQFVH7SYE0` from its primary layer with the same two SoilGrids
+context rasters ahead of it.
+
+### N4 / N11 - the evidence is persisted, and regenerates
+
+Both card drives now write their evidence into `docs/proof/` by default instead
+of `/tmp`, and both were re-run at this correction against a cold daemon:
+`docs/proof/swmm_aquifer_baseflow_cards_evidence.json` (exit 0; 28 form rows; the
+run's own chart payload, which for this chart-first template IS the product) and
+`docs/proof/modflow_regional_water_budget_cards_evidence.json` (exit 0; ratio
+2.0000). The SWMM half is no longer a report of a run that left nothing behind.
+
+`docs/proof/*` is gitignored (only `docs/proof/templates/` is committed), so the
+files themselves are local artifacts like every other proof JSON there. What is
+COMMITTED is the drive that writes them, with that path as its default - which is
+what makes the record reproducible rather than a paste in a report.
+
+### N5 - `modflow/steps/aquifer.py`'s module docstring
+
+It still described the pre-fix behaviour ("memoized on the rounded point") and
+over-claimed the badge. Corrected to what the code does.
+
+### N6 - the design doc rule, restated, with the gap it leaves
+
+`docs/design/declarative-workflows.md` said "a point SAMPLE is a derived Param".
+The rule is about what the PLAN CONSUMES: a scalar that fits a form cell - a
+point sample, a basin mean, a class fraction, a station statistic. Restated
+there, with a recorded GAP that item 11 above did not mention: what a
+world-reading derivation FETCHES on its way to that scalar sits outside the
+`Data` machinery - not ledgered (a resume re-fetches), not an artifact the
+interpreter can evict on a form revision (the derivation re-runs instead, and its
+memo decides whether the fetch repeats), not walked by the terminal leaked-ref
+scan. Small today; a decision the engine campaigns own, not silently blessed
+doctrine.
+
+### N7 - what the DERIVED door costs, stated plainly
+
+Item 11 sells the door without its price. Derivations run inside
+`resolve_params`, which the tool body calls BEFORE `interpret` - therefore before
+`validate_plan` and before the law-9 floor. A run that is about to refuse for
+invented physics, or whose plan is invalid, has already paid for every derivation
+fetch. That is the last-honest-moment trade: the card can only show a real number
+if the number was fetched before the card. Reordering (validate the plan, then
+derive) is QUEUED as a library follow-up and deliberately NOT implemented here -
+it changes when every declared workflow fetches, which is not a correction.
+
+### N9 - the gate table above is wrong in two places
+
+Re-observed at this commit, not re-reported:
+
+- `[f-o]`: **4 failed / 6662 passed** at HEAD - the 4 baseline
+  `test_fetch_resolution_gate` failures ONLY. The 2 `test_model_fire_spread_chain`
+  failures the table names were GREEN at this commit; the ADR carried them
+  forward from ADR 0305 without re-observing them.
+- `[a-e]`: **1652 passed**, not 1639 - the count predates the wave's own 13 new
+  tests.
+
+### N12 / N13 - narrative and process
+
+- The emit-on-fetch SoilGrids layers were re-checked live. BOTH runs surface
+  them: the MODFLOW bullet in (c) is correct as written, and the SWMM run's two
+  context rasters are the same seam (they are what N3 is about). One caveat worth
+  recording, since it made the first re-run look otherwise: the derivation memo
+  is process-wide, so a SECOND run at the same point inside one daemon does not
+  re-fetch and therefore does not re-surface the context layers. The committed
+  evidence is from a cold daemon.
+- Process footnote: `tests/test_declarative_generalization.py` landed in the DOCS
+  commit (`5957eaba`), not with the code it tests. The tests for a wave belong in
+  the wave's code commits; a docs commit that carries tests is how an insensitive
+  test (B2) reaches HEAD without a reviewer seeing it beside its seam.
+
+### Re-run gates (the correction's own)
+
+| gate | result |
+|---|---|
+| `tests/test_[a-e]*.py` | 1654 passed, 5 skipped, **0 failed** |
+| `tests/test_[f-o]*.py` | 6664 passed, 3 skipped, 1 xfailed, **4 failed** - the baseline `test_fetch_resolution_gate` four, nothing else |
+| `tests/test_[p-r]*.py` | 2122 passed, 2 skipped, **0 failed** |
+| `tests/test_[s-z]*.py` | 1420 passed, 6 skipped, **0 failed** |
+| `contracts/tests` | 729 passed (no delta) |
+| `scripts/ws_smoke.py` | `all_passed=True` |
+| `scripts/run_sfincs_direct.py` (flood canary) | PASSED, `status=ok`, depth COG published |
+| `scripts/drive_aquifer_baseflow_cards.py` | exit 0; 0.938 cfs baseflow, tau ~374 h at the revised `a1` |
+| `scripts/drive_regional_water_budget_cards.py` | exit 0; `chd_in` 19.775073 = 2.0000x the reference at the revised K |
+
+The counts are +2 in `[a-e]` (the two retry tests) and +2 in `[f-o]` (the two
+run-prefix tests) against N9's corrected baselines.
+
+**MODFLOW pinned parity, un-edited at the DERIVED K** (run
+`01M0SXCN3JYK98ZHA95NEV5AK7`, read off its own `metrics.json`):
+
+| | ADR reference | this correction |
+|---|---|---|
+| `chd_in` | 9.887537099091208 | **9.887537099091208** |
+| `chd_out` | -9.88753734666957 | **-9.88753734666957** |
+| `aquifer_k_ms` | 9.298175630928423e-07 | identical |
+| `porosity` | 0.15691653512022236 | identical |
+
+Nothing in this correction moved a number on either engine's reference question.

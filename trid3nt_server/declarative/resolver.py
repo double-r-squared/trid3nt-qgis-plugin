@@ -23,6 +23,7 @@ from .params import (
     ResolvedParams,
     doors,
     refuse_duplicate_params,
+    wire_value,
 )
 
 __all__ = ["merge_provenance", "provenance_entries", "rederive_revised",
@@ -225,7 +226,7 @@ async def rederive_revised(
         if fresh is None:
             continue
         note = (f"the sheet approved at input review would derive "
-                f"{_wire_value(fresh.value)}, but this value was set explicitly "
+                f"{wire_value(fresh.value)}, but this value was set explicitly "
                 "and stands")
         rows[param.name] = updates[param.name] = replace(
             current, note=f"{current.note}; {note}" if current.note else note)
@@ -342,7 +343,7 @@ def provenance_entries(resolved: ResolvedParams,
             continue
         out.append(SyntheticInput(
             param=row.name,
-            value=_wire_value(row.value),
+            value=_provenance_value(row.value),
             units=row.units,
             basis=row.basis,
             consequence=row.consequence,
@@ -367,12 +368,8 @@ def merge_provenance(existing: Sequence[SyntheticInput],
     return kept
 
 
-def _wire_value(value: Any) -> Any:
-    if isinstance(value, (int, str)) and not isinstance(value, bool):
-        return value
-    if isinstance(value, float):
-        # SIGNIFICANT figures, not decimal places: a hydraulic conductivity of
-        # 9.3e-07 rounded to four decimals is 0.0, and a provenance row that
-        # reports a physics value as zero is worse than no row at all.
-        return float(f"{value:.6g}")
-    return str(value)
+def _provenance_value(value: Any) -> Any:
+    # Rendered by the one shared rule, then flattened: a provenance row's value is
+    # a scalar or a string, so a coordinate pair travels as its text.
+    rendered = wire_value(value)
+    return str(rendered) if isinstance(rendered, (list, bool)) else rendered

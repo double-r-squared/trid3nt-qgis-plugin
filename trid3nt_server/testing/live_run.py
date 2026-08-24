@@ -356,16 +356,18 @@ def _check_declared_cards(answers: GateAnswers, ev: RunEvidence) -> None:
 
 def _read_run_products(ev: RunEvidence) -> None:
     """Pull the run's OWN artifacts off its prefix - never a rederivation."""
-    # The PRIMARY raster, not merely the first one: a run that surfaces its fetched
-    # inputs through the emit-on-fetch seam puts context rasters on the canvas
-    # ahead of its result, and those live under the cache bucket - so the first
-    # raster locates a prefix the run never wrote to.
+    # The PRIMARY raster, and ONLY it: a run that surfaces its fetched inputs
+    # through the emit-on-fetch seam puts context rasters on the canvas ahead of
+    # its result, and those live under the cache bucket - so falling back to any
+    # raster reports a prefix (`cache`) the run never wrote to, which reads as
+    # "the run's products are missing" rather than "this was the wrong prefix".
     rasters = [l for l in ev.layers if l.get("layer_type") == "raster"
                and str(l.get("uri", "")).startswith("s3://")]
-    raster = next((l for l in rasters if l.get("role") == "primary"),
-                  rasters[0] if rasters else None)
+    raster = next((l for l in rasters if l.get("role") == "primary"), None)
     if raster is None:
-        ev.product_errors["run_id"] = "no published raster to locate the run prefix"
+        ev.product_errors["run_id"] = (
+            "no published PRIMARY raster to locate the run prefix"
+            + (f" ({len(rasters)} context raster(s) on the canvas)" if rasters else ""))
         return
     bucket, _, key = str(raster["uri"])[len("s3://"):].partition("/")
     ev.run_id = key.split("/", 1)[0]

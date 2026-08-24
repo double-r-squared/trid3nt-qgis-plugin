@@ -1,10 +1,10 @@
 """The aquifer-property derivations (law 9): SoilGrids texture -> K and porosity.
 
 Both properties come off ONE texture read at the AOI, so the pedotransfer call is
-memoized on the rounded point: two declared params, one fetch. Declaring them as
+memoized on the EXACT point: two declared params, one fetch. Declaring them as
 DERIVED params rather than resolving them inside a step is what puts the real
-derived number - with its texture evidence and its source badge - on the form
-card the user reviews, instead of behind the gate.
+derived number - with its texture evidence, its bounds and the source it was
+fitted from - on the form card the user reviews, instead of behind the gate.
 
 Unresolvable is a REFUSAL, never a default: there is no invented aquifer here.
 """
@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import lru_cache
 from typing import Any
 
 from trid3nt_server.declarative import Derived
 from trid3nt_server.workflows.shared.aquifer_resolve import derive_soil_k
+from trid3nt_server.workflows.shared.point_memo import memo_on_success
 
 from .errors import ModflowPhysicsInputRequired
 
@@ -34,9 +34,13 @@ logger = logging.getLogger("trid3nt_server.workflows.modflow.steps.aquifer")
 SOIL_PEDOTRANSFER_SOURCE = "fetch_soilgrids (Saxton-Rawls 2006 pedotransfer)"
 
 
-@lru_cache(maxsize=64)
+@memo_on_success
 def _texture_fit(lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
-    """The Saxton-Rawls fit at a point. Memoized: soil texture is a fixed fact."""
+    """The Saxton-Rawls fit at a point. Memoized only when it RESOLVED.
+
+    Soil texture is a fixed fact; an unavailable fetch is not, so a refusal is
+    never remembered - the next attempt at this AOI fetches again.
+    """
     return derive_soil_k(lat, lon)
 
 

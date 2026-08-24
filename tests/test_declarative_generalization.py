@@ -10,10 +10,16 @@ Offline: every fetch, geocode and solver the templates reach for is patched.
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from tests.card_client import (  # noqa: F401 - card_client is a fixture
+    answer_form_card,
+    card_client,
+)
 from trid3nt_server.declarative import (
     Derived,
     Param,
@@ -60,8 +66,6 @@ def test_the_routing_view_is_rendered_from_the_declaration(tool: Any) -> None:
 
 
 def _sheet(params: Any) -> Any:
-    import asyncio
-
     supplied = {p.name: _stub(p) for p in params}
     return asyncio.run(resolve_params(params, supplied))
 
@@ -131,8 +135,13 @@ async def test_a_tiny_physics_value_survives_the_provenance_row() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_run_hands_back_the_sheet_it_actually_ran_on() -> None:
-    """A form gate revises the sheet; the caller narrates from the revised one."""
+async def test_the_run_hands_back_the_sheet_it_actually_ran_on(card_client) -> None:
+    """A form gate REVISES the sheet; the caller narrates from the revised one.
+
+    The sheet the caller passed IN still holds the pre-review value - that is the
+    whole defect: without ``RunResult.params`` the only sheet a narrator can reach
+    reports the number the user REPLACED, while the solver ran on the approved one.
+    """
     from trid3nt_server.declarative import FormGate, Workflow, interpret
 
     declared = (
@@ -144,11 +153,17 @@ async def test_the_run_hands_back_the_sheet_it_actually_ran_on() -> None:
         FormGate(title="review"),
         _echo_step(q=sheet.q),
     ]
-    result = await interpret(plan, sheet, declared, (), input_mode="auto")
-    # auto mode approves unchanged, but the run still reports its own sheet.
+    task = asyncio.ensure_future(
+        interpret(plan, sheet, declared, (), input_mode="user_gated", resume=False))
+    await answer_form_card(card_client, {"q": 7.5})
+    result = await task
+
+    assert sheet.get("q") == pytest.approx(1.0)
     assert result.params is not None
-    assert result.params.get("q") == pytest.approx(1.0)
-    assert result.value == pytest.approx(1.0)
+    assert result.params.get("q") == pytest.approx(7.5)
+    assert result.params.row("q").basis == "user"
+    # ... and the step downstream of the gate ran on the revised value.
+    assert result.value == pytest.approx(7.5)
 
 
 def _echo_step(**kwargs: Any) -> Any:
@@ -178,6 +193,75 @@ async def test_aquifer_baseflow_refuses_with_no_site_and_no_column() -> None:
     assert out["status"] == "error"
     assert out["error_code"] == "SWMM_PHYSICS_INPUT_REQUIRED"
     assert "never invented" in out["error_message"]
+
+
+# --------------------------------------------------------------------------- #
+# The point memo caches FACTS, not failures
+# --------------------------------------------------------------------------- #
+
+
+class _Flaky:
+    """An upstream that fails the first call and serves the second."""
+
+    def __init__(self, fit: Any) -> None:
+        self.fit, self.calls = fit, 0
+
+    def __call__(self, lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
+        self.calls += 1
+        if self.calls == 1:
+            return None, {"reason": "HTTP 503 from SoilGrids"}
+        return self.fit, {"sand_pct": 16.9, "clay_pct": 32.1, "depth": "5-15cm"}
+
+
+@pytest.mark.asyncio
+async def test_a_transient_soilgrids_failure_does_not_stick_to_the_modflow_aoi(
+        monkeypatch) -> None:
+    """Attempt 2 fetches AGAIN: a 503 is an upstream error, not a fact about soil."""
+    import trid3nt_server.workflows.modflow.steps.aquifer as aquifer
+    from trid3nt_server.workflows.modflow.steps.errors import (
+        ModflowPhysicsInputRequired,
+    )
+
+    flaky = _Flaky(SimpleNamespace(k_m_s=9.298175630928423e-07, porosity=0.157))
+    monkeypatch.setattr(aquifer, "derive_soil_k", flaky)
+    aquifer._texture_fit.cache_clear()
+    params = SimpleNamespace(aoi_latlon=(42.0176777, -93.6292127))
+
+    with pytest.raises(ModflowPhysicsInputRequired, match="HTTP 503"):
+        await aquifer.aquifer_k_ms(params)
+
+    row = await aquifer.aquifer_k_ms(params)
+    assert row.value == pytest.approx(9.298175630928423e-07)
+    assert flaky.calls == 2
+    # ... and the RESOLVED fit is remembered: the second param off the same point
+    # costs no third fetch.
+    assert (await aquifer.porosity(params)).value == pytest.approx(0.157)
+    assert flaky.calls == 2
+    aquifer._texture_fit.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_a_transient_soilgrids_failure_does_not_stick_to_the_swmm_site(
+        monkeypatch) -> None:
+    import trid3nt_server.workflows.swmm.steps.soil as soil
+    from trid3nt_server.workflows.swmm.steps.errors import SwmmPhysicsInputRequired
+
+    column = SimpleNamespace(porosity=0.4637, wilting_point=0.1963,
+                             field_capacity=0.3568, conductivity_in_hr=0.1318)
+    flaky = _Flaky(column)
+    monkeypatch.setattr(soil, "derive_soil_column", flaky)
+    monkeypatch.setattr(soil, "resolve_site", lambda params: (42.0176777, -93.6292127))
+    soil._column.cache_clear()
+    params = SimpleNamespace()
+
+    with pytest.raises(SwmmPhysicsInputRequired, match="HTTP 503"):
+        await soil.porosity(params)
+
+    assert (await soil.porosity(params)).value == pytest.approx(0.4637)
+    assert flaky.calls == 2
+    assert (await soil.conductivity_in_hr(params)).value == pytest.approx(0.1318)
+    assert flaky.calls == 2
+    soil._column.cache_clear()
 
 
 @pytest.mark.asyncio

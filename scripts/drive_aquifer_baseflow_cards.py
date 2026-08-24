@@ -17,6 +17,9 @@ emitted, cited rather than rebuilt.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage: drive_aquifer_baseflow_cards.py [--timeout 900] [--out evidence.json]
+
+The evidence lands in ``docs/proof/`` by default: this template publishes no
+raster, so the JSON the drive writes IS the record that the run happened.
 """
 from __future__ import annotations
 
@@ -34,6 +37,9 @@ LOCATION = "Ames, Iowa"
 #: Double the declared default, so the baseflow the card's edit produces is
 #: unmistakably the edited one.
 REVISED_A1 = 0.004
+#: Where the drive records what it saw - committed, so the run is citable.
+EVIDENCE = os.path.join(os.path.dirname(__file__), "..", "docs", "proof",
+                        "swmm_aquifer_baseflow_cards_evidence.json")
 
 RUN = LiveRun(
     tool="swmm_aquifer_baseflow_to_node",
@@ -52,7 +58,7 @@ RUN = LiveRun(
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--timeout", type=float, default=900.0)
-    ap.add_argument("--out", default="/tmp/aquifer_baseflow_cards_evidence.json")
+    ap.add_argument("--out", default=EVIDENCE)
     ns = ap.parse_args()
 
     ev = run_live(LiveRun(**{**RUN.__dict__, "timeout_s": ns.timeout}))

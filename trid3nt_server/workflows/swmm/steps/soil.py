@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import lru_cache
 from typing import Any
 
 from trid3nt_server.declarative import Derived
 from trid3nt_server.workflows.shared.aquifer_resolve import derive_soil_column
+from trid3nt_server.workflows.shared.point_memo import memo_on_success
 from trid3nt_server.workflows.shared.site_resolve import SiteUnresolvedError
 
 from .errors import SwmmPhysicsInputRequired
@@ -36,12 +36,14 @@ logger = logging.getLogger("trid3nt_server.workflows.swmm.steps.soil")
 SOIL_COLUMN_SOURCE = "fetch_soilgrids (Saxton-Rawls 2006 two-zone column)"
 
 
-@lru_cache(maxsize=64)
+@memo_on_success
 def _column(lat: float, lon: float) -> tuple[Any, dict[str, Any]]:
-    """The two-zone column at a point. Memoized: soil texture is a fixed fact.
+    """The two-zone column at a point. Memoized only when it RESOLVED.
 
     The coordinates are used EXACTLY as resolved - the pedotransfer samples a
-    window around the point, so rounding the key would move the fit.
+    window around the point, so rounding the key would move the fit. Soil texture
+    is a fixed fact; an unavailable fetch is not, so a refusal is never
+    remembered - the next attempt at this site fetches again.
     """
     return derive_soil_column(lat, lon)
 

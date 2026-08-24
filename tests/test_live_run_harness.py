@@ -8,6 +8,7 @@ assertions the harness offers are exercised on the evidence it builds.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 
 import pytest
@@ -22,6 +23,7 @@ from trid3nt_server.testing.live_run import (
     _check_declared_cards,
     _feature_collection,
     _pump,
+    _read_run_products,
 )
 
 
@@ -227,6 +229,57 @@ def test_the_assertions_refuse_a_run_that_did_not_deliver():
         _env().metric("dye_cmax_mgl")
     with pytest.raises(LiveRunError, match="has no"):
         _env(metrics={"a": 1}).metric("dye_cmax_mgl")
+
+
+# --- locating the run's OWN prefix ------------------------------------------- #
+_CONTEXT_RASTER = {"layer_type": "raster", "role": "context",
+                   "uri": "s3://trid3nt-cache/soilgrids/sand_5_15.tif"}
+_PRIMARY_RASTER = {"layer_type": "raster", "role": "primary",
+                   "uri": "s3://trid3nt-runs/01RUNULID/budget.tif"}
+
+
+class _FakeS3:
+    """Serves the two run products off whatever prefix it is asked for."""
+
+    def __init__(self) -> None:
+        self.asked: list[tuple[str, str]] = []
+
+    def get_object(self, *, Bucket: str, Key: str):  # noqa: N803 - boto3 kwargs
+        self.asked.append((Bucket, Key))
+        body = json.dumps({"key": Key}).encode("utf-8")
+        return {"Body": io.BytesIO(body)}
+
+
+@pytest.fixture()
+def fake_s3(monkeypatch) -> _FakeS3:
+    import boto3
+
+    s3 = _FakeS3()
+    monkeypatch.setattr(boto3, "client", lambda *a, **kw: s3)
+    return s3
+
+
+def test_the_run_prefix_comes_from_the_primary_raster(fake_s3):
+    """Emit-on-fetch puts CONTEXT rasters on the canvas ahead of the result."""
+    ev = _env()
+    ev.layers = [_CONTEXT_RASTER, _PRIMARY_RASTER]
+    _read_run_products(ev)
+    assert ev.run_id == "01RUNULID"
+    assert ev.product_uris["metrics"] == "s3://trid3nt-runs/01RUNULID/metrics.json"
+    assert {b for b, _ in fake_s3.asked} == {"trid3nt-runs"}
+    ev.require_run_products()
+
+
+def test_context_rasters_alone_locate_no_run_prefix(fake_s3):
+    """The cache bucket is not a run prefix; `run_id="cache"` was a fabrication."""
+    ev = _env()
+    ev.layers = [_CONTEXT_RASTER]
+    _read_run_products(ev)
+    assert ev.run_id is None and fake_s3.asked == []
+    assert "no published PRIMARY raster" in ev.product_errors["run_id"]
+    assert "1 context raster" in ev.product_errors["run_id"]
+    with pytest.raises(LiveRunError, match="no run prefix"):
+        ev.require_run_products()
 
 
 def test_a_metric_comparison_is_relative_and_typed():

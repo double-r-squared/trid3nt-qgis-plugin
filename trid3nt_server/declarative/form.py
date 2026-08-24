@@ -7,11 +7,11 @@ value so the card can render a property grid the user edits in place.
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Sequence
 
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
-from .params import Param, ResolvedParam, ResolvedParams, doors
+from .params import Param, ResolvedParam, ResolvedParams, doors, wire_value
 
 __all__ = ["build_param_sheet", "source_badge"]
 
@@ -56,7 +56,7 @@ def _door_of(by_name: dict[str, Param], row: ResolvedParam) -> str:
 def _row(param: Param, resolved: ResolvedParam) -> ParamSheetRow:
     return ParamSheetRow(
         name=param.name,
-        value=_wire_value(resolved.value),
+        value=wire_value(resolved.value),
         units=param.units,
         desc=param.desc,
         door=param.door,
@@ -87,6 +87,11 @@ def source_badge(param: Param, resolved: ResolvedParam) -> str:
         return (f"fetched from {resolved.real_source}" if resolved.real_source
                 else "fetched from real data")
     if resolved.basis == "derived":
+        # The EVIDENCE first: a derivation that read the world reports what it
+        # read, and naming the function instead ("derived by aquifer_k_ms") tells
+        # the user only the name of the row they are already looking at.
+        if resolved.real_source:
+            return f"derived from {resolved.real_source}"
         return f"derived by {_tail(param.resolve)}" if param.resolve else "derived"
     if resolved.consequence == "physics":
         return "labeled default - NOT a site measurement"
@@ -95,12 +100,3 @@ def source_badge(param: Param, resolved: ResolvedParam) -> str:
 
 def _tail(dotted: str) -> str:
     return dotted.rsplit(".", 1)[-1]
-
-
-def _wire_value(value: Any) -> Any:
-    """Coerce to what the row field accepts; a tuple of coordinates becomes a list."""
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value
-    if isinstance(value, (list, tuple)):
-        return [_wire_value(v) for v in value]
-    return str(value)

@@ -40,6 +40,9 @@ DERIVED_K_MS = 9.298175630928423e-07
 REVISED_K_MS = 2.0 * DERIVED_K_MS
 #: The CHD inflow the un-edited reference run reports at the derived K.
 REFERENCE_CHD_IN_M3_DAY = 9.887537099091208
+#: Where the drive records what it saw - committed, so the run is citable.
+EVIDENCE = os.path.join(os.path.dirname(__file__), "..", "docs", "proof",
+                        "modflow_regional_water_budget_cards_evidence.json")
 
 RUN = LiveRun(
     tool="modflow_regional_water_budget",
@@ -59,7 +62,7 @@ RUN = LiveRun(
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--timeout", type=float, default=1800.0)
-    ap.add_argument("--out", default="/tmp/regional_water_budget_cards_evidence.json")
+    ap.add_argument("--out", default=EVIDENCE)
     ns = ap.parse_args()
 
     ev = run_live(LiveRun(**{**RUN.__dict__, "timeout_s": ns.timeout}))

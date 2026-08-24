@@ -126,18 +126,33 @@ dataset (obstruction geometry, clip zone) = Data with the draw gate
 as producer. Data producers consume params, which is what makes
 dataflow tracing cross the boundary.
 
-AN ARTIFACT IS DATA; A POINT SAMPLE IS A DERIVED PARAM (ADR 0306). A
-`Data` producer may `Ref` a param or another `Data`, never a step, so a
-fetch that depends on a resolved LOCATION cannot be declared as `Data` -
-`Data` reads the DOMAIN environment, which carries an extent, and that
-fits rasters and layers. A value SAMPLED at a point fits a form cell,
-wants bounds, and wants to be editable: declare it `door=DERIVED`.
-Derivations run inside `resolve_params`, BEFORE the plan is built and
-therefore before the form gate, and they may be `async` - so a
-derivation can geocode and can fetch, and the card shows the REAL
-derived number with its source badge rather than an empty row the user
-pins by hand. A derivation that read the world returns
-`Derived(value, note, real_source)` so its evidence rides on the row.
+AN ARTIFACT IS DATA; A SCALAR THE PLAN CONSUMES IS A DERIVED PARAM
+(ADR 0306). A `Data` producer may `Ref` a param or another `Data`,
+never a step, so a fetch that depends on a resolved LOCATION cannot be
+declared as `Data` - `Data` reads the DOMAIN environment, which carries
+an extent, and that fits rasters and layers. The test is what the plan
+CONSUMES, not how the derivation reached it: if the consumed value is a
+scalar that fits a form cell - it wants bounds, wants to be editable,
+wants to be on the card - declare it `door=DERIVED`. (A point sample is
+the common case, not the rule: a basin mean, a class fraction or a
+station statistic is the same shape.) Derivations run inside
+`resolve_params`, BEFORE the plan is built and therefore before the form
+gate, and they may be `async` - so a derivation can geocode and can
+fetch, and the card shows the REAL derived number with its source badge
+rather than an empty row the user pins by hand. A derivation that read
+the world returns `Derived(value, note, real_source)` so its evidence
+rides on the row.
+
+RECORDED GAP, not blessed doctrine: what such a derivation FETCHES on
+its way to the scalar sits outside the `Data` machinery. Those rasters
+are not ledgered (a resume re-fetches rather than replays), they are not
+artifacts the interpreter can evict on a form revision (the DERIVATION
+re-runs instead, and its own memo decides whether the fetch repeats),
+and they are not walked by the terminal leaked-ref scan. Today the cost
+is small - the derivations that exist read one memoized point per run -
+but the SWMM and MODFLOW engine campaigns are the place to decide
+whether a derivation's world-reads become first-class `Data` or stay a
+documented exception.
 
 ## The doors (Param resolution order)
 
