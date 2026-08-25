@@ -112,6 +112,12 @@ class Workflow(EngineOps):
     HOOKS have SILENT defaults: an unfilled hook does nothing, and no engine
     subtype ever restates one. ABSTRACT SLOTS must be filled: the physics the
     template declares and the :class:`EngineOps` five.
+
+    The contract also names a sensor/context-layer hook. It is deliberately NOT
+    here: the steps that fetch inputs already emit their own through the one
+    emission seam, so a skeleton-level second emitter would be exactly the
+    double-emission the input-surfacing guard exists to catch. It arrives with
+    the emission-unification wave, where the seam is the single home.
     """
 
     def __init__(self, *, metadata: Any, params: Sequence[Param],
@@ -140,13 +146,6 @@ class Workflow(EngineOps):
         """Validation checks over the finished result, as NOTES the caller narrates.
 
         Silent default: no checks. A check reports; it never retracts a solved run.
-        """
-        return ()
-
-    def context_layers(self, result: Any, run: RunResult) -> tuple[Any, ...]:
-        """Extra sensor/context layers to surface beside the primary product.
-
-        Silent default: none. The steps that fetch inputs already emit their own.
         """
         return ()
 
@@ -225,7 +224,6 @@ class Workflow(EngineOps):
             update["fallback_note"] = " ".join(parts)
         result = result.model_copy(update=update)
 
-        await self._emit_context_layers(result, run)
         metrics = self.answer(result)
         await self._persist(self._run_id(result, run), run.charts, metrics)
         logger.info("%s complete layer_id=%s answer=%s executed=%s replayed=%s notes=%s",
@@ -263,23 +261,6 @@ class Workflow(EngineOps):
         from trid3nt_server.workflows.shared.run_products import persist_run_products
 
         await persist_run_products(run_id, charts=charts, metrics=metrics)
-
-    async def _emit_context_layers(self, result: Any, run: RunResult) -> None:
-        layers = tuple(self.context_layers(result, run))
-        if not layers:
-            return
-        from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-        from trid3nt_server.emission.pipeline_emitter import current_emitter
-
-        emitter = current_emitter()
-        if emitter is None:
-            return
-        for layer in layers:
-            try:
-                await publish_input_layer(emitter, layer)
-            except Exception as exc:  # noqa: BLE001 - a context layer never kills a run
-                logger.warning("%s: context layer not surfaced (%s)", self.name, exc)
-
 
 # -- the registration factory --------------------------------------------- #
 

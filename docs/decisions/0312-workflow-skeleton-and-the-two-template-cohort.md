@@ -86,6 +86,12 @@ skeleton names and engines the `Plan`.
   `__signature__` over it, so `from_callable` read the simplified hints and the
   unsimplified parameters. It now re-stamps the signature. This affected every
   synthesized-signature tool, spec-promoted fetchers included.
+- The contract's sensor/context-LAYER hook is deliberately NOT built. It was,
+  briefly, and the ADR 0244 input-surfacing sweep caught it at once: the steps
+  that fetch inputs already emit through the one seam, so a skeleton-level
+  second emitter is exactly the double-emission that guard exists to catch. It
+  belongs to the emission-unification wave, where the seam is the single home.
+  A test now pins that the skeleton emits no input layer of its own.
 - Four declarative templates (`modflow_regional_water_budget`,
   `swmm_rdii_rtk_unit_hydrograph`, `swmm_snowmelt_degree_day`,
   `swmm_aquifer_baseflow_to_node`) were NOT migrated; they were adapted

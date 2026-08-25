@@ -82,7 +82,18 @@ def _workflow(cls=Workflow, **kw):
 def test_the_hooks_are_silent_by_default():
     wf = _workflow()
     assert wf.checks(_Layer(), None) == ()
-    assert wf.context_layers(_Layer(), None) == ()
+
+
+def test_the_skeleton_emits_no_input_layer_of_its_own():
+    """The steps that fetch inputs emit through the ONE seam; a skeleton-level
+    second emitter would be the double-emission the ADR 0244 guard catches."""
+    import inspect as _inspect
+
+    from trid3nt_server.workflows.lib import workflow as mod
+
+    src = _inspect.getsource(mod)
+    assert "publish_input_layer" not in src
+    assert "publish_raster_input_cog" not in src
 
 
 @pytest.mark.asyncio

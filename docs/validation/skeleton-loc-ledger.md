@@ -17,7 +17,7 @@ verdict.
 deliberate - docstrings and constraint comments are part of what a reader has
 to hold, and excluding them would let a wave "shrink" by deleting the
 explanation. Counts are PRODUCT `.py` only - never tests, never docs, never
-scripts. (Wave 2 also added `tests/test_workflow_skeleton.py`, 219 lines, not
+scripts. (Wave 2 also added `tests/test_workflow_skeleton.py`, 230 lines, not
 counted here by that rule.)
 
 The four surfaces every row splits into:
@@ -38,16 +38,16 @@ The four surfaces every row splits into:
 | 2026-08-24 | 0 - baseline | telemac family steps (9 files, no facade) | 2874 | - | - | - |
 | 2026-08-24 | 0 - baseline | shared steps (`shared/aoi.py` did not exist) | 0 | - | - | - |
 | 2026-08-24 | 0 - baseline | cohort templates (`do_sag.py` 399 + `do_sag/steps.py` 278 + `river_dye.py` 698) | 1375 | - | - | - |
-| 2026-08-24 | 2 - skeleton + cohort | lib skeleton (16 files; `workflow.py` 373 + `slots.py` 112 new, `plan.py` +30, `params.py` +19, `interpreter.py` +5, `__init__.py` +12) | 3944 | 4495 | +551 | +551 |
-| 2026-08-24 | 2 - skeleton + cohort | telemac facade + family steps (`workflow.py` 184 + `water_quality.py` 77 new; `forcing.py` +72, `substance.py` +26, `solve.py` +22, `reach.py` +13, `__init__.py` +17, `deck.py` +1, `products.py` -24) | 2874 | 3262 | +388 | +939 |
-| 2026-08-24 | 2 - skeleton + cohort | shared steps (`shared/aoi.py`) | 0 | 68 | +68 | +1007 |
-| 2026-08-24 | 2 - skeleton + cohort | cohort templates (`do_sag.py` 399->324, `river_dye.py` 698->530) | 1097 | 854 | -243 | +764 |
-| 2026-08-24 | 2 - skeleton + cohort | deleted outright (`do_sag/steps.py`) | 278 | 0 | -278 | +486 |
+| 2026-08-24 | 2 - skeleton + cohort | lib skeleton (16 files; `workflow.py` 354 + `slots.py` 112 new, `plan.py` +30, `params.py` +19, `interpreter.py` +5, `__init__.py` +12) | 3944 | 4476 | +532 | +532 |
+| 2026-08-24 | 2 - skeleton + cohort | telemac facade + family steps (`workflow.py` 184 + `water_quality.py` 77 new; `forcing.py` +72, `substance.py` +26, `solve.py` +22, `reach.py` +13, `__init__.py` +17, `deck.py` +1, `products.py` -24) | 2874 | 3262 | +388 | +920 |
+| 2026-08-24 | 2 - skeleton + cohort | shared steps (`shared/aoi.py`) | 0 | 68 | +68 | +988 |
+| 2026-08-24 | 2 - skeleton + cohort | cohort templates (`do_sag.py` 399->324, `river_dye.py` 698->530) | 1097 | 854 | -243 | +745 |
+| 2026-08-24 | 2 - skeleton + cohort | deleted outright (`do_sag/steps.py`) | 278 | 0 | -278 | +467 |
 
-**Wave 2 verdict: net +486 - invested in the skeleton, not yet repaid; watch.**
+**Wave 2 verdict: net +467 - invested in the skeleton, not yet repaid; watch.**
 The cohort of two templates shed 521 lines (-38% across the three template
-files) against 669 lines of NEW fixed machinery (lib `workflow.py` + `slots.py`
-485, TELEMAC facade 184). About 215 of the template reduction is RELOCATION into
+files) against 650 lines of NEW fixed machinery (lib `workflow.py` + `slots.py`
+466, TELEMAC facade 184). About 215 of the template reduction is RELOCATION into
 the family-step tier (the resolved-input review, the WAQTEL process block, four
 wire coercions) rather than absorption, so the honest per-template absorption is
 roughly 150 lines each. Projection to watch at the next wave: the lib cost never
