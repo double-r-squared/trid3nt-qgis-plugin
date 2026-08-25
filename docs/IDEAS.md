@@ -1230,3 +1230,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   going forward, README documents the scheme. The per-engine showcase
   KEEP-LIST (delete-on-whim carve-out) points at these folders. Joins
   the accumulated batch.
+
+- STYLE MODIFIER GRAMMAR RULED (NATE 2026-08-25): style override is a
+  DECLARATION MODIFIER in the .byo()/.ladder()/.resample() family -
+  .style(preset=|rescale=|colormap=), optional, absent = the contract
+  default; lives in workflows/lib; resolves against contracts
+  styles.yaml. Emission stays AUTOMATIC on all surfaces (fetch declared
+  -> default style emitted); the modifier only specializes ad hoc where
+  defaults cannot express the output. The .render verb RETIRES (renders
+  are the plugin's job; workflows describe products). Joins the batch's
+  emission chapter (styles->contracts YAML, one resolver, mirror dies).
+
+- ANIMATION LEGEND SHIFT BUG (NATE 2026-08-25, spot-check catch): GIF
+  legends' discrete color sections SHIFT between frames - per-frame
+  autoscaling makes the same color mean different values per frame
+  (dishonest visualization). Fix in render_selafin_animation.py: scale
+  fixed ONCE across the whole time axis (global range or the declared
+  style rescale), legend static; pinned test = extracted-frame legend
+  regions byte-identical across the animation. Joins the batch
+  (proof-lane).
