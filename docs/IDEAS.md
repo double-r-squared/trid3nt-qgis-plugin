@@ -1074,3 +1074,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   says why; user keeps the lever. Mechanism is skeleton-level
   (answer-path labeling), lands with the held fix batch; generalizes
   past TELEMAC (MODFLOW plume peaks next).
+
+- CASE DATA DELETE-ON-WHIM (NATE 2026-08-25): Claude-driven
+  spot-check/canary/diagnostic cases and run prefixes are disposable at
+  Claude's discretion, no per-ask approval. RETAIN: 1-2 most-complex
+  showcase cases per engine (the ones whose proofs persist in
+  docs/proof/templates/), NATE's own cases, live-session cases, and run
+  prefixes still referenced by in-flight agents or proof evidence. The
+  persisted renders + evidence JSONs are the durable record; the run
+  data behind them is recompute-on-demand. Sweeps ride wave close-outs
+  keep-list-first; first sweep = cleanup phase 2 (root disk at 93%).
