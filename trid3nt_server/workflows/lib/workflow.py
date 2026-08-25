@@ -116,7 +116,8 @@ class Workflow(EngineOps):
 
     def __init__(self, *, metadata: Any, params: Sequence[Param],
                  plan: Callable[..., Any], data: Sequence[DataDecl] = (),
-                 answer: Sequence[str] = (), provenance: Sequence[str] = (),
+                 answer: Sequence[str] = (),
+                 provenance: Sequence[str | tuple[str, str]] = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
@@ -298,7 +299,7 @@ def register_workflow(
     *,
     data: Sequence[DataDecl] = (),
     answer: Sequence[str] = (),
-    provenance: Sequence[str] = (),
+    provenance: Sequence[str | tuple[str, str]] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     doc: Mapping[str, Any] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
@@ -313,7 +314,6 @@ def register_workflow(
     in ``extra_args``), so the model-facing schema is generated from the same
     declaration the run resolves.
     """
-    from trid3nt_contracts.tool_registry import AtomicToolMetadata  # noqa: F401
     from trid3nt_server.tools import register_tool
 
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
