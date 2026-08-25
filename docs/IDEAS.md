@@ -1000,6 +1000,35 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   migrate - both are the same worker family and neither postprocessor takes a
   domain bbox today.
 
+  SUPERSEDED 2026-08-25 (the closing sentence only - the TOMAWAC finding above
+  stands as written). Both templates were checked; the "neither postprocessor
+  takes a domain bbox today" claim was already false for one of them and is now
+  false for both:
+
+  - TELEMAC-3D: WAS affected, FIXED. `postprocess_telemac3d` reprojected the
+    re-emitted surface / bottom layer SELAFINs as absolute UTM, so both COGs
+    landed at the zone false origin exactly as TOMAWAC's Hs did.
+    `_rasterize_t3d_field` now takes `domain_bbox=wm.get("bbox")` (landed in
+    `bd0b84cd`, the stratified_flow migration) and `b24feb64` hardened it: the
+    worker echoes the bbox it actually meshed, `solved_domain_bbox` prefers that
+    echo over the staged bbox and never the raw AOI, and `_local_mesh_origin`
+    REFUSES a malformed bbox instead of reading it as absent and landing a real
+    domain at the false origin.
+  - ARTEMIS: NEVER affected. `postprocess_artemis` has taken `request_bbox` and
+    added the SW-corner offset back before the UTM -> 4326 inverse since before
+    this campaign; its docstring names the failure mode ("or the field
+    georeferences to the UTM-zone origin (near lon -91, lat 0) instead of the
+    real harbour") as something it already prevents. `b24feb64` only folded its
+    private copy of that arithmetic into the shared `_local_mesh_origin` - a
+    de-duplication, not a fix. No ARTEMIS Kd COG was ever published at the false
+    origin.
+
+  So the false-origin class is CLOSED for the raster products of all three
+  AOI templates. It remains OPEN for the coastal RESULTS MESH layer (the
+  separate entry above): that defect is in what the worker WRITES into the
+  SELAFIN, not in what the postprocessor reads, and it is still image-rebuild
+  work.
+
 - 2026-08-25 THE OPEN-WATER "FIELD" RASTERS ARE DOT LATTICES, not fields (queued
   defect, visible in every proof sheet this wave produced): `postprocess_coastal`
   and `postprocess_tomawac` rasterize the mesh nodes onto a grid sized by a fixed

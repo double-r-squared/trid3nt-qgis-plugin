@@ -229,9 +229,29 @@ that is exactly the distinction the criterion is testing.
 
 ### The regression figure
 
-The offline suite at the wave-2 landing: **11963 passed**, against the standing
-baseline of exactly 4 environmental `fetch_resolution` failures. An earlier draft
-cited 11990; that number is not reproducible. The count is env-conditional -
-collection skips vary with what is installed and with `.env.local` presence - so
-the pass COUNT is evidence only alongside the failure SET, which is the part that
-must not move.
+THE GATE IS THE FAILURE SET, NOT A PASS COUNT. The offline suite passes when its
+FAILED set matches the documented baseline EXACTLY - **six** failures, by name:
+4 `test_fetch_resolution_gate` in `[f-o]` plus 2 `test_run_river_dye_scenario` in
+`[p-r]`, with `[a-e]` and `[s-z]` clean. A seventh failure is a regression even if
+the pass count went up; a missing one is a silently-skipped test, not a fix. Set
+equality is the whole check.
+
+PASS COUNTS ARE INFORMATIONAL AND THEY WOBBLE. Collection is env-conditional -
+skips vary with what is installed, with `.env.local` presence, and with which
+optional engine libraries the venv holds - so the same tree reports different
+totals on different runs. This document first cited **11963** at the wave-2
+landing; an earlier draft of it cited 11990; the wave-3 review panel reports
+observing **11987**, **12026** and **12051** on this tree, all with the failure
+set intact. None of those five numbers is a gate and none contradicts the others.
+What is measurable and stable is the COLLECTION ceiling every pass count sits
+under:
+
+    ./venvs/agent/bin/python -m pytest tests -q --collect-only | tail -1
+    # 12118 tests collected in 11.13s   (at b24feb64, .env.local present)
+
+An earlier version of this paragraph read "**11963 passed**, against the standing
+baseline of exactly 4 environmental `fetch_resolution` failures", which got the
+gate wrong twice: it led with the count, and its "4" was the `[f-o]` slice's
+share rather than the suite's six. Corrected 2026-08-25; the reading it was
+reaching for - that the count is evidence only alongside the set - was right and
+is now the rule rather than the caveat.
