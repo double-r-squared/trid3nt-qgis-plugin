@@ -1306,3 +1306,10 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   _local_mesh_origin, publish_peak_layer (13 hits/4 defs repo-wide -
   first name on the MODFLOW sweep). Decision 5 fully CLOSED: all 21
   ambiguous MinIO prefixes KEPT.
+
+- PHYSICS NAME CONFIRMED + SIBLING SHAPE APPROVED (NATE 2026-08-25):
+  after deliberate challenge (Process/Inputs considered), Physics stays -
+  no rename churn. The declarations.py separation approved as exemplified
+  (PARAMS + _DOC out; QUESTION docstring, DATA, plan, ANSWER, chart,
+  spec/metadata, registration stay; plan body unchanged by one
+  character). Apply to all six in the batch.
