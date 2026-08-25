@@ -22,7 +22,7 @@ import os
 import tempfile
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.lib import RATE, Step, TemporalSpec, transform_value
 
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 
@@ -42,6 +42,14 @@ _DISCHARGE_QUERY_HALF_DEG: float = 0.03
 #: storm ~500 mm/day; extreme PET ~20 mm/day), so a bad knob cannot destabilize
 #: the solve.
 _NET_RAIN_MIN_MM_DAY, _NET_RAIN_MAX_MM_DAY = -50.0, 2000.0
+
+#: What the rain producer DELIVERS, which is what a declared ``.resample()`` /
+#: ``.normalize()`` on the ``Data("rain")`` declaration is checked against. Both
+#: rungs are daily-cadence rates: gridMET's aggregate is a daily field the router
+#: time-reduces over the window, and a user rate is stated per day. TELEMAC's
+#: single RAIN OR EVAPORATION keyword reads mm/day, so a declaration that asked
+#: for anything else would be asking the deck for a number it cannot carry.
+_RAIN_NATIVE_INTERVAL, _RAIN_UNITS = "1D", "mm/day"
 
 
 def _domain_bbox() -> tuple[float, float, float, float]:
@@ -126,23 +134,29 @@ def _gridmet_domain_mean_pr(bbox: tuple[float, float, float, float],
 async def resolve_rain_forcing(*, rainfall_mm_per_day: float | None,
                                evaporation_mm_per_day: float | None,
                                gridmet_window: str | None,
-                               fallback: tuple[str, ...] = ()) -> dict[str, Any]:
+                               fallback: tuple[str, ...] = (),
+                               temporal: TemporalSpec | None = None) -> dict[str, Any]:
     """The SIGNED net rain-or-evaporation rate (mm/day) the deck carries.
 
     ``fallback`` is the declared ladder, walked in order: a real gridMET storm
     total for the window supersedes an explicit user rate. Evaporation is then
     subtracted (TELEMAC's single signed RAIN OR EVAPORATION keyword). A ``None``
     rate means no forcing was asked for, and the deck stays byte-identical.
+
+    ``temporal`` is the declaration's own ``.resample()`` / ``.normalize()``,
+    checked against the cadence and units this producer actually delivers; the
+    transform it performs (or declines as unnecessary) is stamped onto the note.
     """
     return await asyncio.to_thread(
         _rain_forcing, rainfall_mm_per_day, evaporation_mm_per_day,
-        gridmet_window, tuple(fallback))
+        gridmet_window, tuple(fallback), temporal)
 
 
 def _rain_forcing(rainfall_mm_per_day: float | None,
                   evaporation_mm_per_day: float | None,
                   gridmet_window: str | None,
-                  fallback: tuple[str, ...]) -> dict[str, Any]:
+                  fallback: tuple[str, ...],
+                  temporal: TemporalSpec | None = None) -> dict[str, Any]:
     rung: str | None = None
     rain: float | None = None
     note_bits: list[str] = []
@@ -165,12 +179,26 @@ def _rain_forcing(rainfall_mm_per_day: float | None,
 
     if rain is None and evap is None:
         return {"mm_per_day": None, "note": None, "rung": None,
-                "ladder": list(fallback)}
+                "ladder": list(fallback), "temporal_note": None}
     net = float(min(max((rain or 0.0) - (evap or 0.0),
                         _NET_RAIN_MIN_MM_DAY), _NET_RAIN_MAX_MM_DAY))
+    if temporal is not None and temporal.units is not None \
+            and temporal.units.units != _RAIN_UNITS:
+        raise TelemacDyeScenarioInputError(
+            f"Data('rain').normalize(units={temporal.units.units!r}) cannot be "
+            f"honored: TELEMAC's RAIN OR EVAPORATION keyword reads {_RAIN_UNITS}."
+        )
+    # The clamp band above is stated in mm/day, so the declared transform runs
+    # after it; the units assertion just above is what keeps the two agreeing.
+    moved = transform_value(net, temporal, quantity=RATE, units=_RAIN_UNITS,
+                            native=_RAIN_NATIVE_INTERVAL)
+    net = float(moved.values)
     note = "; ".join(note_bits) + f" -> net {net:+.1f} mm/day (distributed on-mesh)"
+    if temporal is not None:
+        note = f"{note} [{moved.note}]"
     logger.info("telemac rainfall forcing: %s", note)
-    return {"mm_per_day": net, "note": note, "rung": rung, "ladder": list(fallback)}
+    return {"mm_per_day": net, "note": note, "rung": rung,
+            "ladder": list(fallback), "temporal_note": moved.note}
 
 
 def coerce_event_time(value: Any) -> str | None:

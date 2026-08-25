@@ -86,18 +86,40 @@ def _release_provenance(deck: dict[str, Any],
               "supplied point; the solver reported no verdict on it"))
 
 
+def _rain_provenance(deck: dict[str, Any]) -> list[SyntheticInput]:
+    """The on-mesh rain/evaporation forcing, with its DECLARED temporal transform.
+
+    Empty when no forcing was asked for - a run with no rain has no rain row.
+    The note carries the cadence/units stamp the ``Data("rain")`` declaration
+    produced, so a reader can tell an as-reported rate from a moved one.
+    """
+    value = deck.get("rain_mm_per_day")
+    if value is None:
+        return []
+    rung = deck.get("rain_rung")
+    fetched = rung == "gridmet_domain_mean"
+    return [SyntheticInput(
+        param="rain_or_evap_mm_per_day", value=round(float(value), 2),
+        units="mm/day", basis="fetched" if fetched else "user",
+        consequence="physics",
+        real_source_if_any=("fetch_gridmet (University of Idaho gridMET daily "
+                            "precipitation)" if fetched else None),
+        note=deck.get("rain_note"))]
+
+
 def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
                 deck: dict[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
     The carrier discharge that governs dilution (real NWM streamflow or
-    user-supplied), the bank geometry the worker actually sampled (real NHDArea
-    polygons vs an assumed constant-width ribbon), and the release point the
-    solver used.
+    user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
+    the bank geometry the worker actually sampled (real NHDArea polygons vs an
+    assumed constant-width ribbon), and the release point the solver used.
     """
     banks = solve.get("bank_provenance") or "constant_ribbon"
     return [
         _release_provenance(deck, solve.get("metrics") or {}),
+        *_rain_provenance(deck),
         SyntheticInput(
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",

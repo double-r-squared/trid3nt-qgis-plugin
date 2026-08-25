@@ -407,6 +407,8 @@ async def write_reach_deck(
         "seed_source": seed.get("source"),
         "discharge_note": carrier_discharge.get("note"),
         "rain_note": (rain or {}).get("note"),
+        "rain_mm_per_day": rain_mm_day,
+        "rain_rung": (rain or {}).get("rung"),
     }
 
 

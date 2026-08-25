@@ -283,7 +283,13 @@ DATA = (
                             rainfall_mm_per_day=ParamRef("rainfall_mm_per_day"),
                             evaporation_mm_per_day=ParamRef("evaporation_mm_per_day"),
                             gridmet_window=ParamRef("rainfall_gridmet_window"))
-         .ladder("gridmet_domain_mean", "user_rate")),
+         .ladder("gridmet_domain_mean", "user_rate")
+         # The cadence and units the deck receives, stated rather than assumed:
+         # both rungs are daily rates, so this asks for no interpolation - and a
+         # sub-daily target would refuse here instead of manufacturing a storm
+         # shape gridMET never reported.
+         .resample(to="1D", max_gap="native*3")
+         .normalize(units="mm/day")),
 )
 
 
