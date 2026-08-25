@@ -1703,6 +1703,12 @@ async def model_openquake_psha(
 # (installed via the ``local-engines`` extra: ``pip install openquake.engine``).
 # The spec is INERT unless TRID3NT_SOLVER_BACKEND=local-docker; the cloud Batch
 # path (run_solver with aws-batch backend) is unchanged.
+#
+# BEACON KILL: env_overrides sets CI=1 so the engine's own
+# check_obsolete_version() short-circuits before phoning api.openquake.org
+# with calculation_mode in the User-Agent (docs/design/external-fetch-audit.md
+# row 24). Belongs HERE (the subprocess env), not in workers/openquake/
+# Dockerfile's ENV -- this dispatch never touches that image.
 # --------------------------------------------------------------------------- #
 
 #: Path to the thin OpenQuake subprocess shim (mirrors run_inp.py for SWMM).
@@ -1768,7 +1774,14 @@ def openquake_local_spec() -> Any:
         stderr_uri_field="oq_stderr_uri",
         exec_kind="exec",
         classify_exit=classify_exit,
-        env_overrides={"PYTHONPATH": new_pypath},
+        # CI=1 kills the engine's version-check beacon (engine.py
+        # check_obsolete_version(): a bare `os.environ.get('JENKINS_URL') or
+        # os.environ.get('CI')` short-circuits BEFORE the outbound request to
+        # api.openquake.org, whose User-Agent otherwise carries the run's
+        # calculation_mode + platform.platform()). Set here, not in the
+        # worker image env, because exec_kind="exec" dispatches this as a
+        # HOST subprocess -- the image's ENV never reaches it.
+        env_overrides={"PYTHONPATH": new_pypath, "CI": "1"},
     )
 
 

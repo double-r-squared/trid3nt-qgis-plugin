@@ -127,7 +127,16 @@ ENV TRID3NT_OBJECT_STORE=s3 \
     TRID3NT_RUNS_BUCKET="" \
     TRID3NT_RUN_ID="" \
     TRID3NT_MANIFEST_URI="" \
-    AWS_REGION=us-west-2
+    AWS_REGION=us-west-2 \
+    # Kill the engine's version-check beacon (docs/design/external-fetch-audit.md
+    # row 24): openquake.engine.engine.check_obsolete_version() short-circuits
+    # before its outbound request to api.openquake.org (User-Agent carries
+    # calculation_mode) when JENKINS_URL or CI is set. This is the AWS-Batch
+    # cloud lane's image env; the LIVE local-docker path dispatches OpenQuake
+    # as a host subprocess and gets the same CI=1 via env_overrides in
+    # trid3nt_server/workflows/openquake/psha/psha.py -- this image never
+    # runs that path, but ships the same guard for when the lane wakes.
+    CI=1
 
 # Build-time smoke (mirror of the SWMM/SFINCS/MODFLOW Dockerfile assert): the oq
 # CLI runs + the entrypoint + deck-templating modules import cleanly. Catches a
