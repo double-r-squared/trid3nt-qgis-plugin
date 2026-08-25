@@ -14,9 +14,16 @@ in ``trid3nt_server.testing``.
 The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
 ``metrics.json``). Nothing here is rederived.
 
+``--coarse`` is the CANARY form of the same declaration: every param supplied
+up front (path A - the gates are satisfied rather than skipped) on a short
+reach, a short simulated window and a pinned discharge, so a library or shared-
+step change can be proven end-to-end through the product path in minutes rather
+than the half hour the showcase run takes. It writes its own evidence file and
+never renders the canonical proof set.
+
 Env (MinIO): set -a; source .env.local; set +a
 Usage: drive_do_sag_cards.py [--timeout 1800] [--out evidence.json]
-                             [--no-render-proof]
+                             [--no-render-proof] [--coarse]
 """
 from __future__ import annotations
 
@@ -56,6 +63,27 @@ RUN = LiveRun(
                         require_draw=True, confirm="proceed"),
 )
 
+#: The path-A canary: the same reach and outfall, every param supplied so no
+#: card is left to answer, sized so the solve is a smoke test of the plumbing
+#: rather than a physics study. The discharge is PINNED - a canary that also
+#: depended on a live NWM cycle would report a source outage as a code failure.
+COARSE = LiveRun(
+    tool="telemac_do_sag",
+    args={
+        **RUN.args,
+        "outfall_coords": OUTFALL_LONLAT,
+        "reach_length_km": 0.5,
+        "sim_duration_s": 600.0,
+        "mesh_resolution": "coarse",
+        "mesh_resolution_m": 100.0,
+        "discharge_m3s": 60.0,
+        "input_mode": "auto",
+    },
+    case_title="canary: telemac do sag (Eel River near Scotia, coarse)",
+    answers=GateAnswers(confirm="proceed"),
+    cleanup_case=True,
+)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -67,10 +95,17 @@ def main() -> int:
     # comparison - pass --no-render-proof alongside it so the B run never
     # overwrites the canonical (latest-cycle) proof set.
     ap.add_argument("--event-time", default=None)
+    ap.add_argument("--coarse", action="store_true",
+                    help="the path-A canary declaration (short reach, pinned discharge)")
     add_render_proof_flag(ap)
     ns = ap.parse_args()
 
     run = RUN
+    if ns.coarse:
+        run = COARSE
+        ns.render_proof = False
+        if ns.out == EVIDENCE:
+            ns.out = EVIDENCE.replace(".json", "_coarse.json")
     if ns.event_time:
         run = LiveRun(**{**RUN.__dict__, "args": {**RUN.args, "event_time": ns.event_time}})
 

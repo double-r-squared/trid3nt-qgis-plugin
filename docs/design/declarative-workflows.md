@@ -174,6 +174,53 @@ but the SWMM and MODFLOW engine campaigns are the place to decide
 whether a derivation's world-reads become first-class `Data` or stay a
 documented exception.
 
+## Temporal transforms (the `Data` modifiers)
+
+A `Data` declaration states the cadence and the units its artifact ARRIVES
+in, because both are part of what the artifact IS:
+
+```python
+Data("rain", Fetch.tool("...resolve_rain_forcing", ...)
+        .ladder("gridmet_domain_mean", "user_rate")
+        .resample(to="1D", max_gap="native*3")
+        .normalize(units="mm/day")),
+```
+
+pandas does the arithmetic (`workflows/lib/temporal.py`); the library is
+the doctrine around it, and three rules decide every call:
+
+- THE QUANTITY CLASS PICKS THE METHOD. A RATE resamples conservatively
+  (mass-preserving: the interval mean going down, hold-the-interval going
+  up), a STATE interpolates linearly, a CATEGORICAL value moves by
+  nearest and by nothing else. The first two are overridable per
+  declaration; averaging class labels is refused.
+- INTERPOLATION IS DECLARED. A transform that ran leaves a provenance
+  stamp ("resampled 6h->1h linear", "converted in/day->mm/day"), so a
+  manufactured value is distinguishable from an observed one - and a
+  payload with NO `.resample()` is never realigned behind the consumer's
+  back. That is the wave-A clocks-align bug class, closed by declaration.
+- A HOLE WIDER THAN `max_gap` REFUSES, typed. Within-cadence
+  interpolation is refinement; bridging a hole in the record is
+  invention. Default bound: three native intervals (`"native*3"`), where
+  native is the record's own lower-median sample spacing.
+
+Unit conversion rides an EXPLICIT table in `temporal.py`, not a units
+engine: a conversion nobody declared is one nobody can check, and a
+cross-dimension request refuses rather than guessing.
+
+The declaration travels TO the producer (the same channel `.ladder()`
+uses), because the producer is the only party that knows the payload's
+quantity class and native cadence - the interpreter never reshapes a
+payload it cannot read (the no-double-middleware law). A single-value
+payload accepts `.normalize()` and a `.resample()` at its own cadence; a
+`.resample()` to any OTHER cadence refuses, since one number carries no
+time axis to redistribute.
+
+Surfaces: the provenance stamp rides the run's `SyntheticInput` row (the
+`event_time` pinning style), and the gap/shape/units refusals are typed.
+The FORM BADGE is not wired: the form card is a param sheet, and a `Data`
+row on it needs a `ParamSheet` contract plus a plugin change.
+
 ## The doors (Param resolution order)
 
 1. BYO/USER - explicitly passed this invocation. NEVER ambient: no
