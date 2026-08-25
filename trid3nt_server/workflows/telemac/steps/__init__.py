@@ -11,6 +11,12 @@ nothing here decides what question is being asked.
 
 from __future__ import annotations
 
+from .agitation import (
+    Agitation,
+    fetch_osm_breakwaters,
+    publish_agitation_products,
+    write_agitation_deck,
+)
 from .coastal import Coastal, publish_coastal_products, write_coastal_deck
 from .deck import WriteDeck, normalize_bank_source, stage_manifest, write_reach_deck
 from .open_water import (
@@ -76,7 +82,7 @@ from .water_quality import (
 from .wave import Wave, publish_wave_products, write_wave_deck
 
 __all__ = [
-    "CarrierDischarge", "Coastal",
+    "Agitation", "CarrierDischarge", "Coastal",
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
     "MESH_NODE_CAP", "OpenWaterError", "Products", "ReachSeed",
     "ReviewResolvedInputs",
@@ -99,6 +105,8 @@ __all__ = [
     "sanitize_substance", "slug", "solve_reach", "stage_manifest",
     "substance_class",
     "suggest_mesh_size_m", "suggest_time_step_s", "upstream_do_mgl",
-    "publish_wave_products", "waqtel_o2_process", "write_reach_deck",
+    "fetch_osm_breakwaters", "publish_agitation_products",
+    "publish_wave_products", "waqtel_o2_process", "write_agitation_deck",
+    "write_reach_deck",
     "write_wave_deck",
 ]

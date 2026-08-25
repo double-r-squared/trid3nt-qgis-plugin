@@ -54,6 +54,10 @@ _COASTAL_BBOX = [-85.02, 29.69, -84.90, 29.80]
 #: lake-datum bathymetry coverage, so the REAL-bed path is the one exercised.
 _SUPERIOR_BBOX = [-87.60, 46.70, -86.60, 47.20]
 
+#: Marquette Lower Harbor, MI - a REAL harbour with a REAL surveyed breakwater in
+#: OpenStreetMap, which is the whole point of the diffraction question class.
+_MARQUETTE_BBOX = [-87.392, 46.528, -87.368, 46.550]
+
 CANARIES: dict[str, LiveRun] = {
     # The Michael surge coast at a coarse grid over a 6-hour window: wide enough
     # that the rising boundary actually floods low land (a canary whose answer is
@@ -106,6 +110,27 @@ CANARIES: dict[str, LiveRun] = {
             "input_mode": "user_gated",
         },
         case_title="canary: tomawac wave field (Lake Superior, coarse)",
+        answers=GateAnswers(confirm="proceed"),
+        cleanup_case=True,
+    ),
+    # The sheltering question on a real harbour: the surveyed breakwater comes
+    # from OSM and is meshed as a thin solid barrier over the real lake bed, so
+    # the sheltered/exposed pair is a measurement rather than a schematic.
+    "artemis_harbor_agitation": LiveRun(
+        tool="artemis_harbor_agitation",
+        args={
+            "bbox": _MARQUETTE_BBOX,
+            "wave_mode": "diffraction",
+            "wave_period_s": 8.0,
+            "wave_direction_deg": 129.2,
+            "wave_height_m": 2.0,
+            "reflection_coef": 0.5,
+            "target_resolution_m": 30.0,
+            "bathy_source": "noaa_greatlakes",
+            "compute_class": "medium",
+            "input_mode": "user_gated",
+        },
+        case_title="canary: artemis harbor agitation (Marquette, coarse)",
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),

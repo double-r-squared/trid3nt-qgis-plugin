@@ -34,6 +34,7 @@ from trid3nt_server.workflows.lib import (
 )
 from trid3nt_server.workflows.shared.aoi import AcquireAoi
 from trid3nt_server.workflows.telemac.steps import (
+    Agitation,
     CarrierDischarge,
     Coastal,
     Geocode,
@@ -43,6 +44,7 @@ from trid3nt_server.workflows.telemac.steps import (
     SolveOpenWater,
     Wave,
     WriteDeck,
+    write_agitation_deck,
     write_coastal_deck,
     write_reach_deck,
     write_wave_deck,
@@ -103,6 +105,10 @@ def _read_wave(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Wave.products(deck=Ref("deck"), solve=solve).named("wave_field")
 
 
+def _read_agitation(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
+    return Agitation.products(deck=Ref("deck"), solve=solve).named("agitation")
+
+
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
 
@@ -127,6 +133,9 @@ _PROCESSES: dict[str, _Process] = {
     "wave_spectrum": _Process(
         domain_kw="aoi", deck=Wave.deck, writer=write_wave_deck,
         solve=_open_water_solve, read=_read_wave, forcing_fields={}),
+    "harbor_agitation": _Process(
+        domain_kw="aoi", deck=Agitation.deck, writer=write_agitation_deck,
+        solve=_open_water_solve, read=_read_agitation, forcing_fields={}),
 }
 
 #: The universal SIZING ask, translated into the deck fields a TELEMAC writer

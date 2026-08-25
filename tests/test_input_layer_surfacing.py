@@ -630,7 +630,7 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "schism/results_mesh_seam.py": (1, "the seam-side out2d/salinity mesh publisher - framework emission, one home for all schism legs (ADR 0286)"),
     "sfincs/flood/flood.py": (1, "mesh preview"),
     "swan/wave_field/wave_field.py": (1, "in-worker bathymetry COG"),
-    "telemac/agitation/agitation.py": (1, "bare-OSM breakwaters (router-bypass, S3 loose end)"),
+    "telemac/steps/agitation.py": (1, "bare-OSM breakwaters (router-bypass: the mesh needs the WAY GEOMETRY, which the router's general overpass source collapses to centroids)"),
     "telemac/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
     "telemac/steps/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam (ADR 0309)"),

@@ -386,6 +386,12 @@ class ArtemisAgitationLayerURI(LayerURI):
         wave_period_s: incident wave period the field was forced with (s, >= 0).
         mesh_size_m: grid node spacing (m, > 0) the solve used.
         mesh_resolution_label: OPTIONAL human label for the resolution choice.
+        agitation_curve_m / agitation_curve_kd / agitation_curve_kind: OPTIONAL the
+            curve the worker measured across the field - a transect in metres
+            against Kd for a diffraction run, a period sweep for a resonance run -
+            paired index-for-index, with the kind naming what the axis IS. The
+            chart plots this rather than resampling the raster, so the chart and
+            the narrated kd_sheltered / kd_exposed are the SAME measurement.
 
     ``layer_type`` is ``"raster"`` (the Kd COG); the phase field plays from the
     ARTEMIS result SELAFIN mesh sibling discovered via
@@ -403,6 +409,9 @@ class ArtemisAgitationLayerURI(LayerURI):
     wave_period_s: float | None = Field(default=None, ge=0.0)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)
+    agitation_curve_m: list[float] | None = Field(default=None)
+    agitation_curve_kd: list[float] | None = Field(default=None)
+    agitation_curve_kind: str | None = Field(default=None)
 
 
 class Telemac3dLayerURI(LayerURI):
