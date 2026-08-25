@@ -1013,3 +1013,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (something like `max(30, dx_m / 4)`) so the clip distance scales with the mesh
   the run actually solved. NOT done in the migration wave: it changes the
   published raster, and this wave's evidence is same-question-same-answer.
+
+- PER-WORKFLOW DELIVERY NORM (NATE 2026-08-25): during fleet migration
+  every migrated workflow is shown to NATE INDIVIDUALLY as it lands -
+  per-template packet (LOC delta, parity one-liner, full proof render
+  set) - never batched at wave end. Applies TELEMAC and onward (MODFLOW,
+  SWMM).
