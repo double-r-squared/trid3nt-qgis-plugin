@@ -7,3 +7,10 @@ fetch_modis_lst:
 - drought thermal stress surface temperature over a region
 - surface skin temperature heat map (not air temperature)
 - overnight heat retention land surface temperature for heat-risk
+# cleanup wave phase 2 (2026-08-25): the MAP half of the demoted
+# compute_urban_heat_island - this fetcher already paints the LST layer the
+# tool re-painted, so a "show me the surface heat" ask lands here and the
+# per-class analysis lands in the playground.
+- show me land surface temperature over this city
+- night time heat retention in the city versus the countryside
+- paint the surface temperature for this metro area

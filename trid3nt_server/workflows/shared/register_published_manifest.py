@@ -45,7 +45,7 @@ from trid3nt_contracts.publish_manifest import (
     parse_publish_manifest,
 )
 
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission.publish import (
     _stash_legend_for_uri,
     legend_for_published_layer,
     style_params_from_band_stats,

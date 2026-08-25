@@ -305,7 +305,7 @@ def clear_registry_for_tests() -> None:
 # -- fetchers/terrain --
 # fetch_3dep_extra: library-delegate raster fold -- twin DELETED, now
 # spec-driven (source.yaml + pfdf_3dep delegate/validate hooks over the generic
-# library_delegate mode; output.auto_publish=False + per-resolution payload table);
+# library_delegate mode; per-resolution payload table);
 # auto-registered by _register_router_specs() below.
 # fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
 # (source.yaml + router stac_float), registered by _register_router_specs() below.
@@ -497,7 +497,6 @@ from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E
 # V&V wave (lane B): model-fit skill-metrics wrap (spotpy).
 from .processing.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .processing.compute_slope import compute_slope  # noqa: E402,F401
-from .processing.compute_urban_heat_island import compute_urban_heat_island  # noqa: E402,F401
 # compute_zonal_statistics DEMOTED to the code_exec playground
 # (docs/playbooks/zonal-statistics-recipe.md, docs/decisions/0043).
 from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
@@ -592,12 +591,6 @@ from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
 from .meta.passthroughs import passthroughs  # noqa: E402,F401
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
 from .search.web_fetch import web_fetch  # noqa: E402,F401
-
-# -- tools/ root (load-bearing chokepoints kept flat) --
-# Aliased so the registration-side-effect import of the inner module does NOT
-# rebind the ``tools.publish_layer`` attribute (which must stay the subpackage
-# so ``trid3nt_server.tools.publish_layer.publish_layer.<attr>`` resolves).
-from .publish_layer import publish_layer as _publish_layer_reg  # noqa: E402,F401
 
 # ---------------------------------------------------------------------------
 # Workflow-composer registrations (each carries its OWN @register_tool) and

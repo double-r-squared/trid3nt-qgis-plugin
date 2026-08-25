@@ -386,7 +386,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
-from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 from trid3nt_server.emission.outputs_seam import (
     build_layers_from_outputs,
     read_outputs_manifest,

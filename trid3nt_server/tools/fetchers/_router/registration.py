@@ -334,12 +334,6 @@ def register_spec(spec: SourceSpec) -> str:
         payload_mb_estimator_name="estimate_payload_mb",
         open_world_hint=True,
         tier=tier,
-        # propagate output.auto_publish so the server dispatch wrapper
-        # renders (or suppresses) the raster exactly as it did for the twin's
-        # metadata flag. Default True = the terminal-product behaviour for every
-        # prior spec (none set output.auto_publish); an INTERMEDIATE raster spec
-        # (fetch_3dep_extra) sets it False to opt out of the automatic render.
-        auto_publish=spec.output.auto_publish,
         # DATA-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,

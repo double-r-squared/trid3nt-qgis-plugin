@@ -32,7 +32,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
-from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
+from trid3nt_server.emission.publish import PublishLayerError
 from trid3nt_server.workflows.sfincs.flood.flood import (
     model_flood_scenario,
     sfincs_flood,

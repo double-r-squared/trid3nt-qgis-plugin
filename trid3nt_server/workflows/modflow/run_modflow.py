@@ -1649,7 +1649,7 @@ def read_modflow_build_manifest(
         cog_uri.startswith("s3://") or cog_uri.startswith("gs://")
     ):
         try:
-            from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
+            from trid3nt_server.emission.publish import publish_layer
 
             wms_url = publish_layer(
                 layer_uri=cog_uri,
@@ -1762,7 +1762,7 @@ def read_modflow_archetype_manifest(
         cog_uri.startswith("s3://") or cog_uri.startswith("gs://")
     ):
         try:
-            from trid3nt_server.tools.publish_layer.publish_layer import publish_layer
+            from trid3nt_server.emission.publish import publish_layer
 
             wms_url = publish_layer(
                 layer_uri=cog_uri,

@@ -54,7 +54,7 @@ from trid3nt_server.workflows.sfincs.sfincs_builder import (
     _generate_hydromt_yaml_config,
     build_sfincs_model,
 )
-from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
+from trid3nt_server.emission.publish import PublishLayerError
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.envelope import AssessmentEnvelope
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult

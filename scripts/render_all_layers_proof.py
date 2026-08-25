@@ -157,7 +157,7 @@ def _raster_style(layer: dict) -> tuple[float | None, float | None, str | None, 
     if isinstance(legend, dict) and legend.get("kind") == "continuous":
         return (legend.get("vmin"), legend.get("vmax"),
                 legend.get("colormap") or "viridis", "LayerURI.legend")
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         _parse_style_params,
         _resolve_qgis_style_params,
     )
@@ -171,7 +171,7 @@ def _raster_style(layer: dict) -> tuple[float | None, float | None, str | None, 
 
 
 def _preset_label(preset: str | None) -> str:
-    from trid3nt_server.tools.publish_layer.publish_layer import _label_from_style_preset
+    from trid3nt_server.emission.publish import _label_from_style_preset
 
     return _label_from_style_preset(preset) or (preset or "(none)")
 

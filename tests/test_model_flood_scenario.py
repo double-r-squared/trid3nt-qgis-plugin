@@ -2562,7 +2562,7 @@ async def test_model_flood_scenario_publish_layer_failure_drops_layer() -> None:
     (Supersedes the prior "falls back to gs://" contract, which codified the
     leak this job closes.)
     """
-    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.emission.publish import PublishLayerError
 
     run_id = new_ulid()
     handle = _make_handle(run_id=run_id)
@@ -2678,7 +2678,7 @@ async def test_wrapper_publish_failure_returns_truthful_dict_not_layer_uri() -> 
       * The dict carries the depth metrics + provenance so the agent narrates
         the publish failure honestly and can retry.
     """
-    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.emission.publish import PublishLayerError
 
     run_id = new_ulid()
     handle = _make_handle(run_id=run_id)

@@ -376,7 +376,7 @@ async def _ingest_vector(
     # frozen key. Fail-open (None) is honored: the layer still registers, just
     # without a cold-view display asset (the live inline-GeoJSON path still works
     # while the agent box is awake).
-    from trid3nt_server.tools.publish_layer.publish_layer import _write_durable_vector_geojson
+    from trid3nt_server.emission.publish import _write_durable_vector_geojson
 
     geojson_uri = await asyncio.to_thread(
         _write_durable_vector_geojson, fgb_uri, layer_id, case_id
@@ -465,7 +465,7 @@ async def _ingest_raster(
     # resolution, and TiTiler tile-template minting for an s3:// raster. It is a
     # blocking (sync) call (boto3 + rasterio internally); run it off the event
     # loop.
-    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
+    from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
     try:
         tile_template = await asyncio.to_thread(
@@ -477,10 +477,10 @@ async def _ingest_raster(
             error_code=getattr(exc, "error_code", "RASTER_PUBLISH_FAILED"),
         ) from exc
 
-    from trid3nt_server.server import _resolve_publish_wrap_style_preset
-    from trid3nt_server.tools.publish_layer.publish_layer import derive_readable_layer_name
+    from trid3nt_server.emission.publish import style_preset_for_publish
+    from trid3nt_server.emission.publish import derive_readable_layer_name
 
-    resolved_style = _resolve_publish_wrap_style_preset(
+    resolved_style = style_preset_for_publish(
         style_preset=None, layer_uri=tile_template, layer_id=layer_id
     )
     layer_name = derive_readable_layer_name(name, layer_id, resolved_style, tile_template)

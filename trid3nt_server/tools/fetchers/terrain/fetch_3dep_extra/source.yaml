@@ -46,7 +46,6 @@ output:
   ext: tif
   role: input
   style_preset: continuous_dem
-  auto_publish: false
 cache:
   ttl_class: static-30d
 payload_estimate:

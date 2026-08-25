@@ -1,8 +1,0 @@
-compute_urban_heat_island:
-- how strong is the urban heat island in this city
-- how much hotter is downtown than the parks
-- surface temperature by land cover class for this metro
-- urban heat island delta between built up areas and vegetation
-- night time heat retention in the city versus the countryside
-- which land cover classes are hottest here
-- heat island analysis from MODIS LST and landcover

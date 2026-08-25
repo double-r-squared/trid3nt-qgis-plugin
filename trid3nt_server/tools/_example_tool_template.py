@@ -55,8 +55,6 @@ _METADATA = AtomicToolMetadata(
     open_world_hint=False,  # True for anything hitting an EXTERNAL endpoint (all fetch_*)
     destructive_hint=False,  # True only for irreversible mutation (publish_layer)
     idempotent_hint=True,  # False for dispatchers / emitters / interactive tools
-    # auto_publish only matters when a tool returns a raster LayerURI carrying a
-    # raw s3:///gs:// uri; a dict-returning compute leaves it at its default.
 )
 
 

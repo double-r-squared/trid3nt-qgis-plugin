@@ -87,8 +87,6 @@ def _import_tools_registry() -> int:
     # register search_data_catalog + fetch_from_catalog (catalog search substrate).
     from .tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401
     from .tools.search.search_data_catalog import search_data_catalog  # noqa: F401
-    # register publish_layer (COG → QGIS Server WMS bridge; side-effect tool).
-    from .tools.publish_layer import publish_layer  # noqa: F401
     # register compute_colored_relief (gdaldem color-relief; 4 ramp presets).
     from .tools.processing.compute_colored_relief import compute_colored_relief  # noqa: F401
     # register compute_slope (gdaldem slope; degrees + percent units; Horn + ZevenbergenThorne).

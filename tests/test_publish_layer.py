@@ -9,9 +9,8 @@ through the s3 + TiTiler branch, which is covered by
 ``test_publish_layer_vector_and_overviews_f32_f33.py``.
 
 Coverage here:
-1. ``test_publish_layer_registered`` - tool appears in TOOL_REGISTRY with
-   the correct metadata (cacheable=False, ttl_class="live-no-cache",
-   source_class="publish_layer").
+1. ``test_publish_layer_is_not_a_registered_tool`` - publish is a mechanism
+   the emission seam calls, never a tool a model routes to (ADR 0313).
 2. ``test_parse_qgs_key`` - ``_parse_qgs_key`` extracts the object key from
    ``gs://`` / ``s3://`` .qgs URIs (the vector-WMS seam parser).
 3. ``derive_layer_id`` - registered-handle / basename-stem / ULID-fallback
@@ -25,7 +24,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission.publish import (
     PublishLayerError,
     derive_layer_id,
     derive_readable_layer_name,
@@ -35,23 +34,22 @@ from trid3nt_server.tools.publish_layer.publish_layer import (
 
 
 # --------------------------------------------------------------------------- #
-# Test 1 - tool registration
+# Test 1 - publish is a MECHANISM, not a tool
 # --------------------------------------------------------------------------- #
 
 
-def test_publish_layer_registered() -> None:
-    """publish_layer is in TOOL_REGISTRY with correct metadata."""
-    # Import the module to trigger registration (mirrors _import_tools_registry).
-    import trid3nt_server.tools.publish_layer.publish_layer  # noqa: F401
+def test_publish_layer_is_not_a_registered_tool() -> None:
+    """ADR 0313: emission is automatic, so there is no publish intent to route.
 
-    assert "publish_layer" in TOOL_REGISTRY, (
-        f"publish_layer not found in TOOL_REGISTRY; keys={sorted(TOOL_REGISTRY)}"
+    The inverse of the assertion this test used to make. The function still
+    exists and is still the one raster-publish chokepoint - it just lives in
+    ``emission/`` and is called BY the emission seam, never by a model.
+    """
+    assert "publish_layer" not in TOOL_REGISTRY, (
+        "publish_layer is registered again; emission is automatic and a "
+        '"display this" intent has no meaning'
     )
-    entry = TOOL_REGISTRY["publish_layer"]
-    assert entry.metadata.cacheable is False
-    assert entry.metadata.ttl_class == "live-no-cache"
-    assert entry.metadata.source_class == "publish_layer"
-    assert entry.fn is publish_layer
+    assert callable(publish_layer)
 
 
 # --------------------------------------------------------------------------- #

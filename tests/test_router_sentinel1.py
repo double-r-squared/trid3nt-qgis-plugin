@@ -31,7 +31,6 @@ def test_spec_identity(spec):
     assert spec.supports_global_query is False
     assert spec.cache.ttl_class == "static-30d"
     assert spec.source_class == "sentinel1_sar"
-    assert spec.output.auto_publish is True
     assert spec.output.emit_bbox is False               # twin omits LayerURI.bbox
     assert spec.empty_error_suffix == "NO_IMAGERY"
     stac = (spec.ingest or {}).get("stac", {})

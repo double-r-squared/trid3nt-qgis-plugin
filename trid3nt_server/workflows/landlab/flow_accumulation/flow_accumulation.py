@@ -44,7 +44,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.gates.input_review import gate_input_review
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission.publish import (
     PublishLayerError,
     publish_layer,
 )

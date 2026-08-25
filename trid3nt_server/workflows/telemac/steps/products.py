@@ -26,7 +26,7 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.lib import Step
-from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError, publish_layer
+from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
 from .errors import TelemacDyeScenarioError
 from .solve import download_result_selafin

@@ -288,7 +288,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     route_sim_terminal,
     substep,
 )
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission.publish import (
     PublishLayerError,
     publish_layer,
 )

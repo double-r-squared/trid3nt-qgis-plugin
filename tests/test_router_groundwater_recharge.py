@@ -124,7 +124,7 @@ def test_payload_estimate_declared(spec):
 
 def test_style_preset_resolves_in_the_qgis_registry(spec):
     """A preset absent from the registry silently renders a wrong colormap."""
-    from trid3nt_server.tools.publish_layer import publish_layer as pl
+    from trid3nt_server.emission import publish as pl
 
     assert pl._registry_style_params(spec.output.style_preset) is not None
 

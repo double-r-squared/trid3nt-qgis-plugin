@@ -18,8 +18,8 @@
     "mesh_resolution_m": 100.0,
     "discharge_m3s": 60.0
   },
-  "session_id": "01M0W73GB1F6V9R6FJY603WW8N",
-  "case_id": "01M0W73GM4CTAZ338JY4CTZC09",
+  "session_id": "01M0WBPQBKA3G9NYH6B121VKR5",
+  "case_id": "01M0WBPQM73WMKRM9S03RVKQ5M",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -31,7 +31,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W75E3Z88N4VN5FQVAAQ44F",
+      "chart_id": "01M0WBS9S9KYCWBD9PE23GMX8B",
       "vega_lite_spec": {
         "layer": [
           {
@@ -690,7 +690,7 @@
       "title": "Dissolved-oxygen sag - Eel River near Scotia, California",
       "caption": "Streeter-Phelps DO sag: minimum 9.0099 mg/L at 158.8 m downstream (meets the 5 mg/L standard, dashed). CBOD decay drives the sag; reaeration recovers it. Screening/permit grade.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W73HCE8KV3473D5ZP8TQ6E"
+      "created_turn_id": "01M0WBPR6V98XNGZEXSTG7QZE5"
     }
   ],
   "layers": [
@@ -21691,10 +21691,10 @@
       }
     },
     {
-      "layer_id": "telemac-release-01M0W73J24STE7KYPZ53YRKN7F",
+      "layer_id": "telemac-release-01M0WBPTBMHXAVFYVB37AFB76N",
       "name": "Outfall (user) - scotia_humboldt_county_california_95562_united_s",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/inputs/01M0W73J1Q19HPY1HAZNR7CZY2/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M0WBPTB803XJMECWKJYJ1N3T/release_point.geojson",
       "style_preset": "release_point",
       "visible": true,
       "role": "context",
@@ -21726,10 +21726,10 @@
       }
     },
     {
-      "layer_id": "input-river-bed-01M0W75DSYJNS48YYWJX4RYSPC",
+      "layer_id": "input-river-bed-01M0WBS9EP032CYMMSBFXYVWXH",
       "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0WBPTCEDHHH0XZYD7SDHQV4/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -21741,10 +21741,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0W75EANA170HT6A0Z8WS35Y",
+      "layer_id": "01M0WBSA02WNH3BPPAN8EAM64Q",
       "name": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/overviews/01M0W75E1XMPJGVCT81NJK2WZH.tif",
+      "uri": "s3://trid3nt-runs/01M0WBPTCEDHHH0XZYD7SDHQV4/overviews/01M0WBS9Q7GCH0E03551FYBMBQ.tif",
       "style_preset": "continuous_dissolved_oxygen",
       "visible": true,
       "role": "primary",
@@ -21755,24 +21755,24 @@
       "crs_authid": null,
       "legend": {
         "kind": "continuous",
-        "colormap": "viridis",
-        "vmin": 9.00576,
+        "colormap": "rdylbu",
+        "vmin": 5.0,
         "vmax": 9.022,
         "classes": null,
         "value_field": null,
-        "units": null,
-        "label": "Dissolved oxygen"
+        "units": "mg/L",
+        "label": "Dissolved oxygen (mg/L)"
       }
     }
   ],
   "draw_card": null,
   "form_card": null,
   "plain_warnings": [],
-  "run_id": "01M0W73J34FMJ4DMMRDM6GXT3M",
+  "run_id": "01M0WBPTCEDHHH0XZYD7SDHQV4",
   "chart_spec": {
     "do_sag_curve": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W75E3Z88N4VN5FQVAAQ44F",
+      "chart_id": "01M0WBS9S9KYCWBD9PE23GMX8B",
       "vega_lite_spec": {
         "layer": [
           {
@@ -22629,15 +22629,15 @@
       0.0
     ],
     "mesh_size_m": 30.0,
-    "layer_uri": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/overviews/01M0W75E1XMPJGVCT81NJK2WZH.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0WBPTCEDHHH0XZYD7SDHQV4/overviews/01M0WBS9Q7GCH0E03551FYBMBQ.tif",
     "discharge_m3s": 60.0,
     "discharge_note": "carrier discharge 60 m3/s (user-supplied)",
     "mesh_resolution_m": 100.0,
     "mesh_resolution_note": "mesh_resolution_m 100 CAPPED to 30 m by the channel-width rule (width 60 m / 2)"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0WBPTCEDHHH0XZYD7SDHQV4/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0WBPTCEDHHH0XZYD7SDHQV4/metrics.json"
   },
   "product_errors": {}
 }

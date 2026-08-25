@@ -440,7 +440,11 @@ async def _run_render(node: _Node, env: _Env) -> Any:
             f"no object-store raster to style (uri={uri!r}, layer_id={layer_id!r}); "
             "there is no map layer behind this result."
         )
-    from trid3nt_server.tools.publish_layer import publish_layer
+    # The FUNCTION, not the module: the pre-move form imported
+    # ``tools.publish_layer`` (the package's submodule) and handed THAT to
+    # to_thread, which would have raised TypeError the first time a declared
+    # render actually reached here.
+    from trid3nt_server.emission.publish import publish_layer
 
     try:
         published = await asyncio.to_thread(

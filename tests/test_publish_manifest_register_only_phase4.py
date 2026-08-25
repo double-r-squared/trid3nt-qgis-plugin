@@ -27,7 +27,7 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.publish_layer import publish_layer as pl
+from trid3nt_server.emission import publish as pl
 from trid3nt_server.emission.uri_registry import (
     SessionUriRegistry,
     activate_registry,

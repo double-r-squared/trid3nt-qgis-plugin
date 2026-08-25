@@ -44,10 +44,92 @@ logger = logging.getLogger("trid3nt_server.emission.layer_uri_emit")
 
 __all__ = [
     "emit_layer_uri",
+    "publish_for_emission",
     "publish_input_layer",
     "publish_raster_input_cog",
     "stamp_fallbacks",
 ]
+
+
+async def publish_for_emission(
+    layer: LayerURI, *, case_id: str | None = None
+) -> LayerURI:
+    """Publish a raster LayerURI on its way to the map. THE auto-emit step.
+
+    Emission is automatic (NATE ruling b): a tool that produced a renderable
+    raster has produced a layer, and the user hides what they do not want to
+    see rather than asking for each one. This is the ONE place that happens -
+    it runs inside :meth:`PipelineEmitter.emit_tool_call`'s LayerURI branch, on
+    the same seam ``emit_layer_uri`` guards, so a new raster-producing tool
+    gets overviews, styling and a legend by returning a ``LayerURI`` and
+    nothing else. There is no per-tool publish call site to add, and no
+    ``auto_publish`` opt-out: an intermediate is still a layer.
+
+    Only a RASTER carrying a raw ``s3://`` COG is published. Vectors render
+    inline from their producing tool's GeoJSON, and an http(s) raster is
+    already a rendered face.
+
+    FAILS OPEN, and that is honest rather than lax: publishing enriches a
+    raster (COG overviews, the resolved style params, the data-driven legend),
+    it does not make it reachable. The QGIS plugin reads a raw ``s3://`` COG
+    via ``/vsicurl/`` either way, so a failed publish is a DEGRADE - an
+    unstyled layer with a warning in the log - not a broken layer row. The
+    guardrail that keeps genuinely un-renderable rasters off the map is
+    :func:`emit_layer_uri`, and it still runs after this.
+    """
+    uri = layer.uri or ""
+    if layer.layer_type != "raster" or not uri.startswith("s3://"):
+        return layer
+
+    from .publish import PublishLayerError, publish_layer, style_preset_for_publish
+
+    style_preset = style_preset_for_publish(
+        style_preset=layer.style_preset, layer_uri=uri, layer_id=layer.layer_id
+    )
+    try:
+        # OFFLOAD: publish runs rasterio / GDAL over the COG. Keep it off the
+        # event loop so the WS keepalive stays responsive.
+        published = await asyncio.to_thread(
+            publish_layer,
+            layer_uri=uri,
+            layer_id=layer.layer_id,
+            style_preset=style_preset or None,
+            name=layer.name,
+            case_id=case_id,
+        )
+    except (asyncio.CancelledError, GeneratorExit):
+        raise
+    except PublishLayerError as exc:
+        logger.warning(
+            "publish_for_emission: publish failed for layer_id=%s error_code=%s: "
+            "%s. The raw s3:// COG still reaches the map, unstyled.",
+            layer.layer_id, getattr(exc, "error_code", "?"), exc,
+        )
+        return layer
+    except Exception:  # noqa: BLE001 - enrichment is never fatal to the layer
+        logger.exception(
+            "publish_for_emission: publish RAISED for layer_id=%s. The raw "
+            "s3:// COG still reaches the map, unstyled.",
+            layer.layer_id,
+        )
+        return layer
+
+    if not (isinstance(published, str) and published.startswith(
+        ("http://", "https://", "s3://")
+    )):
+        logger.warning(
+            "publish_for_emission: publish returned a non-renderable value for "
+            "layer_id=%s -> %r; keeping the original COG uri.",
+            layer.layer_id, published,
+        )
+        return layer
+
+    update: dict[str, Any] = {}
+    if published != uri:
+        update["uri"] = published
+    if style_preset and style_preset != layer.style_preset:
+        update["style_preset"] = style_preset
+    return layer.model_copy(update=update) if update else layer
 
 
 def stamp_fallbacks(
@@ -280,7 +362,7 @@ async def publish_raster_input_cog(
         # Late import: keep this emission module free of a load-time dependency
         # on the heavy publish_layer tool (rasterio / TiTiler), mirroring how the
         # composers import it inline.
-        from trid3nt_server.tools.publish_layer.publish_layer import (
+        from trid3nt_server.emission.publish import (
             PublishLayerError,
             publish_layer,
         )

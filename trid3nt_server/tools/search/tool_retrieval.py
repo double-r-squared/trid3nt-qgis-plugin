@@ -65,8 +65,13 @@ MAX_K = 25
 #: anything else" primitives (geocode, DEM, weather alerts CONUS + state-scoped),
 #: the discovery escape hatch (search_tools), and the cross-cutting view/analysis
 #: actions a user reaches for at any point (code exec, layer bounds, spatial
-#: input, publish, chart, spatial query). retrieve_visible_tools and the openai
+#: input, chart, spatial query). retrieve_visible_tools and the openai
 #: tool-gating floor both union this set.
+#:
+#: ``publish_layer`` used to sit here. It is no longer a tool at all: emission
+#: is automatic, so there is no "display this" intent left for the model to
+#: route to (the mechanism lives in ``trid3nt_server/emission/publish.py`` and
+#: runs on every renderable layer without being asked).
 CORE_FLOOR: frozenset[str] = frozenset(
     {
         "sfincs_flood",
@@ -78,7 +83,6 @@ CORE_FLOOR: frozenset[str] = frozenset(
         "code_exec_request",
         "compute_layer_bounds",
         "request_spatial_input",
-        "publish_layer",
         "generate_chart",
         "spatial_query",
     }

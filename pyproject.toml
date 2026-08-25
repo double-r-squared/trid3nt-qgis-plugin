@@ -26,8 +26,8 @@ dependencies = [
     # also DROPPED: the cloud sandbox readback (Cloud Logging) and the gcp-workflows
     # solver branch were removed; object I/O is AWS S3 via boto3. google-cloud-run +
     # google-cloud-storage DROPPED with the GCP publish-path excision (the Cloud Run
-    # PyQGIS worker dispatch branch in publish_layer is gone; rasters publish via
-    # TiTiler off s3/MinIO).
+    # PyQGIS worker dispatch branch in the raster publish path is gone; rasters
+    # publish as raw s3/MinIO COGs the QGIS plugin reads via /vsicurl/).
     # google-genai is KEPT (carve-out): bedrock_adapter speaks the genai_types
     # Content/FunctionDeclaration contract that it converts to the Bedrock
     # Converse API — removing it breaks the live Bedrock path.

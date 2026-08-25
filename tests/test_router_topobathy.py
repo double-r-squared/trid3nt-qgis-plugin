@@ -79,7 +79,6 @@ def test_topobathy_registered_with_expected_metadata() -> None:
     assert md.cacheable is True
     assert getattr(md, "supports_global_query", None) is False
     assert getattr(md, "payload_mb_estimator_name", None) == "estimate_payload_mb"
-    assert getattr(md, "auto_publish", None) is False
 
 
 

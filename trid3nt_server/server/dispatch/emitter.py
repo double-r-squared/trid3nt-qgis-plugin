@@ -9,25 +9,21 @@ from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.tool_arg_normalizer import autofill_missing_bbox, normalize_args
-from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, bind_turn_case, bind_turn_drawn_geometry
 from trid3nt_server.emission.uri_registry import activate_registry, deactivate_registry, get_uri_registry
 # The gate engine (trid3nt_server.gates.confirm) is imported function-locally in
 # _invoke_tool_via_emitter -- deferred to break the server<->gates load cycle.
 from trid3nt_server.gates.tool_gating import BenchBlockedError
-from trid3nt_server.persistence.case_lifecycle import CaseLifecycleError, ensure_case_qgs
 from trid3nt_server.scenario_reuse import fetched_kind_for_tool, find_reusable_fetched_layer, get_scenario_index, scenario_signature, scenario_type_for_tool
 from trid3nt_server.server.config import _env_flag
 from trid3nt_server.server.dispatch.aoi import _maybe_default_fetch_bbox_to_pinned_aoi, _maybe_default_solver_bbox_to_pinned_aoi, _pin_case_aoi_from_solve, _pin_case_aoi_from_tool_bbox, _scenario_produces_domain
 from trid3nt_server.server.dispatch.persist import _VALID_ERROR_CODES, _persist_chart_record, _persist_chat_turn, _persist_tool_card
-from trid3nt_server.server.dispatch.results import _auto_publish_droppable_raster, _run_to_completion_shielded
+from trid3nt_server.server.dispatch.results import _run_to_completion_shielded
 from trid3nt_server.server.dispatch.reuse import _ReuseEntry
 from trid3nt_server.server.errors import CodeExecConfirmationCancelledError, PayloadWarningCancelledError, SolverConfirmationCancelledError, ToolNotFoundError
 from trid3nt_server.server.session.case_state import _persist_case_layer_handles, _persist_case_loaded_layers, _turn_case_bbox, _turn_case_id
-from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState
 from trid3nt_server.server.spatial import _is_finite_bbox4, _last_zoom_to_bbox
-from trid3nt_server.server.styles import _is_droppable_object_store_raster, _resolve_publish_wrap_style_preset
 from trid3nt_server.server.turn.wire import _emit_turn_complete, _send_error
 from typing import Any
 from websockets.asyncio.server import ServerConnection
@@ -322,10 +318,6 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # inventory + samples + writes an FGB in one sync call -- same off-load
         # rationale; emit-free body.
         "compute_flood_depth_damage",
-        # compute_urban_heat_island fetches MODIS LST + the 10 m land-cover COG
-        # + resamples onto the class grid + writes a COG in one sync call --
-        # same off-load rationale; emit-free body.
-        "compute_urban_heat_island",
         # compute_model_residuals stages an s3 model COG + (optionally) fetches
         # USGS groundwater observations over HTTP + bilinear-samples + writes
         # an FGB in one sync call -- same off-load rationale; emit-free body.
@@ -559,38 +551,10 @@ async def _invoke_tool_via_emitter(
     # them at the newly visible Case (verified contamination).
     turn_case_id = _turn_case_id(state)
 
-    # Per-Case ``.qgs`` lazy-init for ``publish_layer``: when invoked inside a
-    # Case context we resolve (or initialize) the per-Case ``.qgs`` URI
-    # BEFORE the tool body runs, then substitute it into
-    # ``project_qgs_uri`` so the worker mutates the case-scoped file rather
-    # than the shared default.
-    if tool_name == "publish_layer" and turn_case_id:
-        try:
-            case_qgs = await ensure_case_qgs(
-                get_persistence(), turn_case_id
-            )
-        except CaseLifecycleError as exc:
-            logger.warning(
-                "case-qgs lazy-init failed code=%s case=%s err=%s; "
-                "falling back to default .qgs",
-                exc.error_code,
-                turn_case_id,
-                exc,
-            )
-        else:
-            # Substitute (additively) without clobbering an explicit override.
-            params = dict(params)
-            params.setdefault("project_qgs_uri", case_qgs)
-            params.setdefault("case_id", turn_case_id)
-            logger.info(
-                "publish_layer routed to case-scoped qgs case=%s qgs=%s",
-                turn_case_id,
-                case_qgs,
-            )
-
     # Drop ``case_id`` for tools that don't declare it -- defense in depth.
-    # ``publish_layer`` accepts it; other tools do not.
-    if tool_name != "publish_layer" and "case_id" in params:
+    # No registered tool declares one: the Case scoping a publish needs travels
+    # to the emission seam through ``current_turn_case()``, not through params.
+    if "case_id" in params:
         params = {k: v for k, v in params.items() if k != "case_id"}
 
     # Payload-warning gate. When the tool declares a
@@ -850,26 +814,6 @@ async def _invoke_tool_via_emitter(
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
 
-    # Small-model resilience: local 8B models omit publish_layer's
-    # layer_id entirely. The tool itself now derives one, but
-    # the wrap-site emission below keys off params["layer_id"], so inject the
-    # SAME derived id here (post-URI-resolution, so a handle-resolved
-    # layer_uri maps back to the producing tool's layer_id) - otherwise the
-    # layer would publish without ever being announced to the map.
-    if tool_name == "publish_layer" and not params.get("layer_id"):
-        _pl_uri = params.get("layer_uri")
-        if isinstance(_pl_uri, str) and _pl_uri:
-            from trid3nt_server.tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
-
-            params = dict(params)
-            params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
-            logger.info(
-                "publish_layer: layer_id omitted by the model - derived %r "
-                "from layer_uri=%r",
-                params["layer_id"],
-                _pl_uri,
-            )
-
     # job VAULT-READ: thread the user's per-Case ``secret_ref`` into a keyed
     # tool so its ``_resolve_*_key`` reads the VAULT key first (then env). This
     # mirrors the eBird secret_ref convention. No-op for non-keyed tools and
@@ -1116,42 +1060,6 @@ async def _invoke_tool_via_emitter(
                     turn_case_id,
                 )
 
-    # DETERMINISTIC LAYER AUTO-PUBLISH: a tool returning a renderable RASTER
-    # LayerURI with a raw object-store uri (s3://, gs://) gets AUTO-CALLED
-    # through ``_auto_publish_droppable_raster`` (see its docstring) rather
-    # than left for the LLM to publish.
-    #
-    # Gating: skip ``publish_layer`` itself (its own wrap-site is below) and
-    # the reuse short-circuit (already loaded); honor the per-tool
-    # ``auto_publish`` metadata flag (default True; pure intermediates like
-    # fetch_dem/fetch_topobathy/fetch_3dep_extra opt OUT).
-    #
-    # Dedup: add_loaded_layer dedups by COG identity, so an LLM publish of the
-    # SAME COG merges into the same row.
-    #
-    # Honesty floor: a FAILED auto-publish surfaces a typed
-    # ``LAYER_AUTO_PUBLISH_FAILED`` error rather than silently narrating
-    # success; the LLM-visible tool ``result`` is left unchanged.
-    if (
-        tool_name != "publish_layer"
-        and not isinstance(entry, _ReuseEntry)
-        and getattr(entry.metadata, "auto_publish", True)
-    ):
-        _auto_pub_candidates = (
-            list(result)
-            if isinstance(result, list)
-            else [result]
-        )
-        for _cand in _auto_pub_candidates:
-            if not _is_droppable_object_store_raster(_cand):
-                continue
-            await _auto_publish_droppable_raster(
-                websocket,
-                state,
-                layer=_cand,
-                case_id=turn_case_id,
-            )
-
     # Register every URI the result carries (LayerURI layer_id↔uri
     # pairs + bare object-store strings) so the NEXT tool call can resolve
     # handles / detect mangles. Best-effort -- registration never breaks the
@@ -1256,86 +1164,6 @@ async def _invoke_tool_via_emitter(
             "uri": result.uri,
             "handle": result.layer_id,
         }
-
-    # Track layer emissions on the active turn so the next ``CaseChatMessage``
-    # write captures them. ``publish_layer`` returns a WMS URL string; we use
-    # the tool's ``layer_id`` parameter as the canonical layer identifier.
-    if tool_name == "publish_layer" and "layer_id" in params:
-        lid = params.get("layer_id")
-        if isinstance(lid, str) and lid:
-            state.current_turn_layer_ids.append(lid)
-            # The MISSING LINK between an atomic publish and the map:
-            # ``emit_tool_call`` only feeds ``add_loaded_layer`` (and thus the
-            # ``session-state`` envelope the web renders WMS layers from)
-            # when a tool RETURNS a typed LayerURI -- composers do, but the
-            # atomic ``publish_layer`` returns a bare WMS string. Wrap the WMS
-            # URL in a LayerURI here so the existing emission/persistence
-            # machinery announces it exactly as composer layers are
-            # announced.
-            #
-            # QGIS-native rendering: publish_layer returns the
-            # raw s3:// COG uri for rasters (the plugin reads it via
-            # /vsicurl/), so s3:// joins http(s) as a SUCCESS shape here.
-            if isinstance(result, str) and result.startswith(
-                ("http://", "https://", "s3://")
-            ):
-                try:
-                    # Route through the single emission seam: the publish
-                    # return here is http(s) (WMS/durable-GeoJSON) or a raw
-                    # s3:// COG (QGIS-native raster publish); the seam passes
-                    # both through so this site can never regress into
-                    # emitting an un-renderable shape (gs://, file://, empty).
-                    _resolved_style_preset = _resolve_publish_wrap_style_preset(
-                        style_preset=params.get("style_preset"),
-                        layer_uri=result,
-                        layer_id=lid,
-                    )
-                    # OPEN-9: a bare-ULID layer_id (derive_layer_id's last
-                    # resort) rendered directly as the UI name is meaningless
-                    # ("01KX5TEZ20BK86EE6DG8PSVFJK"). Derive a readable name
-                    # from whatever IS known -- an explicit model-supplied
-                    # name (params carries it even though publish_layer's own
-                    # signature only uses it for logging), else the resolved
-                    # style_preset, else the published URI's path segment.
-                    from trid3nt_server.tools.publish_layer.publish_layer import derive_readable_layer_name
-
-                    _layer_name = derive_readable_layer_name(
-                        params.get("name"),
-                        lid,
-                        _resolved_style_preset,
-                        result,
-                    )
-                    _emit_layer = emit_layer_uri(
-                        LayerURI(
-                            layer_id=lid,
-                            name=_layer_name,
-                            layer_type="raster",
-                            uri=result,
-                            # job duplicate-flood-layer SAFETY NET: when a
-                            # re-publish of a FLOOD/DEPTH COG carries an empty
-                            # style_preset, default it to continuous_flood_depth
-                            # so the layer is never styleless (= viridis). Non-
-                            # flood rasters keep "" (QGIS default).
-                            style_preset=_resolved_style_preset,
-                        )
-                    )
-                    if _emit_layer is not None:
-                        await state.emitter.add_loaded_layer(_emit_layer)
-                        # Re-persist AFTER this add: the dispatch's
-                        # finally-persist above ran BEFORE this wrap-site
-                        # emission, so the published tile layer would
-                        # otherwise only live in memory -- a Case switch +
-                        # reopen would rehydrate WITHOUT it.
-                        if turn_case_id:
-                            await _persist_case_loaded_layers(
-                                state, case_id=turn_case_id
-                            )
-                except Exception:  # noqa: BLE001 -- emission is best-effort
-                    logger.exception(
-                        "publish_layer loaded-layer emission failed "
-                        "layer_id=%s",
-                        lid,
-                    )
 
     # Per-Case layer persistence now happens in
     # the ``finally`` block above so it ALSO fires when the tool (or its

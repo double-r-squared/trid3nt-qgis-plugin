@@ -7,7 +7,7 @@ Coverage:
 - Consistency rule: external-API tools (open_world_hint=True) are a
   subset of the fetch_* / web_fetch / catalog_* group; compute_* /
   clip_* / intra-GCP tools are not open-world.
-- Specific spot-checks for known high-stakes tools (publish_layer,
+- Specific spot-checks for known high-stakes tools (
   run_solver, wait_for_completion, pelicun_damage_assessment).
 - Verify the four new fields land on AtomicToolMetadata with correct
   default values.
@@ -28,7 +28,6 @@ from trid3nt_server.tools import get_registered_tools
 import trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
 import trid3nt_server.tools.search.search_data_catalog.search_data_catalog  # noqa: F401 — registers search_data_catalog
 import trid3nt_server.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
-import trid3nt_server.tools.publish_layer.publish_layer  # noqa: F401 — registers publish_layer
 import trid3nt_server.workflows.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
 import trid3nt_server.tools.search.qgis_discovery.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
 
@@ -95,7 +94,7 @@ def test_write_tools_are_not_read_only():
     snapshot = _registry_snapshot()
     write_tools = {n for n, m in snapshot.items() if not m.read_only_hint}
     assert write_tools, (
-        "No tools have read_only_hint=False — check that publish_layer, "
+        "No tools have read_only_hint=False — check that "
         "run_solver, wait_for_completion, qgis_process, "
         "pelicun_damage_assessment were all annotated."
     )
@@ -125,8 +124,6 @@ def test_write_tools_are_not_read_only():
 #: lookup_precip_return_period), so its open_world_hint=True is honest.
 #: compute_flood_depth_damage fetches the USACE NSI structure inventory
 #: (external API) unless assets_uri is passed, so it is honest too.
-#: compute_urban_heat_island fetches MODIS LST + Esri/IO land cover (external
-#: PC STAC) unless both override URIs are passed, so it is honest too.
 #: compute_model_residuals fetches its own USGS groundwater observations
 #: (external OGC API) when observations_layer_uri is not passed -- the same
 #: input-fetching-composer shape as compute_flood_depth_damage, so it is
@@ -136,7 +133,6 @@ _OPEN_WORLD_COMPUTE_EXCEPTIONS = {
     "compute_change_detection",
     "compute_idf_curve",
     "compute_flood_depth_damage",
-    "compute_urban_heat_island",
     "compute_model_residuals",
 }
 
@@ -172,7 +168,7 @@ def test_non_idempotent_write_tools_exist():
     non_idempotent = {n for n, m in snapshot.items() if not m.idempotent_hint}
     assert non_idempotent, (
         "No tools have idempotent_hint=False — check run_solver, "
-        "wait_for_completion, publish_layer, qgis_process, "
+        "wait_for_completion, qgis_process, "
         "pelicun_damage_assessment."
     )
 
@@ -181,16 +177,6 @@ def test_non_idempotent_write_tools_exist():
 # Spot-checks for high-stakes tools
 # ---------------------------------------------------------------------------
 
-
-def test_publish_layer_annotations():
-    """publish_layer: write + destructive + not idempotent."""
-    snapshot = _registry_snapshot()
-    assert "publish_layer" in snapshot, "publish_layer not registered"
-    meta = snapshot["publish_layer"]
-    assert meta.read_only_hint is False, "publish_layer must not be read-only"
-    assert meta.open_world_hint is False, "publish_layer is intra-GCP only"
-    assert meta.destructive_hint is True, "publish_layer overwrites .qgs → destructive"
-    assert meta.idempotent_hint is False, "publish_layer starts a new CR Job → not idempotent"
 
 
 def test_run_solver_annotations():

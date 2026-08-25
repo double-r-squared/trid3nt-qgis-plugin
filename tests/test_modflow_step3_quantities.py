@@ -130,6 +130,6 @@ def test_physics_invalid_key_raises_typed_error() -> None:
 
 
 def test_modflow_step3_style_presets_resolve() -> None:
-    from trid3nt_server.tools.publish_layer.publish_layer import _QGIS_STYLE_REGISTRY
+    from trid3nt_server.emission.publish import _QGIS_STYLE_REGISTRY
 
     assert pm.HEAD_STYLE_PRESET in _QGIS_STYLE_REGISTRY

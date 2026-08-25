@@ -106,7 +106,6 @@ def test_fetch_dem_is_registered_with_static_30d():
     assert entry.metadata.source_class == "dem"
     assert entry.metadata.cacheable is True
     # INTERMEDIATE raster: opts out of the auto-render (twin metadata flag).
-    assert entry.metadata.auto_publish is False
 
 
 # --------------------------------------------------------------------------- #

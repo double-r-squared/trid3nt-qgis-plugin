@@ -103,7 +103,6 @@ def test_spec_identity(spec):
     assert spec.output.result_model == "LandcoverResult"
     assert spec.output.style_preset == "categorical_landcover"
     assert spec.output.role == "input"
-    assert spec.output.auto_publish is False
     assert spec.normalize.units == "nlcd_class_code"
     assert spec.hooks.pre_resolve == "landcover.pre_resolve"
     assert spec.hooks.envelope == "landcover.envelope"

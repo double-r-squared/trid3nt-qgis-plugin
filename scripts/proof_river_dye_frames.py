@@ -74,7 +74,7 @@ def _read_json(bucket: str, key: str) -> dict:
 
 def _product_style(peak_uri: str) -> tuple[float | None, float | None, str]:
     """The vmin/vmax/colormap the PRODUCT publishes this raster with."""
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         _parse_style_params,
         _resolve_qgis_style_params,
     )

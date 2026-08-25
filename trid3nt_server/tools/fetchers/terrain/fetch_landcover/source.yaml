@@ -64,7 +64,6 @@ output:
   role: input
   style_preset: categorical_landcover
   result_model: LandcoverResult
-  auto_publish: false
 cache:
   ttl_class: static-30d
 payload_estimate:

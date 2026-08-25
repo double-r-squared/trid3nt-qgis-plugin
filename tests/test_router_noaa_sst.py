@@ -57,7 +57,6 @@ def test_spec_identity(spec):
     assert spec.supports_global_query is False
     assert spec.cache.ttl_class == "static-30d"
     assert spec.source_class == "noaa_sst"
-    assert spec.output.auto_publish is True
     assert spec.output.emit_bbox is True
     assert spec.empty_error_suffix == "NO_DATA"
     assert (spec.ingest or {}).get("access") == "griddap"

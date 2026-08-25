@@ -36,3 +36,14 @@ code_exec_request:
 - estimate overtopping discharge in litres per second per metre for this coastal structure
 - take the SWAN wave height and period and compute overtopping over the breakwater
 - how much overtopping for these waves over a dike with roughness reduction
+# cleanup wave phase 2 (2026-08-25): urban-heat-island phrasings re-homed from
+# the DEMOTED compute_urban_heat_island. Both maps the question needs are
+# registered fetchers (fetch_modis_lst + fetch_esri_landcover_10m) and emission
+# is automatic, so what is left is per-class arithmetic over two staged rasters;
+# docs/playbooks/urban-heat-island-recipe.md.
+- how strong is the urban heat island in this city
+- how much hotter are the built up areas than the parks here
+- surface temperature by land cover class for this metro
+- urban heat island delta between built up areas and vegetation
+- which land cover classes are hottest here
+- heat island analysis from MODIS LST and landcover

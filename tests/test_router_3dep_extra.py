@@ -3,7 +3,6 @@
 Migrates the value-bearing coverage of the deleted fetch_3dep_extra twin (the 3DEP
 block of test_pfdf_unlock_statsgo_nldi_3dep.py) onto the generic library-delegate
 mode, plus the two ADR 0075 fast-follow extensions this fold introduced:
-  * ``output.auto_publish: false`` -> AtomicToolMetadata.auto_publish is False (the
     role=input intermediate opts out of the server auto-render);
   * ``payload_estimate.mb_per_sq_deg_by_param`` -> the per-resolution coefficient
     table (5 / 500 / 5000 / 1 / 200 MB/deg^2) the scalar mb_per_sq_deg cannot hold.
@@ -64,7 +63,7 @@ def _patch_tnm_read(monkeypatch, values: Any = None, nodata: Any = None, exc: Ex
 
 
 # --------------------------------------------------------------------------- #
-# Registration + spec shape + the auto_publish extension.
+# Registration + spec shape.
 # --------------------------------------------------------------------------- #
 
 
@@ -79,12 +78,6 @@ def test_3dep_promoted_as_library_delegate_spec():
     assert SPEC.hooks.delegate_validate == "pfdf_3dep.validate"
     assert router.select_executor(SPEC).__module__.endswith("raster_cog")
 
-
-def test_3dep_auto_publish_opts_out():
-    """output.auto_publish=false propagates to the metadata flag (ADR 0075)."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    assert TOOL_REGISTRY["fetch_3dep_extra"].metadata.auto_publish is False
 
 
 def test_3dep_docstring_carried_verbatim():

@@ -1,11 +1,22 @@
-"""Atomic tool ``publish_layer`` - raster publish bridge (raw ``s3://`` COG).
+"""The raster PUBLISH mechanism - overviews, styling, legend, registration.
 
-This module registers one atomic tool that closes the produce->render loop:
+Emission is AUTOMATIC (NATE ruling b): there is no "display this" intent and no
+``publish_layer`` tool for a model to call. Every renderable raster a tool
+returns rides :func:`trid3nt_server.emission.layer_uri_emit.publish_for_emission`
+through this module on its way to the map, intermediates included - the user
+hides what they do not want to see in QGIS.
 
     ``publish_layer(layer_uri, layer_id, style_preset, ...)``
       -> ``str`` (the raster's raw ``s3://`` COG URI, ready for the envelope)
 
-**Live path (s3 + QGIS-native rendering; the only publish path)**
+This module lives in ``emission/`` because that is who consumes it. It used to
+live under ``tools/`` while ``emission/outputs_seam.py`` reached back into it
+for five styling symbols and ``pipeline_emitter`` lifted legends out of its
+module-global stash - a package-level import cycle held together by the fact
+that ``uri_registry`` imports nothing from ``tools``. The dependency is now one
+directional edge inside one package.
+
+**The path (s3 + QGIS-native rendering; the only publish path)**
 
 Rasters live as COGs at ``s3://<bucket>/<key>`` on the object store (MinIO
 locally). The QGIS plugin - the ONLY client - opens the COG DIRECTLY via
@@ -16,39 +27,34 @@ legend/style fields, so the publish emits the raw ``s3://`` URI itself:
 1. Guard against unresolved layer handles / placeholder URIs (typed,
    retryable errors that name the case's real handles).
 2. Vectors: benign no-op (they already render inline via their producing
-   fetch tool's GeoJSON), OR a durable per-Case GeoJSON asset (P0),
+   fetch tool's GeoJSON), OR a durable per-Case GeoJSON asset,
    OR - when ``TRID3NT_QGIS_WMS_BASE`` is exported - a styled QGIS Server
    WMS GetMap face.
-3. Rasters: enforce COG overviews (F33; auto-translate when missing),
-   resolve styling via ``_resolve_qgis_style_params`` (F51 - THE render
+3. Rasters: enforce COG overviews (auto-translate when missing),
+   resolve styling via ``_resolve_qgis_style_params`` (THE render
    chokepoint: categorical/RGBA/terrain passthroughs, then the typed preset
-   registry, then band-stats percentile fallback, then a safe default;
-   the resolver math is UNCHANGED - only its output destination moved from
-   a tile-URL query string into the stashed legend), stash the data-driven
-   legend keyed by the ``s3://`` uri the envelope will carry, and register
-   the layer via ``observe_published_layer``.
+   registry, then band-stats percentile fallback, then a safe default),
+   stash the data-driven legend keyed by the ``s3://`` uri the envelope will
+   carry, and register the layer via ``observe_published_layer``.
 
-QGIS-native rendering: the tool mints no
-``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates and reads
-no ``TRID3NT_TILE_SERVER_BASE``. Old persisted cases still carry
-legacy tile-template URIs; a re-publish of one is UNWRAPPED to its embedded
-``url=`` s3 COG (the ``open_case_in_qgis._unwrap_tile_template`` trick)
-and flows through the normal raster path, and the plugin unwraps legacy
-templates it rehydrates on its own. No worker round-trip, no ``.qgs``
-mutation on the raster path.
-
-The GCP-era publish path (the legacy cloud QGIS-worker dispatch,
-``gs://``/``/vsigs/`` staging, GCS ``.qgs`` verification) was removed with
-the cloud strip - ``cache.storage_scheme()`` is pinned to ``"s3"``.
+QGIS-native rendering: nothing here mints
+``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates or reads
+``TRID3NT_TILE_SERVER_BASE``. Old persisted cases still carry legacy
+tile-template URIs; a re-publish of one is UNWRAPPED to its embedded ``url=``
+s3 COG and flows through the normal raster path, and the plugin unwraps legacy
+templates it rehydrates on its own. No worker round-trip, no ``.qgs`` mutation
+on the raster path.
 
 **Cross-cutting principles:**
 
-- **Uncacheable (side-effect tool).**
-  ``cacheable=False``, ``ttl_class="live-no-cache"``,
-  ``source_class="publish_layer"``.
-- **Resilience:** failures surface as typed ``PublishLayerError``
+- **Side effect, never cached.** A publish writes overview COGs / durable
+  vector assets and registers layer faces; there is nothing to memoize.
+- **Resilience:** failures surface as typed :class:`PublishLayerError`
   (not unhandled exceptions); style/legend/overview probes fail OPEN so a
-  publish is never blocked by a best-effort enhancement.
+  publish is never blocked by a best-effort enhancement. The caller at the
+  emission seam also fails open: a raster whose publish fails still reaches
+  the map as its raw ``s3://`` COG, unstyled, because the QGIS plugin can
+  read that - a degrade, not a broken layer row.
 """
 
 from __future__ import annotations
@@ -59,13 +65,11 @@ import tempfile
 from typing import Any
 
 from trid3nt_contracts import new_ulid
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
-
-from trid3nt_server.emission.uri_registry import observe_published_layer
-from .. import register_tool
+from .uri_registry import observe_published_layer
 
 __all__ = [
     "publish_layer",
+    "style_preset_for_publish",
     "PublishLayerError",
     "derive_layer_id",
     "derive_readable_layer_name",
@@ -76,7 +80,7 @@ __all__ = [
     "DEFAULT_PROJECT_QGS_URI",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.publish_layer.publish_layer")
+logger = logging.getLogger("trid3nt_server.emission.publish")
 
 
 # --------------------------------------------------------------------------- #
@@ -524,7 +528,8 @@ def _sediment_yield_log_style_params() -> str:
     (``[[[min, max], [r, g, b, a]], ...]``) whose class breaks are the
     log-spaced 1/5/10/50/100/500 t/ha/yr table owned by
     ``compute_sediment_yield.SEDIMENT_YIELD_LOG_CLASSES`` (single source of
-    truth -- the tool builds its LayerURI ``legend`` from the SAME table, so
+    truth -- compute_sediment_yield builds its LayerURI ``legend`` from the
+    SAME table, so
     the key always matches the paint). Lazy import mirrors the
     ``_published_scenario_tool_names`` pattern (no import-order coupling).
     ADDITIVE: every existing ``&rescale=..&colormap_name=..`` entry is
@@ -533,7 +538,10 @@ def _sediment_yield_log_style_params() -> str:
     import json as _json
     from urllib.parse import quote
 
-    from ..processing.compute_sediment_yield.compute_sediment_yield import SEDIMENT_YIELD_LOG_CLASSES, hex_to_rgba
+    from trid3nt_server.tools.processing.compute_sediment_yield.compute_sediment_yield import (
+        SEDIMENT_YIELD_LOG_CLASSES,
+        hex_to_rgba,
+    )
 
     intervals = [
         [[lo, hi], hex_to_rgba(color)]
@@ -1123,9 +1131,9 @@ def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
 # --------------------------------------------------------------------------- #
 
 #: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY (see the module
-#: docstring + the inline-GeoJSON path). A vector reaching this tool is
-#: ALREADY on the map via its producing fetch tool (``add_loaded_layer`` inline
-#: GeoJSON), so a publish is unnecessary - and routing it through the raster tile
+#: docstring + the inline-GeoJSON path). A vector reaching here is ALREADY on
+#: the map via its producing fetch tool (``add_loaded_layer`` inline GeoJSON),
+#: so a publish is unnecessary - and routing it through the raster tile
 #: path mints HANGING tiles that freeze the map. Token-tail matched against the
 #: resolved URI basename.
 _VECTOR_EXTS = (
@@ -1156,9 +1164,9 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
     F32 turns that into a benign no-op: NO raise (so ``emit_tool_call``
     ``mark_complete``s the step - green, not red), NO tile template, NO
     ``observe_published_layer`` registration (so no hanging-tile face is minted).
-    The returned string is the function_response the LLM reads - a clear,
-    honest "already rendered inline; no publish needed" so it narrates calmly
-    and does not retry.
+    The returned string is what the caller gets back - a clear, honest
+    "already rendered inline; no publish needed" rather than a failure it would
+    have to explain.
     """
     logger.info(
         "publish_layer: benign vector no-op for layer_id=%s uri=%s - vector "
@@ -1234,7 +1242,7 @@ def _vector_uri_to_geojson_bytes(layer_uri: str) -> bytes | None:
 
     try:
         if layer_uri.startswith("s3://"):
-            from ..cache import read_object_bytes_s3
+            from trid3nt_server.tools.cache import read_object_bytes_s3
 
             raw = read_object_bytes_s3(layer_uri)
         elif layer_uri.startswith(("gs://", "/vsigs/")):
@@ -1452,7 +1460,10 @@ def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
             in_tmp = in_f.name
             in_f.write(raster_bytes)
         try:
-            from ..processing.compute_hillshade.compute_hillshade import _get_gdaldem_bin, _translate_to_cog
+            from trid3nt_server.tools.processing.compute_hillshade.compute_hillshade import (
+                _get_gdaldem_bin,
+                _translate_to_cog,
+            )
 
             gdaldem_bin = _get_gdaldem_bin()  # raises if unavailable
             cog_bytes = _translate_to_cog(in_tmp, gdaldem_bin)
@@ -1592,7 +1603,7 @@ def _read_raster_bytes(layer_uri: str) -> bytes | None:
     """
     try:
         if layer_uri.startswith("s3://"):
-            from ..cache import read_object_bytes_s3
+            from trid3nt_server.tools.cache import read_object_bytes_s3
 
             return read_object_bytes_s3(layer_uri)
         # local path (dev/test convenience)
@@ -1715,17 +1726,18 @@ def _looks_like_unresolved_handle(layer_uri: str) -> bool:
     """True when ``layer_uri`` cannot be a consumable URI or filesystem path.
 
     OPEN-17 class (2026-07-13, live local-8B incident): small models call
-    ``publish_layer`` in the SAME iteration as the producing tool with literal
+a publish in the SAME iteration as the producing tool with literal
     placeholders ('LayerURI_from_previous_step') or invented pseudo-URIs
     ('qgis://project1'). Those fail deep in the publish path with an
     unhelpful GDAL/storage error. This predicate gates them at the door so
-    the tool raises a typed, self-correcting error that NAMES the actually
-    available handles instead.
+    the caller gets a typed error that NAMES the actually available handles
+    instead. The class is rarer now that no model calls a publish tool, but
+    the guard still covers a composer handing on an unresolved handle.
 
     Conservative by construction -- everything a valid caller passes today is
-    accepted: registered handles are already server-resolved to real URIs
-    before the tool body runs; composers pass ``s3://``/``gs://``/tile-template
-    URLs; ``/vsi*`` GDAL paths and absolute filesystem paths pass through.
+    accepted: registered handles are already resolved to real URIs before this
+    runs; composers pass ``s3://``/``gs://``/tile-template URLs; ``/vsi*`` GDAL
+    paths and absolute filesystem paths pass through.
     """
     v = (layer_uri or "").strip()
     if not v:
@@ -1942,29 +1954,63 @@ def derive_readable_layer_name(
 
 
 # --------------------------------------------------------------------------- #
-# Tool registration
+# Style-preset resolution at the publish boundary
 # --------------------------------------------------------------------------- #
 
-_PUBLISH_LAYER_METADATA = AtomicToolMetadata(
-    name="publish_layer",
-    ttl_class="live-no-cache",
-    source_class="publish_layer",
-    cacheable=False,
+#: Tokens that mark a FLOOD / DEPTH COG (vs terrain / land-cover / plume /
+#: generic rasters). A flood-depth COG that arrives with an EMPTY style_preset
+#: is defaulted to ``continuous_flood_depth`` (white->blue->green): an empty
+#: preset makes QGIS fall back to viridis and paint a redundant styleless flood
+#: layer. Token-boundary matched (not substring) so e.g. ``demo`` never trips
+#: ``dem``.
+_FLOOD_DEPTH_STYLE_TOKENS: frozenset[str] = frozenset(
+    {"flood", "depth", "inundation", "floodepth"}
 )
+_DEFAULT_FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
 
-@register_tool(
-    _PUBLISH_LAYER_METADATA,
-    # Annotations: readOnlyHint=False (writes overview COGs / durable vector
-    # GeoJSON assets to the object store), openWorldHint=False (object store +
-    # tile server only; no public API), destructiveHint=True (re-registers an
-    # existing layer handle's display face), idempotentHint=False (each call
-    # can mint a fresh overview COG / durable asset).
-    read_only_hint=False,
-    open_world_hint=False,
-    destructive_hint=True,
-    idempotent_hint=False,
-)
+def _is_flood_depth_cog(layer_uri: str, layer_id: str) -> bool:
+    """True when the resolved URI or layer_id tokenizes to a FLOOD/DEPTH raster.
+
+    Token-boundary matching on non-alphanumerics so ``flood-depth-peak-<run_id>``
+    and a ``.../flood_depth_peak.tif`` URI both match, while ``demo``/``dem`` do
+    not. Conservative: an unrecognized raster returns False (keeps the QGIS
+    default for non-flood rasters).
+    """
+    import re as _re
+
+    tokens = set(_re.split(r"[^a-z0-9]+", f"{layer_uri} {layer_id}".lower()))
+    return bool(tokens & _FLOOD_DEPTH_STYLE_TOKENS)
+
+
+def style_preset_for_publish(
+    *, style_preset: str | None, layer_uri: str, layer_id: str
+) -> str:
+    """The preset a layer publishes under, when the producer named none.
+
+    Deliberately NOT called ``resolve_style_preset``: ``quantity_styles`` in
+    this same package already owns that name for a different question (which
+    ramp a solver QUANTITY gets). This one answers a boundary question - what
+    an unnamed raster publishes as.
+
+    Honors an explicit non-empty ``style_preset`` (the producing tool asked for
+    it). When it resolves EMPTY, defaults a flood/depth COG to
+    ``continuous_flood_depth`` so a re-publish is never styleless (which QGIS
+    renders as viridis). Non-flood rasters keep ``""`` - terrain auto-scales
+    and paletted COGs use their embedded color table.
+    """
+    preset = (style_preset or "").strip()
+    if preset:
+        return preset
+    if _is_flood_depth_cog(layer_uri, layer_id):
+        return _DEFAULT_FLOOD_DEPTH_STYLE_PRESET
+    return ""
+
+
+# --------------------------------------------------------------------------- #
+# The mechanism
+# --------------------------------------------------------------------------- #
+
 def publish_layer(
     layer_uri: str,
     layer_id: str | None = None,
@@ -1972,92 +2018,49 @@ def publish_layer(
     project_qgs_uri: str | None = None,
     case_id: str | None = None,
     name: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # Absorb extra keywords. Kept after the tool died because the callers are
+    # ~30 composers plus the emission seam, and a new keyword on one of them
+    # must not break the other twenty-nine.
     **_extra_ignored: Any,
 ) -> str:
-    """Publish a COG raster layer to the map.
+    """Publish a COG raster: overviews, styling, legend, registration.
 
     Resolves the raster's styling (rescale + colormap -> the data-driven
     legend), enforces COG overviews, registers the layer, and returns the
-    raster's ``s3://`` COG URI string - the client (QGIS plugin) loads the
-    COG directly via GDAL and renders it from the envelope's legend/style
-    fields. Vectors are a benign no-op (they already render inline via
-    their producing fetch tool's GeoJSON). Not cacheable (side-effect tool;
-    registers layer faces + may write overview COGs).
+    raster's ``s3://`` COG URI - the QGIS plugin loads the COG directly via
+    GDAL ``/vsicurl/`` and renders it from the envelope's legend/style fields.
+    Vectors are a benign no-op (they already render inline via their producing
+    fetch tool's GeoJSON) unless a durable per-Case GeoJSON asset or the
+    dormant WMS face is asked for.
 
-    Use this after ``postprocess_flood``, ``compute_hillshade``,
-    ``compute_slope``, ``compute_colored_relief``, ``compute_aspect``, or any
-    tool that returns a ``LayerURI`` with an ``s3://`` COG, when the user
-    needs the layer displayed on the map -- the COG is not visible until this
-    runs; it's the final step of any raster-producing workflow.
+    Called by the emission seam for every renderable raster a tool returns
+    (``layer_uri_emit.publish_for_emission``), by the solver outputs seam, and
+    by the composers that publish a product layer directly. It is NOT a
+    registered tool and there is no model-facing intent that reaches it.
 
-    Do NOT use for: publishing vector layers (FlatGeobuf/GeoJSON already
-    render inline via their producing fetch tool); caching or re-fetching
-    data (side-effect tool, cache shim not invoked).
-
-    Params:
-        layer_uri: the producing tool's ``layer_id`` HANDLE (PREFERRED -- the
-            server resolves it to the exact ``s3://`` COG it recorded), or
-            the ``s3://`` URI copied VERBATIM from the producing tool's
-            result. NEVER construct or re-type an s3:// path from memory.
-        layer_id: layer name for the published layer; stable + unique within
-            the Case (e.g. ``"flood-depth-peak-<run_id>"``). OPTIONAL -- when
-            omitted, DERIVED from the producing tool's registered
-            ``layer_id`` if resolvable, else the URI basename stem
-            (sanitized), else a fresh ``layer-<ulid>``.
-        style_preset: style preset name, or omit for AUTO selection
-            (recommended): flood/plume depth COGs get the
-            ``"continuous_flood_depth"`` ramp; terrain products (colored
-            relief, hillshade, raw DEM) get default rendering -- correct for
-            RGBA/grayscale rasters (the flood ramp paints them invisible).
+    Args:
+        layer_uri: the ``s3://`` COG URI, or a registered layer handle the
+            caller has already resolved. A bare unresolved handle raises.
+        layer_id: stable, Case-unique id for the published layer. Derived from
+            the registered producer id / the URI basename / a fresh
+            ``layer-<ulid>`` when omitted.
+        style_preset: the preset naming this quantity's ramp, or ``None`` for
+            AUTO selection through the resolver ladder.
         project_qgs_uri: legacy ``.qgs`` project URI; consumed only by the
-            dormant ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam. Omit.
-        case_id: optional Case identifier. When passed, the server wrapper
-            resolves the case-scoped ``.qgs`` URI BEFORE invoking this tool;
-            transport-only carrier -- the atomic tool body does no
-            Persistence I/O. Defaults to ``None`` (single-tenant demo path).
-        name: OPTIONAL human-readable display name for the UI's layer list.
-            When given, used verbatim. When omitted (or an unadorned copy of
-            ``layer_id``), a readable name is DERIVED server-side
-            (``style_preset`` -> label, else a ``layer_uri`` path segment,
-            else a generic fallback) so a bare ULID never reaches the layer
-            summary. Transport-only carrier -- this function returns a bare
-            URL string, not a ``LayerURI``; the server-side wrap-site
-            (``derive_readable_layer_name``) applies the same precedence
-            when constructing the client-rendered ``LayerURI``.
+            dormant ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam.
+        case_id: Case identifier for case-scoped ``.qgs`` routing on the
+            vector-WMS seam. Transport-only; no persistence I/O happens here.
+        name: display name for the layer list. Derived from the preset label /
+            a URI path segment when omitted, so a bare ULID never reaches the
+            layer summary.
 
     Returns:
-        The published raster's raw ``s3://`` COG URI string (overview-
-        enforced COG when auto-translated). Suitable for direct use as a
-        ``LayerURI.uri`` value -- the QGIS plugin opens it via GDAL
-        ``/vsicurl/`` and styles it from the envelope legend.
+        The published raster's raw ``s3://`` COG URI (the overview-enforced
+        sibling when one had to be built). Suitable as a ``LayerURI.uri``.
 
     Raises:
-        PublishLayerError: on any failure (unknown layer handle, non-s3
-            raster URI). ``error_code`` carries a SCREAMING_SNAKE_CASE code
-            for the pipeline strip.
-
-    Uncacheable-by-construction (side-effect tool that registers
-    per-Case layer state). Cache shim NOT invoked.
-
-    Invariant 4 (Rendering): this tool IS the publish bridge -- the
-    ``s3://`` COG reaches the map only after this call registers it and
-    stashes its render legend.
-
-    Invariant 6 (Metadata-payload pattern): published layer surfaces to the
-    client via the layer-load envelope (``observe_published_layer``);
-    persistence is local (file-backed JSON store).
-
-    Cross-tool dependencies:
-        Upstream: ``postprocess_flood`` (via ``sfincs_flood``,
-        most common input), ``compute_hillshade`` / ``compute_colored_relief``
-        / ``compute_slope`` / ``compute_aspect`` / ``compute_impervious_surface``
-        (any raster ``LayerURI``), ``clip_raster_to_polygon`` /
-        ``clip_raster_to_polygon`` (clipped rasters for extent-scoped display).
-        Downstream: QGIS plugin layer panel (loads the returned ``s3://``
-        COG URI via GDAL ``/vsicurl/``); ``sfincs_flood`` calls this as the
-        final step.
+        PublishLayerError: unknown layer handle, or a non-``s3://`` raster URI.
+            ``error_code`` carries a SCREAMING_SNAKE_CASE code.
     """
     # OPEN-17 (2026-07-13): unknown/placeholder handle guard. A registered
     # handle was already substituted with its real URI by the server's

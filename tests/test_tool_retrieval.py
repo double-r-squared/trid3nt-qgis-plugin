@@ -34,8 +34,13 @@ def warm_index():
 # The core floor covers the render + layer-analysis slots.
 # ---------------------------------------------------------------------------
 def test_core_floor_covers_render_and_analysis_slots():
-    for name in ("publish_layer", "generate_chart", "spatial_query"):
+    for name in ("generate_chart", "spatial_query"):
         assert name in CORE_FLOOR, f"{name} must be in CORE_FLOOR"
+    # publish_layer used to hold the render slot. ADR 0313 deleted the tool:
+    # emission is automatic, so there is no "display this" intent to keep
+    # always-visible, and a floor entry naming a tool that does not exist would
+    # be a dead name the retrieval pool hands the model every turn.
+    assert "publish_layer" not in CORE_FLOOR
 
 
 # ---------------------------------------------------------------------------

@@ -393,7 +393,7 @@ async def model_culvert_embankment_flow(
     # --- rasterize + publish the WITH-culvert (A) peak-depth COG (feet) ---------------- #
     from trid3nt_server.workflows.shared import cog_io
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         PublishLayerError, publish_layer,
     )
 

@@ -175,7 +175,7 @@ def test_payload_estimate_declared(spec):
 
 def test_style_preset_resolves_in_the_qgis_registry(spec):
     """A preset absent from the registry silently renders a wrong colormap."""
-    from trid3nt_server.tools.publish_layer import publish_layer as pl
+    from trid3nt_server.emission import publish as pl
 
     assert pl._registry_style_params(spec.output.style_preset) is not None
 
@@ -210,7 +210,7 @@ def test_the_legend_caption_says_modelled_too(specs):
     """The legend is the second human surface; derived from the preset name it
     would read "Aquifer saturated thickness m" -- a measured-sounding caption
     over a modelled raster."""
-    import trid3nt_server.tools.publish_layer.publish_layer as pl
+    import trid3nt_server.emission.publish as pl
 
     for name in _NAMES:
         preset = specs[name].output.style_preset

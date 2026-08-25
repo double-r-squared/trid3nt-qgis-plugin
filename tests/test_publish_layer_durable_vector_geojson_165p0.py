@@ -29,7 +29,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import LineString, Point
 
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission.publish import (
     DURABLE_CASE_DATA_PREFIX,
     _vector_uri_to_geojson_bytes,
     _write_durable_vector_geojson,
@@ -280,7 +280,7 @@ def test_publish_vector_in_case_writes_durable_and_registers_both_faces(
 
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "trid3nt_server.tools.publish_layer.publish_layer.observe_published_layer",
+        "trid3nt_server.emission.publish.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -311,7 +311,7 @@ def test_publish_vector_no_case_stays_benign_no_op(
     )
     calls: list = []
     monkeypatch.setattr(
-        "trid3nt_server.tools.publish_layer.publish_layer.observe_published_layer",
+        "trid3nt_server.emission.publish.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -337,7 +337,7 @@ def test_publish_vector_in_case_fail_open_to_noop_on_write_error(
     monkeypatch.setattr("boto3.client", lambda *a, **k: boom)
     calls: list = []
     monkeypatch.setattr(
-        "trid3nt_server.tools.publish_layer.publish_layer.observe_published_layer",
+        "trid3nt_server.emission.publish.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -377,7 +377,7 @@ def test_publish_vector_in_case_geojson_source(
     fake = _FakeS3({(_RUNS_BUCKET, "runs/mesh.geojson"): _geojson_fc_bytes()})
     monkeypatch.setattr("boto3.client", lambda *a, **k: fake)
     monkeypatch.setattr(
-        "trid3nt_server.tools.publish_layer.publish_layer.observe_published_layer",
+        "trid3nt_server.emission.publish.observe_published_layer",
         lambda *a, **k: None,
     )
 
@@ -400,7 +400,7 @@ def test_publish_vector_wms_branch_still_wins_when_env_set(
     )
     calls: list = []
     monkeypatch.setattr(
-        "trid3nt_server.tools.publish_layer.publish_layer.observe_published_layer",
+        "trid3nt_server.emission.publish.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 

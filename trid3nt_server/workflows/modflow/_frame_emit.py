@@ -93,7 +93,7 @@ async def emit_modflow_frames(
             )
         return 0
 
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         PublishLayerError,
         publish_layer,
     )

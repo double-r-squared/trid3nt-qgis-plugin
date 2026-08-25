@@ -150,7 +150,6 @@ _SAMPLE_DEM_URI = "s3://trid3nt-cache/cache/static-30d/dem/sample.tif"
 _SAMPLE_LANDCOVER_URI = "s3://trid3nt-cache/cache/static-30d/landcover/sample.tif"
 _SAMPLE_RASTER_URI = "s3://trid3nt-cache/cache/static-30d/raster/sample.tif"
 _SAMPLE_VECTOR_URI = "s3://trid3nt-cache/cache/static-30d/vector/sample.fgb"
-_SAMPLE_GCS_URI = "gs://legacy-cloud-cog/cache/static-30d/sample.tif"
 
 # Map tool_name → minimal kwargs that satisfy all required parameters.
 # These are plausible real-world values, NOT magic that would make the tool
@@ -228,10 +227,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "location": (-81.87, 26.64),
         "return_period_years": 100,
         "duration_hours": 24,
-    },
-    "publish_layer": {
-        "layer_uri": _SAMPLE_GCS_URI,
-        "layer_id": "test-layer-id",
     },
     "qgis_process": {
         "algorithm": "native:buffer",

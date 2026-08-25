@@ -39,15 +39,18 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from stub_server import LEGACY_RASTER_LAYER_ROW, RASTER_LAYER_ROW  # noqa: E402
 
+#: The server's raster-styling chokepoint, which this file scans for colormap
+#: names the plugin mirror does not carry. The path was pointing at
+#: ``server/src/trid3nt_server/tools/publish_layer.py`` - a layout that stopped
+#: existing two refactors ago - so the ``skipUnless(os.path.exists(...))`` guard
+#: below had been silently skipping the drift check rather than running it.
 _SERVER_PUBLISH_LAYER = os.path.join(
     os.path.dirname(__file__),
     "..",
     "..",
-    "server",
-    "src",
     "trid3nt_server",
-    "tools",
-    "publish_layer.py",
+    "emission",
+    "publish.py",
 )
 
 MINIO = "http://127.0.0.1:9000"

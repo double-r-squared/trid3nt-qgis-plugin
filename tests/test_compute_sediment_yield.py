@@ -296,7 +296,7 @@ def test_bad_erosivity_raises(synthetic_inputs) -> None:
 
 def test_style_preset_resolves_log_colormap() -> None:
     """The publish seam turns the preset into a log-spaced interval colormap."""
-    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.emission.publish import _registry_style_params
 
     params = _registry_style_params("sediment_yield_t_ha_yr")
     assert params is not None and params.startswith("&colormap=")

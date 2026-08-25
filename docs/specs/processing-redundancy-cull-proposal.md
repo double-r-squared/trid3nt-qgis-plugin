@@ -1,5 +1,28 @@
 # processing/ Redundancy Cull Proposal (FOR NATE REVIEW)
 
+> **OUTCOME TABLE - cleanup wave phase 2, 2026-08-25.** NATE ordered six of the
+> KEEP/PROTECTED rows below re-examined for demotion to the code_exec
+> playground, per the `compute_zonal_statistics` precedent (ADR 0043). One
+> demoted; five hold, and the reason they hold is one fact this document's
+> own reason codes already encode. Verdicts, with what changed:
+>
+> | Tool | Phase-1 verdict | Phase-2 outcome | Why |
+> |---|---|---|---|
+> | `compute_urban_heat_island` | KEEP (FETCH x2 + EMIT) | **DEMOTED** | The EMIT half does not survive inspection. Its map product was the MODIS LST resampled onto the 10 m land-cover grid, painted with `style_preset="land_surface_temp_c"` - which its own source calls "the fetch_modis_lst paint". `fetch_modis_lst` paints that layer itself at NATIVE resolution and, since emission became automatic (ADR 0313), without being asked. So the recipe loses no layer, only the upsample - and losing a ~1 km measurement dressed as 10 m data is an honesty gain. What is left is per-class means + the built-minus-vegetation delta: the zonal recipe with land-cover classes as zones. `docs/playbooks/urban-heat-island-recipe.md`. |
+> | `compute_change_detection` | KEEP (FETCH + EMIT) | **KEEP** | Its product is a VECTORIZED gain/loss FGB with a categorical legend, derived from a two-date NDVI/NDWI diff. No registered fetcher paints that; the playground cannot write an FGB to the object store (no network, and `_cleanup_workdir` discards the workdir unconditionally). A recipe would return a JSON blob where the tool returns a map. |
+> | `compute_flood_depth_damage` | KEEP (EMIT) | **KEEP** | Same shape: a painted POINT layer of per-structure damage classes with a categorical legend, sampled from a depth raster at NSI structures. The HAZUS curve itself is inlinable, the painted layer is not. |
+> | `compute_sediment_yield` | KEEP (FETCH x3 + EMIT) | **KEEP** | Same shape (a styled log-class RUSLE COG), plus a hard cross-module import: `emission/publish.py:540` reads `SEDIMENT_YIELD_LOG_CLASSES` + `hex_to_rgba` from this module as the single source of truth for its render classes. Deleting it breaks the publish styling ladder. If it ever demotes, the table moves to `emission/quantity_styles.py` FIRST (ledger row, cleanup wave phase 2). |
+> | `compute_model_residuals` | PROTECTED-VNV | **KEEP** | Protected lane, NATE-scoped, and not merely by label: it paints a diverging per-point residual layer AND carries the USGS pcode unit-family reconciliation that is the honesty floor of the V&V lane. `extract_model_at_observations` defines itself by reference to it ("this tool omits the residual on purpose"), so deleting the residuals half leaves its sibling describing itself against a dead name. |
+> | `compute_exposure_summary` | KEEP (FETCH + session store) | **KEEP** | The only one of the six that clears the EMIT gate (it returns a plain dict). It fails a different one: `compose_case_report.py:354` imports `get_session_exposure`, reading a Case-keyed in-memory session store this tool populates. A `code_exec_request` return value cannot repopulate a store in the agent process - the sandbox is a separate, network-denied process. Demoting deletes the exposure section of every Case report, and the `else` branch that replaces it names the tool that would no longer exist. This is the cross-check's original ruling (§ Resolved disagreements 1), re-confirmed. |
+>
+> The load-bearing fact, stated once: **the playground cannot paint.** The
+> sandbox runs under `--unshare-net` with a workdir destroyed in a `finally`,
+> and `sandbox_executor.convert_result` discriminates on `chart` / `dataframe` /
+> `scalar` / `json` / `repr` - a LayerURI-shaped dict returns as an inert JSON
+> blob. `compute_zonal_statistics` was demotable in ADR 0043 precisely because
+> it was tabular; the `EMIT` reason code in the table below is therefore a hard
+> gate, not a preference, and five of the six carry it.
+
 Branch `refactor/engine-doors`. Read-only synthesis over 5 per-tool audit batches +
 `processing-redundancy-report.md` (prior art) + `processing-decloud-refactor.md` (queued).
 Scope: `agent/tools/processing/` only (40 registered tools + 2 register-nothing infra modules).

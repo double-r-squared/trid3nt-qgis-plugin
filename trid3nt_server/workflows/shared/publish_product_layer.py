@@ -36,7 +36,7 @@ async def publish_product_layer(raw: Any, *, style_preset: str,
     is only enriched. The layer's OWN ``style_preset`` wins over the caller's
     default when the postprocess already chose one.
     """
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         PublishLayerError,
         publish_layer,
     )

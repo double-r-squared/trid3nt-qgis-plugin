@@ -1,19 +1,19 @@
-"""Post-tool result handling: auto-publish rasters, code-exec/chart emission, tool-dispatch persistence."""
+"""Post-tool result handling: code-exec/chart emission, tool-dispatch persistence.
+
+Auto-publishing a raster used to live here as a second call site parallel to the
+emission seam. It now rides the ONE seam
+(``emission/layer_uri_emit.publish_for_emission``), so nothing in the dispatch
+layer decides whether a layer is visible.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 from collections.abc import Awaitable
-from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.meta.code_exec_tool.code_exec_tool import CODE_EXEC_RESULT_KEY
-from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
 from trid3nt_server.server.dispatch.persist import _persist_chart_record
-from trid3nt_server.server.session.case_state import _persist_case_loaded_layers
 from trid3nt_server.server.session.state import SessionState
-from trid3nt_server.server.styles import _resolve_publish_wrap_style_preset
-from trid3nt_server.server.turn.wire import _send_error
 from typing import Any
 from websockets.asyncio.server import ServerConnection
 
@@ -61,183 +61,6 @@ async def _run_to_completion_shielded(coro: Awaitable[Any]) -> None:
     if cancelled:
         # Invariant 8: the write landed; now honor the parent cancellation.
         raise asyncio.CancelledError
-
-async def _auto_publish_droppable_raster(
-    websocket: ServerConnection,
-    state: SessionState,
-    *,
-    layer: LayerURI,
-    case_id: str | None,
-) -> None:
-    """Deterministically publish + render a droppable object-store raster.
-
-    ``layer`` is exactly the class ``emit_layer_uri`` DROPS -- a renderable
-    raster carrying a raw ``s3://``/``gs://`` uri MapLibre cannot fetch. Calls
-    ``publish_layer`` server-side, off the asyncio loop (no-sync-blocking
-    norm), and feeds the resulting published uri (an http(s) face, or the raw
-    ``s3://`` COG on the QGIS-native path) through the SAME
-    ``emit_layer_uri`` -> ``add_loaded_layer`` -> persist machinery the
-    publish_layer wrap-site uses, so dedup/z-index/snapshot/manifest behave
-    identically (an LLM publish of the SAME COG merges by COG identity -- no
-    double-add).
-
-    Honesty floor: on FAILURE (raises, or returns neither an http(s) URL nor
-    an s3:// COG uri) surfaces a typed ``LAYER_AUTO_PUBLISH_FAILED`` error --
-    never a silent green. The raw ``s3://`` COG uri is a SUCCESS shape for
-    rasters (the plugin reads it via /vsicurl/), accepted alongside http(s).
-    The LLM-visible tool result is left UNCHANGED so retry-on-failure
-    narration can act. Best-effort: never raises, so it cannot break the
-    dispatch.
-    """
-    publish_entry = TOOL_REGISTRY.get("publish_layer")
-    if publish_entry is None:  # pragma: no cover - publish_layer always present
-        logger.warning(
-            "auto-publish: publish_layer not in registry; cannot render "
-            "raster layer_id=%s uri=%s",
-            layer.layer_id,
-            layer.uri,
-        )
-        return
-
-    style_preset = _resolve_publish_wrap_style_preset(
-        style_preset=layer.style_preset,
-        layer_uri=layer.uri,
-        layer_id=layer.layer_id,
-    )
-
-    try:
-        # publish_layer is synchronous (polls PyQGIS); run it OFF the
-        # event loop so it cannot stall the WS heartbeat. The server wrapper
-        # normally resolves the case-scoped .qgs for publish_layer; here we pass
-        # case_id straight through so the same per-Case routing applies inside
-        # the tool body.
-        published_url = await asyncio.to_thread(
-            publish_entry.fn,
-            layer_uri=layer.uri,
-            layer_id=layer.layer_id,
-            style_preset=style_preset or None,
-            case_id=case_id,
-        )
-    except (asyncio.CancelledError, GeneratorExit):
-        raise
-    except BaseException as exc:  # noqa: BLE001 - classify into honesty floor
-        logger.exception(
-            "auto-publish: publish_layer FAILED layer_id=%s uri=%s",
-            layer.layer_id,
-            layer.uri,
-        )
-        await _emit_auto_publish_failure(
-            websocket, state, layer=layer, reason=str(exc) or exc.__class__.__name__
-        )
-        return
-
-    # Honesty floor: publish_layer's SUCCESS shapes are an http(s) URL (a
-    # WMS/durable-GeoJSON face) or the raw s3:// COG uri (QGIS-native raster
-    # publish; the plugin reads it via /vsicurl/). Anything else -- empty/None,
-    # an error string, gs://, file:// -- is NOT a renderable layer: never add
-    # it + narrate success.
-    if not (
-        isinstance(published_url, str)
-        and published_url.startswith(("http://", "https://", "s3://"))
-    ):
-        logger.warning(
-            "auto-publish: publish_layer returned a non-renderable value for "
-            "layer_id=%s uri=%s -> %r; treating as render failure",
-            layer.layer_id,
-            layer.uri,
-            published_url,
-        )
-        await _emit_auto_publish_failure(
-            websocket,
-            state,
-            layer=layer,
-            reason=(
-                "publish_layer did not return a renderable http(s) URL or "
-                "s3:// COG uri"
-            ),
-        )
-        return
-
-    # Success: route the published uri (http(s) face or raw s3:// COG) through
-    # the SINGLE emission seam (it passes both through untouched) and the
-    # existing add_loaded_layer machinery. The published layer keeps the
-    # producing layer's id/name so the COG-identity dedup collapses a later LLM
-    # re-publish of the same COG into this same row.
-    try:
-        _emit_layer = emit_layer_uri(
-            LayerURI(
-                layer_id=layer.layer_id,
-                name=layer.name,
-                layer_type="raster",
-                uri=published_url,
-                style_preset=style_preset,
-                role=layer.role,
-                units=layer.units,
-                bbox=layer.bbox,
-            )
-        )
-        if _emit_layer is None:  # pragma: no cover - http/s3 never drops
-            return
-        await state.emitter.add_loaded_layer(_emit_layer)
-        # Track the layer on the active turn so the closing CaseChatMessage
-        # captures it (mirrors the publish_layer wrap-site).
-        if layer.layer_id:
-            state.current_turn_layer_ids.append(layer.layer_id)
-        # Re-persist AFTER this add: the dispatch finally-persist ran BEFORE this
-        # auto-publish, so without re-persisting the rendered layer would live
-        # only in memory and a Case reopen would rehydrate without it (the exact
-        # publish_layer-wrap-site durability concern). Shielded so a parent cancel
-        # cannot interrupt the write; each persist swallows its own errors.
-        if case_id:
-            await _run_to_completion_shielded(
-                _persist_case_loaded_layers(state, case_id=case_id)
-            )
-    except asyncio.CancelledError:
-        raise
-    except Exception:  # noqa: BLE001 - emission/persist is best-effort
-        logger.exception(
-            "auto-publish: rendered-layer emission failed layer_id=%s",
-            layer.layer_id,
-        )
-
-async def _emit_auto_publish_failure(
-    websocket: ServerConnection,
-    state: SessionState,
-    *,
-    layer: LayerURI,
-    reason: str,
-) -> None:
-    """Surface a typed 'computed but not displayable' state (honesty floor).
-
-    When the deterministic auto-publish cannot produce a renderable http(s) URL,
-    we MUST NOT silently drop the layer and narrate success. Emit a typed
-    ``LAYER_AUTO_PUBLISH_FAILED`` error envelope so the failure is visible to the
-    user (a degraded card / honest error) and the LLM-visible retry loop can act.
-    Best-effort: never raises.
-    """
-    try:
-        # The A.6 ErrorCode literal is a closed set; INTERNAL_ERROR is the right
-        # wire code for an unexpected server-side render failure. The typed
-        # ``[LAYER_AUTO_PUBLISH_FAILED]`` marker leads the human-readable message
-        # so the surface is unambiguous + greppable (and the web can special-case
-        # a degraded layer card off it) without widening the contract enum.
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            (
-                f"[LAYER_AUTO_PUBLISH_FAILED] Computed layer {layer.name!r} "
-                f"({layer.layer_id}) could not be displayed: {reason}. The result "
-                f"was produced but is not renderable on the map."
-            ),
-            retryable=True,
-        )
-    except Exception:  # noqa: BLE001 - the honesty surface must never break dispatch
-        logger.debug(
-            "auto-publish failure-envelope emit failed layer_id=%s",
-            layer.layer_id,
-            exc_info=True,
-        )
 
 async def _maybe_emit_code_exec_result(
     websocket: ServerConnection,

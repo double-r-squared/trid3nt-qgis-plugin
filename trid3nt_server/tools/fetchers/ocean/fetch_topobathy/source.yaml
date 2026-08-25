@@ -72,7 +72,6 @@ output:
   ext: tif
   role: input
   style_preset: continuous_dem
-  auto_publish: false
   emit_bbox: true
   result_model: TopobathyResult
   provenance: true

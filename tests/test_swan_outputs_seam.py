@@ -61,7 +61,7 @@ def _frames(n: int) -> dict:
 
 
 def _resolved_style(preset, band_stats, uri):
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         style_params_from_band_stats,
     )
     bs = band_stats or {}
@@ -73,7 +73,7 @@ def _resolved_style(preset, band_stats, uri):
 
 
 def _stashed_legend(uri):
-    from trid3nt_server.tools.publish_layer import publish_layer as pl
+    from trid3nt_server.emission import publish as pl
     lg = pl._LAST_LEGEND_BY_URI.get(uri)
     if lg is None:
         return None

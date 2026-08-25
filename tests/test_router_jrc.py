@@ -53,7 +53,6 @@ def test_spec_identity(spec):
     assert spec.empty_error_suffix == "NO_COVERAGE"
     assert spec.supports_global_query is False
     assert spec.cache.ttl_class == "static-30d"          # -> cacheable True
-    assert spec.output.auto_publish is True              # twin default
     assert spec.ingest["access"] == "stac_continuous_mosaic"
     assert spec.ingest["native_cell_m"] == 30.0
     assert spec.hooks.colormap == "jrc_global_surface_water.colormap"

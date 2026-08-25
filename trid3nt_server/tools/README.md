@@ -144,5 +144,8 @@ FR-DC-1 literal (`cache/<source-class>/<hash>.<ext>`). job-0031's
   `ogc_adapter`.
 - `meta/` — `web_fetch`, `code_exec_tool`, `passthroughs`, case utilities.
 - Root keeps the load-bearing seams: `__init__.py` (registry), `cache.py`,
-  `publish_layer.py`, `vector_tiles.py` (pipeline_emitter's densify/PMTiles
-  seam), `_example_tool_template.py`.
+  `vector_tiles.py` (pipeline_emitter's densify/PMTiles seam),
+  `_example_tool_template.py`. The raster publish mechanism moved OUT to
+  `trid3nt_server/emission/publish.py` when the `publish_layer` tool was
+  deleted: emission is automatic, so publishing is something the emission
+  seam does, not something a tool asks for.

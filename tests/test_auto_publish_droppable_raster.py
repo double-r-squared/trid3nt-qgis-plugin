@@ -1,33 +1,42 @@
-"""Deterministic layer auto-publish (NATE 2026-06-26).
+"""Automatic emission: a raster reaches the map without anyone asking.
 
-NATE's directive: "we should not have the LLM enforce publishing of layers --
-this should just be done without LLM intervention." A tool that returns a
-renderable RASTER ``LayerURI`` carrying a raw object-store uri triggers a
-server-side ``publish_layer`` call from the dispatch wrapper
-(``_invoke_tool_via_emitter``) -- no LLM ``publish_layer`` call required.
+NATE's directive, twice. First (2026-06-26): "we should not have the LLM
+enforce publishing of layers -- this should just be done without LLM
+intervention." Then ruling (b), 2026-08: emission is automatic EVERYWHERE, the
+"display this" intent is retired, and the user hides what they do not want.
 
-TiTiler exit / QGIS-native swap (2026-07): ``publish_layer``'s raster SUCCESS
-shape is now the raw ``s3://`` COG uri itself (the plugin reads it via
-/vsicurl/), and the ``emit_layer_uri`` seam PASSES raster ``s3://`` (only
-``gs://`` / ``file://`` / empty still drop). The auto-publish remains the
-deterministic enrichment pass (overviews, style resolution, legend stash, URI
-registry) and its honesty floor still fires on genuinely bad publish returns.
+ADR 0313 landed the second half. The publish used to happen at a call site in
+the dispatch layer (``server/dispatch/emitter.py`` ->
+``results.py::_auto_publish_droppable_raster``), parallel to the emission seam
+and reachable only from the WS server, gated by a per-tool ``auto_publish``
+flag. Both are gone. The publish now happens inside
+``PipelineEmitter.emit_tool_call``'s LayerURI branch via
+``layer_uri_emit.publish_for_emission`` - the ONE seam ``emit_layer_uri``
+guards - so these tests drive the emitter rather than the server, which is
+also what makes them mean something: no LLM and no dispatch wrapper are in the
+picture, so a published layer can only have come from the seam.
 
-These tests mock ``publish_layer`` (so no real PyQGIS / TiTiler dispatch) and
-drive ``_invoke_tool_via_emitter`` directly via a stubbed raster tool, asserting:
+The honesty floor CHANGED SHAPE with the QGIS-native swap, and that is
+asserted here rather than assumed. Publishing enriches a raster (COG
+overviews, resolved style params, the data-driven legend); it does not make it
+reachable, because the plugin reads a raw ``s3://`` COG via ``/vsicurl/``
+either way. So a failed publish is a DEGRADE - the layer still reaches the map,
+unstyled, with a warning - not the typed ``LAYER_AUTO_PUBLISH_FAILED`` the
+MapLibre era needed. The guardrail that keeps genuinely un-renderable rasters
+(``gs://`` / ``file://`` / empty) off the map is still ``emit_layer_uri``.
 
-  * a raster ``s3://`` LayerURI triggers ONE auto publish_layer + reaches
-    ``loaded_layers`` with the published s3 COG uri, with NO LLM publish_layer
-    call (and no duplicate row alongside the direct seam emission);
-  * an ``auto_publish=False`` intermediate (e.g. fetch_dem) does NOT
-    auto-publish (its raw s3 layer still emits through the seam, unenriched);
-  * an http(s) raster LayerURI is untouched (already renderable);
-  * a vector LayerURI is untouched (inline-GeoJSON path);
-  * a double-publish (the LLM ALSO calls publish_layer for the same COG) does NOT
-    duplicate the layer (COG-identity dedup merges the rows);
-  * a publish FAILURE (raise, or a non-renderable return such as an empty/error
-    string) surfaces a typed honesty-floor error envelope (never a silent
-    green).
+Asserted:
+  * a raster ``s3://`` LayerURI publishes ONCE, unasked, and reaches
+    ``loaded_layers`` carrying the PUBLISHED uri;
+  * an INTERMEDIATE (the class that used to carry ``auto_publish: false``)
+    publishes too - there is no opt-out;
+  * every layer of a returned LIST takes the same trip;
+  * an http(s) raster is untouched (already a rendered face);
+  * a vector is untouched (inline-GeoJSON path);
+  * a publish that RAISES, and one that returns a non-renderable value, both
+    fail OPEN: the raw COG still reaches the map;
+  * a ``gs://`` raster is still DROPPED by the guardrail after the publish
+    step declines to touch it.
 """
 
 from __future__ import annotations
@@ -36,500 +45,237 @@ import json
 
 import pytest
 
-from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import RegisteredTool
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-
-class FakeWS:
-    def __init__(self) -> None:
-        self.sent: list[str] = []
-
-    async def send(self, text: str) -> None:
-        self.sent.append(text)
-
+from trid3nt_server.emission import layer_uri_emit
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 
 S3_COG = "s3://bucket/cache/hillshade.tif"
 
 
-# --------------------------------------------------------------------------- #
-# Fixtures: a recording publish_layer stub + a raster-returning tool.
-# --------------------------------------------------------------------------- #
+def _published(uri: str) -> str:
+    """What the real publish returns: the overview sibling of the SAME COG.
 
-
-class _PublishRecorder:
-    """Records every publish_layer invocation; returns a configurable value.
-
-    Default return: the raw s3:// COG uri -- publish_layer's raster SUCCESS
-    shape since the TiTiler exit (the plugin renders it via /vsicurl/).
+    Per-input rather than a single constant, because ``add_loaded_layer`` dedups
+    by COG identity - a stub that returned one uri for every input would make a
+    three-frame series look like one layer and hide the bug this file is here
+    to catch.
     """
-
-    def __init__(self, return_value: object = S3_COG, raises: bool = False):
-        self.calls: list[dict] = []
-        self.return_value = return_value
-        self.raises = raises
-
-    def __call__(self, layer_uri: str, layer_id: str, **kw) -> object:
-        self.calls.append({"layer_uri": layer_uri, "layer_id": layer_id, **kw})
-        if self.raises:
-            raise RuntimeError("PyQGIS worker boom")
-        return self.return_value
+    head, _, tail = uri.rpartition("/")
+    return f"{head}/overviews/{tail}"
 
 
-def _install_tool(name: str, fn, *, auto_publish: bool = True) -> RegisteredTool | None:
-    """Register a non-cacheable tool (returns the prior entry for teardown)."""
-    original = agent_tools.TOOL_REGISTRY.get(name)
-    meta = AtomicToolMetadata(
-        name=name,
-        ttl_class="live-no-cache",
-        cacheable=False,
-        auto_publish=auto_publish,
-    )
-    agent_tools.TOOL_REGISTRY[name] = RegisteredTool(
-        metadata=meta, fn=fn, module=__name__
-    )
-    return original
+PUBLISHED = _published(S3_COG)
 
 
-def _restore_tool(name: str, original: RegisteredTool | None) -> None:
-    if original is not None:
-        agent_tools.TOOL_REGISTRY[name] = original
-    else:
-        agent_tools.TOOL_REGISTRY.pop(name, None)
+class _Sink:
+    def __init__(self) -> None:
+        self.frames: list[str] = []
+
+    async def __call__(self, text: str) -> None:
+        self.frames.append(text)
+
+
+def _emitter() -> tuple[PipelineEmitter, _Sink]:
+    sink = _Sink()
+    return PipelineEmitter(session_id=new_ulid(), sink=sink), sink
+
+
+def _loaded_layers(sink: _Sink) -> list[dict]:
+    """The LAST session-state's loaded_layers (the accumulator's final shape)."""
+    out: list[dict] = []
+    for raw in sink.frames:
+        env = json.loads(raw)
+        if env.get("type") == "session-state":
+            out = (env.get("payload") or {}).get("loaded_layers") or out
+    return out
 
 
 @pytest.fixture
-def publish_recorder():
-    """Replace publish_layer with a recorder; restore on teardown."""
-    rec = _PublishRecorder()
-    original = agent_tools.TOOL_REGISTRY.get("publish_layer")
-    agent_tools.TOOL_REGISTRY["publish_layer"] = RegisteredTool(
-        metadata=AtomicToolMetadata(
-            name="publish_layer", ttl_class="live-no-cache", cacheable=False
-        ),
-        fn=rec,
-        module=__name__,
+def publish_recorder(monkeypatch):
+    """Record every publish the seam makes; return the published uri."""
+    calls: list[dict] = []
+
+    def _publish(**kwargs):
+        calls.append(kwargs)
+        return _published(kwargs["layer_uri"])
+
+    from trid3nt_server.emission import publish as publish_mod
+
+    monkeypatch.setattr(publish_mod, "publish_layer", _publish)
+    return calls
+
+
+def _raster(uri: str = S3_COG, **over) -> LayerURI:
+    base = dict(
+        layer_id="hillshade-1",
+        name="Hillshade",
+        layer_type="raster",
+        uri=uri,
+        style_preset="continuous_dem",
+        role="primary",
     )
-    try:
-        yield rec
-    finally:
-        _restore_tool("publish_layer", original)
+    base.update(over)
+    return LayerURI(**base)
 
 
-def _session_states(ws: FakeWS) -> list[dict]:
-    return [
-        e
-        for e in (json.loads(s) for s in ws.sent)
-        if e.get("type") == "session-state"
-    ]
-
-
-def _error_envelopes(ws: FakeWS) -> list[dict]:
-    return [
-        e for e in (json.loads(s) for s in ws.sent) if e.get("type") == "error"
-    ]
+async def _run(emitter: PipelineEmitter, result):
+    return await emitter.emit_tool_call(
+        name="stub_tool", tool_name="stub_tool", invoke=lambda: result
+    )
 
 
 # --------------------------------------------------------------------------- #
-# 1. A raster s3:// LayerURI auto-publishes (no LLM publish_layer call).
+# 1. The ordinary case: published once, unasked, and the map gets the result.
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_raster_s3_layer_uri_auto_publishes(publish_recorder) -> None:
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="hillshade-x",
-            name="Hillshade",
-            layer_type="raster",
-            uri=S3_COG,
-            style_preset="",
-        )
+async def test_raster_s3_publishes_once_and_reaches_the_map(publish_recorder) -> None:
+    emitter, sink = _emitter()
+    returned = await _run(emitter, _raster())
 
-    original = _install_tool("compute_hillshade_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
+    assert len(publish_recorder) == 1, "the seam must publish exactly once"
+    assert publish_recorder[0]["layer_uri"] == S3_COG
+    # The TOOL's result is untouched -- the enrichment happens on the way to the
+    # map, not on the value the caller (and the LLM) sees.
+    assert returned.uri == S3_COG
 
-        result = await server._invoke_tool_via_emitter(
-            ws, state, "compute_hillshade_stub", {}
-        )
-
-        # The tool's OWN return is unchanged (still the raw s3:// LayerURI) -- the
-        # LLM-visible result is not rewritten.
-        assert isinstance(result, LayerURI)
-        assert result.uri == S3_COG
-
-        # publish_layer was auto-called EXACTLY once, server-side, with the COG.
-        assert len(publish_recorder.calls) == 1
-        assert publish_recorder.calls[0]["layer_uri"] == S3_COG
-
-        # NEW CONTRACT: the published s3:// COG uri IS the renderable envelope
-        # (the plugin reads it via /vsicurl/). The direct seam emission and the
-        # auto-publish row carry the same COG uri, so dedup collapses them to
-        # EXACTLY ONE row.
-        loaded = state.emitter.loaded_layers
-        uris = [layer.uri for layer in loaded]
-        assert uris.count(S3_COG) == 1, (
-            f"expected exactly one merged s3 COG row: {uris}"
-        )
-
-        # A session-state envelope announced it.
-        assert _session_states(ws), "no session-state emitted after auto-publish"
-    finally:
-        _restore_tool("compute_hillshade_stub", original)
+    layers = _loaded_layers(sink)
+    assert len(layers) == 1
+    assert layers[0]["uri"] == PUBLISHED, "the map got the unpublished COG"
 
 
 @pytest.mark.asyncio
-async def test_auto_publish_passes_no_llm_publish_call(publish_recorder) -> None:
-    """The auto-publish is SERVER-driven: the LLM never issued publish_layer.
-
-    We prove this by asserting the ONLY publish_layer invocation came from the
-    auto-publish branch (single call) while the tool the LLM 'called' was the
-    raster producer, not publish_layer.
-    """
-
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="slope-y",
-            name="Slope",
-            layer_type="raster",
-            uri="gs://bucket/cache/slope.tif",
-            style_preset="",
-        )
-
-    original = _install_tool("compute_slope_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        await server._invoke_tool_via_emitter(ws, state, "compute_slope_stub", {})
-        assert len(publish_recorder.calls) == 1  # exactly the auto-publish
-        # gs:// is still a droppable object-store uri (the seam refuses it) ->
-        # auto-published; the publish's s3:// return is what renders.
-        assert publish_recorder.calls[0]["layer_uri"] == "gs://bucket/cache/slope.tif"
-        assert any(layer.uri == S3_COG for layer in state.emitter.loaded_layers)
-        # The raw gs:// never reaches the map (still un-renderable).
-        assert all(
-            not layer.uri.startswith("gs://")
-            for layer in state.emitter.loaded_layers
-        )
-    finally:
-        _restore_tool("compute_slope_stub", original)
-
-
-# --------------------------------------------------------------------------- #
-# 2. auto_publish=False intermediate does NOT auto-publish.
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.asyncio
-async def test_auto_publish_false_intermediate_does_not_publish(
+async def test_intermediate_publishes_too_there_is_no_opt_out(
     publish_recorder,
 ) -> None:
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="raw-dem",
-            name="DEM",
-            layer_type="raster",
-            uri="s3://bucket/cache/dem.tif",
-            style_preset="",
-        )
+    """ADR 0313: the ``auto_publish`` flag is deleted, not defaulted.
 
-    # Mirror fetch_dem's opt-out.
-    original = _install_tool("fetch_dem_stub", _tool, auto_publish=False)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        await server._invoke_tool_via_emitter(ws, state, "fetch_dem_stub", {})
-        assert publish_recorder.calls == [], "intermediate must NOT auto-publish"
-        # NEW CONTRACT: the raw s3 DEM is renderable (plugin /vsicurl/), so the
-        # emit seam PASSES it -- it reaches the map through the direct emission
-        # gate, just WITHOUT the auto-publish enrichment (no publish call).
-        assert [layer.uri for layer in state.emitter.loaded_layers] == [
-            "s3://bucket/cache/dem.tif"
-        ]
-    finally:
-        _restore_tool("fetch_dem_stub", original)
+    The DEM was the flagship opt-out (``auto_publish: false`` in its
+    source.yaml). NATE: the user hides what they do not want, so an
+    intermediate is still a layer.
+    """
+    emitter, sink = _emitter()
+    await _run(emitter, _raster(layer_id="dem-1", name="DEM", role="input"))
+
+    assert len(publish_recorder) == 1
+    assert _loaded_layers(sink)[0]["uri"] == PUBLISHED
+
+    from trid3nt_contracts.tool_registry import AtomicToolMetadata
+
+    assert not hasattr(AtomicToolMetadata, "model_fields") or (
+        "auto_publish" not in AtomicToolMetadata.model_fields
+    ), "the auto_publish opt-out is back"
 
 
-def test_fetch_dem_metadata_opts_out_of_auto_publish() -> None:
-    """The real fetch_dem (+ fetch_topobathy / fetch_3dep_extra) opt OUT."""
-    import trid3nt_server.server  # noqa: F401 - ensures tool registration
+@pytest.mark.asyncio
+async def test_every_layer_of_a_list_takes_the_same_trip(publish_recorder) -> None:
+    """A frame series is N layers, not one -- the dispatch site handled this
+    and the seam previously did not."""
+    emitter, sink = _emitter()
+    frames = [
+        _raster(layer_id=f"frame-{i}", uri=f"s3://bucket/f{i}.tif") for i in range(3)
+    ]
+    await _run(emitter, frames)
 
-    for name in ("fetch_dem", "fetch_topobathy", "fetch_3dep_extra"):
-        entry = agent_tools.TOOL_REGISTRY.get(name)
-        assert entry is not None, f"{name} not registered"
-        assert entry.metadata.auto_publish is False, f"{name} should opt out"
-
-
-def test_terminal_raster_products_default_auto_publish_true() -> None:
-    import trid3nt_server.server  # noqa: F401
-
-    for name in (
-        "compute_hillshade",
-        "compute_slope",
-        "compute_aspect",
-        "compute_colored_relief",
-        "clip_raster_to_polygon",
-    ):
-        entry = agent_tools.TOOL_REGISTRY.get(name)
-        if entry is None:
-            continue
-        assert entry.metadata.auto_publish is True, f"{name} should default True"
+    assert len(publish_recorder) == 3
+    layers = _loaded_layers(sink)
+    assert len(layers) == 3, "the frames collapsed - dedup ate the series"
+    assert [layer["uri"] for layer in layers] == [
+        _published(f"s3://bucket/f{i}.tif") for i in range(3)
+    ]
 
 
 # --------------------------------------------------------------------------- #
-# 3. An http(s) raster LayerURI is untouched (already renderable).
+# 2. What the seam declines to touch.
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_http_raster_layer_uri_not_auto_published(publish_recorder) -> None:
-    http_uri = "https://tiles.example.com/wms?LAYERS=relief"
+async def test_http_raster_is_not_republished(publish_recorder) -> None:
+    emitter, sink = _emitter()
+    await _run(emitter, _raster(uri="https://tiles.example/x/{z}/{x}/{y}.png"))
 
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="relief-http",
-            name="Relief",
-            layer_type="raster",
-            uri=http_uri,
-            style_preset="",
-        )
-
-    original = _install_tool("compute_relief_http_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        await server._invoke_tool_via_emitter(
-            ws, state, "compute_relief_http_stub", {}
-        )
-        # Already-renderable http(s) raster: no auto-publish, and the emit seam
-        # passes it straight to loaded_layers via the emit_tool_call gate.
-        assert publish_recorder.calls == []
-        assert any(layer.uri == http_uri for layer in state.emitter.loaded_layers)
-    finally:
-        _restore_tool("compute_relief_http_stub", original)
-
-
-# --------------------------------------------------------------------------- #
-# 4. A vector LayerURI is untouched (inline-GeoJSON path).
-# --------------------------------------------------------------------------- #
+    assert publish_recorder == [], "an http(s) raster is already a rendered face"
+    assert _loaded_layers(sink)[0]["uri"].startswith("https://")
 
 
 @pytest.mark.asyncio
-async def test_vector_layer_uri_not_auto_published(publish_recorder) -> None:
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="rivers",
-            name="Rivers",
-            layer_type="vector",
-            uri="s3://bucket/cache/rivers.fgb",
-            style_preset="",
-        )
-
-    original = _install_tool("fetch_rivers_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        await server._invoke_tool_via_emitter(ws, state, "fetch_rivers_stub", {})
-        # Vectors flow through the inline-GeoJSON path; auto-publish must NOT fire
-        # (publish_layer is a RASTER seam).
-        assert publish_recorder.calls == [], "vector must never auto-publish"
-    finally:
-        _restore_tool("fetch_rivers_stub", original)
-
-
-# --------------------------------------------------------------------------- #
-# 5. Double-publish (LLM ALSO calls publish_layer) does not duplicate.
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.asyncio
-async def test_double_publish_does_not_duplicate(publish_recorder) -> None:
-    """Auto-publish + a redundant LLM publish_layer of the same COG MERGE."""
-
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="canopy-1",
-            name="Canopy",
-            layer_type="raster",
-            uri=S3_COG,
-            style_preset="",
-        )
-
-    original = _install_tool("compute_canopy_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-
-        # 1) The producing tool auto-publishes.
-        await server._invoke_tool_via_emitter(ws, state, "compute_canopy_stub", {})
-        # 2) The LLM ALSO calls publish_layer for the SAME COG (returns the same
-        #    raw s3:// COG uri -- the new publish shape).
-        await server._invoke_tool_via_emitter(
-            ws,
-            state,
-            "publish_layer",
-            {"layer_uri": S3_COG, "layer_id": "canopy-1"},
-        )
-
-        # add_loaded_layer dedups by underlying-COG identity (for a plain s3
-        # COG that is the uri itself) -> exactly ONE row, not two/three.
-        cog_rows = [
-            layer
-            for layer in state.emitter.loaded_layers
-            if layer.uri == S3_COG
-        ]
-        assert len(cog_rows) == 1, (
-            f"double-publish duplicated the layer: {state.emitter.loaded_layers}"
-        )
-    finally:
-        _restore_tool("compute_canopy_stub", original)
-
-
-# --------------------------------------------------------------------------- #
-# 6. Honesty floor: a publish FAILURE surfaces a typed error, adds no layer.
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.asyncio
-async def test_publish_failure_surfaces_honesty_floor_error() -> None:
-    rec = _PublishRecorder(raises=True)
-    original_pub = agent_tools.TOOL_REGISTRY.get("publish_layer")
-    agent_tools.TOOL_REGISTRY["publish_layer"] = RegisteredTool(
-        metadata=AtomicToolMetadata(
-            name="publish_layer", ttl_class="live-no-cache", cacheable=False
-        ),
-        fn=rec,
-        module=__name__,
+async def test_vector_is_not_published(publish_recorder) -> None:
+    emitter, sink = _emitter()
+    await _run(
+        emitter,
+        _raster(layer_id="v-1", layer_type="vector", uri="s3://bucket/x.fgb"),
     )
 
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="ndvi-fail",
-            name="NDVI",
-            layer_type="raster",
-            uri=S3_COG,
-            style_preset="",
-        )
-
-    original = _install_tool("compute_ndvi_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        result = await server._invoke_tool_via_emitter(
-            ws, state, "compute_ndvi_stub", {}
-        )
-
-        # The tool result is unchanged (the LLM still sees the produced LayerURI).
-        assert isinstance(result, LayerURI)
-        # The direct seam emission still carries the raw (renderable) s3 row --
-        # ONLY the enrichment publish failed; nothing beyond that row appears.
-        assert [layer.uri for layer in state.emitter.loaded_layers] == [S3_COG]
-        # A typed honesty-floor error envelope went over the wire: an
-        # INTERNAL_ERROR (the closed A.6 wire code) carrying the typed
-        # LAYER_AUTO_PUBLISH_FAILED marker in its message. A failed publish is
-        # NEVER a silent green.
-        errors = _error_envelopes(ws)
-        assert any(
-            e.get("payload", {}).get("error_code") == "INTERNAL_ERROR"
-            and "LAYER_AUTO_PUBLISH_FAILED" in e.get("payload", {}).get("message", "")
-            for e in errors
-        ), f"no honesty-floor error envelope on publish failure: {errors}"
-    finally:
-        _restore_tool("compute_ndvi_stub", original)
-        _restore_tool("publish_layer", original_pub)
+    assert publish_recorder == [], "vectors render inline from their own GeoJSON"
+    assert _loaded_layers(sink)[0]["uri"] == "s3://bucket/x.fgb"
 
 
 @pytest.mark.asyncio
-async def test_publish_s3_return_is_success_no_error_envelope() -> None:
-    """NEW CONTRACT: publish_layer echoing the raw s3:// COG uri is the SUCCESS
-    shape (TiTiler exit) -- the layer renders, NO honesty-floor error fires."""
-    rec = _PublishRecorder(return_value=S3_COG)
-    original_pub = agent_tools.TOOL_REGISTRY.get("publish_layer")
-    agent_tools.TOOL_REGISTRY["publish_layer"] = RegisteredTool(
-        metadata=AtomicToolMetadata(
-            name="publish_layer", ttl_class="live-no-cache", cacheable=False
-        ),
-        fn=rec,
-        module=__name__,
-    )
+async def test_gs_raster_is_still_dropped_by_the_guardrail(publish_recorder) -> None:
+    """The publish declines it; ``emit_layer_uri`` then keeps it off the map."""
+    emitter, sink = _emitter()
+    await _run(emitter, _raster(uri="gs://bucket/x.tif"))
 
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="blend-1",
-            name="Blended",
-            layer_type="raster",
-            uri=S3_COG,
-            style_preset="",
-        )
+    assert publish_recorder == []
+    assert _loaded_layers(sink) == []
 
-    original = _install_tool("compute_blended_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        await server._invoke_tool_via_emitter(ws, state, "compute_blended_stub", {})
-        # The published s3 COG IS the renderable envelope -> exactly one merged
-        # row, and NO honesty-floor error envelope.
-        uris = [layer.uri for layer in state.emitter.loaded_layers]
-        assert uris.count(S3_COG) == 1, f"expected one merged s3 row: {uris}"
-        assert _error_envelopes(ws) == [], (
-            "an s3:// publish return is SUCCESS and must not raise the floor"
-        )
-    finally:
-        _restore_tool("compute_blended_stub", original)
-        _restore_tool("publish_layer", original_pub)
+
+# --------------------------------------------------------------------------- #
+# 3. The honesty floor's new shape: a failed publish DEGRADES, never blanks.
+# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "bad_return",
-    ["", None, "PUBLISH_FAILED: boom", "gs://bucket/cache/echo.tif"],
-)
-async def test_publish_non_renderable_return_surfaces_honesty_floor_error(
-    bad_return,
-) -> None:
-    """The floor stays HONEST: a publish return that is neither http(s) nor
-    s3:// (empty/None/error strings, gs://) is still a FAILURE -- typed error
-    envelope, no enriched row."""
-    rec = _PublishRecorder(return_value=bad_return)
-    original_pub = agent_tools.TOOL_REGISTRY.get("publish_layer")
-    agent_tools.TOOL_REGISTRY["publish_layer"] = RegisteredTool(
-        metadata=AtomicToolMetadata(
-            name="publish_layer", ttl_class="live-no-cache", cacheable=False
-        ),
-        fn=rec,
-        module=__name__,
+async def test_publish_that_raises_fails_open_to_the_raw_cog(monkeypatch) -> None:
+    from trid3nt_server.emission import publish as publish_mod
+
+    def _boom(**kwargs):
+        raise publish_mod.PublishLayerError("no", error_code="PUBLISH_FAILED")
+
+    monkeypatch.setattr(publish_mod, "publish_layer", _boom)
+
+    emitter, sink = _emitter()
+    await _run(emitter, _raster())
+
+    layers = _loaded_layers(sink)
+    assert len(layers) == 1, "a failed publish must not blank the layer"
+    assert layers[0]["uri"] == S3_COG, (
+        "the raw s3 COG is renderable via /vsicurl/ -- an unstyled layer is the "
+        "honest degrade"
     )
 
-    def _tool(**_kw) -> LayerURI:
-        return LayerURI(
-            layer_id="blend-bad",
-            name="Blended",
-            layer_type="raster",
-            uri=S3_COG,
-            style_preset="",
-        )
 
-    original = _install_tool("compute_blended_bad_stub", _tool)
-    try:
-        ws = FakeWS()
-        state = server.SessionState(session_id=new_ulid())
-        await server._invoke_tool_via_emitter(
-            ws, state, "compute_blended_bad_stub", {}
-        )
-        # Only the direct seam emission of the tool's own (renderable) s3 row;
-        # the failed publish added NOTHING.
-        assert [layer.uri for layer in state.emitter.loaded_layers] == [S3_COG]
-        errors = _error_envelopes(ws)
-        assert any(
-            e.get("payload", {}).get("error_code") == "INTERNAL_ERROR"
-            and "LAYER_AUTO_PUBLISH_FAILED" in e.get("payload", {}).get("message", "")
-            for e in errors
-        ), f"non-renderable publish return must surface an error: {errors}"
-    finally:
-        _restore_tool("compute_blended_bad_stub", original)
-        _restore_tool("publish_layer", original_pub)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", ["", None, "PUBLISH_FAILED", "gs://bucket/x.tif"])
+async def test_non_renderable_publish_return_fails_open(monkeypatch, bad) -> None:
+    from trid3nt_server.emission import publish as publish_mod
+
+    monkeypatch.setattr(publish_mod, "publish_layer", lambda **kw: bad)
+
+    emitter, sink = _emitter()
+    await _run(emitter, _raster())
+
+    layers = _loaded_layers(sink)
+    assert len(layers) == 1
+    assert layers[0]["uri"] == S3_COG, f"a {bad!r} return must not reach the map"
+
+
+@pytest.mark.asyncio
+async def test_publish_for_emission_is_the_only_seam() -> None:
+    """The dispatch-layer twin is DELETED, not disabled (ADR 0313)."""
+    assert hasattr(layer_uri_emit, "publish_for_emission")
+
+    from trid3nt_server.server.dispatch import results
+
+    assert not hasattr(results, "_auto_publish_droppable_raster")
+    assert not hasattr(results, "_emit_auto_publish_failure")
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    assert "publish_layer" not in TOOL_REGISTRY, (
+        "publish_layer is a mechanism in emission/, never a tool again"
+    )

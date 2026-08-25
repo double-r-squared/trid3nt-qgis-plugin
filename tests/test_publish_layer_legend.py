@@ -31,8 +31,8 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.tools.publish_layer import publish_layer as pl
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission import publish as pl
+from trid3nt_server.emission.publish import (
     _categorical_legend_from_colormap,
     _parse_style_params,
     legend_for_published_layer,

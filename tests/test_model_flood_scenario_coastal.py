@@ -237,7 +237,7 @@ def _patched_chain(
     async def _wfc(_h):  # noqa: ANN001
         return _run_result_ok(run_id, handle.handle_id)
 
-    from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
+    from trid3nt_server.emission.publish import PublishLayerError
 
     # data-router fold: fetch_noaa_coops_tides is a promoted spec-driven tool
     # resolved by the auto-wire via TOOL_REGISTRY[name].fn (not a twin module

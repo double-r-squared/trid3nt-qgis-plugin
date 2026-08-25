@@ -10,7 +10,8 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 
 - `trid3nt_server/` - the framework package, by feature:
   `tools/` (the atomic-tool registry: fetcher specs + router +
-  emit-on-fetch, processing, search, publish_layer), `data/`
+  emit-on-fetch, processing, search), `emission/` (the one
+  emission seam plus the raster publish mechanism), `data/`
   (category-era fossil - only the per-engine simulation shims remain),
   `mesh/` (shared mesh layer), `workflows/` (engine composers, plus
   `lib/` the declarative library and `solver/` the solve seam),

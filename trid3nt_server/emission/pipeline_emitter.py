@@ -83,7 +83,7 @@ from trid3nt_contracts.ws import (
 )
 
 from trid3nt_server.gates.context_budget import COMPACTING_LABEL, compaction_complete_label
-from .layer_uri_emit import emit_layer_uri
+from .layer_uri_emit import emit_layer_uri, publish_for_emission
 
 __all__ = [
     "ErrorCodeRegistry",
@@ -932,7 +932,7 @@ def _legend_for_layer_uri(uri: str | None) -> Any:
     if not uri:
         return None
     try:
-        from trid3nt_server.tools.publish_layer.publish_layer import pop_legend_for_uri
+        from trid3nt_server.emission.publish import pop_legend_for_uri
 
         return pop_legend_for_uri(uri)
     except Exception:  # noqa: BLE001 - legend lift is best-effort, never fatal
@@ -2248,6 +2248,21 @@ class PipelineEmitter:
             "is reserved for a future non-WS integration"
         )
 
+    async def _emit_one_layer(self, layer: LayerURI) -> None:
+        """Publish, guard, then track one client-bound layer. Never raises."""
+        try:
+            layer = await publish_for_emission(layer, case_id=current_turn_case())
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - enrichment is never fatal
+            logger.exception(
+                "emit_tool_call: auto-publish raised for layer_id=%s; emitting "
+                "the layer as the tool returned it.", layer.layer_id,
+            )
+        emit_layer = emit_layer_uri(layer)
+        if emit_layer is not None:
+            await self.add_loaded_layer(emit_layer)
+
     async def emit_tool_call(
         self,
         *,
@@ -2371,10 +2386,21 @@ class PipelineEmitter:
             # LayerURIs and WMS-URL rasters pass untouched. The tool
             # result is unaffected -- a dropped layer is still narrated honestly
             # and the retry loop can act.
+            #
+            # AUTO-EMIT (NATE ruling b): a raster the tool returned as a raw
+            # s3:// COG is PUBLISHED here - overviews, style params, legend -
+            # before the guardrail sees it. Every raster-producing tool gets
+            # that by returning a LayerURI; there is no publish call site per
+            # tool and no opt-out, intermediates included. A list of layers
+            # (frame series) is each layer's own trip through the same seam.
             if isinstance(result, LayerURI):
-                emit_layer = emit_layer_uri(result)
-                if emit_layer is not None:
-                    await self.add_loaded_layer(emit_layer)
+                await self._emit_one_layer(result)
+            elif isinstance(result, list) and any(
+                isinstance(item, LayerURI) for item in result
+            ):
+                for item in result:
+                    if isinstance(item, LayerURI):
+                        await self._emit_one_layer(item)
             return result
         finally:
             _CURRENT_EMITTER.reset(token)

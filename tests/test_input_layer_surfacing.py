@@ -174,7 +174,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 #      fetched topobathy the same way the flood DEM path does).
 # ===========================================================================
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.tools.publish_layer.publish_layer.publish_layer"
+    "trid3nt_server.emission.publish.publish_layer"
 )
 _COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
 
@@ -226,7 +226,7 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
     """A publish_layer PublishLayerError is swallowed (best-effort): returns
     False, surfaces nothing, NEVER raises -- a failed input can never fail the
     solve."""
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         PublishLayerError,
     )
 
@@ -561,7 +561,7 @@ async def test_surface_in_worker_bed_input_absent_key_and_none_emitter_noop():
 async def test_surface_in_worker_bed_input_publish_failure_non_fatal(monkeypatch):
     """A publish_layer failure is swallowed (best-effort): the emitter-drop cannot
     be silent-crashing -- returns False, surfaces nothing, NEVER raises."""
-    from trid3nt_server.tools.publish_layer.publish_layer import (
+    from trid3nt_server.emission.publish import (
         PublishLayerError,
     )
     from trid3nt_server.workflows.solver import solver as solver_mod

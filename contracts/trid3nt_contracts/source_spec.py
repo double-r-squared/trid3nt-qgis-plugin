@@ -291,14 +291,6 @@ class OutputSpec(GraceModel):
     #: pairing). Default (None) = the plain LayerURI (strict no-op for every prior
     #: spec).
     result_model: str | None = None
-    #: Auto-publish the returned raster LayerURI server-side. Propagated
-    #: into ``AtomicToolMetadata.auto_publish`` at registration so the server dispatch
-    #: wrapper renders (or suppresses) the raster exactly as it did for the twin's
-    #: metadata flag. Default True = the terminal-product behaviour every prior fetcher
-    #: has; set False for a pure INTERMEDIATE raster (role=input) that feeds terrain /
-    #: solver setup and should not auto-render (fetch_3dep_extra / fetch_dem opt out).
-    #: No effect on vector output. Strict no-op for every prior spec (none set it).
-    auto_publish: bool = True
     #: EMPTINESS-DRIVEN output switch (finisher-mechanisms wave). A
     #: hook name ``<source>.<point>`` called with ``(spec, params)`` when the
     #: produced vector FGB is FEATURE-EMPTY: its returned dict is what ``route()``

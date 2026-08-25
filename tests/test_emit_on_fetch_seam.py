@@ -38,7 +38,7 @@ from trid3nt_server.emission.pipeline_emitter import (
 )
 
 _PUBLISH_LAYER_TARGET = (
-    "trid3nt_server.tools.publish_layer.publish_layer.publish_layer"
+    "trid3nt_server.emission.publish.publish_layer"
 )
 _COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
 

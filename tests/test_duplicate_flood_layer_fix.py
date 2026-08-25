@@ -39,7 +39,7 @@ from trid3nt_server.adapters.adapter import (
     summarize_tool_result,
 )
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, _layer_identity_key
-from trid3nt_server.server import _resolve_publish_wrap_style_preset
+from trid3nt_server.emission.publish import style_preset_for_publish
 
 
 # --------------------------------------------------------------------------- #
@@ -154,7 +154,7 @@ class TestScenarioPublishedSignal:
 class TestWrapSiteStylePreset:
     def test_empty_preset_flood_cog_defaults_to_continuous_flood_depth(self) -> None:
         # The wrap-site display URL embeds the flood COG; preset arrives empty.
-        preset = _resolve_publish_wrap_style_preset(
+        preset = style_preset_for_publish(
             style_preset="",
             layer_uri=(
                 "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
@@ -166,7 +166,7 @@ class TestWrapSiteStylePreset:
         assert preset  # never styleless -> never viridis
 
     def test_empty_preset_detected_via_layer_id_token(self) -> None:
-        preset = _resolve_publish_wrap_style_preset(
+        preset = style_preset_for_publish(
             style_preset=None,
             layer_uri="https://titiler.example/cog/tiles/{z}/{x}/{y}.png?url=s3://x.tif",
             layer_id="peak-flood-depth-R",
@@ -175,7 +175,7 @@ class TestWrapSiteStylePreset:
 
     def test_explicit_preset_is_honored(self) -> None:
         # An explicit non-empty preset is never overridden.
-        preset = _resolve_publish_wrap_style_preset(
+        preset = style_preset_for_publish(
             style_preset="continuous_dem",
             layer_uri="https://t/cog?url=s3://flood_depth.tif",
             layer_id="flood",
@@ -185,7 +185,7 @@ class TestWrapSiteStylePreset:
     def test_non_flood_raster_keeps_empty_preset(self) -> None:
         # A terrain / generic raster with empty preset stays "" (QGIS default) —
         # the safety net must not over-style non-flood layers.
-        preset = _resolve_publish_wrap_style_preset(
+        preset = style_preset_for_publish(
             style_preset="",
             layer_uri="https://t/cog?url=s3://boulder_hillshade.tif",
             layer_id="boulder-hillshade",
@@ -194,7 +194,7 @@ class TestWrapSiteStylePreset:
 
     def test_demo_token_does_not_match_dem_or_flood(self) -> None:
         # Token-boundary matching: "demo" must not trip flood/depth/dem tokens.
-        preset = _resolve_publish_wrap_style_preset(
+        preset = style_preset_for_publish(
             style_preset="",
             layer_uri="https://t/cog?url=s3://demo_relief.tif",
             layer_id="demo-relief",

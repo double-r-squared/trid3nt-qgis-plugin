@@ -35,7 +35,6 @@ from . import config as _config
 from . import errors as _errors
 from . import interactions as _interactions
 from . import spatial as _spatial
-from . import styles as _styles
 from ..gates import confirm as _gates_confirm
 from ..gates import pending as _gates_pending
 from ..gates.cards import solver_confirm as _gates_cards_confirm
@@ -63,7 +62,6 @@ _LEAF_MODULES = (
     _protocol_loop,
     _errors,
     _config,
-    _styles,
     _interactions,
     _spatial,
     _gates_confirm,

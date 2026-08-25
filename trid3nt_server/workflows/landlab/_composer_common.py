@@ -26,7 +26,7 @@ from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 # already imports); re-exported here for the templates that import via this module.
 from trid3nt_server.workflows.landlab.run_landlab import LANDLAB_RES_SPEC  # noqa: F401
 
-from trid3nt_server.tools.publish_layer.publish_layer import (
+from trid3nt_server.emission.publish import (
     PublishLayerError,
     publish_layer,
 )

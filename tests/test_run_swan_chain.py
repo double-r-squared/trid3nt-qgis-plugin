@@ -449,7 +449,7 @@ def test_swan_wave_height_preset_resolves_to_titiler_rescale_colormap():
     """The SWAN wave-height preset must resolve to a TiTiler /tiles URL with a
     valid rescale + colormap (gnbu over 0..6 m) -- never a washed-out empty style
     or a raw s3://. This is the publish-side half of the render contract."""
-    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.emission.publish import _registry_style_params
 
     assert SWAN_WAVE_HEIGHT_STYLE_PRESET == "continuous_wave_height"
     params = _registry_style_params("continuous_wave_height")

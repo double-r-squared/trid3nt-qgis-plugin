@@ -53,7 +53,6 @@ def test_spec_identity(spec):
     assert spec.empty_error_suffix == "EMPTY"
     assert spec.supports_global_query is False
     assert spec.cache.ttl_class == "static-30d"
-    assert spec.output.auto_publish is True
     assert spec.ingest["access"] == "projected_vrt_window"
     pw = spec.ingest["projected_window"]
     assert pw["target_res_deg"] == 0.0025

@@ -380,36 +380,6 @@ class AtomicToolMetadata(GraceModel):
         ),
     )
 
-    # --- Deterministic layer auto-publish (NATE 2026-06-26) --- #
-    #
-    # When a tool returns a renderable RASTER LayerURI carrying a raw object-store
-    # uri (s3:// / gs://), the layer_uri_emit seam DROPS it (MapLibre cannot fetch
-    # an object-store uri), so historically it only ever rendered if the LLM
-    # SEPARATELY called publish_layer to convert the COG to an http(s) TiTiler
-    # tile URL. NATE's directive: "we should not have the LLM enforce publishing
-    # of layers — this should just be done without LLM intervention." The server
-    # dispatch wrapper now auto-calls publish_layer for any such droppable raster.
-    #
-    # Default True: terminal raster products (compute_hillshade / slope / aspect /
-    # colored_relief / ndvi / blended, clip_raster_*, and the raster
-    # FETCHERS the user normally wants to see) auto-publish. Set False for pure
-    # INTERMEDIATE rasters whose raw output the user should not auto-see (e.g. the
-    # raw DEM that exists only to feed compute_hillshade / compute_slope). An
-    # intermediate that the LLM explicitly chooses to publish still renders via the
-    # publish_layer wrap-site; auto-publish=False only suppresses the AUTOMATIC
-    # render of the raw input.
-    auto_publish: bool = Field(
-        default=True,
-        description=(
-            "When True (default), a renderable raster LayerURI this tool returns "
-            "carrying a raw object-store uri (s3:// / gs://) is AUTOMATICALLY "
-            "published server-side (publish_layer -> http(s) tile URL) so it "
-            "renders without the LLM calling publish_layer. Set False for pure "
-            "intermediate rasters (e.g. fetch_dem's raw DEM) whose raw output the "
-            "user should not auto-see. Has no effect on vector layers, on layers "
-            "that already carry an http(s) uri, or on publish_layer itself."
-        ),
-    )
 
     # --- Engine-door refactor additions (docs/specs/engine-door-refactor.md) --- #
     #

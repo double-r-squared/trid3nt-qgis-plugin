@@ -112,7 +112,7 @@ def test_tool_is_registered() -> None:
 def test_style_preset_is_in_titiler_registry() -> None:
     """The ndvi preset must resolve to a real (rescale, colormap) so a
     single-band NDVI COG is never published as bare grayscale."""
-    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.emission.publish import _registry_style_params
 
     params = _registry_style_params(_STYLE_PRESET)
     assert params is not None

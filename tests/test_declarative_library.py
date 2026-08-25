@@ -776,7 +776,7 @@ async def test_a_step_that_produced_no_raster_to_render_is_FATAL():
 @pytest.mark.asyncio
 async def test_a_styling_failure_over_a_real_raster_is_only_a_note(monkeypatch):
     """The other half of the split: there IS a raster, the styling of it failed."""
-    import trid3nt_server.tools.publish_layer as _pl
+    import trid3nt_server.emission.publish as _pl
 
     def _boom(**kwargs):
         raise RuntimeError("titiler-style-boom")

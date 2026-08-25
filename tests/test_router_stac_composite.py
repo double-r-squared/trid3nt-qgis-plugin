@@ -60,7 +60,6 @@ def test_spec_identity(specs, name, prefix, empty, cell):
     assert s.empty_error_suffix == empty
     assert s.supports_global_query is False        # twin metadata flag
     assert s.cache.ttl_class == "static-30d"        # -> cacheable True
-    assert s.output.auto_publish is True            # twin default
     assert s.output.emit_bbox is False              # twins omit LayerURI.bbox
     assert s.ingest["access"] == "stac_multi_asset_rgb"
     assert s.ingest["native_cell_m"] == cell
