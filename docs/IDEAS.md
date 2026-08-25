@@ -930,3 +930,10 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   anchored-or-exempt) lands as the FIRST COMMIT of the mesh-gate wave -
   the first feature whose correctness depends on ordering. Contractual
   but unenforced until then, recorded in the amendment.
+
+- ACQUIRE_DOMAIN SURFACE (NATE 2026-08-24, ruling a): keep the landed
+  explicit **slots call - the template names exactly which params/data
+  feed acquisition (read-the-page dataflow). Facade evolution rule: a
+  NEW acquisition input arrives as a keyword WITH A DEFAULT, so existing
+  templates are untouched (one-runner law holds); only templates wanting
+  the new input name it.
