@@ -35,7 +35,7 @@ from trid3nt_server.workflows.telemac.steps import (
     event_time,
     lonlat_point,
 )
-from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import CorridorPolicy, TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_sag_chart", "plan", "telemac_do_sag"]
 
@@ -158,10 +158,12 @@ def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the 
                       reach_seed_coords=p.outfall_coords,
                       sim_duration_s=p.sim_duration_s)
     forcing = Forcing(carrier=Ref("reviewed_discharge"))
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy(
-        resolution=p.mesh_resolution, target_edge_m=p.mesh_resolution_m,
-        extent_km=p.reach_length_km, width_m=p.channel_width_m,
-        boundary_source=p.bank_source))
+    mesh = ops.build_mesh(
+        Ref("reach"),
+        MeshPolicy(resolution=p.mesh_resolution, target_edge_m=p.mesh_resolution_m),
+        corridor=CorridorPolicy(extent_km=p.reach_length_km,
+                                width_m=p.channel_width_m,
+                                boundary_source=p.bank_source))
     return [
         DrawGate(param="outfall_coords", geometry="point",
                  prompt="Click where the discharge enters the river"),
@@ -316,7 +318,7 @@ telemac_do_sag = register_workflow(
     answer=ANSWER,
     provenance=(("discharge_m3s", "discharge_note"),),
     coerce=(
-        location_or_bbox("telemac_do_sag"),
+        location_or_bbox("telemac_do_sag", code_prefix="TELEMAC"),
         lonlat_point("outfall_coords", label="outfall_coords"),
         event_time(),
     ),

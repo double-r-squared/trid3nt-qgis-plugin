@@ -14,6 +14,7 @@ the engine; the domain arrives through ``acquire_domain``'s slots.
 from __future__ import annotations
 
 import inspect
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from trid3nt_server.workflows.lib import (
@@ -35,7 +36,7 @@ from trid3nt_server.workflows.telemac.steps import (
     write_reach_deck,
 )
 
-__all__ = ["ReachMesh", "TelemacWorkflow"]
+__all__ = ["CorridorPolicy", "MeshHandle", "TelemacWorkflow"]
 
 #: Which deliverable family reads each declared physics process. A process the
 #: facade does not know REFUSES at plan construction rather than solving into a
@@ -46,11 +47,16 @@ _READERS: dict[str, str] = {
     "waqtel_o2": "dissolved_oxygen",
 }
 
-#: The mesh ask, translated into the deck fields the corridor mesher reads. The
-#: shared mesh front will consume the MeshPolicy directly and this table goes.
-_MESH_FIELDS: dict[str, str] = {
+#: The universal SIZING ask, translated into the deck fields the corridor mesher
+#: reads. The shared mesh front will consume the MeshPolicy directly and this
+#: table goes.
+_SIZING_FIELDS: dict[str, str] = {
     "resolution": "mesh_resolution",
     "target_edge_m": "mesh_resolution_m",
+}
+
+#: The corridor SHAPE ask, same translation, engine-owned rather than universal.
+_CORRIDOR_FIELDS: dict[str, str] = {
     "extent_km": "reach_length_km",
     "width_m": "channel_width_m",
     "boundary_source": "bank_source",
@@ -60,33 +66,64 @@ _MESH_FIELDS: dict[str, str] = {
 _FORCING_FIELDS: dict[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 
 
-class ReachMesh:
-    """What ``build_mesh`` yields for TELEMAC: the domain it meshes, and the ask.
+@dataclass(frozen=True, slots=True)
+class CorridorPolicy:
+    """The CORRIDOR-shaped part of a mesh ask, owned by the facade that meshes one.
+
+    A length along the flow axis, a cross-stream width and where the banks come
+    from describe one domain SHAPE, not every shape - so by the placement rule
+    they sit here, beside the only mesher that reads them, rather than in the
+    universal :class:`MeshPolicy`. A future basin or coastal facade declares its
+    own shape policy; neither has to carry the other's fields.
+    """
+
+    #: How far the modeled corridor runs, along its principal (flow) axis.
+    extent_km: Any = None
+    #: The modeled cross-stream width of the corridor.
+    width_m: Any = None
+    #: Where the corridor BOUNDARY comes from (real polygons vs an assumed ribbon).
+    boundary_source: Any = None
+
+
+class MeshHandle:
+    """What ``build_mesh`` yields for TELEMAC: the domain, and the ask over it.
 
     A HANDLE, not a mesh: TELEMAC's corridor mesher runs inside the deck writer
     and the worker, so the mesh comes into being during ``author``. The handle is
     what keeps the interface honest while that stays true - a shared-front mesh
-    artifact will arrive in the same slot without the template noticing.
+    artifact will arrive in the same slot without the template noticing. Named for
+    what it IS rather than for the domain it happens to describe; the domain word
+    lives on the :class:`CorridorPolicy` it carries.
     """
 
-    __slots__ = ("domain", "policy")
+    __slots__ = ("domain", "policy", "corridor")
 
-    def __init__(self, domain: Any, policy: MeshPolicy) -> None:
+    def __init__(self, domain: Any, policy: MeshPolicy,
+                 corridor: CorridorPolicy) -> None:
         if not isinstance(policy, MeshPolicy):
             raise PlanValidationError(
                 f"build_mesh needs a MeshPolicy, got {type(policy).__name__}.")
+        if not isinstance(corridor, CorridorPolicy):
+            raise PlanValidationError(
+                "TELEMAC's build_mesh needs a CorridorPolicy in its `corridor` slot, "
+                f"got {type(corridor).__name__}.")
         self.domain = domain
         self.policy = policy
+        self.corridor = corridor
 
     def deck_fields(self) -> dict[str, Any]:
-        return {deck: getattr(self.policy, slot)
-                for slot, deck in _MESH_FIELDS.items()}
+        fields = {deck: getattr(self.policy, slot)
+                  for slot, deck in _SIZING_FIELDS.items()}
+        fields.update({deck: getattr(self.corridor, slot)
+                       for slot, deck in _CORRIDOR_FIELDS.items()})
+        return fields
 
 
 class TelemacWorkflow(Workflow):
     """TELEMAC-2D: the reach pipeline behind five operations."""
 
     engine = "telemac2d"
+    solve_step = "solve"
 
     # -- 1. acquire -------------------------------------------------------- #
 
@@ -108,16 +145,18 @@ class TelemacWorkflow(Workflow):
 
     # -- 2. mesh ----------------------------------------------------------- #
 
-    def build_mesh(self, domain: Any, policy: MeshPolicy) -> ReachMesh:
-        """The reach mesh for an acquired domain, under an engine-neutral policy."""
-        return ReachMesh(domain, policy)
+    def build_mesh(self, domain: Any, policy: MeshPolicy,
+                   *, corridor: CorridorPolicy | None = None) -> MeshHandle:
+        """The reach mesh for an acquired domain: neutral sizing + corridor shape."""
+        return MeshHandle(domain, policy,
+                          CorridorPolicy() if corridor is None else corridor)
 
     # -- 3. author --------------------------------------------------------- #
 
-    def author(self, *, mesh: ReachMesh, physics: Physics,
+    def author(self, *, mesh: MeshHandle, physics: Physics,
                forcing: Forcing) -> Step:
         """Serialize mesh + physics + forcing into the TELEMAC-2D reach deck."""
-        if not isinstance(mesh, ReachMesh):
+        if not isinstance(mesh, MeshHandle):
             raise PlanValidationError(
                 f"author needs the mesh build_mesh produced, got {type(mesh).__name__}.")
         if not isinstance(physics, Physics):
@@ -134,7 +173,7 @@ class TelemacWorkflow(Workflow):
         fields.update(mesh.deck_fields())
         fields.update(_translate(forcing.values, _FORCING_FIELDS))
         fields.update(physics.values)
-        _refuse_unknown_deck_fields(fields, physics.process)
+        _refuse_uncovered_deck_fields(fields, physics.process)
         return WriteDeck.telemac(**fields).named("deck")
 
     # -- 4. solve ---------------------------------------------------------- #
@@ -169,16 +208,35 @@ def _translate(values: Mapping[str, Any], table: Mapping[str, str]) -> dict[str,
     return {table.get(k, k): v for k, v in values.items()}
 
 
-def _refuse_unknown_deck_fields(fields: Mapping[str, Any], process: str) -> None:
-    """A slot member the deck writer does not accept fails HERE, not silently.
+def _refuse_uncovered_deck_fields(fields: Mapping[str, Any], process: str) -> None:
+    """The slots and the deck writer's signature must AGREE, in both directions.
 
-    An unknown key would otherwise vanish - the deck would be written without it
-    and the run would answer a different question than the template declared.
+    The signature check has to run both ways or it only catches half the disease.
+    An UNKNOWN key vanishes - the deck is written without it and the run answers a
+    different question than the template declared. A MISSING required key is the
+    mirror image and costs more: the plan builds, the acquire stage geocodes and
+    fetches, and only then does ``write_reach_deck`` die on a TypeError, several
+    minutes and three network round-trips after the declaration that was already
+    wrong. Both are refused HERE, while the plan value is being built.
     """
-    accepted = set(inspect.signature(write_reach_deck).parameters)
+    signature = inspect.signature(write_reach_deck).parameters
+    accepted = set(signature)
     unknown = sorted(set(fields) - accepted)
     if unknown:
         raise PlanValidationError(
             f"the {process!r} declaration names {unknown}, which the TELEMAC deck "
             f"writer does not accept (accepted: {sorted(accepted)})."
+        )
+    required = sorted(
+        name for name, prm in signature.items()
+        if prm.kind is inspect.Parameter.KEYWORD_ONLY
+        and prm.default is inspect.Parameter.empty
+    )
+    missing = [name for name in required if name not in fields]
+    if missing:
+        raise PlanValidationError(
+            f"the {process!r} declaration covers no {missing}, which the TELEMAC "
+            f"deck writer requires (required: {required}). Declare the slot member "
+            "that carries it - a Forcing without a `carrier`, for instance, leaves "
+            "`carrier_discharge` unfilled."
         )

@@ -43,7 +43,7 @@ from trid3nt_server.workflows.telemac.steps import (
     event_time,
     substance_class,
 )
-from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import CorridorPolicy, TelemacWorkflow
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.river_dye.river_dye")
 
@@ -315,10 +315,12 @@ def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the 
     forcing = Forcing(carrier=Ref("carrier_discharge"), rain=d.rain,
                       wind_speed_mps=p.wind_speed_mps,
                       wind_direction_deg=p.wind_direction_deg)
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy(
-        resolution=p.mesh_resolution, target_edge_m=p.mesh_resolution_m,
-        extent_km=p.reach_length_km, width_m=p.channel_width_m,
-        boundary_source=p.bank_source))
+    mesh = ops.build_mesh(
+        Ref("reach"),
+        MeshPolicy(resolution=p.mesh_resolution, target_edge_m=p.mesh_resolution_m),
+        corridor=CorridorPolicy(extent_km=p.reach_length_km,
+                                width_m=p.channel_width_m,
+                                boundary_source=p.bank_source))
     return [
         FormGate(title="Review the river-tracer scenario"),
         DrawGate(param="release_coords", geometry="point",
@@ -516,7 +518,7 @@ telemac_river_dye = register_workflow(
     answer=ANSWER,
     provenance=(("discharge_m3s", "discharge_note"),),
     coerce=(
-        location_or_bbox("telemac_river_dye",
+        location_or_bbox("telemac_river_dye", code_prefix="TELEMAC",
                          hint="For a natural prompt like 'dye spill in the river "
                               "near <place>', pass location='<place>'."),
         release_points,

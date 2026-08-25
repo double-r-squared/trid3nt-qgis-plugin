@@ -18,9 +18,15 @@ __all__ = ["location_or_bbox"]
 logger = logging.getLogger("trid3nt_server.workflows.shared.aoi")
 
 
-def location_or_bbox(tool: str, *, hint: str = "", code_prefix: str = "TELEMAC",
+def location_or_bbox(tool: str, *, code_prefix: str, hint: str = "",
                      location_wins: bool = True) -> Any:
     """A coercion resolving ``location`` / ``bbox`` down to exactly one AOI.
+
+    ``code_prefix`` is REQUIRED. This file is engine-agnostic by placement, so a
+    default engine prefix here would hand every future caller TELEMAC's error codes
+    silently - a SWMM template refusing with ``TELEMAC_PARAMS_INVALID`` is a wrong
+    answer that no test asks about. The one caller who knows the prefix is the
+    template.
 
     Three real behaviours, each of them a bug the field taught us:
 

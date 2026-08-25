@@ -91,22 +91,21 @@ class Forcing(Slot):
 
 @dataclass(frozen=True, slots=True)
 class MeshPolicy:
-    """The engine-NEUTRAL mesh ask: what to resolve, how finely, over what extent.
+    """The engine-NEUTRAL mesh ask: HOW FINELY to resolve, and nothing else.
 
-    Fixed-field because the ask is the same question for every unstructured
-    solver, and ``EngineOps.build_mesh(domain, policy)`` is the frozen interface
-    the generation strategies evolve behind. Whichever mesher answers it - the
-    engine's private corridor mesher today, the shared front later - reads THIS
-    declaration and nothing else.
+    Sizing is the only part of the ask that is genuinely universal - every
+    unstructured solver, structured grid and node-link network answers "how fine".
+    SHAPE is not: an extent, a cross-stream width and a bank source describe a
+    CORRIDOR, and a corridor is one domain among many. By the placement rule they
+    belong to the facade that meshes corridors (``telemac.workflow.CorridorPolicy``),
+    not to the universal policy, and they reach ``build_mesh`` as an engine slot.
+
+    Fixed-field because the sizing ask is the same question everywhere, and
+    ``EngineOps.build_mesh(domain, policy, **slots)`` is the frozen interface the
+    generation strategies evolve behind.
     """
 
     #: Sizing MODE: auto | fine | coarse. A word, because the user asks in words.
     resolution: Any = "auto"
     #: An explicit target element edge length that overrides the mode.
     target_edge_m: Any = None
-    #: How far the modeled domain runs, along its principal axis.
-    extent_km: Any = None
-    #: The modeled cross-stream width, where the domain is a corridor.
-    width_m: Any = None
-    #: Where the domain BOUNDARY comes from (real polygons vs an assumed ribbon).
-    boundary_source: Any = None
