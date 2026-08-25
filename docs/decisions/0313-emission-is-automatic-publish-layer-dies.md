@@ -1,6 +1,6 @@
 # 0313 - Emission is automatic: the publish mechanism moves to emission/, the tool dies
 
-Status: LANDED
+Status: LANDED (commit 0041b1e0)
 Date: 2026-08-25
 Supersedes: the `auto_publish` opt-out (ADR 0075's intermediate-raster
 suppression). Completes the `publish_layer` row of `docs/DELETION_LEDGER.md`
