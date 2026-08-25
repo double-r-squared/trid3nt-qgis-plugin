@@ -1031,3 +1031,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   path per engine. Blocked-by: the local-coordinate mesh defect (same
   fix as coastal's false-origin mesh layer). Build lands after the
   fleet migration; recon runs now.
+
+- DOT-LATTICE FIX SHAPE RULED (NATE 2026-08-25, "too hand wavy... can we
+  get finer?"): the open-water raster fix is BARYCENTRIC INTERPOLATION
+  over the result triangulation onto the fine output grid (30 m or
+  finer) - the FEM solution IS piecewise-linear over triangles, so this
+  is the solver's own representation, zero invented data; matches QGIS's
+  native mesh rendering. SUPERSEDES the earlier "size the grid from
+  dx_m" shape (continuous but blocky - rejected). Applies to
+  postprocess_coastal + postprocess_tomawac (+ any node-dot rasterizer).
+  Lands in the post-family fix batch w/ before/after proof renders on
+  the SAME runs. Mesh fineness itself stays the user granularity lever.
