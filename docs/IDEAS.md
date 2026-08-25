@@ -1059,3 +1059,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   `scripts/render_selafin_animation.py` takes `--origin-bbox` and puts the
   wireframe over the field correctly, which is how the artemis barrier cut-outs
   and the coastal tide are proved this wave.
+
+- RESOLUTION-SENSITIVITY RULING (NATE 2026-08-25, ruling b+c): (b) NOW -
+  answers in resolution-sensitive classes carry an explicit honesty
+  label when solved on a coarse mesh: concentration/magnitude PEAKS,
+  local feature LOCATIONS, wet/dry BOUNDARY areas, gradient-zone values
+  = "resolution-limited, treat as bound" notes on the answer artifact
+  (the refined-mesh pass 2026-08-25 is the evidence base: dye peak 6x
+  low, flooded land 4x low, crest artifact 2x high, upwind Hs -62%, Kd
+  absolutes -30-50%, stratification dT -25% - all unsafe-direction;
+  converged classes: integrals, saturated maxima, ratios - DO min,
+  hs_max, sheltering ratio). (c) LATER - the granularity gate learns the
+  same map: suggestion steers fine for sensitive question classes and
+  says why; user keeps the lever. Mechanism is skeleton-level
+  (answer-path labeling), lands with the held fix batch; generalizes
+  past TELEMAC (MODFLOW plume peaks next).
