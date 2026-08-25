@@ -1270,3 +1270,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   pairs) compute the range across the compared SET and share it, legend
   stating so. Fixed rescales remain for domain-standard bounded
   quantities. Legends always state which policy + the range.
+
+- SCALE KNOB + RESTYLE TOOL RULED (NATE 2026-08-25): style is
+  DISPLAY-STATE not solve-state - rescaling needs zero recompute, so the
+  policy is available BOTH upfront and post-hoc. (1) Declared knob:
+  .style(scale=...) modifier; a template exposes it as a Param fed via
+  ParamRef (one declared param away, same pattern as mesh policy). (2)
+  Registered restyle_layer tool (LLM-invokable, agentic ad hoc or on
+  command): re-emits the DISPLAY FACE of an already-published layer only
+  - NOT publish_layer resurrected (cannot create visibility); also takes
+  layer_ids+shared_scale=true for honest comparisons (calibration
+  before/after on one range). (3) Scale vocabulary beyond min/max, all
+  declared VALUES: policy data|fixed, transform linear|log|sqrt|
+  percentile, clip, range - ONE schema serving contract default,
+  modifier, param knob, and tool args. Later stages override earlier;
+  every override labeled; data immutable throughout.
