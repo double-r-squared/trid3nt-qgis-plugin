@@ -1019,3 +1019,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   per-template packet (LOC delta, parity one-liner, full proof render
   set) - never batched at wave end. Applies TELEMAC and onward (MODFLOW,
   SWMM).
+
+- 3D RENDERING CAPABILITY RULING (NATE 2026-08-25): 3D results get a
+  QGIS-renderable 3D product - res3d_t3d.slf publishing as two stills is
+  NOT the end state. This is a CAPABILITY track, not a one-off: more 3D
+  outputs AND inputs are coming (telemac3d prisms, MODFLOW layered
+  aquifers - fold the queued FloPy/QGIS-3D-aquifer-viz recon in here).
+  Research-first: MDAL 3D stacked-mesh support (which formats: SELAFIN
+  3D, TUFLOW FV, UGRID NetCDF), QGIS 3D map views + mesh averaging
+  methods, what the plugin must do vs what QGIS gives free, export
+  path per engine. Blocked-by: the local-coordinate mesh defect (same
+  fix as coastal's false-origin mesh layer). Build lands after the
+  fleet migration; recon runs now.
