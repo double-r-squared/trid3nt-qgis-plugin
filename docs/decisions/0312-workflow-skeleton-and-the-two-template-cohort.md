@@ -107,6 +107,17 @@ migrated code.
 | do_sag worker manifest | - | BYTE-IDENTICAL (bar the run tag) |
 | do_sag `chart_spec.json` | - | identical bar the minted `chart_id` |
 | do_sag `metrics.json` | - | identical bar the run-id-derived `layer_uri` |
+| river_dye coarse - peak concentration | 4.878571510314941 mg/L | 4.878571510314941 mg/L |
+| river_dye coarse - peak time | 200.0 s | 200.0 s |
+| river_dye coarse - plume reach | 472.7 m | 472.7 m |
+| river_dye coarse - active frames / mesh | 3 / 30.0 m, 155 nodes | 3 / 30.0 m, 155 nodes |
+| river_dye `t2d_river.cas` | - | BYTE-IDENTICAL |
+| river_dye `metrics.json` / `chart_spec.json` | - | identical bar the run-id-derived `layer_uri` and the minted `chart_id` |
+
+`scripts/drive_river_dye_cards.py` gained a `--coarse` canary declaration (the
+same shape do_sag already had): short reach, short window, pinned discharge, a
+derived release point, `input_mode=auto` - so a library or shared-step change is
+provable end-to-end through the product path in minutes.
 
 One representation delta was found and REMOVED rather than documented: the
 generic answer rule first wrote the provenance note as `discharge_m3s_note`,

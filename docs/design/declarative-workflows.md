@@ -64,8 +64,8 @@ DATA = [
                        .byo(validate=CoversAOI)),       # authored: byo-able, validated
 ]
 
-def plan(p, d):
-    return Workflow("telemac_river_dye", engine="telemac2d")[
+def plan(p, d, ops):
+    return [
         Geocode.river(p.location).named("reach"),
         When(p.delineate,
              Delineate.watershed(dem=d.terrain).overrides_domain()),
@@ -78,9 +78,14 @@ def plan(p, d):
         Solve(),
         Postprocess()
             .render(preset="dye_concentration")
-            .chart("concentration_timeseries", builder="telemac.steps.dye_chart"),
+            .chart("concentration_timeseries", builder=dye_chart),
     ]
 ```
+
+The plan returns the STEP SEQUENCE. The skeleton names and engines it (from the
+registration metadata and the facade), and `ops` is the engine facade whose five
+operations the mechanism steps above are reached through once a template is
+migrated. A chart's `builder` is the FUNCTION, colocated in this same file.
 
 `p.<name>` yields a LATE-BOUND `ParamRef`, not the value: the plan is built
 once, before the gates it declares have run, so it must DESCRIBE the read and
