@@ -4,14 +4,14 @@ elmfire_verification_elliptical_replication:
 - verify the fire spread solver against the closed-form elliptical solution
 - does the numerical fire perimeter match the analytical ellipse under constant wind
 - run the elliptical spread verification case on flat terrain with uniform fuel
-- ELMFIRE calibration check: constant wind flat terrain elliptical fire growth
+- "ELMFIRE calibration check: constant wind flat terrain elliptical fire growth"
 - regression gate comparing the fire front to the Richards ellipse within tolerance
 - validate wildfire spread rate and perimeter shape against the exact ellipse
 - constant fuel uniform wind verification of the level-set fire model
 elmfire_crown_fire_active_ros_verification:
 - verify the crown fire spread rate against the Cruz 2005 closed form
 - validate the active crown-fire rate of spread on a uniform canopied deck
-- ELMFIRE crown-fire calibration check: numerical head rate vs the Cruz analytic
+- "ELMFIRE crown-fire calibration check: numerical head rate vs the Cruz analytic"
 - regression gate comparing the active crown-fire rate to the Cruz exact solution
 - does the numerical active crown fire head rate match the closed-form crown ROS
 - constant wind uniform canopy verification of the crown-fire spread-rate model

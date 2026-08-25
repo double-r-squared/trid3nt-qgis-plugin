@@ -16,7 +16,7 @@ sfincs_flood:
 - model the hurricane storm surge coming in from the coast
 - coastal storm-surge inundation with bathymetry and waves
 - riverine and pluvial watershed flood inundation over a county
-- compound flood: surge plus river discharge plus rainfall
+- "compound flood: surge plus river discharge plus rainfall"
 - route the flood around building footprints (urban obstacles)
 - named-hurricane surge inundation via a parametric spiderweb wind field
 - run a SFINCS flood with a uniform constant infiltration loss rate qinf

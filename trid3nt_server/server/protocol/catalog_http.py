@@ -103,8 +103,24 @@ def _package_data_dir() -> Path:
     return Path(trid3nt_server.__file__).resolve().parent / "data"
 
 
+class _CorpusFormatError(Exception):
+    """Non-string entry in a corpus YAML list (a malformed corpus).
+
+    An unquoted phrasing containing a colon (e.g. ``- TMDL analysis: BOD
+    decay``) parses as a one-key dict instead of a string. Refuse rather
+    than silently drop the entry -- a dropped phrasing vanishes from
+    retrieval with no signal.
+    """
+
+
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
-    """Load a single corpus YAML into ``{tool: [queries]}`` (best-effort)."""
+    """Load a single corpus YAML into ``{tool: [queries]}``.
+
+    Missing files yield ``{}`` (best-effort: the catalog still renders
+    without sample queries). A non-string list entry raises
+    ``_CorpusFormatError`` naming the file, tool key, and offending entry
+    rather than being silently dropped.
+    """
     if not p.exists():
         return {}
     try:
@@ -117,8 +133,18 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
         return {}
     parsed: dict[str, list[str]] = {}
     for k, v in data.items():
-        if isinstance(k, str) and isinstance(v, list):
-            parsed[k] = [str(q) for q in v if isinstance(q, str)]
+        if not (isinstance(k, str) and isinstance(v, list)):
+            continue
+        queries: list[str] = []
+        for q in v:
+            if not isinstance(q, str):
+                raise _CorpusFormatError(
+                    f"non-string corpus entry in {p}: tool {k!r} has entry "
+                    f"{q!r} ({type(q).__name__}) -- likely an unquoted "
+                    "phrasing containing a colon; quote it as a YAML string"
+                )
+            queries.append(q)
+        parsed[k] = queries
     return parsed
 
 

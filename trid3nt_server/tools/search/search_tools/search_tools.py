@@ -78,6 +78,7 @@ __all__ = [
     "_LEX_REINFORCE_GATE_DOOR",
     "_LEX_REINFORCE_GATE_GENERAL",
     "SearchToolsError",
+    "CorpusFormatError",
     "_get_cooccurrence_index",
     "_reset_cooccurrence_cache_for_tests",
     "CooccurrenceIndex",
@@ -96,6 +97,29 @@ class SearchToolsError(RuntimeError):
 
     error_code: str = "SEARCH_TOOLS_ERROR"
     retryable: bool = False
+
+
+class CorpusFormatError(SearchToolsError):
+    """Raised when a corpus YAML entry under a tool key is not a string.
+
+    An unquoted phrasing containing a colon (e.g. ``- TMDL analysis: BOD
+    decay``) parses as a one-key dict instead of a string. Refuse rather
+    than silently drop the entry -- a dropped phrasing vanishes from
+    retrieval with no signal.
+    """
+
+    error_code: str = "CORPUS_FORMAT_ERROR"
+    retryable: bool = False
+
+    def __init__(self, path: Path, tool: str, entry: object) -> None:
+        super().__init__(
+            f"non-string corpus entry in {path}: tool {tool!r} has entry "
+            f"{entry!r} ({type(entry).__name__}) -- likely an unquoted "
+            "phrasing containing a colon; quote it as a YAML string"
+        )
+        self.path = path
+        self.tool = tool
+        self.entry = entry
 
 
 # ---------------------------------------------------------------------------
@@ -385,8 +409,11 @@ def _default_corpus_path() -> Path:
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
     """Load a single corpus YAML file into a ``{tool: [queries]}`` dict.
 
-    Missing / malformed files yield ``{}`` -- the index still builds in
-    docstring-only mode when a corpus file is absent.
+    Missing files yield ``{}`` -- the index still builds in docstring-only
+    mode when a corpus file is absent. A non-string list entry (an unquoted
+    phrasing containing a colon parses as a one-key dict, not a string) is
+    a malformed corpus and raises ``CorpusFormatError`` naming the file and
+    entry rather than being silently dropped.
     """
     if not p.exists():
         return {}
@@ -398,10 +425,16 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
         return {}
     if not isinstance(data, dict):
         return {}
-    return {
-        str(k): [str(q) for q in (v or []) if isinstance(q, str)]
-        for k, v in data.items()
-    }
+    parsed: dict[str, list[str]] = {}
+    for k, v in data.items():
+        tool = str(k)
+        queries: list[str] = []
+        for q in v or []:
+            if not isinstance(q, str):
+                raise CorpusFormatError(p, tool, q)
+            queries.append(q)
+        parsed[tool] = queries
+    return parsed
 
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:

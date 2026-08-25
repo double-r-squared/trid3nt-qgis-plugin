@@ -47,11 +47,13 @@ from trid3nt_server.tools.search.search_tools.search_tools import (
     _default_corpus_path,
     _lexical_reinforcement,
     _load_corpus,
+    _read_corpus_yaml,
     _expand_query_tokens,
     _reciprocal_rank_fusion,
     _reset_index_for_tests,
     _tokenize,
     search_tools,
+    CorpusFormatError,
 )
 
 
@@ -453,3 +455,44 @@ def test_typo_query_ranking_is_deterministic():
     _reset_index_for_tests()
     out_3 = asyncio.run(search_tools(query, top_k=10))
     assert out_1 == out_3
+
+
+# ---------------------------------------------------------------------------
+# 11. Malformed corpus entries raise rather than silently drop (review-panel
+# finding: an unquoted YAML phrasing containing a colon parses as a one-key
+# dict, not a string -- that entry must be refused, not lost with no signal).
+# ---------------------------------------------------------------------------
+
+
+def test_non_string_corpus_entry_raises(tmp_path):
+    """A corpus.yaml list entry that parses as a dict (unquoted phrasing with
+    a colon, e.g. ``- TMDL analysis: BOD decay``) raises CorpusFormatError
+    naming the file and the offending entry, instead of being dropped."""
+    bad_file = tmp_path / "corpus_bad.yaml"
+    bad_file.write_text(
+        "some_tool:\n"
+        "- a well-formed query\n"
+        "- Bad Phrasing: this has an unquoted colon\n"
+    )
+    with pytest.raises(CorpusFormatError) as exc_info:
+        _read_corpus_yaml(bad_file)
+    message = str(exc_info.value)
+    assert str(bad_file) in message
+    assert "some_tool" in message
+
+
+def test_non_string_corpus_entry_via_load_corpus_raises(tmp_path, monkeypatch):
+    """The same refusal surfaces through the ``TRID3NT_TOOL_CORPUS_YAML``
+    single-file pin path (``_load_corpus``), not just the low-level reader."""
+    bad_file = tmp_path / "corpus_bad.yaml"
+    bad_file.write_text("some_tool:\n- Bad Phrasing: this has an unquoted colon\n")
+    monkeypatch.setenv("TRID3NT_TOOL_CORPUS_YAML", str(bad_file))
+    with pytest.raises(CorpusFormatError):
+        _load_corpus()
+
+
+def test_missing_corpus_file_still_yields_empty_dict(tmp_path):
+    """Absence of a corpus file is unchanged behavior -- ``{}``, not a raise.
+    Only malformed (non-string) entries are refused."""
+    missing = tmp_path / "does_not_exist.yaml"
+    assert _read_corpus_yaml(missing) == {}
