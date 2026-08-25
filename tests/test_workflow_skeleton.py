@@ -8,12 +8,19 @@ Offline. Nothing here solves; these pin the contract in
   3. the registration factory synthesizes the wire signature from the declared
      params (``wire=False`` stays off it, aliases and controls join it);
   4. a chart builder is the FUNCTION - a dotted string is refused, no fallback;
-  5. a slot member the engine's deck writer does not accept is refused while the
-     plan value is being BUILT, never silently dropped.
+  5. the slot/signature check runs BOTH ways: a member the deck writer does not
+     accept, and a required member no slot covers, are both refused while the
+     plan value is being BUILT;
+  6. the facade's five are MUST-FILL - a hole refuses at registration, so a
+     NotImplementedError never reaches a caller as an engine internal error;
+  7. a coercion's failure is triaged, not flattened: retryable propagates, typed
+     keeps its code, a bug in our own coercion reads as INTERNAL_ERROR;
+  8. a declaration whose wire type would be silently guessed wrong refuses.
 """
 
 from __future__ import annotations
 
+import copy
 import inspect
 from typing import Any
 
@@ -196,10 +203,13 @@ def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
 
 
 def test_the_mesh_policy_reaches_the_deck_under_the_engine_s_own_names():
+    from trid3nt_server.workflows.telemac.workflow import CorridorPolicy
+
     ops = _telemac()
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy(
-        resolution="coarse", target_edge_m=100.0, extent_km=0.5, width_m=60.0,
-        boundary_source="nhd_area"))
+    mesh = ops.build_mesh(
+        Ref("reach"), MeshPolicy(resolution="coarse", target_edge_m=100.0),
+        corridor=CorridorPolicy(extent_km=0.5, width_m=60.0,
+                                boundary_source="nhd_area"))
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge"), rain=None))
     assert deck.name == "deck" and deck.stage == "author"
@@ -228,3 +238,162 @@ def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
     plan = ops.build_plan(None)
     assert plan.name == "telemac_probe"      # from the metadata
     assert plan.engine == "telemac2d"        # from the facade
+
+
+def test_an_undeclared_data_name_refuses_through_the_ATTRIBUTE_protocol():
+    """The refusal is typed AND an AttributeError: ``__getattr__`` is a protocol,
+    and hasattr / deepcopy / pickle probe it routinely."""
+    from trid3nt_server.workflows.lib import Data, Fetch, UndeclaredDataError
+    from trid3nt_server.workflows.lib.workflow import DataRefs
+
+    d = DataRefs((Data("rivers", Fetch.tool("pkg.mod.fetch")),))
+    assert issubclass(UndeclaredDataError, AttributeError)
+    assert not hasattr(d, "terrain")
+    assert copy.deepcopy(d)._names == ("rivers",)
+    with pytest.raises(UndeclaredDataError):
+        _ = d.terrain
+
+
+# --- (5b) a REQUIRED deck field no slot covers is refused at construction ---- #
+def test_a_required_deck_field_no_slot_covers_refuses_at_plan_construction():
+    """The mirror of the unknown-member check, and the more expensive half.
+
+    A Forcing with no ``carrier`` leaves ``carrier_discharge`` unfilled. Without
+    this the plan builds, the geocode + flowline + discharge fetches all run, and
+    only then does write_reach_deck die on a TypeError - minutes and three network
+    round-trips after the declaration that was already wrong.
+    """
+    ops = _telemac()
+    mesh = ops.build_mesh(Ref("reach"), MeshPolicy())
+    with pytest.raises(PlanValidationError) as ei:
+        ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
+                   forcing=Forcing())
+    message = str(ei.value)
+    assert "carrier_discharge" in message
+    assert "requires" in message
+
+
+def test_the_covered_declaration_still_authors():
+    """The guard refuses a HOLE, not every plan: the cohort shape still passes."""
+    ops = _telemac()
+    mesh = ops.build_mesh(Ref("reach"), MeshPolicy())
+    deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
+                      forcing=Forcing(carrier=Ref("carrier_discharge")))
+    assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
+
+
+# --- (6) the EngineOps five are must-fill at REGISTRATION -------------------- #
+def test_registration_refuses_a_facade_with_an_unrealized_operation():
+    """The design doc promises the library refuses to register a template that
+    leaves a must-fill slot empty. A hole that reaches run time surfaces as a bare
+    NotImplementedError flattened into <ENGINE>_INTERNAL_ERROR - a declaration
+    defect wearing a runtime failure's clothes."""
+    from trid3nt_server.workflows.lib import FacadeIncompleteError, register_workflow
+
+    class HalfEngine(Workflow):
+        engine = "half"
+
+        def acquire_domain(self, **slots):
+            return ()
+
+        def build_mesh(self, domain, policy, **slots):
+            return None
+
+        def author(self, *, mesh, physics, forcing):
+            return Step(runner="pkg.mod.fn")
+
+    with pytest.raises(FacadeIncompleteError) as ei:
+        register_workflow(HalfEngine, _metadata("half_probe"), (),
+                          lambda p, d, o: ())
+    assert "HalfEngine" in str(ei.value)
+    assert "solver_spec" in str(ei.value) and "read_results" in str(ei.value)
+
+
+def test_registration_refuses_something_that_is_not_a_facade_at_all():
+    from trid3nt_server.workflows.lib import FacadeIncompleteError, register_workflow
+
+    with pytest.raises(FacadeIncompleteError):
+        register_workflow(object, _metadata("not_a_facade"), (), lambda p, d, o: ())
+
+
+# --- (7) a coercion's failure is triaged, never flattened ------------------- #
+class _Retryable(Exception):
+    """What a gate raises: the adapter harvests .suggestions off the RAISED object."""
+
+    retryable = True
+    suggestions = ("send location='Eel River, California'",)
+
+
+@pytest.mark.asyncio
+async def test_a_retryable_coercion_failure_propagates_with_its_suggestions():
+    def _gate(args):
+        raise _Retryable("pick one")
+
+    wf = _workflow(coerce=(_gate,))
+    with pytest.raises(_Retryable) as ei:
+        await wf.run({})
+    assert ei.value.suggestions  # the channel survived; nothing flattened it
+
+
+@pytest.mark.asyncio
+async def test_a_typed_coercion_refusal_keeps_its_own_error_code():
+    from trid3nt_server.workflows.lib import WireArgsError
+
+    def _typed(args):
+        raise WireArgsError("needs a location", error_code="TELEMAC_PARAMS_INCOMPLETE")
+
+    out = await _workflow(coerce=(_typed,)).run({})
+    assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
+
+
+@pytest.mark.asyncio
+async def test_a_BUG_in_a_coercion_reads_as_internal_never_as_the_caller_s_fault():
+    """PARAMS_INVALID blames the caller for our own crash and sends the model off
+    to 'fix' arguments that were never wrong."""
+    def _buggy(args):
+        return {"x": 1 / 0}
+
+    out = await _workflow(coerce=(_buggy,)).run({})
+    assert out["error_code"] == "TELEMAC_INTERNAL_ERROR"
+    assert out["status"] == "error"
+
+
+# --- (8) a declaration whose wire type would be guessed wrong refuses -------- #
+def test_an_unbounded_numeric_default_refuses_rather_than_advertising_a_string():
+    with pytest.raises(PlanValidationError) as ei:
+        Param("k_per_day", door=doors.SCENARIO, default=0.3, desc="a rate")
+    assert "STRING" in str(ei.value)
+    # ... and both offered fixes are accepted
+    assert Param("k_per_day", door=doors.SCENARIO, default=0.3,
+                 bounds=(0.01, 20.0), desc="a rate").wire_type is float
+    assert Param("k_per_day", door=doors.SCENARIO, default=0.3,
+                 type=float, desc="a rate").wire_type is float
+
+
+def test_a_bool_default_is_not_a_numeric_default():
+    """bool IS an int in Python; a flag infers bool correctly and must not refuse."""
+    assert Param("armed", door=doors.SCENARIO, default=False,
+                 desc="a flag").wire_type is bool
+
+
+# --- provenance rows are declared as (param, note_key), exactly -------------- #
+@pytest.mark.parametrize("row", [("a", "b", "c"), ("a",), (1, 2)])
+def test_a_malformed_provenance_row_refuses_at_declaration(row):
+    with pytest.raises(PlanValidationError) as ei:
+        _workflow(provenance=(row,))
+    assert "provenance row" in str(ei.value)
+
+
+def test_the_run_prefix_comes_from_the_step_the_facade_NAMES():
+    """A literal "solve" would silently lose the prefix for a facade that named
+    its solve step anything else - and the chart spec would persist nowhere."""
+    from trid3nt_server.workflows.lib import RunResult
+
+    class Renamed(Workflow):
+        solve_step = "telemac_solve"
+
+    run = RunResult(value=_Layer())
+    run.results["telemac_solve"] = {"run_id": "RUN123"}
+    assert _workflow(Renamed)._run_id(_Layer(), run) == "RUN123"
+    # a workflow that declares no solve step simply has no prefix to find
+    assert _workflow()._run_id(_Layer(), run) is None

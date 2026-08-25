@@ -326,3 +326,58 @@ async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path
                                input_mode="user_gated")
     assert isinstance(out, dict) and out["error_code"] == "USER_INPUT_CANCELLED"
     assert "solve" not in order
+
+
+# --- mesh sizing honesty: a moved USER LEVER says so ------------------------ #
+def test_a_width_capped_override_is_narrated_rather_than_silently_applied():
+    """The canary's own numbers: mesh_resolution_m=100 on a 60 m channel.
+
+    The >= 2-cells-across rule caps h at W/2 = 30 m. The MESH is right; what was
+    wrong is that an explicit user lever was overridden with nothing said. The
+    behaviour is unchanged - only the label is added.
+    """
+    from trid3nt_server.workflows.telemac.steps.reach import suggest_mesh_size_m
+
+    sizing = suggest_mesh_size_m(reach_length_km=0.5, channel_width_m=60.0,
+                                 resolution="coarse", override_m=100.0)
+    assert sizing.mesh_size_m == 30.0                      # behaviour: unchanged
+    assert sizing.cap_note == ("mesh_resolution_m 100 CAPPED to 30 m by the "
+                               "channel-width rule (width 60 m / 2)")
+    assert "width-capped" in sizing.label
+
+
+def test_an_override_the_node_budget_RAISES_is_narrated_too():
+    """The mirror move: the budget floor pushes h ABOVE what was asked for."""
+    from trid3nt_server.workflows.telemac.steps.reach import suggest_mesh_size_m
+
+    sizing = suggest_mesh_size_m(reach_length_km=15.0, channel_width_m=1000.0,
+                                 resolution="auto", override_m=3.0)
+    assert sizing.mesh_size_m > 3.0
+    assert sizing.cap_note is not None and "RAISED" in sizing.cap_note
+    assert "budget-clamped" in sizing.label
+
+
+def test_an_HONOURED_override_adds_no_note_at_all():
+    """A row for a lever that was obeyed would be noise, not provenance."""
+    from trid3nt_server.workflows.telemac.steps.reach import suggest_mesh_size_m
+
+    sizing = suggest_mesh_size_m(reach_length_km=0.5, channel_width_m=60.0,
+                                 resolution="coarse", override_m=20.0)
+    assert sizing.mesh_size_m == 20.0
+    assert sizing.cap_note is None
+
+
+def test_the_cap_note_becomes_a_provenance_row_on_the_do_sag_layer():
+    from trid3nt_server.workflows.telemac.steps.products import _do_sag_provenance
+
+    deck = {"mesh_resolution_note": "mesh_resolution_m 100 CAPPED to 30 m by the "
+                                    "channel-width rule (width 60 m / 2)",
+            "mesh_resolution_asked_m": 100.0}
+    rows = _do_sag_provenance({"m3s": 60.0, "basis": "user"}, deck)
+    capped = [r for r in rows if r.param == "mesh_resolution_m"]
+    assert len(capped) == 1
+    assert capped[0].value == 100.0 and capped[0].units == "m"
+    assert "CAPPED to 30 m" in capped[0].note
+    # an unmoved lever leaves no row
+    assert not [r for r in _do_sag_provenance({"m3s": 60.0, "basis": "user"}, {})
+                if r.param == "mesh_resolution_m"]
