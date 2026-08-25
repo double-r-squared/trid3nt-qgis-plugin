@@ -264,13 +264,22 @@ _ALLOWED_COMPUTE = frozenset(
 
 
 def compute_class() -> Any:
-    """A coercion pinning ``compute_class`` to a rung the dispatcher can serve."""
+    """A coercion pinning a SUPPLIED ``compute_class`` to a rung the dispatcher serves.
+
+    An ABSENT rung leaves no row at all. A coercion's output is merged into the
+    door-1 supplied sheet, so a value emitted for an argument nobody sent resolves
+    through the USER door and the run's provenance reports the template's own
+    default as "supplied on this invocation" - the falsification this abstention
+    exists to prevent. The declared constant-door default seats itself instead.
+    """
 
     def _coerce(args: Any) -> dict[str, Any]:
-        value = str(args.get("compute_class") or "medium").strip().lower()
+        raw = args.get("compute_class")
+        value = str(raw or "").strip().lower()
+        if not value:
+            return {}
         if value not in _ALLOWED_COMPUTE:
-            logger.warning("unknown compute_class %r coerced to 'medium'",
-                           args.get("compute_class"))
+            logger.warning("unknown compute_class %r coerced to 'medium'", raw)
             value = "medium"
         return {"compute_class": value}
 

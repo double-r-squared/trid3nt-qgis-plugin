@@ -273,10 +273,17 @@ def substance_class() -> Any:
     Models split intent across the two fields - ``substance="dye"`` AND
     ``contaminant="crude oil"`` - so an oil spill silently ran the tracer class.
     Any NON-tracer contaminant class wins over a tracer-class substance.
+
+    NEITHER field supplied leaves NO row. A coercion's output merges into the
+    door-1 supplied sheet, so emitting the tracer default here would resolve it
+    through the USER door and report the template's own default as "supplied on
+    this invocation". Abstaining lets the declared default seat through its own
+    door with its own basis.
     """
 
     def _coerce(args: Any) -> dict[str, Any]:
-        substance = sanitize_substance(args.get("substance"))
+        supplied = sanitize_substance(args.get("substance"), default="")
+        substance = supplied or sanitize_substance(None)
         contaminant = args.get("contaminant")
         if contaminant:
             cont = sanitize_substance(contaminant, default="")
@@ -285,8 +292,8 @@ def substance_class() -> Any:
                 logger.info("substance %r is tracer-class but contaminant %r is "
                             "%s-family - classifying by contaminant", substance, cont,
                             classify_substance(cont)[0])
-                substance = cont
-        return {"substance": substance}
+                return {"substance": cont}
+        return {"substance": supplied} if supplied else {}
 
     _coerce.__name__ = "substance_class"
     return _coerce

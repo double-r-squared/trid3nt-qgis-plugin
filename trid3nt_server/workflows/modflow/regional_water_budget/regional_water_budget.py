@@ -258,7 +258,11 @@ def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
     supplied["location"] = location if has_loc else None
     supplied["aoi_latlon"] = coerced
     supplied["zone_partition"] = zone
-    supplied["compute_class"] = str(args.get("compute_class") or "standard")
+    # An ABSENT rung leaves NO row. This sheet is DOOR 1, so a value seated here
+    # resolves through the USER door: injecting the declared constant would report
+    # the template's own default as "supplied on this invocation" on every run.
+    rung = str(args.get("compute_class") or "").strip()
+    supplied["compute_class"] = rung or None
     return {k: v for k, v in supplied.items() if v is not None}, None
 
 

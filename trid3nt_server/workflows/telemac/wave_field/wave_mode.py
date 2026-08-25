@@ -31,8 +31,14 @@ def wave_mode() -> Any:
 
     An explicit legal value stands. Anything else - an unknown word, or nothing at
     all - is read off the ``location`` phrasing, which is where a caller putting
-    the question in words puts it, and falls through to fetch growth, the class a
-    bare "how big do the waves get" is asking about.
+    the question in words puts it.
+
+    Neither field carrying a signal leaves NO row: a coercion's output merges into
+    the door-1 supplied sheet, so emitting the fall-through class here would
+    resolve it through the USER door and report the template's own default as
+    "supplied on this invocation". Abstaining lets the declared default -
+    ``fetch_growth``, the class a bare "how big do the waves get" is asking about -
+    seat through its own door with its own basis.
     """
 
     def _coerce(args: Any) -> dict[str, Any]:
@@ -43,7 +49,7 @@ def wave_mode() -> Any:
         for mode, words in _MODE_WORDS:
             if any(word in phrase for word in words):
                 return {"wave_mode": mode}
-        return {"wave_mode": "fetch_growth"}
+        return {}
 
     _coerce.__name__ = "wave_mode"
     return _coerce

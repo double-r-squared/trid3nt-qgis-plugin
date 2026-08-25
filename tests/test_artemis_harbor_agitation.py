@@ -51,12 +51,21 @@ def test_mode_classification_from_prompt():
     assert coerce({"location": "does the basin resonate at the swell period"}
                   )["wave_mode"] == "resonance"
     assert coerce({"location": "waves focusing over the reef"})["wave_mode"] == "shoal"
-    assert coerce({"location": "does the breakwater shelter the berths"}
-                  )["wave_mode"] == "diffraction"
+    # NO signal in either field emits NOTHING: a value emitted here would resolve
+    # through the USER door and stamp the declared default as user-supplied.
+    assert coerce({"location": "does the breakwater shelter the berths"}) == {}
     # an explicit value wins over the phrasing, and an unknown one falls back to it
     assert coerce({"location": "anything", "wave_mode": "shoal"})["wave_mode"] == "shoal"
     assert coerce({"location": "seiche", "wave_mode": "nonsense"}
                   )["wave_mode"] == "resonance"
+
+
+def test_the_unspoken_mode_resolves_to_the_declared_default():
+    """Abstaining changes the row's provenance, never the class the run models."""
+    _, sheet = _sheet(wave_mode=None, location="does the breakwater shelter the berths")
+    row = sheet.row("wave_mode")
+    assert row.value == "diffraction"
+    assert (row.door, row.basis) == ("question", "default_demo")
 
 # ===========================================================================
 # The DECLARATION: the plan value, the deck, and the structure.

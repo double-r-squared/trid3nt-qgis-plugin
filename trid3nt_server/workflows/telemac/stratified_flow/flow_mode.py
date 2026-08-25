@@ -29,8 +29,14 @@ def flow_mode() -> Any:
     """A coercion resolving ``flow_mode`` to one of the three question classes.
 
     An explicit legal value stands. Anything else is read off the ``location``
-    phrasing and falls through to stratification, which is what "does this lake
-    stratify" - the question this tool is most often asked - means.
+    phrasing.
+
+    Neither field carrying a signal leaves NO row: a coercion's output merges into
+    the door-1 supplied sheet, so emitting the fall-through class here would
+    resolve it through the USER door and report the template's own default as
+    "supplied on this invocation". Abstaining lets the declared default -
+    ``stratification``, what "does this lake stratify" means - seat through its own
+    door with its own basis.
     """
 
     def _coerce(args: Any) -> dict[str, Any]:
@@ -41,7 +47,7 @@ def flow_mode() -> Any:
         for mode, words in _MODE_WORDS:
             if any(word in phrase for word in words):
                 return {"flow_mode": mode}
-        return {"flow_mode": "stratification"}
+        return {}
 
     _coerce.__name__ = "flow_mode"
     return _coerce

@@ -53,8 +53,10 @@ def test_mode_classification_from_prompt():
         == "wave_current"
     assert coerce({"location": "bottom friction on the shelf"})["wave_mode"] \
         == "bottom_friction"
-    assert coerce({"location": "how big do the waves get"})["wave_mode"] \
-        == "fetch_growth"
+    # NO signal in either field emits NOTHING: a value emitted here would resolve
+    # through the USER door and stamp the declared fetch_growth default as
+    # user-supplied on every bare invocation.
+    assert coerce({"location": "how big do the waves get"}) == {}
     # an explicit value wins over the phrasing, and an unknown one falls back to it
     assert coerce({"location": "anything", "wave_mode": "wave_current"})["wave_mode"] \
         == "wave_current"
@@ -127,14 +129,22 @@ def test_a_local_coordinate_mesh_is_georeferenced_from_the_aoi_corner():
 
     Reprojecting those local metres as ABSOLUTE UTM is what put the Hs COG at the
     zone's false origin - thousands of km from the lake - while the bed COG beside
-    it sat correctly on the water. A basin with no AOI has no corner to add.
+    it sat correctly on the water. A basin with no AOI has no corner to add; a
+    MALFORMED corner is a different fact and refuses, because reading it as absent
+    is what sends a real domain to the false origin.
     """
-    from trid3nt_server.workflows.telemac.postprocess_telemac import _local_mesh_origin
+    import pytest
+
+    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+        PostprocessTelemacError,
+        _local_mesh_origin,
+    )
 
     x_org, y_org = _local_mesh_origin((-87.60, 46.70, -86.60, 47.20), 32616)
     assert 300_000 < x_org < 700_000 and 5_100_000 < y_org < 5_300_000
     assert _local_mesh_origin(None, 32616) == (0.0, 0.0)
-    assert _local_mesh_origin((1.0, 2.0), 32616) == (0.0, 0.0)
+    with pytest.raises(PostprocessTelemacError):
+        _local_mesh_origin((1.0, 2.0), 32616)
 
 
 def test_the_fetch_chart_plots_the_workers_own_curve():

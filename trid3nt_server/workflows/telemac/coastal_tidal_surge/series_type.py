@@ -29,8 +29,15 @@ def series_type() -> Any:
 
     An explicit legal value stands. Anything else - an unknown word, or nothing at
     all - is read off the ``location`` phrasing, which is where a caller putting
-    the question in words puts it. The result is always one of the two, so the
-    deck never carries a series class the worker cannot write a boundary for.
+    the question in words puts it. The resolved value is always one of the two, so
+    the deck never carries a series class the worker cannot write a boundary for.
+
+    Prediction wording is the only positive SIGNAL there is: ``observed`` is the
+    else-branch, so no wording leaves NO row. A coercion's output merges into the
+    door-1 supplied sheet, and emitting the else-branch here would resolve it
+    through the USER door and report the template's own default as "supplied on
+    this invocation". Abstaining lets the declared ``observed`` default seat
+    through its own door with its own basis.
     """
 
     def _coerce(args: Any) -> dict[str, Any]:
@@ -38,8 +45,9 @@ def series_type() -> Any:
         if explicit in SERIES_TYPES:
             return {"series_type": explicit}
         phrase = str(args.get("location") or "").lower()
-        return {"series_type": "prediction"
-                if any(word in phrase for word in _PREDICTION_WORDS) else "observed"}
+        if any(word in phrase for word in _PREDICTION_WORDS):
+            return {"series_type": "prediction"}
+        return {}
 
     _coerce.__name__ = "series_type"
     return _coerce

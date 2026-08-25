@@ -30,8 +30,14 @@ def agitation_mode() -> Any:
     """A coercion resolving ``wave_mode`` to one of the three question classes.
 
     An explicit legal value stands. Anything else is read off the ``location``
-    phrasing and falls through to diffraction, which is what "does this breakwater
-    shelter the harbour" - the question this tool is most often asked - means.
+    phrasing.
+
+    Neither field carrying a signal leaves NO row: a coercion's output merges into
+    the door-1 supplied sheet, so emitting the fall-through class here would
+    resolve it through the USER door and report the template's own default as
+    "supplied on this invocation". Abstaining lets the declared default -
+    ``diffraction``, what "does this breakwater shelter the harbour" means - seat
+    through its own door with its own basis.
     """
 
     def _coerce(args: Any) -> dict[str, Any]:
@@ -42,7 +48,7 @@ def agitation_mode() -> Any:
         for mode, words in _MODE_WORDS:
             if any(word in phrase for word in words):
                 return {"wave_mode": mode}
-        return {"wave_mode": "diffraction"}
+        return {}
 
     _coerce.__name__ = "agitation_mode"
     return _coerce

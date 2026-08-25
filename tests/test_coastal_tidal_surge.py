@@ -49,9 +49,11 @@ def test_series_type_classification_from_prompt():
     coerce = series_type()
     assert coerce({"location": "the astronomical tide prediction"})["series_type"] \
         == "prediction"
-    assert coerce({"location": "observed hurricane surge record"})["series_type"] \
-        == "observed"
-    assert coerce({"location": "map the storm surge inland"})["series_type"] == "observed"
+    # Prediction wording is the only positive signal; the observed record is the
+    # else-branch, so no wording emits NOTHING. A value emitted here would resolve
+    # through the USER door and stamp the declared default as user-supplied.
+    assert coerce({"location": "observed hurricane surge record"}) == {}
+    assert coerce({"location": "map the storm surge inland"}) == {}
     # an explicit value wins over the phrasing, and an unknown one falls back to it
     assert coerce({"location": "anything", "series_type": "prediction"})["series_type"] \
         == "prediction"

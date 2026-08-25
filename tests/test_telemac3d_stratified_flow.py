@@ -52,8 +52,10 @@ def test_mode_classification_from_prompt():
     """The declared coercion reads the question class off the ask, or takes it."""
     from trid3nt_server.workflows.telemac.stratified_flow.flow_mode import flow_mode
     coerce = flow_mode()
-    assert coerce({"location": "does this lake stratify and turn over"}
-                  )["flow_mode"] == "stratification"
+    # NO signal in either field emits NOTHING: a value emitted here would resolve
+    # through the USER door and stamp the declared stratification default as
+    # user-supplied on every bare invocation.
+    assert coerce({"location": "does this lake stratify and turn over"}) == {}
     assert coerce({"location": "wind-driven circulation and return flow"}
                   )["flow_mode"] == "wind_circulation"
     assert coerce({"location": "salt wedge intrusion in the estuary"}
