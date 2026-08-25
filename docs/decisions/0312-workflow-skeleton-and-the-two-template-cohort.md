@@ -219,6 +219,14 @@ express (a new deck keyword, a new solver module, a new reader) is a mechanism
 change and touches exactly one runner in `<engine>/steps/`. The list above is
 about MEANING, not capability.
 
+The boundary is easy to blur, so wave 2b's own mesh-cap row is worth stating as
+the counter-example it is: DECLARING `("mesh_resolution_m", "mesh_resolution_note")`
+in `provenance=` was class 8 and touched one file, but the row it lifts had to be
+PRODUCED first, which is mechanism and landed in `steps/products.py`. A template
+can declare what it wants on the answer; it cannot conjure a provenance row no
+step emits. Class 8 is template-only for a field the run already carries - and
+that is exactly the distinction the criterion is testing.
+
 ### The regression figure
 
 The offline suite at the wave-2 landing: **11963 passed**, against the standing
