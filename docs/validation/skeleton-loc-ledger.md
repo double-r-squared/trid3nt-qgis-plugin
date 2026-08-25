@@ -62,6 +62,13 @@ across; the reconciliation check above is what proves nothing was dropped.
 | 2026-08-24 | 2b - panel remediation | shared steps (`shared/aoi.py` - required `code_prefix` + its rationale) | 68 | 74 | +6 | +740 |
 | 2026-08-24 | 2b - panel remediation | cohort templates (`do_sag.py` +5, `river_dye.py` +5 - the corridor slot and the mesh provenance row each cost a line and buy the placement and the honesty) | 854 | 864 | +10 | +750 |
 | 2026-08-24 | 2b - panel remediation | fleet adaptations (3 orphaned `_STEPS` constants deleted) | 1209 | 1204 | -5 | **+745** |
+| 2026-08-25 | 3 - TELEMAC family (ref `04ab6b1c`) | migrated template files (`coastal_tidal_surge` 848 -> 347, `wave_field` 695 -> 340, `agitation` 840 -> 340, `stratified_flow` 737 -> 342; each = the template + its new sibling coercion + `__init__`) | 3120 | 1369 | -1751 | -1006 |
+| 2026-08-25 | 3 - TELEMAC family | TELEMAC facade + family steps (`workflow.py` +139 the `_PROCESSES` routing table, `steps/__init__.py` +35, and the five NEW step modules: `open_water.py` 273 shared by all four, `coastal.py` 267, `wave.py` 281, `agitation.py` 399, `stratified.py` 277) | 326 | 1997 | +1671 | +665 |
+| 2026-08-25 | 3 - TELEMAC family | shared steps (`shared/aoi.py` +117 the AOI acquire step, `shared/tide_series.py` 216 the CO-OPS forcing resolver) | 74 | 407 | +333 | +998 |
+| 2026-08-25 | 3 - TELEMAC family | lib skeleton (the CONSTANT-door wire enforcement: `workflow.py` +41 `_wire_params` + the factory note, `docstring.py` +6) | 554 | 601 | +47 | +1045 |
+| 2026-08-25 | 3 - TELEMAC family | adapters/runtime (`postprocess_telemac.py` +38 the shared `_local_mesh_origin` + the three call sites, `contracts/telemac_contracts.py` +27 the curve/profile answer fields, `testing/live_run.py` +31 the dispatch-card verdict, `testing/canaries.py` 258 the declared canary registry) | 3309 | 3663 | +354 | +1399 |
+| 2026-08-25 | 3 - TELEMAC family | fleet adaptations (the cohort's now-dead `TEMPLATE_CARD` / `QUESTION` decoration stripped, its prose moved into the module docstrings) | 864 | 836 | -28 | +1371 |
+| 2026-08-25 | 3 - TELEMAC family | deleted outright (`telemac/_bed_input.py` 62, `telemac/_template_card.py` 30) | 92 | 0 | -92 | **+1279** |
 
 **Wave 2 verdict (corrected): net +487 - invested in the skeleton, not yet
 repaid; watch.** The +467 first published here undercounted by 20 product lines
@@ -89,3 +96,49 @@ once per TEMPLATE (~150-260). A one-template engine roughly breaks even; the
 TELEMAC family alone (6 templates) should turn the running net negative. If wave
 3 does not move the running net down, the generalization is not paying and the
 slot/facade surface needs cutting, not extending.
+
+**Wave 3 verdict: net +534, running net +1279 - the family did NOT turn the
+campaign net negative, and the reason is worth more than the number.**
+
+The projection this wave was measured against said a six-template TELEMAC family
+should turn the running net negative, on the arithmetic that the lib cost never
+recurs, the facade cost recurs once per ENGINE, and the saving recurs once per
+TEMPLATE. Two of those three held. The third did not, and here is the honest
+accounting.
+
+THE TEMPLATE FILES DID COLLAPSE, hard: 3120 lines to 1369, -56%. Four files that
+were each an 700-850 line composer are now each a ~290-line declaration plus a
+~48-line sibling coercion. Read on its own that row is the best result the
+campaign has produced.
+
+BUT THE MECHANISM DID NOT VANISH - IT MOVED. Of the 1671 lines the step tier
+gained, only `open_water.py` (273) is genuinely shared: staging, dispatch, result
+download, the peak publish and the in-worker bed surfacing, written once for four
+templates and ready for the fifth. The other 1224 are FOUR per-template modules -
+`coastal.py`, `wave.py`, `agitation.py`, `stratified.py` - one per template, at a
+different address. Counted per template, the family's own surface (the template
+file PLUS its step module) fell from 3120 to 2593: a real -527, about 130 lines a
+template, but a sixth of what the template row alone suggests.
+
+WHAT THE REST WENT ON, stated rather than buried: 780 lines of front the four now
+share and a fifth will (the AOI acquire, the tide-series resolver, the
+`_PROCESSES` routing table); 354 lines of runtime and instrumentation, of which
+258 is `testing/canaries.py` - the declared canary registry that made every
+parity claim in this wave reproducible, and which by the drivers-are-product rule
+counts here in full; and 47 lines of CONSTANT-door enforcement in the library,
+which is a refusal and can only ever be a cost.
+
+WHAT WOULD ACTUALLY PAY IT BACK, named so the next wave can aim at it: the four
+per-template step modules are the same four shapes each time - a `write_*_deck`,
+a `publish_*_products`, a `_provenance` and a `_honesty_note`. The deck writers
+genuinely differ (four different worker configs) but the PUBLISHERS are roughly
+80% identical: download the result, call the engine's postprocessor, fold the
+worker's extra scalars on, publish through the one seam, surface the bed, log.
+Absorbing that into a DECLARED products shape - which postprocessor, which extra
+scalars, which honesty note - would take perhaps 600 of the 1224 back. That is
+the measurement to make at the MODFLOW family, where the same four shapes will
+appear again and the question stops being TELEMAC's.
+
+Counting note for reproducibility: the wave's whole-tree reconciliation is
+`git diff --numstat 04ab6b1c -- '*.py' ':!tests' ':!scripts'`, which totals
++3680 / -3146 = **+534**, exactly the sum of the seven rows above.

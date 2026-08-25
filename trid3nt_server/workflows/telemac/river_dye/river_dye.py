@@ -6,6 +6,12 @@ wire args, resolving the doors, walking the plan, persisting the products - is
 the skeleton (``workflows/lib/workflow.py``); the reach mechanism is the TELEMAC
 facade (``workflows/telemac/workflow.py``). See
 ``docs/design/declarative-workflows.md``.
+
+THE QUESTION: how far a DYE / TRACER / CONTAMINANT / oil / sewage / sediment
+spill travels DOWNSTREAM in a river reach, and what its peak concentration is;
+OR where the bed SCOURS and re-deposits under a flood (GAIA erodible-bed
+morphodynamics). TELEMAC-2D shallow water over a real reach, with the plume or
+the bed evolution animated from the native time-stepped mesh.
 """
 
 from __future__ import annotations
@@ -35,7 +41,6 @@ from trid3nt_server.workflows.lib import (
     register_workflow,
 )
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.workflows.telemac.steps import (
     TelemacDyeScenarioError,
     coerce_lonlat_point,
@@ -51,26 +56,6 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "build_dye_chart", "plan", "telemac_river
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
-TEMPLATE_CARD = TemplateCard(
-    question=(
-        "how far a DYE / TRACER / CONTAMINANT / oil / sewage / sediment spill "
-        "travels DOWNSTREAM in a river reach (surface water) + its peak "
-        "concentration; OR where the BED SCOURS / ERODES and re-deposits under a "
-        "flood (GAIA erodible-bed morphodynamics) - TELEMAC-2D shallow-water over "
-        "a real reach; animated time-stepped plume / bed evolution"
-    ),
-    required_inputs=["location OR bbox"],
-    knobs=(
-        "spill_fraction, spill_duration_s, dye_concentration_mgl, "
-        "reach_length_km, sim_duration_s, source_q_m3s, channel_width_m, "
-        "substance (dye / oil / sewage / sediment / scour / graded), mesh_resolution, "
-        "release_coords, event_time, decay_half_life_hours, grain_size_um, erodible_bed, "
-        "bed_thickness_m, bedload_formula, morphological_factor, sediment_gradation, "
-        "dredging, dredge_mode (scheduled/criterion), dredge_volume_m3, "
-        "dredge_disposal, dredge_crit_depth_m, dredge_dig_depth_m, friction_coefficient, "
-        "rainfall_mm_per_day, rainfall_gridmet_window, evaporation_mm_per_day"
-    ),
-)
 
 
 PARAMS: tuple[Param, ...] = (

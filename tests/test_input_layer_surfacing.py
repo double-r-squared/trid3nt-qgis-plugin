@@ -500,7 +500,7 @@ async def test_river_dye_bed_cog_recorded_but_object_missing_skips_loudly(
 # ride that object through the shared surface_in_worker_bed_input helper. The
 # router seam cannot cover it (never touches route()), so it is allowlisted.
 # ===========================================================================
-from trid3nt_server.workflows.telemac._bed_input import (  # noqa: E402
+from trid3nt_server.workflows.telemac.steps.open_water import (  # noqa: E402
     surface_in_worker_bed_input,
 )
 
@@ -527,6 +527,7 @@ async def test_surface_in_worker_bed_input_surfaces_lake_bed_as_context(monkeypa
             run_metrics={"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "noaa_greatlakes"},
             run_id="RID",
             name="Input: lake bed bathymetry (marquette, NOAA Great Lakes lake-datum, in-worker)",
+            layer_id_prefix="input-lake-bed",
         )
 
     assert ok is True
@@ -545,11 +546,13 @@ async def test_surface_in_worker_bed_input_absent_key_and_none_emitter_noop():
     """No bed_cog (idealized bed / older image) surfaces nothing; a None emitter is
     a no-op -- both return False and NEVER raise."""
     assert await surface_in_worker_bed_input(
-        None, run_metrics={"bed_cog": "bed_bathymetry.tif"}, run_id="RID", name="x"
+        None, run_metrics={"bed_cog": "bed_bathymetry.tif"}, run_id="RID", name="x",
+        layer_id_prefix="input-lake-bed",
     ) is False
     emitter = _emitter()
     assert await surface_in_worker_bed_input(
-        emitter, run_metrics={}, run_id="RID", name="x"
+        emitter, run_metrics={}, run_id="RID", name="x",
+        layer_id_prefix="input-lake-bed",
     ) is False
     assert emitter._loaded_layers == []
 
@@ -574,6 +577,7 @@ async def test_surface_in_worker_bed_input_publish_failure_non_fatal(monkeypatch
         ok = await surface_in_worker_bed_input(
             emitter, run_metrics={"bed_cog": "bed_bathymetry.tif"}, run_id="RID",
             name="Input: lake bed bathymetry (x)",
+            layer_id_prefix="input-lake-bed",
         )
     assert ok is False
     assert emitter._loaded_layers == []
@@ -616,7 +620,6 @@ _WORKFLOWS_DIR = (
 # relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only
 # input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
-    "telemac/_bed_input.py": (1, "shared in-worker lake-datum bed-COG surfacing (tomawac/artemis)"),
     "geoclaw/inundation/inundation.py": (2, "mesh preview + particle result"),
     "hecras/flood_2d/flood_2d.py": (1, "mesh preview"),
     "hecras/levee_breach/levee_breach.py": (1, "mesh preview"),

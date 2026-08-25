@@ -156,6 +156,14 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
         mesh, values, nplan=nplan, plane=plane)
 
     x_org, y_org = local_origin(origin_bbox, utm_epsg)
+    if not x_org and float(np.nanmin(mesh_x)) < 1000.0:
+        # A mesh whose easting starts near ZERO is LOCAL, and reprojecting it with
+        # no origin puts the frames at the UTM false origin - thousands of km from
+        # the water. Silence here is how that defect hid in the first place.
+        print(f"WARNING: {Path(slf_path).name} looks LOCAL (min easting "
+              f"{float(np.nanmin(mesh_x)):.1f} m) and no origin bbox was given - "
+              "the frames will land at the UTM false origin. Pass --origin-bbox.",
+              file=sys.stderr)
     back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
     lon, lat = back.transform(np.asarray(mesh_x) + x_org, np.asarray(mesh_y) + y_org)
     lon, lat = np.asarray(lon), np.asarray(lat)
@@ -193,13 +201,17 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
             transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
             bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
 
-    writer = PillowWriter(fps=_FPS)
-    with writer.saving(fig, str(gif_path), dpi=_DPI):
-        for i, moment in enumerate(mesh["times"]):
-            coll.set_array(values[i])
-            stamp.set_text(f"t = {float(moment):8.0f} s      "
-                           f"max {float(np.nanmax(values[i])):.3g} {units}")
-            writer.grab_frame()
+    # A STEADY solve has one frame, and a one-frame GIF is a still pretending to
+    # be an animation. It gets the still and an honest "no animation" instead.
+    animated = values.shape[0] > 1
+    if animated:
+        writer = PillowWriter(fps=_FPS)
+        with writer.saving(fig, str(gif_path), dpi=_DPI):
+            for i, moment in enumerate(mesh["times"]):
+                coll.set_array(values[i])
+                stamp.set_text(f"t = {float(moment):8.0f} s      "
+                               f"max {float(np.nanmax(values[i])):.3g} {units}")
+                writer.grab_frame()
 
     # The PEAK frame as its own still, off the SAME figure - same colours, same
     # extent, so the still and the animation cannot disagree.
@@ -209,7 +221,8 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
                    f"max {float(np.nanmax(values[peak_frame])):.3g} {units}")
     fig.savefig(peak_path, bbox_inches="tight")
     plt.close(fig)
-    return {"frames": int(values.shape[0]), "variable": name.strip(),
+    return {"frames": int(values.shape[0]), "animated": animated,
+            "variable": name.strip(),
             "plane": plane_note.strip(" |") or "2d", "peak_frame": peak_frame,
             "peak_time_s": float(mesh["times"][peak_frame]),
             "peak_value": float(np.nanmax(values[peak_frame])),
@@ -261,9 +274,12 @@ def main(argv: list[str] | None = None) -> int:
                         plane=ns.plane, still=ns.still)
     finally:
         Path(slf).unlink(missing_ok=True)
-    print(json.dumps({**result, "run_id": ns.run_id, "animation": str(gif),
+    print(json.dumps({**result, "run_id": ns.run_id,
+                      "animation": str(gif) if result["animated"] else
+                      "NONE - a single-frame (steady) result has nothing to animate",
                       "peak": str(peak), "origin_bbox": origin,
-                      "animation_bytes": gif.stat().st_size,
+                      "animation_bytes": (gif.stat().st_size if result["animated"]
+                                          else 0),
                       "peak_bytes": peak.stat().st_size}, indent=2))
     return 0
 

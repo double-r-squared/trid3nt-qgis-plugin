@@ -58,6 +58,11 @@ _SUPERIOR_BBOX = [-87.60, 46.70, -86.60, 47.20]
 #: OpenStreetMap, which is the whole point of the diffraction question class.
 _MARQUETTE_BBOX = [-87.392, 46.528, -87.368, 46.550]
 
+#: Coweeta Creek, NC - the gauged headwater catchment the rain-on-grid work was
+#: built against. A DOCUMENTED pour point, so the delineation has a real outlet
+#: rather than a guessed one.
+_COWEETA_POUR_POINT = [-83.40402, 35.05746]
+
 CANARIES: dict[str, LiveRun] = {
     # The Michael surge coast at a coarse grid over a 6-hour window: wide enough
     # that the rising boundary actually floods low land (a canary whose answer is
@@ -156,6 +161,25 @@ CANARIES: dict[str, LiveRun] = {
             "input_mode": "user_gated",
         },
         case_title="canary: telemac3d stratified flow (Lake Superior, coarse)",
+        answers=GateAnswers(confirm="proceed"),
+        cleanup_case=True,
+    ),
+    # Coweeta Creek, NC - a small gauged headwater catchment with a documented
+    # pour point, so the delineation has a real outlet to snap to. A short
+    # design storm: this canary proves the whole delineate -> mesh -> infiltrate
+    # -> solve chain rather than studying a flood.
+    "telemac_rain_on_grid": LiveRun(
+        tool="telemac_rain_on_grid",
+        args={
+            "pour_point": _COWEETA_POUR_POINT,
+            "design_storm_mm_per_hr": 25.0,
+            "storm_duration_hr": 1.0,
+            "sim_duration_hr": 2.0,
+            "antecedent_moisture": "normal",
+            "compute_class": "medium",
+            "input_mode": "auto",
+        },
+        case_title="canary: telemac rain on grid (Coweeta Creek, coarse)",
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),

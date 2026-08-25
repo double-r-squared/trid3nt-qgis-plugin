@@ -6,6 +6,11 @@ wire args, resolving the doors, walking the plan, persisting the products - is
 the skeleton (``workflows/lib/workflow.py``); the reach mechanism is the TELEMAC
 facade (``workflows/telemac/workflow.py``). See
 ``docs/design/declarative-workflows.md``.
+
+THE QUESTION: the DISSOLVED-OXYGEN SAG below a permitted discharge / WWTP outfall
+in a river reach (the US TMDL / Clean Water Act permit question). Where does DO
+bottom out downstream, and does it VIOLATE the water-quality standard? TELEMAC-2D
++ WAQTEL O2 - the Streeter-Phelps oxygen sag - over a real NHDPlus reach.
 """
 
 from __future__ import annotations
@@ -28,7 +33,6 @@ from trid3nt_server.workflows.lib import (
     register_workflow,
 )
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac._template_card import TemplateCard
 from trid3nt_server.workflows.telemac.steps import (
     ReviewResolvedInputs,
     WaqtelO2,
@@ -40,23 +44,6 @@ from trid3nt_server.workflows.telemac.workflow import CorridorPolicy, TelemacWor
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_sag_chart", "plan", "telemac_do_sag"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
-
-QUESTION = (
-    "the DISSOLVED-OXYGEN SAG below a permitted discharge / WWTP outfall in a "
-    "river reach (US TMDL / Clean Water Act permit): where does DO bottom out "
-    "downstream and does it VIOLATE the water-quality standard? (TELEMAC-2D "
-    "WAQTEL O2 / Streeter-Phelps oxygen sag over a real reach)"
-)
-
-TEMPLATE_CARD = TemplateCard(
-    question=QUESTION,
-    required_inputs=["location OR bbox"],
-    knobs=(
-        "discharge_bod_mgl, upstream_do_mgl, water_temp_c, do_standard_mgl, "
-        "k1_per_day, k2_per_day, reach_length_km, discharge_m3s, event_time, "
-        "mesh_resolution, bank_source, outfall_coords"
-    ),
-)
 
 
 PARAMS: tuple[Param, ...] = (
