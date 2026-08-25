@@ -1193,3 +1193,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   = resolution-bound class). Implementation joins the accumulated
   TELEMAC fix batch (w/ the coastal results-mesh X/Y-ORIGIN worker fix
   + the resolution labels).
+
+- RUN JOURNAL RULED (NATE 2026-08-25): append-only JSONL database of run
+  RECORDS, decoupled from artifacts - one line per completed run written
+  by the skeleton PUBLISH stage (one seam, all engines free): run_id,
+  template, engine, full resolved sheet w/ doors/bases/notes, ANSWER
+  fields, provenance rows, mesh facts, wall times, compute class,
+  canary-vs-user. Artifacts stay delete-on-whim; journal lines survive
+  every sweep (categorically excluded from sweeps). Enables: deriving
+  defaults from run telemetry (e.g. sim_duration from prior convergence),
+  self-accumulating resolution-sensitivity evidence, calibration priors,
+  wall-time/autoscaler data, regression baselines, digital-twin substrate.
+  Backfill pass seeds from surviving run prefixes + proof evidence JSONs
+  (swept cases honestly gone). Build: skeleton lane, small; joins the
+  accumulated batch.
