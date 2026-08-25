@@ -26,7 +26,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from .data import DataDecl
 from .errors import DeclarativeError, PlanValidationError
-from .params import Param
+from .params import Param, doors
 from .plan import Plan, Ref, Step
 from .resolver import merge_provenance, resolve_params
 from .interpreter import RunResult, interpret
@@ -376,6 +376,18 @@ def register_workflow(
     The facade is checked for HOLES first: the EngineOps five are must-fill slots,
     and registration is the last moment an unfilled one is still an authoring
     error rather than a mid-run failure.
+
+    THE CONSTANT DOOR AND THE WIRE. A CONSTANT-door param is absent from the
+    synthesized signature and from the model-facing docstring's param list, so the
+    model is never offered it and cannot fill it. That is the whole of the
+    enforcement, and stating its EDGE is part of stating it: the generated body
+    takes ``**wire`` and the sheet is filtered by DECLARED name, not by the
+    signature, so a value that arrives for a constant anyway is seated through the
+    USER door with ``basis=user``. That is deliberate and is what keeps the row a
+    user LEVER on the three surfaces it lives on - the form card's advanced fold,
+    the ``!run`` / Tier-A all-params invocation, and the harness that drives the
+    resolved sheet. The exclusion is about who the SCHEMA invites, and the schema
+    invites the user, never the model.
     """
     from trid3nt_server.tools import register_tool
 
@@ -396,6 +408,11 @@ def register_workflow(
     if doc:
         from .docstring import render_docstring
 
+        # The prose sheet describes THIS wire, so it is rendered from the params
+        # the signature actually carries. A template declares `params=PARAMS` and
+        # the factory narrows it; documenting a constant the schema does not offer
+        # would be the docstring inviting a call the tool cannot take.
+        doc = {**doc, "params": _wire_params(params)}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 
@@ -429,6 +446,21 @@ def _refuse_incomplete_facade(facade: type[Workflow]) -> None:
             "does.")
 
 
+def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
+    """The declared params the MODEL-FACING wire carries - the one definition of it.
+
+    Two exclusions, for two different reasons. ``wire=False`` marks a value a
+    COERCION resolves out of other wire args, so sending it would be sending the
+    same thing twice. A CONSTANT-door param is excluded because the door is a
+    BINDING AUTHORITY contract: a constant is non-question physics, nobody asks
+    for it, and a schema that offers one invites exactly the invented physics the
+    doors exist to prevent. Both the synthesized signature and the generated
+    docstring read this function, so the schema and the prose cannot drift apart.
+    """
+    return tuple(prm for prm in params
+                 if prm.wire and prm.door != doors.CONSTANT)
+
+
 def _wire_signature(params: Sequence[Param],
                     extra: Sequence[tuple[str, Any]]) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, wire aliases, controls.
@@ -436,9 +468,18 @@ def _wire_signature(params: Sequence[Param],
     Every argument is keyword-with-default: the doors supply what the caller omits,
     so a workflow argument is never positionally required. A ``**`` absorber keeps
     an unknown key from dead-ending a call the doors could still answer.
+
+    CONSTANT-door params are NOT here. The door is a BINDING AUTHORITY contract,
+    not documentation: a constant is non-question physics, so the model has no
+    business supplying it, and a schema that offers it invites exactly the invented
+    physics the doors exist to prevent. The row keeps its full life on the
+    ``ParamSheet`` - it is form-editable and shows under the card's advanced fold -
+    and a template that decides a particular constant DOES deserve model access
+    re-doors it in one line. ``wire=False`` is the other, orthogonal exclusion: a
+    value a coercion resolves out of other wire args.
     """
     entries: list[tuple[str, Any, Any]] = [
-        (prm.name, prm.wire_type | None, None) for prm in params if prm.wire
+        (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
     ]
     entries += [(name, ann, None) for name, ann in extra]
     entries += list(_CONTROLS)

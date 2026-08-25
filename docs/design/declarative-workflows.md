@@ -566,6 +566,25 @@ must-fill holes before anything is registered. Template file end state:
 PARAMS + DATA + plan + ANSWER + the chart. The old tool bodies are
 deleted, not wrapped.
 
+CONSTANT-DOOR WIRE ENFORCEMENT (NATE ruling, landed with the family
+wave): a CONSTANT-door param is NOT on the model-facing wire. The factory
+computes the wire set ONCE (`_wire_params`) and both the synthesized
+signature and the rendered docstring read it, so the schema and the prose
+cannot drift. The door stops being documentation and becomes a BINDING
+AUTHORITY contract: a constant is non-question physics, so the model is
+not offered it, and a template that decides one deserves model access
+re-doors it in a one-line edit (`sim_duration_s` per template, where
+warranted).
+
+What the exclusion is NOT: a deletion. The row keeps its full life on the
+`ParamSheet` - the form card's advanced fold is where a user changes one -
+and the generated body takes `**wire` filtered by DECLARED name, so a
+value that arrives from a non-model lane is seated through the USER door
+with `basis=user`. That is what keeps the Tier-A `!run` all-params
+invocation working, and a canary that has to pin a 600 s window instead of
+three hours is exactly the case that needs it. The exclusion is about who
+the SCHEMA invites, and it invites the user, never the model.
+
 ### Acceptance criterion (falsifiable)
 
 The skeleton ADR must enumerate the workflow-only change list: every

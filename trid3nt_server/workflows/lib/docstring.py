@@ -71,7 +71,13 @@ def render_docstring(
 
 
 def _ordered(params: Sequence[Param]) -> list[Param]:
-    """Question-bearing params first; constants last (the 'advanced' fold, in prose)."""
+    """Question-bearing params first; constants last (the 'advanced' fold, in prose).
+
+    WHICH params arrive here is the CALLER's decision, not this renderer's: a
+    surface documents its own wire. The registration factory hands over only the
+    params it put on the synthesized signature, so a factory-generated docstring
+    carries no CONSTANT rows - there is no argument there to describe.
+    """
     rank = {doors.QUESTION: 0, doors.USER: 1, doors.GATE: 1,
             doors.SCENARIO: 2, doors.DERIVED: 3, doors.CONSTANT: 4}
     return sorted(params, key=lambda p: (rank.get(p.door, 5), p.name))

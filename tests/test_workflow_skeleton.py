@@ -6,7 +6,8 @@ Offline. Nothing here solves; these pin the contract in
   1. the five EngineOps are ABSTRACT - an unrealized one refuses by name;
   2. hooks have SILENT defaults, and a FILLED hook reaches the result;
   3. the registration factory synthesizes the wire signature from the declared
-     params (``wire=False`` stays off it, aliases and controls join it);
+     params (``wire=False`` and every CONSTANT-door param stay off it, aliases and
+     controls join it) and renders the docstring from that same narrowed set;
   4. a chart builder is the FUNCTION - a dotted string is refused, no fallback;
   5. the slot/signature check runs BOTH ways: a member the deck writer does not
      accept, and a required member no slot covers, are both refused while the
@@ -134,6 +135,8 @@ def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
         Param("armed", door=doors.USER, optional=True, type=bool, desc="a flag"),
         Param("derived_only", door=doors.USER, optional=True, wire=False,
               desc="resolved by a coercion, never sent"),
+        Param("solver_dt_s", door=doors.CONSTANT, default=1.0, bounds=(0.1, 60.0),
+              desc="non-question numerics the model is never asked for"),
     )
     sig, annotations = _wire_signature(params, (("alias", str | None),))
     assert list(sig.parameters) == ["location", "depth_m", "armed", "alias",
@@ -152,9 +155,56 @@ def test_a_declared_param_the_wire_does_not_expose_stays_off_the_real_tool():
 
     wf = TOOL_REGISTRY["telemac_river_dye"].fn.workflow
     declared = {p.name for p in wf.params}
+    constants = {p.name for p in wf.params if p.door == doors.CONSTANT}
     wire = set(inspect.signature(TOOL_REGISTRY["telemac_river_dye"].fn).parameters)
     assert "reach_seed_coords" in declared and "reach_seed_coords" not in wire
-    assert declared - {"reach_seed_coords"} <= wire
+    assert declared - {"reach_seed_coords"} - constants <= wire
+
+
+def test_constant_door_params_are_off_the_model_facing_wire_and_docstring():
+    """The door is a BINDING AUTHORITY contract: a constant is nobody's question.
+
+    Both cohort templates carry real constants (bank source, channel width, the
+    solve sizing class, the simulated window), and none of them is an argument the
+    model may fill or a row the prose sheet advertises. They keep their whole life
+    on the ``ParamSheet`` - the form card's advanced fold is where a user changes
+    one - which is what makes this an authority contract rather than a deletion.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name in ("telemac_do_sag", "telemac_river_dye"):
+        fn = TOOL_REGISTRY[name].fn
+        constants = {p.name for p in fn.workflow.params if p.door == doors.CONSTANT}
+        assert constants, f"{name} declares no constants; the check is vacuous"
+        wire = set(inspect.signature(fn).parameters)
+        assert not (constants & wire), f"{name} puts {constants & wire} on the wire"
+        listed = {c for c in constants if f"    {c}:" in (fn.__doc__ or "")}
+        assert not listed, f"{name} documents {listed}, which its schema refuses"
+
+
+def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
+    """The Tier-A / form-edit lane keeps its lever. The exclusion is the SCHEMA's.
+
+    ``!run`` with every param supplied is the mechanical contract check, and its
+    whole point is that nothing is left to ask - which includes pinning the
+    constants a canary run has to shrink (a 600 s window instead of three hours).
+    That lane hands the workflow a sheet, not a model tool call, so the value is
+    seated through the USER door and the row reads ``basis=user``.
+    """
+    import asyncio
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.lib.resolver import resolve_params
+
+    wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
+    supplied, err = wf._normalize({"location": "x", "sim_duration_s": 600.0,
+                                   "mesh_resolution": "coarse"})
+    assert err is None
+    assert supplied["sim_duration_s"] == 600.0
+    assert supplied["mesh_resolution"] == "coarse"
+    sheet = asyncio.run(resolve_params(wf.params, supplied))
+    assert sheet.get("sim_duration_s") == 600.0
+    assert sheet.row("sim_duration_s").basis == "user"
 
 
 # --- (4) a chart builder is the function, with no string fallback ----------- #
