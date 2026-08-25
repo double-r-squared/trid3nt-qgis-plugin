@@ -209,7 +209,7 @@ def test_inverted_bounds_refused():
 @pytest.mark.asyncio
 async def test_supplied_beats_default_and_question():
     p = await resolve_params(
-        [Param("a", desc="d", door=doors.SCENARIO, default=1.0)],
+        [Param("a", desc="d", door=doors.SCENARIO, default=1.0, type=float)],
         {"a": 7.0}, question={"a": 3.0},
     )
     assert p.get("a") == 7.0 and p.row("a").door == doors.USER
@@ -218,7 +218,7 @@ async def test_supplied_beats_default_and_question():
 @pytest.mark.asyncio
 async def test_question_beats_the_labeled_default():
     p = await resolve_params(
-        [Param("a", desc="d", door=doors.SCENARIO, default=1.0)], {},
+        [Param("a", desc="d", door=doors.SCENARIO, default=1.0, type=float)], {},
         question={"a": 3.0},
     )
     assert p.get("a") == 3.0 and p.row("a").basis == "prompt_interpreted"
@@ -250,7 +250,7 @@ async def test_non_numeric_bounded_value_refuses_never_defaults():
 async def test_derivations_resolve_regardless_of_declaration_order():
     p = await resolve_params([
         Param("out", desc="d", door=doors.DERIVED, resolve=f"{_HERE}.derive_double"),
-        Param("base", desc="d", door=doors.SCENARIO, default=4.0),
+        Param("base", desc="d", door=doors.SCENARIO, default=4.0, type=float),
     ], {})
     assert p.get("out") == 8.0 and p.row("out").basis == "derived"
 
@@ -275,7 +275,7 @@ async def test_optional_absent_param_resolves_to_none():
 
 @pytest.mark.asyncio
 async def test_a_user_door_default_is_stamped_as_a_default_not_as_the_user():
-    decl = [Param("a", desc="d", door=doors.USER, default=3.0)]
+    decl = [Param("a", desc="d", door=doors.USER, default=3.0, type=float)]
     p = await resolve_params(decl, {})
     assert p.get("a") == 3.0 and p.row("a").basis == "default_demo"
     p2 = await resolve_params(decl, {"a": 4.0})
@@ -297,7 +297,7 @@ async def test_an_absent_param_with_a_derived_stand_in_still_leaves_a_row():
 @pytest.mark.asyncio
 async def test_a_bug_inside_a_derivation_is_not_swallowed_as_a_dependency_wait():
     decl = [Param("out", desc="d", door=doors.DERIVED, resolve=f"{_HERE}.derive_broken"),
-            Param("base", desc="d", door=doors.SCENARIO, default=4.0)]
+            Param("base", desc="d", door=doors.SCENARIO, default=4.0, type=float)]
     with pytest.raises(AttributeError, match="missing_attribute"):
         await resolve_params(decl, {})
 
@@ -338,7 +338,7 @@ def test_gate_rejects_step_modifiers():
 
 # --- the plan validator ------------------------------------------------------ #
 def _params():
-    return [Param("base", desc="d", door=doors.SCENARIO, default=1.0),
+    return [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
             Param("pt", desc="d", door=doors.USER, optional=True)]
 
 
@@ -428,16 +428,18 @@ def test_validator_accepts_a_ref_inside_the_same_branch():
 
 
 def test_validator_refuses_a_param_declared_twice():
-    decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0),
-            Param("base", desc="other", door=doors.SCENARIO, default=2.0)]
+    decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
+            Param("base", desc="other", door=doors.SCENARIO, default=2.0,
+                  type=float)]
     with pytest.raises(PlanValidationError, match="declared twice"):
         validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), decl)
 
 
 @pytest.mark.asyncio
 async def test_resolver_refuses_a_param_declared_twice():
-    decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0),
-            Param("base", desc="other", door=doors.SCENARIO, default=2.0)]
+    decl = [Param("base", desc="d", door=doors.SCENARIO, default=1.0, type=float),
+            Param("base", desc="other", door=doors.SCENARIO, default=2.0,
+                  type=float)]
     with pytest.raises(PlanValidationError, match="declared twice"):
         await resolve_params(decl, {})
 
@@ -1232,7 +1234,7 @@ async def test_auto_mode_refuses_an_invented_physics_default_with_no_form_gate()
     """Removing the plan's FormGate must not remove the honesty floor with it: a
     physics value that fell back to an invented default has nobody to approve it."""
     decl = [Param("aquifer_k_ms", desc="hydraulic conductivity", door=doors.SCENARIO,
-                  default=1e-4, units="m/s", consequence="physics")]
+                  default=1e-4, type=float, units="m/s", consequence="physics")]
     plan = Plan("law9_w", None, (
         Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
     ))
@@ -1244,7 +1246,7 @@ async def test_auto_mode_refuses_an_invented_physics_default_with_no_form_gate()
 @pytest.mark.asyncio
 async def test_a_user_supplied_physics_value_is_not_refused():
     decl = [Param("aquifer_k_ms", desc="hydraulic conductivity", door=doors.SCENARIO,
-                  default=1e-4, units="m/s", consequence="physics")]
+                  default=1e-4, type=float, units="m/s", consequence="physics")]
     plan = Plan("law9_ok", None, (
         Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
     ))
@@ -1468,8 +1470,8 @@ async def test_data_that_reads_no_revised_param_is_not_evicted(monkeypatch):
     """Eviction is targeted, not a blanket refetch: an artifact the revision
     cannot have changed keeps its resume value."""
     _review({"other": 9.0}, monkeypatch)
-    decl = [Param("res_m", desc="resolution", door=doors.CONSTANT, default=30.0),
-            Param("other", desc="unrelated", door=doors.SCENARIO, default=1.0)]
+    decl = [Param("res_m", desc="resolution", door=doors.CONSTANT, default=30.0, type=float),
+            Param("other", desc="unrelated", door=doors.SCENARIO, default=1.0, type=float)]
     p = await resolve_params(decl, {})
     data = [Data("terrain", Fetch.tool(f"{_HERE}.stub_dem", res=p.res_m))]
     plan = Plan("evict_none", None, (
@@ -1499,7 +1501,7 @@ class _FakeEmitter:
 
 def _physics_only():
     return [Param("aquifer_k_ms", desc="hydraulic conductivity",
-                  door=doors.SCENARIO, default=1e-4, units="m/s",
+                  door=doors.SCENARIO, default=1e-4, type=float, units="m/s",
                   consequence="physics")]
 
 
@@ -1636,7 +1638,7 @@ async def test_validator_refuses_a_form_gate_over_a_branch_on_a_revisable_param(
 @pytest.mark.asyncio
 async def test_a_branch_on_a_constant_is_stable_across_a_review():
     decl = [Param("mode", desc="sizing mode", door=doors.CONSTANT, default="fine"),
-            Param("temp", desc="temperature", door=doors.SCENARIO, default=20.0)]
+            Param("temp", desc="temperature", door=doors.SCENARIO, default=20.0, type=float)]
     p = await resolve_params(decl, {})
     plan = Plan("branchy_ok", None, (
         FormGate(),

@@ -261,7 +261,7 @@ def test_a_normalize_to_an_unlisted_unit_refuses_at_declaration_time():
 
 async def _run(data):
     _SEEN.clear()
-    declared = (Param("x", door=doors.CONSTANT, default=1.0, desc="a constant"),)
+    declared = (Param("x", door=doors.CONSTANT, default=1.0, type=float, desc="a constant"),)
     p = await resolve_params(declared, {})
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
                               kwargs={"m": Ref("rain")}),))

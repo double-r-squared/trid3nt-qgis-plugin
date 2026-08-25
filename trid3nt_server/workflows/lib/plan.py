@@ -1,7 +1,10 @@
-"""The plan VALUE: steps, gates, refs, modifiers, ``Workflow[...]`` composition.
+"""The plan VALUE: steps, gates, refs, modifiers, charts, the stage sequence.
 
-Nothing here executes; ``plan(p, d)`` returns one of these trees and the
-interpreter walks it.
+Nothing here executes. A template's ``plan(p, d, ops)`` returns the step sequence
+and the SKELETON names and engines the :class:`Plan`; the interpreter then walks
+it. (The ``Workflow(name, engine=...)[...]`` plan constructor this module used to
+export is deleted - ADR 0312's demolition clause: the name belongs to the
+skeleton, which already knows it from the metadata.)
 """
 
 from __future__ import annotations

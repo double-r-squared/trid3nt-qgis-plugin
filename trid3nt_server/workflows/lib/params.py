@@ -98,7 +98,8 @@ class Param:
     #: The declared WIRE type - what the registration factory annotates the
     #: generated tool argument with, hence what the model sees in the schema.
     #: Unset is inferred from the declaration (bounded -> float, bool default ->
-    #: bool, otherwise str); declare it where the inference would be wrong.
+    #: bool, otherwise str); declare it where the inference would be wrong. An
+    #: unbounded NUMERIC default is refused rather than inferred: see __post_init__.
     type: Any = None
     #: Whether the wire exposes this param at all. ``False`` marks a value the
     #: model never sends because a coercion resolves it from other wire args.
@@ -131,6 +132,20 @@ class Param:
             raise PlanValidationError(
                 f"Param {self.name!r} declares derived_when_absent but is not optional; "
                 "a required param has no absence to describe."
+            )
+        if self.type is None and self.bounds is None \
+                and isinstance(self.default, (int, float)) \
+                and not isinstance(self.default, bool):
+            # The wire-type inference ends in `str`, and a NUMBER advertised to the
+            # model as a string is a schema that lies: the model sends "12", the
+            # deck writer multiplies a string, and nothing refused on the way. The
+            # two honest declarations are bounds (which also clamp) or an explicit
+            # type; guessing between them is not this class's call.
+            raise PlanValidationError(
+                f"Param {self.name!r} has the numeric default {self.default!r} but "
+                "declares neither bounds nor type, so the wire would advertise it "
+                "as a STRING. Declare bounds=(lo, hi) - the physical range - or "
+                "type=float/int if the value is genuinely unbounded."
             )
 
     @property
