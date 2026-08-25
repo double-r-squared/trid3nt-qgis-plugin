@@ -461,3 +461,12 @@ LayerURI-shaped dict returns as an inert blob).
   die together.
 - Decided by: NATE (decision 1, 2026-08-25): "this should be the behavior
   we have now, work its sentiment into the skeleton."
+
+## scripts/run_l2_validation_harness.py - QUEUED 2026-08-25 (keep-until-superseded)
+- What: the 1,477-line Harvey L2 V&V harness (repaired/repointed in wave 2c;
+  imports green; two recorded live executions in docs/validation/).
+- CONDITION to delete: a better replacement exists and is proven - i.e. the
+  calibration-track / canonical-case V&V machinery covers the SFINCS
+  hurricane-case end-to-end validation this script does, with a recorded run.
+- Decided by: NATE (decision 3, 2026-08-25): "keep until we replace it with
+  something better."
