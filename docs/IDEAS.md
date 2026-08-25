@@ -1042,3 +1042,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   postprocess_coastal + postprocess_tomawac (+ any node-dot rasterizer).
   Lands in the post-family fix batch w/ before/after proof renders on
   the SAME runs. Mesh fineness itself stays the user granularity lever.
+
+- 2026-08-25 OPEN-WATER MESH-LAYER PUBLISHING GAP (NATE spot-check, TELEMAC
+  family wave - QUEUED, do not build): the four AOI templates disagree with each
+  other and with the reach family about whether a mesh reaches the canvas at all.
+  artemis and tomawac publish NO mesh layer (artemis emits three layers: the
+  surveyed breakwater, the bed, the Kd field; tomawac two); coastal publishes one
+  and it lands at the false origin; telemac3d writes an 11-frame `res3d_t3d.slf`
+  that nothing publishes; the reach family ships both a mesh PREVIEW (the
+  approve-mesh gate) and a results mesh. Whether the AOI templates should ship
+  mesh preview + result-mesh layers like the reach family joins the res3d /
+  3D-rendering decision cluster - it is the same canvas-products question and it
+  has the same blocker underneath it, the local-coordinate meshes (a mesh layer
+  cannot be published honestly until the worker writes absolute coordinates or
+  fills the SELAFIN X/Y-ORIGIN header). Until then the diagnostic lane covers it:
+  `scripts/render_selafin_animation.py` takes `--origin-bbox` and puts the
+  wireframe over the field correctly, which is how the artemis barrier cut-outs
+  and the coastal tide are proved this wave.
