@@ -78,3 +78,10 @@ ordered "don't proceed past telemac". In-flight wave completes (close-out
 builds HELD for his explicit go. Autonomous decisions made while AFK:
 entry 1 (CONSTANT-door edge, MEDIUM confidence - re-make if desired).
 Everything else executed under his own pre-AFK rulings.
+
+ENTRY 1 RESOLVED (NATE 2026-08-25): RATIFIED as landed. NATE's own
+framing: two routes are a feature - AUTO (LLM fills params; constants
+invisible, defaults apply) and USER-GATED (human in the loop, knobs on
+the form) - plus the direct-invocation spot-test lane acting as the
+user. Schema exclusion walls the model; user lanes keep knob access;
+every off-default value is labeled. No further action.
