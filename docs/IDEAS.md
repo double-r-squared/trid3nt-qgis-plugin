@@ -896,3 +896,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   baseline re-binds at fleet-migration completion. Rationale: converge
   the skeleton quickly on a few real workflows instead of dragging 30
   templates through every revision.
+
+- SKELETON LOC LEDGER (NATE 2026-08-24): every skeleton-campaign wave
+  records LOC before/after in docs/validation/skeleton-loc-ledger.md -
+  per surface (lib skeleton / facade+steps / templates / deleted), delta,
+  running campaign net, reproducible counting command in the header, and
+  a one-line honest verdict per wave. Purpose: bloat detector +
+  removed-what-it-superseded check + measures whether the generalization
+  is making a real difference. Wave 2 writes row 0 (pre-change baseline)
+  + its own rows.
