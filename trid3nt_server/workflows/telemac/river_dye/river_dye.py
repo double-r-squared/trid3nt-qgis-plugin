@@ -313,7 +313,7 @@ def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the 
         *ops.acquire_domain(location=p.location, bbox=p.bbox, rivers=d.rivers,
                             discharge=p.discharge_m3s, event_time=p.event_time),
         ops.author(mesh=mesh, physics=physics, forcing=forcing),
-        ops.solver_spec(compute_class=p.compute_class),
+        ops.solver_spec(compute_class=p.compute_class, physics=physics),
         ops.read_results(Ref("solve"), physics=physics, forcing=forcing)
            .chart("dye_concentration", builder=build_dye_chart),
     ]

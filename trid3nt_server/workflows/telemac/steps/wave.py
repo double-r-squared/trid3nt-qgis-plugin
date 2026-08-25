@@ -29,11 +29,14 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.shared.publish_product_layer import (
+    publish_product_layer,
+)
 
 from .open_water import (
     download_open_water_result,
     mesh_sizing_provenance,
-    publish_peak_layer,
+    solved_domain_bbox,
     surface_in_worker_bed_input,
 )
 
@@ -138,9 +141,11 @@ async def write_wave_deck(
         "outputs": list(_OUTPUTS),
         "run_failed_code": "TOMAWAC_RUN_FAILED",
         "output_missing_code": "TOMAWAC_OUTPUT_MISSING",
+        # Both bed paths report a zone: the real lake its own, the idealized basin
+        # the placeholder one its geography-free grid is laid in.
+        "requires_utm": True,
         "domain_name": aoi["name"],
         "domain_slug": aoi["slug"],
-        "domain_bbox": tuple(float(v) for v in aoi["bbox"]),
         "mesh_size_m": float(resolution),
         # What the CALLER asked for, kept beside what was built, so a
         # lever the worker moved leaves a row instead of a silence.
@@ -224,7 +229,8 @@ async def publish_wave_products(*, deck: dict[str, Any],
             # ONLY the real-lake grid has a geographic corner to add back; the
             # idealized basin has none, and claiming one would put a made-up
             # domain on a real map.
-            domain_bbox=deck["domain_bbox"] if deck["real_bathymetry"] else None)
+            domain_bbox=(solved_domain_bbox(deck, metrics)
+                         if deck["real_bathymetry"] else None))
     finally:
         Path(slf_path).unlink(missing_ok=True)
     if not layers:
@@ -237,7 +243,7 @@ async def publish_wave_products(*, deck: dict[str, Any],
     # The worker's own discriminating shore pair: Hs at the upwind shore against
     # Hs at the downwind shore under the SAME storm, which is what makes a
     # fetch-growth answer checkable rather than a single number.
-    published = await publish_peak_layer(
+    published = await publish_product_layer(
         raw, style_preset=TELEMAC_WAVE_STYLE_PRESET,
         update={
             "hs_upwind_m": metrics.get("hs_upwind_m"),

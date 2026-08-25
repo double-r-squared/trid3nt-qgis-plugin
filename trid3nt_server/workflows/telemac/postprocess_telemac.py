@@ -1508,22 +1508,55 @@ def postprocess_telemac_do(
 _HS_WET_FLOOR: float = 1e-3
 
 
-def _local_mesh_origin(domain_bbox: Any, utm_epsg: int) -> tuple[float, float]:
-    """The UTM corner a LOCAL-coordinate mesh was built from; ``(0, 0)`` with no AOI.
+def _local_mesh_origin(domain_bbox: Any, utm_epsg: int, *,
+                       required: bool = False,
+                       context: str = "this postprocess") -> tuple[float, float]:
+    """The UTM corner a LOCAL-coordinate mesh was built from. The ONE origin.
 
-    The open-water TELEMAC builds lay their grid with node 0 at the AOI's SW
+    Every open-water TELEMAC build lays its grid with node 0 at the AOI's SW
     corner, so the result SELAFIN carries local metres and the corner has to be
-    added back before reprojection. A build with no AOI (the geography-free
-    idealized basin) has no corner to add, and its coordinates are already what
-    they are.
+    added back before reprojection. Getting this wrong does not fail: it silently
+    lands the field at the UTM zone's false origin, thousands of km from the
+    domain. Three copies of the arithmetic is three places for that to happen, so
+    there is one.
+
+    ABSENCE and MALFORMATION are different facts. A build with no AOI (the
+    geography-free idealized basin) has no corner to add and its coordinates are
+    already what they are; ``required=True`` says this reader cannot place its
+    mesh without one and refuses instead. A bbox that is PRESENT but not four
+    numeric corners is a refusal either way - reading it as absent would put a
+    real domain at the false origin, which is the bug this guards.
     """
-    if not (domain_bbox is not None and len(tuple(domain_bbox)) == 4):
+    if domain_bbox is None:
+        if required:
+            raise PostprocessTelemacError(
+                "TELEMAC_PARAMS_INVALID",
+                message=f"{context} needs the 4326 domain bbox (min_lon, min_lat, "
+                "max_lon, max_lat) to place the local-coordinate mesh; none was "
+                f"supplied for utm_epsg={utm_epsg}.",
+                details={"utm_epsg": utm_epsg, "domain_bbox": None},
+            )
         return (0.0, 0.0)
+
+    corners = tuple(domain_bbox)
+    try:
+        if len(corners) != 4:
+            raise ValueError(f"{len(corners)} corners, expected 4")
+        west, south, east, north = (float(v) for v in corners)
+    except (TypeError, ValueError) as exc:
+        raise PostprocessTelemacError(
+            "TELEMAC_PARAMS_INVALID",
+            message=f"{context} was handed a malformed domain bbox "
+            f"{domain_bbox!r}: {exc}. It must be four numeric 4326 corners "
+            "(min_lon, min_lat, max_lon, max_lat).",
+            details={"utm_epsg": utm_epsg, "domain_bbox": repr(domain_bbox)},
+        ) from exc
+
     from pyproj import Transformer
 
     fwd = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-    x0, y0 = fwd.transform(float(domain_bbox[0]), float(domain_bbox[1]))
-    x1, y1 = fwd.transform(float(domain_bbox[2]), float(domain_bbox[3]))
+    x0, y0 = fwd.transform(west, south)
+    x1, y1 = fwd.transform(east, north)
     return (min(x0, x1), min(y0, y1))
 
 
@@ -1812,25 +1845,15 @@ def postprocess_artemis(
     # local-frame path does, so the COG still renders on the map.
     if utm_epsg is not None:
         from pyproj import Transformer
-        # Reconstruct the LOCAL-frame origin the worker subtracted (AOI SW corner in
-        # UTM) and add it back so the local mesh metres become TRUE UTM before the
-        # inverse to 4326. Without request_bbox the offset is unknown and the field
-        # would land at the zone origin -- a georef bug, not a silent guess.
-        if request_bbox is None or len(tuple(request_bbox)) != 4:
-            raise PostprocessTelemacError(
-                "TELEMAC_PARAMS_INVALID",
-                message="postprocess_artemis needs request_bbox (min_lon,min_lat,"
-                "max_lon,max_lat) to georeference the local-frame mesh when "
-                f"utm_epsg={utm_epsg} is set.",
-                details={"utm_epsg": utm_epsg, "request_bbox": request_bbox},
-            )
-        rb = [float(v) for v in request_bbox]
-        fwd = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-        # SW corner = (min_lon, min_lat); in a UTM zone easting/northing both
-        # increase NE so min(x0,x1)=x0 and min(y0,y1)=y0 -- exactly the mesh origin.
-        x0m, y0m = fwd.transform(rb[0], rb[1])
+        # Add back the LOCAL-frame origin the worker subtracted (AOI SW corner in
+        # UTM) so the local mesh metres become TRUE UTM before the inverse to
+        # 4326. Without the bbox the offset is unknown and the field would land at
+        # the zone origin -- a georef bug, so it refuses rather than guessing.
+        x0m, y0m = _local_mesh_origin(
+            request_bbox, int(utm_epsg), required=True,
+            context="postprocess_artemis")
         back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
-        lon, lat = back.transform(x_m + float(x0m), y_m + float(y0m))
+        lon, lat = back.transform(x_m + x0m, y_m + y0m)
         lon = np.asarray(lon)
         lat = np.asarray(lat)
         dst_crs = "EPSG:4326"
@@ -2311,16 +2334,8 @@ def postprocess_coastal(
     # the coastal SELAFIN carries LOCAL (0-origin) mesh coordinates; add back the
     # UTM origin (min easting/northing over the AOI corners, matching the build)
     # before reprojecting, else the COG lands at the UTM false-origin.
-    if not (domain_bbox is not None and len(domain_bbox) == 4):
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_READ_FAILED",
-            message="coastal postprocess needs the 4326 domain_bbox to georeference "
-            "the local-coordinate mesh.",
-        )
-    fwd = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-    cx0, cy0 = fwd.transform(float(domain_bbox[0]), float(domain_bbox[1]))
-    cx1, cy1 = fwd.transform(float(domain_bbox[2]), float(domain_bbox[3]))
-    x_org, y_org = min(cx0, cx1), min(cy0, cy1)
+    x_org, y_org = _local_mesh_origin(
+        domain_bbox, int(utm_epsg), required=True, context="postprocess_coastal")
     back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
     lon, lat = back.transform(x_utm + x_org, y_utm + y_org)
     lon = np.asarray(lon)

@@ -166,7 +166,7 @@ def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the 
                              bank_source=p.bank_source, workflow=ops.name,
                              input_mode=RunMode).named("reviewed_discharge"),
         ops.author(mesh=mesh, physics=physics, forcing=forcing),
-        ops.solver_spec(compute_class=p.compute_class),
+        ops.solver_spec(compute_class=p.compute_class, physics=physics),
         ops.read_results(Ref("solve"), physics=physics, forcing=forcing)
            .chart("do_sag_curve", builder=build_sag_chart),
     ]

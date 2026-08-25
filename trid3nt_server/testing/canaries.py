@@ -164,6 +164,33 @@ CANARIES: dict[str, LiveRun] = {
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),
+    # THE IDEALIZED PATH, which no other canary walks. Every open-water canary
+    # above solves over real geography, so the geography-free analytic domains -
+    # the seiche ladder, the Berkhoff shoal, the lock-exchange channel - had no
+    # live cover at all, and the one thing they do differently (report NO utm_epsg
+    # and rasterize their local metres in a placeholder frame) was the thing that
+    # broke. Resonance because its answer is a NUMBER a regression moves: the
+    # response at the basin's own resonant period against the response off it.
+    # The bbox only places the analytic basin's label on the map; the physics is
+    # the harbour geometry, not the location.
+    "artemis_harbor_resonance_idealized": LiveRun(
+        tool="artemis_harbor_agitation",
+        args={
+            "bbox": _MARQUETTE_BBOX,
+            "wave_mode": "resonance",
+            "wave_period_s": 8.0,
+            "wave_direction_deg": 90.0,
+            "wave_height_m": 1.0,
+            "reflection_coef": 1.0,
+            "target_resolution_m": 12.0,
+            "bathy_source": "idealized",
+            "compute_class": "medium",
+            "input_mode": "user_gated",
+        },
+        case_title="canary: artemis harbour resonance (idealized basin, coarse)",
+        answers=GateAnswers(confirm="proceed"),
+        cleanup_case=True,
+    ),
     # Coweeta Creek, NC - a small gauged headwater catchment with a documented
     # pour point, so the delineation has a real outlet to snap to. A short
     # design storm: this canary proves the whole delineate -> mesh -> infiltrate
@@ -311,6 +338,16 @@ def _answer(ev: RunEvidence) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Drive one canary and exit non-zero unless its PRODUCTS were read.
+
+    ``require_ok`` alone is not the gate. It asks whether the tool dispatched and
+    the turn finished, and a run whose object store was not reachable satisfies
+    both: the products reader misses, ``metrics`` stays None, and a canary that
+    read NOTHING exits 0. That green means the socket worked, which is not what a
+    canary is for. ``require_run_products`` is what makes the exit code depend on
+    the run's own artifacts, so it is part of the DEFAULT gate - a missing
+    TRID3NT_RUNS_BUCKET fails loudly instead of passing quietly.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("name", choices=sorted(CANARIES))
     ap.add_argument("--timeout", type=float, default=1800.0)
@@ -325,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(ev.as_dict(), fh, indent=2, default=str)
     print(json.dumps({**_answer(ev), "evidence": out}, indent=2, default=str))
     try:
-        ev.require_ok()
+        ev.require_ok().require_run_products()
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         print(f"CANARY FAILED: {exc}", file=sys.stderr)
         return 1

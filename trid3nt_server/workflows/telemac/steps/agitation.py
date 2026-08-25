@@ -33,12 +33,15 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.shared.publish_product_layer import (
+    publish_product_layer,
+)
 
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
     mesh_sizing_provenance,
-    publish_peak_layer,
+    solved_domain_bbox,
     surface_in_worker_bed_input,
 )
 from .wave import great_lake_for
@@ -211,6 +214,10 @@ async def write_agitation_deck(
         "outputs": list(_OUTPUTS),
         "run_failed_code": "ARTEMIS_RUN_FAILED",
         "output_missing_code": "ARTEMIS_OUTPUT_MISSING",
+        # Only the REAL-bathymetry harbour is georeferenced. The analytic seiche
+        # ladder and the Berkhoff shoal are geography-free by construction and
+        # report no zone; their reader rasterizes the local metres directly.
+        "requires_utm": real,
         "domain_name": aoi["name"],
         "domain_slug": aoi["slug"],
         "mesh_size_m": float(resolution),
@@ -317,19 +324,18 @@ async def publish_agitation_products(*, deck: dict[str, Any],
     run_id = solve["run_id"]
     metrics = dict(solve.get("metrics") or {})
     reach = deck["domain_slug"]
-    utm_epsg = metrics.get("utm_epsg")
+    utm_epsg = solve["utm_epsg"]
 
     slf_path = await asyncio.to_thread(
         download_open_water_result, run_id, deck["result_basename"],
         error_code=deck["output_missing_code"])
     try:
         layers, _pmetrics = await asyncio.to_thread(
-            postprocess_artemis, slf_path, run_id=run_id,
-            utm_epsg=int(utm_epsg) if utm_epsg is not None else None,
+            postprocess_artemis, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             # The worker meshes in a LOCAL UTM frame, so the postprocess needs the
             # SW corner to add the origin back before UTM -> 4326. The idealized
             # analytic domain records no bbox and has none to add.
-            request_bbox=metrics.get("bbox"),
+            request_bbox=solved_domain_bbox(deck, metrics),
             incident_hs_m=float(deck["wave_height_m"]), reach_name=reach,
             wave_mode=deck["wave_mode"])
     finally:
@@ -339,7 +345,7 @@ async def publish_agitation_products(*, deck: dict[str, Any],
                              error_code="ARTEMIS_NO_LAYERS")
     raw = layers[0]
 
-    published = await publish_peak_layer(
+    published = await publish_product_layer(
         raw, style_preset=TELEMAC_AGITATION_STYLE_PRESET,
         update={
             "kd_sheltered": metrics.get("kd_sheltered"),

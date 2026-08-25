@@ -30,6 +30,8 @@ from trid3nt_contracts import new_ulid
 
 from trid3nt_server.workflows.lib import DeclarativeError, Step
 
+from .solve import read_run_metrics
+
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
 
 __all__ = [
@@ -37,8 +39,8 @@ __all__ = [
     "mesh_sizing_provenance",
     "SolveOpenWater",
     "download_open_water_result",
-    "publish_peak_layer",
     "solve_open_water",
+    "solved_domain_bbox",
     "stage_open_water_manifest",
     "surface_in_worker_bed_input",
 ]
@@ -99,6 +101,14 @@ async def solve_open_water(*, deck: dict[str, Any],
     the ONE dispatch for every open-water TELEMAC domain. The returned ``uri`` is
     the result SELAFIN under the run prefix - what a ledger replay probes, so a
     resumed rerun can only skip the solve while the solved artifact is still there.
+
+    ``deck["requires_utm"]`` says whether a missing ``utm_epsg`` is a FAILURE.
+    A domain built over real geography is ungeoreferenceable without the worker's
+    zone, so its absence is a typed refusal. An IDEALIZED domain - the analytic
+    harbour basin, the Berkhoff shoal, the lock-exchange channel - has no
+    geographic footprint at all and legitimately reports no zone; its reader
+    rasterizes the local metres in a placeholder frame instead. Refusing there
+    refuses a run that is working exactly as designed.
     """
     from trid3nt_server.emission.pipeline_emitter import (
         current_emitter,
@@ -160,11 +170,12 @@ async def solve_open_water(*, deck: dict[str, Any],
             f"{getattr(run_result, 'error_message', '') or ''}",
             error_code=deck.get("run_failed_code") or "TELEMAC_OPEN_WATER_FAILED")
 
-    metrics = await asyncio.to_thread(_read_run_metrics, batch_run_id)
-    if metrics.get("utm_epsg") is None:
-        # A SELAFIN carries no CRS of its own, so without the worker's UTM zone
-        # the result cannot be georeferenced at all - a typed refusal, never a
-        # guessed zone.
+    metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
+    utm_epsg = metrics.get("utm_epsg")
+    if utm_epsg is None and deck.get("requires_utm", True):
+        # A SELAFIN carries no CRS of its own, so a domain built over real
+        # geography cannot be georeferenced at all without the worker's UTM zone -
+        # a typed refusal, never a guessed zone.
         raise OpenWaterError(
             f"TELEMAC {section} run {batch_run_id} produced no utm_epsg; "
             "the result cannot be georeferenced.",
@@ -172,23 +183,44 @@ async def solve_open_water(*, deck: dict[str, Any],
     return {
         "run_id": batch_run_id,
         "uri": f"s3://{_get_runs_bucket()}/{batch_run_id}/{deck['result_basename']}",
-        "utm_epsg": int(metrics["utm_epsg"]),
+        "utm_epsg": int(utm_epsg) if utm_epsg is not None else None,
         "metrics": metrics,
     }
 
 
-def _read_run_metrics(run_id: str) -> dict[str, Any]:
-    """Best-effort read of ``<run_id>/telemac_metrics.json``; ``{}`` on any miss."""
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+def solved_domain_bbox(deck: Mapping[str, Any],
+                       metrics: Mapping[str, Any]) -> tuple[float, ...] | None:
+    """The 4326 bbox the WORKER laid its local mesh frame over. ``None`` if none.
 
-    try:
-        obj = _get_s3_client().get_object(
-            Bucket=_get_runs_bucket(), Key=f"{run_id}/telemac_metrics.json")
-        loaded = json.loads(obj["Body"].read().decode("utf-8"))
-        return loaded if isinstance(loaded, dict) else {}
-    except Exception as exc:  # noqa: BLE001 - absence is a fact, not a crash
-        logger.info("telemac: run metrics read miss for %s: %s", run_id, exc)
-        return {}
+    The open-water builds put node 0 at the AOI's SW corner, so the reader has to
+    add that exact corner back before reprojecting. "That exact corner" is the
+    point: the deck rounds the AOI to 4 decimals on its way into the manifest, so
+    the ORIGINAL AOI is a few metres away from the one the worker meshed and
+    offsets the whole field by that much. The worker's own echo in
+    ``telemac_metrics.json`` is the ground truth; the manifest's rounded bbox is
+    what it was handed and is the fallback. The unrounded AOI is neither.
+
+    An IDEALIZED domain has no geographic footprint and reports no bbox at all.
+    """
+    echoed = (metrics or {}).get("bbox")
+    staged = (deck.get("config") or {}).get("bbox")
+    for candidate in (echoed, staged):
+        if candidate is None:
+            continue
+        values = tuple(candidate)
+        if len(values) != 4:
+            raise OpenWaterError(
+                f"the TELEMAC domain bbox {candidate!r} is not 4 values "
+                "(min_lon, min_lat, max_lon, max_lat); the local mesh frame "
+                "cannot be placed.", error_code="TELEMAC_PARAMS_INVALID")
+        try:
+            return tuple(float(v) for v in values)
+        except (TypeError, ValueError) as exc:
+            raise OpenWaterError(
+                f"the TELEMAC domain bbox {candidate!r} carries non-numeric "
+                "corners; the local mesh frame cannot be placed.",
+                error_code="TELEMAC_PARAMS_INVALID") from exc
+    return None
 
 
 def download_open_water_result(run_id: str, basename: str,
@@ -237,6 +269,12 @@ async def surface_in_worker_bed_input(emitter: Any, *, run_metrics: dict[str, An
         return False
 
 
+#: The workers report ``dx_m`` rounded to 0.1 m, so any disagreement at or below
+#: half of that last place is the REPORT's precision, not a move the builder made.
+#: Without this an ask of 33.33 m built at 33.3 m raised a 3 cm "override" note.
+_DX_REPORT_TOL_M = 0.05
+
+
 def mesh_sizing_provenance(asked_m: Any, metrics: Mapping[str, Any]) -> list[Any]:
     """The user's grid-spacing ask, as a row, WHEN the worker MOVED it.
 
@@ -246,48 +284,36 @@ def mesh_sizing_provenance(asked_m: Any, metrics: Mapping[str, Any]) -> list[Any
     node BUDGET raises one that is finer than the domain can afford - and neither
     said so, while the reach family has narrated exactly this since wave 2b.
 
-    The row appears only when the ask and the built spacing DIFFER, so an honoured
-    lever adds no noise. ``basis="user"`` - the value came from the caller; the
-    note says what happened to it.
+    The row appears only when the ask and the built spacing differ by more than
+    the report's own precision, so an honoured lever adds no noise, and it names
+    the DIRECTION the value actually moved rather than assuming it was raised.
+    ``basis="user"`` - the value came from the caller; the note says what happened.
     """
     from trid3nt_contracts.common import SyntheticInput
 
     built = metrics.get("dx_m")
-    if asked_m is None or built is None or abs(float(built) - float(asked_m)) < 1e-6:
+    if asked_m is None or built is None:
         return []
-    reason = ("the node budget for this domain" if metrics.get("coarsened")
-              else "the grid floor this builder authors")
+    asked_f, built_f = float(asked_m), float(built)
+    if abs(built_f - asked_f) <= _DX_REPORT_TOL_M:
+        return []
+    if built_f > asked_f:
+        # Both coarsening paths RAISE the spacing. The node budget records itself;
+        # anything else that raised a finer ask is the builder's own grid floor.
+        direction = "RAISED"
+        reason = ("the node budget for this domain" if metrics.get("coarsened")
+                  else "the grid floor this builder authors")
+    else:
+        # Nothing in the open-water builds coarsens DOWNWARD, so a lowered spacing
+        # came from the builder fitting the ask onto its own grid. Say that rather
+        # than blaming a floor or a budget that did the opposite.
+        direction = "LOWERED"
+        reason = "the builder fitting the ask to this domain's grid"
     return [SyntheticInput(
-        param="target_resolution_m", value=round(float(asked_m), 3), units="m",
+        param="target_resolution_m", value=round(asked_f, 3), units="m",
         basis="user", consequence="numerical",
-        note=(f"target_resolution_m {float(asked_m):g} RAISED to {float(built):g} m "
-              f"by {reason}; the field was solved at {float(built):g} m"))]
-
-
-async def publish_peak_layer(raw: Any, *, style_preset: str,
-                             update: dict[str, Any]) -> Any:
-    """Style the peak COG through the ONE publish seam and fold the narration on.
-
-    On a publish failure the RAW layer is returned enriched but unpublished: its
-    object-store COG still lets the case find the SELAFIN sibling, and retracting
-    a solved result over a styling miss would be the failure-retracts-something
-    anti-pattern.
-    """
-    from trid3nt_server.tools.publish_layer.publish_layer import (
-        PublishLayerError,
-        publish_layer,
-    )
-
-    if not str(getattr(raw, "uri", "")).startswith(("s3://", "gs://")):
-        return raw.model_copy(update=update)
-    try:
-        published_uri = await asyncio.to_thread(
-            publish_layer, layer_uri=raw.uri, layer_id=raw.layer_id,
-            style_preset=raw.style_preset or style_preset)
-    except PublishLayerError as exc:
-        logger.warning("telemac publish_layer failed (%s) - unpublished COG", exc)
-        return raw.model_copy(update=update)
-    return raw.model_copy(update={"uri": published_uri, **update})
+        note=(f"target_resolution_m {asked_f:g} {direction} to {built_f:g} m "
+              f"by {reason}; the field was solved at {built_f:g} m"))]
 
 
 class SolveOpenWater:

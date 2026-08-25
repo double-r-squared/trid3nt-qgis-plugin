@@ -466,7 +466,11 @@ def build_real_lake_grid(cfg: TomawacConfig):
     mesh["bed_lon"] = np.asarray(lon, dtype=float)
     mesh["bed_lat"] = np.asarray(lat, dtype=float)
     mesh["bed_raw"] = np.where(wet, bed, np.nan).astype(float)
+    # The bbox is ECHOED because the agent-side reader has to add this exact SW
+    # corner back to the local mesh metres. Reconstructing it from the request
+    # rather than from what was built is how a rounded corner offsets the field.
     meta = dict(utm_epsg=epsg, dx_m=round(dx, 1), coarsened=coarsened,
+                bbox=[float(v) for v in bbox],
                 n_wet_nodes=n_wet, depth_max_m=round(float(-np.nanmin(bed)), 1),
                 depth_mean_m=round(float(-np.nanmean(bed[wet])), 1),
                 aoi_epsg=epsg)

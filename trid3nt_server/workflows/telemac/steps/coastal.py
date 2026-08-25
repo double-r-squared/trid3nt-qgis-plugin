@@ -26,12 +26,15 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.shared.publish_product_layer import (
+    publish_product_layer,
+)
 
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
     mesh_sizing_provenance,
-    publish_peak_layer,
+    solved_domain_bbox,
     surface_in_worker_bed_input,
 )
 
@@ -113,9 +116,10 @@ async def write_coastal_deck(
         "outputs": list(_OUTPUTS),
         "run_failed_code": "COASTAL_RUN_FAILED",
         "output_missing_code": "COASTAL_OUTPUT_MISSING",
+        # A real coast: the result is meaningless without the worker's UTM zone.
+        "requires_utm": True,
         "domain_name": aoi["name"],
         "domain_slug": aoi["slug"],
-        "domain_bbox": tuple(float(v) for v in aoi["bbox"]),
         "mesh_size_m": float(mesh_resolution_m),
         "mesh_resolution_asked_m": mesh_resolution_m,
         "series_datum": datum,
@@ -208,7 +212,7 @@ async def publish_coastal_products(*, deck: dict[str, Any],
     try:
         layers, _pmetrics = await asyncio.to_thread(
             postprocess_coastal, slf_path, run_id=run_id, utm_epsg=utm_epsg,
-            domain_bbox=deck["domain_bbox"], reach_name=reach,
+            domain_bbox=solved_domain_bbox(deck, metrics), reach_name=reach,
             worker_metrics=metrics)
     finally:
         Path(slf_path).unlink(missing_ok=True)
@@ -217,7 +221,7 @@ async def publish_coastal_products(*, deck: dict[str, Any],
                              error_code="COASTAL_NO_LAYERS")
     raw = layers[0]
 
-    published = await publish_peak_layer(
+    published = await publish_product_layer(
         raw, style_preset=TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
         update={
             "mesh_resolution_label": (

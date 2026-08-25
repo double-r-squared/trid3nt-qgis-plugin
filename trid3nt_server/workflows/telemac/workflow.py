@@ -310,16 +310,20 @@ class TelemacWorkflow(Workflow):
 
     # -- 4. solve ---------------------------------------------------------- #
 
-    def solver_spec(self, *, compute_class: Any,
-                    physics: Physics | None = None) -> Step:
+    def solver_spec(self, *, compute_class: Any, physics: Physics) -> Step:
         """Dispatch the staged deck to the worker the declared process runs on.
 
-        ``physics`` is the process selector, defaulted so the reach templates that
-        predate the open-water front keep their one-argument call. A template that
-        models something other than a reach names its physics here.
+        ``physics`` is the process SELECTOR and is required. It was once defaulted
+        to the tracer (reach) process for the templates that predate the open-water
+        front, which meant a template that forgot to name its physics dispatched a
+        coastal or wave deck to the reach solver - a wrong worker, silently, rather
+        than a plan that refuses to build.
         """
-        process = self._process(physics) if physics is not None else _PROCESSES["tracer"]
-        return process.solve(compute_class=compute_class).named("solve")
+        if physics is None:
+            raise PlanValidationError(
+                "solver_spec needs the physics process that selects the worker; "
+                f"none was named (known: {sorted(_PROCESSES)}).")
+        return self._process(physics).solve(compute_class=compute_class).named("solve")
 
     # -- 5. read ----------------------------------------------------------- #
 

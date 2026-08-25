@@ -27,12 +27,14 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.shared.publish_product_layer import (
+    publish_product_layer,
+)
 
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
     mesh_sizing_provenance,
-    publish_peak_layer,
 )
 from .wave import great_lake_for
 
@@ -114,6 +116,10 @@ async def write_stratified_deck(
         "outputs": list(_OUTPUTS),
         "run_failed_code": "TELEMAC3D_RUN_FAILED",
         "output_missing_code": "TELEMAC3D_OUTPUT_MISSING",
+        # Only the REAL-bathymetry lake column is georeferenced. The lock-exchange
+        # channel and the idealized closed basin are geography-free by
+        # construction and report no zone; the reader keeps the local metres.
+        "requires_utm": real,
         "domain_name": aoi["name"],
         "domain_slug": aoi["slug"],
         "mesh_size_m": float(resolution),
@@ -206,7 +212,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
     run_id = solve["run_id"]
     metrics = dict(solve.get("metrics") or {})
     reach = deck["domain_slug"]
-    utm_epsg = metrics.get("utm_epsg")
+    utm_epsg = solve["utm_epsg"]
 
     surface = await asyncio.to_thread(
         download_open_water_result, run_id, deck["result_basename"],
@@ -217,8 +223,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
     try:
         layers, _pmetrics = await asyncio.to_thread(
             postprocess_telemac3d, surface, bottom, run_id=run_id,
-            utm_epsg=int(utm_epsg) if utm_epsg is not None else None,
-            worker_metrics=metrics, reach_name=reach,
+            utm_epsg=utm_epsg, worker_metrics=metrics, reach_name=reach,
             flow_mode=deck["flow_mode"])
     finally:
         for path in (surface, bottom):
@@ -246,7 +251,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
     # The bottom companion first: it is published and EMITTED here, because only
     # the returned surface layer rides the dispatch seam onto the canvas.
     if len(layers) > 1 and emitter is not None:
-        bottom_pub = await publish_peak_layer(
+        bottom_pub = await publish_product_layer(
             layers[1], style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET,
             update={"fallback_note": _honesty_note(deck)})
         try:
@@ -258,7 +263,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
         except Exception as exc:  # noqa: BLE001 - a missing companion never voids the pair
             logger.warning("telemac3d bottom emit failed: %s", exc)
 
-    published = await publish_peak_layer(
+    published = await publish_product_layer(
         layers[0], style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET, update=update)
     logger.info("telemac3d complete run_id=%s domain=%s mode=%s metric=%.4g "
                 "surface_mean=%s bottom_mean=%s uri=%s", run_id, reach,

@@ -365,7 +365,11 @@ def build_coastal_mesh(cfg: CoastalConfig):
     # ocean-node global indices (for the liquid-boundary count / listing sanity).
     mesh["ocean_ring_ranks"] = np.where([c == "ocean" for c in cls])[0] + 1
 
+    # The bbox is ECHOED because the agent-side reader has to add this exact SW
+    # corner back to the local mesh metres. Reconstructing it from the request
+    # rather than from what was built is how a rounded corner offsets the field.
     meta = dict(utm_epsg=epsg, dx_m=round(dx, 1), coarsened=coarsened,
+                bbox=[float(v) for v in bbox],
                 ocean_edge=ocean_edge, n_ocean_nodes=n_ocean,
                 n_wet_nodes=int(wet.sum()), depth_max_m=depth_max,
                 topo_max_m=topo_max, bathy_source=src)
