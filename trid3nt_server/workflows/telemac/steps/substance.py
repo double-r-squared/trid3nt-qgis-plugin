@@ -30,6 +30,7 @@ __all__ = [
     "resolve_gradation",
     "resolve_grain",
     "sanitize_substance",
+    "substance_class",
 ]
 
 
@@ -264,3 +265,28 @@ def resolve_grain(payload: Any, sediment_type: str | None,
     if grain_size_um is not None:
         sed_grain_um = float(grain_size_um)
     return sed_type, float(min(max(sed_grain_um, 5.0), 2000.0))
+
+
+def substance_class() -> Any:
+    """A coercion reconciling ``substance`` with a separately-named ``contaminant``.
+
+    Models split intent across the two fields - ``substance="dye"`` AND
+    ``contaminant="crude oil"`` - so an oil spill silently ran the tracer class.
+    Any NON-tracer contaminant class wins over a tracer-class substance.
+    """
+
+    def _coerce(args: Any) -> dict[str, Any]:
+        substance = sanitize_substance(args.get("substance"))
+        contaminant = args.get("contaminant")
+        if contaminant:
+            cont = sanitize_substance(contaminant, default="")
+            if cont and classify_substance(substance)[0] == "tracer" \
+                    and classify_substance(cont)[0] != "tracer":
+                logger.info("substance %r is tracer-class but contaminant %r is "
+                            "%s-family - classifying by contaminant", substance, cont,
+                            classify_substance(cont)[0])
+                substance = cont
+        return {"substance": substance}
+
+    _coerce.__name__ = "substance_class"
+    return _coerce

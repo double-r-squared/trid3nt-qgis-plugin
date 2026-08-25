@@ -1,50 +1,45 @@
 """Engine template ``telemac_do_sag`` - TELEMAC-2D WAQTEL dissolved-oxygen sag.
 
-Declared as PARAMS + ``plan(p, d)``: the tool body resolves the doors, validates
-the plan, and hands it to the interpreter. See
+Four declarations and a chart: PARAMS, DATA, ``plan(p, d, ops)``, the ANSWER
+fields, and the chart function beside them. Everything else - normalizing the
+wire args, resolving the doors, walking the plan, persisting the products - is
+the skeleton (``workflows/lib/workflow.py``); the reach mechanism is the TELEMAC
+facade (``workflows/telemac/workflow.py``). See
 ``docs/design/declarative-workflows.md``.
 """
 
 from __future__ import annotations
 
-import asyncio
-import logging
 from typing import Any
 
-from trid3nt_contracts.telemac_contracts import TelemacDoLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.lib import (
-    DeclarativeError,
+    Data,
     DrawGate,
+    Fetch,
+    Forcing,
+    MeshPolicy,
     Param,
+    Physics,
+    Ref,
     RunMode,
-    Workflow,
     doors,
-    interpret,
-    merge_provenance,
-    render_docstring,
-    resolve_params,
+    register_workflow,
 )
+from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
-from trid3nt_server.workflows.shared.run_products import persist_run_products
-from trid3nt_server.workflows.telemac.do_sag.steps import (
-    OutfallCoordsInvalidError,
-    ReachSolve,
-    coerce_outfall_point,
-)
 from trid3nt_server.workflows.telemac.steps import (
-    TelemacDyeScenarioError,
-    coerce_event_time,
+    ReviewResolvedInputs,
+    WaqtelO2,
+    event_time,
+    lonlat_point,
 )
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.do_sag.do_sag")
+__all__ = ["ANSWER", "DATA", "PARAMS", "build_sag_chart", "plan", "telemac_do_sag"]
 
-__all__ = ["DATA", "PARAMS", "plan", "telemac_do_sag"]
-
-_STEPS = "trid3nt_server.workflows.telemac.do_sag.steps"
+_STEPS = "trid3nt_server.workflows.telemac.steps"
 
 QUESTION = (
     "the DISSOLVED-OXYGEN SAG below a permitted discharge / WWTP outfall in a "
@@ -68,9 +63,10 @@ PARAMS: tuple[Param, ...] = (
     Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
           desc="Place name near the discharge, geocoded to the reach"),
     Param("bbox", door=doors.USER, optional=True, consequence="aoi",
+          type=tuple[float, float, float, float] | list[float] | str,
           desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place"),
     Param("outfall_coords", door=doors.USER, optional=True, consequence="scenario",
-          user_lever=True,
+          user_lever=True, type=tuple[float, float] | list[float],
           derived_when_absent=(
               "the release is seeded at the reach point the pipeline derives "
               "(mid-reach on the fetched flowline, else the geocoded centroid); the "
@@ -101,10 +97,12 @@ PARAMS: tuple[Param, ...] = (
           desc="Modeled reach length downstream of the discharge; the sag critical "
                "point is often several km down"),
 
-    Param("do_saturation_mgl", door=doors.DERIVED, resolve=f"{_STEPS}.do_saturation_mgl",
+    Param("do_saturation_mgl", door=doors.DERIVED,
+          resolve=f"{_STEPS}.water_quality.do_saturation_mgl",
           user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
           desc="DO saturation Cs; derived from water temperature unless supplied"),
-    Param("upstream_do_mgl", door=doors.DERIVED, resolve=f"{_STEPS}.upstream_do_mgl",
+    Param("upstream_do_mgl", door=doors.DERIVED,
+          resolve=f"{_STEPS}.water_quality.upstream_do_mgl",
           user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
           desc="DO carried in at the top of the reach; derived as saturation unless supplied"),
 
@@ -144,32 +142,107 @@ PARAMS: tuple[Param, ...] = (
           consequence="numerical", desc="Solve sizing class"),
 )
 
-#: The reach pipeline is ONE composite step in v1; its internal fetches surface
-#: through the emit-on-fetch seam. They become declared Data when river_dye is
-#: migrated.
-DATA: tuple = ()
+
+#: The reach's REFERENCE data - fetched fresh for the domain the geocode step
+#: binds, never BYO. The carrier discharge is a STEP rather than Data: it reads
+#: the resolved mid-reach seed, which is a step result and not something a
+#: producer declaration can name.
+DATA = (
+    Data("rivers", Fetch.tool(f"{_STEPS}.reach.fetch_reach_flowline", prefetched=None)),
+)
 
 
-def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
     """The DO-sag recipe. Pure: constructs the plan value, executes nothing."""
-    return Workflow("telemac_do_sag", engine="telemac2d")[
+    physics = Physics("waqtel_o2", do_sag_config=Ref("waqtel"),
+                      reach_seed_coords=p.outfall_coords,
+                      sim_duration_s=p.sim_duration_s)
+    forcing = Forcing(carrier=Ref("reviewed_discharge"))
+    mesh = ops.build_mesh(Ref("reach"), MeshPolicy(
+        resolution=p.mesh_resolution, target_edge_m=p.mesh_resolution_m,
+        extent_km=p.reach_length_km, width_m=p.channel_width_m,
+        boundary_source=p.bank_source))
+    return [
         DrawGate(param="outfall_coords", geometry="point",
                  prompt="Click where the discharge enters the river"),
-        ReachSolve.telemac_waqtel_o2(
-            location=p.location, bbox=p.bbox, outfall_coords=p.outfall_coords,
-            discharge_bod_mgl=p.discharge_bod_mgl,
-            upstream_do_mgl=p.upstream_do_mgl,
-            do_saturation_mgl=p.do_saturation_mgl,
-            water_temp_c=p.water_temp_c, do_standard_mgl=p.do_standard_mgl,
-            k1_per_day=p.k1_per_day, k2_per_day=p.k2_per_day,
-            reach_length_km=p.reach_length_km, channel_width_m=p.channel_width_m,
-            sim_duration_s=p.sim_duration_s, discharge_m3s=p.discharge_m3s,
-            mesh_resolution=p.mesh_resolution, mesh_resolution_m=p.mesh_resolution_m,
-            bank_source=p.bank_source, compute_class=p.compute_class,
-            event_time=p.event_time, input_mode=RunMode,
-        ).named("do_field")
-         .chart("do_sag_curve", builder=f"{_STEPS}.build_sag_chart"),
+        *ops.acquire_domain(location=p.location, bbox=p.bbox, rivers=d.rivers,
+                            discharge=p.discharge_m3s, event_time=p.event_time),
+        WaqtelO2(discharge_bod_mgl=p.discharge_bod_mgl,
+                 upstream_do_mgl=p.upstream_do_mgl,
+                 do_saturation_mgl=p.do_saturation_mgl,
+                 water_temp_c=p.water_temp_c, k1_per_day=p.k1_per_day,
+                 k2_per_day=p.k2_per_day,
+                 do_standard_mgl=p.do_standard_mgl).named("waqtel"),
+        ReviewResolvedInputs(carrier_discharge=Ref("carrier_discharge"),
+                             bank_source=p.bank_source, workflow=ops.name,
+                             input_mode=RunMode).named("reviewed_discharge"),
+        ops.author(mesh=mesh, physics=physics, forcing=forcing),
+        ops.solver_spec(compute_class=p.compute_class),
+        ops.read_results(Ref("solve"), physics=physics, forcing=forcing)
+           .chart("do_sag_curve", builder=build_sag_chart),
     ]
+
+
+#: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
+#: beside the chart spec so verification cites the run's own figures rather than
+#: recomputing them from the raster.
+ANSWER = ("do_min_mgl", "do_min_distance_m", "do_standard_mgl",
+          "do_violates_standard", "do_upstream_mgl", "do_saturation_mgl",
+          "bod_upstream_mgl", "sag_curve_distance_m", "sag_curve_do_mgl",
+          "sag_curve_bod_mgl", "mesh_size_m")
+
+
+def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
+    """The DO-sag chart SPEC: DO + CBOD vs downstream distance, standard as a rule.
+
+    Honest postprocess scalars off the published layer (the binned centerline
+    curve), never a fabricated line; ``None`` when the curve is absent.
+    """
+    xs = getattr(result, "sag_curve_distance_m", None)
+    do = getattr(result, "sag_curve_do_mgl", None)
+    bod = getattr(result, "sag_curve_bod_mgl", None)
+    if not xs or not do or len(xs) != len(do):
+        return None
+    std = float(getattr(result, "do_standard_mgl", None) or 5.0)
+
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+
+    do_vals = [{"x_km": round(xs[i] / 1000.0, 4), "v": do[i], "series": "Dissolved O2"}
+               for i in range(len(xs))]
+    bod_vals = ([{"x_km": round(xs[i] / 1000.0, 4), "v": bod[i], "series": "CBOD"}
+                 for i in range(len(xs))] if bod and len(bod) == len(xs) else [])
+    vega_lite_spec = {
+        "layer": [
+            {"mark": {"type": "line", "point": False},
+             "data": {"values": do_vals + bod_vals},
+             "encoding": {
+                 "x": {"field": "x_km", "type": "quantitative",
+                       "title": "Downstream distance (km)"},
+                 "y": {"field": "v", "type": "quantitative",
+                       "title": "Concentration (mg/L)"},
+                 "color": {"field": "series", "type": "nominal", "title": None}}},
+            {"mark": {"type": "rule", "strokeDash": [6, 4], "color": "#c0392b"},
+             "data": {"values": [{"y": std}]},
+             "encoding": {"y": {"field": "y", "type": "quantitative"}}},
+        ]
+    }
+    dmin = getattr(result, "do_min_mgl", None)
+    dloc = getattr(result, "do_min_distance_m", None)
+    verdict = "violates" if getattr(result, "do_violates_standard", False) else "meets"
+    # With no location words the LAYER's own name is the title: it already reads
+    # "Dissolved oxygen sag (<reach>)", so prefixing it would say it twice.
+    where = params.get("location")
+    title = (f"Dissolved-oxygen sag - {where}" if where
+             else (getattr(result, "name", None) or "Dissolved-oxygen sag"))
+    return build_chart_payload(
+        vega_lite_spec=vega_lite_spec,
+        title=title,
+        caption=(
+            f"Streeter-Phelps DO sag: minimum {dmin} mg/L at {dloc} m downstream "
+            f"({verdict} the {std:g} mg/L standard, dashed). CBOD decay drives the "
+            f"sag; reaeration recovers it. Screening/permit grade."
+        ),
+    )
 
 
 _TELEMAC_DO_SAG_RES_SPEC = ResolutionSpec(
@@ -194,162 +267,6 @@ _TELEMAC_DO_SAG_METADATA = AtomicToolMetadata(
     tier="template",
     resolution_specs=(_TELEMAC_DO_SAG_RES_SPEC,),
 )
-
-
-@register_tool(
-    _TELEMAC_DO_SAG_METADATA,
-    read_only_hint=False,
-    open_world_hint=False,
-    destructive_hint=False,
-    idempotent_hint=False,
-)
-async def telemac_do_sag(
-    location: str | None = None,
-    bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    outfall_coords: tuple[float, float] | list[float] | None = None,
-    discharge_bod_mgl: float | None = None,
-    upstream_do_mgl: float | None = None,
-    water_temp_c: float | None = None,
-    do_saturation_mgl: float | None = None,
-    do_standard_mgl: float | None = None,
-    k1_per_day: float | None = None,
-    k2_per_day: float | None = None,
-    reach_length_km: float | None = None,
-    channel_width_m: float | None = None,
-    sim_duration_s: float | None = None,
-    discharge_m3s: float | None = None,
-    mesh_resolution: str | None = None,
-    mesh_resolution_m: float | None = None,
-    bank_source: str | None = None,
-    compute_class: str | None = None,
-    event_time: str | None = None,
-    input_mode: str | None = None,
-    restart_clean: bool = False,
-    **_extra_ignored: Any,
-) -> TelemacDoLayerURI | dict[str, Any]:
-    supplied, err = _normalize(locals())
-    if err is not None:
-        return err
-    try:
-        p = await resolve_params(PARAMS, supplied)
-        result = await interpret(
-            plan(p, None), p, PARAMS, DATA,
-            input_mode=input_mode, resume=not restart_clean,
-        )
-    except asyncio.CancelledError:
-        raise
-    except DeclarativeError as exc:
-        logger.warning("telemac_do_sag %s: %s", exc.error_code, exc)
-        return {"status": "error", "error_code": exc.error_code,
-                "error_message": _with_notes(exc)}
-    except Exception as exc:  # noqa: BLE001
-        if getattr(exc, "retryable", False):
-            # The banks/reach gates carry .suggestions the adapter harvests off the
-            # RAISED exception, so the model can retry with corrected args.
-            raise
-        logger.exception("telemac_do_sag unexpected failure")
-        return {"status": "error", "error_code": "TELEMAC_INTERNAL_ERROR",
-                "error_message": _with_notes(exc)}
-
-    layer = result.value
-    update: dict[str, Any] = {
-        "synthetic_inputs": merge_provenance(layer.synthetic_inputs or [],
-                                             result.entries),
-    }
-    if result.notes:
-        parts = [layer.fallback_note] if layer.fallback_note else []
-        parts += [f"NOTE: {n}" for n in result.notes]
-        update["fallback_note"] = " ".join(parts)
-    layer = layer.model_copy(update=update)
-    await persist_run_products(
-        getattr(layer, "run_id", None),
-        charts=result.charts, metrics=_physical_answer(layer),
-    )
-    logger.info(
-        "telemac_do_sag complete layer_id=%s do_min=%.3g mg/L at %sm violates=%s "
-        "executed=%s replayed=%s notes=%s",
-        layer.layer_id, layer.do_min_mgl, layer.do_min_distance_m,
-        layer.do_violates_standard, result.executed, result.replayed, result.notes,
-    )
-    return layer
-
-
-def _physical_answer(layer: TelemacDoLayerURI) -> dict[str, Any]:
-    """The run's ANSWER, as the numbers a reader has to be able to check.
-
-    Persisted beside the chart spec so verification cites the run's own figures
-    rather than recomputing them from the raster. ``discharge_m3s``/``discharge_note``
-    ride the carrier-discharge provenance row when the layer carries one, so the
-    RESOLVED NWM cycle (never a bare "latest") is pinned here too.
-    """
-    disc = next((r for r in (layer.synthetic_inputs or [])
-                if r.param == "discharge_m3s"), None)
-    return {
-        "do_min_mgl": layer.do_min_mgl,
-        "do_min_distance_m": layer.do_min_distance_m,
-        "do_standard_mgl": layer.do_standard_mgl,
-        "do_violates_standard": layer.do_violates_standard,
-        "do_upstream_mgl": layer.do_upstream_mgl,
-        "do_saturation_mgl": layer.do_saturation_mgl,
-        "bod_upstream_mgl": layer.bod_upstream_mgl,
-        "sag_curve_distance_m": layer.sag_curve_distance_m,
-        "sag_curve_do_mgl": layer.sag_curve_do_mgl,
-        "sag_curve_bod_mgl": layer.sag_curve_bod_mgl,
-        "mesh_size_m": layer.mesh_size_m,
-        "layer_uri": layer.uri,
-        "discharge_m3s": disc.value if disc else None,
-        "discharge_note": disc.note if disc else None,
-    }
-
-
-def _with_notes(exc: BaseException) -> str:
-    """The failure, plus whatever auxiliary products the run also lost on the way."""
-    notes = getattr(exc, "__notes__", ()) or ()
-    return " ".join([str(exc), *notes])
-
-
-def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Coerce the wire args to the door-1 sheet: exactly one of location or bbox."""
-    try:
-        outfall = coerce_outfall_point(args.get("outfall_coords"))
-    except OutfallCoordsInvalidError as exc:
-        return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INVALID",
-                    "error_message": str(exc)}
-    try:
-        event_time = coerce_event_time(args.get("event_time"))
-    except TelemacDyeScenarioError as exc:
-        return {}, {"status": "error", "error_code": exc.error_code,
-                    "error_message": str(exc)}
-
-    location, bbox = args.get("location"), args.get("bbox")
-    coerced: tuple[float, float, float, float] | None = None
-    if bbox is not None:
-        cb = coerce_bbox_value(bbox)
-        if cb is None:
-            if isinstance(bbox, str) and any(c.isalpha() for c in bbox) \
-                    and not (location and str(location).strip()):
-                location, bbox = bbox, None
-            else:
-                return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INVALID",
-                            "error_message": f"invalid bbox: {bbox!r}"}
-        else:
-            coerced = tuple(cb)  # type: ignore[assignment]
-
-    has_loc = bool(location and str(location).strip())
-    if not has_loc and coerced is None:
-        return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INCOMPLETE",
-                    "error_message": ("telemac_do_sag needs a place `location` "
-                                      "(geocoded) or an explicit `bbox` AOI.")}
-    if has_loc:
-        coerced = None  # location wins
-
-    declared = {p.name for p in PARAMS}
-    supplied = {k: v for k, v in args.items() if k in declared and v is not None}
-    supplied["location"] = location if has_loc else None
-    supplied["bbox"] = coerced
-    supplied["outfall_coords"] = outfall
-    supplied["event_time"] = event_time
-    return {k: v for k, v in supplied.items() if v is not None}, None
 
 
 _DOC = dict(
@@ -392,8 +309,16 @@ _DOC = dict(
     ),
 )
 
-#: The full sheet is what the MODEL needs (it fills the params); the routing view
-#: is what a surface that only helps someone CHOOSE the tool needs, and it fits
-#: the truncation budget by construction.
-telemac_do_sag.__doc__ = render_docstring(**_DOC)
-telemac_do_sag.routing_doc = render_docstring(**_DOC, view="routing")
+
+telemac_do_sag = register_workflow(
+    TelemacWorkflow, _TELEMAC_DO_SAG_METADATA, PARAMS, plan,
+    data=DATA,
+    answer=ANSWER,
+    provenance=(("discharge_m3s", "discharge_note"),),
+    coerce=(
+        location_or_bbox("telemac_do_sag"),
+        lonlat_point("outfall_coords", label="outfall_coords"),
+        event_time(),
+    ),
+    doc=_DOC,
+)

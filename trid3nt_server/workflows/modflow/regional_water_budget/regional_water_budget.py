@@ -21,7 +21,7 @@ from trid3nt_server.workflows.lib import (
     DeclarativeError,
     FormGate,
     Param,
-    Workflow,
+    Plan,
     doors,
     interpret,
     merge_provenance,
@@ -29,6 +29,7 @@ from trid3nt_server.workflows.lib import (
     resolve_params,
 )
 from trid3nt_server.workflows.modflow._template_card import TemplateCard
+from trid3nt_server.workflows.modflow.steps.products import build_budget_chart
 from trid3nt_server.workflows.modflow.steps import (
     ModflowStepError,
     RunArchetype,
@@ -94,7 +95,7 @@ DATA: tuple = ()
 
 def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
     """The regional-budget recipe. Pure: constructs the plan value, executes nothing."""
-    return Workflow("modflow_regional_water_budget", engine="modflow6")[
+    return Plan("modflow_regional_water_budget", "modflow6", (
         FormGate(title="Review the regional water-budget inputs"),
         RunArchetype.regional_water_budget(
             expected_type="trid3nt_contracts.modflow_contracts.BudgetPartitionLayerURI",
@@ -103,8 +104,8 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
             compute_class=p.compute_class,
             tool_label="Model regional water budget",
         ).named("budget")
-         .chart("budget_partition", builder=f"{_STEPS}.products.build_budget_chart"),
-    ]
+         .chart("budget_partition", builder=build_budget_chart),
+    ))
 
 
 _METADATA = AtomicToolMetadata(

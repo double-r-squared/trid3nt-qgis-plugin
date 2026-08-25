@@ -28,8 +28,10 @@ from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.forcing")
 
-__all__ = ["CarrierDischarge", "coerce_event_time", "resolve_carrier_discharge",
-           "resolve_rain_forcing"]
+__all__ = ["CarrierDischarge", "ReviewResolvedInputs", "coerce_event_time",
+           "event_time",
+           "resolve_carrier_discharge", "resolve_rain_forcing",
+           "review_resolved_inputs"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
@@ -233,6 +235,16 @@ def coerce_event_time(value: Any) -> str | None:
     return dt.astimezone(_dt.timezone.utc).isoformat()
 
 
+def event_time() -> Any:
+    """A coercion that reads the wire's ``event_time`` into a pinned ISO cycle."""
+
+    def _coerce(args: Any) -> dict[str, Any]:
+        return {"event_time": coerce_event_time(args.get("event_time"))}
+
+    _coerce.__name__ = "event_time"
+    return _coerce
+
+
 def _fmt_cycle(reference_time: str | None) -> str:
     """A short display form of a resolved cycle ISO string, for names/notes."""
     if not reference_time:
@@ -299,8 +311,68 @@ async def resolve_carrier_discharge(*, seed: dict[str, Any],
 def CarrierDischarge(*, seed: Any, explicit: Any, event_time: Any = None) -> Step:  # noqa: N802
     """The reach's carrier discharge. A STEP, not Data: it reads the resolved seed,
     which is a step result rather than a declaration a producer could name."""
-    return Step(runner=f"{_STEPS}.forcing.resolve_carrier_discharge",
+    return Step(runner=f"{_STEPS}.forcing.resolve_carrier_discharge", stage="acquire",
                 kwargs={"seed": seed, "explicit": explicit, "event_time": event_time})
+
+
+def ReviewResolvedInputs(*, carrier_discharge: Any, bank_source: Any,  # noqa: N802
+                         workflow: str, input_mode: Any) -> Step:
+    """Review the values the pipeline RESOLVED, before the expensive solve.
+
+    ``self_gating``: the review is over values no plan-level form can show,
+    because they do not exist until the fetch that produced them has run. A plan
+    that declares this step may not also declare a FormGate - the validator
+    refuses it, because a second card's edits would land on a sheet this review
+    never reads.
+    """
+    return Step(runner=f"{_STEPS}.forcing.review_resolved_inputs", stage="gates",
+                self_gating=True,
+                kwargs={"discharge": carrier_discharge, "bank_source": bank_source,
+                        "workflow": workflow, "input_mode": input_mode})
+
+
+async def review_resolved_inputs(*, discharge: dict[str, Any], bank_source: Any,
+                                 workflow: str,
+                                 input_mode: str | None) -> dict[str, Any]:
+    """Present the RESOLVED carrier discharge + bank source before the solve.
+
+    The carrier discharge governs dilution and is the physically dominant
+    reviewable input, so ``user_gated`` pauses on it here - after the fetch that
+    produced it and before the expensive solve. ``auto`` proceeds labeled.
+    """
+    from trid3nt_contracts.common import SyntheticInput as entry
+
+    from trid3nt_server.gates.input_review import gate_input_review
+
+    from .deck import normalize_bank_source
+
+    banks = normalize_bank_source(bank_source)
+    outcome = await gate_input_review(
+        tool_name=workflow, mode=input_mode,
+        entries=[
+            entry(param="discharge_m3s", value=round(float(discharge["m3s"]), 2),
+                  units="m^3/s", basis=discharge.get("basis") or "fetched",
+                  real_source_if_any=(None if discharge.get("basis") == "user"
+                                      else "NOAA National Water Model streamflow"),
+                  note=discharge.get("note") or "carrier discharge governing dilution"),
+            entry(param="bank_source", value=banks,
+                  basis="fetched" if banks == "nhd_area" else "default_demo",
+                  consequence="physics",
+                  note=("real NHDArea banks" if banks == "nhd_area"
+                        else "assumed constant-width ribbon")),
+        ],
+        params={"discharge_m3s": float(discharge["m3s"])})
+    if outcome.cancelled:
+        raise TelemacDyeScenarioError("USER_INPUT_CANCELLED",
+                                      f"{workflow} {outcome.cancel_reason}")
+    revised = float(outcome.params.get("discharge_m3s", discharge["m3s"]))
+    if revised != float(discharge["m3s"]):
+        # A user-revised value is no longer the fetched cycle it started from -
+        # the reference_time/product it carried would misdescribe this row.
+        return {**discharge, "m3s": revised, "basis": "user", "real_source": None,
+                "reference_time": None, "product": None,
+                "note": f"carrier discharge {revised:.0f} m3/s (revised at review)"}
+    return discharge
 
 
 async def _surface_discharge_station_layer(layer: Any) -> None:

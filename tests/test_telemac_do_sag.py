@@ -69,8 +69,14 @@ def test_waqtel_o2_reproduces_streeter_phelps():
 
 
 # --- tool arg handling (no dispatch) ---------------------------------------- #
+def _workflow():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["telemac_do_sag"].fn.workflow
+
+
 def test_do_saturation_temperature_relation():
-    from trid3nt_server.workflows.telemac.do_sag.steps import do_saturation_mgl
+    from trid3nt_server.workflows.telemac.steps.water_quality import do_saturation_mgl
 
     def sat(t):
         return do_saturation_mgl(SimpleNamespace(water_temp_c=t))
@@ -81,21 +87,35 @@ def test_do_saturation_temperature_relation():
 
 def test_declared_params_and_plan_validate():
     from trid3nt_server.workflows.lib import resolve_params, validate_plan
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import DATA, PARAMS, plan
 
-    p = asyncio.run(resolve_params(PARAMS, {"location": "Eel River near Scotia, California"}))
-    validate_plan(plan(p, None), PARAMS, DATA)
+    wf = _workflow()
+    p = asyncio.run(resolve_params(wf.params,
+                                   {"location": "Eel River near Scotia, California"}))
+    validate_plan(wf.build_plan(p), wf.params, wf.data, sheet=p)
     assert p.get("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
-    assert p.get("upstream_do_mgl") == p.get("do_saturation_mgl")               # saturated inflow
-    assert p.row("k1_per_day").consequence == "numerical"         # never refuses in auto
+    assert p.get("upstream_do_mgl") == p.get("do_saturation_mgl")        # saturated inflow
+    assert p.row("k1_per_day").consequence == "numerical"    # never refuses in auto
+
+
+def test_the_plan_reads_as_the_universal_stage_sequence():
+    """The skeleton owns the sequence; the facade's five ops stamp each step."""
+    from trid3nt_server.workflows.lib import resolve_params
+
+    wf = _workflow()
+    p = asyncio.run(resolve_params(wf.params, {"location": "x"}))
+    plan = wf.build_plan(p)
+    stages = [s.stage for s in plan.flat() if s.stage]
+    assert stages == ["acquire", "acquire", "acquire", "prep", "gates", "author",
+                      "solve", "publish"]
+    assert [s.name for s in plan.flat()][-1] == "do_field"
 
 
 def test_declared_bounds_clamp_the_wq_knobs():
     from trid3nt_server.workflows.lib import resolve_params
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS
 
-    p = asyncio.run(resolve_params(PARAMS, {"location": "x", "reach_length_km": 900.0,
-                                            "k1_per_day": 0.0}))
+    wf = _workflow()
+    p = asyncio.run(resolve_params(wf.params, {"location": "x", "reach_length_km": 900.0,
+                                               "k1_per_day": 0.0}))
     assert p.get("reach_length_km") == 15.0 and "CLAMPED" in p.row("reach_length_km").note
     assert p.get("k1_per_day") == 0.01
 
@@ -124,69 +144,46 @@ async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
 def test_an_absent_outfall_leaves_a_derived_provenance_row():
     """The user has to see what the sag distance is measured FROM."""
     from trid3nt_server.workflows.lib import provenance_entries, resolve_params
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS
 
-    p = asyncio.run(resolve_params(PARAMS, {"location": "Eel River near Scotia"}))
-    row = next(r for r in provenance_entries(p, PARAMS) if r.param == "outfall_coords")
+    wf = _workflow()
+    p = asyncio.run(resolve_params(wf.params, {"location": "Eel River near Scotia"}))
+    row = next(r for r in provenance_entries(p, wf.params)
+               if r.param == "outfall_coords")
     assert row.basis == "derived"
     assert "mid-reach" in (row.note or "")
 
 
 def test_a_supplied_outfall_is_carried_as_a_user_row():
     from trid3nt_server.workflows.lib import provenance_entries, resolve_params
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS, _normalize
 
-    supplied, err = _normalize({"location": "x", "outfall_coords": ["-124.1", "40.5"]})
+    wf = _workflow()
+    supplied, err = wf._normalize({"location": "x",
+                                   "outfall_coords": ["-124.1", "40.5"]})
     assert err is None and supplied["outfall_coords"] == (-124.1, 40.5)
-    p = asyncio.run(resolve_params(PARAMS, supplied))
-    row = next(r for r in provenance_entries(p, PARAMS) if r.param == "outfall_coords")
+    p = asyncio.run(resolve_params(wf.params, supplied))
+    row = next(r for r in provenance_entries(p, wf.params)
+               if r.param == "outfall_coords")
     assert row.basis == "user"
 
 
-# --- the gate-mode lever reaches the reach pipeline -------------------------- #
-def test_the_plan_declares_the_run_mode_read_for_the_reach_pipeline():
+# --- the gate-mode lever reaches the resolved-input review ------------------- #
+def test_the_plan_declares_the_run_mode_read_for_the_input_review():
     """input_mode is the gate lever, not a Param: without this the user_gated
     review of NWM discharge / bank_source is silently lost."""
     from trid3nt_server.workflows.lib import RunMode, resolve_params
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import PARAMS, plan
 
-    p = asyncio.run(resolve_params(PARAMS, {"location": "x"}))
-    solve = next(s for s in plan(p, None).flat() if s.name == "do_field")
-    assert solve.kwargs["input_mode"] is RunMode
-
-
-@pytest.mark.asyncio
-async def test_input_mode_reaches_the_reach_solve(tmp_path, monkeypatch):
-    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_DO_STYLE_PRESET,
-        TelemacDoLayerURI,
-    )
-    from trid3nt_server.workflows.telemac.do_sag import steps as do_sag_steps
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
-
-    seen: dict = {}
-
-    async def _fake_solve(**kwargs):
-        seen.update(kwargs)
-        return TelemacDoLayerURI(
-            layer_id="t", name="Dissolved oxygen sag (reach)", layer_type="raster",
-            uri="s3://b/k.tif", style_preset=TELEMAC_DO_STYLE_PRESET, role="primary",
-            do_min_mgl=8.0, do_min_distance_m=100.0, do_standard_mgl=5.0,
-            do_violates_standard=False,
-        )
-
-    monkeypatch.setattr(do_sag_steps, "solve_waqtel_o2", _fake_solve)
-    out = await telemac_do_sag(location="Eel River near Scotia, California",
-                               input_mode="user_gated")
-    assert not isinstance(out, dict), out
-    assert seen["input_mode"] == "user_gated"
+    wf = _workflow()
+    p = asyncio.run(resolve_params(wf.params, {"location": "x"}))
+    review = next(s for s in wf.build_plan(p).flat()
+                  if s.name == "reviewed_discharge")
+    assert review.kwargs["input_mode"] is RunMode
+    assert review.self_gating is True    # so no second FormGate may be declared
 
 
 # --- the sag chart ----------------------------------------------------------- #
 def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
     from trid3nt_server.workflows.lib import ResolvedParams
-    from trid3nt_server.workflows.telemac.do_sag.steps import build_sag_chart
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import build_sag_chart
 
     result = SimpleNamespace(
         name="Dissolved oxygen sag (Eel_River_near_Scotia)",
@@ -215,23 +212,17 @@ def test_do_layer_contract_fields():
     assert lay.style_preset == "continuous_dissolved_oxygen"
 
 
-# --- the REAL composition over the shared step family ------------------------ #
-@pytest.mark.asyncio
-async def test_the_reach_solve_composes_the_shared_steps_in_order(monkeypatch):
-    """The wave-3 rewrite itself, not a stand-in for it: solve_waqtel_o2 composes
-    geocode -> flowline -> seed -> discharge -> review -> deck -> solve -> DO
-    products, and the outfall rides as the reach SEED (it pins which water body
-    is meshed), never as a dye release point."""
-    from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_DO_STYLE_PRESET,
-        TelemacDoLayerURI,
-    )
+# --- the REAL composition, driven through the declared plan ------------------ #
+def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review):
+    """Patch the shared step family at the modules the plan's runners resolve to."""
     from trid3nt_server.gates import input_review as gate_mod
-    from trid3nt_server.workflows.telemac import steps as shared
-    from trid3nt_server.workflows.telemac.do_sag.steps import solve_waqtel_o2
-
-    order: list[str] = []
-    seen: dict = {}
+    from trid3nt_server.workflows.telemac.steps import (
+        deck as deck_mod,
+        forcing as forcing_mod,
+        products as products_mod,
+        reach as reach_mod,
+        solve as solve_mod,
+    )
 
     def _step(name, ret):
         async def _inner(**kwargs):
@@ -242,23 +233,43 @@ async def test_the_reach_solve_composes_the_shared_steps_in_order(monkeypatch):
 
     reach = {"bbox": (-124.2, 40.4, -124.0, 40.6), "name": "Eel", "slug": "eel",
              "river_name": "Eel River"}
-    seed = {"lon": -124.1, "lat": 40.5, "source": "flowline"}
+    monkeypatch.setattr(reach_mod, "geocode_reach", _step("geocode", reach))
+    monkeypatch.setattr(reach_mod, "fetch_reach_flowline",
+                        _step("rivers", "s3://r/rivers.geojson"))
+    monkeypatch.setattr(reach_mod, "reach_seed",
+                        _step("seed", {"lon": -124.1, "lat": 40.5,
+                                       "source": "flowline"}))
+    monkeypatch.setattr(forcing_mod, "resolve_carrier_discharge",
+                        _step("discharge", {"m3s": 2.0, "basis": "fetched",
+                                            "note": "NWM 2.0 m3/s"}))
+    monkeypatch.setattr(deck_mod, "write_reach_deck",
+                        _step("deck", {"deck": {"name": "eel"}, "run_tag": "T"}))
+    monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
+    monkeypatch.setattr(products_mod, "publish_do_products", _step("products", layer))
+    monkeypatch.setattr(gate_mod, "gate_input_review", review)
+
+
+@pytest.mark.asyncio
+async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
+                                                                    tmp_path):
+    """The migrated plan itself, not a stand-in: geocode -> flowline -> seed ->
+    discharge -> waqtel -> review -> deck -> solve -> DO products, with the
+    outfall riding as the reach SEED (it pins which water body is meshed), never
+    as a dye release point."""
+    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
+    from trid3nt_contracts.telemac_contracts import (
+        TELEMAC_DO_STYLE_PRESET,
+        TelemacDoLayerURI,
+    )
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+
+    order: list[str] = []
+    seen: dict = {}
     layer = TelemacDoLayerURI(
         layer_id="t", name="Dissolved oxygen sag (eel)", layer_type="raster",
         uri="s3://b/k.tif", style_preset=TELEMAC_DO_STYLE_PRESET, role="primary",
         do_min_mgl=8.0, do_min_distance_m=100.0, do_standard_mgl=5.0,
         do_violates_standard=False)
-
-    monkeypatch.setattr(shared, "geocode_reach", _step("geocode", reach))
-    monkeypatch.setattr(shared, "fetch_reach_flowline", _step("rivers", {"uri": "s3://r"}))
-    monkeypatch.setattr(shared, "reach_seed", _step("seed", seed))
-    monkeypatch.setattr(shared, "resolve_carrier_discharge",
-                        _step("discharge", {"m3s": 2.0, "basis": "fetched",
-                                            "note": "NWM 2.0 m3/s"}))
-    monkeypatch.setattr(shared, "write_reach_deck",
-                        _step("deck", {"deck": {"name": "eel"}, "run_tag": "T"}))
-    monkeypatch.setattr(shared, "solve_reach", _step("solve", {"run_id": "R"}))
-    monkeypatch.setattr(shared, "publish_do_products", _step("products", layer))
 
     async def _review(**kwargs):
         order.append("review")
@@ -268,52 +279,35 @@ async def test_the_reach_solve_composes_the_shared_steps_in_order(monkeypatch):
         return ReviewOutcome(proceed=True, entries=list(kwargs["entries"]),
                              params=dict(kwargs["params"]))
 
-    monkeypatch.setattr(gate_mod, "gate_input_review", _review)
+    _stub_reach_pipeline(monkeypatch, order, seen, layer=layer, review=_review)
 
-    out = await solve_waqtel_o2(
-        location="Eel River near Scotia, California", bbox=None,
-        discharge_bod_mgl=20.0, upstream_do_mgl=99.0, do_saturation_mgl=9.022,
-        water_temp_c=20.0, do_standard_mgl=5.0, k1_per_day=0.3, k2_per_day=0.9,
-        reach_length_km=12.0, channel_width_m=60.0, sim_duration_s=3600.0,
-        discharge_m3s=None, mesh_resolution="auto", mesh_resolution_m=None,
-        bank_source="nhd_area", compute_class="medium",
+    out = await telemac_do_sag(
+        location="Eel River near Scotia, California", upstream_do_mgl=99.0,
         outfall_coords=[-124.11, 40.51], input_mode="user_gated")
 
-    assert out is layer
+    assert not isinstance(out, dict), out
     assert order == ["geocode", "rivers", "seed", "discharge", "review", "deck",
                      "solve", "products"]
     # the outfall pins the MESHED water body, so it rides as the reach seed
-    assert seen["deck"]["reach_seed_coords"] == [-124.11, 40.51]
+    assert seen["deck"]["reach_seed_coords"] == (-124.11, 40.51)
     assert "release_coords" not in seen["deck"]
     # DO cannot ride in above its own saturation - the one coupled clamp
     assert seen["deck"]["do_sag_config"]["upstream_do_mgl"] == pytest.approx(9.022)
     assert seen["deck"]["do_sag_config"]["k2_formula"] == 0
     assert seen["review"]["mode"] == "user_gated"
     assert seen["solve"]["deck"] is seen["products"]["deck"]
+    # the REVIEWED discharge is what the deck and the products both read
+    assert seen["deck"]["carrier_discharge"] is seen["products"]["carrier_discharge"]
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch):
-    from trid3nt_server.gates import input_review as gate_mod
-    from trid3nt_server.workflows.telemac import steps as shared
-    from trid3nt_server.workflows.telemac.do_sag.steps import solve_waqtel_o2
+async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path):
+    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
+    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.steps import solve as solve_mod
 
-    def _step(ret):
-        async def _inner(**kwargs):
-            return ret
-        return _inner
-
-    monkeypatch.setattr(shared, "geocode_reach",
-                        _step({"bbox": (-1, 1, 1, 2), "name": "n", "slug": "s"}))
-    monkeypatch.setattr(shared, "fetch_reach_flowline", _step({}))
-    monkeypatch.setattr(shared, "reach_seed", _step({"lon": 0.0, "lat": 1.5}))
-    monkeypatch.setattr(shared, "resolve_carrier_discharge",
-                        _step({"m3s": 2.0, "basis": "fetched", "note": "n"}))
-
-    async def _solve_must_not_run(**_kw):
-        raise AssertionError("the solve ran past a cancelled review")
-
-    monkeypatch.setattr(shared, "solve_reach", _solve_must_not_run)
+    order: list[str] = []
+    seen: dict = {}
 
     async def _cancelled(**_kw):
         from trid3nt_server.gates.input_review import ReviewOutcome
@@ -321,14 +315,14 @@ async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch):
         return ReviewOutcome(proceed=False, entries=[], params={},
                              cancelled=True, cancel_reason="user declined")
 
-    monkeypatch.setattr(gate_mod, "gate_input_review", _cancelled)
+    _stub_reach_pipeline(monkeypatch, order, seen, layer=None, review=_cancelled)
 
-    with pytest.raises(shared.TelemacDyeScenarioError) as ei:
-        await solve_waqtel_o2(
-            location="x", bbox=None, discharge_bod_mgl=20.0, upstream_do_mgl=9.0,
-            do_saturation_mgl=9.0, water_temp_c=20.0, do_standard_mgl=5.0,
-            k1_per_day=0.3, k2_per_day=0.9, reach_length_km=12.0,
-            channel_width_m=60.0, sim_duration_s=3600.0, discharge_m3s=None,
-            mesh_resolution="auto", mesh_resolution_m=None, bank_source="nhd_area",
-            compute_class="medium", outfall_coords=None, input_mode="user_gated")
-    assert ei.value.error_code == "USER_INPUT_CANCELLED"
+    async def _solve_must_not_run(**_kw):
+        raise AssertionError("the solve ran past a cancelled review")
+
+    monkeypatch.setattr(solve_mod, "solve_reach", _solve_must_not_run)
+
+    out = await telemac_do_sag(location="Eel River near Scotia, California",
+                               input_mode="user_gated")
+    assert isinstance(out, dict) and out["error_code"] == "USER_INPUT_CANCELLED"
+    assert "solve" not in order

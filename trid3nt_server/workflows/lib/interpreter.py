@@ -236,7 +236,7 @@ def _expand(plan: Plan) -> tuple[_Node, ...]:
                                step.runner, "render", step, spec))
         for spec in step.charts:
             nodes.append(_Node(len(nodes), f"{step.label}.chart:{spec.name}",
-                               spec.builder, "chart", step, spec))
+                               spec.builder_path, "chart", step, spec))
     return tuple(nodes)
 
 
@@ -383,8 +383,13 @@ async def _run_node(node: _Node, env: _Env, emitter: Any) -> Any:
 
 async def _call_runner(runner: str, kwargs: dict[str, Any], label: str) -> Any:
     """Call a declared runner, converting whatever it raises into the typed family."""
+    return await _call_fn(_load(runner), kwargs, label)
+
+
+async def _call_fn(fn: Any, kwargs: dict[str, Any], label: str) -> Any:
+    """Call a resolved callable inside the typed error family."""
     try:
-        return await _call(_load(runner), kwargs)
+        return await _call(fn, kwargs)
     except asyncio.CancelledError:
         raise
     except DeclarativeError:
@@ -406,7 +411,7 @@ async def _call_runner(runner: str, kwargs: dict[str, Any], label: str) -> Any:
 async def _run_chart(node: _Node, env: _Env) -> Any:
     spec: ChartSpec = node.spec
     source = env.results.get(node.step.name or node.step.label)
-    payload = await _call_runner(
+    payload = await _call_fn(
         spec.builder, {"result": source, "params": env.params.values_view()},
         node.label)
     if not payload:

@@ -25,7 +25,7 @@ from trid3nt_server.workflows.lib import (
     TemporalSpec,
     TemporalUnitsError,
     UnitsSpec,
-    Workflow,
+    Plan,
     convert_units,
     doors,
     interpret,
@@ -263,8 +263,8 @@ async def _run(data):
     _SEEN.clear()
     declared = (Param("x", door=doors.CONSTANT, default=1.0, desc="a constant"),)
     p = await resolve_params(declared, {})
-    plan = Workflow("w")[Step(runner=f"{_HERE}.stub_step",
-                              kwargs={"m": Ref("rain")})]
+    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
+                              kwargs={"m": Ref("rain")}),))
     await interpret(plan, p, declared, data, resume=False)
     return _SEEN[0]
 

@@ -52,7 +52,7 @@ from trid3nt_server.workflows.lib import (
     FormGate,
     Param,
     Ref,
-    Workflow,
+    Plan,
     doors,
     interpret,
     render_docstring,
@@ -60,6 +60,7 @@ from trid3nt_server.workflows.lib import (
 )
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
 from trid3nt_server.workflows.swmm.rdii_rtk.steps import (
+    build_rdii_chart,
     NODE,
     ClosedForm,
     Deck,
@@ -173,7 +174,7 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
     """
     uhs = dict(R1=p.R1, T1=p.T1, K1=p.K1, R2=p.R2, T2=p.T2, K2=p.K2,
                R3=p.R3, T3=p.T3, K3=p.K3)
-    return Workflow("swmm_rdii_rtk_unit_hydrograph", engine="swmm5")[
+    return Plan("swmm_rdii_rtk_unit_hydrograph", "swmm5", (
         FormGate(title="Review the RTK unit-hydrograph RDII scenario"),
         ClosedForm.rtk(
             **uhs, sewershed_area_ac=p.sewershed_area_ac,
@@ -194,8 +195,8 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
             sewershed_area_ac=p.sewershed_area_ac,
             direct_runoff_coeff=p.direct_runoff_coeff,
         ).named("rdii")
-         .chart("rdii_vs_runoff", builder=f"{_STEPS}.build_rdii_chart"),
-    ]
+         .chart("rdii_vs_runoff", builder=build_rdii_chart),
+    ))
 
 
 _METADATA = AtomicToolMetadata(

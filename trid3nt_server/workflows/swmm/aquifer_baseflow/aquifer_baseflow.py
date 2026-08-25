@@ -40,14 +40,18 @@ from trid3nt_server.workflows.lib import (
     FormGate,
     Param,
     Ref,
-    Workflow,
+    Plan,
     doors,
     interpret,
     render_docstring,
     resolve_params,
 )
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
-from trid3nt_server.workflows.swmm.aquifer_baseflow.steps import Deck, Metrics
+from trid3nt_server.workflows.swmm.aquifer_baseflow.steps import (
+    Deck,
+    Metrics,
+    build_baseflow_chart,
+)
 from trid3nt_server.workflows.swmm.steps import Solve, SwmmStepError
 
 logger = logging.getLogger(
@@ -235,7 +239,7 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
         surface_elev_ft=p.surface_elev_ft,
         initial_water_table_ft=p.initial_water_table_ft,
     )
-    return Workflow("swmm_aquifer_baseflow_to_node", engine="swmm5")[
+    return Plan("swmm_aquifer_baseflow_to_node", "swmm5", (
         FormGate(title="Review the aquifer-baseflow scenario"),
         Deck.aquifer(a1=p.a1, b1=p.b1, **forcing, **column, **site).named("deck_gw"),
         Solve.pyswmm(inp_text=Ref("deck_gw.inp_text"), nodes=(_NODE,),
@@ -250,8 +254,8 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
             second_storm_day=p.second_storm_day, area_ac=p.area_ac,
             a1=p.a1, b1=p.b1,
         ).named("baseflow")
-         .chart("node_hydrograph", builder=f"{_STEPS}.build_baseflow_chart"),
-    ]
+         .chart("node_hydrograph", builder=build_baseflow_chart),
+    ))
 
 
 _METADATA = AtomicToolMetadata(

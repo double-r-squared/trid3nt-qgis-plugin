@@ -33,7 +33,7 @@ from .solve import download_result_selafin
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.products")
 
-__all__ = ["Products", "build_dye_chart", "publish_do_products", "publish_dye_products"]
+__all__ = ["Products", "publish_do_products", "publish_dye_products"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
@@ -500,44 +500,20 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
     return published
 
 
-def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The plume's rise-to-peak chart SPEC: honest tracer scalars, never a fitted curve.
-
-    Two points, both measured off the postprocessed field - zero concentration at
-    release, then the peak at its arrival time. ``None`` when the run measured no
-    peak, which is the honest "there was no curve to draw".
-    """
-    cmax = getattr(result, "dye_cmax_mgl", None)
-    peak_t = getattr(result, "dye_peak_time_s", None)
-    if cmax is None or peak_t is None:
-        return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
-
-    where = params.get("location") or getattr(result, "name", None) or "the reach"
-    substance = params.get("substance") or "dye"
-    return build_chart_payload(
-        vega_lite_spec={
-            "mark": {"type": "line", "point": True},
-            "data": {"values": [{"t_s": 0.0, "dye_mgl": 0.0},
-                                {"t_s": float(peak_t), "dye_mgl": float(cmax)}]},
-            "encoding": {
-                "x": {"field": "t_s", "type": "quantitative", "title": "Time (s)"},
-                "y": {"field": "dye_mgl", "type": "quantitative",
-                      "title": f"{str(substance).capitalize()} concentration (mg/L)"},
-            },
-        },
-        title=f"Peak {substance} concentration - {where}",
-        caption=(f"Reach peak {substance} concentration {float(cmax):.3g} mg/L, "
-                 f"arriving {float(peak_t):.0f} s after release (idealized-bed demo)."),
-    )
-
-
 class Products:
     """Postprocess + publish steps, one constructor per deliverable family."""
 
     @staticmethod
     def dye(*, deck: Any, solve: Any, carrier_discharge: Any) -> Step:
         """The dye/oil/sediment deliverables: peak COG, results mesh, class extras."""
-        return Step(runner=f"{_STEPS}.products.publish_dye_products",
+        return Step(runner=f"{_STEPS}.products.publish_dye_products", stage="publish",
                     kwargs={"deck": deck, "solve": solve,
+                            "carrier_discharge": carrier_discharge})
+
+    @staticmethod
+    def dissolved_oxygen(*, deck: Any, solve: Any, process: Any,
+                         carrier_discharge: Any) -> Step:
+        """The WAQTEL O2 deliverables: dissolved-O2 field COG + the along-reach sag."""
+        return Step(runner=f"{_STEPS}.products.publish_do_products", stage="publish",
+                    kwargs={"deck": deck, "solve": solve, "do_sag_config": process,
                             "carrier_discharge": carrier_discharge})

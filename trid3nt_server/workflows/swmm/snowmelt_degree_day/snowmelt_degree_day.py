@@ -60,7 +60,7 @@ from trid3nt_server.workflows.lib import (
     FormGate,
     Param,
     Ref,
-    Workflow,
+    Plan,
     doors,
     interpret,
     render_docstring,
@@ -68,6 +68,8 @@ from trid3nt_server.workflows.lib import (
 )
 from trid3nt_server.workflows.swmm._template_card import TemplateCard
 from trid3nt_server.workflows.swmm.snowmelt_degree_day.steps import (
+    build_runoff_chart,
+    build_swe_chart,
     RAIN_ONLY_DIVIDING_TEMP_F,
     SUBCATCHMENT,
     Deck,
@@ -309,7 +311,7 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
         horton_dry_time_days=p.horton_dry_time_days,
     )
     solve = dict(subcatchments=(SUBCATCHMENT,), subcatchment_attrs=_SAMPLED)
-    return Workflow("swmm_snowmelt_degree_day", engine="swmm5")[
+    return Plan("swmm_snowmelt_degree_day", "swmm5", (
         FormGate(title="Review the rain-on-snow snowmelt scenario"),
         Forcing.rain_on_snow(
             dt_min=p.dt_min, sim_days=p.sim_days, cold_temp_f=p.cold_temp_f,
@@ -348,10 +350,10 @@ def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the desig
             subcatchment=SUBCATCHMENT, area_ac=p.area_ac,
             dividing_temp_f=p.dividing_temp_f,
         ).named("snowmelt")
-         .chart("swe_series", builder=f"{_STEPS}.build_swe_chart")
+         .chart("swe_series", builder=build_swe_chart)
          .chart("runoff_snowmelt_vs_rain_only",
-                builder=f"{_STEPS}.build_runoff_chart"),
-    ]
+                builder=build_runoff_chart),
+    ))
 
 
 _METADATA = AtomicToolMetadata(

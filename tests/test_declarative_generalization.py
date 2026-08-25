@@ -23,6 +23,7 @@ from tests.card_client import (  # noqa: F401 - card_client is a fixture
 from trid3nt_server.workflows.lib import (
     Derived,
     Param,
+    Plan,
     doors,
     resolve_params,
     validate_plan,
@@ -149,10 +150,10 @@ async def test_the_run_hands_back_the_sheet_it_actually_ran_on(card_client) -> N
               consequence="scenario", desc="a reviewable value"),
     )
     sheet = await resolve_params(declared, {})
-    plan = Workflow("t")[
+    plan = Plan("t", None, (
         FormGate(title="review"),
         _echo_step(q=sheet.q),
-    ]
+    ))
     task = asyncio.ensure_future(
         interpret(plan, sheet, declared, (), input_mode="user_gated", resume=False))
     await answer_form_card(card_client, {"q": 7.5})

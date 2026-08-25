@@ -35,6 +35,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.solve")
 
 __all__ = [
     "Solve",
+    "compute_class",
     "download_result_selafin",
     "raise_if_banks_unavailable",
     "raise_if_reach_degenerate",
@@ -256,12 +257,33 @@ async def solve_reach(*, deck: dict[str, Any],
     }
 
 
+#: The compute ladder the dispatcher knows. Anything outside it is a model
+#: invention that used to crash the dispatch AFTER the geocode and river fetch.
+_ALLOWED_COMPUTE = frozenset(
+    {"small", "medium", "standard", "large", "xlarge", "gpu"})
+
+
+def compute_class() -> Any:
+    """A coercion pinning ``compute_class`` to a rung the dispatcher can serve."""
+
+    def _coerce(args: Any) -> dict[str, Any]:
+        value = str(args.get("compute_class") or "medium").strip().lower()
+        if value not in _ALLOWED_COMPUTE:
+            logger.warning("unknown compute_class %r coerced to 'medium'",
+                           args.get("compute_class"))
+            value = "medium"
+        return {"compute_class": value}
+
+    _coerce.__name__ = "compute_class"
+    return _coerce
+
+
 class Solve:
     """Solver dispatch steps. The plan's consequential node."""
 
     @staticmethod
     def telemac(*, deck: Any, compute_class: Any) -> Step:
         """Dispatch the staged reach to the TELEMAC worker and wait for the result."""
-        return Step(runner=f"{_STEPS}.solve.solve_reach",
+        return Step(runner=f"{_STEPS}.solve.solve_reach", stage="solve",
                     kwargs={"deck": deck, "compute_class": compute_class},
                     consequential=True)

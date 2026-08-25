@@ -418,4 +418,5 @@ class WriteDeck:
     @staticmethod
     def telemac(**kwargs: Any) -> Step:
         """The TELEMAC-2D reach deck."""
-        return Step(runner=f"{_STEPS}.deck.write_reach_deck", kwargs=kwargs)
+        return Step(runner=f"{_STEPS}.deck.write_reach_deck", stage="author",
+                    kwargs=kwargs)

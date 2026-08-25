@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 from .errors import ModifierIllegalError, PlanValidationError
 
@@ -23,10 +23,16 @@ __all__ = [
     "Ref",
     "RenderSpec",
     "RunMode",
+    "STAGES",
     "Step",
     "When",
-    "Workflow",
 ]
+
+#: The universal stage sequence the skeleton walks. A step names the stage it
+#: belongs to so the plan reads as the sequence rather than as a list of runners;
+#: the facade's five operations are what stamp it.
+STAGES: tuple[str, ...] = ("acquire", "prep", "mesh", "gates", "author", "solve",
+                           "post", "publish")
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,13 +133,33 @@ class RenderSpec:
 class ChartSpec:
     """A declared chart: the SPEC is the product; the plugin dock is the renderer.
 
-    ``builder`` is a dotted import path to a pure ``(result, params) -> payload dict``.
-    The builder owns the axes: it writes the vega-lite encodings, so the spec
-    declares no x/y of its own.
+    ``builder`` is the FUNCTION ITSELF - a plain, standalone-runnable
+    ``(result, params) -> payload dict`` colocated in the template file beside
+    the plan it charts. The builder owns the axes: it writes the vega-lite
+    encodings, so the spec declares no x/y of its own. A dotted string is
+    refused: an import path defers the "does this exist" question to run time,
+    after the solve it was supposed to describe.
     """
 
     name: str
-    builder: str
+    builder: Callable[..., Any]
+
+    def __post_init__(self) -> None:
+        if isinstance(self.builder, str):
+            raise PlanValidationError(
+                f"chart {self.name!r}: builder is the function object, not the "
+                f"dotted path {self.builder!r}. Import the builder and pass it."
+            )
+        if not callable(self.builder):
+            raise PlanValidationError(
+                f"chart {self.name!r}: builder {self.builder!r} is not callable."
+            )
+
+    @property
+    def builder_path(self) -> str:
+        """Where the builder lives - the ledger's record of which code ran."""
+        return (f"{getattr(self.builder, '__module__', '?')}."
+                f"{getattr(self.builder, '__qualname__', repr(self.builder))}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,10 +176,19 @@ class Step:
     self_gating: bool = False
     renders: tuple[RenderSpec, ...] = ()
     charts: tuple[ChartSpec, ...] = ()
+    #: Which universal stage this step belongs to (see ``STAGES``). Stamped by the
+    #: engine facade's five operations; a step a template declares directly leaves
+    #: it empty and simply reads as unstaged.
+    stage: str = ""
 
     def __post_init__(self) -> None:
         if not self.runner:
             raise PlanValidationError("Step declares no runner path.")
+        if self.stage and self.stage not in STAGES:
+            raise PlanValidationError(
+                f"step {self.runner!r} names stage {self.stage!r}, which is not one "
+                f"of the universal stages {STAGES}."
+            )
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
 
     @property
@@ -178,8 +213,8 @@ class Step:
         """Declare how this step's raster result is styled when published."""
         return replace(self, renders=self.renders + (RenderSpec(preset=preset),))
 
-    def chart(self, name: str, *, builder: str) -> "Step":
-        """Declare a chart SPEC built from this step's result."""
+    def chart(self, name: str, *, builder: Callable[..., Any]) -> "Step":
+        """Declare a chart SPEC built from this step's result by ``builder`` itself."""
         return replace(self, charts=self.charts + (ChartSpec(name=name, builder=builder),))
 
 
@@ -247,11 +282,21 @@ Node = Step | Gate | When
 
 @dataclass(frozen=True, slots=True)
 class Plan:
-    """A workflow's step tree - a pure value the interpreter walks."""
+    """A workflow's step tree - a pure value the interpreter walks.
+
+    Built by the skeleton from the template's ``plan(p, d, ops)`` declaration:
+    the name and the engine are the workflow's, not something a template restates.
+    """
 
     name: str
     engine: str | None
     steps: tuple[Node, ...]
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise PlanValidationError("Plan declares no name.")
+        object.__setattr__(self, "steps", tuple(self.steps))
+        _flatten(self.steps, taken_only=False)  # shape check at construction
 
     def flat(self) -> tuple[Step, ...]:
         """Every step in execution order, with untaken ``When`` bodies dropped.
@@ -268,6 +313,8 @@ class Plan:
         lines = [f"{self.name} (engine={self.engine or '-'})"]
         for i, step in enumerate(self.flat(), 1):
             bits = [step.label]
+            if step.stage:
+                bits.append(f"[{step.stage}]")
             if step.rebinds_domain:
                 bits.append("[overrides domain]")
             for r in step.renders:
@@ -292,20 +339,3 @@ def _flatten(nodes: tuple[Any, ...], *, taken_only: bool) -> list[Step]:
                 f"plan node {node!r} is not a Step, Gate or When."
             )
     return out
-
-
-class Workflow:
-    """``Workflow(name, engine=...)[step, step, ...]`` - the plan constructor."""
-
-    __slots__ = ("_name", "_engine")
-
-    def __init__(self, name: str, *, engine: str | None = None) -> None:
-        if not name:
-            raise PlanValidationError("Workflow declares no name.")
-        self._name = name
-        self._engine = engine
-
-    def __getitem__(self, items: Any) -> Plan:
-        nodes = items if isinstance(items, tuple) else (items,)
-        _flatten(nodes, taken_only=False)  # shape check at construction
-        return Plan(name=self._name, engine=self._engine, steps=tuple(nodes))

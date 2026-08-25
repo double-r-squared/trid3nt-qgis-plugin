@@ -40,6 +40,7 @@ __all__ = [
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
     "geocode_reach",
+    "lonlat_point",
     "named_watercourse",
     "reach_seed",
     "slug",
@@ -170,12 +171,14 @@ def slug(name: str) -> str:
     return (out or "river_dye")[:48]
 
 
-def coerce_lonlat_point(value: Any) -> tuple[float, float] | None:
+def coerce_lonlat_point(value: Any, *,
+                        label: str = "release point") -> tuple[float, float] | None:
     """``(lon, lat)`` from a wire value; ``None`` only when nothing was supplied.
 
     A MALFORMED point REFUSES rather than degrading to a derived location:
-    silently modelling a different release point than the one asked for is the
-    swallow class. Callers whose contract is fail-open (the pre-dispatch gate
+    silently modelling a different point than the one asked for is the swallow
+    class. ``label`` is what the refusal calls the point, so an outfall reads as
+    an outfall. Callers whose contract is fail-open (the pre-dispatch gate
     builder) catch the refusal explicitly at the call site.
     """
     if value is None:
@@ -185,16 +188,26 @@ def coerce_lonlat_point(value: Any) -> tuple[float, float] | None:
     except (TypeError, ValueError):
         raise TelemacDyeScenarioError(
             "TELEMAC_PARAMS_INVALID",
-            f"release point {value!r} is not a (lon, lat) pair. Supply it as two "
+            f"{label} {value!r} is not a (lon, lat) pair. Supply it as two "
             "numbers in EPSG:4326, or omit it.",
         ) from None
     if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
         raise TelemacDyeScenarioError(
             "TELEMAC_PARAMS_INVALID",
-            f"release point ({lon}, {lat}) is off the earth; it is (lon, lat) in "
+            f"{label} ({lon}, {lat}) is off the earth; it is (lon, lat) in "
             "EPSG:4326, longitude first.",
         )
     return (lon, lat)
+
+
+def lonlat_point(param: str, *, label: str) -> Any:
+    """A coercion that reads one wire field into a clean ``(lon, lat)`` param."""
+
+    def _coerce(args: Any) -> dict[str, Any]:
+        return {param: coerce_lonlat_point(args.get(param), label=label)}
+
+    _coerce.__name__ = f"lonlat_point:{param}"
+    return _coerce
 
 
 def bbox_center(bbox: Any) -> tuple[float, float]:
@@ -454,11 +467,11 @@ class Geocode:
     @staticmethod
     def reach(location: Any, bbox: Any) -> Step:
         """Place/AOI -> the reach centre. Refines the domain for everything after it."""
-        return Step(runner=f"{_STEPS}.reach.geocode_reach",
+        return Step(runner=f"{_STEPS}.reach.geocode_reach", stage="acquire",
                     kwargs={"location": location, "bbox": bbox}).overrides_domain()
 
 
 def ReachSeed(*, reach: Any, rivers: Any) -> Step:  # noqa: N802 - a value constructor
     """The mid-reach seed on the fetched flowline."""
-    return Step(runner=f"{_STEPS}.reach.reach_seed",
+    return Step(runner=f"{_STEPS}.reach.reach_seed", stage="acquire",
                 kwargs={"reach": reach, "rivers": rivers})

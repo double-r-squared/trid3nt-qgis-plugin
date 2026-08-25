@@ -1,19 +1,18 @@
 """Engine template ``telemac_river_dye`` - TELEMAC-2D river surface-tracer engine.
 
-Declared as PARAMS + DATA + a pure ``plan(p, d)``: the tool body normalizes the
-wire args, resolves the doors, validates the plan and hands it to the
-interpreter. The reach pipeline itself is the shared TELEMAC step family
-(``workflows/telemac/steps``), so every river template runs the same skeleton.
-See ``docs/design/declarative-workflows.md``.
+Four declarations and a chart: PARAMS, DATA, ``plan(p, d, ops)``, the ANSWER
+fields, and the chart function beside them. Everything else - normalizing the
+wire args, resolving the doors, walking the plan, persisting the products - is
+the skeleton (``workflows/lib/workflow.py``); the reach mechanism is the TELEMAC
+facade (``workflows/telemac/workflow.py``). See
+``docs/design/declarative-workflows.md``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
-from trid3nt_contracts.telemac_contracts import TelemacDyeLayerURI
 from trid3nt_contracts.tool_registry import (
     AtomicToolMetadata,
     GateSpec,
@@ -21,51 +20,36 @@ from trid3nt_contracts.tool_registry import (
     ResolutionSpec,
 )
 
-from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.lib import (
-    DeclarativeError,
-    DrawGate,
     Data,
+    DrawGate,
     Fetch,
+    Forcing,
     FormGate,
+    MeshPolicy,
     Param,
     ParamRef,
+    Physics,
     Ref,
-    Workflow,
     doors,
-    interpret,
-    merge_provenance,
-    render_docstring,
-    resolve_params,
+    register_workflow,
 )
+from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac._template_card import TemplateCard
-from trid3nt_server.workflows.shared.run_products import persist_run_products
 from trid3nt_server.workflows.telemac.steps import (
-    CarrierDischarge,
-    Geocode,
-    Products,
-    ReachSeed,
-    Solve,
     TelemacDyeScenarioError,
-    WriteDeck,
-    classify_substance,
-    coerce_event_time,
     coerce_lonlat_point,
-    sanitize_substance,
+    compute_class,
+    event_time,
+    substance_class,
 )
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.river_dye.river_dye")
 
-__all__ = ["DATA", "PARAMS", "plan", "telemac_river_dye"]
+__all__ = ["ANSWER", "DATA", "PARAMS", "build_dye_chart", "plan", "telemac_river_dye"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
-
-#: The compute ladder the dispatcher knows. Anything outside it is a model
-#: invention that used to crash the dispatch AFTER the geocode and river fetch.
-_ALLOWED_COMPUTE = frozenset(
-    {"small", "medium", "standard", "large", "xlarge", "gpu"})
-
 
 TEMPLATE_CARD = TemplateCard(
     question=(
@@ -94,13 +78,14 @@ PARAMS: tuple[Param, ...] = (
     Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
           desc="Place name on the river, geocoded to the reach"),
     Param("bbox", door=doors.USER, optional=True, consequence="aoi",
+          type=tuple[float, float, float, float] | list[float] | str,
           desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place"),
     Param("substance", door=doors.QUESTION, default="dye", consequence="scenario",
           desc="What was spilled - dye | oil/diesel/crude | sewage/E.coli | "
                "sediment/sand/silt | scour/erosion | graded/mixed-grain | dredging; "
                "the word picks the TELEMAC module family"),
     Param("release_coords", door=doors.USER, optional=True, user_lever=True,
-          consequence="scenario",
+          consequence="scenario", type=tuple[float, float] | list[float],
           derived_when_absent=(
               "the release sits at spill_fraction along the meshed reach; the "
               "downstream plume distance is measured from there"),
@@ -184,6 +169,7 @@ PARAMS: tuple[Param, ...] = (
     Param("sediment_type", door=doors.USER, optional=True, consequence="scenario",
           desc="Sediment alias - sand | silt | mud - picking the default grain size"),
     Param("erodible_bed", door=doors.USER, optional=True, consequence="scenario",
+          type=bool,
           derived_when_absent=(
               "the bed is erodible only when the substance names scour / erosion / "
               "a mobile bed, or a graded mixture or dredging rule needs one"),
@@ -193,6 +179,7 @@ PARAMS: tuple[Param, ...] = (
           units="m", consequence="scenario",
           desc="Erodible bed only - depth of the erodible sediment stock"),
     Param("bedload_formula", door=doors.USER, optional=True, consequence="numerical",
+          type=int,
           desc="Erodible bed only - GAIA bed-load law: 1=Meyer-Peter-Mueller "
                "(default), 2=Einstein-Brown, 7=van Rijn"),
     Param("morphological_factor", door=doors.USER, optional=True, bounds=(1.0, 100.0),
@@ -200,10 +187,12 @@ PARAMS: tuple[Param, ...] = (
           desc="Erodible bed only - amplifies bed change per hydraulic step so a "
                "short hydrograph yields a readable depth; a speed-up lever, not a rate"),
     Param("sediment_gradation", door=doors.USER, optional=True, consequence="scenario",
+          type=list | str,
           desc="Multi-class graded sediment: a preset name (graded_sand | "
                "poorly_sorted | sand_gravel_bimodal | fine_coarse_sand) or a list of "
                "[d50_um, fraction] pairs; forces a mobile bed so the mix can sort"),
     Param("dredging", door=doors.USER, optional=True, consequence="scenario",
+          type=bool,
           derived_when_absent=(
               "the NESTOR dig/dump rule arms only when the ask names dredging, "
               "channel maintenance, spoil disposal or shoaling"),
@@ -223,6 +212,7 @@ PARAMS: tuple[Param, ...] = (
           units="m", consequence="scenario",
           desc="Criterion-mode dig target below the design grade"),
     Param("dredge_disposal", door=doors.USER, optional=True, consequence="scenario",
+          type=bool,
           derived_when_absent="the spoil is not placed (dredge-only)",
           desc="Also place the dug spoil in a downstream disposal zone"),
 
@@ -231,6 +221,7 @@ PARAMS: tuple[Param, ...] = (
           user_lever=True, consequence="numerical",
           desc="Bed roughness under friction_law; unset keeps the deck's own value"),
     Param("friction_law", door=doors.USER, optional=True, consequence="numerical",
+          type=int,
           desc="Law interpreting friction_coefficient: 2=Chezy, 3=Strickler, 4=Manning"),
     Param("velocity_diffusivity", door=doors.USER, optional=True, bounds=(1e-3, 10.0),
           units="m^2/s", consequence="numerical",
@@ -264,6 +255,7 @@ PARAMS: tuple[Param, ...] = (
           desc="Reuse an already-fetched fetch_river_geometry flowline for this reach "
                "instead of re-fetching it"),
     Param("reach_seed_coords", door=doors.USER, optional=True, consequence="aoi",
+          type=tuple[float, float] | list[float], wire=False,
           derived_when_absent=(
               "the reach centerline is resolved from the mid-reach point on the "
               "largest fetched flowline, else the geocoded centroid"),
@@ -293,52 +285,137 @@ DATA = (
 )
 
 
-def plan(p, d):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
     """The river-tracer recipe. Pure: constructs the plan value, executes nothing.
 
     The gates come FIRST so every step and every producer downstream of them runs
     on the approved sheet - a step that had already consumed a value the form can
     revise would be exactly the contradiction the review exists to prevent.
     """
-    return Workflow("telemac_river_dye", engine="telemac2d")[
+    physics = Physics(
+        "tracer",
+        substance=p.substance, release_coords=p.release_coords,
+        reach_seed_coords=p.reach_seed_coords, sim_duration_s=p.sim_duration_s,
+        spill_fraction=p.spill_fraction, spill_duration_s=p.spill_duration_s,
+        dye_concentration_mgl=p.dye_concentration_mgl, source_q_m3s=p.source_q_m3s,
+        output_interval_min=p.output_interval_min,
+        friction_coefficient=p.friction_coefficient, friction_law=p.friction_law,
+        velocity_diffusivity=p.velocity_diffusivity,
+        tracer_diffusivity=p.tracer_diffusivity, erodible_bed=p.erodible_bed,
+        sediment_gradation=p.sediment_gradation, dredging=p.dredging,
+        decay_half_life_hours=p.decay_half_life_hours,
+        decay_rate_per_day=p.decay_rate_per_day, sediment_type=p.sediment_type,
+        grain_size_um=p.grain_size_um, bed_thickness_m=p.bed_thickness_m,
+        bedload_formula=p.bedload_formula,
+        morphological_factor=p.morphological_factor, dredge_mode=p.dredge_mode,
+        dredge_volume_m3=p.dredge_volume_m3, dredge_disposal=p.dredge_disposal,
+        dredge_crit_depth_m=p.dredge_crit_depth_m,
+        dredge_dig_depth_m=p.dredge_dig_depth_m,
+    )
+    forcing = Forcing(carrier=Ref("carrier_discharge"), rain=d.rain,
+                      wind_speed_mps=p.wind_speed_mps,
+                      wind_direction_deg=p.wind_direction_deg)
+    mesh = ops.build_mesh(Ref("reach"), MeshPolicy(
+        resolution=p.mesh_resolution, target_edge_m=p.mesh_resolution_m,
+        extent_km=p.reach_length_km, width_m=p.channel_width_m,
+        boundary_source=p.bank_source))
+    return [
         FormGate(title="Review the river-tracer scenario"),
         DrawGate(param="release_coords", geometry="point",
                  prompt="Click where the substance enters the river"),
-        Geocode.reach(p.location, p.bbox).named("reach"),
-        ReachSeed(reach=Ref("reach"), rivers=Ref("rivers")).named("seed"),
-        CarrierDischarge(seed=Ref("seed"), explicit=p.discharge_m3s,
-                         event_time=p.event_time).named("carrier_discharge"),
-        WriteDeck.telemac(
-            reach=Ref("reach"), seed=Ref("seed"),
-            carrier_discharge=Ref("carrier_discharge"), rain=Ref("rain"),
-            release_coords=p.release_coords, reach_seed_coords=p.reach_seed_coords,
-            substance=p.substance, reach_length_km=p.reach_length_km,
-            channel_width_m=p.channel_width_m, sim_duration_s=p.sim_duration_s,
-            spill_fraction=p.spill_fraction, spill_duration_s=p.spill_duration_s,
-            dye_concentration_mgl=p.dye_concentration_mgl,
-            source_q_m3s=p.source_q_m3s, mesh_resolution=p.mesh_resolution,
-            mesh_resolution_m=p.mesh_resolution_m, bank_source=p.bank_source,
-            output_interval_min=p.output_interval_min,
-            wind_speed_mps=p.wind_speed_mps, wind_direction_deg=p.wind_direction_deg,
-            friction_coefficient=p.friction_coefficient, friction_law=p.friction_law,
-            velocity_diffusivity=p.velocity_diffusivity,
-            tracer_diffusivity=p.tracer_diffusivity, erodible_bed=p.erodible_bed,
-            sediment_gradation=p.sediment_gradation, dredging=p.dredging,
-            decay_half_life_hours=p.decay_half_life_hours,
-            decay_rate_per_day=p.decay_rate_per_day, sediment_type=p.sediment_type,
-            grain_size_um=p.grain_size_um, bed_thickness_m=p.bed_thickness_m,
-            bedload_formula=p.bedload_formula,
-            morphological_factor=p.morphological_factor, dredge_mode=p.dredge_mode,
-            dredge_volume_m3=p.dredge_volume_m3, dredge_disposal=p.dredge_disposal,
-            dredge_crit_depth_m=p.dredge_crit_depth_m,
-            dredge_dig_depth_m=p.dredge_dig_depth_m,
-        ).named("deck"),
-        Solve.telemac(deck=Ref("deck"), compute_class=p.compute_class).named("solve"),
-        Products.dye(deck=Ref("deck"), solve=Ref("solve"),
-                     carrier_discharge=Ref("carrier_discharge"))
-                .named("plume")
-                .chart("dye_concentration", builder=f"{_STEPS}.products.build_dye_chart"),
+        *ops.acquire_domain(location=p.location, bbox=p.bbox, rivers=d.rivers,
+                            discharge=p.discharge_m3s, event_time=p.event_time),
+        ops.author(mesh=mesh, physics=physics, forcing=forcing),
+        ops.solver_spec(compute_class=p.compute_class),
+        ops.read_results(Ref("solve"), physics=physics, forcing=forcing)
+           .chart("dye_concentration", builder=build_dye_chart),
     ]
+
+
+#: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
+#: beside the chart spec so verification cites the run's own figures rather than
+#: recomputing them from the raster.
+ANSWER = ("dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
+          "max_deposition_mm", "max_scour_mm", "deposited_mass_kg",
+          "deposit_fraction", "sediment_surface_d50_range_um", "mesh_size_m",
+          "mesh_node_estimate")
+
+
+def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
+    """The plume's rise-to-peak chart SPEC: honest tracer scalars, never a fitted curve.
+
+    Two points, both measured off the postprocessed field - zero concentration at
+    release, then the peak at its arrival time. ``None`` when the run measured no
+    peak, which is the honest "there was no curve to draw".
+    """
+    cmax = getattr(result, "dye_cmax_mgl", None)
+    peak_t = getattr(result, "dye_peak_time_s", None)
+    if cmax is None or peak_t is None:
+        return None
+    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+
+    where = params.get("location") or getattr(result, "name", None) or "the reach"
+    substance = params.get("substance") or "dye"
+    return build_chart_payload(
+        vega_lite_spec={
+            "mark": {"type": "line", "point": True},
+            "data": {"values": [{"t_s": 0.0, "dye_mgl": 0.0},
+                                {"t_s": float(peak_t), "dye_mgl": float(cmax)}]},
+            "encoding": {
+                "x": {"field": "t_s", "type": "quantitative", "title": "Time (s)"},
+                "y": {"field": "dye_mgl", "type": "quantitative",
+                      "title": f"{str(substance).capitalize()} concentration (mg/L)"},
+            },
+        },
+        title=f"Peak {substance} concentration - {where}",
+        caption=(f"Reach peak {substance} concentration {float(cmax):.3g} mg/L, "
+                 f"arriving {float(peak_t):.0f} s after release (idealized-bed demo)."),
+    )
+
+
+def release_points(args: dict[str, Any]) -> dict[str, Any]:
+    """The release point, and the point the WORKER seeds the reach from.
+
+    Models split the same value across three shapes - an explicit pair, split
+    lon/lat, or one "lat,lon" string - and dropping the ones the signature does
+    not name is the silent-swallow class. The approve-mesh decision tail is the
+    only caller that separates release from seed: call-provided release coords
+    seed the reach, while a gate-picked click moves the SOURCE only - re-seeding
+    from the click would silently mesh a different reach than the one the user
+    approved.
+    """
+    release = args.get("release_coords")
+    if release is None:
+        lat, lon = args.get("release_lat"), args.get("release_lon")
+        if lat is None and lon is None and args.get("spill_location_latlon"):
+            try:
+                lat_s, lon_s = str(args["spill_location_latlon"]).split(",", 1)
+                lat, lon = float(lat_s), float(lon_s)
+            except (ValueError, TypeError):
+                raise TelemacDyeScenarioError(
+                    "TELEMAC_PARAMS_INVALID",
+                    f"spill_location_latlon={args['spill_location_latlon']!r} is not "
+                    "'lat,lon'. Supply release_coords as (lon, lat) instead.") from None
+        release = None if (lat is None and lon is None) else [lon, lat]
+
+    if args.get("_seed_release_lon") is not None \
+            or args.get("_seed_release_lat") is not None:
+        seed = [args.get("_seed_release_lon"), args.get("_seed_release_lat")]
+    else:
+        seed = None if args.get("_release_seeds_reach") is False else release
+    return {"release_coords": coerce_lonlat_point(release),
+            "reach_seed_coords": coerce_lonlat_point(seed)}
+
+
+def wind_bearing(args: dict[str, Any]) -> dict[str, Any]:
+    """A bearing WRAPS; it does not clamp, so the modulo happens before the door."""
+    value = args.get("wind_direction_deg")
+    if value is None:
+        return {}
+    try:
+        return {"wind_direction_deg": float(value) % 360.0}
+    except (TypeError, ValueError):
+        return {}
 
 
 #: DECLARED mesh_resolution_m range. The solver floor is the finest edge the mesh
@@ -375,279 +452,6 @@ _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     ),
     resolution_specs=(_TELEMAC_RIVER_DYE_RES_SPEC,),
 )
-
-
-@register_tool(
-    _TELEMAC_RIVER_DYE_METADATA,
-    # readOnlyHint=False (runs a solver writing output COG + mesh artifacts),
-    # openWorldHint=False (worker container + intra-cloud object store),
-    # destructiveHint=False (writes go to a new runs/ prefix),
-    # idempotentHint=False (each call mints a new run_id + output keys).
-    read_only_hint=False,
-    open_world_hint=False,
-    destructive_hint=False,
-    idempotent_hint=False,
-)
-async def telemac_river_dye(
-    location: str | None = None,
-    bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    substance: str = "dye",
-    contaminant: str | None = None,
-    release_coords: tuple[float, float] | list[float] | None = None,
-    release_lon: float | None = None,
-    release_lat: float | None = None,
-    spill_location_latlon: str | None = None,
-    spill_fraction: float | None = None,
-    spill_duration_s: float | None = None,
-    dye_concentration_mgl: float | None = None,
-    source_q_m3s: float | None = None,
-    reach_length_km: float | None = None,
-    sim_duration_s: float | None = None,
-    channel_width_m: float | None = None,
-    river_geometry_uri: str | None = None,
-    mesh_resolution: str | None = None,
-    mesh_resolution_m: float | None = None,
-    discharge_m3s: float | None = None,
-    event_time: str | None = None,
-    decay_half_life_hours: float | None = None,
-    decay_rate_per_day: float | None = None,
-    grain_size_um: float | None = None,
-    sediment_type: str | None = None,
-    erodible_bed: bool | None = None,
-    bed_thickness_m: float | None = None,
-    bedload_formula: int | None = None,
-    morphological_factor: float | None = None,
-    sediment_gradation: list | str | None = None,
-    dredging: bool | None = None,
-    dredge_mode: str | None = None,
-    dredge_volume_m3: float | None = None,
-    dredge_disposal: bool | None = None,
-    dredge_crit_depth_m: float | None = None,
-    dredge_dig_depth_m: float | None = None,
-    friction_coefficient: float | None = None,
-    friction_law: int | None = None,
-    velocity_diffusivity: float | None = None,
-    tracer_diffusivity: float | None = None,
-    wind_speed_mps: float | None = None,
-    wind_direction_deg: float | None = None,
-    rainfall_mm_per_day: float | None = None,
-    evaporation_mm_per_day: float | None = None,
-    rainfall_gridmet_window: str | None = None,
-    compute_class: str | None = None,
-    bank_source: str | None = None,
-    output_interval_min: float | None = None,
-    input_mode: str | None = None,
-    restart_clean: bool = False,
-    # The approve-mesh decision tail sets these (underscore -> stripped from the
-    # model's schema): whether the CALL-provided release coords also seed the
-    # reach, and the original pair the preview meshed from. They fold into
-    # ``reach_seed_coords`` before any door.
-    _release_seeds_reach: bool | None = None,
-    _seed_release_lon: float | None = None,
-    _seed_release_lat: float | None = None,
-    **_extra_ignored: Any,
-) -> TelemacDyeLayerURI | dict[str, Any]:
-    supplied, err = _normalize(locals())
-    if err is not None:
-        return err
-    try:
-        p = await resolve_params(PARAMS, supplied)
-        result = await interpret(
-            plan(p, None), p, PARAMS, DATA,
-            input_mode=input_mode, resume=not restart_clean,
-        )
-    except asyncio.CancelledError:
-        raise
-    except DeclarativeError as exc:
-        logger.warning("telemac_river_dye %s: %s", exc.error_code, exc)
-        return {"status": "error", "error_code": exc.error_code,
-                "error_message": _with_notes(exc)}
-    except Exception as exc:  # noqa: BLE001
-        if getattr(exc, "retryable", False):
-            # The banks / degenerate-reach gates carry .suggestions the adapter
-            # harvests off the RAISED exception, so the model can retry with
-            # corrected args. Flattening them destroys that channel.
-            raise
-        logger.exception("telemac_river_dye unexpected failure")
-        return {"status": "error", "error_code": "TELEMAC_INTERNAL_ERROR",
-                "error_message": _with_notes(exc)}
-
-    layer = result.value
-    update: dict[str, Any] = {
-        "synthetic_inputs": merge_provenance(layer.synthetic_inputs or [],
-                                             result.entries),
-    }
-    if result.notes:
-        parts = [layer.fallback_note] if layer.fallback_note else []
-        parts += [f"NOTE: {n}" for n in result.notes]
-        update["fallback_note"] = " ".join(parts)
-    layer = layer.model_copy(update=update)
-
-    run_id = (result.results.get("solve") or {}).get("run_id")
-    await persist_run_products(run_id, charts=result.charts,
-                               metrics=_physical_answer(layer))
-    logger.info(
-        "telemac_river_dye complete layer_id=%s dye_cmax_mgl=%.4g plume_reach_m=%s "
-        "active_frames=%s executed=%s replayed=%s notes=%s",
-        layer.layer_id, layer.dye_cmax_mgl, layer.plume_reach_m,
-        layer.active_frames, result.executed, result.replayed, result.notes,
-    )
-    return layer
-
-
-def _physical_answer(layer: TelemacDyeLayerURI) -> dict[str, Any]:
-    """The run's ANSWER, as the numbers a reader has to be able to check.
-
-    Persisted beside the chart spec so verification cites the run's own figures
-    rather than recomputing them from the raster. ``discharge_m3s``/``discharge_note``
-    ride the carrier-discharge provenance row, so the RESOLVED NWM cycle (never a
-    bare "latest") is pinned here too.
-    """
-    disc = next((r for r in (layer.synthetic_inputs or [])
-                if r.param == "discharge_m3s"), None)
-    return {
-        "dye_cmax_mgl": layer.dye_cmax_mgl,
-        "dye_peak_time_s": layer.dye_peak_time_s,
-        "plume_reach_m": layer.plume_reach_m,
-        "active_frames": layer.active_frames,
-        "max_deposition_mm": layer.max_deposition_mm,
-        "max_scour_mm": layer.max_scour_mm,
-        "deposited_mass_kg": layer.deposited_mass_kg,
-        "deposit_fraction": layer.deposit_fraction,
-        "sediment_surface_d50_range_um": layer.sediment_surface_d50_range_um,
-        "mesh_size_m": layer.mesh_size_m,
-        "mesh_node_estimate": layer.mesh_node_estimate,
-        "layer_uri": layer.uri,
-        "discharge_m3s": disc.value if disc else None,
-        "discharge_note": disc.note if disc else None,
-    }
-
-
-def _with_notes(exc: BaseException) -> str:
-    """The failure, plus whatever auxiliary products the run also lost on the way."""
-    notes = getattr(exc, "__notes__", ()) or ()
-    return " ".join([str(exc), *notes])
-
-
-def _release_point(args: dict[str, Any]) -> Any:
-    """The release point from whichever field the caller used.
-
-    Models split the same value across three shapes - an explicit pair, split
-    lon/lat, or one "lat,lon" string - and dropping the ones the signature does
-    not name is the silent-swallow class.
-    """
-    if args.get("release_coords") is not None:
-        return args["release_coords"]
-    lat, lon = args.get("release_lat"), args.get("release_lon")
-    if lat is None and lon is None and args.get("spill_location_latlon"):
-        try:
-            lat_s, lon_s = str(args["spill_location_latlon"]).split(",", 1)
-            lat, lon = float(lat_s), float(lon_s)
-        except (ValueError, TypeError):
-            raise TelemacDyeScenarioError(
-                "TELEMAC_PARAMS_INVALID",
-                f"spill_location_latlon={args['spill_location_latlon']!r} is not "
-                "'lat,lon'. Supply release_coords as (lon, lat) instead.") from None
-    return None if (lat is None and lon is None) else [lon, lat]
-
-
-def _reach_seed_point(args: dict[str, Any], release: Any) -> Any:
-    """Which point the WORKER resolves the reach centerline from.
-
-    The approve-mesh decision tail is the only caller that separates the two:
-    call-provided release coords seed the reach, while a gate-picked click moves
-    the SOURCE only - re-seeding from the click would silently mesh a different
-    reach than the one the user approved.
-    """
-    if args.get("_seed_release_lon") is not None \
-            or args.get("_seed_release_lat") is not None:
-        return [args.get("_seed_release_lon"), args.get("_seed_release_lat")]
-    return None if args.get("_release_seeds_reach") is False else release
-
-
-def _normalize(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Coerce the wire args to the door-1 sheet: exactly one AOI, one release point."""
-    location, bbox = args.get("location"), args.get("bbox")
-    coerced: tuple[float, float, float, float] | None = None
-    if bbox is not None:
-        cb = coerce_bbox_value(bbox)
-        if cb is None:
-            # A non-numeric string bbox is almost always a PLACE NAME - shift it
-            # into location rather than dead-ending the call.
-            if isinstance(bbox, str) and any(c.isalpha() for c in bbox) \
-                    and not (location and str(location).strip()):
-                logger.warning("telemac_river_dye: bbox %r is a place name - using "
-                               "as location", bbox)
-                location, bbox = bbox, None
-            else:
-                return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INVALID",
-                            "error_message": (
-                                "invalid bbox (expected 4 numbers min_lon,min_lat,"
-                                f"max_lon,max_lat): {bbox!r}")}
-        else:
-            coerced = tuple(cb)  # type: ignore[assignment]
-
-    has_loc = bool(location and str(location).strip())
-    if not has_loc and coerced is None:
-        return {}, {"status": "error", "error_code": "TELEMAC_PARAMS_INCOMPLETE",
-                    "error_message": (
-                        "telemac_river_dye needs a place `location` (geocoded) or an "
-                        "explicit `bbox` AOI. For a natural prompt like 'dye spill in "
-                        "the river near <place>', pass location='<place>'.")}
-    if has_loc and coerced is not None:
-        # LOCATION wins: a model that fabricates a bbox alongside a real place name
-        # has been observed to put it on open water at a river MOUTH, and the
-        # geocoded place is ground truth. A user-drawn AOI arrives via case state.
-        logger.warning("telemac_river_dye: both location and bbox supplied - dropping "
-                       "the bbox %s in favour of geocoding %r", coerced, location)
-        coerced = None
-
-    try:
-        release = coerce_lonlat_point(_release_point(args))
-        seed_point = coerce_lonlat_point(_reach_seed_point(args, release))
-        event_time = coerce_event_time(args.get("event_time"))
-    except TelemacDyeScenarioError as exc:
-        return {}, {"status": "error", "error_code": exc.error_code,
-                    "error_message": str(exc)}
-
-    substance = sanitize_substance(args.get("substance"))
-    contaminant = args.get("contaminant")
-    if contaminant:
-        # Models split intent across the two fields - substance="dye" AND
-        # contaminant="crude oil" - so an oil spill silently ran the tracer class.
-        # Any NON-tracer contaminant class wins over a tracer-class substance.
-        cont = sanitize_substance(contaminant, default="")
-        if cont and classify_substance(substance)[0] == "tracer" \
-                and classify_substance(cont)[0] != "tracer":
-            logger.info("telemac_river_dye: substance %r is tracer-class but "
-                        "contaminant %r is %s-family - classifying by contaminant",
-                        substance, cont, classify_substance(cont)[0])
-            substance = cont
-
-    compute = str(args.get("compute_class") or "medium").strip().lower()
-    if compute not in _ALLOWED_COMPUTE:
-        logger.warning("telemac_river_dye: unknown compute_class %r coerced to "
-                       "'medium'", args.get("compute_class"))
-        compute = "medium"
-
-    declared = {p.name for p in PARAMS}
-    supplied = {k: v for k, v in args.items() if k in declared and v is not None}
-    supplied.update({
-        "location": location if has_loc else None,
-        "bbox": coerced,
-        "release_coords": release,
-        "reach_seed_coords": seed_point,
-        "event_time": event_time,
-        "substance": substance,
-        "compute_class": compute,
-    })
-    # A bearing WRAPS; it does not clamp, so the modulo happens before the door.
-    if args.get("wind_direction_deg") is not None:
-        try:
-            supplied["wind_direction_deg"] = float(args["wind_direction_deg"]) % 360.0
-        except (TypeError, ValueError):
-            pass
-    return {k: v for k, v in supplied.items() if v is not None}, None
 
 
 _DOC = dict(
@@ -691,8 +495,36 @@ _DOC = dict(
     ),
 )
 
-#: The full sheet is what the MODEL needs (it fills the params); the routing view
-#: is what a surface that only helps someone CHOOSE the tool needs, and it fits
-#: the truncation budget by construction.
-telemac_river_dye.__doc__ = render_docstring(**_DOC)
-telemac_river_dye.routing_doc = render_docstring(**_DOC, view="routing")
+
+#: Wire ALIASES the model uses for values PARAMS already declares, plus the
+#: approve-mesh decision tail (underscore -> stripped from the model's schema).
+#: ``release_points`` folds them into the declared params before any door.
+_EXTRA_ARGS: tuple[tuple[str, Any], ...] = (
+    ("contaminant", str | None),
+    ("release_lon", float | None),
+    ("release_lat", float | None),
+    ("spill_location_latlon", str | None),
+    ("_release_seeds_reach", bool | None),
+    ("_seed_release_lon", float | None),
+    ("_seed_release_lat", float | None),
+)
+
+
+telemac_river_dye = register_workflow(
+    TelemacWorkflow, _TELEMAC_RIVER_DYE_METADATA, PARAMS, plan,
+    data=DATA,
+    answer=ANSWER,
+    provenance=(("discharge_m3s", "discharge_note"),),
+    coerce=(
+        location_or_bbox("telemac_river_dye",
+                         hint="For a natural prompt like 'dye spill in the river "
+                              "near <place>', pass location='<place>'."),
+        release_points,
+        event_time(),
+        substance_class(),
+        compute_class(),
+        wind_bearing,
+    ),
+    doc=_DOC,
+    extra_args=_EXTRA_ARGS,
+)

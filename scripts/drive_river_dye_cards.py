@@ -64,6 +64,29 @@ ARGS = {
 CASES = {"honored": IN_DOMAIN_LONLAT, "refused": OFF_REACH_LONLAT}
 REFUSAL_CODE = "TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN"
 
+#: The path-A canary: the same reach, every param supplied so no card is left to
+#: answer, sized so the solve is a smoke test of the plumbing rather than a
+#: physics study. The release is DERIVED at spill_fraction (no draw), and the
+#: discharge is PINNED - a canary that also depended on a live NWM cycle would
+#: report a source outage as a code failure.
+COARSE_ARGS = {
+    **ARGS,
+    "reach_length_km": 1.0,
+    "sim_duration_s": 600.0,
+    "spill_duration_s": 120.0,
+    "mesh_resolution": "coarse",
+    "mesh_resolution_m": 50.0,
+    "input_mode": "auto",
+}
+
+
+def _run_coarse(timeout: float):
+    return run_live(LiveRun(
+        tool="telemac_river_dye", args=COARSE_ARGS,
+        case_title="canary: telemac river dye (Eel River, coarse)",
+        answers=GateAnswers(confirm="proceed"),
+        timeout_s=timeout, cleanup_case=True))
+
 
 def _run(case: str, timeout: float):
     return run_live(LiveRun(
@@ -132,17 +155,56 @@ def _compact(evidence: dict) -> dict:
     return {**evidence, "layers": layers}
 
 
+def _main_coarse(ns) -> int:
+    """The canary: status, the run's own metrics, the chart, the products."""
+    ev = _run_coarse(ns.timeout)
+    report = {
+        "case": "coarse",
+        "tool_status": ev.tool_status,
+        "turn_complete": ev.turn_complete,
+        "layers": [l.get("name") for l in ev.layers],
+        "run_id": ev.run_id,
+        "product_uris": ev.product_uris,
+        "product_errors": ev.product_errors,
+        "charts_emitted": ev.charts,
+        "dye_cmax_mgl": (ev.metrics or {}).get("dye_cmax_mgl"),
+        "dye_peak_time_s": (ev.metrics or {}).get("dye_peak_time_s"),
+        "plume_reach_m": (ev.metrics or {}).get("plume_reach_m"),
+        "active_frames": (ev.metrics or {}).get("active_frames"),
+        "mesh_size_m": (ev.metrics or {}).get("mesh_size_m"),
+        "mesh_node_estimate": (ev.metrics or {}).get("mesh_node_estimate"),
+        "detail": ev.detail,
+    }
+    print(json.dumps(report, indent=2, default=str))
+    out = ns.out or os.path.join(
+        os.path.dirname(__file__), "..", "docs", "proof", "templates",
+        "telemac_river_dye_coarse_evidence.json")
+    with open(out, "w", encoding="utf-8") as fh:
+        json.dump({"report": report, "evidence": _compact(ev.as_dict())}, fh,
+                  indent=2, default=str)
+    print(f"evidence -> {os.path.abspath(out)}")
+    ev.require_ok()
+    ev.require_run_products()
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--case", choices=sorted(CASES), default="honored")
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--coarse", action="store_true",
+                    help="the path-A canary declaration (short reach, pinned discharge)")
     add_render_proof_flag(ap)
     ns = ap.parse_args()
+    if ns.coarse:
+        ns.render_proof = False
     out_path = ns.out or os.path.join(
         os.path.dirname(__file__), "..", "docs", "proof", "templates",
         f"telemac_river_dye_release_{ns.case}_evidence.json")
 
+    if ns.coarse:
+        return _main_coarse(ns)
     ev = _run(ns.case, ns.timeout)
     form = ev.form_card or {}
     report = {

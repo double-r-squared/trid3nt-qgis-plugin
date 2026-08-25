@@ -1168,6 +1168,18 @@ def _normalize_callable_for_gemini(fn: Any) -> Any:
             new_annotations[param_name] = _simplify_annotation(annotation)
 
     _wrapper.__annotations__ = new_annotations
+    # A SYNTHESIZED signature (spec-promoted fetchers, skeleton-registered
+    # workflows) lives in ``fn.__dict__`` and ``functools.wraps`` copies it here,
+    # where ``inspect.signature`` prefers it over ``__annotations__`` - so the
+    # simplification above would be read for the type hints and ignored for the
+    # parameters. Re-stamp it with the simplified annotations so both surfaces
+    # agree. Nothing to do when the callable declares no explicit signature.
+    sig = getattr(fn, "__signature__", None)
+    if sig is not None:
+        _wrapper.__signature__ = sig.replace(  # type: ignore[attr-defined]
+            parameters=[p.replace(annotation=new_annotations.get(p.name, p.annotation))
+                        for p in sig.parameters.values()],
+            return_annotation=dict)
     return _wrapper
 
 

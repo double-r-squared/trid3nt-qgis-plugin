@@ -42,6 +42,7 @@ from .params import (
     doors,
 )
 from .plan import (
+    STAGES,
     ChartSpec,
     DrawGate,
     FormGate,
@@ -53,7 +54,14 @@ from .plan import (
     RunMode,
     Step,
     When,
+)
+from .slots import Forcing, MeshPolicy, Physics, Slot
+from .workflow import (
+    DataRefs,
+    EngineOps,
+    WireArgsError,
     Workflow,
+    register_workflow,
 )
 from .temporal import (
     CATEGORICAL,
@@ -82,22 +90,26 @@ from .validate import validate_plan
 __all__ = [
     "AuthoredProducer", "Build", "ByoCoverageError", "CATEGORICAL", "ChartSpec",
     "CoversAOI",
-    "Data", "DataDecl", "DeclarativeError", "Derived", "Domain", "DrawGate",
-    "Fetch",
+    "Data", "DataDecl", "DataRefs", "DeclarativeError", "Derived", "Domain",
+    "DrawGate", "EngineOps",
+    "Fetch", "Forcing",
     "FormGate", "Gate", "GateRefusedError",
-    "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError", "Param",
+    "LeakScanTruncated", "LedgerRecord", "MeshPolicy", "ModifierIllegalError",
+    "Param",
     "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
-    "ParamValues", "Plan",
+    "ParamValues", "Physics", "Plan",
     "PlanValidationError", "Producer", "RATE", "Ref", "ReferenceProducer",
     "RenderSourceMissingError", "RenderSpec", "ResampleSpec", "ResolvedParam",
     "ResolvedParams",
-    "RunMode", "RunResult", "STATE", "Step", "StepFailedError", "StepLedger",
+    "RunMode", "RunResult", "STAGES", "STATE", "Slot", "Step", "StepFailedError",
+    "StepLedger",
     "TemporalGapError", "TemporalShapeError", "TemporalSpec",
-    "TemporalUnitsError", "Transformed", "UnitsSpec", "When",
+    "TemporalUnitsError", "Transformed", "UnitsSpec", "When", "WireArgsError",
     "Workflow", "convert_units", "current_domain", "doors", "interpret",
     "invocation_key",
     "merge_provenance", "provenance_entries", "rederive_revised",
+    "register_workflow",
     "render_docstring", "reseat_revised", "resolve_params", "transform_series",
     "transform_value", "validate_plan",
 ]

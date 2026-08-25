@@ -98,8 +98,13 @@ def test_docstring_routing_view_fits_the_truncation_budget():
 # ===========================================================================
 # (2) Wire-arg normalization.
 # ===========================================================================
+def _workflow():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY["telemac_river_dye"].fn.workflow
+
+
 def _norm(**kw):
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import _normalize
 
     base: dict[str, Any] = {
         "location": None, "bbox": None, "substance": "dye", "contaminant": None,
@@ -109,7 +114,7 @@ def _norm(**kw):
         "_seed_release_lon": None, "_seed_release_lat": None,
     }
     base.update(kw)
-    return _normalize(base)
+    return _workflow()._normalize(base)
 
 
 def test_tool_rejects_neither_location_nor_bbox():
@@ -257,11 +262,11 @@ def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
 def test_the_plan_validates_and_gates_before_the_solve():
     from trid3nt_server.workflows.lib import validate_plan
     from trid3nt_server.workflows.lib.plan import Gate
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA, PARAMS, plan
 
+    wf = _workflow()
     p = _resolve()
-    pl = plan(p, None)
-    validate_plan(pl, PARAMS, DATA, sheet=p)
+    pl = wf.build_plan(p)
+    validate_plan(pl, wf.params, wf.data, sheet=p)
 
     steps = list(pl.flat())
     assert [s.label for s in steps][2:] == [
@@ -296,7 +301,6 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac import release_layer as rel_mod
     from trid3nt_server.workflows.telemac import results_mesh_seam as seam_mod
     from trid3nt_server.workflows.shared import run_products as products_mod
-    from trid3nt_server.workflows.telemac.river_dye import river_dye as tool_mod
     from trid3nt_server.workflows.telemac.steps import products as prod_steps
     from trid3nt_server.workflows.telemac.steps import reach as reach_steps
     from trid3nt_server.workflows.telemac.steps import forcing as forcing_steps
@@ -364,7 +368,6 @@ def _install_step_mocks(captured: dict):
         patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),
         patch.object(rel_mod, "publish_release_point", _amock(False)),
         patch.object(products_mod, "persist_run_products", _amock([])),
-        patch.object(tool_mod, "persist_run_products", _amock([])),
         patch.object(solver_mod, "run_solver", _fake_run_solver),
         patch.object(solver_mod, "wait_for_completion", _amock(_FakeRunResult())),
         patch.object(solver_mod, "set_emitter_binding", lambda *a, **k: None),

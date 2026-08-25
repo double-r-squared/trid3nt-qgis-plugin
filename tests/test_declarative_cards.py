@@ -24,7 +24,7 @@ from trid3nt_server.workflows.lib import (
     FormGate,
     Param,
     Step,
-    Workflow,
+    Plan,
     doors,
     interpret,
     resolve_params,
@@ -69,11 +69,11 @@ def _params():
 async def test_the_form_card_carries_the_declared_sheet(card_client):
     decl = _params()
     p = await resolve_params(decl, {"outfall": [-124.1, 40.5]})
-    plan = Workflow("form_w")[
+    plan = Plan("form_w", None, (
         FormGate(title="Review the DO-sag inputs"),
         Step(runner=f"{_HERE}.stub_solve", kwargs={"t": p.water_temp_c},
              consequential=True).named("solve"),
-    ]
+    ))
     task = asyncio.ensure_future(
         interpret(plan, p, decl, input_mode="user_gated", resume=False))
     warning = await answer_form_card(card_client, {"water_temp_c": 24.0})
@@ -99,11 +99,11 @@ async def test_an_edit_submitted_at_the_form_card_is_what_runs(card_client):
     step downstream of the gate reads the edited value - not the resolved one."""
     decl = _params()
     p = await resolve_params(decl, {"outfall": [-124.1, 40.5]})
-    plan = Workflow("form_edit")[
+    plan = Plan("form_edit", None, (
         FormGate(),
         Step(runner=f"{_HERE}.stub_solve", kwargs={"t": p.water_temp_c},
              consequential=True).named("solve"),
-    ]
+    ))
     task = asyncio.ensure_future(
         interpret(plan, p, decl, input_mode="user_gated", resume=False))
     await answer_form_card(card_client, {"water_temp_c": 24.0})
@@ -118,11 +118,11 @@ async def test_an_edit_submitted_at_the_form_card_is_what_runs(card_client):
 async def test_a_submitted_edit_still_obeys_the_declared_bounds(card_client):
     decl = _params()
     p = await resolve_params(decl, {"outfall": [-124.1, 40.5]})
-    plan = Workflow("form_clamp")[
+    plan = Plan("form_clamp", None, (
         FormGate(),
         Step(runner=f"{_HERE}.stub_solve", kwargs={"t": p.water_temp_c},
              consequential=True).named("solve"),
-    ]
+    ))
     task = asyncio.ensure_future(
         interpret(plan, p, decl, input_mode="user_gated", resume=False))
     await answer_form_card(card_client, {"water_temp_c": 900.0})
@@ -138,10 +138,10 @@ async def test_submitting_the_form_proceeds_rather_than_re_presenting(card_clien
     would ask the user to confirm the table they just filled in."""
     decl = _params()
     p = await resolve_params(decl, {"outfall": [-124.1, 40.5]})
-    plan = Workflow("form_once")[
+    plan = Plan("form_once", None, (
         FormGate(),
         Step(runner=f"{_HERE}.stub_solve", consequential=True).named("solve"),
-    ]
+    ))
     task = asyncio.ensure_future(
         interpret(plan, p, decl, input_mode="user_gated", resume=False))
     await answer_form_card(card_client, {"water_temp_c": 21.0})
@@ -152,10 +152,10 @@ async def test_submitting_the_form_proceeds_rather_than_re_presenting(card_clien
 async def test_cancelling_the_form_card_refuses_typed(card_client):
     decl = _params()
     p = await resolve_params(decl, {"outfall": [-124.1, 40.5]})
-    plan = Workflow("form_cancel")[
+    plan = Plan("form_cancel", None, (
         FormGate(),
         Step(runner=f"{_HERE}.stub_solve", consequential=True).named("solve"),
-    ]
+    ))
     task = asyncio.ensure_future(
         interpret(plan, p, decl, input_mode="user_gated", resume=False))
     await answer_form_card(card_client, None, decision="cancel")
@@ -174,12 +174,12 @@ async def _draw_plan(name, geometry, *, optional=False):
                   **({"derived_when_absent": "the reach seed stands in"}
                      if optional else {}))]
     p = await resolve_params(decl, {})
-    plan = Workflow(name)[
+    plan = Plan(name, None, (
         DrawGate(param="outfall", geometry=geometry,
                  prompt="Click where the discharge enters the river"),
         Step(runner=f"{_HERE}.stub_solve", kwargs={"pt": p.outfall},
              consequential=True).named("solve"),
-    ]
+    ))
     return plan, p, decl
 
 

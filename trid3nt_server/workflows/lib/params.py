@@ -95,6 +95,14 @@ class Param:
     consequence: Literal["physics", "scenario", "numerical", "aoi"] = "scenario"
     real_source: str | None = None
     derived_when_absent: str | None = None
+    #: The declared WIRE type - what the registration factory annotates the
+    #: generated tool argument with, hence what the model sees in the schema.
+    #: Unset is inferred from the declaration (bounded -> float, bool default ->
+    #: bool, otherwise str); declare it where the inference would be wrong.
+    type: Any = None
+    #: Whether the wire exposes this param at all. ``False`` marks a value the
+    #: model never sends because a coercion resolves it from other wire args.
+    wire: bool = True
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.isidentifier():
@@ -128,6 +136,17 @@ class Param:
     @property
     def basis(self) -> str:
         return _BASIS_FOR_DOOR[self.door]
+
+    @property
+    def wire_type(self) -> Any:
+        """The declared type, or the one the declaration implies."""
+        if self.type is not None:
+            return self.type
+        if isinstance(self.default, bool):
+            return bool
+        if self.bounds is not None:
+            return float
+        return str
 
 
 def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
