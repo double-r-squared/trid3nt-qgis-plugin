@@ -1285,3 +1285,24 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   percentile, clip, range - ONE schema serving contract default,
   modifier, param knob, and tool args. Later stages override earlier;
   every override labeled; data immutable throughout.
+
+- TEMPLATE DECLARATIONS SIBLING RULED (NATE 2026-08-25, "settle now at 6
+  templates - it costs more later"): UNIFORM norm, no threshold - every
+  template folder carries declarations.py holding PARAMS + _DOC; the
+  template file hydrates via one import and keeps QUESTION docstring,
+  DATA, plan, ANSWER, chart, ResolutionSpec, metadata, registration
+  (the recipe readable on one page, the contract one file over).
+  PYTHON not JSON (types, resolve= hooks, and the three render surfaces
+  keep working; params-as-YAML deferred to the user-tool-builder
+  authoring format, which COMPILES to Param objects). Apply to all six
+  migrated templates in the accumulated batch; every future migration
+  lands in this shape.
+
+- REUSE-SWEEP NORM + CANDIDATES (NATE 2026-08-25): utilities promote to
+  shared only on a CONFIRMED second consumer, then a deliberate reuse
+  sweep - not preemptively. The sweep is each family migration's opening
+  act. Candidate list from the telemac root: read_selafin, the
+  node/mesh-to-grid rasterizers, the barycentric interpolator,
+  _local_mesh_origin, publish_peak_layer (13 hits/4 defs repo-wide -
+  first name on the MODFLOW sweep). Decision 5 fully CLOSED: all 21
+  ambiguous MinIO prefixes KEPT.
