@@ -1113,3 +1113,44 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   persisted renders + evidence JSONs are the durable record; the run
   data behind them is recompute-on-demand. Sweeps ride wave close-outs
   keep-list-first; first sweep = cleanup phase 2 (root disk at 93%).
+
+- ARTEMIS RESOLUTION BOUND CONTRADICTS ITS OWN DEFAULT (found 2026-08-25,
+  driving the new idealized canary): `target_resolution_m` declares
+  `bounds=(20.0, 2000.0)` while its `derived_when_absent` declares the
+  analytic-domain default as 8 m. So the labeled default is BELOW the
+  declared minimum, and any EXPLICIT ask for the analytic spacing is
+  floored to 20 m - at which the 100 m wide basin's 25 m mouth lands on
+  two grid columns, the dividing wall's opening goes asymmetric, and
+  ARTEMIS aborts on FRONT2 (now a typed ARTEMIS_BOUNDARY_DEGENERATE
+  refusal rather than an MPI exit code 2). The 20 m floor was authored
+  for REAL harbour AOIs; the analytic basin is two orders smaller. Fix
+  shape: the floor is a property of the DOMAIN, not the template, so it
+  belongs beside the bed path (real harbour 20 m, analytic 2 m) rather
+  than as one bound covering both. Worked around for now by leaving the
+  canary's lever unsupplied so the labeled default rides. NOT a physics
+  change - do not widen the bound without deciding which domain it guards.
+
+- do_sag DECLARES NO OUTPUT-CADENCE LEVER (found 2026-08-25, NATE's
+  denser-frames ask): `telemac_do_sag` PARAMS has no
+  `output_interval_min`, though `write_reach_deck` accepts one and its
+  cohort sibling `telemac_river_dye` declares it (door=USER, bounds
+  0.1-1440 min). So the do_sag animation is stuck at the worker's
+  graphic_period default - 6 frames over the refined 600 s window, which
+  NATE called too coarse to spot-check. river_dye now runs 30 frames.
+  Fix is the 4-line declaration mirroring river_dye's plus passing it in
+  `plan`; held because it is workflow code and the directive scoped that
+  pass to params only. Cheap, and it closes an inconsistency inside one
+  cohort rather than adding a feature.
+
+- COASTAL PEAK RASTER PAINTS THE PERMANENT BAY (found 2026-08-25, the
+  t=0 wet-land diagnosis): `coastal_depth_max.tif` is per-node max WATER
+  DEPTH over ALL frames including t=0, with no subtraction of the
+  initial water line - so the permanently submerged bay floor renders in
+  the same "inundation depth" ramp as land that actually flooded. On the
+  diagnosed run 44.8% of the wet raster is deeper than 2 m. The worker's
+  own `flooded_land_km2` metric already does the right `bed > init_wl`
+  discrimination; the raster does not, so the scalar and the picture
+  disagree. Fix shape is one of: mask the product to `bed > init_wl`, or
+  publish depth-above-initial as the primary and keep total depth as a
+  companion. This changes what the product MEANS, so it is NATE's call,
+  not a silent correction - recorded, not done.
