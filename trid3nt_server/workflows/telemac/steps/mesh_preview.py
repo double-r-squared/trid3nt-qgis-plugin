@@ -125,10 +125,13 @@ async def preview_telemac_mesh(params: dict[str, Any], *,
     finally:
         reset_domain(token)
 
-    mesh_size_m, mesh_node_estimate, mesh_resolution_label = suggest_mesh_size_m(
+    sizing = suggest_mesh_size_m(
         reach_length_km=reach_length_km, channel_width_m=channel_width_m,
         resolution=str(params.get("mesh_resolution") or "auto"),
         override_m=float(override_m) if override_m else None)
+    mesh_size_m = sizing.mesh_size_m
+    mesh_node_estimate = sizing.node_estimate
+    mesh_resolution_label = sizing.label
     time_step_s = suggest_time_step_s(mesh_size_m)
     deck: dict[str, Any] = {
         "name": reach["slug"],

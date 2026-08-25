@@ -316,7 +316,10 @@ telemac_do_sag = register_workflow(
     TelemacWorkflow, _TELEMAC_DO_SAG_METADATA, PARAMS, plan,
     data=DATA,
     answer=ANSWER,
-    provenance=(("discharge_m3s", "discharge_note"),),
+    # The mesh row is present only when a sizing rule MOVED the user's explicit
+    # edge length; on an honoured (or absent) override both fields read null.
+    provenance=(("discharge_m3s", "discharge_note"),
+                ("mesh_resolution_m", "mesh_resolution_note")),
     coerce=(
         location_or_bbox("telemac_do_sag", code_prefix="TELEMAC"),
         lonlat_point("outfall_coords", label="outfall_coords"),

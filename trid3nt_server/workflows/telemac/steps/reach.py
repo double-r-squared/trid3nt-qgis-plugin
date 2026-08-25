@@ -21,7 +21,7 @@ import asyncio
 import logging
 import re
 import tempfile
-from typing import Any
+from typing import Any, NamedTuple
 
 from trid3nt_server.workflows.lib import Step
 
@@ -34,6 +34,7 @@ __all__ = [
     "Geocode",
     "MESH_H_FLOOR_M",
     "MESH_NODE_CAP",
+    "MeshSizing",
     "ReachSeed",
     "SOLVE_TIME_BUDGET_S",
     "coerce_lonlat_point",
@@ -127,13 +128,33 @@ def _estimate_mesh_nodes(reach_length_km: float, channel_width_m: float, h: floa
     return int(round(area / (_MESH_NODE_K * h * h)))
 
 
+class MeshSizing(NamedTuple):
+    """The chosen edge length, its node estimate, its label, and any OVERRIDE note.
+
+    ``cap_note`` is populated only when the user's own explicit ``mesh_resolution_m``
+    was moved: a lever the run silently ignored is the dishonest case, so the note
+    is what the provenance row carries. ``None`` means the ask stood as asked.
+    """
+
+    mesh_size_m: float
+    node_estimate: int
+    label: str
+    cap_note: str | None = None
+
+
 def suggest_mesh_size_m(
     reach_length_km: float,
     channel_width_m: float,
     resolution: str = "auto",
     override_m: float | None = None,
-) -> tuple[float, int, str]:
-    """Pick the mesh target edge length ``h``. Returns ``(h, est_nodes, label)``."""
+) -> MeshSizing:
+    """Pick the mesh target edge length ``h``, and say so when a lever was moved.
+
+    An EXPLICIT ``override_m`` is still bounded on both sides - raised by the node
+    budget, lowered by the >= 2-cells-across-the-channel rule - and either move
+    contradicts what the user asked for. Both are narrated: the label carries it for
+    the layer, ``cap_note`` for the provenance row.
+    """
     L = max(float(reach_length_km), 0.0)
     W = max(float(channel_width_m), 1.0)
     preset = str(resolution or "auto").strip().lower()
@@ -142,8 +163,9 @@ def suggest_mesh_size_m(
     budget_floor = ((area / (_MESH_NODE_K * MESH_NODE_CAP)) ** 0.5
                     if area > 0 else MESH_H_FLOOR_M)
 
-    if override_m is not None and float(override_m) > 0.0:
-        h = float(override_m)
+    asked = float(override_m) if override_m is not None else None
+    if asked is not None and asked > 0.0:
+        h = asked
         label = f"custom {h:.3g} m"
     else:
         cells = MESH_CELLS_ACROSS_BY_PRESET.get(
@@ -153,10 +175,18 @@ def suggest_mesh_size_m(
 
     h = max(h, MESH_H_FLOOR_M, budget_floor)
     h = min(h, W / 2.0)
-    if override_m is not None and h > float(override_m):
-        label += f" -> {h:.3g} m (budget-clamped)"
 
-    return round(h, 3), _estimate_mesh_nodes(L, W, h), label
+    cap_note = None
+    if asked is not None and h > asked:
+        label += f" -> {h:.3g} m (budget-clamped)"
+        cap_note = (f"mesh_resolution_m {asked:g} RAISED to {round(h, 3):g} m by the "
+                    f"node budget ({MESH_NODE_CAP} nodes over {L:g} km x {W:g} m)")
+    elif asked is not None and h < asked:
+        label += f" -> {h:.3g} m (width-capped)"
+        cap_note = (f"mesh_resolution_m {asked:g} CAPPED to {round(h, 3):g} m by the "
+                    f"channel-width rule (width {W:g} m / 2)")
+
+    return MeshSizing(round(h, 3), _estimate_mesh_nodes(L, W, h), label, cap_note)
 
 
 # --------------------------------------------------------------------------- #

@@ -516,7 +516,10 @@ telemac_river_dye = register_workflow(
     TelemacWorkflow, _TELEMAC_RIVER_DYE_METADATA, PARAMS, plan,
     data=DATA,
     answer=ANSWER,
-    provenance=(("discharge_m3s", "discharge_note"),),
+    # The mesh row is present only when a sizing rule MOVED the user's explicit
+    # edge length; on an honoured (or absent) override both fields read null.
+    provenance=(("discharge_m3s", "discharge_note"),
+                ("mesh_resolution_m", "mesh_resolution_note")),
     coerce=(
         location_or_bbox("telemac_river_dye", code_prefix="TELEMAC",
                          hint="For a natural prompt like 'dye spill in the river "

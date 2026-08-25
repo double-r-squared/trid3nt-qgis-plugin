@@ -114,12 +114,14 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
     The carrier discharge that governs dilution (real NWM streamflow or
     user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
     the bank geometry the worker actually sampled (real NHDArea polygons vs an
-    assumed constant-width ribbon), and the release point the solver used.
+    assumed constant-width ribbon), the release point the solver used, and the
+    user's explicit mesh edge length WHEN a sizing rule moved it.
     """
     banks = solve.get("bank_provenance") or "constant_ribbon"
     return [
         _release_provenance(deck, solve.get("metrics") or {}),
         *_rain_provenance(deck),
+        *_mesh_override_provenance(deck),
         SyntheticInput(
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",
@@ -413,15 +415,34 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     return peak
 
 
-def _do_sag_provenance(carrier_discharge: dict[str, Any] | None) -> list[SyntheticInput]:
+def _mesh_override_provenance(deck: dict[str, Any]) -> list[SyntheticInput]:
+    """The user's mesh_resolution_m ask, as a row, WHEN a sizing rule moved it.
+
+    A user lever the run quietly overrode is the silent-override class: the mesh
+    was right and the label was a lie. The row appears only when the ask and the
+    built edge differ, so an honoured override adds no noise. ``basis="user"`` -
+    the value came from the caller, the note says what happened to it.
+    """
+    note = deck.get("mesh_resolution_note")
+    if not note:
+        return []
+    return [SyntheticInput(
+        param="mesh_resolution_m", value=deck.get("mesh_resolution_asked_m"),
+        units="m", basis="user", consequence="numerical", note=note)]
+
+
+def _do_sag_provenance(carrier_discharge: dict[str, Any] | None,
+                       deck: dict[str, Any] | None = None) -> list[SyntheticInput]:
     """The carrier discharge governing dilution, as the DO-sag layer's own record.
 
     Mirrors ``_provenance``'s dye row: the layer must carry which cycle it read,
-    never leave the reader to trust an unrecorded "latest".
+    never leave the reader to trust an unrecorded "latest". Plus the mesh-override
+    row when a sizing rule moved the user's explicit edge length.
     """
+    rows = _mesh_override_provenance(deck or {})
     if not carrier_discharge:
-        return []
-    return [SyntheticInput(
+        return rows
+    return rows + [SyntheticInput(
         param="discharge_m3s", value=round(float(carrier_discharge["m3s"]), 1),
         units="m3/s", basis=carrier_discharge.get("basis") or "fetched",
         real_source_if_any=carrier_discharge.get("real_source"),
@@ -467,7 +488,7 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
         # The run prefix travels WITH the layer: the caller writes this run's own
         # chart spec + metrics there once the chart has been built.
         "run_id": run_id,
-        "synthetic_inputs": _do_sag_provenance(carrier_discharge),
+        "synthetic_inputs": _do_sag_provenance(carrier_discharge, deck),
     }
     published = raw.model_copy(update=mesh_meta)
     if raw.uri.startswith(("s3://", "gs://")):

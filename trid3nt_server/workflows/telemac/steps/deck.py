@@ -313,13 +313,17 @@ async def write_reach_deck(
     seed_pair = coerce_lonlat_point(reach_seed_coords)
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
 
-    mesh_size_m, mesh_node_estimate, mesh_resolution_label = suggest_mesh_size_m(
+    sizing = suggest_mesh_size_m(
         reach_length_km=reach_length_km, channel_width_m=channel_width_m,
         resolution=mesh_resolution, override_m=mesh_resolution_m)
+    mesh_size_m = sizing.mesh_size_m
+    mesh_node_estimate = sizing.node_estimate
+    mesh_resolution_label = sizing.label
     time_step_s = suggest_time_step_s(mesh_size_m)
     logger.info("telemac mesh granularity: %s -> h=%.3g m (~%d nodes, dt=%.3g s, "
-                "reach=%.3g km x %.3g m)", mesh_resolution_label, mesh_size_m,
-                mesh_node_estimate, time_step_s, reach_length_km, channel_width_m)
+                "reach=%.3g km x %.3g m)%s", mesh_resolution_label, mesh_size_m,
+                mesh_node_estimate, time_step_s, reach_length_km, channel_width_m,
+                f" [{sizing.cap_note}]" if sizing.cap_note else "")
 
     substance_class, _payload, erodible, class_block = _substance_block(
         substance, erodible_bed=erodible_bed, sediment_gradation=sediment_gradation,
@@ -403,6 +407,11 @@ async def write_reach_deck(
         "mesh_size_m": mesh_size_m,
         "mesh_node_estimate": mesh_node_estimate,
         "mesh_resolution_label": mesh_resolution_label,
+        # Present ONLY when the user's own explicit mesh_resolution_m was moved by
+        # a sizing rule; the products turn it into a provenance row so an
+        # overridden lever is never silently overridden.
+        "mesh_resolution_note": sizing.cap_note,
+        "mesh_resolution_asked_m": mesh_resolution_m,
         "time_step_s": time_step_s,
         "seed_source": seed.get("source"),
         "discharge_note": carrier_discharge.get("note"),
