@@ -406,11 +406,28 @@ A-green with B-red isolates a fault to the interaction machinery.
 - Calibration capability (separate design; consumes the form
   snapshot + basis machinery this campaign builds).
 
-## The Workflow Skeleton (Template Method) - PROPOSED, FOR NATE REDLINE
+## The Workflow Skeleton (Template Method) - BUILT ON A COHORT, FOR NATE REDLINE
 
 Agreed in the 2026-08-24 architecture discussion (rulings recorded in
 docs/IDEAS.md, 2026-08-24/25 entries); this section is the contract the
-family campaign builds. Status: PROPOSED until NATE redlines.
+family campaign builds. Status: BUILT and hardened on the two-template cohort
+(`telemac_do_sag` + `telemac_river_dye`, ADR 0312) - PROPOSED for the FLEET
+until NATE redlines the cohort result. What the cohort taught, recorded here so
+the contract and the code do not drift:
+
+* the base class lives at `workflows/lib/workflow.py`; the plan-value
+  constructor that used to be called `Workflow` is DELETED and `plan(p, d, ops)`
+  returns the step sequence, which the skeleton names and engines;
+* slots are unpacked by the facade at PLAN-CONSTRUCTION time, so `Step.kwargs`
+  stays the plain mapping the interpreter already binds, and an unknown slot
+  member is refused against the deck writer's real signature there and then;
+* a step carries the `stage` its operation stamps, so `plan.describe()` reads as
+  the universal sequence - the ORDER is not enforced yet, because the mesh gate
+  that sits mid-sequence does not exist and both cohort templates gate at the
+  front;
+* `EngineOps.build_mesh` returns a mesh HANDLE for TELEMAC (the corridor mesher
+  still runs inside the deck writer and the worker). The interface is the frozen
+  part, exactly as intended - the shared front is a later iteration.
 
 ### The placement rule
 
