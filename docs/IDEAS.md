@@ -1249,3 +1249,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   style rescale), legend static; pinned test = extracted-frame legend
   regions byte-identical across the animation. Joins the batch
   (proof-lane).
+
+- STYLE MODIFIER PRECISION (NATE 2026-08-25): .render never shipped in
+  live templates - it is dormant lib machinery + a design-doc example
+  only; the six migrated templates declare zero styles (absence-is-
+  default already validated). The REAL live coupling is engine step
+  publishers importing preset CONSTANTS - those retire: publishers
+  declare QUANTITIES, the contract owns quantity->preset. .style()
+  replaces the dormant .render machinery + the doc example.
