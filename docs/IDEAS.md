@@ -923,3 +923,10 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   access gets deliberately re-doored (one-line template edit) - e.g.
   sim_duration_s per-template where warranted. Implement in the next
   cohort-hardening batch alongside the remaining redline rulings.
+
+- STAGE-SEQUENCE ENFORCEMENT DEFERRED (NATE 2026-08-24, ruling b): stays
+  stamped-and-displayed for now; enforcement (validate_plan refuses stage
+  regression, facade ops become the stamping authority, gates
+  anchored-or-exempt) lands as the FIRST COMMIT of the mesh-gate wave -
+  the first feature whose correctness depends on ordering. Contractual
+  but unenforced until then, recorded in the amendment.
