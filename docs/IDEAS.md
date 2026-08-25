@@ -1220,3 +1220,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   normalizer. Mesh/BYO acceptance joins the species at the mesh-gate
   wave (the species = "things the user hands us: clicks, sketches,
   values, objects"). Joins the accumulated batch.
+
+- PROOF FOLDER ORGANIZATION RULED (NATE 2026-08-25): spot-check GIFs +
+  showcase renders live in INHERITED NAMED FOLDERS for quick reference -
+  docs/proof/templates/<template_name>/<variant>/ (variant = coarse |
+  refined | postmigration | addendum) instead of the flat
+  name-prefixed pile. Mechanical reorg: git mv existing files into
+  their folders (names kept), proof/render scripts write the new layout
+  going forward, README documents the scheme. The per-engine showcase
+  KEEP-LIST (delete-on-whim carve-out) points at these folders. Joins
+  the accumulated batch.
