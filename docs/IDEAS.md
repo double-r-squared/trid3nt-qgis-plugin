@@ -1207,3 +1207,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Backfill pass seeds from surviving run prefixes + proof evidence JSONs
   (swept cases honestly gone). Build: skeleton lane, small; joins the
   accumulated batch.
+
+- USER-INPUT SPECIES RULED (NATE 2026-08-25): typed user-input
+  normalizers (point-from-shapes, polyline, polygon, bbox, BEARING wrap,
+  later BYO-object acceptors) become ONE species in workflows/lib
+  LIVING WITH the gate machinery - because a value can arrive drawn
+  (DrawGate response) or typed (wire coercion) and BOTH routes must pass
+  the SAME normalizer (no-double-middleware; gate geometry vocabulary ==
+  coercion shape vocabulary). wind_bearing folds entirely into the lib
+  species; release_points SPLITS - shape normalization to lib, the
+  seed-vs-source POLICY stays in the template sibling calling the lib
+  normalizer. Mesh/BYO acceptance joins the species at the mesh-gate
+  wave (the species = "things the user hands us: clicks, sketches,
+  values, objects"). Joins the accumulated batch.
