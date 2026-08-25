@@ -111,8 +111,10 @@ async def write_coastal_deck(
         "bathy_source": "synthetic" if synthetic else "noaa_demall",
         "target_resolution_m": float(mesh_resolution_m),
         "ocean_edge": str(ocean_edge or "auto"),
+        # bed_datum is NOT staged: the worker has no knob for it and its parser
+        # hard-errors on a field it does not read. It rides the deck instead,
+        # where the layer's narration and provenance rows are written from.
         "series_datum": datum,
-        "bed_datum": BED_DATUM,
         "datum_offset_m": float(datum_offset_m),
         "duration_s": float(duration_s),
         "time_step_s": float(time_step_s),

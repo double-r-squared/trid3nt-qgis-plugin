@@ -154,11 +154,20 @@ ANSWER = ("kd_max", "hs_max_m", "kd_sheltered", "kd_exposed", "resonant_period_s
           "agitation_curve_kd", "agitation_curve_kind")
 
 
-#: What the curve's x axis IS, per question class. A transect in metres for a
-#: diffraction run; anything else names itself.
-_CURVE_AXIS: dict[str, str] = {
-    "diffraction_transect": "Distance along the transect (m)",
+#: What the curve's axes ARE, per question class. Each mode sweeps a different
+#: independent variable, so a single axis label would be wrong for two of the
+#: three: a resonance run plots amplification against incident PERIOD, not Kd
+#: against distance.
+_CURVE_AXIS: dict[str, tuple[str, str]] = {
+    "diffraction_transect": ("Distance along the transect (m)",
+                             "Agitation coefficient Kd = Hs/H0"),
+    "resonance_sweep": ("Incident wave period (s)",
+                        "Basin response (amplification of H0)"),
+    "shoal_axis_transect": ("Distance along the shoal axis (m)",
+                            "Agitation coefficient Kd = Hs/H0"),
 }
+_CURVE_AXIS_DEFAULT = ("Along the measured curve",
+                       "Agitation coefficient Kd = Hs/H0")
 
 
 def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
@@ -176,6 +185,7 @@ def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     kind = str(getattr(result, "agitation_curve_kind", None) or "transect")
+    x_title, y_title = _CURVE_AXIS.get(kind, _CURVE_AXIS_DEFAULT)
     sheltered = getattr(result, "kd_sheltered", None)
     exposed = getattr(result, "kd_exposed", None)
     period = getattr(result, "wave_period_s", None)
@@ -188,10 +198,8 @@ def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
             "data": {"values": [{"x": float(xs[i]), "kd": float(kd[i])}
                                 for i in range(len(xs))]},
             "encoding": {
-                "x": {"field": "x", "type": "quantitative",
-                      "title": _CURVE_AXIS.get(kind, "Along the measured curve")},
-                "y": {"field": "kd", "type": "quantitative",
-                      "title": "Agitation coefficient Kd = Hs/H0"},
+                "x": {"field": "x", "type": "quantitative", "title": x_title},
+                "y": {"field": "kd", "type": "quantitative", "title": y_title},
             },
         },
         title=title,

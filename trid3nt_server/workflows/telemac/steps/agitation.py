@@ -304,6 +304,31 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
     return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
+#: The x/y metric pair each question class MEASURES, by the worker's own chart
+#: kind. Each mode sweeps a different independent variable - distance along a
+#: transect, incident period, distance along the shoal axis - and writes it under
+#: its own key. Reading only the diffraction pair left resonance and shoal runs
+#: publishing a raster with no curve at all, and a chart builder that correctly
+#: refused to invent one, so two of the three question classes were silently
+#: chartless.
+_CURVE_KEYS: dict[str, tuple[str, str]] = {
+    "diffraction_transect": ("chart_s_m", "chart_kd"),
+    "resonance_sweep": ("chart_period_s", "chart_response"),
+    "shoal_axis_transect": ("chart_axis_y_m", "chart_kd"),
+}
+
+
+def _curve_rows(metrics: dict[str, Any]) -> dict[str, Any]:
+    """The measured curve as the layer's own fields, whichever mode measured it."""
+    kind = str(metrics.get("chart_kind") or "")
+    x_key, y_key = _CURVE_KEYS.get(kind, ("chart_s_m", "chart_kd"))
+    return {
+        "agitation_curve_m": list(metrics.get(x_key) or []) or None,
+        "agitation_curve_kd": list(metrics.get(y_key) or []) or None,
+        "agitation_curve_kind": metrics.get("chart_kind"),
+    }
+
+
 def _honesty_note(deck: dict[str, Any]) -> str:
     return (
         "Phase-RESOLVING agitation SCREENING: ARTEMIS elliptic mild-slope "
@@ -362,12 +387,9 @@ async def publish_agitation_products(*, deck: dict[str, Any],
             "fallback_note": _honesty_note(deck),
             "synthetic_inputs": _provenance(deck, metrics),
             "run_id": run_id,
-            # The curve the WORKER measured across the field - a transect for a
-            # diffraction run, a period sweep for a resonance one. The chart plots
+            # The curve the WORKER measured across the field. The chart plots
             # this, so the chart and the narrated scalars are one measurement.
-            "agitation_curve_m": list(metrics.get("chart_s_m") or []) or None,
-            "agitation_curve_kd": list(metrics.get("chart_kd") or []) or None,
-            "agitation_curve_kind": metrics.get("chart_kind"),
+            **_curve_rows(metrics),
         })
 
     # INPUT PARITY: the surveyed structure on the map beside the field it shelters.

@@ -201,3 +201,56 @@ def test_a_rounded_corner_moves_the_origin_by_metres():
     staged = _local_mesh_origin([-85.0234, 29.6911, -84.9012, 29.8044], 32616)
     offset = max(abs(raw[0] - staged[0]), abs(raw[1] - staged[1]))
     assert 0.05 < offset < 100.0
+
+
+# --------------------------------------------------------------------------- #
+# Every ARTEMIS question class measures a curve; every one of them must plot.
+# --------------------------------------------------------------------------- #
+
+def test_each_agitation_mode_publishes_the_curve_it_actually_measured():
+    """Two of the three question classes were silently chartless.
+
+    The worker sweeps a different independent variable per mode and writes it
+    under its own key - distance along a transect, incident period, distance
+    along the shoal axis. The publisher read only the diffraction pair, so a
+    resonance or shoal run published a raster with no curve and the chart builder
+    correctly refused to invent one.
+    """
+    from trid3nt_server.workflows.telemac.steps.agitation import _curve_rows
+
+    diffraction = _curve_rows({"chart_kind": "diffraction_transect",
+                               "chart_s_m": [0.0, 10.0], "chart_kd": [1.0, 0.4]})
+    assert diffraction["agitation_curve_m"] == [0.0, 10.0]
+    assert diffraction["agitation_curve_kd"] == [1.0, 0.4]
+
+    resonance = _curve_rows({"chart_kind": "resonance_sweep",
+                             "chart_period_s": [30.0, 32.0],
+                             "chart_response": [0.638, 3.482]})
+    assert resonance["agitation_curve_m"] == [30.0, 32.0]
+    assert resonance["agitation_curve_kd"] == [0.638, 3.482]
+    assert resonance["agitation_curve_kind"] == "resonance_sweep"
+
+    shoal = _curve_rows({"chart_kind": "shoal_axis_transect",
+                         "chart_axis_y_m": [0.0, 5.0], "chart_kd": [1.0, 2.2]})
+    assert shoal["agitation_curve_m"] == [0.0, 5.0]
+    assert shoal["agitation_curve_kd"] == [1.0, 2.2]
+
+
+def test_a_mode_that_measured_nothing_carries_no_curve():
+    """No curve is an honest empty, never a fabricated one."""
+    from trid3nt_server.workflows.telemac.steps.agitation import _curve_rows
+
+    rows = _curve_rows({"chart_kind": "resonance_sweep"})
+    assert rows["agitation_curve_m"] is None
+    assert rows["agitation_curve_kd"] is None
+
+
+def test_every_agitation_curve_kind_names_both_of_its_axes():
+    """A resonance run plots amplification against PERIOD, not Kd against metres."""
+    from trid3nt_server.workflows.telemac.agitation.agitation import _CURVE_AXIS
+    from trid3nt_server.workflows.telemac.steps.agitation import _CURVE_KEYS
+
+    assert set(_CURVE_AXIS) == set(_CURVE_KEYS)
+    for kind, (x_title, y_title) in _CURVE_AXIS.items():
+        assert x_title and y_title and x_title != y_title, kind
+    assert "period" in _CURVE_AXIS["resonance_sweep"][0].lower()

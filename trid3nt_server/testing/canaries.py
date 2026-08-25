@@ -183,13 +183,14 @@ CANARIES: dict[str, LiveRun] = {
             "wave_period_s": 8.0,
             "wave_direction_deg": 90.0,
             "wave_height_m": 1.0,
-            "reflection_coef": 1.0,
-            # 8 m, not 12: the realized grid spacing is Lx/(nx-1) rather than the
-            # ask, and at 12 m the dividing wall's opening lands so that the
-            # boundary ring carries an isolated liquid point, which ARTEMIS
-            # refuses. The worker now says so by name; the canary asks for a
-            # spacing that resolves the basin.
-            "target_resolution_m": 8.0,
+            # target_resolution_m is deliberately UNSUPPLIED, and this canary is
+            # the reason the gap is visible: the param declares bounds of
+            # (20, 2000) m while declaring its own analytic-domain default as
+            # 8 m, so an EXPLICIT ask is floored to 20 m - and the analytic
+            # basin is 100 m wide with a 25 m mouth, which 20 m spacing cannot
+            # discretize (the opening lands on 2 columns and the boundary ring
+            # gets an isolated liquid point). Letting the labeled 8 m default
+            # ride is the declared path and the one that resolves the basin.
             "bathy_source": "idealized",
             "compute_class": "medium",
             "input_mode": "user_gated",
@@ -274,6 +275,12 @@ CANARIES.update({
             "sim_duration_s": 600.0, "source_q_m3s": 8.0,
             "channel_width_m": 60.0, "mesh_resolution": "coarse",
             "mesh_resolution_m": 10.0, "discharge_m3s": 2.2,
+            # 30 frames over the 600 s window instead of the worker default's 6.
+            # Six frames is too coarse to spot-check a plume against: the dye
+            # arrives and the animation is over. The cadence is the SOLVER's
+            # output interval, so this is the run producing more of its own
+            # answer rather than the renderer interpolating between fewer.
+            "output_interval_min": 0.333,
             "input_mode": "auto",
         },
         case_title="refined: telemac river dye (Eel River near Scotia, 10 m)",
