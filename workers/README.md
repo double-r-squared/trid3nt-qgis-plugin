@@ -49,12 +49,11 @@ Env gates + measured runtimes for every engine: `docs/site/engines.md`.
 
 ## Cloud-lane Dockerfiles that are NOT part of local dispatch
 
-`modflow/`, `landlab/`, `openquake/`, `elmfire/`, and `canopy/` also
+`modflow/`, `landlab/`, `openquake/`, and `elmfire/` also
 carry a `Dockerfile`. Those build AWS Batch worker images (a scale-beyond-local
 path this repo does not deploy) -- read as "FILE-ONLY SCAFFOLD" / "AWS Batch
 worker" in their own header comments. Locally these engines run exec-mode
 per above; `elmfire` runs its separately-built `trid3nt/elmfire:dev` dev image
-instead of `elmfire/Dockerfile`'s cloud build; `canopy` has no local dispatch
-wiring yet (no `LocalSolverSpec` registered). `qgis/Dockerfile` is a separate
+instead of `elmfire/Dockerfile`'s cloud build. `qgis/Dockerfile` is a separate
 QGIS-Processing-worker concern (job-0308, EC2/cloud), unrelated to the solver
 dispatch seam above.

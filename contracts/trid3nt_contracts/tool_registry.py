@@ -391,7 +391,7 @@ class AtomicToolMetadata(GraceModel):
     # dispatch wrapper now auto-calls publish_layer for any such droppable raster.
     #
     # Default True: terminal raster products (compute_hillshade / slope / aspect /
-    # colored_relief / ndvi / blended / canopy, clip_raster_*, and the raster
+    # colored_relief / ndvi / blended, clip_raster_*, and the raster
     # FETCHERS the user normally wants to see) auto-publish. Set False for pure
     # INTERMEDIATE rasters whose raw output the user should not auto-see (e.g. the
     # raw DEM that exists only to feed compute_hillshade / compute_slope). An

@@ -477,7 +477,6 @@ from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E
 from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
 from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
 from .processing.compute_building_density import compute_building_density  # noqa: E402,F401
-from .processing.compute_canopy_height import compute_canopy_height  # noqa: E402,F401
 from .processing.compute_change_detection import compute_change_detection  # noqa: E402,F401
 from .processing.compute_colored_relief import compute_colored_relief  # noqa: E402,F401
 from .processing.compute_contours import compute_contours  # noqa: E402,F401

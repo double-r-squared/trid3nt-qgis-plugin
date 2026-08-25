@@ -197,7 +197,6 @@ TIMEOUT_OVERRIDES = {
     "fetch_storm_events_db": 420,
     "fetch_climate_normals": 420,
     "fetch_population": 420,
-    "compute_canopy_height": 600,
     "fetch_goes_archive_animation": 420,
     "fetch_goes_blend_animation": 420,
     "fetch_nws_alerts_conus": 300,

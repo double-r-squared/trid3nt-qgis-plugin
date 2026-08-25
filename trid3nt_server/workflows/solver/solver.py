@@ -272,14 +272,6 @@ SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
     # static literal here is evaluated first, so the setdefault is a no-op and
     # this consistent composer name wins).
     "swan": "model_swan_wave_field",
-    # canopy-height ML-inference tool (Meta HighResCanopyHeight on CPU). It is
-    # NOT a numerical engine -- it is a compute-heavy ML-inference tool that runs
-    # on the SAME local-docker substrate the physics engines use. The agent
-    # stages an RGB COG + build_spec and dispatches via the generic run_solver /
-    # wait_for_completion seam; the canopy worker writes the SAME completion.json
-    # schema, so the wait branch is reused verbatim. The value is consumed only
-    # as a presence-gate by run_solver.
-    "canopy": "canopy_height_inference",
 }
 
 
