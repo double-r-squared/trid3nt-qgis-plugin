@@ -1154,3 +1154,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   publish depth-above-initial as the primary and keep total depth as a
   companion. This changes what the product MEANS, so it is NATE's call,
   not a silent correction - recorded, not done.
+
+- SETTER SENTIMENT INTO THE SKELETON (NATE 2026-08-25, decision 1): the
+  set_* family's capability becomes SKELETON machinery - (a)
+  RERUN-WITH-OVERRIDES: derive a run from a parent run's resolved sheet
+  w/ named overrides through the USER door; ledger/resume reuses
+  unchanged stages; copy-on-write via run-prefix separation;
+  approved==ran holds by construction. (b) COUPLED-VALIDITY RULES:
+  declared cross-param validators (friction_law change inverts
+  friction_coefficient meaning -> re-confirm or refuse). This IS the
+  calibration substrate (a calibration loop = automated
+  rerun-with-overrides vs observations) - build as the calibration
+  track's FIRST wave (slow, research-first, post-MODFLOW per NATE's
+  sequencing). The four set_* tools = interim mechanism; DELETION_LEDGER
+  rows conditioned on the skeleton capability proving the same live
+  recalibration, then they die.
