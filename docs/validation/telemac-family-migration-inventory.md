@@ -75,3 +75,41 @@ there is no parallel lane.
 4. `telemac3d_stratified_flow` - adds the 3D reader.
 5. `rain_on_grid` - the outlier (catchment delineation, in-container mesher, CN
    infiltration). Its own risk, taken last.
+
+---
+
+## Close-out: what the wave actually did
+
+| template | migrated | template LOC | parity | proofs |
+|---|---|---|---|---|
+| `telemac_do_sag` | wave 2 (cohort) | 329 -> 316 | canary re-verified: DO min 9.0099 mg/L @ 158.8 m, unchanged | post-migration + refined-10 m sets |
+| `telemac_river_dye` | wave 3 (cohort) | 535 -> 520 | canary re-verified: cmax 4.878571510314941 mg/L, peak 200 s, reach 472.7 m, unchanged | refined-10 m set |
+| `coastal_tidal_surge` | THIS WAVE | 843 -> 301 | deck BYTE-IDENTICAL, worker metrics identical bar run tag + wall_s | coarse + refined-50 m sets |
+| `tomawac_wave_field` | THIS WAVE | 690 -> 288 | deck BYTE-IDENTICAL, worker metrics identical bar run tag | coarse + refined-500 m sets |
+| `artemis_harbor_agitation` | THIS WAVE | 835 -> 289 | deck BYTE-IDENTICAL, worker metrics identical bar run tag + wall_s | coarse + refined-20 m sets |
+| `telemac3d_stratified_flow` | THIS WAVE | 732 -> 292 | manifest BYTE-IDENTICAL bar run tag, worker metrics identical bar run tag + wall_s | coarse + refined-1150 m sets |
+| `telemac_rain_on_grid` | **NO** | 1835, untouched | n/a - not migrated | its live canary run is captured as the next wave's baseline |
+
+`telemac_rain_on_grid` was left DELIBERATELY un-migrated and verified UNBROKEN by
+a live run through the registered tool (`01M0VZ7XCBD74RVXWAKKBFWX0J`: Coweeta
+Creek delineated, meshed, infiltrated and solved, six layers on the canvas). The
+reason it is the monster is principled rather than a matter of size: it is the
+only TELEMAC template whose migration lands inside the MESH-GATE wave's
+territory. It carries a mesh PRECONDITION GATE (a gate species the declarative
+library does not have), a BYO mesh (`mesh_uri`, which is the mesh-as-`Data`
+ruling), and an in-container mesher - all three explicitly deferred by NATE to a
+later wave. Migrating it now would either invent a mesh-gate species ahead of the
+wave designed to rule on it, or keep the gate imperative inside a composite,
+which is the exact disease the skeleton exists to remove.
+
+## What happened to the legacy files
+
+| file | predicted | actual |
+|---|---|---|
+| `postprocess_telemac.py` | survives | SURVIVES, +44 (the shared `_local_mesh_origin` + four call sites) |
+| `run_telemac.py` | survives | SURVIVES, untouched - it is the solver registry |
+| `results_mesh_seam.py` | survives | SURVIVES, untouched |
+| `release_layer.py` | survives | SURVIVES, untouched |
+| `streeter_phelps.py` | survives (a V&V oracle) | SURVIVES, untouched |
+| `_bed_input.py` | dies with the three wave-module templates | DELETED, mechanism in `steps/open_water.py` |
+| `_template_card.py` | zero readers already | DELETED - TELEMAC is the first engine to clear the species |
