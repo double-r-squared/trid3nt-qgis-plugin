@@ -103,9 +103,9 @@ class DerivedEventParam(GraceModel):
     """One derived event parameter from cross-source claim aggregation.
 
     Returned per-target inside ``EventIngestResult.derived_params``. Shape
-    mirrors the per-target claim dict that ``aggregate_claims_across_sources``
-    returns, promoted into a typed envelope so downstream solvers (MODFLOW in
-    sprint-13, etc.) consume a stable contract rather than a free-form dict.
+    mirrors a per-target cross-source claim dict, promoted into a typed
+    envelope so downstream solvers consume a stable contract rather than a
+    free-form dict.
 
     ``value`` is intentionally ``Any`` because the per-target shape varies:
 

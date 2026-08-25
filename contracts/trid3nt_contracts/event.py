@@ -110,8 +110,8 @@ class ClaimSet(GraceModel):
     """A set of numerical claims for one quantity across sources, with consensus.
 
     ``consensus_value`` is the narrated number (invariant 7). Contributing
-    ``claims`` stay drillable. Populated by ``aggregate_claims_across_sources``
-    (engine-owned); ``schema`` owns this shape.
+    ``claims`` stay drillable. ``schema`` owns this shape; a producer fills it
+    from whatever cross-source aggregation it runs.
     """
 
     claims: list[NumericClaim] = Field(default_factory=list)

@@ -75,7 +75,7 @@
     },
     "ClaimSet": {
       "additionalProperties": false,
-      "description": "A set of numerical claims for one quantity across sources, with consensus.\n\n``consensus_value`` is the narrated number (invariant 7). Contributing\n``claims`` stay drillable. Populated by ``aggregate_claims_across_sources``\n(engine-owned); ``schema`` owns this shape.",
+      "description": "A set of numerical claims for one quantity across sources, with consensus.\n\n``consensus_value`` is the narrated number (invariant 7). Contributing\n``claims`` stay drillable. ``schema`` owns this shape; a producer fills it\nfrom whatever cross-source aggregation it runs.",
       "properties": {
         "claims": {
           "items": {

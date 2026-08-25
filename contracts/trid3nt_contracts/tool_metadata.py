@@ -40,7 +40,6 @@ TOOL_CATEGORIES: tuple[str, ...] = (
     "discovery",  # public hazard layer discovery (catalog search / fetch / summarize)
     "data-fetch",  # DEM, landcover, rivers, precip, streamflow, tracks, buildings
     "event-sourcing",  # news + agency feeds + generic web fetch
-    "event-aggregation",  # aggregate_claims_across_sources
     "geocoding",  # place name -> bbox
     "mongodb",  # MCP-served document/vector/insert operations
     "qgis",  # PyQGIS worker operations + algorithm discovery

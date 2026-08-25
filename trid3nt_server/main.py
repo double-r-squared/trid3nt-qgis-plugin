@@ -113,9 +113,7 @@ def _import_tools_registry() -> int:
     # registered via register_specs_from_tree.
     # fetch_nws_alerts_conus: spec-driven (single /alerts/active GET +
     # zone-polygon enrichment), registered via register_specs_from_tree.
-    # aggregate_claims_across_sources is an importable library, not an LLM-facing
-    # tool; model_groundwater imports its private extractors. News ingest rides
-    # web_fetch / fetch_nws_event / fetch_storm_events_db.
+    # News ingest rides web_fetch / fetch_nws_event / fetch_storm_events_db.
     # register compute_impervious_surface (NLCD impervious-fraction raster).
     from .tools.processing.compute_impervious_surface import compute_impervious_surface  # noqa: F401
     # register extract_landcover_class (NLCD binary-mask extractor for zone_input).
