@@ -1169,3 +1169,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sequencing). The four set_* tools = interim mechanism; DELETION_LEDGER
   rows conditioned on the skeleton capability proving the same live
   recalibration, then they die.
+
+- DECISION 1 PLACEMENT AMENDED (NATE 2026-08-25): rerun-with-overrides +
+  coupled-validity rules are NOT calibration-land - they are a PRIMITIVE
+  behavior of a workflow (skeleton core capability) that UNDERPINS
+  calibration. Build placement: the skeleton lane (workflows/lib -
+  natural fit alongside the ledger/resume machinery it composes), not
+  the calibration track; calibration later consumes it as a loop driver.
+  Setter-family deletion condition unchanged.
