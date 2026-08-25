@@ -23,10 +23,38 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+
+import pytest
 
 from trid3nt_server.server.protocol import catalog_http as tool_catalog_http
 from trid3nt_server.adapters import model_discovery
 from trid3nt_server.gates import context_budget
+
+_PROVIDER_ENV = (
+    "MODEL_PROVIDER",
+    "TRID3NT_OPENAI_BASE_URL",
+    "TRID3NT_OPENAI_API_KEY",
+    "TRID3NT_OPENAI_MODEL",
+    "TRID3NT_OPENAI_NUM_CTX",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_provider_env():
+    """Snapshot/restore the provider env block around every test.
+
+    The route mutates ``os.environ`` DIRECTLY, and ``monkeypatch.delenv`` on an
+    already-absent var records nothing to undo -- so without this a test's write
+    outlives it and seeds the next test's coherence gate.
+    """
+    saved = {name: os.environ.get(name) for name in _PROVIDER_ENV}
+    yield
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +239,248 @@ def test_provider_config_non_object_body_is_400(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     writer = _dispatch("/api/provider-config", b'["a","list"]')
     assert _status(bytes(writer.buffer)) == 400
+
+
+# ---------------------------------------------------------------------------
+# base_url/model provider-coherence gate
+#
+# A dock Save pushes fields independently, so a base-URL-only push could strand
+# the previous provider's model id in place: the daemon then dialled an endpoint
+# that does not serve it and was silently un-runnable until restart. The gate
+# checks the RESOLVED pair before touching os.environ.
+# ---------------------------------------------------------------------------
+
+
+def _seed_provider_env(monkeypatch, base_url: str, model: str) -> None:
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_OPENAI_MODEL", model)
+    monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "seeded-key")
+
+
+def test_coherent_openrouter_pair_is_applied(monkeypatch):
+    """(a) matching base_url + model -> 200 and the env actually moves."""
+    import os
+
+    _seed_provider_env(monkeypatch, "http://127.0.0.1:11434/v1", "qwen3:8b-24k")
+    body = json.dumps(
+        {
+            "base_url": "https://openrouter.ai/api/v1",
+            "model": "deepseek/deepseek-chat",
+        }
+    ).encode("utf-8")
+    writer = _dispatch("/api/provider-config", body)
+    out = bytes(writer.buffer)
+
+    assert _status(out) == 200
+    assert _resp_body(out)["base_url_host"] == "openrouter.ai"
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == "deepseek/deepseek-chat"
+
+
+def test_coherent_ollama_pair_is_applied(monkeypatch):
+    """(a) a plain Ollama tag against an Ollama base URL never probes."""
+    import os
+
+    _seed_provider_env(
+        monkeypatch, "https://openrouter.ai/api/v1", "deepseek/deepseek-chat"
+    )
+    body = json.dumps(
+        {"base_url": "http://127.0.0.1:11434/v1", "model": "llama3.1:8b"}
+    ).encode("utf-8")
+    writer = _dispatch("/api/provider-config", body)
+    out = bytes(writer.buffer)
+
+    assert _status(out) == 200
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == "llama3.1:8b"
+
+
+def test_ollama_base_url_with_openrouter_model_is_rejected(monkeypatch):
+    """(b) THE incident: base_url pushed to Ollama, OpenRouter model left in
+    place. Rejected statically (no probe) with both values named; env UNCHANGED.
+    """
+    import os
+
+    _seed_provider_env(
+        monkeypatch,
+        "https://openrouter.ai/api/v1",
+        "meta-llama/llama-3.3-70b-instruct:free",
+    )
+    # Only base_url is pushed -- the model rides in from the live env.
+    body = b'{"base_url":"http://127.0.0.1:11434/v1"}'
+    writer = _dispatch("/api/provider-config", body)
+    out = bytes(writer.buffer)
+
+    assert _status(out) == 400
+    err = _resp_body(out)["error"]
+    assert "127.0.0.1" in err
+    assert "meta-llama/llama-3.3-70b-instruct:free" in err
+    assert "Ollama" in err
+    # No partial mutation: BOTH vars are exactly as seeded.
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == (
+        "meta-llama/llama-3.3-70b-instruct:free"
+    )
+
+
+def test_openrouter_base_url_with_bare_tag_is_rejected(monkeypatch):
+    """(b) the reverse direction: an Ollama tag against OpenRouter, which only
+    serves namespaced 'vendor/model' ids. Env UNCHANGED, api_key untouched."""
+    import os
+
+    _seed_provider_env(monkeypatch, "http://127.0.0.1:11434/v1", "qwen3:8b-24k")
+    body = json.dumps(
+        {"base_url": "https://openrouter.ai/api/v1", "api_key": "sk-or-NEW-SECRET"}
+    ).encode("utf-8")
+    writer = _dispatch("/api/provider-config", body)
+    out = bytes(writer.buffer)
+
+    assert _status(out) == 400
+    err = _resp_body(out)["error"]
+    assert "openrouter.ai" in err
+    assert "qwen3:8b-24k" in err
+    assert "vendor/model" in err
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
+    # The rejected key never landed, and never rode back out in the response.
+    assert os.environ["TRID3NT_OPENAI_API_KEY"] == "seeded-key"
+    assert b"sk-or-NEW-SECRET" not in out
+
+
+def test_unknown_provider_endpoint_is_not_gated(monkeypatch):
+    """vLLM / LM Studio / llama.cpp serve HF-style ids on loopback; only the
+    Ollama PORT identifies Ollama, so these are never second-guessed."""
+    import os
+
+    _seed_provider_env(monkeypatch, "http://127.0.0.1:11434/v1", "qwen3:8b-24k")
+    body = json.dumps(
+        {
+            "base_url": "http://127.0.0.1:8000/v1",
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+        }
+    ).encode("utf-8")
+    writer = _dispatch("/api/provider-config", body)
+
+    assert _status(bytes(writer.buffer)) == 200
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == "meta-llama/Llama-3.1-8B-Instruct"
+
+
+# --- the live /api/tags probe (namespaced id vs Ollama only) ----------------
+
+
+class _TagsClient:
+    """httpx.Client stand-in for the /api/tags probe."""
+
+    payload: object = {"models": []}
+    boom: Exception | None = None
+    calls: int = 0
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def get(self, url, headers=None):
+        _TagsClient.calls += 1
+        if _TagsClient.boom is not None:
+            raise _TagsClient.boom
+        return _FakeResponse(_TagsClient.payload)
+
+
+def _install_tags_probe(monkeypatch, payload=None, boom=None):
+    import httpx
+
+    _TagsClient.calls = 0
+    _TagsClient.payload = payload if payload is not None else {"models": []}
+    _TagsClient.boom = boom
+    monkeypatch.setattr(httpx, "Client", _TagsClient)
+
+
+def test_namespaced_model_absent_from_ollama_is_rejected(monkeypatch):
+    """(b) an Ollama base URL accepts 'namespace/model' references of its own,
+    so shape alone cannot settle it -- the probe answers, the model is absent."""
+    import os
+
+    _seed_provider_env(
+        monkeypatch, "https://openrouter.ai/api/v1", "deepseek/deepseek-chat"
+    )
+    _install_tags_probe(
+        monkeypatch,
+        payload={"models": [{"name": "qwen3:8b-24k"}, {"name": "llama3.1:8b"}]},
+    )
+    writer = _dispatch(
+        "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
+    )
+    out = bytes(writer.buffer)
+
+    assert _TagsClient.calls == 1
+    assert _status(out) == 400
+    err = _resp_body(out)["error"]
+    assert "deepseek/deepseek-chat" in err
+    assert "127.0.0.1" in err
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
+
+
+def test_namespaced_model_installed_in_ollama_is_accepted(monkeypatch):
+    """A real Ollama namespaced pull must NOT be rejected."""
+    import os
+
+    _seed_provider_env(monkeypatch, "https://openrouter.ai/api/v1", "gpt-4o-mini")
+    _install_tags_probe(
+        monkeypatch, payload={"models": [{"name": "hf.co/user/some-model:latest"}]}
+    )
+    body = json.dumps(
+        {
+            "base_url": "http://127.0.0.1:11434/v1",
+            "model": "hf.co/user/some-model",
+        }
+    ).encode("utf-8")
+    writer = _dispatch("/api/provider-config", body)
+
+    assert _status(bytes(writer.buffer)) == 200
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == "hf.co/user/some-model"
+
+
+def test_probe_unreachable_does_not_reject(monkeypatch):
+    """(c) a network hiccup is NOT incoherence -- an unreachable probe applies."""
+    import os
+
+    _seed_provider_env(
+        monkeypatch, "https://openrouter.ai/api/v1", "deepseek/deepseek-chat"
+    )
+    _install_tags_probe(monkeypatch, boom=RuntimeError("connection refused"))
+    writer = _dispatch(
+        "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
+    )
+
+    assert _status(bytes(writer.buffer)) == 200
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == "deepseek/deepseek-chat"
+
+
+def test_probe_empty_or_unusable_body_does_not_reject(monkeypatch):
+    """(c) an endpoint that answers with nothing usable proves nothing."""
+    import os
+
+    _seed_provider_env(
+        monkeypatch, "https://openrouter.ai/api/v1", "deepseek/deepseek-chat"
+    )
+    _install_tags_probe(monkeypatch, payload={"models": []})
+    writer = _dispatch(
+        "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
+    )
+    assert _status(bytes(writer.buffer)) == 200
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
+
+    _install_tags_probe(monkeypatch, payload="not-a-dict")
+    writer = _dispatch(
+        "/api/provider-config", b'{"base_url":"http://127.0.0.1:11434/v1"}'
+    )
+    assert _status(bytes(writer.buffer)) == 200
 
 
 # ---------------------------------------------------------------------------

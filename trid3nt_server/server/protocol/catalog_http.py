@@ -1415,6 +1415,127 @@ class _ProviderConfigBadRequest(Exception):
     (a malformed body could itself be a mistyped key)."""
 
 
+class _ProviderConfigIncoherent(_ProviderConfigBadRequest):
+    """base_url and model name DIFFERENT providers -> 400 with the env left
+    exactly as it was. The message may name the base URL HOST and the model id
+    (both already leave this route in the success body); it must never carry the
+    full base URL or the api_key."""
+
+
+#: Ollama's fixed listen port. The ONLY signal that an OpenAI-compatible
+#: endpoint is Ollama rather than vLLM / llama.cpp / LM Studio, which also serve
+#: on loopback but accept HuggingFace-style ``vendor/model`` ids -- so a bare
+#: localhost host must NEVER be read as Ollama.
+_OLLAMA_PORT = 11434
+
+#: Live /api/tags probe budget. The dock's post_provider_config timeout is 5s;
+#: this must stay far under it so a slow endpoint never stalls Save.
+_OLLAMA_PROBE_TIMEOUT_S = 1.5
+
+
+def _provider_family(base_url: str) -> str | None:
+    """OpenAI-compatible base URL -> provider family, or None when the endpoint
+    has no fixed model-id convention.
+
+    Only families whose id convention is UNAMBIGUOUS are named. api.openai.com,
+    Groq, vLLM, llama.cpp and LM Studio all serve ids we must not second-guess,
+    so they resolve to None and are never gated.
+    """
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(base_url)
+        port = parts.port
+    except ValueError:  # unparsable authority -> no identity, no gate
+        return None
+    if (parts.hostname or "").lower().endswith("openrouter.ai"):
+        return "openrouter"
+    if port == _OLLAMA_PORT:
+        return "ollama"
+    return None
+
+
+def _ollama_serves_model(base_url: str, model: str) -> bool | None:
+    """SYNC live probe of Ollama's ``/api/tags``: True/False when the endpoint
+    answers, None when it cannot be reached or says nothing usable.
+
+    None is the honest answer for a network hiccup and MUST NOT be read as
+    incoherence -- only an endpoint that answers with a non-empty installed list
+    can prove a model absent.
+    """
+    import httpx
+
+    root = model_discovery._ollama_root(base_url)
+    if not root:
+        return None
+    try:
+        with httpx.Client(timeout=_OLLAMA_PROBE_TIMEOUT_S) as client:
+            resp = client.get(f"{root}/api/tags")
+            resp.raise_for_status()
+            payload = resp.json()
+    except Exception:  # noqa: BLE001 -- unreachable / slow / non-JSON -> unknown
+        return None
+    raw = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return None
+
+    def _norm(name: str) -> str:
+        return name[: -len(":latest")] if name.endswith(":latest") else name
+
+    installed = {
+        _norm(m["name"].strip())
+        for m in raw
+        if isinstance(m, dict)
+        and isinstance(m.get("name"), str)
+        and m["name"].strip()
+    }
+    if not installed:
+        return None
+    return _norm(model) in installed
+
+
+def _check_provider_coherence(base_url: str, model: str) -> None:
+    """Raise ``_ProviderConfigIncoherent`` when base_url and model belong to
+    DIFFERENT providers. Called BEFORE any env mutation.
+
+    A dock Save pushes fields independently, so a base-URL-only push can strand
+    a model id from the previous provider in place; the daemon then dials an
+    endpoint that does not serve it and is un-runnable until restart. The pair
+    is therefore checked as RESOLVED (payload over live env), not per field.
+
+    Static identification is the gate. The live ``/api/tags`` probe runs only
+    for the one pair static shape cannot settle -- a namespaced id against
+    Ollama, which accepts ``namespace/model`` references of its own -- and an
+    unreachable probe never rejects.
+    """
+    family = _provider_family(base_url)
+    if family is None or not model:
+        return
+    host = model_discovery._base_url_host(base_url)
+    if family == "openrouter" and "/" not in model:
+        raise _ProviderConfigIncoherent(
+            f"provider mismatch: base_url host {host!r} is OpenRouter but model "
+            f"{model!r} is not an OpenRouter id. OpenRouter ids are namespaced "
+            "'vendor/model' (e.g. 'meta-llama/llama-3.3-70b-instruct:free'). "
+            "Set base_url and model to the same provider."
+        )
+    if family == "ollama":
+        if model.endswith(":free"):
+            raise _ProviderConfigIncoherent(
+                f"provider mismatch: base_url host {host!r} is Ollama but model "
+                f"{model!r} is an OpenRouter free-tier id. Expected an installed "
+                "Ollama tag (e.g. 'qwen3:8b-24k'). Set base_url and model to "
+                "the same provider."
+            )
+        if "/" in model and _ollama_serves_model(base_url, model) is False:
+            raise _ProviderConfigIncoherent(
+                f"provider mismatch: base_url host {host!r} is Ollama but model "
+                f"{model!r} is not installed there (it looks like another "
+                "provider's namespaced id). Pull it with 'ollama pull' or set "
+                "base_url and model to the same provider."
+            )
+
+
 def _apply_provider_config(raw_body: bytes) -> bytes:
     """Update the OpenAI-provider process env from the POST body and return the
     encoded ``{"ok", "model", "base_url_host"}`` result.
@@ -1427,6 +1548,10 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
     matching env var is set (str()-ed so a numeric ``num_ctx`` rides cleanly);
     a same-name model then re-discovers its context window via the public
     ``reset_num_ctx_cache`` seam.
+
+    The RESOLVED base_url/model pair (this body over the live env) must pass
+    ``_check_provider_coherence`` before anything is written, so a rejected push
+    leaves the env byte-identical rather than half-applied.
 
     SECURITY: the api_key is written to ``os.environ`` but is NEVER logged,
     echoed in the response, or placed in a raised message -- only the base URL
@@ -1448,11 +1573,21 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
         "model": "TRID3NT_OPENAI_MODEL",
         "num_ctx": "TRID3NT_OPENAI_NUM_CTX",
     }
+    updates: dict[str, str] = {}
     for field, env_name in field_env.items():
         if field in payload and payload[field] is not None:
             value = str(payload[field]).strip()
             if value:
-                os.environ[env_name] = value
+                updates[env_name] = value
+    # Gate on the pair that would be IN FORCE after this push -- a body carrying
+    # only base_url still has to agree with the model already set.
+    _check_provider_coherence(
+        updates.get("TRID3NT_OPENAI_BASE_URL")
+        or os.environ.get("TRID3NT_OPENAI_BASE_URL", "").strip(),
+        updates.get("TRID3NT_OPENAI_MODEL")
+        or os.environ.get("TRID3NT_OPENAI_MODEL", "").strip(),
+    )
+    os.environ.update(updates)
     # A same-name model must re-discover its num_ctx (the provider/num_ctx
     # switch invalidates the process-lifetime cache).
     try:
@@ -2058,7 +2193,9 @@ async def _handle_http(
         # time + rebuilds AsyncOpenAI per-call). Local-mode gated EXACTLY like
         # /api/local-models -- absent (404) on the cloud surface. SECURITY: the
         # api_key rides the body, is written to env, and is NEVER logged or
-        # echoed -- only the base_url host + effective model return.
+        # echoed -- only the base_url host + effective model return. Runs in a
+        # thread: the coherence gate may make a short blocking /api/tags probe,
+        # which must never sit on the event loop.
         if not model_discovery._local_models_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
             await writer.drain()
@@ -2073,7 +2210,7 @@ async def _handle_http(
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
         try:
-            body = _apply_provider_config(raw_body)
+            body = await asyncio.to_thread(_apply_provider_config, raw_body)
             writer.write(_format_response(200, body))
         except _ProviderConfigBadRequest as exc:
             writer.write(
