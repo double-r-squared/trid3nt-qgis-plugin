@@ -1,13 +1,27 @@
-"""The shared TELEMAC step family: the reach pipeline every river template declares.
+"""The shared TELEMAC step families: the pipelines every TELEMAC template declares.
 
-One skeleton - geocode -> flowline -> seed -> deck -> solve -> products - with a
-per-deliverable serialization hook at each end. A workflow declares which steps
-it wants and what feeds them; nothing here decides what question is being asked.
+Two fronts, one skeleton each. The REACH front - geocode -> flowline -> seed ->
+deck -> solve -> products - meshes a corridor along a flowline. The OPEN-WATER
+front - AOI -> deck -> solve -> products - lays a regular grid over an extent and
+serves the coastal, wave, harbour and stratified domains, which differ only in
+which worker section their deck names. Both have a per-deliverable serialization
+hook at each end. A workflow declares which steps it wants and what feeds them;
+nothing here decides what question is being asked.
 """
 
 from __future__ import annotations
 
+from .coastal import Coastal, publish_coastal_products, write_coastal_deck
 from .deck import WriteDeck, normalize_bank_source, stage_manifest, write_reach_deck
+from .open_water import (
+    OpenWaterError,
+    SolveOpenWater,
+    download_open_water_result,
+    publish_peak_layer,
+    solve_open_water,
+    stage_open_water_manifest,
+    surface_in_worker_bed_input,
+)
 from .errors import (
     TelemacBanksUnavailableError,
     TelemacDyeScenarioError,
@@ -61,10 +75,14 @@ from .water_quality import (
 )
 
 __all__ = [
-    "CarrierDischarge",
+    "CarrierDischarge", "Coastal",
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
-    "MESH_NODE_CAP", "Products", "ReachSeed", "ReviewResolvedInputs",
-    "SCOUR_KEYWORDS", "Solve",
+    "MESH_NODE_CAP", "OpenWaterError", "Products", "ReachSeed",
+    "ReviewResolvedInputs",
+    "SCOUR_KEYWORDS", "Solve", "SolveOpenWater",
+    "download_open_water_result", "publish_coastal_products", "publish_peak_layer",
+    "solve_open_water", "stage_open_water_manifest", "surface_in_worker_bed_input",
+    "write_coastal_deck",
     "TelemacBanksUnavailableError", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
     "TelemacReleasePointRejectedError", "WaqtelO2", "WriteDeck",

@@ -1,0 +1,289 @@
+{
+  "report": {
+    "case": "coarse",
+    "tool_status": null,
+    "turn_complete": true,
+    "layers": [
+      "Mesh preview (30 m edges, 1,048 nodes)",
+      "Input: river geometry (river_geometry)",
+      "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+      "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
+      "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
+    ],
+    "run_id": "01M0VT23RCD31KTPK9MX1JGZ90",
+    "product_uris": {
+      "chart_spec": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/metrics.json"
+    },
+    "product_errors": {},
+    "charts_emitted": 1,
+    "dye_cmax_mgl": 4.878571510314941,
+    "dye_peak_time_s": 200.0,
+    "plume_reach_m": 472.7,
+    "active_frames": 3,
+    "mesh_size_m": 30.0,
+    "mesh_node_estimate": 155,
+    "detail": ""
+  },
+  "evidence": {
+    "tool": "telemac_river_dye",
+    "args": {
+      "location": "Eel River near Scotia, California",
+      "substance": "dye",
+      "spill_fraction": 0.25,
+      "spill_duration_s": 120.0,
+      "dye_concentration_mgl": 100.0,
+      "reach_length_km": 1.0,
+      "sim_duration_s": 600.0,
+      "source_q_m3s": 8.0,
+      "channel_width_m": 60.0,
+      "mesh_resolution": "coarse",
+      "discharge_m3s": 2.2,
+      "input_mode": "auto",
+      "mesh_resolution_m": 50.0
+    },
+    "session_id": "01M0VT0VGRWZMATSTKNVY59YZC",
+    "case_id": "01M0VT0VS5XXVDM2P52TQ8F4VJ",
+    "tool_status": null,
+    "dispatched": true,
+    "is_error": false,
+    "detail": "",
+    "turn_complete": true,
+    "charts": 1,
+    "chart_payloads": [
+      {
+        "envelope_type": "chart-emission",
+        "chart_id": "01M0VT40VAY7W237SJD2761KJ4",
+        "vega_lite_spec": {
+          "mark": {
+            "type": "line",
+            "point": true
+          },
+          "data": {
+            "values": [
+              {
+                "t_s": 0.0,
+                "dye_mgl": 0.0
+              },
+              {
+                "t_s": 200.0,
+                "dye_mgl": 4.878571510314941
+              }
+            ]
+          },
+          "encoding": {
+            "x": {
+              "field": "t_s",
+              "type": "quantitative",
+              "title": "Time (s)"
+            },
+            "y": {
+              "field": "dye_mgl",
+              "type": "quantitative",
+              "title": "Dye concentration (mg/L)"
+            }
+          },
+          "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+        },
+        "title": "Peak dye concentration - Eel River near Scotia, California",
+        "caption": "Reach peak dye concentration 4.88 mg/L, arriving 200 s after release (idealized-bed demo).",
+        "source_layer_uri": null,
+        "created_turn_id": "01M0VT237KG9QJGRZVWPPXW89B"
+      }
+    ],
+    "layers": [
+      {
+        "layer_id": "telemac-mesh-preview-01M0VT0WZZVFKVNNJ6TQDCERN7",
+        "name": "Mesh preview (30 m edges, 1,048 nodes)",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-runs/01M0VT0WZZVFKVNNJ6TQDCERN7/mesh_preview.geojson",
+        "style_preset": "nhdplus_flowlines",
+        "visible": true,
+        "role": "input",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 0,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": "<dropped, 237604 bytes>"
+      },
+      {
+        "layer_id": "input-river_geometry-c08198e815b0",
+        "name": "Input: river geometry (river_geometry)",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-cache/cache/static-30d/river_geometry/e3039853850c4b03d8c7bbfaf25e1edc.fgb",
+        "style_preset": "osm_waterways",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 1,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": "<dropped, 162816 bytes>"
+      },
+      {
+        "layer_id": "telemac-release-01M0VT23QFPEBDACX7DK194Y1H",
+        "name": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+        "layer_type": "vector",
+        "uri": "s3://trid3nt-runs/inputs/01M0VT23Q74YSCW12WQC53AEW4/release_point.geojson",
+        "style_preset": "release_point",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 2,
+        "crs_authid": null,
+        "legend": null,
+        "inline_geojson": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {
+                "role": "point",
+                "basis": "derived",
+                "reach": "scotia_humboldt_county_california_95562_united_s"
+              },
+              "geometry": {
+                "type": "Point",
+                "coordinates": [
+                  -124.09228,
+                  40.495585
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "layer_id": "input-river-bed-01M0VT40AC0G1EW35055N0M5AQ",
+        "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
+        "layer_type": "raster",
+        "uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/bed_bathymetry.tif",
+        "style_preset": "continuous_dem",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 3,
+        "crs_authid": null,
+        "legend": null
+      },
+      {
+        "layer_id": "model-results-mesh-01M0VT23RCD31KTPK9MX1JGZ90",
+        "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+        "layer_type": "mesh",
+        "uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/r2d_river.slf",
+        "style_preset": "mesh_grid",
+        "visible": true,
+        "role": "context",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 4,
+        "crs_authid": "EPSG:32610",
+        "legend": null
+      },
+      {
+        "layer_id": "01M0VT411YMA9TN4BYFHFBYAX6",
+        "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+        "layer_type": "raster",
+        "uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/overviews/01M0VT40RRSCDHV6VZZQCY412G.tif",
+        "style_preset": "continuous_dye_concentration",
+        "visible": true,
+        "role": "primary",
+        "temporal": false,
+        "wms_url": null,
+        "opacity": null,
+        "z_index": 5,
+        "crs_authid": null,
+        "legend": {
+          "kind": "continuous",
+          "colormap": "viridis",
+          "vmin": 0.262461,
+          "vmax": 3.26453,
+          "classes": null,
+          "value_field": null,
+          "units": null,
+          "label": "Dye concentration"
+        }
+      }
+    ],
+    "draw_card": null,
+    "form_card": null,
+    "plain_warnings": [
+      "telemac_river_dye"
+    ],
+    "run_id": "01M0VT23RCD31KTPK9MX1JGZ90",
+    "chart_spec": {
+      "dye_concentration": {
+        "envelope_type": "chart-emission",
+        "chart_id": "01M0VT40VAY7W237SJD2761KJ4",
+        "vega_lite_spec": {
+          "mark": {
+            "type": "line",
+            "point": true
+          },
+          "data": {
+            "values": [
+              {
+                "t_s": 0.0,
+                "dye_mgl": 0.0
+              },
+              {
+                "t_s": 200.0,
+                "dye_mgl": 4.878571510314941
+              }
+            ]
+          },
+          "encoding": {
+            "x": {
+              "field": "t_s",
+              "type": "quantitative",
+              "title": "Time (s)"
+            },
+            "y": {
+              "field": "dye_mgl",
+              "type": "quantitative",
+              "title": "Dye concentration (mg/L)"
+            }
+          },
+          "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+        },
+        "title": "Peak dye concentration - Eel River near Scotia, California",
+        "caption": "Reach peak dye concentration 4.88 mg/L, arriving 200 s after release (idealized-bed demo).",
+        "source_layer_uri": null,
+        "created_turn_id": null
+      }
+    },
+    "metrics": {
+      "dye_cmax_mgl": 4.878571510314941,
+      "dye_peak_time_s": 200.0,
+      "plume_reach_m": 472.7,
+      "active_frames": 3,
+      "max_deposition_mm": null,
+      "max_scour_mm": null,
+      "deposited_mass_kg": null,
+      "deposit_fraction": null,
+      "sediment_surface_d50_range_um": null,
+      "mesh_size_m": 30.0,
+      "mesh_node_estimate": 155,
+      "layer_uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/overviews/01M0VT40RRSCDHV6VZZQCY412G.tif",
+      "discharge_m3s": 2.2,
+      "discharge_note": "carrier discharge 2 m3/s (user-supplied)",
+      "mesh_resolution_m": 30.0,
+      "mesh_resolution_note": "Explicit target element edge length, overriding the sizing mode [supplied on this invocation]"
+    },
+    "product_uris": {
+      "chart_spec": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/metrics.json"
+    },
+    "product_errors": {}
+  }
+}

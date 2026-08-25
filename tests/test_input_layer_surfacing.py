@@ -634,7 +634,9 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "telemac/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
     "telemac/steps/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam (ADR 0309)"),
+    "telemac/steps/coastal.py": (1, "the published peak-inundation result layer"),
     "telemac/steps/mesh_preview.py": (1, "the approve-mesh wireframe preview"),
+    "telemac/steps/open_water.py": (1, "in-worker bed COG surfacing, shared by every open-water TELEMAC domain"),
     "telemac/steps/products.py": (4, "deposition + oil-slick + DO-field results + in-worker bed COG"),
     "telemac/stratified_flow/stratified_flow.py": (1, "in-worker telemac3d bottom COG"),
 }

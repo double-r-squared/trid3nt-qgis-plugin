@@ -354,6 +354,41 @@ def _union_bbox(bboxes: list[tuple]) -> tuple[float, float, float, float]:
     return (min(xs0), min(ys0), max(xs1), max(ys1))
 
 
+def _intersects(a: tuple, b: tuple) -> bool:
+    return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
+
+
+def _canvas_bbox(renderable: list[tuple]) -> tuple[tuple, list[str]]:
+    """The canvas extent, and the names of any layers that do NOT sit inside it.
+
+    A layer whose extent is DISJOINT from every other layer in the run is not a
+    layer of this scene - it is a georeferencing defect (a mesh published with a
+    CRS whose coordinates are local, a raster at a false origin). Letting it into
+    the union zooms the whole sheet out to the two of them, which is how a
+    misplaced layer hides ITSELF by making every panel unreadable.
+
+    So: the union is taken over the largest mutually-intersecting group, and the
+    strays are RETURNED rather than dropped silently - the caller captions them,
+    which is the diagnostic this sheet exists to deliver.
+    """
+    boxes = [payload["bbox_ll"] for _, payload in renderable]
+    best: list[int] = []
+    for seed in range(len(boxes)):
+        group = [seed]
+        extent = boxes[seed]
+        for other in range(len(boxes)):
+            if other == seed or not _intersects(extent, boxes[other]):
+                continue
+            group.append(other)
+            extent = _union_bbox([extent, boxes[other]])
+        if len(group) > len(best):
+            best = group
+    kept = set(best)
+    strays = [str(renderable[i][0].get("name"))
+              for i in range(len(boxes)) if i not in kept]
+    return _union_bbox([boxes[i] for i in sorted(kept)]), strays
+
+
 def _frame_axes(ax, mosaic, extent, bbox_ll):
     ax.imshow(np.asarray(mosaic), extent=extent, origin="upper", zorder=0)
     xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
@@ -496,7 +531,7 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
         raise RenderProofError(
             f"no renderable layer among {len(layers)}: {skipped}")
 
-    bbox_ll = _union_bbox([p["bbox_ll"] for _, p in renderable])
+    bbox_ll, strays = _canvas_bbox(renderable)
     zoom = MR.pick_zoom(bbox_ll, max_tiles=max_tiles)
     mosaic, extent = MR.fetch_basemap(bbox_ll, zoom)
 
@@ -546,6 +581,9 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
               f"{[l.get('z_index') for l, _ in renderable]})  |  "
               f"ESRI World Imagery, EPSG:3857"]
     footer += [f"NOT RENDERED: {s['name']} -> {s['error']}" for s in skipped]
+    if strays:
+        footer += [f"OFF-CANVAS (extent disjoint from every other layer in this "
+                   f"run - a georeferencing defect, not a view choice): {strays}"]
     fig.suptitle("\n".join(footer), fontsize=8, y=0.998)
     fig.tight_layout(rect=(0, 0, 1, 0.985))
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -558,7 +596,8 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
 
     return {"sheet": str(out_path), "bytes": out_path.stat().st_size,
             "panels": panels, "layers": [l.get("name") for l, _ in renderable],
-            "not_rendered": skipped, "panel_pngs": panel_pngs}
+            "not_rendered": skipped, "off_canvas": strays,
+            "panel_pngs": panel_pngs}
 
 
 def render_from_evidence(evidence_path: str | os.PathLike[str], *,

@@ -82,6 +82,15 @@ class RunEvidence:
     dispatched: bool = False
     is_error: bool = False
     detail: str = ""
+    #: The TERMINAL state of this tool's own dispatch card, off the last
+    #: ``pipeline-state`` snapshot. The authoritative success signal, and the only
+    #: one both lanes carry: the model lane fills in the completion ``tool-io``
+    #: frame, but a ``!run`` gets only the early input-only frame (response null,
+    #: is_error false), so a tool that RETURNED an error envelope reads exactly
+    #: like one that succeeded. The card does not - the emitter marks it failed
+    #: with the tool's own code.
+    step_state: str | None = None
+    step_error: str = ""
     turn_complete: bool = False
     charts: int = 0
     #: The chart payloads that crossed the wire. For a template whose product IS
@@ -112,6 +121,10 @@ class RunEvidence:
             raise LiveRunError(
                 f"{self.tool} never dispatched - no tool-io frame arrived: "
                 f"{self.detail or '(no detail)'}")
+        if self.step_state in ("failed", "cancelled"):
+            raise LiveRunError(
+                f"{self.tool}: its dispatch card ended {self.step_state} - "
+                f"{self.step_error or '(no code)'}")
         if self.is_error or self.tool_status == "error":
             raise LiveRunError(
                 f"{self.tool} failed (status={self.tool_status!r}): "
@@ -256,6 +269,8 @@ async def _pump(ws: Any, session_id: str, run: LiveRun, ev: RunEvidence) -> None
             if msg["payload"].get("is_error"):
                 ev.is_error = True
                 ev.detail = (msg["payload"].get("function_response") or "")[:600]
+        elif kind == "pipeline-state":
+            _read_dispatch_card(msg["payload"], ev)
         elif kind == "session-state":
             loaded = msg["payload"].get("loaded_layers") or []
             if loaded:
@@ -348,6 +363,22 @@ async def _answer_warning(ws: Any, session_id: str, msg: dict[str, Any],
     await ws.send(mk("tool-payload-confirmation", session_id, {
         "warning_id": payload["warning_id"],
         "decision": answers.confirm, "revised_args": None}))
+
+
+def _read_dispatch_card(payload: dict[str, Any], ev: RunEvidence) -> None:
+    """Track the state of the card for the tool this run invoked.
+
+    Only the step whose ``tool_name`` is the invoked tool: a plan's own substeps
+    and the off-box solver card ride the same snapshot, and a failed FETCH inside
+    a run that recovered is not this run's verdict. The last snapshot wins, so the
+    terminal transition is what survives.
+    """
+    for step in payload.get("steps") or []:
+        if step.get("tool_name") != ev.tool or step.get("role") == "compute":
+            continue
+        ev.step_state = step.get("state")
+        code, message = step.get("error_code"), step.get("error_message")
+        ev.step_error = " ".join(str(part) for part in (code, message) if part)
 
 
 def _check_declared_cards(answers: GateAnswers, ev: RunEvidence) -> None:
