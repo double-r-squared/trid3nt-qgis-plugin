@@ -58,3 +58,12 @@ rolling net at every landing.
   ruling, but the EDGE - what happens to a constant supplied outside the
   model schema - is a judgment NATE may want to re-make. Nothing else
   depends on the choice.
+
+---
+
+LEDGER CLOSED 2026-08-25: NATE returned mid-TELEMAC-family wave and
+ordered "don't proceed past telemac". In-flight wave completes (close-out
++ owed packets + family panel); MODFLOW/SWMM/fix-batch/rain_on_grid/3D
+builds HELD for his explicit go. Autonomous decisions made while AFK:
+entry 1 (CONSTANT-door edge, MEDIUM confidence - re-make if desired).
+Everything else executed under his own pre-AFK rulings.
