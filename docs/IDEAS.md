@@ -1177,3 +1177,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   natural fit alongside the ledger/resume machinery it composes), not
   the calibration track; calibration later consumes it as a loop driver.
   Setter-family deletion condition unchanged.
+
+- DECISION 1 THIRD CONSUMER (NATE 2026-08-25): rerun-with-overrides is
+  also a TROUBLESHOOTING helper - a FAILED workflow reruns with adjusted
+  params from its own ledger (composes with resume-from-failure /
+  restart_clean). Three consumers: failure recovery, manual what-if
+  perturbation, calibration loops.
+
+- DECISION 2 RULED (NATE 2026-08-25, ruling b): coastal inundation
+  product SPLITS - primary answer layer = depth over INITIALLY-DRY land
+  (the planning quantity, matches flooded_land_km2, uses the
+  datum-corrected t=0 wet/dry mask), honestly named; the full
+  water-depth field stays published as a CONTEXT layer. The
+  resolution-sensitivity label rides the inundation layer (flooded-land
+  = resolution-bound class). Implementation joins the accumulated
+  TELEMAC fix batch (w/ the coastal results-mesh X/Y-ORIGIN worker fix
+  + the resolution labels).
