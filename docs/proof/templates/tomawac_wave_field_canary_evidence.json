@@ -20,8 +20,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0VWM657BMDPKTG81YR02KZ6",
-  "case_id": "01M0VWM6D6EDV4DB4F25CJ9VE4",
+  "session_id": "01M0W83Q8Z7ZNFKDBJRBPS5NM2",
+  "case_id": "01M0W83QH5FAFY4Q0DPSHWHQQ8",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -33,7 +33,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0VWNHHG4X4W4A6922QZ07ZX",
+      "chart_id": "01M0W852GSYQ622WS3EXAT6TGW",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -164,15 +164,15 @@
       "title": "Significant wave height (aoi)",
       "caption": "Fetch-limited growth under a prescribed 20 m/s wind: Hs 0.379 m at the upwind shore rising to 0.716 m downwind. Spectral screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0VWM733TT23E2NVVE0F1HMB"
+      "created_turn_id": "01M0W83R9F3HHZM1Q812H0WEZD"
     }
   ],
   "layers": [
     {
-      "layer_id": "input-lake-bed-01M0VWNHF2Z5G80P7W78Z1GFBP",
+      "layer_id": "input-lake-bed-01M0W852E5F1HAANSWQF7FXG48",
       "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VWM75FQS0ZZE7G6RVD008N/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0W83RAW9WGTJ70HA4VA83QZ/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -184,10 +184,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0VWNHQY3G5N23KACHQEKMTM",
+      "layer_id": "01M0W853MT2YNY7HQ83B1S9201",
       "name": "Significant wave height (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VWM75FQS0ZZE7G6RVD008N/tomawac_hs.tif",
+      "uri": "s3://trid3nt-runs/01M0W83RAW9WGTJ70HA4VA83QZ/tomawac_hs.tif",
       "style_preset": "continuous_significant_wave_height",
       "visible": true,
       "role": "primary",
@@ -199,8 +199,8 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 0.0930594,
-        "vmax": 0.716334,
+        "vmin": 0.17756,
+        "vmax": 0.716335,
         "classes": null,
         "value_field": null,
         "units": null,
@@ -386,11 +386,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0VWM75FQS0ZZE7G6RVD008N",
+  "run_id": "01M0W83RAW9WGTJ70HA4VA83QZ",
   "chart_spec": {
     "wave_fetch_growth": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0VWNHHG4X4W4A6922QZ07ZX",
+      "chart_id": "01M0W852GSYQ622WS3EXAT6TGW",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -589,14 +589,16 @@
       0.7164,
       0.7164
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0VWM75FQS0ZZE7G6RVD008N/tomawac_hs.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0W83RAW9WGTJ70HA4VA83QZ/tomawac_hs.tif",
     "wind_note": "prescribed steady storm wind (no wave-forcing fetcher exists)",
     "bathy_source": "noaa_greatlakes",
-    "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)"
+    "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
+    "target_resolution_m": 3000.0,
+    "target_resolution_note": "Explicit grid node spacing; 150 m is the finest the wave grid authors and a large lake is coarsened under the node budget [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0VWM75FQS0ZZE7G6RVD008N/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0VWM75FQS0ZZE7G6RVD008N/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0W83RAW9WGTJ70HA4VA83QZ/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0W83RAW9WGTJ70HA4VA83QZ/metrics.json"
   },
   "product_errors": {}
 }

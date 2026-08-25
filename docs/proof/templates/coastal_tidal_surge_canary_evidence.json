@@ -11,17 +11,17 @@
     "station": "8728690",
     "start_date": "2018-10-09",
     "end_date": "2018-10-11",
-    "datum_offset_m": 0.0,
     "ocean_edge": "auto",
     "target_resolution_m": 250.0,
     "duration_hours": 6.0,
     "time_step_s": 20.0,
     "bathy_source": "noaa_demall",
     "compute_class": "medium",
-    "input_mode": "user_gated"
+    "input_mode": "user_gated",
+    "restart_clean": true
   },
-  "session_id": "01M0VVBXR4SPAFRAKP4WQDK8Q9",
-  "case_id": "01M0VVBY0TK4KQRBBX2HVDCCJX",
+  "session_id": "01M0W79VZ87Y39Y18PDK913Q8D",
+  "case_id": "01M0W79W82SKBMHCNJV7QMS0ZB",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -33,7 +33,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0VVD8D4YKMS7RYJMT0MQKM1",
+      "chart_id": "01M0W7BFYXBV0JTGMXK5ACSXH4",
       "vega_lite_spec": {
         "mark": {
           "type": "bar"
@@ -42,15 +42,15 @@
           "values": [
             {
               "quantity": "Boundary stage (peak)",
-              "m": 2.845
+              "m": 2.613
             },
             {
               "quantity": "Water level (peak)",
-              "m": 5.3869
+              "m": 3.4863
             },
             {
               "quantity": "Inundation depth (peak)",
-              "m": 6.8779
+              "m": 6.6471
             }
           ]
         },
@@ -70,17 +70,17 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Peak inundation depth (coast)",
-      "caption": "Driven by the observed CO-OPS series (MLLW datum): peak boundary stage 2.85 m, deepest inundation 6.88 m, 0.0921 km2 of land newly flooded. Planning-grade screening, not a calibrated hindcast.",
+      "caption": "Driven by the observed CO-OPS series (MLLW datum): peak boundary stage 2.61 m, deepest inundation 6.65 m, 0.0307 km2 of land newly flooded. Planning-grade screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0VVBYPV7P2VR5TS36XSXVNV"
+      "created_turn_id": "01M0W79WZYGVZHKN6HE0CEEZCQ"
     }
   ],
   "layers": [
     {
-      "layer_id": "input-noaa_coops_tides-3b83e9abebf4",
+      "layer_id": "input-noaa_coops_tides-cf7615275e84",
       "name": "Input: coastal tide/surge boundary (noaa_coops_tides)",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/817897268c3a0ede18f4fc4fd497a626.fgb",
+      "uri": "s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/22ac35c944be589e41b47880f180ed8b.fgb",
       "style_preset": "coops_water_level",
       "visible": true,
       "role": "context",
@@ -123,10 +123,10 @@
       }
     },
     {
-      "layer_id": "model-results-mesh-01M0VVBYVXTNBN1YFC53NVR5HY",
+      "layer_id": "model-results-mesh-01M0W79XG9MG05GTYBYSJ951V8",
       "name": "Model results (time series): coast",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0VVBYVXTNBN1YFC53NVR5HY/res_coastal.slf",
+      "uri": "s3://trid3nt-runs/01M0W79XG9MG05GTYBYSJ951V8/res_coastal.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -138,10 +138,10 @@
       "legend": null
     },
     {
-      "layer_id": "input-coastal-bed-01M0VVD8A9RM8HJHWARJD0XZ5X",
+      "layer_id": "input-coastal-bed-01M0W7BFVYWVNVCCXWCK9XJY4E",
       "name": "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VVBYVXTNBN1YFC53NVR5HY/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0W79XG9MG05GTYBYSJ951V8/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -153,10 +153,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0VVD8MHNPNPDCQ37T9J5GVB",
+      "layer_id": "01M0W7BG6PS1X9XHTYS9HZGM58",
       "name": "Peak inundation depth (coast)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VVBYVXTNBN1YFC53NVR5HY/overviews/01M0VVD87BXG5CT28BQKBRNGEE.tif",
+      "uri": "s3://trid3nt-runs/01M0W79XG9MG05GTYBYSJ951V8/overviews/01M0W7BFRVCY1YCR6ZKJWXZPWC.tif",
       "style_preset": "continuous_coastal_inundation_depth",
       "visible": true,
       "role": "primary",
@@ -168,8 +168,8 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 0.0550856,
-        "vmax": 3.82848,
+        "vmin": 0.0653916,
+        "vmax": 3.51813,
         "classes": null,
         "value_field": null,
         "units": null,
@@ -319,17 +319,17 @@
       },
       {
         "name": "datum_offset_m",
-        "value": 0.0,
+        "value": null,
         "units": "m",
         "door": "scenario",
-        "basis": "user",
-        "source_badge": "you supplied this",
+        "basis": "default_demo",
+        "source_badge": "not supplied",
         "bounds": [
           -10.0,
           10.0
         ],
         "advanced": false,
-        "note": "supplied on this invocation"
+        "note": "not supplied (declared optional)"
       },
       {
         "name": "compute_class",
@@ -360,11 +360,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0VVBYVXTNBN1YFC53NVR5HY",
+  "run_id": "01M0W79XG9MG05GTYBYSJ951V8",
   "chart_spec": {
     "coastal_stage_vs_inundation": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0VVD8D4YKMS7RYJMT0MQKM1",
+      "chart_id": "01M0W7BFYXBV0JTGMXK5ACSXH4",
       "vega_lite_spec": {
         "mark": {
           "type": "bar"
@@ -373,15 +373,15 @@
           "values": [
             {
               "quantity": "Boundary stage (peak)",
-              "m": 2.845
+              "m": 2.613
             },
             {
               "quantity": "Water level (peak)",
-              "m": 5.3869
+              "m": 3.4863
             },
             {
               "quantity": "Inundation depth (peak)",
-              "m": 6.8779
+              "m": 6.6471
             }
           ]
         },
@@ -401,31 +401,33 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Peak inundation depth (coast)",
-      "caption": "Driven by the observed CO-OPS series (MLLW datum): peak boundary stage 2.85 m, deepest inundation 6.88 m, 0.0921 km2 of land newly flooded. Planning-grade screening, not a calibrated hindcast.",
+      "caption": "Driven by the observed CO-OPS series (MLLW datum): peak boundary stage 2.61 m, deepest inundation 6.65 m, 0.0307 km2 of land newly flooded. Planning-grade screening, not a calibrated hindcast.",
       "source_layer_uri": null,
       "created_turn_id": null
     }
   },
   "metrics": {
-    "peak_depth_m": 6.8779,
-    "flooded_land_km2": 0.0921,
-    "wet_area_km2": 118.26135,
-    "peak_wl_m": 5.3869,
-    "sl_peak_m": 2.845,
+    "peak_depth_m": 6.6471,
+    "flooded_land_km2": 0.0307,
+    "wet_area_km2": 89.21793,
+    "peak_wl_m": 3.4863,
+    "sl_peak_m": 2.613,
     "series_type": "observed",
     "series_datum": "MLLW",
-    "datum_offset_m": 0.0,
+    "datum_offset_m": -0.232,
     "station_id": "8728690",
     "station_name": "Apalachicola",
     "ocean_edge": "E",
     "mesh_size_m": 250.0,
-    "layer_uri": "s3://trid3nt-runs/01M0VVBYVXTNBN1YFC53NVR5HY/overviews/01M0VVD87BXG5CT28BQKBRNGEE.tif",
-    "datum_offset_note": "reconciles the MLLW tide datum with the DEM_all (~MSL) datum",
-    "series_type_note": "OBSERVED storm-surge record"
+    "layer_uri": "s3://trid3nt-runs/01M0W79XG9MG05GTYBYSJ951V8/overviews/01M0W7BFRVCY1YCR6ZKJWXZPWC.tif",
+    "datum_offset_note": "reconciles the MLLW tide datum with the NAVD88 bed datum; the gauge's own published datum table, not a regional constant",
+    "series_type_note": "OBSERVED storm-surge record",
+    "target_resolution_m": 250.0,
+    "target_resolution_note": "Explicit grid node spacing; the coastal grid floor is 20 m and a wide AOI is coarsened under the node budget [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0VVBYVXTNBN1YFC53NVR5HY/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0VVBYVXTNBN1YFC53NVR5HY/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0W79XG9MG05GTYBYSJ951V8/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0W79XG9MG05GTYBYSJ951V8/metrics.json"
   },
   "product_errors": {}
 }

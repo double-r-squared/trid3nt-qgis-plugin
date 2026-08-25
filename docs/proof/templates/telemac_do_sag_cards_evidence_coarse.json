@@ -18,8 +18,8 @@
     "mesh_resolution_m": 100.0,
     "discharge_m3s": 60.0
   },
-  "session_id": "01M0W2V8C8PGAGHQ40DA9CRKBC",
-  "case_id": "01M0W2V8T4HH4PJCECB5Y8E17K",
+  "session_id": "01M0W73GB1F6V9R6FJY603WW8N",
+  "case_id": "01M0W73GM4CTAZ338JY4CTZC09",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -31,7 +31,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W2XG95SYAZAE4Y8MK5T2Y1",
+      "chart_id": "01M0W75E3Z88N4VN5FQVAAQ44F",
       "vega_lite_spec": {
         "layer": [
           {
@@ -690,7 +690,7 @@
       "title": "Dissolved-oxygen sag - Eel River near Scotia, California",
       "caption": "Streeter-Phelps DO sag: minimum 9.0099 mg/L at 158.8 m downstream (meets the 5 mg/L standard, dashed). CBOD decay drives the sag; reaeration recovers it. Screening/permit grade.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W2V9J184YNBKCB146KE2F8"
+      "created_turn_id": "01M0W73HCE8KV3473D5ZP8TQ6E"
     }
   ],
   "layers": [
@@ -21691,10 +21691,10 @@
       }
     },
     {
-      "layer_id": "telemac-release-01M0W2VACSTH2RR5J9KMY1M9MG",
+      "layer_id": "telemac-release-01M0W73J24STE7KYPZ53YRKN7F",
       "name": "Outfall (user) - scotia_humboldt_county_california_95562_united_s",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/inputs/01M0W2VACDT12F5BB2ZXEN29R0/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M0W73J1Q19HPY1HAZNR7CZY2/release_point.geojson",
       "style_preset": "release_point",
       "visible": true,
       "role": "context",
@@ -21726,10 +21726,10 @@
       }
     },
     {
-      "layer_id": "input-river-bed-01M0W2XFYVCZFS4PS0YSXCM8B8",
+      "layer_id": "input-river-bed-01M0W75DSYJNS48YYWJX4RYSPC",
       "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W2VADTWTB23JJFF19X1XCG/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -21741,10 +21741,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0W2XGG982XV55SA5BA3MTAH",
+      "layer_id": "01M0W75EANA170HT6A0Z8WS35Y",
       "name": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W2VADTWTB23JJFF19X1XCG/overviews/01M0W2XG6ZH9KG4H446036EMHM.tif",
+      "uri": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/overviews/01M0W75E1XMPJGVCT81NJK2WZH.tif",
       "style_preset": "continuous_dissolved_oxygen",
       "visible": true,
       "role": "primary",
@@ -21768,11 +21768,11 @@
   "draw_card": null,
   "form_card": null,
   "plain_warnings": [],
-  "run_id": "01M0W2VADTWTB23JJFF19X1XCG",
+  "run_id": "01M0W73J34FMJ4DMMRDM6GXT3M",
   "chart_spec": {
     "do_sag_curve": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W2XG95SYAZAE4Y8MK5T2Y1",
+      "chart_id": "01M0W75E3Z88N4VN5FQVAAQ44F",
       "vega_lite_spec": {
         "layer": [
           {
@@ -22629,15 +22629,15 @@
       0.0
     ],
     "mesh_size_m": 30.0,
-    "layer_uri": "s3://trid3nt-runs/01M0W2VADTWTB23JJFF19X1XCG/overviews/01M0W2XG6ZH9KG4H446036EMHM.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/overviews/01M0W75E1XMPJGVCT81NJK2WZH.tif",
     "discharge_m3s": 60.0,
     "discharge_note": "carrier discharge 60 m3/s (user-supplied)",
     "mesh_resolution_m": 100.0,
     "mesh_resolution_note": "mesh_resolution_m 100 CAPPED to 30 m by the channel-width rule (width 60 m / 2)"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W2VADTWTB23JJFF19X1XCG/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W2VADTWTB23JJFF19X1XCG/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0W73J34FMJ4DMMRDM6GXT3M/metrics.json"
   },
   "product_errors": {}
 }

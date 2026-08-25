@@ -13,11 +13,12 @@
     "mesh_resolution": "coarse",
     "mesh_resolution_m": 10.0,
     "discharge_m3s": 2.2,
+    "output_interval_min": 0.333,
     "input_mode": "auto",
     "restart_clean": true
   },
-  "session_id": "01M0W1DJ74AXAC018GY49CEG12",
-  "case_id": "01M0W1DJFDQVW1B3SGY8GWE35E",
+  "session_id": "01M0W6XKWRH9SYHSBYX1RMZM76",
+  "case_id": "01M0W6XM4ZW5MP7V0WHE2KDHBA",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -29,7 +30,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W1H6RKK2P7WBEXYC42SGP2",
+      "chart_id": "01M0W71MK4073JNVY9K1XPEKTX",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -42,8 +43,8 @@
               "dye_mgl": 0.0
             },
             {
-              "t_s": 100.0,
-              "dye_mgl": 28.674646377563477
+              "t_s": 40.0,
+              "dye_mgl": 41.38519287109375
             }
           ]
         },
@@ -62,17 +63,17 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Peak dye concentration - Eel River near Scotia, California",
-      "caption": "Reach peak dye concentration 28.7 mg/L, arriving 100 s after release (idealized-bed demo).",
+      "caption": "Reach peak dye concentration 41.4 mg/L, arriving 40 s after release (idealized-bed demo).",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W1EZTDTTW04XJABYVDJ046"
+      "created_turn_id": "01M0W6Z45VB9F22YNRMG0RDZ9P"
     }
   ],
   "layers": [
     {
-      "layer_id": "telemac-mesh-preview-01M0W1DKM9MX0KPFH1Y95RTN93",
+      "layer_id": "telemac-mesh-preview-01M0W6XQYTZTC1XPTWNHPTJFDP",
       "name": "Mesh preview (10 m edges, 8,268 nodes)",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/01M0W1DKM9MX0KPFH1Y95RTN93/mesh_preview.geojson",
+      "uri": "s3://trid3nt-runs/01M0W6XQYTZTC1XPTWNHPTJFDP/mesh_preview.geojson",
       "style_preset": "nhdplus_flowlines",
       "visible": true,
       "role": "input",
@@ -257091,10 +257092,10 @@
       }
     },
     {
-      "layer_id": "telemac-release-01M0W1F0RG3J6TS8RDCEY0HY3C",
+      "layer_id": "telemac-release-01M0W6Z4KTADEJAM4ZHT569YJC",
       "name": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/inputs/01M0W1F0R8KEM1MYCR56GNDHHP/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M0W6Z4KG84VDGMMFH5SWG6GD/release_point.geojson",
       "style_preset": "release_point",
       "visible": true,
       "role": "context",
@@ -257126,10 +257127,10 @@
       }
     },
     {
-      "layer_id": "input-river-bed-01M0W1H67Q5QBDP0RZ546B653X",
+      "layer_id": "input-river-bed-01M0W71M08Z1007XP49KYWZ1N7",
       "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W1F0T9A941N1WWXYQT4XT4/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0W6Z4NP6N7W7WD11D37HH2A/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -257141,10 +257142,10 @@
       "legend": null
     },
     {
-      "layer_id": "model-results-mesh-01M0W1F0T9A941N1WWXYQT4XT4",
+      "layer_id": "model-results-mesh-01M0W6Z4NP6N7W7WD11D37HH2A",
       "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0W1F0T9A941N1WWXYQT4XT4/r2d_river.slf",
+      "uri": "s3://trid3nt-runs/01M0W6Z4NP6N7W7WD11D37HH2A/r2d_river.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -257156,10 +257157,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0W1H6ZABF8Y6FEZMCBQYKME",
+      "layer_id": "01M0W71MSXHRG02QS895KP0CRY",
       "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W1F0T9A941N1WWXYQT4XT4/overviews/01M0W1H6N63BT9SS26X8VXZQR3.tif",
+      "uri": "s3://trid3nt-runs/01M0W6Z4NP6N7W7WD11D37HH2A/overviews/01M0W71MFNB4W9SANY43SAAZ2M.tif",
       "style_preset": "continuous_dye_concentration",
       "visible": true,
       "role": "primary",
@@ -257171,8 +257172,8 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 1.4694,
-        "vmax": 12.499,
+        "vmin": 2.11629,
+        "vmax": 17.0467,
         "classes": null,
         "value_field": null,
         "units": null,
@@ -257185,11 +257186,11 @@
   "plain_warnings": [
     "telemac_river_dye"
   ],
-  "run_id": "01M0W1F0T9A941N1WWXYQT4XT4",
+  "run_id": "01M0W6Z4NP6N7W7WD11D37HH2A",
   "chart_spec": {
     "dye_concentration": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W1H6RKK2P7WBEXYC42SGP2",
+      "chart_id": "01M0W71MK4073JNVY9K1XPEKTX",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -257202,8 +257203,8 @@
               "dye_mgl": 0.0
             },
             {
-              "t_s": 100.0,
-              "dye_mgl": 28.674646377563477
+              "t_s": 40.0,
+              "dye_mgl": 41.38519287109375
             }
           ]
         },
@@ -257222,16 +257223,16 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Peak dye concentration - Eel River near Scotia, California",
-      "caption": "Reach peak dye concentration 28.7 mg/L, arriving 100 s after release (idealized-bed demo).",
+      "caption": "Reach peak dye concentration 41.4 mg/L, arriving 40 s after release (idealized-bed demo).",
       "source_layer_uri": null,
       "created_turn_id": null
     }
   },
   "metrics": {
-    "dye_cmax_mgl": 28.674646377563477,
-    "dye_peak_time_s": 100.0,
-    "plume_reach_m": 617.5,
-    "active_frames": 6,
+    "dye_cmax_mgl": 41.38519287109375,
+    "dye_peak_time_s": 40.0,
+    "plume_reach_m": 645.1,
+    "active_frames": 30,
     "max_deposition_mm": null,
     "max_scour_mm": null,
     "deposited_mass_kg": null,
@@ -257239,15 +257240,15 @@
     "sediment_surface_d50_range_um": null,
     "mesh_size_m": 10.0,
     "mesh_node_estimate": 1395,
-    "layer_uri": "s3://trid3nt-runs/01M0W1F0T9A941N1WWXYQT4XT4/overviews/01M0W1H6N63BT9SS26X8VXZQR3.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0W6Z4NP6N7W7WD11D37HH2A/overviews/01M0W71MFNB4W9SANY43SAAZ2M.tif",
     "discharge_m3s": 2.2,
     "discharge_note": "carrier discharge 2 m3/s (user-supplied)",
     "mesh_resolution_m": 10.0,
     "mesh_resolution_note": "Explicit target element edge length, overriding the sizing mode [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W1F0T9A941N1WWXYQT4XT4/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W1F0T9A941N1WWXYQT4XT4/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0W6Z4NP6N7W7WD11D37HH2A/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0W6Z4NP6N7W7WD11D37HH2A/metrics.json"
   },
   "product_errors": {}
 }

@@ -1,0 +1,1380 @@
+{
+  "tool": "artemis_harbor_agitation",
+  "args": {
+    "bbox": [
+      -87.392,
+      46.528,
+      -87.368,
+      46.55
+    ],
+    "wave_mode": "resonance",
+    "wave_period_s": 8.0,
+    "wave_direction_deg": 90.0,
+    "wave_height_m": 1.0,
+    "bathy_source": "idealized",
+    "compute_class": "medium",
+    "input_mode": "user_gated",
+    "restart_clean": true
+  },
+  "session_id": "01M0W82321P62ENR3THSNYRWF0",
+  "case_id": "01M0W823AKT297X3W3831G3TAA",
+  "tool_status": null,
+  "dispatched": true,
+  "is_error": false,
+  "detail": "",
+  "step_state": "complete",
+  "step_error": "",
+  "turn_complete": true,
+  "charts": 1,
+  "chart_payloads": [
+    {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M0W83CKHGB0VRBRYAQ2859PA",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": false
+        },
+        "data": {
+          "values": [
+            {
+              "x": 30.0,
+              "kd": 0.723
+            },
+            {
+              "x": 32.0,
+              "kd": 3.482
+            },
+            {
+              "x": 34.0,
+              "kd": 0.866
+            },
+            {
+              "x": 36.0,
+              "kd": 0.559
+            },
+            {
+              "x": 38.0,
+              "kd": 0.533
+            },
+            {
+              "x": 40.0,
+              "kd": 0.638
+            },
+            {
+              "x": 42.0,
+              "kd": 0.888
+            },
+            {
+              "x": 44.0,
+              "kd": 1.472
+            },
+            {
+              "x": 46.0,
+              "kd": 2.614
+            },
+            {
+              "x": 48.0,
+              "kd": 1.962
+            },
+            {
+              "x": 50.0,
+              "kd": 1.23
+            },
+            {
+              "x": 52.0,
+              "kd": 0.918
+            },
+            {
+              "x": 54.0,
+              "kd": 0.772
+            },
+            {
+              "x": 56.0,
+              "kd": 0.701
+            },
+            {
+              "x": 58.0,
+              "kd": 0.675
+            },
+            {
+              "x": 60.0,
+              "kd": 0.679
+            },
+            {
+              "x": 62.0,
+              "kd": 0.709
+            },
+            {
+              "x": 64.0,
+              "kd": 0.766
+            },
+            {
+              "x": 66.0,
+              "kd": 0.846
+            },
+            {
+              "x": 68.0,
+              "kd": 0.947
+            },
+            {
+              "x": 70.0,
+              "kd": 1.07
+            },
+            {
+              "x": 72.0,
+              "kd": 1.217
+            },
+            {
+              "x": 74.0,
+              "kd": 1.39
+            },
+            {
+              "x": 76.0,
+              "kd": 1.585
+            },
+            {
+              "x": 78.0,
+              "kd": 1.789
+            },
+            {
+              "x": 80.0,
+              "kd": 1.974
+            },
+            {
+              "x": 82.0,
+              "kd": 2.098
+            },
+            {
+              "x": 84.0,
+              "kd": 2.128
+            },
+            {
+              "x": 86.0,
+              "kd": 2.068
+            },
+            {
+              "x": 88.0,
+              "kd": 1.95
+            },
+            {
+              "x": 90.0,
+              "kd": 1.809
+            },
+            {
+              "x": 92.0,
+              "kd": 1.668
+            },
+            {
+              "x": 94.0,
+              "kd": 1.54
+            },
+            {
+              "x": 96.0,
+              "kd": 1.429
+            },
+            {
+              "x": 98.0,
+              "kd": 1.333
+            },
+            {
+              "x": 100.0,
+              "kd": 1.251
+            },
+            {
+              "x": 102.0,
+              "kd": 1.182
+            },
+            {
+              "x": 104.0,
+              "kd": 1.122
+            },
+            {
+              "x": 106.0,
+              "kd": 1.072
+            },
+            {
+              "x": 108.0,
+              "kd": 1.029
+            },
+            {
+              "x": 110.0,
+              "kd": 0.992
+            },
+            {
+              "x": 112.0,
+              "kd": 0.961
+            },
+            {
+              "x": 114.0,
+              "kd": 0.934
+            },
+            {
+              "x": 116.0,
+              "kd": 0.911
+            },
+            {
+              "x": 118.0,
+              "kd": 0.892
+            },
+            {
+              "x": 120.0,
+              "kd": 0.875
+            },
+            {
+              "x": 122.0,
+              "kd": 0.861
+            },
+            {
+              "x": 124.0,
+              "kd": 0.85
+            },
+            {
+              "x": 126.0,
+              "kd": 0.841
+            },
+            {
+              "x": 128.0,
+              "kd": 0.833
+            },
+            {
+              "x": 130.0,
+              "kd": 0.828
+            },
+            {
+              "x": 132.0,
+              "kd": 0.824
+            },
+            {
+              "x": 134.0,
+              "kd": 0.821
+            },
+            {
+              "x": 136.0,
+              "kd": 0.82
+            },
+            {
+              "x": 138.0,
+              "kd": 0.82
+            },
+            {
+              "x": 140.0,
+              "kd": 0.822
+            },
+            {
+              "x": 142.0,
+              "kd": 0.824
+            },
+            {
+              "x": 144.0,
+              "kd": 0.828
+            },
+            {
+              "x": 146.0,
+              "kd": 0.832
+            },
+            {
+              "x": 148.0,
+              "kd": 0.838
+            },
+            {
+              "x": 150.0,
+              "kd": 0.844
+            },
+            {
+              "x": 152.0,
+              "kd": 0.852
+            },
+            {
+              "x": 154.0,
+              "kd": 0.86
+            },
+            {
+              "x": 156.0,
+              "kd": 0.869
+            },
+            {
+              "x": 158.0,
+              "kd": 0.879
+            },
+            {
+              "x": 160.0,
+              "kd": 0.889
+            },
+            {
+              "x": 162.0,
+              "kd": 0.9
+            },
+            {
+              "x": 164.0,
+              "kd": 0.912
+            },
+            {
+              "x": 166.0,
+              "kd": 0.925
+            },
+            {
+              "x": 168.0,
+              "kd": 0.938
+            },
+            {
+              "x": 170.0,
+              "kd": 0.952
+            },
+            {
+              "x": 172.0,
+              "kd": 0.967
+            },
+            {
+              "x": 174.0,
+              "kd": 0.982
+            },
+            {
+              "x": 176.0,
+              "kd": 0.998
+            },
+            {
+              "x": 178.0,
+              "kd": 1.014
+            },
+            {
+              "x": 180.0,
+              "kd": 1.031
+            },
+            {
+              "x": 182.0,
+              "kd": 1.048
+            },
+            {
+              "x": 184.0,
+              "kd": 1.066
+            },
+            {
+              "x": 186.0,
+              "kd": 1.085
+            },
+            {
+              "x": 188.0,
+              "kd": 1.104
+            },
+            {
+              "x": 190.0,
+              "kd": 1.123
+            },
+            {
+              "x": 192.0,
+              "kd": 1.144
+            },
+            {
+              "x": 194.0,
+              "kd": 1.164
+            },
+            {
+              "x": 196.0,
+              "kd": 1.184
+            },
+            {
+              "x": 198.0,
+              "kd": 1.205
+            },
+            {
+              "x": 200.0,
+              "kd": 1.225
+            },
+            {
+              "x": 202.0,
+              "kd": 1.245
+            },
+            {
+              "x": 204.0,
+              "kd": 1.265
+            },
+            {
+              "x": 206.0,
+              "kd": 1.285
+            },
+            {
+              "x": 208.0,
+              "kd": 1.304
+            },
+            {
+              "x": 210.0,
+              "kd": 1.323
+            },
+            {
+              "x": 212.0,
+              "kd": 1.342
+            },
+            {
+              "x": 214.0,
+              "kd": 1.361
+            },
+            {
+              "x": 216.0,
+              "kd": 1.379
+            },
+            {
+              "x": 218.0,
+              "kd": 1.398
+            },
+            {
+              "x": 220.0,
+              "kd": 1.415
+            },
+            {
+              "x": 222.0,
+              "kd": 1.433
+            },
+            {
+              "x": 224.0,
+              "kd": 1.45
+            },
+            {
+              "x": 226.0,
+              "kd": 1.467
+            },
+            {
+              "x": 228.0,
+              "kd": 1.483
+            },
+            {
+              "x": 230.0,
+              "kd": 1.499
+            },
+            {
+              "x": 232.0,
+              "kd": 1.515
+            },
+            {
+              "x": 234.0,
+              "kd": 1.531
+            },
+            {
+              "x": 236.0,
+              "kd": 1.546
+            },
+            {
+              "x": 238.0,
+              "kd": 1.561
+            },
+            {
+              "x": 240.0,
+              "kd": 1.575
+            },
+            {
+              "x": 242.0,
+              "kd": 1.59
+            },
+            {
+              "x": 244.0,
+              "kd": 1.604
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "x",
+            "type": "quantitative",
+            "title": "Incident wave period (s)"
+          },
+          "y": {
+            "field": "kd",
+            "type": "quantitative",
+            "title": "Basin response (amplification of H0)"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Wave agitation Kd (aoi)",
+      "caption": "Forced by a prescribed 8 s incident wave: Phase-resolving screening, not a calibrated hindcast.",
+      "source_layer_uri": null,
+      "created_turn_id": "01M0W82431S29N016BPHYC614C"
+    }
+  ],
+  "layers": [
+    {
+      "layer_id": "01M0W83CTC88TGECV6EBHKZ44Q",
+      "name": "Wave agitation Kd (aoi)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/overviews/01M0W83CHFDJNR0GJ36C46BF1C.tif",
+      "style_preset": "continuous_wave_agitation",
+      "visible": true,
+      "role": "primary",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 0,
+      "crs_authid": null,
+      "legend": {
+        "kind": "continuous",
+        "colormap": "viridis",
+        "vmin": 0.193028,
+        "vmax": 5.41745,
+        "classes": null,
+        "value_field": null,
+        "units": null,
+        "label": "Wave agitation"
+      }
+    }
+  ],
+  "draw_card": null,
+  "form_card": {
+    "workflow": "artemis_harbor_agitation",
+    "title": "Review the incident wave and the structure",
+    "rows": [
+      {
+        "name": "bbox",
+        "value": [
+          -87.392,
+          46.528,
+          -87.368,
+          46.55
+        ],
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "breakwater",
+        "value": null,
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "location",
+        "value": null,
+        "units": null,
+        "door": "question",
+        "basis": "prompt_interpreted",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "target_resolution_m",
+        "value": null,
+        "units": "m",
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": [
+          20.0,
+          2000.0
+        ],
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "wave_mode",
+        "value": "resonance",
+        "units": null,
+        "door": "question",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "bathy_source",
+        "value": "idealized",
+        "units": null,
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "reflection_coef",
+        "value": 1.0,
+        "units": null,
+        "door": "scenario",
+        "basis": "default_demo",
+        "source_badge": "labeled default - NOT a site measurement",
+        "bounds": [
+          0.0,
+          1.0
+        ],
+        "advanced": false,
+        "note": "declared scenario default"
+      },
+      {
+        "name": "wave_direction_deg",
+        "value": 90.0,
+        "units": "deg",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.0,
+          360.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wave_height_m",
+        "value": 1.0,
+        "units": "m",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.01,
+          10.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wave_period_s",
+        "value": 8.0,
+        "units": "s",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          300.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "compute_class",
+        "value": "medium",
+        "units": null,
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": true,
+        "note": "supplied on this invocation"
+      }
+    ],
+    "edited": {}
+  },
+  "plain_warnings": [],
+  "run_id": "01M0W82461ABWBYN3PZ5WEAYRZ",
+  "chart_spec": {
+    "harbor_agitation": {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M0W83CKHGB0VRBRYAQ2859PA",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": false
+        },
+        "data": {
+          "values": [
+            {
+              "x": 30.0,
+              "kd": 0.723
+            },
+            {
+              "x": 32.0,
+              "kd": 3.482
+            },
+            {
+              "x": 34.0,
+              "kd": 0.866
+            },
+            {
+              "x": 36.0,
+              "kd": 0.559
+            },
+            {
+              "x": 38.0,
+              "kd": 0.533
+            },
+            {
+              "x": 40.0,
+              "kd": 0.638
+            },
+            {
+              "x": 42.0,
+              "kd": 0.888
+            },
+            {
+              "x": 44.0,
+              "kd": 1.472
+            },
+            {
+              "x": 46.0,
+              "kd": 2.614
+            },
+            {
+              "x": 48.0,
+              "kd": 1.962
+            },
+            {
+              "x": 50.0,
+              "kd": 1.23
+            },
+            {
+              "x": 52.0,
+              "kd": 0.918
+            },
+            {
+              "x": 54.0,
+              "kd": 0.772
+            },
+            {
+              "x": 56.0,
+              "kd": 0.701
+            },
+            {
+              "x": 58.0,
+              "kd": 0.675
+            },
+            {
+              "x": 60.0,
+              "kd": 0.679
+            },
+            {
+              "x": 62.0,
+              "kd": 0.709
+            },
+            {
+              "x": 64.0,
+              "kd": 0.766
+            },
+            {
+              "x": 66.0,
+              "kd": 0.846
+            },
+            {
+              "x": 68.0,
+              "kd": 0.947
+            },
+            {
+              "x": 70.0,
+              "kd": 1.07
+            },
+            {
+              "x": 72.0,
+              "kd": 1.217
+            },
+            {
+              "x": 74.0,
+              "kd": 1.39
+            },
+            {
+              "x": 76.0,
+              "kd": 1.585
+            },
+            {
+              "x": 78.0,
+              "kd": 1.789
+            },
+            {
+              "x": 80.0,
+              "kd": 1.974
+            },
+            {
+              "x": 82.0,
+              "kd": 2.098
+            },
+            {
+              "x": 84.0,
+              "kd": 2.128
+            },
+            {
+              "x": 86.0,
+              "kd": 2.068
+            },
+            {
+              "x": 88.0,
+              "kd": 1.95
+            },
+            {
+              "x": 90.0,
+              "kd": 1.809
+            },
+            {
+              "x": 92.0,
+              "kd": 1.668
+            },
+            {
+              "x": 94.0,
+              "kd": 1.54
+            },
+            {
+              "x": 96.0,
+              "kd": 1.429
+            },
+            {
+              "x": 98.0,
+              "kd": 1.333
+            },
+            {
+              "x": 100.0,
+              "kd": 1.251
+            },
+            {
+              "x": 102.0,
+              "kd": 1.182
+            },
+            {
+              "x": 104.0,
+              "kd": 1.122
+            },
+            {
+              "x": 106.0,
+              "kd": 1.072
+            },
+            {
+              "x": 108.0,
+              "kd": 1.029
+            },
+            {
+              "x": 110.0,
+              "kd": 0.992
+            },
+            {
+              "x": 112.0,
+              "kd": 0.961
+            },
+            {
+              "x": 114.0,
+              "kd": 0.934
+            },
+            {
+              "x": 116.0,
+              "kd": 0.911
+            },
+            {
+              "x": 118.0,
+              "kd": 0.892
+            },
+            {
+              "x": 120.0,
+              "kd": 0.875
+            },
+            {
+              "x": 122.0,
+              "kd": 0.861
+            },
+            {
+              "x": 124.0,
+              "kd": 0.85
+            },
+            {
+              "x": 126.0,
+              "kd": 0.841
+            },
+            {
+              "x": 128.0,
+              "kd": 0.833
+            },
+            {
+              "x": 130.0,
+              "kd": 0.828
+            },
+            {
+              "x": 132.0,
+              "kd": 0.824
+            },
+            {
+              "x": 134.0,
+              "kd": 0.821
+            },
+            {
+              "x": 136.0,
+              "kd": 0.82
+            },
+            {
+              "x": 138.0,
+              "kd": 0.82
+            },
+            {
+              "x": 140.0,
+              "kd": 0.822
+            },
+            {
+              "x": 142.0,
+              "kd": 0.824
+            },
+            {
+              "x": 144.0,
+              "kd": 0.828
+            },
+            {
+              "x": 146.0,
+              "kd": 0.832
+            },
+            {
+              "x": 148.0,
+              "kd": 0.838
+            },
+            {
+              "x": 150.0,
+              "kd": 0.844
+            },
+            {
+              "x": 152.0,
+              "kd": 0.852
+            },
+            {
+              "x": 154.0,
+              "kd": 0.86
+            },
+            {
+              "x": 156.0,
+              "kd": 0.869
+            },
+            {
+              "x": 158.0,
+              "kd": 0.879
+            },
+            {
+              "x": 160.0,
+              "kd": 0.889
+            },
+            {
+              "x": 162.0,
+              "kd": 0.9
+            },
+            {
+              "x": 164.0,
+              "kd": 0.912
+            },
+            {
+              "x": 166.0,
+              "kd": 0.925
+            },
+            {
+              "x": 168.0,
+              "kd": 0.938
+            },
+            {
+              "x": 170.0,
+              "kd": 0.952
+            },
+            {
+              "x": 172.0,
+              "kd": 0.967
+            },
+            {
+              "x": 174.0,
+              "kd": 0.982
+            },
+            {
+              "x": 176.0,
+              "kd": 0.998
+            },
+            {
+              "x": 178.0,
+              "kd": 1.014
+            },
+            {
+              "x": 180.0,
+              "kd": 1.031
+            },
+            {
+              "x": 182.0,
+              "kd": 1.048
+            },
+            {
+              "x": 184.0,
+              "kd": 1.066
+            },
+            {
+              "x": 186.0,
+              "kd": 1.085
+            },
+            {
+              "x": 188.0,
+              "kd": 1.104
+            },
+            {
+              "x": 190.0,
+              "kd": 1.123
+            },
+            {
+              "x": 192.0,
+              "kd": 1.144
+            },
+            {
+              "x": 194.0,
+              "kd": 1.164
+            },
+            {
+              "x": 196.0,
+              "kd": 1.184
+            },
+            {
+              "x": 198.0,
+              "kd": 1.205
+            },
+            {
+              "x": 200.0,
+              "kd": 1.225
+            },
+            {
+              "x": 202.0,
+              "kd": 1.245
+            },
+            {
+              "x": 204.0,
+              "kd": 1.265
+            },
+            {
+              "x": 206.0,
+              "kd": 1.285
+            },
+            {
+              "x": 208.0,
+              "kd": 1.304
+            },
+            {
+              "x": 210.0,
+              "kd": 1.323
+            },
+            {
+              "x": 212.0,
+              "kd": 1.342
+            },
+            {
+              "x": 214.0,
+              "kd": 1.361
+            },
+            {
+              "x": 216.0,
+              "kd": 1.379
+            },
+            {
+              "x": 218.0,
+              "kd": 1.398
+            },
+            {
+              "x": 220.0,
+              "kd": 1.415
+            },
+            {
+              "x": 222.0,
+              "kd": 1.433
+            },
+            {
+              "x": 224.0,
+              "kd": 1.45
+            },
+            {
+              "x": 226.0,
+              "kd": 1.467
+            },
+            {
+              "x": 228.0,
+              "kd": 1.483
+            },
+            {
+              "x": 230.0,
+              "kd": 1.499
+            },
+            {
+              "x": 232.0,
+              "kd": 1.515
+            },
+            {
+              "x": 234.0,
+              "kd": 1.531
+            },
+            {
+              "x": 236.0,
+              "kd": 1.546
+            },
+            {
+              "x": 238.0,
+              "kd": 1.561
+            },
+            {
+              "x": 240.0,
+              "kd": 1.575
+            },
+            {
+              "x": 242.0,
+              "kd": 1.59
+            },
+            {
+              "x": 244.0,
+              "kd": 1.604
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "x",
+            "type": "quantitative",
+            "title": "Incident wave period (s)"
+          },
+          "y": {
+            "field": "kd",
+            "type": "quantitative",
+            "title": "Basin response (amplification of H0)"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Wave agitation Kd (aoi)",
+      "caption": "Forced by a prescribed 8 s incident wave: Phase-resolving screening, not a calibrated hindcast.",
+      "source_layer_uri": null,
+      "created_turn_id": null
+    }
+  },
+  "metrics": {
+    "kd_max": 5.86,
+    "hs_max_m": 5.8596,
+    "kd_sheltered": null,
+    "kd_exposed": null,
+    "resonant_period_s": 32.0,
+    "response_at_resonance": 3.482,
+    "response_off_resonance": 0.638,
+    "wave_mode": "resonance",
+    "wave_period_s": 8.0,
+    "mesh_size_m": 8.0,
+    "agitation_curve_m": [
+      30.0,
+      32.0,
+      34.0,
+      36.0,
+      38.0,
+      40.0,
+      42.0,
+      44.0,
+      46.0,
+      48.0,
+      50.0,
+      52.0,
+      54.0,
+      56.0,
+      58.0,
+      60.0,
+      62.0,
+      64.0,
+      66.0,
+      68.0,
+      70.0,
+      72.0,
+      74.0,
+      76.0,
+      78.0,
+      80.0,
+      82.0,
+      84.0,
+      86.0,
+      88.0,
+      90.0,
+      92.0,
+      94.0,
+      96.0,
+      98.0,
+      100.0,
+      102.0,
+      104.0,
+      106.0,
+      108.0,
+      110.0,
+      112.0,
+      114.0,
+      116.0,
+      118.0,
+      120.0,
+      122.0,
+      124.0,
+      126.0,
+      128.0,
+      130.0,
+      132.0,
+      134.0,
+      136.0,
+      138.0,
+      140.0,
+      142.0,
+      144.0,
+      146.0,
+      148.0,
+      150.0,
+      152.0,
+      154.0,
+      156.0,
+      158.0,
+      160.0,
+      162.0,
+      164.0,
+      166.0,
+      168.0,
+      170.0,
+      172.0,
+      174.0,
+      176.0,
+      178.0,
+      180.0,
+      182.0,
+      184.0,
+      186.0,
+      188.0,
+      190.0,
+      192.0,
+      194.0,
+      196.0,
+      198.0,
+      200.0,
+      202.0,
+      204.0,
+      206.0,
+      208.0,
+      210.0,
+      212.0,
+      214.0,
+      216.0,
+      218.0,
+      220.0,
+      222.0,
+      224.0,
+      226.0,
+      228.0,
+      230.0,
+      232.0,
+      234.0,
+      236.0,
+      238.0,
+      240.0,
+      242.0,
+      244.0
+    ],
+    "agitation_curve_kd": [
+      0.723,
+      3.482,
+      0.866,
+      0.559,
+      0.533,
+      0.638,
+      0.888,
+      1.472,
+      2.614,
+      1.962,
+      1.23,
+      0.918,
+      0.772,
+      0.701,
+      0.675,
+      0.679,
+      0.709,
+      0.766,
+      0.846,
+      0.947,
+      1.07,
+      1.217,
+      1.39,
+      1.585,
+      1.789,
+      1.974,
+      2.098,
+      2.128,
+      2.068,
+      1.95,
+      1.809,
+      1.668,
+      1.54,
+      1.429,
+      1.333,
+      1.251,
+      1.182,
+      1.122,
+      1.072,
+      1.029,
+      0.992,
+      0.961,
+      0.934,
+      0.911,
+      0.892,
+      0.875,
+      0.861,
+      0.85,
+      0.841,
+      0.833,
+      0.828,
+      0.824,
+      0.821,
+      0.82,
+      0.82,
+      0.822,
+      0.824,
+      0.828,
+      0.832,
+      0.838,
+      0.844,
+      0.852,
+      0.86,
+      0.869,
+      0.879,
+      0.889,
+      0.9,
+      0.912,
+      0.925,
+      0.938,
+      0.952,
+      0.967,
+      0.982,
+      0.998,
+      1.014,
+      1.031,
+      1.048,
+      1.066,
+      1.085,
+      1.104,
+      1.123,
+      1.144,
+      1.164,
+      1.184,
+      1.205,
+      1.225,
+      1.245,
+      1.265,
+      1.285,
+      1.304,
+      1.323,
+      1.342,
+      1.361,
+      1.379,
+      1.398,
+      1.415,
+      1.433,
+      1.45,
+      1.467,
+      1.483,
+      1.499,
+      1.515,
+      1.531,
+      1.546,
+      1.561,
+      1.575,
+      1.59,
+      1.604
+    ],
+    "agitation_curve_kind": "resonance_sweep",
+    "layer_uri": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/overviews/01M0W83CHFDJNR0GJ36C46BF1C.tif",
+    "wave_period_note": "prescribed monochromatic incident wave period",
+    "breakwater": "derived",
+    "breakwater_note": "not supplied; the ACTUAL surveyed breakwater is fetched from OpenStreetMap and meshed as a thin solid barrier; if OSM has none, a LABELED schematic segment stands in and says so",
+    "target_resolution_m": "derived",
+    "target_resolution_note": "not supplied; the grid is laid at the labeled default spacing - 40 m over a real harbour, 8 m in the analytic domain"
+  },
+  "product_uris": {
+    "chart_spec": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/metrics.json"
+  },
+  "product_errors": {}
+}
