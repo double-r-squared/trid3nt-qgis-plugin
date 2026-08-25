@@ -937,3 +937,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   NEW acquisition input arrives as a keyword WITH A DEFAULT, so existing
   templates are untouched (one-runner law holds); only templates wanting
   the new input name it.
+
+- PHYSICS BUNDLE STAYS WHOLE (NATE 2026-08-24, ruling a): river_dye's
+  Physics stays ONE bundle - no Bed/Dredging split; that would be
+  presentational complexity (three classes + facade flattening) for
+  lines already readable in one place. PRINCIPLE (NATE, verbatim
+  intent): "don't overcomplicate or overthink" - a split/abstraction
+  earns itself only when a real second consumer needs it, never for
+  tidiness.
