@@ -953,3 +953,35 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   then SWMM. Same per-template regime throughout: parity via existing
   drivers first, spot-check proofs through the scripts/ harness lane,
   readability principle, ledger rows, LOC ledger rolling net.
+
+- 2026-08-25 COASTAL RESULTS MESH IS PUBLISHED AT A FALSE ORIGIN (queued
+  defect, found by the TELEMAC-family wave's own proof sheet): the coastal
+  worker writes LOCAL, origin-shifted coordinates into `res_coastal.slf`
+  (verified on run `01M0VVBYVXTNBN1YFC53NVR5HY`: x 0..11391 m, y 0..12397 m)
+  and `results_mesh_seam` publishes that file as `crs_authid=EPSG:<utm>`.
+  In QGIS the animated "Model results (time series)" layer therefore lands at
+  the UTM zone's false origin - roughly 1,600 km off, near the equator - while
+  the peak-depth COG beside it is correct, because `postprocess_coastal`
+  recovers the origin from `domain_bbox` before it reprojects. PREDATES the
+  declarative migration (the composer always published it this way). Two
+  possible fixes, both worker-side and therefore image-rebuild work: write
+  ABSOLUTE UTM coordinates into the result SELAFIN, or fill the SELAFIN
+  header's X-ORIGIN / Y-ORIGIN (IPARAM 3/4), which MDAL honours. Until then
+  the diagnostic sheet names it: `render_all_layers_proof` now takes the
+  canvas extent over the largest mutually-intersecting group of layers and
+  captions the strays "OFF-CANVAS ... a georeferencing defect, not a view
+  choice", so a misplaced layer can no longer hide itself by zooming every
+  panel out to nothing. Check the other worker-written meshes for the same
+  shape when the wave-module templates migrate.
+
+- 2026-08-25 A `!run` DISPATCH EMITS NO COMPLETION `tool-io` FRAME (queued
+  defect, found while building the family canaries): the model lane fills in
+  `function_response` at completion (`turn/stream.py`), but the
+  `dev-tool-invoke` lane emits only the EARLY input-only frame
+  (`dispatch/emitter.py:_emit_early_input_frame`, response `null`,
+  `is_error` false) - so the operator's tool card shows "Running..." forever,
+  and a tool that RETURNED `{"status": "error"}` was indistinguishable from
+  one that succeeded. The testing harness now reads the terminal state off the
+  `pipeline-state` card instead (which BOTH lanes stamp honestly), so the
+  gates are trustworthy; the card's own expander is still empty on a `!run`
+  and wants the completion frame emitted from the shared dispatch seam.
