@@ -945,3 +945,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   intent): "don't overcomplicate or overthink" - a split/abstraction
   earns itself only when a real second consumer needs it, never for
   tidiness.
+
+- FLEET MIGRATION ORDER (NATE 2026-08-24): after the TELEMAC family ->
+  MODFLOW workflows next (similar control flow to TELEMAC; the USGS
+  modflow6-examples notebooks they were derived from remain the
+  referencable published-first sources for parity/coverage checks) ->
+  then SWMM. Same per-template regime throughout: parity via existing
+  drivers first, spot-check proofs through the scripts/ harness lane,
+  readability principle, ledger rows, LOC ledger rolling net.
