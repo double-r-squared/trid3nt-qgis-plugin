@@ -1184,8 +1184,12 @@ class Telemac3dManifestUnknownFieldsError(ValueError):
 #: doubles as the telemac3d worker-image/behavior provenance marker the
 #: image-staleness law keys off. -1 is the initial 3D stratified leg
 #: (three question classes stratification/wind_circulation/salt_wedge + the NOAA
-#: Great Lakes real-bathy path for the two closed-basin modes).
-_TELEMAC3D_PARSER_VERSION = "telemac3d-strat-1"
+#: Great Lakes real-bathy path for the two closed-basin modes). -2 is the
+#: vertical-discretisation leg: planned sigma zooming with a
+#: TELEMAC3D_VERTICAL_UNRESOLVED refusal, a tanh thermocline IC, the declared
+#: vertical_*/thermocline_delta_m/column_heat_* fidelity facts, and NaN at
+#: bathymetry-clamped nodes in the emitted layer SELAFINs.
+_TELEMAC3D_PARSER_VERSION = "telemac3d-strat-2"
 
 
 def _telemac3d_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
