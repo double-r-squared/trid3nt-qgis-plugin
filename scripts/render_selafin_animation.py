@@ -143,7 +143,8 @@ def slice_plane(mesh: dict, values: np.ndarray, *, nplan: int, plane: str):
 def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            units: str, title: str, run_id: str, gif_path: Path,
            peak_path: Path, nplan: int = 1, plane: str = "surface",
-           still: str = "peak") -> dict:
+           still: str = "peak", mask_var: str | None = None,
+           mask_min: float = 0.0) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
@@ -154,6 +155,15 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
         raise SystemExit(f"{name!r} carries no time steps in {slf_path}")
     mesh_x, mesh_y, triangles, values, plane_note = slice_plane(
         mesh, values, nplan=nplan, plane=plane)
+    # DRY NODES ARE NOT COLOURED. A coastal free surface on a dry node IS the bed
+    # elevation, so an unmasked field is scaled by the LAND - six metres of hill
+    # against a two-metre tide - and the tide reads as a flat wash that does not
+    # move. Masking on the depth is what makes the wetted area grow on screen,
+    # which is the thing the run is about.
+    if mask_var:
+        gate = np.asarray(mesh["data"][pick_variable(mesh["varnames"], mask_var)])
+        _, _, _, gate, _ = slice_plane(mesh, gate, nplan=nplan, plane=plane)
+        values = np.where(gate > float(mask_min), values, np.nan)
 
     x_org, y_org = local_origin(origin_bbox, utm_epsg)
     if not x_org and float(np.nanmin(mesh_x)) < 1000.0:
@@ -187,8 +197,18 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap="viridis",
                         vmin=vmin, vmax=vmax, alpha=0.85, zorder=2)
     # The MESH is the modeled domain, drawn OVER the field: a wireframe hidden
-    # under an opaque field tells the reader nothing about what was solved.
-    ax.triplot(tri, color="white", linewidth=0.1, alpha=0.25, zorder=3)
+    # under an opaque field tells the reader nothing about what was solved. Its
+    # weight is ADAPTIVE, because one fixed line width cannot read across the
+    # domain sizes this family covers - 900 elements over a lake and 50,000 over a
+    # reach are two different pictures, and a width tuned for the dense one
+    # disappears on the sparse one (which is exactly what a reader reports as "I
+    # do not see a mesh"). The element count is the scale that matters, not the
+    # extent in metres.
+    n_elements = max(int(tri.triangles.shape[0]), 1)
+    ax.triplot(tri, color="white",
+               linewidth=float(np.clip(60.0 / n_elements ** 0.5, 0.12, 0.6)),
+               alpha=float(np.clip(0.25 + 1200.0 / n_elements, 0.30, 0.75)),
+               zorder=3)
     cbar = fig.colorbar(coll, ax=ax, fraction=0.025, pad=0.01)
     cbar.set_label(f"{name.strip()} ({units})", fontsize=8)
     cbar.ax.tick_params(labelsize=7)
@@ -248,6 +268,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="which horizontal plane of a 3D PRISM result to render")
     ap.add_argument("--nplan", type=int, default=None,
                     help="sigma planes in a 3D result; default reads telemac_metrics")
+    ap.add_argument("--mask-var", default=None,
+                    help="a second variable that gates which nodes are coloured "
+                         "(e.g. WATER DEPTH, so dry land is not painted)")
+    ap.add_argument("--mask-min", type=float, default=0.0)
     ap.add_argument("--still", choices=("peak", "final"), default="peak",
                     help="which frame the still shows - peak for a field that "
                          "builds, final for one that decays toward its answer")
@@ -271,7 +295,8 @@ def main(argv: list[str] | None = None) -> int:
                         title=ns.title or f"{ns.stem} - {ns.var.strip()}",
                         run_id=ns.run_id, gif_path=gif, peak_path=peak,
                         nplan=int(ns.nplan or worker.get("nplan") or 1),
-                        plane=ns.plane, still=ns.still)
+                        plane=ns.plane, still=ns.still, mask_var=ns.mask_var,
+                        mask_min=ns.mask_min)
     finally:
         Path(slf).unlink(missing_ok=True)
     print(json.dumps({**result, "run_id": ns.run_id,
