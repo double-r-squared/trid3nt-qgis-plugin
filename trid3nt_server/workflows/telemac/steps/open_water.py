@@ -24,7 +24,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from trid3nt_contracts import new_ulid
 
@@ -34,6 +34,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
 
 __all__ = [
     "OpenWaterError",
+    "mesh_sizing_provenance",
     "SolveOpenWater",
     "download_open_water_result",
     "publish_peak_layer",
@@ -234,6 +235,33 @@ async def surface_in_worker_bed_input(emitter: Any, *, run_metrics: dict[str, An
     except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
         logger.warning("telemac bed input absent (the solve is unaffected): %s", exc)
         return False
+
+
+def mesh_sizing_provenance(asked_m: Any, metrics: Mapping[str, Any]) -> list[Any]:
+    """The user's grid-spacing ask, as a row, WHEN the worker MOVED it.
+
+    A user lever the run quietly overrode is the silent-override class: the mesh
+    was right and the label was a lie. The open-water builds move it two ways -
+    the grid FLOOR raises an ask that is finer than the builder authors, and the
+    node BUDGET raises one that is finer than the domain can afford - and neither
+    said so, while the reach family has narrated exactly this since wave 2b.
+
+    The row appears only when the ask and the built spacing DIFFER, so an honoured
+    lever adds no noise. ``basis="user"`` - the value came from the caller; the
+    note says what happened to it.
+    """
+    from trid3nt_contracts.common import SyntheticInput
+
+    built = metrics.get("dx_m")
+    if asked_m is None or built is None or abs(float(built) - float(asked_m)) < 1e-6:
+        return []
+    reason = ("the node budget for this domain" if metrics.get("coarsened")
+              else "the grid floor this builder authors")
+    return [SyntheticInput(
+        param="target_resolution_m", value=round(float(asked_m), 3), units="m",
+        basis="user", consequence="numerical",
+        note=(f"target_resolution_m {float(asked_m):g} RAISED to {float(built):g} m "
+              f"by {reason}; the field was solved at {float(built):g} m"))]
 
 
 async def publish_peak_layer(raw: Any, *, style_preset: str,

@@ -275,7 +275,8 @@ tomawac_wave_field = register_workflow(
     data=DATA,
     answer=ANSWER,
     provenance=(("wind_speed_mps", "wind_note"),
-                ("bathy_source", "bathy_note")),
+                ("bathy_source", "bathy_note"),
+                ("target_resolution_m", "target_resolution_note")),
     coerce=(
         location_or_bbox("tomawac_wave_field", code_prefix="TOMAWAC",
                          hint="For a natural prompt like 'how big do the waves get "

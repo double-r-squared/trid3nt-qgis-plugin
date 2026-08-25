@@ -186,6 +186,84 @@ CANARIES: dict[str, LiveRun] = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# REFINED-MESH variants: the same question, the resolution lever moved.
+# --------------------------------------------------------------------------- #
+# NOT parity runs. A different mesh is a different discretization, so the
+# scalars MOVE - and that movement is the physics of resolution, information
+# about how far the coarse answer can be trusted, never a regression. Each one
+# is the coarse declaration with its sizing lever changed and nothing else, so
+# the drift has exactly one cause.
+
+def _refined(name: str, **overrides: Any) -> LiveRun:
+    base = CANARIES[name]
+    return LiveRun(**{**base.__dict__,
+                      "args": {**base.args, **overrides},
+                      "case_title": base.case_title.replace("canary:", "refined:")
+                      .replace("coarse", "refined")})
+
+
+#: The Eel River reach near Scotia, CA - the cohort's own canary reach, with a
+#: real NHDArea-covered channel. The outfall is the USGS Scotia gage (11477000).
+_EEL_REACH = "Eel River near Scotia, California"
+_EEL_OUTFALL = [-124.0983, 40.4921]
+
+CANARIES.update({
+    # THE COHORT'S REFINED RUNS. Their COARSE canaries live in their own drive
+    # scripts (scripts/drive_do_sag_cards.py --coarse, drive_river_dye_cards.py
+    # --coarse), which is where NATE reviewed them; only the refined variants are
+    # declared here, beside the other four.
+    #
+    # 10 m, and the direction of the width cap is worth stating: the >= 2 cells
+    # across the channel rule is a CEILING on coarseness (h <= width / 2 = 30 m
+    # on a 60 m channel), not a floor on fineness. The coarse canary asked 100 m
+    # and was capped DOWN to 30; asking 10 m stands, and the node budget is the
+    # only thing that could raise it.
+    "telemac_do_sag_refined": LiveRun(
+        tool="telemac_do_sag",
+        args={
+            "location": _EEL_REACH, "outfall_coords": _EEL_OUTFALL,
+            "discharge_bod_mgl": 20.0, "water_temp_c": 20.0,
+            "do_standard_mgl": 5.0, "k1_per_day": 0.3, "k2_per_day": 0.9,
+            "reach_length_km": 0.5, "sim_duration_s": 600.0,
+            "mesh_resolution": "coarse", "mesh_resolution_m": 10.0,
+            "discharge_m3s": 60.0, "input_mode": "auto",
+        },
+        case_title="refined: telemac do sag (Eel River near Scotia, 10 m)",
+        answers=GateAnswers(confirm="proceed"), cleanup_case=True),
+    "telemac_river_dye_refined": LiveRun(
+        tool="telemac_river_dye",
+        args={
+            "location": _EEL_REACH, "substance": "dye",
+            "spill_fraction": 0.25, "spill_duration_s": 120.0,
+            "dye_concentration_mgl": 100.0, "reach_length_km": 1.0,
+            "sim_duration_s": 600.0, "source_q_m3s": 8.0,
+            "channel_width_m": 60.0, "mesh_resolution": "coarse",
+            "mesh_resolution_m": 10.0, "discharge_m3s": 2.2,
+            "input_mode": "auto",
+        },
+        case_title="refined: telemac river dye (Eel River near Scotia, 10 m)",
+        answers=GateAnswers(confirm="proceed"), cleanup_case=True),
+    # 250 -> 50 m. The finer grid should also thin the dot-lattice sparsity in
+    # the published raster, since that sparsity is a mesh-vs-output-grid
+    # mismatch and this closes the gap by a factor of five.
+    "coastal_tidal_surge_refined": _refined("coastal_tidal_surge",
+                                            target_resolution_m=50.0),
+    # 3000 -> 500 m over a whole-lake fetch; the node budget may coarsen it back
+    # and the run says so in its own `coarsened` flag if it does.
+    "tomawac_wave_field_refined": _refined("tomawac_wave_field",
+                                           target_resolution_m=500.0),
+    # 30 -> 15 m. A phase-resolving solve needs nodes per WAVELENGTH, so this is
+    # the refinement that matters most for the diffraction fringes.
+    "artemis_harbor_agitation_refined": _refined("artemis_harbor_agitation",
+                                                 target_resolution_m=15.0),
+    # 3000 -> 1000 m at the SAME 13 planes: 3D cost cubes, so the vertical is
+    # held fixed and only the horizontal moves.
+    "telemac3d_stratified_flow_refined": _refined("telemac3d_stratified_flow",
+                                                  target_resolution_m=1000.0),
+})
+
+
 def evidence_path(name: str) -> str:
     return os.path.join(_EVIDENCE_DIR, f"{name}_canary_evidence.json")
 

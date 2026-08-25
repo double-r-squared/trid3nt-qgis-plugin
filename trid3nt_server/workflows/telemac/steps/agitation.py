@@ -37,6 +37,7 @@ from trid3nt_server.workflows.lib import Step
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    mesh_sizing_provenance,
     publish_peak_layer,
     surface_in_worker_bed_input,
 )
@@ -213,6 +214,10 @@ async def write_agitation_deck(
         "domain_name": aoi["name"],
         "domain_slug": aoi["slug"],
         "mesh_size_m": float(resolution),
+        # What the CALLER asked for, kept beside what was built, so a
+        # lever the worker moved leaves a row instead of a silence.
+        "mesh_resolution_asked_m": (mesh_resolution_m if mesh_resolution_m is not None
+                                    else None),
         "wave_mode": str(wave_mode),
         "wave_period_s": float(wave_period_s),
         "wave_height_m": float(wave_height_m),
@@ -289,7 +294,7 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
     ]
     if deck["wave_mode"] == "diffraction":
         rows.append(_structure_row(deck))
-    return rows
+    return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
 def _honesty_note(deck: dict[str, Any]) -> str:

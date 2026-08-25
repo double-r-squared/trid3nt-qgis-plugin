@@ -285,8 +285,11 @@ coastal_tidal_surge = register_workflow(
     TelemacWorkflow, _COASTAL_METADATA, PARAMS, plan,
     data=DATA,
     answer=ANSWER,
+    # The mesh row is present only when the WORKER moved the user's explicit
+    # spacing (a grid floor or the node budget); on an honoured ask it reads null.
     provenance=(("datum_offset_m", "datum_offset_note"),
-                ("series_type", "series_type_note")),
+                ("series_type", "series_type_note"),
+                ("target_resolution_m", "target_resolution_note")),
     coerce=(
         location_or_bbox("coastal_tidal_surge", code_prefix="COASTAL",
                          hint="For a natural prompt like 'storm surge flooding near "

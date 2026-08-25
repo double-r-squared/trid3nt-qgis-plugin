@@ -30,6 +30,7 @@ from trid3nt_server.workflows.lib import Step
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    mesh_sizing_provenance,
     publish_peak_layer,
     surface_in_worker_bed_input,
 )
@@ -116,6 +117,7 @@ async def write_coastal_deck(
         "domain_slug": aoi["slug"],
         "domain_bbox": tuple(float(v) for v in aoi["bbox"]),
         "mesh_size_m": float(mesh_resolution_m),
+        "mesh_resolution_asked_m": mesh_resolution_m,
         "series_datum": datum,
         "datum_offset_m": float(datum_offset_m),
         "series_type": str((water_level or {}).get("series_type") or "observed"),
@@ -159,7 +161,7 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             param="ocean_edge", value=str(metrics["ocean_edge"]), basis="derived",
             consequence="numerical",
             note="the bbox edge the seaward liquid boundary was placed on"))
-    return rows
+    return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
 def _honesty_note(deck: dict[str, Any]) -> str:

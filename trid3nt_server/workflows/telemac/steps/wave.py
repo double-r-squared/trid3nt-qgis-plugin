@@ -32,6 +32,7 @@ from trid3nt_server.workflows.lib import Step
 
 from .open_water import (
     download_open_water_result,
+    mesh_sizing_provenance,
     publish_peak_layer,
     surface_in_worker_bed_input,
 )
@@ -141,6 +142,10 @@ async def write_wave_deck(
         "domain_slug": aoi["slug"],
         "domain_bbox": tuple(float(v) for v in aoi["bbox"]),
         "mesh_size_m": float(resolution),
+        # What the CALLER asked for, kept beside what was built, so a
+        # lever the worker moved leaves a row instead of a silence.
+        "mesh_resolution_asked_m": (mesh_resolution_m if mesh_resolution_m is not None
+                                    else None),
         "wave_mode": str(wave_mode),
         "real_bathymetry": real,
         "lake": lake,
@@ -184,7 +189,7 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             basis="derived", consequence="physics",
             note=("bottom-friction dissipation armed for this question class"
                   if deck["bottom_friction"] else "no bottom-friction dissipation")),
-    ]
+    ] + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
 def _honesty_note(deck: dict[str, Any]) -> str:

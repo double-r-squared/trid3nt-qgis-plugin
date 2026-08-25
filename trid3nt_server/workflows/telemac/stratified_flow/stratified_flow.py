@@ -279,7 +279,8 @@ telemac3d_stratified_flow = register_workflow(
     data=DATA,
     answer=ANSWER,
     provenance=(("wind_speed_mps", "wind_note"),
-                ("bathy_source", "bathy_note")),
+                ("bathy_source", "bathy_note"),
+                ("target_resolution_m", "target_resolution_note")),
     coerce=(
         location_or_bbox("telemac3d_stratified_flow", code_prefix="TELEMAC3D",
                          hint="For a natural prompt like 'does <lake> stratify', "

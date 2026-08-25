@@ -31,6 +31,7 @@ from trid3nt_server.workflows.lib import Step
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    mesh_sizing_provenance,
     publish_peak_layer,
 )
 from .wave import great_lake_for
@@ -116,6 +117,10 @@ async def write_stratified_deck(
         "domain_name": aoi["name"],
         "domain_slug": aoi["slug"],
         "mesh_size_m": float(resolution),
+        # What the CALLER asked for, kept beside what was built, so a
+        # lever the worker moved leaves a row instead of a silence.
+        "mesh_resolution_asked_m": (mesh_resolution_m if mesh_resolution_m is not None
+                                    else None),
         "flow_mode": str(flow_mode),
         "real_bathymetry": real,
         "wind_speed_mps": float(wind_speed_mps),
@@ -171,7 +176,7 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             basis="default_demo", consequence="physics",
             note=(f"prescribed warm epilimnion over cold hypolimnion, thermocline at "
                   f"{deck['thermocline_depth_m']:g} m (no met-forcing fetcher exists)")))
-    return rows
+    return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
 def _honesty_note(deck: dict[str, Any]) -> str:

@@ -1,0 +1,1872 @@
+{
+  "tool": "tomawac_wave_field",
+  "args": {
+    "bbox": [
+      -87.6,
+      46.7,
+      -86.6,
+      47.2
+    ],
+    "wave_mode": "fetch_growth",
+    "wind_speed_mps": 20.0,
+    "wind_direction_deg": 270.0,
+    "boundary_hs_m": 1.5,
+    "boundary_period_s": 10.0,
+    "current_speed_mps": -2.5,
+    "target_resolution_m": 500.0,
+    "sim_duration_hours": 1.0,
+    "bathy_source": "noaa_greatlakes",
+    "compute_class": "medium",
+    "input_mode": "user_gated",
+    "restart_clean": true
+  },
+  "session_id": "01M0W1SSFGR953XHRK9P17AAG9",
+  "case_id": "01M0W1SSQG4G5PEA4NZA3B3JKX",
+  "tool_status": null,
+  "dispatched": true,
+  "is_error": false,
+  "detail": "",
+  "step_state": "complete",
+  "step_error": "",
+  "turn_complete": true,
+  "charts": 1,
+  "chart_payloads": [
+    {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M0W1W2A9KE4X9CV2JM3RSGZ0",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": false
+        },
+        "data": {
+          "values": [
+            {
+              "x_km": 0.0,
+              "hs_m": 0.09
+            },
+            {
+              "x_km": 0.501,
+              "hs_m": 0.1424
+            },
+            {
+              "x_km": 1.002,
+              "hs_m": 0.2027
+            },
+            {
+              "x_km": 1.503,
+              "hs_m": 0.2529
+            },
+            {
+              "x_km": 2.004,
+              "hs_m": 0.2964
+            },
+            {
+              "x_km": 2.505,
+              "hs_m": 0.3356
+            },
+            {
+              "x_km": 3.007,
+              "hs_m": 0.3712
+            },
+            {
+              "x_km": 3.508,
+              "hs_m": 0.4039
+            },
+            {
+              "x_km": 4.009,
+              "hs_m": 0.434
+            },
+            {
+              "x_km": 4.51,
+              "hs_m": 0.4619
+            },
+            {
+              "x_km": 5.011,
+              "hs_m": 0.4877
+            },
+            {
+              "x_km": 5.512,
+              "hs_m": 0.5115
+            },
+            {
+              "x_km": 6.013,
+              "hs_m": 0.5333
+            },
+            {
+              "x_km": 6.514,
+              "hs_m": 0.5535
+            },
+            {
+              "x_km": 7.015,
+              "hs_m": 0.5721
+            },
+            {
+              "x_km": 7.516,
+              "hs_m": 0.5893
+            },
+            {
+              "x_km": 8.018,
+              "hs_m": 0.6048
+            },
+            {
+              "x_km": 8.519,
+              "hs_m": 0.6189
+            },
+            {
+              "x_km": 9.02,
+              "hs_m": 0.6316
+            },
+            {
+              "x_km": 9.521,
+              "hs_m": 0.6429
+            },
+            {
+              "x_km": 10.022,
+              "hs_m": 0.653
+            },
+            {
+              "x_km": 10.523,
+              "hs_m": 0.6618
+            },
+            {
+              "x_km": 11.024,
+              "hs_m": 0.6695
+            },
+            {
+              "x_km": 11.525,
+              "hs_m": 0.6761
+            },
+            {
+              "x_km": 12.026,
+              "hs_m": 0.6818
+            },
+            {
+              "x_km": 12.527,
+              "hs_m": 0.6866
+            },
+            {
+              "x_km": 13.028,
+              "hs_m": 0.6906
+            },
+            {
+              "x_km": 13.53,
+              "hs_m": 0.6939
+            },
+            {
+              "x_km": 14.031,
+              "hs_m": 0.6966
+            },
+            {
+              "x_km": 14.532,
+              "hs_m": 0.6988
+            },
+            {
+              "x_km": 15.033,
+              "hs_m": 0.7007
+            },
+            {
+              "x_km": 15.534,
+              "hs_m": 0.7021
+            },
+            {
+              "x_km": 16.035,
+              "hs_m": 0.7034
+            },
+            {
+              "x_km": 16.536,
+              "hs_m": 0.7045
+            },
+            {
+              "x_km": 17.037,
+              "hs_m": 0.7056
+            },
+            {
+              "x_km": 17.538,
+              "hs_m": 0.7065
+            },
+            {
+              "x_km": 18.039,
+              "hs_m": 0.7073
+            },
+            {
+              "x_km": 18.541,
+              "hs_m": 0.7081
+            },
+            {
+              "x_km": 19.042,
+              "hs_m": 0.7088
+            },
+            {
+              "x_km": 19.543,
+              "hs_m": 0.7094
+            },
+            {
+              "x_km": 20.044,
+              "hs_m": 0.71
+            },
+            {
+              "x_km": 20.545,
+              "hs_m": 0.7106
+            },
+            {
+              "x_km": 21.046,
+              "hs_m": 0.7111
+            },
+            {
+              "x_km": 21.547,
+              "hs_m": 0.7115
+            },
+            {
+              "x_km": 22.048,
+              "hs_m": 0.7119
+            },
+            {
+              "x_km": 22.549,
+              "hs_m": 0.7123
+            },
+            {
+              "x_km": 23.05,
+              "hs_m": 0.7126
+            },
+            {
+              "x_km": 23.551,
+              "hs_m": 0.713
+            },
+            {
+              "x_km": 24.053,
+              "hs_m": 0.7132
+            },
+            {
+              "x_km": 24.554,
+              "hs_m": 0.7135
+            },
+            {
+              "x_km": 25.055,
+              "hs_m": 0.7138
+            },
+            {
+              "x_km": 25.556,
+              "hs_m": 0.714
+            },
+            {
+              "x_km": 26.057,
+              "hs_m": 0.7142
+            },
+            {
+              "x_km": 26.558,
+              "hs_m": 0.7144
+            },
+            {
+              "x_km": 27.059,
+              "hs_m": 0.7145
+            },
+            {
+              "x_km": 27.56,
+              "hs_m": 0.7147
+            },
+            {
+              "x_km": 28.061,
+              "hs_m": 0.7148
+            },
+            {
+              "x_km": 28.562,
+              "hs_m": 0.715
+            },
+            {
+              "x_km": 29.064,
+              "hs_m": 0.7151
+            },
+            {
+              "x_km": 29.565,
+              "hs_m": 0.7152
+            },
+            {
+              "x_km": 30.066,
+              "hs_m": 0.7153
+            },
+            {
+              "x_km": 30.567,
+              "hs_m": 0.7155
+            },
+            {
+              "x_km": 31.068,
+              "hs_m": 0.7156
+            },
+            {
+              "x_km": 31.569,
+              "hs_m": 0.7156
+            },
+            {
+              "x_km": 32.07,
+              "hs_m": 0.7157
+            },
+            {
+              "x_km": 32.571,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 33.072,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 33.573,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 34.075,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 34.576,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 35.077,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 35.578,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 36.079,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 36.58,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 37.081,
+              "hs_m": 0.716
+            },
+            {
+              "x_km": 37.582,
+              "hs_m": 0.716
+            },
+            {
+              "x_km": 38.083,
+              "hs_m": 0.7161
+            },
+            {
+              "x_km": 38.584,
+              "hs_m": 0.7161
+            },
+            {
+              "x_km": 39.085,
+              "hs_m": 0.7161
+            },
+            {
+              "x_km": 39.587,
+              "hs_m": 0.7162
+            },
+            {
+              "x_km": 40.088,
+              "hs_m": 0.7162
+            },
+            {
+              "x_km": 40.589,
+              "hs_m": 0.7162
+            },
+            {
+              "x_km": 41.09,
+              "hs_m": 0.7163
+            },
+            {
+              "x_km": 41.591,
+              "hs_m": 0.7163
+            },
+            {
+              "x_km": 42.092,
+              "hs_m": 0.7164
+            },
+            {
+              "x_km": 42.593,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 43.094,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 43.595,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 44.096,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 44.598,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 45.099,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 45.6,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 46.101,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 46.602,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 47.103,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 47.604,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 48.105,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 48.606,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 49.107,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 49.608,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 50.11,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 50.611,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 51.112,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 51.613,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 52.114,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 52.615,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 53.116,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 53.617,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 54.118,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 54.619,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 55.121,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 55.622,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 56.123,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 56.624,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 57.125,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 57.626,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 58.127,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 58.628,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 59.129,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 59.63,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 60.131,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 60.633,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 61.134,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 61.635,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 62.136,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 62.637,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 63.138,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 63.639,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 64.14,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 64.641,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 65.142,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 65.644,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 66.145,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 66.646,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 67.147,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 67.648,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 68.149,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 68.65,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 69.151,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 69.652,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 70.153,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 70.654,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 71.156,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 71.657,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 72.158,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 72.659,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 73.16,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 73.661,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 74.162,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 74.663,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 75.164,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 75.665,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 76.167,
+              "hs_m": 0.7166
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "x_km",
+            "type": "quantitative",
+            "title": "Downwind distance (km)"
+          },
+          "y": {
+            "field": "hs_m",
+            "type": "quantitative",
+            "title": "Significant wave height Hs (m)"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Significant wave height (aoi)",
+      "caption": "Fetch-limited growth under a prescribed 20 m/s wind: Hs 0.142 m at the upwind shore rising to 0.717 m downwind. Spectral screening, not a calibrated hindcast.",
+      "source_layer_uri": null,
+      "created_turn_id": "01M0W1STDG7M86YRY752P13XNX"
+    }
+  ],
+  "layers": [
+    {
+      "layer_id": "input-lake-bed-01M0W1W27J3EFQG9XKQBZFXYB7",
+      "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/bed_bathymetry.tif",
+      "style_preset": "continuous_dem",
+      "visible": true,
+      "role": "context",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 0,
+      "crs_authid": null,
+      "legend": null
+    },
+    {
+      "layer_id": "01M0W1W2H0H1YPD4ENW7HXACSB",
+      "name": "Significant wave height (aoi)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/tomawac_hs.tif",
+      "style_preset": "continuous_significant_wave_height",
+      "visible": true,
+      "role": "primary",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 1,
+      "crs_authid": null,
+      "legend": {
+        "kind": "continuous",
+        "colormap": "viridis",
+        "vmin": 0.204535,
+        "vmax": 0.716563,
+        "classes": null,
+        "value_field": null,
+        "units": null,
+        "label": "Significant wave height"
+      }
+    }
+  ],
+  "draw_card": null,
+  "form_card": {
+    "workflow": "tomawac_wave_field",
+    "title": "Review the wave-field storm forcing",
+    "rows": [
+      {
+        "name": "bbox",
+        "value": [
+          -87.6,
+          46.7,
+          -86.6,
+          47.2
+        ],
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "bottom_friction",
+        "value": null,
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "location",
+        "value": null,
+        "units": null,
+        "door": "question",
+        "basis": "prompt_interpreted",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "target_resolution_m",
+        "value": 500.0,
+        "units": "m",
+        "door": "user",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          150.0,
+          20000.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wave_mode",
+        "value": "fetch_growth",
+        "units": null,
+        "door": "question",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "bathy_source",
+        "value": "noaa_greatlakes",
+        "units": null,
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "boundary_hs_m",
+        "value": 1.5,
+        "units": "m",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.0,
+          20.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "boundary_period_s",
+        "value": 10.0,
+        "units": "s",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          30.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "current_speed_mps",
+        "value": -2.5,
+        "units": "m/s",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          -10.0,
+          10.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "sim_duration_hours",
+        "value": 1.0,
+        "units": "h",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          24.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wind_direction_deg",
+        "value": 270.0,
+        "units": "deg",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.0,
+          360.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wind_speed_mps",
+        "value": 20.0,
+        "units": "m/s",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.0,
+          60.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "compute_class",
+        "value": "medium",
+        "units": null,
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": true,
+        "note": "supplied on this invocation"
+      }
+    ],
+    "edited": {}
+  },
+  "plain_warnings": [],
+  "run_id": "01M0W1STE456CZZ133AGXPQVKE",
+  "chart_spec": {
+    "wave_fetch_growth": {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M0W1W2A9KE4X9CV2JM3RSGZ0",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": false
+        },
+        "data": {
+          "values": [
+            {
+              "x_km": 0.0,
+              "hs_m": 0.09
+            },
+            {
+              "x_km": 0.501,
+              "hs_m": 0.1424
+            },
+            {
+              "x_km": 1.002,
+              "hs_m": 0.2027
+            },
+            {
+              "x_km": 1.503,
+              "hs_m": 0.2529
+            },
+            {
+              "x_km": 2.004,
+              "hs_m": 0.2964
+            },
+            {
+              "x_km": 2.505,
+              "hs_m": 0.3356
+            },
+            {
+              "x_km": 3.007,
+              "hs_m": 0.3712
+            },
+            {
+              "x_km": 3.508,
+              "hs_m": 0.4039
+            },
+            {
+              "x_km": 4.009,
+              "hs_m": 0.434
+            },
+            {
+              "x_km": 4.51,
+              "hs_m": 0.4619
+            },
+            {
+              "x_km": 5.011,
+              "hs_m": 0.4877
+            },
+            {
+              "x_km": 5.512,
+              "hs_m": 0.5115
+            },
+            {
+              "x_km": 6.013,
+              "hs_m": 0.5333
+            },
+            {
+              "x_km": 6.514,
+              "hs_m": 0.5535
+            },
+            {
+              "x_km": 7.015,
+              "hs_m": 0.5721
+            },
+            {
+              "x_km": 7.516,
+              "hs_m": 0.5893
+            },
+            {
+              "x_km": 8.018,
+              "hs_m": 0.6048
+            },
+            {
+              "x_km": 8.519,
+              "hs_m": 0.6189
+            },
+            {
+              "x_km": 9.02,
+              "hs_m": 0.6316
+            },
+            {
+              "x_km": 9.521,
+              "hs_m": 0.6429
+            },
+            {
+              "x_km": 10.022,
+              "hs_m": 0.653
+            },
+            {
+              "x_km": 10.523,
+              "hs_m": 0.6618
+            },
+            {
+              "x_km": 11.024,
+              "hs_m": 0.6695
+            },
+            {
+              "x_km": 11.525,
+              "hs_m": 0.6761
+            },
+            {
+              "x_km": 12.026,
+              "hs_m": 0.6818
+            },
+            {
+              "x_km": 12.527,
+              "hs_m": 0.6866
+            },
+            {
+              "x_km": 13.028,
+              "hs_m": 0.6906
+            },
+            {
+              "x_km": 13.53,
+              "hs_m": 0.6939
+            },
+            {
+              "x_km": 14.031,
+              "hs_m": 0.6966
+            },
+            {
+              "x_km": 14.532,
+              "hs_m": 0.6988
+            },
+            {
+              "x_km": 15.033,
+              "hs_m": 0.7007
+            },
+            {
+              "x_km": 15.534,
+              "hs_m": 0.7021
+            },
+            {
+              "x_km": 16.035,
+              "hs_m": 0.7034
+            },
+            {
+              "x_km": 16.536,
+              "hs_m": 0.7045
+            },
+            {
+              "x_km": 17.037,
+              "hs_m": 0.7056
+            },
+            {
+              "x_km": 17.538,
+              "hs_m": 0.7065
+            },
+            {
+              "x_km": 18.039,
+              "hs_m": 0.7073
+            },
+            {
+              "x_km": 18.541,
+              "hs_m": 0.7081
+            },
+            {
+              "x_km": 19.042,
+              "hs_m": 0.7088
+            },
+            {
+              "x_km": 19.543,
+              "hs_m": 0.7094
+            },
+            {
+              "x_km": 20.044,
+              "hs_m": 0.71
+            },
+            {
+              "x_km": 20.545,
+              "hs_m": 0.7106
+            },
+            {
+              "x_km": 21.046,
+              "hs_m": 0.7111
+            },
+            {
+              "x_km": 21.547,
+              "hs_m": 0.7115
+            },
+            {
+              "x_km": 22.048,
+              "hs_m": 0.7119
+            },
+            {
+              "x_km": 22.549,
+              "hs_m": 0.7123
+            },
+            {
+              "x_km": 23.05,
+              "hs_m": 0.7126
+            },
+            {
+              "x_km": 23.551,
+              "hs_m": 0.713
+            },
+            {
+              "x_km": 24.053,
+              "hs_m": 0.7132
+            },
+            {
+              "x_km": 24.554,
+              "hs_m": 0.7135
+            },
+            {
+              "x_km": 25.055,
+              "hs_m": 0.7138
+            },
+            {
+              "x_km": 25.556,
+              "hs_m": 0.714
+            },
+            {
+              "x_km": 26.057,
+              "hs_m": 0.7142
+            },
+            {
+              "x_km": 26.558,
+              "hs_m": 0.7144
+            },
+            {
+              "x_km": 27.059,
+              "hs_m": 0.7145
+            },
+            {
+              "x_km": 27.56,
+              "hs_m": 0.7147
+            },
+            {
+              "x_km": 28.061,
+              "hs_m": 0.7148
+            },
+            {
+              "x_km": 28.562,
+              "hs_m": 0.715
+            },
+            {
+              "x_km": 29.064,
+              "hs_m": 0.7151
+            },
+            {
+              "x_km": 29.565,
+              "hs_m": 0.7152
+            },
+            {
+              "x_km": 30.066,
+              "hs_m": 0.7153
+            },
+            {
+              "x_km": 30.567,
+              "hs_m": 0.7155
+            },
+            {
+              "x_km": 31.068,
+              "hs_m": 0.7156
+            },
+            {
+              "x_km": 31.569,
+              "hs_m": 0.7156
+            },
+            {
+              "x_km": 32.07,
+              "hs_m": 0.7157
+            },
+            {
+              "x_km": 32.571,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 33.072,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 33.573,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 34.075,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 34.576,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 35.077,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 35.578,
+              "hs_m": 0.7158
+            },
+            {
+              "x_km": 36.079,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 36.58,
+              "hs_m": 0.7159
+            },
+            {
+              "x_km": 37.081,
+              "hs_m": 0.716
+            },
+            {
+              "x_km": 37.582,
+              "hs_m": 0.716
+            },
+            {
+              "x_km": 38.083,
+              "hs_m": 0.7161
+            },
+            {
+              "x_km": 38.584,
+              "hs_m": 0.7161
+            },
+            {
+              "x_km": 39.085,
+              "hs_m": 0.7161
+            },
+            {
+              "x_km": 39.587,
+              "hs_m": 0.7162
+            },
+            {
+              "x_km": 40.088,
+              "hs_m": 0.7162
+            },
+            {
+              "x_km": 40.589,
+              "hs_m": 0.7162
+            },
+            {
+              "x_km": 41.09,
+              "hs_m": 0.7163
+            },
+            {
+              "x_km": 41.591,
+              "hs_m": 0.7163
+            },
+            {
+              "x_km": 42.092,
+              "hs_m": 0.7164
+            },
+            {
+              "x_km": 42.593,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 43.094,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 43.595,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 44.096,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 44.598,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 45.099,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 45.6,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 46.101,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 46.602,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 47.103,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 47.604,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 48.105,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 48.606,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 49.107,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 49.608,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 50.11,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 50.611,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 51.112,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 51.613,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 52.114,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 52.615,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 53.116,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 53.617,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 54.118,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 54.619,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 55.121,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 55.622,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 56.123,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 56.624,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 57.125,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 57.626,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 58.127,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 58.628,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 59.129,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 59.63,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 60.131,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 60.633,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 61.134,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 61.635,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 62.136,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 62.637,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 63.138,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 63.639,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 64.14,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 64.641,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 65.142,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 65.644,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 66.145,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 66.646,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 67.147,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 67.648,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 68.149,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 68.65,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 69.151,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 69.652,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 70.153,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 70.654,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 71.156,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 71.657,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 72.158,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 72.659,
+              "hs_m": 0.7165
+            },
+            {
+              "x_km": 73.16,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 73.661,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 74.162,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 74.663,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 75.164,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 75.665,
+              "hs_m": 0.7166
+            },
+            {
+              "x_km": 76.167,
+              "hs_m": 0.7166
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "x_km",
+            "type": "quantitative",
+            "title": "Downwind distance (km)"
+          },
+          "y": {
+            "field": "hs_m",
+            "type": "quantitative",
+            "title": "Significant wave height Hs (m)"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Significant wave height (aoi)",
+      "caption": "Fetch-limited growth under a prescribed 20 m/s wind: Hs 0.142 m at the upwind shore rising to 0.717 m downwind. Spectral screening, not a calibrated hindcast.",
+      "source_layer_uri": null,
+      "created_turn_id": null
+    }
+  },
+  "metrics": {
+    "hs_max_m": 0.7166,
+    "hs_mean_m": 0.6546,
+    "hs_upwind_m": 0.1424,
+    "hs_downwind_m": 0.7166,
+    "peak_period_max_s": 3.661,
+    "wave_mode": "fetch_growth",
+    "wind_speed_mps": 20.0,
+    "mesh_size_m": 500.0,
+    "fetch_curve_km": [
+      0.0,
+      0.501,
+      1.002,
+      1.503,
+      2.004,
+      2.505,
+      3.007,
+      3.508,
+      4.009,
+      4.51,
+      5.011,
+      5.512,
+      6.013,
+      6.514,
+      7.015,
+      7.516,
+      8.018,
+      8.519,
+      9.02,
+      9.521,
+      10.022,
+      10.523,
+      11.024,
+      11.525,
+      12.026,
+      12.527,
+      13.028,
+      13.53,
+      14.031,
+      14.532,
+      15.033,
+      15.534,
+      16.035,
+      16.536,
+      17.037,
+      17.538,
+      18.039,
+      18.541,
+      19.042,
+      19.543,
+      20.044,
+      20.545,
+      21.046,
+      21.547,
+      22.048,
+      22.549,
+      23.05,
+      23.551,
+      24.053,
+      24.554,
+      25.055,
+      25.556,
+      26.057,
+      26.558,
+      27.059,
+      27.56,
+      28.061,
+      28.562,
+      29.064,
+      29.565,
+      30.066,
+      30.567,
+      31.068,
+      31.569,
+      32.07,
+      32.571,
+      33.072,
+      33.573,
+      34.075,
+      34.576,
+      35.077,
+      35.578,
+      36.079,
+      36.58,
+      37.081,
+      37.582,
+      38.083,
+      38.584,
+      39.085,
+      39.587,
+      40.088,
+      40.589,
+      41.09,
+      41.591,
+      42.092,
+      42.593,
+      43.094,
+      43.595,
+      44.096,
+      44.598,
+      45.099,
+      45.6,
+      46.101,
+      46.602,
+      47.103,
+      47.604,
+      48.105,
+      48.606,
+      49.107,
+      49.608,
+      50.11,
+      50.611,
+      51.112,
+      51.613,
+      52.114,
+      52.615,
+      53.116,
+      53.617,
+      54.118,
+      54.619,
+      55.121,
+      55.622,
+      56.123,
+      56.624,
+      57.125,
+      57.626,
+      58.127,
+      58.628,
+      59.129,
+      59.63,
+      60.131,
+      60.633,
+      61.134,
+      61.635,
+      62.136,
+      62.637,
+      63.138,
+      63.639,
+      64.14,
+      64.641,
+      65.142,
+      65.644,
+      66.145,
+      66.646,
+      67.147,
+      67.648,
+      68.149,
+      68.65,
+      69.151,
+      69.652,
+      70.153,
+      70.654,
+      71.156,
+      71.657,
+      72.158,
+      72.659,
+      73.16,
+      73.661,
+      74.162,
+      74.663,
+      75.164,
+      75.665,
+      76.167
+    ],
+    "fetch_curve_hs_m": [
+      0.09,
+      0.1424,
+      0.2027,
+      0.2529,
+      0.2964,
+      0.3356,
+      0.3712,
+      0.4039,
+      0.434,
+      0.4619,
+      0.4877,
+      0.5115,
+      0.5333,
+      0.5535,
+      0.5721,
+      0.5893,
+      0.6048,
+      0.6189,
+      0.6316,
+      0.6429,
+      0.653,
+      0.6618,
+      0.6695,
+      0.6761,
+      0.6818,
+      0.6866,
+      0.6906,
+      0.6939,
+      0.6966,
+      0.6988,
+      0.7007,
+      0.7021,
+      0.7034,
+      0.7045,
+      0.7056,
+      0.7065,
+      0.7073,
+      0.7081,
+      0.7088,
+      0.7094,
+      0.71,
+      0.7106,
+      0.7111,
+      0.7115,
+      0.7119,
+      0.7123,
+      0.7126,
+      0.713,
+      0.7132,
+      0.7135,
+      0.7138,
+      0.714,
+      0.7142,
+      0.7144,
+      0.7145,
+      0.7147,
+      0.7148,
+      0.715,
+      0.7151,
+      0.7152,
+      0.7153,
+      0.7155,
+      0.7156,
+      0.7156,
+      0.7157,
+      0.7158,
+      0.7158,
+      0.7159,
+      0.7159,
+      0.7159,
+      0.7158,
+      0.7158,
+      0.7159,
+      0.7159,
+      0.716,
+      0.716,
+      0.7161,
+      0.7161,
+      0.7161,
+      0.7162,
+      0.7162,
+      0.7162,
+      0.7163,
+      0.7163,
+      0.7164,
+      0.7165,
+      0.7165,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7165,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166,
+      0.7166
+    ],
+    "layer_uri": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/tomawac_hs.tif",
+    "wind_note": "prescribed steady storm wind (no wave-forcing fetcher exists)",
+    "bathy_source": "noaa_greatlakes",
+    "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)"
+  },
+  "product_uris": {
+    "chart_spec": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/metrics.json"
+  },
+  "product_errors": {}
+}

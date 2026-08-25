@@ -276,7 +276,8 @@ artemis_harbor_agitation = register_workflow(
     data=DATA,
     answer=ANSWER,
     provenance=(("wave_period_s", "wave_period_note"),
-                ("breakwater", "breakwater_note")),
+                ("breakwater", "breakwater_note"),
+                ("target_resolution_m", "target_resolution_note")),
     coerce=(
         location_or_bbox("artemis_harbor_agitation", code_prefix="ARTEMIS",
                          hint="For a natural prompt like 'is the marina at <place> "
