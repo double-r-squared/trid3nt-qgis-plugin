@@ -1,11 +1,13 @@
 """The workflow SKELETON: the template method every declared workflow runs on.
 
 A template file declares a workflow; :class:`Workflow` IS one. The skeleton owns
-everything that never varies between questions - the stage sequence, the gate
-mechanics, the chart scaffolding, the emission seam, solve supervision, ledger +
-resume, provenance, the leak guard and the registration factory - and the engine
-facade (:class:`EngineOps`, realized as ``TelemacWorkflow`` and friends) realizes
-exactly five operations.
+everything that never varies between questions - the normalize -> resolve ->
+interpret spine, the post + publish stages, the typed error envelope, the chart
+HOOK and its persistence, the answer artifact, and the registration factory - and
+the engine facade (:class:`EngineOps`, realized as ``TelemacWorkflow`` and
+friends) realizes exactly five operations. The mechanics behind the invariants -
+gate cards, chart building and emission, solve supervision, ledger + resume, the
+leak guard - are the interpreter's, and stay there.
 
 The skeleton COMPOSES the library; it does not reimplement it. Gates, ledger,
 binding and the leak guard all live in ``interpreter.py`` and stay there - the
@@ -23,13 +25,14 @@ import logging
 from typing import Any, Callable, Mapping, Sequence
 
 from .data import DataDecl
-from .errors import DeclarativeError
+from .errors import DeclarativeError, PlanValidationError
 from .params import Param
 from .plan import Plan, Ref, Step
 from .resolver import merge_provenance, resolve_params
 from .interpreter import RunResult, interpret
 
-__all__ = ["DataRefs", "EngineOps", "Workflow", "WireArgsError", "register_workflow"]
+__all__ = ["DataRefs", "EngineOps", "FacadeIncompleteError", "UndeclaredDataError",
+           "Workflow", "WireArgsError", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.lib.workflow")
 
@@ -38,6 +41,31 @@ class WireArgsError(DeclarativeError):
     """The wire arguments cannot be coerced into a sheet the workflow can run."""
 
     error_code = "WIRE_ARGS_INVALID"
+
+
+class UndeclaredDataError(WireArgsError, AttributeError):
+    """``d.<name>`` named a Data the workflow does not declare.
+
+    An ``AttributeError`` as well as a typed refusal, because it is raised from
+    ``__getattr__`` and the attribute PROTOCOL is what callers rely on there:
+    ``hasattr``, ``copy.deepcopy`` probing ``__deepcopy__``, pickle probing
+    ``__reduce_ex__`` and pytest probing ``__iter__`` all expect a miss to read as
+    an AttributeError. Raising a bare RuntimeError from a lookup turns every one of
+    those routine probes into a crash.
+    """
+
+
+class FacadeIncompleteError(DeclarativeError):
+    """A registered workflow's facade leaves one of the EngineOps five unrealized.
+
+    An AUTHORING error, refused at registration (import) time: a facade with a hole
+    in it would otherwise run until the plan reached the missing operation and then
+    surface the raw ``NotImplementedError`` to the model as an
+    ``<ENGINE>_INTERNAL_ERROR`` - a declaration defect wearing a runtime failure's
+    clothes.
+    """
+
+    error_code = "FACADE_INCOMPLETE"
 
 
 class DataRefs:
@@ -56,7 +84,7 @@ class DataRefs:
     def __getattr__(self, name: str) -> Ref:
         names = object.__getattribute__(self, "_names")
         if name not in names:
-            raise WireArgsError(
+            raise UndeclaredDataError(
                 f"the plan reads Data {name!r}, which this workflow does not declare "
                 f"(declared: {sorted(names)})."
             )
@@ -76,15 +104,26 @@ class EngineOps:
     #: The solver family a plan built by this facade records.
     engine: str = ""
 
+    #: What ``solver_spec`` NAMES its step. The skeleton reads the run prefix off
+    #: that step when the result carries none, and a facade that renamed its solve
+    #: would otherwise lose the run id to a literal guess. Declared, never assumed.
+    solve_step: str = ""
+
+    #: The operations a facade must realize to be registrable.
+    MUST_FILL: tuple[str, ...] = ("acquire_domain", "build_mesh", "author",
+                                  "solver_spec", "read_results")
+
     def acquire_domain(self, **slots: Any) -> tuple[Step, ...]:
         """The steps that establish the modeled world and its resolved state."""
         raise NotImplementedError(f"{type(self).__name__} realizes no acquire_domain.")
 
-    def build_mesh(self, domain: Any, policy: Any) -> Any:
+    def build_mesh(self, domain: Any, policy: Any, **slots: Any) -> Any:
         """The mesh, from an acquired domain and an engine-neutral :class:`MeshPolicy`.
 
         FROZEN interface: BYO-authored meshes, the shared generation front and the
-        mesh gate all arrive behind it without the declaration changing.
+        mesh gate all arrive behind it without the declaration changing. Domain
+        SHAPE that is not universal (a corridor's extent and width, a basin's
+        outlet) arrives as an engine slot, never as a field on the neutral policy.
         """
         raise NotImplementedError(f"{type(self).__name__} realizes no build_mesh.")
 
@@ -99,6 +138,25 @@ class EngineOps:
     def read_results(self, run: Any, **slots: Any) -> Step:
         """Read the solve's raw output into the question's published deliverable."""
         raise NotImplementedError(f"{type(self).__name__} realizes no read_results.")
+
+
+def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
+    """One declared ``provenance=`` entry, as ``(param, note_key)``.
+
+    A bare name takes the conventional ``<param>_note`` key. A PAIR names the note
+    key where the answer artifact has always called it something else - and it must
+    be exactly a pair: a three-element row would silently drop its tail and a
+    one-element row would raise deep inside :meth:`Workflow.answer`, long after the
+    declaration that was wrong.
+    """
+    if isinstance(row, str):
+        return (row, f"{row}_note")
+    pair = tuple(row)
+    if len(pair) != 2 or not all(isinstance(part, str) for part in pair):
+        raise PlanValidationError(
+            f"provenance row {row!r} is not (param, note_key): a provenance entry is "
+            "either a param NAME or a two-string pair naming the note's key.")
+    return (pair[0], pair[1])
 
 
 class Workflow(EngineOps):
@@ -134,9 +192,7 @@ class Workflow(EngineOps):
         #: Each declared provenance name lifts its resolved VALUE and its NOTE onto
         #: the answer. A pair names the note's key where the value's name plus
         #: "_note" is not what the answer has always called it.
-        self.answer_provenance = tuple(
-            (row, f"{row}_note") if isinstance(row, str) else tuple(row)
-            for row in provenance)
+        self.answer_provenance = tuple(_provenance_row(row) for row in provenance)
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
 
@@ -189,14 +245,27 @@ class Workflow(EngineOps):
     # -- normalize --------------------------------------------------------- #
 
     def _normalize(self, args: dict[str, Any]) -> tuple[dict[str, Any], dict | None]:
-        """Coerce the wire args into the door-1 sheet through the declared coercions."""
+        """Coerce the wire args into the door-1 sheet through the declared coercions.
+
+        The same three-way discrimination :meth:`run` makes, because a coercion can
+        raise all three things: a RETRYABLE typed error is a gate and must PROPAGATE
+        (flattening it into an envelope destroys the ``.suggestions`` channel the
+        adapter harvests off the raised exception); a typed refusal reports under its
+        own code; and anything else is a BUG in our own coercion, which reports as an
+        internal error rather than blaming the caller's params.
+        """
         try:
             for coercion in self.coercions:
                 args.update(coercion(args) or {})
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001 - every coercion refuses typed
-            code = getattr(exc, "error_code", None) or f"{self.error_prefix}_PARAMS_INVALID"
+        except Exception as exc:  # noqa: BLE001
+            if getattr(exc, "retryable", False):
+                raise
+            code = getattr(exc, "error_code", None)
+            if code is None:
+                logger.exception("%s coercion failed", self.name)
+                code = f"{self.error_prefix}_INTERNAL_ERROR"
             return {}, self._error(code, exc)
         declared = {prm.name for prm in self.params}
         return {k: v for k, v in args.items()
@@ -249,11 +318,19 @@ class Workflow(EngineOps):
             out[note_key] = getattr(row, "note", None) if row else None
         return out
 
-    @staticmethod
-    def _run_id(result: Any, run: RunResult) -> str | None:
-        """The solve's run prefix, from the layer or from the solve step itself."""
-        return (getattr(result, "run_id", None)
-                or (run.results.get("solve") or {}).get("run_id"))
+    def _run_id(self, result: Any, run: RunResult) -> str | None:
+        """The solve's run prefix, from the layer or from the solve step itself.
+
+        The step is the one the FACADE declares (``solve_step``), never the literal
+        ``"solve"``: a facade that names its solve step something else would
+        silently lose the prefix, and the run's chart spec and metrics would be
+        persisted nowhere. An analysis-only workflow declares no solve step and
+        simply has no prefix to find here.
+        """
+        direct = getattr(result, "run_id", None)
+        if direct or not self.solve_step:
+            return direct
+        return (run.results.get(self.solve_step) or {}).get("run_id")
 
     @staticmethod
     async def _persist(run_id: str | None, charts: Mapping[str, Any],
@@ -261,6 +338,7 @@ class Workflow(EngineOps):
         from trid3nt_server.workflows.shared.run_products import persist_run_products
 
         await persist_run_products(run_id, charts=charts, metrics=metrics)
+
 
 # -- the registration factory --------------------------------------------- #
 
@@ -294,9 +372,14 @@ def register_workflow(
     synthesized from the declared params (plus any wire aliases the template names
     in ``extra_args``), so the model-facing schema is generated from the same
     declaration the run resolves.
+
+    The facade is checked for HOLES first: the EngineOps five are must-fill slots,
+    and registration is the last moment an unfilled one is still an authoring
+    error rather than a mid-run failure.
     """
     from trid3nt_server.tools import register_tool
 
+    _refuse_incomplete_facade(facade)
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
                       answer=answer, provenance=provenance, coerce=coerce)
 
@@ -321,6 +404,29 @@ def register_workflow(
     register_kwargs.setdefault("destructive_hint", False)
     register_kwargs.setdefault("idempotent_hint", False)
     return register_tool(metadata, **register_kwargs)(_run)
+
+
+def _refuse_incomplete_facade(facade: type[Workflow]) -> None:
+    """A facade with an unrealized operation never reaches a caller as a run failure.
+
+    The design contract calls the EngineOps five must-fill slots and promises the
+    library refuses to register a template that leaves one empty; this is that
+    refusal. Without it the hole surfaces mid-run - after the geocode, the fetches
+    and possibly the solve - as a bare ``NotImplementedError`` flattened into an
+    ``<ENGINE>_INTERNAL_ERROR``, which tells the reader a runtime broke when in
+    fact the declaration was never complete.
+    """
+    if not (isinstance(facade, type) and issubclass(facade, EngineOps)):
+        raise FacadeIncompleteError(
+            f"{facade!r} is not an EngineOps facade; register_workflow takes the "
+            "facade CLASS (e.g. TelemacWorkflow).")
+    unfilled = [op for op in EngineOps.MUST_FILL
+                if getattr(facade, op, None) is getattr(EngineOps, op)]
+    if unfilled:
+        raise FacadeIncompleteError(
+            f"{facade.__name__} realizes no {unfilled} - the EngineOps five are "
+            "must-fill. Implement them on the facade, or register against one that "
+            "does.")
 
 
 def _wire_signature(params: Sequence[Param],
