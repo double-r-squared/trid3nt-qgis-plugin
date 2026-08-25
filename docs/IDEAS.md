@@ -1257,3 +1257,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   publishers importing preset CONSTANTS - those retire: publishers
   declare QUANTITIES, the contract owns quantity->preset. .style()
   replaces the dormant .render machinery + the doc example.
+
+- DATA-DRIVEN SCALING RULED (NATE 2026-08-25): rescale: data is a
+  first-class declared policy in the style contract and the DEFAULT for
+  model-output quantities - hardcoded scales make outputs less
+  informative (refined river_dye peaked 28.7 vs the old 0-10 preset).
+  Two boundaries: (1) the SCOPE of "data" is the RUN, never the frame -
+  range computed once over the whole time axis/planes; every frame +
+  legend uses that one range (this IS the legend-shift fix: the bug was
+  per-frame scoping, not the policy); (2) COMPARISON paths (rerun-with-
+  overrides before/after, calibration iterations, coarse-vs-refined
+  pairs) compute the range across the compared SET and share it, legend
+  stating so. Fixed rescales remain for domain-standard bounded
+  quantities. Legends always state which policy + the range.
