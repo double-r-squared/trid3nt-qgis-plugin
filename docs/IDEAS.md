@@ -905,3 +905,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   removed-what-it-superseded check + measures whether the generalization
   is making a real difference. Wave 2 writes row 0 (pre-change baseline)
   + its own rows.
+
+- TEMPLATE FILE READABILITY PRINCIPLE + COHORT LGTM (NATE 2026-08-24):
+  cohort taste review PASSED ("it's in fine form"). Principle going
+  forward: the template FILE is the plan + supplementary declarations
+  (PARAMS/DATA/plan/ANSWER/chart/registration) readable without
+  ambiguity; bespoke helpers (e.g. river_dye release_points coercion)
+  may live in sibling files within the template's own folder. Charts
+  stay colocated in the file (meaning, not plumbing). Apply as the norm
+  at fleet migration; no immediate cohort churn required.
