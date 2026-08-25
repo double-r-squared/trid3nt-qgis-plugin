@@ -105,6 +105,26 @@ skeleton names and engines the `Plan`.
   `shared/aoi.location_or_bbox` no longer defaults `code_prefix` to `"TELEMAC"`:
   the file is engine-agnostic by placement, and a default engine prefix there
   would hand a future SWMM caller TELEMAC's error codes silently.
+- ENFORCEMENT (wave 2b): five promises the wave-2 skeleton made and did not keep,
+  now kept. (1) `register_workflow` REFUSES a facade with an unrealized operation
+  (`FacadeIncompleteError` at import), so a `NotImplementedError` never reaches a
+  caller as `<ENGINE>_INTERNAL_ERROR`. (2) The slot-vs-signature check runs BOTH
+  ways: a required deck field no slot covers is refused at plan construction, not
+  discovered by `write_reach_deck` three fetches later. (3) `_normalize` triages
+  like `run()` does - retryable propagates with its suggestions channel, typed
+  keeps its code, and a bug in our own coercion reads as `INTERNAL_ERROR` instead
+  of blaming the caller with `PARAMS_INVALID`. (4) A `Param` with a numeric default
+  and neither bounds nor `type` is refused rather than advertised to the model as a
+  STRING. (5) `_run_id` reads the step the facade DECLARES (`solve_step`) instead
+  of the literal `"solve"`. Plus: `provenance=` rows are arity-checked at
+  declaration, and `DataRefs`' miss is an `AttributeError` subclass so `hasattr` /
+  `deepcopy` / pickle probes do not crash.
+- HONESTY (wave 2b): an explicit `mesh_resolution_m` that the >= 2-cells-across
+  rule caps DOWNWARD now stamps a provenance note in the bounds-clamp's own
+  narration style ("mesh_resolution_m 100 CAPPED to 30 m by the channel-width rule
+  (width 60 m / 2)"). Only the raise was narrated before, so the canary's own
+  declaration - 100 m asked on a 60 m channel - silently modelled 30 m with the
+  lever reading as honoured. The mesh is unchanged; the label is new.
 - COERCION ORDER (recorded, low severity): `do_sag`'s coercion tuple now runs
   `location_or_bbox` FIRST, where the pre-migration body ran the outfall-point
   coercion first. No behavioural difference has been found - the two read
