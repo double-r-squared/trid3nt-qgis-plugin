@@ -344,6 +344,12 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     kwargs = await _bind(dict(producer.kwargs), env, label)
     if producer.ladder_rungs:
         kwargs.setdefault("fallback", tuple(producer.ladder_rungs))
+    if producer.temporal is not None:
+        # The declared transform travels TO the producer, which is the only party
+        # that knows the payload's quantity class and native cadence. The library
+        # owns the mechanism; the interpreter never reshapes a payload it cannot
+        # read.
+        kwargs.setdefault("temporal", producer.temporal)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
         # The eager batch runs outside any node's body, so a producer that raises
         # would otherwise escape the typed family entirely.

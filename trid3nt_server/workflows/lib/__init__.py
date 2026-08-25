@@ -55,6 +55,21 @@ from .plan import (
     When,
     Workflow,
 )
+from .temporal import (
+    CATEGORICAL,
+    RATE,
+    STATE,
+    ResampleSpec,
+    TemporalGapError,
+    TemporalShapeError,
+    TemporalSpec,
+    TemporalUnitsError,
+    Transformed,
+    UnitsSpec,
+    convert_units,
+    transform_series,
+    transform_value,
+)
 from .resolver import (
     merge_provenance,
     provenance_entries,
@@ -65,7 +80,8 @@ from .resolver import (
 from .validate import validate_plan
 
 __all__ = [
-    "AuthoredProducer", "Build", "ByoCoverageError", "ChartSpec", "CoversAOI",
+    "AuthoredProducer", "Build", "ByoCoverageError", "CATEGORICAL", "ChartSpec",
+    "CoversAOI",
     "Data", "DataDecl", "DeclarativeError", "Derived", "Domain", "DrawGate",
     "Fetch",
     "FormGate", "Gate", "GateRefusedError",
@@ -73,10 +89,15 @@ __all__ = [
     "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
     "ParamValues", "Plan",
-    "PlanValidationError", "Producer", "Ref", "ReferenceProducer",
-    "RenderSourceMissingError", "RenderSpec", "ResolvedParam", "ResolvedParams",
-    "RunMode", "RunResult", "Step", "StepFailedError", "StepLedger", "When",
-    "Workflow", "current_domain", "doors", "interpret", "invocation_key",
+    "PlanValidationError", "Producer", "RATE", "Ref", "ReferenceProducer",
+    "RenderSourceMissingError", "RenderSpec", "ResampleSpec", "ResolvedParam",
+    "ResolvedParams",
+    "RunMode", "RunResult", "STATE", "Step", "StepFailedError", "StepLedger",
+    "TemporalGapError", "TemporalShapeError", "TemporalSpec",
+    "TemporalUnitsError", "Transformed", "UnitsSpec", "When",
+    "Workflow", "convert_units", "current_domain", "doors", "interpret",
+    "invocation_key",
     "merge_provenance", "provenance_entries", "rederive_revised",
-    "render_docstring", "reseat_revised", "resolve_params", "validate_plan",
+    "render_docstring", "reseat_revised", "resolve_params", "transform_series",
+    "transform_value", "validate_plan",
 ]

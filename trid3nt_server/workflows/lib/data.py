@@ -1,5 +1,9 @@
 """``Data`` - a declared ARTIFACT and its PRODUCER. Modifier legality is the rule
-surface: a REFERENCE producer (fetch-fresh world data) simply has no ``.byo()``."""
+surface: a REFERENCE producer (fetch-fresh world data) simply has no ``.byo()``.
+
+``.resample()`` / ``.normalize()`` ride the declaration too: the cadence and the
+units an artifact ARRIVES in are part of what it is, and declaring them is what
+keeps consumer-side realignment from happening silently (see ``temporal.py``)."""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from .errors import PlanValidationError
+from .temporal import TemporalSpec, spec_from
 
 __all__ = [
     "AuthoredProducer",
@@ -38,6 +43,7 @@ class Producer:
     runner: str
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     ladder_rungs: tuple[str, ...] = ()
+    temporal: TemporalSpec | None = None
 
     def __post_init__(self) -> None:
         if not self.runner:
@@ -49,6 +55,22 @@ class Producer:
         if not rungs:
             raise PlanValidationError(f"{self.runner}: .ladder() declares no rungs.")
         return replace(self, ladder_rungs=self.ladder_rungs + tuple(rungs))
+
+    def resample(self, *, to: str, method: str | None = None,
+                 max_gap: str = "native*3") -> "Producer":
+        """Declare the cadence this artifact is delivered at, and how it gets there.
+
+        ``method`` unset takes the producer's quantity-class default (rates
+        conservative, states linear, categorical nearest). A hole wider than
+        ``max_gap`` refuses rather than being bridged.
+        """
+        return replace(self, temporal=spec_from(to, method, max_gap, None,
+                                                self.temporal))
+
+    def normalize(self, *, units: str) -> "Producer":
+        """Declare the units this artifact is delivered in (explicit table, no guessing)."""
+        return replace(self, temporal=spec_from(None, None, "native*3", units,
+                                                self.temporal))
 
 
 @dataclass(frozen=True, slots=True)
