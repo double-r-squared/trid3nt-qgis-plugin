@@ -72,8 +72,6 @@ logger = logging.getLogger("trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk")
 
 __all__ = ["DATA", "PARAMS", "plan", "swmm_rdii_rtk_unit_hydrograph"]
 
-_STEPS = "trid3nt_server.workflows.swmm.rdii_rtk.steps"
-
 
 TEMPLATE_CARD = TemplateCard(
     question=(

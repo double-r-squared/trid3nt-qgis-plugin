@@ -61,7 +61,6 @@ logger = logging.getLogger(
 __all__ = ["DATA", "PARAMS", "plan", "swmm_aquifer_baseflow_to_node"]
 
 _SHARED = "trid3nt_server.workflows.swmm.steps"
-_STEPS = "trid3nt_server.workflows.swmm.aquifer_baseflow.steps"
 
 #: The receiving node the [GROUNDWATER] link discharges to in this deck.
 _NODE = "J1"

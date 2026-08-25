@@ -83,8 +83,6 @@ logger = logging.getLogger(
 
 __all__ = ["DATA", "PARAMS", "plan", "swmm_snowmelt_degree_day"]
 
-_STEPS = "trid3nt_server.workflows.swmm.snowmelt_degree_day.steps"
-
 #: The three subcatchment attributes one solve samples: the snowpack, the runoff
 #: it produces, and the precipitation that drove it.
 _SAMPLED = ("snow_depth", "runoff", "rainfall")
