@@ -26,6 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.genai import types as genai_types
 
+from trid3nt_server.gates.context_budget import ContextWindow, WINDOW_SOURCE_ENV
 from trid3nt_server.adapters.openai_adapter import (
     _TOOL_DISCIPLINE_SYSTEM,
     contents_to_openai_messages,
@@ -630,7 +631,7 @@ class TestOpenaiModelPrecedence:
 # ---------------------------------------------------------------------------
 # 5. OPEN-14: context-budget wiring inside stream_openai (proactive
 #    compaction + the reactive clip-guard retry-then-typed-error path).
-#    ``discover_num_ctx`` is monkeypatched everywhere here -- no live Ollama.
+#    ``discover_context_window`` is monkeypatched everywhere here -- no live Ollama.
 # ---------------------------------------------------------------------------
 
 
@@ -703,15 +704,18 @@ class TestContextBudgetWiring:
         self._env(monkeypatch)
         captured: dict[str, Any] = {}
 
-        async def _fake_discover(base_url, model_name):
-            return 600  # tiny window -- the 60-row history blows this budget
+        async def _fake_discover(provider, model_name, *, base_url=None):
+            return ContextWindow(
+                tokens=600, source=WINDOW_SOURCE_ENV,
+                provider="openai", model=model_name,
+            )  # tiny window -- the 60-row history blows this budget
 
         async def _capture_create(**kwargs):
             captured.update(kwargs)
             return _make_stream([_text_chunk("ok"), _usage_chunk(100), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.adapters.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -737,11 +741,14 @@ class TestContextBudgetWiring:
         compaction events at all."""
         self._env(monkeypatch)
 
-        async def _fake_discover(base_url, model_name):
-            return 16384
+        async def _fake_discover(provider, model_name, *, base_url=None):
+            return ContextWindow(
+                tokens=16384, source=WINDOW_SOURCE_ENV,
+                provider="openai", model=model_name,
+            )
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.adapters.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
 
             async def _create(**kwargs):
@@ -767,8 +774,11 @@ class TestContextBudgetWiring:
         -- the turn completes normally, no exception."""
         self._env(monkeypatch)
 
-        async def _fake_discover(base_url, model_name):
-            return 1000
+        async def _fake_discover(provider, model_name, *, base_url=None):
+            return ContextWindow(
+                tokens=1000, source=WINDOW_SOURCE_ENV,
+                provider="openai", model=model_name,
+            )
 
         streams = [
             _make_stream(
@@ -787,7 +797,7 @@ class TestContextBudgetWiring:
             return stream
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.adapters.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _create
             mock_cls.return_value = mock_client
@@ -819,8 +829,11 @@ class TestContextBudgetWiring:
         ONE retry (two attempts total) and raises the typed error."""
         self._env(monkeypatch)
 
-        async def _fake_discover(base_url, model_name):
-            return 1000
+        async def _fake_discover(provider, model_name, *, base_url=None):
+            return ContextWindow(
+                tokens=1000, source=WINDOW_SOURCE_ENV,
+                provider="openai", model=model_name,
+            )
 
         streams = [
             _make_stream([_text_chunk("bad 1"), _usage_chunk(1000), _final_empty_chunk()]),
@@ -835,7 +848,7 @@ class TestContextBudgetWiring:
             return stream
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.adapters.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _create
             mock_cls.return_value = mock_client
@@ -872,8 +885,11 @@ class TestMaxTokensCap:
         self._env(monkeypatch)
         monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
 
-        async def _fake_discover(base_url, model_name):
-            return 16384
+        async def _fake_discover(provider, model_name, *, base_url=None):
+            return ContextWindow(
+                tokens=16384, source=WINDOW_SOURCE_ENV,
+                provider="openai", model=model_name,
+            )
 
         captured: dict[str, Any] = {}
 
@@ -882,7 +898,7 @@ class TestMaxTokensCap:
             return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.adapters.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -899,8 +915,11 @@ class TestMaxTokensCap:
         self._env(monkeypatch)
         monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "512")
 
-        async def _fake_discover(base_url, model_name):
-            return 16384
+        async def _fake_discover(provider, model_name, *, base_url=None):
+            return ContextWindow(
+                tokens=16384, source=WINDOW_SOURCE_ENV,
+                provider="openai", model=model_name,
+            )
 
         captured: dict[str, Any] = {}
 
@@ -909,7 +928,7 @@ class TestMaxTokensCap:
             return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("trid3nt_server.adapters.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.adapters.openai_adapter.discover_context_window", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client

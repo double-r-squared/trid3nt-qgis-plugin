@@ -127,8 +127,13 @@ def test_provider_config_updates_env_and_returns_host(monkeypatch):
     monkeypatch.delenv("TRID3NT_OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
     monkeypatch.delenv("TRID3NT_OPENAI_NUM_CTX", raising=False)
-    # Seed the num_ctx cache; the update must clear it.
-    context_budget._NUM_CTX_CACHE["some-model"] = 4096
+    # Seed the window-discovery cache; the update must clear it.
+    context_budget._WINDOW_CACHE[("openai", "some-model")] = context_budget.ContextWindow(
+        tokens=4096,
+        source=context_budget.WINDOW_SOURCE_ENV,
+        provider="openai",
+        model="some-model",
+    )
 
     body = json.dumps(
         {
@@ -156,8 +161,8 @@ def test_provider_config_updates_env_and_returns_host(monkeypatch):
         "meta-llama/llama-3.3-70b-instruct:free"
     )
     assert os.environ["TRID3NT_OPENAI_NUM_CTX"] == "32768"
-    # num_ctx cache cleared so a same-name model re-discovers.
-    assert context_budget._NUM_CTX_CACHE == {}
+    # Discovery cache cleared so a same-name model re-discovers its window.
+    assert context_budget._WINDOW_CACHE == {}
 
     # The response NEVER carries the api key (raw bytes check).
     assert b"sk-or-SECRET-do-not-leak" not in out

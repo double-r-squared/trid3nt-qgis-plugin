@@ -39,6 +39,8 @@ from typing import Any
 from google.genai import types as genai_types
 
 from .adapter import (
+    CompactionCompleteEvent,
+    CompactionStartEvent,
     FunctionCallEvent,
     StreamEvent,
     TextDeltaEvent,
@@ -46,6 +48,14 @@ from .adapter import (
     UsageMetadataEvent,
     provider_backoff_wait,
     provider_retries,
+)
+from trid3nt_server.gates.context_budget import (
+    ContextWindowExceededError,
+    discover_context_window,
+    estimate_tokens,
+    estimate_tokens_for_tools,
+    looks_like_context_overflow_error,
+    plan_turn,
 )
 
 logger = logging.getLogger("trid3nt_server.adapters.bedrock_adapter")
@@ -117,6 +127,51 @@ SELECTABLE_MODELS: list[dict[str, Any]] = [
 #: ``resolve_selected_model``) so a stale / removed / unsupported id can never
 #: reach ConverseStream and throw a ValidationException.
 SELECTABLE_MODEL_IDS: frozenset[str] = frozenset(m["id"] for m in SELECTABLE_MODELS)
+
+#: Bedrock context windows -- a MAINTAINED TABLE, and the only provider on the
+#: roster that needs one. Bedrock has no runtime metadata for this: the Converse
+#: API never reports it, and ``bedrock.get_foundation_model`` returns modalities
+#: / customization support but NO input-token capacity. So unlike the OpenRouter
+#: and Anthropic paths -- which read the number off the provider's own /models
+#: response -- this is a hand-kept fact, and every read of it logs a WARNING
+#: naming it as such (see ``bedrock_context_window``).
+#:
+#: Values are the CONSERVATIVE on-demand windows for these inference profiles.
+#: Under-stating a window only trims earlier than strictly necessary; OVER-stating
+#: it overflows the real request, so a doubtful model belongs at the lower number.
+#: Keys are matched as PREFIXES (longest first) so a dated profile id resolves
+#: without an edit per snapshot.
+_BEDROCK_CONTEXT_WINDOWS: dict[str, int] = {
+    "us.anthropic.claude-sonnet-4-6": 200_000,
+    "us.anthropic.claude-haiku-4-5": 200_000,
+    "us.anthropic.claude-opus-4-5": 200_000,
+    "us.amazon.nova-pro": 300_000,
+    "us.amazon.nova-lite": 300_000,
+}
+
+
+def bedrock_context_window(model_id: str) -> int | None:
+    """Table lookup for ``model_id``'s context window (None when unlisted).
+
+    LOUD BY DESIGN: Bedrock publishes no runtime context-window fact, so every
+    hit logs a WARNING recording that the number came from a hand-maintained
+    table rather than the provider. An unlisted model returns None and the
+    caller falls through to its honest conservative default -- never a guess
+    made here.
+    """
+    mid = (model_id or "").lower()
+    for prefix in sorted(_BEDROCK_CONTEXT_WINDOWS, key=len, reverse=True):
+        if mid.startswith(prefix.lower()):
+            window = _BEDROCK_CONTEXT_WINDOWS[prefix]
+            logger.warning(
+                "context-window: bedrock exposes no runtime window fact -- using the "
+                "MAINTAINED TABLE value %d for model %s (verify on model changes)",
+                window,
+                model_id,
+            )
+            return window
+    return None
+
 
 def model_supports_cache(model_id: str) -> bool:
     """Return True only when ``model_id`` is an Anthropic Claude model.
@@ -958,9 +1013,38 @@ async def stream_bedrock(
     back-pressure behave identically.
     """
     loop = asyncio.get_running_loop()
+    model_id_for_window = model or bedrock_model_id()
+
+    # CLIENT-SIDE history management, same shared strategy as every other
+    # adapter. Bedrock publishes no runtime window fact, so discovery lands on
+    # the maintained table (loudly -- see ``bedrock_context_window``). The plan
+    # rewrites ONLY the conversation, so the cachePoint markers on the system
+    # block and the tool catalog -- which render BEFORE messages -- keep their
+    # byte-identical prefix and stay cacheable across turns.
+    window = await discover_context_window("bedrock", model_id_for_window)
+    working_contents = list(contents)
+    _tools_preview = tool_declarations_to_bedrock_tools(tool_declarations)
+    _sys_tokens = estimate_tokens(system_prompt) if system_prompt else 0
+    plan = plan_turn(
+        working_contents,
+        window=window,
+        tool_tokens=estimate_tokens_for_tools(_tools_preview),
+        system_tokens=_sys_tokens,
+        output_reserve=_DEFAULT_MAX_TOKENS,
+        phase="proactive",
+    )
+    if plan.compacted:
+        working_contents = plan.contents
+        yield CompactionStartEvent()
+        yield CompactionCompleteEvent(
+            before_tokens=plan.before_tokens, after_tokens=plan.after_tokens
+        )
+
     # Bedrock prompt-caching restored here (job -- bill fix): caches the static
     # system prompt + 94-tool catalog across turns via cachePoint markers.
-    kwargs = _build_converse_kwargs(contents, tool_declarations, system_prompt, model)
+    kwargs = _build_converse_kwargs(
+        working_contents, tool_declarations, system_prompt, model
+    )
 
     queue: asyncio.Queue[StreamEvent | None | BaseException] = asyncio.Queue()
 
@@ -1083,15 +1167,69 @@ async def stream_bedrock(
                 )
             loop.call_soon_threadsafe(queue.put_nowait, exc)
 
-    producer_task = loop.run_in_executor(None, _producer)
-    try:
-        while True:
-            item = await queue.get()
-            if item is None:
-                return
-            if isinstance(item, BaseException):
-                raise item
-            yield item
-    except asyncio.CancelledError:
-        producer_task.cancel()
-        raise
+    # ``_producer`` closes over the NAMES ``kwargs`` and ``queue``, so the
+    # overflow retry below can rebind both and re-run the same closure.
+    overflow_retried = False
+    while True:
+        producer_task = loop.run_in_executor(None, _producer)
+        yielded_any = False
+        overflow_exc: BaseException | None = None
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    return
+                if isinstance(item, BaseException):
+                    # CONTEXT OVERFLOW is the one ValidationException worth
+                    # retrying: the request is well-formed, it just did not
+                    # fit. Only before any event has flowed -- a replay after
+                    # tokens streamed would duplicate output.
+                    if not yielded_any and looks_like_context_overflow_error(item):
+                        if overflow_retried:
+                            logger.error(
+                                "bedrock context overflow persisted after one "
+                                "recompaction (model=%s, window=%d from %s); provider "
+                                "error verbatim: %s",
+                                kwargs.get("modelId"),
+                                window.tokens,
+                                window.source,
+                                item,
+                            )
+                            raise ContextWindowExceededError(window.tokens) from item
+                        overflow_exc = item
+                        break
+                    raise item
+                yielded_any = True
+                yield item
+        except asyncio.CancelledError:
+            producer_task.cancel()
+            raise
+
+        # Standing upstream-provider rule: the provider's message is logged
+        # VERBATIM, then we trim HARDER (reactive ratio) and resend once.
+        overflow_retried = True
+        logger.warning(
+            "bedrock context overflow (model=%s, window=%d from %s) -- recompacting "
+            "and retrying once; provider error verbatim: %s",
+            kwargs.get("modelId"),
+            window.tokens,
+            window.source,
+            overflow_exc,
+        )
+        retry_plan = plan_turn(
+            working_contents,
+            window=window,
+            tool_tokens=estimate_tokens_for_tools(_tools_preview),
+            system_tokens=_sys_tokens,
+        output_reserve=_DEFAULT_MAX_TOKENS,
+            phase="reactive",
+        )
+        working_contents = retry_plan.contents
+        kwargs = _build_converse_kwargs(
+            working_contents, tool_declarations, system_prompt, model
+        )
+        queue = asyncio.Queue()
+        yield CompactionStartEvent()
+        yield CompactionCompleteEvent(
+            before_tokens=retry_plan.before_tokens, after_tokens=retry_plan.after_tokens
+        )

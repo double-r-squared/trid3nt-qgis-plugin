@@ -1,14 +1,44 @@
-"""Context-budget compaction + overflow guard for the LOCAL model path.
+"""Context-budget: per-model window discovery + client-side history management.
 
-Ollama silently clips an over-long prompt to fit the context window rather
-than erroring -- the model never sees its own tool contract, can emit ZERO
-tool calls, and narrate a fabricated success as if the (non-existent) work
-had happened. This module exists to prevent that.
+TWO FAILURE MODES, one seam. Ollama silently CLIPS an over-long prompt rather
+than erroring -- the model never sees its own tool contract, can emit ZERO tool
+calls, and narrate a fabricated success as if the (non-existent) work had
+happened. Hosted providers instead REJECT it with a 400. Either way the fix is
+the same and it is ours: manage history CLIENT-SIDE, before the provider has to
+react. Provider-side compaction (e.g. the Anthropic compaction beta) is an
+opt-in extra layered on top, never a replacement.
 
-Four independent pieces, all LOCAL (``MODEL_PROVIDER=openai``) only -- the
-Bedrock path is untouched:
+TWO INVARIANTS this module exists to hold:
 
-  1. NUM_CTX DISCOVERY (``discover_num_ctx``) -- per-model, queries Ollama's
+  * The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME -- never a
+    hardcoded constant. ``ContextWindow.source`` records where each number came
+    from, and a window we could not discover narrates as an assumption instead
+    of passing for a fact.
+  * The trim STRATEGY lives here, once. Adapters translate the planned
+    ``contents`` into their own wire shape and emit the compaction events; they
+    do not decide what to drop.
+
+Pieces:
+
+  0. WINDOW DISCOVERY (``discover_context_window``) -- provider-agnostic, cached
+     per ``(provider, model)``. Reads each provider's OWN metadata via the
+     resolvers in ``adapters.model_discovery`` (OpenRouter ``context_length``,
+     Anthropic ``max_input_tokens``, Ollama's runtime ``num_ctx``, and -- only
+     because Bedrock publishes no such fact -- a loudly-logged maintained
+     table), then ``TRID3NT_CONTEXT_WINDOW``, then a conservative default with
+     a WARNING. Never a silent guess.
+
+  0b. THE SHARED BUDGET SEAM (``plan_turn``) -- the single client-side
+     history-management entry point, used by the OpenAI-compatible, Anthropic
+     and Bedrock adapters alike. Always preserves the system prompt and tool
+     contracts (they are not in ``contents`` at all) plus the terminal user
+     message and the case-state note carrying the pending-confirmation spine.
+     CACHE-SAFE by construction: it rewrites only the conversation, and every
+     provider's cache breakpoints sit on tools/system, which render BEFORE
+     messages -- so trimming cannot invalidate a cached prefix.
+
+  1. NUM_CTX DISCOVERY (``discover_num_ctx``) -- the OpenAI-path-specific
+     back-compat wrapper over the above. Per-model, queries Ollama's
      native ``/api/show`` and parses the RUNTIME-configured window out of the
      ``parameters`` free-text field (NOT ``model_info.*.context_length``,
      which is the architecture's max TRAINED context -- a different, much
@@ -59,10 +89,16 @@ Bedrock path is untouched:
      ``ContextWindowExceededError`` abort path, so a clipped/aborted turn
      cannot persist an unqualified false completion claim either.
 
-All four pieces are individually unit-testable without a live Ollama or
-network access; ``discover_num_ctx`` is the only piece that makes a network
-call, and it degrades gracefully (best-effort) through its fallback chain on
-any fault.
+  5. OVERFLOW CLASSIFICATION (``looks_like_context_overflow_error``) --
+     separates the one 400 worth retrying ("prompt is too long") from every
+     other 400, which is a genuine bug in our request and must fail loudly.
+     Adapters log the provider's message VERBATIM either way, trim harder,
+     retry ONCE, then raise the typed ``ContextWindowExceededError`` rather
+     than the generic provider-unavailable bucket.
+
+Every piece is individually unit-testable without a live provider or network
+access; window discovery is the only piece that makes a network call, and it
+degrades gracefully (best-effort) through its fallback chain on any fault.
 """
 
 from __future__ import annotations
@@ -274,8 +310,6 @@ def estimate_tokens_for_tools(tools: list[dict[str, Any]] | None) -> int:
 # 1. NUM_CTX DISCOVERY
 # ---------------------------------------------------------------------------
 
-_NUM_CTX_CACHE: dict[str, int] = {}
-
 _SUFFIX_RE = re.compile(r"-(\d+)k$", re.IGNORECASE)
 
 # Matches a "num_ctx <int>" line inside Ollama /api/show's ``parameters``
@@ -335,44 +369,16 @@ def _parse_num_ctx_from_show_response(payload: dict[str, Any]) -> int | None:
 
 
 async def discover_num_ctx(base_url: str | None, model_name: str) -> int:
-    """Resolve the effective ``num_ctx`` for ``model_name`` (cached for the
-    process lifetime -- one ``/api/show`` round-trip per model name, ever).
+    """The OpenAI/local path's ``num_ctx``, as a plain int.
 
-    Precedence:
-      1. Ollama-native ``POST {root}/api/show`` (see
-         ``_parse_num_ctx_from_show_response``).
-      2. A ``-<N>k`` suffix on ``model_name``.
-      3. ``TRID3NT_OPENAI_NUM_CTX`` env var (default 16384).
-
-    Any network/parse fault at step 1 is swallowed -- discovery is
-    best-effort, never a hard dependency of the model call.
+    A THIN WRAPPER over :func:`discover_context_window` -- the ladder, the
+    cache and the honest fallback all live there, so the two can never drift.
+    Kept because the local path talks in bare ``num_ctx`` integers (the clip
+    guard compares reported ``usage.prompt_tokens`` against it); callers that
+    need to know WHERE the number came from should use the window directly.
     """
-    cached = _NUM_CTX_CACHE.get(model_name)
-    if cached is not None:
-        return cached
-
-    discovered: int | None = None
-    root = _ollama_root(base_url)
-    if root:
-        try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.post(f"{root}/api/show", json={"model": model_name})
-            if resp.status_code == 200:
-                discovered = _parse_num_ctx_from_show_response(resp.json())
-        except Exception:  # noqa: BLE001 -- discovery is best-effort
-            logger.debug(
-                "context-budget: /api/show discovery failed for %r", model_name, exc_info=True
-            )
-
-    if discovered is None:
-        discovered = num_ctx_from_suffix(model_name)
-    if discovered is None:
-        discovered = num_ctx_env_fallback()
-
-    _NUM_CTX_CACHE[model_name] = discovered
-    return discovered
+    window = await discover_context_window("openai", model_name, base_url=base_url)
+    return window.tokens
 
 
 def reset_num_ctx_cache() -> None:
@@ -384,14 +390,241 @@ def reset_num_ctx_cache() -> None:
     serving the stale cached value (e.g. the local ollama 16k default lingering
     after a switch to a 32k OpenRouter preset). Named WITHOUT the
     ``_for_tests`` suffix so production code can call it honestly.
+
+    Clears the provider-agnostic ``_WINDOW_CACHE`` too: a live switch changes
+    the PROVIDER as well as the model, and a window discovered from the old
+    provider must never be reused against the new one.
     """
-    _NUM_CTX_CACHE.clear()
+    _WINDOW_CACHE.clear()
 
 
 def _reset_num_ctx_cache_for_tests() -> None:
     """Test-only alias of :func:`reset_num_ctx_cache` (kept for the existing
     test-suite call sites)."""
     reset_num_ctx_cache()
+
+
+# ---------------------------------------------------------------------------
+# 1b. PROVIDER-AGNOSTIC CONTEXT-WINDOW DISCOVERY
+#
+# The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME. It is never
+# hardcoded, and a value we could not discover is never passed off as one we
+# did -- ``ContextWindow.source`` records where every number came from, and an
+# undiscovered window logs a WARNING and carries narration for the user.
+# ---------------------------------------------------------------------------
+
+#: Where a resolved window came from. Carried on every ``ContextWindow`` so a
+#: log line (or a test) can tell a provider-stated fact from a fallback.
+WINDOW_SOURCE_OLLAMA_SHOW = "ollama:/api/show"
+WINDOW_SOURCE_OPENROUTER_MODELS = "openrouter:/models.context_length"
+WINDOW_SOURCE_ANTHROPIC_MODELS = "anthropic:/v1/models.max_input_tokens"
+WINDOW_SOURCE_BEDROCK_TABLE = "bedrock:maintained-table"
+WINDOW_SOURCE_NAME_SUFFIX = "model-name-suffix"
+WINDOW_SOURCE_ENV = "env:TRID3NT_CONTEXT_WINDOW"
+WINDOW_SOURCE_FALLBACK = "conservative-default"
+
+#: The sources that represent a genuine provider-stated (or operator-stated)
+#: fact. Anything outside this set is a fallback and narrates as one.
+_DISCOVERED_SOURCES = frozenset(
+    {
+        WINDOW_SOURCE_OLLAMA_SHOW,
+        WINDOW_SOURCE_OPENROUTER_MODELS,
+        WINDOW_SOURCE_ANTHROPIC_MODELS,
+        WINDOW_SOURCE_BEDROCK_TABLE,
+        WINDOW_SOURCE_NAME_SUFFIX,
+        WINDOW_SOURCE_ENV,
+    }
+)
+
+#: Conservative window used when NOTHING could be discovered. Deliberately
+#: small: under-stating a window costs an early compaction, over-stating it
+#: costs a hard provider overflow. Operator override: ``TRID3NT_CONTEXT_WINDOW``.
+CONTEXT_WINDOW_FALLBACK_DEFAULT = 16384
+
+
+def context_window_env_override() -> int | None:
+    """Operator-pinned window (``TRID3NT_CONTEXT_WINDOW``), or None when unset.
+
+    An explicit operator statement outranks the conservative default but NEVER
+    outranks a fact the provider itself reported -- if discovery succeeded, the
+    provider is right and the env var is stale.
+    """
+    raw = os.environ.get("TRID3NT_CONTEXT_WINDOW", "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "context-window: TRID3NT_CONTEXT_WINDOW=%r is not an integer -- ignoring", raw
+        )
+        return None
+    return value if value > 0 else None
+
+
+@dataclass(frozen=True)
+class ContextWindow:
+    """A model's resolved input-token capacity PLUS where that number came from.
+
+    ``source`` is the honesty carrier: a caller can always tell a window the
+    provider stated from one we fell back to. Never construct this with a
+    made-up number and a discovered-looking source.
+    """
+
+    tokens: int
+    source: str
+    provider: str
+    model: str
+
+    @property
+    def discovered(self) -> bool:
+        """True when ``tokens`` is a provider- or operator-stated fact."""
+        return self.source in _DISCOVERED_SOURCES
+
+    def narration(self) -> str | None:
+        """User-facing honesty note, or None when the window is a real fact.
+
+        Surfaced so an undiscoverable window is a stated assumption rather than
+        a silent guess that later shows up as a mysterious early compaction.
+        """
+        if self.discovered:
+            return None
+        return (
+            f"Could not determine the context window for {self.model!r} from "
+            f"{self.provider}; assuming a conservative {self.tokens} tokens. "
+            "Set TRID3NT_CONTEXT_WINDOW to pin the real value."
+        )
+
+
+#: Discovered windows, keyed ``(provider, model)`` for the process lifetime --
+#: one discovery round-trip per model, ever. Cleared by ``reset_num_ctx_cache``
+#: so a LIVE provider/model switch re-discovers instead of serving a stale
+#: window from the previous provider.
+_WINDOW_CACHE: dict[tuple[str, str], ContextWindow] = {}
+
+
+async def _resolve_window_tokens(
+    provider: str, model_name: str, base_url: str | None
+) -> tuple[int, str] | None:
+    """Per-provider discovery ladder -> ``(tokens, source)``, or None.
+
+    Each branch asks the provider for its OWN metadata and gives up honestly:
+      openai-compatible -- OpenRouter ``/models.context_length`` when the base
+        URL is OpenRouter, else Ollama's native ``/api/show`` runtime ``num_ctx``
+        (NOT ``model_info.*.context_length``, the much larger TRAINED context --
+        see ``_parse_num_ctx_from_show_response``), then a ``-<N>k`` name suffix.
+      anthropic -- the Models API ``max_input_tokens`` field.
+      bedrock -- the maintained table (Bedrock publishes no runtime fact).
+    """
+    from trid3nt_server.adapters import model_discovery
+
+    if provider == "openai":
+        if model_discovery.is_openrouter_base_url(base_url):
+            tokens = await model_discovery.openrouter_context_length(
+                (base_url or "").rstrip("/"), model_name
+            )
+            if tokens:
+                return tokens, WINDOW_SOURCE_OPENROUTER_MODELS
+        else:
+            root = _ollama_root(base_url)
+            if root:
+                try:
+                    import httpx
+
+                    async with httpx.AsyncClient(timeout=3.0) as client:
+                        resp = await client.post(
+                            f"{root}/api/show", json={"model": model_name}
+                        )
+                    if resp.status_code == 200:
+                        tokens = _parse_num_ctx_from_show_response(resp.json())
+                        if tokens:
+                            return tokens, WINDOW_SOURCE_OLLAMA_SHOW
+                except Exception:  # noqa: BLE001 -- discovery is best-effort
+                    logger.debug(
+                        "context-window: /api/show discovery failed for %r",
+                        model_name,
+                        exc_info=True,
+                    )
+        suffix = num_ctx_from_suffix(model_name)
+        if suffix:
+            return suffix, WINDOW_SOURCE_NAME_SUFFIX
+        # Provider-specific operator pin, honored before the generic one so
+        # existing local-path deployments keep their configured window.
+        if os.environ.get("TRID3NT_OPENAI_NUM_CTX", "").strip():
+            return num_ctx_env_fallback(), WINDOW_SOURCE_ENV
+        return None
+
+    if provider == "anthropic":
+        tokens = await model_discovery.anthropic_max_input_tokens(model_name)
+        if tokens:
+            return tokens, WINDOW_SOURCE_ANTHROPIC_MODELS
+        return None
+
+    if provider == "bedrock":
+        from trid3nt_server.adapters.bedrock_adapter import bedrock_context_window
+
+        tokens = bedrock_context_window(model_name)
+        if tokens:
+            return tokens, WINDOW_SOURCE_BEDROCK_TABLE
+        return None
+
+    return None
+
+
+async def discover_context_window(
+    provider: str, model_name: str, *, base_url: str | None = None
+) -> ContextWindow:
+    """Resolve ``model_name``'s context window for ``provider`` (cached).
+
+    Precedence: the provider's own metadata -> ``TRID3NT_CONTEXT_WINDOW`` ->
+    ``CONTEXT_WINDOW_FALLBACK_DEFAULT``. Discovery faults are swallowed (it is
+    best-effort, never a hard dependency of the model call), but a window that
+    ends up undiscovered logs a WARNING and comes back with a fallback
+    ``source`` so the caller can narrate the assumption honestly.
+    """
+    key = (provider, model_name)
+    cached = _WINDOW_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    resolved: tuple[int, str] | None = None
+    try:
+        resolved = await _resolve_window_tokens(provider, model_name, base_url)
+    except Exception:  # noqa: BLE001 -- discovery is best-effort
+        logger.debug(
+            "context-window: discovery raised for provider=%s model=%r",
+            provider,
+            model_name,
+            exc_info=True,
+        )
+
+    if resolved is None:
+        override = context_window_env_override()
+        if override is not None:
+            resolved = (override, WINDOW_SOURCE_ENV)
+        else:
+            resolved = (CONTEXT_WINDOW_FALLBACK_DEFAULT, WINDOW_SOURCE_FALLBACK)
+            logger.warning(
+                "context-window: UNDISCOVERABLE for provider=%s model=%r -- assuming a "
+                "conservative %d tokens. Set TRID3NT_CONTEXT_WINDOW to pin the real "
+                "value.",
+                provider,
+                model_name,
+                resolved[0],
+            )
+
+    window = ContextWindow(
+        tokens=resolved[0], source=resolved[1], provider=provider, model=model_name
+    )
+    logger.info(
+        "context-window: provider=%s model=%s tokens=%d source=%s",
+        provider,
+        model_name,
+        window.tokens,
+        window.source,
+    )
+    _WINDOW_CACHE[key] = window
+    return window
 
 
 # ---------------------------------------------------------------------------
@@ -887,9 +1120,212 @@ def looks_like_fabricated_action_claim(text: str | None) -> bool:
     return bool(_FABRICATION_RE.search(text))
 
 
+# ---------------------------------------------------------------------------
+# 5. THE SHARED BUDGET SEAM (one strategy, every provider)
+#
+# History management is CLIENT-SIDE: we trim/compact BEFORE the provider has to
+# reject us. What to trim, when to trim it, and what is untouchable lives HERE,
+# once -- adapters only translate the planned ``contents`` into their own wire
+# shape and emit the compaction events. Provider-side compaction (e.g. the
+# Anthropic compaction beta) is an opt-in EXTRA layered on top, never a
+# replacement for this.
+#
+# CACHE-PREFIX SAFETY: the plan only ever rewrites ``contents`` -- the
+# conversation. Prompt-cache breakpoints on every provider sit on the TOOL
+# catalog and the SYSTEM block, which render BEFORE messages (tools -> system
+# -> messages), so trimming the conversation cannot move or invalidate them.
+# Adapters therefore MUST run the plan BEFORE building request kwargs, so the
+# cached prefix is rebuilt byte-identically each turn.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TurnPlan:
+    """The decision for one model round: what to send, and what it cost."""
+
+    contents: list[genai_types.Content]
+    compacted: bool
+    before_tokens: int
+    after_tokens: int
+    window: ContextWindow
+    est_tokens: int
+
+
+def plan_turn(
+    contents: list[genai_types.Content],
+    *,
+    window: ContextWindow,
+    tool_tokens: int = 0,
+    system_tokens: int = 0,
+    wire_tokens: int | None = None,
+    target_ratio: float | None = None,
+    output_reserve: int | None = None,
+    phase: str = "proactive",
+) -> TurnPlan:
+    """Decide whether this turn's history must be compacted, and do it.
+
+    THE single client-side history-management entry point. ``window`` is the
+    discovered per-model fact; ``tool_tokens`` / ``system_tokens`` are the fixed
+    per-turn overhead the ladder cannot shrink; ``wire_tokens`` lets a caller
+    supply the AUTHORITATIVE TOTAL prompt size -- the OpenAI path measures the
+    real wire payload, and the Anthropic path hands over the provider's own
+    ``count_tokens`` result -- in place of the chars/4 heuristic. It must be the
+    WHOLE prompt (conversation + tools + system); nothing is added on top of it.
+    ``output_reserve`` is what THIS request may generate, which must be held
+    back from the same window.
+
+    Always preserved, by ``compact_contents``'s protected tail: the terminal
+    user message and the case-state note that carries the pending-confirmation
+    spine. The system prompt and tool contracts are never even candidates --
+    they are not part of ``contents``.
+
+    ``phase`` is "proactive" (pre-send estimate) or "reactive" (the provider
+    already told us we overflowed); the latter defaults to the tighter target
+    ratio so a retry actually gains headroom.
+    """
+    if target_ratio is None:
+        target_ratio = (
+            reactive_target_ratio() if phase != "proactive" else proactive_target_ratio()
+        )
+    # The reply has to FIT IN THE SAME WINDOW as the prompt, so the budget must
+    # reserve exactly what THIS request is allowed to generate. Defaults to the
+    # OpenAI-path cap; the Anthropic and Bedrock adapters pass their own
+    # ``max_tokens``, which are far larger -- reserving the wrong one would let
+    # a long reply overflow a prompt we had declared safe.
+    reserve = output_reserve if output_reserve is not None else reserve_output_tokens()
+    budget = max(window.tokens - reserve - safety_tokens(), 256)
+    # Budget available to the CONTENT rows: tool schemas and the system prompt
+    # are fixed overhead the ladder cannot touch.
+    content_budget = max(budget - tool_tokens - system_tokens, 256)
+
+    # ``wire_tokens``, when given, is the COMPLETE prompt count (conversation +
+    # tools + system) -- measured off the real wire payload, or returned by the
+    # provider's own token counter. It is AUTHORITATIVE: nothing is added on top
+    # of it. Absent one, fall back to the stated chars/4 heuristic per piece.
+    if wire_tokens is not None:
+        est_tokens = wire_tokens
+        conversation_tokens = max(wire_tokens - tool_tokens - system_tokens, 0)
+    else:
+        conversation_tokens = estimate_tokens_for_contents(contents)
+        est_tokens = conversation_tokens + tool_tokens + system_tokens
+
+    if phase != "proactive":
+        # THE REJECTED PROMPT IS ITSELF AN UPPER BOUND. A reactive pass runs
+        # because the provider said the prompt did not fit -- which means our
+        # window fact, our estimator, or both were wrong. Budgeting off the
+        # (evidently wrong) window can leave the ladder believing there is
+        # nothing to do, and we would resend a byte-identical prompt and burn
+        # the one retry. Clamping to what we just sent forces real shrinkage:
+        # compact_contents targets ``budget_tokens * target_ratio``, so this
+        # guarantees the retry is strictly smaller than the rejected request.
+        actual_content_tokens = estimate_tokens_for_contents(contents)
+        content_budget = max(min(content_budget, actual_content_tokens), 256)
+
+    logger.info(
+        "context-budget: pre-send provider=%s model=%s window=%d source=%s budget=%d "
+        "est_total=%d convo=%d tools=%d sys=%d phase=%s",
+        window.provider,
+        window.model,
+        window.tokens,
+        window.source,
+        budget,
+        est_tokens,
+        conversation_tokens,
+        tool_tokens,
+        system_tokens,
+        phase,
+    )
+
+    # Proactive: only pay for the ladder when the estimate says we must.
+    # Reactive: the provider has ALREADY rejected this prompt, so run it
+    # unconditionally -- our estimate was wrong by definition.
+    if phase == "proactive" and est_tokens <= budget:
+        return TurnPlan(
+            contents=list(contents),
+            compacted=False,
+            before_tokens=est_tokens,
+            after_tokens=est_tokens,
+            window=window,
+            est_tokens=est_tokens,
+        )
+
+    result = compact_contents(
+        contents, budget_tokens=content_budget, target_ratio=target_ratio
+    )
+    if result.changed:
+        logger.info(
+            "context-budget: %s compaction provider=%s model=%s window=%d before=%d "
+            "after=%d dropped=%d hardened=%d folded=%s",
+            phase,
+            window.provider,
+            window.model,
+            window.tokens,
+            result.before_tokens,
+            result.after_tokens,
+            result.dropped,
+            result.hardened,
+            result.folded,
+        )
+    return TurnPlan(
+        contents=result.contents,
+        # A reactive pass reports itself as compacted even when the ladder found
+        # nothing further to shrink: a retry IS happening, and the honest
+        # before==after counts say so rather than hiding the pass.
+        compacted=result.changed or phase != "proactive",
+        before_tokens=result.before_tokens,
+        after_tokens=result.after_tokens,
+        window=window,
+        est_tokens=est_tokens,
+    )
+
+
+#: Provider phrasings for "your prompt does not fit". Each is a 400-class
+#: REJECTION (never a transient fault), so it must not be routed into the
+#: transient-retry ladder -- the fix is to trim and resend, not to wait.
+#: Anthropic: "prompt is too long: 210000 tokens > 200000 maximum".
+#: Bedrock: ValidationException "Input is too long for requested model".
+#: OpenAI-compatible: "context_length_exceeded" / "maximum context length".
+_CONTEXT_OVERFLOW_RE = re.compile(
+    r"context[_ ]length[_ ]exceeded"
+    r"|prompt is too long"
+    r"|input is too long"
+    r"|too many (?:input )?tokens"
+    r"|maximum context length"
+    r"|exceeds the maximum",
+    re.IGNORECASE,
+)
+
+
+def looks_like_context_overflow_error(exc: BaseException | None) -> bool:
+    """True when a provider error says the PROMPT DID NOT FIT.
+
+    Used to separate the one 400 worth retrying (trim harder, resend once) from
+    every other 400, which is a genuine bug in our request and must fail loudly.
+    The provider's message is logged VERBATIM by the caller either way -- this
+    only classifies it.
+    """
+    if exc is None:
+        return False
+    return bool(_CONTEXT_OVERFLOW_RE.search(str(exc)))
+
+
 __all__ = [
     "CompactionResult",
+    "ContextWindow",
     "ContextWindowExceededError",
+    "CONTEXT_WINDOW_FALLBACK_DEFAULT",
+    "TurnPlan",
+    "context_window_env_override",
+    "discover_context_window",
+    "looks_like_context_overflow_error",
+    "plan_turn",
+    "WINDOW_SOURCE_ANTHROPIC_MODELS",
+    "WINDOW_SOURCE_BEDROCK_TABLE",
+    "WINDOW_SOURCE_ENV",
+    "WINDOW_SOURCE_FALLBACK",
+    "WINDOW_SOURCE_NAME_SUFFIX",
+    "WINDOW_SOURCE_OLLAMA_SHOW",
+    "WINDOW_SOURCE_OPENROUTER_MODELS",
     "CONTEXT_WINDOW_ABORT_NOTE",
     "COMPACTING_LABEL",
     "FABRICATION_CAVEAT",

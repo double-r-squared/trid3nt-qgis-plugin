@@ -91,16 +91,13 @@ from .adapter import (
 )
 from trid3nt_server.gates.context_budget import (
     ContextWindowExceededError,
-    compact_contents,
-    compute_budget_tokens,
-    discover_num_ctx,
+    discover_context_window,
     estimate_tokens,
     estimate_tokens_for_messages,
     estimate_tokens_for_tools,
     is_prompt_clipped,
     openai_max_output_tokens,
-    proactive_target_ratio,
-    reactive_target_ratio,
+    plan_turn,
 )
 
 logger = logging.getLogger("trid3nt_server.adapters.openai_adapter")
@@ -977,12 +974,12 @@ async def stream_openai(
     removed). ``server.py``'s dispatch loop turns that pair into a durable
     pipeline card (``pipeline_emitter.mint_compaction_card`` /
     ``complete_compaction_card``) instead. The PROACTIVE call site (below)
-    gates the pair on ``result.changed`` (mirroring the original note's own
-    gate -- an under-budget turn that never compacts must show no card at
-    all). The REACTIVE clip-guard call site does NOT gate it: a detected clip
-    always means a retry is happening, so the card always reports its honest
-    before/after count even on a no-op pass (mirrors the original
-    ``CLIP_RETRY_NOTE``, which was likewise unconditional on that path).
+    gates the pair on ``TurnPlan.compacted`` -- an under-budget turn that never
+    compacts must show no card at all. On the REACTIVE clip-guard path
+    ``compacted`` is True unconditionally: a detected clip always means a retry
+    is happening, so the card always reports its honest before/after count even
+    on a no-op pass (mirrors the original ``CLIP_RETRY_NOTE``, which was
+    likewise unconditional on that path).
     """
     try:
         from openai import AsyncOpenAI
@@ -1002,67 +999,46 @@ async def stream_openai(
         default_headers=openai_default_headers(),
     )
 
-    num_ctx = await discover_num_ctx(base_url, resolved_model)
-    budget = compute_budget_tokens(num_ctx)
+    # The context window is a PER-MODEL FACT discovered at runtime (Ollama's
+    # runtime num_ctx, or OpenRouter's published context_length) -- never a
+    # hardcoded number. ``window.source`` records which.
+    window = await discover_context_window("openai", resolved_model, base_url=base_url)
+    num_ctx = window.tokens
 
     tools = tool_declarations_to_openai_tools(tool_declarations)
     tool_tokens = estimate_tokens_for_tools(tools)
-    # Budget available to the CONTENT rows (the part the ladder can shrink) --
-    # tool schemas and the system prompt are fixed overhead per turn.
     sys_tokens = estimate_tokens(system_prompt) if system_prompt else 0
-    content_budget = max(budget - tool_tokens - sys_tokens, 256)
 
     working_contents = list(contents)
     messages = contents_to_openai_messages(
         working_contents, system_prompt=system_prompt, show_thinking=show_thinking
     )
 
-    # PROACTIVE BUDGET CHECK: estimate over the ACTUAL wire messages + tool
-    # schemas (the closest available proxy to what Ollama really receives).
-    msg_tokens = estimate_tokens_for_messages(messages)
-    est_tokens = msg_tokens + tool_tokens
-    # One honest pre-send line per model round (2026-07-12 context-window
-    # fix): the compaction line below only fires when a turn is OVER budget,
-    # which left healthy turns unmeasurable in the log.
-    logger.info(
-        "context-budget: pre-send model=%s num_ctx=%d budget=%d est_total=%d "
-        "msgs=%d tools=%d sys=%d",
-        resolved_model,
-        num_ctx,
-        budget,
-        est_tokens,
-        msg_tokens,
-        tool_tokens,
-        sys_tokens,
+    # PROACTIVE BUDGET CHECK: the wire messages are the closest available proxy
+    # to what the server really receives, so the TOTAL prompt estimate is those
+    # messages (which already inline the system prompt) plus the separately-sent
+    # tool schemas. The trim STRATEGY itself lives in context_budget.plan_turn --
+    # shared with the Anthropic and Bedrock paths, never reimplemented here.
+    plan = plan_turn(
+        working_contents,
+        window=window,
+        tool_tokens=tool_tokens,
+        system_tokens=sys_tokens,
+        wire_tokens=estimate_tokens_for_messages(messages) + tool_tokens,
+        phase="proactive",
     )
-    if est_tokens > budget:
-        result = compact_contents(
-            working_contents, budget_tokens=content_budget, target_ratio=proactive_target_ratio()
+    if plan.compacted:
+        working_contents = plan.contents
+        messages = contents_to_openai_messages(
+            working_contents, system_prompt=system_prompt, show_thinking=show_thinking
         )
-        if result.changed:
-            logger.info(
-                "context-budget: proactive compaction model=%s num_ctx=%d budget=%d "
-                "before_est=%d after_est=%d dropped=%d hardened=%d folded=%s",
-                resolved_model,
-                num_ctx,
-                budget,
-                est_tokens,
-                result.after_tokens + tool_tokens + sys_tokens,
-                result.dropped,
-                result.hardened,
-                result.folded,
-            )
-            working_contents = result.contents
-            messages = contents_to_openai_messages(
-                working_contents, system_prompt=system_prompt, show_thinking=show_thinking
-            )
-            # Compaction UX (Part A): typed events, not a narration note --
-            # see the docstring above and context_budget.COMPACTING_LABEL /
-            # compaction_complete_label.
-            yield CompactionStartEvent()
-            yield CompactionCompleteEvent(
-                before_tokens=result.before_tokens, after_tokens=result.after_tokens
-            )
+        # Compaction UX (Part A): typed events, not a narration note --
+        # see the docstring above and context_budget.COMPACTING_LABEL /
+        # compaction_complete_label.
+        yield CompactionStartEvent()
+        yield CompactionCompleteEvent(
+            before_tokens=plan.before_tokens, after_tokens=plan.after_tokens
+        )
 
     attempt = 0
     while True:
@@ -1112,23 +1088,27 @@ async def stream_openai(
         if attempt >= 2:
             raise ContextWindowExceededError(num_ctx)
 
-        result = compact_contents(
-            working_contents, budget_tokens=content_budget, target_ratio=reactive_target_ratio()
+        plan = plan_turn(
+            working_contents,
+            window=window,
+            tool_tokens=tool_tokens,
+            system_tokens=sys_tokens,
+            phase="reactive",
         )
-        working_contents = result.contents
+        working_contents = plan.contents
         messages = contents_to_openai_messages(
             working_contents, system_prompt=system_prompt, show_thinking=show_thinking
         )
         # Compaction UX (Part A): same typed-event pair as the proactive
-        # path above -- UNCONDITIONAL (unlike the proactive site's
-        # ``if result.changed:`` gate), matching the pre-Part-A
+        # path above -- UNCONDITIONAL here (plan_turn's reactive phase always
+        # reports ``compacted``, unlike the proactive site), matching the pre-Part-A
         # ``CLIP_RETRY_NOTE`` this replaces: a detected clip always means a
         # retry is happening, whether or not this pass finds more to shrink
         # (an already-near-minimal history still reports its honest
         # before==after count -- not a fabrication, just a no-op pass).
         yield CompactionStartEvent()
         yield CompactionCompleteEvent(
-            before_tokens=result.before_tokens, after_tokens=result.after_tokens
+            before_tokens=plan.before_tokens, after_tokens=plan.after_tokens
         )
 
 

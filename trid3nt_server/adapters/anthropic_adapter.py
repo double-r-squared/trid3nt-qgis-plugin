@@ -43,6 +43,8 @@ from typing import Any
 from google.genai import types as genai_types
 
 from .adapter import (
+    CompactionCompleteEvent,
+    CompactionStartEvent,
     FunctionCallEvent,
     StreamEvent,
     TextDeltaEvent,
@@ -52,6 +54,15 @@ from .adapter import (
     provider_retries,
 )
 from .bedrock_adapter import _genai_schema_to_json_schema
+from trid3nt_server.gates.context_budget import (
+    ContextWindowExceededError,
+    discover_context_window,
+    estimate_tokens,
+    estimate_tokens_for_contents,
+    estimate_tokens_for_tools,
+    looks_like_context_overflow_error,
+    plan_turn,
+)
 
 logger = logging.getLogger("trid3nt_server.adapters.anthropic_adapter")
 
@@ -66,6 +77,39 @@ _PROVIDER_LABEL = "Anthropic API"
 
 #: Cache breakpoint marker. Max 4 per request; this file places 2.
 _CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
+
+#: This API offers an EXACT token counter (``messages.count_tokens``), which is
+#: strictly better than our chars/4 heuristic -- but it costs a round trip, so
+#: paying it on every turn would tax the common case to settle a question that
+#: is not close. We consult it only once the cheap estimate reaches this
+#: fraction of the discovered window, i.e. exactly when the trim decision is
+#: marginal and being wrong is expensive.
+_COUNT_TOKENS_CONSULT_RATIO = 0.7
+
+
+async def _exact_prompt_tokens(client: Any, kwargs: dict[str, Any]) -> int | None:
+    """The provider's OWN count of this request's input tokens, or None.
+
+    Counts the whole prompt -- messages, system block and tool schemas -- which
+    is precisely the number ``plan_turn`` wants as ``wire_tokens``. Best-effort:
+    the counter is an optimization over the heuristic, never a hard dependency,
+    so any fault degrades to the estimate rather than failing the turn.
+    """
+    try:
+        payload: dict[str, Any] = {
+            "model": kwargs["model"],
+            "messages": kwargs["messages"],
+        }
+        if kwargs.get("system") is not None:
+            payload["system"] = kwargs["system"]
+        if kwargs.get("tools") is not None:
+            payload["tools"] = kwargs["tools"]
+        resp = await client.messages.count_tokens(**payload)
+        tokens = getattr(resp, "input_tokens", None)
+        return int(tokens) if isinstance(tokens, int) and tokens > 0 else None
+    except Exception:  # noqa: BLE001 -- fall back to the heuristic
+        logger.debug("anthropic count_tokens unavailable; using the estimate", exc_info=True)
+        return None
 
 
 def anthropic_api_key() -> str:
@@ -436,12 +480,58 @@ async def stream_anthropic(
 
     anthropic_api_key()  # fail loudly and early when the key is unset
     client = AsyncAnthropic()
-    kwargs = _build_message_kwargs(contents, tool_declarations, system_prompt, model)
-    model_id = kwargs["model"]
+    model_id = anthropic_model(model)
+
+    # CLIENT-SIDE history management. The window is discovered from the Models
+    # API (``max_input_tokens``), and the trim strategy is the SHARED one in
+    # context_budget -- this adapter only rebuilds kwargs from the planned
+    # contents. Because the plan rewrites ONLY the conversation, and the cache
+    # breakpoints sit on ``tools``/``system`` (which render before messages),
+    # trimming can never invalidate the cached prefix.
+    window = await discover_context_window("anthropic", model_id)
+    working_contents = list(contents)
+    tools_preview = tool_declarations_to_anthropic_tools(tool_declarations)
+    tool_tokens = estimate_tokens_for_tools(tools_preview)
+    sys_tokens = estimate_tokens(system_prompt) if system_prompt else 0
+
+    kwargs = _build_message_kwargs(working_contents, tool_declarations, system_prompt, model)
+
+    # Only when the cheap estimate says the decision is MARGINAL do we spend a
+    # round trip on the provider's exact counter (see the ratio's docstring).
+    heuristic = estimate_tokens_for_contents(working_contents) + tool_tokens + sys_tokens
+    exact: int | None = None
+    if heuristic >= window.tokens * _COUNT_TOKENS_CONSULT_RATIO:
+        exact = await _exact_prompt_tokens(client, kwargs)
+        if exact is not None:
+            logger.info(
+                "context-budget: anthropic exact prompt tokens=%d (heuristic said %d)",
+                exact,
+                heuristic,
+            )
+
+    plan = plan_turn(
+        working_contents,
+        window=window,
+        tool_tokens=tool_tokens,
+        system_tokens=sys_tokens,
+        wire_tokens=exact,
+        output_reserve=_DEFAULT_MAX_TOKENS,
+        phase="proactive",
+    )
+    if plan.compacted:
+        working_contents = plan.contents
+        yield CompactionStartEvent()
+        yield CompactionCompleteEvent(
+            before_tokens=plan.before_tokens, after_tokens=plan.after_tokens
+        )
+        kwargs = _build_message_kwargs(
+            working_contents, tool_declarations, system_prompt, model
+        )
 
     max_retries = provider_retries()
     streamed_any = False
     last_exc: BaseException | None = None
+    overflow_retried = False
 
     for attempt in range(max_retries + 1):
         try:
@@ -467,6 +557,54 @@ async def stream_anthropic(
                 yield _usage_event(usage)
             return
         except anthropic.APIError as exc:
+            # CONTEXT OVERFLOW is the one 400 worth retrying: the request is
+            # well-formed, it just did not fit. Standing upstream-provider
+            # rule -- log the provider's message VERBATIM, then trim HARDER
+            # (reactive ratio) and resend exactly once. A second overflow is
+            # the honest typed CONTEXT_WINDOW_EXCEEDED envelope, never the
+            # generic provider-unavailable bucket.
+            if (
+                looks_like_context_overflow_error(exc)
+                and not streamed_any
+            ):
+                last_exc = exc
+                if overflow_retried:
+                    logger.error(
+                        "anthropic context overflow persisted after one recompaction "
+                        "(model=%s, window=%d from %s); provider error verbatim: %s",
+                        model_id,
+                        window.tokens,
+                        window.source,
+                        exc,
+                    )
+                    raise ContextWindowExceededError(window.tokens) from exc
+                overflow_retried = True
+                logger.warning(
+                    "anthropic context overflow (model=%s, window=%d from %s) -- "
+                    "recompacting and retrying once; provider error verbatim: %s",
+                    model_id,
+                    window.tokens,
+                    window.source,
+                    exc,
+                )
+                retry_plan = plan_turn(
+                    working_contents,
+                    window=window,
+                    tool_tokens=tool_tokens,
+                    system_tokens=sys_tokens,
+                    output_reserve=_DEFAULT_MAX_TOKENS,
+                    phase="reactive",
+                )
+                working_contents = retry_plan.contents
+                kwargs = _build_message_kwargs(
+                    working_contents, tool_declarations, system_prompt, model
+                )
+                yield CompactionStartEvent()
+                yield CompactionCompleteEvent(
+                    before_tokens=retry_plan.before_tokens,
+                    after_tokens=retry_plan.after_tokens,
+                )
+                continue
             if not _is_transient_anthropic_error(exc):
                 raise
             if streamed_any:
@@ -496,6 +634,18 @@ async def stream_anthropic(
             await asyncio.sleep(wait)
 
     assert last_exc is not None
+    if looks_like_context_overflow_error(last_exc):
+        # The retry budget ran out while the prompt still did not fit: that is
+        # a context-window failure, not an unavailable provider.
+        logger.error(
+            "anthropic context overflow unresolved (model=%s, window=%d from %s); "
+            "last provider error verbatim: %s",
+            model_id,
+            window.tokens,
+            window.source,
+            last_exc,
+        )
+        raise ContextWindowExceededError(window.tokens) from last_exc
     logger.error(
         "anthropic upstream provider unavailable after %d attempt(s) (model=%s); "
         "last provider error verbatim: %s",

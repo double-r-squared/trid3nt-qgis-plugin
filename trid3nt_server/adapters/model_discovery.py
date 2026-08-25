@@ -1,12 +1,24 @@
 """Provider model-discovery: the installed-Ollama and OpenRouter free/tool-capable
-model listings plus the Ollama API-root/tags URL derivation. Provider nouns are
-quarantined here, off the protocol/gates surfaces that consume them."""
+model listings, the Ollama API-root/tags URL derivation, and the per-provider
+CONTEXT-WINDOW resolvers. Provider nouns are quarantined here, off the
+protocol/gates surfaces that consume them.
+
+The window resolvers below each answer ONE question -- "how many input tokens
+does this model accept?" -- from that provider's own metadata, and return
+``None`` (never a guess) when the provider does not say. The ladder that
+consumes them, the cache, and the honest fallback all live in
+``gates.context_budget.discover_context_window``; the strategy is NOT
+per-adapter.
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
+
+logger = logging.getLogger("trid3nt_server.adapters.model_discovery")
 
 
 def _local_models_route_enabled() -> bool:
@@ -202,3 +214,112 @@ def _fetch_local_models() -> bytes:
     return json.dumps(
         {"models": models, "default": default}, separators=(",", ":")
     ).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Per-provider CONTEXT-WINDOW resolvers
+#
+# Each returns the model's INPUT-token capacity, or None when the provider
+# exposes no such fact. None means "undiscoverable", NEVER "assume a default"
+# -- the caller (gates.context_budget.discover_context_window) owns the
+# fallback and the warning that goes with it.
+# ---------------------------------------------------------------------------
+
+
+def is_openrouter_base_url(base_url: str | None) -> bool:
+    """True when an OpenAI-compatible base URL points at OpenRouter."""
+    return bool(base_url) and _base_url_host(base_url or "").endswith("openrouter.ai")
+
+
+def parse_openrouter_context_length(raw: Any, model_name: str) -> int | None:
+    """PURE: an OpenRouter ``GET /models`` body -> ``context_length`` for
+    ``model_name``, or None when the id is absent or the field is unusable.
+
+    OpenRouter publishes ``context_length`` at the top level of each model row
+    (and mirrors it under ``top_provider.context_length``, which can be SMALLER
+    when the routed upstream provider serves a shorter window). We take the
+    MINIMUM of the two present values -- the smaller number is the one a
+    request actually has to fit inside.
+    """
+    data = raw.get("data") if isinstance(raw, dict) else None
+    if not isinstance(data, list):
+        return None
+    for row in data:
+        if not isinstance(row, dict) or row.get("id") != model_name:
+            continue
+        candidates: list[int] = []
+        for value in (
+            row.get("context_length"),
+            (row.get("top_provider") or {}).get("context_length")
+            if isinstance(row.get("top_provider"), dict)
+            else None,
+        ):
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int) and value > 0:
+                candidates.append(value)
+        return min(candidates) if candidates else None
+    return None
+
+
+async def openrouter_context_length(base_url: str, model_name: str) -> int | None:
+    """OpenRouter ``GET /models`` -> this model's ``context_length``.
+
+    Unfiltered (unlike ``_fetch_openrouter_models``, which keeps only the free
+    tool-capable subset for the picker) -- a paid or non-tool model still needs
+    an honest window. Best-effort: any network / parse fault returns None.
+    """
+    import httpx
+
+    from .openai_adapter import openai_api_key
+
+    url = f"{base_url.rstrip('/')}/models"
+    headers: dict[str, str] = {}
+    key = openai_api_key()
+    if key and key != "not-needed":
+        headers["Authorization"] = f"Bearer {key}"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            payload = resp.json()
+    except Exception:  # noqa: BLE001 -- discovery is best-effort
+        # NB: never log the key -- only the URL.
+        logger.debug("context-window: OpenRouter /models failed at %s", url, exc_info=True)
+        return None
+    return parse_openrouter_context_length(payload, model_name)
+
+
+def parse_anthropic_max_input_tokens(model_obj: Any) -> int | None:
+    """PURE: an Anthropic Models API model object -> ``max_input_tokens``.
+
+    ``max_input_tokens`` IS the context window on this API (there is no
+    ``context_window`` field). It was added to the model object in Mar 2026, so
+    an older API surface -- or a partner platform that proxies a trimmed object
+    -- can legitimately omit it; that returns None.
+    """
+    value = getattr(model_obj, "max_input_tokens", None)
+    if value is None and isinstance(model_obj, dict):
+        value = model_obj.get("max_input_tokens")
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+async def anthropic_max_input_tokens(model_id: str) -> int | None:
+    """Anthropic ``GET /v1/models/{id}`` -> ``max_input_tokens``.
+
+    Best-effort: a missing SDK, an auth fault, an unknown id, or an object
+    without the field all return None.
+    """
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError:
+        return None
+    try:
+        client = AsyncAnthropic()
+        model_obj = await client.models.retrieve(model_id)
+    except Exception:  # noqa: BLE001 -- discovery is best-effort
+        logger.debug("context-window: anthropic models.retrieve failed for %r", model_id, exc_info=True)
+        return None
+    return parse_anthropic_max_input_tokens(model_obj)

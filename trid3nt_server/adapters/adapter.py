@@ -147,19 +147,20 @@ class UsageMetadataEvent:
 
 @dataclass(frozen=True)
 class CompactionStartEvent:
-    """Context-budget compaction (``context_budget.compact_contents``) is
-    about to run for this turn -- proactive (before the request) or reactive
-    (after a detected clip; see ``openai_adapter.stream_openai``).
+    """Client-side history management (``context_budget.plan_turn``) is about
+    to run for this turn -- proactive (the pre-send estimate exceeded the
+    model's discovered window) or reactive (the send was clipped, or the
+    provider rejected it as too long).
 
-    Yielded by the OpenAI-compatible adapter. ``server.py``'s dispatch loop
-    mints a durable running card ("Compacting conversation...") the instant
-    this arrives (``pipeline_emitter.mint_compaction_card``), animated on the
-    wire and persisted so it survives a Case reopen. Carries no fields: the
-    token counts are not yet final (the compacted-side count is only known
-    once ``compact_contents`` returns), they ride the matching
-    ``CompactionCompleteEvent``. Never emitted by the Bedrock / Vertex /
-    scripted paths (compaction is a local/OpenAI-path-only concern -- see
-    ``context_budget`` module docstring); the server loop must tolerate it
+    Yielded by EVERY live provider path -- OpenAI-compatible, Anthropic, and
+    Bedrock -- since all three share the one budget seam. ``server.py``'s
+    dispatch loop mints a durable running card ("Compacting conversation...")
+    the instant this arrives (``pipeline_emitter.mint_compaction_card``),
+    animated on the wire and persisted so it survives a Case reopen. Carries
+    no fields: the token counts are not final yet (the compacted-side count is
+    only known once the ladder returns), so they ride the matching
+    ``CompactionCompleteEvent``. The scripted path never emits it, and a turn
+    that stays under budget emits nothing, so the server loop must tolerate it
     being absent.
     """
 
