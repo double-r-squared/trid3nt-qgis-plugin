@@ -76,7 +76,9 @@ CANARIES: dict[str, LiveRun] = {
             "station": "8728690",
             "start_date": "2018-10-09",
             "end_date": "2018-10-11",
-            "datum_offset_m": 0.0,
+            # datum_offset_m is deliberately UNSET: the gauge's own published
+            # MLLW -> NAVD 88 offset reconciles the series with the DEM_all bed.
+            # Pinning 0.0 here is what cold-started 12 km2 of marsh wet.
             "ocean_edge": "auto",
             "target_resolution_m": 250.0,
             "duration_hours": 6.0,
@@ -182,7 +184,12 @@ CANARIES: dict[str, LiveRun] = {
             "wave_direction_deg": 90.0,
             "wave_height_m": 1.0,
             "reflection_coef": 1.0,
-            "target_resolution_m": 12.0,
+            # 8 m, not 12: the realized grid spacing is Lx/(nx-1) rather than the
+            # ask, and at 12 m the dividing wall's opening lands so that the
+            # boundary ring carries an isolated liquid point, which ARTEMIS
+            # refuses. The worker now says so by name; the canary asks for a
+            # spacing that resolves the basin.
+            "target_resolution_m": 8.0,
             "bathy_source": "idealized",
             "compute_class": "medium",
             "input_mode": "user_gated",

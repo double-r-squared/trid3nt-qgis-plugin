@@ -170,7 +170,8 @@ def test_the_coastal_deck_carries_what_solves_it():
     deck = asyncio.run(write_coastal_deck(
         aoi={"slug": "coast", "name": "coast", "bbox": (-85.02, 29.69, -84.90, 29.80)},
         water_level={"series": [[0.0, 0.5], [360.0, 1.4]], "series_datum": "MLLW",
-                     "series_type": "observed", "station_id": "8728690"},
+                     "series_type": "observed", "station_id": "8728690",
+                     "datum_offset_m": -0.232},
         mesh_resolution_m=250.0, duration_hours=6.0))
     assert deck["solver"] == "telemac_coastal" and deck["section"] == "coastal"
     assert deck["result_basename"] == "res_coastal.slf"
@@ -178,6 +179,57 @@ def test_the_coastal_deck_carries_what_solves_it():
     assert deck["config"]["water_level_series"] == [[0.0, 0.5], [360.0, 1.4]]
     # unasked cadence stays ABSENT so the worker's own default stands
     assert "output_interval_min" not in deck["config"]
+    # the resolver's datum reconciliation rides onto the deck and the manifest
+    assert deck["datum_offset_m"] == -0.232
+    assert deck["config"]["datum_offset_m"] == -0.232
+    assert deck["bed_datum"] == "NAVD88"
+
+
+def test_an_unreconciled_tide_datum_refuses_rather_than_flooding_the_marsh():
+    """MLLW levels on a NAVD 88 bed sit ~0.23 m high and cold-start land wet.
+
+    The old default of 0.0 made that the SILENT path: the run solved, published a
+    peak-depth raster, and 12 km2 of Apalachicola marsh was wet at t=0 with no
+    row anywhere saying the two datums had never been reconciled.
+    """
+    import pytest
+
+    from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
+    from trid3nt_server.workflows.telemac.steps.open_water import OpenWaterError
+
+    with pytest.raises(OpenWaterError) as excinfo:
+        asyncio.run(write_coastal_deck(
+            aoi={"slug": "coast", "name": "coast",
+                 "bbox": (-85.02, 29.69, -84.90, 29.80)},
+            water_level={"series": [[0.0, 0.5], [360.0, 1.4]],
+                         "series_datum": "MLLW", "series_type": "observed",
+                         "station_id": "8728690"},
+            mesh_resolution_m=250.0, duration_hours=6.0))
+    assert excinfo.value.error_code == "COASTAL_DATUM_UNRECONCILED"
+
+
+def test_an_explicit_zero_offset_is_an_override_not_a_default():
+    """0.0 stays available - it just has to be ASKED for now."""
+    from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
+
+    deck = asyncio.run(write_coastal_deck(
+        aoi={"slug": "coast", "name": "coast",
+             "bbox": (-85.02, 29.69, -84.90, 29.80)},
+        water_level={"series": [[0.0, 0.5], [360.0, 1.4]], "series_datum": "MLLW",
+                     "series_type": "observed", "station_id": "8728690"},
+        mesh_resolution_m=250.0, duration_hours=6.0, datum_offset_m=0.0))
+    assert deck["datum_offset_m"] == 0.0
+
+
+def test_the_synthetic_beach_needs_no_datum_reconciliation():
+    """An analytic plane beach has no gauge and no geodetic bed to reconcile."""
+    from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
+
+    deck = asyncio.run(write_coastal_deck(
+        aoi={"slug": "coast", "name": "coast",
+             "bbox": (-85.02, 29.69, -84.90, 29.80)},
+        bathy_source="synthetic", mesh_resolution_m=250.0))
+    assert deck["datum_offset_m"] == 0.0
 
 
 def test_a_coastal_deck_with_no_series_refuses_typed():

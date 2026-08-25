@@ -267,14 +267,54 @@ def write_slf(mesh, path, values=None, varname="BOTTOM          "):
 #      col6  ALFAP   phase (deg), 0 here
 #      col7  RP      reflection coefficient (1=full reflect, 0=absorbing)
 # ---------------------------------------------------------------------------
-def write_cli(mesh, path, classify):
+#: LIHBOR 2 is a solid wall; every other code the classifiers emit (1 incident,
+#: 4 free exit) is a LIQUID boundary point.
+_SOLID_LIHBOR = 2
+
+
+def _refuse_isolated_liquid_point(ring_lihbor, ring, X, Y, dx):
+    """Refuse a boundary ring carrying a liquid point wedged between two solids.
+
+    ARTEMIS's own FRONT2 check rejects exactly this and takes the whole run down
+    with ``PLANTE: PROGRAM STOPPED AFTER AN ERROR`` and an MPI abort several
+    seconds in - an exit code 2 with no typed cause, which reads to the composer
+    as an unexplained solver failure rather than as a domain the requested
+    spacing cannot discretize. The condition is cheap and exact here, so it is
+    checked BEFORE the solve and refused by name.
+
+    It is a real spacing effect: the grid realizes ``Lx/(nx-1)``, not the
+    requested spacing, so which rows and columns land on the dividing wall and
+    its mouth moves with the ask. A 12 m request on the 100 x 650 m resonance
+    basin produces it; 8, 10 and 12.5 m do not.
+    """
+    n = len(ring_lihbor)
+    for k in range(n):
+        if ring_lihbor[k] == _SOLID_LIHBOR:
+            continue
+        before, after = ring_lihbor[(k - 1) % n], ring_lihbor[(k + 1) % n]
+        if before == _SOLID_LIHBOR and after == _SOLID_LIHBOR:
+            node = int(ring[k])
+            raise ArtemisInputError(
+                "ARTEMIS_BOUNDARY_DEGENERATE",
+                f"at a {dx:g} m grid spacing the boundary ring carries an isolated "
+                f"LIQUID point at rank {k + 1} (node {node + 1}, "
+                f"x={float(X[node]):.1f} y={float(Y[node]):.1f}) between two SOLID "
+                "points, which ARTEMIS refuses (FRONT2). The requested spacing does "
+                "not discretize this domain's opening: ask for a different "
+                "target_resolution_m (8, 10 or 12.5 m resolve the default resonance "
+                "basin) or widen the opening.")
+
+
+def write_cli(mesh, path, classify, dx=0.0):
     """classify(x, y) -> (lihbor, HB, TETAP, ALFAP, RP)."""
     ring = mesh["ring"]
     X, Y = mesh["X"], mesh["Y"]
     lines = []
+    ring_lihbor = []
     for k in range(mesh["nptfr"]):
         n0 = int(ring[k])
         lih, hb, tetap, alfap, rp = classify(float(X[n0]), float(Y[n0]))
+        ring_lihbor.append(int(lih))
         liu = liv = 5 if lih in (1, 2) else 2
         lit = 2
         node1 = n0 + 1
@@ -282,6 +322,7 @@ def write_cli(mesh, path, classify):
         lines.append(
             f"{lih} {liu} {liv}  {hb:.4f} {tetap:.3f} {alfap:.3f} {rp:.3f}  "
             f"{lit}  0.000 0.000 0.000  {node1:>11d} {rank:>11d}")
+    _refuse_isolated_liquid_point(ring_lihbor, ring, X, Y, dx)
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -707,7 +748,7 @@ def _run_diffraction(cfg, mesh, data_dir, run_id, classify, *, H0, T, h, wdir,
     res = os.path.join(data_dir, "res_agitation.slf")
     cas = os.path.join(data_dir, "art_agit.cas")
     write_slf(mesh, geo)
-    write_cli(mesh, cli, classify)
+    write_cli(mesh, cli, classify, dx)
     write_cas(cas, os.path.basename(geo), os.path.basename(cli),
               os.path.basename(res), title=f"ARTEMIS DIFFRACTION {cfg.name}",
               wave_period=T, wave_dir=wdir, swl=0.0)
@@ -830,7 +871,7 @@ def _solve_resonance(cfg: ArtemisConfig, data_dir: str, run_id):
     cas = os.path.join(data_dir, "art_agit.cas")
     scan = (float(cfg.scan_begin_s), float(cfg.scan_end_s), float(cfg.scan_step_s))
     write_slf(mesh, geo)
-    write_cli(mesh, cli, classify)
+    write_cli(mesh, cli, classify, dx)
     write_cas(cas, os.path.basename(geo), os.path.basename(cli),
               os.path.basename(res), title=f"ARTEMIS RESONANCE {cfg.name}",
               wave_period=scan[0], wave_dir=90.0, swl=0.0, period_scan=scan,
@@ -900,7 +941,7 @@ def _solve_shoal(cfg: ArtemisConfig, data_dir: str, run_id):
     res = os.path.join(data_dir, "res_agitation.slf")
     cas = os.path.join(data_dir, "art_agit.cas")
     write_slf(mesh, geo)
-    write_cli(mesh, cli, classify)
+    write_cli(mesh, cli, classify, dx)
     write_cas(cas, os.path.basename(geo), os.path.basename(cli),
               os.path.basename(res), title=f"ARTEMIS SHOAL {cfg.name}",
               wave_period=T, wave_dir=wdir, swl=0.0, rapid_topo=3)

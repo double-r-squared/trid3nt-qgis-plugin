@@ -23,7 +23,14 @@ Format authority (pinned against the in-image v9.0 sources, NEVER guessed):
     discharge would be ``Q(<i>)`` (sources/telemac2d/q.f). With a single ocean
     boundary the column is ``SL(1)``.
 
-Parser version marker: ``coastal-tidal-2`` (a new coastal build path, distinct
+VERTICAL DATUM. The bed and the boundary series are on DIFFERENT references and
+the composer reconciles them: DEM_all is a MIXED-datum mosaic whose served NCEI
+1/9 arc-sec CUDEM tiles declare NAVD 88 over US coasts (its other components
+declare MHW, EGM 2008 or Sea Level), while a CO-OPS series is reported on a tidal
+datum. ``datum_offset_m`` carries that reconciliation; a zero one puts the whole
+water column high by the difference and cold-starts land wet.
+
+Parser version marker: ``coastal-tidal-3`` (a new coastal build path, distinct
 from the telemac-reach parser).  ASCII only; imports NO agent code; runs only
 inside the worker image.
 """
@@ -44,11 +51,12 @@ LOG = logging.getLogger("telemac_coastal")
 
 #: worker-image / behavior provenance marker (mirrors _TOMAWAC_PARSER_VERSION).
 #: -2 adds the output_interval_min cadence lever (ADR 0283).
-COASTAL_PARSER_VERSION = "coastal-tidal-2"
+COASTAL_PARSER_VERSION = "coastal-tidal-3"
 
 #: NOAA NGDC DEM_all topobathy mosaic ImageServer -- the SAME real-bathymetry
-#: source the TOMAWAC lake path samples (negative below MSL = bathymetry,
-#: positive = land topo); covers US coastal waters + estuaries at node lon/lat.
+#: source the TOMAWAC lake path samples (negative below the DEM's own vertical
+#: datum = bathymetry, positive = land topo; over US coasts that datum is
+#: NAVD 88); covers US coastal waters + estuaries at node lon/lat.
 _NOAA_DEM_ALL_URL = (
     "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/"
     "ImageServer/exportImage"
@@ -93,7 +101,7 @@ class CoastalConfig:
     #: series vertical datum label (provenance only).
     series_datum: str = "MLLW"
     #: added to every series value to reconcile the tide datum (e.g. MLLW) with
-    #: the DEM datum (DEM_all ~ MSL/sea level); labeled knob, never invented.
+    #: the DEM datum (DEM_all over US coasts = NAVD 88); labeled knob, never invented.
     datum_offset_m: float = 0.0
 
     #: initial constant free-surface elevation (m, DEM datum). None -> series[0].
@@ -180,7 +188,7 @@ def _build_grid(Lx: float, Ly: float, dx: float):
 
 
 def fetch_demall_bed(lon, lat, bbox, timeout: float = 180.0):
-    """Sample NOAA DEM_all topobathy at node lon/lat (m, negative below MSL).
+    """Sample NOAA DEM_all topobathy at node lon/lat (m, on the DEM's own datum - NAVD 88 for the NCEI CUDEM tiles that serve US coasts).
 
     exportImage returns a bbox F32 GeoTIFF; a node off-coverage / NoData is NaN.
     Same call family as ``tomawac_build.fetch_greatlakes_bathy``."""
@@ -309,7 +317,7 @@ def build_coastal_mesh(cfg: CoastalConfig):
         if n_wet < 0.05 * raw.size:
             raise CoastalInputError(
                 "COASTAL_BATHY_UNAVAILABLE",
-                f"NOAA DEM_all covered only {n_wet}/{raw.size} nodes below MSL over "
+                f"NOAA DEM_all covered only {n_wet}/{raw.size} nodes below the DEM datum over "
                 f"{bbox} -- the AOI is essentially all land. Pick a bbox spanning "
                 "the shoreline (open water on one side, low land on the other).")
         ocean_edge = _classify_ocean_edge(mesh, raw, cfg.ocean_edge)

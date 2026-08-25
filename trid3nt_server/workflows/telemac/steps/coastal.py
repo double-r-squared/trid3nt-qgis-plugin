@@ -29,6 +29,7 @@ from trid3nt_server.workflows.lib import Step
 from trid3nt_server.workflows.shared.publish_product_layer import (
     publish_product_layer,
 )
+from trid3nt_server.workflows.shared.tide_series import BED_DATUM
 
 from .open_water import (
     OpenWaterError,
@@ -63,7 +64,7 @@ async def write_coastal_deck(
     aoi: dict[str, Any],
     water_level: dict[str, Any] | None = None,
     mesh_resolution_m: float = 180.0,
-    datum_offset_m: float = 0.0,
+    datum_offset_m: float | None = None,
     ocean_edge: str = "auto",
     duration_hours: float | None = None,
     time_step_s: float = 20.0,
@@ -90,6 +91,20 @@ async def write_coastal_deck(
                   else (float(series[-1][0]) if series else _FALLBACK_DURATION_S))
     datum = str((water_level or {}).get("series_datum") or "MLLW")
 
+    # The series is on a TIDAL datum, the bed on a GEODETIC one. 0.0 is an
+    # explicit OVERRIDE here, never a default: an MLLW series left unreconciled
+    # against the NAVD 88 bed puts the whole water column ~0.23 m high and
+    # cold-starts the marsh wet, which reads as a flood the tide did not cause.
+    if datum_offset_m is None:
+        datum_offset_m = (water_level or {}).get("datum_offset_m")
+    if datum_offset_m is None and not synthetic:
+        raise OpenWaterError(
+            f"the coastal bed is {BED_DATUM} but the gauge series is on {datum}, "
+            "and no datum offset was resolved; the boundary stage would sit on the "
+            "wrong vertical reference. Supply datum_offset_m explicitly.",
+            error_code="COASTAL_DATUM_UNRECONCILED")
+    datum_offset_m = float(datum_offset_m or 0.0)
+
     config: dict[str, Any] = {
         "name": aoi["slug"],
         "bbox": [round(float(v), 4) for v in aoi["bbox"]],
@@ -97,6 +112,7 @@ async def write_coastal_deck(
         "target_resolution_m": float(mesh_resolution_m),
         "ocean_edge": str(ocean_edge or "auto"),
         "series_datum": datum,
+        "bed_datum": BED_DATUM,
         "datum_offset_m": float(datum_offset_m),
         "duration_s": float(duration_s),
         "time_step_s": float(time_step_s),
@@ -123,6 +139,7 @@ async def write_coastal_deck(
         "mesh_size_m": float(mesh_resolution_m),
         "mesh_resolution_asked_m": mesh_resolution_m,
         "series_datum": datum,
+        "bed_datum": BED_DATUM,
         "datum_offset_m": float(datum_offset_m),
         "series_type": str((water_level or {}).get("series_type") or "observed"),
         "station_id": (water_level or {}).get("station_id"),
@@ -148,9 +165,13 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
                   else "astronomical PREDICTION (the calm-tide control)")),
         SyntheticInput(
             param="datum_offset_m", value=round(float(deck["datum_offset_m"]), 3),
-            units="m", basis="user", consequence="physics",
+            units="m", basis="derived", consequence="physics",
+            real_source_if_any=(f"NOAA CO-OPS station {deck['station_id']} "
+                                "published datums"
+                                if deck.get("station_id") else None),
             note=(f"reconciles the {deck['series_datum']} tide datum with the "
-                  "DEM_all (~MSL) datum")),
+                  f"{deck.get('bed_datum') or BED_DATUM} bed datum; the gauge's own "
+                  "published datum table, not a regional constant")),
     ]
     if deck.get("station_id"):
         rows.append(SyntheticInput(
@@ -177,7 +198,8 @@ def _honesty_note(deck: dict[str, Any]) -> str:
         "ONE seaward liquid boundary by the "
         + ("OBSERVED CO-OPS water-level record (tide + surge)" if observed
            else "astronomical CO-OPS PREDICTION (calm tide, no surge)")
-        + f" through the LIQUID BOUNDARIES FILE, {deck['series_datum']} datum with a "
+        + f" through the LIQUID BOUNDARIES FILE, {deck['series_datum']} series on a "
+        f"{deck.get('bed_datum') or BED_DATUM} bed with a "
         f"{deck['datum_offset_m']:g} m offset applied. The raster is the peak "
         "inundation DEPTH envelope over the run; the animation plays from the "
         "native coastal SELAFIN. Not a calibrated hindcast.")

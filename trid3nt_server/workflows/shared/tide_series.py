@@ -26,12 +26,25 @@ from trid3nt_server.workflows.lib import DeclarativeError
 
 logger = logging.getLogger("trid3nt_server.workflows.shared.tide_series")
 
-__all__ = ["TideSeriesError", "iso_to_epoch_s", "resolve_tide_series"]
+__all__ = ["BED_DATUM", "TideSeriesError", "datum_offset_m", "iso_to_epoch_s",
+           "resolve_tide_series"]
 
 #: How far outside the modeled extent a station may sit and still be the one the
 #: question is about. CO-OPS gauges stand at the shoreline, sometimes just beyond
 #: a tight coastal strip, so a fetch bbox equal to the domain finds nothing.
 _STATION_SEARCH_PAD_DEG = 0.25
+
+#: The gauge's OWN published datum table. A regional constant would be a guess;
+#: the offset between two tidal datums is a property of the individual station.
+_COOPS_DATUMS_URL = ("https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/"
+                     "stations/{station_id}/datums.json?units=metric")
+
+#: The datum the coastal bed is on. NOAA DEM_all is a MIXED-datum mosaic, but
+#: over US coasts it serves the NCEI 1/9 arc-sec CUDEM tiles, whose catalog
+#: declares NAVD 88. The other components (MHW, EGM 2008, Sea Level) sit far
+#: enough away that a run landing on one has a different offset - which is why
+#: the offset is derived per run and recorded, never hard-coded.
+BED_DATUM = "NAVD88"
 
 #: Which CO-OPS product answers which question class. ``observed`` is the real
 #: record (tide + surge); ``prediction`` is the astronomical tide alone - the
@@ -116,8 +129,55 @@ async def resolve_tide_series(*, series_type: str = "observed",
               0.5 * (domain.bbox[1] + domain.bbox[3]))
     series, meta = await asyncio.to_thread(_read_station_series, str(uri), station,
                                            centre)
+    # The series is reported on a TIDAL datum (MLLW) and the bed it drives is on
+    # a GEODETIC one. Left unreconciled the whole water column sits high by the
+    # difference - at Apalachicola that is 0.232 m, which cold-starts 12 km2 of
+    # marsh wet and floods land above the highest normal tide.
+    offset = await asyncio.to_thread(
+        datum_offset_m, meta.get("station_id"), meta.get("series_datum"), BED_DATUM)
     return {"series": series, "series_type": str(series_type), "product": product,
-            "window": f"{start_date}..{end_date}", "uri": str(uri), **meta}
+            "window": f"{start_date}..{end_date}", "uri": str(uri),
+            "bed_datum": BED_DATUM, "datum_offset_m": offset, **meta}
+
+
+def datum_offset_m(station_id: Any, frm: Any, to: Any) -> float:
+    """Metres to ADD to a level reported on ``frm`` to express it on ``to``.
+
+    Both legs come from the gauge's own published datum table, so the conversion
+    is that station's rather than a regional average. It RAISES rather than
+    returning 0.0 on any miss: a silent zero is precisely the defect this exists
+    to prevent, and a boundary stage on the wrong vertical reference is a wrong
+    answer that looks like a right one.
+    """
+    import json
+    import urllib.request
+
+    def _key(value: Any) -> str:
+        return str(value).upper().replace(" ", "").replace("_", "")
+
+    station = str(station_id or "").strip()
+    if not station:
+        raise TideSeriesError(
+            "the water-level series carries no station id, so its datum cannot be "
+            "reconciled with the bed's; the boundary stage would sit on an "
+            "unknown vertical reference.")
+    try:
+        with urllib.request.urlopen(
+                _COOPS_DATUMS_URL.format(station_id=station), timeout=30) as fh:
+            payload = json.loads(fh.read())
+    except Exception as exc:  # noqa: BLE001 - an honest refusal, never a zero
+        raise TideSeriesError(
+            f"CO-OPS station {station} published datums could not be read "
+            f"({exc}); the {frm} series cannot be reconciled with the {to} bed.") from exc
+    table = {_key(row.get("name")): row.get("value")
+             for row in (payload.get("datums") or [])}
+    source, target = table.get(_key(frm)), table.get(_key(to))
+    if source is None or target is None:
+        raise TideSeriesError(
+            f"CO-OPS station {station} publishes no {frm} -> {to} datum pair "
+            f"(it has {sorted(table)}); the vertical datums cannot be reconciled, "
+            "so the boundary stage would sit on the wrong reference.")
+    return round(float(source) - float(target), 4)
 
 
 def _read_station_series(fgb_uri: str, station_id: str | None,

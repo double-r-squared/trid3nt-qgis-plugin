@@ -79,10 +79,13 @@ PARAMS: tuple[Param, ...] = (
                "is about"),
     Param("end_date", door=doors.QUESTION, optional=True, consequence="scenario",
           desc="ISO YYYY-MM-DD end of the gauge window"),
-    Param("datum_offset_m", door=doors.SCENARIO, default=0.0, bounds=(-10.0, 10.0),
-          units="m", consequence="physics",
+    Param("datum_offset_m", door=doors.SCENARIO, optional=True,
+          bounds=(-10.0, 10.0), units="m", consequence="physics",
+          derived_when_absent="the gauge's OWN published tidal-to-geodetic offset "
+                              "reconciles the series with the DEM_all bed",
           desc="Metres ADDED to every series value to reconcile the tide datum (MLLW) "
-               "with the DEM datum (DEM_all ~ MSL); 0 uses the series as reported"),
+               "with the bed datum (DEM_all over US coasts is served NAVD 88); "
+               "supplying 0 is an explicit override that leaves them unreconciled"),
 
     # -- the domain --------------------------------------------------------- #
     Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
