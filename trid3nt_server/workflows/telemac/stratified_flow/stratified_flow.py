@@ -15,6 +15,9 @@ structure itself:
   * ``stratification``    - a warm surface layer over a cold bottom either keeps
                             its thermocline (calm) or is mixed away (wind). The
                             metric is the top-to-bottom difference that SURVIVES.
+                            The deck has NO surface heat exchange, so heat is
+                            CONSERVED: a falling surface temperature is the warm
+                            layer MIXING DOWNWARD, never the lake cooling.
   * ``wind_circulation``  - a steady wind drives surface water downwind and a
                             return flow at depth; the depth average is ~0, which
                             is exactly why a 2D model reports nothing.
@@ -167,6 +170,10 @@ def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     final state - because the 3D answer IS the difference between them, and a map
     of the surface alone carries no depth at all. ``None`` when the run measured no
     profile, which is the honest "there is nothing to plot".
+
+    The stratification deck exchanges NO heat with the atmosphere, so the two lines
+    enclose the same heat: the caption must read the change as REDISTRIBUTION
+    (mixing), never as the lake losing heat.
     """
     sigma = getattr(result, "profile_sigma", None)
     final = getattr(result, "profile_values", None)
@@ -205,7 +212,11 @@ def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
              f"{units}. " if metric is not None else "")
             + "The two lines are the PRESCRIBED initial column and the solved final "
               "one; their separation is what a depth-averaged model cannot show. "
-              "3D screening, not a calibrated study."
+            + ("There is no heat exchange in this deck - heat is CONSERVED, so the "
+               "surface falling and the depths rising is the warm layer MIXING "
+               "DOWNWARD, not the lake cooling. "
+               if getattr(result, "flow_mode", None) == "stratification" else "")
+            + "3D screening, not a calibrated study."
         ),
     )
 

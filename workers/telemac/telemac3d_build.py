@@ -19,6 +19,12 @@ discriminating 3D-vs-2D or stratified-vs-mixed pair:
                            discriminating metric is the persisting top-to-bottom
                            temperature difference (the lake-turnover question,
                            the stratified 3D column the AED2 STOP needs).
+                           The deck carries NO surface heat exchange (no THERMIC,
+                           no met forcing): heat is CONSERVED and the only thing
+                           that can change the column is REDISTRIBUTION. A falling
+                           surface temperature is the warm layer MIXING DOWNWARD,
+                           never the lake cooling - ``column_heat_*`` in the
+                           metrics is the drift that proves it.
   * ``wind_circulation`` - a steady wind over a closed basin drives surface water
                            downwind; mass conservation forces a return flow at
                            depth. The vertical U profile at mid-basin (surface
@@ -142,6 +148,154 @@ class Telemac3dInputError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
+# 0. Vertical discretisation planner (MESH TRANSFORMATION 1 vs 4).
+#
+# A uniform sigma (MESH TRANSFORMATION 1) spreads NPLAN planes evenly, so the
+# near-surface layer thickness over the deepest column is depth/(NPLAN-1). A deep
+# lake against a metres-thick thermocline therefore gets a ONE-NODE epilimnion and
+# the initial condition is unrepresentable no matter how the profile is written.
+# MESH TRANSFORMATION 4 (verified in the baked telemac3d.dico, INDEX 96: "4: sigma
+# with zoom factor") clusters planes with the GOTM tanh stretch steered by MESH
+# STRETCHING COEFFICIENTS (dico 'COEFFICIENTS D ETIREMENT DU MAILLAGE', REAL x2,
+# MNEMO TRANSF_COEF, "only used with MESH TRANSFORMATION = 4"; first = stretching
+# near the BOTTOM, second = near the FREE SURFACE). condim.f implements it as
+#
+#     ZSTAR(k) = (TANH((DL+DU)*s - DL) + TANH(DL)) / (TANH(DL) + TANH(DU))
+#     s = (k-1)/(NPLAN-1),  ZSTAR 0 = bed .. 1 = free surface
+#
+# so the planner below reproduces that exact transform to solve for the surface
+# coefficient and to REPORT the achieved layer thickness as a fidelity fact.
+# ---------------------------------------------------------------------------
+#: Bottom stretching coefficient. Held fixed: the thermocline is a SURFACE
+#: feature, so the solve spends its freedom on the surface coefficient and keeps a
+#: mild bed-boundary-layer clustering.
+VSTRETCH_BOTTOM_COEF: float = 1.0
+#: Numerical ceiling on the surface coefficient (past this the tanh saturates and
+#: the top layers collapse to millimetres).
+VSTRETCH_SURFACE_MAX: float = 8.0
+#: Ceiling on the thickness ratio between adjacent layers. A terrain-following
+#: vertical grid whose layers grow faster than this makes the vertical advection /
+#: diffusion operators inconsistent, so a stretch that would need it is a REFUSAL,
+#: not a silently-distorted grid.
+VSTRETCH_MAX_GROWTH: float = 2.0
+#: The near-surface layer must be no thicker than this fraction of the thermocline
+#: depth, else the epilimnion is a single node and the IC is unrepresentable.
+VSTRETCH_DZ_FRACTION: float = 0.5
+
+
+def sigma_planes(nplan: int, dl: float, du: float) -> "np.ndarray":
+    """The condim.f MESH TRANSFORMATION 4 plane distribution, bed(0) -> surface(1).
+
+    ``dl <= 0 and du <= 0`` is the uniform sigma the solver falls back to."""
+    s = np.arange(int(nplan), dtype=np.float64) / max(int(nplan) - 1, 1)
+    if dl <= 0.0 and du <= 0.0:
+        return s
+    return (np.tanh((dl + du) * s - dl) + np.tanh(dl)) / (np.tanh(dl) + np.tanh(du))
+
+
+def _layer_thicknesses(nplan: int, dl: float, du: float, depth_m: float):
+    """Layer thicknesses bed -> surface (m) over a column of ``depth_m``."""
+    return np.diff(sigma_planes(nplan, dl, du)) * float(depth_m)
+
+
+def _stretch_stats(nplan: int, dl: float, du: float, depth_m: float):
+    dz = _layer_thicknesses(nplan, dl, du, depth_m)
+    growth = float(np.max(dz[:-1] / dz[1:])) if dz.size > 1 else 1.0
+    return float(dz[-1]), growth
+
+
+def _min_surface_coef(nplan: int, depth_m: float, dz_target_m: float):
+    """Smallest surface stretching coefficient reaching ``dz_target_m``, or None.
+
+    Minimum-distortion by construction: the near-surface thickness falls
+    monotonically with the coefficient, so the bisection returns the LEAST stretch
+    that meets the target rather than starving the interior."""
+    lo, hi = 0.0, VSTRETCH_SURFACE_MAX
+    if _stretch_stats(nplan, VSTRETCH_BOTTOM_COEF, hi, depth_m)[0] > dz_target_m:
+        return None
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if _stretch_stats(nplan, VSTRETCH_BOTTOM_COEF, mid, depth_m)[0] <= dz_target_m:
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+def plan_vertical_grid(nplan: int, max_depth_m: float, thermocline_depth_m: float):
+    """Pick the vertical discretisation that can HOLD a thermocline at
+    ``thermocline_depth_m`` over a column of ``max_depth_m``, or refuse.
+
+    Returns a dict of declared fidelity facts (transformation keyword value, the
+    stretching coefficients, the ACHIEVED near-surface layer thickness, the
+    thermocline thickness DELTA the initial condition must use). Raises
+    ``Telemac3dInputError('TELEMAC3D_VERTICAL_UNRESOLVED')`` when no admissible
+    stretch reaches the target - the grid must never silently carry an initial
+    condition it cannot represent."""
+    nplan = int(nplan)
+    depth = float(max_depth_m)
+    dtherm = float(thermocline_depth_m)
+    dz_uniform = depth / max(nplan - 1, 1)
+    dz_target = VSTRETCH_DZ_FRACTION * dtherm
+
+    if dz_uniform <= dz_target:
+        dl = du = 0.0
+        transf = 1
+        dz_surface, growth = dz_uniform, 1.0
+    else:
+        du = _min_surface_coef(nplan, depth, dz_target)
+        dl = VSTRETCH_BOTTOM_COEF
+        if du is not None:
+            dz_surface, growth = _stretch_stats(nplan, dl, du, depth)
+        if du is None or growth > VSTRETCH_MAX_GROWTH:
+            need = _min_planes_for(depth, dtherm)
+            raise Telemac3dInputError(
+                "TELEMAC3D_VERTICAL_UNRESOLVED",
+                f"{nplan} horizontal levels cannot resolve a {dtherm:g} m "
+                f"thermocline over a {depth:.1f} m column: uniform sigma gives a "
+                f"{dz_uniform:.1f} m near-surface layer (target <= {dz_target:g} m), "
+                "and the surface zooming that would reach it needs a layer-growth "
+                f"ratio of {(growth if du is not None else float('inf')):.2f} "
+                f"(limit {VSTRETCH_MAX_GROWTH:g}). Raise nplan to at least "
+                f"{need} or model a shallower AOI / a thicker thermocline.")
+        transf = 4
+    delta = 2.0 * dz_surface
+    z = sigma_planes(nplan, dl, du)
+    depths = (1.0 - z) * depth
+    return {
+        "mesh_transformation": transf,
+        "mesh_stretching_coefficients": ([round(dl, 4), round(du, 4)]
+                                         if transf == 4 else None),
+        "vertical_dz_surface_m": round(dz_surface, 3),
+        "vertical_dz_uniform_m": round(dz_uniform, 3),
+        "vertical_layer_growth_ratio": round(growth, 3),
+        "vertical_planes_above_thermocline": int((depths < dtherm).sum()),
+        "vertical_sigma_planes": np.round(z, 5).tolist(),
+        "thermocline_delta_m": round(delta, 3),
+        "vertical_resolution_label": (
+            f"{nplan} sigma planes, near-surface layer {dz_surface:.2f} m over the "
+            f"{depth:.1f} m deep column"
+            + ("" if transf == 1 else
+               f" (surface-zoomed sigma, stretching {dl:g}/{du:.2f}; uniform sigma "
+               f"would have been {dz_uniform:.1f} m)")
+            + f"; thermocline declared {delta:.2f} m thick"),
+    }
+
+
+def _min_planes_for(depth_m: float, thermocline_depth_m: float, cap: int = 200):
+    """Fewest horizontal levels an admissible stretch exists for (refusal advice)."""
+    dz_target = VSTRETCH_DZ_FRACTION * float(thermocline_depth_m)
+    for n in range(5, cap + 1):
+        if float(depth_m) / (n - 1) <= dz_target:
+            return n
+        du = _min_surface_coef(n, depth_m, dz_target)
+        if du is not None and _stretch_stats(
+                n, VSTRETCH_BOTTOM_COEF, du, depth_m)[1] <= VSTRETCH_MAX_GROWTH:
+            return n
+    return cap
+
+
+# ---------------------------------------------------------------------------
 # 1. Idealized regular-grid 2D triangular mesh (CCW ring, rank IPOBO) - promoted
 #    from the sandbox. TELEMAC-3D reads a 2D geometry + 2D boundary file and
 #    extrudes NPLAN horizontal levels internally (the sigma transform).
@@ -262,17 +416,24 @@ def condi_lock(xgate, slock):
             f"      ENDDO\n" + CONDI_TAIL)
 
 
-def condi_thermocline(dtherm, twarm, tcold):
-    # warm epilimnion above depth DTHERM (below still-water surface at z=0), cold
-    # hypolimnion below. Z is bed-referenced elevation; depth-below-surface = -Z.
+def condi_thermocline(dtherm, twarm, tcold, delta):
+    """Warm epilimnion over a cold hypolimnion, joined by a tanh thermocline of
+    thickness ``delta`` centred at depth ``dtherm``.
+
+    T = Tc + (Tw - Tc) * 0.5 * (1 - TANH((DPTH - DTHERM)/DELTA))
+
+    A STEP profile is not representable on a sigma grid: its column heat anomaly
+    is O(dz) wrong and the discretisation error reads as a physical signal. The
+    tanh is resolved whenever DELTA >= 2*dz, and the anomaly then converges
+    O(dz^2) - so ``delta`` MUST come from ``plan_vertical_grid`` (which sizes it
+    off the ACHIEVED near-surface layer), never from a literal.
+
+    Z is bed-referenced elevation; depth-below-surface = -Z."""
     return (CONDI_HEAD +
             f"      DO I3=1,NPOIN3\n"
             f"        DPTH=-Z(I3)\n"
-            f"        IF(DPTH.LT.{dtherm:.4f}D0) THEN\n"
-            f"          TA%ADR(1)%P%R(I3)={twarm:.4f}D0\n"
-            f"        ELSE\n"
-            f"          TA%ADR(1)%P%R(I3)={tcold:.4f}D0\n"
-            f"        ENDIF\n"
+            f"        TA%ADR(1)%P%R(I3)={tcold:.4f}D0+({twarm - tcold:.4f}D0)*0.5D0*\n"
+            f"     &    (1.D0-TANH((DPTH-{dtherm:.4f}D0)/{delta:.4f}D0))\n"
             f"      ENDDO\n" + CONDI_TAIL)
 
 
@@ -282,7 +443,7 @@ def condi_thermocline(dtherm, twarm, tcold):
 def write_cas(path, geo, cli, res3d, res2d, fort, *, title, nplan, dt, nit,
               graprd, denlaw=0, tracer_name=None, nonhyd=False,
               wind=False, wind_u=0.0, wind_v=0.0, iturbv=2,
-              rho0=None, friction_coef=0.01):
+              rho0=None, friction_coef=0.01, transf=1, transf_coef=None):
     L = []
     A = L.append
     A(f"TITLE : '{title}'")
@@ -303,7 +464,18 @@ def write_cas(path, geo, cli, res3d, res2d, fort, *, title, nplan, dt, nit,
     A("MASS-BALANCE : YES")
     # --- vertical discretisation (sigma) ---
     A(f"NUMBER OF HORIZONTAL LEVELS : {nplan}")
-    A("MESH TRANSFORMATION : 1")             # 1 = sigma (uniform planes)
+    # dico INDEX 96: 1 = sigma (uniform planes), 4 = sigma with zoom factor.
+    A(f"MESH TRANSFORMATION : {int(transf)}")
+    if int(transf) == 4:
+        # dico: MESH STRETCHING COEFFICIENTS (TRANSF_COEF, 2 REALs, > 0) is read
+        # ONLY under MESH TRANSFORMATION 4; first = bottom, second = free surface.
+        if not transf_coef or len(transf_coef) != 2:
+            raise Telemac3dInputError(
+                "TELEMAC3D_PARAMS_INVALID",
+                "MESH TRANSFORMATION 4 needs two MESH STRETCHING COEFFICIENTS; "
+                f"got {transf_coef!r}.")
+        A("MESH STRETCHING COEFFICIENTS : "
+          f"{float(transf_coef[0]):.4f};{float(transf_coef[1]):.4f}")
     # gotcha 6: NON-HYDROSTATIC VERSION defaults YES in the dico; set explicitly.
     A("NON-HYDROSTATIC VERSION : " + ("YES" if nonhyd else "NO"))
     # --- initial free surface at rest ---
@@ -481,8 +653,13 @@ def build_real_lake_grid(cfg: Telemac3dConfig):
     Z = np.where(wet, bed, -min_depth)
     Z = np.minimum(Z, -min_depth)
     mesh["Z"] = Z.astype(np.float64)
+    # The clamp is a SOLVER-STABILITY device, not a statement about the world: a
+    # clamped node is land or shallows the DEM says carries no lake water. The mask
+    # travels with the mesh so the published layers read NoData there instead of
+    # painting land as warm water (honesty floor).
+    mesh["wet"] = wet
     meta = dict(utm_epsg=epsg, dx_m=round(dx, 1), coarsened=coarsened,
-                n_wet_nodes=n_wet,
+                n_wet_nodes=n_wet, n_clamped_nodes=int(bed.size - n_wet),
                 depth_max_m=round(float(-np.nanmin(bed[wet])), 1),
                 depth_mean_m=round(float(-np.nanmean(bed[wet])), 1))
     return mesh, meta
@@ -493,19 +670,42 @@ def build_real_lake_grid(cfg: Telemac3dConfig):
 # ---------------------------------------------------------------------------
 def _emit_layer_fields(mesh, surface_vals, bottom_vals, data_dir, varname):
     """Re-emit the surface + bottom layers as single-frame 2D SELAFINs (the
-    artemis re-emit pattern) the agent postprocess rasterizes to the COGs."""
+    artemis re-emit pattern) the agent postprocess rasterizes to the COGs.
+
+    Nodes the bathymetry clamp forced wet (``mesh['wet']`` False - land, NoData or
+    sub-threshold shallows) are written NaN. The solver needs a value there to keep
+    the closed basin stable; the PRODUCT must not claim one, and every downstream
+    scalar is computed off the masked arrays this returns.
+
+    Returns ``(surface_basename, bottom_basename, surface_masked, bottom_masked)``."""
+    wet = mesh.get("wet")
+    surf = np.asarray(surface_vals, dtype=np.float64).copy()
+    bot = np.asarray(bottom_vals, dtype=np.float64).copy()
+    if wet is not None:
+        dry = ~np.asarray(wet, dtype=bool)
+        surf[dry] = np.nan
+        bot[dry] = np.nan
     sp = os.path.join(data_dir, "t3d_surface.slf")
     bp = os.path.join(data_dir, "t3d_bottom.slf")
-    write_slf(mesh, sp, values=surface_vals, varname=varname)
-    write_slf(mesh, bp, values=bottom_vals, varname=varname)
-    return "t3d_surface.slf", "t3d_bottom.slf"
+    write_slf(mesh, sp, values=surf, varname=varname)
+    write_slf(mesh, bp, values=bot, varname=varname)
+    return "t3d_surface.slf", "t3d_bottom.slf", surf, bot
 
 
 def _vertical_profile(field3d, mesh, nplan):
-    """Column of the primary variable at the basin centre, bed -> surface."""
+    """Column of the primary variable at the basin centre, bed -> surface.
+
+    A CLAMPED (land) centre node would make the whole profile chart a statement
+    about 5 m of invented water, so the column snaps to the nearest wet node."""
     icx, jcy = mesh["nx"] // 2, mesh["ny"] // 2
     jc = icx * mesh["ny"] + jcy
     jc = min(jc, field3d.shape[1] - 1)
+    wet = mesh.get("wet")
+    if wet is not None:
+        wet = np.asarray(wet, dtype=bool)[: field3d.shape[1]]
+        if wet.any() and not wet[jc]:
+            idx = np.flatnonzero(wet)
+            jc = int(idx[np.argmin(np.abs(idx - jc))])
     col = field3d[:, jc]
     sigma = np.linspace(0.0, 1.0, nplan)
     return sigma, col
@@ -548,10 +748,14 @@ def _solve_stratification(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
     nplan = int(cfg.nplan)
     dtherm = float(cfg.thermocline_depth_m)
     twarm, tcold = float(cfg.warm_temp_c), float(cfg.cold_temp_c)
+    # the vertical grid is planned BEFORE the deck is authored: an unresolvable
+    # thermocline refuses here rather than solving an IC the grid cannot hold.
+    vgrid = plan_vertical_grid(nplan, float(-np.nanmin(mesh["Z"])), dtherm)
     write_slf(mesh, geo)
     write_cli(mesh, cli)
     with open(fort, "w") as f:
-        f.write(condi_thermocline(dtherm, twarm, tcold))
+        f.write(condi_thermocline(dtherm, twarm, tcold,
+                                  vgrid["thermocline_delta_m"]))
     wind_on = cfg.wind_speed_mps > 0.0
     wu, wv = wind_components(float(cfg.wind_speed_mps), float(cfg.wind_dir_from_deg))
     dt = 20.0
@@ -563,7 +767,9 @@ def _solve_stratification(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
               title=f"THERMAL STRAT wind={wind_on} {cfg.name}", nplan=nplan,
               dt=dt, nit=nit, graprd=graprd, denlaw=1,
               tracer_name="TEMPERATURE     ", nonhyd=False,
-              wind=wind_on, wind_u=wu, wind_v=wv, iturbv=2, rho0=1000.0)
+              wind=wind_on, wind_u=wu, wind_v=wv, iturbv=2, rho0=1000.0,
+              transf=vgrid["mesh_transformation"],
+              transf_coef=vgrid["mesh_stretching_coefficients"])
     ok, out = run_t3d(os.path.join(data_dir, f"t3d_{tag}.cas"), data_dir, tag,
                       timeout=int(os.environ.get("TRID3NT_TELEMAC3D_SOLVE_TIMEOUT", "3600")))
     if not ok:
@@ -573,32 +779,52 @@ def _solve_stratification(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
     t_init, npoin2, nplan_r = field_3d(tf, "TEMPERATURE", 0)
     t_fin, _, _ = field_3d(tf, "TEMPERATURE", nt - 1)
     tf.close()
-    surf, bot = t_fin[-1], t_fin[0]              # surface / bottom temperature
     sigma, col_fin = _vertical_profile(t_fin, mesh, nplan_r)
     _, col_init = _vertical_profile(t_init, mesh, nplan_r)
     dT_init = float(col_init[-1] - col_init[0])
     dT_final = float(col_fin[-1] - col_fin[0])
-    surf_slf, bot_slf = _emit_layer_fields(mesh, surf, bot, data_dir,
-                                           "TEMPERATURE     ")
+    z_planes = np.asarray(vgrid["vertical_sigma_planes"], dtype=np.float64)
+    if z_planes.size != col_fin.size:
+        z_planes = np.linspace(0.0, 1.0, col_fin.size)
+    heat_init = float(np.trapz(col_init, z_planes))
+    heat_final = float(np.trapz(col_fin, z_planes))
+    # surface / bottom temperature, land-clamped nodes already NaN
+    surf_slf, bot_slf, surf, bot = _emit_layer_fields(
+        mesh, t_fin[-1], t_fin[0], data_dir, "TEMPERATURE     ")
     m = _base_metrics(cfg, run_id, mesh, meta.get("utm_epsg"), cfg.bbox,
                       res3d, surf_slf, bot_slf, nplan_r)
+    m.update(vgrid)
     m.update({
         "variable_label": "Surface temperature", "variable_units": "degC",
         "stratification_metric": round(abs(dT_final), 4),
         "stratification_dt": round(dT_final, 4),
         "stratification_dt_init": round(dT_init, 4),
+        # depth-weighted column mean: with no heat exchange in the deck this is
+        # CONSERVED, so the drift is the numerical error bar on "the warm layer
+        # mixed down" - and the refutation of any "the lake cooled" reading.
+        "column_heat_mean_init_c": round(heat_init, 4),
+        "column_heat_mean_final_c": round(heat_final, 4),
+        "column_heat_drift_frac": round(
+            (heat_final - heat_init) / max(abs(heat_init), 1e-9), 6),
         "surface_value_mean": round(float(np.nanmean(surf)), 3),
         "bottom_value_mean": round(float(np.nanmean(bot)), 3),
         "wind_speed_mps": float(cfg.wind_speed_mps) if wind_on else 0.0,
-        "chart_sigma": np.round(sigma, 3).tolist(),
+        # the plane positions the deck actually used - a zoomed sigma is NOT evenly
+        # spaced, so plotting the column against linspace would misplace every point
+        "chart_sigma": (np.round(vgrid["vertical_sigma_planes"], 4).tolist()
+                        if len(vgrid["vertical_sigma_planes"]) == len(col_fin)
+                        else np.round(sigma, 3).tolist()),
         "chart_profile": np.round(col_fin, 3).tolist(),
         "chart_profile_init": np.round(col_init, 3).tolist(),
         "chart_kind": "vertical_temperature_profile",
         **{k: meta[k] for k in ("dx_m", "coarsened", "n_wet_nodes",
-                                "depth_max_m", "depth_mean_m") if k in meta},
+                                "n_clamped_nodes", "depth_max_m",
+                                "depth_mean_m") if k in meta},
     })
-    LOG.info("telemac3d stratification ok: dT_final=%.3f C (wind=%s) surf=%.2f bot=%.2f",
-             dT_final, wind_on, surf.mean(), bot.mean())
+    LOG.info("telemac3d stratification ok: dT_final=%.3f C (wind=%s) surf=%.2f bot=%.2f "
+             "dz_surface=%.2f m (transf %d)",
+             dT_final, wind_on, float(np.nanmean(surf)), float(np.nanmean(bot)),
+             vgrid["vertical_dz_surface_m"], vgrid["mesh_transformation"])
     return m
 
 
@@ -632,11 +858,11 @@ def _solve_wind_circulation(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
     nt = tf.ntimestep
     u3, npoin2, nplan_r = field_3d(tf, "VELOCITY U", nt - 1)
     tf.close()
-    surf, bot = u3[-1], u3[0]                     # surface / bottom U
     sigma, u_col = _vertical_profile(u3, mesh, nplan_r)
     depth_avg = float(np.trapz(u_col, dx=1.0) / max(nplan_r - 1, 1))
-    surf_slf, bot_slf = _emit_layer_fields(mesh, surf, bot, data_dir,
-                                           "VELOCITY U      ")
+    # surface / bottom U, land-clamped nodes already NaN
+    surf_slf, bot_slf, surf, bot = _emit_layer_fields(
+        mesh, u3[-1], u3[0], data_dir, "VELOCITY U      ")
     m = _base_metrics(cfg, run_id, mesh, meta.get("utm_epsg"), cfg.bbox,
                       res3d, surf_slf, bot_slf, nplan_r)
     m.update({
@@ -652,7 +878,8 @@ def _solve_wind_circulation(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
         "chart_profile": np.round(u_col, 5).tolist(),
         "chart_kind": "vertical_velocity_profile",
         **{k: meta[k] for k in ("dx_m", "coarsened", "n_wet_nodes",
-                                "depth_max_m", "depth_mean_m") if k in meta},
+                                "n_clamped_nodes", "depth_max_m",
+                                "depth_mean_m") if k in meta},
     })
     LOG.info("telemac3d wind_circulation ok: u_surface=%.4f u_bottom=%.4f depth_avg=%.4f",
              u_col[-1], u_col[0], depth_avg)
@@ -717,7 +944,6 @@ def _solve_salt_wedge(cfg: Telemac3dConfig, data_dir, run_id):
         front_t.append(float(times[rec]))
     sal_fin, _, nplan_r = field_3d(tf, "SALINITY", nt - 1)
     tf.close()
-    surf, bot = sal_fin[-1], sal_fin[0]
     sigma, sal_col = _vertical_profile(sal_fin, mesh, nplan_r)
     ft, fx = np.array(front_t), np.array(front_x)
     win = (fx > xgate + 0.5) & (fx < 0.9 * Lx)
@@ -727,8 +953,8 @@ def _solve_salt_wedge(cfg: Telemac3dConfig, data_dir, run_id):
         speed = float((fx[-1] - xgate) / max(ft[-1], 1e-9))
     drho = 750e-6 * S
     benjamin = float(benjamin_front_speed(drho, H))
-    surf_slf, bot_slf = _emit_layer_fields(mesh, surf, bot, data_dir,
-                                           "SALINITY        ")
+    surf_slf, bot_slf, surf, bot = _emit_layer_fields(
+        mesh, sal_fin[-1], sal_fin[0], data_dir, "SALINITY        ")
     m = _base_metrics(cfg, run_id, mesh, None, None, res3d, surf_slf, bot_slf,
                       nplan_r)
     m.update({

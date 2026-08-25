@@ -181,7 +181,9 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             value=f"{deck['warm_temp_c']:g}C/{deck['cold_temp_c']:g}C", units="C",
             basis="default_demo", consequence="physics",
             note=(f"prescribed warm epilimnion over cold hypolimnion, thermocline at "
-                  f"{deck['thermocline_depth_m']:g} m (no met-forcing fetcher exists)")))
+                  f"{deck['thermocline_depth_m']:g} m (no met-forcing fetcher exists). "
+                  "No heat exchange: the column can only REDISTRIBUTE its heat, "
+                  "never lose it")))
     return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
@@ -193,7 +195,10 @@ def _honesty_note(deck: dict[str, Any]) -> str:
         f"grid of {deck['bathy_label']}, driven by a PRESCRIBED column and a "
         f"{deck['wind_speed_mps']:g} m/s wind - labeled demo forcing, not observed "
         "conditions. The pair of rasters is the SURFACE and BOTTOM field; their "
-        "contrast is what a depth-averaged model cannot show. Not a calibrated study.")
+        "contrast is what a depth-averaged model cannot show. Not a calibrated study."
+        + (" The deck exchanges NO heat with the atmosphere: heat is CONSERVED, so a "
+           "falling surface temperature is downward MIXING, not the lake cooling."
+           if deck["flow_mode"] == "stratification" else ""))
 
 
 async def publish_stratified_products(*, deck: dict[str, Any],

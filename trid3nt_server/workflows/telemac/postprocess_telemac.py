@@ -360,6 +360,98 @@ def _rasterize_nodes_to_grid(lon, lat, vals, bbox, out_shape, clip_dist_deg, wet
     return grid
 
 
+def _tri_from_ikle(ikle):
+    """The element table as TRIANGLES (a quad element splits into two)."""
+    import numpy as np
+
+    ikle = np.asarray(ikle, dtype="int64")
+    if ikle.ndim != 2 or ikle.shape[0] == 0:
+        return np.empty((0, 3), dtype="int64")
+    if ikle.shape[1] == 3:
+        return ikle
+    if ikle.shape[1] == 4:
+        return np.vstack([ikle[:, [0, 1, 2]], ikle[:, [0, 2, 3]]])
+    return ikle[:, :3]
+
+
+def _rasterize_mesh_to_grid(lon, lat, ikle, vals, bbox, out_shape, wet_floor=0.0):
+    """P1 (barycentric) interpolation of a nodal FEM field onto a regular grid.
+
+    The TELEMAC solution IS piecewise-linear over its own elements, so evaluating
+    each element's barycentric shape functions at the covered cell centres
+    reproduces the solver's representation exactly - zero invented data, and the
+    same thing QGIS's native mesh renderer draws. This REPLACES the nearest-node
+    halo of :func:`_rasterize_nodes_to_grid` for open-water meshes, where nodes
+    kilometres apart under a ~100 m halo published a lattice of isolated pixels
+    instead of a field.
+
+    A cell covered by no element stays NaN (the mesh footprint IS the clip - no
+    distance threshold to tune). An element with ANY non-finite vertex value is
+    SKIPPED: a masked node (dry, clamped land, never-wet) must not bleed a value
+    across the element it touches. Sub-``wet_floor`` cells are NaN. Row 0 = NORTH.
+    """
+    import numpy as np
+
+    nrows, ncols = int(out_shape[0]), int(out_shape[1])
+    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
+    gdx = (max_lon - min_lon) / ncols
+    gdy = (max_lat - min_lat) / nrows
+    xc = min_lon + (np.arange(ncols) + 0.5) * gdx
+    yc = max_lat - (np.arange(nrows) + 0.5) * gdy      # north -> south
+
+    x = np.asarray(lon, dtype="float64")
+    y = np.asarray(lat, dtype="float64")
+    v = np.asarray(vals, dtype="float64")
+    tri = _tri_from_ikle(ikle)
+    if tri.size == 0 or tri.max() >= x.size:
+        raise ValueError(
+            f"element table does not index the {x.size} mesh nodes "
+            f"(nelem={tri.shape[0]}, max index={tri.max() if tri.size else -1})")
+
+    grid = np.full((nrows, ncols), np.nan, dtype="float64")
+    x0, x1, x2 = x[tri[:, 0]], x[tri[:, 1]], x[tri[:, 2]]
+    y0, y1, y2 = y[tri[:, 0]], y[tri[:, 1]], y[tri[:, 2]]
+    v0, v1, v2 = v[tri[:, 0]], v[tri[:, 1]], v[tri[:, 2]]
+    det = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+
+    keep = np.isfinite(v0) & np.isfinite(v1) & np.isfinite(v2) & (np.abs(det) > 0.0)
+    # cell-index window per element (half-cell offset: xc[j] = min_lon+(j+0.5)*gdx)
+    txmin = np.minimum(np.minimum(x0, x1), x2)
+    txmax = np.maximum(np.maximum(x0, x1), x2)
+    tymin = np.minimum(np.minimum(y0, y1), y2)
+    tymax = np.maximum(np.maximum(y0, y1), y2)
+    j_lo = np.ceil((txmin - min_lon) / gdx - 0.5).astype("int64")
+    j_hi = np.floor((txmax - min_lon) / gdx - 0.5).astype("int64")
+    i_lo = np.ceil((max_lat - tymax) / gdy - 0.5).astype("int64")
+    i_hi = np.floor((max_lat - tymin) / gdy - 0.5).astype("int64")
+    np.clip(j_lo, 0, ncols - 1, out=j_lo)
+    np.clip(j_hi, 0, ncols - 1, out=j_hi)
+    np.clip(i_lo, 0, nrows - 1, out=i_lo)
+    np.clip(i_hi, 0, nrows - 1, out=i_hi)
+
+    eps = -1e-9
+    for k in np.flatnonzero(keep):
+        jl, jh, il, ih = int(j_lo[k]), int(j_hi[k]), int(i_lo[k]), int(i_hi[k])
+        if jh < jl or ih < il:
+            continue
+        gx = xc[jl:jh + 1][None, :]
+        gy = yc[il:ih + 1][:, None]
+        d = det[k]
+        l0 = ((y1[k] - y2[k]) * (gx - x2[k]) + (x2[k] - x1[k]) * (gy - y2[k])) / d
+        l1 = ((y2[k] - y0[k]) * (gx - x2[k]) + (x0[k] - x2[k]) * (gy - y2[k])) / d
+        l2 = 1.0 - l0 - l1
+        inside = (l0 >= eps) & (l1 >= eps) & (l2 >= eps)
+        if not inside.any():
+            continue
+        block = grid[il:ih + 1, jl:jh + 1]
+        interp = l0 * v0[k] + l1 * v1[k] + l2 * v2[k]
+        np.copyto(block, np.broadcast_to(interp, block.shape), where=inside)
+
+    grid[~np.isfinite(grid)] = np.nan
+    grid[grid < wet_floor] = np.nan
+    return grid
+
+
 def _reraise_cogio(exc: CogIoError) -> "PostprocessTelemacError":
     codes = {
         "DEPENDENCY": "TELEMAC_DEPENDENCY_MISSING",
@@ -1663,13 +1755,12 @@ def postprocess_tomawac(
         float(lon.max() + pad), float(lat.max() + pad),
     )
     shape = _grid_shape(bbox, target_ground_res_m)
-    # coarse wave grid -> clip at ~2 output cells so interior stays filled.
-    clip_dist_deg = 2.0 * max(
-        (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
     try:
+        # barycentric over the wave mesh's own elements: a ~3 km TOMAWAC grid under
+        # a nearest-node halo published isolated pixels, not an Hs field.
         # wet_floor tiny so a small-Hs run is not clipped; NaN nodes drop out.
-        grid = _rasterize_nodes_to_grid(
-            lon, lat, node_hs, bbox, shape, clip_dist_deg, wet_floor=_HS_WET_FLOOR)
+        grid = _rasterize_mesh_to_grid(
+            lon, lat, mesh["ikle"], node_hs, bbox, shape, wet_floor=_HS_WET_FLOOR)
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
@@ -1977,7 +2068,9 @@ def _rasterize_t3d_field(
 ):
     """Read a single-frame re-emitted 2D SELAFIN (surface OR bottom layer),
     rasterize its one field to a 4326 (or local-frame placeholder) COG, upload it,
-    and return ``(uri, bbox, node_min, node_max, node_mean)``. NO value masking
+    and return ``(uri, bbox, node_min, node_max, node_mean, valid_frac)``
+    (``valid_frac`` = the fraction of output pixels carrying a value, the number
+    that separates a FIELD from a dot lattice). NO value masking
     (temperature / velocity can be negative and valid) -- only NaN-clipped.
 
     ``domain_bbox`` is the 4326 AOI the real-lake grid was built over. The 3D build
@@ -2039,8 +2132,6 @@ def _rasterize_t3d_field(
         bbox = (float(lon.min() - pad), float(lat.min() - pad),
                 float(lon.max() + pad), float(lat.max() + pad))
         shape = _grid_shape(bbox, target_ground_res_m)
-        clip_dist = 2.0 * max((bbox[2] - bbox[0]) / shape[1],
-                              (bbox[3] - bbox[1]) / shape[0])
     else:
         # idealized path: the coords are LOCAL METRES with no real georeferencing.
         # Treat them as the placeholder projected frame (EPSG:3857) + WARP to 4326
@@ -2062,16 +2153,20 @@ def _rasterize_t3d_field(
         ncols = min(max(int(round(w_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
         nrows = min(max(int(round(h_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
         shape = (nrows, ncols)
-        clip_dist = 2.0 * nn
 
     try:
-        grid = _rasterize_nodes_to_grid(
-            lon, lat, node_vals, bbox, shape, clip_dist, wet_floor=-1e30)
+        # barycentric over the RESULT triangulation: an open-water 3D grid spaces
+        # its nodes ~1 km apart, so a nearest-node halo published ~2% valid pixels
+        # (a dot lattice). The element fill is the solver's own P1 representation.
+        grid = _rasterize_mesh_to_grid(
+            lon, lat, mesh["ikle"], node_vals, bbox, shape, wet_floor=-1e30)
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
             message=f"TELEMAC-3D field rasterization failed: {exc}",
         ) from exc
+
+    valid_frac = float(np.isfinite(grid).sum()) / float(max(grid.size, 1))
 
     from rasterio.transform import from_bounds
 
@@ -2094,7 +2189,7 @@ def _rasterize_t3d_field(
         raise _reraise_cogio(exc) from exc
     finally:
         cog_io.safe_unlink(cog)
-    return uri, bbox, node_min, node_max, node_mean
+    return uri, bbox, node_min, node_max, node_mean, valid_frac
 
 
 def postprocess_telemac3d(
@@ -2141,12 +2236,12 @@ def postprocess_telemac3d(
     var_label = wm.get("variable_label") or "Surface field"
     metric = float(wm.get("stratification_metric") or 0.0)
 
-    s_uri, s_bbox, s_min, s_max, s_mean = _rasterize_t3d_field(
+    s_uri, s_bbox, s_min, s_max, s_mean, s_frac = _rasterize_t3d_field(
         surface_slf_path, run_id=run_id, utm_epsg=utm_epsg,
         dest_filename="telemac3d_surface.tif", dst_suffix="_t3d_surface.tif",
         log_label="TELEMAC-3D surface COG", runs_bucket=runs_bucket,
         target_ground_res_m=target_ground_res_m, domain_bbox=wm.get("bbox"))
-    b_uri, b_bbox, b_min, b_max, b_mean = _rasterize_t3d_field(
+    b_uri, b_bbox, b_min, b_max, b_mean, b_frac = _rasterize_t3d_field(
         bottom_slf_path, run_id=run_id, utm_epsg=utm_epsg,
         dest_filename="telemac3d_bottom.tif", dst_suffix="_t3d_bottom.tif",
         log_label="TELEMAC-3D bottom COG", runs_bucket=runs_bucket,
@@ -2171,6 +2266,22 @@ def postprocess_telemac3d(
         "resolve). A planning-grade idealized/prescribed-forcing field, not a "
         "calibrated site study."
     )
+    if flow_mode == "stratification":
+        # the deck has no THERMIC / no met forcing, so nothing can remove heat
+        honesty += (
+            " The deck carries NO surface heat exchange: heat is CONSERVED, so a "
+            "falling surface temperature is the warm layer MIXING DOWNWARD, not "
+            "the lake cooling."
+        )
+    vlabel = wm.get("vertical_resolution_label")
+    if vlabel:
+        honesty += f" Vertical fidelity: {vlabel}."
+    if wm.get("n_clamped_nodes"):
+        honesty += (
+            f" {int(wm['n_clamped_nodes'])} grid nodes the DEM reports as land or "
+            "sub-threshold shallows were clamped wet for solver stability and read "
+            "NoData in these rasters."
+        )
 
     def _mk(uri, bbox, role, is_surface, node_mean):
         if signed:
@@ -2210,7 +2321,10 @@ def postprocess_telemac3d(
             mesh_resolution_label=(
                 f"{'real NOAA lake bathy' if utm_epsg is not None else 'idealized'} "
                 f"grid {wm.get('dx_m', target_ground_res_m):g} m x {wm.get('nplan', '?')} planes"
-                + (" (coarsened under node budget)" if wm.get("coarsened") else "")),
+                + (" (coarsened under node budget)" if wm.get("coarsened") else "")
+                # vertical resolution is a DECLARED fact alongside horizontal dx_m
+                + (f", near-surface layer {wm['vertical_dz_surface_m']:g} m"
+                   if wm.get("vertical_dz_surface_m") is not None else "")),
         )
 
     surface_layer = _mk(s_uri, s_bbox, "primary", True, s_mean)
@@ -2225,12 +2339,22 @@ def postprocess_telemac3d(
         "bottom_value_range": [b_min, b_max],
         "utm_epsg": utm_epsg,
         "surface_bbox": list(s_bbox),
+        "surface_valid_pixel_fraction": round(s_frac, 4),
+        "bottom_valid_pixel_fraction": round(b_frac, 4),
+        "vertical_dz_surface_m": wm.get("vertical_dz_surface_m"),
+        "vertical_dz_uniform_m": wm.get("vertical_dz_uniform_m"),
+        "mesh_transformation": wm.get("mesh_transformation"),
+        "mesh_stretching_coefficients": wm.get("mesh_stretching_coefficients"),
+        "thermocline_delta_m": wm.get("thermocline_delta_m"),
+        "n_clamped_nodes": wm.get("n_clamped_nodes"),
+        "column_heat_drift_frac": wm.get("column_heat_drift_frac"),
         "honesty_label": honesty,
     }
     logger.info(
         "postprocess_telemac3d run_id=%s mode=%s metric=%.4g surf=[%.3g,%.3g] "
-        "bot=[%.3g,%.3g] -> %s , %s",
-        run_id, flow_mode, metric, s_min, s_max, b_min, b_max, s_uri, b_uri,
+        "bot=[%.3g,%.3g] valid_px=%.1f%%/%.1f%% -> %s , %s",
+        run_id, flow_mode, metric, s_min, s_max, b_min, b_max,
+        100.0 * s_frac, 100.0 * b_frac, s_uri, b_uri,
     )
     return [surface_layer, bottom_layer], metrics
 
@@ -2347,13 +2471,15 @@ def postprocess_coastal(
         float(lon.max() + pad), float(lat.max() + pad),
     )
     shape = _grid_shape(bbox, target_ground_res_m)
-    clip_dist_deg = 2.0 * max(
-        (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
     try:
-        # only wet nodes carry a finite depth; wet_floor keeps the shallow rim.
-        grid = _rasterize_nodes_to_grid(
-            lon[finite], lat[finite], node_peak[finite], bbox, shape,
-            clip_dist_deg, wet_floor=TELEMAC_WSE_WET_DEPTH_M)
+        # barycentric over the coastal mesh's own elements (a ~250 m grid under a
+        # nearest-node halo published a dot lattice, not an inundation field).
+        # node_peak is passed UNFILTERED so the element table still indexes it:
+        # a never-wet node is NaN, and the interpolator drops the elements it
+        # touches - the dry rim is nodata, never an interpolated depth.
+        grid = _rasterize_mesh_to_grid(
+            lon, lat, mesh["ikle"], node_peak, bbox, shape,
+            wet_floor=TELEMAC_WSE_WET_DEPTH_M)
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
