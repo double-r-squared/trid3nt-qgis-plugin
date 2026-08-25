@@ -17,8 +17,9 @@ verdict.
 deliberate - docstrings and constraint comments are part of what a reader has
 to hold, and excluding them would let a wave "shrink" by deleting the
 explanation. Counts are PRODUCT `.py` only - never tests, never docs, never
-scripts. (Wave 2 also added `tests/test_workflow_skeleton.py`, 230 lines, not
-counted here by that rule.)
+scripts. (Wave 2 added `tests/test_workflow_skeleton.py`, 230 lines; wave 2b added
+179 more there plus 55 in `tests/test_telemac_do_sag.py`. None are counted here,
+by that rule.)
 
 The four surfaces every row splits into:
 
@@ -39,6 +40,11 @@ and both count. The check that catches an omission: `git diff --stat <baseline>
 
 ## Ledger
 
+A remediation wave touches a handful of files across a surface rather than
+rebuilding it, so the 2b rows report the TOUCHED files' before/after and do not
+continue the wave-2 surface totals. The DELTA and the running net are what carry
+across; the reconciliation check above is what proves nothing was dropped.
+
 | date | wave | surface | LOC before | LOC after | delta | running net |
 |---|---|---|---|---|---|---|
 | 2026-08-24 | 0 - baseline (ref `8304c289`) | lib skeleton (14 files) | 3944 | - | - | - |
@@ -50,12 +56,12 @@ and both count. The check that catches an omission: `git diff --stat <baseline>
 | 2026-08-24 | 2 - skeleton + cohort | shared steps (`shared/aoi.py`) | 0 | 68 | +68 | +988 |
 | 2026-08-24 | 2 - skeleton + cohort | cohort templates (`do_sag.py` 399->324, `river_dye.py` 698->530) | 1097 | 854 | -243 | +745 |
 | 2026-08-24 | 2 - skeleton + cohort | deleted outright (`do_sag/steps.py`) | 278 | 0 | -278 | +467 |
-| 2026-08-24 | 2 - CORRECTION (found by the wave-2 adversarial panel) | product lines the wave-2 rows missed: the `_normalize_callable_for_gemini` signature re-stamp (`adapters/gemini_compat.py` +12) and the four non-migrated templates' mechanical `Plan(...)` / chart-function adaptations (+8) | 0 | 20 | +20 | **+487** |
-| 2026-08-24 | 2b - panel remediation | lib skeleton (`workflow.py` +105 must-fill + coercion triage + provenance arity + explicit solve step, `params.py` +12 wire-type refusal, `slots.py` -3 corridor fields out, `plan.py` +4, `__init__.py` +6) | 1270 | 1394 | +124 | +611 |
-| 2026-08-24 | 2b - panel remediation | telemac facade + family steps (`workflow.py` +40 CorridorPolicy + required-coverage check, `reach.py` +37 MeshSizing + cap narration, `products.py` +21 mesh-override provenance, `deck.py` +9, `mesh_preview.py` +3) | 1867 | 1988 | +121 | +732 |
-| 2026-08-24 | 2b - panel remediation | shared steps (`shared/aoi.py` - required `code_prefix` + its rationale) | 68 | 74 | +6 | +738 |
-| 2026-08-24 | 2b - panel remediation | cohort templates (`do_sag.py` +7, `river_dye.py` -3 - the corridor slot costs a line and buys the placement) | 854 | 858 | +4 | +742 |
-| 2026-08-24 | 2b - panel remediation | fleet adaptations (3 orphaned `_STEPS` constants deleted) | 1209 | 1204 | -5 | **+737** |
+| 2026-08-24 | 2 - CORRECTION (found by the wave-2 adversarial panel) | product lines the wave-2 rows missed: the `_normalize_callable_for_gemini` signature re-stamp (`adapters/adapter.py` +12) and the four non-migrated templates' mechanical `Plan(...)` / chart-function adaptations (+8) | 0 | 20 | +20 | **+487** |
+| 2026-08-24 | 2b - panel remediation | lib skeleton (the 5 files touched, not the whole 16-file surface: `workflow.py` +106 must-fill + coercion triage + provenance arity + explicit solve step, `params.py` +15 wire-type refusal, `plan.py` +3, `__init__.py` +3, `slots.py` -1 corridor fields out) | 1270 | 1396 | +126 | +613 |
+| 2026-08-24 | 2b - panel remediation | telemac facade + family steps (the 5 files touched: `workflow.py` +58 CorridorPolicy + MeshHandle + required-coverage check, `reach.py` +30 MeshSizing + cap narration, `products.py` +21 mesh-override provenance, `deck.py` +9, `mesh_preview.py` +3) | 1867 | 1988 | +121 | +734 |
+| 2026-08-24 | 2b - panel remediation | shared steps (`shared/aoi.py` - required `code_prefix` + its rationale) | 68 | 74 | +6 | +740 |
+| 2026-08-24 | 2b - panel remediation | cohort templates (`do_sag.py` +5, `river_dye.py` +5 - the corridor slot and the mesh provenance row each cost a line and buy the placement and the honesty) | 854 | 864 | +10 | +750 |
+| 2026-08-24 | 2b - panel remediation | fleet adaptations (3 orphaned `_STEPS` constants deleted) | 1209 | 1204 | -5 | **+745** |
 
 **Wave 2 verdict (corrected): net +487 - invested in the skeleton, not yet
 repaid; watch.** The +467 first published here undercounted by 20 product lines
@@ -63,7 +69,7 @@ the wave landed outside the five surfaces the rows enumerate. The verdict itself
 does not change - the sign, the magnitude and the "not yet repaid" reading all
 stand - but the number the next wave is measured against is +487, not +467.
 
-**Wave 2b verdict: net +737 - the remediation is pure COST, and that is
+**Wave 2b verdict: net +745 - the remediation is pure COST, and that is
 correct.** Every line of it is a refusal, a narration or a placement move: the
 must-fill facade check, the both-directions signature check, the coercion triage,
 the wire-type refusal, the width-cap provenance note. None of it absorbs template
