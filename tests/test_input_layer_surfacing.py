@@ -637,7 +637,7 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "telemac/steps/mesh_preview.py": (1, "the approve-mesh wireframe preview"),
     "telemac/steps/open_water.py": (1, "in-worker bed COG surfacing, shared by every open-water TELEMAC domain"),
     "telemac/steps/products.py": (4, "deposition + oil-slick + DO-field results + in-worker bed COG"),
-    "telemac/stratified_flow/stratified_flow.py": (1, "in-worker telemac3d bottom COG"),
+    "telemac/steps/stratified.py": (1, "the TELEMAC-3D BOTTOM companion layer - the surface layer rides the dispatch seam, so only its pair-mate is emitted here"),
 }
 
 # The ONE bespoke input-surfacing helper that survives: it rides an IN-WORKER bed

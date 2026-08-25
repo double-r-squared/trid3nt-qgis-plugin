@@ -42,11 +42,13 @@ from trid3nt_server.workflows.telemac.steps import (
     ReachSeed,
     Solve,
     SolveOpenWater,
+    Stratified,
     Wave,
     WriteDeck,
     write_agitation_deck,
     write_coastal_deck,
     write_reach_deck,
+    write_stratified_deck,
     write_wave_deck,
 )
 
@@ -109,6 +111,10 @@ def _read_agitation(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Agitation.products(deck=Ref("deck"), solve=solve).named("agitation")
 
 
+def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
+    return Stratified.products(deck=Ref("deck"), solve=solve).named("column")
+
+
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
 
@@ -136,6 +142,9 @@ _PROCESSES: dict[str, _Process] = {
     "harbor_agitation": _Process(
         domain_kw="aoi", deck=Agitation.deck, writer=write_agitation_deck,
         solve=_open_water_solve, read=_read_agitation, forcing_fields={}),
+    "stratified_3d": _Process(
+        domain_kw="aoi", deck=Stratified.deck, writer=write_stratified_deck,
+        solve=_open_water_solve, read=_read_stratified, forcing_fields={}),
 }
 
 #: The universal SIZING ask, translated into the deck fields a TELEMAC writer

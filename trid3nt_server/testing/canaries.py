@@ -134,6 +134,31 @@ CANARIES: dict[str, LiveRun] = {
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),
+    # A CALM Lake Superior column: warm over cold, no wind, so the thermocline
+    # persists. That is the half of the calm-vs-windy pair whose answer is a
+    # NUMBER (the surviving top-to-bottom temperature difference), which is what
+    # a parity canary needs.
+    "telemac3d_stratified_flow": LiveRun(
+        tool="telemac3d_stratified_flow",
+        args={
+            "bbox": _SUPERIOR_BBOX,
+            "flow_mode": "stratification",
+            "wind_speed_mps": 0.0,
+            "wind_direction_deg": 270.0,
+            "warm_temp_c": 25.0,
+            "cold_temp_c": 15.0,
+            "thermocline_depth_m": 8.0,
+            "nplan": 13,
+            "target_resolution_m": 3000.0,
+            "sim_duration_hours": 1.0,
+            "bathy_source": "noaa_greatlakes",
+            "compute_class": "medium",
+            "input_mode": "user_gated",
+        },
+        case_title="canary: telemac3d stratified flow (Lake Superior, coarse)",
+        answers=GateAnswers(confirm="proceed"),
+        cleanup_case=True,
+    ),
 }
 
 

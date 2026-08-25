@@ -64,6 +64,11 @@ from .reach import (
     suggest_time_step_s,
 )
 from .solve import Solve, compute_class, read_run_metrics, solve_reach
+from .stratified import (
+    Stratified,
+    publish_stratified_products,
+    write_stratified_deck,
+)
 from .substance import (
     GRADATION_PRESETS,
     SCOUR_KEYWORDS,
@@ -86,7 +91,7 @@ __all__ = [
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
     "MESH_NODE_CAP", "OpenWaterError", "Products", "ReachSeed",
     "ReviewResolvedInputs",
-    "SCOUR_KEYWORDS", "Solve", "SolveOpenWater",
+    "SCOUR_KEYWORDS", "Solve", "SolveOpenWater", "Stratified",
     "download_open_water_result", "publish_coastal_products", "publish_peak_layer",
     "solve_open_water", "stage_open_water_manifest", "surface_in_worker_bed_input",
     "Wave", "write_coastal_deck",
@@ -106,7 +111,9 @@ __all__ = [
     "substance_class",
     "suggest_mesh_size_m", "suggest_time_step_s", "upstream_do_mgl",
     "fetch_osm_breakwaters", "publish_agitation_products",
+    "publish_stratified_products",
     "publish_wave_products", "waqtel_o2_process", "write_agitation_deck",
+    "write_stratified_deck",
     "write_reach_deck",
     "write_wave_deck",
 ]

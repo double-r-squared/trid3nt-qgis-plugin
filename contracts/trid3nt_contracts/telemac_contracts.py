@@ -448,6 +448,13 @@ class Telemac3dLayerURI(LayerURI):
             (m/s, >= 0).
         mesh_size_m: OPTIONAL horizontal grid node spacing (m, > 0).
         mesh_resolution_label: OPTIONAL human label for the resolution choice.
+        profile_sigma / profile_values / profile_values_initial: OPTIONAL the
+            VERTICAL profile the worker measured - sigma (0 = bed, 1 = surface)
+            against the field value, final and initial, paired index-for-index.
+            This is the 3D answer in the only form that shows it: what the column
+            looked like when the run started and what survived. The chart plots
+            it rather than resampling the surface map, which carries no depth at
+            all.
 
     ``layer_type`` is ``"raster"`` (the surface-field COG); the full-column
     evolution plays from the TELEMAC-3D result SELAFIN mesh sibling that
@@ -456,6 +463,9 @@ class Telemac3dLayerURI(LayerURI):
     """
 
     stratification_metric: float = Field(ge=0.0)
+    profile_sigma: list[float] | None = Field(default=None)
+    profile_values: list[float] | None = Field(default=None)
+    profile_values_initial: list[float] | None = Field(default=None)
     flow_mode: str | None = Field(default=None)
     variable_label: str | None = Field(default=None)
     variable_units: str | None = Field(default=None)

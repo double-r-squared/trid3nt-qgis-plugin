@@ -1950,12 +1950,18 @@ _LOCAL_FRAME_EPSG: int = 3857
 # --------------------------------------------------------------------------- #
 def _rasterize_t3d_field(
     slf_path, *, run_id, utm_epsg, dest_filename, dst_suffix, log_label,
-    runs_bucket, target_ground_res_m,
+    runs_bucket, target_ground_res_m, domain_bbox=None,
 ):
     """Read a single-frame re-emitted 2D SELAFIN (surface OR bottom layer),
     rasterize its one field to a 4326 (or local-frame placeholder) COG, upload it,
     and return ``(uri, bbox, node_min, node_max, node_mean)``. NO value masking
-    (temperature / velocity can be negative and valid) -- only NaN-clipped."""
+    (temperature / velocity can be negative and valid) -- only NaN-clipped.
+
+    ``domain_bbox`` is the 4326 AOI the real-lake grid was built over. The 3D build
+    lays its mesh with node 0 at that AOI's SW corner, so the re-emitted layer
+    SELAFINs carry LOCAL metres; without the corner they reproject as ABSOLUTE UTM
+    and both COGs land at the zone's false origin, thousands of km from the lake.
+    The idealized basin records no bbox and has no corner to add."""
     import numpy as np
 
     slf = Path(slf_path)
@@ -1998,8 +2004,9 @@ def _rasterize_t3d_field(
         # real-bathy path: reproject the mesh nodes UTM -> 4326 here and write the
         # COG directly in 4326 (already-4326 direct path, guard on).
         from pyproj import Transformer
+        x_org, y_org = _local_mesh_origin(domain_bbox, int(utm_epsg))
         back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
-        lon, lat = back.transform(x, y)
+        lon, lat = back.transform(x + x_org, y + y_org)
         lon = np.asarray(lon)
         lat = np.asarray(lat)
         src_crs = "EPSG:4326"
@@ -2115,12 +2122,12 @@ def postprocess_telemac3d(
         surface_slf_path, run_id=run_id, utm_epsg=utm_epsg,
         dest_filename="telemac3d_surface.tif", dst_suffix="_t3d_surface.tif",
         log_label="TELEMAC-3D surface COG", runs_bucket=runs_bucket,
-        target_ground_res_m=target_ground_res_m)
+        target_ground_res_m=target_ground_res_m, domain_bbox=wm.get("bbox"))
     b_uri, b_bbox, b_min, b_max, b_mean = _rasterize_t3d_field(
         bottom_slf_path, run_id=run_id, utm_epsg=utm_epsg,
         dest_filename="telemac3d_bottom.tif", dst_suffix="_t3d_bottom.tif",
         log_label="TELEMAC-3D bottom COG", runs_bucket=runs_bucket,
-        target_ground_res_m=target_ground_res_m)
+        target_ground_res_m=target_ground_res_m, domain_bbox=wm.get("bbox"))
 
     # shared diverging/continuous legend over the combined surface+bottom range so
     # the two layers read on ONE ramp (the surface-vs-bottom contrast is the point).
