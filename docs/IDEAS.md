@@ -883,3 +883,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   is the frozen interface; strategies/writers evolve behind it. TELEMAC
   campaign folds the private corridor mesher into the shared front as a
   generation strategy; private ladder dies (ledger).
+
+- SKELETON HARDENING METHODOLOGY (NATE 2026-08-24, mid-launch): INSIDE-OUT,
+  SMALL COHORT FIRST. Wave 2 builds Workflow + TelemacWorkflow and migrates
+  ONLY do_sag + river_dye; iterate in short loops against NATE's taste
+  until it meets his expectations, THEN the fleet migrates. During
+  hardening the un-migrated fleet has NO operability/testability
+  obligation - it may go dark; its tests may sit red/skipped on a TRACKED
+  list; broken-by-hardening templates are fixed by their own migration
+  wave, never chased mid-iteration. Gates during hardening = cohort
+  canary + library/core tests + NATE redline checkpoints; the full-suite
+  baseline re-binds at fleet-migration completion. Rationale: converge
+  the skeleton quickly on a few real workflows instead of dragging 30
+  templates through every revision.
