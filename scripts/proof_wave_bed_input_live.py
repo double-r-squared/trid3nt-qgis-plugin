@@ -26,8 +26,13 @@ import rasterio
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render_fidelity_proof_generic import download_s3  # noqa: E402
 
+import trid3nt_server.tools as _bootstrap  # noqa: F401,E402 -- init the tool registry first
 from trid3nt_contracts import new_ulid  # noqa: E402
-from trid3nt_server.emission.pipeline_emitter import PipelineEmitter  # noqa: E402
+from trid3nt_server.emission.pipeline_emitter import (  # noqa: E402
+    _CURRENT_EMITTER,
+    PipelineEmitter,
+)
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
 
 
 async def _capture_sink(text: str) -> None:
@@ -51,16 +56,21 @@ def _bounds_inside(uri: str, aoi: tuple, pad: float = 0.05) -> tuple:
 
 
 async def _drive_tomawac() -> int:
-    from trid3nt_server.workflows.telemac.wave_field.wave_field import (
-        model_tomawac_wave_field,
-    )
+    fn = TOOL_REGISTRY["tomawac_wave_field"].fn
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_capture_sink)
-    out = await model_tomawac_wave_field(
-        location="Marquette, Michigan", bbox=None, wave_mode="fetch_growth",
-        wind_speed_mps=18.0, wind_direction_deg=300.0, boundary_hs_m=1.5,
-        boundary_period_s=10.0, current_speed_mps=0.0, bottom_friction=None,
-        target_resolution_m=None, sim_duration_hours=3.0,
-        bathy_source="noaa_greatlakes", pipeline_emitter=emitter)
+    token = _CURRENT_EMITTER.set(emitter)
+    try:
+        out = await fn(
+            location="Marquette, Michigan", bbox=None, wave_mode="fetch_growth",
+            wind_speed_mps=18.0, wind_direction_deg=300.0, boundary_hs_m=1.5,
+            boundary_period_s=10.0, current_speed_mps=0.0, bottom_friction=None,
+            target_resolution_m=None, sim_duration_hours=3.0,
+            bathy_source="noaa_greatlakes")
+    finally:
+        _CURRENT_EMITTER.reset(token)
+    if isinstance(out, dict):
+        print("[tomawac] ERROR:", out)
+        return 1
     print("[tomawac] result uri:", out.uri, "hs_max:", getattr(out, "hs_max_m", None))
     rows = _bed_rows(emitter)
     assert rows, "tomawac surfaced NO lake-bed input row"
@@ -79,16 +89,21 @@ async def _drive_tomawac() -> int:
 
 
 async def _drive_artemis() -> int:
-    from trid3nt_server.workflows.telemac.agitation.agitation import (
-        model_artemis_harbor_agitation,
-    )
+    fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_capture_sink)
     aoi = (-87.392, 46.528, -87.368, 46.55)
-    out = await model_artemis_harbor_agitation(
-        location="Marquette, Michigan", bbox=aoi, wave_mode="diffraction",
-        wave_period_s=8.0, wave_direction_deg=129.2, wave_height_m=2.0,
-        reflection_coef=0.5, breakwater=None, target_resolution_m=30.0,
-        bathy_source="noaa_greatlakes", pipeline_emitter=emitter)
+    token = _CURRENT_EMITTER.set(emitter)
+    try:
+        out = await fn(
+            location=None, bbox=aoi, wave_mode="diffraction",
+            wave_period_s=8.0, wave_direction_deg=129.2, wave_height_m=2.0,
+            reflection_coef=0.5, breakwater=None, target_resolution_m=30.0,
+            bathy_source="noaa_greatlakes")
+    finally:
+        _CURRENT_EMITTER.reset(token)
+    if isinstance(out, dict):
+        print("[artemis] ERROR:", out)
+        return 1
     print("[artemis] result uri:", out.uri, "kd_max:", getattr(out, "kd_max", None))
     rows = _bed_rows(emitter)
     assert rows, "artemis surfaced NO lake-bed input row"

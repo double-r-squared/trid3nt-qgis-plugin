@@ -85,8 +85,8 @@ returned FIRMS layer with geopandas, pool `(geom.x, geom.y)` for each point, the
 
 AOI precedence (highest wins): explicit user bbox / canvas AOI > FIRMS densest
 hotspot > WFIGS incident bbox (`fetch_wfigs_incident`) > geocoded place. Then run
-Recipe A over the chosen AOI and overlay FIRMS + `fetch_nifc_perimeters` (or the
-active-fire perimeter fetcher) as context layers.
+Recipe A over the chosen AOI and overlay FIRMS + `fetch_nifc_fire_perimeters`
+(or the active-fire perimeter fetcher) as context layers.
 
 ## Recipe C -- news-event ingest for review (replaces run_model_news_event_ingest)
 
@@ -94,28 +94,67 @@ The review-gated ingest is a conversational loop, not tool plumbing: the agent
 fetches sources, derives params, narrates them, and waits for the user's go
 before dispatching any solver (Invariant 9 across turns).
 
+`aggregate_claims_across_sources` -- the library this recipe used to call into
+the playground -- was DELETED (its stated consumer, `model_groundwater`, was
+never built; see the deletion commit and `docs/DELETION_LEDGER.md`, "cleanup
+wave phase 1"). Per the analysis-is-playground norm, cross-source claim
+reconciliation is straight-line code over the fetched text, not a bespoke
+library import -- the model composes it inline in `code_exec_request`, the
+same way Recipe B composes `densest_hotspot_bbox` inline.
+
 1. Per source, dispatch by type: `web_fetch(url, extract="main_text")` for
    article URLs; `fetch_nws_event(area)` for an NWS state/county; and
    `fetch_storm_events_db(year, state)` for a Storm-Events entry. Extract the
    text for each (title + body for URLs; layer name for the structured sources).
 2. Reconcile the fetched texts into best-supported claims IN THE PLAYGROUND
-   (`code_exec_request`): `aggregate_claims_across_sources` is now an importable
-   LIBRARY (deregistered as an LLM tool in the processing-wave cull -- see
-   docs/decisions/0043), so call it from the sandbox:
-   `from trid3nt_server.agent.tools.processing.aggregate_claims_across_sources.aggregate_claims_across_sources import aggregate_claims_across_sources`
-   then `aggregate_claims_across_sources(sources=[{"url","text","fetched_at"}, ...],
-   claim_targets=["location","date","scale","contaminant","casualties"])` ->
-   best-supported value per target with source-agreement confidence + provenance.
-   (Its private `_extract_contaminants` / `_extract_locations` / `_extract_scale`
-   helpers are also directly importable for single-target extraction.)
+   (`code_exec_request`) with a short inline reconciliation pass: for each
+   `claim_target` (e.g. `"location"`, `"date"`, `"scale"`, `"contaminant"`,
+   `"casualties"`), pull a keyword-window candidate value out of each source's
+   text, then keep the value the most sources agree on (ties broken by the
+   earliest `fetched_at`) as the consensus value, with `confidence =
+   agreeing_sources / total_sources` and the per-source values kept as
+   provenance:
+
+   ```python
+   import re
+   from collections import Counter
+
+   def reconcile_claims(sources, claim_targets):
+       """sources: [{"url","text","fetched_at"}, ...] -> {target: {value,
+       confidence, provenance}}. A source with no match for a target is
+       simply absent from that target's votes -- no source is forced to vote."""
+       out = {}
+       for target in claim_targets:
+           votes, provenance = [], []
+           for src in sources:
+               m = re.search(rf"{target}\s*[:\-]?\s*([A-Za-z0-9 ,.\-]{{2,60}})",
+                              src["text"], re.IGNORECASE)
+               if m:
+                   value = m.group(1).strip().rstrip(".")
+                   votes.append(value)
+                   provenance.append({"url": src["url"], "value": value,
+                                       "fetched_at": src.get("fetched_at")})
+           if not votes:
+               out[target] = None
+               continue
+           best, n = Counter(votes).most_common(1)[0]
+           out[target] = {"value": best, "confidence": n / len(sources),
+                          "provenance": provenance}
+       return out
+   ```
+
+   This is a deliberately plain default matcher (a labeled `- : <value>`
+   window) -- tighten the regex per `claim_target` when a source's phrasing
+   needs it; the shape of the result (value + agreement confidence +
+   per-source provenance) is what step 4 narrates, not the extraction method.
 3. `geocode_location(derived_location_value)` -> bbox for the review card.
 4. Narrate the derived params + provenance + confidence and STOP; only after the
    user approves does a downstream solver (e.g. the `run_modflow` door) run.
 
-Live replication (2026-07-29) fired exactly
-`web_fetch` + `fetch_nws_event` + `fetch_storm_events_db` -> `code_exec_request`
-(importing the `aggregate_claims_across_sources` library) -> `geocode_location`
-and produced the same derived-param + geocoded-bbox envelope.
+Fired-tool set for this recipe: `web_fetch` + `fetch_nws_event` +
+`fetch_storm_events_db` -> `code_exec_request` (the inline reconciliation
+above) -> `geocode_location`, producing the same derived-param +
+geocoded-bbox envelope the composer once did.
 
 ## Recipe D -- GLM lightning animation (replaces run_model_glm_lightning_animation)
 

@@ -31,7 +31,7 @@ TWO modes:
   BY THIS SCRIPT'S OWN AUTOMATION -- running it live is NATE's call.
 
 Runs created by this harness are Claude-driver junk cases: every
-``run_model_flood_scenario`` call is tagged with ``session_id``/``project_id``
+``sfincs_flood`` call is tagged with ``session_id``/``project_id``
 prefixed ``l2-smoke-`` (smoke) / ``l2-live-`` (live) so they are recognizable
 and safe to clean up later.
 
@@ -415,12 +415,12 @@ MINTED_RUN_IDS: list[str] = []
 async def run_baseline(rain_mm: float, tag: str) -> Any:
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    fn = TOOL_REGISTRY["run_model_flood_scenario"].fn
+    fn = TOOL_REGISTRY["sfincs_flood"].fn
     with tempfile.TemporaryDirectory(prefix="l2_smoke_forcing_") as tmp:
         raster_path = Path(tmp) / f"{tag}.tif"
         make_constant_precip_raster(raster_path, CHATTANOOGA_BBOX, rain_mm)
         log.info(
-            "run_model_flood_scenario bbox=%s duration_hr=%s compute_class=%s "
+            "sfincs_flood bbox=%s duration_hr=%s compute_class=%s "
             "forcing_raster_uri=%s (constant %.1f mm, ZERO network) tag=%s",
             CHATTANOOGA_BBOX, DURATION_HR, COMPUTE_CLASS, raster_path, rain_mm, tag,
         )
@@ -439,7 +439,7 @@ async def run_baseline(rain_mm: float, tag: str) -> Any:
 
 
 def _is_failed_envelope(result: Any) -> bool:
-    # run_model_flood_scenario's layer-emission contract: a LayerURI on
+    # sfincs_flood's layer-emission contract: a LayerURI on
     # success, an AssessmentEnvelope.model_dump() dict (no top-level
     # error_code key -- the code is threaded into
     # flood.metrics.solver_version / workflow_name) on failure. ANY dict
@@ -632,7 +632,7 @@ async def main_smoke() -> int:
                 )
             else:
                 child_run_id = handle.run_id
-                from trid3nt_server.workflows.sfincs.postprocess_flood import postprocess_flood
+                from trid3nt_server.workflows.sfincs.postprocess_sfincs import postprocess_flood
 
                 layers, _metrics = postprocess_flood(child_result.output_uri, run_id=child_run_id)
                 child_peak_uri = layers[0].uri
@@ -1072,7 +1072,7 @@ def build_observed_forcing(
 
     def _divisor_fields(mean_total_mm: float, represented_hours: int) -> dict[str, Any]:
         """Preview netamt divides by the ACTUAL hours the summed rasters
-        represent; the REAL solver call (run_model_flood_scenario ->
+        represent; the REAL solver call (sfincs_flood ->
         compute_precip_area_mean_mm_per_hr) divides the area-mean by
         --duration-hr. Both are reported so a represented!=duration mismatch is
         visible, never silently double-accounted."""
@@ -1307,7 +1307,7 @@ async def main_live(args: argparse.Namespace) -> int:
     # free-text tag there fails validation AFTER the solve completes. No
     # free-text case tag at this call site; recognizability comes from the
     # run_id(s) this prints, same as smoke mode.
-    run_flood = TOOL_REGISTRY["run_model_flood_scenario"].fn
+    run_flood = TOOL_REGISTRY["sfincs_flood"].fn
 
     # --- Step 1: forcing construction (OBSERVED default; DESIGN fallback). ---
     if args.forcing == "observed":
@@ -1415,7 +1415,7 @@ async def main_live(args: argparse.Namespace) -> int:
     if child_result.status != "complete":
         record("live-8-rerun-child", False, f"status={child_result.status} error={child_result.error_message}")
     else:
-        from trid3nt_server.workflows.sfincs.postprocess_flood import postprocess_flood
+        from trid3nt_server.workflows.sfincs.postprocess_sfincs import postprocess_flood
 
         layers, _m = postprocess_flood(child_result.output_uri, run_id=handle.run_id)
         paired_held_after = step_pairing(layers[0].uri, held_path)
