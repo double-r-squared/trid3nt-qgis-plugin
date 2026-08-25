@@ -43,7 +43,7 @@ from .open_water import (
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.wave")
 
 __all__ = ["GREAT_LAKES", "Wave", "great_lake_for", "publish_wave_products",
-           "write_wave_deck"]
+           "real_lake_bathy_label", "write_wave_deck"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
@@ -74,6 +74,18 @@ GREAT_LAKES: dict[str, tuple[float, float, float, float]] = {
 #: because a lake is large; both are self-labeled on the layer.
 _DEFAULT_REAL_RES_M = 2000.0
 _DEFAULT_IDEALIZED_RES_M = 1500.0
+
+
+def real_lake_bathy_label(lake: str | None) -> str:
+    """What the REAL Great Lakes bed IS, said once.
+
+    All three lake-capable open-water templates sample the same NOAA lake-datum
+    grid, so all three said this same sentence in their own words. The IDEALIZED
+    half of each label stays with its module: an analytic seiche basin, a
+    Berkhoff shoal and a lock-exchange channel are different physics and deserve
+    different sentences.
+    """
+    return f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
 
 
 def great_lake_for(lon: float, lat: float) -> str | None:
@@ -155,7 +167,7 @@ async def write_wave_deck(
         "real_bathymetry": real,
         "lake": lake,
         "bathy_label": (
-            f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})" if real
+            real_lake_bathy_label(lake) if real
             else "idealized basin (no real bathymetry fetched for this AOI; "
                  "geography-free verification physics)"),
         "bottom_friction": friction,

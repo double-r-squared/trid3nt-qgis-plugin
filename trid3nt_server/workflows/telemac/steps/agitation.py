@@ -44,7 +44,7 @@ from .open_water import (
     solved_domain_bbox,
     surface_in_worker_bed_input,
 )
-from .wave import great_lake_for
+from .wave import great_lake_for, real_lake_bathy_label
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.agitation")
 
@@ -248,7 +248,7 @@ def _coerce_segment(value: Any) -> tuple[float, float, float, float] | None:
 
 def _bathy_label(real: bool, wave_mode: str, lake: str | None) -> str:
     if real:
-        return f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
+        return real_lake_bathy_label(lake)
     if wave_mode == "resonance":
         return ("idealized narrow-mouth harbour basin (analytic seiche ladder; no "
                 "real harbour outline fetched)")

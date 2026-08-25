@@ -36,7 +36,7 @@ from .open_water import (
     download_open_water_result,
     mesh_sizing_provenance,
 )
-from .wave import great_lake_for
+from .wave import great_lake_for, real_lake_bathy_label
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.stratified")
 
@@ -140,7 +140,7 @@ async def write_stratified_deck(
 
 def _bathy_label(real: bool, flow_mode: str, lake: str | None) -> str:
     if real:
-        return f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
+        return real_lake_bathy_label(lake)
     if flow_mode == "salt_wedge":
         return ("idealized lock-exchange channel (analytic Benjamin gravity-current "
                 "V&V; no real estuary bathymetry)")
