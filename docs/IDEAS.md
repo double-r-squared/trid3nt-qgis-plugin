@@ -914,3 +914,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   may live in sibling files within the template's own folder. Charts
   stay colocated in the file (meaning, not plumbing). Apply as the norm
   at fleet migration; no immediate cohort churn required.
+
+- CONSTANT-DOOR WIRE ENFORCEMENT (NATE 2026-08-24, ruling b): CONSTANT-door
+  params DROP OFF the model-facing wire entirely - the factory excludes
+  them from the synthesized tool signature; they remain form-editable
+  surfaces for the user (user_lever-style). The door becomes a binding
+  authority contract, not documentation. A param that deserves model
+  access gets deliberately re-doored (one-line template edit) - e.g.
+  sim_duration_s per-template where warranted. Implement in the next
+  cohort-hardening batch alongside the remaining redline rulings.
