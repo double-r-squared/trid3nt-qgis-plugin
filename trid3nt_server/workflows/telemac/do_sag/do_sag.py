@@ -110,6 +110,9 @@ PARAMS: tuple[Param, ...] = (
           consequence="scenario",
           desc="Bank geometry source: nhd_area (real polygons, else a typed refusal) "
                "| constant_ribbon (assumed width)"),
+    Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
+          units="min", consequence="numerical",
+          desc="Result-writing cadence; unset keeps the deck's own graphic period"),
     Param("discharge_m3s", door=doors.USER, optional=True, units="m^3/s",
           bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
           desc="Steady carrier discharge; unset resolves from the NOAA National "
@@ -143,7 +146,8 @@ def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the 
     """The DO-sag recipe. Pure: constructs the plan value, executes nothing."""
     physics = Physics("waqtel_o2", do_sag_config=Ref("waqtel"),
                       reach_seed_coords=p.outfall_coords,
-                      sim_duration_s=p.sim_duration_s)
+                      sim_duration_s=p.sim_duration_s,
+                      output_interval_min=p.output_interval_min)
     forcing = Forcing(carrier=Ref("reviewed_discharge"))
     mesh = ops.build_mesh(
         Ref("reach"),

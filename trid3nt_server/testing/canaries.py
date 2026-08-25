@@ -262,7 +262,15 @@ CANARIES.update({
             "do_standard_mgl": 5.0, "k1_per_day": 0.3, "k2_per_day": 0.9,
             "reach_length_km": 0.5, "sim_duration_s": 600.0,
             "mesh_resolution": "coarse", "mesh_resolution_m": 10.0,
-            "discharge_m3s": 60.0, "input_mode": "auto",
+            "discharge_m3s": 60.0,
+            # 30 frames over the 600 s window instead of the worker default's 6,
+            # for the same reason the dye run asks for them: a sag that develops
+            # and settles inside six frames cannot be spot-checked against. The
+            # cadence is the SOLVER's output interval, so the run produces more
+            # of its own answer rather than the renderer interpolating between
+            # fewer.
+            "output_interval_min": 0.333,
+            "input_mode": "auto",
         },
         case_title="refined: telemac do sag (Eel River near Scotia, 10 m)",
         answers=GateAnswers(confirm="proceed"), cleanup_case=True),

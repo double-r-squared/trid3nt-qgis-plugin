@@ -55,6 +55,22 @@ current canary reports `datum_offset_m: -0.232` and `sl_peak_m: 2.613` (NAVD 88)
 against the pre-fix `2.845` (MLLW); a render whose metrics show a zero offset is
 a pre-fix artifact and is kept as history, not as the current answer.
 
+### The do-sag lever gap is closed - both cohort animations now run at 0.333 min
+
+The 2026-08-25 river-dye pass recorded that `telemac_do_sag` could not be made
+denser because its `PARAMS` declared no `output_interval_min`, though the deck
+writer it calls has accepted one all along. That gap is now closed by the
+declaration alone: `do_sag.py` gains the `Param` (bounds 0.1-1440 min, USER
+door) and passes it into its `Physics("waqtel_o2", ...)` slot, which the
+skeleton folds into the same `write_reach_deck(output_interval_min=...)`
+keyword river-dye already used. No step, facade, worker or deck-writer code
+changed - the workflow-only law held.
+
+The refined do-sag canary consequently went from 7 frames to 31 over the same
+600 s window. `refined_animation_frame_evolution.json` is the check that the
+extra frames are worth their bytes: every consecutive pair of frames differs,
+in both cohort GIFs, so the cadence bought new field data rather than repeats.
+
 ### Known open defect: the coastal chart renders blank
 
 `coastal_tidal_surge_chart_coastal_stage_vs_inundation.png` and its `_refined`
