@@ -40,6 +40,7 @@ from trid3nt_server.emission.pipeline_emitter import (
 _PUBLISH_LAYER_TARGET = (
     "trid3nt_server.tools.publish_layer.publish_layer.publish_layer"
 )
+_COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
 
 
 class _Sink:
@@ -135,7 +136,8 @@ async def test_raster_input_surfaced_via_worker_thread(monkeypatch):
         return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
 
     try:
-        with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+        with patch(_COG_EXISTS_TARGET, return_value=True), \
+             patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
             # route() runs the fetch (and this hook) inside asyncio.to_thread.
             await asyncio.to_thread(
                 maybe_emit_input_on_fetch,
@@ -262,7 +264,8 @@ async def test_dedup_by_uri_within_session(monkeypatch):
         return layer_uri
 
     try:
-        with patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
+        with patch(_COG_EXISTS_TARGET, return_value=True), \
+             patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
             await asyncio.to_thread(
                 maybe_emit_input_on_fetch, _spec(), {}, _raster_layer(),
                 visualize=None, purpose=None,
