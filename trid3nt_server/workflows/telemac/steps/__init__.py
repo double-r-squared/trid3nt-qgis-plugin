@@ -73,6 +73,7 @@ from .water_quality import (
     upstream_do_mgl,
     waqtel_o2_process,
 )
+from .wave import Wave, publish_wave_products, write_wave_deck
 
 __all__ = [
     "CarrierDischarge", "Coastal",
@@ -82,7 +83,7 @@ __all__ = [
     "SCOUR_KEYWORDS", "Solve", "SolveOpenWater",
     "download_open_water_result", "publish_coastal_products", "publish_peak_layer",
     "solve_open_water", "stage_open_water_manifest", "surface_in_worker_bed_input",
-    "write_coastal_deck",
+    "Wave", "write_coastal_deck",
     "TelemacBanksUnavailableError", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
     "TelemacReleasePointRejectedError", "WaqtelO2", "WriteDeck",
@@ -98,5 +99,6 @@ __all__ = [
     "sanitize_substance", "slug", "solve_reach", "stage_manifest",
     "substance_class",
     "suggest_mesh_size_m", "suggest_time_step_s", "upstream_do_mgl",
-    "waqtel_o2_process", "write_reach_deck",
+    "publish_wave_products", "waqtel_o2_process", "write_reach_deck",
+    "write_wave_deck",
 ]

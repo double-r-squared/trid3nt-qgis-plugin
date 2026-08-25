@@ -336,6 +336,12 @@ class TelemacWaveLayerURI(LayerURI):
             visible granularity lever.
         mesh_node_estimate: OPTIONAL node count for that resolution (>= 0).
         mesh_resolution_label: OPTIONAL human label for the resolution choice.
+        fetch_curve_km / fetch_curve_hs_m: OPTIONAL the ALONG-FETCH growth curve
+            the worker measured -- downwind distance (km) against Hs (m), the two
+            arrays paired index-for-index. This is the run's own record of the
+            growth the fetch produced; the chart plots it rather than resampling
+            the raster, which is what keeps the chart and the narrated numbers the
+            SAME measurement.
 
     ``layer_type`` is ``"raster"`` (the Hs COG); the time evolution plays from the
     TOMAWAC result SELAFIN mesh sibling that ``export_case_to_qgis`` discovers via
@@ -352,6 +358,8 @@ class TelemacWaveLayerURI(LayerURI):
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_node_estimate: int | None = Field(default=None, ge=0)
     mesh_resolution_label: str | None = Field(default=None)
+    fetch_curve_km: list[float] | None = Field(default=None)
+    fetch_curve_hs_m: list[float] | None = Field(default=None)
 
 
 class ArtemisAgitationLayerURI(LayerURI):

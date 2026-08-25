@@ -985,3 +985,31 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   `pipeline-state` card instead (which BOTH lanes stamp honestly), so the
   gates are trustworthy; the card's own expander is still empty on a `!run`
   and wants the completion frame emitted from the shared dispatch seam.
+
+- 2026-08-25 TOMAWAC Hs COG WAS AT THE UTM FALSE ORIGIN (FIXED in the family
+  wave, recorded because the class is wider): the wave worker builds its grid
+  with node 0 at the AOI's SW corner and only offsets by that corner when it
+  SAMPLES the bed, so the result SELAFIN carried local metres - and
+  `postprocess_tomawac` reprojected them as ABSOLUTE UTM. Every Hs map this
+  template ever published landed near the equator (measured: the Lake Superior
+  canary's COG at lon -91.49..-90.81, lat -0.001..0.50) while the bed COG beside
+  it sat correctly on the lake. `postprocess_coastal` already recovered the
+  origin from its `domain_bbox`; `postprocess_tomawac` now does the same through
+  a shared `_local_mesh_origin` (and the idealized basin, which has no corner,
+  passes none). CHECK THE SAME SHAPE on artemis + telemac3d when those templates
+  migrate - both are the same worker family and neither postprocessor takes a
+  domain bbox today.
+
+- 2026-08-25 THE OPEN-WATER "FIELD" RASTERS ARE DOT LATTICES, not fields (queued
+  defect, visible in every proof sheet this wave produced): `postprocess_coastal`
+  and `postprocess_tomawac` rasterize the mesh nodes onto a grid sized by a fixed
+  `target_ground_res_m=30.0` and fill only within `clip_dist_deg = 2 output
+  cells` of a node. With a 250 m coastal grid - let alone a 3000 m wave grid -
+  that is ~60 m of fill around nodes kilometres apart, so the published "peak
+  inundation depth" and "significant wave height" layers are a lattice of
+  isolated pixels with nodata between them. The scalars are unaffected (they are
+  computed from the MESH, not the raster), which is why this has never shown up
+  in a number. Fix shape: size the output grid from the run's own `dx_m`
+  (something like `max(30, dx_m / 4)`) so the clip distance scales with the mesh
+  the run actually solved. NOT done in the migration wave: it changes the
+  published raster, and this wave's evidence is same-question-same-answer.

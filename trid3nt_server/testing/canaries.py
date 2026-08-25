@@ -50,6 +50,10 @@ _EVIDENCE_DIR = os.path.join(os.path.dirname(os.path.dirname(
 #: "the last few days" would report a quiet week as a physics regression.
 _COASTAL_BBOX = [-85.02, 29.69, -84.90, 29.80]
 
+#: Lake Superior open water off Marquette - inside the NOAA Great Lakes
+#: lake-datum bathymetry coverage, so the REAL-bed path is the one exercised.
+_SUPERIOR_BBOX = [-87.60, 46.70, -86.60, 47.20]
+
 CANARIES: dict[str, LiveRun] = {
     # The Michael surge coast at a coarse grid over a 6-hour window: wide enough
     # that the rising boundary actually floods low land (a canary whose answer is
@@ -81,6 +85,30 @@ CANARIES: dict[str, LiveRun] = {
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),
+    # Lake Superior open water at a coarse grid over the shortest storm the tool
+    # accepts. The REAL lake-datum bed, because that is the path a lake question
+    # takes; the prescribed storm wind is a labeled demo default and goes past the
+    # review card, which is why this runs user_gated too.
+    "tomawac_wave_field": LiveRun(
+        tool="tomawac_wave_field",
+        args={
+            "bbox": _SUPERIOR_BBOX,
+            "wave_mode": "fetch_growth",
+            "wind_speed_mps": 20.0,
+            "wind_direction_deg": 270.0,
+            "boundary_hs_m": 1.5,
+            "boundary_period_s": 10.0,
+            "current_speed_mps": -2.5,
+            "target_resolution_m": 3000.0,
+            "sim_duration_hours": 1.0,
+            "bathy_source": "noaa_greatlakes",
+            "compute_class": "medium",
+            "input_mode": "user_gated",
+        },
+        case_title="canary: tomawac wave field (Lake Superior, coarse)",
+        answers=GateAnswers(confirm="proceed"),
+        cleanup_case=True,
+    ),
 }
 
 
@@ -89,13 +117,23 @@ def evidence_path(name: str) -> str:
 
 
 def run(name: str, *, timeout_s: float | None = None) -> RunEvidence:
-    """Drive one declared canary over the live socket."""
+    """Drive one declared canary over the live socket, from the top every time.
+
+    ``restart_clean`` is the registry's, not each declaration's, because it is a
+    property of what a canary IS. A canary re-run after a code change must
+    exercise the code that changed; resume-from-failure would replay the PREVIOUS
+    attempt's deck out of the ledger - the same invocation key, the same params -
+    and report the old artifact as the new run's answer. That is a correct feature
+    doing exactly the wrong thing here, and it is the kind of green that costs an
+    afternoon.
+    """
     declared = CANARIES.get(name)
     if declared is None:
         raise KeyError(f"no canary named {name!r} (declared: {sorted(CANARIES)})")
+    overrides: dict[str, Any] = {"args": {**declared.args, "restart_clean": True}}
     if timeout_s is not None:
-        declared = LiveRun(**{**declared.__dict__, "timeout_s": timeout_s})
-    return run_live(declared)
+        overrides["timeout_s"] = timeout_s
+    return run_live(LiveRun(**{**declared.__dict__, **overrides}))
 
 
 def _answer(ev: RunEvidence) -> dict[str, Any]:

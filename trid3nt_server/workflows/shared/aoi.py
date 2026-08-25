@@ -117,7 +117,7 @@ def _geo_field(geo: Any, keys: tuple[str, ...]) -> float | None:
 
 async def acquire_aoi(*, location: str | None,
                       bbox: Any = None,
-                      half_deg: float = 0.06,
+                      half_deg: float | tuple[float, float] = 0.06,
                       default_name: str = "aoi",
                       code_prefix: str = "AOI") -> dict[str, Any]:
     """Resolve the modeled AOI: an explicit extent, or a geocoded place around one.
@@ -126,6 +126,11 @@ async def acquire_aoi(*, location: str | None,
     step reads the AOI implicitly instead of being handed one. An explicit bbox is
     used VERBATIM - it is the user's own extent and squaring it off around its
     centre would model a different place than the one drawn.
+
+    ``half_deg`` is one number for a square box or a ``(dlon, dlat)`` pair where
+    the question is not square - a lake fetch runs along the wind and a coastal
+    strip across the shore, and forcing both into a square would model a different
+    domain than the one asked about.
 
     ``default_name`` is what an AOI with no place name is called; it becomes the
     slug the worker manifest and the published layer names are keyed on, so it is
@@ -162,9 +167,11 @@ async def acquire_aoi(*, location: str | None,
             raise WireArgsError(
                 f"could not geocode {location!r} to an AOI.",
                 error_code=f"{code_prefix}_GEOCODE_FAILED")
-        h = float(half_deg)
-        extent = (round(lon - h, 4), round(lat - h, 4),
-                  round(lon + h, 4), round(lat + h, 4))
+        dlon, dlat = ((float(half_deg[0]), float(half_deg[1]))
+                      if isinstance(half_deg, (list, tuple))
+                      else (float(half_deg), float(half_deg)))
+        extent = (round(lon - dlon, 4), round(lat - dlat, 4),
+                  round(lon + dlon, 4), round(lat + dlat, 4))
         name = str(location).strip()
     else:
         raise WireArgsError(
@@ -174,7 +181,8 @@ async def acquire_aoi(*, location: str | None,
             "slug": aoi_slug(name, default=default_name), "bbox": extent}
 
 
-def AcquireAoi(*, location: Any, bbox: Any, half_deg: float = 0.06,  # noqa: N802
+def AcquireAoi(*, location: Any, bbox: Any,  # noqa: N802
+               half_deg: float | tuple[float, float] = 0.06,
                default_name: str = "aoi", code_prefix: str = "AOI") -> Step:
     """Place/extent -> the modeled AOI. Refines the domain for everything after it."""
     return Step(runner=f"{_SHARED}.acquire_aoi", stage="acquire",

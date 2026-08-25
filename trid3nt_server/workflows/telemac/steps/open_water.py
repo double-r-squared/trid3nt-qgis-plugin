@@ -58,14 +58,20 @@ class OpenWaterError(DeclarativeError):
 
 
 def stage_open_water_manifest(*, section: str, config: dict[str, Any],
-                              run_tag: str, outputs: list[str]) -> str:
+                              run_tag: str, outputs: list[str],
+                              prefix: str | None = None) -> str:
     """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
 
-    ``section`` is the key the worker's parser dispatches on (``coastal``,
-    ``wave``, ``agitation``, ``stratified``); the rest of the envelope -
-    ``run_id``, an empty ``inputs`` list because these pipelines self-fetch, an
-    empty ``telemac_args`` because the image CMD drives the entrypoint - is the
-    same for every one of them.
+    ``section`` is the key the worker's ENTRYPOINT dispatches on (``coastal``,
+    ``wave``, ``agitation``, ``stratified``). ``prefix`` is where the manifest is
+    STAGED, and it is not always the same word - the wave module answers to
+    ``wave`` inside the document while its manifests live under ``tomawac/``, and
+    the harbour module to ``agitation`` under ``artemis/``. Collapsing the two
+    into one name is how a manifest lands somewhere the worker looks and carries a
+    key it does not read, which is a silent fall-through to a different pipeline
+    rather than an error. The rest of the envelope - ``run_id``, an empty
+    ``inputs`` because these pipelines self-fetch, an empty ``telemac_args``
+    because the image CMD drives the entrypoint - is the same for all of them.
     """
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -76,7 +82,7 @@ def stage_open_water_manifest(*, section: str, config: dict[str, Any],
 
     manifest = {section: config, "run_id": run_tag, "inputs": [],
                 "telemac_args": [], "outputs": list(outputs)}
-    key = f"{section}/{run_tag}/manifest.json"
+    key = f"{prefix or section}/{run_tag}/manifest.json"
     _get_s3_client().put_object(
         Bucket=cache_bucket, Key=key,
         Body=json.dumps(manifest, indent=2).encode("utf-8"),
@@ -111,7 +117,7 @@ async def solve_open_water(*, deck: dict[str, Any],
     run_tag = deck["run_tag"]
     manifest_uri = await asyncio.to_thread(
         stage_open_water_manifest, section=section, config=deck["config"],
-        run_tag=run_tag, outputs=deck["outputs"])
+        run_tag=run_tag, outputs=deck["outputs"], prefix=deck.get("prefix"))
     logger.info("telemac %s staged manifest run_tag=%s name=%s -> %s",
                 section, run_tag, deck["config"].get("name"), manifest_uri)
 

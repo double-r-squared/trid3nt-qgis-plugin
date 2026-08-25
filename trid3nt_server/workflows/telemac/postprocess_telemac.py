@@ -1508,6 +1508,25 @@ def postprocess_telemac_do(
 _HS_WET_FLOOR: float = 1e-3
 
 
+def _local_mesh_origin(domain_bbox: Any, utm_epsg: int) -> tuple[float, float]:
+    """The UTM corner a LOCAL-coordinate mesh was built from; ``(0, 0)`` with no AOI.
+
+    The open-water TELEMAC builds lay their grid with node 0 at the AOI's SW
+    corner, so the result SELAFIN carries local metres and the corner has to be
+    added back before reprojection. A build with no AOI (the geography-free
+    idealized basin) has no corner to add, and its coordinates are already what
+    they are.
+    """
+    if not (domain_bbox is not None and len(tuple(domain_bbox)) == 4):
+        return (0.0, 0.0)
+    from pyproj import Transformer
+
+    fwd = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    x0, y0 = fwd.transform(float(domain_bbox[0]), float(domain_bbox[1]))
+    x1, y1 = fwd.transform(float(domain_bbox[2]), float(domain_bbox[3]))
+    return (min(x0, x1), min(y0, y1))
+
+
 def postprocess_tomawac(
     slf_path: str | Path,
     *,
@@ -1515,6 +1534,7 @@ def postprocess_tomawac(
     utm_epsg: int,
     reach_name: str = "wave_field",
     wave_mode: str = "fetch_growth",
+    domain_bbox: Sequence[float] | None = None,
     runs_bucket: str | None = None,
     target_ground_res_m: float = 30.0,
 ) -> tuple[list[TelemacWaveLayerURI], dict[str, Any]]:
@@ -1528,6 +1548,16 @@ def postprocess_tomawac(
     ``([TelemacWaveLayerURI], metrics)``. The time evolution plays from the
     SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
     ``TELEMAC_WAVE_STYLE_PRESET`` (no per-frame COGs).
+
+    ``domain_bbox`` is the 4326 AOI the REAL-lake grid was built over, and it is
+    what georeferences the result. The wave worker builds its grid in LOCAL
+    coordinates (node 0 at the AOI's SW corner) and only offsets by the corner
+    when it samples the bed, so the result SELAFIN carries local metres - exactly
+    as the coastal build does. Without the bbox those metres reproject as ABSOLUTE
+    UTM and the Hs COG lands at the zone's false origin, thousands of km from the
+    lake, while the bed COG beside it sits correctly on the water. The IDEALIZED
+    basin has no geographic footprint at all, so it passes no bbox and its layer
+    stays where the geography-free grid puts it - which its own label already says.
 
     Honesty floor (invariant 1): every wave scalar is plain arithmetic over the
     Hs field -- no LLM. The COG carries a spectral-screening label so a demo run
@@ -1588,8 +1618,9 @@ def postprocess_tomawac(
 
     from pyproj import Transformer
 
+    x_org, y_org = _local_mesh_origin(domain_bbox, utm_epsg)
     back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
-    lon, lat = back.transform(x_utm, y_utm)
+    lon, lat = back.transform(x_utm + x_org, y_utm + y_org)
     lon = np.asarray(lon)
     lat = np.asarray(lat)
 

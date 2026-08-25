@@ -41,9 +41,11 @@ from trid3nt_server.workflows.telemac.steps import (
     ReachSeed,
     Solve,
     SolveOpenWater,
+    Wave,
     WriteDeck,
     write_coastal_deck,
     write_reach_deck,
+    write_wave_deck,
 )
 
 __all__ = ["CorridorPolicy", "MeshHandle", "TelemacWorkflow"]
@@ -97,6 +99,10 @@ def _read_coastal(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Coastal.products(deck=Ref("deck"), solve=solve).named("inundation")
 
 
+def _read_wave(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
+    return Wave.products(deck=Ref("deck"), solve=solve).named("wave_field")
+
+
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
 
@@ -118,6 +124,9 @@ _PROCESSES: dict[str, _Process] = {
         domain_kw="aoi", deck=Coastal.deck, writer=write_coastal_deck,
         solve=_open_water_solve, read=_read_coastal,
         forcing_fields=_COASTAL_FORCING),
+    "wave_spectrum": _Process(
+        domain_kw="aoi", deck=Wave.deck, writer=write_wave_deck,
+        solve=_open_water_solve, read=_read_wave, forcing_fields={}),
 }
 
 #: The universal SIZING ask, translated into the deck fields a TELEMAC writer
@@ -215,7 +224,8 @@ class TelemacWorkflow(Workflow):
 
     def acquire_domain(self, *, location: Any, bbox: Any, shape: str = "reach",
                        rivers: Any = None, discharge: Any = None,
-                       event_time: Any = None, aoi_half_deg: float = 0.06,
+                       event_time: Any = None,
+                       aoi_half_deg: float | tuple[float, float] = 0.06,
                        aoi_name: str = "aoi",
                        code_prefix: str = "TELEMAC") -> tuple[Step, ...]:
         """The steps that establish the modeled world and its resolved state.

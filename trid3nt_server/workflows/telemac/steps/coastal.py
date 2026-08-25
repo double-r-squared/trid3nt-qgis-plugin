@@ -244,19 +244,8 @@ async def publish_coastal_products(*, deck: dict[str, Any],
               "in-worker)"),
         layer_id_prefix="input-coastal-bed")
 
-    if emitter is not None:
-        try:
-            from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-
-            await publish_input_layer(emitter, published)
-        except Exception as exc:  # noqa: BLE001 - the layer stands either way
-            logger.warning("coastal layer emit failed: %s", exc)
-        if published.bbox:
-            try:
-                await emitter.emit_map_command("zoom-to", {"bbox": list(published.bbox)})
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("coastal zoom-to failed: %s", exc)
-
+    # The peak layer is RETURNED, and the dispatch seam materializes what a tool
+    # returns - so there is no emit call here. One seam, one emission.
     logger.info("telemac coastal complete run_id=%s domain=%s peak_depth=%.4g "
                 "flooded_land=%.4g km2 sl_peak=%s uri=%s", run_id, reach,
                 published.peak_depth_m, published.flooded_land_km2,
