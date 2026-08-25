@@ -424,15 +424,26 @@ the contract and the code do not drift:
   constructor that used to be called `Workflow` is DELETED and `plan(p, d, ops)`
   returns the step sequence, which the skeleton names and engines;
 * slots are unpacked by the facade at PLAN-CONSTRUCTION time, so `Step.kwargs`
-  stays the plain mapping the interpreter already binds, and an unknown slot
-  member is refused against the deck writer's real signature there and then;
-* a step carries the `stage` its operation stamps, so `plan.describe()` reads as
-  the universal sequence - the ORDER is not enforced yet, because the mesh gate
-  that sits mid-sequence does not exist and both cohort templates gate at the
-  front;
-* `EngineOps.build_mesh` returns a mesh HANDLE for TELEMAC (the corridor mesher
+  stays the plain mapping the interpreter already binds, and the declaration is
+  checked against the deck writer's real signature there and then - in BOTH
+  directions: an unknown member is refused, and so is a required deck field no
+  slot covers (the second is the expensive one, because without it the plan
+  builds and the failure lands after the fetches);
+* a step carries the `stage` its STEP-FAMILY CONSTRUCTOR stamps (`Geocode.reach`,
+  `WriteDeck.telemac`, `Solve.telemac`, `Products.*` each name their own), so
+  `plan.describe()` reads as the universal sequence. The facade ASSEMBLES the
+  sequence; it does not label it. The ORDER is not enforced yet, because the mesh
+  gate that sits mid-sequence does not exist and both cohort templates gate at
+  the front;
+* `EngineOps.build_mesh` returns a `MeshHandle` for TELEMAC (the corridor mesher
   still runs inside the deck writer and the worker). The interface is the frozen
-  part, exactly as intended - the shared front is a later iteration.
+  part, exactly as intended - the shared front is a later iteration;
+* the placement rule was applied AGAIN in wave 2b and moved three fields: a
+  corridor's `extent_km` / `width_m` / `boundary_source` are not universal, so
+  they left `MeshPolicy` for the facade's own `CorridorPolicy`, and
+  `shared/aoi.location_or_bbox` lost its `code_prefix="TELEMAC"` default. A
+  shared file that defaults to one engine is a placement leak wearing a
+  convenience's clothes.
 
 ### The placement rule
 
@@ -454,7 +465,11 @@ and simply leave the solve-family slots unfilled.
 - the stage sequence: acquire -> prep -> mesh -> gates -> author ->
   solve -> post -> publish;
 - gate mechanics (form/draw/select on the pending-confirmation spine);
-- chart scaffolding (display/persist/emit - invisible to templates);
+- chart scaffolding, invisible to templates: the HOOK is `Workflow`'s
+  (a step's declared `ChartSpec`, its builder, and the persist call in the
+  publish stage), while the build/emit/display mechanics live in the
+  interpreter with the rest of the plan walk - one home each, no
+  re-implementation;
 - the emission seam (automatic publish; see Emission unification);
 - solve supervision (the shared solver supervisor);
 - ledger + resume, provenance, the leak guard;
@@ -462,20 +477,44 @@ and simply leave the solve-family slots unfilled.
 
 Two slot kinds, distinguished per slot:
 
-- **hooks** - SILENT defaults: charts, sensor/context layers,
-  validation checks. Unfilled = nothing happens; no engine subtype ever
-  restates them (chart scaffolding exists ONLY in `Workflow`).
+- **hooks** - SILENT defaults: charts and validation checks. Unfilled =
+  nothing happens; no engine subtype ever restates them. A sensor/context-
+  LAYER hook was drafted here and deliberately NOT built (removed in
+  `efcca38b`): the steps that fetch inputs already emit through the one
+  emission seam, so a skeleton-level hook would be a SECOND input-emission
+  site - exactly the double emission the ADR 0244 single-seam guard exists
+  to catch. It belongs to the emission-unification wave, where the seam is
+  the single home; a test pins that the skeleton emits no input layer of
+  its own.
 - **abstract slots** - must-fill: physics and the EngineOps five. The
   library refuses to register a template that leaves one empty.
 
 ### EngineOps - the engine facade
 
 Each engine subtype realizes exactly five abstract operations, and
-nothing else:
+nothing else. The LANDED shapes (ADR 0312 + wave 2b):
 
-    acquire_domain(p, d)          build_mesh(domain, policy)
-    author(mesh, physics, forcing)  solver_spec() -> image/limits
-    read_results(run) -> result
+    acquire_domain(**slots) -> tuple[Step, ...]
+    build_mesh(domain, policy, **slots) -> mesh handle
+    author(*, mesh, physics, forcing) -> Step
+    solver_spec(**slots) -> Step
+    read_results(run, **slots) -> Step
+
+Every operation takes its shaping values as SLOTS, so a template names
+what it means (`ops.acquire_domain(location=p.location, bbox=p.bbox,
+rivers=d.rivers, ...)`) rather than matching a positional `(p, d)`
+convention - and an engine's own extra slot (TELEMAC's
+`corridor=CorridorPolicy(...)`) arrives without widening the universal
+signature. `policy` is the engine-neutral `MeshPolicy`: SIZING only
+(`resolution`, `target_edge_m`). Domain SHAPE is not universal, so a
+corridor's extent, width and bank source live on the facade's own
+`CorridorPolicy` and ride in as a slot.
+
+The five are MUST-FILL: `register_workflow` refuses a facade that leaves
+one unrealized, with a typed authoring error at import. A hole that
+reached run time would surface as a bare `NotImplementedError` flattened
+into `<ENGINE>_INTERNAL_ERROR` - a declaration defect wearing a runtime
+failure's clothes.
 
 Facades are named by engine ONLY: `TelemacWorkflow`, `SwmmWorkflow`,
 `ModflowWorkflow`. Domain qualifiers are BANNED ("Reach" rejected: it
@@ -515,10 +554,17 @@ There is no Builder DSL (rejected twice); optional plain helpers only.
 
 The ~70-line `_normalize` / `_with_notes` / `_physical_answer` +
 try/except tool-body tails repeated in do_sag.py and river_dye.py are
-absorbed into library-generated registration:
-`register_workflow(metadata, PARAMS, plan, answer=(...))`. Template
-file end state: PARAMS + plan + answer + chart - four declarations and
-a chart. The old tool bodies are deleted, not wrapped.
+absorbed into library-generated registration. The LANDED signature:
+
+    register_workflow(facade, metadata, PARAMS, plan,
+                      data=(...), answer=(...), provenance=(...),
+                      coerce=(...), doc={...}, extra_args=(...))
+
+The FACADE class comes first - it is what makes the generated tool an
+engine's workflow rather than a bare skeleton, and it is checked for
+must-fill holes before anything is registered. Template file end state:
+PARAMS + DATA + plan + ANSWER + the chart. The old tool bodies are
+deleted, not wrapped.
 
 ### Acceptance criterion (falsifiable)
 
@@ -578,7 +624,7 @@ writers (the hecras_build pattern); cross-engine translation is a
 writer WITHIN a mesh species (unstructured tri: TELEMAC / SCHISM /
 HEC-RAS 2D) and a TYPED REFUSAL across species (MODFLOW structured
 grids, SWMM node-link networks) - never a silent conversion.
-`EngineOps.build_mesh(domain, policy)` is the frozen interface;
+`EngineOps.build_mesh(domain, policy, **slots)` is the frozen interface;
 generation strategies and writers evolve behind it. The TELEMAC private
 corridor mesher folds into the shared front as a generation strategy;
 the private ladder dies (ledger row).

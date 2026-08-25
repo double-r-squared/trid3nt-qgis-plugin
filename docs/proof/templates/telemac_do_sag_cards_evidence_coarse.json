@@ -18,8 +18,8 @@
     "mesh_resolution_m": 100.0,
     "discharge_m3s": 60.0
   },
-  "session_id": "01M0V5G7EEHPTM5SRQ1KVT5BC8",
-  "case_id": "01M0V5G7PAV9BQMFTH1HWRB8J7",
+  "session_id": "01M0VCTJAJ88RFTR8KQDV56SHW",
+  "case_id": "01M0VCTJJQEWE5A27HERAETCS6",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -29,7 +29,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0V5JET568DRYM8V2CBSQHP5",
+      "chart_id": "01M0VCWV8D6NT2Y6Q3YSF1T6JF",
       "vega_lite_spec": {
         "layer": [
           {
@@ -688,7 +688,7 @@
       "title": "Dissolved-oxygen sag - Eel River near Scotia, California",
       "caption": "Streeter-Phelps DO sag: minimum 9.0099 mg/L at 158.8 m downstream (meets the 5 mg/L standard, dashed). CBOD decay drives the sag; reaeration recovers it. Screening/permit grade.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0V5G8B7VK2YQMF6TP10C2T5"
+      "created_turn_id": "01M0VCTK8B2KKS29HNRJZKNPPE"
     }
   ],
   "layers": [
@@ -21689,10 +21689,10 @@
       }
     },
     {
-      "layer_id": "telemac-release-01M0V5G93VZA6H4041MGGT77TV",
+      "layer_id": "telemac-release-01M0VCTNHNQ3Z5FXAZSG4R7DQY",
       "name": "Outfall (user) - scotia_humboldt_county_california_95562_united_s",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/inputs/01M0V5G939BHJ8TC261T0G8N61/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M0VCTNHAAN2H3GVAC7KRT4D4/release_point.geojson",
       "style_preset": "release_point",
       "visible": true,
       "role": "context",
@@ -21724,10 +21724,10 @@
       }
     },
     {
-      "layer_id": "input-river-bed-01M0V5JEG6EA78RY570ZDJ9808",
+      "layer_id": "input-river-bed-01M0VCWTY7JRS81J1P02SJ2H95",
       "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0V5G94G2CFETACB9HTHAR05/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0VCTNJG9CDHVZSRCW3GMPGF/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -21739,10 +21739,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0V5JF0C5R13MQ9GJ83GR9DK",
+      "layer_id": "01M0VCWVF19Q68KX1KQYKQNDND",
       "name": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0V5G94G2CFETACB9HTHAR05/overviews/01M0V5JER6KH5TQAEMWAJK5Q41.tif",
+      "uri": "s3://trid3nt-runs/01M0VCTNJG9CDHVZSRCW3GMPGF/overviews/01M0VCWV6BVR9T54EPCJABZNHK.tif",
       "style_preset": "continuous_dissolved_oxygen",
       "visible": true,
       "role": "primary",
@@ -21766,11 +21766,11 @@
   "draw_card": null,
   "form_card": null,
   "plain_warnings": [],
-  "run_id": "01M0V5G94G2CFETACB9HTHAR05",
+  "run_id": "01M0VCTNJG9CDHVZSRCW3GMPGF",
   "chart_spec": {
     "do_sag_curve": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0V5JET568DRYM8V2CBSQHP5",
+      "chart_id": "01M0VCWV8D6NT2Y6Q3YSF1T6JF",
       "vega_lite_spec": {
         "layer": [
           {
@@ -22627,13 +22627,15 @@
       0.0
     ],
     "mesh_size_m": 30.0,
-    "layer_uri": "s3://trid3nt-runs/01M0V5G94G2CFETACB9HTHAR05/overviews/01M0V5JER6KH5TQAEMWAJK5Q41.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0VCTNJG9CDHVZSRCW3GMPGF/overviews/01M0VCWV6BVR9T54EPCJABZNHK.tif",
     "discharge_m3s": 60.0,
-    "discharge_note": "carrier discharge 60 m3/s (user-supplied)"
+    "discharge_note": "carrier discharge 60 m3/s (user-supplied)",
+    "mesh_resolution_m": 100.0,
+    "mesh_resolution_note": "mesh_resolution_m 100 CAPPED to 30 m by the channel-width rule (width 60 m / 2)"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0V5G94G2CFETACB9HTHAR05/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0V5G94G2CFETACB9HTHAR05/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0VCTNJG9CDHVZSRCW3GMPGF/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0VCTNJG9CDHVZSRCW3GMPGF/metrics.json"
   },
   "product_errors": {}
 }

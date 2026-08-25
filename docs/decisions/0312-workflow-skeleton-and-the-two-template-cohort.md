@@ -72,20 +72,44 @@ skeleton names and engines the `Plan`.
   `steps/water_quality.waqtel_o2_process`, a named step the deck and the
   postprocess both `Ref` - one resolution, two readers, which is what the old
   composite achieved by passing one local variable to both.
-- Steps carry a `stage` (`acquire|prep|mesh|gates|author|solve|post|publish`)
-  stamped by the facade's five operations, so `plan.describe()` reads as the
-  universal sequence. The order is NOT enforced this iteration: the mesh gate
-  (which sits mid-plan) does not exist yet, and both cohort templates gate at
-  the front. Enforcement waits for the mesh wave.
-- `build_mesh` returns a `ReachMesh` HANDLE, not a mesh artifact: TELEMAC's
-  corridor mesher still runs inside the deck writer and the worker. The
-  interface is the frozen part; the shared front (`workflows/mesh`) and the
-  BYO/mesh-gate work are later iterations, deliberately not built here.
+- Steps carry a `stage` (`acquire|prep|mesh|gates|author|solve|post|publish`), so
+  `plan.describe()` reads as the universal sequence. The stamp is applied by the
+  STEP-FAMILY CONSTRUCTORS - `Geocode.reach`, `WriteDeck.telemac`,
+  `Solve.telemac`, `Products.*` each name their own stage - not by the facade
+  operations, which assemble already-stamped steps. (The first draft of this ADR
+  said the five operations stamp it; they do not, and the distinction matters for
+  the mesh wave, where the enforcement will read the stamp.) The order is NOT
+  enforced this iteration: the mesh gate (which sits mid-plan) does not exist yet,
+  and both cohort templates gate at the front. Enforcement waits for the mesh
+  wave.
+- `build_mesh` returns a `MeshHandle`, not a mesh artifact: TELEMAC's corridor
+  mesher still runs inside the deck writer and the worker. The interface is the
+  frozen part; the shared front (`workflows/mesh`) and the BYO/mesh-gate work are
+  later iterations, deliberately not built here. (Landed as `ReachMesh`; renamed
+  in wave 2b - "Reach" is the banned domain qualifier one layer down from the
+  facade, and the class is a handle, so it is now named for what it is. The
+  corridor-shaped fields moved with it: see the placement note below.)
 - An adapter bug surfaced and was fixed: `_normalize_callable_for_gemini`
   simplified `__annotations__` but `functools.wraps` copied a SYNTHESIZED
   `__signature__` over it, so `from_callable` read the simplified hints and the
-  unsimplified parameters. It now re-stamps the signature. This affected every
-  synthesized-signature tool, spec-promoted fetchers included.
+  unsimplified parameters. It now re-stamps the signature. SCOPE, measured rather
+  than assumed: it fixed the 2 cohort tools; the 101 spec-promoted fetchers were
+  empirically UNCHANGED by it (their synthesized signatures and their simplified
+  hints already agreed, so there was nothing for the re-stamp to correct). The
+  first draft's "affected every synthesized-signature tool" overclaimed.
+- PLACEMENT (wave 2b): `MeshPolicy` keeps only the engine-neutral SIZING ask
+  (`resolution`, `target_edge_m`). `extent_km` / `width_m` / `boundary_source`
+  describe a CORRIDOR, which is one domain shape among many, so they moved into a
+  facade-owned `CorridorPolicy` in `workflows/telemac/` and reach `build_mesh` as
+  an engine slot (`build_mesh(domain, policy, **slots)`). Likewise
+  `shared/aoi.location_or_bbox` no longer defaults `code_prefix` to `"TELEMAC"`:
+  the file is engine-agnostic by placement, and a default engine prefix there
+  would hand a future SWMM caller TELEMAC's error codes silently.
+- COERCION ORDER (recorded, low severity): `do_sag`'s coercion tuple now runs
+  `location_or_bbox` FIRST, where the pre-migration body ran the outfall-point
+  coercion first. No behavioural difference has been found - the two read
+  disjoint wire keys - but the order is now the declaration's, so it is stated
+  rather than incidental.
 - The contract's sensor/context-LAYER hook is deliberately NOT built. It was,
   briefly, and the ADR 0244 input-surfacing sweep caught it at once: the steps
   that fetch inputs already emit through the one seam, so a skeleton-level
@@ -116,9 +140,15 @@ migrated code.
 | river_dye coarse - peak concentration | 4.878571510314941 mg/L | 4.878571510314941 mg/L |
 | river_dye coarse - peak time | 200.0 s | 200.0 s |
 | river_dye coarse - plume reach | 472.7 m | 472.7 m |
-| river_dye coarse - active frames / mesh | 3 / 30.0 m, 155 nodes | 3 / 30.0 m, 155 nodes |
+| river_dye coarse - active frames / mesh | 3 / 30.0 m, 155 node estimate | 3 / 30.0 m, 155 node estimate |
 | river_dye `t2d_river.cas` | - | BYTE-IDENTICAL |
 | river_dye `metrics.json` / `chart_spec.json` | - | identical bar the run-id-derived `layer_uri` and the minted `chart_id` |
+
+"155 nodes" in that table is the pre-solve ESTIMATE the autoscaler reports
+(`_estimate_mesh_nodes`, calibrated to ~15%), not a count of the mesh that ran:
+the coarse river_dye run's actual mesh was **1,048 nodes**. It is a parity row
+because the same declaration must produce the same estimate; it is not a mesh
+measurement, and the earlier wording read as one.
 
 `scripts/drive_river_dye_cards.py` gained a `--coarse` canary declaration (the
 same shape do_sag already had): short reach, short window, pinned discharge, a
@@ -132,12 +162,48 @@ accepts a `(param, note_key)` pair so the answer artifact keeps its own name.
 
 ## Acceptance: the workflow-only change list
 
-Demonstrated live on the migrated `do_sag.py`, two meaning-level edits, each
-with `git diff --name-only` showing ONE file:
+The design doc's falsifiable criterion: **the ADR must ENUMERATE every
+meaning-level edit class achievable in the template file with zero other
+touches.** A meaning-level change that turns out to need `steps/` is a defect by
+definition. The complete list, each with the mechanism that makes it
+template-only:
 
-1. a BOUND - `reach_length_km` bounds `(0.5, 15.0)` -> `(0.5, 8.0)`: a 12 km ask
-   resolved to 8.0 with the note "CLAMPED from 12 to the declared maximum 8 km";
-2. a CHART - the sag caption's grade wording: the built payload carried the new
-   sentence.
+| # | edit class | example | what makes it template-only |
+|---|---|---|---|
+| 1 | VALUES / defaults | `k1_per_day` default `0.3` -> `0.25` | `Param.default` is read by the resolver at the SCENARIO/CONSTANT door; no runner names a default |
+| 2 | BOUNDS | `reach_length_km` `(0.5, 15.0)` -> `(0.5, 8.0)` | `resolver._finish` clamps against `Param.bounds` and writes the CLAMPED note itself; the deck writer sees only the clamped number |
+| 3 | DOORS | move `channel_width_m` from CONSTANT to USER, or to DERIVED with a `resolve=` path | the door IS the field; `resolve` is a dotted path, so a new derivation is a new step-tier function the declaration NAMES, and the walk order is the library's |
+| 4 | COMPOSITION / plan shape | add, drop or reorder a node in `plan(p, d, ops)`; branch it with `When` | `plan` returns a VALUE; the skeleton names and engines the `Plan` and the interpreter walks whatever it is handed |
+| 5 | SLOT CONTENTS | add `tracer_diffusivity` to the `Physics` bundle | slots are open bundles unpacked at plan construction against the deck writer's real signature - a member the writer accepts needs no other edit, and one it does not is refused on the spot |
+| 6 | GATES | add/remove a `FormGate` or `DrawGate`, or change which param a draw fills | gates are plan NODES on the pending-confirmation spine; the card mechanics are the interpreter's |
+| 7 | CHARTS | rewrite `build_sag_chart`, add a second `.chart(...)` to a step | the builder is a FUNCTION OBJECT colocated in the file; display / persist / emit are the skeleton hook's |
+| 8 | ANSWER fields | add `sag_curve_bod_mgl` to `ANSWER`, or a `provenance=` row | `Workflow.answer` reads `getattr(result, field)` over the declared tuple; the persisted metrics follow |
+| 9 | DOCSTRING / ROUTING | rewrite `summary` / `routing` / `not_for` | `doc=` is rendered by `render_docstring`; the routing view and the model-facing schema are generated from the same declaration |
+| 10 | WIRE SURFACE | add an alias in `extra_args`, or hide a param with `wire=False` | the signature is synthesized by `_wire_signature` from the declaration, so the schema moves with the file |
+| 11 | COERCIONS | add/reorder an entry in `coerce=` | coercions are declared callables run by `_normalize` in declaration order |
+| 12 | METADATA | resolution specs, gate spec, ttl/cache class | `AtomicToolMetadata` is constructed in the file and passed straight to `register_tool` |
+
+Demonstrated live on the migrated `do_sag.py`, two of these edits, each with
+`git diff --name-only` showing ONE file:
+
+1. class 2, a BOUND - `reach_length_km` bounds `(0.5, 15.0)` -> `(0.5, 8.0)`: a
+   12 km ask resolved to 8.0 with the note "CLAMPED from 12 to the declared
+   maximum 8 km";
+2. class 7, a CHART - the sag caption's grade wording: the built payload carried
+   the new sentence.
 
 Both reverted.
+
+NOT on this list, and deliberately: anything that changes what the ENGINE can
+express (a new deck keyword, a new solver module, a new reader) is a mechanism
+change and touches exactly one runner in `<engine>/steps/`. The list above is
+about MEANING, not capability.
+
+### The regression figure
+
+The offline suite at the wave-2 landing: **11963 passed**, against the standing
+baseline of exactly 4 environmental `fetch_resolution` failures. An earlier draft
+cited 11990; that number is not reproducible. The count is env-conditional -
+collection skips vary with what is installed and with `.env.local` presence - so
+the pass COUNT is evidence only alongside the failure SET, which is the part that
+must not move.
