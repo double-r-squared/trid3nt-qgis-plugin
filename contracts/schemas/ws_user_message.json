@@ -1,4 +1,30 @@
 {
+  "$defs": {
+    "DrawnGeometry": {
+      "additionalProperties": false,
+      "description": "A user-drawn geometry attached to a ``user-message``.\n\nONE rectangle for now -- the QGIS dock 'Draw region' rubber-band tool. Rides\n``UserMessagePayload.drawn_geometry`` exactly as the canvas AOI rides\n``aoi_bbox``: a per-turn STRUCTURED spatial knob (distinct from the analysis\nAOI) that composer input-review gates consume as ``basis=\"user\"`` -- e.g. the\ngeoclaw ``amr_regions`` refinement window. The ``geometry_type`` discriminator\nleaves room for a polygon-editor follow-on; only ``\"rectangle\"`` is wired\ntoday. ``bbox`` is EPSG:4326 ``[min_lon, min_lat, max_lon, max_lat]`` -- the\nsame element order + ordering rules as every other bbox carrier.",
+      "properties": {
+        "bbox": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Bbox",
+          "type": "array"
+        },
+        "geometry_type": {
+          "const": "rectangle",
+          "default": "rectangle",
+          "title": "Geometry Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bbox"
+      ],
+      "title": "DrawnGeometry",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "description": "``user-message`` (A.3): user-submitted text input.",
   "properties": {
@@ -29,6 +55,17 @@
       "default": null,
       "title": "Case Id"
     },
+    "drawn_geometry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DrawnGeometry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "model_id": {
       "anyOf": [
         {
@@ -40,15 +77,6 @@
       ],
       "default": null,
       "title": "Model Id"
-    },
-    "research_mode": {
-      "default": "research",
-      "enum": [
-        "research",
-        "deep_research"
-      ],
-      "title": "Research Mode",
-      "type": "string"
     },
     "show_thinking": {
       "anyOf": [

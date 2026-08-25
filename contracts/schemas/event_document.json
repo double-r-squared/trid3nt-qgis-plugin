@@ -839,7 +839,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``events`` (D.5): an EventMetadata document. ``event_id`` is the ``_id``.\n\nThe collection schema *is* the ``EventMetadata`` schema (Appendix C); no\nwrapper fields are added. The Mongo ``_id`` is ``event_id`` (a ULID); the\nwrite path sets ``_id = event_id`` at insert time. We do not alias here to\nkeep ``EventMetadata`` a single shape across wire and storage.",
+  "description": "``events`` (D.5): an EventMetadata document. ``event_id`` is the ``_id``.\n\nThe collection schema *is* the ``EventMetadata`` schema; no\nwrapper fields are added. The Mongo ``_id`` is ``event_id`` (a ULID); the\nwrite path sets ``_id = event_id`` at insert time. We do not alias here to\nkeep ``EventMetadata`` a single shape across wire and storage.",
   "properties": {
     "canonical_id": {
       "anyOf": [

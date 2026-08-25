@@ -1,6 +1,233 @@
 {
+  "$defs": {
+    "GateSpec": {
+      "additionalProperties": false,
+      "description": "A tool's DECLARED confirm gate (the gate-collapse carrier).\n\nPresence of this on a tool's :class:`AtomicToolMetadata` is the ONE membership\nsignal the server gate engine reads - the ``SOLVER_CONFIRM_TOOLS`` /\n``FETCH_CONFIRM_TOOLS`` name sets die. It names the pure functions that build the\ncard and pin the decision (by dotted import path, so the contract carries no server\nimport) and declares the levers the card offers.\n\nFields:\n\n- ``kind`` - ``\"solver\"`` or ``\"fetch\"`` (see :data:`GateKind`).\n- ``estimate_provider`` - dotted import path to a PURE builder\n  ``(params: dict) -> CardEstimate`` (may be a coroutine; async providers are awaited)\n  exported from the tool's OWN module. It builds the confirm card (envelope) and the\n  opaque tail state the pin provider reads. Returning a CardEstimate whose envelope is\n  ``None`` signals \"no gate needed, dispatch as-is\" (the fetch_landcover\n  no-coarsening skip).\n- ``pin_provider`` - dotted import path to a PURE decision-tail function\n  ``(decision, revised_args, params, tail_state) -> dict`` (may be a coroutine)\n  returning the approved-params DELTA to merge on a ``proceed`` / ``narrow_scope``.\n  ``None`` for a plain proceed/cancel gate with no levers (the generic tail then just\n  injects ``confirmed=True`` for a solver, nothing for a fetch).\n- ``levers`` - the declared :class:`LeverSpec` list (empty for a plain proceed/cancel\n  gate). Card rendering + the generic ``narrow_scope`` routing read these.\n- ``title`` / ``rationale`` - optional card-copy fields naming the gate + why it\n  exists (the prose the provider bakes into the envelope recommendation still owns the\n  user-facing caption; these are metadata for the docstring / audit surface).",
+      "properties": {
+        "estimate_provider": {
+          "minLength": 1,
+          "title": "Estimate Provider",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "solver",
+            "fetch"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "levers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LeverSpec"
+          },
+          "title": "Levers",
+          "type": "array"
+        },
+        "pin_provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pin Provider"
+        },
+        "rationale": {
+          "default": "",
+          "title": "Rationale",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "estimate_provider"
+      ],
+      "title": "GateSpec",
+      "type": "object"
+    },
+    "LeverSpec": {
+      "additionalProperties": false,
+      "description": "One user-overridable lever a confirm card offers (declared, not hand-wired).\n\nThe card renderer (the existing ``GranularitySuggestion`` / ``TimeScaleSuggestion``\nblocks the plugin already draws) and the decision tail read this declaration\nuniformly. The ENGINE-specific pinning arithmetic (a real-cap re-probe, a floor\nclamp, a seed-pair decouple) stays in the tool's pin provider; this is only the\nmachine-readable DECLARATION of the lever so membership/rendering/enforcement are\nuniform.\n\nFields:\n\n- ``name`` - human label for the lever (e.g. ``\"grid resolution\"``, ``\"animation\n  cadence\"``). Card copy only.\n- ``param`` - the approved-params key the pin writes (e.g. ``\"grid_resolution_m\"``,\n  ``\"output_interval_min\"``, ``\"target_resolution_m\"``, ``\"resolution_m\"``,\n  ``\"mesh_resolution_m\"``). The generic tail routes a ``narrow_scope`` override's\n  ``revised_args[param]`` through the engine's pin provider under this key.\n- ``unit`` - value unit (``\"m\"`` default; ``\"min\"`` for a cadence lever, ``\"hr\"`` for\n  a window lever).\n- ``rungs`` - a DISCRETE suggested-value ladder (mutually exclusive with a\n  ``range_min``/``range_max`` window); the chips the card offers. ``None`` when the\n  lever is a continuous free-edit window.\n- ``range_min`` / ``range_max`` - a continuous override window (FINEST / COARSEST\n  inclusive); the pin provider clamps a chosen value into it. ``None`` on either side\n  declares that side unbounded.\n- ``pin_on_proceed`` - when True (default) a plain ``proceed`` pins the SUGGESTED\n  value the card showed into the approved params (so the run matches the card the\n  user saw); when False the lever only takes effect on an explicit ``narrow_scope``\n  override.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "param": {
+          "minLength": 1,
+          "title": "Param",
+          "type": "string"
+        },
+        "pin_on_proceed": {
+          "default": true,
+          "title": "Pin On Proceed",
+          "type": "boolean"
+        },
+        "range_max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Range Max"
+        },
+        "range_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Range Min"
+        },
+        "rungs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rungs"
+        },
+        "unit": {
+          "default": "m",
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "param"
+      ],
+      "title": "LeverSpec",
+      "type": "object"
+    },
+    "ResolutionSpec": {
+      "additionalProperties": false,
+      "description": "A DECLARED valid-resolution range for one granularity-bearing tool param.\n\nNATE's clamp ruling: silent coercion to an undeclared resolution is\nBANNED. A tool DECLARES the resolutions it can actually run (min/max or a discrete\noption set) so the user picks from REALITY; an out-of-range ask gets the declared\nrange QUOTED BACK (typed / gated), never a silent snap. This is the machine-readable\ncarrier of that declaration - one per resolution-class parameter. It is read by\n(a) the tool docstring (via :meth:`docstring_line`), (b) the payload / input-review\ngate card (via :meth:`quote_back`), and (c) the self-enforcing registry sweep test.\n\nFields (the kickoff shape ``{min, max, native_hint, step/options, unit,\nconstraint_source, rationale}``):\n\n- ``param`` - the tool argument this constrains (e.g. ``\"resolution_m\"``,\n  ``\"min_edge_length_m\"``). The registry sweep matches specs to params by this name.\n- ``unit`` - the value unit (``\"m\"`` default; ``\"px\"`` for an output-pixel cap,\n  ``\"arcsec\"`` for a lat/long-native source tier).\n- ``min_value`` / ``max_value`` - the FINEST (smallest) and COARSEST (largest)\n  declared values, INCLUSIVE. ``None`` on either side declares that side UNBOUNDED\n  (e.g. no coarse ceiling). At least one bound, or ``options``, must be present.\n- ``native_hint`` - a human string for the DATA-native / default resolution the\n  card quotes alongside the range (e.g. ``\"CUDEM 1/9\" ~3 m nearshore; ETOPO ~450 m\n  offshore\"``, ``\"3DEP 10 m\"``). ``None`` when there is no meaningful native.\n- ``options`` - a DISCRETE valid-value set (mutually exclusive with a continuous\n  min/max window); used when only specific cells are supported.\n- ``step`` - a discretization step within a continuous window, when the tool snaps\n  to a grid of allowed values (informational; ``None`` = continuous).\n- ``constraint_source`` - ``\"solver\"`` or ``\"data\"`` (the two-layer-truth owner).\n- ``rationale`` - WHY these are the bounds, evidence-based (the node-budget solve\n  time, the mesh-generator's accepted window, the source's native cell). Required so\n  a future reader/auditor can check the bound is real, not a guess.",
+      "properties": {
+        "constraint_source": {
+          "enum": [
+            "solver",
+            "data"
+          ],
+          "title": "Constraint Source",
+          "type": "string"
+        },
+        "max_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Value"
+        },
+        "min_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Value"
+        },
+        "native_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Native Hint"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
+        },
+        "param": {
+          "minLength": 1,
+          "title": "Param",
+          "type": "string"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step"
+        },
+        "unit": {
+          "default": "m",
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "param",
+        "constraint_source",
+        "rationale"
+      ],
+      "title": "ResolutionSpec",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
-  "description": "Cache-shim metadata for an atomic tool's registration (FR-CE-8, FR-DC-2).\n\nEvery atomic tool that may issue a network call to an external public data\nsource declares one of these at registration time. The agent service's\ntool-registry refuses to register a tool whose metadata is missing,\nincomplete, or fails the cross-field validator below.\n\nFields:\n\n- ``name`` \u2014 atomic-tool function name (Python identifier, e.g.\n  ``\"fetch_dem\"``). The agent registry uses this as the registry key.\n- ``ttl_class`` \u2014 one of the four FR-DC-2 classes. Required for every\n  external-API tool. ``\"live-no-cache\"`` is reserved for the FR-DC-6\n  uncacheable-by-construction enumeration (interactive solicitation\n  tools, envelope emitters, MongoDB writes, solver dispatchers).\n- ``source_class`` \u2014 the ``<source-class>`` prefix in the cache bucket\n  layout per FR-DC-1 (e.g. ``\"dem\"``, ``\"buildings\"``, ``\"geocode\"``).\n  Required when ``cacheable=True``; MAY be omitted when ``cacheable=False``\n  (no bucket prefix is needed if nothing is written).\n- ``cacheable`` \u2014 explicit boolean for FR-DC-6 enumeration; defaults to\n  ``True`` because the cacheable case is the common case. ``False`` for\n  interactive solicitation tools, envelope emitters, MongoDB writes,\n  and solver dispatchers per FR-DC-6.\n\nCross-field rule (``_validate_cacheable_consistency``):\n\n- ``cacheable=True`` \u21d2 ``ttl_class != \"live-no-cache\"`` AND\n  ``source_class`` is non-empty. A cacheable tool with a live-no-cache\n  class would never hit; a cacheable tool with no source_class can't\n  construct a cache key path.\n- ``cacheable=False`` \u21d2 ``ttl_class == \"live-no-cache\"``. The other\n  classes would suggest the cache is in play.\n\nThe validator runs at construction time, so a misconfigured registration\nraises ``ValidationError`` before the tool is reachable on the wire.",
+  "description": "Cache-shim metadata for an atomic tool's registration.\n\nEvery atomic tool that may issue a network call to an external public data\nsource declares one of these at registration time. The agent service's\ntool-registry refuses to register a tool whose metadata is missing,\nincomplete, or fails the cross-field validator below.\n\nFields:\n\n- ``name`` \u2014 atomic-tool function name (Python identifier, e.g.\n  ``\"fetch_dem\"``). The agent registry uses this as the registry key.\n- ``ttl_class`` \u2014 one of the four classes. Required for every\n  external-API tool. ``\"live-no-cache\"`` is reserved for the\n  uncacheable-by-construction enumeration (interactive solicitation\n  tools, envelope emitters, MongoDB writes, solver dispatchers).\n- ``source_class`` \u2014 the ``<source-class>`` prefix in the cache bucket\n  layout  (e.g. ``\"dem\"``, ``\"buildings\"``, ``\"geocode\"``).\n  Required when ``cacheable=True``; MAY be omitted when ``cacheable=False``\n  (no bucket prefix is needed if nothing is written).\n- ``cacheable`` \u2014 explicit boolean for enumeration; defaults to\n  ``True`` because the cacheable case is the common case. ``False`` for\n  interactive solicitation tools, envelope emitters, MongoDB writes,\n  and solver dispatchers.\n\nCross-field rule (``_validate_cacheable_consistency``):\n\n- ``cacheable=True`` \u21d2 ``ttl_class != \"live-no-cache\"`` AND\n  ``source_class`` is non-empty. A cacheable tool with a live-no-cache\n  class would never hit; a cacheable tool with no source_class can't\n  construct a cache key path.\n- ``cacheable=False`` \u21d2 ``ttl_class == \"live-no-cache\"``. The other\n  classes would suggest the cache is in play.\n\nThe validator runs at construction time, so a misconfigured registration\nraises ``ValidationError`` before the tool is reachable on the wire.",
   "properties": {
     "auto_publish": {
       "default": true,
@@ -31,6 +258,18 @@
       "default": null,
       "description": "Owning engine slug for an engine-door family member (e.g. 'modflow', 'sfincs'). None (default) for every non-engine tool - zero impact on existing registrations. A door lists / gate-expands over its engine's tier=template members filtered by this slug.",
       "title": "Engine"
+    },
+    "gate_spec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GateSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Declared confirm gate. Presence is the server gate engine's membership signal; names the pure estimate/pin providers + the card's levers. None (default) for every un-gated tool."
     },
     "idempotent_hint": {
       "default": true,
@@ -68,6 +307,15 @@
       "title": "Read Only Hint",
       "type": "boolean"
     },
+    "resolution_specs": {
+      "default": [],
+      "description": "Declared valid-resolution ranges, one ResolutionSpec per granularity-bearing parameter. Read by the docstring, the payload/input-review gate card, and the registry sweep test that FAILS when a future resolution-class param ships without a declaration.",
+      "items": {
+        "$ref": "#/$defs/ResolutionSpec"
+      },
+      "title": "Resolution Specs",
+      "type": "array"
+    },
     "source_class": {
       "anyOf": [
         {
@@ -92,7 +340,9 @@
       "enum": [
         "general",
         "door",
-        "template"
+        "template",
+        "catalog",
+        "internal"
       ],
       "title": "Tier",
       "type": "string"

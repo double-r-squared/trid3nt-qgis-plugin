@@ -67,7 +67,8 @@ def _ws_message_exports() -> list[tuple[str, type[BaseModel]]]:
 def default_output_dir() -> Path:
     """``contracts/schemas`` relative to this file."""
     # this file: contracts/trid3nt_contracts/export_schemas.py
-    return Path(__file__).resolve().parents[2] / "schemas"
+    # parents[0]=trid3nt_contracts, parents[1]=contracts -> contracts/schemas
+    return Path(__file__).resolve().parents[1] / "schemas"
 
 
 def export(output_dir: Path) -> list[Path]:

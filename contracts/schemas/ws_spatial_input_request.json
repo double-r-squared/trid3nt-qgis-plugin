@@ -63,7 +63,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``spatial-input-request`` (A.4): agent needs the user to pick a geometry.\n\n``mode`` selects the client pick affordance:\n\n- ``\"point\"`` \u2014 single map click; the reply carries ``coordinates=[lon, lat]``.\n- ``\"bbox\"`` \u2014 a drag-rectangle; the reply carries\n  ``coordinates=[minLon, minLat, maxLon, maxLat]``.\n- ``\"vector_draw\"`` \u2014 FR-WC-16 urban vector-draw: the client opens a\n  terra-draw surface (rectangle / polygon / polyline + select-edit) and the\n  reply carries ``features`` (a GeoJSON ``FeatureCollection`` with\n  ``role``-tagged + per-segment ``barrier_type``/``flap_direction``\n  properties). Use this when the agent needs the user to draw AOIs and\n  tagged structural barriers (walls / flap gates) for the urban-flood\n  (SWMM) engine.",
+  "description": "``spatial-input-request`` (A.4): agent needs the user to pick a geometry.\n\n``mode`` selects the client pick affordance:\n\n- ``\"point\"`` \u2014 single map click; the reply carries ``coordinates=[lon, lat]``.\n- ``\"bbox\"`` \u2014 a drag-rectangle; the reply carries\n  ``coordinates=[minLon, minLat, maxLon, maxLat]``.\n- ``\"vector_draw\"`` \u2014 urban vector-draw: the client opens a\n  terra-draw surface (rectangle / polygon / polyline + select-edit) and the\n  reply carries ``features`` (a GeoJSON ``FeatureCollection`` with\n  ``role``-tagged + per-segment ``barrier_type``/``flap_direction``\n  properties). Use this when the agent needs the user to draw AOIs and\n  tagged structural barriers (walls / flap gates) for the urban-flood\n  (SWMM) engine.",
   "properties": {
     "default_timeout_seconds": {
       "default": 300,

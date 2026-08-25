@@ -2,7 +2,7 @@
   "$defs": {
     "BaseMetrics": {
       "additionalProperties": false,
-      "description": "Empty base; subtype payloads carry the real metric fields (Appendix B.3).\n\nThe envelope's top-level ``metrics`` field is ``BaseMetrics`` and stays\nempty by design \u2014 real numbers live in the hazard subtype payload\n(``flood.metrics`` etc.), enforcing invariant 3.",
+      "description": "Empty base; subtype payloads carry the real metric fields.\n\nThe envelope's top-level ``metrics`` field is ``BaseMetrics`` and stays\nempty by design \u2014 real numbers live in the hazard subtype payload\n(``flood.metrics`` etc.), enforcing invariant 3.",
       "properties": {},
       "title": "BaseMetrics",
       "type": "object"
@@ -117,6 +117,58 @@
         "accessed_at"
       ],
       "title": "DataSource",
+      "type": "object"
+    },
+    "FallbackActivation": {
+      "additionalProperties": false,
+      "description": "One rung of a declared fallback ladder that actually served a request.\n\nFields:\n  - ``capability``: the ladder's owner (a tool name or a seam id).\n  - ``rung`` / ``consequence``: which alternative served and what it costs.\n  - ``coverage``: the FRACTION of the request this rung served - 1.0 for a\n    whole-request swap, a partial share for a mosaic that several rungs\n    painted together (0.89 primary + 0.11 cross_dataset).\n  - ``note``: what the alternative IS, in the words the user reads.",
+      "properties": {
+        "capability": {
+          "title": "Capability",
+          "type": "string"
+        },
+        "consequence": {
+          "enum": [
+            "primary",
+            "user_supplied",
+            "enhancement",
+            "same_data",
+            "cross_dataset",
+            "synthetic"
+          ],
+          "title": "Consequence",
+          "type": "string"
+        },
+        "coverage": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Coverage",
+          "type": "number"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "rung": {
+          "title": "Rung",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability",
+        "rung",
+        "consequence"
+      ],
+      "title": "FallbackActivation",
       "type": "object"
     },
     "FloodMetrics": {
@@ -512,8 +564,27 @@
     },
     "ResultLayer": {
       "additionalProperties": false,
-      "description": "A renderable result layer.\n\nField-for-field alignable with ``map-command load-layer`` args\n(``layer_id``, ``style_preset``, ``temporal``) so the UI renders without\ntranslation. Output formats are fixed by FR-CE-4/FR-QS-3: rasters COG,\nvectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer\nshape that maps onto this.\n\n``legend`` mirrors ``LayerURI.legend`` -- the DATA-DRIVEN render key (see\n``execution.LegendKey``): the colormap is the semantic per-variable choice,\nthe range is the REAL data range. Additive + optional -- ``None`` means\nlegacy ``style_preset`` rendering, so layers without a legend render exactly\nas before.",
+      "description": "A renderable result layer.\n\nField-for-field alignable with ``map-command load-layer`` args\n(``layer_id``, ``style_preset``, ``temporal``) so the UI renders without\ntranslation. Output formats are fixed by/: rasters COG,\nvectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer\nshape that maps onto this.\n\n``legend`` mirrors ``LayerURI.legend`` -- the DATA-DRIVEN render key (see\n``execution.LegendKey``): the colormap is the semantic per-variable choice,\nthe range is the REAL data range. Additive + optional -- ``None`` means\nlegacy ``style_preset`` rendering, so layers without a legend render exactly\nas before.",
       "properties": {
+        "fallback_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fallback Note"
+        },
+        "fallbacks": {
+          "items": {
+            "$ref": "#/$defs/FallbackActivation"
+          },
+          "title": "Fallbacks",
+          "type": "array"
+        },
         "layer_id": {
           "title": "Layer Id",
           "type": "string"
@@ -645,7 +716,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "The central output structure (Appendix B.2).\n\nFor a given envelope, exactly one subtype field matching ``hazard_type`` is\npopulated; the rest are ``None``. ``envelope_type`` (modeled vs discovered)\nis independent of ``hazard_type``.\n\nv0.1 note: only the flood subtype is fully typed (``FloodPayload``). The\nv0.2+/v0.3+ subtypes (groundwater/wildfire/seismic/spill) are carried as\npermissive ``dict | None`` slots until their engines land \u2014 matching\nAppendix B.6b, which states discovery payloads are a permissive dict\nvalidated at the workflow layer in v0.1. See report Open Question OQ-S2.",
+  "description": "The central output structure.\n\n    For a given envelope, exactly one subtype field matching ``hazard_type`` is\n    populated; the rest are ``None``. ``envelope_type`` (modeled vs discovered)\n    is independent of ``hazard_type``.\n\n    v0.1 note: only the flood subtype is fully typed (``FloodPayload``). The\n    v0.2+/v0.3+ subtypes (groundwater/wildfire/seismic/spill) are carried as\n    permissive ``dict | None`` slots until their engines land \u2014 matching\n.6b, which states discovery payloads are a permissive dict\n    validated at the workflow layer in v0.1. See report Open Question OQ-S2.\n    ",
   "properties": {
     "bbox": {
       "maxItems": 4,

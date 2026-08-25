@@ -1,5 +1,57 @@
 {
   "$defs": {
+    "FallbackActivation": {
+      "additionalProperties": false,
+      "description": "One rung of a declared fallback ladder that actually served a request.\n\nFields:\n  - ``capability``: the ladder's owner (a tool name or a seam id).\n  - ``rung`` / ``consequence``: which alternative served and what it costs.\n  - ``coverage``: the FRACTION of the request this rung served - 1.0 for a\n    whole-request swap, a partial share for a mosaic that several rungs\n    painted together (0.89 primary + 0.11 cross_dataset).\n  - ``note``: what the alternative IS, in the words the user reads.",
+      "properties": {
+        "capability": {
+          "title": "Capability",
+          "type": "string"
+        },
+        "consequence": {
+          "enum": [
+            "primary",
+            "user_supplied",
+            "enhancement",
+            "same_data",
+            "cross_dataset",
+            "synthetic"
+          ],
+          "title": "Consequence",
+          "type": "string"
+        },
+        "coverage": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Coverage",
+          "type": "number"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "rung": {
+          "title": "Rung",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability",
+        "rung",
+        "consequence"
+      ],
+      "title": "FallbackActivation",
+      "type": "object"
+    },
     "LegendClass": {
       "additionalProperties": false,
       "description": "One class swatch in a CATEGORICAL ``LegendKey`` (NLCD class, drought\nD0-D4, Pelicun damage state, etc.).\n\nA class addresses the data it colors in one of two ways; populate exactly\none form per class:\n\n- ``value`` -- a single discrete value the swatch matches (the GDAL color\n  table entry, the NLCD class code, the ``\"D2\"`` drought label). May be a\n  number or a string.\n- ``value_min`` / ``value_max`` -- a half-open / closed numeric bin the\n  swatch covers (graduated buckets, e.g. damage-state mean ``0.5..1.5``).\n\n``color`` is an ``#rrggbb`` hex string; ``label`` is the human-readable\nswatch caption the frontend renders verbatim.",
@@ -184,6 +236,107 @@
       "title": "LegendKey",
       "type": "object"
     },
+    "SyntheticInput": {
+      "additionalProperties": false,
+      "description": "One structured provenance entry for a physical model input.\n\nRecords WHERE a single physical parameter used in a run came from so the\nagent can narrate provenance instead of inventing phrasing, and so a demo\ndefault is never mistaken for site-derived data (the input-provenance audit\ngate, structured half). Carried by the result-envelope contracts (base\n``LayerURI.synthetic_inputs`` + ``ImpactEnvelope.synthetic_inputs``); ADDITIVE\nand default-empty so templates populate the list incrementally - an empty\nlist means \"no declared provenance\", never \"all real\".\n\nFields:\n  - ``param``: the canonical parameter name (e.g. ``\"dam_break_depth_m\"``).\n  - ``value``: the value actually used (scalar/str; None when not surfaced).\n  - ``units``: physical units, when applicable.\n  - ``basis``: the provenance class (see ``InputBasis``).\n  - ``consequence``: what the value's wrongness costs (see ``InputConsequence``).\n    REQUIRED when ``basis == \"default_demo\"`` - the gate cannot decide\n    refuse-vs-proceed from ``basis`` alone, because a demo default may be an\n    invented physics value (refuse) or a scenario/numerical/aoi assumption\n    (proceed). Optional on other bases.\n  - ``real_source_if_any``: the fetcher / dataset name when\n    ``basis in {\"fetched\", \"derived\"}`` (e.g. ``\"fetch_usace_dams\"``).\n  - ``note``: a short human-readable qualifier.",
+      "properties": {
+        "basis": {
+          "enum": [
+            "fetched",
+            "user",
+            "prompt_interpreted",
+            "default_demo",
+            "derived",
+            "measured_inversion",
+            "scenario_slab2"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "consequence": {
+          "anyOf": [
+            {
+              "enum": [
+                "physics",
+                "scenario",
+                "numerical",
+                "aoi"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consequence"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "param": {
+          "title": "Param",
+          "type": "string"
+        },
+        "real_source_if_any": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Real Source If Any"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Units"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "param",
+        "basis"
+      ],
+      "title": "SyntheticInput",
+      "type": "object"
+    },
     "TemporalConfig": {
       "additionalProperties": false,
       "description": "WMS-T temporal config for a time-varying layer.",
@@ -214,7 +367,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Returned by ``postprocess_flood`` (one per output layer).\n\nAligned field-for-field with ``map-command load-layer`` args and with\n``ResultLayer`` so postprocess output maps onto the visualization seam with\nno translation. ``uri`` is a COG (raster) or FlatGeobuf/GeoParquet (vector).\n\n``bbox`` is optional (job-0068): when present the pipeline emitter emits a\n``map-command(zoom-to)`` after ``add_loaded_layer`` so the client camera\nflies to the layer's geographic extent. Format: ``(min_lon, min_lat,\nmax_lon, max_lat)`` in EPSG:4326.\n\n``legend`` is the DATA-DRIVEN render key (see ``LegendKey``): the colormap\nis the semantic per-variable choice, the range is the REAL data range the\nproducer already computed. Additive + optional -- ``legend=None`` means\nlegacy ``style_preset`` rendering (the existing preset + URL-rescale +\npreset-fallback path), so layers without a legend render exactly as before.",
+  "description": "Returned by ``postprocess_flood`` (one per output layer).\n\nAligned field-for-field with ``map-command load-layer`` args and with\n``ResultLayer`` so postprocess output maps onto the visualization seam with\nno translation. ``uri`` is a COG (raster) or FlatGeobuf/GeoParquet (vector).\n\n``bbox`` is optional: when present the pipeline emitter emits a\n``map-command(zoom-to)`` after ``add_loaded_layer`` so the client camera\nflies to the layer's geographic extent. Format: ``(min_lon, min_lat,\nmax_lon, max_lat)`` in EPSG:4326.\n\n``legend`` is the DATA-DRIVEN render key (see ``LegendKey``): the colormap\nis the semantic per-variable choice, the range is the REAL data range the\nproducer already computed. Additive + optional -- ``legend=None`` means\nlegacy ``style_preset`` rendering (the existing preset + URL-rescale +\npreset-fallback path), so layers without a legend render exactly as before.",
   "properties": {
     "bbox": {
       "anyOf": [
@@ -244,6 +397,18 @@
       "default": null,
       "title": "Bbox"
     },
+    "crs_authid": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Crs Authid"
+    },
     "fallback_note": {
       "anyOf": [
         {
@@ -256,6 +421,13 @@
       "default": null,
       "title": "Fallback Note"
     },
+    "fallbacks": {
+      "items": {
+        "$ref": "#/$defs/FallbackActivation"
+      },
+      "title": "Fallbacks",
+      "type": "array"
+    },
     "layer_id": {
       "title": "Layer Id",
       "type": "string"
@@ -263,7 +435,8 @@
     "layer_type": {
       "enum": [
         "raster",
-        "vector"
+        "vector",
+        "mesh"
       ],
       "title": "Layer Type",
       "type": "string"
@@ -296,6 +469,13 @@
     "style_preset": {
       "title": "Style Preset",
       "type": "string"
+    },
+    "synthetic_inputs": {
+      "items": {
+        "$ref": "#/$defs/SyntheticInput"
+      },
+      "title": "Synthetic Inputs",
+      "type": "array"
     },
     "temporal": {
       "anyOf": [

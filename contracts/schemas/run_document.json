@@ -2,7 +2,7 @@
   "$defs": {
     "UserSpatialInput": {
       "additionalProperties": false,
-      "description": "A user-provided spatial input recorded on a run (FR-AS-10).",
+      "description": "A user-provided spatial input recorded on a run.",
       "properties": {
         "coordinates": {
           "items": {

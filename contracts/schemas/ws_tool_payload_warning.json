@@ -100,6 +100,279 @@
       "title": "GranularitySuggestion",
       "type": "object"
     },
+    "ParamSheet": {
+      "additionalProperties": false,
+      "description": "The resolved param sheet a declared ``FormGate`` presents for review.\n\nThe rows arrive in RENDER order (question-bearing first, ``advanced`` last) --\nthe server owns the ordering because it owns the doors. The user's edits ride\nback on the existing ``tool-payload-confirmation``\n(``decision=\"narrow_scope\"`` + ``revised_args`` keyed by ``row.name``), and a\nsubmit-with-edits IS the approval: the sheet was fully visible, so there is\nnothing left to re-present.",
+      "properties": {
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/ParamSheetRow"
+          },
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Title",
+          "type": "string"
+        },
+        "workflow": {
+          "minLength": 1,
+          "title": "Workflow",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow",
+        "rows"
+      ],
+      "title": "ParamSheet",
+      "type": "object"
+    },
+    "ParamSheetRow": {
+      "additionalProperties": false,
+      "description": "One row of the resolved param sheet the FORM CARD renders.\n\nRicher than the :class:`~trid3nt_contracts.common.SyntheticInput` line beside\nit: provenance narration needs a value and a basis, while an EDIT SURFACE also\nneeds the declaration -- what the value means (``desc``), what it may become\n(``bounds``), and how loudly to warn that editing it overrides a derivation\n(``source_badge`` + ``user_lever``).\n\nFields:\n\n- ``name`` -- the declared param name; the key the edit rides back under in\n  ``revised_args``.\n- ``value`` -- the resolved value. ``None`` means the row resolved to nothing\n  (an optional param, or one waiting on a gate).\n- ``units`` -- physical units, when applicable.\n- ``desc`` -- the param's one-line declaration; the row LABEL.\n- ``door`` -- which door served the value.\n- ``basis`` -- the provenance class (shared vocabulary with ``SyntheticInput``).\n- ``source_badge`` -- the short human phrase the card shows beside the value\n  (\"read from your prompt\" / \"derived from water_temp_c\" / \"labeled default\").\n  Rendered, never re-derived by the client from ``basis`` + ``door``.\n- ``bounds`` -- the declared ``(min, max)``; the card clamps its editor to it\n  and the server re-clamps on submit (the form is an edit surface, not a\n  bypass of the declaration).\n- ``user_lever`` -- the declaration marks this derived/constant value as one\n  the user is expected to override.\n- ``editable`` -- whether the card offers an editor. Every row is editable\n  today; editing a derived row is WARNED through ``source_badge``, not locked.\n- ``advanced`` -- render under the \"advanced\" fold (constant-door physics that\n  is inspectable but not the question).\n- ``note`` -- the resolution note (a clamp, a derivation, a conflict).",
+      "properties": {
+        "advanced": {
+          "default": false,
+          "title": "Advanced",
+          "type": "boolean"
+        },
+        "basis": {
+          "enum": [
+            "fetched",
+            "user",
+            "prompt_interpreted",
+            "default_demo",
+            "derived",
+            "measured_inversion",
+            "scenario_slab2"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "bounds": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bounds"
+        },
+        "desc": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Desc",
+          "type": "string"
+        },
+        "door": {
+          "enum": [
+            "user",
+            "question",
+            "derived",
+            "scenario",
+            "constant",
+            "gate"
+          ],
+          "title": "Door",
+          "type": "string"
+        },
+        "editable": {
+          "default": true,
+          "title": "Editable",
+          "type": "boolean"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "source_badge": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Source Badge",
+          "type": "string"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Units"
+        },
+        "user_lever": {
+          "default": false,
+          "title": "User Lever",
+          "type": "boolean"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "door",
+        "basis"
+      ],
+      "title": "ParamSheetRow",
+      "type": "object"
+    },
+    "SyntheticInput": {
+      "additionalProperties": false,
+      "description": "One structured provenance entry for a physical model input.\n\nRecords WHERE a single physical parameter used in a run came from so the\nagent can narrate provenance instead of inventing phrasing, and so a demo\ndefault is never mistaken for site-derived data (the input-provenance audit\ngate, structured half). Carried by the result-envelope contracts (base\n``LayerURI.synthetic_inputs`` + ``ImpactEnvelope.synthetic_inputs``); ADDITIVE\nand default-empty so templates populate the list incrementally - an empty\nlist means \"no declared provenance\", never \"all real\".\n\nFields:\n  - ``param``: the canonical parameter name (e.g. ``\"dam_break_depth_m\"``).\n  - ``value``: the value actually used (scalar/str; None when not surfaced).\n  - ``units``: physical units, when applicable.\n  - ``basis``: the provenance class (see ``InputBasis``).\n  - ``consequence``: what the value's wrongness costs (see ``InputConsequence``).\n    REQUIRED when ``basis == \"default_demo\"`` - the gate cannot decide\n    refuse-vs-proceed from ``basis`` alone, because a demo default may be an\n    invented physics value (refuse) or a scenario/numerical/aoi assumption\n    (proceed). Optional on other bases.\n  - ``real_source_if_any``: the fetcher / dataset name when\n    ``basis in {\"fetched\", \"derived\"}`` (e.g. ``\"fetch_usace_dams\"``).\n  - ``note``: a short human-readable qualifier.",
+      "properties": {
+        "basis": {
+          "enum": [
+            "fetched",
+            "user",
+            "prompt_interpreted",
+            "default_demo",
+            "derived",
+            "measured_inversion",
+            "scenario_slab2"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "consequence": {
+          "anyOf": [
+            {
+              "enum": [
+                "physics",
+                "scenario",
+                "numerical",
+                "aoi"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consequence"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "param": {
+          "title": "Param",
+          "type": "string"
+        },
+        "real_source_if_any": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Real Source If Any"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Units"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "param",
+        "basis"
+      ],
+      "title": "SyntheticInput",
+      "type": "object"
+    },
     "TimeScaleSuggestion": {
       "additionalProperties": false,
       "description": "Pre-run TIME-SCALE (animation cadence + window) suggestion attached to a\n``tool-payload-warning`` (combined run-settings gate, sprint-16).\n\nThe sibling of :class:`GranularitySuggestion`: where granularity makes the\nSPATIAL resolution a user lever, this makes the TEMPORAL resolution one. A\ncoastal/wave SFINCS run animates its rising water at a FINE minute-scale\nstride (so it reads as water rolling in, not a slowly-filling bathtub \u2014\nmemory: the \"looks like rain\" fix); the pluvial path animates hourly. The\ncadence (minutes per frame) and the simulation window (duration in hours)\ntogether determine the animation FRAME COUNT \u2014 too many frames balloons the\npayload, too few hides the wave motion. This model surfaces the agent's\nSUGGESTED cadence + window + the resulting frame-count estimate so the user\ncan SEE \"~N frames every M min\" and override the cadence / window before the\nsolve.\n\nThe override reuses the EXISTING ``tool-payload-confirmation`` path\n(``decision=\"narrow_scope\"`` + ``revised_args`` carrying the chosen\n``cadence_param`` value and/or ``duration_param`` value) \u2014 no new envelope.\nThe combined run-settings card sends the resolution override AND the\ntime-scale override in the SAME ``revised_args`` dict (ONE interaction).\n\nThis model is an OPTIONAL enrichment on ``PayloadWarningEnvelopePayload``; a\npayload-warning without a time-scale suggestion is unchanged. The pluvial\nflood path emits NO time-scale row (hourly cadence is fixed) so the gate\nfalls back to the granularity-only card.\n\nFields:\n\n- ``cadence_param`` \u2014 the solver-args field the user overrides for cadence:\n  ``\"output_interval_min\"`` (minutes between animation frames). The client\n  writes the chosen value back into ``revised_args`` under this exact key.\n- ``suggested_interval_min`` \u2014 the agent's recommended minutes-per-frame\n  (> 0). The default-prefilled cadence.\n- ``interval_choices`` \u2014 an OPTIONAL ascending ladder of suggested cadences\n  (minutes) for quick-pick chips; the card ALSO exposes a free numeric edit\n  so a value off the ladder is allowed. May be empty (free-edit only).\n- ``duration_param`` \u2014 the solver-args field for the simulation window:\n  ``\"duration_hr\"``. The client writes the chosen window back under this key.\n- ``suggested_duration_hr`` \u2014 the agent's simulation window in hours (> 0).\n  The default-prefilled, editable duration.\n- ``estimated_frame_count`` \u2014 projected animation frames at the suggested\n  cadence + window (>= 1). Drives the \"~N frames\" readout; the client\n  LIVE-recomputes it as the user edits (``duration_hr*60 / interval``,\n  clamped to ``[1, max_frames]``).\n- ``max_frames`` \u2014 the postprocess frame cap (> 0); the ceiling the\n  recompute clamps to (so the readout never advertises an unbounded count).\n- ``min_interval_min`` \u2014 physical floor on the cadence (minutes, > 0); the\n  deck re-floors at this, so a finer edit cannot yield more frames than the\n  deck emits. The client floors the editable interval at this value.\n- ``is_coastal`` \u2014 True for a coastal/wave run (fine minute-scale stride),\n  False for pluvial (hourly). Surfaced so the card labels the cadence honestly.\n- ``reason`` \u2014 short human-readable rationale (e.g. \"Coastal surge: 5-min\n  frames over a 6 h window animate the wave roll-in\").\n\nInvariant 1 (Determinism boundary): every number the chat narrates here is a\nstructured field, never inferred from prose.\nInvariant 9 (No cost theater): frames / minutes / hours are capacity +\ncapability descriptors, NOT dollar figures. No dollar field.",
@@ -172,7 +445,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``tool-payload-warning`` (Appendix A amendment, job-0127).\n\nAgent emits this when a registered estimator's projected payload\nexceeds the warning threshold. The client renders an inline chat card\nshowing the tool name, the projected MB, the threshold, the agent's\nshort recommendation, and (optionally) the agent's suggested narrowing\nargs. The user picks one of the actions in ``options``.\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"tool-payload-warning\"``.\n- ``warning_id`` \u2014 ULID identifying the gate; the response carries it\n  back so the agent can match the confirmation to the right paused\n  coroutine.\n- ``tool_name`` \u2014 atomic-tool function name (Python identifier). The\n  client renders this to the user.\n- ``tool_args`` \u2014 the args the agent intended to dispatch (sanitized,\n  JSON-serializable). The client shows a summary so the user can\n  verify what's about to be fetched.\n- ``estimated_mb`` \u2014 the estimator's projected payload size in\n  megabytes. Float; the estimator may return a fractional value.\n- ``threshold_mb`` \u2014 the threshold the estimate exceeded. The client\n  surfaces both numbers (estimate + threshold) so the user understands\n  WHY the gate fired.\n- ``recommendation`` \u2014 short human-readable suggestion (e.g.\n  \"Consider narrowing bbox to a single county\" or \"Filter to fewer\n  bands\"). Capped at 512 chars.\n- ``alternative_args`` \u2014 optional agent-drafted narrowed args. When\n  present, the client can offer a one-click \"narrow scope\" using these\n  exact args (no second prompt needed). Permissive ``dict`` shape so\n  tool-specific narrowing strategies (smaller bbox / fewer time steps\n  / fewer features) all fit. The agent service round-trips this\n  through the target tool's signature before dispatch.\n- ``options`` \u2014 non-empty subset of {``\"proceed\"``, ``\"cancel\"``,\n  ``\"narrow_scope\"``}. When the estimate exceeds the hard cap, the\n  agent omits ``\"proceed\"`` here so the client cannot offer it.\n- ``ttl_seconds`` \u2014 gate validity (seconds since envelope ``ts``); on\n  expiry the gate becomes a typed failure (``CONFIRMATION_TIMEOUT``\n  from A.6). Default 300s \u2014 payload-warning gates are read-decisions,\n  so they get the same TTL as a confirmation-request.\n- ``granularity`` \u2014 OPTIONAL pre-run mesh-granularity suggestion\n  (#154 granularity gate). When present, the client renders the\n  resolution ladder + estimated cells / solve time / compute class and\n  lets the user override the rung before the heavy solver run. The\n  override rides back on the existing ``tool-payload-confirmation``\n  (``decision=\"narrow_scope\"`` + ``revised_args``). None on ordinary\n  payload-warnings \u2014 fully back-compatible.\n- ``time_scale`` \u2014 OPTIONAL pre-run time-scale (animation cadence +\n  window) suggestion (combined run-settings gate). When present ALONGSIDE\n  ``granularity``, the client renders ONE combined \"Run settings\" card\n  letting the user review + override BOTH the spatial resolution AND the\n  temporal cadence/window before the heavy solver run, sending both\n  overrides in a SINGLE ``revised_args`` dict (ONE interaction). None for\n  the pluvial path (hourly cadence is fixed) \u2014 the card falls back to the\n  granularity-only resolution gate. Fully back-compatible.\n\nInvariant 1 (Determinism boundary): every number the chat narrates\nhere is a structured field, never inferred from prose.\nInvariant 9 (No cost theater): ``estimated_mb`` is a payload-size\nestimate, not a dollar / latency / quota figure. No cost field anywhere.",
+  "description": "``tool-payload-warning`` (amendment).\n\nAgent emits this when a registered estimator's projected payload\nexceeds the warning threshold. The client renders an inline chat card\nshowing the tool name, the projected MB, the threshold, the agent's\nshort recommendation, and (optionally) the agent's suggested narrowing\nargs. The user picks one of the actions in ``options``.\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"tool-payload-warning\"``.\n- ``warning_id`` \u2014 ULID identifying the gate; the response carries it\n  back so the agent can match the confirmation to the right paused\n  coroutine.\n- ``tool_name`` \u2014 atomic-tool function name (Python identifier). The\n  client renders this to the user.\n- ``tool_args`` \u2014 the args the agent intended to dispatch (sanitized,\n  JSON-serializable). The client shows a summary so the user can\n  verify what's about to be fetched.\n- ``estimated_mb`` \u2014 the estimator's projected payload size in\n  megabytes. Float; the estimator may return a fractional value.\n- ``threshold_mb`` \u2014 the threshold the estimate exceeded. The client\n  surfaces both numbers (estimate + threshold) so the user understands\n  WHY the gate fired.\n- ``recommendation`` \u2014 short human-readable suggestion (e.g.\n  \"Consider narrowing bbox to a single county\" or \"Filter to fewer\n  bands\"). Capped at 512 chars.\n- ``alternative_args`` \u2014 optional agent-drafted narrowed args. When\n  present, the client can offer a one-click \"narrow scope\" using these\n  exact args (no second prompt needed). Permissive ``dict`` shape so\n  tool-specific narrowing strategies (smaller bbox / fewer time steps\n  / fewer features) all fit. The agent service round-trips this\n  through the target tool's signature before dispatch.\n- ``options`` \u2014 non-empty subset of {``\"proceed\"``, ``\"cancel\"``,\n  ``\"narrow_scope\"``}. When the estimate exceeds the hard cap, the\n  agent omits ``\"proceed\"`` here so the client cannot offer it.\n- ``ttl_seconds`` \u2014 gate validity (seconds since envelope ``ts``); on\n  expiry the gate becomes a typed failure (``CONFIRMATION_TIMEOUT``\n  from A.6). Default 300s \u2014 payload-warning gates are read-decisions,\n  so they get the same TTL as a confirmation-request.\n- ``granularity`` \u2014 OPTIONAL pre-run mesh-granularity suggestion\n  (#154 granularity gate). When present, the client renders the\n  resolution ladder + estimated cells / solve time / compute class and\n  lets the user override the rung before the heavy solver run. The\n  override rides back on the existing ``tool-payload-confirmation``\n  (``decision=\"narrow_scope\"`` + ``revised_args``). None on ordinary\n  payload-warnings \u2014 fully back-compatible.\n- ``time_scale`` \u2014 OPTIONAL pre-run time-scale (animation cadence +\n  window) suggestion (combined run-settings gate). When present ALONGSIDE\n  ``granularity``, the client renders ONE combined \"Run settings\" card\n  letting the user review + override BOTH the spatial resolution AND the\n  temporal cadence/window before the heavy solver run, sending both\n  overrides in a SINGLE ``revised_args`` dict (ONE interaction). None for\n  the pluvial path (hourly cadence is fixed) \u2014 the card falls back to the\n  granularity-only resolution gate. Fully back-compatible.\n\nInvariant 1 (Determinism boundary): every number the chat narrates\nhere is a structured field, never inferred from prose.\nInvariant 9 (No cost theater): ``estimated_mb`` is a payload-size\nestimate, not a dollar / latency / quota figure. No cost field anywhere.",
   "properties": {
     "alternative_args": {
       "anyOf": [
@@ -223,10 +496,36 @@
       "title": "Options",
       "type": "array"
     },
+    "param_sheet": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ParamSheet"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "recommendation": {
       "maxLength": 512,
       "title": "Recommendation",
       "type": "string"
+    },
+    "synthetic_inputs": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SyntheticInput"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Synthetic Inputs"
     },
     "threshold_mb": {
       "minimum": 0.0,

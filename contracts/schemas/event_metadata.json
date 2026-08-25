@@ -839,7 +839,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Structured representation of a real-world hazard event (Appendix C.2).",
+  "description": "Structured representation of a real-world hazard event.",
   "properties": {
     "canonical_id": {
       "anyOf": [

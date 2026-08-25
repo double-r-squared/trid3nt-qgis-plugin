@@ -188,6 +188,18 @@
       "additionalProperties": false,
       "description": "Denormalized layer entry on a project (and on session map state).\n\nThe ``wms_url`` field carries the QGIS Server WMS endpoint the client uses\nfor MapLibre source registration; ``uri`` remains the underlying GCS file\npointer (gs://...). ``style_preset`` drives client-side legend matching.\n``opacity`` (0.0\u20131.0) and ``z_index`` enable layer-stack arbitration;\nclients fall back to ``1.0`` / a default order if both are absent.\n\n``legend`` is the DATA-DRIVEN render key mirrored from ``LayerURI.legend``\n(see ``execution.LegendKey``): the colormap is the semantic per-variable\nchoice, the range is the REAL data range. Additive + optional -- ``None``\nmeans legacy ``style_preset`` rendering, so layers without a legend render\nexactly as before. The pipeline emitter copies it onto this summary.\n\nCloses OQ-62-LAYERURI-URI-FIELD, OQ-W-65-STYLE-PRESET, OQ-0068-ZIDX.",
       "properties": {
+        "crs_authid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crs Authid"
+        },
         "layer_id": {
           "title": "Layer Id",
           "type": "string"
@@ -195,7 +207,8 @@
         "layer_type": {
           "enum": [
             "raster",
-            "vector"
+            "vector",
+            "mesh"
           ],
           "title": "Layer Type",
           "type": "string"
