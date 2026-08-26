@@ -71,3 +71,17 @@ product/test split reads +388 / -55 = +333 product and +219 test. Both numbers a
 true of their own range. This ledger's stated rule is deltas from ROW 0, so the
 number that belongs in the column is **+46**, and `0f7a6351..02acbfed` is recorded
 here only so a reader who meets +607 / -55 elsewhere knows what it measures.
+
+| C - the open-water fetch migration (`53591921`) | `02acbfed..<wave head>` | workers/telemac/ | +146 / -378 = **-232** | +2 / -49 = **-47** | **-233** | the dissolution starts. Four builders' copies of one HTTP fetch against the NOAA NCEI mosaic (~20 lines each) became one 55-line staged-raster reader; `_bed_cog.py` (109) and its two tests died with the node-lattice bed COG the server now publishes from the source raster instead; ARTEMIS's schematic-breakwater branch went with them. The image runs the four open-water families with `--network none`. |
+
+Reading the two numbers in that row: **-279** is this wave's own span
+(`f609b762..<head>`, `git diff --numstat -- workers/`), and **-233** is the running
+net from row 0, which still carries wave B's +46. Per dir, against row 0:
+`workers/telemac/` 9318 -> **9132** product and 2383 -> **2336** test; every other
+worker dir is untouched, so the TOTAL moves 46947 -> **46714**.
+
+The dissolution is NOT done for TELEMAC. `telemac_river_dye_build.py` still holds
+six network fetches (NLDI snap + navigate, two NHDPlus_HR flowline re-seeds, the
+NHDArea bank query, and the private Copernicus-STAC -> 3DEP DEM ladder), so the
+reach family cannot run `--network none` yet. Why that half was left standing, and
+what it costs to finish, is in ADR 0317.

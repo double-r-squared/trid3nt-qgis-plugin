@@ -195,3 +195,49 @@ The steps audit parked rain_on_grid's whole set behind this migration. Row by ro
   open-water front's, with the reason it is an order of magnitude larger stated.
 - **the duplicated UTM-zone formula** - one `utm_epsg_for(lon, lat)` in the mesh
   front; both former copies read it.
+
+---
+
+## Wave D - the FETCH migration (2026-08-26, ADR 0317)
+
+Waves B and C moved the templates onto the skeleton. This one moves the DATA:
+the bed four of the seven families solve on was fetched from inside the solver
+container, and is now a declared producer staged into the run directory.
+
+| family | bed before | bed after | `--network none` | parity |
+|---|---|---|---|---|
+| `coastal_tidal_surge` | in-worker `requests.get` NOAA DEM_all, 1800 px/deg | `Data("bed")` -> `fetch_ncei_dem_mosaic`, staged as `bed_source.tif` | YES | 19/19 composer metrics + all worker metrics IDENTICAL |
+| `tomawac_wave_field` | same fetch, 1200 px/deg | same, 1200 px/deg | YES | IDENTICAL |
+| `telemac3d_stratified_flow` | same fetch, 1200 px/deg, NO bed layer at all | same, 1200 px/deg, bed layer for the first time | YES | IDENTICAL |
+| `artemis_harbor_agitation` | same fetch, 3000 px/deg | same, 3000 px/deg | YES | MOVED - the `demo_bw` chop, by design |
+| `telemac_river_dye` | 6 in-worker fetches | UNCHANGED | no | IDENTICAL (refined) |
+| `telemac_do_sag` | shares river_dye's | UNCHANGED | no | IDENTICAL on re-run; a pre-existing FLAKE found |
+| `telemac_rain_on_grid` | agent-side already | UNCHANGED | no (shares the reach solver) | IDENTICAL |
+
+Byte-parity was PROVEN before anything was migrated, not argued: the router's
+`fetch_ncei_dem_mosaic` request over the coastal canary's own bbox returns a
+262982-byte body with sha256 `ffa0579fbf84d7d9...`, and so does the worker's own
+`requests.get` of the same endpoint. That is why the executor gained a declared
+`px_per_deg` sizing rather than reusing its metric `native_cell_m` one - the four
+builders' lattices are ANGULAR and differ per builder, and a re-grid would have
+moved every sampled node.
+
+### What died
+
+| file / seam | LOC | why |
+|---|---|---|
+| `workers/telemac/_bed_cog.py` | 109 | the node-lattice bed COG; the staged SOURCE raster is continuous and IS what the nodes were sampled from |
+| 4x `fetch_greatlakes_bathy` / `fetch_demall_bed` | ~80 | one 55-line `_staged_bed.sample_staged_bed` reads the file instead |
+| `steps/open_water.py::surface_in_worker_bed_input` | 26 | emit-on-fetch surfaces the producer's own result |
+| `artemis_build.py`'s `demo_bw` branch | ~30 | the deck is the only authority on a structure |
+| 5x hand-copied `build_argv` closures | ~40 | one `_telemac_build_argv` factory |
+| 4x `test_write_bed_cog*` / `test_surface_in_worker_*` | ~90 | they covered the deleted seams |
+
+`workers/telemac/` product 9318 -> 9132, test 2383 -> 2336.
+
+### What did NOT die, and why
+
+`telemac_river_dye_build.py::write_bed_cog` survives. It is the same shape as the
+one that died, and it dies the same way - but only once its bed is a declared
+producer too, and that is blocked on a NATE ruling and a measured parity question
+(ADR 0317, "What this ADR deliberately does not do").

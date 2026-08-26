@@ -1875,3 +1875,57 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   week. Closing this properly means first establishing whether those names are
   composed or dead; if composed, the gate needs the composition sites declared
   rather than guessed at, which is the same lesson as every other mirror here.
+
+- REACH-FAMILY FETCH MIGRATION - THE MONSTER LEFT UNBROKEN (2026-08-26, the
+  fetch-migration wave, ADR 0317). The four open-water families are migrated and
+  run `--network none`; `telemac_river_dye_build.py` still holds SIX network
+  fetches (NLDI `comid/position` snap, two NHDPlus_HR `/3/query` flowline
+  re-seeds, the NLDI navigate that IS the model centerline, the NHDArea `/8/query`
+  bank polygons, and the private Copernicus-STAC -> 3DEP DEM ladder), so
+  river_dye / do_sag cannot take the posture. TWO blockers, both measured rather
+  than assumed. (1) NATE OWES A RULING on the producer: the canvas shows an OSM
+  `fetch_river_geometry` layer while the mesh is built on an NLDI centerline
+  nobody sees, and making the declared layer the CONSUMED one moves the seed and
+  therefore the physics - the false-surface repair is not free. (2) The DEM rung
+  is NOT a like-for-like swap: over the Eel River canary reach the router's
+  `fetch_dem(source="copernicus")` mosaic differs from the worker's own
+  `/vsicurl` sample of the same GLO-30 tiles by RMS 3.87 m, max 22.3 m on valley
+  walls (mean 0.002 m - a robust along-channel fit may survive it, which is worth
+  MEASURING on the real reach nodes before deciding). The parity-exact route is a
+  native-grid STAC mosaic that does not re-grid, an executor change with its own
+  risk. Sequence: measure the fit first (cheap, decides everything), then take
+  NATE's producer ruling, then migrate all six together.
+
+- do_sag REFINED CANARY IS NON-DETERMINISTIC (found 2026-08-26 proving the
+  fetch-migration wave; NOT caused by it). Two consecutive runs, no code change:
+  one sampled the sag curve every 7.4 m with BOD zero at every station and DO
+  minimum 8.9964 @ 692.1 m, the next reproduced the recorded pin exactly
+  (9.0081 @ 123.5 m). Cause is almost certainly `_mainstem_flowline_seed` being
+  FAIL-OPEN: a slow NHDPlus_HR query keeps the raw position seed and meshes a
+  DIFFERENT reach, and nothing in the record says which happened. Two lessons:
+  a silent-ladder bug costs REPEATABILITY as well as visibility, and a canary
+  whose pin can flip is not a pin. Dies with the reach-family migration; until
+  then a do_sag comparison that disagrees deserves a second run before it is
+  called a regression.
+
+- SAME-SOURCE REUSE RULE - DESIGNED, NOT BUILT (2026-08-26, ADR 0317). "A ladder
+  that resolves to the same source AND resolution as a raster already fetched for
+  a window COVERING this one clips rather than refetches." Shape: per-process
+  registry of raster-cog fetches keyed on (source_class, every non-bbox resolved
+  param), reuse only when the held bbox strictly CONTAINS the request, provenance
+  stamped with what was reused. Not built in the fetch wave for two reasons: it
+  lives in the router, whose wrong answer is wrong DATA rather than a wrong
+  layout; and the case that motivated it turned out NOT to be one (see the Coweeta
+  finding - two DEMs, two datasets, two purposes, nothing to reuse). Wants a real
+  motivating case before it earns the risk.
+
+- COMPUTE-CLASS VOCABULARY RENAME (medium -> standard) QUEUED (2026-08-26). The
+  schema contract says `small|standard|large|gpu`; the fleet says `medium`.
+  `COMPUTE_CLASS_ALIAS` is now the ONE definition (exported, read by everything
+  that validates a class) and `medium` is a documented synonym rather than a
+  parallel vocabulary. Finishing it is 84 occurrences across 42 files, most of
+  them model-facing `Param` defaults and template declarations whose provenance
+  rows and recorded canary args all move - a fleet-wide rename, so it belongs with
+  an engine-wide sweep and NOT smuggled into an engine wave. Also open: the schema
+  `Literal` has no `xlarge` while the alias map, `run_solver`'s docstring and
+  `telemac/steps/solve.py` all accept one.

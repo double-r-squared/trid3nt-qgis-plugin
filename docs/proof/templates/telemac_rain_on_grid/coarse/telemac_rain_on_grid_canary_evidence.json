@@ -13,8 +13,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YPHDMDFH45ED9K6HS8M6D2",
-  "case_id": "01M0YPHDX7DV7A00N00ACN8WB8",
+  "session_id": "01M0YYZ7YME6Z83QBV0QZTPKDE",
+  "case_id": "01M0YYZ87941XKYCBKXW505QMW",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -26,7 +26,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YPKNC82SNMQ3SEKJBVJ175",
+      "chart_id": "01M0YZ16EPPDYAVJKMT8FJRVC8",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -105,7 +105,7 @@
       "title": "Outlet hydrograph - watershed",
       "caption": "Peak outflow 0 m3/s from a 30.5 km2 catchment, 25 mm/h storm, runoff coefficient 0. Planning-grade single-storm screening: infiltrated water is permanently lost, so there is no baseflow limb.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YPHEKFD632GW5HZS199BWN"
+      "created_turn_id": "01M0YYZ8WJNHHHMJ5TYRY2EGM5"
     }
   ],
   "layers": [
@@ -75068,7 +75068,7 @@
     },
     {
       "layer_id": "input-copernicus_dem-98b7524a54a0",
-      "name": "Input: copernicus dem (copernicus_dem)",
+      "name": "Input: D8 flow routing (geographic grid); not the model bed (copernicus_dem)",
       "layer_type": "raster",
       "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/df44211455a3c2c4400e95813fba978a.tif",
       "style_preset": "continuous_dem",
@@ -76343,14 +76343,14 @@
         ],
         "value_field": null,
         "units": null,
-        "label": "Landcover"
+        "label": "Land Cover"
       }
     },
     {
-      "layer_id": "model-results-mesh-01M0YPJ339R6J2T91ACAH4SAET",
+      "layer_id": "model-results-mesh-01M0YYZM4Z6DXJFB8HC7ZDD9JH",
       "name": "Model results (time series): watershed",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0YPJ339R6J2T91ACAH4SAET/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/r2d_rog.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -76362,10 +76362,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0YPKNMG2QHGT3E47H814ZXP",
+      "layer_id": "01M0YZ16XM4AHTVGRDCDAF9EG9",
       "name": "Max water depth (watershed)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YPJ339R6J2T91ACAH4SAET/overviews/01M0YPKN81T23XVBSK6YRX995A.tif",
+      "uri": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/overviews/01M0YZ16ABQ5P2AKXV3X1GSBA2.tif",
       "style_preset": "continuous_water_surface_elevation",
       "visible": true,
       "role": "primary",
@@ -76732,11 +76732,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YPJ339R6J2T91ACAH4SAET",
+  "run_id": "01M0YYZM4Z6DXJFB8HC7ZDD9JH",
   "chart_spec": {
     "rain_on_grid_outlet_hydrograph": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YPKNC82SNMQ3SEKJBVJ175",
+      "chart_id": "01M0YZ16EPPDYAVJKMT8FJRVC8",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -76841,7 +76841,7 @@
       -83.39982025301708,
       35.073210729988745
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0YPJ339R6J2T91ACAH4SAET/overviews/01M0YPKN81T23XVBSK6YRX995A.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/overviews/01M0YZ16ABQ5P2AKXV3X1GSBA2.tif",
     "rain_event": "design_storm",
     "rain_event_note": "a CONSTANT design storm of 25 mm/h over 1 h - a hypothetical event, not a record. Ladder aorc_hourly -> design_storm.",
     "sim_duration_hr": 2.0,
@@ -76854,8 +76854,8 @@
     "mesh_bed_note": "mesh bed DEM: USGS 3DEP bare-earth (10 m); ladder usgs_3dep_bare_earth -> copernicus_glo30"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YPJ339R6J2T91ACAH4SAET/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YPJ339R6J2T91ACAH4SAET/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/metrics.json"
   },
   "product_errors": {}
 }

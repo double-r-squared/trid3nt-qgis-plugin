@@ -660,3 +660,38 @@ object determine the physics, (ii) how hot is the path, (iii) how many of the
 five visibility properties are absent, (iv) is the result actively MISLEADING
 rather than merely invisible. Criterion (iv) is why row 1 leads: an invisible
 fetch hides the truth, a false surface asserts a falsehood.
+
+---
+
+## Migration status (updated 2026-08-26, ADR 0317)
+
+Rows 5-8 are **CLOSED**. The four NOAA `DEM_all` fetches are one declared
+`Data("bed", ...)` producer per template, routed through a new
+`fetch_ncei_dem_mosaic` spec and staged into the run directory via the manifest
+`inputs` list this document called "deliberately empty". All five visibility
+properties now hold for the bed: it emits as a role=context input layer (and a
+CONTINUOUS one - the node-lattice bed COG died with the fetch), it read-through
+caches, it carries the router's provenance, it walks the router's retry doctrine,
+and its typed errors carry an `error_code` instead of a bare `HTTPError`.
+`telemac3d` (row 6, "the single worst individual site in the audit") gains all
+five at once, having had none.
+
+The four legs now run `docker run --network none`, declared per-spec on
+`LocalSolverSpec`. The audit's own framing - "the container is trusted with the
+public internet but is NOT given object-store credentials" - no longer describes
+them: they are trusted with nothing.
+
+Rows 1-4 are **OPEN**, and the reach family therefore cannot take
+`--network none`. Two reasons, both recorded in ADR 0317: row 1's producer
+question is NATE's to answer (repairing the false surface by making the declared
+layer the consumed one moves the seed, and therefore the physics), and row 4 is
+not a like-for-like swap (the router's Copernicus mosaic differs from the
+worker's own `/vsicurl` sample of the same GLO-30 tiles by RMS 3.87 m, up to
+22.3 m on valley walls, over the Eel River canary reach - measured, not assumed).
+
+One new piece of evidence for row 2, found while proving the wave: the
+`telemac_do_sag_refined` canary is NON-DETERMINISTIC, flipping between two
+centerlines on consecutive runs with no code change. `_mainstem_flowline_seed`
+fails open, so a slow NHDPlus_HR query silently keeps the raw seed and meshes a
+different reach - and nothing in the record says which happened. The audit graded
+that row on visibility; it also costs REPEATABILITY.

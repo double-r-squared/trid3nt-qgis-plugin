@@ -883,7 +883,7 @@ code inheritance. Superseded as the V&V exemplar by coastal-surge-vs-CO-OPS.
 **Decided by:** NATE (malpasset chop-no-harvest ruling, 2026-08-26). **Status:**
 QUEUED (condition: the stale sweep).
 
-## `workers/telemac/artemis_build.py`'s `demo_bw` branch - QUEUED
+## `workers/telemac/artemis_build.py`'s `demo_bw` branch - DELETED
 
 **What:** the third source-of-structure branch in the real-bathymetry diffraction
 builder (`artemis_build.py:635-642`). When the deck names neither
@@ -912,5 +912,86 @@ an unfilled slot then meshes no barrier and keeps the declared heading.
 unrequested barrier says so, and a solve that reports nothing reads UNMEASURED
 rather than open water. That closes the honesty hole; it does not close this one.
 
-**Decided by:** the panel-2 remediation wave's honesty pass. **Status:** QUEUED
-(condition: an ARTEMIS worker image rebuild + live diffraction smoke).
+**Decided by:** the panel-2 remediation wave's honesty pass. **Status:** DELETED
+(`53591921`). The condition was met by the fetch-migration wave, which rebuilds
+the TELEMAC image anyway: the branch, the `wdir = 90.0` override and the
+`if demo_bw:` dispatch are gone, an empty structure set meshes nothing, and the
+sheltered/exposed split projects about the DOMAIN CENTRE when there is no
+structure - previously a mean over an empty selection, which is where the
+all-NaN transect the first post-deletion canary produced came from.
+
+The physics MOVED, and that is the point. The coarse canary supplies no
+structure, so the recorded evidence was of the fabricated barrier: `kd_sheltered`
+0.0 (a total shadow behind a wall nobody asked for) -> 0.098, `kd_exposed` 0.631
+-> 0.524, `kd_max` 2.837 -> 2.764, `hs_max_m` 5.674 -> 5.527. What remains of the
+shelter is Marquette's REAL land in the bathymetry, which is a harbour, not an
+invention. Live diffraction smoke: the coarse canary and the refined flagship
+packet (PASS, 8 deliverables) both through the rebuilt image.
+
+
+## `workers/telemac/_bed_cog.py` + the in-worker bed COG - DELETED
+
+**What:** `write_bed_cog_lonlat` (109 lines) and the three call sites that wrote
+`bed_bathymetry.tif` beside a coastal / wave / agitation result, plus
+`steps/open_water.py::surface_in_worker_bed_input` (26 lines) which published it,
+plus the two tests that covered the writer and the two that covered the publisher.
+
+**Why it died:** it existed for ONE reason - a bed sampled inside a container
+never touched the router, so the only way to put it on the canvas was for the
+worker to rasterize its own nodes and hand the composer a key. Its output was a
+node lattice: a 512 px grid clipped to 1.5 cells around each node, which on a
+250 m coastal mesh is dots with nodata between them. The bed is now a declared
+`fetch_ncei_dem_mosaic` producer staged into the run directory, so the emit-on-fetch
+seam surfaces the SOURCE raster - continuous, and literally the data the nodes
+were sampled from. Evidence: `docs/proof/templates/coastal_tidal_surge/addendum/
+coastal_bed_input_continuous.png`, 100% of cells painted.
+
+**Decided by:** the fetch-migration wave (ADR 0317). **Status:** DELETED
+(`53591921`). The reach family's own `write_bed_cog` in
+`telemac_river_dye_build.py` SURVIVES: its bed is still fetched in-worker, so the
+seam that would replace this one does not exist for it yet.
+
+## `solver_backend()` + `_local_compute_lane()` + the branches they gated - DELETED
+
+**What:** `solver.solver_backend()` (a function that unconditionally returned
+`"local-docker"`), `gates/cards/solver_confirm._local_compute_lane()` (which
+compared that constant to itself), and every branch that read them: the
+`NonLocalAuthUnsupported` raise and `_is_local_single_user_mode` in
+`credentials/auth_handshake.py`, the cloud arm of `gates/confirm._gate_wait_timeout`,
+six "cloud solve" / "AWS Batch" wording alternates on the confirm cards, and the
+three `_*_route_enabled` guards in `server/protocol/catalog_http.py` that could
+only ever return True.
+
+**Why it died:** a predicate with one possible answer is not a seam, it is a
+disguise. Its else-branches described a deployment that no longer exists and could
+not be tested, and one of them - the fetch card's `"fetch"` compute label - was
+still being ASSERTED by a test, so the suite was pinning behaviour the product
+cannot produce.
+
+**Decided by:** the fetch-migration wave's solver tightening (ADR 0317).
+**Status:** DELETED. Three stale tests went with it
+(`test_solver_backend_is_always_local_docker`, `test_non_local_mode_raises`,
+`test_fetch_gate_compute_label_deployment_aware`) and two stale expectations were
+corrected to the one lane that exists.
+
+## The four duplicate object-store seams - DELETED
+
+**What:** inline `boto3.client("s3", region_name=...)` constructions in
+`emission/publish.py` (x2), `emission/pipeline_emitter.py`, `tools/cache.py`,
+`tools/vector_tiles.py`, `cases/ingest_user_layer.py`, `fallbacks/persist.py`,
+`workflows/telemac/release_layer.py`, `workflows/shared/run_products.py`,
+`server/protocol/catalog_http.py` and `testing/live_run.py`, plus two of the three
+independent `_split_s3_uri` implementations.
+
+**Why it died:** `solver._get_s3_client` is the canonical seam - it is the only
+one with an injectable client, ~70 modules already import it, and the duplicates
+differed from it in nothing (same region default, same implicit endpoint, no
+retry config anywhere). A test that injected a client saw some reads and not
+others, which is the failure mode duplication of a client always has.
+
+`tools/fetchers/_public_s3.py` SURVIVES and is not a duplicate: it builds an
+UNSIGNED client pinned to real AWS for third-party open-data buckets, which is a
+different store with a different auth posture.
+
+**Decided by:** the fetch-migration wave's solver tightening (ADR 0317).
+**Status:** DELETED.

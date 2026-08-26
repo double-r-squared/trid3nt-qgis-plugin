@@ -1,22 +1,27 @@
 {
   "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "working_tree_dirty",
+    "code_sha": "53591921e41c8298851b619deca228d387b89f28",
+    "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
+  },
   "template": "artemis_harbor_agitation",
   "variant": "refined",
   "tool": "artemis_harbor_agitation",
-  "run_id": "01M0W257083QD36RSRVBEKEBMP",
+  "run_id": "01M0YZ1XQ8NP11DTSZFMADMXV0",
   "stem": "artemis_harbor_agitation_refined",
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined",
   "panel_base": "artemis_harbor_agitation_refined",
   "mode": "render",
-  "assembled_at": "2026-08-26T02:06:04",
+  "assembled_at": "2026-08-26T05:02:00",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
     "frames": 1,
     "slf": "res_agitation.slf",
-    "source": "s3://trid3nt-runs/01M0W257083QD36RSRVBEKEBMP/res_agitation.slf",
+    "source": "s3://trid3nt-runs/01M0YZ1XQ8NP11DTSZFMADMXV0/res_agitation.slf",
     "method": "SELAFIN header + file length",
-    "npoin": 6071,
-    "nelem": 11692,
+    "npoin": 6180,
+    "nelem": 12010,
     "nbv1": 4,
     "varnames": [
       "WAVE HEIGHT     M",
@@ -24,9 +29,9 @@
       "FREE SURFACE    M",
       "BOTTOM          M"
     ],
-    "bytes": 310704,
-    "header_bytes": 213524,
-    "frame_bytes": 97180,
+    "bytes": 317572,
+    "header_bytes": 218648,
+    "frame_bytes": 98924,
     "recorded_ntimestep": null
   },
   "animation_declarations": [
@@ -41,8 +46,14 @@
       "derived": [],
       "transform": null,
       "vectors": null,
+      "still_vectors": null,
       "vector_density": 1.4,
       "vector_grid_n": 200,
+      "arrow_size": 0.7,
+      "vector_lw": [
+        0.35,
+        1.1
+      ],
       "still": "peak",
       "plane": "surface",
       "suffix": "",
@@ -53,8 +64,7 @@
   ],
   "notes": [],
   "published_layers": [
-    "Surveyed breakwater (aoi)",
-    "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+    "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
     "Wave agitation Kd (aoi)"
   ],
   "verdict": "PASS",
@@ -63,69 +73,58 @@
     {
       "order": 1,
       "kind": "panel",
-      "caption": "1. Surveyed breakwater (aoi) - context/vector, run 01M0W257083QD36RSRVBEKEBMP",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_01_surveyed-breakwater-aoi.png",
-      "layer": "Surveyed breakwater (aoi)",
-      "bytes": 1383820,
-      "mtime": "2026-08-26T02:06:02",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
+      "caption": "1. Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m) - context/raster, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+      "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+      "bytes": 983321,
+      "mtime": "2026-08-26T05:01:58",
+      "run_id_stamp": "01M0YZ1XQ8NP11DTSZFMADMXV0",
       "verdict": "present"
     },
     {
       "order": 2,
       "kind": "panel",
-      "caption": "2. Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker) - context/raster, run 01M0W257083QD36RSRVBEKEBMP",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_02_input-lake-bed-bathymetry-aoi-noaa-great-lakes-lake-datum-in-worker.png",
-      "layer": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
-      "bytes": 1674510,
-      "mtime": "2026-08-26T02:06:02",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
+      "caption": "2. Wave agitation Kd (aoi) - primary/raster, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_02_wave-agitation-kd-aoi.png",
+      "layer": "Wave agitation Kd (aoi)",
+      "bytes": 1490875,
+      "mtime": "2026-08-26T05:01:59",
+      "run_id_stamp": "01M0YZ1XQ8NP11DTSZFMADMXV0",
       "verdict": "present"
     },
     {
       "order": 3,
-      "kind": "panel",
-      "caption": "3. Wave agitation Kd (aoi) - primary/raster, run 01M0W257083QD36RSRVBEKEBMP",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_03_wave-agitation-kd-aoi.png",
-      "layer": "Wave agitation Kd (aoi)",
-      "bytes": 1459258,
-      "mtime": "2026-08-26T02:06:03",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
+      "kind": "canvas_view",
+      "caption": "3. CANVAS VIEW - all 2 layers stacked in emission order, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_03_canvas-view.png",
+      "bytes": 1228030,
+      "mtime": "2026-08-26T05:01:59",
+      "run_id_stamp": "01M0YZ1XQ8NP11DTSZFMADMXV0",
       "verdict": "present"
     },
     {
       "order": 4,
-      "kind": "canvas_view",
-      "caption": "4. CANVAS VIEW - all 3 layers stacked in emission order, run 01M0W257083QD36RSRVBEKEBMP",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_04_canvas-view.png",
-      "bytes": 1778559,
-      "mtime": "2026-08-26T02:06:03",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 3 panels in emission order, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined.png",
+      "bytes": 1430118,
+      "mtime": "2026-08-26T05:02:00",
+      "run_id_stamp": "01M0YZ1XQ8NP11DTSZFMADMXV0",
       "verdict": "present"
     },
     {
       "order": 5,
-      "kind": "contact_sheet",
-      "caption": "Contact sheet - every emitted layer, 4 panels in emission order, run 01M0W257083QD36RSRVBEKEBMP",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined.png",
-      "bytes": 2897089,
-      "mtime": "2026-08-26T02:06:04",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
+      "kind": "chart",
+      "caption": "Chart harbor_agitation - the run's persisted spec through the plugin chart dock's own renderer, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_chart_harbor_agitation.png",
+      "chart": "harbor_agitation",
+      "bytes": 66422,
+      "mtime": "2026-08-26T05:02:00",
+      "run_id_stamp": "01M0YZ1XQ8NP11DTSZFMADMXV0",
       "verdict": "present"
     },
     {
       "order": 6,
-      "kind": "chart",
-      "caption": "Chart harbor_agitation - the run's persisted spec through the plugin chart dock's own renderer, run 01M0W257083QD36RSRVBEKEBMP",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_chart_harbor_agitation.png",
-      "chart": "harbor_agitation",
-      "bytes": 79322,
-      "mtime": "2026-08-26T02:06:04",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
-      "verdict": "present"
-    },
-    {
-      "order": 7,
       "kind": "animation",
       "path": null,
       "animation": "default",
@@ -134,56 +133,50 @@
       "caption": "Animation [default] - EXEMPT. ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it solves a boundary-value problem for a single monochromatic sea state and returns ONE field, the steady agitation coefficient Kd. The deck has no simulation clock at all, which is why the run records no ntimestep - there is no time evolution to animate, and the single field IS the whole answer."
     },
     {
-      "order": 8,
+      "order": 7,
       "kind": "still",
-      "caption": "PEAK frame [default] - WAVE HEIGHT (m), which IS the whole answer rather than one sample of it, run 01M0W257083QD36RSRVBEKEBMP",
+      "caption": "PEAK frame [default] - WAVE HEIGHT (m), which IS the whole answer rather than one sample of it, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_peak_frame.png",
       "animation": "default",
-      "bytes": 1946967,
-      "mtime": "2026-08-26T02:06:04",
-      "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
+      "bytes": 2053703,
+      "mtime": "2026-08-26T05:02:00",
+      "run_id_stamp": "01M0YZ1XQ8NP11DTSZFMADMXV0",
       "verdict": "present"
     },
     {
-      "order": 9,
+      "order": 8,
       "kind": "evidence",
-      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0W257083QD36RSRVBEKEBMP",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0YZ1XQ8NP11DTSZFMADMXV0",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_canary_evidence.json",
-      "bytes": 41510,
-      "mtime": "2026-08-25T01:57:13",
+      "bytes": 20481,
+      "mtime": "2026-08-26T05:00:43",
       "verdict": "present"
     }
   ],
   "render": {
     "sheet": {
       "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined.png",
-      "bytes": 2896846,
-      "panels": 4,
+      "bytes": 1429875,
+      "panels": 3,
       "layers": [
-        "Surveyed breakwater (aoi)",
-        "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+        "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
         "Wave agitation Kd (aoi)"
       ],
       "not_rendered": [],
       "off_canvas": [],
       "panel_pngs": [
         {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_01_surveyed-breakwater-aoi.png",
-          "layer": "Surveyed breakwater (aoi)",
-          "framed_on_layer": true
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_02_input-lake-bed-bathymetry-aoi-noaa-great-lakes-lake-datum-in-worker.png",
-          "layer": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+          "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
           "framed_on_layer": false
         },
         {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_03_wave-agitation-kd-aoi.png",
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_02_wave-agitation-kd-aoi.png",
           "layer": "Wave agitation Kd (aoi)",
           "framed_on_layer": false
         },
         {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_04_canvas-view.png",
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_03_canvas-view.png",
           "layer": "CANVAS VIEW"
         }
       ]
@@ -205,7 +198,7 @@
           "y_log": false,
           "legend_labels": []
         },
-        "bytes": 79048
+        "bytes": 66148
       }
     ],
     "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
@@ -217,17 +210,21 @@
         "plane": "2d",
         "peak_frame": 0,
         "peak_time_s": 8.0,
-        "peak_value": 9.576066017150879,
+        "peak_value": 8.714999198913574,
         "dry_frames": [],
-        "vmin": 0.012208422459661961,
-        "vmax": 5.272091388702385,
+        "vmin": 0.07339952901005745,
+        "vmax": 4.833162832260134,
         "style_preset": "neutral_ramp",
-        "legend_note": "scaled to this run (p2-p98): 0.0122084 to 5.27209",
+        "legend_note": "scaled to this run (p2-p98): 0.0733995 to 4.83316",
         "transform": "percentile",
         "colormap": "viridis",
         "vectors": null,
+        "still_vectors": null,
         "vector_density": null,
+        "arrow_size": null,
+        "vector_lw": null,
         "vector_grid": null,
+        "still_vector_grid": null,
         "bbox_ll": [
           -87.38450927525486,
           46.528027301325615,
@@ -238,7 +235,7 @@
           469936.5561654824,
           5152789.269038762
         ],
-        "run_id": "01M0W257083QD36RSRVBEKEBMP",
+        "run_id": "01M0YZ1XQ8NP11DTSZFMADMXV0",
         "origin_bbox": [
           -87.392,
           46.528,
@@ -248,7 +245,7 @@
         "animation": null,
         "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_peak_frame.png",
         "animation_bytes": 0,
-        "peak_bytes": 1946693
+        "peak_bytes": 2053429
       }
     }
   }
