@@ -42,8 +42,11 @@ from .params import (
     doors,
 )
 from .plan import (
+    D,
+    P,
     STAGES,
     ChartSpec,
+    DataRef,
     DrawGate,
     FormGate,
     Gate,
@@ -55,12 +58,10 @@ from .plan import (
     Step,
     When,
 )
-from .slots import Forcing, MeshPolicy, Physics, Slot
+from .slots import Forcing, MeshPolicy, Physics, Slot, deep_freeze
 from .workflow import (
-    DataRefs,
     EngineOps,
     FacadeIncompleteError,
-    UndeclaredDataError,
     WireArgsError,
     Workflow,
     register_workflow,
@@ -87,17 +88,18 @@ from .resolver import (
     reseat_revised,
     resolve_params,
 )
+from . import user_input
 from .validate import validate_plan
 
 __all__ = [
     "AuthoredProducer", "Build", "ByoCoverageError", "CATEGORICAL", "ChartSpec",
     "CoversAOI",
-    "Data", "DataDecl", "DataRefs", "DeclarativeError", "Derived", "Domain",
+    "D", "Data", "DataDecl", "DataRef", "DeclarativeError", "Derived", "Domain",
     "DrawGate", "EngineOps",
     "FacadeIncompleteError", "Fetch", "Forcing",
     "FormGate", "Gate", "GateRefusedError",
     "LeakScanTruncated", "LedgerRecord", "MeshPolicy", "ModifierIllegalError",
-    "Param",
+    "P", "Param",
     "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
     "ParamValues", "Physics", "Plan",
@@ -107,12 +109,13 @@ __all__ = [
     "RunMode", "RunResult", "STAGES", "STATE", "Slot", "Step", "StepFailedError",
     "StepLedger",
     "TemporalGapError", "TemporalShapeError", "TemporalSpec",
-    "TemporalUnitsError", "Transformed", "UndeclaredDataError", "UnitsSpec",
+    "TemporalUnitsError", "Transformed", "UnitsSpec",
     "When", "WireArgsError",
-    "Workflow", "convert_units", "current_domain", "doors", "interpret",
+    "Workflow", "convert_units", "current_domain", "deep_freeze", "doors",
+    "interpret",
     "invocation_key",
     "merge_provenance", "provenance_entries", "rederive_revised",
     "register_workflow",
     "render_docstring", "reseat_revised", "resolve_params", "transform_series",
-    "transform_value", "validate_plan",
+    "transform_value", "user_input", "validate_plan",
 ]

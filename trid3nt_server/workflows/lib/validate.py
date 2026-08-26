@@ -10,31 +10,24 @@ from typing import Any, Iterable, Sequence
 from .data import DataDecl
 from .errors import PlanValidationError
 from .params import Param, doors, refuse_duplicate_params
-from .plan import Gate, ParamRef, Plan, Ref, When
+from .plan import DataRef, Gate, ParamRef, Plan, Ref, When
 
 __all__ = ["validate_plan"]
 
 
 def validate_plan(plan: Plan, params: Sequence[Param],
-                  data: Sequence[DataDecl] = (), *, sheet: Any = None) -> None:
+                  data: Sequence[DataDecl] = ()) -> None:
     """Refuse a plan that cannot possibly execute. Raises :class:`PlanValidationError`.
 
-    ``sheet`` is the resolved :class:`ResolvedParams` the plan was built from, when
-    the caller has it. It carries which params the plan read as CONCRETE values,
-    which is what makes the revisable-branch check (below) possible.
+    The plan is STATIC - it reads no concrete value - so validation needs no sheet
+    and runs at REGISTRATION, before any invocation exists.
     """
-    # UNCONDITIONAL: the read set closes here whether or not the revisable-branch
-    # check below needs it. A conditional freeze let a sheet reused for a second
-    # interpret carry the first run's run-time reads into the second validation.
-    freeze = getattr(sheet, "freeze_reads", None)
-    if callable(freeze):
-        freeze()
     refuse_duplicate_params(params)
     param_names = {p.name for p in params}
     data_names = {d.name for d in data}
     _check_duplicate_names(plan)
     _check_gate_declarations(plan, {p.name: p for p in params})
-    _check_revisable_branches(plan, {p.name: p for p in params}, sheet)
+    _check_when_conditions(plan, param_names, data_names)
     _check_refs(plan, param_names, data_names)
     _check_param_refs(plan, param_names)
     _check_data_refs(data, param_names, data_names)
@@ -103,43 +96,39 @@ def _check_gate_declarations(plan: Plan, params: dict[str, Param]) -> None:
         )
 
 
-def _check_revisable_branches(plan: Plan, params: dict[str, Param], sheet: Any) -> None:
-    """A FormGate plan may not branch on a value that gate can revise.
+def _check_when_conditions(plan: Plan, param_names: set[str],
+                           data_names: set[str]) -> None:
+    """Every branch condition must be a read that RESOLVES when the branch is reached.
 
-    ``When`` is decided when the plan VALUE is built, which is before any gate
-    runs, so the branch is frozen against the pre-review sheet. If the user then
-    revises the very param the branch was decided from, the plan shape cannot
-    honor the revision - the run would take one branch while its provenance claims
-    the other. That contradiction is refused at validation rather than executed.
-
-    Revisable == any door but CONSTANT: a constant is not on the form as an
-    editable value, so branching on one is stable across the review.
+    A ``When`` is decided by the interpreter, after the gates - so a form gate
+    revising the very value a branch reads is the point, not a contradiction. What
+    is still refusable is a condition that names nothing: an undeclared param, an
+    undeclared Data, or a step that is not visible on this branch (declared later,
+    or named inside a sibling branch that may not fire).
     """
-    if sheet is None or not _declares_form_gate(plan) or not _has_when(plan.steps):
-        return
-    reads = getattr(sheet, "concrete_reads", None)
-    revisable = sorted(
-        name for name in (reads() if callable(reads) else ())
-        if name in params and params[name].door != doors.CONSTANT
-    )
-    if not revisable:
-        return
-    raise PlanValidationError(
-        f"plan {plan.name!r}: it declares a FormGate AND branches (When) on "
-        + ", ".join(revisable)
-        + " - values that gate can revise. A When is decided when the plan value is "
-        "built, i.e. BEFORE the review, so an approved revision could not change "
-        "which branch runs. Branch on a CONSTANT-door param, or drop the FormGate "
-        "and let the step that owns the decision review its own inputs."
-    )
+    _check_when_scope(plan.name, plan.steps, param_names, data_names, set())
 
 
-def _declares_form_gate(plan: Plan) -> bool:
-    return any(isinstance(s, Gate) and s.kind == "form" for s in plan.declared())
-
-
-def _has_when(nodes: tuple[Any, ...]) -> bool:
-    return any(isinstance(n, When) for n in nodes)
+def _check_when_scope(plan_name: str, nodes: tuple[Any, ...], param_names: set[str],
+                      data_names: set[str], visible: set[str]) -> None:
+    local = set(visible)
+    for node in nodes:
+        if isinstance(node, When):
+            cond = node.condition
+            if isinstance(cond, ParamRef):
+                if cond.name not in param_names:
+                    raise PlanValidationError(
+                        f"plan {plan_name!r}: When branches on ParamRef({cond.name!r})"
+                        + (f" (declared at {cond.origin})" if cond.origin else "")
+                        + ", which is not a declared param."
+                    )
+            else:
+                _resolve_root(plan_name, node.label, cond, param_names, data_names,
+                              local)
+            _check_when_scope(plan_name, node.body, param_names, data_names, local)
+            continue
+        if node.name is not None:
+            local.add(node.name)
 
 
 def _check_refs(plan: Plan, param_names: set[str], data_names: set[str]) -> None:
@@ -166,30 +155,48 @@ def _check_refs_in_scope(plan_name: str, nodes: tuple[Any, ...], param_names: se
 
 
 def _check_param_refs(plan: Plan, param_names: set[str]) -> None:
-    """A late-bound ``p.<name>`` read must name a param the workflow declares."""
+    """A late-bound ``P.<name>`` read must name a param the workflow declares."""
     for step in plan.declared():
         for ref in _walk_param_refs(dict(step.kwargs)):
             if ref.name not in param_names:
                 raise PlanValidationError(
-                    f"plan {plan.name!r} step {step.label!r}: ParamRef({ref.name!r}) "
-                    "is not a declared param."
+                    param_name_refusal(ref, param_names,
+                                       f"plan {plan.name!r} step {step.label!r}")
                 )
+
+
+def param_name_refusal(ref: ParamRef, param_names: set[str], where: str) -> str:
+    """A ``P.<name>`` that names no declared param, said WITH its construction site.
+
+    The refusal fires at registration, an import away from the module line that
+    wrote the ref, and the candidate list runs to forty names - so the site and the
+    nearest declared spellings are the whole value of the message.
+    """
+    import difflib
+
+    close = difflib.get_close_matches(ref.name, sorted(param_names), n=3, cutoff=0.6)
+    return (
+        f"{where}: P.{ref.name} names no declared param"
+        + (f" (written at {ref.origin})" if ref.origin else "")
+        + (f". Closest declared: {', '.join(close)}." if close
+           else f" (declared: {sorted(param_names)}).")
+    )
 
 
 def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
                      data_names: set[str]) -> None:
     for decl in data:
-        for ref in _walk_refs(dict(decl.producer.kwargs)):
+        for ref in _walk_refs(dict(decl.producer_kwargs)):
             if ref.root not in param_names and ref.root not in data_names:
                 raise PlanValidationError(
                     f"Data {decl.name!r} producer Refs {ref.path!r}, which is neither "
                     "a declared param nor a declared Data."
                 )
-        for pref in _walk_param_refs(dict(decl.producer.kwargs)):
+        for pref in _walk_param_refs(dict(decl.producer_kwargs)):
             if pref.name not in param_names:
                 raise PlanValidationError(
-                    f"Data {decl.name!r} producer reads ParamRef({pref.name!r}), "
-                    "which is not a declared param."
+                    param_name_refusal(pref, param_names,
+                                       f"Data {decl.name!r} producer")
                 )
 
 
@@ -197,6 +204,13 @@ def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[st
                   data_names: set[str], available: set[str]) -> None:
     if ref.root in param_names or ref.root in data_names or ref.root in available:
         return
+    if isinstance(ref, DataRef):
+        raise PlanValidationError(
+            f"plan {plan_name!r} step {step_label!r}: D.{ref.root} names no declared "
+            "Data"
+            + (f" (written at {ref.origin})" if ref.origin else "")
+            + f". Declared Data: {sorted(data_names)}."
+        )
     raise PlanValidationError(
         f"plan {plan_name!r} step {step_label!r}: Ref({ref.path!r}) resolves to "
         "nothing - it is not a declared param, not a declared Data, and not a step "

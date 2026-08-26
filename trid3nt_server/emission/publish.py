@@ -87,9 +87,8 @@ logger = logging.getLogger("trid3nt_server.emission.publish")
 # Constants
 # --------------------------------------------------------------------------- #
 
-#: Default canonical project .qgs URI (heritage default; consumed only by the
-#: ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam and ``case_lifecycle``'s template
-#: resolution - override via ``TRID3NT_CASE_QGS_TEMPLATE`` / ``set_default_qgs_uri``).
+#: Default canonical project .qgs URI, consumed by the ``TRID3NT_QGIS_WMS_BASE``
+#: vector-WMS seam - override via ``set_default_qgs_uri``.
 DEFAULT_PROJECT_QGS_URI: str = "s3://trid3nt-qgs/sample.qgs"
 
 

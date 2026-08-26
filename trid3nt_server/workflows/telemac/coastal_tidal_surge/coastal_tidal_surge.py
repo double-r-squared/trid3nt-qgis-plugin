@@ -1,11 +1,12 @@
 """Engine template ``coastal_tidal_surge`` - TELEMAC-2D coastal tidal/surge
 inundation.
 
-Four declarations and a chart: PARAMS, DATA, ``plan(p, d, ops)``, the ANSWER
-fields, and the chart function beside them. Everything else - normalizing the
-wire args, resolving the doors, walking the plan, persisting the products - is
-the skeleton (``workflows/lib/workflow.py``); the coastal mechanism is the
-TELEMAC facade's open-water front (``workflows/telemac/steps/open_water.py`` +
+The recipe on one page: the binding blocks, ``plan(ops)``, the ANSWER fields and
+the chart function. The declared params and the model-facing prose are one file
+over in ``declarations.py``. Everything else - normalizing the wire args,
+resolving the doors, walking the plan, persisting the products - is the skeleton
+(``workflows/lib/workflow.py``); the coastal mechanism is the TELEMAC facade's
+open-water front (``workflows/telemac/steps/open_water.py`` +
 ``steps/coastal.py``). See ``docs/design/declarative-workflows.md``.
 
 THE QUESTION: how far does an OBSERVED or PREDICTED coastal water-level series
@@ -24,19 +25,22 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
+    D,
     Data,
     Fetch,
     Forcing,
     FormGate,
     MeshPolicy,
-    Param,
-    ParamRef,
+    P,
     Physics,
     Ref,
-    doors,
     register_workflow,
 )
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
+from trid3nt_server.workflows.telemac.coastal_tidal_surge.declarations import (
+    DOC,
+    PARAMS,
+)
 from trid3nt_server.workflows.telemac.coastal_tidal_surge.series_type import (
     series_type,
 )
@@ -54,108 +58,53 @@ _SHARED = "trid3nt_server.workflows.shared"
 _COAST_HALF_DEG = 0.06
 
 
-PARAMS: tuple[Param, ...] = (
-    # -- the question ------------------------------------------------------- #
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Coastal place near the AOI, geocoded to a shoreline-spanning extent"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 spanning the "
-               "shoreline - open water on one side, low land on the other"),
-    Param("series_type", door=doors.QUESTION, default="observed",
-          consequence="scenario",
-          desc="Which water-level record drives the boundary: observed (the storm-surge "
-               "record) | prediction (the astronomical tide, the calm-tide control that "
-               "isolates the surge)"),
-
-    # -- the gauge series --------------------------------------------------- #
-    Param("station", door=doors.USER, optional=True, consequence="physics",
-          derived_when_absent=(
-              "the CO-OPS station nearest the AOI centre drives the boundary"),
-          desc="NOAA CO-OPS station id (e.g. '8728690'); unset uses the nearest "
-               "in-AOI gauge"),
-    Param("start_date", door=doors.QUESTION, optional=True, consequence="scenario",
-          desc="ISO YYYY-MM-DD start of the gauge window - the storm the question "
-               "is about"),
-    Param("end_date", door=doors.QUESTION, optional=True, consequence="scenario",
-          desc="ISO YYYY-MM-DD end of the gauge window"),
-    Param("datum_offset_m", door=doors.SCENARIO, optional=True,
-          bounds=(-10.0, 10.0), units="m", consequence="physics",
-          derived_when_absent="the gauge's OWN published tidal-to-geodetic offset "
-                              "reconciles the series with the DEM_all bed",
-          desc="Metres ADDED to every series value to reconcile the tide datum (MLLW) "
-               "with the bed datum (DEM_all over US coasts is served NAVD 88); "
-               "supplying 0 is an explicit override that leaves them unreconciled"),
-
-    # -- the domain --------------------------------------------------------- #
-    Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
-          bounds=(20.0, 5000.0), units="m", consequence="numerical",
-          derived_when_absent="the grid is laid at the labeled 180 m default spacing",
-          desc="Explicit grid node spacing; the coastal grid floor is 20 m and a wide "
-               "AOI is coarsened under the node budget"),
-    Param("ocean_edge", door=doors.USER, optional=True, consequence="numerical",
-          derived_when_absent=(
-              "the seaward boundary is placed on the DEEPEST-mean bbox edge"),
-          desc="Which bbox edge carries the seaward liquid boundary: N | S | E | W; "
-               "unset picks the deepest edge"),
-    Param("bathy_source", door=doors.SCENARIO, default="noaa_demall",
-          consequence="physics",
-          desc="Bed source: noaa_demall (real topobathy) | synthetic (an analytic "
-               "plane beach - the deterministic offline path, not a real coast)"),
-
-    # -- numerics (the advanced fold) --------------------------------------- #
-    Param("duration_hours", door=doors.USER, optional=True, bounds=(0.1, 720.0),
-          units="h", consequence="numerical",
-          derived_when_absent="the simulated window is the fetched series' own span",
-          desc="Simulated window; unset runs the whole gauge series"),
-    Param("time_step_s", door=doors.CONSTANT, default=20.0, bounds=(1.0, 600.0),
-          units="s", consequence="numerical", desc="Solver time step"),
-    Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
-          units="min", consequence="numerical",
-          desc="Result-writing cadence; unset keeps the deck's own graphic period"),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
-
-
 #: The boundary FORCING - the gauge record, fetched fresh over the domain the AOI
 #: step binds. Reference data: a water-level record is the world's, never BYO'd.
 #: It reads the DOMAIN for where to look and the params for which series, which
 #: station and which window.
 DATA = (
     Data("tides", Fetch.tool(f"{_SHARED}.tide_series.resolve_tide_series",
-                             series_type=ParamRef("series_type"),
-                             station=ParamRef("station"),
-                             start_date=ParamRef("start_date"),
-                             end_date=ParamRef("end_date"))),
+                             series_type=P.series_type,
+                             station=P.station,
+                             start_date=P.start_date,
+                             end_date=P.end_date)),
 )
 
 
-def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
-    """The coastal tidal/surge recipe. Pure: constructs the plan value, executes nothing.
+# -- the binding blocks --------------------------------------------------- #
+# What the run IS, declared as frozen values above the recipe that assembles
+# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# interpreter substitutes against the approved sheet, so the blocks are
+# process-lifetime constants and the plan is a pure assembly of them.
+
+PHYSICS = Physics("coastal_surge",
+                  datum_offset_m=P.datum_offset_m, ocean_edge=P.ocean_edge,
+                  duration_hours=P.duration_hours, time_step_s=P.time_step_s,
+                  bathy_source=P.bathy_source,
+                  output_interval_min=P.output_interval_min)
+
+FORCING = Forcing(water_level=D.tides)
+
+MESH = MeshPolicy(resolution=None, target_edge_m=P.target_resolution_m)
+
+
+def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+    """The coastal tidal/surge recipe. Pure and STATIC: it reads no value, it names them.
 
     The form gate comes FIRST so the fetch and the solve both run on the approved
     sheet: the window and the datum offset are exactly the values a reviewer would
     want to change, and a series fetched before the review would have been fetched
     for the window the review replaced.
     """
-    physics = Physics("coastal_surge",
-                      datum_offset_m=p.datum_offset_m, ocean_edge=p.ocean_edge,
-                      duration_hours=p.duration_hours, time_step_s=p.time_step_s,
-                      bathy_source=p.bathy_source,
-                      output_interval_min=p.output_interval_min)
-    forcing = Forcing(water_level=d.tides)
-    mesh = ops.build_mesh(Ref("aoi"),
-                          MeshPolicy(resolution=None,
-                                     target_edge_m=p.target_resolution_m))
     return [
         FormGate(title="Review the coastal tide/surge scenario"),
-        *ops.acquire_domain(location=p.location, bbox=p.bbox, shape="open_water",
+        *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="open_water",
                             aoi_half_deg=_COAST_HALF_DEG, aoi_name="coast",
                             code_prefix="COASTAL"),
-        ops.author(mesh=mesh, physics=physics, forcing=forcing),
-        ops.solver_spec(compute_class=p.compute_class, physics=physics),
-        ops.read_results(Ref("solve"), physics=physics, forcing=forcing)
+        ops.author(mesh=ops.build_mesh(Ref("aoi"), MESH), physics=PHYSICS,
+                   forcing=FORCING),
+        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=FORCING)
            .chart("coastal_stage_vs_inundation", builder=build_stage_chart),
     ]
 
@@ -243,47 +192,6 @@ _COASTAL_METADATA = AtomicToolMetadata(
 )
 
 
-_DOC = dict(
-    summary="How far an OBSERVED or PREDICTED coastal water-level series FLOODS this coast.",
-    routing=(
-        "THE tool for \"how far does the storm surge flood inland\", \"map the coastal "
-        "inundation from this tide-gauge record\", \"which low land does the storm tide "
-        "reach\", \"surge vs calm-tide flooded area at this coast\". TELEMAC-2D shallow "
-        "water with TIDAL FLATS wetting/drying over real NOAA DEM_all topobathy, one "
-        "seaward liquid boundary driven in time by a NOAA CO-OPS series. TWO question "
-        "classes via `series_type`: `observed` (the storm-surge record floods the low "
-        "coast) and `prediction` (the astronomical tide over the SAME domain - the "
-        "control isolating the surge). Produces a peak-inundation-DEPTH map + the "
-        "newly-flooded land area. Supply a coastal `location` OR a `bbox` spanning "
-        "the shoreline."
-    ),
-    not_for=(
-        "a spectral WAVE-HEIGHT field (`tomawac_wave_field`); harbour agitation "
-        "(`artemis_harbor_agitation`); a river dye/contaminant plume "
-        "(`telemac_river_dye`); regional compound-flood screening (`sfincs_flood`)"
-    ),
-    params=PARAMS,
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved window, station and datum offset for '
-         'review/edit before the solve and WAITS; "auto" (session default) proceeds '
-         "with every assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
-         "left behind and re-runs every step from the top. Default False resumes at "
-         "the failed step. A run that completed is marked complete and is never "
-         "replayed, so a fresh invocation always re-solves against live upstream data."),
-    ),
-    returns=(
-        "On success a `TelemacCoastalLayerURI` (a `LayerURI` subtype) - the emitter "
-        "loads the peak-inundation-depth COG and animates the coastal SELAFIN sibling. "
-        "It carries `peak_depth_m` / `flooded_land_km2` / `wet_area_km2` / `sl_peak_m` "
-        "/ `series_type`; narrate those typed numbers. On failure a dict with "
-        "`status=\"error\"` + `error_code`."
-    ),
-)
-
-
 coastal_tidal_surge = register_workflow(
     TelemacWorkflow, _COASTAL_METADATA, PARAMS, plan,
     data=DATA,
@@ -300,5 +208,5 @@ coastal_tidal_surge = register_workflow(
         series_type(),
         compute_class(),
     ),
-    doc=_DOC,
+    doc=DOC,
 )

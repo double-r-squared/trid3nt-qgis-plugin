@@ -1,9 +1,8 @@
-"""Persistence layer: the document-store client seam plus case-lifecycle joins.
+"""Persistence layer: the document-store client seam.
 
 ``persistence`` holds the ``MCPClientProtocol`` store seam (file-backed by
-default); ``case_lifecycle`` builds the per-case QGS project on top of it. This
-package re-exports the store surface so ``trid3nt_server.persistence.X`` resolves
-unchanged after the module-to-package grouping.
+default). This package re-exports the store surface so
+``trid3nt_server.persistence.X`` resolves unchanged.
 """
 
 from __future__ import annotations

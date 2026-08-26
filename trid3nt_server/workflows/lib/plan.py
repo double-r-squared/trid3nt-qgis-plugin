@@ -1,14 +1,16 @@
 """The plan VALUE: steps, gates, refs, modifiers, charts, the stage sequence.
 
-Nothing here executes. A template's ``plan(p, d, ops)`` returns the step sequence
-and the SKELETON names and engines the :class:`Plan`; the interpreter then walks
-it. (The ``Workflow(name, engine=...)[...]`` plan constructor this module used to
-export is deleted - ADR 0312's demolition clause: the name belongs to the
-skeleton, which already knows it from the metadata.)
+Nothing here executes. A template's ``plan(ops)`` returns the step sequence and
+the SKELETON names and engines the :class:`Plan`. The plan is STATIC: it reads no
+concrete value, so it is built ONCE - at registration - and the interpreter walks
+the same value on every run. Every read is a late-bound ``P.<param>`` /
+``D.<data>`` / ``Ref("step.field")`` description, and every conditional is a
+:class:`When` the interpreter decides AFTER the gates have run.
 """
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Callable, Literal, Mapping
@@ -17,10 +19,13 @@ from .errors import ModifierIllegalError, PlanValidationError
 
 __all__ = [
     "ChartSpec",
+    "D",
+    "DataRef",
     "DrawGate",
     "FormGate",
     "Gate",
     "Node",
+    "P",
     "ParamRef",
     "Plan",
     "Ref",
@@ -30,6 +35,21 @@ __all__ = [
     "Step",
     "When",
 ]
+
+
+def declaration_site(depth: int = 2) -> str:
+    """Where a declaration-time ref was BUILT, as ``file.py:line``.
+
+    A ``P.<name>`` typo is caught at registration, far from the module line that
+    wrote it, and the sheet it is checked against lists forty names - so the
+    refusal has to be able to point back at the line. ``sys._getframe`` is the
+    only thing that knows, and it costs one frame walk per declared ref at import.
+    """
+    try:
+        frame = sys._getframe(depth)
+    except ValueError:      # shallower stack than the caller assumed
+        return ""
+    return f"{frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}"
 
 #: The universal stage sequence the skeleton walks. A step names the stage it
 #: belongs to so the plan reads as the sequence rather than as a list of runners;
@@ -78,6 +98,9 @@ class ParamRef:
     """
 
     name: str
+    #: Where ``P.<name>`` was written, as ``file.py:line``. Carried so a name the
+    #: template does not declare can be refused AT its construction site.
+    origin: str = ""
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.isidentifier():
@@ -87,15 +110,15 @@ class ParamRef:
         return PlanValidationError(
             f"ParamRef({self.name!r}) does not support {operation} at "
             "plan-construction time - it is a description of a late-bound read, not "
-            f"the value. Read the value explicitly with p.get({self.name!r}), or "
-            "leave the ref in the plan and let the interpreter substitute it."
+            "the value. Leave the ref in the plan and let the interpreter "
+            "substitute it; a conditional is a When the interpreter decides."
         )
 
     def __bool__(self) -> bool:
         raise PlanValidationError(
             f"ParamRef({self.name!r}) has no truth value at plan-construction time - "
-            "it is a description, not the value. For a real construction-time branch "
-            f"(When(...)), read the value explicitly with p.get({self.name!r})."
+            "it is a description, not the value. A branch on it is "
+            f"When(P.{self.name}, ...), which the interpreter decides after the gates."
         )
 
     def __str__(self) -> str:
@@ -112,6 +135,69 @@ class ParamRef:
 
     def __repr__(self) -> str:
         return f"ParamRef({self.name!r})"
+
+
+@dataclass(frozen=True, slots=True, eq=False, repr=False)
+class DataRef(Ref):
+    """A late-bound read of a declared ``Data``: what ``D.<name>`` yields.
+
+    A :class:`Ref` so the interpreter dereferences it with everything else, and its
+    own type so the registration check can say WHICH namespace a bad name came
+    from - ``D.terain`` is a Data typo, not a step nobody named.
+    """
+
+    origin: str = ""
+
+    def __repr__(self) -> str:
+        return f"DataRef({self.path!r})"
+
+
+class _Namespace:
+    """A declaration-time ref namespace. Attribute access BUILDS a ref."""
+
+    __slots__ = ("_kind",)
+
+    def __init__(self, kind: str) -> None:
+        object.__setattr__(self, "_kind", kind)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise PlanValidationError(
+            f"{self._kind} is a declaration namespace, not a place to store values."
+        )
+
+    def __repr__(self) -> str:
+        return self._kind
+
+
+class _ParamNamespace(_Namespace):
+    """``P.spill_fraction`` IS ``ParamRef('spill_fraction')``, wherever it is written.
+
+    Module-level: a binding block above ``plan()`` (PHYSICS, FORCING, MESH,
+    CORRIDOR) is a plain frozen value built out of these, so the recipe reads as
+    declarations rather than as a function that has to be called with a sheet to
+    mean anything.
+    """
+
+    def __getattr__(self, name: str) -> ParamRef:
+        if name.startswith("__"):           # let the object protocol probe
+            raise AttributeError(name)
+        return ParamRef(name, origin=declaration_site())
+
+
+class _DataNamespace(_Namespace):
+    """``D.rivers`` IS ``DataRef('rivers')`` - the declared artifact, by name."""
+
+    def __getattr__(self, name: str) -> DataRef:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return DataRef(name, origin=declaration_site())
+
+
+#: The two declaration-time namespaces. They carry NO sheet and NO workflow: a
+#: name is checked against the template's own PARAMS/DATA at registration, which
+#: is what lets a binding block sit at module level above the plan it feeds.
+P = _ParamNamespace("P")
+D = _DataNamespace("D")
 
 
 class _RunMode:
@@ -258,17 +344,31 @@ def DrawGate(*, param: str, geometry: str = "point", prompt: str = "") -> Gate: 
 
 @dataclass(frozen=True, slots=True, init=False)
 class When:
-    """A branch kept INSPECTABLE in the plan value: the condition and the body it guards."""
+    """A branch the INTERPRETER decides, after the gates have run.
+
+    The ONE conditional in the language. Its condition is a late-bound read -
+    ``P.<param>``, ``D.<data>`` or ``Ref("step.field")`` - and the interpreter
+    binds it against the CURRENT sheet at the moment the branch is reached, so an
+    approved form-gate revision decides which body runs. A construction-time
+    ``if`` could not: the plan value is built once, before any gate, and would
+    freeze the branch against the pre-review sheet while the provenance claimed
+    the approved one.
+
+    A guarded body is also a SCOPE: a step named inside it is Ref-able only from
+    inside it, because the branch may not fire.
+    """
 
     condition: Any
     body: tuple[Any, ...]
 
     def __init__(self, condition: Any, *body: Any) -> None:
-        if isinstance(condition, ParamRef):
+        if not isinstance(condition, (ParamRef, Ref)):
             raise PlanValidationError(
-                f"When({condition!r}) branches on a description, not a value. A "
-                "construction-time branch reads the param explicitly: "
-                f"p.get({condition.name!r})."
+                f"When({condition!r}) is not a late-bound condition. A branch takes "
+                "P.<param>, D.<data> or Ref('step.field') and the interpreter "
+                "decides it after the gates; a concrete "
+                f"{type(condition).__name__} would decide it while the plan value "
+                "is being built, which is before anything the user could approve."
             )
         object.__setattr__(self, "condition", condition)
         object.__setattr__(self, "body", tuple(body))
@@ -276,8 +376,9 @@ class When:
             raise PlanValidationError("When(...) guards no steps.")
 
     @property
-    def taken(self) -> bool:
-        return bool(self.condition)
+    def label(self) -> str:
+        name = getattr(self.condition, "name", None) or getattr(self.condition, "path", "?")
+        return f"when:{name}"
 
 
 Node = Step | Gate | When
@@ -287,8 +388,10 @@ Node = Step | Gate | When
 class Plan:
     """A workflow's step tree - a pure value the interpreter walks.
 
-    Built by the skeleton from the template's ``plan(p, d, ops)`` declaration:
+    Built ONCE, by the skeleton, from the template's ``plan(ops)`` declaration:
     the name and the engine are the workflow's, not something a template restates.
+    Which steps RUN is the interpreter's answer, not the plan's - a ``When`` body
+    is declared here and decided there.
     """
 
     name: str
@@ -299,25 +402,20 @@ class Plan:
         if not self.name:
             raise PlanValidationError("Plan declares no name.")
         object.__setattr__(self, "steps", tuple(self.steps))
-        _flatten(self.steps, taken_only=False)  # shape check at construction
-
-    def flat(self) -> tuple[Step, ...]:
-        """Every step in execution order, with untaken ``When`` bodies dropped.
-
-        Untaken at ANY depth: a nested branch is guarded by its own condition too.
-        """
-        return tuple(_flatten(self.steps, taken_only=True))
+        _flatten(self.steps)  # shape check at construction
 
     def declared(self) -> tuple[Step, ...]:
-        """Every step INCLUDING untaken branches - what the validator and printer read."""
-        return tuple(_flatten(self.steps, taken_only=False))
+        """Every step, guarded ones included - what the validator and printer read."""
+        return tuple(_flatten(self.steps))
 
     def describe(self) -> list[str]:
         lines = [f"{self.name} (engine={self.engine or '-'})"]
-        for i, step in enumerate(self.flat(), 1):
+        for i, (step, guards) in enumerate(_flatten_guarded(self.steps, ()), 1):
             bits = [step.label]
             if step.stage:
                 bits.append(f"[{step.stage}]")
+            for guard in guards:
+                bits.append(f"[{guard.label}]")
             if step.rebinds_domain:
                 bits.append("[overrides domain]")
             for r in step.renders:
@@ -328,15 +426,19 @@ class Plan:
         return lines
 
 
-def _flatten(nodes: tuple[Any, ...], *, taken_only: bool) -> list[Step]:
-    out: list[Step] = []
+def _flatten(nodes: tuple[Any, ...]) -> list[Step]:
+    return [step for step, _ in _flatten_guarded(nodes, ())]
+
+
+def _flatten_guarded(nodes: tuple[Any, ...],
+                     guards: tuple[When, ...]) -> list[tuple[Step, tuple[When, ...]]]:
+    """Every step in declaration order, each with the ``When`` chain that guards it."""
+    out: list[tuple[Step, tuple[When, ...]]] = []
     for node in nodes:
         if isinstance(node, When):
-            if taken_only and not node.taken:
-                continue
-            out.extend(_flatten(node.body, taken_only=taken_only))
+            out.extend(_flatten_guarded(node.body, guards + (node,)))
         elif isinstance(node, Step):
-            out.append(node)
+            out.append((node, guards))
         else:
             raise PlanValidationError(
                 f"plan node {node!r} is not a Step, Gate or When."

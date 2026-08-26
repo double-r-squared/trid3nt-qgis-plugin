@@ -47,7 +47,17 @@ from .errors import (
 from .form import build_param_sheet
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import Param, ResolvedParams
-from .plan import ChartSpec, Gate, ParamRef, Plan, Ref, RenderSpec, RunMode, Step
+from .plan import (
+    ChartSpec,
+    Gate,
+    ParamRef,
+    Plan,
+    Ref,
+    RenderSpec,
+    RunMode,
+    Step,
+    When,
+)
 from .resolver import provenance_entries, rederive_revised, reseat_revised
 from .validate import validate_plan
 
@@ -84,7 +94,13 @@ class RunResult:
 
 @dataclass(frozen=True, slots=True)
 class _Node:
-    """One ledger-tracked execution unit."""
+    """One ledger-tracked execution unit.
+
+    ``guards`` are the indices of the ``When`` nodes whose bodies enclose it. Every
+    declared node is numbered, guarded or not, so an index means the same thing
+    whichever way the branches fall - which is what lets the ledger replay a run
+    that took a different branch than the attempt before it.
+    """
 
     index: int
     label: str
@@ -92,6 +108,7 @@ class _Node:
     kind: str
     step: Step
     spec: Any = None
+    guards: tuple[int, ...] = ()
 
 
 async def interpret(
@@ -103,9 +120,10 @@ async def interpret(
     input_mode: str | None = None,
     domain: Domain | None = None,
     resume: bool = True,
+    byo: Mapping[str, Any] | None = None,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
-    validate_plan(plan, declared_params, data, sheet=params)
+    validate_plan(plan, declared_params, data)
 
     entries = provenance_entries(params, declared_params)
     key = invocation_key(plan.name, params.values_dict(), input_mode=input_mode)
@@ -118,18 +136,27 @@ async def interpret(
     begin_substeps(emitter, len(nodes))
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
-               input_mode=input_mode, ledger=ledger, resume=resume)
+               input_mode=input_mode, ledger=ledger, resume=resume, byo=dict(byo or {}))
     out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
-    produce_at = _eager_data_index(nodes)
     final_index = _final_recordable_index(nodes)
-    first_step = next((n.index for n in nodes if not isinstance(n.step, Gate)), None)
-    reviewed = any(isinstance(n.step, Gate) and n.step.kind == "form" for n in nodes)
-    self_reviewed = any(not isinstance(n.step, Gate) and n.step.self_gating
-                        for n in nodes)
+    first_step = next((n.index for n in nodes if n.kind == "step"), None)
+    reviewed = any(n.kind == "gate" and n.step.kind == "form" for n in nodes)
+    self_reviewed = any(n.kind != "gate" and n.step.self_gating for n in nodes)
+    #: Which guarded branches fired, by the ``When`` node's index. A node whose
+    #: guard is absent or False is SKIPPED - and so is everything it would have
+    #: pulled, which is what makes an unfired branch cost no fetch.
+    taken: dict[int, bool] = {}
     try:
         for node in nodes:
-            if isinstance(node.step, Gate):
+            if any(not taken.get(g, False) for g in node.guards):
+                continue
+            if node.kind == "when":
+                taken[node.index] = bool(await _bind_value(node.spec, env))
+                logger.info("plan %s branch %s -> %s", plan.name, node.label,
+                            taken[node.index])
+                continue
+            if node.kind == "gate":
                 revision = await _run_gate(node.step, env.params, declared_params,
                                            out.entries, input_mode=input_mode,
                                            tool_name=plan.name)
@@ -144,8 +171,6 @@ async def interpret(
                 # otherwise skip the floor entirely.
                 _refuse_invented_physics(out.entries, plan.name, input_mode,
                                          self_reviewed=self_reviewed)
-            if node.index == produce_at:
-                await _produce_independent_data(env)
             if node.step.consequential:
                 _refuse_missing_required(env.params, plan.name)
             cached = ledger.replay_for(node.index, node.label) if resume else None
@@ -170,6 +195,13 @@ async def interpret(
             await ledger.record(_record(node, value), final=node.index == final_index)
         out.domain = current_domain()
         out.charts = dict(env.charts)
+        # An unfilled context slot is LABELLED, never silent: the run answered a
+        # slightly different question than one that had the layer, and the reader
+        # is the only one who can decide whether that matters.
+        for name in env.absences:
+            out.notes.append(
+                f"the optional {name!r} context layer was not supplied, so the run "
+                "modelled the domain without it")
         await env.ledger.complete()
     finally:
         reset_domain(token)
@@ -184,8 +216,9 @@ async def interpret(
 
 
 def _final_recordable_index(nodes: Sequence[_Node]) -> int | None:
-    """The LAST node whose completion is ledgered - gates leave no record."""
-    return max((n.index for n in nodes if not isinstance(n.step, Gate)), default=None)
+    """The LAST node whose completion is ledgered - gates and branches leave none."""
+    return max((n.index for n in nodes if n.kind not in ("gate", "when")),
+               default=None)
 
 
 def _carry_notes(exc: BaseException, notes: Sequence[str]) -> None:
@@ -197,17 +230,6 @@ def _carry_notes(exc: BaseException, notes: Sequence[str]) -> None:
     """
     for note in notes:
         exc.add_note(f"also missing from this run: {note}")
-
-
-def _eager_data_index(nodes: Sequence[_Node]) -> int | None:
-    """Where the independent-Data batch fires: the first node AFTER the last gate.
-
-    A producer that ran before a gate would have fetched against params the gate
-    exists to change. Anything a pre-gate step needs is still produced lazily on
-    its first ``Ref``.
-    """
-    last_gate = max((n.index for n in nodes if isinstance(n.step, Gate)), default=-1)
-    return next((n.index for n in nodes if n.index > last_gate), None)
 
 
 def _note_aux_failure(out: RunResult, plan_name: str, node: _Node,
@@ -224,20 +246,37 @@ def _note_aux_failure(out: RunResult, plan_name: str, node: _Node,
 
 
 def _expand(plan: Plan) -> tuple[_Node, ...]:
+    """Number EVERY declared node, guarded ones included, in declaration order."""
     nodes: list[_Node] = []
-    for step in plan.flat():
-        i = len(nodes)
-        if isinstance(step, Gate):
-            nodes.append(_Node(i, step.label, step.runner, "gate", step))
-            continue
-        nodes.append(_Node(i, step.label, step.runner, "step", step))
-        for spec in step.renders:
-            nodes.append(_Node(len(nodes), f"{step.label}.render:{spec.preset}",
-                               step.runner, "render", step, spec))
-        for spec in step.charts:
-            nodes.append(_Node(len(nodes), f"{step.label}.chart:{spec.name}",
-                               spec.builder_path, "chart", step, spec))
+    _expand_into(nodes, plan.steps, ())
     return tuple(nodes)
+
+
+def _expand_into(nodes: list[_Node], declared: tuple[Any, ...],
+                 guards: tuple[int, ...]) -> None:
+    for node in declared:
+        i = len(nodes)
+        if isinstance(node, When):
+            nodes.append(_Node(i, node.label, "declarative.when", "when",
+                               _WHEN_STEP, node.condition, guards))
+            _expand_into(nodes, node.body, guards + (i,))
+            continue
+        if isinstance(node, Gate):
+            nodes.append(_Node(i, node.label, node.runner, "gate", node,
+                               guards=guards))
+            continue
+        nodes.append(_Node(i, node.label, node.runner, "step", node, guards=guards))
+        for spec in node.renders:
+            nodes.append(_Node(len(nodes), f"{node.label}.render:{spec.preset}",
+                               node.runner, "render", node, spec, guards))
+        for spec in node.charts:
+            nodes.append(_Node(len(nodes), f"{node.label}.chart:{spec.name}",
+                               spec.builder_path, "chart", node, spec, guards))
+
+
+#: A ``When`` node carries no work of its own; ``_Node.step`` is typed as a Step
+#: and this stands in so the branch marker fits the same list.
+_WHEN_STEP = Step(runner="declarative.when")
 
 
 @dataclass
@@ -250,24 +289,11 @@ class _Env:
     resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
     charts: dict[str, Any] = field(default_factory=dict)
-
-
-async def _produce_independent_data(env: _Env) -> None:
-    """The independent Data set - producers that Ref no other Data, run together.
-
-    Everything else is produced lazily on first ``Ref``. Skipped until a domain is
-    bound, because a spatial producer with no AOI would fetch the wrong world.
-    """
-    if current_domain() is None:
-        return
-    ready = [d for d in env.data.values()
-             if d.name not in env.artifacts
-             and not any(r.root in env.data for r in _refs(dict(d.producer.kwargs)))]
-    if not ready:
-        return
-    produced = await asyncio.gather(*(_produce(env, decl) for decl in ready))
-    for decl, value in zip(ready, produced):
-        env.artifacts[decl.name] = value
+    #: Artifacts handed IN rather than produced - a layer handle, a BYO file, a
+    #: gate's answer. What satisfies a producer-less ``Data`` slot.
+    byo: dict[str, Any] = field(default_factory=dict)
+    #: Absences worth narrating: an optional Data nothing satisfied.
+    absences: list[str] = field(default_factory=list)
 
 
 async def _reseat_after_gate(env: _Env, revision: "_Revision", plan: Plan,
@@ -315,7 +341,7 @@ def _data_consuming(data: Mapping[str, DataDecl],
         for name, decl in data.items():
             if name in stale:
                 continue
-            kwargs = dict(decl.producer.kwargs)
+            kwargs = dict(decl.producer_kwargs)
             if any(r.name in revised for r in _param_refs(kwargs)) or \
                     any(r.root in revised or r.root in stale for r in _refs(kwargs)):
                 stale.add(name)
@@ -330,7 +356,30 @@ def _data_step_label(name: str) -> str:
 
 
 async def _produce(env: _Env, decl: DataDecl) -> Any:
+    """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
+
+    Demand-pulled rather than fetched up front, which is what makes a branch that
+    does not fire cost nothing: the producer behind a ``When``-guarded consumer is
+    never reached.
+    """
+    supplied = env.byo.get(decl.name)
+    if supplied is not None:
+        _validate_byo(decl, supplied, decl.byo_validate)
+        return supplied
     producer = decl.producer
+    if producer is None:
+        # A producer-less slot: nothing was handed in, and naming a default
+        # fetcher for it would be this library inventing the source.
+        if decl.is_optional:
+            env.absences.append(decl.name)
+            logger.info("data %s is an optional slot nothing satisfied; the run "
+                        "proceeds without it", decl.name)
+            return None
+        raise StepFailedError(
+            f"Data {decl.name!r} is a producer-less slot and nothing satisfied it: "
+            "supply a layer, a file URI, or declare it .optional().",
+            error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
+        )
     if isinstance(producer, AuthoredProducer) and producer.byo_uri:
         _validate_byo(decl, producer.byo_uri, producer.byo_validate)
         return producer.byo_uri
@@ -351,8 +400,6 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         # read.
         kwargs.setdefault("temporal", producer.temporal)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
-        # The eager batch runs outside any node's body, so a producer that raises
-        # would otherwise escape the typed family entirely.
         value = await _call_runner(producer.runner, kwargs, label)
     if env.ledger is not None:
         await env.ledger.record_data(
@@ -683,7 +730,7 @@ async def _bind_value(value: Any, env: _Env) -> Any:
     if isinstance(value, ParamRef):
         # LATE binding: the sheet a gate may have revised, not the one the plan
         # value was built from.
-        return env.params.get(value.name)
+        return env.params.value_of(value.name)
     if isinstance(value, Ref):
         return await _deref(value, env)
     if isinstance(value, dict):
@@ -717,7 +764,7 @@ async def _deref(ref: Ref, env: _Env) -> Any:
     elif ref.root in env.data:
         base = env.artifacts[ref.root] = await _produce(env, env.data[ref.root])
     elif ref.root in env.params:
-        base = env.params.get(ref.root)
+        base = env.params.value_of(ref.root)
     else:
         raise StepFailedError(f"Ref({ref.path!r}) resolves to nothing at run time.",
                               error_code="REF_UNRESOLVED")

@@ -124,13 +124,27 @@ async def gate_draw_input(
 
 
 def _value_from(response: Any, geometry: str) -> Any:
-    """The PARAM value inside the reply - a handful of vertices, never a dataset."""
+    """The PARAM value inside the reply - a handful of vertices, never a dataset.
+
+    Reads through the SAME user-input normalizers a typed wire value passes, so
+    the drawn vocabulary and the typed vocabulary cannot drift. The import is
+    function-local because the declarative library's interpreter imports this
+    module, and the package edge is the cycle.
+    """
+    from trid3nt_server.workflows.lib.user_input import (
+        lonlat_bbox,
+        lonlat_point,
+        polygon_ring,
+        polyline_coords,
+    )
+
     if geometry == "point":
         coords = response.coordinates or []
-        return (float(coords[0]), float(coords[1])) if len(coords) >= 2 else None
+        return lonlat_point(coords[:2] if len(coords) >= 2 else None, label="the point")
     if geometry == "rectangle":
         coords = response.coordinates or []
-        return tuple(float(c) for c in coords[:4]) if len(coords) >= 4 else None
+        return lonlat_bbox(coords[:4] if len(coords) >= 4 else None,
+                           label="the rectangle")
 
     from trid3nt_server.gates.spatial_input import parse_spatial_input_features
 
@@ -138,16 +152,14 @@ def _value_from(response: Any, geometry: str) -> Any:
         return None
     parsed = parse_spatial_input_features(response.features)
     if geometry == "polyline":
-        return [[float(x), float(y)] for x, y in parsed.line_coords or []] or None
-    ring = _first_ring(parsed.aoi_features)
-    return ring or None
+        return polyline_coords(parsed.line_coords or None, label="the line")
+    return polygon_ring(_first_ring(parsed.aoi_features) or None, label="the polygon")
 
 
 def _first_ring(features: list[dict[str, Any]]) -> list[list[float]]:
-    """The outer ring of the first drawn polygon, as ``[[lon, lat], ...]``."""
+    """The outer ring of the first drawn polygon, still in the reply's own shape."""
     for feature in features:
         coords = ((feature.get("geometry") or {}).get("coordinates") or [])
         if coords and isinstance(coords[0], list):
-            return [[float(pt[0]), float(pt[1])] for pt in coords[0]
-                    if isinstance(pt, (list, tuple)) and len(pt) >= 2]
+            return coords[0]
     return []

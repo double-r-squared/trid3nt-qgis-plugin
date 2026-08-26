@@ -1369,3 +1369,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (rides the artemis BYO rematch): measured max distance from the
   barrier polyline to the nearest coincident mesh edge ~ 0 within vertex
   tolerance, plus the zoom-crop showing edges tracking the line exactly.
+
+- EDITABLE MESH LAYERS RULED (NATE 2026-08-25, observed rasterized
+  meshes in the mesh folder): a mesh reaching the CANVAS ships as a
+  native MDAL MESH LAYER in an EDITABLE format (2DM the reliable
+  writable one; verify SELAFIN write/edit support per QGIS version) -
+  NEVER rasterized to pixels (pictures of meshes are diagnostic-lane
+  only). Sweep: find every mesh currently published as an image and
+  convert its path. THE PAYOFF: QGIS's native mesh-editing toolbar
+  (3.22+: move/add/delete vertices) BECOMES the mesh gate's refinement
+  mechanism - publish editable mesh -> user edits in QGIS -> edited mesh
+  returns through the BYO door as the approved domain. No custom editor
+  built (leverage-libraries); joins the mesh wave charter, blocked-by
+  the SELAFIN local-coords fix where applicable.

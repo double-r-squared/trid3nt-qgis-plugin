@@ -1,10 +1,11 @@
 """Engine template ``tomawac_wave_field`` - TOMAWAC spectral (phase-averaged) waves.
 
-Four declarations and a chart: PARAMS, DATA, ``plan(p, d, ops)``, the ANSWER
-fields, and the chart function beside them. Everything else - normalizing the
-wire args, resolving the doors, walking the plan, persisting the products - is
-the skeleton (``workflows/lib/workflow.py``); the wave mechanism is the TELEMAC
-facade's open-water front (``steps/open_water.py`` + ``steps/wave.py``). See
+The recipe on one page: the binding blocks, ``plan(ops)``, the ANSWER fields and
+the chart function. The declared params and the model-facing prose are one file
+over in ``declarations.py``. Everything else - normalizing the wire args,
+resolving the doors, walking the plan, persisting the products - is the skeleton
+(``workflows/lib/workflow.py``); the wave mechanism is the TELEMAC facade's
+open-water front (``steps/open_water.py`` + ``steps/wave.py``). See
 ``docs/design/declarative-workflows.md``.
 
 THE QUESTION: how big do the waves get. TOMAWAC's third-generation wave-action
@@ -33,14 +34,14 @@ from trid3nt_server.workflows.lib import (
     Forcing,
     FormGate,
     MeshPolicy,
-    Param,
+    P,
     Physics,
     Ref,
-    doors,
     register_workflow,
 )
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.steps import compute_class
+from trid3nt_server.workflows.telemac.wave_field.declarations import DOC, PARAMS
 from trid3nt_server.workflows.telemac.wave_field.wave_mode import wave_mode
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
@@ -53,72 +54,6 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "build_fetch_chart", "plan",
 _LAKE_HALF_DEG = (0.7, 0.4)
 
 
-PARAMS: tuple[Param, ...] = (
-    # -- the question ------------------------------------------------------- #
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Lake or coastal place near the AOI (e.g. 'Lake Superior'), geocoded"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - open water "
-               "inside a lake for the real-bathymetry path"),
-    Param("wave_mode", door=doors.QUESTION, default="fetch_growth",
-          consequence="scenario",
-          desc="Which wave question: fetch_growth (wind-wave growth across the fetch) "
-               "| shoaling (swell steepens and depth-breaks) | bottom_friction (a "
-               "shallow shelf dissipates energy) | wave_current (a current amplifies "
-               "or damps the swell)"),
-
-    # -- the storm ---------------------------------------------------------- #
-    Param("wind_speed_mps", door=doors.SCENARIO, default=20.0, bounds=(0.0, 60.0),
-          units="m/s", consequence="physics",
-          desc="Sustained storm wind speed - a PRESCRIBED demo forcing, since no "
-               "wave-forcing fetcher exists yet"),
-    Param("wind_direction_deg", door=doors.SCENARIO, default=270.0,
-          bounds=(0.0, 360.0), units="deg", consequence="physics",
-          desc="Compass bearing the wind blows FROM (0=N, 90=E, 270=W); the fetch "
-               "runs downwind of it"),
-    Param("boundary_hs_m", door=doors.SCENARIO, default=1.5, bounds=(0.0, 20.0),
-          units="m", consequence="scenario",
-          desc="Incident swell significant wave height at the open boundary - the "
-               "shoaling and wave_current question classes"),
-    Param("boundary_period_s", door=doors.SCENARIO, default=10.0, bounds=(1.0, 30.0),
-          units="s", consequence="scenario",
-          desc="Incident swell peak period"),
-    Param("current_speed_mps", door=doors.SCENARIO, default=-2.5,
-          bounds=(-10.0, 10.0), units="m/s", consequence="scenario",
-          desc="wave_current only - the current ramped across the domain; NEGATIVE "
-               "opposes the swell (amplifies Hs), POSITIVE follows it (damps it)"),
-    Param("bottom_friction", door=doors.USER, optional=True, type=bool,
-          consequence="physics",
-          derived_when_absent=(
-              "bottom-friction dissipation arms itself for the bottom_friction "
-              "question class and stays off for every other one"),
-          desc="Force bottom-friction dissipation on or off"),
-
-    # -- the domain --------------------------------------------------------- #
-    Param("bathy_source", door=doors.SCENARIO, default="auto",
-          consequence="physics",
-          desc="Bed source: auto (a Great Lakes AOI samples the real NOAA lake-datum "
-               "bathymetry, anywhere else runs the idealized basin) | noaa_greatlakes "
-               "| idealized"),
-    Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
-          bounds=(150.0, 20000.0), units="m", consequence="numerical",
-          derived_when_absent=(
-              "the grid is laid at the labeled default spacing - 2000 m over a real "
-              "lake, 1500 m in the idealized basin"),
-          desc="Explicit grid node spacing; 150 m is the finest the wave grid authors "
-               "and a large lake is coarsened under the node budget"),
-
-    # -- numerics (the advanced fold) --------------------------------------- #
-    Param("sim_duration_hours", door=doors.SCENARIO, default=4.0, bounds=(1.0, 24.0),
-          units="h", consequence="numerical",
-          desc="Simulated storm duration - long enough for the sea to reach its "
-               "fetch-limited steady state"),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
-
-
 #: NO declared Data. The wave bed is sampled INSIDE the solver container from the
 #: NOAA lake-datum grids, so there is no agent-side artifact to declare - which is
 #: itself a queued item (the in-worker fetch migration), not a gap in this
@@ -126,34 +61,42 @@ PARAMS: tuple[Param, ...] = (
 DATA = ()
 
 
-def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
-    """The spectral-wave recipe. Pure: constructs the plan value, executes nothing.
+# -- the binding blocks --------------------------------------------------- #
+# What the run IS, declared as frozen values above the recipe that assembles
+# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# interpreter substitutes against the approved sheet, so the blocks are
+# process-lifetime constants and the plan is a pure assembly of them.
+
+PHYSICS = Physics("wave_spectrum",
+                  wave_mode=P.wave_mode,
+                  wind_speed_mps=P.wind_speed_mps,
+                  wind_direction_deg=P.wind_direction_deg,
+                  boundary_hs_m=P.boundary_hs_m,
+                  boundary_period_s=P.boundary_period_s,
+                  current_speed_mps=P.current_speed_mps,
+                  bottom_friction=P.bottom_friction,
+                  sim_duration_hours=P.sim_duration_hours,
+                  bathy_source=P.bathy_source)
+
+MESH = MeshPolicy(resolution=None, target_edge_m=P.target_resolution_m)
+
+
+def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+    """The spectral-wave recipe. Pure and STATIC: it reads no value, it names them.
 
     The form gate comes FIRST because the storm is a PRESCRIBED value: the wind
     speed that sets the whole answer is a labeled default, and reviewing it after
     the solve would be reviewing a number that had already decided everything.
     """
-    physics = Physics("wave_spectrum",
-                      wave_mode=p.wave_mode,
-                      wind_speed_mps=p.wind_speed_mps,
-                      wind_direction_deg=p.wind_direction_deg,
-                      boundary_hs_m=p.boundary_hs_m,
-                      boundary_period_s=p.boundary_period_s,
-                      current_speed_mps=p.current_speed_mps,
-                      bottom_friction=p.bottom_friction,
-                      sim_duration_hours=p.sim_duration_hours,
-                      bathy_source=p.bathy_source)
-    mesh = ops.build_mesh(Ref("aoi"),
-                          MeshPolicy(resolution=None,
-                                     target_edge_m=p.target_resolution_m))
     return [
         FormGate(title="Review the wave-field storm forcing"),
-        *ops.acquire_domain(location=p.location, bbox=p.bbox, shape="open_water",
+        *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="open_water",
                             aoi_half_deg=_LAKE_HALF_DEG, aoi_name="aoi",
                             code_prefix="TOMAWAC"),
-        ops.author(mesh=mesh, physics=physics, forcing=Forcing()),
-        ops.solver_spec(compute_class=p.compute_class, physics=physics),
-        ops.read_results(Ref("solve"), physics=physics, forcing=Forcing())
+        ops.author(mesh=ops.build_mesh(Ref("aoi"), MESH), physics=PHYSICS,
+                   forcing=Forcing()),
+        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=Forcing())
            .chart("wave_fetch_growth", builder=build_fetch_chart),
     ]
 
@@ -232,44 +175,6 @@ _TOMAWAC_METADATA = AtomicToolMetadata(
 )
 
 
-_DOC = dict(
-    summary="The SPECTRAL WAVE FIELD (significant wave height Hs) a storm builds over a lake or coast.",
-    routing=(
-        "THE tool for \"how big do the waves get\", \"significant wave height\", \"wave "
-        "field / sea state\", \"fetch-limited wave growth across the lake\", \"swell "
-        "shoaling / breaking at the beach\", \"wave-current interaction\", \"wave energy "
-        "dissipation on a shallow shelf\". TOMAWAC third-generation spectral wave-action "
-        "solver - wind-wave generation (WAM cycle 4), shoaling/breaking, wave-current "
-        "interaction, bottom friction. FOUR question classes via `wave_mode`: "
-        "`fetch_growth` (default), `shoaling`, `bottom_friction`, `wave_current`. "
-        "Produces an Hs field map + the along-fetch growth curve + the upwind/downwind "
-        "shore pair. Supply a lake/coastal `location` OR a `bbox`."
-    ),
-    not_for=(
-        "inundation DEPTH (`sfincs_flood` / `geoclaw_inundation`); coastal storm-tide "
-        "flooding (`coastal_tidal_surge`); harbour agitation inside a breakwater "
-        "(`artemis_harbor_agitation`); a river plume (`telemac_river_dye`)"
-    ),
-    params=PARAMS,
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved storm forcing and bed source for '
-         'review/edit before the solve and WAITS; "auto" (session default) proceeds '
-         "with every assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
-         "left behind and re-runs every step from the top. Default False resumes at "
-         "the failed step."),
-    ),
-    returns=(
-        "On success a `TelemacWaveLayerURI` (a `LayerURI` subtype) - the emitter loads "
-        "the Hs COG and animates the TOMAWAC SELAFIN sibling. It carries `hs_max_m` / "
-        "`hs_mean_m` / `hs_upwind_m` / `hs_downwind_m` / `wave_mode`; narrate those "
-        "typed numbers. On failure a dict with `status=\"error\"` + `error_code`."
-    ),
-)
-
-
 tomawac_wave_field = register_workflow(
     TelemacWorkflow, _TOMAWAC_METADATA, PARAMS, plan,
     data=DATA,
@@ -284,5 +189,5 @@ tomawac_wave_field = register_workflow(
         wave_mode(),
         compute_class(),
     ),
-    doc=_DOC,
+    doc=DOC,
 )

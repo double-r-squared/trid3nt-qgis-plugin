@@ -22,16 +22,19 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import time
 from typing import Any, Callable, Mapping, Sequence
 
+from . import journal
 from .data import DataDecl
 from .errors import DeclarativeError, PlanValidationError
 from .params import Param, doors
 from .plan import Plan, Ref, Step
 from .resolver import merge_provenance, resolve_params
+from .validate import validate_plan
 from .interpreter import RunResult, interpret
 
-__all__ = ["DataRefs", "EngineOps", "FacadeIncompleteError", "UndeclaredDataError",
+__all__ = ["EngineOps", "FacadeIncompleteError",
            "Workflow", "WireArgsError", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.lib.workflow")
@@ -41,18 +44,6 @@ class WireArgsError(DeclarativeError):
     """The wire arguments cannot be coerced into a sheet the workflow can run."""
 
     error_code = "WIRE_ARGS_INVALID"
-
-
-class UndeclaredDataError(WireArgsError, AttributeError):
-    """``d.<name>`` named a Data the workflow does not declare.
-
-    An ``AttributeError`` as well as a typed refusal, because it is raised from
-    ``__getattr__`` and the attribute PROTOCOL is what callers rely on there:
-    ``hasattr``, ``copy.deepcopy`` probing ``__deepcopy__``, pickle probing
-    ``__reduce_ex__`` and pytest probing ``__iter__`` all expect a miss to read as
-    an AttributeError. Raising a bare RuntimeError from a lookup turns every one of
-    those routine probes into a crash.
-    """
 
 
 class FacadeIncompleteError(DeclarativeError):
@@ -66,29 +57,6 @@ class FacadeIncompleteError(DeclarativeError):
     """
 
     error_code = "FACADE_INCOMPLETE"
-
-
-class DataRefs:
-    """``d`` inside ``plan(p, d, ops)``: ``d.rivers`` IS ``Ref("rivers")``.
-
-    Naming a Data that was never declared is refused HERE, while the plan value is
-    being built, rather than surfacing as a run-time ``REF_UNRESOLVED`` after the
-    geocode has already run.
-    """
-
-    __slots__ = ("_names",)
-
-    def __init__(self, data: Sequence[DataDecl]) -> None:
-        object.__setattr__(self, "_names", tuple(d.name for d in data))
-
-    def __getattr__(self, name: str) -> Ref:
-        names = object.__getattribute__(self, "_names")
-        if name not in names:
-            raise UndeclaredDataError(
-                f"the plan reads Data {name!r}, which this workflow does not declare "
-                f"(declared: {sorted(names)})."
-            )
-        return Ref(name)
 
 
 class EngineOps:
@@ -195,6 +163,20 @@ class Workflow(EngineOps):
         self.answer_provenance = tuple(_provenance_row(row) for row in provenance)
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
+        #: The plan is STATIC - it reads no concrete value - so it is built and
+        #: validated ONCE, here, at import. A P/D typo, an unreachable Ref, a
+        #: misplaced gate or a physics process the facade does not model is an
+        #: AUTHORING error, and this is the last moment it can be reported as one.
+        self.plan = self.build_plan()
+        validate_plan(self.plan, self.params, self.data)
+
+    def build_plan(self) -> Plan:
+        """The declared plan value, named and engined by the WORKFLOW, not restated."""
+        nodes = self.plan_decl(self)
+        if isinstance(nodes, Plan):
+            return nodes
+        return Plan(name=self.name, engine=self.engine or None,
+                    steps=tuple(nodes) if isinstance(nodes, (list, tuple)) else (nodes,))
 
     # -- hooks: silent defaults ------------------------------------------- #
 
@@ -207,25 +189,19 @@ class Workflow(EngineOps):
 
     # -- the spine --------------------------------------------------------- #
 
-    def build_plan(self, p: Any) -> Plan:
-        """The declared plan value, named and engined by the WORKFLOW, not restated."""
-        nodes = self.plan_decl(p, DataRefs(self.data), self)
-        if isinstance(nodes, Plan):
-            return nodes
-        return Plan(name=self.name, engine=self.engine or None,
-                    steps=tuple(nodes) if isinstance(nodes, (list, tuple)) else (nodes,))
-
     async def run(self, wire: Mapping[str, Any]) -> Any:
         """The absorbed tool body: normalize, resolve, interpret, post, publish."""
         supplied, err = self._normalize(dict(wire))
         if err is not None:
             return err
         input_mode = wire.get("input_mode")
+        started = time.monotonic()
         try:
             p = await resolve_params(self.params, supplied)
             run = await interpret(
-                self.build_plan(p), p, self.params, self.data,
+                self.plan, p, self.params, self.data,
                 input_mode=input_mode, resume=not bool(wire.get("restart_clean")),
+                byo=self._supplied_artifacts(wire),
             )
         except asyncio.CancelledError:
             raise
@@ -240,7 +216,7 @@ class Workflow(EngineOps):
                 raise
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
-        return await self._publish(run)
+        return await self._publish(run, time.monotonic() - started)
 
     # -- normalize --------------------------------------------------------- #
 
@@ -271,6 +247,18 @@ class Workflow(EngineOps):
         return {k: v for k, v in args.items()
                 if k in declared and v is not None}, None
 
+    def _supplied_artifacts(self, wire: Mapping[str, Any]) -> dict[str, Any]:
+        """Artifacts handed in for producer-less ``Data`` slots, by slot name.
+
+        A context slot has no producer BY DESIGN - the template will not name a
+        default source for a breakwater or a clip zone - so the only way one gets
+        filled is somebody handing it over. The wire argument carries the slot's
+        own name, which is what makes "which layer is this" answerable from the
+        declaration alone.
+        """
+        return {decl.name: wire[decl.name] for decl in self.data
+                if decl.producer is None and wire.get(decl.name) is not None}
+
     def _error(self, code: str, exc: BaseException) -> dict[str, Any]:
         """The failure, plus whatever auxiliary products the run also lost on the way."""
         notes = getattr(exc, "__notes__", ()) or ()
@@ -279,7 +267,7 @@ class Workflow(EngineOps):
 
     # -- post + publish ---------------------------------------------------- #
 
-    async def _publish(self, run: RunResult) -> Any:
+    async def _publish(self, run: RunResult, wall_seconds: float = 0.0) -> Any:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(result, run) if n]
         update: dict[str, Any] = {
@@ -294,7 +282,10 @@ class Workflow(EngineOps):
         result = result.model_copy(update=update)
 
         metrics = self.answer(result)
-        await self._persist(self._run_id(result, run), run.charts, metrics)
+        run_id = self._run_id(result, run)
+        await self._persist(run_id, run.charts, metrics)
+        await asyncio.to_thread(self._journal, run_id, run, result, metrics,
+                                wall_seconds)
         logger.info("%s complete layer_id=%s answer=%s executed=%s replayed=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
                     {k: v for k, v in metrics.items() if not isinstance(v, list)},
@@ -331,6 +322,27 @@ class Workflow(EngineOps):
         if direct or not self.solve_step:
             return direct
         return (run.results.get(self.solve_step) or {}).get("run_id")
+
+    def _journal(self, run_id: str | None, run: RunResult, result: Any,
+                 metrics: Mapping[str, Any], wall_seconds: float) -> None:
+        """Append this run to the run journal - one seam, every engine.
+
+        The publish stage is where a run has everything the record needs at once:
+        the sheet it actually ran on, the answer it published, the provenance rows
+        and the wall time. Anywhere else would be reassembling it from artifacts
+        that are allowed to disappear.
+        """
+        from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+        sheet = run.params.rows() if run.params is not None else ()
+        journal.append_record(journal.build_record(
+            run_id=run_id, template=self.name, engine=self.engine or None,
+            sheet=sheet, answer=metrics,
+            provenance=getattr(result, "synthetic_inputs", None) or [],
+            result=result, wall_seconds=round(wall_seconds, 3),
+            origin=journal.run_origin(live_session=current_emitter() is not None),
+            executed=run.executed, replayed=run.replayed, notes=run.notes,
+        ))
 
     @staticmethod
     async def _persist(run_id: str | None, charts: Mapping[str, Any],
@@ -401,7 +413,7 @@ def register_workflow(
     _run.__name__ = workflow.name
     _run.__qualname__ = workflow.name
     _run.__module__ = getattr(plan, "__module__", __name__)
-    sig, annotations = _wire_signature(params, extra_args)
+    sig, annotations = _wire_signature(params, extra_args, data)
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
     _run.workflow = workflow  # type: ignore[attr-defined]
@@ -461,9 +473,9 @@ def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
                  if prm.wire and prm.door != doors.CONSTANT)
 
 
-def _wire_signature(params: Sequence[Param],
-                    extra: Sequence[tuple[str, Any]]) -> tuple[inspect.Signature, dict]:
-    """The generated tool's signature: declared params, wire aliases, controls.
+def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
+                    data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
+    """The generated tool's signature: declared params, context slots, aliases, controls.
 
     Every argument is keyword-with-default: the doors supply what the caller omits,
     so a workflow argument is never positionally required. A ``**`` absorber keeps
@@ -481,6 +493,10 @@ def _wire_signature(params: Sequence[Param],
     entries: list[tuple[str, Any, Any]] = [
         (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
     ]
+    # A producer-less Data slot IS on the wire: it has no source of its own, so
+    # the only way it ever gets filled is a caller naming the layer.
+    entries += [(decl.name, str | None, None) for decl in data
+                if decl.producer is None]
     entries += [(name, ann, None) for name, ann in extra]
     entries += list(_CONTROLS)
     seen: set[str] = set()

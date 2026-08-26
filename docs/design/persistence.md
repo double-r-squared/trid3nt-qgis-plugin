@@ -1,8 +1,7 @@
-# persistence/ -- the document-store seam + case lifecycle
+# persistence/ -- the document-store seam
 
-`trid3nt_server/persistence/` (ADR 0277 grouped the two former top-level
-modules `persistence.py` + `case_lifecycle.py` into a package) is the storage
-layer behind the `MCPClientProtocol` seam.
+`trid3nt_server/persistence/` is the storage layer behind the
+`MCPClientProtocol` seam.
 
 ## What lives here
 
@@ -12,17 +11,17 @@ layer behind the `MCPClientProtocol` seam.
   `SESSIONS_COLLECTION`, `CHAT_COLLECTION`, `USERS_COLLECTION`),
   `DEFAULT_DATABASE`, and dev-persistence env knobs. Another document-store
   client drops in unchanged behind the protocol.
-- `case_lifecycle.py` -- builds the per-case QGS project on top of the store
-  (`ensure_case_qgs`, `CaseLifecycleError`).
 - `__init__.py` -- re-exports the store surface so `trid3nt_server.persistence.X`
-  resolves unchanged after the module-to-package grouping.
+  resolves unchanged.
+
+`CaseSummary.qgs_project_uri` stays as INERT DATA: a case that was handed an
+explicit project URI keeps it, and nothing provisions one. The per-case `.qgs`
+lazy-init that used to live here never had a production caller.
 
 ## Composition
 
-`case_lifecycle` imports `persistence` (one direction, no cycle).
 `server/_core` and `server/session` read/write cases, chat turns, and sessions
-through the store surface; `server/_core` imports
-`persistence.case_lifecycle.ensure_case_qgs`.
+through the store surface.
 
 ## Invariants / extension points
 

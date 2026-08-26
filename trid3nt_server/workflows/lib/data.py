@@ -108,23 +108,55 @@ class Build:
 
 @dataclass(frozen=True, slots=True)
 class DataDecl:
-    """A declared artifact: a name the plan Refs and the producer that satisfies it."""
+    """A declared artifact: a name the plan Refs, and what satisfies it.
+
+    A PRODUCER-LESS declaration (``producer=None``) is a CONTEXT SLOT: the
+    template names the artifact it can use and says nothing about where it comes
+    from, because naming a default fetcher for a breakwater or a clip zone is an
+    opinion the question does not carry. What satisfies it arrives from outside -
+    a layer the user already has, a file URI, a gate's answer - or nothing does,
+    and ``.optional()`` says that absence is legal.
+    """
 
     name: str
-    producer: Producer
+    producer: Producer | None
+    #: Absence is legal. Only meaningful on a producer-less slot; a declared
+    #: producer either produces or fails.
+    is_optional: bool = False
+    #: How a supplied artifact is checked against the domain.
+    byo_validate: Any = CoversAOI
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.isidentifier():
             raise PlanValidationError(f"Data name {self.name!r} is not an identifier.")
+        if self.is_optional and self.producer is not None:
+            raise PlanValidationError(
+                f"Data {self.name!r} declares a producer AND .optional(): a producer "
+                "either produces the artifact or fails typed, so there is no absence "
+                "for optional to describe. Drop the producer to make it a context "
+                "slot, or drop .optional()."
+            )
 
     @property
     def is_byo(self) -> bool:
         return getattr(self.producer, "byo_uri", None) is not None
 
+    @property
+    def producer_kwargs(self) -> Mapping[str, Any]:
+        """The reads the producer declares - empty for a producer-less slot."""
+        return {} if self.producer is None else self.producer.kwargs
 
-def Data(name: str, producer: Producer) -> DataDecl:  # noqa: N802 - a value constructor
-    """Declare an artifact. The producer's kind decides which modifiers are legal."""
-    if not isinstance(producer, Producer):
+    def optional(self) -> "DataDecl":
+        """Absence is legal, and LABELLED: the run says the slot went unfilled."""
+        return replace(self, is_optional=True)
+
+
+def Data(name: str, producer: Producer | None = None) -> DataDecl:  # noqa: N802
+    """Declare an artifact. The producer's kind decides which modifiers are legal.
+
+    No producer declares a CONTEXT SLOT - see :class:`DataDecl`.
+    """
+    if producer is not None and not isinstance(producer, Producer):
         raise PlanValidationError(
             f"Data {name!r}: producer must be a Producer, got {type(producer).__name__}."
         )

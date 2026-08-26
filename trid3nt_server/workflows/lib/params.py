@@ -207,27 +207,22 @@ class ResolvedParam:
 
 
 class ResolvedParams:
-    """The resolved param sheet. ``p.name`` yields a LATE-BOUND :class:`ParamRef`.
+    """The resolved param sheet - what the RUN reads, never what the plan reads.
 
-    Attribute access is what ``plan(p, d)`` uses, and a plan is built once, before
-    the gates it declares have run - so it must describe the read rather than
-    perform it. The concrete value is reached through ``get``/``values_dict``, or
-    through the :class:`ParamValues` view handed to derivations and chart builders.
+    A plan is a static value built before any sheet exists (``plan(ops)``, with
+    ``P.<name>`` describing each read), so nothing here is reachable at
+    plan-construction time. What this class serves is the interpreter binding a
+    ref, the gate machinery re-seating an approval, and the
+    :class:`ParamValues` view handed to derivations and chart builders.
+
+    ``p.name`` still yields a :class:`ParamRef` for the templates that predate the
+    skeleton and build their own ``Plan`` from a sheet.
     """
 
-    __slots__ = ("_rows", "_reads", "_reads_frozen")
+    __slots__ = ("_rows",)
 
     def __init__(self, rows: dict[str, ResolvedParam]) -> None:
         object.__setattr__(self, "_rows", dict(rows))
-        # Names read as CONCRETE values through ANY public read path. ``plan(p, d)``
-        # is the only code that runs before the plan is validated, so this set is
-        # exactly the plan's construction-time reads - which is how the validator
-        # can tell that a ``When`` branch was decided from a value a form gate may
-        # later revise. Every read path records: a branch decided from
-        # ``values_dict()[name]`` or ``values_view().name`` is exactly as frozen
-        # against the pre-review sheet as one decided from ``get(name)``.
-        object.__setattr__(self, "_reads", set())
-        object.__setattr__(self, "_reads_frozen", None)
 
     def __getattr__(self, name: str) -> ParamRef:
         rows = object.__getattribute__(self, "_rows")
@@ -246,55 +241,23 @@ class ResolvedParams:
     def __iter__(self):
         return iter(self._rows.values())
 
-    def _record_read(self, *names: str) -> None:
-        if self._reads_frozen is None:
-            self._reads.update(names)
-
-    def get(self, name: str, default: Any = None) -> Any:
-        self._record_read(name)
+    def value_of(self, name: str, default: Any = None) -> Any:
+        """The concrete value of one row - the interpreter's own read."""
         row = self._rows.get(name)
         return default if row is None else row.value
 
-    def freeze_reads(self) -> None:
-        """Close the construction-time read set. Idempotent; the validator calls it.
-
-        UNCONDITIONAL at validation, not lazy: a sheet reused for a second
-        ``interpret`` would otherwise carry the FIRST run's run-time reads into the
-        second validation and refuse a plan the first accepted.
-        """
-        if self._reads_frozen is None:
-            object.__setattr__(self, "_reads_frozen", frozenset(self._reads))
-
-    def concrete_reads(self) -> frozenset[str]:
-        """Names whose CONCRETE value has been read off this sheet.
-
-        Frozen by :meth:`freeze_reads`: every read after that is the interpreter
-        binding a ref at run time, not the plan deciding a branch.
-        """
-        self.freeze_reads()
-        return self._reads_frozen
-
     def row(self, name: str) -> ResolvedParam | None:
-        self._record_read(name)
         return self._rows.get(name)
 
     def values_dict(self) -> dict[str, Any]:
-        # Every name at once: the caller holds all the concrete values, so any of
-        # them could have decided a branch.
-        self._record_read(*self._rows)
         return {k: v.value for k, v in self._rows.items()}
 
     def rows(self) -> tuple[ResolvedParam, ...]:
-        self._record_read(*self._rows)
         return tuple(self._rows.values())
 
     def values_view(self) -> "ParamValues":
-        """The concrete-value view, for code that runs WITH the sheet, not on it.
-
-        The view records each name it hands over back onto this sheet, so reaching
-        a value through the view is the same declared read as ``get``.
-        """
-        return ParamValues(self._rows, record=self._record_read)
+        """The concrete-value view, for code that runs WITH the sheet, not on it."""
+        return ParamValues(self._rows)
 
     def replacing(self, rows: dict[str, ResolvedParam]) -> "ResolvedParams":
         """A new sheet with these rows overlaid - the sheet itself stays frozen."""
@@ -307,21 +270,12 @@ class ParamValues:
     Handed to derivations and chart builders, which run at a moment when the value
     exists and is what they need. Distinct from :class:`ResolvedParams` so a
     plan-construction read cannot silently collapse into an early-bound value.
-
-    ``record`` reports each name handed over back to the sheet the view came from,
-    so a value reached through the view counts as the same concrete read as
-    ``ResolvedParams.get``.
     """
 
-    __slots__ = ("_rows", "_record")
+    __slots__ = ("_rows",)
 
-    def __init__(self, rows: dict[str, ResolvedParam], *, record: Any = None) -> None:
+    def __init__(self, rows: dict[str, ResolvedParam]) -> None:
         self._rows = dict(rows)
-        self._record = record
-
-    def _read(self, name: str) -> None:
-        if self._record is not None:
-            self._record(name)
 
     def __getattr__(self, name: str) -> Any:
         rows = object.__getattribute__(self, "_rows")
@@ -329,14 +283,12 @@ class ParamValues:
             raise ParamNotResolved(
                 f"param {name!r} is not declared (declared: {sorted(rows)})"
             )
-        self._read(name)
         return rows[name].value
 
     def __contains__(self, name: str) -> bool:
         return name in self._rows
 
     def get(self, name: str, default: Any = None) -> Any:
-        self._read(name)
         row = self._rows.get(name)
         return default if row is None else row.value
 

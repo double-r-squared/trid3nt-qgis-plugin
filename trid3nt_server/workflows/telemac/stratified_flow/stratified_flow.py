@@ -1,11 +1,12 @@
 """Engine template ``telemac3d_stratified_flow`` - TELEMAC-3D vertical structure.
 
-Four declarations and a chart: PARAMS, DATA, ``plan(p, d, ops)``, the ANSWER
-fields, and the chart function beside them. Everything else - normalizing the
-wire args, resolving the doors, walking the plan, persisting the products - is
-the skeleton (``workflows/lib/workflow.py``); the 3D mechanism is the TELEMAC
-facade's open-water front (``steps/open_water.py`` + ``steps/stratified.py``).
-See ``docs/design/declarative-workflows.md``.
+The recipe on one page: the binding blocks, ``plan(ops)``, the ANSWER fields and
+the chart function. The declared params and the model-facing prose are one file
+over in ``declarations.py``. Everything else - normalizing the wire args,
+resolving the doors, walking the plan, persisting the products - is the skeleton
+(``workflows/lib/workflow.py``); the 3D mechanism is the TELEMAC facade's
+open-water front (``steps/open_water.py`` + ``steps/stratified.py``). See
+``docs/design/declarative-workflows.md``.
 
 THE QUESTION: what a depth-averaged model cannot see. TELEMAC-3D solves the
 three-dimensional (hydrostatic or non-hydrostatic) equations with active-tracer
@@ -35,14 +36,17 @@ from trid3nt_server.workflows.lib import (
     Forcing,
     FormGate,
     MeshPolicy,
-    Param,
+    P,
     Physics,
     Ref,
-    doors,
     register_workflow,
 )
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.steps import compute_class
+from trid3nt_server.workflows.telemac.stratified_flow.declarations import (
+    DOC,
+    PARAMS,
+)
 from trid3nt_server.workflows.telemac.stratified_flow.flow_mode import flow_mode
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
@@ -54,104 +58,48 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "build_profile_chart", "plan",
 _BASIN_HALF_DEG = (0.35, 0.25)
 
 
-PARAMS: tuple[Param, ...] = (
-    # -- the question ------------------------------------------------------- #
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Lake or basin place near the AOI (e.g. 'Lake Superior'), geocoded"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - deep open "
-               "water inside a lake for the real-bathymetry path"),
-    Param("flow_mode", door=doors.QUESTION, default="stratification",
-          consequence="scenario",
-          desc="Which 3D question: stratification (does the thermocline survive) | "
-               "wind_circulation (surface downwind, return flow at depth) | "
-               "salt_wedge (a density-driven bottom gravity current)"),
-
-    # -- the column --------------------------------------------------------- #
-    Param("warm_temp_c", door=doors.SCENARIO, default=25.0, bounds=(-2.0, 40.0),
-          units="C", consequence="physics",
-          desc="Epilimnion (warm surface layer) temperature - a PRESCRIBED demo "
-               "column, since no met-forcing fetcher exists yet"),
-    Param("cold_temp_c", door=doors.SCENARIO, default=15.0, bounds=(-2.0, 40.0),
-          units="C", consequence="physics",
-          desc="Hypolimnion (cold bottom layer) temperature; the initial "
-               "top-to-bottom difference is what the run either keeps or mixes away"),
-    Param("thermocline_depth_m", door=doors.SCENARIO, default=8.0,
-          bounds=(0.5, 200.0), units="m", consequence="physics",
-          desc="Depth of the thermocline below the surface"),
-    Param("wind_speed_mps", door=doors.SCENARIO, default=0.0, bounds=(0.0, 40.0),
-          units="m/s", consequence="physics",
-          desc="Sustained wind speed; 0 is CALM - the half of the pair in which the "
-               "thermocline persists - and a nonzero value mixes the column and "
-               "drives the circulation"),
-    Param("wind_direction_deg", door=doors.SCENARIO, default=270.0,
-          bounds=(0.0, 360.0), units="deg", consequence="scenario",
-          desc="Compass bearing the wind blows FROM (0=N, 90=E, 270=W)"),
-
-    # -- the numerics (the advanced fold) ----------------------------------- #
-    Param("nplan", door=doors.SCENARIO, default=13, bounds=(5.0, 30.0),
-          type=int, consequence="numerical",
-          desc="Number of vertical sigma levels - the degree of freedom a 2D model "
-               "does not have, so it is the resolution lever that matters here"),
-    Param("non_hydrostatic", door=doors.USER, optional=True, type=bool,
-          consequence="physics",
-          derived_when_absent="the hydrostatic solver runs",
-          desc="Force the non-hydrostatic solver - the dam-break-3D fidelity rung a "
-               "salt wedge's front needs"),
-    Param("bathy_source", door=doors.SCENARIO, default="auto",
-          consequence="physics",
-          desc="Bed source: auto (a Great Lakes AOI samples the real NOAA lake-datum "
-               "bathymetry, anywhere else runs the idealized basin) | noaa_greatlakes "
-               "| idealized"),
-    Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
-          bounds=(50.0, 20000.0), units="m", consequence="numerical",
-          derived_when_absent=(
-              "the horizontal grid is laid at the labeled default spacing - 2000 m "
-              "over a real lake, 250 m in the idealized basin"),
-          desc="Explicit HORIZONTAL grid node spacing; the vertical is nplan"),
-    Param("sim_duration_hours", door=doors.SCENARIO, default=5.0, bounds=(1.0, 24.0),
-          units="h", consequence="numerical",
-          desc="Simulated duration - long enough for the column to settle or mix"),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
-
-
 #: NO declared Data. The lake bed is sampled INSIDE the solver container from the
 #: NOAA lake-datum grids; that is the in-worker-fetch migration's business, not a
 #: gap in this declaration.
 DATA = ()
 
 
-def plan(p, d, ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
-    """The 3D-structure recipe. Pure: constructs the plan value, executes nothing.
+# -- the binding blocks --------------------------------------------------- #
+# What the run IS, declared as frozen values above the recipe that assembles
+# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# interpreter substitutes against the approved sheet, so the blocks are
+# process-lifetime constants and the plan is a pure assembly of them.
+
+PHYSICS = Physics("stratified_3d",
+                  flow_mode=P.flow_mode,
+                  wind_speed_mps=P.wind_speed_mps,
+                  wind_direction_deg=P.wind_direction_deg,
+                  warm_temp_c=P.warm_temp_c, cold_temp_c=P.cold_temp_c,
+                  thermocline_depth_m=P.thermocline_depth_m,
+                  non_hydrostatic=P.non_hydrostatic, nplan=P.nplan,
+                  sim_duration_hours=P.sim_duration_hours,
+                  bathy_source=P.bathy_source)
+
+MESH = MeshPolicy(resolution=None, target_edge_m=P.target_resolution_m)
+
+
+def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
+    """The 3D-structure recipe. Pure and STATIC: it reads no value, it names them.
 
     The form gate comes FIRST because the whole answer is prescribed: the warm and
     cold temperatures ARE the initial condition, and the wind decides whether the
     difference between them survives. Reviewing those after the solve would be
     reviewing the answer.
     """
-    physics = Physics("stratified_3d",
-                      flow_mode=p.flow_mode,
-                      wind_speed_mps=p.wind_speed_mps,
-                      wind_direction_deg=p.wind_direction_deg,
-                      warm_temp_c=p.warm_temp_c, cold_temp_c=p.cold_temp_c,
-                      thermocline_depth_m=p.thermocline_depth_m,
-                      non_hydrostatic=p.non_hydrostatic, nplan=p.nplan,
-                      sim_duration_hours=p.sim_duration_hours,
-                      bathy_source=p.bathy_source)
-    mesh = ops.build_mesh(Ref("aoi"),
-                          MeshPolicy(resolution=None,
-                                     target_edge_m=p.target_resolution_m))
     return [
         FormGate(title="Review the prescribed column and the wind"),
-        *ops.acquire_domain(location=p.location, bbox=p.bbox, shape="open_water",
+        *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="open_water",
                             aoi_half_deg=_BASIN_HALF_DEG, aoi_name="aoi",
                             code_prefix="TELEMAC3D"),
-        ops.author(mesh=mesh, physics=physics, forcing=Forcing()),
-        ops.solver_spec(compute_class=p.compute_class, physics=physics),
-        ops.read_results(Ref("solve"), physics=physics, forcing=Forcing())
+        ops.author(mesh=ops.build_mesh(Ref("aoi"), MESH), physics=PHYSICS,
+                   forcing=Forcing()),
+        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=Forcing())
            .chart("vertical_profile", builder=build_profile_chart),
     ]
 
@@ -245,46 +193,6 @@ _TELEMAC3D_METADATA = AtomicToolMetadata(
 )
 
 
-_DOC = dict(
-    summary="The 3D VERTICAL STRUCTURE of a water body a 2D depth-averaged model cannot resolve.",
-    routing=(
-        "THE tool for \"does this lake stratify or turn over\", \"thermal "
-        "stratification / thermocline\", \"epilimnion over hypolimnion\", "
-        "\"wind-driven vertical circulation / return flow in a lake\", \"surface-vs-"
-        "bottom current structure\", \"salt wedge / salinity intrusion in an estuary\", "
-        "\"density-driven bottom gravity current\". TELEMAC-3D with active-tracer "
-        "baroclinic coupling over sigma layers. THREE question classes via "
-        "`flow_mode`: `stratification` (default), `wind_circulation`, `salt_wedge`. "
-        "Returns the SURFACE field map with a BOTTOM companion beside it and the "
-        "vertical profile. Supply a lake `location` OR a `bbox`."
-    ),
-    not_for=(
-        "a 2D river dye/contaminant plume (`telemac_river_dye`); inundation DEPTH "
-        "(`sfincs_flood` / `geoclaw_inundation`); coastal storm-tide flooding "
-        "(`coastal_tidal_surge`); the surface wave field (`tomawac_wave_field` / "
-        "`artemis_harbor_agitation`)"
-    ),
-    params=PARAMS,
-    controls=(
-        ("input_mode",
-         '"user_gated" presents the resolved column and wind for review/edit before '
-         'the solve and WAITS; "auto" (session default) proceeds with every '
-         "assumption labeled. Not a physical value."),
-        ("restart_clean",
-         "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
-         "left behind and re-runs every step from the top. Default False resumes at "
-         "the failed step."),
-    ),
-    returns=(
-        "On success a `Telemac3dLayerURI` (a `LayerURI` subtype) - the SURFACE-layer "
-        "field COG, with the BOTTOM companion emitted beside it. It carries "
-        "`stratification_metric` / `stratification_dt` / `flow_mode` / `nplan` and "
-        "the vertical `profile_*` arrays; narrate those typed numbers. On failure a "
-        "dict with `status=\"error\"` + `error_code`."
-    ),
-)
-
-
 telemac3d_stratified_flow = register_workflow(
     TelemacWorkflow, _TELEMAC3D_METADATA, PARAMS, plan,
     data=DATA,
@@ -299,5 +207,5 @@ telemac3d_stratified_flow = register_workflow(
         flow_mode(),
         compute_class(),
     ),
-    doc=_DOC,
+    doc=DOC,
 )

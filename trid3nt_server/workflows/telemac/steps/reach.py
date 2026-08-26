@@ -23,7 +23,7 @@ import re
 import tempfile
 from typing import Any, NamedTuple
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.lib import Step, user_input
 
 from .errors import TelemacDyeScenarioError
 
@@ -41,7 +41,6 @@ __all__ = [
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
     "geocode_reach",
-    "lonlat_point",
     "named_watercourse",
     "reach_seed",
     "slug",
@@ -203,41 +202,18 @@ def slug(name: str) -> str:
 
 def coerce_lonlat_point(value: Any, *,
                         label: str = "release point") -> tuple[float, float] | None:
-    """``(lon, lat)`` from a wire value; ``None`` only when nothing was supplied.
+    """``(lon, lat)`` from a wire value, in TELEMAC's own error family.
 
-    A MALFORMED point REFUSES rather than degrading to a derived location:
-    silently modelling a different point than the one asked for is the swallow
-    class. ``label`` is what the refusal calls the point, so an outfall reads as
-    an outfall. Callers whose contract is fail-open (the pre-dispatch gate
-    builder) catch the refusal explicitly at the call site.
+    The SHAPE rules are the user-input species' (one normalizer, whether the point
+    was clicked or typed); what this adds is the engine's error TYPE, because
+    callers whose contract is fail-open - the pre-dispatch gate builder, the mesh
+    preview - catch ``TelemacDyeScenarioError`` at the call site.
     """
-    if value is None:
-        return None
     try:
-        lon, lat = (float(v) for v in tuple(value))  # type: ignore[misc]
-    except (TypeError, ValueError):
-        raise TelemacDyeScenarioError(
-            "TELEMAC_PARAMS_INVALID",
-            f"{label} {value!r} is not a (lon, lat) pair. Supply it as two "
-            "numbers in EPSG:4326, or omit it.",
-        ) from None
-    if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
-        raise TelemacDyeScenarioError(
-            "TELEMAC_PARAMS_INVALID",
-            f"{label} ({lon}, {lat}) is off the earth; it is (lon, lat) in "
-            "EPSG:4326, longitude first.",
-        )
-    return (lon, lat)
-
-
-def lonlat_point(param: str, *, label: str) -> Any:
-    """A coercion that reads one wire field into a clean ``(lon, lat)`` param."""
-
-    def _coerce(args: Any) -> dict[str, Any]:
-        return {param: coerce_lonlat_point(args.get(param), label=label)}
-
-    _coerce.__name__ = f"lonlat_point:{param}"
-    return _coerce
+        return user_input.lonlat_point(value, label=label,
+                                       code="TELEMAC_PARAMS_INVALID")
+    except user_input.UserInputError as exc:
+        raise TelemacDyeScenarioError("TELEMAC_PARAMS_INVALID", str(exc)) from None
 
 
 def bbox_center(bbox: Any) -> tuple[float, float]:

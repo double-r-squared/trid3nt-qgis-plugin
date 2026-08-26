@@ -9,6 +9,12 @@ A slot is a plan-CONSTRUCTION value: its members are ``ParamRef``/``Ref``
 descriptions, and the facade unpacks it while the plan is being built, so what
 reaches ``Step.kwargs`` is a plain mapping the interpreter already knows how to
 bind. Nothing here reaches run time.
+
+A slot is also a BINDING BLOCK: a template writes PHYSICS / FORCING / MESH /
+CORRIDOR at module level, above ``plan(ops)``, and the plan reads them. That makes
+them process-lifetime values shared by every run, so they are DEEP-frozen - a
+nested mapping or list inside one would otherwise be a mutable global that one
+run could edit for the next.
 """
 
 from __future__ import annotations
@@ -19,7 +25,31 @@ from typing import Any, Mapping
 
 from .errors import PlanValidationError
 
-__all__ = ["Forcing", "MeshPolicy", "Physics", "Slot"]
+__all__ = ["Forcing", "MeshPolicy", "Physics", "Slot", "deep_freeze"]
+
+
+def deep_freeze(value: Any) -> Any:
+    """Freeze a declared value ALL THE WAY DOWN - mappings included.
+
+    A binding block lives at module scope for the life of the process and every
+    run of the template reads the same object, so a mutable container inside one
+    is a cross-run channel: a step that pops a key out of a declared dict changes
+    what the NEXT run declares. Mappings become read-only views, sequences become
+    tuples, sets become frozensets. Anything else is left alone - a ``ParamRef``,
+    a ``Ref`` and a number are already values.
+    """
+    if isinstance(value, (str, bytes, bytearray)):
+        return bytes(value) if isinstance(value, bytearray) else value
+    if isinstance(value, Mapping):
+        return MappingProxyType({k: deep_freeze(v) for k, v in value.items()})
+    if isinstance(value, (list, tuple)):
+        frozen = [deep_freeze(v) for v in value]
+        if isinstance(value, tuple) and hasattr(value, "_make"):
+            return value._make(frozen)      # a namedtuple keeps its field names
+        return tuple(frozen)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(deep_freeze(v) for v in value)
+    return value
 
 
 class Slot:
@@ -35,7 +65,9 @@ class Slot:
     kind = "slot"
 
     def __init__(self, **values: Any) -> None:
-        object.__setattr__(self, "_values", MappingProxyType(dict(values)))
+        object.__setattr__(
+            self, "_values",
+            MappingProxyType({k: deep_freeze(v) for k, v in values.items()}))
 
     @property
     def values(self) -> Mapping[str, Any]:
@@ -109,3 +141,8 @@ class MeshPolicy:
     resolution: Any = "auto"
     #: An explicit target element edge length that overrides the mode.
     target_edge_m: Any = None
+
+    def __post_init__(self) -> None:
+        for field_name in ("resolution", "target_edge_m"):
+            object.__setattr__(self, field_name,
+                               deep_freeze(getattr(self, field_name)))
