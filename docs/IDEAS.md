@@ -1313,3 +1313,21 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (PARAMS + _DOC out; QUESTION docstring, DATA, plan, ANSWER, chart,
   spec/metadata, registration stay; plan body unchanged by one
   character). Apply to all six in the batch.
+
+- MESH WAVE CHARTER GROWS (NATE 2026-08-25 discussion): (1) CONTEXT-OBJECT
+  SLOTS: producer-less optional Data (.byo geometry-typed, .optional()) -
+  no baked default producer (even naming a fetcher is opinion); sources =
+  standalone fetchers (fetch_osm_breakwaters gets BUILT as one), QGIS-
+  authored layers, draw gate, or omitted (labeled absence); lazy
+  demand-pulled producers in the lib. (2) ENFORCEMENT vocabulary:
+  obstacle(polygon)=punch hole, barrier(polyline)=blocked edge,
+  refine(zone) - neutral declarations, per-engine writers realize
+  (TELEMAC islands, SWMM blocked links); artemis TRUTH: already a real
+  1-element-wide topological slit (marching-cell thin barrier, LIHBOR 2
+  faces) - thin cuts need ZOOM-CROP proof panels as the norm. (3) OPEN
+  BOUNDARIES: open_boundary(stretch, forcing)/free_exit(stretch)/closed
+  default - declared neutrally, realized per-engine (LIHBOR 1/2/4 exists
+  natively, wasted today: coastal hardcodes ocean_edge E); subsumes the
+  OceanMesh BYO boundary-tagging question; reviewable at the mesh gate.
+  Misrepresented coastal connectivity = quiet physics corruption
+  (reflections that should radiate).
