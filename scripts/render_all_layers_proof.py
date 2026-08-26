@@ -70,6 +70,23 @@ _FRAME_SUFFIX_RE = re.compile(
 #: every element edge as one MultiLineString), and a flowline's line weight turns
 #: it into a solid blob. Drawn thin instead, so the panel reads as the domain.
 _WIREFRAME_VERTICES = 5000
+#: ADAPTIVE geometry weight, as ``numerator / sqrt(n)`` clipped to ``(lo, hi)``.
+#: One fixed width cannot read across the range this sheet covers - a 40-vertex
+#: reach and a 200,000-vertex flowline network are two different pictures, and a
+#: width tuned for the dense one vanishes on the sparse one, which is exactly
+#: what a reader reports as "the layer is not there". The animation renderer
+#: already scales its mesh wireframe this way; these are the same bar for the
+#: sheet's geometry.
+_VECTOR_LW = (300.0, 0.45, 2.2)     # lines / polygon edges, by VERTEX count
+_MESH_LW = (60.0, 0.15, 0.7)        # solver-mesh triangles, by ELEMENT count
+_POINT_S = (1600.0, 22.0, 110.0)    # marker area, by POINT count
+#: Every vector stroke is drawn TWICE: a dark casing under the bright colour.
+#: Satellite imagery is busy at every luminance, so a single-colour hairline
+#: disappears against some part of any basemap no matter which colour it is; a
+#: casing is the cartographic answer and costs one extra draw call.
+_CASING = "#0d0f14"
+_CASING_MULT = 2.8
+_CASING_ALPHA = 0.55
 #: Per-layer colours for the VECTOR geometry on the composite panel, so six
 #: stacked layers are still separable. A sheet-side choice, stated on the panel -
 #: the product declares no vector colour to read.
@@ -316,31 +333,59 @@ def _draw_raster(ax, payload: dict, *, alpha: float):
                      vmin=vmin, vmax=vmax, alpha=alpha, zorder=2)
 
 
+def _adaptive(spec: tuple[float, float, float], n: int) -> float:
+    """``numerator / sqrt(n)`` clipped to the spec's floor and ceiling."""
+    numerator, lo, hi = spec
+    return float(np.clip(numerator / max(int(n), 1) ** 0.5, lo, hi))
+
+
 def _draw_vector(ax, payload: dict, *, color: str, zorder: int):
+    """Vector geometry, weighted to its own density and cased for contrast.
+
+    The width follows the VERTEX count rather than the feature count, because
+    that is what decides whether the drawing reads: 1,900 river reaches at a flat
+    hairline is a smudge over imagery, and one 200,000-vertex mesh-preview
+    MultiLineString at a flat 1.4 pt is a solid block. Both used to happen.
+    """
     gdf = payload["gdf"]
+    width = _adaptive(_VECTOR_LW, payload["vertices"])
+    casing = width * _CASING_MULT
     geom_types = set(gdf.geom_type)
     if geom_types & {"Point", "MultiPoint"}:
         pts = gdf[gdf.geom_type.isin(["Point", "MultiPoint"])].explode(
             index_parts=False)
         ax.scatter(pts.geometry.x, pts.geometry.y,
-                   s=90, marker="o", facecolor=color, edgecolor="white",
-                   linewidths=1.2, zorder=zorder + 2)
+                   s=_adaptive(_POINT_S, len(pts)), marker="o",
+                   facecolor=color, edgecolor="white", linewidths=1.2,
+                   zorder=zorder + 2)
     lines = gdf[gdf.geom_type.isin(["LineString", "MultiLineString"])]
     if len(lines):
-        lines.plot(ax=ax, color=color, zorder=zorder,
-                   linewidth=0.12 if payload["wireframe"] else 1.4,
-                   alpha=0.7 if payload["wireframe"] else 1.0)
+        lines.plot(ax=ax, color=_CASING, zorder=zorder, linewidth=casing,
+                   alpha=_CASING_ALPHA)
+        lines.plot(ax=ax, color=color, zorder=zorder + 1, linewidth=width,
+                   alpha=1.0)
     polys = gdf[gdf.geom_type.isin(["Polygon", "MultiPolygon"])]
     if len(polys):
         # Mesh-preview and bank polygons are thousands of tiny cells: an outline
         # at this scale reads as the domain, a fill reads as a solid blob.
-        polys.plot(ax=ax, facecolor="none", edgecolor=color, linewidth=0.25,
-                   zorder=zorder)
+        polys.plot(ax=ax, facecolor="none", edgecolor=_CASING, zorder=zorder,
+                   linewidth=casing * 0.6, alpha=_CASING_ALPHA)
+        polys.plot(ax=ax, facecolor="none", edgecolor=color, zorder=zorder + 1,
+                   linewidth=width * 0.6)
 
 
 def _draw_mesh(ax, payload: dict, *, color: str, zorder: int):
-    ax.triplot(payload["tri"], color=color, linewidth=0.12, alpha=0.55,
-               zorder=zorder)
+    """A solver mesh as its TRIANGLES - the modeled domain, not a node cloud.
+
+    Weight and opacity both follow the element count, on the same rule the
+    animation renderer uses. A fixed hairline over a small catchment inside a
+    wide frame collapses into a scatter of dots, which is what NATE read as an
+    empty panel; there was a mesh there the whole time.
+    """
+    elements = int(payload["tri"].triangles.shape[0])
+    ax.triplot(payload["tri"], color=color, zorder=zorder,
+               linewidth=_adaptive(_MESH_LW, elements),
+               alpha=float(np.clip(0.30 + 1200.0 / max(elements, 1), 0.35, 0.85)))
 
 
 def _draw(ax, layer: dict, payload: dict, *, color: str, zorder: int,
@@ -395,6 +440,64 @@ def _canvas_bbox(renderable: list[tuple]) -> tuple[tuple, list[str]]:
     return _union_bbox([boxes[i] for i in sorted(kept)]), strays
 
 
+#: A layer whose own extent covers less than this share of the canvas union is
+#: framed on ITSELF and the caption says so. Below it, the shared frame turns the
+#: layer into a speck: a 30 km2 catchment inside a whole-county AOI reads as
+#: empty, and an empty-looking panel is indistinguishable from a broken one.
+_ZOOM_AREA_FRAC = 0.55
+#: A degenerate extent - a single drawn point, one station - has no span to frame,
+#: so it gets this much around it, in degrees.
+_POINT_PAD_DEG = 0.01
+
+
+def _bbox_area(bbox: tuple) -> float:
+    return max(bbox[2] - bbox[0], 0.0) * max(bbox[3] - bbox[1], 0.0)
+
+
+def _undegenerate(bbox: tuple) -> tuple:
+    """A frame with real span, so a single point does not ask for a zero-width axis."""
+    x0, y0, x1, y1 = (float(v) for v in bbox)
+    if x1 - x0 < _POINT_PAD_DEG:
+        mid = (x0 + x1) / 2.0
+        x0, x1 = mid - _POINT_PAD_DEG, mid + _POINT_PAD_DEG
+    if y1 - y0 < _POINT_PAD_DEG:
+        mid = (y0 + y1) / 2.0
+        y0, y1 = mid - _POINT_PAD_DEG, mid + _POINT_PAD_DEG
+    return (x0, y0, x1, y1)
+
+
+def _panel_frame(payload: dict, canvas_bbox: tuple) -> tuple[tuple, str]:
+    """The frame ONE layer's own panel gets, and the note its caption carries.
+
+    A per-layer panel exists to be looked at, so it frames the LAYER. The canvas
+    union is the CANVAS VIEW's job - that panel is where the layers are compared
+    against each other in one extent, and keeping both is what lets a reader see
+    a small layer clearly AND see where it sits.
+    """
+    own = _undegenerate(tuple(payload["bbox_ll"]))
+    canvas_area = _bbox_area(canvas_bbox)
+    if canvas_area <= 0 or _bbox_area(own) / canvas_area >= _ZOOM_AREA_FRAC:
+        return canvas_bbox, ""
+    ratio = canvas_area / max(_bbox_area(own), 1e-12)
+    return own, (f"FRAMED ON THIS LAYER ({ratio:.0f}x closer than the canvas "
+                 f"extent, which the CANVAS VIEW panel shows)")
+
+
+#: Mosaics memoised per (rounded bbox, zoom): per-layer framing asks for the same
+#: extent repeatedly whenever several layers share one, and every miss is a fresh
+#: round of tile downloads.
+_BASEMAP_MEMO: dict[tuple, tuple] = {}
+
+
+def _basemap(bbox_ll: tuple, max_tiles: int):
+    key = (tuple(round(float(v), 6) for v in bbox_ll), int(max_tiles))
+    if key not in _BASEMAP_MEMO:
+        _BASEMAP_MEMO[key] = MR.fetch_basemap(bbox_ll,
+                                              MR.pick_zoom(bbox_ll,
+                                                           max_tiles=max_tiles))
+    return _BASEMAP_MEMO[key]
+
+
 def _frame_axes(ax, mosaic, extent, bbox_ll):
     ax.imshow(np.asarray(mosaic), extent=extent, origin="upper", zorder=0)
     xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
@@ -411,7 +514,8 @@ def _frame_axes(ax, mosaic, extent, bbox_ll):
 _WRAP = 78
 
 
-def _panel_caption(index: int, layer: dict, payload: dict) -> str:
+def _panel_caption(index: int, layer: dict, payload: dict,
+                   frame_note: str = "") -> str:
     kind = str(layer.get("layer_type"))
     bits = [f"{index}. {layer.get('name')}",
             f"role={layer.get('role')}  kind={kind}  "
@@ -434,6 +538,8 @@ def _panel_caption(index: int, layer: dict, payload: dict) -> str:
     if layer.get("_frames"):
         bits.append(f"FRAME SERIES: {layer['_frames']} frames on the canvas, "
                     f"first shown (the GIF renderer covers the animation)")
+    if frame_note:
+        bits.append(frame_note)
     return _wrap(bits)
 
 
@@ -484,24 +590,36 @@ def _save_full_panel(out_path: Path, *, mosaic, extent, bbox_ll, panel_h: float,
 
 
 def _save_layer_panels(renderable: list[tuple[dict, dict]], out_path: Path, *,
-                       mosaic, extent, bbox_ll, title: str) -> list[dict]:
+                       mosaic, extent, bbox_ll, title: str,
+                       max_tiles: int = 6) -> list[dict]:
     """Every renderable layer PLUS the stacked composite view, each its own
-    full-size PNG, in emission order: ``<base>_panel_01_<layer-slug>.png``."""
+    full-size PNG, in emission order: ``<base>_panel_01_<layer-slug>.png``.
+
+    Each LAYER panel frames its own extent; the CANVAS VIEW keeps the union. A
+    panel framed on the union is the right picture for comparing layers and the
+    wrong one for looking at any of them - a catchment mesh inside a county-wide
+    AOI is a speck there, and a speck reads as an empty panel.
+    """
     base = _panel_base(out_path)
-    panel_h = _single_panel_h(bbox_ll)
     saved: list[dict] = []
     for i, (layer, payload) in enumerate(renderable):
         color = _VECTOR_CYCLE[i % len(_VECTOR_CYCLE)]
+        frame, note = _panel_frame(payload, bbox_ll)
+        panel_mosaic, panel_extent = ((mosaic, extent) if not note
+                                      else _basemap(frame, max_tiles))
         path = out_path.parent / (
             f"{base}_panel_{i + 1:02d}_{_panel_slug(layer.get('name'))}.png")
         _save_full_panel(
-            path, mosaic=mosaic, extent=extent, bbox_ll=bbox_ll, panel_h=panel_h,
-            title=title, caption=_panel_caption(i + 1, layer, payload),
+            path, mosaic=panel_mosaic, extent=panel_extent, bbox_ll=frame,
+            panel_h=_single_panel_h(frame), title=title,
+            caption=_panel_caption(i + 1, layer, payload, note),
             draw_fn=lambda ax, layer=layer, payload=payload, color=color:
                 _draw(ax, layer, payload, color=color, zorder=3, alpha=0.9),
             colorbar=payload.get("bands", 1) == 1)
-        saved.append({"path": str(path), "layer": layer.get("name")})
+        saved.append({"path": str(path), "layer": layer.get("name"),
+                      "framed_on_layer": bool(note)})
 
+    panel_h = _single_panel_h(bbox_ll)
     composite_index = len(renderable) + 1
     composite_path = out_path.parent / f"{base}_panel_{composite_index:02d}_canvas-view.png"
     composite_caption = _wrap([
@@ -538,8 +656,7 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
             f"no renderable layer among {len(layers)}: {skipped}")
 
     bbox_ll, strays = _canvas_bbox(renderable)
-    zoom = MR.pick_zoom(bbox_ll, max_tiles=max_tiles)
-    mosaic, extent = MR.fetch_basemap(bbox_ll, zoom)
+    mosaic, extent = _basemap(bbox_ll, max_tiles)
 
     panels = len(renderable) + 1
     rows = (panels + _COLS - 1) // _COLS
@@ -555,14 +672,19 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
 
     for i, (layer, payload) in enumerate(renderable):
         ax = axes[i]
-        _frame_axes(ax, mosaic, extent, bbox_ll)
+        # Same rule as the full-size panels: a cell frames its own layer, and the
+        # CANVAS VIEW cell below is where the shared extent lives.
+        frame, note = _panel_frame(payload, bbox_ll)
+        cell_mosaic, cell_extent = ((mosaic, extent) if not note
+                                    else _basemap(frame, max_tiles))
+        _frame_axes(ax, cell_mosaic, cell_extent, frame)
         artist = _draw(ax, layer, payload,
                        color=_VECTOR_CYCLE[i % len(_VECTOR_CYCLE)],
                        zorder=3, alpha=0.9)
         if artist is not None and payload.get("bands", 1) == 1:
             cbar = fig.colorbar(artist, ax=ax, fraction=0.030, pad=0.01)
             cbar.ax.tick_params(labelsize=6)
-        ax.set_title(_panel_caption(i + 1, layer, payload), fontsize=7,
+        ax.set_title(_panel_caption(i + 1, layer, payload, note), fontsize=7,
                      loc="left", linespacing=1.5)
 
     composite = axes[len(renderable)]
@@ -585,7 +707,8 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
     footer = [f"{title}  |  {emitted} emitted layer rows, {len(renderable)} "
               f"rendered  |  emission order = loaded_layers order (z_index "
               f"{[l.get('z_index') for l, _ in renderable]})  |  "
-              f"ESRI World Imagery, EPSG:3857"]
+              f"each panel frames ITS OWN layer (the CANVAS VIEW holds the "
+              f"shared extent)  |  ESRI World Imagery, EPSG:3857"]
     footer += [f"NOT RENDERED: {s['name']} -> {s['error']}" for s in skipped]
     if strays:
         footer += [f"OFF-CANVAS (extent disjoint from every other layer in this "
@@ -598,7 +721,7 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
 
     panel_pngs = [] if composite_only else _save_layer_panels(
         renderable, out_path, mosaic=mosaic, extent=extent, bbox_ll=bbox_ll,
-        title=title)
+        title=title, max_tiles=max_tiles)
 
     return {"sheet": str(out_path), "bytes": out_path.stat().st_size,
             "panels": panels, "layers": [l.get("name") for l, _ in renderable],

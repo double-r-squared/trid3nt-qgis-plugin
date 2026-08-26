@@ -78,6 +78,17 @@ presets:
               range: [0, 50]}   # range = the no-band-stats fallback
     units: "m^3/s"
     label: "Discharge m3s"
+  continuous_dissolved_oxygen_mgl:
+    kind: continuous
+    # rdylbu, NOT reversed: low DO reads red and high DO reads blue, which is the
+    # water-quality convention and the direction a sag curve is read in. Distinct
+    # from continuous_flood_depth's ylgnbu on purpose - a dissolved-oxygen field
+    # is not a depth and must not borrow a depth's colours.
+    colormap: rdylbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 12]}   # range = the no-band-stats fallback
+    units: "mg/L"
+    label: "Dissolved oxygen"
   continuous_drainage_area:
     kind: continuous
     colormap: viridis
@@ -133,6 +144,18 @@ presets:
               range: [0, 5]}   # range = the no-band-stats fallback
     units: "m^3/s"
     label: "Flooding losses"
+  continuous_flow_velocity_ms:
+    kind: continuous
+    # plasma: speed reads HOT, and it is nobody else's ramp here - a velocity
+    # field and a depth field share a canvas in every overland-flow run and must
+    # never be mistaken for each other. continuous_conduit_velocity is a PIPE
+    # velocity (viridis) and stays its own row; this is free-surface overland and
+    # channel flow.
+    colormap: plasma
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 2]}   # range = the no-band-stats fallback
+    units: "m/s"
+    label: "Flow velocity"
   continuous_gmf_spread:
     kind: continuous
     colormap: viridis
@@ -218,6 +241,18 @@ presets:
     rescale: {policy: fixed, range: [0, 40], transform: linear}
     units: "C"
     label: "Temperature c"
+  continuous_water_level_m:
+    kind: continuous
+    # A water SURFACE ELEVATION is not a depth: it is referenced to a vertical
+    # datum, it is signed, and the same 2 m means something else. cividis rather
+    # than flood_depth's ylgnbu so the two are never confused on a canvas that
+    # carries both - a coastal run publishes an inundation depth raster and
+    # animates the free surface, and they must not read as the same quantity.
+    colormap: cividis
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 5]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Water surface elevation"
   continuous_wave_height:
     kind: continuous
     colormap: gnbu
@@ -454,6 +489,7 @@ quantity_defaults:
   dewatering-rate: continuous_dewatering_rate
   dewatering_rate: continuous_dewatering_rate
   discharge: continuous_discharge_m3s
+  dissolved_oxygen: continuous_dissolved_oxygen_mgl
   drainage_area: continuous_drainage_area
   drawdown: continuous_drawdown_m
   dye_concentration: continuous_plume_concentration
@@ -462,6 +498,7 @@ quantity_defaults:
   fire_spread_rate: continuous_fire_spread_rate
   flame_length: continuous_flame_length_m
   flood_depth: continuous_flood_depth
+  flow_velocity: continuous_flow_velocity_ms
   flooding_losses: continuous_flooding_losses
   hazard-curves: continuous_seismic_pga
   head: continuous_head_m
@@ -497,5 +534,6 @@ quantity_defaults:
   temperature: continuous_temperature_c
   uhs: continuous_seismic_pga
   water-table: continuous_head_m
+  water_level: continuous_water_level_m
   water_table: continuous_head_m
   wave_height: continuous_wave_height

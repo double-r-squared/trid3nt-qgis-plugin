@@ -69,11 +69,52 @@ What it will not let past:
   * **Frames drawn off the water.** The animation's extent is checked against the
     run's own AOI, so a LOCAL mesh rendered without its origin is caught rather
     than shipped.
-  * **An undeclared animated field.** WHICH variable a template's animation
-    paints is DECLARED in `trid3nt_server/testing/proof_animations.py` -
-    variable, mask variable and threshold, `still=peak|final`, and the physics
-    reason in one line - and a time-stepped template with no declaration REFUSES
-    rather than animating whatever a default would have chosen.
+  * **An undeclared animated field, or a missing one of several.** WHICH
+    variables a template's animations paint is DECLARED in
+    `trid3nt_server/testing/proof_animations.py` - name, variable, derived
+    components, mask variable and threshold, ramp transform, vector styling,
+    `still=peak|final`, and the physics reason in one line. A time-stepped
+    template with no declaration REFUSES rather than animating whatever a
+    default would have chosen, and a template declaring SEVERAL owes all of
+    them: one rendered and one forgotten is the same delivery gap at a finer
+    grain. Multi-animation templates carry the name in the filename
+    (`_animation_<name>.gif`); single-animation ones keep the bare
+    `_animation.gif`, because those names are cited in ADRs.
+
+### Panels frame their own layer, and geometry weight is adaptive
+
+A per-layer panel exists to be LOOKED at, so it frames the layer, and the caption
+says how much closer than the canvas extent it sits. The CANVAS VIEW panel keeps
+the shared extent - that is where the layers are compared against each other. Both
+are needed: a 30 km2 catchment mesh inside a county-wide AOI is a speck, and a
+speck is indistinguishable from a broken panel.
+
+Line weight follows density rather than a fixed number, the same bar the
+animation renderer's mesh wireframe uses. 1,900 river reaches at a flat hairline
+is a smudge over imagery and one 200,000-vertex mesh-preview MultiLineString at a
+flat 1.4 pt is a solid block; both used to happen. Every vector stroke is also
+drawn twice - a dark casing under the bright colour - because satellite imagery is
+busy at every luminance and a single-colour hairline disappears against some part
+of any basemap no matter which colour it is.
+
+### One run, several animations
+
+A coastal solve answers two questions off one SELAFIN, and they are not two
+renderings of one picture:
+
+  * `surge_dynamics` - FREE SURFACE masked to wet nodes. How the water surface
+    moves. Takes the `water_level` contract row (cividis).
+  * `inundation` - WATER DEPTH over INITIALLY-DRY land, gated on the run's own
+    `init_wl_m`, which is the discriminant `flooded_land_km2` counts on.
+    Permanent water is nodata, so the bay floor cannot dominate the scale and
+    call itself inundation. Takes `flood_depth` (ylgnbu).
+
+Rain-on-grid declares two as well - `inundation_depth` on a LOG ramp (a uniform
+design storm over a millimetre-scale field renders as the whole grid darkening
+together on a linear scale; the drainage network only separates when millimetre
+sheet flow and centimetre channel accumulation stop sharing one ramp) and
+`flow_dynamics`, a VELOCITY MAGNITUDE derived from the U/V components with
+streamlines traced over it, so the frame carries direction as well as speed.
 
 ### Why the animated field is declared and not defaulted
 

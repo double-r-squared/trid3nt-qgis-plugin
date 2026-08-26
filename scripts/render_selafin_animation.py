@@ -74,6 +74,15 @@ _PAD_FRAC = 0.06
 _DPI = 130
 #: The clip the style contract's own band reader uses when a preset declares none.
 _DEFAULT_CLIP = (2.0, 98.0)
+#: Streamline stroke, adaptive on the traced grid the same way the mesh wireframe
+#: is adaptive on its element count: a fixed weight legible over a 200-point grid
+#: is a smear over a 600-point one.
+_STREAM_LW = (14.0, 0.35, 1.1)
+#: Streamlines read as WHITE with a dark casing under them. A magnitude ramp runs
+#: dark at one end and bright at the other, so a single-colour trace disappears
+#: over half of any field it is drawn on.
+_STREAM_COLOR = "#ffffff"
+_STREAM_CASING = "#101318"
 
 
 @dataclass(frozen=True)
@@ -89,6 +98,10 @@ class AnimationScale:
     colormap: str
     note: str
     preset: str | None = None
+    #: How the values map onto the ramp - ``linear``, ``log`` or ``sqrt``. A
+    #: field spanning orders of magnitude has no linear ramp that shows both
+    #: ends, and the legend note carries this word so the reader is told.
+    transform: str = "linear"
 
     @property
     def range(self) -> tuple[float, float]:
@@ -128,7 +141,8 @@ def _matplotlib_colormap(name: str | None) -> str:
     return table.get((name or "").strip().lower(), "viridis")
 
 
-def resolve_animation_style(values, *, preset: str | None = None) -> AnimationScale:
+def resolve_animation_style(values, *, preset: str | None = None,
+                            transform: str | None = None) -> AnimationScale:
     """THE scale for an animation, resolved over EVERY frame at once.
 
     The scope of a data-policy rescale is the RUN, never the frame: resolving here,
@@ -145,12 +159,25 @@ def resolve_animation_style(values, *, preset: str | None = None) -> AnimationSc
         found = _percentile_range(finite, _DEFAULT_CLIP)
         lo, hi = _widen(found or (0.0, 1.0))
         how = "scaled to this run (p2-p98)" if found else "empty field"
-        return AnimationScale(lo, hi, "viridis", f"{how}: {lo:g} to {hi:g}", None)
+        return AnimationScale(lo, hi, "viridis", f"{how}: {lo:g} to {hi:g}", None,
+                              transform or "linear")
+    # The TRANSFORM rides in as a scale OVERRIDE, which is the contract's own
+    # fourth entry point - not a second opinion invented here. ``merged`` keeps
+    # the preset's policy, clip and fallback range, so the range is still read
+    # p2-p98 over the whole run and only the ramp mapping moves; the resolver
+    # then labels the override on the legend, which is the whole point.
+    override = None
+    if transform:
+        from trid3nt_contracts.styles import ScaleSpec
+
+        override = ScaleSpec(transform=transform)
     resolved = _STYLES.resolve_style(
-        preset, read_range=lambda scale: _percentile_range(finite, scale.clip))
+        preset, read_range=lambda scale: _percentile_range(finite, scale.clip),
+        override=override)
     lo, hi = _widen(resolved.range or (0.0, 1.0))
     return AnimationScale(lo, hi, _matplotlib_colormap(resolved.colormap),
-                          resolved.legend_note(), resolved.preset)
+                          resolved.legend_note(), resolved.preset,
+                          resolved.scale.transform or "linear")
 
 
 def animation_scale(values, *, preset: str | None = None) -> tuple[float, float]:
@@ -298,11 +325,38 @@ def slice_plane(mesh: dict, values: np.ndarray, *, nplan: int, plane: str):
             f"  |  {plane} plane of {nplan}")
 
 
+def _stream_field(tri: Triangulation, grid_n: int):
+    """The regular grid a streamline trace needs, off a triangular mesh's extent.
+
+    Streamlines cannot be traced on an unstructured mesh: matplotlib integrates
+    on a rectilinear field. This is the DECLARED decimation - the components are
+    interpolated onto ``grid_n`` points across the wider axis and traced there,
+    which resolves the drainage network without paying for a trace through every
+    element.
+    """
+    span_x = float(tri.x.max() - tri.x.min())
+    span_y = float(tri.y.max() - tri.y.min())
+    wider = max(span_x, span_y) or 1.0
+    nx = max(int(grid_n * span_x / wider), 16)
+    ny = max(int(grid_n * span_y / wider), 16)
+    return np.meshgrid(np.linspace(tri.x.min(), tri.x.max(), nx),
+                       np.linspace(tri.y.min(), tri.y.max(), ny))
+
+
+def _interpolate(tri: Triangulation, node_values, gx, gy):
+    from matplotlib.tri import LinearTriInterpolator
+
+    return np.ma.filled(LinearTriInterpolator(tri, node_values)(gx, gy), 0.0)
+
+
 def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   units: str, title: str, run_id: str, source_name: str,
                   variable: str, gif_path: Path, peak_path: Path,
                   preset: str | None = None, still: str = "peak",
-                  plane_note: str = "", axes_factory=None) -> dict:
+                  plane_note: str = "", axes_factory=None,
+                  transform: str | None = None, vector_uv=None,
+                  vectors: str | None = None, vector_density: float = 1.4,
+                  vector_grid_n: int = 200) -> dict:
     """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF + still.
 
     THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN, and
@@ -315,17 +369,42 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     basemap axes and takes :func:`plain_axes` where there is no tile access.
     """
     values = np.asarray(values, dtype="float64")
-    scale = resolve_animation_style(values, preset=preset)
+    scale = resolve_animation_style(values, preset=preset, transform=transform)
     # WHICH frame the still shows. "peak" is right for a field that BUILDS (a
     # rising tide, an arriving plume); "final" for one that DECAYS toward its
     # answer (a cooling column, a settling sea), where the peak frame is the
     # initial condition and shows the reader nothing the run did.
+    # A masked frame can be ENTIRELY empty - a dry-start catchment holds no water
+    # at t=0 - so the per-frame maximum is read with the all-NaN case named
+    # rather than warned about, and a frame with nothing in it says "dry".
+    def _frame_max(frame) -> float:
+        finite = frame[np.isfinite(frame)]
+        return float(np.max(finite)) if finite.size else float("nan")
+
+    frame_max = [_frame_max(frame) for frame in values]
     peak_frame = (int(values.shape[0] - 1) if still == "final"
-                  else int(np.nanargmax([np.nanmax(frame) for frame in values])))
+                  else int(np.nanargmax(frame_max)) if np.any(np.isfinite(frame_max))
+                  else 0)
+
+    # A LOG ramp needs a strictly positive floor, and a p2 clip over a field that
+    # starts dry can sit at or below zero. The floor is the smallest POSITIVE
+    # value the run actually produced rather than an invented epsilon, so the
+    # bottom of the ramp is a number the solver wrote.
+    norm = None
+    if scale.transform == "log":
+        from matplotlib.colors import LogNorm
+
+        positive = values[np.isfinite(values) & (values > 0)]
+        floor = (max(scale.vmin, float(positive.min())) if positive.size
+                 else max(scale.vmin, scale.vmax / 1e4))
+        norm = LogNorm(vmin=floor if floor > 0 else scale.vmax / 1e4,
+                       vmax=max(scale.vmax, floor * 10.0))
 
     fig, ax = (axes_factory or _axes_with_basemap)(bbox_ll, title)
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=scale.colormap,
-                        vmin=scale.vmin, vmax=scale.vmax, alpha=0.85, zorder=2)
+                        alpha=0.85, zorder=2,
+                        **({"norm": norm} if norm is not None
+                           else {"vmin": scale.vmin, "vmax": scale.vmax}))
     # The MESH is the modeled domain, drawn OVER the field: a wireframe hidden
     # under an opaque field tells the reader nothing about what was solved. Its
     # weight is ADAPTIVE, because one fixed line width cannot read across the
@@ -345,12 +424,44 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     cbar = fig.colorbar(coll, ax=ax, fraction=0.025, pad=0.01)
     cbar.set_label(f"{variable} ({units})\n{scale.note}", fontsize=8)
     cbar.ax.tick_params(labelsize=7)
+    # STREAMLINES over the magnitude ramp: direction and speed in one frame. The
+    # trace is redrawn per frame because the flow field is what MOVES - the
+    # colour scale above is not, and nothing here touches it.
+    streaming = vectors == "streamlines" and vector_uv is not None
+    stream_state: dict[str, Any] = {"artists": []}
+    if streaming:
+        gx, gy = _stream_field(tri, vector_grid_n)
+        stream_lw = float(np.clip(_STREAM_LW[0] / max(gx.size, 1) ** 0.25,
+                                  _STREAM_LW[1], _STREAM_LW[2]))
+
+        def _draw_streamlines(index: int) -> None:
+            for artist in stream_state["artists"]:
+                try:
+                    artist.remove()
+                except (ValueError, NotImplementedError):
+                    pass
+            stream_state["artists"] = []
+            u = _interpolate(tri, vector_uv[0][index], gx, gy)
+            v = _interpolate(tri, vector_uv[1][index], gx, gy)
+            if not np.any(np.hypot(u, v) > 0):
+                return  # a frame with no flow has no streamline to trace
+            for colour, width, alpha, zorder in (
+                    (_STREAM_CASING, stream_lw * 2.6, 0.5, 3.5),
+                    (_STREAM_COLOR, stream_lw, 0.9, 3.6)):
+                traced = ax.streamplot(
+                    gx, gy, u, v, density=vector_density, color=colour,
+                    linewidth=width, arrowsize=0.7, zorder=zorder)
+                traced.lines.set_alpha(alpha)
+                stream_state["artists"].extend([traced.lines, traced.arrows])
     stamp = ax.text(0.012, 0.045, "", transform=ax.transAxes, fontsize=9,
                     color="white", zorder=5,
                     bbox=dict(facecolor="black", alpha=0.45, pad=3, edgecolor="none"))
     ax.text(0.012, 0.955,
             f"run {run_id}  |  {source_name}, {values.shape[0]} frames"
-            f"{plane_note}  |  wireframe = the meshed domain  |  ESRI World Imagery",
+            f"{plane_note}  |  wireframe = the meshed domain"
+            + (f"  |  streamlines: density {vector_density:g} on a "
+               f"{gx.shape[1]}x{gx.shape[0]} interpolated grid" if streaming else "")
+            + "  |  ESRI World Imagery",
             transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
             bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
 
@@ -362,26 +473,40 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
         with writer.saving(fig, str(gif_path), dpi=_DPI):
             for i, moment in enumerate(times):
                 coll.set_array(values[i])
-                stamp.set_text(f"t = {float(moment):8.0f} s      "
-                               f"max {float(np.nanmax(values[i])):.3g} {units}")
+                if streaming:
+                    _draw_streamlines(i)
+                stamp.set_text(
+                    f"t = {float(moment):8.0f} s      "
+                    + (f"max {frame_max[i]:.3g} {units}"
+                       if np.isfinite(frame_max[i]) else "dry (no wet nodes)"))
                 writer.grab_frame()
 
     # The PEAK frame as its own still, off the SAME figure - same colours, same
     # extent, so the still and the animation cannot disagree.
     coll.set_array(values[peak_frame])
+    if streaming:
+        _draw_streamlines(peak_frame)
     stamp.set_text(f"{still.upper()} FRAME  t = "
                    f"{float(times[peak_frame]):8.0f} s      "
-                   f"max {float(np.nanmax(values[peak_frame])):.3g} {units}")
+                   + (f"max {frame_max[peak_frame]:.3g} {units}"
+                      if np.isfinite(frame_max[peak_frame]) else "dry (no wet nodes)"))
     fig.savefig(peak_path, bbox_inches="tight")
     plt.close(fig)
     return {"frames": int(values.shape[0]), "animated": animated,
             "variable": variable,
             "plane": plane_note.strip(" |") or "2d", "peak_frame": peak_frame,
             "peak_time_s": float(times[peak_frame]),
-            "peak_value": float(np.nanmax(values[peak_frame])),
-            "vmin": scale.vmin, "vmax": scale.vmax,
+            "peak_value": frame_max[peak_frame],
+            "dry_frames": [i for i, v in enumerate(frame_max)
+                           if not np.isfinite(v)],
+            "vmin": (float(norm.vmin) if norm is not None else scale.vmin),
+            "vmax": (float(norm.vmax) if norm is not None else scale.vmax),
             "style_preset": scale.preset, "legend_note": scale.note,
-            "colormap": scale.colormap}
+            "transform": scale.transform, "colormap": scale.colormap,
+            "vectors": vectors if streaming else None,
+            "vector_density": vector_density if streaming else None,
+            "vector_grid": ([int(gx.shape[1]), int(gx.shape[0])]
+                            if streaming else None)}
 
 
 def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
@@ -389,17 +514,38 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            peak_path: Path, nplan: int = 1, plane: str = "surface",
            still: str = "peak", mask_var: str | None = None,
            mask_min: float = 0.0, preset: str | None = None,
-           source_name: str | None = None) -> dict:
+           source_name: str | None = None,
+           initial_water_level: float | None = None,
+           derived: tuple[str, ...] = (), transform: str | None = None,
+           vectors: str | None = None, vector_density: float = 1.4,
+           vector_grid_n: int = 200) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
     mesh = read_selafin(slf_path)
-    name = pick_variable(mesh["varnames"], variable)
-    values = np.asarray(mesh["data"][name])
+    if derived:
+        # A field the solver did not write, built from the components it did.
+        # TELEMAC stores VELOCITY U and VELOCITY V; the QUESTION is the speed,
+        # and deriving it here beats asking a reader to imagine the magnitude of
+        # two panels. The component names are DECLARED, so an engine that spells
+        # them differently refuses in pick_variable rather than guessing.
+        parts = [np.asarray(mesh["data"][pick_variable(mesh["varnames"], token)])
+                 for token in derived]
+        values = np.sqrt(sum(np.square(part) for part in parts))
+        name = variable
+        components = parts
+    else:
+        name = pick_variable(mesh["varnames"], variable)
+        values = np.asarray(mesh["data"][name])
+        components = []
     if values.ndim != 2 or values.shape[0] == 0:
         raise SystemExit(f"{name!r} carries no time steps in {slf_path}")
     mesh_x, mesh_y, triangles, values, plane_note = slice_plane(
         mesh, values, nplan=nplan, plane=plane)
+    # The COMPONENTS ride the same slice as the magnitude, so a 3D plane pick
+    # cannot leave the streamlines tracing a different plane than the field.
+    components = [slice_plane(mesh, part, nplan=nplan, plane=plane)[3]
+                  for part in components]
     # DRY NODES ARE NOT COLOURED. A coastal free surface on a dry node IS the bed
     # elevation, so an unmasked field is scaled by the LAND - six metres of hill
     # against a two-metre tide - and the tide reads as a flat wash that does not
@@ -409,6 +555,24 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
         gate = np.asarray(mesh["data"][pick_variable(mesh["varnames"], mask_var)])
         _, _, _, gate, _ = slice_plane(mesh, gate, nplan=nplan, plane=plane)
         values = np.where(gate > float(mask_min), values, np.nan)
+
+    # THE INUNDATION GATE, when the caller asks for it: keep only nodes that were
+    # DRY at t=0. A depth field over a tidal bay is mostly the permanently
+    # submerged floor, and painting that in an "inundation" ramp says the sea is
+    # flooded - the scalar (flooded_land_km2) has always made this discrimination
+    # and the picture did not. ``initial_water_level`` is the run's OWN
+    # init_wl_m, the datum-corrected stage it cold-started from, so the mask is
+    # the scalar's mask rather than one recomputed here.
+    dry_land_note = ""
+    if initial_water_level is not None:
+        bed = np.asarray(mesh["data"][pick_variable(mesh["varnames"], "BOTTOM")])
+        _, _, _, bed, _ = slice_plane(mesh, bed, nplan=nplan, plane=plane)
+        initially_dry = bed[0] > float(initial_water_level)
+        values = np.where(initially_dry[None, :], values, np.nan)
+        dry_land_note = (f"  |  initially-dry land only (bed > "
+                         f"{float(initial_water_level):.3f} m at t=0, "
+                         f"{int(initially_dry.sum()):,} of {initially_dry.size:,} "
+                         f"nodes)")
 
     x_org, y_org = local_origin(origin_bbox, utm_epsg)
     # WHETHER an origin belongs is a fact about the FILE, not about the caller. A
@@ -437,7 +601,12 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
                            source_name=source_name or Path(slf_path).name,
                            variable=name.strip(),
                            gif_path=gif_path, peak_path=peak_path, preset=preset,
-                           still=still, plane_note=plane_note)
+                           still=still, plane_note=plane_note + dry_land_note,
+                           transform=transform,
+                           vector_uv=(tuple(components[:2]) if vectors
+                                      and len(components) >= 2 else None),
+                           vectors=vectors, vector_density=vector_density,
+                           vector_grid_n=vector_grid_n)
     # WHERE the frames actually landed. A LOCAL mesh rendered with no origin lands
     # at the UTM false origin, thousands of km from the water, and every other
     # number in this report stays perfectly healthy while it does - so the extent
@@ -468,7 +637,10 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                origin_bbox=None, utm_epsg: int | None = None,
                plane: str = "surface", nplan: int | None = None,
                mask_var: str | None = None, mask_min: float = 0.0,
-               still: str = "peak") -> dict:
+               still: str = "peak", initial_water_level: float | None = None,
+               name_infix: str = "", derived: tuple[str, ...] = (),
+               transform: str | None = None, vectors: str | None = None,
+               vector_density: float = 1.4, vector_grid_n: int = 200) -> dict:
     """One run's SELAFIN -> its GIF + still, straight off the object store.
 
     The importable seam under ``main``: the packet assembler renders through this
@@ -490,15 +662,22 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
         preset, _fallback = _STYLES.resolve_style_preset(quantity)
 
     local = _download(bucket, f"{run_id}/{slf}", ".slf")
-    gif = out_dir / f"{stem}_animation.gif"
-    peak = out_dir / f"{stem}_{still}_frame.png"
+    # ``name_infix`` separates a template's SEVERAL animations on disk. It is
+    # empty for the templates that declare one, so their filenames - cited by
+    # name in ADRs and evidence JSONs - do not move.
+    gif = out_dir / f"{stem}_animation{name_infix}.gif"
+    peak = out_dir / f"{stem}{name_infix}_{still}_frame.png"
     try:
         result = render(local, utm_epsg=int(epsg), origin_bbox=origin, variable=var,
                         units=units, title=title or f"{stem} - {var.strip()}",
                         run_id=run_id, gif_path=gif, peak_path=peak,
                         nplan=int(nplan or worker.get("nplan") or 1), plane=plane,
                         still=still, mask_var=mask_var, mask_min=mask_min,
-                        preset=preset, source_name=slf)
+                        preset=preset, source_name=slf,
+                        initial_water_level=initial_water_level,
+                        derived=derived, transform=transform, vectors=vectors,
+                        vector_density=vector_density,
+                        vector_grid_n=vector_grid_n)
     finally:
         Path(local).unlink(missing_ok=True)
     return {**result, "run_id": run_id, "origin_bbox": origin,

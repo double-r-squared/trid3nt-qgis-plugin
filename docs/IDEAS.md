@@ -1706,3 +1706,28 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   commits touching the engine's paths since that sha ("this run predates
   N relevant fixes" as a named warning). Queue to the assembler/journal
   lane.
+
+- PROOF-LANE STINT 3 (NATE spot-checks, 2026-08-26). Three panel defects and two
+  animation defects, all fixed as DECLARATIONS or ADAPTIVE rules, none as a
+  per-case tweak. (1) Vector styling is adaptive on VERTEX count with a dark
+  casing under every stroke - 1,902 river reaches were drawn as near-invisible
+  hairlines over imagery. (2) Per-layer panels frame the LAYER, not the canvas
+  union, and say in the caption how much closer they sit (rog panel 05: 32x); the
+  CANVAS VIEW keeps the shared extent. Mesh layers draw as adaptive-weight
+  wireframe triangles - what NATE read as "sparse orange node-dots" was a
+  0.12 pt wireframe over a speck. (3) PROOF_ANIMATIONS became a per-tool LIST:
+  coastal declares surge_dynamics + inundation (initially-dry-land gate off the
+  run's own init_wl_m, the flooded_land_km2 discriminant), rog declares
+  inundation_depth (LOG ramp) + flow_dynamics (VELOCITY MAGNITUDE derived from
+  U/V, streamlines at declared density 1.4 on a declared 200-point interpolated
+  grid). The checklist requires ALL declared animations. (4) Three style-contract
+  rows added: continuous_water_level_m (cividis), continuous_dissolved_oxygen_mgl
+  (rdylbu), continuous_flow_velocity_ms (plasma) - so coastal/do_sag/rog velocity
+  stop taking the neutral ramp and no field borrows flood_depth's label.
+  FOUND ALONG THE WAY: the coastal WET_TOL 0.02 is a COASTAL discriminant and was
+  wrong for rain-on-grid, whose entire field peaks at 0.0273 m - masking at 0.02
+  kept a 7 mm sliver and threw the answer away. rog masks at depth > 0 instead,
+  declared with the reason. QUEUED: the streamline styling is the reference for
+  QGIS-native mesh vector rendering when mesh-layer publishing lands - the dock's
+  vector symbology must reproduce streamlines over a magnitude ramp at a declared
+  density, or the proof sheet and the product show the same run two ways.

@@ -28,7 +28,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["PROOF_ANIMATIONS", "ProofAnimation"]
+__all__ = ["PACKET_NOTES", "PROOF_ANIMATIONS", "ProofAnimation",
+           "animations_for", "packet_notes", "suffixed"]
 
 #: The coastal worker's own wet-node discriminant
 #: (``workers/telemac/telemac_coastal_build.py``): a node counts as wet at
@@ -53,8 +54,22 @@ class ProofAnimation:
     ``exempt_reason`` is the other half of the declaration: a solver with no
     simulation clock states WHY it owes no animation, so the exemption is a
     physics fact in the packet rather than a hole nobody noticed.
+
+    ``name`` exists because ONE run can owe more than one animation. A coastal
+    solve answers two different questions off the same SELAFIN - how the water
+    surface moves, and where it went onto land - and they are not two renderings
+    of one picture: they take different variables, different masks and different
+    scales. A template declares each, the packet requires all of them, and the
+    name lands in the filename so a reader is never guessing which is which.
+
+    ``dry_land_only`` is the INUNDATION gate: keep only nodes that were DRY at
+    t=0 (bed above the run's initial water line) so permanently submerged bay
+    floor is nodata rather than colour. It is the same discriminant
+    ``flooded_land_km2`` counts on, and without it the bathymetry dominates the
+    scale and "inundation" paints the sea.
     """
 
+    name: str = "default"
     variable: str | None = None
     units: str = ""
     #: The published quantity this field is, so the animation resolves the SAME
@@ -66,67 +81,213 @@ class ProofAnimation:
     still: str = "peak"
     #: Which horizontal plane of a 3D PRISM result to paint.
     plane: str = "surface"
+    dry_land_only: bool = False
+    #: A field the SELAFIN does not store, built from the components it does.
+    #: ``("VELOCITY U", "VELOCITY V")`` is the vector magnitude; the solver writes
+    #: components and the QUESTION is the speed.
+    derived: tuple[str, ...] = ()
+    #: Draw the vector FIELD over the colour field: ``"streamlines"`` traces the
+    #: flow direction from the same two components ``derived`` builds the
+    #: magnitude from, so one picture carries direction AND speed instead of
+    #: asking a reader to hold two panels in their head.
+    #:
+    #: CONSTRAINT, not history: this styling is the reference for QGIS-native
+    #: mesh vector rendering when mesh-layer publishing lands. The dock's vector
+    #: symbology must reproduce what these frames show - streamlines over a
+    #: magnitude ramp at a declared density - or the proof sheet and the product
+    #: will be showing the same run two different ways.
+    vectors: str | None = None
+    #: Streamline seeding density, matplotlib's own ``density`` argument. 1.4
+    #: keeps a catchment-scale network legible: enough traces to see the
+    #: drainage concentrate, few enough that they do not merge into a wash.
+    vector_density: float = 1.4
+    #: The regular grid the components are interpolated onto before tracing, per
+    #: axis. Streamlines need a REGULAR field and the solve is on a triangular
+    #: mesh, so this is a declared DECIMATION - 200 across the wider axis, which
+    #: resolves a 40 m mesh over a 30 km2 catchment without paying for a trace
+    #: through every element.
+    vector_grid_n: int = 200
+    #: Overrides the preset's ramp TRANSFORM (``linear`` | ``log`` | ``sqrt``).
+    #: A field spanning orders of magnitude - millimetre sheet flow against
+    #: centimetre channel accumulation - has no linear ramp that shows both: the
+    #: whole grid just darkens together and the picture cannot tell solver
+    #: dynamics from a brightness ramp. The legend states the transform.
+    transform: str | None = None
     reason: str = ""
     exempt_reason: str | None = None
 
 
-#: Keyed by TOOL, because a tool name is what an evidence JSON records.
-PROOF_ANIMATIONS: dict[str, ProofAnimation] = {
-    # quantity is deliberately UNSET. The style contract has no water-surface-
-    # elevation row, and borrowing ``flood_depth``'s would put the published
-    # inundation raster's label and ramp on a field that is not that quantity -
-    # a quiet mislabel in exchange for a prettier colour. The neutral ramp,
-    # scaled p2-p98 over the run, is the honest resolution until the contract
-    # gains a water_level row.
-    "coastal_tidal_surge": ProofAnimation(
-        variable="FREE SURFACE", units="m", quantity=None,
-        mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
-        reason="depth is bathymetry-dominated; the surge lives in the free "
-               "surface. Masked to wet nodes because TELEMAC sets FREE SURFACE = "
-               "BOTTOM on dry land, so an unmasked field is scaled by the highest "
-               "hill in the domain and the tide reads as a flat wash."),
+#: Keyed by TOOL, because a tool name is what an evidence JSON records; the value
+#: is a TUPLE, because one run can owe more than one animation. A second entry is
+#: a template DECISION - somebody decided this run answers two questions - never
+#: a default the assembler invents.
+PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
+    "coastal_tidal_surge": (
+        # QUESTION ONE: how the water surface moves. quantity is ``water_level``,
+        # its OWN contract row (cividis), not ``flood_depth``: a water surface
+        # elevation is referenced to a vertical datum and is not the depth raster
+        # this run also publishes. Two quantities, two ramps, so a canvas
+        # carrying both cannot read them as one field.
+        ProofAnimation(
+            name="surge_dynamics",
+            variable="FREE SURFACE", units="m", quantity="water_level",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
+            reason="depth is bathymetry-dominated; the surge lives in the free "
+                   "surface. Masked to wet nodes because TELEMAC sets FREE "
+                   "SURFACE = BOTTOM on dry land, so an unmasked field is scaled "
+                   "by the highest hill in the domain and the tide reads as a "
+                   "flat wash."),
+        # QUESTION TWO: where the water went onto LAND. The same SELAFIN, a
+        # different question, and it is NOT the first animation restyled - the
+        # variable, the mask and the scale all differ. This is the wave-B
+        # inundation split rendered in time: the run publishes a peak-inundation
+        # raster over initially-dry land, and this is that quantity moving.
+        # Permanent water is nodata, so the bay floor cannot dominate the scale
+        # and call itself inundation.
+        ProofAnimation(
+            name="inundation",
+            variable="WATER DEPTH", units="m", quantity="flood_depth",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M,
+            dry_land_only=True, still="peak",
+            reason="depth over initially-dry land IS inundation - how water "
+                   "moves onto the land. Gated on bed > the run's own initial "
+                   "water line (the datum-corrected one it solved from), which "
+                   "is the discriminant flooded_land_km2 counts on."),
+    ),
     # A dry-start watershed is the opposite case: the published answer IS max
     # water depth (overland sheet flow), and free surface over a hillslope is
-    # terrain. The wet mask keeps unrained hillside out of the colour scale.
-    "telemac_rain_on_grid": ProofAnimation(
-        variable="WATER DEPTH", units="m", quantity="flood_depth",
-        mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
-        reason="the question is overland sheet flow on a dry-start catchment, so "
-               "the answer is the depth itself; free surface on a hillslope is "
-               "terrain."),
-    "telemac_river_dye": ProofAnimation(
-        variable="DYE", units="mg/L", quantity="dye_concentration",
-        mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
-        reason="the plume IS the tracer concentration; it BUILDS as the dye "
-               "arrives, so the peak frame is the answer."),
-    # The contract has no dissolved-oxygen row either, so no quantity is claimed.
-    "telemac_do_sag": ProofAnimation(
-        variable="DISSOLVED O2", units="mgO2/l", quantity=None,
-        mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="final",
-        reason="the sag is the oxygen deficit downstream of the outfall. It "
-               "DECAYS toward its answer, so the still is the final frame - the "
-               "peak frame is the un-depleted initial condition."),
-    "tomawac_wave_field": ProofAnimation(
-        variable="WAVE HEIGHT HM0", units="m", quantity="wave_height",
-        mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
-        reason="the significant wave height is the sea state the run reports; it "
-               "GROWS with fetch and duration, so the peak frame is the answer."),
+    # terrain.
+    #
+    # AND THE THRESHOLD IS NOT WET_TOL. 0.02 m is a COASTAL discriminant - the
+    # depth at which flooded land counts as flooded - and overland sheet flow on
+    # a hillslope is an order of magnitude thinner than that: this catchment's
+    # whole field peaks at 0.0273 m, so masking at 0.02 keeps a 7 mm sliver and
+    # throws the answer away. Exact zero is the only honest gate here: paint
+    # every cell carrying water, leave the never-wetted hillside to the basemap.
+    "telemac_rain_on_grid": (
+        ProofAnimation(
+            name="inundation_depth",
+            variable="WATER DEPTH", units="m", quantity="flood_depth",
+            mask_var="WATER DEPTH", mask_threshold=0.0, still="peak",
+            transform="log",
+            reason="the question is overland sheet flow on a dry-start "
+                   "catchment, so the answer is the depth itself; free surface "
+                   "on a hillslope is terrain. Masked at depth > 0 rather than "
+                   "at the coastal WET_TOL, which is thicker than the entire "
+                   "sheet-flow field. LOG ramp because uniform design-storm "
+                   "forcing over a millimetre-scale field on a linear scale "
+                   "renders as the whole grid darkening together - the drainage "
+                   "network only separates from the hillslope when millimetre "
+                   "sheet flow and centimetre channel accumulation stop sharing "
+                   "one linear ramp."),
+        # The depth field says how much water is standing; it does not say the
+        # water is GOING anywhere. Speed is the field that shows hillslope-to-
+        # channel concentration - the visual counterpart of the outlet
+        # hydrograph the run already charts. The solver writes components, so
+        # the magnitude is derived.
+        ProofAnimation(
+            name="flow_dynamics",
+            variable="VELOCITY MAGNITUDE", units="m/s", quantity="flow_velocity",
+            derived=("VELOCITY U", "VELOCITY V"),
+            vectors="streamlines", vector_density=1.4, vector_grid_n=200,
+            mask_var="WATER DEPTH", mask_threshold=0.0, still="peak",
+            reason="speed is what shows the water MOVING - runoff concentrating "
+                   "off the hillslopes into the drainage network - which a depth "
+                   "field cannot show. Linear, because a speed field spans one "
+                   "order of magnitude rather than three. Streamlines over the "
+                   "magnitude ramp so the frame carries DIRECTION as well as "
+                   "speed: a scalar speed field says the water is fast without "
+                   "saying where it is going."),
+    ),
+    "telemac_river_dye": (
+        ProofAnimation(
+            variable="DYE", units="mg/L", quantity="dye_concentration",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
+            reason="the plume IS the tracer concentration; it BUILDS as the dye "
+                   "arrives, so the peak frame is the answer."),
+    ),
+    "telemac_do_sag": (
+        ProofAnimation(
+            variable="DISSOLVED O2", units="mgO2/l", quantity="dissolved_oxygen",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="final",
+            reason="the sag is the oxygen deficit downstream of the outfall. It "
+                   "DECAYS toward its answer, so the still is the final frame - "
+                   "the peak frame is the un-depleted initial condition."),
+    ),
+    "tomawac_wave_field": (
+        ProofAnimation(
+            variable="WAVE HEIGHT HM0", units="m", quantity="wave_height",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
+            reason="the significant wave height is the sea state the run "
+                   "reports; it GROWS with fetch and duration, so the peak frame "
+                   "is the answer."),
+    ),
     # A 3D prism result carries no WATER DEPTH to mask on - every node of the
     # column is in the water by construction.
-    "telemac3d_stratified_flow": ProofAnimation(
-        variable="TEMPERATURE", units="degC", quantity="temperature",
-        still="final", plane="surface",
-        reason="the thermocline question is answered by the temperature field, "
-               "and the surface plane is the half that the wind (or its absence) "
-               "acts on. It SETTLES toward its answer, so the still is final."),
-    "artemis_harbor_agitation": ProofAnimation(
-        exempt_reason="ARTEMIS is the phase-resolving elliptic mild-slope "
-                      "(Berkhoff) solver: it solves a boundary-value problem for "
-                      "a single monochromatic sea state and returns ONE field, "
-                      "the steady agitation coefficient Kd. The deck has no "
-                      "simulation clock at all, which is why the run records no "
-                      "ntimestep - there is no time evolution to animate, and "
-                      "the single field IS the whole answer.",
-        variable="WAVE HEIGHT", units="m", still="peak",
-        reason="the steady wave height field, rendered as the run's one still."),
+    "telemac3d_stratified_flow": (
+        ProofAnimation(
+            variable="TEMPERATURE", units="degC", quantity="temperature",
+            still="final", plane="surface",
+            reason="the thermocline question is answered by the temperature "
+                   "field, and the surface plane is the half that the wind (or "
+                   "its absence) acts on. It SETTLES toward its answer, so the "
+                   "still is final."),
+    ),
+    "artemis_harbor_agitation": (
+        ProofAnimation(
+            exempt_reason="ARTEMIS is the phase-resolving elliptic mild-slope "
+                          "(Berkhoff) solver: it solves a boundary-value problem "
+                          "for a single monochromatic sea state and returns ONE "
+                          "field, the steady agitation coefficient Kd. The deck "
+                          "has no simulation clock at all, which is why the run "
+                          "records no ntimestep - there is no time evolution to "
+                          "animate, and the single field IS the whole answer.",
+            variable="WAVE HEIGHT", units="m", still="peak",
+            reason="the steady wave height field, rendered as the run's one "
+                   "still."),
+    ),
 }
+
+
+def animations_for(tool: str) -> tuple[ProofAnimation, ...]:
+    """Every animation the tool declares, in declaration order. Empty when none.
+
+    Empty is a REFUSAL upstream, never a default: the packet assembler reports an
+    undeclared time-stepped template as a named gap rather than animating
+    whatever variable a renderer would have reached for first.
+    """
+    return PROOF_ANIMATIONS.get(tool, ())
+
+
+def suffixed(animation: ProofAnimation, declared: int) -> str:
+    """The filename infix for one animation: ``_<name>`` only when there are many.
+
+    A template declaring ONE animation keeps the bare ``_animation.gif`` /
+    ``_peak_frame.png`` names, because those filenames are cited by name in ADRs
+    and evidence JSONs and renaming every existing proof for a coastal-only
+    feature is churn, not consistency.
+    """
+    return f"_{animation.name}" if declared > 1 else ""
+
+
+#: Standing caveats a packet must CARRY, keyed by ``(tool, variant)``. A proof
+#: that is a thin test of what it shows has to say so on the packet rather than
+#: in somebody's memory of the review - a reader handed a folder cannot tell a
+#: deliberately small canary from the flagship it stands in for.
+PACKET_NOTES: dict[tuple[str, str], tuple[str, ...]] = {
+    ("telemac_rain_on_grid", "coarse"): (
+        "THIN TEST. This canary is a 1-hour design storm on a 30 km2 catchment: "
+        "it proves the delineate -> mesh -> infiltrate -> solve chain and the "
+        "two animations' plumbing, and it is NOT a study of the hydrology. The "
+        "depths are millimetre-scale and the velocities are sub-mm/s, which is "
+        "why the depth animation needs a log ramp to separate the drainage "
+        "network from the hillslope at all. The refined, longer flagship run at "
+        "the family's close is the real show; read this packet as a mechanism "
+        "check, not as a result.",
+    ),
+}
+
+
+def packet_notes(tool: str, variant: str) -> tuple[str, ...]:
+    """The standing caveats this template+variant packet must carry."""
+    return PACKET_NOTES.get((tool, variant), ())

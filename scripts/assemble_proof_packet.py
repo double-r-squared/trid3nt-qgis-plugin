@@ -13,8 +13,12 @@ WHAT THE CHECKLIST IS
   1. every published layer as a full-size panel, in EMISSION ORDER
   2. the composite canvas view (the last panel) plus the contact sheet
   3. every chart the run persisted, drawn through the plugin dock's own renderer
-  4. the GIF and its peak-or-final still WHEN the run is time-stepped; an explicit
-     EXEMPTION line naming the physics when it is not
+  4. EVERY animation the template declares, each with its peak-or-final still,
+     when the run is time-stepped; an explicit EXEMPTION line naming the physics
+     when it is not. A template may declare more than one - a coastal solve
+     answers both "how did the water surface move" and "where did it go onto
+     land", which are two variables, two masks and two scales off one SELAFIN -
+     and the checklist requires ALL of them
   5. the canary evidence JSON the whole packet was assembled from
 
 WHAT IT VERIFIES, MECHANICALLY
@@ -70,8 +74,10 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from trid3nt_server.testing.proof_animations import (  # noqa: E402
-    PROOF_ANIMATIONS,
     ProofAnimation,
+    animations_for,
+    packet_notes,
+    suffixed,
 )
 from trid3nt_server.testing.proof_paths import (  # noqa: E402
     VARIANTS,
@@ -340,19 +346,39 @@ def _panel_groups(directory: Path) -> dict[str, list[tuple[int, Path]]]:
     return {base: sorted(items) for base, items in groups.items()}
 
 
-def _declaration_row(animation: ProofAnimation | None) -> dict:
-    """The declaration, as the packet reports it - what was ruled, and why."""
-    if animation is None:
-        return {"declared": False,
-                "note": "no entry in PROOF_ANIMATIONS for this tool"}
-    return {"declared": True, "variable": animation.variable,
+def _declaration_row(animation: ProofAnimation, declared: int) -> dict:
+    """One declaration, as the packet reports it - what was ruled, and why."""
+    return {"name": animation.name, "variable": animation.variable,
             "units": animation.units, "quantity": animation.quantity,
             "mask_var": animation.mask_var,
             "mask_threshold": animation.mask_threshold,
+            "dry_land_only": animation.dry_land_only,
+            "derived": list(animation.derived), "transform": animation.transform,
+            "vectors": animation.vectors,
+            "vector_density": animation.vector_density,
+            "vector_grid_n": animation.vector_grid_n,
             "still": animation.still, "plane": animation.plane,
+            "suffix": suffixed(animation, declared),
             "reason": animation.reason,
             "exempt_reason": animation.exempt_reason,
             "declared_in": "trid3nt_server/testing/proof_animations.py"}
+
+
+def _field_label(animation: ProofAnimation) -> str:
+    """The one-line description of what an animation paints."""
+    bits = [str(animation.variable)]
+    if animation.derived:
+        bits.append("derived from " + " / ".join(animation.derived))
+    if animation.mask_var:
+        bits.append(f"masked to {animation.mask_var} > {animation.mask_threshold}")
+    if animation.dry_land_only:
+        bits.append("over INITIALLY-DRY land only")
+    if animation.vectors:
+        bits.append(f"with {animation.vectors} (density "
+                    f"{animation.vector_density:g})")
+    if animation.transform and animation.transform != "linear":
+        bits.append(f"on a {animation.transform.upper()} ramp")
+    return " ".join(bits) + f" ({animation.units})"
 
 
 # --------------------------------------------------------------------------- #
@@ -360,7 +386,7 @@ def _declaration_row(animation: ProofAnimation | None) -> dict:
 # --------------------------------------------------------------------------- #
 def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
             *, template: str, variant: str, run_id: str, bucket: str,
-            animation: ProofAnimation | None, frames: int, s3) -> dict:
+            declared: tuple, frames: int, s3) -> dict:
     """Every deliverable, rendered fresh, in checklist order. Returns a report."""
     tool = str(evidence.get("tool") or template)
     title = f"{tool} - run {run_id}"
@@ -383,38 +409,54 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
     # animating whatever the renderer would have picked: the one regression this
     # script has shipped was a fallback painting WATER DEPTH (bathymetry-
     # dominated, barely moves) where the ruled field was a masked FREE SURFACE.
-    if animation is None or animation.variable is None:
+    if not declared or declared[0].variable is None:
         report["animation_error"] = (
             f"tool {tool!r} has no declared field in "
             "trid3nt_server/testing/proof_animations.PROOF_ANIMATIONS, so this "
             "script cannot say which variable its animation paints. Declare one "
             "- with its mask and its physics reason - rather than let a default "
             "choose the picture.")
-    elif frames >= 1:
-        # ONE call for both cases. A steady result takes the same path and comes
-        # back with ``animation: None`` and its still rendered, so the exemption
-        # is the renderer's own finding rather than a branch that skipped it.
-        completion = _read_json(s3, bucket, f"{run_id}/completion.json")
-        origin = aoi_bbox(evidence, _read_json(s3, bucket,
-                                               f"{run_id}/telemac_metrics.json"))
-        report["origin_bbox_basis"] = (
-            "telemac_metrics.json / the canary's declared bbox" if origin
-            else "NONE - neither the worker metrics nor the evidence args carry a "
-                 "bbox, so a LOCAL mesh cannot be put back on the map")
-        report["animation_declaration"] = {
-            "variable": animation.variable, "units": animation.units,
-            "quantity": animation.quantity, "mask_var": animation.mask_var,
-            "mask_threshold": animation.mask_threshold, "still": animation.still,
-            "plane": animation.plane, "reason": animation.reason,
-            "declared_in": "trid3nt_server/testing/proof_animations.py"}
-        report["animation"] = _sibling("render_selafin_animation").render_run(
+        return report
+    if frames < 1:
+        return report
+
+    completion = _read_json(s3, bucket, f"{run_id}/completion.json")
+    metrics = _read_json(s3, bucket, f"{run_id}/telemac_metrics.json")
+    origin = aoi_bbox(evidence, metrics)
+    report["origin_bbox_basis"] = (
+        "telemac_metrics.json / the canary's declared bbox" if origin
+        else "NONE - neither the worker metrics nor the evidence args carry a "
+             "bbox, so a LOCAL mesh cannot be put back on the map")
+
+    # EVERY declared animation, not the first one. A template that says its run
+    # answers two questions owes two pictures, and the checklist below requires
+    # both - one rendered and one forgotten is the same delivery gap the whole
+    # script exists to close, just at a finer grain.
+    report["animations"] = {}
+    for animation in declared:
+        initial_wl = None
+        if animation.dry_land_only:
+            initial_wl = completion.get("init_wl_m", metrics.get("init_wl_m"))
+            if initial_wl is None:
+                report.setdefault("animation_errors", []).append(
+                    f"{animation.name}: the declaration asks for initially-dry "
+                    f"land only, but run {run_id} records no init_wl_m to gate "
+                    "on - the mask cannot be the scalar's mask if the number is "
+                    "not the run's own")
+                continue
+        report["animations"][animation.name] = _sibling(
+            "render_selafin_animation").render_run(
             run_id=run_id, slf=str(completion.get("result_slf")),
             var=animation.variable, stem=stem, out_dir=directory,
             units=animation.units, quantity=animation.quantity, bucket=bucket,
             plane=animation.plane, mask_var=animation.mask_var,
             mask_min=animation.mask_threshold, still=animation.still,
-            origin_bbox=origin,
-            title=f"{stem} - {animation.variable} - run {run_id}")
+            origin_bbox=origin, initial_water_level=initial_wl,
+            derived=animation.derived, transform=animation.transform,
+            vectors=animation.vectors, vector_density=animation.vector_density,
+            vector_grid_n=animation.vector_grid_n,
+            name_infix=suffixed(animation, len(declared)),
+            title=f"{stem} - {_field_label(animation)} - run {run_id}")
     return report
 
 
@@ -433,10 +475,10 @@ def _rendered_paths(report: dict) -> set[Path]:
         out.add(Path(panel["path"]))
     for chart in report.get("charts") or []:
         out.add(Path(chart["chart"]))
-    animation = report.get("animation") or {}
-    for key in ("animation", "peak"):
-        if animation.get(key):
-            out.add(Path(animation[key]))
+    for animation in (report.get("animations") or {}).values():
+        for key in ("animation", "peak"):
+            if animation.get(key):
+                out.add(Path(animation[key]))
     return out
 
 
@@ -509,7 +551,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     bucket = bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
     missing: list[str] = []
-    animation = PROOF_ANIMATIONS.get(tool)
+    declared = animations_for(tool)
 
     # ------------------------------------------------------------------ #
     # 1. Is this run time-stepped? MEASURED off its own SELAFIN.
@@ -547,28 +589,32 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     if not check:
         render_report = _render(
             directory, stem, evidence_path, evidence, template=template,
-            variant=variant, run_id=run_id, bucket=bucket, animation=animation,
+            variant=variant, run_id=run_id, bucket=bucket, declared=declared,
             frames=frames, s3=s3)
         if render_report.get("animation_error"):
             missing.append(f"animation: {render_report['animation_error']}")
         if render_report.get("chart_error"):
             missing.append(f"chart: {render_report['chart_error']}")
+        for note in render_report.get("animation_errors") or []:
+            missing.append(f"animation: {note}")
         # WHERE the frames landed, against where the run was asked about. A LOCAL
         # mesh rendered without its origin lands at the UTM false origin and every
         # other number in the render report stays healthy while it does.
-        drawn = (render_report.get("animation") or {}).get("bbox_ll")
         aoi = aoi_bbox(evidence, _read_json(s3, bucket,
                                             f"{run_id}/telemac_metrics.json"))
-        if drawn and aoi and not _intersects(drawn, aoi):
-            missing.append(
-                f"animation: the frames were drawn over {drawn} but the run's AOI "
-                f"is {aoi} - the two do not overlap, so the animation is at the "
-                "UTM false origin rather than on the water")
-        elif drawn and not aoi:
-            missing.append(
-                "animation: the run records no bbox and the evidence declares "
-                "none, so there is nothing to check the frames' extent against - "
-                f"they were drawn over {drawn}")
+        for name, rendered in (render_report.get("animations") or {}).items():
+            drawn = rendered.get("bbox_ll")
+            if drawn and aoi and not _intersects(drawn, aoi):
+                missing.append(
+                    f"animation {name}: the frames were drawn over {drawn} but "
+                    f"the run's AOI is {aoi} - the two do not overlap, so the "
+                    "animation is at the UTM false origin rather than on the "
+                    "water")
+            elif drawn and not aoi:
+                missing.append(
+                    f"animation {name}: the run records no bbox and the evidence "
+                    "declares none, so there is nothing to check the frames' "
+                    f"extent against - they were drawn over {drawn}")
     fresh = _rendered_paths(render_report)
 
     # ------------------------------------------------------------------ #
@@ -654,93 +700,91 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
                                   extra={"chart": name}, **stamp))
 
     # ------------------------------------------------------------------ #
-    # 4. The animation, or the exemption that names why there is none.
+    # 4. EVERY declared animation, or the exemption that names why there is none.
     # ------------------------------------------------------------------ #
-    order += 1
-    gif = directory / f"{stem}_animation.gif"
-    if frames > 1:
-        # The GIF's run id is BURNED into every frame by the renderer and cannot
-        # be read back as text, so its tie to this run is the pair of checks a
-        # picture cannot fake: the frame count must equal the SELAFIN's, and it
-        # must not predate the evidence beside it.
-        field = (f"{animation.variable}"
-                 + (f" masked to {animation.mask_var} > {animation.mask_threshold} "
-                    if animation.mask_var else " ")
-                 + f"({animation.units})") if animation else "(undeclared)"
-        row = _item(order, "animation",
-                    f"Animation - {field}, {frames} frames on one run-scoped "
-                    f"colour scale with a static legend, run {run_id}",
-                    path=gif, evidence_mtime=evidence_mtime, missing=missing,
-                    require_stamp=False,
-                    extra={"declared_field": field,
-                           "declared_reason": animation.reason if animation else None},
-                    **stamp)
-        if row["verdict"] == "present":
-            try:
-                checks = verify_gif(gif)
-            except Exception as exc:  # noqa: BLE001 - unreadable IS the finding
-                checks = {"error": f"{type(exc).__name__}: {exc}"}
-            row["gif_checks"] = checks
-            reasons = []
-            if checks.get("error"):
-                reasons.append(f"unreadable: {checks['error']}")
-            else:
-                if checks["frames"] != frames:
-                    reasons.append(f"{checks['frames']} GIF frames against the "
-                                   f"SELAFIN's {frames}")
-                if checks["distinct_frames"] != checks["frames"]:
-                    reasons.append(
-                        f"only {checks['distinct_frames']} of {checks['frames']} "
-                        "frames are distinct - repeats carry no new field data")
-                if not checks["field_moves"]:
-                    reasons.append("the field never changes - this is a still "
-                                   "wearing an animation's extension")
-                if not checks["legend_covers_a_ramp"]:
-                    reasons.append(
-                        f"the legend crop at x >= {_LEGEND_X_FRAC} holds only "
-                        f"{checks['legend_ramp_colours']} colours, so it is not "
-                        "covering the colorbar and proves nothing")
-                elif checks["legend_drift_frames"]:
-                    reasons.append(
-                        f"the legend is not byte-identical across frames "
-                        f"({len(checks['legend_drift_frames'])} of "
-                        f"{checks['frames'] - 1} pairs drift) - the colour scale "
-                        "is being recomputed per frame")
-            if reasons:
-                row["verdict"] = "FAILED"
-                missing.append(f"animation: {gif.name} - " + "; ".join(reasons))
-        deliverables.append(row)
+    fallback = declared or (ProofAnimation(),)
+    for animation in fallback:
+        infix = suffixed(animation, len(fallback))
+        field = (_field_label(animation) if animation.variable
+                 else "(undeclared)")
+        still = animation.still
+        gif = directory / f"{stem}_animation{infix}.gif"
+        order += 1
+        if frames > 1:
+            # The GIF's run id is BURNED into every frame by the renderer and
+            # cannot be read back as text, so its tie to this run is the pair of
+            # checks a picture cannot fake: the frame count must equal the
+            # SELAFIN's, and it must not predate the evidence beside it.
+            row = _item(order, "animation",
+                        f"Animation [{animation.name}] - {field}, {frames} frames "
+                        f"on one run-scoped colour scale with a static legend, "
+                        f"run {run_id}",
+                        path=gif, evidence_mtime=evidence_mtime, missing=missing,
+                        require_stamp=False,
+                        extra={"animation": animation.name,
+                               "declared_field": field,
+                               "declared_reason": animation.reason or None},
+                        **stamp)
+            if row["verdict"] == "present":
+                try:
+                    checks = verify_gif(gif)
+                except Exception as exc:  # noqa: BLE001 - unreadable IS the finding
+                    checks = {"error": f"{type(exc).__name__}: {exc}"}
+                row["gif_checks"] = checks
+                reasons = []
+                if checks.get("error"):
+                    reasons.append(f"unreadable: {checks['error']}")
+                else:
+                    if checks["frames"] != frames:
+                        reasons.append(f"{checks['frames']} GIF frames against "
+                                       f"the SELAFIN's {frames}")
+                    if checks["distinct_frames"] != checks["frames"]:
+                        reasons.append(
+                            f"only {checks['distinct_frames']} of "
+                            f"{checks['frames']} frames are distinct - repeats "
+                            "carry no new field data")
+                    if not checks["field_moves"]:
+                        reasons.append("the field never changes - this is a "
+                                       "still wearing an animation's extension")
+                    if not checks["legend_covers_a_ramp"]:
+                        reasons.append(
+                            f"the legend crop at x >= {_LEGEND_X_FRAC} holds only "
+                            f"{checks['legend_ramp_colours']} colours, so it is "
+                            "not covering the colorbar and proves nothing")
+                    elif checks["legend_drift_frames"]:
+                        reasons.append(
+                            f"the legend is not byte-identical across frames "
+                            f"({len(checks['legend_drift_frames'])} of "
+                            f"{checks['frames'] - 1} pairs drift) - the colour "
+                            "scale is being recomputed per frame")
+                if reasons:
+                    row["verdict"] = "FAILED"
+                    missing.append(f"animation {animation.name}: {gif.name} - "
+                                   + "; ".join(reasons))
+            deliverables.append(row)
+            caption = (f"{still.upper()} frame [{animation.name}] - {field}, the "
+                       f"animation's own figure at its {still} step, same colours "
+                       f"and extent, run {run_id}")
+        else:
+            reason = (animation.exempt_reason or
+                      f"the run's result SELAFIN carries {frames} frame(s): a "
+                      "single-frame (steady) result has nothing to animate")
+            deliverables.append({
+                "order": order, "kind": "animation", "path": None,
+                "animation": animation.name, "verdict": "exempt",
+                "reason": reason,
+                "caption": f"Animation [{animation.name}] - EXEMPT. {reason}"})
+            caption = (f"{still.upper()} frame [{animation.name}] - {field}, which "
+                       f"IS the whole answer rather than one sample of it, "
+                       f"run {run_id}")
 
         order += 1
-        still = animation.still if animation else "peak"
-        path = directory / f"{stem}_{still}_frame.png"
-        caption = (f"{still.upper()} frame - {field}, the animation's own figure "
-                   f"at its {still} step, same colours and extent, run {run_id}")
+        path = directory / f"{stem}{infix}_{still}_frame.png"
         if path in fresh:
             stamp_png(path, caption=caption, **stamp)
         deliverables.append(_item(order, "still", caption, path=path,
                                   evidence_mtime=evidence_mtime, missing=missing,
-                                  **stamp))
-    else:
-        reason = (animation.exempt_reason if animation and animation.exempt_reason
-                  else f"the run's result SELAFIN carries {frames} frame(s): a "
-                       "single-frame (steady) result has nothing to animate")
-        deliverables.append({
-            "order": order, "kind": "animation", "path": None,
-            "verdict": "exempt", "reason": reason,
-            "caption": f"Animation - EXEMPT. {reason}"})
-        order += 1
-        still = animation.still if animation else "peak"
-        path = directory / f"{stem}_{still}_frame.png"
-        field = (f"{animation.variable} ({animation.units})" if animation
-                 and animation.variable else "the steady field")
-        caption = (f"{still.upper()} frame - {field}, which IS the whole answer "
-                   f"rather than one sample of it, run {run_id}")
-        if path in fresh:
-            stamp_png(path, caption=caption, **stamp)
-        deliverables.append(_item(order, "still", caption, path=path,
-                                  evidence_mtime=evidence_mtime, missing=missing,
-                                  **stamp))
+                                  extra={"animation": animation.name}, **stamp))
 
     order += 1
     deliverables.append(_item(
@@ -759,8 +803,9 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         "assembled_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "assembler": "scripts/assemble_proof_packet.py",
         "time_stepped": measured,
-        "animation_declaration": (render_report.get("animation_declaration")
-                                  or _declaration_row(animation)),
+        "animation_declarations": [_declaration_row(a, len(declared))
+                                   for a in declared],
+        "notes": list(packet_notes(tool, variant)),
         "published_layers": [layer.get("name") for layer in layers],
         "verdict": "REFUSED" if missing else "PASS",
         "missing": missing,
