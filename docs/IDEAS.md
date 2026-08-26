@@ -1396,3 +1396,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   labeled fallback not a stance. Two routes, one mechanism set. The
   artemis BYO rematch is route 1 end to end - it proves the slate
   principle, not just the meshing.
+
+- ONE FLAGSHIP CANARY RULED (NATE 2026-08-25): the NATE-facing canary =
+  ONE end-to-end flagship run leveraging the full buildup - mesh
+  AUTHORED (generate -> conformal enforcement -> boundary tags) -> FED
+  IN via .supplied() -> SOLVED -> proven to the described standard
+  (every layer full-size in emission order + composite canvas + charts +
+  GIF when the outcome is animated). The artemis BYO rematch BECOMES the
+  standing flagship once the mesh wave lands; interim flagship = coastal
+  surge (animated, richest layers, freshest machinery). The six coarse
+  per-template runs DEMOTE to silent internal parity pins - never
+  rendered, never delivered, no packets; suite-level tripwires only.
