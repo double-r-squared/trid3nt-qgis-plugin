@@ -260,13 +260,19 @@ def _load_mesh(layer: dict) -> dict:
         if path != uri:
             Path(path).unlink(missing_ok=True)
     authid = str(layer.get("crs_authid") or "EPSG:4326")
-    lon, lat = Transformer.from_crs(authid, "EPSG:4326", always_xy=True).transform(
-        mesh["x"], mesh["y"])
+    # The SELAFIN header's X-ORIGIN / Y-ORIGIN, which MDAL honours and this sheet
+    # must too. A worker that writes local metres and fills the origin is
+    # correctly georeferenced; reading the coordinates raw would report it
+    # OFF-CANVAS and blame the fix for the defect it closed.
+    x = np.asarray(mesh["x"]) + float(mesh.get("x_origin") or 0)
+    y = np.asarray(mesh["y"]) + float(mesh.get("y_origin") or 0)
+    lon, lat = Transformer.from_crs(authid, "EPSG:4326", always_xy=True).transform(x, y)
     mx, my = MR.ll_to_merc(np.asarray(lon), np.asarray(lat))
     return {"tri": Triangulation(mx, my, mesh["ikle"][:, :3]),
             "bbox_ll": (float(np.min(lon)), float(np.min(lat)),
                         float(np.max(lon)), float(np.max(lat))),
             "nodes": int(len(mesh["x"])),
+            "origin_m": (mesh.get("x_origin"), mesh.get("y_origin")),
             "elements": int(len(mesh["ikle"])),
             "frames": int(len(mesh.get("times", []))),
             "varnames": list(mesh.get("varnames", []))}

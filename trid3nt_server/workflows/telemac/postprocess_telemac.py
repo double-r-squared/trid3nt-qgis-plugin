@@ -246,6 +246,13 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
         "nelem": int(nelem),
         "x": x,
         "y": y,
+        # The header's X-ORIGIN / Y-ORIGIN (IPARAM(3)/(4)), REPORTED and not
+        # applied. ``x``/``y`` stay exactly as the file stores them because every
+        # postprocessor adds the origin it recovers from the domain bbox, and
+        # applying it here would double the offset on all of them. A reader that
+        # wants absolute coordinates - the diagnostic sheet, or MDAL - adds these.
+        "x_origin": int(iparam[2]),
+        "y_origin": int(iparam[3]),
         "ikle": ikle,
         "times": np.asarray(times, dtype="float64"),
         "data": {v: (np.vstack(a) if a else np.empty((0, npoin))) for v, a in data.items()},
