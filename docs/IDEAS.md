@@ -2044,3 +2044,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   `telemac_river_dye/coarse`'s evidence file predates the `tool`/`args`/`metrics`
   fields and describes a run nobody can re-issue. WORTH DOING: re-record that one
   so the family has no unreplayable member.
+
+- PARK AFTER CALIBRATION + OFFICIAL-TELEMAC-PYTHON RECON (NATE
+  2026-08-26): TELEMAC work PARKS after the calibration campaign.
+  BEFORE more TELEMAC code: recon gitlab.pam-retd.fr/otm/telemac-mascaret
+  - the distribution in our OWN image ships telapy / data_manip (SELAFIN
+  IO) / postel / validation cases; audit our hand-rolled readers/writers
+  (read_selafin, slf/cli/cas authoring, mesh writers) against it:
+  verdict per module = JUSTIFIED-BESPOKE (server-side, must not depend
+  on a TELEMAC install) vs WHEEL-REINVENTED (in-worker, the official
+  lib sits beside it). References-are-benchmarks applies to the
+  ARCHITECTURE; for ENGINE-NATIVE IO the official implementation is the
+  presumptive winner (leverage-libraries rule).
