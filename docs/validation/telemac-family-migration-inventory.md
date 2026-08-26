@@ -113,3 +113,30 @@ which is the exact disease the skeleton exists to remove.
 | `streeter_phelps.py` | survives (a V&V oracle) | SURVIVES, untouched |
 | `_bed_input.py` | dies with the three wave-module templates | DELETED, mechanism in `steps/open_water.py` |
 | `_template_card.py` | zero readers already | DELETED - TELEMAC is the first engine to clear the species |
+
+## Wave A - the static plan + the style contract (representation only)
+
+The six migrated templates were REWRITTEN, not re-tuned: `plan(ops)` with
+module-level binding blocks, all reads through the `P` / `D` namespaces, PARAMS
+and DOC moved to a `declarations.py` sibling. Physics answers owe parity, so
+every coarse canary was re-run through the product path and its metrics compared
+field-for-field against the evidence the migration wave recorded.
+
+| canary | headline | verdict |
+|---|---|---|
+| `telemac_do_sag` (coarse) | DO min **9.0099 mg/L @ 158.8 m**, discharge 60 m3/s user-supplied | 15/15 metric keys IDENTICAL |
+| `telemac_river_dye` (coarse) | cmax **4.878571510314941 mg/L**, peak **200 s**, reach **472.7 m**, mesh 30 m / 155 nodes | IDENTICAL |
+| `coastal_tidal_surge` | peak WL 3.4863 m, datum offset -0.232 m (Apalachicola 8728690) | 16/16 IDENTICAL |
+| `tomawac_wave_field` | Hs field over Superior, 3000 m grid | 15/15 IDENTICAL |
+| `artemis_harbor_agitation` | Kd over the real surveyed Marquette breakwater, 30 m | IDENTICAL bar `target_resolution_m` / `_note`, which were ABSENT in the recorded evidence and are present now |
+| `telemac3d_stratified_flow` | surface temperature profile, calm column, 3000 m | 16/16 IDENTICAL |
+
+The one artemis difference is a STALE EVIDENCE FILE, not a drift. That evidence
+was written at `fbd013aa` (the artemis migration), and the
+`("target_resolution_m", "target_resolution_note")` provenance row was added
+afterwards by `ee86785c` - the change that made a grid spacing the WORKER moved
+narrate itself. The row is now populated with the canary's own supplied 30 m,
+which is the later commit working, and the file is refreshed here.
+
+Run ids are excluded from the comparison for the obvious reason, and so are
+`layer_uri` and wall times.

@@ -260,3 +260,43 @@ Counting note for 2c: `git diff --numstat 0f7a6351 HEAD -- '*.py' ':!tests'
 above. Commit `06ec2f82` (broken tool/library references repointed) is in that
 range and contributes 0 - it touches only `scripts/` and `docs/`, neither of
 which this ledger counts.
+
+**Wave A verdict: net +891, running net +2162 - the wave bought STRUCTURE and one
+whole capability, and it is honest that neither pays back in lines.**
+
+Three of the seven rows are pure ADDITION of things that did not exist:
+`workflows/lib/user_input.py` (207 - the typed user-input species), `journal.py`
+(166 - the run journal), and the emission style trio `styles.py` + `restyle.py` +
+`cog.py` (557) plus the contracts loader (150) and the `restyle_layer` tool (183).
+That is 1263 lines of NEW capability against which no deletion was ever going to
+net out. The style landing paid back 564 of it in the same breath - the 59-row
+in-code registry, its family rules, its safe default, its band-percentile helper
+and the whole of `quantity_styles.py` - so `emission/` finishes -14 despite
+gaining three modules, and the docstring sweep took another 55 out of the same
+package as archaeology.
+
+THE TEMPLATE ROW IS THE ONE TO READ CAREFULLY, and it is the wave's least
+flattering: +282. The six template FILES fell 1721 -> 1141 (-580, -34%), which is
+the number the declarations-sibling ruling was aiming at - each recipe now reads on
+one page. But PARAMS and DOC did not shrink when they moved; they landed in 862
+lines of sibling. A contract moved next door is not a contract absorbed, and this
+ledger counts lines, so the row is +282 and stays +282. What it bought is
+readability, not brevity, and the ruling said so ("the recipe readable on one page,
+the contract one file over"). The absorption to watch for is the NEXT migration's:
+a template that lands in this shape from the start writes its declarations once.
+
+The lib row (+663) is the static-plan rule itself. Roughly half of it is
+capability the plan gained (the P/D namespaces with construction-site provenance,
+the interpreter's branch evaluation, context slots, deep-freeze) and the deletions
+inside it are real but small: -48 from `params.py` when the read-recording
+apparatus went. A refactor that makes a plan STATIC cannot be expected to shrink
+the machinery that makes it static; it should be expected to shrink the templates,
+and it did.
+
+Counting note: `git diff --numstat 09e4d734 HEAD -- '*.py' ':!tests' ':!scripts'`
+totals +3865 / -2974 = **+891**, exactly the sum of the seven wave-A rows above.
+Tests and scripts are excluded by the rule at the head of this file; for the
+record, the same command without those exclusions reads +6428 / -4294 = +2134,
+the difference being the test migration to the static contract (four new test
+files: the user-input species, the run journal, the animation legend stability
+and the raster-headline coherence check).

@@ -11,10 +11,10 @@
       "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
     ],
-    "run_id": "01M0VT23RCD31KTPK9MX1JGZ90",
+    "run_id": "01M0Y5TKKVYZ04D4DG13TXAZJQ",
     "product_uris": {
-      "chart_spec": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/chart_spec.json",
-      "metrics": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/metrics.json"
+      "chart_spec": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/metrics.json"
     },
     "product_errors": {},
     "charts_emitted": 1,
@@ -43,18 +43,20 @@
       "input_mode": "auto",
       "mesh_resolution_m": 50.0
     },
-    "session_id": "01M0VT0VGRWZMATSTKNVY59YZC",
-    "case_id": "01M0VT0VS5XXVDM2P52TQ8F4VJ",
+    "session_id": "01M0Y5RWXKP90AFYPHZAXZCH07",
+    "case_id": "01M0Y5RX5R88P2H5T8NQAJBA2H",
     "tool_status": null,
     "dispatched": true,
     "is_error": false,
     "detail": "",
+    "step_state": "complete",
+    "step_error": "",
     "turn_complete": true,
     "charts": 1,
     "chart_payloads": [
       {
         "envelope_type": "chart-emission",
-        "chart_id": "01M0VT40VAY7W237SJD2761KJ4",
+        "chart_id": "01M0Y5WS8YC1J3BVPSRPYWN5RY",
         "vega_lite_spec": {
           "mark": {
             "type": "line",
@@ -89,15 +91,15 @@
         "title": "Peak dye concentration - Eel River near Scotia, California",
         "caption": "Reach peak dye concentration 4.88 mg/L, arriving 200 s after release (idealized-bed demo).",
         "source_layer_uri": null,
-        "created_turn_id": "01M0VT237KG9QJGRZVWPPXW89B"
+        "created_turn_id": "01M0Y5TJZWRCNHK5HVRVHY7RSE"
       }
     ],
     "layers": [
       {
-        "layer_id": "telemac-mesh-preview-01M0VT0WZZVFKVNNJ6TQDCERN7",
+        "layer_id": "telemac-mesh-preview-01M0Y5RY1Z6VJFP12QST0J12DC",
         "name": "Mesh preview (30 m edges, 1,048 nodes)",
         "layer_type": "vector",
-        "uri": "s3://trid3nt-runs/01M0VT0WZZVFKVNNJ6TQDCERN7/mesh_preview.geojson",
+        "uri": "s3://trid3nt-runs/01M0Y5RY1Z6VJFP12QST0J12DC/mesh_preview.geojson",
         "style_preset": "nhdplus_flowlines",
         "visible": true,
         "role": "input",
@@ -126,10 +128,10 @@
         "inline_geojson": "<dropped, 162816 bytes>"
       },
       {
-        "layer_id": "telemac-release-01M0VT23QFPEBDACX7DK194Y1H",
+        "layer_id": "telemac-release-01M0Y5TKJY72XPNF213QBV3B98",
         "name": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
         "layer_type": "vector",
-        "uri": "s3://trid3nt-runs/inputs/01M0VT23Q74YSCW12WQC53AEW4/release_point.geojson",
+        "uri": "s3://trid3nt-runs/inputs/01M0Y5TKJPJVXWEM39FGG21Y1H/release_point.geojson",
         "style_preset": "release_point",
         "visible": true,
         "role": "context",
@@ -161,10 +163,10 @@
         }
       },
       {
-        "layer_id": "input-river-bed-01M0VT40AC0G1EW35055N0M5AQ",
+        "layer_id": "input-river-bed-01M0Y5WRWTXSCN3QR34W57JY92",
         "name": "Input: river bed bathymetry (scotia_humboldt_county_california_95562_united_s, Copernicus GLO-30-sampled, in-worker)",
         "layer_type": "raster",
-        "uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/bed_bathymetry.tif",
+        "uri": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/bed_bathymetry.tif",
         "style_preset": "continuous_dem",
         "visible": true,
         "role": "context",
@@ -176,10 +178,10 @@
         "legend": null
       },
       {
-        "layer_id": "model-results-mesh-01M0VT23RCD31KTPK9MX1JGZ90",
+        "layer_id": "model-results-mesh-01M0Y5TKKVYZ04D4DG13TXAZJQ",
         "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
         "layer_type": "mesh",
-        "uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/r2d_river.slf",
+        "uri": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/r2d_river.slf",
         "style_preset": "mesh_grid",
         "visible": true,
         "role": "context",
@@ -191,10 +193,10 @@
         "legend": null
       },
       {
-        "layer_id": "01M0VT411YMA9TN4BYFHFBYAX6",
+        "layer_id": "01M0Y5WSFVCXTSRQK68MRYAW41",
         "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
         "layer_type": "raster",
-        "uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/overviews/01M0VT40RRSCDHV6VZZQCY412G.tif",
+        "uri": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/overviews/01M0Y5WS5QG4VCFSDMX928FF4Q.tif",
         "style_preset": "continuous_dye_concentration",
         "visible": true,
         "role": "primary",
@@ -206,12 +208,12 @@
         "legend": {
           "kind": "continuous",
           "colormap": "viridis",
-          "vmin": 0.262461,
-          "vmax": 3.26453,
+          "vmin": 0.0,
+          "vmax": 4.878572,
           "classes": null,
           "value_field": null,
-          "units": null,
-          "label": "Dye concentration"
+          "units": "mg/L",
+          "label": "Dye concentration (mg/L)"
         }
       }
     ],
@@ -220,11 +222,11 @@
     "plain_warnings": [
       "telemac_river_dye"
     ],
-    "run_id": "01M0VT23RCD31KTPK9MX1JGZ90",
+    "run_id": "01M0Y5TKKVYZ04D4DG13TXAZJQ",
     "chart_spec": {
       "dye_concentration": {
         "envelope_type": "chart-emission",
-        "chart_id": "01M0VT40VAY7W237SJD2761KJ4",
+        "chart_id": "01M0Y5WS8YC1J3BVPSRPYWN5RY",
         "vega_lite_spec": {
           "mark": {
             "type": "line",
@@ -274,15 +276,15 @@
       "sediment_surface_d50_range_um": null,
       "mesh_size_m": 30.0,
       "mesh_node_estimate": 155,
-      "layer_uri": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/overviews/01M0VT40RRSCDHV6VZZQCY412G.tif",
+      "layer_uri": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/overviews/01M0Y5WS5QG4VCFSDMX928FF4Q.tif",
       "discharge_m3s": 2.2,
       "discharge_note": "carrier discharge 2 m3/s (user-supplied)",
       "mesh_resolution_m": 30.0,
       "mesh_resolution_note": "Explicit target element edge length, overriding the sizing mode [supplied on this invocation]"
     },
     "product_uris": {
-      "chart_spec": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/chart_spec.json",
-      "metrics": "s3://trid3nt-runs/01M0VT23RCD31KTPK9MX1JGZ90/metrics.json"
+      "chart_spec": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M0Y5TKKVYZ04D4DG13TXAZJQ/metrics.json"
     },
     "product_errors": {}
   }

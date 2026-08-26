@@ -18,8 +18,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0VXE9WSHNKYCZ45F5B2KMAH",
-  "case_id": "01M0VXEA59ACDM22KVQCQRBFGK",
+  "session_id": "01M0Y5ZMMMA5TGGMYX4DMAB5FF",
+  "case_id": "01M0Y5ZMX84530Q84841PCD79P",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -31,7 +31,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0VXGJ3YX8F250FYCNH2J04D",
+      "chart_id": "01M0Y60ZCZ5PWWD8AGNQXXMSQJ",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -298,15 +298,15 @@
       "title": "Wave agitation Kd (aoi)",
       "caption": "Forced by a prescribed 8 s incident wave: Kd 0.352 on the exposed approach against 0.09 in the lee - the structure sheltered the berths by a factor of 3.91. Phase-resolving screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0VXEAVTTJ9XP7N23CZASCW3"
+      "created_turn_id": "01M0Y5ZNHJCRQAPXYYPZ9Z3PJA"
     }
   ],
   "layers": [
     {
-      "layer_id": "artemis-breakwater-01M0VXF9N9C2WTVRJ1ZCYKAG18",
+      "layer_id": "artemis-breakwater-01M0Y5ZQ1BR3D78DMC1SP2MG02",
       "name": "Surveyed breakwater (aoi)",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-cache/artemis/01M0VXF9N9C2WTVRJ1ZCYKAG18/breakwater_structure.fgb",
+      "uri": "s3://trid3nt-cache/artemis/01M0Y5ZQ1BR3D78DMC1SP2MG02/breakwater_structure.fgb",
       "style_preset": "affected_buildings",
       "visible": true,
       "role": "context",
@@ -1167,10 +1167,10 @@
       }
     },
     {
-      "layer_id": "input-lake-bed-01M0VXGJ1CP6VXYJCGPAPT1BDF",
+      "layer_id": "input-lake-bed-01M0Y60ZABBK9G46R931K61F36",
       "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VXF9NXPKSQ0CP5PAEF43YX/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0Y5ZQ2ADBVZ5FZDNFSJ2CNB/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -1182,10 +1182,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0VXGJAY8X8QR4EQDTJJ3CTE",
+      "layer_id": "01M0Y60ZKTT3DMHAWDRDG09NNF",
       "name": "Wave agitation Kd (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VXF9NXPKSQ0CP5PAEF43YX/overviews/01M0VXGHYB6ZPCWSPK8KV80R9J.tif",
+      "uri": "s3://trid3nt-runs/01M0Y5ZQ2ADBVZ5FZDNFSJ2CNB/overviews/01M0Y60Z7W72QYSD9S40ZQDKMM.tif",
       "style_preset": "continuous_wave_agitation",
       "visible": true,
       "role": "primary",
@@ -1197,12 +1197,12 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 0.00187096,
-        "vmax": 1.9369,
+        "vmin": 0.0,
+        "vmax": 2.871,
         "classes": null,
         "value_field": null,
-        "units": null,
-        "label": "Wave agitation"
+        "units": "Kd",
+        "label": "Agitation coefficient Kd = Hs / H0"
       }
     }
   ],
@@ -1356,11 +1356,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0VXF9NXPKSQ0CP5PAEF43YX",
+  "run_id": "01M0Y5ZQ2ADBVZ5FZDNFSJ2CNB",
   "chart_spec": {
     "harbor_agitation": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0VXGJ3YX8F250FYCNH2J04D",
+      "chart_id": "01M0Y60ZCZ5PWWD8AGNQXXMSQJ",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -1766,14 +1766,16 @@
       0.0
     ],
     "agitation_curve_kind": "diffraction_transect",
-    "layer_uri": "s3://trid3nt-runs/01M0VXF9NXPKSQ0CP5PAEF43YX/overviews/01M0VXGHYB6ZPCWSPK8KV80R9J.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0Y5ZQ2ADBVZ5FZDNFSJ2CNB/overviews/01M0Y60Z7W72QYSD9S40ZQDKMM.tif",
     "wave_period_note": "prescribed monochromatic incident wave period",
     "breakwater": "real_surveyed_9_ways",
-    "breakwater_note": "the REAL surveyed breakwater, meshed as a thin solid barrier over real bathymetry"
+    "breakwater_note": "the REAL surveyed breakwater, meshed as a thin solid barrier over real bathymetry",
+    "target_resolution_m": 30.0,
+    "target_resolution_note": "Explicit grid node spacing; a phase-resolving solve needs several nodes per WAVELENGTH, so this is much finer than a spectral run [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0VXF9NXPKSQ0CP5PAEF43YX/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0VXF9NXPKSQ0CP5PAEF43YX/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0Y5ZQ2ADBVZ5FZDNFSJ2CNB/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0Y5ZQ2ADBVZ5FZDNFSJ2CNB/metrics.json"
   },
   "product_errors": {}
 }

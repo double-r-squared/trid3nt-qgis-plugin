@@ -21,8 +21,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0W85BZWMYC4AP4NCMXXCPK5",
-  "case_id": "01M0W85C8AXEA2CQBFR64377NX",
+  "session_id": "01M0Y610WHC1GVEC6AFJJJ3XM7",
+  "case_id": "01M0Y6114KYWG6EVYDCRCS3ZAF",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -34,7 +34,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W870B5WW8Q1BPG3YJPB8BG",
+      "chart_id": "01M0Y62MRS4BJ6WHF5KZFD88ZH",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -196,15 +196,15 @@
       "title": "Surface temperature (aoi)",
       "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W85CZVHTSPJ0S34J666EXE"
+      "created_turn_id": "01M0Y611QHWCRBEK9EAPZYAMK5"
     }
   ],
   "layers": [
     {
-      "layer_id": "telemac3d-bottom-01M0W85D16Q7466KRQWT1TD5J7",
+      "layer_id": "telemac3d-bottom-01M0Y611S9AYKBXKY3J7RB3DFF",
       "name": "Bottom temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W85D16Q7466KRQWT1TD5J7/telemac3d_bottom.tif",
+      "uri": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/telemac3d_bottom.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "input",
@@ -225,10 +225,10 @@
       }
     },
     {
-      "layer_id": "01M0W870HZ67EJRR7CFT125DB0",
+      "layer_id": "01M0Y62N0AAQDVY1RKDCGBJQXC",
       "name": "Surface temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W85D16Q7466KRQWT1TD5J7/telemac3d_surface.tif",
+      "uri": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/telemac3d_surface.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "primary",
@@ -240,12 +240,12 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 16.6745,
-        "vmax": 23.4319,
+        "vmin": 15.0,
+        "vmax": 23.59845,
         "classes": null,
         "value_field": null,
-        "units": null,
-        "label": "Stratified flow"
+        "units": "degC",
+        "label": "Surface temperature (degC)"
       }
     }
   ],
@@ -441,11 +441,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0W85D16Q7466KRQWT1TD5J7",
+  "run_id": "01M0Y611S9AYKBXKY3J7RB3DFF",
   "chart_spec": {
     "vertical_profile": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W870B5WW8Q1BPG3YJPB8BG",
+      "chart_id": "01M0Y62MRS4BJ6WHF5KZFD88ZH",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -664,7 +664,7 @@
       23.39,
       23.808
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0W85D16Q7466KRQWT1TD5J7/telemac3d_surface.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/telemac3d_surface.tif",
     "wind_note": "calm - the thermocline persists and no wind circulation is driven",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -672,8 +672,8 @@
     "target_resolution_note": "Explicit HORIZONTAL grid node spacing; the vertical is nplan [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W85D16Q7466KRQWT1TD5J7/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W85D16Q7466KRQWT1TD5J7/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/metrics.json"
   },
   "product_errors": {}
 }
