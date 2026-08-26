@@ -215,6 +215,15 @@ async def interpret(
                 f"the optional {name!r} context layer was not supplied, so the run "
                 "modelled the domain without it")
         await env.ledger.complete()
+    except DeclarativeError as exc:
+        # The failed attempt CARRIES what it got done. Everything up to the
+        # failure really happened, and a caller that only ever sees the message
+        # cannot re-run this question with the bad value corrected without
+        # paying for that work twice. The partial run rides the exception so the
+        # skeleton can record it; see ``Workflow.execute``.
+        out.data_records = list(env.data_records)
+        exc.partial_run = out
+        raise
     finally:
         reset_domain(token)
     # The terminal leak guard: a ParamRef in what the caller receives is a

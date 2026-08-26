@@ -25,6 +25,8 @@ import logging
 import time
 from typing import Any, Callable, Mapping, Sequence
 
+from trid3nt_contracts import new_ulid
+
 from . import journal, snapshot
 from .data import DataDecl
 from .errors import DeclarativeError, PlanValidationError
@@ -249,7 +251,7 @@ class Workflow(EngineOps):
             raise
         except DeclarativeError as exc:
             logger.warning("%s %s: %s", self.name, exc.error_code, exc)
-            return self._error(exc.error_code, exc)
+            return await self._record_failure(exc, input_mode, supplied_artifacts)
         except Exception as exc:  # noqa: BLE001
             if getattr(exc, "retryable", False):
                 # A retryable typed error is a GATE: the adapter harvests its
@@ -265,6 +267,36 @@ class Workflow(EngineOps):
 
     async def _resolve(self, supplied: Mapping[str, Any]) -> ResolvedParams:
         return await resolve_params(self.params, supplied)
+
+    async def _record_failure(self, exc: DeclarativeError, input_mode: str | None,
+                              supplied: Mapping[str, Any]) -> dict[str, Any]:
+        """The failure envelope, plus a handle on the work the attempt DID finish.
+
+        A run that dies at the deck has already geocoded, fetched and meshed. The
+        step ledger keeps that for a retry of the SAME invocation - but the retry
+        a failure actually wants is the same question with the bad value
+        CORRECTED, which is a different invocation and would replay nothing. So
+        the attempt is recorded like a completed run, under an id the envelope
+        names, and the caller re-runs it through the one primitive instead of
+        paying for the good work twice.
+        """
+        envelope = self._error(exc.error_code, exc)
+        run = getattr(exc, "partial_run", None)
+        records = list(getattr(run, "records", ()) or ())
+        if run is None or run.params is None or not records:
+            return envelope
+        attempt = new_ulid()
+        await snapshot.write_snapshot(
+            run_id=attempt, workflow=self.name, input_mode=input_mode,
+            sheet=run.params.rows(), records=records,
+            data_records=list(run.data_records), supplied=dict(supplied))
+        envelope["run_id"] = attempt
+        envelope["error_message"] += (
+            f" This attempt is recorded as run {attempt}, with "
+            f"{', '.join(run.executed)} already done: rerun_workflow(run_id="
+            f"'{attempt}', overrides={{...}}) re-runs the question with the value "
+            "corrected and inherits that work.")
+        return envelope
 
     # -- normalize --------------------------------------------------------- #
 

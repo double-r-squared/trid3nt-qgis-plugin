@@ -26,7 +26,7 @@ declared workflow, through the plan rather than through a text editor.
 
 from __future__ import annotations
 
-import asyncio
+import sys
 from typing import Any
 
 import pytest
@@ -212,6 +212,40 @@ async def test_a_child_is_itself_derivable_from(monkeypatch):
     assert grandchild.results["measure"]["value"] == pytest.approx(15.0)
 
 
+@pytest.mark.asyncio
+async def test_a_failed_run_is_recorded_and_reruns_with_the_bad_value_corrected(
+        monkeypatch):
+    """The failure-recovery consumer: the good work survives the bad value."""
+    wf = _probe_workflow()
+    _no_persist(monkeypatch)
+    monkeypatch.setattr(_registry_module(), "TOOL_REGISTRY",
+                        {wf.name: _entry(wf)}, raising=False)
+    monkeypatch.setattr(_probe_module(), "_MEASURE_REFUSES_ABOVE", 3.0)
+
+    failed = await wf.run({"rate": 9.0, "input_mode": "auto"})
+    assert failed["status"] == "error"
+    # the envelope names the attempt AND the work it finished, so the caller can
+    # act on it without reading a log
+    attempt = failed["run_id"]
+    assert "locate" in failed["error_message"] and attempt in failed["error_message"]
+
+    captured: dict[str, Any] = {}
+    _pin_run_id(monkeypatch, wf, "RECOVERED", captured)
+    await rerun(attempt, {"rate": 2.0})
+    assert captured["run"].replayed == ["locate"]
+    assert captured["run"].results["measure"]["value"] == pytest.approx(10.0)
+
+
+@pytest.mark.asyncio
+async def test_a_failure_with_nothing_finished_records_no_attempt(monkeypatch):
+    """No inheritable work means no handle to offer - the envelope stays plain."""
+    wf = _probe_workflow()
+    _no_persist(monkeypatch)
+    monkeypatch.setattr(_probe_module(), "_LOCATE_REFUSES", True)
+    failed = await wf.run({"rate": 1.0, "input_mode": "auto"})
+    assert failed["status"] == "error" and "run_id" not in failed
+
+
 # --- (5) coupled validity, both lanes --------------------------------------- #
 def _coastal():
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -276,15 +310,23 @@ _PROBE = "tests.test_rerun_with_overrides"
 
 _STAGED: dict[str, Any] = {}
 
+#: Failure seams, so a refusal can be aimed at a chosen node.
+_MEASURE_REFUSES_ABOVE: float | None = None
+_LOCATE_REFUSES = False
+
 
 def locate(*, where: str) -> dict[str, Any]:
     """A step whose product is an ARTIFACT, so replay has a URI to point at."""
+    if _LOCATE_REFUSES:
+        raise ValueError(f"cannot locate {where!r}")
     _STAGED.setdefault(where, 0)
     _STAGED[where] += 1
     return {"uri": f"file:///staged/{where}/{_STAGED[where]}", "where": where}
 
 
 def measure(*, source: str, rate: float) -> dict[str, Any]:
+    if _MEASURE_REFUSES_ABOVE is not None and float(rate) > _MEASURE_REFUSES_ABOVE:
+        raise ValueError(f"rate {rate} is past what this probe measures")
     return {"value": 5.0 * float(rate), "source": source}
 
 
@@ -428,6 +470,10 @@ def _registry_module():
     import trid3nt_server.tools as mod
 
     return mod
+
+
+def _probe_module():
+    return sys.modules[__name__]
 
 
 class _Entry:
