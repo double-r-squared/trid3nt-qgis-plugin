@@ -96,6 +96,32 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
 )
 
 
+
+def _telemac_image() -> str:
+    """The TELEMAC worker image every leg of the family runs in."""
+    import os
+
+    return os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
+
+
+def _telemac_build_argv(image: str):
+    """The volume-mount launch line, written once for the whole family.
+
+    Five legs run the same image the same way - the launcher has already written
+    ``<rundir>/manifest.json`` and staged every input beside it, and the worker
+    reads them at ``/data``. ``args`` (``manifest["telemac_args"]``) is normally
+    empty because the image CMD drives the entrypoint; anything passed is appended
+    after the image, as on the SFINCS spec.
+    """
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        return [
+            "docker", "run", "--rm", "--name", run_id,
+            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
+        ]
+
+    return build_argv
+
+
 # --------------------------------------------------------------------------- #
 # Solver registration (mirrors register_geoclaw_solver / register_swan_solver).
 # --------------------------------------------------------------------------- #
@@ -168,36 +194,13 @@ def _classify_exit(
 
 def telemac_local_spec() -> "Any":
     """Build the TELEMAC river-dye ``LocalSolverSpec`` for the local-docker backend."""
-    import os
     from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
-
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        # SFINCS-canonical volume-mount launch: the launcher already wrote
-        # <rundir>/manifest.json; the worker reads it at /data/manifest.json.
-        # ``args`` (manifest["telemac_args"]) is normally empty -- the CMD in the
-        # image drives the entrypoint. Anything passed is appended after the
-        # image (parity with the SFINCS spec).
-        return [
-            "docker",
-            "run",
-            "--rm",
-            "--name",
-            run_id,
-            "-v",
-            f"{rundir}:/data",
-            "-w",
-            "/data",
-            image,
-            *args,
-        ]
 
     return LocalSolverSpec(
         solver=TELEMAC_SOLVER_NAME,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="telemac_args",
-        build_argv=build_argv,
+        build_argv=_telemac_build_argv(_telemac_image()),
         stdout_name="telemac.stdout",
         stderr_name="telemac.stderr",
         stdout_uri_field="telemac_stdout_uri",
@@ -268,23 +271,16 @@ def _classify_wave_exit(
 
 def tomawac_local_spec() -> "Any":
     """Build the TOMAWAC ``LocalSolverSpec`` -- same image + volume mount as the
-    river-dye spec (identical build_argv), a wave-specific classify_exit."""
-    import os
+    river-dye spec, a wave-specific classify_exit. Runs with NO NETWORK: its bed
+    arrives staged in the run directory."""
     from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
-
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        return [
-            "docker", "run", "--rm", "--name", run_id,
-            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
-        ]
 
     return LocalSolverSpec(
         solver=TOMAWAC_SOLVER_NAME,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="telemac_args",
-        build_argv=build_argv,
+        build_argv=_telemac_build_argv(_telemac_image()),
+        network="none",
         stdout_name="tomawac.stdout",
         stderr_name="tomawac.stderr",
         stdout_uri_field="tomawac_stdout_uri",
@@ -361,23 +357,16 @@ def _classify_agitation_exit(
 
 def artemis_local_spec() -> "Any":
     """Build the ARTEMIS ``LocalSolverSpec`` -- same image + volume mount as the
-    river-dye/tomawac specs (identical build_argv), an agitation classify_exit."""
-    import os
+    river-dye/tomawac specs, an agitation classify_exit. Runs with NO NETWORK: its
+    bed arrives staged in the run directory."""
     from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
-
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        return [
-            "docker", "run", "--rm", "--name", run_id,
-            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
-        ]
 
     return LocalSolverSpec(
         solver=ARTEMIS_SOLVER_NAME,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="telemac_args",
-        build_argv=build_argv,
+        build_argv=_telemac_build_argv(_telemac_image()),
+        network="none",
         stdout_name="artemis.stdout",
         stderr_name="artemis.stderr",
         stdout_uri_field="artemis_stdout_uri",
@@ -455,23 +444,16 @@ def _classify_strat_exit(
 
 def telemac3d_local_spec() -> "Any":
     """Build the TELEMAC-3D ``LocalSolverSpec`` -- same image + volume mount as the
-    river-dye/tomawac/artemis specs (identical build_argv), a 3D classify_exit."""
-    import os
+    river-dye/tomawac/artemis specs, a 3D classify_exit. Runs with NO NETWORK: its
+    bed arrives staged in the run directory."""
     from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
-
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        return [
-            "docker", "run", "--rm", "--name", run_id,
-            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
-        ]
 
     return LocalSolverSpec(
         solver=TELEMAC3D_SOLVER_NAME,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="telemac_args",
-        build_argv=build_argv,
+        build_argv=_telemac_build_argv(_telemac_image()),
+        network="none",
         stdout_name="telemac3d.stdout",
         stderr_name="telemac3d.stderr",
         stdout_uri_field="telemac3d_stdout_uri",
@@ -550,23 +532,16 @@ def _classify_coastal_exit(
 
 def coastal_local_spec() -> "Any":
     """Build the COASTAL ``LocalSolverSpec`` -- same image + volume mount as the
-    river-dye/tomawac/artemis/3D specs (identical build_argv), a coastal classify_exit."""
-    import os
+    river-dye/tomawac/artemis/3D specs, a coastal classify_exit. Runs with NO
+    NETWORK: its bed arrives staged in the run directory."""
     from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
-
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        return [
-            "docker", "run", "--rm", "--name", run_id,
-            "-v", f"{rundir}:/data", "-w", "/data", image, *args,
-        ]
 
     return LocalSolverSpec(
         solver=TELEMAC_COASTAL_SOLVER_NAME,
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="telemac_args",
-        build_argv=build_argv,
+        build_argv=_telemac_build_argv(_telemac_image()),
+        network="none",
         stdout_name="coastal.stdout",
         stderr_name="coastal.stderr",
         stdout_uri_field="coastal_stdout_uri",

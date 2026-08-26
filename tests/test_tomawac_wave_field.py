@@ -9,6 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
+#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: A domain solved on real bathymetry refuses without one, because the worker
+#: holds no fetcher of its own any more.
+_STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
+               "source": "noaa_ncei_dem_all"}
+
 
 def test_tomawac_wave_field_registered_as_engine_template():
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -98,7 +104,7 @@ def test_the_wave_deck_stages_under_tomawac_but_keys_itself_wave():
     """
     from trid3nt_server.workflows.telemac.steps.wave import write_wave_deck
 
-    deck = asyncio.run(write_wave_deck(
+    deck = asyncio.run(write_wave_deck(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,
              "bbox": (-87.60, 46.70, -86.60, 47.20)},
         wave_mode="fetch_growth", mesh_resolution_m=3000.0, sim_duration_hours=1.0,
@@ -115,7 +121,7 @@ def test_the_idealized_basin_carries_no_bbox():
     """A geography-free basin has no AOI to sample, so it claims none."""
     from trid3nt_server.workflows.telemac.steps.wave import write_wave_deck
 
-    deck = asyncio.run(write_wave_deck(
+    deck = asyncio.run(write_wave_deck(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -120.0, "lat": 38.0,
              "bbox": (-120.7, 37.6, -119.3, 38.4)},
         bathy_source="auto"))

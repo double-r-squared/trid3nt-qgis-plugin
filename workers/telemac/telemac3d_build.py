@@ -77,16 +77,6 @@ LOG = logging.getLogger("trid3nt.worker.telemac3d.build")
 
 G = 9.81
 
-#: NOAA NGDC DEM mosaic ImageServer - the DEM_all mosaic includes the
-#: greatlakes_lakedatum bathymetry (lake-bottom depth, negative below the Great
-#: Lakes low-water datum). Same proven source the TOMAWAC/ARTEMIS legs use.
-_NOAA_DEM_ALL_URL = (
-    "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/"
-    "ImageServer/exportImage"
-)
-_UA = "trid3nt-local-telemac3d (agent@trid3nt.dev)"
-
-
 # ---------------------------------------------------------------------------
 # Config (strict-field manifest; the entrypoint rejects unknown keys)
 # ---------------------------------------------------------------------------
@@ -562,40 +552,20 @@ def wind_components(speed, dir_from_deg):
 
 
 # ---------------------------------------------------------------------------
-# 6. Real Great Lakes bathymetry (NOAA NGDC DEM_all -> greatlakes_lakedatum),
-#    mirroring the proven TOMAWAC/ARTEMIS fetch.
+# 6. Real Great Lakes bathymetry -- READ from the staged raster.
 # ---------------------------------------------------------------------------
-def fetch_greatlakes_bathy(lon, lat, bbox):
-    """Sample Great Lakes lake-datum bathymetry at node lon/lat via NOAA DEM_all.
+def read_greatlakes_bathy(lon, lat, data_dir):
+    """Bed elevation (m) at node lon/lat from the bed the run was staged with.
 
-    Returns per-node bed elevation (m, NEGATIVE below the datum); a node outside
-    the lake (land / NoData) is NaN. Raises Telemac3dInputError on a non-tiff."""
-    import requests
-    from rasterio.io import MemoryFile
+    A node outside the lake (land / NoData) is NaN. Raises Telemac3dInputError
+    when no bed was staged at all, which is a staging fault rather than a
+    coverage answer."""
+    from _staged_bed import sample_staged_bed
 
-    ncols = int(np.clip(round((bbox[2] - bbox[0]) * 1200.0), 64, 2000))
-    nrows = int(np.clip(round((bbox[3] - bbox[1]) * 1200.0), 64, 2000))
-    resp = requests.get(_NOAA_DEM_ALL_URL, params={
-        "bbox": ",".join(str(v) for v in bbox),
-        "bboxSR": "4326", "imageSR": "4326",
-        "size": f"{ncols},{nrows}",
-        "format": "tiff", "pixelType": "F32", "f": "image",
-    }, headers={"User-Agent": _UA}, timeout=180)
-    resp.raise_for_status()
-    body = resp.content
-    if body[:4] not in (b"II*\x00", b"MM\x00*"):
-        raise Telemac3dInputError(
-            "TELEMAC3D_BATHY_UNAVAILABLE",
-            f"NOAA DEM_all exportImage returned non-tiff over {bbox}: {body[:160]!r}")
-    with MemoryFile(body) as mf, mf.open() as src:
-        samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
-                        dtype=float).ravel()
-        nod = src.nodata
-        if nod is not None:
-            samp[samp == nod] = np.nan
-    samp[~np.isfinite(samp)] = np.nan
-    samp[samp < -1.0e4] = np.nan
-    return samp
+    try:
+        return sample_staged_bed(lon, lat, data_dir)
+    except FileNotFoundError as exc:
+        raise Telemac3dInputError("TELEMAC3D_BATHY_UNAVAILABLE", str(exc)) from exc
 
 
 def _bbox_utm_epsg(bbox):
@@ -605,7 +575,7 @@ def _bbox_utm_epsg(bbox):
     return (32600 if lat >= 0 else 32700) + zone
 
 
-def build_real_lake_grid(cfg: Telemac3dConfig):
+def build_real_lake_grid(cfg: Telemac3dConfig, data_dir: str):
     """Regular UTM grid over a real Great Lake AOI with NOAA lake-datum bed at
     nodes. Land / NaN / too-shallow nodes are CLAMPED to a wet bed at
     ``min_depth_m`` (labeled) so the closed basin is ENTIRELY wet - a
@@ -638,14 +608,14 @@ def build_real_lake_grid(cfg: Telemac3dConfig):
     xabs = mesh["X"] + min(x0, x1)
     yabs = mesh["Y"] + min(y0, y1)
     lon, lat = back.transform(xabs, yabs)
-    bed = fetch_greatlakes_bathy(np.asarray(lon), np.asarray(lat), bbox)
+    bed = read_greatlakes_bathy(np.asarray(lon), np.asarray(lat), data_dir)
     min_depth = max(float(cfg.min_depth_m), 1.0)
     wet = np.isfinite(bed) & (bed < -min_depth)
     n_wet = int(wet.sum())
     if n_wet < 0.20 * bed.size:
         raise Telemac3dInputError(
             "TELEMAC3D_BATHY_UNAVAILABLE",
-            f"NOAA lake bathymetry covered only {n_wet}/{bed.size} grid nodes "
+            f"the staged lake bathymetry covered only {n_wet}/{bed.size} grid nodes "
             f">{min_depth} m deep over {bbox} -- the AOI is mostly land/shallow. "
             "Pick a DEEP OPEN-WATER AOI inside a Great Lake (Superior/Michigan/"
             "Huron) that can stratify.")
@@ -1012,7 +982,7 @@ def solve(cfg: Telemac3dConfig, workdir: str, run_id: str = None) -> dict[str, A
         metrics = _solve_salt_wedge(cfg, workdir, run_id)
     elif mode == "wind_circulation":
         if real:
-            mesh, meta = build_real_lake_grid(cfg)
+            mesh, meta = build_real_lake_grid(cfg, workdir)
         else:
             mesh, meta = _idealized_wind_mesh(cfg), dict(
                 utm_epsg=None, dx_m=float(cfg.target_resolution_m or 250.0),
@@ -1020,7 +990,7 @@ def solve(cfg: Telemac3dConfig, workdir: str, run_id: str = None) -> dict[str, A
         metrics = _solve_wind_circulation(cfg, workdir, run_id, mesh, meta)
     else:  # stratification (default)
         if real:
-            mesh, meta = build_real_lake_grid(cfg)
+            mesh, meta = build_real_lake_grid(cfg, workdir)
         else:
             mesh, meta = _idealized_strat_mesh(cfg), dict(
                 utm_epsg=None, dx_m=float(cfg.target_resolution_m or 250.0),

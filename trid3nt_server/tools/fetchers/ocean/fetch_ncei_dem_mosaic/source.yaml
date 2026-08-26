@@ -1,0 +1,132 @@
+schema_version: v1
+name: fetch_ncei_dem_mosaic
+source_class: ncei_dem_mosaic
+shape: raster-cog
+supports_global_query: false
+error_prefix: NCEI_DEM_MOSAIC
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+endpoints:
+  data:
+    url: https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics
+auth:
+  mode: none
+  user_agent: trid3nt_default
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  # The SAMPLE LATTICE, declared. This mosaic serves whatever grid is asked for,
+  # so the density is the caller's fact about how finely its nodes are spaced -
+  # not a property of the data - and a consumer that samples the returned raster
+  # at mesh nodes needs to name the lattice it was built against.
+  px_per_deg:
+    type: float
+    default: 1800.0
+    min: 60.0
+    max: 12000.0
+  max_px_per_side:
+    type: int
+    default: 3000
+    min: 64
+    max: 4000
+ingest:
+  access: imageserver_export
+  imageserver:
+    service: DEM_all
+    px_min: 64
+    px_per_deg: 1800.0
+    px_max: 3000
+    export_query:
+      bboxSR: '4326'
+      imageSR: '4326'
+      format: tiff
+      pixelType: F32
+      f: image
+normalize:
+  crs: EPSG:4326
+  units: meters
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: continuous_dem
+  emit_bbox: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 12.0
+  floor_mb: 0.05
+  ceil_mb: 60.0
+resolution_declarations:
+- param: px_per_deg
+  unit: px/deg
+  min_value: 60.0
+  native_hint: NCEI DEM_all is a multi-resolution mosaic - 1/9" (~3 m) to 24" (~700 m) depending on
+    the contributing DEM; 1800 px/deg is ~62 m
+  constraint_source: data
+  rationale: the mosaic resamples to whatever lattice is requested, so the density is bounded by the
+    contributing DEM under the AOI rather than by the service
+caveats:
+- NOAA NCEI DEM_all is the MOSAIC of every NCEI-hosted DEM - coastal CUDEM/CoNED tiles, the Great
+  Lakes lake-datum bathymetry grids, and the global bases underneath them - served as one ArcGIS
+  ImageServer. Positive up, negative below the contributing DEM's own vertical datum.
+- 'THE VERTICAL DATUM IS THE MOSAIC''S, NOT ONE DATUM: NAVD88 over the US coastal CUDEM tiles, the
+  respective LOW WATER DATUM over each Great Lake, and the global base elsewhere. A consumer that
+  mixes this bed with a water-level series on a different datum owes an explicit offset - this tool
+  will not guess one.'
+- An AOI the mosaic does not cover returns nodata rather than an error; a node sampled off coverage
+  reads as no data, which the consumer must treat as absent bed rather than as 0 m.
+docstring: |-
+  Fetch NOAA NCEI DEM_all topo-bathymetry over a bbox as a float32 GeoTIFF.
+
+  **What it does:**
+      Exports the NOAA NCEI ``DEM_all`` ImageServer mosaic - the union of every
+      NCEI-hosted digital elevation model, including the coastal CUDEM/CoNED
+      integrated topo-bathy tiles and the Great Lakes lake-datum bathymetry
+      grids - onto the requested lattice and returns the server's GeoTIFF
+      unchanged (EPSG:4326, float32, metres, POSITIVE UP: land positive,
+      bathymetry negative).
+
+  **When to use:**
+      - A model that samples BED ELEVATION at its own node coordinates over a
+        coastal strip, an estuary, or a Great Lake, and needs one continuous
+        surface across the waterline.
+      - The Great Lakes specifically: this is the mosaic that carries the
+        lake-datum bathymetry grids, which the CUDEM-based ``fetch_topobathy``
+        does not.
+
+  **When NOT to use:**
+      - A US OCEAN coast where the finest available nearshore bed matters:
+        ``fetch_topobathy`` composites the 1/9 arc-second CUDEM tiles with 3DEP
+        land and declares its coverage, which is a better-labelled bed there.
+      - Land-only terrain: use ``fetch_dem`` (USGS 3DEP lidar, 1-10 m).
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+      px_per_deg: the sample lattice, in pixels per DEGREE on both axes
+          (default 1800, about 62 m in latitude). Angular, so cells are not
+          square away from the equator - this names the grid a consumer's nodes
+          were sampled against, not a metric resolution.
+      max_px_per_side: per-axis pixel ceiling (default 3000).
+
+  **Returns:**
+      A ``LayerURI`` pointing at the cached GeoTIFF. ``layer_type="raster"``,
+      ``role="input"``, ``style_preset="continuous_dem"``, ``units="meters"``.
+
+  **Errors:**
+      - ``NCEI_DEM_MOSAIC_INPUT_INVALID``: bad bbox (retryable=False).
+      - ``NCEI_DEM_MOSAIC_UPSTREAM``: the ImageServer failed or returned a
+        non-TIFF body (retryable=True).
+
+  **Vertical datum:**
+      The mosaic's, and it is not one datum: NAVD88 over the US coastal tiles,
+      each Great Lake's own low water datum over that lake, the global base
+      elsewhere. Reconciling this bed with a water-level series on a different
+      datum is the caller's declared offset, never an assumed zero.
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="ncei_dem_mosaic"``.
+  Tier-1 free. No API key. ``supports_global_query=False``.

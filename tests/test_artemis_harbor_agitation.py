@@ -9,6 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
+#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: A domain solved on real bathymetry refuses without one, because the worker
+#: holds no fetcher of its own any more.
+_STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
+               "source": "noaa_ncei_dem_all"}
+
 
 def test_artemis_harbor_agitation_registered_as_engine_template():
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -107,14 +113,14 @@ def test_a_supplied_structure_is_meshed_whatever_form_it_arrived_in():
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
     drawn = [[-87.39, 46.53], [-87.37, 46.54]]
-    deck = asyncio.run(write_agitation_deck(
+    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
         structure=drawn, mesh_resolution_m=30.0))
     assert deck["config"]["breakwater_polylines"] == [
         [[-87.39, 46.53], [-87.37, 46.54]]]
 
     # the draw gate's reply shape reaches the same deck
-    sketched = asyncio.run(write_agitation_deck(
+    sketched = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
         structure={"type": "Feature",
                    "geometry": {"type": "LineString", "coordinates": drawn}},
@@ -136,7 +142,7 @@ def test_an_unfilled_structure_slot_asks_for_nothing():
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    deck = asyncio.run(write_agitation_deck(
+    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
     assert deck["breakwater_polylines"] is None
     assert "breakwater_polylines" not in deck["config"]
@@ -157,7 +163,7 @@ def test_the_structure_row_reports_the_solve_not_the_request():
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    deck = asyncio.run(write_agitation_deck(
+    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
 
     confirmed = _structure_row(deck, {"structure_present": False, "bw_label": ""})
@@ -202,7 +208,7 @@ def test_only_diffraction_gets_a_real_harbour():
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    deck = asyncio.run(write_agitation_deck(
+    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="resonance", bathy_source="noaa_greatlakes"))
     assert deck["real_bathymetry"] is False
     assert "bbox" not in deck["config"]

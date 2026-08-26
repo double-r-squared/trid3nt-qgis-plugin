@@ -602,6 +602,41 @@ class LocalSolverSpec:
     by the spec factory using the current env value.
     """
 
+    network: str | None = None
+    """The docker network this solver's container runs on, when it declares one.
+
+    ``"none"`` is the ENGINE-ROOM posture: the container is handed a fully staged
+    run directory and can reach nothing. It is per-spec, and deliberately so - an
+    engine whose in-container fetches have not been migrated yet would fail under
+    it, so each engine adopts it as its own inputs become staged rather than by a
+    global switch. ``None`` (the default) leaves the launch line untouched, which
+    is the default bridge; a spec whose ``build_argv`` already writes its own
+    ``--network`` keeps that and must leave this unset.
+    """
+
+
+def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
+    """Apply the spec's declared docker network to a launch line.
+
+    The flag goes in HERE rather than in each ``build_argv`` because the network a
+    container is allowed is a property of whether its inputs are staged, not of
+    how its argv is spelled - and because a posture spread across five identical
+    closures is one that drifts. A spec that already writes its own ``--network``
+    is left alone: two of them on one command line is a launch failure, and the
+    closure's is the one somebody wrote on purpose.
+    """
+    if not spec.network or spec.exec_kind != "docker":
+        return cmd
+    if "--network" in cmd:
+        raise SolverDispatchError(
+            f"solver {spec.solver!r} declares network={spec.network!r} AND its "
+            "build_argv writes its own --network; declare it in one place.")
+    if cmd[:2] != ["docker", "run"]:
+        raise SolverDispatchError(
+            f"solver {spec.solver!r} declares network={spec.network!r} but its "
+            f"launch line does not start with 'docker run': {cmd[:2]}")
+    return [*cmd[:2], "--network", spec.network, *cmd[2:]]
+
 
 def _sfincs_local_spec() -> LocalSolverSpec:
     """The SFINCS local-docker spec - behavior verbatim."""
@@ -999,6 +1034,7 @@ def launch_local_solver(
     stdout_path = rundir / spec.stdout_name
     stderr_path = rundir / spec.stderr_name
     cmd = spec.build_argv(run_id, rundir, solver_args)
+    cmd = _with_declared_network(spec, cmd)
     logger.info("local-%s exec: %s", spec.exec_kind, " ".join(cmd))
     # Build the subprocess environment: start from the current process env and
     # merge any spec-level overrides (e.g. PYTHONPATH for pip-only workers that

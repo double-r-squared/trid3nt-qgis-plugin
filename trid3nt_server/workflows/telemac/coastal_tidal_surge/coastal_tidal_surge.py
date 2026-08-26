@@ -57,6 +57,8 @@ _SHARED = "trid3nt_server.workflows.shared"
 #: which is the domain shape this question needs.
 _COAST_HALF_DEG = 0.06
 
+_TSTEPS = "trid3nt_server.workflows.telemac.steps"
+
 
 #: The boundary FORCING - the gauge record, fetched fresh over the domain the AOI
 #: step binds. Reference data: a water-level record is the world's, never supplied.
@@ -68,6 +70,18 @@ DATA = (
                              station=P.station,
                              start_date=P.start_date,
                              end_date=P.end_date)),
+    #: The BED, as declared reference data. It used to be sampled INSIDE the solver
+    #: container, which put the one raster the physics rests on outside the emit,
+    #: cache, provenance and retry the router gives every other fetch. Declaring it
+    #: here is what puts the bathymetry on the canvas as a continuous surface and
+    #: lets the worker run with no network at all: the producer fetches, the manifest
+    #: stages the raster into the run directory, and the builder reads a file.
+    #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
+    #: against - so it travels from the template rather than being a router default.
+    Data("bed", Fetch.tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+                           bathy_source=P.bathy_source,
+                           domain_kind="coast", px_per_deg=1800.0,
+                           max_px_per_side=3000)),
 )
 
 
@@ -85,7 +99,8 @@ PHYSICS = Physics("coastal_surge",
                   friction_coefficient=P.friction_coefficient,
                   wind_speed_mps=P.wind_speed_mps,
                   wind_direction_from_deg=P.wind_direction_from_deg,
-                  output_interval_min=P.output_interval_min)
+                  output_interval_min=P.output_interval_min,
+                  bed=D.bed)
 
 FORCING = Forcing(water_level=D.tides)
 

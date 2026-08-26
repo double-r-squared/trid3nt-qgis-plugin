@@ -21,8 +21,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YBVHT2H6MFB78JP1FSF0WS",
-  "case_id": "01M0YBVJ456A21ARJG4PEAS9MZ",
+  "session_id": "01M0YWBBSBCMSJ8KFZ4BR11Y7R",
+  "case_id": "01M0YWBC26B1QN002YD17723B6",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -34,7 +34,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YBX6MA8VKXCN8W08FQDQ45",
+      "chart_id": "01M0YWCP7VFSBC3KKT6BQ7DVKE",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -196,22 +196,37 @@
       "title": "Surface temperature (aoi)",
       "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YBVJTXBJ6HC4C54F43YS4K"
+      "created_turn_id": "01M0YWBCQW9DWDB3GZT44S09PH"
     }
   ],
   "layers": [
     {
-      "layer_id": "telemac3d-bottom-01M0YBVJWWYPAKE44TYH46MTC1",
+      "layer_id": "input-ncei_dem_mosaic-675132065060",
+      "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0YWBCXPYN74NNFZBQDBPHCF.tif",
+      "style_preset": "continuous_dem",
+      "visible": true,
+      "role": "context",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 0,
+      "crs_authid": null,
+      "legend": null
+    },
+    {
+      "layer_id": "telemac3d-bottom-01M0YWBD1ECFAZ4R7FMSNH6QPW",
       "name": "Bottom temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/telemac3d_bottom.tif",
+      "uri": "s3://trid3nt-runs/01M0YWBD1ECFAZ4R7FMSNH6QPW/telemac3d_bottom.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "input",
       "temporal": false,
       "wms_url": null,
       "opacity": null,
-      "z_index": 0,
+      "z_index": 1,
       "crs_authid": null,
       "legend": {
         "kind": "continuous",
@@ -225,17 +240,17 @@
       }
     },
     {
-      "layer_id": "01M0YBX6ZJ5YKFPQ16DNWW0ZJJ",
+      "layer_id": "01M0YWCPEYW2J0PFS1WK0J2WTZ",
       "name": "Surface temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/telemac3d_surface.tif",
+      "uri": "s3://trid3nt-runs/01M0YWBD1ECFAZ4R7FMSNH6QPW/telemac3d_surface.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "primary",
       "temporal": false,
       "wms_url": null,
       "opacity": null,
-      "z_index": 1,
+      "z_index": 2,
       "crs_authid": null,
       "legend": {
         "kind": "continuous",
@@ -441,11 +456,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YBVJWWYPAKE44TYH46MTC1",
+  "run_id": "01M0YWBD1ECFAZ4R7FMSNH6QPW",
   "chart_spec": {
     "vertical_profile": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YBX6MA8VKXCN8W08FQDQ45",
+      "chart_id": "01M0YWCP7VFSBC3KKT6BQ7DVKE",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -664,7 +679,7 @@
       23.39,
       23.808
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/telemac3d_surface.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0YWBD1ECFAZ4R7FMSNH6QPW/telemac3d_surface.tif",
     "wind_note": "calm - the thermocline persists and no wind circulation is driven",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -672,8 +687,8 @@
     "target_resolution_note": "Explicit HORIZONTAL grid node spacing; the vertical is nplan [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0YWBD1ECFAZ4R7FMSNH6QPW/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YWBD1ECFAZ4R7FMSNH6QPW/metrics.json"
   },
   "product_errors": {}
 }

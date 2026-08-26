@@ -66,11 +66,6 @@ G = 9.81
 #: greatlakes_lakedatum bathymetry (lake-bottom depth, negative below the Great
 #: Lakes low-water datum). exportImage returns a GeoTIFF sampled at nodes. Same
 #: proven source the TOMAWAC leg uses.
-_NOAA_DEM_ALL_URL = (
-    "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/"
-    "ImageServer/exportImage"
-)
-_UA = "trid3nt-local-artemis (agent@trid3nt.dev)"
 
 
 # ---------------------------------------------------------------------------
@@ -434,41 +429,20 @@ def berkhoff_bottom(X, Y):
 
 
 # ---------------------------------------------------------------------------
-# 4. Real Great Lakes bathymetry (NOAA NGDC DEM_all -> greatlakes_lakedatum),
-#    mirroring the proven TOMAWAC fetch.
+# 4. Real Great Lakes bathymetry -- READ from the staged raster.
 # ---------------------------------------------------------------------------
-def fetch_greatlakes_bathy(lon, lat, bbox):
-    """Sample Great Lakes lake-datum bathymetry at node lon/lat via NOAA DEM_all.
+def read_greatlakes_bathy(lon, lat, data_dir):
+    """Bed elevation (m) at node lon/lat from the bed the run was staged with.
 
-    Returns per-node bed elevation (m, NEGATIVE below the datum); a node outside
-    the lake (land / NoData) is NaN. Raises ArtemisInputError if the AOI carries
-    no lake bathymetry."""
-    import requests
-    from rasterio.io import MemoryFile
+    A node outside the lake (land / NoData) is NaN. Raises ArtemisInputError when
+    no bed was staged at all, which is a staging fault rather than a coverage
+    answer."""
+    from _staged_bed import sample_staged_bed
 
-    ncols = int(np.clip(round((bbox[2] - bbox[0]) * 3000.0), 64, 2500))
-    nrows = int(np.clip(round((bbox[3] - bbox[1]) * 3000.0), 64, 2500))
-    resp = requests.get(_NOAA_DEM_ALL_URL, params={
-        "bbox": ",".join(str(v) for v in bbox),
-        "bboxSR": "4326", "imageSR": "4326",
-        "size": f"{ncols},{nrows}",
-        "format": "tiff", "pixelType": "F32", "f": "image",
-    }, headers={"User-Agent": _UA}, timeout=180)
-    resp.raise_for_status()
-    body = resp.content
-    if body[:4] not in (b"II*\x00", b"MM\x00*"):
-        raise ArtemisInputError(
-            "ARTEMIS_BATHY_UNAVAILABLE",
-            f"NOAA DEM_all exportImage returned non-tiff over {bbox}: {body[:160]!r}")
-    with MemoryFile(body) as mf, mf.open() as src:
-        samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
-                        dtype=float).ravel()
-        nod = src.nodata
-        if nod is not None:
-            samp[samp == nod] = np.nan
-    samp[~np.isfinite(samp)] = np.nan
-    samp[samp < -1.0e4] = np.nan
-    return samp
+    try:
+        return sample_staged_bed(lon, lat, data_dir)
+    except FileNotFoundError as exc:
+        raise ArtemisInputError("ARTEMIS_BATHY_UNAVAILABLE", str(exc)) from exc
 
 
 def _bbox_utm_epsg(bbox):
@@ -595,59 +569,49 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
     Yg = np.tile(ys, nx)
     back = Transformer.from_crs(epsg, 4326, always_xy=True)
     lon, lat = back.transform(Xg + x0m, Yg + y0m)
-    bed = fetch_greatlakes_bathy(np.asarray(lon), np.asarray(lat), bbox)
+    bed = read_greatlakes_bathy(np.asarray(lon), np.asarray(lat), data_dir)
     min_depth = max(float(cfg.min_depth_m), 0.1)
     wet_grid = np.isfinite(bed) & (bed < -min_depth)
     n_wet = int(wet_grid.sum())
     if n_wet < 0.25 * bed.size:
         raise ArtemisInputError(
             "ARTEMIS_BATHY_UNAVAILABLE",
-            f"NOAA lake bathymetry covered only {n_wet}/{bed.size} grid nodes "
+            f"the staged lake bathymetry covered only {n_wet}/{bed.size} grid nodes "
             f">{min_depth} m deep over {bbox} -- the AOI is mostly land/shallow. "
             "Pick an OPEN-WATER harbour approach AOI (few interior land nodes) "
             "inside a Great Lake.")
 
-    # Structure geometry as LOCAL-frame UTM segments. Three sources, by priority:
-    #   1. breakwater_polylines -- the REAL surveyed structure (e.g. OSM man_made=
-    #      breakwater / pier ways): mesh the ACTUAL geometry as a thin solid barrier
-    #      (many segments; marching cells route the mesh around the 1-cell slit).
-    #   2. breakwater -- a single user-supplied (lon0,lat0,lon1,lat1) segment.
-    #   3. else -- a labeled schematic demo segment attached to the west AOI edge
-    #      (a floating internal barrier isolates stray boundary nodes and aborts
-    #      FRONT2, so the demo attaches to the edge; for the demo the incident wave
-    #      is forced perpendicular (+Y) so the geometric shadow sits due-north).
+    # Structure geometry as LOCAL-frame UTM segments. The DECK is the only
+    # authority: a polyline set, or one segment, or NOTHING. An unnamed structure
+    # means the harbour approach is open water, and the incident heading is always
+    # the declared one.
     real_struct = bool(cfg.breakwater_polylines)
-    demo_bw = (not real_struct
-               and not (cfg.breakwater and len(cfg.breakwater) == 4))
+    wdir = float(cfg.wave_dir_deg)
     if real_struct:
         segs = _polylines_to_segments(cfg.breakwater_polylines, tr, x0m, y0m)
-        wdir = float(cfg.wave_dir_deg)
         bw_label = (f"REAL surveyed breakwater (as mapped in OpenStreetMap "
                     f"man_made=breakwater/pier, {len(segs)} segments) meshed as a "
                     f"thin solid reflecting barrier over real NOAA lake bathymetry")
-    elif not demo_bw:
+    elif cfg.breakwater and len(cfg.breakwater) == 4:
         bx0, by0 = tr.transform(cfg.breakwater[0], cfg.breakwater[1])
         bx1, by1 = tr.transform(cfg.breakwater[2], cfg.breakwater[3])
         segs = np.asarray([(bx0 - x0m, by0 - y0m, bx1 - x0m, by1 - y0m)],
                           dtype=float)
         bw_label = "user-supplied breakwater segment"
-        wdir = float(cfg.wave_dir_deg)
     else:
-        y_bw = Ly * 0.55
-        tip_x = Lx * 0.5
-        segs = np.asarray([(0.0, y_bw, tip_x, y_bw)], dtype=float)
-        wdir = 90.0                      # +Y, perpendicular to the barrier
-        bw_label = ("schematic demo breakwater (labeled): a thin solid semi-"
-                    "infinite barrier from the west AOI edge to an interior tip, "
-                    "the incident wave normal to it -- not a surveyed structure")
+        segs = np.zeros((0, 4), dtype=float)
+        bw_label = "no structure -- open water"
 
     def _dist_fn(px, py):
-        # min distance to ANY structure segment (single-seg + demo are 1-element).
+        # min distance to ANY structure segment; with none, every node is far.
+        if segs.size == 0:
+            return np.full(np.shape(px), np.inf, dtype=float)
         return _dist_to_segments(px, py, segs)
 
     # proof-norm-#9 REMOVED control: same bathy + the same split geometry, but the
     # structure is NOT a solid barrier (no masked line, no reflecting faces).
-    structure_solid = not (real_struct and bool(cfg.remove_structure))
+    structure_solid = segs.size > 0 and not (
+        real_struct and bool(cfg.remove_structure))
 
     # mask: wet AND not on the structure line (thin barrier ~1 cell wide)
     on_bw_grid = (_dist_fn(Xg, Yg) <= dx * 0.6) if structure_solid \
@@ -694,41 +658,22 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
                 depth_max_m=round(float(-np.nanmin(bed[wet_grid])), 1),
                 bathy_label="real NOAA Great Lakes lake-datum bathymetry",
                 structure_present=bool(structure_solid),
-                bw_label=(bw_label if structure_solid
+                bw_label=(bw_label if segs.size == 0 or structure_solid
                           else bw_label + " -- REMOVED (proof-norm-#9 control)"))
 
-    # in-worker bed-COG input surface: write the sampled lake-datum bed the solve
-    # ran on (the RAW bathymetry at the full-grid nodes, NaN off the wet lake) as a
-    # 4326 COG so the composer surfaces it as a role=context input. Best-effort: a
-    # bed-COG hiccup NEVER voids a CORRECT END solve.
-    try:
-        import _bed_cog as _BC  # noqa: WPS433 -- worker payload sibling
-
-        bed_raw = np.where(wet_grid, bed, np.nan)
-        bed_cog_meta = _BC.write_bed_cog_lonlat(
-            lon, lat, bed_raw, os.path.join(data_dir, _BC.BED_COG_FILENAME))
-        bed_cog_meta["bed_cog_source"] = "noaa_greatlakes"
-        meta.update(bed_cog_meta)
-        LOG.info("artemis bed COG written: %s", bed_cog_meta)
-    except Exception as exc:  # noqa: BLE001 -- input surfacing is never fatal
-        LOG.warning("artemis bed COG write failed (non-fatal): %s", exc)
-    if demo_bw:
-        # semi-infinite west-attached barrier + normal incidence: the geometric
-        # shadow is the idealized split (downwave of + laterally behind the tip).
-        return _run_diffraction(cfg, mesh, data_dir, run_id, classify,
-                                H0=H0, T=float(cfg.wave_period_s), h=max(h_mean, 1.0),
-                                wdir=wdir, x_tip=tip_x, y_bw=y_bw, dx=dx,
-                                bathy_label=meta["bathy_label"], utm_epsg=epsg,
-                                bbox=bbox, x0m=x0m, y0m=y0m, back=back,
-                                bw_mid=None, wave_uv=None, extra=meta)
-    # real surveyed structure OR user segment: the projection split about the
-    # structure centroid (all segment endpoints, local frame). Sheltered = downwave
-    # of the barrier along the incident direction; exposed = the lit approach.
+    # The projection origin for the sheltered/exposed split and the transect:
+    # the structure centroid when there IS one, the domain centre when there is
+    # not. With no barrier the two sides of that line are the same open water, so
+    # the split reports no shelter -- which is the honest reading, where a mean
+    # over an empty selection would have been a silent NaN.
     wrad = np.radians(wdir)
     ux, uy = np.cos(wrad), np.sin(wrad)
-    allx = np.concatenate([segs[:, 0], segs[:, 2]])
-    ally = np.concatenate([segs[:, 1], segs[:, 3]])
-    bw_mid = (float(allx.mean()), float(ally.mean()))
+    if segs.size:
+        allx = np.concatenate([segs[:, 0], segs[:, 2]])
+        ally = np.concatenate([segs[:, 1], segs[:, 3]])
+        bw_mid = (float(allx.mean()), float(ally.mean()))
+    else:
+        bw_mid = (0.5 * float(Lx), 0.5 * float(Ly))
     meta["n_structure_segments"] = int(len(segs))
     return _run_diffraction(cfg, mesh, data_dir, run_id, classify,
                             H0=H0, T=float(cfg.wave_period_s), h=max(h_mean, 1.0),

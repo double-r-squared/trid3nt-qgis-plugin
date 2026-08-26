@@ -34,10 +34,13 @@ from trid3nt_server.workflows.shared.publish_product_layer import (
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    great_lake_for,
     mesh_resolution_label,
     mesh_sizing_provenance,
+    real_lake_bathy_label,
+    solves_on_real_bed,
+    staged_bed_inputs,
 )
-from .wave import great_lake_for, real_lake_bathy_label
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.stratified")
 
@@ -58,9 +61,10 @@ _OUTPUTS = [
 ]
 
 
-#: A salt wedge is the ANALYTIC lock-exchange V&V (a real estuary would need a
-#: tidal liquid boundary), so it never takes the real-bathymetry path.
-_IDEALIZED_ONLY_MODES = ("salt_wedge",)
+#: The 3D questions that HAVE real geography. A salt wedge is the ANALYTIC
+#: lock-exchange V&V (a real estuary would need a tidal liquid boundary), so it
+#: is absent here and never takes the real-bathymetry path.
+_REAL_BED_MODES = ("stratification", "wind_circulation")
 
 
 async def write_stratified_deck(
@@ -77,6 +81,7 @@ async def write_stratified_deck(
     mesh_resolution_m: float | None = None,
     sim_duration_hours: float = 5.0,
     bathy_source: str = "auto",
+    bed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker's 3D config + the run meta."""
     from trid3nt_server.workflows.telemac.run_telemac import TELEMAC3D_SOLVER_NAME
@@ -87,10 +92,10 @@ async def write_stratified_deck(
         DEFAULT_REAL_RES_M,
     )
 
-    asked = str(bathy_source or "auto").strip().lower()
     lake = great_lake_for(float(aoi["lon"]), float(aoi["lat"]))
-    real = str(flow_mode) not in _IDEALIZED_ONLY_MODES and (
-        asked == "noaa_greatlakes" or (asked == "auto" and lake is not None))
+    real = solves_on_real_bed(bathy_source, domain_kind="lake",
+                              lon=aoi["lon"], lat=aoi["lat"],
+                              mode=flow_mode, real_bed_modes=_REAL_BED_MODES)
     resolution = (float(mesh_resolution_m) if mesh_resolution_m is not None
                   else (DEFAULT_REAL_RES_M if real else DEFAULT_IDEALIZED_RES_M))
 
@@ -112,6 +117,7 @@ async def write_stratified_deck(
         config["bbox"] = [round(float(v), 4) for v in aoi["bbox"]]
     return {
         "config": config,
+        "inputs": staged_bed_inputs(bed, real=real, section=_SECTION),
         "run_tag": new_ulid(),
         "section": _SECTION,
         "prefix": _PREFIX,

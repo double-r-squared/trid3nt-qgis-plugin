@@ -38,12 +38,14 @@ from trid3nt_server.workflows.shared.publish_product_layer import (
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    great_lake_for,
     mesh_resolution_label,
     mesh_sizing_provenance,
+    real_lake_bathy_label,
     solved_domain_bbox,
-    surface_in_worker_bed_input,
+    solves_on_real_bed,
+    staged_bed_inputs,
 )
-from .wave import great_lake_for, real_lake_bathy_label
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.agitation")
 
@@ -56,7 +58,7 @@ _PREFIX = "artemis"
 _RESULT = "agit_field.slf"
 _OUTPUTS = [
     "agit_field.slf", "res_agitation.slf", "geo_agit.slf", "bc_agit.cli",
-    "art_agit.cas", "full_listing.log", "artemis_agit.log", "bed_bathymetry.tif",
+    "art_agit.cas", "full_listing.log", "artemis_agit.log",
     "telemac_metrics.json",
 ]
 
@@ -79,6 +81,7 @@ async def write_agitation_deck(
     structure: Any = None,
     mesh_resolution_m: float | None = None,
     bathy_source: str = "auto",
+    bed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker's agitation config + run meta.
 
@@ -96,10 +99,10 @@ async def write_agitation_deck(
         DEFAULT_REAL_RES_M,
     )
 
-    asked = str(bathy_source or "auto").strip().lower()
     lake = great_lake_for(float(aoi["lon"]), float(aoi["lat"]))
-    real = str(wave_mode) in _REAL_BATHY_MODES and (
-        asked == "noaa_greatlakes" or (asked == "auto" and lake is not None))
+    real = solves_on_real_bed(bathy_source, domain_kind="lake",
+                              lon=aoi["lon"], lat=aoi["lat"],
+                              mode=wave_mode, real_bed_modes=_REAL_BATHY_MODES)
     resolution = (float(mesh_resolution_m) if mesh_resolution_m is not None
                   else (DEFAULT_REAL_RES_M if real else DEFAULT_IDEALIZED_RES_M))
     # Reading a supplied vector is file I/O; it must not run on the loop.
@@ -127,6 +130,7 @@ async def write_agitation_deck(
             for line in polylines]
     return {
         "config": config,
+        "inputs": staged_bed_inputs(bed, real=real, section=_SECTION),
         "run_tag": new_ulid(),
         "section": _SECTION,
         "prefix": _PREFIX,
@@ -335,12 +339,6 @@ async def publish_agitation_products(*, deck: dict[str, Any],
     # fetcher that produced it emitted it, or the user drew it - and staging a
     # second copy of somebody else's layer is the double-emission the input
     # guard exists to catch.
-    await surface_in_worker_bed_input(
-        emitter, run_metrics=metrics, run_id=run_id,
-        name=(f"Input: lake bed bathymetry ({reach}, NOAA Great Lakes lake-datum, "
-              "in-worker)"),
-        layer_id_prefix="input-lake-bed")
-
     logger.info("telemac artemis complete run_id=%s domain=%s mode=%s kd_max=%.3g "
                 "sheltered=%s exposed=%s uri=%s", run_id, reach, deck["wave_mode"],
                 published.kd_max, published.kd_sheltered, published.kd_exposed,

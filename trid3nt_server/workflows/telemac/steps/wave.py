@@ -35,16 +35,18 @@ from trid3nt_server.workflows.shared.publish_product_layer import (
 
 from .open_water import (
     download_open_water_result,
+    great_lake_for,
     mesh_resolution_label,
     mesh_sizing_provenance,
+    real_lake_bathy_label,
     solved_domain_bbox,
-    surface_in_worker_bed_input,
+    solves_on_real_bed,
+    staged_bed_inputs,
 )
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.wave")
 
-__all__ = ["GREAT_LAKES", "Wave", "great_lake_for", "publish_wave_products",
-           "real_lake_bathy_label", "write_wave_deck"]
+__all__ = ["Wave", "publish_wave_products", "write_wave_deck"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
@@ -56,41 +58,8 @@ _PREFIX = "tomawac"
 _RESULT = "res_wave.slf"
 _OUTPUTS = [
     "res_wave.slf", "geo_wave.slf", "bc_wave.cli", "tom_wave.cas",
-    "full_listing.log", "tomawac_wave.log", "bed_bathymetry.tif",
-    "telemac_metrics.json",
+    "full_listing.log", "tomawac_wave.log", "telemac_metrics.json",
 ]
-
-#: Rough lon/lat extents of the five Great Lakes' open water. The gate on the
-#: REAL-bathymetry path: the NOAA lake-datum grids cover these and nothing else,
-#: so an AOI outside them has no real bed to sample and says so.
-GREAT_LAKES: dict[str, tuple[float, float, float, float]] = {
-    "superior": (-92.2, 46.4, -84.3, 49.1),
-    "michigan": (-88.1, 41.6, -84.7, 46.1),
-    "huron": (-84.8, 43.0, -79.7, 46.3),
-    "erie": (-83.5, 41.3, -78.8, 42.9),
-    "ontario": (-79.9, 43.2, -76.0, 44.3),
-}
-
-
-
-def real_lake_bathy_label(lake: str | None) -> str:
-    """What the REAL Great Lakes bed IS, said once.
-
-    All three lake-capable open-water templates sample the same NOAA lake-datum
-    grid, so all three said this same sentence in their own words. The IDEALIZED
-    half of each label stays with its module: an analytic seiche basin, a
-    Berkhoff shoal and a lock-exchange channel are different physics and deserve
-    different sentences.
-    """
-    return f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
-
-
-def great_lake_for(lon: float, lat: float) -> str | None:
-    """Which Great Lake this point sits in, or ``None`` for anywhere else."""
-    for name, (x0, y0, x1, y1) in GREAT_LAKES.items():
-        if x0 <= lon <= x1 and y0 <= lat <= y1:
-            return name
-    return None
 
 
 async def write_wave_deck(
@@ -106,6 +75,7 @@ async def write_wave_deck(
     mesh_resolution_m: float | None = None,
     sim_duration_hours: float = 4.0,
     bathy_source: str = "auto",
+    bed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker's wave config + the run meta.
 
@@ -121,9 +91,9 @@ async def write_wave_deck(
         DEFAULT_REAL_RES_M,
     )
 
-    asked = str(bathy_source or "auto").strip().lower()
     lake = great_lake_for(float(aoi["lon"]), float(aoi["lat"]))
-    real = asked == "noaa_greatlakes" or (asked == "auto" and lake is not None)
+    real = solves_on_real_bed(bathy_source, domain_kind="lake",
+                              lon=aoi["lon"], lat=aoi["lat"])
     resolution = (float(mesh_resolution_m) if mesh_resolution_m is not None
                   else (DEFAULT_REAL_RES_M if real else DEFAULT_IDEALIZED_RES_M))
     friction = (str(wave_mode) == "bottom_friction" if bottom_friction is None
@@ -148,6 +118,7 @@ async def write_wave_deck(
         config["bbox"] = [round(float(v), 4) for v in aoi["bbox"]]
     return {
         "config": config,
+        "inputs": staged_bed_inputs(bed, real=real, section=_SECTION),
         "run_tag": new_ulid(),
         "section": _SECTION,
         "prefix": _PREFIX,
@@ -278,12 +249,6 @@ async def publish_wave_products(*, deck: dict[str, Any],
             "fetch_curve_km": list(metrics.get("chart_x_km") or []) or None,
             "fetch_curve_hs_m": list(metrics.get("chart_hs_m") or []) or None,
         })
-
-    await surface_in_worker_bed_input(
-        emitter, run_metrics=metrics, run_id=run_id,
-        name=(f"Input: lake bed bathymetry ({reach}, NOAA Great Lakes lake-datum, "
-              "in-worker)"),
-        layer_id_prefix="input-lake-bed")
 
     logger.info("telemac tomawac complete run_id=%s domain=%s mode=%s hs_max=%.4g "
                 "upwind=%s downwind=%s uri=%s", run_id, reach, deck["wave_mode"],

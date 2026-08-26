@@ -37,14 +37,20 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
 __all__ = [
     "mesh_resolution_label",
     "OpenWaterError",
+    "STAGED_BED_DEST",
     "dispatch_and_wait",
+    "fetch_domain_bed",
+    "GREAT_LAKES",
+    "great_lake_for",
+    "real_lake_bathy_label",
+    "solves_on_real_bed",
+    "staged_bed_inputs",
     "mesh_sizing_provenance",
     "SolveOpenWater",
     "download_open_water_result",
     "solve_open_water",
     "solved_domain_bbox",
     "stage_open_water_manifest",
-    "surface_in_worker_bed_input",
 ]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
@@ -62,8 +68,166 @@ class OpenWaterError(DeclarativeError):
     error_code = "TELEMAC_OPEN_WATER_FAILED"
 
 
+#: Where a staged bed raster lands inside the worker's run directory. The worker
+#: READS this name; nothing in the image knows where the bytes came from.
+STAGED_BED_DEST: str = "bed_source.tif"
+
+#: Rough lon/lat extents of the five Great Lakes' open water. The gate on the
+#: REAL-bathymetry path: the NOAA lake-datum grids cover these and nothing else,
+#: so an AOI outside them has no real bed to sample and says so.
+GREAT_LAKES: dict[str, tuple[float, float, float, float]] = {
+    "superior": (-92.2, 46.4, -84.3, 49.1),
+    "michigan": (-88.1, 41.6, -84.7, 46.1),
+    "huron": (-84.8, 43.0, -79.7, 46.3),
+    "erie": (-83.5, 41.3, -78.8, 42.9),
+    "ontario": (-79.9, 43.2, -76.0, 44.3),
+}
+
+
+def great_lake_for(lon: float, lat: float) -> str | None:
+    """Which Great Lake this point sits in, or ``None`` for anywhere else."""
+    for name, (x0, y0, x1, y1) in GREAT_LAKES.items():
+        if x0 <= lon <= x1 and y0 <= lat <= y1:
+            return name
+    return None
+
+
+def real_lake_bathy_label(lake: str | None) -> str:
+    """What the REAL Great Lakes bed IS, said once.
+
+    All three lake-capable open-water templates sample the same NOAA lake-datum
+    grid, so all three said this same sentence in their own words. The IDEALIZED
+    half of each label stays with its module: an analytic seiche basin, a
+    Berkhoff shoal and a lock-exchange channel are different physics and deserve
+    different sentences.
+    """
+    return f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
+
+
+def solves_on_real_bed(bathy_source: Any, *, domain_kind: str,
+                       lon: float | None = None,
+                       lat: float | None = None,
+                       mode: Any = None,
+                       real_bed_modes: tuple[str, ...] | None = None) -> bool:
+    """Whether this domain is solved on FETCHED bed data rather than an authored one.
+
+    The producer and the deck writer both have to answer this, and they have to
+    agree: a producer that fetched where the deck went idealized stages a raster
+    nothing reads, and the reverse builds a real domain with no bed. One
+    definition, two readers.
+
+    Two gates, in order. ``real_bed_modes`` is the set of question modes that HAVE
+    real geography at all - an analytic seiche ladder, a Berkhoff shoal and a
+    lock-exchange channel are verification domains whose bed is authored by the
+    physics, so no bathymetry request makes them real. Then the source gate: a
+    ``coast`` domain is real unless it was explicitly asked to be synthetic, and a
+    ``lake`` domain is real when the lake bed was asked for, or when auto-selection
+    finds the AOI inside one of the Great Lakes the grids cover.
+    """
+    if real_bed_modes is not None and str(mode) not in real_bed_modes:
+        return False
+    asked = str(bathy_source or "auto").strip().lower()
+    if domain_kind == "coast":
+        return asked != "synthetic"
+    if domain_kind != "lake":
+        raise OpenWaterError(
+            f"open-water domain_kind {domain_kind!r} is not a declared kind "
+            "(coast | lake).", error_code="TELEMAC_PARAMS_INVALID")
+    if asked == "noaa_greatlakes":
+        return True
+    if asked != "auto" or lon is None or lat is None:
+        return False
+    return great_lake_for(float(lon), float(lat)) is not None
+
+
+async def fetch_domain_bed(*, bathy_source: Any = "auto",
+                           domain_kind: str = "lake",
+                           mode: Any = None,
+                           real_bed_modes: tuple[str, ...] | None = None,
+                           px_per_deg: float = 1800.0,
+                           max_px_per_side: int = 3000) -> dict[str, Any]:
+    """The BED an open-water domain is solved on, fetched over the acquired AOI.
+
+    This is the declared producer that replaced four copies of an in-container
+    ``requests.get`` against the NOAA NCEI mosaic. Routing it agent-side is what
+    gives the bed everything a container fetch could never have: the emit-on-fetch
+    input layer (the bathymetry NATE asked to SEE, continuous rather than a lattice
+    of sampled nodes), the read-through cache, the provenance record and the
+    router's retry doctrine.
+
+    ``px_per_deg`` is the SAMPLE LATTICE the builder's nodes are read against, so
+    it is the builder's fact and travels from the template, not a default here.
+    The bbox is the BOUND DOMAIN's, rounded exactly as the deck rounds it: the
+    raster a node is sampled from has to be the one the deck describes, and a bbox
+    that disagreed by a rounding step would sample a grid offset from the mesh.
+    The lake gate reads the domain's CENTRE, while the deck reads the AOI's own
+    point; for a drawn or passed extent those are the same point, and for a
+    geocoded place they differ by the AOI's 4-decimal rounding. A disagreement is
+    therefore possible only within metres of a lake's edge, and it surfaces as the
+    staging refusal in :func:`staged_bed_inputs`, never as a solve on a bed that
+    is not there.
+
+    An IDEALIZED domain - an analytic beach, a seiche basin, a Berkhoff shoal -
+    has no geography to sample and fetches NOTHING: the returned record says so
+    and the manifest stages no input.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.lib import current_domain
+
+    domain = current_domain()
+    extent = None if domain is None else domain.bbox
+    if not extent or len(tuple(extent)) != 4:
+        raise OpenWaterError(
+            "the domain bed cannot be fetched: no domain with an extent is bound.",
+            error_code="TELEMAC_PARAMS_INVALID")
+    bbox = [round(float(v), 4) for v in extent]
+    if not solves_on_real_bed(bathy_source, domain_kind=domain_kind,
+                              lon=0.5 * (bbox[0] + bbox[2]),
+                              lat=0.5 * (bbox[1] + bbox[3]),
+                              mode=mode, real_bed_modes=real_bed_modes):
+        return {"uri": None, "bbox": bbox, "source": "authored"}
+    entry = TOOL_REGISTRY.get("fetch_ncei_dem_mosaic")
+    if entry is None:
+        raise OpenWaterError("fetch_ncei_dem_mosaic is not registered.",
+                             error_code="TELEMAC_STAGING_FAILED")
+    layer = await asyncio.to_thread(
+        lambda: entry.fn(bbox=bbox, px_per_deg=float(px_per_deg),
+                         max_px_per_side=int(max_px_per_side),
+                         purpose="TELEMAC open-water bed elevation at mesh nodes"))
+    uri = getattr(layer, "uri", None)
+    if not uri:
+        raise OpenWaterError(
+            f"the domain bed fetch returned no raster for bbox={bbox}.",
+            error_code="TELEMAC_STAGING_FAILED")
+    return {"uri": str(uri), "bbox": bbox, "px_per_deg": float(px_per_deg),
+            "source": "noaa_ncei_dem_all",
+            "name": getattr(layer, "name", None)}
+
+
+def staged_bed_inputs(bed: Mapping[str, Any] | None, *, real: bool,
+                      section: str) -> list[dict[str, str]]:
+    """The manifest ``inputs`` row that puts the fetched bed in the run directory.
+
+    An idealized domain stages nothing, because it samples nothing. A REAL domain
+    with no bed raster is a refusal rather than a silent fall-through: the worker
+    holds no fetcher any more, so a missing staged bed would surface as a solve on
+    whatever the builder does with an absent file rather than as the staging
+    failure it is.
+    """
+    if not real:
+        return []
+    uri = (bed or {}).get("uri")
+    if not uri:
+        raise OpenWaterError(
+            f"the TELEMAC {section} domain is solved on real bathymetry but no bed "
+            "raster was staged; the worker fetches nothing of its own, so there is "
+            "no bed to sample.", error_code="TELEMAC_STAGING_FAILED")
+    return [{"gs_uri": str(uri), "dest": STAGED_BED_DEST}]
+
+
 def stage_open_water_manifest(*, section: str, config: dict[str, Any],
                               run_tag: str, outputs: list[str],
+                              inputs: list[dict[str, str]] | None = None,
                               prefix: str | None = None) -> str:
     """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
 
@@ -74,9 +238,11 @@ def stage_open_water_manifest(*, section: str, config: dict[str, Any],
     the harbour module to ``agitation`` under ``artemis/``. Collapsing the two
     into one name is how a manifest lands somewhere the worker looks and carries a
     key it does not read, which is a silent fall-through to a different pipeline
-    rather than an error. The rest of the envelope - ``run_id``, an empty
-    ``inputs`` because these pipelines self-fetch, an empty ``telemac_args``
-    because the image CMD drives the entrypoint - is the same for all of them.
+    rather than an error.
+
+    ``inputs`` is what the launcher stages into the run directory before the
+    container starts, ``{gs_uri, dest}`` per entry. It carries the bed these
+    domains used to fetch for themselves, which is why the worker needs no network.
     """
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -85,7 +251,7 @@ def stage_open_water_manifest(*, section: str, config: dict[str, Any],
             error_code="TELEMAC_STAGING_FAILED")
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
-    manifest = {section: config, "run_id": run_tag, "inputs": [],
+    manifest = {section: config, "run_id": run_tag, "inputs": list(inputs or []),
                 "telemac_args": [], "outputs": list(outputs)}
     key = f"{prefix or section}/{run_tag}/manifest.json"
     _get_s3_client().put_object(
@@ -176,7 +342,8 @@ async def solve_open_water(*, deck: dict[str, Any],
     run_tag = deck["run_tag"]
     manifest_uri = await asyncio.to_thread(
         stage_open_water_manifest, section=section, config=deck["config"],
-        run_tag=run_tag, outputs=deck["outputs"], prefix=deck.get("prefix"))
+        run_tag=run_tag, outputs=deck["outputs"], inputs=deck.get("inputs"),
+        prefix=deck.get("prefix"))
     logger.info("telemac %s staged manifest run_tag=%s name=%s -> %s",
                 section, run_tag, deck["config"].get("name"), manifest_uri)
 
@@ -262,33 +429,6 @@ def download_open_water_result(run_id: str, basename: str,
             f"TELEMAC run {run_id} completed but s3://{runs_bucket}/{run_id}/"
             f"{basename} was not downloadable: {exc}", error_code=error_code) from exc
     return local
-
-
-async def surface_in_worker_bed_input(emitter: Any, *, run_metrics: dict[str, Any],
-                                      run_id: str, name: str,
-                                      layer_id_prefix: str) -> bool:
-    """BEST-EFFORT: surface an in-worker-sampled bed COG as a role=context input.
-
-    The emit-on-fetch seam surfaces every AGENT-SIDE router fetch of renderable
-    data, but a bed sampled INSIDE a solver container never touches the router.
-    The worker writes the bed it actually solved on beside the result and records
-    the key; this rides that existing object (NO re-upload). NEVER raises - a
-    missing bed COG must not void a solve.
-    """
-    bed_cog = (run_metrics or {}).get("bed_cog")
-    if emitter is None or not bed_cog:
-        return False
-    try:
-        from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
-
-        return await publish_raster_input_cog(
-            emitter, cog_uri=f"s3://{_get_runs_bucket()}/{run_id}/{bed_cog}",
-            layer_id=f"{layer_id_prefix}-{new_ulid()}", name=name,
-            style_preset="continuous_dem", role="context")
-    except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
-        logger.warning("telemac bed input absent (the solve is unaffected): %s", exc)
-        return False
 
 
 #: The workers report ``dx_m`` rounded to 0.1 m, so any disagreement at or below

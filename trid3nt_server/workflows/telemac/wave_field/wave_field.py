@@ -31,6 +31,9 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
+    D,
+    Data,
+    Fetch,
     Forcing,
     FormGate,
     MeshPolicy,
@@ -53,12 +56,23 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "build_fetch_chart", "plan",
 #: A square box here would model a different fetch than the question asked about.
 _LAKE_HALF_DEG = (0.7, 0.4)
 
+_TSTEPS = "trid3nt_server.workflows.telemac.steps"
 
-#: NO declared Data. The wave bed is sampled INSIDE the solver container from the
-#: NOAA lake-datum grids, so there is no agent-side artifact to declare - which is
-#: itself a queued item (the in-worker fetch migration), not a gap in this
-#: declaration.
-DATA = ()
+
+#: The BED, as declared reference data. It used to be sampled INSIDE the solver
+#: container, which put the one raster the physics rests on outside the emit,
+#: cache, provenance and retry the router gives every other fetch. Declaring it
+#: here is what puts the bathymetry on the canvas as a continuous surface and
+#: lets the worker run with no network at all: the producer fetches, the manifest
+#: stages the raster into the run directory, and the builder reads a file.
+#: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
+#: against - so it travels from the template rather than being a router default.
+DATA = (
+    Data("bed", Fetch.tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+                           bathy_source=P.bathy_source,
+                           domain_kind="lake", px_per_deg=1200.0,
+                           max_px_per_side=2000)),
+)
 
 
 # -- the binding blocks --------------------------------------------------- #
@@ -76,7 +90,8 @@ PHYSICS = Physics("wave_spectrum",
                   current_speed_mps=P.current_speed_mps,
                   bottom_friction=P.bottom_friction,
                   sim_duration_hours=P.sim_duration_hours,
-                  bathy_source=P.bathy_source)
+                  bathy_source=P.bathy_source,
+                  bed=D.bed)
 
 MESH = MeshPolicy(resolution=None, target_edge_m=P.target_resolution_m)
 

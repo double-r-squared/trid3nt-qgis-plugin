@@ -1540,17 +1540,26 @@ def _categorical_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) ->
 def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str, Any]) -> tuple[int, int]:
     """ImageServer ``size`` (width_px, height_px) for ``bbox`` at the native grid.
 
-    Approximates m/degree at the bbox midpoint latitude (the standard ArcGIS
-    ImageServer sizing the landfire/usfs twins used), rounds to the native cell,
-    and clamps per axis. Declarative knobs: ``native_cell_m`` / ``px_min`` /
-    ``px_max``.
+    Two declared sizings. ``px_per_deg`` asks for a fixed pixel density per
+    DEGREE on both axes -- an angular grid, so the cell is not square away from
+    the equator, and a caller that wants the sample lattice reproduced exactly
+    (rather than a metric cell) declares this one; the density itself may be a
+    request param, so a param of the same name overrides the spec default.
+    Otherwise the metric sizing applies: m/degree at the bbox midpoint latitude
+    rounded to ``native_cell_m``. Both clamp per axis to ``px_min`` / ``px_max``.
     """
     import math
 
-    cell_m = float(ingest.get("native_cell_m", 30.0))
     px_min = int(ingest.get("px_min", 16))
     px_max = int(ingest.get("px_max", 4096))
     min_lon, min_lat, max_lon, max_lat = bbox
+    px_per_deg = ingest.get("px_per_deg")
+    if px_per_deg is not None:
+        density = float(px_per_deg)
+        width_px = max(px_min, min(px_max, int(round((max_lon - min_lon) * density))))
+        height_px = max(px_min, min(px_max, int(round((max_lat - min_lat) * density))))
+        return width_px, height_px
+    cell_m = float(ingest.get("native_cell_m", 30.0))
     mid_lat = 0.5 * (min_lat + max_lat)
     m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
     width_m = (max_lon - min_lon) * m_per_deg_lon
@@ -1580,11 +1589,15 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     img = ingest.get("imageserver", {})
     bbox = tuple(params["bbox"])
 
-    # service name resolved from a request param (the layer -> ImageServer map).
-    svc_cfg = img.get("service_by_param", {})
-    svc_param = svc_cfg.get("param")
-    svc_map = svc_cfg.get("map", {})
-    service = svc_map.get(params.get(svc_param))
+    # The service is either FIXED on the spec (one mosaic, no choice to offer) or
+    # resolved from a request param (the layer -> ImageServer map).
+    service = img.get("service")
+    svc_param = None
+    if service is None:
+        svc_cfg = img.get("service_by_param", {})
+        svc_param = svc_cfg.get("param")
+        svc_map = svc_cfg.get("map", {})
+        service = svc_map.get(params.get(svc_param))
     if service is None:
         # A param outside the map is an input defect (mirrors the twin's layer
         # guard); the enum gate already rejected it, so this is defense-in-depth.
@@ -1596,7 +1609,14 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
     base = (endpoint.url or endpoint.url_template or "").rstrip("/")
     url = f"{base}/{service}/ImageServer/exportImage"
 
-    width_px, height_px = _imageserver_size(bbox, img)
+    # A caller may declare the sample lattice itself (px_per_deg / max_px_per_side);
+    # a request value overrides the spec default so one spec serves callers whose
+    # grids differ, without either of them re-implementing the request.
+    sizing = dict(img)
+    for knob, key in (("px_per_deg", "px_per_deg"), ("max_px_per_side", "px_max")):
+        if params.get(knob) is not None:
+            sizing[key] = params[knob]
+    width_px, height_px = _imageserver_size(bbox, sizing)
     query = dict(img.get("export_query", {}))
     query["bbox"] = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
     query["size"] = f"{width_px},{height_px}"

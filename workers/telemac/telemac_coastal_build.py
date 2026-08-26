@@ -2,7 +2,7 @@
 
 Builds a coastal open-water TELEMAC-2D domain the same family way the TOMAWAC /
 ARTEMIS wave modules build a lake / harbour grid (``tomawac_build.build_grid`` +
-``_bed_cog``): a regular UTM grid over a coastal bbox, real NOAA topobathy at the
+a regular UTM grid over a coastal bbox, the staged topobathy at the
 nodes, ONE seaward OPEN (liquid, free-surface-imposed) boundary edge and closed
 (solid) land edges. The seaward boundary water level is driven in TIME by a
 LIQUID BOUNDARIES FILE authored from a NOAA CO-OPS tide/surge series
@@ -58,16 +58,6 @@ LOG = logging.getLogger("telemac_coastal")
 #: result mesh lands on the domain rather than at the UTM false origin, and
 #: echoes the origin in the metrics.
 COASTAL_PARSER_VERSION = "coastal-tidal-4"
-
-#: NOAA NGDC DEM_all topobathy mosaic ImageServer -- the SAME real-bathymetry
-#: source the TOMAWAC lake path samples (negative below the DEM's own vertical
-#: datum = bathymetry, positive = land topo; over US coasts that datum is
-#: NAVD 88); covers US coastal waters + estuaries at node lon/lat.
-_NOAA_DEM_ALL_URL = (
-    "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/"
-    "ImageServer/exportImage"
-)
-_UA = "trid3nt-local-coastal (agent@trid3nt.dev)"
 
 #: grid guardrails (mirror the TOMAWAC lake grid budget).
 GRID_H_FLOOR_M = 20.0
@@ -193,37 +183,18 @@ def _build_grid(Lx: float, Ly: float, dx: float):
                 xs=xs, ys=ys, Lx=Lx, Ly=Ly, dx=dx)
 
 
-def fetch_demall_bed(lon, lat, bbox, timeout: float = 180.0):
-    """Sample NOAA DEM_all topobathy at node lon/lat (m, on the DEM's own datum - NAVD 88 for the NCEI CUDEM tiles that serve US coasts).
+def read_staged_bed(lon, lat, data_dir):
+    """Bed elevation (m) at node lon/lat from the bed the run was staged with.
 
-    exportImage returns a bbox F32 GeoTIFF; a node off-coverage / NoData is NaN.
-    Same call family as ``tomawac_build.fetch_greatlakes_bathy``."""
-    import requests
-    from rasterio.io import MemoryFile
+    Positive up on the staged raster's own vertical datum; a node off coverage is
+    NaN. Raises CoastalInputError when no bed was staged at all, which is a
+    staging fault rather than a coverage answer."""
+    from _staged_bed import sample_staged_bed
 
-    ncols = int(np.clip(round((bbox[2] - bbox[0]) * 1800.0), 64, 3000))
-    nrows = int(np.clip(round((bbox[3] - bbox[1]) * 1800.0), 64, 3000))
-    resp = requests.get(_NOAA_DEM_ALL_URL, params={
-        "bbox": ",".join(str(v) for v in bbox),
-        "bboxSR": "4326", "imageSR": "4326",
-        "size": f"{ncols},{nrows}",
-        "format": "tiff", "pixelType": "F32", "f": "image",
-    }, headers={"User-Agent": _UA}, timeout=timeout)
-    resp.raise_for_status()
-    body = resp.content
-    if body[:4] not in (b"II*\x00", b"MM\x00*"):
-        raise CoastalInputError(
-            "COASTAL_BATHY_UNAVAILABLE",
-            f"NOAA DEM_all exportImage returned non-tiff over {bbox}: {body[:160]!r}")
-    with MemoryFile(body) as mf, mf.open() as src:
-        samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
-                        dtype=float).ravel()
-        nod = src.nodata
-        if nod is not None:
-            samp[samp == nod] = np.nan
-    samp[~np.isfinite(samp)] = np.nan
-    samp[samp < -1.0e4] = np.nan
-    return samp
+    try:
+        return sample_staged_bed(lon, lat, data_dir)
+    except FileNotFoundError as exc:
+        raise CoastalInputError("COASTAL_BATHY_UNAVAILABLE", str(exc)) from exc
 
 
 def _synthetic_bed(mesh, cfg: CoastalConfig, ocean_edge: str):
@@ -282,7 +253,7 @@ def _edge_mask(mesh, ocean_edge: str) -> np.ndarray:
     return X >= Lx - dx * 0.5
 
 
-def build_coastal_mesh(cfg: CoastalConfig):
+def build_coastal_mesh(cfg: CoastalConfig, data_dir: str):
     """Regular UTM grid over the coastal bbox with a real (or synthetic) bed and
     ONE seaward OPEN boundary edge; the rest solid. Returns (mesh, meta)."""
     from pyproj import Transformer
@@ -323,13 +294,13 @@ def build_coastal_mesh(cfg: CoastalConfig):
 
     src = str(cfg.bathy_source).lower()
     if src in ("noaa_demall", "demall", "noaa", "topobathy"):
-        raw = fetch_demall_bed(np.asarray(lon), np.asarray(lat), bbox)
+        raw = read_staged_bed(np.asarray(lon), np.asarray(lat), data_dir)
         wet = np.isfinite(raw) & (raw < 0.0)
         n_wet = int(wet.sum())
         if n_wet < 0.05 * raw.size:
             raise CoastalInputError(
                 "COASTAL_BATHY_UNAVAILABLE",
-                f"NOAA DEM_all covered only {n_wet}/{raw.size} nodes below the DEM datum over "
+                f"the staged bed covered only {n_wet}/{raw.size} nodes below its datum over "
                 f"{bbox} -- the AOI is essentially all land. Pick a bbox spanning "
                 "the shoreline (open water on one side, low land on the other).")
         ocean_edge = _classify_ocean_edge(mesh, raw, cfg.ocean_edge)
@@ -668,24 +639,12 @@ def solve(cfg: CoastalConfig, workdir: str, run_id: str | None = None) -> dict:
     tag = "coastal"
     WET_TOL = 0.02   # m depth to count a node as wet
 
-    mesh, meta = build_coastal_mesh(cfg)
+    mesh, meta = build_coastal_mesh(cfg, workdir)
 
     series = _normalize_series(cfg.water_level_series, cfg.datum_offset_m)
     duration = float(cfg.duration_s) if cfg.duration_s else float(series[-1][0])
     cfg.duration_s = duration
     init_wl = float(cfg.init_wl_m) if cfg.init_wl_m is not None else float(series[0][1])
-
-    # in-worker bed COG (real bathy only) -> role=context input via _bed_input.
-    bed_cog_meta: dict = {}
-    if str(cfg.bathy_source).lower() != "synthetic" and mesh.get("bed_lon") is not None:
-        try:
-            import _bed_cog as _BC  # noqa: WPS433 -- worker payload sibling
-            bed_cog_meta = _BC.write_bed_cog_lonlat(
-                mesh["bed_lon"], mesh["bed_lat"], mesh["bed_raw"],
-                os.path.join(workdir, _BC.BED_COG_FILENAME))
-            bed_cog_meta["bed_cog_source"] = "noaa_demall"
-        except Exception as exc:  # noqa: BLE001 -- never fatal
-            LOG.warning("coastal bed COG write failed (non-fatal): %s", exc)
 
     geo = os.path.join(workdir, f"geo_{tag}.slf")
     cli = os.path.join(workdir, f"bc_{tag}.cli")
@@ -722,7 +681,6 @@ def solve(cfg: CoastalConfig, workdir: str, run_id: str | None = None) -> dict:
         "datum_offset_m": float(cfg.datum_offset_m),
         **meta,
         **liq_meta,
-        **bed_cog_meta,
         "wall_s": round(time.time() - t0, 1),
     }
     if not ok:

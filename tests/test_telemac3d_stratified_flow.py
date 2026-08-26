@@ -9,6 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
+#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: A domain solved on real bathymetry refuses without one, because the worker
+#: holds no fetcher of its own any more.
+_STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
+               "source": "noaa_ncei_dem_all"}
+
 
 def test_telemac3d_registered_as_engine_template():
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -97,7 +103,7 @@ def test_the_declared_plan_is_the_open_water_sequence():
 def test_the_3d_deck_carries_both_layer_files():
     from trid3nt_server.workflows.telemac.steps.stratified import write_stratified_deck
 
-    deck = asyncio.run(write_stratified_deck(
+    deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,
              "bbox": (-87.60, 46.70, -86.60, 47.20)},
         flow_mode="stratification", nplan=13, mesh_resolution_m=3000.0,
@@ -115,7 +121,7 @@ def test_a_salt_wedge_never_takes_the_real_bathymetry_path():
     ANALYTIC lock-exchange V&V, and asking for real bathymetry cannot conjure one."""
     from trid3nt_server.workflows.telemac.steps.stratified import write_stratified_deck
 
-    deck = asyncio.run(write_stratified_deck(
+    deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,
              "bbox": (-87.60, 46.70, -86.60, 47.20)},
         flow_mode="salt_wedge", bathy_source="noaa_greatlakes"))

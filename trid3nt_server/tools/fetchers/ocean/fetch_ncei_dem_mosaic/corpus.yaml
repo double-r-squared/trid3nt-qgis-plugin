@@ -1,0 +1,11 @@
+fetch_ncei_dem_mosaic:
+- give me the lake bed bathymetry for this great lakes harbour so i can mesh it
+- what is the water depth across lake superior on the noaa lake datum
+- fetch the NCEI DEM_all mosaic over this coastal bbox as elevation metres
+- i need bed elevation at my mesh nodes across the shoreline, land and sea floor in one grid
+- pull the great lakes lake-datum bathymetry grid for marquette harbor
+- topo-bathy elevation raster for a telemac coastal domain over this AOI
+- how deep is the lake here, i want a continuous bed surface not a station reading
+- the seabed and the land together for this estuary at about 60 metre sampling
+- NOAA NCEI digital elevation mosaic over the bbox, positive up in metres
+- bathymetry raster covering both the wet and dry parts of this coastal strip

@@ -48,16 +48,6 @@ import numpy as np
 
 LOG = logging.getLogger("trid3nt.worker.tomawac.build")
 
-#: NOAA NGDC DEM mosaic ImageServer - the DEM_all mosaic includes the
-#: greatlakes_lakedatum bathymetry (lake-bottom depth, negative below the
-#: Great Lakes low-water datum). exportImage returns a GeoTIFF sampled at nodes.
-_NOAA_DEM_ALL_URL = (
-    "https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/"
-    "ImageServer/exportImage"
-)
-_UA = "trid3nt-local-tomawac (agent@trid3nt.dev)"
-
-
 # ---------------------------------------------------------------------------
 # Config (strict-field manifest; the entrypoint rejects unknown keys)
 # ---------------------------------------------------------------------------
@@ -368,43 +358,21 @@ def cerc_hs(U, fetch_m):
 
 
 # ---------------------------------------------------------------------------
-# 4. Real Great Lakes bathymetry (NOAA NGDC DEM_all -> greatlakes_lakedatum)
+# 4. Real Great Lakes bathymetry -- READ from the staged raster.
 # ---------------------------------------------------------------------------
-def fetch_greatlakes_bathy(lon, lat, bbox):
-    """Sample Great Lakes lake-datum bathymetry at node lon/lat via NOAA DEM_all.
+def read_greatlakes_bathy(lon, lat, data_dir):
+    """Bed elevation (m) at node lon/lat from the bed the run was staged with.
 
-    exportImage returns a bbox GeoTIFF (F32) from the NGDC DEM_all mosaic, which
-    carries the greatlakes_lakedatum bathymetry (lake-bottom depth, NEGATIVE below
-    the Great Lakes low-water datum -- already TOMAWAC's bed-sign convention).
-    Returns per-node bed elevation (m); a node outside the lake (land / NoData) is
-    NaN. Raises TomawacInputError if the AOI carries no lake bathymetry.
-    """
-    import requests
-    from rasterio.io import MemoryFile
+    The lake-datum bathymetry the wave field is solved on arrives as a file in the
+    run directory; a node outside the lake (land / NoData) is NaN. Raises
+    TomawacInputError when no bed was staged at all, which is a staging fault
+    rather than a coverage answer."""
+    from _staged_bed import sample_staged_bed
 
-    ncols = int(np.clip(round((bbox[2] - bbox[0]) * 1200.0), 64, 2000))
-    nrows = int(np.clip(round((bbox[3] - bbox[1]) * 1200.0), 64, 2000))
-    resp = requests.get(_NOAA_DEM_ALL_URL, params={
-        "bbox": ",".join(str(v) for v in bbox),
-        "bboxSR": "4326", "imageSR": "4326",
-        "size": f"{ncols},{nrows}",
-        "format": "tiff", "pixelType": "F32", "f": "image",
-    }, headers={"User-Agent": _UA}, timeout=180)
-    resp.raise_for_status()
-    body = resp.content
-    if body[:4] not in (b"II*\x00", b"MM\x00*"):
-        raise TomawacInputError(
-            "TOMAWAC_BATHY_UNAVAILABLE",
-            f"NOAA DEM_all exportImage returned non-tiff over {bbox}: {body[:160]!r}")
-    with MemoryFile(body) as mf, mf.open() as src:
-        samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
-                        dtype=float).ravel()
-        nod = src.nodata
-        if nod is not None:
-            samp[samp == nod] = np.nan
-    samp[~np.isfinite(samp)] = np.nan
-    samp[samp < -1.0e4] = np.nan
-    return samp
+    try:
+        return sample_staged_bed(lon, lat, data_dir)
+    except FileNotFoundError as exc:
+        raise TomawacInputError("TOMAWAC_BATHY_UNAVAILABLE", str(exc)) from exc
 
 
 def _bbox_utm_epsg(bbox):
@@ -414,7 +382,7 @@ def _bbox_utm_epsg(bbox):
     return (32600 if lat >= 0 else 32700) + zone
 
 
-def build_real_lake_grid(cfg: TomawacConfig):
+def build_real_lake_grid(cfg: TomawacConfig, data_dir: str):
     """Regular UTM grid over a real lake AOI with NOAA lake-datum bed at nodes.
 
     Deep-water NaN nodes (land / outside the lake) are lifted to a shallow +2 m
@@ -450,13 +418,13 @@ def build_real_lake_grid(cfg: TomawacConfig):
     xabs = mesh["X"] + min(x0, x1)
     yabs = mesh["Y"] + min(y0, y1)
     lon, lat = back.transform(xabs, yabs)
-    bed = fetch_greatlakes_bathy(np.asarray(lon), np.asarray(lat), bbox)
+    bed = read_greatlakes_bathy(np.asarray(lon), np.asarray(lat), data_dir)
     wet = np.isfinite(bed) & (bed < 0.0)
     n_wet = int(wet.sum())
     if n_wet < 0.05 * bed.size:
         raise TomawacInputError(
             "TOMAWAC_BATHY_UNAVAILABLE",
-            f"NOAA lake bathymetry covered only {n_wet}/{bed.size} grid nodes over "
+            f"the staged lake bathymetry covered only {n_wet}/{bed.size} grid nodes over "
             f"{bbox} -- the AOI is mostly land/dry. Pick a bbox inside a Great "
             "Lake (Superior/Michigan/Huron/Erie/Ontario) open water.")
     Z = np.where(wet, bed, 2.0)                # NaN/land -> +2 m dry bed
@@ -522,7 +490,7 @@ def solve(cfg: TomawacConfig, workdir: str, run_id: str = None):
 
     # --- mesh ---
     if str(cfg.bathy_source).lower() in ("noaa_greatlakes", "greatlakes", "noaa"):
-        mesh, bmeta = build_real_lake_grid(cfg)
+        mesh, bmeta = build_real_lake_grid(cfg, workdir)
         # a real lake fetch run is all-solid (fetch develops from the upwind
         # shore); shoaling/current over a real lake would need an open boundary
         # picker, out of this pass -- force the wind-driven all-solid path.
@@ -533,22 +501,6 @@ def solve(cfg: TomawacConfig, workdir: str, run_id: str = None):
         mesh = _idealized_mesh(cfg)
         bmeta = dict(utm_epsg=32615, dx_m=float(cfg.target_resolution_m or 1500.0),
                      coarsened=False)
-
-    # in-worker bed-COG input surface: write the sampled lake-datum bed the solve
-    # ran on as a 4326 COG so the composer can surface it as a role=context input.
-    # Best-effort: a bed-COG hiccup NEVER voids a CORRECT END solve. Only the real
-    # lake path carries node lon/lat (the idealized bed has no geographic footprint).
-    bed_cog_meta: dict = {}
-    if mesh.get("bed_lon") is not None:
-        try:
-            import _bed_cog as _BC  # noqa: WPS433 -- worker payload sibling
-            bed_cog_meta = _BC.write_bed_cog_lonlat(
-                mesh["bed_lon"], mesh["bed_lat"], mesh["bed_raw"],
-                os.path.join(workdir, _BC.BED_COG_FILENAME))
-            bed_cog_meta["bed_cog_source"] = "noaa_greatlakes"
-            LOG.info("tomawac bed COG written: %s", bed_cog_meta)
-        except Exception as exc:  # noqa: BLE001 -- input surfacing is never fatal
-            LOG.warning("tomawac bed COG write failed (non-fatal): %s", exc)
 
     geo = os.path.join(workdir, f"geo_{tag}.slf")
     cli = os.path.join(workdir, f"bc_{tag}.cli")
@@ -609,7 +561,6 @@ def solve(cfg: TomawacConfig, workdir: str, run_id: str = None):
         "wind_speed_mps": float(cfg.wind_speed_mps) if wind_on else 0.0,
         "wind_dir_from_deg": float(cfg.wind_dir_from_deg) if wind_on else None,
         **bmeta,
-        **bed_cog_meta,
         "wall_s": round(time.time() - t0, 1),
     }
     if not ok:

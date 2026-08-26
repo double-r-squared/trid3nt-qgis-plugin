@@ -37,7 +37,8 @@ from .open_water import (
     mesh_resolution_label,
     mesh_sizing_provenance,
     solved_domain_bbox,
-    surface_in_worker_bed_input,
+    solves_on_real_bed,
+    staged_bed_inputs,
 )
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.coastal")
@@ -51,8 +52,7 @@ _SECTION = "coastal"
 _RESULT = "res_coastal.slf"
 _OUTPUTS = [
     "res_coastal.slf", "geo_coastal.slf", "bc_coastal.cli", "t2d_coastal.cas",
-    "coastal_liquid_bnd.txt", "full_listing.log", "bed_bathymetry.tif",
-    "telemac_metrics.json",
+    "coastal_liquid_bnd.txt", "full_listing.log", "telemac_metrics.json",
 ]
 
 
@@ -71,6 +71,7 @@ async def write_coastal_deck(
     wind_speed_mps: float,
     wind_direction_from_deg: float,
     output_interval_min: float | None = None,
+    bed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker's coastal config + the run meta.
 
@@ -88,7 +89,8 @@ async def write_coastal_deck(
         SYNTHETIC_WINDOW_HOURS,
     )
 
-    synthetic = str(bathy_source).strip().lower() == "synthetic"
+    real = solves_on_real_bed(bathy_source, domain_kind="coast")
+    synthetic = not real
     mesh_resolution_m = (float(mesh_resolution_m) if mesh_resolution_m is not None
                          else DEFAULT_GRID_SPACING_M)
     series = list((water_level or {}).get("series") or [])
@@ -148,6 +150,7 @@ async def write_coastal_deck(
         config["water_level_series"] = series
     return {
         "config": config,
+        "inputs": staged_bed_inputs(bed, real=real, section=_SECTION),
         "run_tag": new_ulid(),
         "section": _SECTION,
         "solver": TELEMAC_COASTAL_SOLVER_NAME,
@@ -330,12 +333,6 @@ async def publish_coastal_products(*, deck: dict[str, Any],
         emitter, run_id=run_id, engine="telemac", peak_layer=raw,
         peak_quantity="flood_depth", mesh_basename=deck["result_basename"],
         mesh_epsg=utm_epsg, reach_name=reach)
-
-    await surface_in_worker_bed_input(
-        emitter, run_metrics=metrics, run_id=run_id,
-        name=(f"Input: coastal bed bathymetry ({reach}, NOAA DEM_all topobathy, "
-              "in-worker)"),
-        layer_id_prefix="input-coastal-bed")
 
     # The peak layer is RETURNED, and the dispatch seam materializes what a tool
     # returns - so there is no emit call here. One seam, one emission.

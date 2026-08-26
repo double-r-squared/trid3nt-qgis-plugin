@@ -10,6 +10,12 @@ from __future__ import annotations
 
 import asyncio
 
+#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: A domain solved on real bathymetry refuses without one, because the worker
+#: holds no fetcher of its own any more.
+_STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
+               "source": "noaa_ncei_dem_all"}
+
 
 
 #: The non-question physics every coastal deck carries. Declared on the template
@@ -176,7 +182,7 @@ def test_a_grid_domain_declares_no_corridor_fields():
 def test_the_coastal_deck_carries_what_solves_it():
     from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
 
-    deck = asyncio.run(write_coastal_deck(
+    deck = asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
         aoi={"slug": "coast", "name": "coast", "bbox": (-85.02, 29.69, -84.90, 29.80)},
         water_level={"series": [[0.0, 0.5], [360.0, 1.4]], "series_datum": "MLLW",
                      "series_type": "observed", "station_id": "8728690",
@@ -207,7 +213,7 @@ def test_an_unreconciled_tide_datum_refuses_rather_than_flooding_the_marsh():
     from trid3nt_server.workflows.telemac.steps.open_water import OpenWaterError
 
     with pytest.raises(OpenWaterError) as excinfo:
-        asyncio.run(write_coastal_deck(
+        asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
             aoi={"slug": "coast", "name": "coast",
                  "bbox": (-85.02, 29.69, -84.90, 29.80)},
             water_level={"series": [[0.0, 0.5], [360.0, 1.4]],
@@ -221,7 +227,7 @@ def test_an_explicit_zero_offset_is_an_override_not_a_default():
     """0.0 stays available - it just has to be ASKED for now."""
     from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
 
-    deck = asyncio.run(write_coastal_deck(
+    deck = asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
         aoi={"slug": "coast", "name": "coast",
              "bbox": (-85.02, 29.69, -84.90, 29.80)},
         water_level={"series": [[0.0, 0.5], [360.0, 1.4]], "series_datum": "MLLW",
@@ -235,7 +241,7 @@ def test_the_synthetic_beach_needs_no_datum_reconciliation():
     """An analytic plane beach has no gauge and no geodetic bed to reconcile."""
     from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
 
-    deck = asyncio.run(write_coastal_deck(
+    deck = asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
         aoi={"slug": "coast", "name": "coast",
              "bbox": (-85.02, 29.69, -84.90, 29.80)},
         mesh_resolution_m=250.0, **{**_PHYSICS, "bathy_source": "synthetic"}))
@@ -250,7 +256,7 @@ def test_a_coastal_deck_with_no_series_refuses_typed():
 
     import pytest
     with pytest.raises(OpenWaterError) as excinfo:
-        asyncio.run(write_coastal_deck(
+        asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
             aoi={"slug": "coast", "name": "coast", "bbox": (-85.0, 29.7, -84.9, 29.8)},
             water_level=None, **_PHYSICS))
     assert excinfo.value.error_code == "COASTAL_TIDE_EMPTY"

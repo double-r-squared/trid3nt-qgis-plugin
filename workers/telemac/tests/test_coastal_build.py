@@ -51,7 +51,7 @@ def test_synthetic_mesh_has_exactly_one_contiguous_open_boundary():
     cfg = C.CoastalConfig(bbox=(-85.0, 29.7, -84.9, 29.8), bathy_source="synthetic",
                           target_resolution_m=400.0, ocean_edge="S",
                           water_level_series=[[0, 0.4], [3600, 2.0]], duration_s=3600)
-    mesh, meta = C.build_coastal_mesh(cfg)
+    mesh, meta = C.build_coastal_mesh(cfg, ".")
     assert meta["ocean_edge"] == "S"
     assert meta["n_ocean_nodes"] >= 2
     # ocean nodes form ONE contiguous run on the ring (=> one TELEMAC liquid boundary)
@@ -65,7 +65,7 @@ def test_synthetic_mesh_has_exactly_one_contiguous_open_boundary():
 
 def test_bbox_required():
     with pytest.raises(C.CoastalInputError):
-        C.build_coastal_mesh(C.CoastalConfig(bbox=None, bathy_source="synthetic"))
+        C.build_coastal_mesh(C.CoastalConfig(bbox=None, bathy_source="synthetic"), ".")
 
 
 def test_manifest_strict_unknown_field_gate(tmp_path):
