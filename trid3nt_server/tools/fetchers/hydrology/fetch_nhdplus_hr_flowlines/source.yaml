@@ -1,0 +1,136 @@
+# NHDPlus High Resolution NetworkNHDFlowline (MapServer layer 3) by envelope,
+# optionally filtered to one GNIS name. The seed rungs of the TELEMAC reach
+# family used to run this query from inside the solver container; it is server
+# tier because a flowline query changes if the box moves.
+schema_version: v1
+
+name: fetch_nhdplus_hr_flowlines
+source_class: nhdplus_hr_flowlines
+error_prefix: NHDPLUS_HR_FLOWLINES
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/3/query"
+    # Server-side generalization. It is NOT a cosmetic knob: the vertex this
+    # layer is searched for is picked from the geometry the server returns, so
+    # the tolerance is part of the question and a different one is a different
+    # answer. ~0.0005 deg is ~55 m at the equator.
+    query:
+      maxAllowableOffset: "0.0005"
+      returnGeometry: "true"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  # The GNIS watercourse name, when the caller has one to disambiguate with.
+  # Absent asks the envelope for every flowline in it, which is what a caller
+  # ranking channels by stream order wants.
+  gnis_name: {type: str, schema_optional: true}
+  # The caller's own resultRecordCount. Declared rather than fixed because the
+  # two questions this layer answers cap at different counts, and a cap is part
+  # of the request when the envelope holds more rows than the cap.
+  max_records: {type: int, default: 500, min: 1, max: 5000}
+
+gates:
+  max_features: 5000
+
+ingest:
+  geometry_envelope: json
+  query_template:
+    out_fields: "gnis_name,streamorde,totdasqkm"
+    f: geojson
+  pagination: {mode: exceeded_transfer_limit, page_size: 500}
+  where_clauses:
+    - {template: "UPPER(gnis_name)=UPPER('{gnis_name}')", require: [gnis_name]}
+  properties:
+    - gnis_name
+    - streamorde
+    - totdasqkm
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: "nhdplus_flowlines"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 4000.0
+  kb_per_feature: 2.0
+  floor_mb: 0.01
+
+caveats:
+  - "NHDPlus HR covers the US (CONUS + AK + HI + territories); an envelope with no mapped channel returns a header-only FGB rather than an error"
+  - "gnis_name matches EXACTLY (case-insensitively) - an unnamed headwater reach carries no gnis_name and is unreachable by name"
+  - "max_records is a hard server-side cap in the service's own row order, not a ranked top-N"
+
+docstring: |-
+  Fetch NHDPlus High Resolution stream flowlines inside a bounding box, optionally only the ones carrying one river name.
+
+  What it does:
+      Queries the USGS NHDPlus HR NetworkNHDFlowline layer for every
+      mapped stream channel intersecting the bbox and returns them as a
+      FlatGeobuf of LineStrings. Each feature carries ``gnis_name`` (the
+      official watercourse name, blank on unnamed reaches),
+      ``streamorde`` (Strahler stream order - 1 is a headwater trickle,
+      7+ is a major river) and ``totdasqkm`` (total upstream drainage
+      area in square kilometres).
+
+  When to use:
+      - Deciding WHICH channel a point near a confluence belongs to:
+        rank the returned flowlines by ``streamorde`` then ``totdasqkm``
+        to find the dominant mainstem rather than the geometrically
+        nearest tributary stub.
+      - Resolving "the Snake River near Twin Falls" to actual channel
+        geometry: pass ``gnis_name="Snake River"`` and the layer returns
+        only that watercourse inside the window.
+      - Any question that needs stream ORDER or DRAINAGE AREA per reach
+        (stream classification, headwater vs mainstem contrasts).
+
+  When NOT to use:
+      - DO NOT use to walk the network upstream or downstream from a
+        point - that is a traversal, and
+        ``fetch_nhdplus_nldi_navigate`` does it.
+      - DO NOT use for wide-river WATER-SURFACE polygons (the banks of a
+        river rather than its centreline) - use
+        ``fetch_nhd_area_water``.
+      - DO NOT use for lakes/ponds/reservoirs - use
+        ``fetch_nhd_waterbodies``.
+      - DO NOT use outside the US - NHDPlus HR is US-only.
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. The
+          query envelope; flowlines INTERSECTING it are returned whole,
+          not clipped.
+      gnis_name: optional exact (case-insensitive) GNIS watercourse
+          name, e.g. ``"Eel River"``. Omit to get every flowline in the
+          envelope.
+      max_records: server-side row cap, default 500. Raise it for a
+          large envelope over a dense network; it is the service's own
+          row order, so it is a cap and not a ranking.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf of LineString geometries in
+      EPSG:4326, ``layer_type="vector"``, ``role="context"``,
+      ``style_preset="nhdplus_flowlines"``. Properties per feature:
+      ``gnis_name`` (str), ``streamorde`` (int), ``totdasqkm`` (float).
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically. Do
+  NOT call ``publish_layer`` on it - that is raster-only.
+
+  Cache: ``ttl_class="static-30d"``. NHDPlus HR is revised on a multi-year
+  cadence, so a 30-day bucket is well amortized.
+
+  Tier-1 free. No API key.

@@ -1,0 +1,115 @@
+# NHDArea (MapServer layer 8) water-surface polygons by envelope - the WIDTH of
+# a river rather than its centreline. The TELEMAC reach mesher used to run this
+# query from inside the solver container; it is server tier because a bank
+# polygon changes if the box moves.
+schema_version: v1
+
+name: fetch_nhd_area_water
+source_class: nhd_area_water
+error_prefix: NHD_AREA_WATER
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: vector-fgb
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/8/query"
+    # Server-side generalization, ~0.00005 deg (~5 m at mid-latitudes). A bank
+    # is sampled off the returned ring, so the tolerance is part of the
+    # question. It is also what keeps a full-mainstem polygon from arriving at
+    # a resolution nothing here uses: the reach window needs local bank detail,
+    # not every vertex of the Columbia.
+    query:
+      maxAllowableOffset: "0.00005"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  # The caller's own resultRecordCount, declared for the same reason the
+  # flowline layer declares one: a cap is part of the request.
+  max_records: {type: int, default: 200, min: 1, max: 5000}
+
+gates:
+  max_features: 5000
+
+ingest:
+  query_template:
+    out_fields: "ftype"
+    f: geojson
+  pagination: {mode: exceeded_transfer_limit, page_size: 200}
+  properties:
+    - ftype
+
+normalize:
+  crs: "EPSG:4326"
+  units: null
+
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: "nhd_waterbodies"
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 300.0
+  kb_per_feature: 40.0
+  floor_mb: 0.02
+
+caveats:
+  - "NHDArea maps water surfaces WIDE enough to have two banks - a big river, an estuary, a canal. A narrow creek is a flowline only and returns nothing here, which is a real answer about the channel and not a fetch failure"
+  - "US only (NHDPlus HR); an envelope with no mapped water surface returns a header-only FGB"
+  - "max_records is a hard server-side cap in the service's own row order, not a ranked top-N"
+
+docstring: |-
+  Fetch NHD water-surface polygons (the two BANKS of a wide river, an estuary, a canal) inside a bounding box.
+
+  What it does:
+      Queries the USGS NHDPlus HR NHDArea layer for every mapped water
+      SURFACE intersecting the bbox and returns them as a FlatGeobuf of
+      Polygon geometries tagged with ``ftype``. Unlike a flowline - which
+      is a one-dimensional centreline - an NHDArea polygon carries the
+      river's actual WIDTH, so a transect across it measures the distance
+      to each bank.
+
+  When to use:
+      - Meshing or cross-sectioning a real river channel: the polygon is
+        where the water is, so per-station bank offsets come off it
+        rather than off an assumed constant width.
+      - Any question that needs how WIDE a river is at a place, or where
+        its mid-river islands are (they arrive as interior rings).
+      - Masking a raster to open water over a big river or estuary.
+
+  When NOT to use:
+      - DO NOT use for the river CENTRELINE or the stream network - use
+        ``fetch_nhdplus_hr_flowlines`` (bbox) or
+        ``fetch_nhdplus_nldi_navigate`` (traversal).
+      - DO NOT use for lakes, ponds and reservoirs - those are the
+        NHDWaterbody feature class, and ``fetch_nhd_waterbodies``
+        serves it.
+      - DO NOT use outside the US - NHDPlus HR is US-only.
+      - DO NOT expect coverage on a narrow creek: NHD maps a water
+        surface only where the channel is wide enough to have one.
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+          Polygons INTERSECTING it are returned whole, not clipped, so a
+          mainstem polygon can extend well beyond the window.
+      max_records: server-side row cap, default 200.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf of Polygon geometries in
+      EPSG:4326, ``layer_type="vector"``, ``role="context"``,
+      ``style_preset="nhd_waterbodies"``. One property: ``ftype``.
+
+  Rendering: a VECTOR layer renders INLINE on the map automatically. Do
+  NOT call ``publish_layer`` on it - that is raster-only.
+
+  Cache: ``ttl_class="static-30d"``.
+
+  Tier-1 free. No API key.

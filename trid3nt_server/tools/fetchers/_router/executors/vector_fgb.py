@@ -658,6 +658,15 @@ def _fetch_from_endpoint(spec: SourceSpec, endpoint: Any, params: dict[str, Any]
     bbox = params.get("bbox")   # None -> global-query sweep (supports_global_query)
     max_features = spec.gates.max_features or 30000
     page_size = int((spec.ingest or {}).get("pagination", {}).get("page_size", 2000))
+    # A caller may CAP the sweep at its own count, and that is a single-shot
+    # request rather than a paging hint: page size and ceiling move together, so
+    # the first page returns exactly the cap in server order and the loop stops.
+    # It exists because a consumer reproducing a hand-written query has to
+    # reproduce its resultRecordCount - two different counts against the same
+    # layer are two different answers when the layer holds more rows than either.
+    capped = params.get("max_records")
+    if capped is not None:
+        page_size = max_features = int(capped)
     where = build_where(spec, params)
 
     accumulated: list[dict[str, Any]] = []

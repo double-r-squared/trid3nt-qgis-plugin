@@ -1,0 +1,8 @@
+fetch_nhd_area_water:
+- how wide is the river here
+- give me the water surface polygons for this stretch of river
+- I need the river banks not just the centerline
+- show me the mapped extent of the water in this estuary
+- where are the islands in this river
+- outline of the open water for this reach
+- polygon of the river channel so I can mesh between the banks

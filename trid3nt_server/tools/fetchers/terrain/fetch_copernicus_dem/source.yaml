@@ -24,6 +24,13 @@ auth:
 
 params:
   bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  # The SAMPLE LATTICE, declared, and the parity seam. GLO-30's own tiles are
+  # 3600 px per degree (1 arcsecond) with their pixel edges on multiples of
+  # 1/3600 from the prime meridian, so px_per_deg=3600 returns the SOURCE PIXELS
+  # rather than a resample of them - which is what a consumer sampling this
+  # raster at mesh nodes needs if its answers are to match an in-container
+  # /vsicurl read of the same tiles. Absent (the default) keeps the metric grid.
+  px_per_deg: {type: float, schema_optional: true, min: 60.0, max: 12000.0}
 gates:
   max_bbox_deg2: 4.0
 

@@ -1,0 +1,8 @@
+fetch_nhdplus_hr_flowlines:
+- which river channel is this point actually on
+- show me every stream in this box with its stream order
+- find the Eel River flowlines near Scotia
+- I need the drainage area for each channel around this confluence
+- get me the named river geometry for this reach
+- which of these channels is the main stem and which is a tributary
+- stream order and upstream drainage for the creeks in this window

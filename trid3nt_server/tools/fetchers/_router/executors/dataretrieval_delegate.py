@@ -357,7 +357,13 @@ def nldi_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, An
     try:
         fc = nldi.get_flowlines(
             navigation_mode=str(direction),
-            distance=int(round(float(distance_km))),
+            # The distance travels as the FLOAT it was declared as. Rounding it
+            # to a whole kilometre is not a rounding at all below 1 km: NLDI
+            # returns whole reaches until the cumulative distance is EXCEEDED, so
+            # a 0.5 km ask rounded to 0 returns the seed reach alone - one
+            # flowline where the ask means four, and a shorter river than the
+            # caller asked to model. NLDI accepts the fraction.
+            distance=float(distance_km),
             comid=seed_comid,
             as_json=True,
         )

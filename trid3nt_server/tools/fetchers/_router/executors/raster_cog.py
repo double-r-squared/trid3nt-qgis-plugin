@@ -1833,6 +1833,92 @@ def _normalize_via_aliases(spec: SourceSpec, value: Any, aliases: dict, allowed:
     return norm
 
 
+def _stac_float_grid(bbox: tuple[float, float, float, float],
+                     ingest: dict[str, Any],
+                     params: dict[str, Any] | None = None,
+                     src_transform: Any = None) -> tuple[Any, int, int, Any]:
+    """The destination grid a STAC float mosaic is reprojected onto, and how.
+
+    Two declared sizings, and the choice decides whether the mosaic REPRODUCES
+    the source pixels or resamples them.
+
+    Without ``px_per_deg`` the metric sizing applies: a grid derived from
+    ``native_cell_m`` at the bbox mid-latitude. That is a lattice of the
+    router's OWN, so it needs bilinear, and every value it returns is an
+    interpolation of the source rather than the source.
+
+    ``px_per_deg`` asks instead for the SOURCE's lattice, and the phase comes
+    from the data. A global 1-arcsecond DEM tile is pixel-is-POINT: its pixel
+    CENTRES sit on the integer arcsecond, so its edges sit half a pixel off the
+    integer degree, and a lattice snapped to the prime meridian would land every
+    destination centre exactly BETWEEN two source centres - the worst alignment
+    available, not the best. Snapping to the source's own origin instead puts
+    every destination pixel centre on a source pixel centre, and NEAREST then
+    carries the value across unchanged. A consumer that samples the returned
+    raster at its own nodes reads the same number an in-container ``/vsicurl``
+    read of the tile would have returned, which is what lets a fetch migrate out
+    of a worker without moving the physics.
+
+    Two things fall back to the resampled grid rather than pretending: a source
+    whose cell is not the declared density (the ask does not describe the data),
+    and a lattice past the pixel cap (a large AOI). Either way the resampling
+    drops to bilinear rather than nearest-sampling a lattice that does not line
+    up, and a consumer that NEEDS parity checks the delivered cell size rather
+    than trusting the ask.
+    """
+    import math
+
+    import rasterio
+    from rasterio.warp import Resampling
+
+    from ...imagery import _pc_stac
+
+    px_min = int(ingest.get("px_min", 16))
+    px_max = int(ingest.get("px_max", 4096))
+    # The density may be a REQUEST param, as it is on the ImageServer sizing: the
+    # lattice a consumer samples against is the consumer's fact, so it travels
+    # from the caller and the spec default is only what applies when nobody said.
+    px_per_deg = (params or {}).get("px_per_deg")
+    if px_per_deg is None:
+        px_per_deg = ingest.get("px_per_deg")
+
+    def _resampled() -> tuple[Any, int, int, Any]:
+        width_px, height_px = _pc_stac.bbox_pixel_dims(
+            bbox, float(ingest.get("native_cell_m", 1000.0)),
+            px_min=px_min, px_max=px_max)
+        return (rasterio.transform.from_bounds(*bbox, width_px, height_px),
+                width_px, height_px, Resampling.bilinear)
+
+    if px_per_deg is None:
+        return _resampled()
+
+    density = float(px_per_deg)
+    cell = 1.0 / density
+    if src_transform is None or abs(abs(float(src_transform.a)) - cell) > cell * 1e-6:
+        logger.warning(
+            "router.stac_float: %g px/deg was asked for but the source grid is "
+            "%s - the ask does not describe the data, so the metric grid applies",
+            density, "unknown" if src_transform is None else f"{abs(float(src_transform.a)):.10g} deg")
+        return _resampled()
+
+    ox, oy = float(src_transform.c), float(src_transform.f)
+    west = ox + math.floor((bbox[0] - ox) / cell) * cell
+    east = ox + math.ceil((bbox[2] - ox) / cell) * cell
+    north = oy - math.floor((oy - bbox[3]) / cell) * cell
+    south = oy - math.ceil((oy - bbox[1]) / cell) * cell
+    width_px = max(px_min, int(round((east - west) * density)))
+    height_px = max(px_min, int(round((north - south) * density)))
+    if width_px > px_max or height_px > px_max:
+        logger.warning(
+            "router.stac_float: the %g px/deg native lattice needs %dx%d px over "
+            "bbox=%s, past the %d px cap - falling back to the metric grid "
+            "(the delivered cell is COARSER than the ask)",
+            density, width_px, height_px, tuple(round(v, 4) for v in bbox), px_max)
+        return _resampled()
+    return (rasterio.transform.from_origin(west, north, cell, cell),
+            width_px, height_px, Resampling.nearest)
+
+
 def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
     """Continuous-FLOAT STAC read: search -> select -> sign -> windowed reproject
     -> DN scale/offset -> float32 (modis_lst). Two selection modes:
@@ -1912,9 +1998,23 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
             spec.error_code_prefix, f"no {collection!r} item intersects bbox={bbox} in {dt_range}",
             spec.empty_error_suffix)
 
-    native_cell_m = float(ingest.get("native_cell_m", 1000.0))
-    width_px, height_px = _pc_stac.bbox_pixel_dims(bbox, native_cell_m)
-    dst_transform = rasterio.transform.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px)
+    # The destination lattice can only be aligned to the source's if the source's
+    # is READ, so a native-grid ask probes one item's header for the grid it is
+    # actually on. Every tile of a global 1-arcsecond collection shares that
+    # phase, so one probe answers for the mosaic. A probe that fails is not a
+    # fetch failure - it just means the grid is not known, and the sizing falls
+    # back to the resampled one with the reason logged.
+    src_transform = None
+    if (params.get("px_per_deg") or ingest.get("px_per_deg")) is not None:
+        try:
+            probe = _pc_sign_two_tier(
+                spec, (getattr(items[0], "assets", {}) or {})[asset_key].href, collection)
+            with open_windowed_cog(probe) as _src:
+                src_transform = _src.transform
+        except Exception as exc:  # noqa: BLE001 -- unknown grid, not a failed fetch
+            logger.warning("router.stac_float: native-grid probe failed (%s)", exc)
+    dst_transform, width_px, height_px, resampling = _stac_float_grid(
+        bbox, ingest, params, src_transform)
 
     scale = tf.get("scale")
     offset = tf.get("offset", 0.0)
@@ -1937,7 +2037,7 @@ def _stac_float_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any,
                     source=rasterio.band(src, 1), destination=dst,
                     src_transform=src.transform, src_crs=src.crs,
                     dst_transform=dst_transform, dst_crs="EPSG:4326",
-                    resampling=Resampling.bilinear,
+                    resampling=resampling,
                     src_nodata=(src_nodata if src_nodata is not None else src.nodata),
                     dst_nodata=init,
                 )
