@@ -608,13 +608,21 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
 
 def render_from_evidence(evidence_path: str | os.PathLike[str], *,
                          out_path: str | os.PathLike[str] | None = None,
-                         max_tiles: int = 6, composite_only: bool = False) -> dict:
-    """Sheet from a drive script's evidence JSON. The drives' ``--render-proof``."""
+                         max_tiles: int = 6, composite_only: bool = False,
+                         title: str | None = None) -> dict:
+    """Sheet from a drive script's evidence JSON. The drives' ``--render-proof``.
+
+    ``title`` overrides the caption every panel carries. The packet assembler
+    passes the RUN ID through it, so a panel handed to a reader names the run it
+    came from rather than only the tool - a delivered picture with no run id is
+    unverifiable against the evidence beside it.
+    """
     src = Path(evidence_path).resolve()
-    layers, title = _layers_from_evidence(src)
+    layers, evidence_title = _layers_from_evidence(src)
     out = Path(out_path) if out_path else src.with_name(
         re.sub(r"_evidence$", "", src.stem) + "_canvas_layers.png")
-    return render_sheet(_collapse_frames(layers), out, title=title,
+    return render_sheet(_collapse_frames(layers), out,
+                        title=title or evidence_title,
                         max_tiles=max_tiles, composite_only=composite_only)
 
 
@@ -658,7 +666,8 @@ def main() -> int:
         if ns.evidence:
             result = render_from_evidence(ns.evidence, out_path=ns.out,
                                           max_tiles=ns.max_tiles,
-                                          composite_only=ns.composite_only)
+                                          composite_only=ns.composite_only,
+                                          title=ns.title)
         else:
             layers, title = _layers_from_case(ns.case_id)
             out = Path(ns.out or (REPO / "docs" / "proof" / "templates"

@@ -30,6 +30,49 @@ FOUR variants, and no more. A fifth would be a category nobody agreed on:
 | `postmigration` | the same question re-run after a refactor, to show the representation changed and the numbers did not. |
 | `addendum` | a proof that is none of those three: a gate-card walkthrough, a release-point acceptance case, a one-off diagnostic kept because it settled something. |
 
+## THE MECHANISM: `scripts/assemble_proof_packet.py`
+
+The per-workflow delivery norm is not a list anybody remembers any more. It is a
+script, and the script refuses:
+
+    venvs/agent/bin/python scripts/assemble_proof_packet.py \
+        --template coastal_tidal_surge --variant refined
+
+It renders the whole checklist for one `<template>/<variant>` - every published
+layer as a full-size panel in emission order, the composite canvas view, the
+contact sheet, every chart through the plugin dock's own renderer, the animation
+and its still - and then writes `packet.json` beside them: the ORDERED list of
+deliverable paths, a one-line caption for each, and a verdict per item. The
+delivery step is then "send exactly what `packet.json` lists", with zero
+judgement in it.
+
+`--check` audits an existing folder against the same checklist without rendering
+anything, which is how an old packet gets held to the current standard.
+
+What it will not let past:
+
+  * **A missing GIF on a time-stepped run.** Whether the run is time-stepped is
+    MEASURED - the frame count is read off the run's own SELAFIN (its header,
+    then arithmetic over the file's length) and cross-checked against the
+    worker's `ntimestep`. A single-frame result is EXEMPT and the exemption
+    names the physics; ARTEMIS's is written into the script's own declaration.
+  * **A GIF that does not evolve, or a legend that does.** Every frame is pulled
+    through PIL (with `.copy()` - Pillow reuses its decode buffer, and a list
+    built without it is N references to the last frame), hashed, and required to
+    be distinct; the colorbar strip must be byte-identical across every frame.
+  * **A short panel set.** Panel count must equal the published layer count plus
+    the canvas view, every file nonzero, and every PNG carries the run id both in
+    its caption and in a `trid3nt_run_id` PNG text chunk.
+  * **Anything stale.** A deliverable older than the evidence JSON it claims to
+    show is reported STALE with both mtimes - a folder holding the previous run's
+    GIF beside this run's panels reads as complete and is not.
+  * **Frames drawn off the water.** The animation's extent is checked against the
+    run's own AOI, so a LOCAL mesh rendered without its origin is caught rather
+    than shipped.
+
+`trid3nt_server/testing/canaries.py` calls it at close-out, so every canary
+either produces a `packet.json` or exits non-zero.
+
 `trid3nt_server/testing/proof_paths.py` is the ONE place that builds these paths.
 `canaries.evidence_path`, `scripts/render_selafin_animation.py` and the drive
 scripts all ask it rather than joining their own; `render_all_layers_proof`
@@ -50,6 +93,9 @@ design, not by oversight.
 ## Standing notes on individual sets
 
 ### ARTEMIS produces no animation GIF - by physics, not by omission
+
+(The packet assembler carries this as a DECLARED exemption, so an artemis packet
+passes with an "Animation - EXEMPT" row naming the reason rather than a hole.)
 
 `artemis_harbor_agitation` is the one TELEMAC template whose proof set has no
 `*_animation.gif`, and that is correct rather than incomplete. ARTEMIS is the

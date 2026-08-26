@@ -14,10 +14,13 @@ home, one registry, one runner:
 
     venvs/agent/bin/python -m trid3nt_server.testing.canaries <name>
 
-writes the run's evidence JSON, which the ``scripts/`` diagnostic lane renders
-into the proof sheet (``scripts/render_all_layers_proof.py --evidence ...``).
-Proof RENDERING stays out of the product tree by ruling; the declaration does
-not.
+writes the run's evidence JSON and then assembles the DELIVERY PACKET from it -
+``scripts/assemble_proof_packet.py``, which renders every panel, chart and
+animation the checklist demands, verifies them mechanically, and writes the
+ordered ``packet.json`` a reader is handed. A canary that solves but cannot be
+delivered exits non-zero, because "did we send the GIF" is not a question anybody
+should be answering from memory. Proof RENDERING stays out of the product tree by
+ruling; the declaration does not.
 
 DEMO VALUES LIVE IN THE DECLARATION. A canary's location, window and station are
 here, in a labeled declaration, never as a constant inside workflow code.
@@ -33,8 +36,9 @@ from typing import Any
 
 from .live_run import GateAnswers, LiveRun, RunEvidence, run_live
 from .proof_paths import evidence_path as _proof_evidence_path
+from .proof_paths import split_variant
 
-__all__ = ["CANARIES", "evidence_path", "main", "run"]
+__all__ = ["CANARIES", "assemble_packet", "evidence_path", "main", "run"]
 
 #: Where a canary's evidence lands: ``docs/proof/templates/<template>/<variant>/``,
 #: beside the renders the diagnostic lane writes from it. The FOLDER is
@@ -213,7 +217,13 @@ CANARIES: dict[str, LiveRun] = {
             "sim_duration_hr": 2.0,
             "antecedent_moisture": "normal",
             "compute_class": "medium",
-            "input_mode": "auto",
+            # user_gated, not auto, for the same reason the four open-water
+            # canaries are: the template declares physics-consequential rows with
+            # labeled defaults (the infiltration model, the land-cover product,
+            # the soil-store trio), and a run that showed them to nobody refuses
+            # under law 9. That is the floor working, not a canary to route
+            # around, so the harness answers the card instead of turning it off.
+            "input_mode": "user_gated",
         },
         case_title="canary: telemac rain on grid (Coweeta Creek, coarse)",
         answers=GateAnswers(confirm="proceed"),
@@ -360,6 +370,31 @@ def _answer(ev: RunEvidence) -> dict[str, Any]:
     }
 
 
+def assemble_packet(name: str) -> dict:
+    """The canary's DELIVERY PACKET - the checklist, assembled and verified.
+
+    A canary that finished is not a canary that can be handed to anybody: the
+    panels, the canvas view, the charts, the animation and the evidence JSON are
+    the deliverable, and "did we send the GIF" was a remembered question until
+    this. ``scripts/assemble_proof_packet.py`` answers it mechanically and writes
+    ``packet.json`` beside the renders, so every canary close either produces the
+    ordered list of what to send or fails loudly saying what is missing.
+
+    Imported BY PATH because proof RENDERING stays out of the product tree by
+    ruling - the declaration lives here, the renderers do not.
+    """
+    import importlib.util
+
+    template, variant = split_variant(name)
+    script = (os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))) + "/scripts/assemble_proof_packet.py")
+    spec = importlib.util.spec_from_file_location("assemble_proof_packet", script)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("assemble_proof_packet", module)
+    spec.loader.exec_module(module)
+    return module.assemble(template, variant)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Drive one canary and exit non-zero unless its PRODUCTS were read.
 
@@ -376,6 +411,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--out", default=None,
                     help="evidence JSON path (default: the canonical one)")
+    ap.add_argument("--packet", dest="packet", action="store_true", default=True,
+                    help="assemble + verify the delivery packet (default on)")
+    ap.add_argument("--no-packet", dest="packet", action="store_false")
     ns = ap.parse_args(argv)
 
     ev = run(ns.name, timeout_s=ns.timeout)
@@ -388,6 +426,24 @@ def main(argv: list[str] | None = None) -> int:
         ev.require_ok().require_run_products()
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         print(f"CANARY FAILED: {exc}", file=sys.stderr)
+        return 1
+    if not ns.packet or ns.out:
+        # An evidence file written somewhere other than the canonical proof path
+        # has no variant folder to assemble into, so the packet step is skipped
+        # rather than pointed at a directory it does not own.
+        return 0
+    try:
+        packet = assemble_packet(ns.name)
+    except Exception as exc:  # noqa: BLE001 - the reason IS the report
+        print(f"PACKET FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({"packet": f"{os.path.dirname(out)}/packet.json",
+                      "verdict": packet["verdict"],
+                      "deliverables": len(packet["deliverables"]),
+                      "missing": packet["missing"]}, indent=2))
+    if packet["verdict"] != "PASS":
+        print(f"PACKET REFUSED - {len(packet['missing'])} gap(s); the run is green "
+              "and its proof is not deliverable", file=sys.stderr)
         return 1
     return 0
 

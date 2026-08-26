@@ -77,18 +77,19 @@ def _each_chart(document: dict, wanted: str | None):
             yield name, payload
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--run-id", required=True)
-    ap.add_argument("--stem", required=True, help="output basename (the workflow file)")
-    ap.add_argument("--bucket", default=os.environ.get("TRID3NT_RUNS_BUCKET",
-                                                       "trid3nt-runs"))
-    ap.add_argument("--out-dir", default=str(REPO / "docs" / "proof" / "templates"))
-    ap.add_argument("--chart", default=None,
-                    help="render only this DECLARED chart name (default: all)")
-    ap.add_argument("--caption", default="")
-    ns = ap.parse_args(argv)
+def render_charts(*, run_id: str, stem: str, out_dir: str | os.PathLike[str],
+                  bucket: str | None = None, chart: str | None = None,
+                  caption: str = "") -> list[dict]:
+    """Every chart the run persisted, drawn through the DOCK's renderer.
 
+    The importable seam. ``main`` is the command line over it and the packet
+    assembler calls it directly, so a delivered chart and a hand-rendered one
+    come off exactly one code path rather than two that drifted.
+    """
+    ns = argparse.Namespace(
+        run_id=run_id, stem=stem, out_dir=str(out_dir),
+        bucket=bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs"),
+        chart=chart, caption=caption)
     persisted = _read_spec(ns.bucket, ns.run_id)
     charts = _dock_renderer()
     out_dir = Path(ns.out_dir)
@@ -121,6 +122,23 @@ def main(argv: list[str] | None = None) -> int:
     if not written:
         raise SystemExit(f"run {ns.run_id} persisted no chart matching "
                          f"{ns.chart!r} (has {sorted(persisted)})")
+    return written
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--run-id", required=True)
+    ap.add_argument("--stem", required=True, help="output basename (the workflow file)")
+    ap.add_argument("--bucket", default=os.environ.get("TRID3NT_RUNS_BUCKET",
+                                                       "trid3nt-runs"))
+    ap.add_argument("--out-dir", default=str(REPO / "docs" / "proof" / "templates"))
+    ap.add_argument("--chart", default=None,
+                    help="render only this DECLARED chart name (default: all)")
+    ap.add_argument("--caption", default="")
+    ns = ap.parse_args(argv)
+
+    written = render_charts(run_id=ns.run_id, stem=ns.stem, out_dir=ns.out_dir,
+                            bucket=ns.bucket, chart=ns.chart, caption=ns.caption)
     print(json.dumps({"run_id": ns.run_id, "charts": written}, indent=2, default=str))
     return 0
 

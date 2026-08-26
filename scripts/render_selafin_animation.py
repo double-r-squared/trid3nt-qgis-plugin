@@ -383,7 +383,8 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            units: str, title: str, run_id: str, gif_path: Path,
            peak_path: Path, nplan: int = 1, plane: str = "surface",
            still: str = "peak", mask_var: str | None = None,
-           mask_min: float = 0.0, preset: str | None = None) -> dict:
+           mask_min: float = 0.0, preset: str | None = None,
+           source_name: str | None = None) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
@@ -420,11 +421,64 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
     tri = Triangulation(mx, my, triangles)
     bbox_ll = (float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max()))
 
-    return render_frames(tri, values, mesh["times"], bbox_ll=bbox_ll, units=units,
-                         title=title, run_id=run_id,
-                         source_name=Path(slf_path).name, variable=name.strip(),
-                         gif_path=gif_path, peak_path=peak_path, preset=preset,
-                         still=still, plane_note=plane_note)
+    result = render_frames(tri, values, mesh["times"], bbox_ll=bbox_ll, units=units,
+                           title=title, run_id=run_id,
+                           source_name=source_name or Path(slf_path).name,
+                           variable=name.strip(),
+                           gif_path=gif_path, peak_path=peak_path, preset=preset,
+                           still=still, plane_note=plane_note)
+    # WHERE the frames actually landed. A LOCAL mesh rendered with no origin lands
+    # at the UTM false origin, thousands of km from the water, and every other
+    # number in this report stays perfectly healthy while it does - so the extent
+    # is REPORTED and a caller can check it against the run's own AOI.
+    return {**result, "bbox_ll": [float(v) for v in bbox_ll],
+            "local_origin_m": [float(x_org), float(y_org)]}
+
+
+def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
+               units: str = "", quantity: str | None = None,
+               title: str | None = None, bucket: str | None = None,
+               origin_bbox=None, utm_epsg: int | None = None,
+               plane: str = "surface", nplan: int | None = None,
+               mask_var: str | None = None, mask_min: float = 0.0,
+               still: str = "peak") -> dict:
+    """One run's SELAFIN -> its GIF + still, straight off the object store.
+
+    The importable seam under ``main``: the packet assembler renders through this
+    rather than shelling out, so the delivered animation and a hand-rendered one
+    are the same code. Returns the render report plus the two paths - ``animation``
+    is ``None`` for a single-frame (steady) result, which has nothing to animate.
+    """
+    bucket = bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    worker = _read_json(bucket, f"{run_id}/telemac_metrics.json")
+    epsg = utm_epsg or worker.get("utm_epsg")
+    if epsg is None:
+        raise SystemExit(f"run {run_id} records no utm_epsg; pass utm_epsg")
+    origin = origin_bbox if origin_bbox is not None else worker.get("bbox")
+
+    preset = None
+    if quantity and _STYLES is not None:
+        preset, _fallback = _STYLES.resolve_style_preset(quantity)
+
+    local = _download(bucket, f"{run_id}/{slf}", ".slf")
+    gif = out_dir / f"{stem}_animation.gif"
+    peak = out_dir / f"{stem}_{still}_frame.png"
+    try:
+        result = render(local, utm_epsg=int(epsg), origin_bbox=origin, variable=var,
+                        units=units, title=title or f"{stem} - {var.strip()}",
+                        run_id=run_id, gif_path=gif, peak_path=peak,
+                        nplan=int(nplan or worker.get("nplan") or 1), plane=plane,
+                        still=still, mask_var=mask_var, mask_min=mask_min,
+                        preset=preset, source_name=slf)
+    finally:
+        Path(local).unlink(missing_ok=True)
+    return {**result, "run_id": run_id, "origin_bbox": origin,
+            "animation": str(gif) if result["animated"] else None,
+            "peak": str(peak),
+            "animation_bytes": gif.stat().st_size if result["animated"] else 0,
+            "peak_bytes": peak.stat().st_size}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -471,43 +525,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if ns.out_dir:
         out_dir = Path(ns.out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
     else:
         from trid3nt_server.testing.proof_paths import proof_dir, split_variant
 
         template, variant = split_variant(ns.stem)
         out_dir = Path(proof_dir(ns.template or template, ns.variant or variant))
-    worker = _read_json(ns.bucket, f"{ns.run_id}/telemac_metrics.json")
-    utm_epsg = ns.utm_epsg or worker.get("utm_epsg")
-    if utm_epsg is None:
-        raise SystemExit(f"run {ns.run_id} records no utm_epsg; pass --utm-epsg")
-    origin = ([float(v) for v in ns.origin_bbox.split(",")] if ns.origin_bbox
-              else worker.get("bbox"))
 
-    preset = None
-    if ns.quantity and _STYLES is not None:
-        preset, _fallback = _STYLES.resolve_style_preset(ns.quantity)
-
-    slf = _download(ns.bucket, f"{ns.run_id}/{ns.slf}", ".slf")
-    gif = out_dir / f"{ns.stem}_animation.gif"
-    peak = out_dir / f"{ns.stem}_{ns.still}_frame.png"
-    try:
-        result = render(slf, utm_epsg=int(utm_epsg), origin_bbox=origin,
-                        variable=ns.var, units=ns.units,
-                        title=ns.title or f"{ns.stem} - {ns.var.strip()}",
-                        run_id=ns.run_id, gif_path=gif, peak_path=peak,
-                        nplan=int(ns.nplan or worker.get("nplan") or 1),
-                        plane=ns.plane, still=ns.still, mask_var=ns.mask_var,
-                        mask_min=ns.mask_min, preset=preset)
-    finally:
-        Path(slf).unlink(missing_ok=True)
-    print(json.dumps({**result, "run_id": ns.run_id,
-                      "animation": str(gif) if result["animated"] else
-                      "NONE - a single-frame (steady) result has nothing to animate",
-                      "peak": str(peak), "origin_bbox": origin,
-                      "animation_bytes": (gif.stat().st_size if result["animated"]
-                                          else 0),
-                      "peak_bytes": peak.stat().st_size}, indent=2))
+    result = render_run(
+        run_id=ns.run_id, slf=ns.slf, var=ns.var, stem=ns.stem, out_dir=out_dir,
+        units=ns.units, quantity=ns.quantity, title=ns.title, bucket=ns.bucket,
+        origin_bbox=([float(v) for v in ns.origin_bbox.split(",")]
+                     if ns.origin_bbox else None),
+        utm_epsg=ns.utm_epsg, plane=ns.plane, nplan=ns.nplan,
+        mask_var=ns.mask_var, mask_min=ns.mask_min, still=ns.still)
+    print(json.dumps({**result, "animation": result["animation"] or
+                      "NONE - a single-frame (steady) result has nothing to animate"},
+                     indent=2))
     return 0
 
 
