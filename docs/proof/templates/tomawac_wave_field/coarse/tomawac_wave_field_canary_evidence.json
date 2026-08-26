@@ -20,8 +20,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YWGN46FHS4XWCAZ16C9D2W",
-  "case_id": "01M0YWGND23M4YGZG6ZCAY339Q",
+  "session_id": "01M0ZSAESC8BQFYGQV7K1XWE2Y",
+  "case_id": "01M0ZSAF28V1THDW2CKBT8XSGC",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -33,7 +33,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YWHZFK99NYX2DWMFYSY59H",
+      "chart_id": "01M0ZSCDFNPNC56R0R6BX0ZJP4",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -164,7 +164,7 @@
       "title": "Significant wave height (aoi)",
       "caption": "Fetch-limited growth under a prescribed 20 m/s wind: Hs 0.379 m at the upwind shore rising to 0.716 m downwind. Spectral screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YWGP1JJ9FPZN3X0V04KCRC"
+      "created_turn_id": "01M0ZSAFQSTKZGETAT9RAPN1Y1"
     }
   ],
   "layers": [
@@ -172,7 +172,7 @@
       "layer_id": "input-ncei_dem_mosaic-675132065060",
       "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0YWGP91B6ECZG678VRHS3SH.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0ZSB31A8ECB61XPR6SMANQK.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -184,10 +184,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0YWHZPR6VAW23QN5B8Q25KK",
+      "layer_id": "01M0ZSCDQGR558PKK9X1BKC7BK",
       "name": "Significant wave height (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YWGPCN7428A7C82FWCFSPE/tomawac_hs.tif",
+      "uri": "s3://trid3nt-runs/01M0ZSB38NKYD44D6B73MNJGYD/tomawac_hs.tif",
       "style_preset": "continuous_significant_wave_height",
       "visible": true,
       "role": "primary",
@@ -386,11 +386,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YWGPCN7428A7C82FWCFSPE",
+  "run_id": "01M0ZSB38NKYD44D6B73MNJGYD",
   "chart_spec": {
     "wave_fetch_growth": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YWHZFK99NYX2DWMFYSY59H",
+      "chart_id": "01M0ZSCDFNPNC56R0R6BX0ZJP4",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -589,7 +589,7 @@
       0.7164,
       0.7164
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0YWGPCN7428A7C82FWCFSPE/tomawac_hs.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZSB38NKYD44D6B73MNJGYD/tomawac_hs.tif",
     "wind_note": "prescribed steady storm wind (no wave-forcing fetcher exists)",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -597,8 +597,8 @@
     "target_resolution_note": "Explicit grid node spacing; 150 m is the finest the wave grid authors and a large lake is coarsened under the node budget [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YWGPCN7428A7C82FWCFSPE/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YWGPCN7428A7C82FWCFSPE/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZSB38NKYD44D6B73MNJGYD/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZSB38NKYD44D6B73MNJGYD/metrics.json"
   },
   "product_errors": {}
 }

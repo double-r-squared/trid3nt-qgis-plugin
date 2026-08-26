@@ -18,8 +18,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YWJ1B9YG67ZK7E58JEQ8ZA",
-  "case_id": "01M0YWJ1KRQ5Q9AD5Q9YK6PWWE",
+  "session_id": "01M0ZSCJCFRNDZD3ABPMBH0XPC",
+  "case_id": "01M0ZSCJP1GWY2R9V1169AFZNY",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -31,7 +31,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YWKAV17WXHT04G1VMZZ97J",
+      "chart_id": "01M0ZSDW2NFMZKXDSTMRXVBSYB",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -298,7 +298,7 @@
       "title": "Wave agitation Kd (aoi)",
       "caption": "Forced by a prescribed 8 s incident wave: Kd 0.524 on the exposed approach against 0.098 in the lee - the structure sheltered the berths by a factor of 5.35. Phase-resolving screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YWJ28FR15NM3A9M7VK5FJ7"
+      "created_turn_id": "01M0ZSCKDJXEMKQAZV7Q3FW2TP"
     }
   ],
   "layers": [
@@ -306,7 +306,7 @@
       "layer_id": "input-ncei_dem_mosaic-0e9339370b66",
       "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0YWJ2D4CZN4VWM0SNXT3FE6.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0ZSCKJFJ12C2T0076VD8GRQ.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -318,10 +318,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0YWKB2ANQRHXERJ92EHRNP5",
+      "layer_id": "01M0ZSDWAT3S4B84HPAXTDYQ2A",
       "name": "Wave agitation Kd (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YWJ2G89ZZTJD224SF6JJRK/overviews/01M0YWKAS5KZV8BFJZT0S8JXZE.tif",
+      "uri": "s3://trid3nt-runs/01M0ZSCKN934VYN7XZJW7GHMDX/overviews/01M0ZSDW0NAGPPF9VE9R8PHG9P.tif",
       "style_preset": "continuous_wave_agitation",
       "visible": true,
       "role": "primary",
@@ -481,11 +481,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YWJ2G89ZZTJD224SF6JJRK",
+  "run_id": "01M0ZSCKN934VYN7XZJW7GHMDX",
   "chart_spec": {
     "harbor_agitation": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YWKAV17WXHT04G1VMZZ97J",
+      "chart_id": "01M0ZSDW2NFMZKXDSTMRXVBSYB",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -891,7 +891,7 @@
       0.0
     ],
     "agitation_curve_kind": "diffraction_transect",
-    "layer_uri": "s3://trid3nt-runs/01M0YWJ2G89ZZTJD224SF6JJRK/overviews/01M0YWKAS5KZV8BFJZT0S8JXZE.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZSCKN934VYN7XZJW7GHMDX/overviews/01M0ZSDW0NAGPPF9VE9R8PHG9P.tif",
     "wave_period_note": "prescribed monochromatic incident wave period",
     "structure": null,
     "structure_note": "NO structure was supplied, and the solve confirms it meshed none: the domain was solved as OPEN WATER and every Kd here is the unsheltered response. Hand the slot a breakwater layer (fetch_osm_breakwaters) or a drawn line to model one.",
@@ -899,8 +899,8 @@
     "target_resolution_note": "Explicit grid node spacing; a phase-resolving solve needs several nodes per WAVELENGTH, so this is much finer than a spectral run [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YWJ2G89ZZTJD224SF6JJRK/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YWJ2G89ZZTJD224SF6JJRK/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZSCKN934VYN7XZJW7GHMDX/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZSCKN934VYN7XZJW7GHMDX/metrics.json"
   },
   "product_errors": {}
 }

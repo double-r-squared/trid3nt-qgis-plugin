@@ -21,8 +21,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YYEF8H4S990ARXQ22YZC40",
-  "case_id": "01M0YYEFH3YBE1Y3DR393A9WCT",
+  "session_id": "01M0ZSE0PGMQB3W1C04V0QCQPE",
+  "case_id": "01M0ZSE11X5Q947GVXN8RJK8Z5",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -34,7 +34,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YYG3QES26YP5BWX2R3Y89Z",
+      "chart_id": "01M0ZSFBNMXGGEXVTP6A4Z32YQ",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -196,7 +196,7 @@
       "title": "Surface temperature (aoi)",
       "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YYEG5HCS8J10FRQTP39PK5"
+      "created_turn_id": "01M0ZSE1WFFYEJTGF2BY3S8QQZ"
     }
   ],
   "layers": [
@@ -204,7 +204,7 @@
       "layer_id": "input-ncei_dem_mosaic-675132065060",
       "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0YYEGCYBKJ5787NTMAJJ9G8.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0ZSE2249XM4099F0NG6S78N.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -216,10 +216,10 @@
       "legend": null
     },
     {
-      "layer_id": "telemac3d-bottom-01M0YYEGGEXZWTC4KP8W0SEWWR",
+      "layer_id": "telemac3d-bottom-01M0ZSE25XWEVZVZJ0C2NKVPD0",
       "name": "Bottom temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YYEGGEXZWTC4KP8W0SEWWR/telemac3d_bottom.tif",
+      "uri": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/telemac3d_bottom.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "input",
@@ -240,10 +240,10 @@
       }
     },
     {
-      "layer_id": "01M0YYG3YJRNRDDB6BK5Y3E44S",
+      "layer_id": "01M0ZSFBX6M1CCS8TPYWPQRS8Z",
       "name": "Surface temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YYEGGEXZWTC4KP8W0SEWWR/telemac3d_surface.tif",
+      "uri": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/telemac3d_surface.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "primary",
@@ -456,11 +456,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YYEGGEXZWTC4KP8W0SEWWR",
+  "run_id": "01M0ZSE25XWEVZVZJ0C2NKVPD0",
   "chart_spec": {
     "vertical_profile": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YYG3QES26YP5BWX2R3Y89Z",
+      "chart_id": "01M0ZSFBNMXGGEXVTP6A4Z32YQ",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -679,7 +679,7 @@
       23.39,
       23.808
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0YYEGGEXZWTC4KP8W0SEWWR/telemac3d_surface.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/telemac3d_surface.tif",
     "wind_note": "calm - the thermocline persists and no wind circulation is driven",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -687,8 +687,8 @@
     "target_resolution_note": "Explicit HORIZONTAL grid node spacing; the vertical is nplan [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YYEGGEXZWTC4KP8W0SEWWR/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YYEGGEXZWTC4KP8W0SEWWR/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/metrics.json"
   },
   "product_errors": {}
 }
