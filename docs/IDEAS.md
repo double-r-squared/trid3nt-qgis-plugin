@@ -1611,3 +1611,24 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   list_run_frames -> emission/display seam, compose_case_report ->
   staleness check (who invokes it? aggressive posture applies),
   passthroughs -> inspect. The folder dies even where the tenants live.
+
+- data/ DELETED 2026-08-26 - the category-era fossil is gone. Last six
+  tenants (model_debris_flow, postprocess_pelicun, the four
+  set_<engine>_parameters setters, the three unregistered MODFLOW engine
+  surfaces) relocated to workflows/<engine>/ or tools/processing/; see
+  docs/DELETION_LEDGER.md for the per-tenant table.
+
+- CHOP CANDIDATES VERDICTS (NATE-named, co-verified 2026-08-26):
+  runaway_guard.py = KEEP, live safety-critical (turn stream +
+  context_budget import it; born from the 2026-06-25 runaway incident;
+  a local daemon wedges identically) - but its cloud-era docstring
+  archaeology (EC2/SSM narration) gets scrubbed in the stale sweep.
+  MALPASSET constellation (cases/malpasset_obs.py 285, scripts/
+  run_l2_malpasset.py 614, tests, fixtures, staged case) = HARVEST THEN
+  CHOP: it violates the US-only hard rule (French case) BUT the harness
+  is a working mini-calibration loop (obs pairing, NSE/KGE/RMSE skill
+  metrics, friction adjustment toward the published band, re-run,
+  re-score) - the best prior art for the calibration track. It lives
+  until the calibration design harvests its shape; then dies under
+  US-only, superseded by coastal-surge-vs-CO-OPS as the V&V exemplar,
+  ledger row citing supersession.
