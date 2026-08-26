@@ -1552,3 +1552,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   resolution (more honest as an "input": what the run was GIVEN, not a
   scatter of what the solver kept). ACCEPTANCE DELIVERABLE of the
   fetch-migration wave: this exact panel re-rendered continuous.
+
+- TELEMAC REMAINS OPEN (NATE 2026-08-26): the family does NOT close until
+  (1) VIOLATION 1 - the in-worker DEM/bathymetry fetch - is OUT (the
+  fetch-migration wave; --network none on the TELEMAC image is the
+  gate), and (2) the flagship proof set is RE-RENDERED current-standard
+  with MEASURED legend stability: legend-region hash count == 1 across
+  all frames (NATE's moving-ramp observation measured at 41/41 distinct
+  on the stale pre-wave-A render - per-frame GIF palette re-quantization,
+  fixed in wave A but the proof store still holds pre-fix renders =
+  tainted evidence). The assembler's --check flags stale/drifting GIFs;
+  all pre-fix animations get re-rendered, and the max-vs-colorbar
+  question (2.59 m label vs 0.94 bar) gets settled in the same pass
+  (if the ramp deliberately clips, the legend must SAY so).
