@@ -2,7 +2,7 @@
 
 Some answers converge with mesh refinement and some do not, and the ones that do
 not are not random - they fall into four classes, measured on the same runs at two
-spacings (the refined-mesh pass, 2026-08-25):
+spacings:
 
   * PEAK          - a concentration or magnitude maximum. Measured 6x LOW on the
                     coarse dye mesh, because a peak lives inside one element and a
@@ -22,11 +22,14 @@ the same as labeling nothing.
 WHAT THE LABEL IS CONDITIONED ON. Not a magic "coarse below N metres" threshold -
 nobody has run the convergence study that would justify one, and inventing the
 number would be exactly the baked opinion this campaign removes. It is conditioned
-on the run's own SHEET: whether the resolution lever came through the USER door or
-was left at the template's labeled default. A default-spacing run is the case the
-evidence above was measured on, and it says "treat as a bound". A run the user
-refined says so instead, and still says the class is sensitive, because refining
-is not the same as converging.
+on the run's own SHEET, and on TWO facts about the lever's row together: the row
+must carry a USER basis AND a seated value. Both are required, because a lever
+declared optional on the USER door seats an unresolved row that carries a user
+basis with a null value when nobody supplies anything - reading the basis alone
+calls that run refined and suppresses the warning on exactly the runs the
+evidence was measured on. A default-spacing run says "treat as a bound". A run
+the user refined says so instead, and still says the class is sensitive, because
+refining is not the same as converging.
 
 The mechanism is SKELETON-level (``Workflow.checks``), so every engine gets it the
 moment its template declares which of its answer fields are in which class.
@@ -113,7 +116,12 @@ def sensitivity_notes(decl: SensitivityDecl, metadata: Any, result: Any,
 
     lever = _lever(metadata)
     row = next((r for r in sheet if getattr(r, "name", None) == lever), None)
-    refined = getattr(row, "basis", None) == "user"
+    # BOTH halves are load-bearing: a lever declared optional on the USER door
+    # carries a user basis on the row nobody supplied, so the SEATED VALUE is
+    # what says the user actually put a spacing through the door. Testing the
+    # basis alone labels a default-spacing run as refined and swallows the bound.
+    refined = (getattr(row, "basis", None) == "user"
+               and getattr(row, "value", None) is not None)
     mesh_m = getattr(result, "mesh_size_m", None)
     at = f" at {float(mesh_m):g} m" if mesh_m is not None else ""
 

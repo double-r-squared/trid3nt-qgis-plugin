@@ -4,12 +4,19 @@ The mechanism is skeleton-level, so these pin it at the library rather than
 through any one engine: a template declares which of its ANSWER fields sit in
 which measured class, and the run's own sheet decides which of the two sentences
 it gets.
+
+The two DIRECTION tests drive the real resolver rather than a hand-built row: the
+user/default distinction is a property of the sheet the resolver produces, and a
+row written by hand can assert a shape the resolver never emits.
 """
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
+from trid3nt_server.workflows.lib.resolver import resolve_params
 from trid3nt_server.workflows.lib.resolution import (
     CLASSES,
     SensitivityDecl,
@@ -46,32 +53,57 @@ def test_a_declaration_refuses_a_class_nobody_can_read() -> None:
     assert all(c in str(excinfo.value) for c in CLASSES)
 
 
+#: A template whose resolution lever is optional on the USER door and whose
+#: derivations are pure, so the sheet under test is the real resolver's output
+#: and no network is touched.
+_TEMPLATE, _LEVER, _FIELD = "telemac_do_sag", "mesh_resolution_m", "do_min_distance_m"
+
+
+def _resolved_sheet(**supplied):
+    """The REAL sheet: what ``resolve_params`` seats for this template's params."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    workflow = TOOL_REGISTRY[_TEMPLATE].fn.workflow
+    sheet = asyncio.run(resolve_params(workflow.params, supplied)).rows()
+    return workflow, sheet
+
+
 def test_a_default_spacing_run_is_labeled_a_bound() -> None:
     """The un-refined run is the case the evidence was measured on."""
+    workflow, sheet = _resolved_sheet(location="Eel River near Scotia, California")
+
+    row = next(r for r in sheet if r.name == _LEVER)
+    assert row.basis == "user" and row.value is None, (
+        "an optional USER-door lever nobody supplied is seated with a USER basis "
+        "and a null value; the seated value is the only thing separating a run "
+        "the user refined from one left at the labeled default")
+
     notes = sensitivity_notes(
-        _DECL, _Meta(),
-        _Result(flooded_land_km2=0.03, inundation_peak_depth_m=0.15,
-                mesh_size_m=250.0),
-        [_Row("target_resolution_m", "derived")])
+        workflow.sensitivity, workflow.metadata,
+        _Result(**{_FIELD: 4200.0}, mesh_size_m=250.0), sheet)
     assert len(notes) == 1, "one mesh is one fact, not one note per field"
     note = notes[0]
     assert note.startswith("RESOLUTION-LIMITED, TREAT AS A BOUND:")
-    assert "flooded_land_km2" in note and "inundation_peak_depth_m" in note
+    assert _FIELD in note
     assert "250 m" in note
-    assert "target_resolution_m" in note, "the note names the lever to turn"
+    assert _LEVER in note, "the note names the lever to turn"
     assert "unsafe direction" in note
 
 
 def test_a_refined_run_says_refined_is_not_converged() -> None:
+    workflow, sheet = _resolved_sheet(location="Eel River near Scotia, California",
+                                      **{_LEVER: 25.0})
+
+    row = next(r for r in sheet if r.name == _LEVER)
+    assert row.basis == "user" and row.value == 25.0
+
     notes = sensitivity_notes(
-        _DECL, _Meta(),
-        _Result(flooded_land_km2=0.03, inundation_peak_depth_m=0.15,
-                mesh_size_m=60.0),
-        [_Row("target_resolution_m", "user")])
+        workflow.sensitivity, workflow.metadata,
+        _Result(**{_FIELD: 4200.0}, mesh_size_m=25.0), sheet)
     assert len(notes) == 1
     assert notes[0].startswith("RESOLUTION-SENSITIVE:")
     assert "not a demonstrated convergence" in notes[0]
-    assert "60 m" in notes[0]
+    assert "25 m" in notes[0]
 
 
 def test_a_field_the_run_did_not_produce_is_not_labeled() -> None:
