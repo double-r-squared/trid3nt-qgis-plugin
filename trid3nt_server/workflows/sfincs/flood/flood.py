@@ -152,6 +152,9 @@ from trid3nt_server.workflows.solver.solver import (
     run_solver,
     wait_for_completion,
 )
+from trid3nt_server.workflows.sfincs.flood.sfincs_dispatch import (  # noqa: F401 -- import registers the regular-grid spec
+    register_sfincs_local_spec,
+)
 from trid3nt_server.workflows.sfincs.flood.quadtree_dispatch import (
     SFINCS_QUADTREE_SOLVER_NAME,
     QuadtreeDispatchError,

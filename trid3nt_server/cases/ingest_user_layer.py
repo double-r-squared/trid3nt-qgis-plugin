@@ -159,9 +159,10 @@ def _split_s3_uri(uri: str) -> tuple[str, str]:
 
 
 def _s3_client():
-    import boto3
+    """The ONE object-store client (bound or lazily built), never a second one."""
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
-    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
+    return _get_s3_client()
 
 
 def _head_object_size(s3_uri: str) -> int:

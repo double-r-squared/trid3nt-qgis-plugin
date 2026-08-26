@@ -68,9 +68,10 @@ async def publish_release_point(emitter: Any, *, lon: float, lat: float,
 
 
 def _upload_point(lon: float, lat: float, basis: str, reach_name: str) -> str | None:
-    import boto3
-
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+    from trid3nt_server.workflows.solver.solver import (
+        _get_runs_bucket,
+        _get_s3_client,
+    )
 
     body = json.dumps({
         "type": "FeatureCollection",
@@ -83,7 +84,6 @@ def _upload_point(lon: float, lat: float, basis: str, reach_name: str) -> str | 
     }).encode("utf-8")
     bucket = _get_runs_bucket()
     key = f"inputs/{new_ulid()}/release_point.geojson"
-    boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2")) \
-        .put_object(Bucket=bucket, Key=key, Body=body,
-                    ContentType="application/geo+json")
+    _get_s3_client().put_object(Bucket=bucket, Key=key, Body=body,
+                                ContentType="application/geo+json")
     return f"s3://{bucket}/{key}"

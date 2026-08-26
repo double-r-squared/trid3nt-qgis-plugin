@@ -1,10 +1,9 @@
-"""Solver dispatch atomic tools (M5 Stage C).
+"""Solver dispatch atomic tools.
 
 This module registers two atomic tools that drive the solver-execution
 substrate. Dispatch is a local container run (``local-docker``) or a
 direct-binary run (``local-exec``) on this machine, selected per solver by its
-``LocalSolverSpec`` exec spec -- ``solver_backend()`` unconditionally returns
-``local-docker``. Together they implement the **solver-dispatch
+``LocalSolverSpec`` exec spec. Together they implement the **solver-dispatch
 surface**:
 
     - ``run_solver(solver, model_setup_uri, compute_class="medium")
@@ -87,7 +86,7 @@ call. The same id is used to compose the runs-bucket completion path
 Solver backend (local-only)
 ---------------------------
 
-``local-docker`` is the ONLY backend (``solver_backend()`` is hardwired):
+``local-docker`` is the ONLY backend:
 
 - ``local-docker`` -- the S3-IN → sfincs → S3-OUT envelope lives INSIDE the
   agent (testable Python); the object store is whatever ``AWS_ENDPOINT_URL``
@@ -142,7 +141,7 @@ classifier for solver-specific status resolution, and the cancel kind):
   is byte-identical to ``workers/sfincs/entrypoint.py``).
 - MODFLOW (``workflows/run_modflow.py``) launches the **mf6 binary directly**
   (``exec_kind="exec"`` -- no public MODFLOW image exists; the instance gets
-  the same SHA-pinned USGS 6.5.0 static binary the GCP Dockerfile installs).
+  the same SHA-pinned USGS 6.5.0 static binary the worker image installs).
   Its spec's ``classify_exit`` reproduces the MODFLOW entrypoint's
   list-file convergence guard, and the completion.json carries the EXACT
   ``workers/modflow/entrypoint.py`` key set (``mf6_stdout_uri`` /
@@ -186,7 +185,6 @@ __all__ = [
     "set_emitter_binding",
     "set_runs_bucket",
     "set_s3_client",
-    "solver_backend",
     "SOLVER_BACKEND_LOCAL_DOCKER",
     "LOCAL_DOCKER_WORKFLOW_NAME",
     "LOCAL_EXEC_WORKFLOW_NAME",
@@ -248,7 +246,7 @@ PROGRESS_TERMINAL: int = 100
 #: workflow/composer name for the solver; the registry is consumed purely as a
 #: PRESENCE GATE by ``run_solver`` (an unregistered solver raises
 #: ``SolverNotRegisteredError``) -- the live backend routing + the handle's pinned
-#: ``workflow_name`` come from ``solver_backend()`` / the backend sentinel
+#: ``workflow_name`` come from the backend sentinel
 #: (``LOCAL_DOCKER_WORKFLOW_NAME`` / ``LOCAL_EXEC_WORKFLOW_NAME``), not from this
 #: value. SWMM + MODFLOW self-register at import (``setdefault`` to a backend
 #: sentinel); GeoClaw also self-registers (``register_geoclaw_solver()``), but
@@ -277,8 +275,8 @@ SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
 
 # --- Solver backend seam --- #
 
-#: AWS EC2 backend -- plain upstream ``deltares/sfincs-cpu`` via ``docker run``
-#: on the same instance; staging/upload envelope lives in this module.
+#: The ONE backend: plain upstream ``deltares/sfincs-cpu`` via ``docker run`` on
+#: this machine; the staging/upload envelope lives in this module.
 SOLVER_BACKEND_LOCAL_DOCKER: str = "local-docker"
 
 #: ``ExecutionHandle.workflow_name`` sentinel for local-docker handles --
@@ -305,35 +303,23 @@ LOCAL_DOCKER_WORKFLOW_LOCATION: str = "local"
 #: Default rundir root under local-docker (env ``TRID3NT_RUNS_DIR``).
 DEFAULT_LOCAL_RUNS_DIR: str = "/opt/trid3nt/runs"
 
-#: Default SFINCS image under local-docker (env ``TRID3NT_SFINCS_IMAGE``).
-DEFAULT_SFINCS_IMAGE: str = "deltares/sfincs-cpu:latest"
-
 #: Budget for the ``docker kill`` subprocess on cancel -- comfortably inside
 #: the ≤30 s cancellation-budget envelope.
 DOCKER_KILL_TIMEOUT_S: float = 25.0
 
 
-def solver_backend() -> str:
-    """Return the active solver backend.
-
-    ``local-docker`` is the ONLY backend, so this unconditionally returns
-    ``SOLVER_BACKEND_LOCAL_DOCKER``. Retained as a stable predicate seam the
-    local-single-user-mode and solver-confirm checks read.
-    """
-    return SOLVER_BACKEND_LOCAL_DOCKER
-
-
-#: Map the kickoff-named compute classes (small/medium/large) onto the
-#: ``ExecutionHandle.ComputeClass`` literal contract
-#: (``Literal["small", "standard", "large", "gpu"]``). This alias map names
-#: the middle class ``medium`` but the schema-side contract chose ``standard``;
-#: rather than break the kickoff parameter surface we pin a mapping here.
-_COMPUTE_CLASS_ALIAS: dict[str, str] = {
+#: The compute-class vocabulary, in ONE place: what a caller may say, mapped onto
+#: the ``ExecutionHandle.ComputeClass`` contract. ``medium`` is a retained SYNONYM
+#: of the contract's ``standard`` - it is still the spelling most template Params
+#: declare, and renaming it is a fleet-wide model-facing change rather than a
+#: dispatch one. Everything that validates a compute class reads this map; nobody
+#: keeps a second copy of the set.
+COMPUTE_CLASS_ALIAS: dict[str, str] = {
     "small": "small",
-    "medium": "standard",  # medium == schema-side standard
+    "medium": "standard",
     "standard": "standard",
     "large": "large",
-    "xlarge": "xlarge",  # higher-powered vertical-scale tier (48 vCPU / 96 GiB)
+    "xlarge": "xlarge",
     "gpu": "gpu",
 }
 
@@ -405,9 +391,10 @@ def set_runs_bucket(name: str | None) -> None:
 def set_s3_client(client: Any) -> None:
     """Bind the boto3 S3 client used for ALL local-docker S3 I/O.
 
-    Production wiring leaves this ``None`` (the lazy default builds
-    ``boto3.client("s3", region_name=$AWS_REGION)``, which resolves the EC2
-    instance-role credentials via IMDS - the boto3-not-s3fs lesson).
+    Production wiring leaves this ``None``: the lazy default builds
+    ``boto3.client("s3", region_name=$AWS_REGION)``, whose endpoint and
+    credentials come from the ambient environment - boto3, never s3fs, because
+    s3fs falls back to anonymous access and reads corrupt bytes.
     Tests inject a tmpdir-backed fake exposing ``get_object`` /
     ``put_object``. ``None`` restores the lazy default.
 
@@ -424,7 +411,7 @@ def _get_s3_client() -> Any:
 
     boto3 (NOT s3fs) for all S3 I/O -- s3fs falls back to anonymous
     credentials on the EC2 instance role. Lazy import so
-    GCP-only / CI environments never pay for boto3 at module load.
+    A process that never dispatches a solver never pays for boto3 at import.
     """
     if _S3_CLIENT is not None:
         return _S3_CLIENT
@@ -439,24 +426,19 @@ def _get_s3_client() -> Any:
 
 
 def _get_runs_bucket() -> str:
-    """Return the overridden runs bucket or the env-default
-    (``TRID3NT_RUNS_BUCKET`` if set, else the AWS runs bucket).
-
-    GCP is decommissioned: the default is the AWS S3 runs bucket. Production
-    sets ``TRID3NT_RUNS_BUCKET`` explicitly via systemd."""
+    """The overridden runs bucket, or ``TRID3NT_RUNS_BUCKET``, or the default name."""
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
     return os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _get_local_runs_bucket() -> str:
-    """Runs bucket under local-docker -- NO default to a GCP bucket name.
+    """Runs bucket under local-docker, with NO default at all.
 
-    ``set_runs_bucket`` override wins (test seam); otherwise
-    ``TRID3NT_RUNS_BUCKET`` must be set explicitly (on AWS the orchestrator
-    provisions e.g. ``trid3nt-runs``). A silent fallback
-    to the GCP-named default would make every local run upload to a bucket
-    that does not exist on AWS -- fail loudly instead.
+    ``set_runs_bucket`` wins (the test seam); otherwise ``TRID3NT_RUNS_BUCKET``
+    must be set explicitly. A default here would let every run upload into a
+    bucket nobody provisioned and call it a success, so an unset variable fails
+    loudly instead.
     """
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
@@ -464,7 +446,7 @@ def _get_local_runs_bucket() -> str:
     if not bucket:
         raise SolverDispatchError(
             "TRID3NT_RUNS_BUCKET must be set when TRID3NT_SOLVER_BACKEND="
-            "local-docker (no GCP-named default on AWS)."
+            "local-docker; there is no default runs bucket."
         )
     return bucket
 
@@ -488,7 +470,7 @@ def _utc_now_iso() -> str:
 def _split_object_uri(uri: str) -> tuple[str, str, str]:
     """Split ``s3://bucket/key`` → (scheme, bucket, key).
 
-    GCP is decommissioned: only the ``s3://`` scheme is supported. Raises
+    Only the ``s3://`` scheme is supported. Raises
     ``SolverDispatchError`` on malformed or unsupported URIs.
     """
     prefix = "s3://"
@@ -520,7 +502,7 @@ def _download_object(uri: str, dest: Path) -> None:
 
     The manifest's input entries keep the LEGACY field name ``gs_uri`` but
     the VALUE is an ``s3://`` URI (the storage backend) - we dispatch
-    on the URI scheme, never the field name. GCP is decommissioned, so only
+    on the URI scheme, never the field name. Only
     ``s3://`` (and ``file://`` / local paths) are resolved.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -638,39 +620,6 @@ def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
     return [*cmd[:2], "--network", spec.network, *cmd[2:]]
 
 
-def _sfincs_local_spec() -> LocalSolverSpec:
-    """The SFINCS local-docker spec - behavior verbatim."""
-    image = os.environ.get("TRID3NT_SFINCS_IMAGE") or DEFAULT_SFINCS_IMAGE
-
-    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
-        return [
-            "docker",
-            "run",
-            "--rm",
-            "--name",
-            run_id,
-            "-v",
-            f"{rundir}:/data",
-            "-w",
-            "/data",
-            image,
-            *args,
-        ]
-
-    return LocalSolverSpec(
-        solver="sfincs",
-        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
-        args_key="sfincs_args",
-        build_argv=build_argv,
-        stdout_name="sfincs.stdout",
-        stderr_name="sfincs.stderr",
-        stdout_uri_field="sfincs_stdout_uri",
-        stderr_uri_field="sfincs_stderr_uri",
-        exec_kind="docker",
-        classify_exit=None,
-    )
-
-
 @dataclass
 class _LocalRun:
     """In-process registry entry for one local-backend solver run."""
@@ -684,6 +633,10 @@ class _LocalRun:
     stdout_path: Path
     stderr_path: Path
     spec: LocalSolverSpec
+    #: WHICH CODE dispatched this run - stamped at launch, carried into
+    #: completion.json, so a reader of the artifact can ask whether the engine
+    #: has moved since rather than assuming it has not.
+    code: dict[str, Any] = field(default_factory=dict)
     cancel_requested: threading.Event = field(default_factory=threading.Event)
     supervisor: threading.Thread | None = None
 
@@ -745,6 +698,7 @@ def _write_local_completion(
     stderr_uri_field: str = "sfincs_stderr_uri",
     extra: dict[str, Any] | None = None,
     solver: str | None = None,
+    code: dict[str, Any] | None = None,
 ) -> None:
     """Write ``s3://<runs_bucket>/<run_id>/completion.json`` -- EXACT
     worker-entrypoint schema (the ``wait_for_completion`` terminal signal).
@@ -772,6 +726,7 @@ def _write_local_completion(
         "status": status,
         "exit_code": exit_code,
         "solver": solver,
+        **(code or {}),
         **(extra or {}),
         stdout_uri_field: stdout_uri,
         stderr_uri_field: stderr_uri,
@@ -909,6 +864,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
             stderr_uri_field=run.spec.stderr_uri_field,
             extra=completion_extra,
             solver=run.spec.solver,
+            code=run.code,
         )
     except Exception:  # noqa: BLE001 -- terminal-signal write failed; log loudly
         logger.exception(
@@ -940,7 +896,7 @@ def launch_local_solver(
             worker-contract manifest; input URIs inside resolve by scheme.
         run_id: optional pre-minted run id (the MODFLOW deck is staged under
             ``modflow/<run_id>/`` BEFORE submit, so its run_id must flow
-            through -- GCP parity with the ``{run_id, manifest_uri}`` workflow
+            through -- parity with the ``{run_id, manifest_uri}`` workflow
             argument). Minted fresh when ``None`` (the SFINCS path).
         compute_class: class, alias-mapped onto the schema literal.
     """
@@ -953,11 +909,11 @@ def launch_local_solver(
             f"model_setup_uri must be an s3:// / gs:// / file:// URI under "
             f"the local-docker backend; got {model_setup_uri!r}"
         )
-    schema_compute_class = _COMPUTE_CLASS_ALIAS.get(compute_class)
+    schema_compute_class = COMPUTE_CLASS_ALIAS.get(compute_class)
     if schema_compute_class is None:
         raise SolverDispatchError(
             f"compute_class {compute_class!r} not recognized; allowed: "
-            f"{sorted(_COMPUTE_CLASS_ALIAS)}"
+            f"{sorted(COMPUTE_CLASS_ALIAS)}"
         )
     runs_bucket = _get_local_runs_bucket()  # fail fast on missing env
 
@@ -990,6 +946,19 @@ def launch_local_solver(
     # without requiring a separate S3 read from the subprocess. This is a
     # no-op for docker/exec specs that do not use the manifest URI at runtime
     # (SFINCS passes sfincs_args; MODFLOW passes mf6_args; SWMM passes inp path).
+    # WHICH CODE is dispatching. It lands BESIDE the manifest rather than inside
+    # it: manifest.json is the worker's input contract and several entrypoints
+    # gate it strictly, so run provenance goes in its own file. The run record
+    # carries the same values into completion.json.
+    from .code_provenance import code_identity
+
+    code = code_identity()
+    try:
+        (rundir / "code_provenance.json").write_text(
+            json.dumps(code, indent=2), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 -- a provenance note never fails a run
+        logger.warning("local-docker could not write code_provenance.json to %s: %s",
+                       rundir, exc)
     manifest_rundir_path = rundir / "manifest.json"
     try:
         manifest_rundir_path.write_text(
@@ -1013,8 +982,8 @@ def launch_local_solver(
                 f"manifest input entry malformed (need gs_uri + dest): {item!r}"
             ) from exc
         dest = rundir / dest_rel
-        # Host-side path-traversal guard (the GCP entrypoint runs sandboxed in
-        # its container; here we stage on the instance filesystem).
+        # Host-side path-traversal guard: staging writes to the instance
+        # filesystem, so a dest that climbs out of the rundir is refused.
         if rundir_resolved not in dest.resolve().parents:
             raise SolverDispatchError(
                 f"manifest input dest escapes the rundir: {dest_rel!r}"
@@ -1070,6 +1039,7 @@ def launch_local_solver(
         stdout_path=stdout_path,
         stderr_path=stderr_path,
         spec=spec,
+        code=code,
     )
     _LOCAL_RUNS[run_id] = run
     supervisor = threading.Thread(
@@ -1107,19 +1077,11 @@ def _run_solver_local_docker(
 ) -> ExecutionHandle:
     """``run_solver`` body under ``TRID3NT_SOLVER_BACKEND=local-docker``.
 
-    Dispatches to the per-solver ``LocalSolverSpec`` via
-    ``LOCAL_SOLVER_SPEC_REGISTRY``. SFINCS uses the original docker path; pip-
-    only engines (swmm/landlab/openquake) use ``exec_kind="exec"`` subprocess
-    specs registered at import time (deferred via callables to avoid circular
-    imports -- each workflow module self-registers when it is first imported).
-
-    Only ``solver == "sfincs"`` falls back to the hardcoded SFINCS docker spec
-    (the original local-docker path, kept byte-identical for callers that only
-    set ``TRID3NT_SOLVER_BACKEND=local-docker`` for SFINCS). Every other solver
-    MUST have a ``LOCAL_SOLVER_SPEC_REGISTRY`` entry registered by its own
-    workflow module at import time; a solver with no entry raises
-    ``SolverDispatchError`` rather than silently running under the SFINCS spec
-    (a wrong-engine dispatch is worse than a loud failure).
+    Every solver is looked up in ``LOCAL_SOLVER_SPEC_REGISTRY``, which its own
+    workflow module fills at import time (deferred via callables, so a spec can
+    name its image and its exit classifier without importing this module back).
+    A solver with no entry raises ``SolverDispatchError`` rather than borrowing
+    somebody else's spec: a wrong-engine dispatch is worse than a loud failure.
     """
     factory = LOCAL_SOLVER_SPEC_REGISTRY.get(solver)
     if factory is not None:
@@ -1131,12 +1093,6 @@ def _run_solver_local_docker(
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         return launch_local_solver(spec, model_setup_uri, compute_class=compute_class)
-    if solver == "sfincs":
-        return launch_local_solver(
-            _sfincs_local_spec(),
-            model_setup_uri,
-            compute_class=compute_class,
-        )
     raise SolverDispatchError(
         f"solver {solver!r} has no LOCAL_SOLVER_SPEC_REGISTRY entry -- its "
         "workflow module must call register_local_solver_spec() (never a "
@@ -1145,17 +1101,14 @@ def _run_solver_local_docker(
 
 
 # --------------------------------------------------------------------------- #
-# Per-solver local-spec registry (subprocess runner for pip-only engines)
+# Per-solver local-spec registry -- EVERY solver, no exceptions.
 #
 # Maps solver name -> callable returning a LocalSolverSpec. The callable form
 # (factory, not a pre-built spec) avoids circular imports: each workflow module
-# (run_swmm, run_landlab, model_openquake_psha) registers itself at
-# import time via register_local_solver_spec(); the factory is only CALLED
-# inside _run_solver_local_docker, by which time the module is fully loaded.
-#
-# SFINCS is NOT in this registry -- it keeps the original _sfincs_local_spec()
-# path (docker exec_kind, not subprocess). All pip-only engines that have no
-# public container image use exec_kind="exec" and register here.
+# registers itself at import time via register_local_solver_spec(), and the
+# factory is only CALLED inside _run_solver_local_docker, by which time the
+# module is fully loaded. Engines with a public image use exec_kind="docker";
+# pip-only engines with none use exec_kind="exec".
 # --------------------------------------------------------------------------- #
 
 #: solver name -> zero-arg callable returning a LocalSolverSpec.
@@ -1383,7 +1336,7 @@ async def _wait_for_completion_local(
                     handle.run_id,
                 )
                 # Timeout ≠ user cancel: kill WITHOUT the cancelled flag so the
-                # supervisor records status="error" (mirrors the GCP path's
+                # supervisor records status="error" (mirrors the worker path's
                 # best-effort cancel + SOLVER_TIMEOUT result). Kind-aware
                 #: docker kill or process-group kill.
                 await loop.run_in_executor(None, _kill_local_run, handle.run_id)

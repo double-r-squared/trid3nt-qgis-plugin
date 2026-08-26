@@ -47,13 +47,11 @@ from botocore.exceptions import ClientError
 import trid3nt_server.workflows.solver.solver as solver_mod
 from trid3nt_server.workflows.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
-    SOLVER_BACKEND_LOCAL_DOCKER,
     SolverDispatchError,
     run_solver,
     set_emitter_binding,
     set_runs_bucket,
     set_s3_client,
-    solver_backend,
     wait_for_completion,
 )
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
@@ -269,24 +267,6 @@ def _wait_for_completion_object(
         f"supervisor did not write completion.json within {timeout_s}s "
         f"(objects: {sorted(s3.objects)})"
     )
-
-
-# --------------------------------------------------------------------------- #
-# 1. Backend seam default — aws-batch (GCP decommissioned)
-# --------------------------------------------------------------------------- #
-
-
-def test_solver_backend_is_always_local_docker(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The AWS Batch (and legacy GCP) dispatch arms are removed: this build is
-    # local-docker-only, so solver_backend() ALWAYS resolves to local-docker
-    # regardless of TRID3NT_SOLVER_BACKEND (the env read is gone).
-    monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
-    assert solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
-    for val in ("aws-batch", "gcp-workflows", "gcp-workflows-someday", "local-docker"):
-        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", val)
-        assert solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
 
 # --------------------------------------------------------------------------- #

@@ -408,10 +408,9 @@ def _read_run_products(ev: RunEvidence) -> None:
     bucket, _, key = str(raster["uri"])[len("s3://"):].partition("/")
     ev.run_id = key.split("/", 1)[0]
 
-    import boto3
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
-    s3 = boto3.client("s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-                      region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    s3 = _get_s3_client()
     for label, name in _RUN_PRODUCTS:
         try:
             blob = s3.get_object(Bucket=bucket,

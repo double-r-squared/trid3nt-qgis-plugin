@@ -134,7 +134,7 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
     assert g is not None
     assert g["engine"] == engine
     assert g["resolution_param"] == "resolution_m"
-    assert g["compute_class"] == "fetch"
+    assert g["compute_class"] == "local"  # the fetch runs in this process
     assert g["suggested_resolution_m"] > 0
     assert len(g["resolution_choices"]) >= 1
     assert all(r > 0 for r in g["resolution_choices"])
@@ -354,42 +354,6 @@ def test_clamp_fetch_resolution_helper() -> None:
 #     "fetch (1 vCPU)" compute label on the confirm card -- it renders the
 #     "local" compute lane instead. The cloud lane (aws-batch / unset) keeps
 #     the exact prior values byte-for-byte.
-# --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "backend,expected_compute_class",
-    [
-        ("local-docker", "local"),
-        ("aws-batch", "fetch"),
-        ("", "fetch"),  # unset/empty -> the cloud default, unchanged
-    ],
-)
-async def test_fetch_gate_compute_label_deployment_aware(
-    monkeypatch, backend: str, expected_compute_class: str
-) -> None:
-    from trid3nt_server import server
-
-    if backend:
-        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend)
-    else:
-        monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
-
-    ws, state = _FakeWS(), _FakeState()
-    approver = asyncio.create_task(_drive_decision(server, "proceed"))
-    should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "fetch_dem", _fetch_params()
-    )
-    await approver
-
-    assert should_run is True
-    card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
-    g = card["payload"]["granularity"]
-    assert g["compute_class"] == expected_compute_class
-    # Both lanes: vcpus stays 1 (contract requires > 0) and no Spot label.
-    assert g["vcpus"] == 1
-    assert g["spot_label"] is None
-
-
 # --------------------------------------------------------------------------- #
 # 11) fetch_dem F16-for-DEM extension (2026-07-10): a state-scale bbox (the
 #     WA-state live failure this fixes) gets an HONEST coarsened suggestion --

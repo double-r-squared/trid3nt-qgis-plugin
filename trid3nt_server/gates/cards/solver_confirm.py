@@ -61,21 +61,6 @@ _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
 }
 
 
-def _local_compute_lane() -> bool:
-    """True when solves run on the LOCAL machine (the TRID3NT local build).
-
-    Local-cloud fingerprint seam: the canonical deployment
-    signal is the solver dispatch backend -- ``TRID3NT_SOLVER_BACKEND=
-    local-docker`` (``tools.simulation.solver.solver_backend()``), which the local build
-    pins and the cloud stack never sets. Used ONLY to localize user-visible
-    confirm-card wording (compute labels / "cloud solve" prose); it never
-    changes dispatch. Cloud wording stays byte-identical when this is False.
-    """
-    from trid3nt_server.workflows.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
-
-    return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
-
-
 def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
     """Floor a user-chosen fetch resolution UP to the finest allowed cell size.
 
@@ -198,12 +183,9 @@ async def _build_fetch_resolution_envelope(
         "fetch_landcover": "landcover",
     }
     engine = _ENGINE_BY_TOOL.get(tool_name, "topobathy")
-    # Local-cloud fingerprint fix: the local build must not
-    # surface the cloud "fetch (1 vCPU)" compute label on the confirm card --
-    # the fetch runs in-process on the local machine, so the compute label is
-    # "local" (the QGIS-plugin/web cards render local wording off it). The
-    # cloud lane keeps the exact prior values byte-for-byte.
-    fetch_compute_class = "local" if _local_compute_lane() else "fetch"
+    # The fetch runs in-process on this machine, so the compute label the
+    # QGIS-plugin and web cards render is "local".
+    fetch_compute_class = "local"
     granularity = GranularitySuggestion(
         engine=engine,
         resolution_param="resolution_m",
@@ -351,15 +333,10 @@ async def _build_flood_run_settings_envelope(
             suggest_sfincs_resolution_from_bbox,
             tuple(coerced),  # type: ignore[arg-type]
         )
-        compute_class = params.get("compute_class", "standard") or "standard"
-        card_vcpus = int(auto.vcpus)
-        if _local_compute_lane():
-            # Local-cloud fingerprint fix: the local build
-            # solves on the local machine, so the card's compute descriptors
-            # are the local lane's ("local" + host CPU count -- mirrors the
-            # SWMM builder's local lane). Cloud keeps the exact prior values.
-            compute_class = "local"
-            card_vcpus = os.cpu_count() or 1
+        # The solve runs on this machine, so the card's compute descriptors are
+        # this host's rather than a sizing class.
+        compute_class = "local"
+        card_vcpus = os.cpu_count() or 1
         rungs = sorted(
             {r for r in SFINCS_RES_LADDER if r > 0}
             | {float(auto.grid_resolution_m)}
@@ -414,14 +391,7 @@ async def _build_flood_run_settings_envelope(
         threshold_mb=0.0,
         recommendation=(
             f"Run a SFINCS flood simulation for {where} "
-            # Local-cloud fingerprint fix: local builds run
-            # the solve on this machine -- never say "cloud solve" there. The
-            # cloud phrase is byte-identical to the prior wording.
-            + (
-                "(local solve)."
-                if _local_compute_lane()
-                else "(cloud solve, typically 5-20 minutes)."
-            )
+            "(local solve)."
             + res_phrase
             + cadence_phrase
             + " Review the run settings, then confirm to start."
@@ -524,16 +494,8 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
         if return_period_years is not None
         else ""
     )
-    # Local-cloud fingerprint fix: the local build runs the
-    # OpenQuake engine on this machine -- never say "AWS Batch"/"cloud solve"
-    # there. The cloud phrase is byte-identical to the prior wording.
     dispatch_phrase = (
         "This runs the OpenQuake engine locally (typically several minutes)."
-        if _local_compute_lane()
-        else (
-            "This dispatches the OpenQuake engine to AWS Batch (a cloud "
-            "solve, typically several minutes)."
-        )
     )
     recommendation = (
         f"Run a classical probabilistic seismic-hazard (PSHA) calculation over "
@@ -596,11 +558,7 @@ def _build_scenario_confirm_envelope(params: dict, tool_name: str) -> Any:
         f"~{bbox_area_km2:,.0f} km^2 AOI" if bbox_area_km2 is not None
         else "the requested AOI"
     )
-    lane_phrase = (
-        "This runs the OpenQuake engine locally (typically seconds)."
-        if _local_compute_lane()
-        else "This dispatches the OpenQuake engine to AWS Batch (typically minutes)."
-    )
+    lane_phrase = "This runs the OpenQuake engine locally (typically seconds)."
     if tool_name == "openquake_secondary_perils":
         recommendation = (
             f"Screen earthquake-triggered LIQUEFACTION + LANDSLIDE ground failure "
@@ -785,16 +743,8 @@ def _build_geoclaw_confirm_envelope(params: dict) -> Any:
         f"~{sim_minutes:,.0f} min simulated" if sim_minutes >= 1.0
         else f"{sim_duration_s:g} s simulated"
     )
-    # Local-cloud fingerprint fix (mirrors the psha card): the local build runs
-    # the GeoClaw engine on this machine -- never say "AWS Batch"/"cloud solve"
-    # there.
     dispatch_phrase = (
         "This runs the GeoClaw engine locally (typically several minutes)."
-        if _local_compute_lane()
-        else (
-            "This dispatches the GeoClaw engine to AWS Batch (a cloud solve, "
-            "typically several minutes)."
-        )
     )
     recommendation = (
         f"Run a GeoClaw {scenario} shallow-water inundation simulation over "

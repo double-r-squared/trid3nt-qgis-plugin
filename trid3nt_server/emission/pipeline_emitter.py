@@ -745,14 +745,9 @@ async def _read_vector_uri_as_geojson(uri: str) -> dict[str, Any] | None:
     def _read_and_parse() -> dict[str, Any] | None:
         try:
             if uri.startswith("s3://"):
-                # boto3 resolves the EC2 instance role
-                # (s3fs falls back to anonymous here).
-                import boto3
-                rest = uri[len("s3://"):]
-                b, _, k = rest.partition("/")
-                data = boto3.client(
-                    "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")
-                ).get_object(Bucket=b, Key=k)["Body"].read()
+                from trid3nt_server.workflows.solver.solver import _read_object_bytes
+
+                data = _read_object_bytes(uri)
             else:
                 # Local path (test / dev convenience).
                 import fsspec  # type: ignore[import-not-found]

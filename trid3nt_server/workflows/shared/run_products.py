@@ -46,13 +46,13 @@ async def persist_run_products(run_id: str | None, *,
 
 def _put_json(run_id: str, key: str, body: dict[str, Any]) -> str | None:
     try:
-        import boto3
-
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+        from trid3nt_server.workflows.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+        )
 
         bucket = _get_runs_bucket()
-        boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2")) \
-            .put_object(Bucket=bucket, Key=f"{run_id}/{key}",
+        _get_s3_client().put_object(Bucket=bucket, Key=f"{run_id}/{key}",
                         Body=json.dumps(body, indent=2, default=str).encode("utf-8"),
                         ContentType="application/json")
         return f"s3://{bucket}/{run_id}/{key}"

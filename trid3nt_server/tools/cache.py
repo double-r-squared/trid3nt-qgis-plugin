@@ -355,17 +355,15 @@ def _split_s3_uri(uri: str) -> tuple[str, str]:
 
 
 def read_object_bytes_s3(uri: str) -> bytes:
-    """Read an ``s3://`` object fully into memory via boto3.
+    """Read an ``s3://`` object fully into memory through the ONE store seam.
 
-    Shared by every tool download-helper so the per-tool ``gs://`` staging
-    paths gain s3 support with a one-line guard. boto3 (NOT s3fs) per the
-     lesson: s3fs/aiobotocore falls back to anonymous on the EC2
-    instance role."""
-    import boto3
+    Shared by every tool download-helper. It delegates rather than building its
+    own client so a test that injects one client sees every read - boto3, never
+    s3fs, because s3fs falls back to anonymous access and returns corrupt bytes.
+    """
+    from trid3nt_server.workflows.solver.solver import _read_object_bytes
 
-    bucket, obj_key = _split_s3_uri(uri)
-    s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
-    return s3.get_object(Bucket=bucket, Key=obj_key)["Body"].read()
+    return _read_object_bytes(uri)
 
 
 def _read_sidecar_s3(s3: Any, bucket: str, obj_key: str) -> dict[str, Any] | None:
@@ -421,11 +419,12 @@ def _read_through_s3(
     ``<key>.provenance.json`` sidecar; on a MISS the recorder is bound around
     ``fetch_fn`` (so the delegate's :func:`record_provenance` fills it) and the
     result is persisted as the sidecar. Strictly no-op when ``provenance`` is None."""
-    import boto3
     from botocore.exceptions import ClientError
 
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
+
     bucket, obj_key = _split_s3_uri(uri)
-    s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
+    s3 = _get_s3_client()
     if not force_refresh:
         try:
             resp = s3.get_object(Bucket=bucket, Key=obj_key)

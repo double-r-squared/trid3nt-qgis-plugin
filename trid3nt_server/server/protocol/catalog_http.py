@@ -1349,9 +1349,9 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     prefix = sentinel.rsplit("KEY", 1)[0]  # cache/static-30d/buildings/
     suffix = f".{sidecar_ext}"
     try:
-        s3 = boto3.client(
-            "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")
-        )
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
+
+        s3 = _get_s3_client()
         paginator = s3.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for obj in page.get("Contents", []) or []:
@@ -1646,15 +1646,10 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
 #
 # User scoping mirrors ``_emit_case_list``: the WS path resolves
 # ``state.authenticated_user_id or state.session_id`` from the live
-# handshake. A cold HTTP caller has neither. The TRID3NT LOCAL build
-# collapses every connection onto ONE fixed user id
-# (``auth_handshake.LOCAL_SINGLE_USER_ID``, see
-# ``auth_handshake._resolve_local_single_user``), so a cold caller under that
-# same seam can resolve the identical id without a handshake. CLOUD posture:
-# when the agent is not running the local single-user seam
-# (``auth_handshake._is_local_single_user_mode()`` is False), the route is
-# treated as ABSENT (404) -- there is no honest per-user identity to resolve
-# without a session, matching the ``/api/local-models`` precedent below.
+# handshake. A cold HTTP caller has neither. This build collapses every
+# connection onto ONE fixed user id (``auth_handshake.LOCAL_SINGLE_USER_ID``,
+# see ``auth_handshake._resolve_local_single_user``), so a cold caller resolves
+# the identical id without a handshake.
 # ---------------------------------------------------------------------------
 
 
@@ -1663,13 +1658,8 @@ class _CaseListPersistenceUnavailable(Exception):
 
 
 def _case_list_route_enabled() -> bool:
-    """The route exists only under the local single-user seam (see above)."""
-    try:
-        from trid3nt_server.credentials.auth_handshake import _is_local_single_user_mode
-
-        return _is_local_single_user_mode()
-    except Exception:  # noqa: BLE001 -- import fault -> route absent
-        return False
+    """The route is served: this build has ONE fixed local user to resolve to."""
+    return True
 
 
 def _case_summary_to_wire(case: Any) -> dict[str, Any]:
@@ -1745,14 +1735,8 @@ class _IngestLayerBadRequest(Exception):
 
 
 def _ingest_layer_route_enabled() -> bool:
-    """The routes exist only under the local single-user seam (mirrors
-    ``_case_list_route_enabled``)."""
-    try:
-        from trid3nt_server.credentials.auth_handshake import _is_local_single_user_mode
-
-        return _is_local_single_user_mode()
-    except Exception:  # noqa: BLE001 -- import fault -> route absent
-        return False
+    """The routes are served (mirrors ``_case_list_route_enabled``)."""
+    return True
 
 
 def _ingest_layer_fn():
@@ -1841,14 +1825,8 @@ class _ProbePointBadRequest(Exception):
 
 
 def _probe_point_route_enabled() -> bool:
-    """The route exists only under the local single-user seam (mirrors
-    ``_ingest_layer_route_enabled`` / ``_case_list_route_enabled``)."""
-    try:
-        from trid3nt_server.credentials.auth_handshake import _is_local_single_user_mode
-
-        return _is_local_single_user_mode()
-    except Exception:  # noqa: BLE001 -- import fault -> route absent
-        return False
+    """The route is served (mirrors ``_case_list_route_enabled``)."""
+    return True
 
 
 def _probe_point_fn():

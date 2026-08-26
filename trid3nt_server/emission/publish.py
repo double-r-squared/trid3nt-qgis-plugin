@@ -889,9 +889,8 @@ def _write_durable_vector_geojson(
 
     Reads ``layer_uri`` (FlatGeobuf / GeoJSON) to a GeoJSON FeatureCollection,
     writes it to ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson``
-    via the SAME boto3 client + runs-bucket convention every run artifact
-    uses (``solver._get_runs_bucket``), and returns the durable ``s3://``
-    asset URI.
+    through the ONE object-store seam (``solver._get_s3_client`` +
+    ``solver._get_runs_bucket``), and returns the durable ``s3://`` asset URI.
 
     FAIL-OPEN: returns ``None`` on ANY read / parse / write error (the
     caller degrades to the existing benign no-op). NEVER raises.
@@ -900,15 +899,14 @@ def _write_durable_vector_geojson(
     if geojson_bytes is None:
         return None
     try:
-        import boto3
-
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+        from trid3nt_server.workflows.solver.solver import (
+            _get_runs_bucket,
+            _get_s3_client,
+        )
 
         bucket = _get_runs_bucket()
         key = durable_vector_geojson_key(case_id, layer_id)
-        s3 = boto3.client(
-            "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")
-        )
+        s3 = _get_s3_client()
         s3.put_object(
             Bucket=bucket,
             Key=key,
@@ -1186,14 +1184,22 @@ def _read_raster_bytes(layer_uri: str) -> bytes | None:
 
 
 def _split_s3_uri(uri: str) -> tuple[str, str] | None:
-    """Split an ``s3://`` URI into ``(bucket, key)``, or ``None`` if not parseable."""
-    if not uri.startswith("s3://"):
+    """``(bucket, key)`` for an ``s3://`` URI, or ``None`` when it is not one.
+
+    The solver's ``_split_object_uri`` RAISES on anything that is not an object
+    URI; this is the fail-open caller's shape, because a local path here is a
+    legal input rather than a fault.
+    """
+    from trid3nt_server.workflows.solver.solver import (
+        SolverDispatchError,
+        _split_object_uri,
+    )
+
+    try:
+        _scheme, bucket, key = _split_object_uri(uri)
+    except SolverDispatchError:
         return None
-    rest = uri[len("s3://"):]
-    slash = rest.find("/")
-    if slash <= 0 or slash == len(rest) - 1:
-        return None
-    return rest[:slash], rest[slash + 1:]
+    return (bucket, key) if bucket and key else None
 
 
 def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
@@ -1206,14 +1212,12 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
     parsed_s3 = _split_s3_uri(layer_uri)
     try:
         if layer_uri.startswith("s3://") and parsed_s3 is not None:
-            import boto3
+            from trid3nt_server.workflows.solver.solver import _get_s3_client
 
             bucket, key = parsed_s3
             dir_prefix = key.rsplit("/", 1)[0] + "/" if "/" in key else ""
             new_key = f"{dir_prefix}overviews/{new_ulid()}.tif"
-            s3 = boto3.client(
-                "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")
-            )
+            s3 = _get_s3_client()
             s3.put_object(
                 Bucket=bucket, Key=new_key, Body=cog_bytes, ContentType="image/tiff"
             )

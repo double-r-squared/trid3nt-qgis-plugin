@@ -28,6 +28,11 @@ from trid3nt_contracts.envelope import (
     Provenance,
 )
 from trid3nt_contracts.execution import ExecutionHandle, ModelSetup, RunResult
+
+# Importing the dispatch module REGISTERS the regular-grid SFINCS solver spec.
+# It lives here rather than only in the template so that any path which can
+# dispatch a SFINCS solve has necessarily filled the registry first.
+from trid3nt_server.workflows.sfincs.flood import sfincs_dispatch  # noqa: E402,F401
 from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
 
 logger = logging.getLogger("trid3nt_server.workflows.sfincs.flood.flood")

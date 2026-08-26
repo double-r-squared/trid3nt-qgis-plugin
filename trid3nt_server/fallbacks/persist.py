@@ -60,9 +60,9 @@ def persist_run_activations(
             "note": capability_note,
             "activations": [_row(a) for a in activations],
         }
-        boto3.client(
-            "s3", region_name=os.environ.get("AWS_REGION", "us-west-2")
-        ).put_object(
+        from trid3nt_server.workflows.solver.solver import _get_s3_client
+
+        _get_s3_client().put_object(
             Bucket=bucket,
             Key=key,
             Body=json.dumps(payload, indent=2).encode("utf-8"),

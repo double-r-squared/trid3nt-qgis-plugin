@@ -15,7 +15,7 @@ from trid3nt_contracts.ws import SpatialInputResponsePayload
 from trid3nt_server.credentials.credential_registry import CredentialProvider, generic_provider_for_tool, is_credential_error, is_credential_shaped_error, provider_for_tool
 from trid3nt_server.credentials.resolver import resolve_credential
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.gates.cards import _build_credential_request_payload, _build_region_choice_request_payload, _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _local_compute_lane, _resolve_payload_estimator, _spatial_response_to_result
+from trid3nt_server.gates.cards import _build_credential_request_payload, _build_region_choice_request_payload, _build_spatial_input_request_payload, _gate_memory_key, _get_hard_cap_mb, _get_warning_threshold_mb, _resolve_payload_estimator, _spatial_response_to_result
 from trid3nt_server.gates.cards.estimate import call_provider
 from trid3nt_server.gates.pending import _pop_pending_confirmation, _register_pending_confirmation
 from trid3nt_server.server.config import CODE_EXEC_CONFIRM_TIMEOUT_SECONDS, _code_exec_approval_timeout_s
@@ -117,22 +117,17 @@ def _gate_wait_cap_s() -> "float | None":
 def _gate_wait_timeout(default_seconds: float) -> float:
     """Effective ``asyncio.wait_for`` timeout for a user-decision gate future.
 
-    Local build (``_local_compute_lane()`` -- the established
-    ``solver_backend() == "local-docker"`` seam): 24h, so confirmation /
-    resolution / credential / region-choice / spatial-input gates never time
-    out on a user who stepped away. Cloud: ``default_seconds`` unchanged
-    (byte-identical behavior when the backend is aws-batch/unset). The wire
-    envelope (``ttl_seconds`` etc.) is NOT rewritten -- only the server-side
-    wait changes, so the client contract is untouched.
+    24h: confirmation / resolution / credential / region-choice / spatial-input
+    gates must never time out on a user who stepped away, and the solve is on
+    their own machine waiting for them. ``default_seconds`` is what the CARD
+    advertises and is left alone - the wire envelope (``ttl_seconds`` etc.) is
+    not rewritten, so the client contract is untouched.
 
     Test cap (``TRID3NT_GATE_WAIT_CAP_S``, see ``_gate_wait_cap_s``): when set,
     the resolved wait is floored to ``min(effective, cap)`` so headless suites
     never hang on an unanswerable card. Unset -> production behavior unchanged.
     """
-    if _local_compute_lane():
-        effective = float(_LOCAL_GATE_TIMEOUT_SECONDS)
-    else:
-        effective = float(default_seconds)
+    effective = float(_LOCAL_GATE_TIMEOUT_SECONDS)
     cap = _gate_wait_cap_s()
     if cap is not None:
         return min(effective, cap)

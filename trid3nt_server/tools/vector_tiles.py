@@ -482,7 +482,9 @@ def write_pmtiles_to_object_store(pmtiles_bytes: bytes, key: str) -> str:
         or os.environ.get("TRID3NT_CACHE_BUCKET")
         or "trid3nt-runs"
     )
-    s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
+
+    s3 = _get_s3_client()
     s3.put_object(
         Bucket=bucket,
         Key=key,

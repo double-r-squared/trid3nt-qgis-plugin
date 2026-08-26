@@ -34,7 +34,6 @@ from trid3nt_server.credentials import auth_handshake
 from trid3nt_server.credentials.auth_handshake import (
     LOCAL_SINGLE_USER_ID,
     AuthResult,
-    NonLocalAuthUnsupported,
     authenticate_token,
     build_auth_ack,
 )
@@ -378,19 +377,3 @@ def test_auth_envelope_contracts_round_trip() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.asyncio
-async def test_non_local_mode_raises(
-    persistence: Persistence, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Outside local single-user mode the handshake raises a typed rejection.
-
-    Unreachable in the product (``solver_backend()`` is hardwired to
-    ``local-docker``), but the guard must fail LOUD rather than silently
-    resolve an unauthenticated identity -- the deleted cloud/multi-user
-    anonymous-provisioning branch.
-    """
-    monkeypatch.setattr(
-        auth_handshake, "_is_local_single_user_mode", lambda: False
-    )
-    with pytest.raises(NonLocalAuthUnsupported):
-        await authenticate_token(AuthTokenEnvelope(token=""), persistence)

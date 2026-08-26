@@ -1,8 +1,7 @@
 """Local WS connect handshake: the ONE fixed local user.
 
 TRID3NT is a local, single-user product: there is no identity provider and no
-token verification. ``solver_backend()`` is hardwired to ``local-docker``, so
-EVERY connection resolves to the ONE fixed local user
+token verification, so EVERY connection resolves to the ONE fixed local user
 (``LOCAL_SINGLE_USER_ID``) -- the desktop browser, phone, QGIS plugin, and
 test drivers all share one case list. The canonical owner identity is an
 internal ULID (Decision 10).
@@ -185,53 +184,18 @@ class AuthResult:
     is_anonymous: bool
 
 
-class NonLocalAuthUnsupported(RuntimeError):
-    """Raised when the handshake runs outside local single-user mode.
-
-    ``solver_backend()`` is hardwired to ``local-docker``, so this path is
-    unreachable in the product. The explicit raise replaces the deleted
-    cloud/multi-user anonymous-provisioning branch: a non-local backend has no
-    identity provider and no token verifier here, so it must fail LOUD rather
-    than silently resolve an unauthenticated identity.
-    """
-
-
 async def authenticate_token(
     token_envelope: AuthTokenEnvelope | None,
     persistence: Persistence | None,
 ) -> AuthResult:
     """Resolve an ``AuthTokenEnvelope`` to the ONE fixed local ``User``.
 
-    ``solver_backend()`` is hardwired to ``local-docker``
-    (:func:`_is_local_single_user_mode` True), so EVERY connection -- any
-    token -- resolves to the ONE fixed local user (``LOCAL_SINGLE_USER_ID``).
-    The token field still rides the wire (clients keep their handshake
-    unchanged) but is ignored: there is no verifier and no per-client identity.
-
-    Raises :class:`NonLocalAuthUnsupported` when not in local single-user mode
-    -- unreachable in the product, made loud so a mis-provisioned backend can
-    never silently fall through to an unauthenticated identity.
+    This build is single-user, so EVERY connection - any token - resolves to
+    ``LOCAL_SINGLE_USER_ID``. The token field still rides the wire (clients keep
+    their handshake unchanged) but is ignored: there is no verifier and no
+    per-client identity to resolve it against.
     """
-    if not _is_local_single_user_mode():
-        raise NonLocalAuthUnsupported(
-            "authenticate_token requires local single-user mode "
-            "(solver_backend=local-docker); no non-local auth path exists."
-        )
     return await _resolve_local_single_user(persistence)
-
-
-def _is_local_single_user_mode() -> bool:
-    """True when auth must collapse to the ONE fixed local user.
-
-    The canonical is-local seam (same one ``secrets_handler`` and
-    ``server._local_compute_lane`` use): ``TRID3NT_SOLVER_BACKEND=local-docker``
-    -> ``tools.simulation.solver.solver_backend()`` returns ``local-docker``. The TRID3NT
-    local build pins it. Read at call time so a test env injection takes
-    effect without re-import.
-    """
-    from trid3nt_server.workflows.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
-
-    return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
 
 async def _resolve_local_single_user(
@@ -319,7 +283,6 @@ def get_auth_token_timeout_s(default: float | None = None) -> float:
 
 __all__ = [
     "AuthResult",
-    "NonLocalAuthUnsupported",
     "DEFAULT_AUTH_TOKEN_TIMEOUT_S",
     "ADVERTISED_DATA_PORT",
     "ADVERTISED_HTTP_PORT_DEFAULT",

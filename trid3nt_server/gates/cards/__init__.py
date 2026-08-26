@@ -29,7 +29,6 @@ from .solver_confirm import (
     _clamp_fetch_resolution,
     _clamp_swmm_resolution_to_cap,
     _gate_memory_key,
-    _local_compute_lane,
 )
 from .spatial_input import (
     _build_spatial_input_request_payload,
@@ -57,7 +56,6 @@ __all__ = [
     "_gate_memory_key",
     "_get_hard_cap_mb",
     "_get_warning_threshold_mb",
-    "_local_compute_lane",
     "_region_admin_level_for",
     "_resolve_payload_estimator",
     "_spatial_response_to_result",
