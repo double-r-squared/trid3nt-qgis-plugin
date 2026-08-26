@@ -1529,3 +1529,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   vs `mesh_sizing_provenance` - two implementations of "narrate the grid ask the
   run moved", learned at different times (deck-time vs metrics-time), so
   unifying them is a design call not a de-duplication.
+
+- FLAGSHIP RUNS REFINED (NATE 2026-08-26, "I saw points again"): the
+  delivered flagship canary ALWAYS runs at refined resolution (coastal
+  50 m: continuous inundation fringe, 85%+ fill, 41-frame GIF); coarse
+  runs are silent pins only, never delivered. The sparse triangles NATE
+  saw were the coarse 250 m run - barycentric working (whole elements,
+  not node dots) but extent-class physics at coarse resolution.
+  Rasterization method stays MECHANISM, not a knob (one honest method -
+  the solver's own piecewise-linear representation); a second honest
+  method would be a style-contract entry. Canary-evolution discussion
+  QUEUED at the mesh wave's close (interim refined coastal -> the
+  artemis BYO rematch w/ authored conformal mesh).
