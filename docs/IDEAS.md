@@ -1441,3 +1441,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   dir = the reproducibility artifact the rerun primitive + calibration
   pin. FUTURE DOOR, not built: a declared box-side reduce stage if cloud
   result-transfer costs ever bite (mechanism only, manifest-listed).
+
+- WORKER RATIONALE CORRECTED (NATE 2026-08-25): the cloud lane is NOT a
+  consideration - no cloud planning, no reduce-stage future door
+  (struck). The doctrine is only this: the worker is a true black box
+  (staged run dir in, results out), and trivial deployability is a
+  PROPERTY that falls out of real encapsulation, not a goal to design
+  for. The portability test survives purely as a purity heuristic for
+  classifying code out of the box. Nothing else from the cloud framing
+  carries.
