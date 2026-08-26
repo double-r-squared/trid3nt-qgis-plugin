@@ -325,12 +325,17 @@ def _build_watershed(pp, aoi, rundir, min_edge, max_edge, grade) -> dict[str, An
 
     from trid3nt_server.workflows.mesh import watershed as W
 
+    # The resolved artifacts are held rather than passed inline: their notes are the
+    # only record of which datasets actually landed, and the provenance this build
+    # publishes must be COPIED from them, never asserted independently.
+    bed_dem = W.resolve_bed_dem(bbox=aoi)
+    rivers = W.resolve_river_network(bbox=aoi)
     wm = W.generate_catchment_mesh(
         pour_point=pp, bbox=aoi, slug="watershed", output_dir=rundir,
-        bed_dem=W.resolve_bed_dem(bbox=aoi),
-        rivers=W.resolve_river_network(bbox=aoi),
+        bed_dem=bed_dem, rivers=rivers,
         min_edge_length_m=float(min_edge), max_edge_length_m=float(max_edge),
         grade=float(grade))
+    bed_note = _watershed_bed_note(bed_dem, wm)
     return {
         "points_utm": np.asarray(wm.points_utm, dtype=float),
         "cells": np.asarray(wm.cells, dtype=np.int64),
@@ -340,10 +345,14 @@ def _build_watershed(pp, aoi, rundir, min_edge, max_edge, grade) -> dict[str, An
         "area_km2": float(wm.area_km2),
         "outlet_lonlat": tuple(wm.outlet_lonlat) if wm.outlet_lonlat else None,
         "open_boundary_info": {},  # inland catchment: single closed boundary
-        "local_slf": wm.slf_path,
-        "sizing_source": "pysheds catchment domain; refined by distance to the "
-                         "NHDPlus HR/OSM river network",
-        "dem_source": "USGS 3DEP bare-earth (bed) + Copernicus GLO-30 (delineation)",
+        # An ADOPTED mesh arrives as a file the writer stages verbatim; the
+        # generated route carries none and the SELAFIN is authored downstream.
+        "local_slf": wm.source_path or None,
+        "sizing_source": _watershed_sizing_source(rivers),
+        "dem_source": _watershed_bed_provenance(bed_dem, bed_note),
+        # A degraded bed must travel WITH the mesh, so the cross-dataset label is
+        # carried in its own slot rather than only inside the composed sentence.
+        "bed_fallback_note": bed_note if bed_dem.get("cross_dataset") else None,
     }
 
 
@@ -712,6 +721,74 @@ def _sizing_source(rundir: Path) -> str:
     if not active:
         return f"{domain}; sizing functions unreported by the mesher"
     return f"{domain}; " + "; ".join(active)
+
+
+#: The grid the catchment is DELINEATED on. D8 routing needs a natively geographic
+#: grid, so this is a constraint of the delineation method rather than a source the
+#: run selected; it is stated apart from the bed, which is resolved per run.
+_DELINEATION_DEM = "Copernicus GLO-30 (D8 routing needs a geographic grid)"
+
+
+def _watershed_bed_note(bed_dem: dict[str, Any], mesh: Any) -> str:
+    """The bed resolver's OWN label, from whichever sink actually carries it.
+
+    ``resolve_bed_dem`` labels its ladder on the artifact it returns, and the
+    catchment mesher copies that label into the mesh's ``notes``. Both are read
+    because either may be the sink the value survives in; an empty result means
+    the run genuinely holds no statement about the bed's source.
+    """
+    note = str((bed_dem or {}).get("note") or "").strip()
+    if note:
+        return note
+    for candidate in getattr(mesh, "notes", None) or []:
+        text = str(candidate).strip()
+        if text and "bed" in text.lower():
+            return text
+    return ""
+
+
+def _watershed_bed_provenance(bed_dem: dict[str, Any], bed_note: str) -> str:
+    """What ACTUALLY painted the catchment bed, copied from the resolver's note.
+
+    A cross-dataset substitution the run cannot state is a false promise, so it
+    REFUSES here rather than name a source it does not know it got; a fully
+    labeled build states the source and the label it arrived with.
+    """
+    source = str((bed_dem or {}).get("source") or "").strip()
+    if not bed_note and bool((bed_dem or {}).get("cross_dataset")):
+        raise GenerateMeshError(
+            "GENERATE_MESH_UNSOURCED_DEM",
+            "the bed DEM resolver reported a CROSS-DATASET fallback but carried no "
+            "note naming the elevation source it landed on. This mesh therefore "
+            "cannot state which elevation source its bed came from and refuses to "
+            "claim one. Re-run once the bed resolver labels its substitution, or "
+            "supply a bed DEM whose source is known.")
+    if bed_note:
+        bed = f"{source}: {bed_note}" if source else bed_note
+    elif source:
+        bed = f"{source} (the bed resolver reported no note)"
+    else:
+        bed = ("source UNMEASURED: the bed resolver reported neither a source nor "
+               "a note")
+    return f"bed: {bed}; delineation: {_DELINEATION_DEM}"
+
+
+def _watershed_sizing_source(rivers: dict[str, Any]) -> str:
+    """What ACTUALLY sized the catchment mesh, copied from the resolver's note.
+
+    River refinement is best-effort: a basin with no mapped flowline is meshed at
+    UNIFORM sizing, so a fixed string here would promise refinement that never
+    ran. The domain half is the delineation method itself and is always true.
+    """
+    domain = "pysheds catchment domain"
+    note = str((rivers or {}).get("note") or "").strip()
+    if note:
+        return f"{domain}; {note}"
+    source = str((rivers or {}).get("source") or "").strip()
+    if source:
+        return (f"{domain}; {source} was requested, but the river resolver reported "
+                "no note, so the refinement that ran is UNMEASURED")
+    return f"{domain}; river sizing UNREPORTED by the resolver"
 
 
 def _bed_provenance(layer: Any) -> str:

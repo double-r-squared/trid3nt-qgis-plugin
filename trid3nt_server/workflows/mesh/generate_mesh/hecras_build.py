@@ -48,6 +48,7 @@ def build_and_record_hecras_mesh(
         acquire_channel_inputs, _fetch_dem_local,
     )
     from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import (
+        _DELINEATION_DEM,
         GenerateMeshError,
     )
     from trid3nt_server.workflows.mesh.artifact import (
@@ -71,8 +72,10 @@ def build_and_record_hecras_mesh(
             "(a HEC-RAS RoG mesh grades toward the channel; is this an inland flat box "
             "with no mapped drainage?)")
 
-    # 2. bare-earth DEM for the terrain frame.
-    dem_tif = _fetch_dem_local(list(bbox))
+    # 2. bare-earth DEM for the terrain frame. The s3 uri is the only record of
+    #    WHICH terrain the mesh was cut from, so it rides into the provenance
+    #    rather than being replaced by a dataset name nothing here resolved.
+    dem_tif, dem_s3_uri = _fetch_dem_local(list(bbox))
 
     # 3. build + validate the graded cell mesh (host seeds/breaklines + meshprobe).
     if str(_WORKERS_FRESHTOPO) not in sys.path:
@@ -138,7 +141,9 @@ def build_and_record_hecras_mesh(
         "attempt0_clean": built.attempt0_clean, "badcells_attempt0": built.badcells_attempt0,
         "sizing_source": ("graded Poisson-disk seeds (rog_refine) + main-stem channel "
                           "breaklines; realized + validated via the in-container meshprobe"),
-        "dem_source": "USGS 3DEP bare-earth (bed) + Copernicus GLO-30 (delineation)",
+        "dem_source": (f"bed: the terrain COG fetch_dem served at 10 m ({dem_s3_uri}) "
+                       f"- the router picks the rung, so no dataset is named here "
+                       f"that this build did not resolve; delineation: {_DELINEATION_DEM}"),
         "reproducibility": ("TryCreateMesh is deterministic on identical seeds -- the "
                             "consume path re-realizes exactly this cell mesh"),
     }

@@ -341,3 +341,117 @@ def test_materialize_hecras_bundle_missing_required_raises():
         with pytest.raises(ValueError, match="seeds"):
             materialize_hecras_mesh_inputs(
                 _hecras_artifact(hecras_inputs=inputs), td, _FakeS3())
+
+
+# --------------------------------------------------------------------------- #
+# Watershed provenance: the claim is the resolver's own note, never a literal.
+#
+# The build is stubbed at the two seams that read the world (the bed and river
+# resolvers) plus the container-driven mesher, so these run with no network and
+# no docker while still exercising the real composition.
+# --------------------------------------------------------------------------- #
+from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import (  # noqa: E402
+    GenerateMeshError,
+    _build_watershed,
+)
+
+_3DEP_NOTE = "mesh bed DEM: USGS 3DEP bare-earth (10 m); ladder usgs_3dep -> copernicus_glo30"
+_COPERNICUS_NOTE = (
+    "mesh bed DEM CROSS-DATASET FALLBACK: USGS 3DEP bare-earth was unavailable for "
+    "this AOI, so Copernicus GLO-30 was used instead.")
+_UNIFORM_NOTE = (
+    "no nhdplus_hr flowlines were available for this AOI, so the mesh was sized "
+    "UNIFORMLY rather than refined toward the channel network")
+_LITERAL_CLAIM = "USGS 3DEP bare-earth (bed) + Copernicus GLO-30 (delineation)"
+
+
+def _stub_catchment_build(monkeypatch, *, bed_dem, rivers=None, notes=None):
+    """Point the watershed build at a real CatchmentMesh and stubbed resolvers."""
+    from trid3nt_server.workflows.mesh import watershed as W
+
+    mesh = W.CatchmentMesh(
+        slug="watershed", points_utm=np.zeros((3, 2), dtype=float),
+        cells=np.zeros((1, 3), dtype=np.int64), bed_elev=np.zeros(3, dtype=float),
+        points_lonlat=np.zeros((3, 2), dtype=float), utm_epsg=32617, area_km2=1.5,
+        pour_point_lonlat=(-83.43, 35.06), outlet_lonlat=(-83.43, 35.06),
+        provenance="generated", notes=list(notes or []))
+    rivers = rivers if rivers is not None else {
+        "uri": "s3://cache/flowlines.fgb", "source": "nhdplus_hr",
+        "note": "mesh refined by distance to the nhdplus_hr channel network"}
+    monkeypatch.setattr(W, "resolve_bed_dem", lambda **kw: dict(bed_dem))
+    monkeypatch.setattr(W, "resolve_river_network", lambda **kw: dict(rivers))
+    monkeypatch.setattr(W, "generate_catchment_mesh", lambda **kw: mesh)
+    return mesh
+
+
+def _run_build(monkeypatch, **kw):
+    _stub_catchment_build(monkeypatch, **kw)
+    return _build_watershed(
+        (-83.43, 35.06), (-83.5, 35.0, -83.4, 35.09), "/tmp/mesh-test",
+        40.0, 300.0, 0.2)
+
+
+def test_watershed_dem_source_quotes_the_bed_resolver_note():
+    with pytest.MonkeyPatch.context() as mp:
+        built = _run_build(mp, bed_dem={
+            "uri": "s3://cache/dem.tif", "source": "usgs_3dep_bare_earth",
+            "cross_dataset": False, "note": _3DEP_NOTE})
+    assert _3DEP_NOTE in built["dem_source"]
+    assert "usgs_3dep_bare_earth" in built["dem_source"]
+    assert built["bed_fallback_note"] is None
+
+
+def test_watershed_dem_source_reports_the_cross_dataset_bed_actually_used():
+    with pytest.MonkeyPatch.context() as mp:
+        built = _run_build(mp, bed_dem={
+            "uri": "s3://cache/dem.tif", "source": "copernicus_glo30",
+            "cross_dataset": True, "note": _COPERNICUS_NOTE})
+    # The fabricated literal asserted 3DEP for the bed no matter what landed.
+    assert _LITERAL_CLAIM not in built["dem_source"]
+    assert "CROSS-DATASET FALLBACK" in built["dem_source"]
+    assert "copernicus_glo30" in built["dem_source"]
+    assert built["bed_fallback_note"] == _COPERNICUS_NOTE
+
+
+def test_watershed_dem_source_reads_the_mesh_notes_sink():
+    with pytest.MonkeyPatch.context() as mp:
+        built = _run_build(
+            mp,
+            bed_dem={"uri": "s3://cache/dem.tif", "source": "copernicus_glo30",
+                     "cross_dataset": True, "note": ""},
+            notes=[_COPERNICUS_NOTE])
+    assert _COPERNICUS_NOTE in built["dem_source"]
+    assert _LITERAL_CLAIM not in built["dem_source"]
+
+
+def test_watershed_refuses_unsourced_cross_dataset_bed():
+    with pytest.MonkeyPatch.context() as mp:
+        with pytest.raises(GenerateMeshError) as excinfo:
+            _run_build(mp, bed_dem={
+                "uri": "s3://cache/dem.tif", "source": "", "cross_dataset": True,
+                "note": ""})
+    assert excinfo.value.error_code == "GENERATE_MESH_UNSOURCED_DEM"
+    message = str(excinfo.value)
+    assert "CROSS-DATASET" in message
+    assert "refuses to claim one" in message
+
+
+def test_watershed_sizing_source_says_uniform_when_no_flowlines():
+    with pytest.MonkeyPatch.context() as mp:
+        built = _run_build(
+            mp,
+            bed_dem={"uri": "s3://cache/dem.tif", "source": "usgs_3dep_bare_earth",
+                     "cross_dataset": False, "note": _3DEP_NOTE},
+            rivers={"uri": None, "source": "nhdplus_hr", "note": _UNIFORM_NOTE})
+    assert _UNIFORM_NOTE in built["sizing_source"]
+    assert "refined by distance" not in built["sizing_source"]
+
+
+def test_watershed_sizing_source_quotes_the_river_resolver_note():
+    with pytest.MonkeyPatch.context() as mp:
+        built = _run_build(mp, bed_dem={
+            "uri": "s3://cache/dem.tif", "source": "usgs_3dep_bare_earth",
+            "cross_dataset": False, "note": _3DEP_NOTE})
+    assert "refined by distance to the nhdplus_hr channel network" in (
+        built["sizing_source"])
+    assert built["sizing_source"].startswith("pysheds catchment domain")
