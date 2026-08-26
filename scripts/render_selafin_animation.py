@@ -441,7 +441,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--title", default=None)
     ap.add_argument("--bucket", default=os.environ.get("TRID3NT_RUNS_BUCKET",
                                                        "trid3nt-runs"))
-    ap.add_argument("--out-dir", default=str(REPO / "docs" / "proof" / "templates"))
+    # The proof layout is docs/proof/templates/<template>/<variant>/ and the
+    # writer asks proof_paths for it rather than joining its own path, so a
+    # render and the canary evidence it was made from land together.
+    ap.add_argument("--template", default=None,
+                    help="proof folder template name; default is --stem's own "
+                         "template (a _refined stem files under refined/)")
+    ap.add_argument("--variant", default=None,
+                    choices=("coarse", "refined", "postmigration", "addendum"),
+                    help="proof folder variant; default is read off --stem")
+    ap.add_argument("--out-dir", default=None,
+                    help="explicit output directory; overrides the proof layout")
     ap.add_argument("--origin-bbox", default=None,
                     help="4326 min_lon,min_lat,max_lon,max_lat the LOCAL mesh was "
                          "built from; default reads telemac_metrics.json's bbox")
@@ -459,8 +469,14 @@ def main(argv: list[str] | None = None) -> int:
                          "builds, final for one that decays toward its answer")
     ns = ap.parse_args(argv)
 
-    out_dir = Path(ns.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if ns.out_dir:
+        out_dir = Path(ns.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        from trid3nt_server.testing.proof_paths import proof_dir, split_variant
+
+        template, variant = split_variant(ns.stem)
+        out_dir = Path(proof_dir(ns.template or template, ns.variant or variant))
     worker = _read_json(ns.bucket, f"{ns.run_id}/telemac_metrics.json")
     utm_epsg = ns.utm_epsg or worker.get("utm_epsg")
     if utm_epsg is None:

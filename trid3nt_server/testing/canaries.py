@@ -32,13 +32,14 @@ import sys
 from typing import Any
 
 from .live_run import GateAnswers, LiveRun, RunEvidence, run_live
+from .proof_paths import evidence_path as _proof_evidence_path
 
 __all__ = ["CANARIES", "evidence_path", "main", "run"]
 
-#: Where a canary's evidence lands. Named after the TOOL, beside the proof
-#: renders the diagnostic lane writes from it.
-_EVIDENCE_DIR = os.path.join(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))), "docs", "proof", "templates")
+#: Where a canary's evidence lands: ``docs/proof/templates/<template>/<variant>/``,
+#: beside the renders the diagnostic lane writes from it. The FOLDER is
+#: ``proof_paths``' to decide - one home, so a render script and the canary that
+#: fed it cannot end up in different directories.
 
 
 # --------------------------------------------------------------------------- #
@@ -314,7 +315,7 @@ CANARIES.update({
 
 
 def evidence_path(name: str) -> str:
-    return os.path.join(_EVIDENCE_DIR, f"{name}_canary_evidence.json")
+    return _proof_evidence_path(name)
 
 
 def run(name: str, *, timeout_s: float | None = None) -> RunEvidence:

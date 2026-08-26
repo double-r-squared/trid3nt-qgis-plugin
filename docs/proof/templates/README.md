@@ -1,17 +1,51 @@
 # Template proof renders
 
-One render set per landed workflow template, named after the workflow file
-stem (`<stem>.png`, plus `_chart` / `_mesh` / variant suffixes). These are
-the AS-SEEN-IN-QGIS proofs: layers composited over the Esri World Imagery
-basemap approximating the QGIS canvas, charts rendered exactly as the
-plugin chart dock draws them. When a template is corrected, its proofs are
-regenerated and OVERWRITTEN in place under the same names.
+One render set per landed workflow template. These are the AS-SEEN-IN-QGIS
+proofs: layers composited over the Esri World Imagery basemap approximating the
+QGIS canvas, charts rendered exactly as the plugin chart dock draws them. When a
+template is corrected, its proofs are regenerated and OVERWRITTEN in place under
+the same names.
 
 Debug renders (gradient relief spot-checks and similar) do NOT live here -
 they are on-demand-only, generated when NATE asks, and go to a tmp folder
 (/tmp/trid3nt_debug_renders/).
 
 Audit folder: NEVER cleaned or pruned without NATE's explicit say-so.
+
+## The layout: `<template>/<variant>/`
+
+    docs/proof/templates/<template_name>/<variant>/<filename>
+
+Filenames are unchanged - they are cited by name in ADRs, evidence JSONs and the
+module-coverage board - and they still carry the template prefix, so a file that
+escapes its folder is still identifiable. What moved is only the folder, and the
+folder carries the two facts every reader was parsing out of the name anyway.
+
+FOUR variants, and no more. A fifth would be a category nobody agreed on:
+
+| variant | what it is |
+| --- | --- |
+| `coarse` | the default-resolution canary run. The baseline. |
+| `refined` | the same question on a finer mesh. The pair that makes a resolution-sensitivity claim measurable. |
+| `postmigration` | the same question re-run after a refactor, to show the representation changed and the numbers did not. |
+| `addendum` | a proof that is none of those three: a gate-card walkthrough, a release-point acceptance case, a one-off diagnostic kept because it settled something. |
+
+`trid3nt_server/testing/proof_paths.py` is the ONE place that builds these paths.
+`canaries.evidence_path`, `scripts/render_selafin_animation.py` and the drive
+scripts all ask it rather than joining their own; `render_all_layers_proof`
+inherits the folder from the evidence JSON it renders from, so panels land beside
+the run that produced them. An unknown variant REFUSES rather than quietly
+creating a fifth folder.
+
+The per-engine showcase KEEP-LIST (the delete-on-whim carve-out) points at these
+folders: a template directory is the unit that is kept, so "retain the two most
+complex showcase cases per engine" is now a statement about directories rather
+than about a filename prefix.
+
+Files still loose at the top level are the one-off physics-validation renders for
+behaviours that are not templated workflows (individual solver checks, mesh
+experiments, engine spot-probes). They are out of scope for this scheme by
+design, not by oversight.
 
 ## Standing notes on individual sets
 
@@ -70,6 +104,26 @@ The refined do-sag canary consequently went from 7 frames to 31 over the same
 600 s window. `refined_animation_frame_evolution.json` is the check that the
 extra frames are worth their bytes: every consecutive pair of frames differs,
 in both cohort GIFs, so the cadence bought new field data rather than repeats.
+
+### The coastal inundation product SPLIT - two layers, one run (2026-08-25)
+
+The peak raster used to be per-node max WATER DEPTH over every frame including
+t=0, with no subtraction of the initial water line, so the permanently submerged
+bay floor rendered in the same "inundation depth" ramp as land the tide actually
+reached. The scalar and the picture disagreed: `flooded_land_km2` had always done
+the `bed > init_wl` discrimination and the raster had not.
+
+The run now publishes TWO layers and the roster is deliberate:
+
+  * `coastal_inundation.tif` - PRIMARY. Peak depth over land that was DRY at t=0,
+    on the same discrimination the scalar counts. This is the planning answer.
+  * `coastal_depth_max.tif` - CONTEXT. The total peak water depth including the
+    permanent bay: where the water is, rather than where the tide went.
+
+Every scalar is unchanged; `inundation_peak_depth_m` and `inundation_basis` are
+ADDED. A coastal proof render made before 2026-08-25 shows one layer where the
+current run shows two, and its single raster is the CONTEXT one under the
+primary's old name.
 
 ### Known open defect: the coastal chart renders blank
 
