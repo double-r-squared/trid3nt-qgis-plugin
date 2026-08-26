@@ -5,7 +5,7 @@ Ref integrity, modifier legality and gate placement, all as typed refusals.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from .data import DataDecl
 from .errors import PlanValidationError
@@ -227,11 +227,18 @@ def _walk_param_refs(value: Any) -> Iterable[ParamRef]:
 
 
 def _walk(value: Any, kind: type) -> Iterable[Any]:
+    """Every declared read inside a container, whatever KIND of container it is.
+
+    ``Mapping`` rather than ``dict``: a binding block is deep-frozen into
+    ``MappingProxyType``, which is a Mapping and not a dict, so a walk that
+    descended dicts alone would call a ref hidden in a declared block invisible -
+    and the validator would pass a plan the binder then has to bind blind.
+    """
     if isinstance(value, kind):
         yield value
-    elif isinstance(value, dict):
+    elif isinstance(value, Mapping):
         for v in value.values():
             yield from _walk(v, kind)
-    elif isinstance(value, (list, tuple, set)):
+    elif isinstance(value, (list, tuple, set, frozenset)):
         for v in value:
             yield from _walk(v, kind)

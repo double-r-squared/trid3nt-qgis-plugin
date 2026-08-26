@@ -407,14 +407,23 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     return value
 
 
-def _validate_supplied(decl: DataDecl, uri: str, validate: Any) -> None:
+def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
+    """What a supplied artifact is checked for before the run adopts it.
+
+    Two checks and no third: the slot's declared SHAPE against the artifact's
+    class, and - under ``CoversAOI`` - that a domain with an extent is bound at
+    all, so an artifact is never adopted against no modelled world. Whether the
+    artifact's own extent COVERS that domain is not checked; see
+    :class:`~trid3nt_server.workflows.lib.data._CoversAOI` for what that costs.
+    """
+    decl.refuse_wrong_shape(supplied)
     if validate is not CoversAOI:
         return
     dom = current_domain()
     if dom is None or dom.bbox is None:
         raise SuppliedCoverageError(
-            f"the artifact supplied for {decl.name!r} cannot be coverage-validated: "
-            "no domain is bound. Resolve the AOI before supplying one."
+            f"the artifact supplied for {decl.name!r} cannot be checked against the "
+            "modelled domain: no domain is bound. Resolve the AOI before supplying one."
         )
 
 
@@ -737,7 +746,12 @@ async def _bind_value(value: Any, env: _Env) -> Any:
         return env.params.value_of(value.name)
     if isinstance(value, Ref):
         return await _deref(value, env)
-    if isinstance(value, dict):
+    # Any Mapping, not dicts alone: a deep-frozen binding block is a
+    # MappingProxyType, which the VALIDATOR walks, so a ref inside one is a
+    # declared read the binder has to honor or the two disagree about the plan. A
+    # bound mapping comes back as a plain dict because a read-only proxy has no
+    # constructor to rebuild it with, and bound kwargs are consumed as ``**kwargs``.
+    if isinstance(value, Mapping):
         return {k: await _bind_value(v, env) for k, v in value.items()}
     # sets and frozensets included: the VALIDATOR walks them, so a ref an author
     # put in one is a declared read the binder has to honor or the two disagree
@@ -786,9 +800,15 @@ def _param_refs(value: Any) -> Iterable[ParamRef]:
 
 
 def _declared_reads(value: Any, kind: type) -> Iterable[Any]:
+    """The declared reads a producer makes - the twin of the validator's walk.
+
+    ``Mapping``, so a read hidden in a deep-frozen block still counts as consumed:
+    eviction after a gate revision is decided from this walk, and a missed read
+    would keep an artifact fetched against the sheet the review replaced.
+    """
     if isinstance(value, kind):
         yield value
-    elif isinstance(value, dict):
+    elif isinstance(value, Mapping):
         for v in value.values():
             yield from _declared_reads(v, kind)
     elif isinstance(value, (list, tuple, set, frozenset)):

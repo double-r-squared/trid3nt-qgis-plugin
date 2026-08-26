@@ -40,13 +40,17 @@ def render_docstring(
     returns: str,
     not_for: str = "",
     controls: Sequence[tuple[str, str]] = (),
+    context: Sequence[tuple[str, str]] = (),
     view: DocstringView = "full",
 ) -> str:
     """Build the docstring: summary, routing, negative routing, params, returns.
 
     ``controls`` documents the run levers that are NOT params (gate mode, restart)
-    - the tool accepts them, so the model has to be told they exist. ``view``
-    selects the rendering; ``routing`` stops after the returns line.
+    - the tool accepts them, so the model has to be told they exist. ``context``
+    documents the producer-less Data slots on the same wire: they take a layer the
+    caller already has, and the SHAPE each accepts is the only thing a template
+    that names no source can say about one. ``view`` selects the rendering;
+    ``routing`` stops after the returns line.
     """
     head = [summary.strip(), "", routing.strip()]
     if not_for:
@@ -63,6 +67,9 @@ def render_docstring(
     body = ["", "Params:"]
     for p in _ordered(params):
         body.append(f"    {p.name}: {_param_line(p)}")
+    if context:
+        body += ["", "Context layers:"]
+        body += [f"    {name}: {line.strip()}" for name, line in context]
     if controls:
         body += ["", "Run controls:"]
         body += [f"    {name}: {desc.strip()}" for name, desc in controls]

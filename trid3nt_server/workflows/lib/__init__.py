@@ -20,6 +20,7 @@ from .docstring import render_docstring
 from .domain import Domain, current_domain
 from .errors import (
     SuppliedCoverageError,
+    SuppliedGeometryError,
     DeclarativeError,
     GateRefusedError,
     LeakScanTruncated,
@@ -108,6 +109,7 @@ __all__ = [
     "ResolvedParams",
     "RunMode", "RunResult", "STAGES", "STATE", "Slot", "Step", "StepFailedError",
     "SuppliedCoverageError",
+    "SuppliedGeometryError",
     "StyleSpec",
     "StepLedger",
     "TemporalGapError", "TemporalShapeError", "TemporalSpec",

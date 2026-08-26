@@ -14,6 +14,7 @@ __all__ = [
     "RenderSourceMissingError",
     "StepFailedError",
     "SuppliedCoverageError",
+    "SuppliedGeometryError",
 ]
 
 
@@ -68,6 +69,17 @@ class GateRefusedError(DeclarativeError):
 
 class SuppliedCoverageError(DeclarativeError):
     error_code = "SUPPLIED_COVERAGE_MISMATCH"
+
+
+class SuppliedGeometryError(DeclarativeError):
+    """A supplied artifact is not the SHAPE the slot it fills declares.
+
+    A slot that names no source can still say what shape it takes, so filling a
+    mesh slot with a raster is an answer to a different question - and it fails
+    here, at the front door, rather than inside a reader that cannot open it.
+    """
+
+    error_code = "SUPPLIED_GEOMETRY_MISMATCH"
 
 
 class RenderSourceMissingError(DeclarativeError):

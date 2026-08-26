@@ -19,6 +19,7 @@ from trid3nt_server.workflows.lib import (
     CoversAOI,
     D,
     Data,
+    DataRef,
     Domain,
     DrawGate,
     Fetch,
@@ -37,10 +38,12 @@ from trid3nt_server.workflows.lib import (
     ResolvedParams,
     RunMode,
     StepFailedError,
+    SuppliedGeometryError,
     Step,
     When,
     Plan,
     Workflow,
+    deep_freeze,
     doors,
     interpret,
     invocation_key,
@@ -619,7 +622,7 @@ async def test_byo_coverage_validation_refuses_without_a_domain():
     data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
                                                                   validate=CoversAOI))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
-    with pytest.raises(Exception, match="coverage-validated"):
+    with pytest.raises(Exception, match="cannot be checked against the modelled domain"):
         await _run(plan, _params(), {}, data, resume=False)
 
 
@@ -2191,3 +2194,96 @@ def test_a_binding_block_is_frozen_all_the_way_down():
         block.cfg = {}
     # a declared read passes through untouched - it is already a value
     assert isinstance(block.decay, ParamRef) and block.decay.name == "base"
+
+
+# --- what the validator walks, the binder must bind --------------------------- #
+def test_a_ref_inside_a_frozen_mapping_is_not_invisible_to_the_validator():
+    """A binding block is deep-frozen into MappingProxyType, which is a Mapping and
+    not a dict - so a walk that descended dicts alone would pass a plan carrying a
+    ref to nothing straight through to the run."""
+    block = deep_freeze({"cfg": {"decay": ParamRef("ghost")}})
+    plan = Plan("frozen_param_w", None, (
+        Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}),))
+    assert isinstance(block["cfg"], MappingProxyType)
+    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
+        validate_plan(plan, _params())
+
+
+def test_a_data_ref_inside_a_frozen_mapping_is_not_invisible_to_the_validator():
+    block = deep_freeze({"cfg": {"zone": DataRef("ghost_zone")}})
+    plan = Plan("frozen_data_w", None, (
+        Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}),))
+    with pytest.raises(PlanValidationError, match="D.ghost_zone names no declared Data"):
+        validate_plan(plan, _params(), [Data("clip_zone")])
+
+
+@pytest.mark.asyncio
+async def test_a_ref_inside_a_frozen_mapping_reaches_the_runner_bound():
+    """The binder honors every read the validator counted; a frozen mapping arrives
+    as a plain dict because a read-only proxy has no constructor to rebuild it."""
+    block = deep_freeze({"cfg": {"decay": ParamRef("base"), "zone": DataRef("clip_zone")}})
+    plan = Plan("frozen_bind_w", None, (
+        Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}).named("a"),))
+    out = await _run(plan, _params(), {"base": 4.0}, [Data("clip_zone")], resume=False,
+                     supplied={"clip_zone": "s3://mine/zone.gpkg"},
+                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    bound = out.value["seen"]["physics"]
+    assert isinstance(bound, dict) and not isinstance(bound, MappingProxyType)
+    assert bound["cfg"] == {"decay": 4.0, "zone": "s3://mine/zone.gpkg"}
+
+
+def test_a_data_ref_refuses_every_read_that_would_turn_it_into_data():
+    """``D.<name>`` describes an artifact the interpreter has not produced yet, so
+    the three silent conversions - a branch, str(), an f-string - all refuse."""
+    ref = DataRef("mesh")
+    with pytest.raises(PlanValidationError, match="truth-value testing"):
+        bool(ref)
+    with pytest.raises(PlanValidationError, match=r"str\(\)"):
+        str(ref)
+    with pytest.raises(PlanValidationError, match="f-string"):
+        f"{ref}"
+    with pytest.raises(PlanValidationError, match="f-string"):
+        f"{D.mesh}"
+    assert repr(ref) == "DataRef('mesh')"       # naming it is what a diagnostic does
+
+
+# --- a context slot's declared SHAPE is checked at the front door ------------- #
+@pytest.mark.asyncio
+async def test_a_supplied_artifact_of_the_wrong_shape_is_refused_typed():
+    data = [Data("structure").supplied(geometry="polyline").optional()]
+    plan = Plan("shape_w", None, (
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"s": Ref("structure")}).named("a"),))
+    with pytest.raises(SuppliedGeometryError) as exc:
+        await _run(plan, _params(), {}, data, resume=False,
+                   supplied={"structure": "s3://mine/terrain.tif"},
+                   domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    assert exc.value.error_code == "SUPPLIED_GEOMETRY_MISMATCH"
+    assert "raster" in str(exc.value) and _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_a_supplied_artifact_of_the_declared_shape_is_adopted():
+    """Suffix-deep and no deeper: a vector satisfies a polyline slot here, and
+    whether its features are lines is the consumer's species reader's answer."""
+    data = [Data("structure").supplied(geometry="polyline").optional()]
+    plan = Plan("shape_ok_w", None, (
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"s": Ref("structure")}).named("a"),))
+    out = await _run(plan, _params(), {}, data, resume=False,
+                     supplied={"structure": "s3://mine/breakwater.fgb"},
+                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    assert out.value["seen"]["s"] == "s3://mine/breakwater.fgb"
+
+
+@pytest.mark.asyncio
+async def test_an_unclassifiable_supplied_artifact_is_adopted_not_guessed_at():
+    """A layer name carries no suffix, and a refusal must never rest on a guess."""
+    data = [Data("structure").supplied(geometry="polyline").optional()]
+    plan = Plan("shape_unknown_w", None, (
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"s": Ref("structure")}).named("a"),))
+    out = await _run(plan, _params(), {}, data, resume=False,
+                     supplied={"structure": "harbor-breakwater-layer"},
+                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    assert out.value["seen"]["s"] == "harbor-breakwater-layer"

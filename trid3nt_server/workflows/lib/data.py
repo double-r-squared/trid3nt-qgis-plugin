@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Annotated, Any, Mapping
 
-from .errors import PlanValidationError
+from .errors import PlanValidationError, SuppliedGeometryError
 from .temporal import TemporalSpec, spec_from
 
 __all__ = [
@@ -24,11 +24,22 @@ __all__ = [
     "Fetch",
     "Producer",
     "ReferenceProducer",
+    "SuppliedGeometry",
+    "artifact_class",
 ]
 
 
 class _CoversAOI:
-    """Validator sentinel: a supplied artifact must cover the current domain."""
+    """Validator sentinel: check a supplied artifact against the BOUND DOMAIN.
+
+    What it actually asks for is that a domain is bound and has an extent when an
+    artifact is supplied, so the run cannot adopt one against no modelled world at
+    all. It does NOT compare the artifact's own extent to that domain: answering
+    that means opening the file, and the species a slot accepts include meshes no
+    reader in this process can open. An artifact that covers LESS than the
+    modelled domain is therefore adopted, and the run models the smaller world it
+    describes without saying so.
+    """
 
     def __repr__(self) -> str:
         return "CoversAOI"
@@ -39,6 +50,57 @@ CoversAOI = _CoversAOI()
 #: The shapes a producer-less slot can declare it accepts.
 _GEOMETRIES: frozenset[str] = frozenset(
     {"point", "polyline", "polygon", "rectangle", "raster", "mesh"})
+
+#: What a declared shape means for the KIND of artifact that can satisfy it. The
+#: exact vector shape (a point layer vs a line layer) is not knowable from a file
+#: name, so the shapes collapse to one vector class here.
+_GEOMETRY_CLASS: Mapping[str, str] = MappingProxyType({
+    "point": "vector", "polyline": "vector", "polygon": "vector",
+    "rectangle": "vector", "raster": "raster", "mesh": "mesh"})
+
+#: Which class an artifact SUFFIX belongs to. A suffix nobody lists here leaves
+#: the artifact unclassifiable, and an unclassifiable artifact is adopted rather
+#: than refused: this check answers what a file name can honestly answer, and a
+#: refusal must never rest on a guess.
+_CLASS_BY_SUFFIX: Mapping[str, str] = MappingProxyType({
+    ".tif": "raster", ".tiff": "raster", ".vrt": "raster", ".img": "raster",
+    ".asc": "raster", ".jp2": "raster",
+    ".slf": "mesh", ".sel": "mesh", ".med": "mesh", ".2dm": "mesh",
+    ".gr3": "mesh", ".msh": "mesh",
+    ".fgb": "vector", ".geojson": "vector", ".json": "vector", ".shp": "vector",
+    ".gpkg": "vector", ".kml": "vector", ".gml": "vector"})
+
+
+@dataclass(frozen=True, slots=True)
+class SuppliedGeometry:
+    """The shape a context slot accepts, carried ON the generated argument's type.
+
+    Annotation metadata rather than the type itself: a supplied artifact arrives
+    as a string whichever shape it is, so the shape is what the wire has to SAY,
+    not what it has to enforce. ``typing.get_type_hints`` drops it before any
+    model-facing schema is built.
+    """
+
+    shape: str
+
+    def __repr__(self) -> str:
+        return f"geometry={self.shape}"
+
+
+def artifact_class(value: Any) -> str | None:
+    """``raster`` | ``mesh`` | ``vector`` for a supplied artifact, or ``None``.
+
+    Read off the URI SUFFIX, because that is the only thing about a supplied
+    artifact that is knowable without opening it. ``None`` means unclassifiable -
+    an in-memory sketch, a bare layer handle, a suffix nobody declares - and is
+    never grounds for a refusal.
+    """
+    uri = getattr(value, "uri", None) or (value if isinstance(value, str) else None)
+    if not isinstance(uri, str):
+        return None
+    stem = uri.split("?", 1)[0].rstrip("/")
+    dot = stem.rfind(".")
+    return _CLASS_BY_SUFFIX.get(stem[dot:].lower()) if dot >= 0 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,8 +156,9 @@ class AuthoredProducer(Producer):
                  validate: Any = CoversAOI) -> "AuthoredProducer":
         """Take the artifact the caller supplied instead of building one.
 
-        Coverage-validated against the domain at resolution, because an artifact
-        that does not cover the modelled world silently models a smaller one.
+        ``CoversAOI`` checks that a domain is bound before the artifact is
+        adopted; it does not compare the artifact's extent to it (see
+        :class:`_CoversAOI`).
         """
         return replace(self, supplied_uri=uri, supplied_validate=validate)
 
@@ -109,7 +172,7 @@ class Fetch:
 
 
 class Build:
-    """Authored-artifact producers: supplied-able, coverage-validated at resolution."""
+    """Authored-artifact producers: supplied-able, checked against the bound domain."""
 
     @staticmethod
     def tool(name: str, **kwargs: Any) -> AuthoredProducer:
@@ -138,7 +201,8 @@ class DataDecl:
     #: it takes, which is the only thing a template CAN say about a context layer
     #: whose source it deliberately does not name.
     geometry: str | None = None
-    #: How a supplied artifact is checked against the domain.
+    #: How a supplied artifact is checked against the domain - BOUND-DOMAIN-ONLY
+    #: under ``CoversAOI`` (see :class:`_CoversAOI`), which is not a coverage test.
     supplied_validate: Any = CoversAOI
 
     def __post_init__(self) -> None:
@@ -160,6 +224,51 @@ class DataDecl:
     def producer_kwargs(self) -> Mapping[str, Any]:
         """The reads the producer declares - empty for a producer-less slot."""
         return {} if self.producer is None else self.producer.kwargs
+
+    @property
+    def wire_annotation(self) -> Any:
+        """This slot's declared type on the generated tool's signature.
+
+        A supplied artifact arrives as a uri or a layer name, so the type is a
+        string whatever shape the slot takes; the declared shape rides along as
+        :class:`SuppliedGeometry` metadata so the wire says what it accepts.
+        """
+        if self.geometry is None:
+            return str | None
+        return Annotated[str | None, SuppliedGeometry(self.geometry)]
+
+    @property
+    def doc_line(self) -> str:
+        """What the model reads about this slot: the shape it takes, and absence.
+
+        The slot names no source, so the shape is the only thing the prose CAN
+        say - and saying it is what keeps a caller from filling a mesh slot with a
+        raster because nothing told them otherwise.
+        """
+        shape = f"a {self.geometry} layer" if self.geometry else "a layer"
+        tail = ("absent is legal and the run reports it" if self.is_optional
+                else "required - the template names no source for it")
+        return f"{shape} you supply, as a uri or a layer name; {tail}."
+
+    def refuse_wrong_shape(self, value: Any) -> None:
+        """Refuse a supplied artifact whose CLASS is not the shape this slot declared.
+
+        Suffix-deep and no deeper: it separates a raster from a mesh from a vector,
+        which is what a name can answer without a read. An unclassifiable artifact
+        passes - the consumer's own species reader is what finally refuses a vector
+        that carries the wrong geometry inside it.
+        """
+        if self.geometry is None:
+            return
+        found = artifact_class(value)
+        wanted = _GEOMETRY_CLASS[self.geometry]
+        if found is None or found == wanted:
+            return
+        raise SuppliedGeometryError(
+            f"Data {self.name!r} declares geometry={self.geometry!r}, so it takes a "
+            f"{wanted} artifact; what was supplied reads as {found} ({value!r}). "
+            "Supply the shape the slot declares, or leave it unfilled."
+        )
 
     def supplied(self, *, geometry: str | None = None,
                  validate: Any = CoversAOI) -> "DataDecl":

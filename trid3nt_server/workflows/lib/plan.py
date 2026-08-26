@@ -80,8 +80,39 @@ class Ref:
         return tuple(self.path.split(".")[1:])
 
 
+class _Placeholder:
+    """A plan-time DESCRIPTION of a read, and the operations that must not read it.
+
+    Truthiness, ``str()`` and f-string interpolation are the three ways a
+    placeholder silently becomes data: a construction-time ``if`` decides a branch
+    against a description, and an f-string bakes ``ParamRef('x')`` into a layer
+    title a user reads. Every placeholder refuses all three the same way, because
+    the leak is the same leak whichever namespace the ref came from. ``repr`` stays
+    live: naming the ref is what a diagnostic is for.
+    """
+
+    __slots__ = ()
+
+    def _refuse(self, operation: str) -> "PlanValidationError":
+        return PlanValidationError(
+            f"{self!r} does not support {operation} at plan-construction time - it "
+            "is a description of a late-bound read, not the value. Leave the ref in "
+            "the plan and let the interpreter substitute it; a conditional is a When "
+            "the interpreter decides."
+        )
+
+    def __bool__(self) -> bool:
+        raise self._refuse("truth-value testing")
+
+    def __str__(self) -> str:
+        raise self._refuse("str()")
+
+    def __format__(self, _spec: str) -> str:
+        raise self._refuse("f-string / format() interpolation")
+
+
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
-class ParamRef:
+class ParamRef(_Placeholder):
     """A LATE-BOUND read of a declared param: what ``p.<name>`` yields in ``plan()``.
 
     A plan DESCRIBES; the interpreter SUBSTITUTES. Baking the concrete value into
@@ -106,26 +137,12 @@ class ParamRef:
         if not self.name or not self.name.isidentifier():
             raise PlanValidationError(f"ParamRef({self.name!r}) has no identifier name.")
 
-    def _refuse(self, operation: str) -> "PlanValidationError":
-        return PlanValidationError(
-            f"ParamRef({self.name!r}) does not support {operation} at "
-            "plan-construction time - it is a description of a late-bound read, not "
-            "the value. Leave the ref in the plan and let the interpreter "
-            "substitute it; a conditional is a When the interpreter decides."
-        )
-
     def __bool__(self) -> bool:
         raise PlanValidationError(
             f"ParamRef({self.name!r}) has no truth value at plan-construction time - "
             "it is a description, not the value. A branch on it is "
             f"When(P.{self.name}, ...), which the interpreter decides after the gates."
         )
-
-    def __str__(self) -> str:
-        raise self._refuse("str()")
-
-    def __format__(self, _spec: str) -> str:
-        raise self._refuse("f-string / format() interpolation")
 
     def __eq__(self, _other: Any) -> bool:
         raise self._refuse("==/!= comparison")
@@ -138,12 +155,19 @@ class ParamRef:
 
 
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
-class DataRef(Ref):
+class DataRef(_Placeholder, Ref):
     """A late-bound read of a declared ``Data``: what ``D.<name>`` yields.
 
     A :class:`Ref` so the interpreter dereferences it with everything else, and its
     own type so the registration check can say WHICH namespace a bad name came
     from - ``D.terain`` is a Data typo, not a step nobody named.
+
+    A PLACEHOLDER like ``ParamRef``, and it refuses the same reads: the artifact a
+    ``D.<name>`` describes does not exist until the interpreter produces it, so an
+    f-string over one puts ``DataRef('mesh')`` in front of a user and a
+    construction-time ``if`` branches on a description. Equality and hashing stay
+    :class:`Ref`'s: a Data name is compared and keyed by path all through
+    registration.
     """
 
     origin: str = ""

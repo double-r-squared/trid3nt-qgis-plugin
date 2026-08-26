@@ -22,6 +22,7 @@ Offline. Nothing here solves; these pin the contract in
 from __future__ import annotations
 
 import inspect
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -450,3 +451,57 @@ def test_the_run_prefix_comes_from_the_step_the_facade_NAMES():
     assert _workflow(Renamed)._run_id(_Layer(), run) == "RUN123"
     # a workflow that declares no solve step simply has no prefix to find
     assert _workflow()._run_id(_Layer(), run) is None
+
+
+# --- a context slot's declared SHAPE reaches the wire and the prose ---------- #
+def test_a_context_slot_puts_its_declared_shape_on_the_wire_and_in_the_prose():
+    """A slot names no source, so the SHAPE it accepts is the only thing the
+    schema and the prose can say about it - and both have to say it, or a caller
+    fills a polyline slot with a raster because nothing told them otherwise."""
+    import typing
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.lib.data import SuppliedGeometry
+
+    fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
+    annotation = inspect.signature(fn).parameters["structure"].annotation
+    assert typing.get_args(annotation)[1:] == (SuppliedGeometry("polyline"),)
+    # the metadata is documentation, not schema: the hint a declaration builder
+    # resolves is the plain string type the argument really takes
+    assert typing.get_type_hints(fn)["structure"] == (str | None)
+
+    doc = fn.__doc__ or ""
+    context = doc.split("Context layers:")[1].split("Run controls:")[0]
+    assert "structure: a polyline layer you supply" in context
+    # one argument, one description: the template's own prose joins the slot's
+    # line rather than repeating it as a run control
+    assert "    structure:" not in doc.split("Run controls:")[1]
+
+
+def test_a_slot_that_declares_no_shape_still_reaches_the_wire_as_a_string():
+    from trid3nt_server.workflows.lib import Data
+    from trid3nt_server.workflows.lib.workflow import _wire_signature
+
+    sig, annotations = _wire_signature((), (), (Data("clip_zone"),))
+    assert annotations["clip_zone"] == (str | None)
+    assert sig.parameters["clip_zone"].default is None
+
+
+# --- a corridor policy is a binding block, so it is frozen DEEP -------------- #
+def test_a_corridor_policy_is_frozen_all_the_way_down():
+    """A template writes CORRIDOR at module level and every run reads that same
+    object, so a mutable container inside one is a channel from one run to the
+    next: a step that edits the declared list changes what the NEXT run declares."""
+    from trid3nt_server.workflows.telemac.workflow import CorridorPolicy
+
+    banks = ["nhd_area", "assumed_ribbon"]
+    policy = CorridorPolicy(extent_km=0.5, width_m={"left": 30.0, "right": [1, 2]},
+                            boundary_source=banks)
+
+    assert policy.boundary_source == ("nhd_area", "assumed_ribbon")
+    assert isinstance(policy.width_m, MappingProxyType)
+    assert policy.width_m["right"] == (1, 2)     # the nested list became a tuple
+    with pytest.raises(TypeError):
+        policy.width_m["left"] = 99.0
+    banks.append("invented_later")               # the caller's list is not the policy's
+    assert policy.boundary_source == ("nhd_area", "assumed_ribbon")

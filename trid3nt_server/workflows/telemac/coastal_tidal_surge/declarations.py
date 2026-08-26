@@ -101,7 +101,7 @@ PARAMS: tuple[Param, ...] = (
           derived_when_absent=(
               "the simulated window is the fetched series' OWN span; a synthetic "
               "plane-beach run, which has no series, takes the labeled "
-              "{SYNTHETIC_WINDOW_HOURS:g} h window"),
+              f"{SYNTHETIC_WINDOW_HOURS:g} h window"),
           desc="Simulated window; unset runs the whole gauge series"),
     Param("time_step_s", door=doors.CONSTANT, default=20.0, bounds=(1.0, 600.0),
           units="s", consequence="numerical", desc="Solver time step"),

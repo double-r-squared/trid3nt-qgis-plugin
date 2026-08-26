@@ -442,7 +442,8 @@ def register_workflow(
         # the signature actually carries. A template declares `params=PARAMS` and
         # the factory narrows it; documenting a constant the schema does not offer
         # would be the docstring inviting a call the tool cannot take.
-        doc = {**doc, "params": _wire_params(params)}
+        doc = {**doc, "params": _wire_params(params),
+               **_context_doc(data, doc.get("controls", ()))}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 
@@ -474,6 +475,27 @@ def _refuse_incomplete_facade(facade: type[Workflow]) -> None:
             f"{facade.__name__} realizes no {unfilled} - the EngineOps five are "
             "must-fill. Implement them on the facade, or register against one that "
             "does.")
+
+
+def _context_doc(data: Sequence[DataDecl],
+                 controls: Sequence[tuple[str, str]]) -> dict[str, Any]:
+    """The docstring's ``context`` rows, and the ``controls`` with the slots taken out.
+
+    A producer-less slot is documented in ONE place. Its SHAPE comes from the
+    declaration, which is the only party that knows it; whatever prose the template
+    wrote about the same wire argument is appended and its control row drops, so
+    the model reads one description of one argument instead of two that can drift.
+    """
+    slots = tuple(decl for decl in data if decl.producer is None)
+    names = {decl.name for decl in slots}
+    written = dict(controls)
+    return {
+        "controls": tuple((n, text) for n, text in controls if n not in names),
+        "context": tuple(
+            (decl.name, " ".join(p for p in (decl.doc_line, written.get(decl.name))
+                                 if p))
+            for decl in slots),
+    }
 
 
 def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
@@ -512,8 +534,10 @@ def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
         (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
     ]
     # A producer-less Data slot IS on the wire: it has no source of its own, so
-    # the only way it ever gets filled is a caller naming the layer.
-    entries += [(decl.name, str | None, None) for decl in data
+    # the only way it ever gets filled is a caller naming the layer. The slot's
+    # declared SHAPE travels on the annotation, which is the schema's own record
+    # of what the argument accepts.
+    entries += [(decl.name, decl.wire_annotation, None) for decl in data
                 if decl.producer is None]
     entries += [(name, ann, None) for name, ann in extra]
     entries += list(_CONTROLS)

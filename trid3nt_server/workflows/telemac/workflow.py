@@ -31,6 +31,7 @@ from trid3nt_server.workflows.lib import (
     Ref,
     Step,
     Workflow,
+    deep_freeze,
 )
 from trid3nt_server.workflows.shared.aoi import AcquireAoi
 from trid3nt_server.workflows.telemac.steps import (
@@ -199,6 +200,10 @@ class CorridorPolicy:
     they sit here, beside the only mesher that reads them, rather than in the
     universal :class:`MeshPolicy`. A future basin or coastal facade declares its
     own shape policy; neither has to carry the other's fields.
+
+    A BINDING BLOCK like its siblings: a template writes one at module level, so
+    every run of the template reads the same object and its fields are DEEP-frozen
+    - a mutable container inside one would be a channel from one run to the next.
     """
 
     #: How far the modeled corridor runs, along its principal (flow) axis.
@@ -207,6 +212,11 @@ class CorridorPolicy:
     width_m: Any = None
     #: Where the corridor BOUNDARY comes from (real polygons vs an assumed ribbon).
     boundary_source: Any = None
+
+    def __post_init__(self) -> None:
+        for field_name in ("extent_km", "width_m", "boundary_source"):
+            object.__setattr__(self, field_name,
+                               deep_freeze(getattr(self, field_name)))
 
 
 class MeshHandle:

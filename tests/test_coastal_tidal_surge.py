@@ -276,3 +276,20 @@ def test_the_stage_chart_reads_the_layer_and_refuses_to_invent_one():
     assert "0.0921 km2" in payload["caption"]
     # a run that measured no boundary stage has no chart to draw, and says so
     assert build_stage_chart(result=object(), params={}) is None
+
+
+def test_the_synthetic_window_row_renders_the_number_not_the_symbol():
+    """The provenance row a user reads carries the labeled window in HOURS. An
+    un-interpolated declaration would put the symbol name in front of them, which
+    is a promise about a number with no number in it."""
+    from trid3nt_server.workflows.lib import provenance_entries, resolve_params
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.declarations import (
+        PARAMS,
+        SYNTHETIC_WINDOW_HOURS,
+    )
+
+    resolved = asyncio.run(resolve_params(PARAMS, {}))
+    row = next(r for r in provenance_entries(resolved, PARAMS)
+               if r.param == "duration_hours")
+    assert f"{SYNTHETIC_WINDOW_HOURS:g} h window" in row.note
+    assert "{" not in row.note and "SYNTHETIC_WINDOW_HOURS" not in row.note
