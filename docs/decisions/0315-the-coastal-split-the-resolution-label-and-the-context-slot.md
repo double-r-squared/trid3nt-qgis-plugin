@@ -190,4 +190,66 @@ inventory - four different auto-spacing divisors, four grid floors duplicated
 against the params' own bounds, the TOMAWAC spectral discretisation, the
 TELEMAC-3D turbulence constants, the six hardcoded fetch endpoints - is recorded
 in `docs/IDEAS.md` and rides the in-worker-fetch migration, which is the other
-half of the same end state.
+half of the same end state. (The grid-floor half of that list is corrected below.)
+
+## CORRECTED (ledger audit of `0f7a6351..02acbfed`, 2026-08-26)
+
+Three claims were checked against git and did not hold. The rest of the note was
+checked too and does hold - the three legs with a zero-origin mesh are the right
+three, the three Overpass mirrors are three, the four resolution classes are four,
+the four auto-spacing divisors are four, the six distinct fetch endpoints are six,
+and "six templates" was right at this ADR's own commit (`rain_on_grid` picks up its
+`sensitivity=` rows later, in `871acc38`, exactly as section 5 says it would).
+
+### "four grid floors duplicated against the params' own bounds" - only THREE duplicate
+
+The count of four floors is right. The word "duplicated" is right for three of them
+and wrong for the fourth, and the fourth is the one that matters:
+
+| leg | `GRID_H_FLOOR_M` | the template's `target_resolution_m` `bounds=` min | relation |
+| --- | --- | --- | --- |
+| artemis (`artemis_build.py:137`) | 20.0 | `agitation/declarations.py:69` - 20.0 | duplicate |
+| coastal (`telemac_coastal_build.py:73`) | 20.0 | `coastal_tidal_surge/declarations.py:62` - 20.0 | duplicate |
+| tomawac (`tomawac_build.py:118`) | 150.0 | `wave_field/declarations.py:72` - 150.0 | duplicate |
+| telemac3d (`telemac3d_build.py:139`) | **400.0** | `stratified_flow/declarations.py:74` - **50.0** | **contradicts** |
+
+`stratified_flow` declares `bounds=(50.0, 20000.0)`, so a caller may legally ask for
+50 m horizontal spacing. `telemac3d_build.py:629-630` then runs
+`dx = max(dx_req, GRID_H_FLOOR_M)` and lays the grid at 400 m - an 8x move on the
+user's own lever, with no note and no provenance row (the only narration in that
+block, `coarsened`, belongs to the node-cap loop below it and never fires for the
+floor). That is not a de-duplication chore waiting on the manifest migration; it is
+a live narrate-on-adjust violation, and it belongs in a different queue from the
+three that merely say one number twice.
+
+### "Our own `read_selafin` ignores IPARAM" - no longer true at the end of this range
+
+The sentence in section 4 continues "so every postprocessor reads exactly what it
+read before: the numbers do not move, the header gains the fact." That described
+`8c796d38`, where `read_selafin` unpacked IPARAM only to test `iparam[9]` for a
+trailing date record. Two later commits in the same range changed it: `69ab5069`
+("the diagnostic sheet honours X-ORIGIN") and `bee14156`. At `02acbfed`,
+`postprocess_telemac.read_selafin` returns `"x_origin": int(iparam[2])` and
+`"y_origin": int(iparam[3])`, and `scripts/render_all_layers_proof.py:284` adds
+that origin to the node x. The reader is still deliberately non-applying - the
+values are REPORTED, and the docstring beside them says so, because every
+postprocessor recovers the origin from the domain bbox and applying it twice would
+double the offset - but "ignores IPARAM" and "the numbers do not move" are not what
+the code says any more.
+
+### "The ARTEMIS canary no longer meshes a breakwater" - the schematic one lives in the WORKER
+
+The Context bullet attributes the invented barrier to "the step", and section 3
+lists the buried Overpass call, its mirrors, the FlatGeobuf re-upload and the
+pinned-segment coercion as DELETED - all four verified deleted from
+`workflows/telemac/steps/agitation.py` by `a67cc188`. But the schematic barrier
+itself was never in the step. `workers/telemac/artemis_build.py` still carries a
+`demo_bw` branch that, when no real structure is present, meshes
+`segs = [(0.0, Ly*0.55, Lx*0.5, Ly*0.55)]` labeled "schematic demo breakwater
+(labeled)" AND silently overrides `wave_dir_deg` to 90.0 so the shadow sits
+due-north. `steps/agitation.py:125` sets only `breakwater_polylines` and no longer
+sets `breakwater` at all, so an unfilled slot reaches exactly that branch. No commit
+in `0f7a6351..02acbfed` touched `artemis_build.py` except the two coastal datum /
+origin fixes. The server-side stance was removed; the worker-side one was not, and
+the consequence as written promises an open-water solve that the deck writer alone
+cannot deliver.

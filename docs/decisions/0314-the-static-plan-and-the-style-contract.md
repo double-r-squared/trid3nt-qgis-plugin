@@ -135,3 +135,61 @@ re-emits a published layer's display face and deliberately cannot make one visib
 The TELEMAC-specific work rides a second wave: the coastal inundation split, the
 results-mesh origin fix, the resolution labels, the sim-duration doors, the
 agitation exemplar, the steps audit and the proof-folder reorg.
+
+## CORRECTED (ledger audit of `0f7a6351..02acbfed`, 2026-08-26)
+
+Section 7 claims the style mirror is gone. It is not. The exact wording is
+"`contracts/trid3nt_contracts/styles.yaml` holds the preset table AND the
+quantity -> preset defaults in ONE file, so the mirror is not constructible.
+`emission/styles.py` is the only resolver", and the consequence it draws is that
+"a style change is a one-line contract edit rather than a code change in three
+places". The landing commit's own subject line reads "the mirror collapses" and
+`styles.yaml`'s first line reads "The STYLE CONTRACT: one file, so a mirror is
+impossible."
+
+At the end of this review range, `trid3nt_server/emission/publish.py` still
+carried a SECOND, independent preset-to-label table:
+
+    _STYLE_PRESET_LABELS: dict[str, str]        publish.py:1386 @ 02acbfed
+
+Nine rows, keyed by preset name, with the comment "Extend as new presets land" -
+the growth instruction a mirror needs to keep growing. `_label_from_style_preset`
+(`publish.py:1428`) read that dict and never consulted the contract, although the
+contract-backed resolver `styles.preset_label` already existed at
+`emission/styles.py:345` and the contract declared 65 `label:` rows. So the
+publish path answered "what is this layer called" from one table while the legend
+path answered it from another.
+
+The two tables did not agree, which is the part that matters. Only two of the nine
+mirrored keys are contract preset names at all: `continuous_flood_depth`, labeled
+"Flood Depth" in the mirror and `"Flood depth"` in the contract, and
+`diverging_bed_evolution`, labeled "Sediment Deposition" in the mirror and
+`"Bed evolution"` in the contract - not a casing difference but a different claim
+about what the raster shows. The other seven (`standard_hillshade`,
+`continuous_slope_pct`, `categorical_aspect`, `standard_colored_relief`,
+`continuous_dem`, `categorical_landcover`, `continuous_impervious_surface`) name
+presets the contract does not have under those spellings; the contract calls the
+same styles `slope_angle_deg`, `aspect_compass_deg`, `impervious_surface_pct` and
+so on. A second table under a second naming scheme is further from collapsed than
+the three agreeing homes section 7's Context describes, because the CI test that
+used to catch drift between agreeing copies was deleted with the copies it
+guarded, and nothing asserted anything about this one.
+
+Beside it, the same file carried a helper that inferred a raster's PHYSICAL
+QUANTITY from its filename:
+
+    _is_flood_depth_cog(layer_uri, layer_id)    publish.py:1537 @ 02acbfed
+
+It tokenizes `f"{layer_uri} {layer_id}"` on non-alphanumerics and returns True on
+any of `flood`, `depth`, `inundation`, `floodepth`; `style_preset_for_publish`
+then paints such a raster `continuous_flood_depth` when the producer named no
+preset. A name is not a measurement, so this is the guessed-ramp failure the
+quantity resolver in the same module forbids in as many words. It also predates
+the split ADR 0315 landed: after that split, `coastal_depth_max.tif` and
+`coastal_inundation.tif` both tokenize to a hit while meaning different quantities.
+
+What this note corrects is the CLAIM, not the code. Section 7's design is right and
+the contract is the single home it says it is; what was wrong was declaring the
+mirror gone while a second table and a filename-sniffing quantity guess were still
+live in the publish path. A landing does not collapse a mirror by writing the
+contract - it collapses it by leaving no second reader, and that check was not run.

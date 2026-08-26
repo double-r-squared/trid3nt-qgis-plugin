@@ -747,3 +747,170 @@ thing, and the standalone mesh tool reads the same constant.
 
 **Decided by:** the steps audit's duplicated-default class (wave C).
 **Status:** DELETED.
+
+## Backfill: four test deletions that landed unledgered - 2026-08-26
+
+The four rows below were written after the fact, during a ledger audit of the
+review range `0f7a6351..02acbfed`. Each file was deleted inside that range and
+no row named it at the time, so the deletion had no traceable record. They are
+registered here in their true state - DELETED, with the commit that did it -
+rather than left out because the code they guarded was ledgered elsewhere. A
+guard is a deletion of its own: what stops being asserted is a fact about the
+product, not a footnote to the module that went with it.
+
+## `tests/test_mesh_acquisition_cross_dataset.py` - DELETED 2026-08-26
+
+**What:** 58 lines asserting that the rain-on-grid mesh bed DEM's cross-dataset
+fallback (3DEP bare-earth -> Copernicus GLO-30 DSM) was labeled UNCONDITIONALLY,
+by raising when the caller passed no `notes` sink. It imported
+`workflows.telemac.rain_on_grid.mesh_acquisition` directly.
+
+**CONDITION to delete:** met by ADR 0316's third ruling. The module it imported
+no longer exists (ledger row above), and the shape it asserted no longer exists
+either: the bed DEM is `Data("bed_dem", Fetch.tool(...).ladder("usgs_3dep_bare_earth",
+"copernicus_glo30"))`, so the cross-dataset label rides the RETURNED ARTIFACT and
+there is no `notes` out-parameter left for a caller to decline to pass. The
+"raises when no notes sink" assertion has nothing to bind to.
+
+**Superseded by:** `tests/test_mesh_bed_dem_cross_dataset.py` (66 lines, added in
+the same commit), rewritten against `resolve_bed_dem`'s producer contract - a
+returned dict whose note carries the label, which is what makes the label
+unbypassable rather than merely loud.
+
+**Decided by:** ADR 0316 (wave C). **Status:** DELETED (commit 3b2fe565).
+
+## `tests/test_quantity_styles_registry.py` - DELETED 2026-08-26
+
+**What:** 52 lines, one of the TWO drift guards over `emission/quantity_styles.py`'s
+hand-mirrored copy of `publish._QGIS_STYLE_REGISTRY` - the test that existed only
+because two copies of one table had to be kept agreeing by CI.
+
+**CONDITION to delete:** met by the style contract. `contracts/trid3nt_contracts/styles.yaml`
+holds the preset table AND the quantity -> preset defaults in one file, so the
+mirror is not constructible and a drift guard has no drift to catch.
+`emission/quantity_styles.py` was deleted in the SAME commit (its own row is in
+the main table above), so this file outlived its subject by zero commits.
+
+**Note on the row it leaves behind:** the QUEUED candidate
+"`emission/quantity_styles.py`'s hand-mirrored copy of `_QGIS_STYLE_REGISTRY`"
+in the cleanup-wave table cites this file by name as one of the two tests that
+"exist purely to catch the drift between the two copies". That row still reads
+QUEUED and its stated reason (the drift tests are the only thing standing between
+a preset rename and a silently unstyled solver output) no longer describes a
+living arrangement.
+
+**Decided by:** ADR 0314, section 7 (the style contract). **Status:** DELETED
+(commit f4a378c3).
+
+## `tests/test_output_quantity_style_presets.py` - DELETED 2026-08-26
+
+**What:** 59 lines, the second of the two mirror drift guards - the CI test that
+asserted every `OutputQuantitySpec.style_preset` value named a real preset row.
+
+**CONDITION to delete:** met by the same style contract, one commit later than its
+twin. Every `quantity_id` is now a row in `styles.yaml`'s `quantity_defaults`, and
+the contract's own self-consistency check (`tests/test_style_contract.py`, which
+walks `contract.quantity_defaults()` against the declared presets) asserts the
+same property from inside the single file rather than across two.
+
+**Note on the row it leaves behind:** the QUEUED candidate "`output_quantities.py`
++ `publish_quantities.py` scaffold + its 4 live engine consumers' calls" names
+`test_output_quantity_style_presets` inside its test list. That candidate is still
+QUEUED as a whole; this one file of its scope is already gone.
+
+**Decided by:** ADR 0314, section 7 (the style contract). **Status:** DELETED
+(commit 20e6a1cb).
+
+## `tests/test_publish_layer_titiler_style_resolver_f51.py` - DELETED 2026-08-26
+
+**What:** 746 lines - the largest single deletion in the range - guarding the
+TiTiler-era style resolver on the AWS s3 branch: the F51 percentile fallback, the
+typed registry band, the paletted-COG no-rescale rule and the safe default. Its
+imports were `_band1_percentile_rescale`, `_is_rgba_or_multiband`,
+`_is_terrain_token_preset`, `_registry_style_params` and `_resolve_qgis_style_params`.
+
+**CONDITION to delete:** met by the style contract deleting the symbols underneath
+it. `_registry_style_params` and `_band1_percentile_rescale` are grep-to-zero
+across `trid3nt_server/` and `tests/` at `02acbfed`; the 59 preset rows they read
+are declared in `styles.yaml` and resolved by `emission/styles.py`. The file's
+whole premise - a hardcoded two-entry if/elif that only flood and plume escaped -
+describes an arrangement that no longer exists, and its docstring's framing (the
+AWS deployment, TiTiler rendering the COG) describes a deployment that no longer
+exists either.
+
+**Superseded by:** `tests/test_publish_layer_style_resolver.py` (543 lines, added
+in the same commit). `_resolve_qgis_style_params` SURVIVES - it is still the single
+render chokepoint - so the coverage was rewritten onto it rather than dropped: the
+data-policy range, the fixed-preset range, the NaN/flat/unreadable fallbacks and
+the paletted-COG rule are all still asserted, against the contract instead of
+against the registry.
+
+**Decided by:** ADR 0314, section 7 (the style contract). **Status:** DELETED
+(commit 20e6a1cb).
+
+## The MALPASSET constellation - QUEUED 2026-08-26 (row corrected on registration)
+
+**What:** `trid3nt_server/cases/malpasset_obs.py` (the observation-layer builder:
+`build_malpasset_obs_layers`, `MALPASSET_VERTICAL_DATUM`, the police-HWM /
+transformer / gauge FlatGeobuf writers), `scripts/run_l2_malpasset.py` (the L2
+calibration harness), `tests/test_malpasset_obs.py`, the
+`tests/fixtures/telemac_malpasset/` deck fixtures and the staged
+`data/cases/malpasset/` case data.
+
+**CONDITION to delete:** the STALE SWEEP wave. Nothing else. The chop is ruled and
+unblocked; what it waits on is a wave with the mandate to execute it.
+
+**CORRECTED, and what the correction strikes:** the ruling as recorded in
+`docs/IDEAS.md` fenced this chop behind "it has a live import in
+postprocess_telemac.py, so the chop waits for wave C to land". THAT FENCE DOES NOT
+EXIST. `postprocess_telemac.py` has no import of anything malpasset; its single
+occurrence of the word is a comment at `:293` explaining where the free-surface
+variable names were verified from ("Never guessed -- verified by parsing the
+bundled `f2d_malpasset-small.slf` header"), which is a provenance sentence about a
+fixture, not a dependency on this code. The complete importer list for
+`trid3nt_server.cases.malpasset_obs`, repo-wide, is `scripts/run_l2_malpasset.py`
+(three lazy function-local imports) and `tests/test_malpasset_obs.py` - a harness
+script and its own test, both inside the constellation being chopped. ZERO live
+product modules import it. The chop therefore awaits the stale sweep, not an
+import removal, and no wave has to land first.
+
+**Why it dies:** the L2 harness is a working mini-calibration loop (obs pairing,
+NSE/KGE/RMSE skill metrics, friction adjustment toward the published band, re-run,
+re-score), and the ruling is explicitly CHOP WITHOUT HARVEST: the calibration track
+builds fresh, with published methods as design references under paper-first and no
+code inheritance. Superseded as the V&V exemplar by coastal-surge-vs-CO-OPS.
+
+**Decided by:** NATE (malpasset chop-no-harvest ruling, 2026-08-26). **Status:**
+QUEUED (condition: the stale sweep).
+
+## `workers/telemac/artemis_build.py`'s `demo_bw` branch - QUEUED
+
+**What:** the third source-of-structure branch in the real-bathymetry diffraction
+builder (`artemis_build.py:635-642`). When the deck names neither
+`breakwater_polylines` nor a `breakwater` segment, it meshes a schematic
+semi-infinite barrier from the west AOI edge to an interior tip AND overrides
+`wave_dir_deg` to 90.0 so the geometric shadow sits due-north.
+
+**Why it dies:** it invents the very thing the run is asked to evaluate. The
+sheltering question is meaningless without the thing that shelters, and WHICH
+thing is not the worker's to decide; the step already declares the slot
+producer-less and refuses to go looking. The heading override is the more
+dangerous half - it silently discards a declared `wave_direction_deg` and returns
+a field solved at a different incident angle than the one the run states. The
+structure is a SLOT with two legal answers, supplied or absent, and this branch
+is a third answer nobody can ask for.
+
+**CONDITION to delete:** a wave that can rebuild the ARTEMIS worker image and
+smoke a diffraction run through it. Worker code is inert until the image is
+rebuilt, so landing the deletion without the rebuild changes nothing that runs
+and proves nothing. The deletion is the branch plus the `wdir = 90.0` override;
+an unfilled slot then meshes no barrier and keeps the declared heading.
+
+**Interim, already landed:** the run no longer LIES about it.
+`steps/agitation.py::_structure_row` reads the worker's own `bw_label` /
+`structure_present` echo instead of the deck it sent, so a domain carrying an
+unrequested barrier says so, and a solve that reports nothing reads UNMEASURED
+rather than open water. That closes the honesty hole; it does not close this one.
+
+**Decided by:** the panel-2 remediation wave's honesty pass. **Status:** QUEUED
+(condition: an ARTEMIS worker image rebuild + live diffraction smoke).

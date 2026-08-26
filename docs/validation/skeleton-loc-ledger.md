@@ -79,6 +79,19 @@ letter continues the 2/2b remediation naming (a wave that fixes rather than
 migrates), not the wave-3 migration sequence, and its running net continues from
 wave 3's +1408.
 
+WAVE-A INSERTION AND FULL RE-CHAIN (2026-08-26). Wave A had a verdict in this file
+but no ROWS: its counting note claimed to be "exactly the sum of the seven wave-A
+rows above" against rows that were never written. The seven rows are now measured
+and inserted, and they sit between the last 2c row (`0ff5231f`, 2026-08-25 02:12)
+and the first wave-B row (`33e879cf`, 2026-08-25 23:19) because wave A's own range
+is `09e4d734..f76234c3` (18:56 to 21:16 the same day) - after every 2c commit and
+before every B commit. Six of the eight wave-B rows did not reproduce at their own
+pinned commits and are corrected here from git. Because seven rows joined the table
+mid-column, EVERY running-net cell from wave A down has been recomputed as a true
+running sum of the delta column: wave A now closes at +2036 (not the +2162 its
+verdict claimed), wave B at +2855 (it had no verdict at all) and wave C at +3899
+(not +2974). Nothing before wave A moved.
+
 | date | wave | surface | LOC before | LOC after | delta | running net |
 |---|---|---|---|---|---|---|
 | 2026-08-24 | 0 - baseline (ref `8304c289`) | lib skeleton (14 files) | 3944 | - | - | - |
@@ -114,18 +127,32 @@ wave 3's +1408.
 | 2026-08-25 | 2c - panel remediation | worker code (`workers/telemac/telemac_coastal_build.py`, `workers/telemac/tomawac_build.py` - each echoes the bbox it actually meshed), commit `b24feb64` | 1379 | 1387 | +8 | +1816 |
 | 2026-08-25 | 2c - cleanup phase 1 | fleet adaptations (`contracts/{case_results,event,tool_metadata}.py` + `main.py` - the prose/category references the deleted library left behind), commit `0ff5231f` | 1116 | 1113 | -3 | +1813 |
 | 2026-08-25 | 2c - cleanup phase 1 | deleted outright (`tools/processing/aggregate_claims_across_sources/` - the orphaned library, module 668 + empty `__init__.py`), commit `0ff5231f` | 668 | 0 | -668 | **+1145** |
-| 2026-08-25 | B - TELEMAC engine-specific | lib skeleton (`resolution.py` 136 NEW - the four sensitive classes and the one note builder; `user_input.py` +45 `polyline_set`, the plural the polyline context slot normalizes to; `workflow.py` +12 the `sensitivity=` declaration threaded to `checks()`), commit `a67cc188` | 601 | 794 | +193 | +1338 |
-| 2026-08-25 | B - TELEMAC engine-specific | shared steps (`shared/supplied_geometry.py` 93 NEW - the one reader for a filled context slot, layer-or-sketch), commit `a67cc188` | 407 | 500 | +93 | +1431 |
-| 2026-08-25 | B - TELEMAC engine-specific | adapters/runtime (`postprocess_telemac.py` +94 net - the t=0 dry mask, the two-product split, the two COG writers collapsed into one local function), commit `a67cc188` | 2827 | 2921 | +94 | +1525 |
-| 2026-08-25 | B - TELEMAC engine-specific | TELEMAC family steps (`coastal.py` +62 the split publish + the three named duration rungs + the four newly-reachable worker knobs; `agitation.py` **-98** the Overpass helper, its three mirrors, the FlatGeobuf re-upload and the pinned-segment coercion all deleted; `open_water.py` +18 the one `mesh_resolution_label`, which replaced four copies; `wave.py`/`stratified.py` -8 onto it; `deck.py`/`products.py`/`substance.py`/`solve.py` +9 net for the refusals that replaced three silent substitutions), commit `a67cc188` | 2094 | 2077 | -17 | +1508 |
-| 2026-08-25 | B - TELEMAC engine-specific | template files (six `sensitivity=` declarations + the coastal split's answer/chart/params + the agitation `structure` slot; the three prose-holds-a-number resolution defaults moved from the steps into the declarations that promise them), commit `a67cc188` | 1375 | 1462 | +87 | +1595 |
-| 2026-08-25 | B - TELEMAC engine-specific | NEW spec fetcher (`fetchers/ocean/fetch_osm_breakwaters/` - `source.yaml` + `corpus.yaml` + `__init__.py`) and its hook pair (`hooks/overpass.py` +105 `overpass_breakwaters.build_request` / `.parse_response`), commit `a67cc188` | 0 | 195 | +195 | +1790 |
-| 2026-08-25 | B - TELEMAC engine-specific | worker code (`telemac_coastal_build.py` +23 the kept origin + `add_mesh(orig=)` + the echoed corner; `entrypoint.py` +12 the echoed rescaled discharge and the one parser stamp; `artemis_build.py` +11 the echoed shoal overrides), commit `075ad814` | 1387 | 1433 | +46 | +1836 |
-| 2026-08-25 | B - TELEMAC engine-specific | proof-path seam (`testing/proof_paths.py` 77 NEW; `canaries.py` -6 onto it, the render + drive scripts +23), commit `33e879cf` | 2827 | 2921 | +94 | **+1930** |
-| 2026-08-26 | C - `telemac_rain_on_grid` | the TEMPLATE folder (`rain_on_grid.py` 680 -> 282, `declarations.py` 259 NEW, `cn_infiltration.py` +31 the one AMC normalizer, `__init__.py` 20 -> 10; `mesh_acquisition.py` **-765**, re-homed) | 1835 | 952 | **-883** | +1047 |
-| 2026-08-26 | C - `telemac_rain_on_grid` | the shared MESH FRONT (`mesh/watershed.py` 753 NEW - the catchment generation strategy plus its three `Data` producers; `mesh/telemac_build.py` 83 NEW - the thin per-solver SELAFIN writer; `generate_mesh.py` +1 net onto both) | 733 | 1570 | +837 | +1884 |
-| 2026-08-26 | C - `telemac_rain_on_grid` | the TELEMAC family steps (`steps/rain_on_grid.py` 941 NEW - acquire, mesh, infiltration, rain, deck, solve, publish; `steps/open_water.py` +21 the extracted `dispatch_and_wait` its second consumer earned; `steps/__init__.py` +21 the exports; `workflow.py` +35 the catchment shape and the seventh process row) | 850 | 1868 | +1018 | +2902 |
-| 2026-08-26 | C - `telemac_rain_on_grid` | contracts + harness (`telemac_contracts.py` +74 `TelemacRainOnGridLayerURI` - the 19 typed answer scalars the composer had nowhere to put; `flood_2d.py` -2 onto the shared delineator) | 1713 | 1785 | +72 | **+2974** |
+| 2026-08-25 | A - static plan + emission style | lib skeleton (`workflows/lib/*.py`: `user_input.py` 207 NEW the typed user-input species, `journal.py` 166 NEW the append-only run journal, `plan.py` +148 the P/D namespaces with construction-site provenance, `data.py` +67, `interpreter.py` +51 the branch evaluation, `slots.py` +37 the context slots, `workflow.py` +16, `validate.py` +14, `__init__.py` +5, `errors.py`/`resolver.py` 0, `params.py` **-48** when the read-recording apparatus went), range `09e4d734..f76234c3` | 3281 | 3944 | +663 | +1808 |
+| 2026-08-25 | A - static plan + emission style | template files (the six TELEMAC template folders: the six template `.py` fell 2032 -> 1286, **-746**; six new `declarations.py` siblings 849 + `river_dye/coercions.py` 53 = +902), range `09e4d734..f76234c3` | 2032 | 2188 | +156 | +1964 |
+| 2026-08-25 | A - static plan + emission style | emission (`trid3nt_server/emission/*.py`: `styles.py` 367 + `restyle.py` 114 + `cog.py` 87 NEW, against `publish.py` **-432** and `quantity_styles.py` **-156** deleted whole; `outputs_seam.py` +12, `uri_registry.py` +10, `pipeline_emitter.py` -7, `layer_uri_emit.py` -9, `__init__.py` 0), range `09e4d734..f76234c3` | 7454 | 7440 | -14 | +1950 |
+| 2026-08-25 | A - static plan + emission style | contracts (`contracts/trid3nt_contracts/styles.py` 150 NEW - the style CONTRACT the one resolver reads; `output_quantities.py` **-23** as the mirror it duplicated went), range `09e4d734..f76234c3` | 481 | 608 | +127 | +2077 |
+| 2026-08-25 | A - static plan + emission style | NEW tool (`tools/display/restyle_layer/restyle_layer.py` 177 + `__init__.py` 5 - the fourth entry point onto the one scale schema - plus the single registration line in `tools/__init__.py`), range `09e4d734..f76234c3` | 936 | 1119 | +183 | +2260 |
+| 2026-08-25 | A - static plan + emission style | deleted outright (`persistence/case_lifecycle.py` 140, and the one export line for it in `persistence/__init__.py`), range `09e4d734..f76234c3` | 152 | 11 | -141 | +2119 |
+| 2026-08-25 | A - static plan + emission style | fleet adaptations (everything the wave had to touch outside the six surfaces above: `tools/processing/_gdal_runner.py` **-65** with `compute_sediment_yield` -15 and `compute_hillshade` -9 onto the collapsed runner, `charts_common.py` +17 NEW, `gates/draw_input.py` +12, `telemac/steps/reach.py` -24, `shared/publish_quantities.py` +2, `telemac/steps/__init__.py` -1, and thirteen signature-only touches that net 0), range `09e4d734..f76234c3` | 19466 | 19383 | -83 | **+2036** |
+| 2026-08-25 | B - TELEMAC engine-specific | lib skeleton (`resolution.py` 136 NEW - the four sensitive classes and the one note builder; `user_input.py` +45 `polyline_set`, the plural the polyline context slot normalizes to; `workflow.py` +18 across the wave - the `sensitivity=` declaration threaded to `checks()` at `a67cc188`, the supplied-geometry wiring at `8c796d38`), measured across the wave range `fb4d9c63..8c796d38` | 724 | 923 | +199 | +2235 |
+| 2026-08-25 | B - TELEMAC engine-specific | shared steps (`shared/supplied_geometry.py` 121 NEW - the one reader for a filled context slot, layer-or-sketch; it landed in the wave's CLOSE-OUT commit, not with the feature commit), commit `8c796d38` | 0 | 121 | +121 | +2356 |
+| 2026-08-25 | B - TELEMAC engine-specific | adapters/runtime (`postprocess_telemac.py` +94 net - the t=0 dry mask, the two-product split, the two COG writers collapsed into one local function; `contracts/trid3nt_contracts/telemac_contracts.py` +16 - the split's answer fields, which the original eight rows omitted and which sits here by the wave-3 precedent), commit `a67cc188` | 3119 | 3229 | +110 | +2466 |
+| 2026-08-25 | B - TELEMAC engine-specific | TELEMAC family steps (`agitation.py` **-98** the Overpass helper, its three mirrors, the FlatGeobuf re-upload and the pinned-segment coercion all deleted; `coastal.py` +62 the split publish + the three named duration rungs + the four newly-reachable worker knobs; `deck.py` +20 and `open_water.py` +20 the one `mesh_resolution_label`, which replaced four copies; `substance.py` +8, `solve.py` +6, `stratified.py` +3, `wave.py` +2, `products.py` +2, `__init__.py` -1), commit `a67cc188` | 3339 | 3363 | +24 | +2490 |
+| 2026-08-25 | B - TELEMAC engine-specific | template files (six `sensitivity=` declarations + the coastal split's answer/chart/params + the agitation `structure` slot; the three prose-holds-a-number resolution defaults moved from the steps into the declarations that promise them), commit `a67cc188` | 1748 | 1884 | +136 | +2626 |
+| 2026-08-25 | B - TELEMAC engine-specific | NEW spec fetcher (`fetchers/ocean/fetch_osm_breakwaters/` - `source.yaml` + `corpus.yaml` + an EMPTY `__init__.py`; the two YAML files are not `.py` and this ledger does not count them) and its hook pair (`hooks/overpass.py` +105 `overpass_breakwaters.build_request` / `.parse_response`), commit `a67cc188` | 560 | 665 | +105 | +2731 |
+| 2026-08-25 | B - TELEMAC engine-specific | worker code (`telemac_coastal_build.py` +26 the kept origin + `add_mesh(orig=)` + the echoed corner; `artemis_build.py` +11 the echoed shoal overrides; `entrypoint.py` +9 the echoed rescaled discharge and the one parser stamp), commit `075ad814` | 3338 | 3384 | +46 | +2777 |
+| 2026-08-25 | B - TELEMAC engine-specific | proof-path seam (`testing/proof_paths.py` 77 NEW; `canaries.py` +1 onto it; the render + drive scripts moved +23 more, which the counting rule at the head of this file excludes), commit `33e879cf` | 395 | 473 | +78 | **+2855** |
+| 2026-08-26 | C - `telemac_rain_on_grid` | the TEMPLATE folder (`rain_on_grid.py` 680 -> 282, `declarations.py` 259 NEW, `cn_infiltration.py` +31 the one AMC normalizer, `__init__.py` 20 -> 10; `mesh_acquisition.py` **-765**, re-homed) | 1835 | 952 | **-883** | +1972 |
+| 2026-08-26 | C - `telemac_rain_on_grid` | the shared MESH FRONT (`mesh/watershed.py` 753 NEW - the catchment generation strategy plus its three `Data` producers; `mesh/telemac_build.py` 83 NEW - the thin per-solver SELAFIN writer; `generate_mesh.py` +1 net onto both) | 733 | 1570 | +837 | +2809 |
+| 2026-08-26 | C - `telemac_rain_on_grid` | the TELEMAC family steps (`steps/rain_on_grid.py` 941 NEW - acquire, mesh, infiltration, rain, deck, solve, publish; `steps/open_water.py` +21 the extracted `dispatch_and_wait` its second consumer earned; `steps/__init__.py` +21 the exports; `workflow.py` +35 the catchment shape and the seventh process row) | 850 | 1868 | +1018 | +3827 |
+| 2026-08-26 | C - `telemac_rain_on_grid` | contracts + harness (`telemac_contracts.py` +74 `TelemacRainOnGridLayerURI` - the 19 typed answer scalars the composer had nowhere to put; `flood_2d.py` -2 onto the shared delineator) | 1713 | 1785 | +72 | **+3899** |
+
+NOTE ON THE JOURNALED ANSWERS - read this with the wave-B `resolution.py` row above.
+Runs journaled before the resolution-label fix may carry the inverted sentence: a
+default-spacing run whose resolution lever was declared optional on the USER door
+but never supplied was labeled RESOLUTION-SENSITIVE instead of RESOLUTION-LIMITED,
+TREAT AS A BOUND, so the unsafe-direction warning is missing from those journaled
+answers.
 
 **Wave 2 verdict (corrected): net +487 - invested in the skeleton, not yet
 repaid; watch.** The +467 first published here undercounted by 20 product lines
@@ -133,8 +160,9 @@ the wave landed outside the five surfaces the rows enumerate. The verdict itself
 does not change - the sign, the magnitude and the "not yet repaid" reading all
 stand - but the number the next wave is measured against is +487, not +467.
 
-**Wave 2b verdict: net +745 - the remediation is pure COST, and that is
-correct.** Every line of it is a refusal, a narration or a placement move: the
+**Wave 2b verdict: net +258, running net +745 - the remediation is pure COST, and
+that is correct.** (The figure first published here, "net +745", was the running
+CLOSE, not the wave's own net; the five 2b rows sum to +258.) Every line of it is a refusal, a narration or a placement move: the
 must-fill facade check, the both-directions signature check, the coercion triage,
 the wire-type refusal, the width-cap provenance note. None of it absorbs template
 code, so none of it can pay back through repetition - it is bought once and it
@@ -267,35 +295,44 @@ first line of the fold named in the wave-3 verdict above. It cost 54 to write an
 removed nothing yet, because only the four TELEMAC step modules ride it so far.
 Whether it pays is a MODFLOW-wave measurement, not a TELEMAC one.
 
-Counting note for 2c: `git diff --numstat 0f7a6351 HEAD -- '*.py' ':!tests'
+Counting note for 2c: `git diff --numstat 0f7a6351 06ec2f82 -- '*.py' ':!tests'
 ':!scripts'` totals +570 / -833 = **-263**, exactly the sum of the eleven 2c rows
-above. Commit `06ec2f82` (broken tool/library references repointed) is in that
-range and contributes 0 - it touches only `scripts/` and `docs/`, neither of
-which this ledger counts.
+above. (This note originally ended the range at `HEAD`, which has since moved
+through waves A, B and C and no longer reproduces the figure; `06ec2f82` is the
+pin that does.) Commit `06ec2f82` (broken tool/library references repointed) is the
+range's endpoint and contributes 0 - it touches only `scripts/` and `docs/`,
+neither of which this ledger counts.
 
-**Wave A verdict: net +891, running net +2162 - the wave bought STRUCTURE and one
+**Wave A verdict: net +891, running net +2036 - the wave bought STRUCTURE and one
 whole capability, and it is honest that neither pays back in lines.**
 
 Three of the seven rows are pure ADDITION of things that did not exist:
 `workflows/lib/user_input.py` (207 - the typed user-input species), `journal.py`
-(166 - the run journal), and the emission style trio `styles.py` + `restyle.py` +
-`cog.py` (557) plus the contracts loader (150) and the `restyle_layer` tool (183).
-That is 1263 lines of NEW capability against which no deletion was ever going to
-net out. The style landing paid back 564 of it in the same breath - the 59-row
-in-code registry, its family rules, its safe default, its band-percentile helper
-and the whole of `quantity_styles.py` - so `emission/` finishes -14 despite
-gaining three modules, and the docstring sweep took another 55 out of the same
-package as archaeology.
+(166 - the run journal), and the emission style trio `styles.py` (367) +
+`restyle.py` (114) + `cog.py` (87) = 568, plus the contracts loader (150) and the
+`restyle_layer` tool (183, its two files plus the one registration line).
+That is 1274 lines of NEW capability against which no deletion was ever going to
+net out. The style landing paid it back in the same breath out of `publish.py`
+(-432) and the whole of `quantity_styles.py` (-156) - the in-code registry, its
+family rules, its safe default and its band-percentile helper - so `emission/`
+finishes -14 despite gaining three modules.
 
-THE TEMPLATE ROW IS THE ONE TO READ CAREFULLY, and it is the wave's least
-flattering: +282. The six template FILES fell 1721 -> 1141 (-580, -34%), which is
-the number the declarations-sibling ruling was aiming at - each recipe now reads on
-one page. But PARAMS and DOC did not shrink when they moved; they landed in 862
-lines of sibling. A contract moved next door is not a contract absorbed, and this
-ledger counts lines, so the row is +282 and stays +282. What it bought is
-readability, not brevity, and the ruling said so ("the recipe readable on one page,
-the contract one file over"). The absorption to watch for is the NEXT migration's:
-a template that lands in this shape from the start writes its declarations once.
+THE TEMPLATE ROW IS THE ONE TO READ CAREFULLY, because it is the row the whole
+campaign is measured on: +156. The six template FILES fell 2032 -> 1286 (-746,
+-37%), which is the number the declarations-sibling ruling was aiming at - each
+recipe now reads on one page. But PARAMS and DOC did not shrink when they moved;
+they landed in 902 lines of sibling (six `declarations.py` totalling 849 plus
+`river_dye/coercions.py` at 53). A contract moved next door is not a contract
+absorbed, and this ledger counts lines, so the row is +156 and stays +156. What it
+bought is readability, not brevity, and the ruling said so ("the recipe readable on
+one page, the contract one file over"). The absorption to watch for is the NEXT
+migration's: a template that lands in this shape from the start writes its
+declarations once.
+
+(The figures in the two paragraphs above were published as 557 / 1263 / +282 /
+1721 -> 1141 / 862. None of them reproduced. Every one is now the measured value
+from `git diff --numstat 09e4d734 f76234c3` and `git show <ref>:<file> | wc -l`,
+and the sign and the reading are unchanged.)
 
 The lib row (+663) is the static-plan rule itself. Roughly half of it is
 capability the plan gained (the P/D namespaces with construction-site provenance,
@@ -305,15 +342,71 @@ apparatus went. A refactor that makes a plan STATIC cannot be expected to shrink
 the machinery that makes it static; it should be expected to shrink the templates,
 and it did.
 
-Counting note: `git diff --numstat 09e4d734 HEAD -- '*.py' ':!tests' ':!scripts'`
-totals +3865 / -2974 = **+891**, exactly the sum of the seven wave-A rows above.
+Counting note: `git diff --numstat 09e4d734 f76234c3 -- '*.py' ':!tests'
+':!scripts'` totals +3865 / -2974 = **+891**, exactly the sum of the seven wave-A
+rows above. (`f76234c3` is the parent of the wave-A close-out doc commit
+`6a0f87aa`; this note originally ended the range at `HEAD`, which has since moved
+through waves B and C.)
 Tests and scripts are excluded by the rule at the head of this file; for the
-record, the same command without those exclusions reads +6428 / -4294 = +2134,
+record, `git diff --numstat 09e4d734 f76234c3 -- '*.py'` reads +6428 / -4294 = +2134,
 the difference being the test migration to the static contract (four new test
 files: the user-input species, the run journal, the animation legend stability
 and the raster-headline coherence check).
 
-**Wave C verdict: net +1044, running net +2974 - the last composer died and the
+**Wave B verdict: net +819, running net +2855 - the most expensive wave since the
+family migration, and not one line of it was absorption.**
+
+Wave B migrated no template. It bought three things: a resolution LABEL the answers
+never carried, a SPLIT of the coastal product into the two layers the question
+actually asks for, and a `structure` context slot that lets a user hand the model a
+breakwater instead of hoping OSM has one. All three are capability, and capability
+costs lines. There is no row here that the generalization thesis can point at.
+
+THE LEAST FLATTERING ROW IS THE TEMPLATE ROW: **+136**, in a wave that migrated
+nothing. The surface this campaign exists to SHRINK grew, and it grew in the six
+files wave A had just finished cutting. The reason is not a defect: six
+`sensitivity=` declarations, the coastal split's answer/chart/params, the agitation
+`structure` slot, and three resolution defaults that had been prose holding a number
+inside a step. Every one of those is a promise the template previously made silently
+or not at all. It is still +136 on the wrong side of the ledger, and the only thing
+that can pay it back is the next migration landing in this shape from the start
+rather than being retrofitted into it.
+
+THE ROW THAT DID ITS JOB is the family-step row at **+24**, the smallest number in
+the wave and the only one that looks like absorption. `agitation.py` gave back 98
+lines - the Overpass helper, its three mirrors, the FlatGeobuf re-upload and the
+pinned-segment coercion, all deleted onto the new spec fetcher and the
+supplied-geometry reader - and `open_water.py`'s one `mesh_resolution_label` (+20)
+replaced four copies. Against that, `coastal.py` +62 and `deck.py` +20 are the split
+and its newly-reachable worker knobs. Net, the step tier spent almost exactly what
+it absorbed, which is the best a non-migrating wave can honestly do.
+
+WHAT THE FETCHER ROW ACTUALLY COSTS, stated because the row first published here
+overstated it by 90: **+105, not +195**. `fetch_osm_breakwaters/` is a SPEC fetcher
+- `source.yaml`, `corpus.yaml` and an EMPTY `__init__.py` - and the rule at the head
+of this file counts product `.py` only. The 105 real lines are the
+`overpass_breakwaters` hook pair. A new data source arriving for 105 lines of hook
+instead of a 300-line coded fetcher is the universal-fetcher endgame working, and it
+belongs in the ledger at its true size rather than at a flattering one.
+
+TWO BOOKKEEPING FACTS the original eight rows got wrong, recorded so the arithmetic
+and the history agree. First, the `structure` slot landed LATE: `shared/supplied_geometry.py`
+(121 lines, not the 93 first published) and its `lib/workflow.py` wiring are in
+`8c796d38`, the wave's close-out commit - the same commit that first wrote these
+rows - not in the feature commit `a67cc188`. That is why its row is pinned there and
+why the lib row is measured across the wave's whole range instead of at one commit.
+Second, `contracts/trid3nt_contracts/telemac_contracts.py` (+16, the split's answer
+fields) appeared in NO row at all; it now sits in the adapters/runtime row, which is
+where wave 3 put the same file. Row 8's published `2827 -> 2921 | +94` was a
+byte-identical copy of row 3's cells; measured on its own it is `395 -> 473 | +78`.
+
+Counting note: the wave's whole-tree reconciliation is `git diff --numstat fb4d9c63
+8c796d38 -- '*.py' ':!tests' ':!scripts'`, which totals +1179 / -360 = **+819**,
+exactly the sum of the eight wave-B rows above. `fb4d9c63` is `33e879cf~1`, the
+parent of the wave's first commit; `8c796d38` is its close-out. Commit `2b02e061` is
+inside that range and contributes 0 - it touches only `docs/`.
+
+**Wave C verdict: net +1044, running net +3899 - the last composer died and the
 ledger got its worst-looking row for the best reason. Honest: this wave BUILT more
 than it absorbed.**
 
@@ -363,3 +456,8 @@ One de-duplication did land and is worth naming because it is the reuse-sweep no
 working rather than a guess: `dispatch_and_wait` moved to `open_water.py` on its
 CONFIRMED second consumer, not preemptively. It nets about zero in lines and
 removes the second copy of a cancellation clause that a hand-copied version drops.
+
+## Corrected campaign net
+
+**The campaign net is +3899** - the true running sum of every delta in the table
+above, from wave 2's first row to wave C's last.

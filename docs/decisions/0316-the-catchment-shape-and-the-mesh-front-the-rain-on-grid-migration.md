@@ -177,7 +177,57 @@ The mesh GATE species is still not built: refinement between generation and solv
 remains the mesh wave's, and this template reaches the precondition gate rather
 than a mesh-approval card. The worker is untouched, so the rain-on-grid half of
 the worker-purity inventory (the RAINDEF staging, the in-worker fetch endpoints)
-still rides the in-worker-fetch migration. Three worker comments still name
-`mesh_acquisition`, a module that no longer exists; correcting them costs a worker
-ledger row for zero behaviour change and belongs to the next wave that opens that
-image.
+still rides the in-worker-fetch migration. FOUR worker comments still name
+`mesh_acquisition`, a module that no longer exists (see the correction below);
+correcting them costs a worker ledger row for zero behaviour change and belongs to
+the next wave that opens that image.
+
+## CORRECTED (ledger audit of `0f7a6351..02acbfed`, 2026-08-26)
+
+Two claims in this note were checked against git and both were short.
+
+### The stale worker comments are FOUR, not three
+
+The line above originally read "Three worker comments still name `mesh_acquisition`,
+a module that no longer exists". `git grep -n mesh_acquisition 02acbfed -- workers/`
+returns four, in three files - none of them an import, all of them prose that sends
+a reader to a module that is gone:
+
+| where | what it says |
+| --- | --- |
+| `workers/telemac/entrypoint.py:822` | "the agent-side composer staged into the rundir (mesh_acquisition + fetch_landcover)" |
+| `workers/telemac/rog_build.py:61` | `WATERSHED_SLF` trailing comment - "BOTTOM SELAFIN (UTM metres) from mesh_acquisition" |
+| `workers/telemac/rog_build.py:88` | section banner - "1. read the watershed SELAFIN staged by mesh_acquisition" |
+| `workers/telemac/telemac_river_dye_build.py:299` | "a rain-fed delineated-watershed TIN (staged by the agent-side mesh_acquisition step as watershed_slf...)" |
+
+The fourth is the river-dye one, which is the one a count taken from `rog_build.py`
+plus `entrypoint.py` alone would miss: the RoG dispatch comment lives in the
+CHANNEL-DYE builder, because that is where `mode="rain_on_grid"` routes away.
+
+### Section 2's symbol list names the OLD names and omits the renames
+
+Section 2 says the standalone `generate_mesh` tool "was already importing four
+symbols out of a TELEMAC template's private module (`acquire_watershed_mesh`,
+`reproject_nodes_to_utm`, `_sample_raster_at_nodes`, `_write_bottom_selafin`), and
+`hecras_flood_2d` a fifth (`_delineate_catchment`)". That count is right about the
+world BEFORE the move, and it is what commit `871acc38` inherited. What the section
+does not say is that four of the five did not keep their names, so a reader who
+takes the list as a map of the new homes will not find them:
+
+| old name, in `rain_on_grid/mesh_acquisition.py` | new name | new home |
+| --- | --- | --- |
+| `acquire_watershed_mesh` | `generate_catchment_mesh` | `workflows/mesh/watershed.py` |
+| `reproject_nodes_to_utm` | unchanged | `workflows/mesh/watershed.py` |
+| `_sample_raster_at_nodes` | `sample_raster_at_nodes` | `workflows/mesh/watershed.py` |
+| `_delineate_catchment` | `delineate_catchment` | `workflows/mesh/watershed.py` |
+| `_write_bottom_selafin` | `write_bottom_selafin` | `workflows/mesh/telemac_build.py` |
+
+The de-underscoring is the load-bearing half of the move rather than cosmetics: a
+leading underscore said "private to this template", and three shared callers were
+reaching past it. Dropping it is the placement rule being stated in the name.
+`generate_catchment_mesh` also changed SHAPE, not only spelling - it takes `slug`,
+`bed_dem` and `rivers` as arguments now, because the strategy no longer fetches
+(section 3), so the caller resolves the bed raster and the flowlines and hands them
+in. `write_bottom_selafin` is the one that landed in a different file from the other
+four, which is the split section 2 already describes and the flat five-name list
+flattens away.

@@ -1651,9 +1651,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   track builds FRESH (published methods remain design references via
   paper-first, but no code inheritance). The whole constellation
   (cases/malpasset_obs.py, scripts/run_l2_malpasset.py, tests, fixtures,
-  staged case data) chops in the stale sweep - NOTE it has a live import
-  in postprocess_telemac.py, so the chop waits for wave C to land
-  (fence). RULE REFINED: "US-only" was an INFRASTRUCTURE scope, not a
+  staged case data) chops in the stale sweep. FENCE STRUCK (corrected
+  2026-08-26, verified against the tree): this entry claimed "a live
+  import in postprocess_telemac.py, so the chop waits for wave C to
+  land". There is no such import. postprocess_telemac.py's only
+  malpasset mention is a comment at :293 recording where the
+  free-surface variable names were verified from (the bundled
+  f2d_malpasset-small.slf header) - a provenance sentence about a
+  fixture, not a dependency. The complete repo-wide importer list for
+  trid3nt_server.cases.malpasset_obs is scripts/run_l2_malpasset.py and
+  tests/test_malpasset_obs.py, both inside the constellation being
+  chopped; zero live product modules import it. The chop is UNBLOCKED
+  and awaits the stale sweep, not an import removal or any wave landing.
+  Registered in docs/DELETION_LEDGER.md as QUEUED with that condition.
+  RULE REFINED: "US-only" was an INFRASTRUCTURE scope, not a
   nationality rule - spot-check/validation/calibration cases go wherever
   GAUGES AND SENSORS our substrate can fetch live; the US simply has the
   best observation infrastructure, so it dominates. Cases elsewhere are
@@ -1731,3 +1742,136 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   QGIS-native mesh vector rendering when mesh-layer publishing lands - the dock's
   vector symbology must reproduce streamlines over a magnitude ramp at a declared
   density, or the proof sheet and the product show the same run two ways.
+
+- 2026-08-26 SFINCS RETRIEVAL FLOOR IS FRAGILE (RECORD-ONLY, ledger audit of
+  0f7a6351..02acbfed - finding, no build proposed). `sfincs_flood` is a
+  hardcoded literal in CORE_FLOOR (tool_retrieval.py:77), the always-visible
+  set, so it is handed to the model every turn regardless of ranking. Three
+  things follow, and the third is measured.
+  (1) Its 22-query corpus (workflows/sfincs/flood/corpus.yaml) carries none of
+  its findability. The corpus could regress to empty and every retrieval test
+  would still pass, because what those tests assert is `CORE_FLOOR <= res`
+  (tests/test_tool_retrieval.py:56), which the floor satisfies by itself. The
+  canonical test query is "model the flood" - verbatim corpus line 2 - but the
+  assertion it feeds cannot tell the corpus from the floor.
+  (2) Nothing asserts a CORE_FLOOR name is a REGISTERED tool. The only guard is
+  a negative, name-specific one added after publish_layer was deleted
+  (test_tool_retrieval.py:43, `assert "publish_layer" not in CORE_FLOOR`), and
+  the shadow test FILTERS instead of asserting
+  (test_tool_retrieval_shadow.py:193, `{t for t in CORE_FLOOR if t in
+  TOOL_REGISTRY}`). A rename of sfincs_flood leaves a dead string in the floor
+  and no test fails - and a rename is exactly what the template-capability
+  naming rule queues, since a name should be the question class, not the
+  engine.
+  (3) MEASURED: removing the floor and leaving the corpus and ranking untouched,
+  sfincs_flood drops out of the top-8 for 2 of 5 natural flood asks - "how deep
+  will the flood water get here" and "will my street flood" both MISS, while
+  "model the flood", "model flooding in this county" and "simulate inundation
+  from the storm" hit. The first miss is a near-verbatim paraphrase of the
+  template's own corpus line "how deep will the flood water get at this
+  location". So the corpus is measurably weaker than the floor makes it look,
+  and the floor is what stops anyone from finding that out. The sibling
+  sfincs_advanced_numerical_physics_knobs has no floor entry and 12 far more
+  literal queries; it survives paraphrase today, which is the comparison that
+  shows the flood template's corpus was never under the same pressure.
+
+- 2026-08-26 `When` IS PRODUCTION-UNEXERCISED (RECORD-ONLY, same audit -
+  finding, no build proposed). The declarative library's conditional construct
+  (workflows/lib/plan.py:416, decided by the interpreter at
+  interpreter.py:259) has ZERO production uses. `grep -rn "When(" --include=*.py`
+  over the whole repo, excluding workflows/lib/ and tests/, returns NOTHING;
+  all 12 call sites live in one file, tests/test_declarative_library.py. Seven
+  static plans are registered and none declares a branch.
+  Why it matters rather than being trivia: ADR 0314 turned a validator refusal
+  INSIDE OUT for this construct. `_check_revisable_branches` - which refused a
+  plan that declared a FormGate and branched on a revisable param - was DELETED
+  because the shape it forbade became the intended one, and
+  `_check_when_conditions` replaced it. So the library carries a
+  late-bound-condition contract, a scope rule (a When body is a scope, which
+  ADR 0315 section 3 cites as the reason the structure slot could not have been
+  written as a literal When), guard-chain flattening in `_flatten_guarded`, and
+  the demand-pull property that a When-guarded consumer whose branch does not
+  fire costs no fetch - and every one of those is asserted only by its own unit
+  test. The first template that branches will be the first real reader of that
+  contract, and ADR 0315 already records one case where the construct was
+  reached for and turned out not to fit.
+
+- 2026-08-26 `Step.kwargs` IS FROZEN SHALLOWLY (RECORD-ONLY, same audit -
+  finding, no build proposed). `Step.__post_init__` (workflows/lib/plan.py:342)
+  does `MappingProxyType(dict(self.kwargs))` - one level. plan.py does not
+  import `deep_freeze` at all. `Slot.__init__` (workflows/lib/slots.py:70) does
+  `MappingProxyType({k: deep_freeze(v) ...})`, so the binding blocks ARE frozen
+  all the way down. The two halves of one static plan are frozen to different
+  depths.
+  MEASURED, from the shipped classes: a Step built with
+  `kwargs={"cfg": {"a": [1,2]}, "seq": [3,4]}` yields `Step.kwargs` type
+  mappingproxy, nested `cfg` type dict, nested `seq` type list;
+  `s.kwargs["cfg"]["a"].append(99)` and `s.kwargs["seq"].append(5)` both
+  SUCCEED, and `s.kwargs["cfg"] is inner` is True - the proxy aliases the
+  caller's own object rather than copying it. The same values through `Slot`
+  come back mappingproxy and tuple.
+  Why it matters: ADR 0314's whole argument for deep-freezing is that a
+  declared value "lives at module scope for the life of the process and every
+  run of the template reads the same object, so a mutable container inside one
+  is a cross-run channel" - `deep_freeze`'s own docstring, slots.py:34-37. The
+  static plan is built ONCE at registration and has exactly that lifetime, so a
+  container nested in a step's kwargs is the same cross-run channel the
+  docstring names, in the half of the plan that was not frozen.
+  CURRENTLY LATENT, not live: walking all 7 registered static plans and their
+  45 steps finds ZERO `Step.kwargs` values that are still dict/list/set. Landed
+  templates pass scalars, Refs and strings. So this is a guarantee the type does
+  not carry rather than a bug anyone is hitting - which is the right time to
+  record it, and the reason it will not announce itself when someone does.
+
+- 2026-08-26 TELEMAC3D SILENTLY FLOORS A LEGAL RESOLUTION ASK (RECORD-ONLY,
+  ledger audit of 0f7a6351..02acbfed - finding, no build proposed).
+  `stratified_flow/declarations.py:74` declares `target_resolution_m` with
+  `bounds=(50.0, 20000.0)`, so a 50 m ask passes the resolver's clamp and is a
+  legal, in-contract request. `workers/telemac/telemac3d_build.py:139` then sets
+  `GRID_H_FLOOR_M = 400.0` and `:629-630` floors the ask to it with no note and
+  no provenance row. The declared floor and the enforced floor differ by 8x, and
+  the run reports the number it was asked for rather than the number it solved.
+  This is the narrate-on-adjust rule broken in the direction that matters: an
+  adjustment nobody is told about. The open-water front already has the honest
+  shape for this - `mesh_sizing_provenance` exists precisely to turn a silent
+  override into a stated one, and telemac3d does not reach it for the horizontal
+  floor.
+  Two halves, and they land in different places. The PRODUCT half is a contract
+  that promises a range the engine will not honour: either the declaration's
+  lower bound rises to what the solver actually accepts, or the floor becomes a
+  narrated clamp carrying a provenance row. The WORKER half cannot land without
+  an image rebuild, so nothing here is inert-safe to change piecemeal.
+  Related and separate: the same audit found three (not four) grid floors
+  genuinely duplicated against their params' declared bounds. Those are a
+  de-duplication chore; this one is a contradiction, and only this one is a
+  correctness defect.
+
+- 2026-08-26 THE STYLE CONTRACT CAN MIRROR ITSELF, AND NOTHING WATCHES FOR IT
+  (RECORD-ONLY, panel-2 remediation - finding, gate attempted and withdrawn).
+  Collapsing the publish path's preset-to-label table meant giving the contract
+  a row for each of the seven presets that had existed only in code. Three of
+  those seven turned out to be second spellings of rows the contract already
+  had: `categorical_aspect` against `aspect_compass_deg`,
+  `continuous_impervious_surface` against `impervious_surface_pct` (both
+  byte-identical but for the label), and `continuous_slope_pct` against
+  `slope_angle_deg`. None of the three had a single consumer anywhere in the
+  tree. Migrating a dead mirror INTO the contract is not collapsing it, so the
+  three rows were deleted rather than kept as synonyms.
+  What this exposes is a blind spot in the policing gate: it walks CODE for
+  literals keyed on preset names, so it cannot see a mirror that fits inside the
+  one file the whole design rests on.
+  A gate was attempted and withdrawn, and the reason is worth keeping. Comparing
+  rows by their painting decisions with the label removed flags ten groups, and
+  almost all are legitimate: `era5_2m_temperature`, `gridmet_tmmn`,
+  `gridmet_tmmx` and `hrrr_2m_temperature` are four genuinely different
+  quantities that happen to be painted alike. Same look is not same quantity, so
+  that fingerprint is the wrong test.
+  The property that would actually catch it is REACHABILITY - a preset row no
+  producer and no `quantity_defaults` entry can arrive at is dead weight that
+  can only ever drift. Measured on the tree: 14 of 69 rows are unreachable by a
+  static search, but 13 of those are the dataset-named `era5_*` / `gridmet_*` /
+  `goes_*` / `hrrr_*` family, whose names are plausibly composed at runtime from
+  a variable name. A hard gate would fire on all 13 and be turned off within a
+  week. Closing this properly means first establishing whether those names are
+  composed or dead; if composed, the gate needs the composition sites declared
+  rather than guessed at, which is the same lesson as every other mirror here.
