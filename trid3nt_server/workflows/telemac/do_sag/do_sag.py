@@ -49,7 +49,7 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 
 
 #: The reach's REFERENCE data - fetched fresh for the domain the geocode step
-#: binds, never BYO. The carrier discharge is a STEP rather than Data: it reads
+#: binds, never supplied. The carrier discharge is a STEP rather than Data: it reads
 #: the resolved mid-reach seed, which is a step result and not something a
 #: producer declaration can name.
 DATA = (

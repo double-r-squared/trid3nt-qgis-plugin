@@ -341,9 +341,9 @@ def test_the_composites_own_provenance_row_wins():
 
 
 # --- modifier legality ------------------------------------------------------- #
-def test_reference_producer_has_no_byo():
-    assert not hasattr(Fetch.tool("fetch_dem"), "byo")
-    assert hasattr(Build.tool("build_mesh"), "byo")
+def test_reference_producer_cannot_be_supplied():
+    assert not hasattr(Fetch.tool("fetch_dem"), "supplied")
+    assert hasattr(Build.tool("build_mesh"), "supplied")
 
 
 def test_named_applies_once():
@@ -522,8 +522,8 @@ def test_declared_lists_a_guarded_step_whichever_way_the_branch_falls():
 
 
 # --- the interpreter ---------------------------------------------------------- #
-async def _run(plan, params_decl, supplied, data=(), **kw):
-    p = await resolve_params(params_decl, supplied)
+async def _run(plan, params_decl, wire, data=(), **kw):
+    p = await resolve_params(params_decl, wire)
     return await interpret(plan, p, params_decl, data, **kw)
 
 
@@ -606,7 +606,7 @@ async def test_data_producer_runs_lazily_on_first_ref():
 
 @pytest.mark.asyncio
 async def test_byo_artifact_short_circuits_the_producer():
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").byo("s3://mine/m.slf",
+    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
                                                                   validate=None))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
     out = await _run(plan, _params(), {}, data, resume=False)
@@ -616,7 +616,7 @@ async def test_byo_artifact_short_circuits_the_producer():
 
 @pytest.mark.asyncio
 async def test_byo_coverage_validation_refuses_without_a_domain():
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").byo("s3://mine/m.slf",
+    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
                                                                   validate=CoversAOI))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
     with pytest.raises(Exception, match="coverage-validated"):
@@ -750,12 +750,12 @@ async def test_a_data_producer_runs_when_its_consumer_does_hence_after_the_gate(
 @pytest.mark.asyncio
 async def test_a_context_slot_is_satisfied_by_the_artifact_handed_in():
     data = [Data("clip_zone")]
-    plan = Plan("slot_byo", None, (
+    plan = Plan("slot_supplied", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"z": Ref("clip_zone")}).named("a"),
     ))
     out = await _run(plan, _params(), {}, data, resume=False,
-                     byo={"clip_zone": "s3://mine/zone.gpkg"},
+                     supplied={"clip_zone": "s3://mine/zone.gpkg"},
                      domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
     assert out.value["seen"]["z"] == "s3://mine/zone.gpkg"
 
@@ -794,6 +794,26 @@ def test_a_producer_backed_data_may_not_be_optional():
     """A producer either produces or fails typed, so there is no absence to describe."""
     with pytest.raises(PlanValidationError, match="optional"):
         Data("mesh", Build.tool(f"{_HERE}.stub_producer")).optional()
+
+
+def test_a_context_slot_declares_the_shape_it_accepts():
+    """A slot names no source - the SHAPE is the only thing it can honestly say."""
+    slot = Data("structure").supplied(geometry="polyline").optional()
+    assert slot.producer is None
+    assert slot.geometry == "polyline" and slot.is_optional is True
+
+
+def test_a_context_slot_refuses_a_shape_nobody_declares():
+    with pytest.raises(PlanValidationError, match="not a declared shape"):
+        Data("structure").supplied(geometry="squiggle")
+
+
+def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
+    """A producer that can be SUPERSEDED says so on the producer, not on the slot."""
+    with pytest.raises(PlanValidationError, match="declares a producer AND"):
+        Data("mesh", Build.tool(f"{_HERE}.stub_producer")).supplied(geometry="mesh")
+    producer = Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf")
+    assert Data("mesh", producer).is_supplied is True
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ Three declared steps and one declared Data producer:
 * ``Geocode.reach`` - place/AOI to a reach centre, and it REBINDS THE DOMAIN, so
   every spatial producer after it reads the reach AOI implicitly.
 * ``fetch_reach_flowline`` - the ``Data("rivers")`` producer (reference data:
-  fetched fresh for the domain, never BYO).
+  fetched fresh for the domain, never supplied).
 * ``ReachSeed`` - the mid-reach point on the largest fetched flowline, which is
   what the worker NLDI-snaps the centerline from and what the carrier-discharge
   lookup queries at.

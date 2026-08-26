@@ -36,7 +36,7 @@ from trid3nt_server.gates.input_review import (
 from .data import AuthoredProducer, CoversAOI, DataDecl
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
-    ByoCoverageError,
+    SuppliedCoverageError,
     DeclarativeError,
     GateRefusedError,
     LeakScanTruncated,
@@ -120,7 +120,7 @@ async def interpret(
     input_mode: str | None = None,
     domain: Domain | None = None,
     resume: bool = True,
-    byo: Mapping[str, Any] | None = None,
+    supplied: Mapping[str, Any] | None = None,
 ) -> RunResult:
     """Validate, then walk the plan. The only place a declared workflow executes."""
     validate_plan(plan, declared_params, data)
@@ -136,7 +136,7 @@ async def interpret(
     begin_substeps(emitter, len(nodes))
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
-               input_mode=input_mode, ledger=ledger, resume=resume, byo=dict(byo or {}))
+               input_mode=input_mode, ledger=ledger, resume=resume, supplied=dict(supplied or {}))
     out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
     final_index = _final_recordable_index(nodes)
@@ -289,9 +289,9 @@ class _Env:
     resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
     charts: dict[str, Any] = field(default_factory=dict)
-    #: Artifacts handed IN rather than produced - a layer handle, a BYO file, a
+    #: Artifacts SUPPLIED rather than produced - a layer handle, a file uri, a
     #: gate's answer. What satisfies a producer-less ``Data`` slot.
-    byo: dict[str, Any] = field(default_factory=dict)
+    supplied: dict[str, Any] = field(default_factory=dict)
     #: Absences worth narrating: an optional Data nothing satisfied.
     absences: list[str] = field(default_factory=list)
 
@@ -362,10 +362,10 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     does not fire cost nothing: the producer behind a ``When``-guarded consumer is
     never reached.
     """
-    supplied = env.byo.get(decl.name)
-    if supplied is not None:
-        _validate_byo(decl, supplied, decl.byo_validate)
-        return supplied
+    handed_in = env.supplied.get(decl.name)
+    if handed_in is not None:
+        _validate_supplied(decl, handed_in, decl.supplied_validate)
+        return handed_in
     producer = decl.producer
     if producer is None:
         # A producer-less slot: nothing was handed in, and naming a default
@@ -377,12 +377,12 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             return None
         raise StepFailedError(
             f"Data {decl.name!r} is a producer-less slot and nothing satisfied it: "
-            "supply a layer, a file URI, or declare it .optional().",
+            "supply a layer, a file uri, or declare it .optional().",
             error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
         )
-    if isinstance(producer, AuthoredProducer) and producer.byo_uri:
-        _validate_byo(decl, producer.byo_uri, producer.byo_validate)
-        return producer.byo_uri
+    if isinstance(producer, AuthoredProducer) and producer.supplied_uri:
+        _validate_supplied(decl, producer.supplied_uri, producer.supplied_validate)
+        return producer.supplied_uri
     cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
     if cached is not None and await _artifacts_live(cached):
         value = _rehydrate(cached)
@@ -407,14 +407,14 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     return value
 
 
-def _validate_byo(decl: DataDecl, uri: str, validate: Any) -> None:
+def _validate_supplied(decl: DataDecl, uri: str, validate: Any) -> None:
     if validate is not CoversAOI:
         return
     dom = current_domain()
     if dom is None or dom.bbox is None:
-        raise ByoCoverageError(
-            f"BYO artifact for {decl.name!r} cannot be coverage-validated: no domain "
-            "is bound. Resolve the AOI before supplying a byo artifact."
+        raise SuppliedCoverageError(
+            f"the artifact supplied for {decl.name!r} cannot be coverage-validated: "
+            "no domain is bound. Resolve the AOI before supplying one."
         )
 
 

@@ -34,7 +34,7 @@ A workflow file has three parts, none of which execute anything:
 2. DATA - frozen `Data` declarations (artifacts: rasters, layers,
    meshes, decks). Each carries its PRODUCER description
    (`Fetch.dem()`, `BuildMesh.channel(...)`) which the runner executes
-   - or an explicit BYO artifact satisfies it instead.
+   - or the artifact the caller SUPPLIED satisfies it instead.
 3. `plan(ops)` - a PURE function returning the step tree. No awaits, no side
    effects, and NO SHEET: it reads no concrete value, so it is built ONCE at
    registration and the interpreter walks the same value on every run.
@@ -62,7 +62,7 @@ DATA = (
     Data("terrain", Fetch.dem()),                       # reference: fetch-fresh, never byo
     Data("rivers",  Fetch.river_geometry()),
     Data("rain",    Fetch.rain().ladder("era5_domain_mean")),
-    Data("breakwaters").optional(),                     # a context SLOT: no producer
+    Data("breakwaters").supplied(geometry="polyline").optional(),   # a context SLOT
 )
 
 # -- the binding blocks --------------------------------------------------- #
@@ -181,17 +181,18 @@ a byo mesh's footprint). The Case camera follows the final domain.
 ## Param vs Data
 
 Param = a VALUE (fits in a form cell; doors; bounds; form-editable).
-Data = an ARTIFACT (object store; produced, BYO'd, handed in, or absent;
+Data = an ARTIFACT (object store; produced, supplied, or absent;
 ladders + coverage validation; emitted to the canvas as it arrives).
 
 Producers are DEMAND-PULLED: one runs when a step that `Ref`s it executes, which
 is what makes a `When`-guarded consumer whose branch does not fire cost no fetch.
 
-A `Data` may declare NO producer at all - a CONTEXT SLOT. The template names the
-artifact it can use and says nothing about where it comes from, because naming a
+A `Data` may declare NO producer at all - a CONTEXT SLOT, written
+`Data("structure").supplied(geometry="polyline")`. The template names the SHAPE it
+accepts and says nothing about where the thing comes from, because naming a
 default fetcher for a breakwater or a clip zone is an opinion the question does
 not carry. What satisfies one arrives from outside (a layer the user already has,
-a file URI, a gate's answer) or nothing does, and `.optional()` says that absence
+a file uri, a gate's answer) or nothing does, and `.optional()` says that absence
 is legal - and LABELLED: the run reports which slot went unfilled, because it
 answered a slightly different question than one that had the layer. An
 unsatisfied REQUIRED slot refuses typed. Boundary
@@ -278,7 +279,7 @@ row on it needs a `ParamSheet` contract plus a plugin change.
 
 ## The doors (Param resolution order)
 
-1. BYO/USER - explicitly passed this invocation. NEVER ambient: no
+1. SUPPLIED/USER - explicitly passed this invocation. NEVER ambient: no
    case-store lookup, ever (NATE ruling - kills the stale-DEM
    collision class at the root).
 2. QUESTION - agent-filled from the ask (the user's words beat data).
@@ -287,7 +288,7 @@ row on it needs a `ParamSheet` contract plus a plugin change.
 5. CONSTANT - non-question physics; defaulted, never asked, inspectable.
 6. GATE/REFUSE - asked for (form/draw) or refused typed. Never invented.
 
-BYO data rule (NATE, from the declarative-UI mutable/immutable axis):
+SUPPLIED data rule (from the declarative-UI mutable/immutable axis):
 AUTHORED artifacts (meshes, networks, decks, edited layers, survey
 rasters) are byo-able; REFERENCE data (DEM, landcover, canonical
 rasters) is not - fetch-fresh for the domain - except the explicit
@@ -384,9 +385,9 @@ waits per the hybrid rule).
   (e.g. CoastalBed: fetch -> validate -> clip) is a value reusable
   across workflows.
 - INTERPRETER: the runner walks the plan; plans never run themselves.
-- BUILDER/FLUENT: modifiers (.byo(), .ladder(), .render(),
+- BUILDER/FLUENT: modifiers (.supplied(), .ladder(), .style(),
   .overrides_domain()), each returning a new value; modifier LEGALITY
-  is the rule surface (reference fetchers simply lack .byo()).
+  is the rule surface (reference fetchers simply lack .supplied()).
 - STRATEGY: doors and fallback ladders - interchangeable resolution
   policies.
 - TEMPLATE METHOD: per-engine step families (WriteDeck.telemac /
@@ -445,7 +446,7 @@ A-green with B-red isolates a fault to the interaction machinery.
    SWMM waves, per ADR 0307's tranche plan: **A - the standalone solve
    templates (LANDED)**; B - the published-deck trio, where a fetched
    deck becomes the family's first `Data` (authored, therefore
-   `.byo()`-able); C - the mechanism-comparison five, where the purity
+   `.supplied()`-able); C - the mechanism-comparison five, where the purity
    fork gets its per-engine answer over the SHARED deck-authoring core,
    all five at once; D - the AOI giants (`urban_flood`,
    `network_import`, `dual_drainage`), where the `Data` producers, the
@@ -738,7 +739,7 @@ plus flood canary green).
 
 ### Mesh
 
-Mesh is BYO-optional `Data`: AUTHORED (user-supplied - e.g. the 2dm
+Mesh is SUPPLIED-optional `Data`: AUTHORED (user-supplied - e.g. the 2dm
 import path - the top ladder rung) or GENERATED (the shared front in
 `workflows/mesh/`, the default). The default generation policy is
 opinionated toward SPEED - a fast, normal-quality baseline, never a

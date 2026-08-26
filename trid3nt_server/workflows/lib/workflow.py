@@ -88,7 +88,7 @@ class EngineOps:
     def build_mesh(self, domain: Any, policy: Any, **slots: Any) -> Any:
         """The mesh, from an acquired domain and an engine-neutral :class:`MeshPolicy`.
 
-        FROZEN interface: BYO-authored meshes, the shared generation front and the
+        FROZEN interface: user-supplied meshes, the shared generation front and the
         mesh gate all arrive behind it without the declaration changing. Domain
         SHAPE that is not universal (a corridor's extent and width, a basin's
         outlet) arrives as an engine slot, never as a field on the neutral policy.
@@ -201,7 +201,7 @@ class Workflow(EngineOps):
             run = await interpret(
                 self.plan, p, self.params, self.data,
                 input_mode=input_mode, resume=not bool(wire.get("restart_clean")),
-                byo=self._supplied_artifacts(wire),
+                supplied=self._supplied_artifacts(wire),
             )
         except asyncio.CancelledError:
             raise

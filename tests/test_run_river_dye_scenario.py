@@ -286,7 +286,7 @@ def test_the_declared_data_is_reference_data_with_the_rain_ladder():
 
     by_name = {d.name: d for d in DATA}
     assert set(by_name) == {"rivers", "rain"}
-    # Canonical world data is fetched fresh for the domain - it has no .byo().
+    # Canonical world data is fetched fresh for the domain - no .supplied().
     assert all(isinstance(d.producer, ReferenceProducer) for d in DATA)
     assert not hasattr(by_name["rivers"].producer, "byo")
     assert by_name["rain"].producer.ladder_rungs == ("gridmet_domain_mean", "user_rate")

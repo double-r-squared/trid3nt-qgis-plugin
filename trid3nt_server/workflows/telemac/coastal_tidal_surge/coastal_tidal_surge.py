@@ -59,7 +59,7 @@ _COAST_HALF_DEG = 0.06
 
 
 #: The boundary FORCING - the gauge record, fetched fresh over the domain the AOI
-#: step binds. Reference data: a water-level record is the world's, never BYO'd.
+#: step binds. Reference data: a water-level record is the world's, never supplied.
 #: It reads the DOMAIN for where to look and the params for which series, which
 #: station and which window.
 DATA = (

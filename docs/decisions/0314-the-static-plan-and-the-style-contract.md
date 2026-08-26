@@ -64,9 +64,15 @@ The eager independent-Data batch is DELETED. A producer runs when a step that
 not fire cost no fetch. The trade is stated in the ledger: independent producers no
 longer run concurrently.
 
-A `Data` may declare NO producer - a CONTEXT SLOT. Naming a default fetcher for a
-breakwater or a clip zone is an opinion the question does not carry. `.optional()`
-makes absence legal and LABELLED; an unsatisfied required slot refuses typed.
+A `Data` may declare NO producer - a CONTEXT SLOT, written
+`Data("structure").supplied(geometry="polyline")`. Naming a default fetcher for a
+breakwater or a clip zone is an opinion the question does not carry, so the slot
+declares the SHAPE it accepts and nothing else. `.optional()` makes absence legal
+and LABELLED; an unsatisfied required slot refuses typed.
+
+The modifier is `.supplied()` throughout, not `.byo()`: `user_supplied` is already
+the ladder rung's name and "supplied on this invocation" is already the provenance
+vocabulary, so one word covers all three surfaces. No alias survives.
 
 ### 4. `declarations.py` beside every template
 

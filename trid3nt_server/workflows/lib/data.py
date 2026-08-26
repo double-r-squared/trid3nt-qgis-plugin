@@ -1,5 +1,6 @@
 """``Data`` - a declared ARTIFACT and its PRODUCER. Modifier legality is the rule
-surface: a REFERENCE producer (fetch-fresh world data) simply has no ``.byo()``.
+surface: a REFERENCE producer (fetch-fresh world data) simply has no
+``.supplied()``.
 
 ``.resample()`` / ``.normalize()`` ride the declaration too: the cadence and the
 units an artifact ARRIVES in are part of what it is, and declaring them is what
@@ -27,13 +28,17 @@ __all__ = [
 
 
 class _CoversAOI:
-    """Validator sentinel: a BYO artifact must cover the current domain."""
+    """Validator sentinel: a supplied artifact must cover the current domain."""
 
     def __repr__(self) -> str:
         return "CoversAOI"
 
 
 CoversAOI = _CoversAOI()
+
+#: The shapes a producer-less slot can declare it accepts.
+_GEOMETRIES: frozenset[str] = frozenset(
+    {"point", "polyline", "polygon", "rectangle", "raster", "mesh"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,23 +80,28 @@ class Producer:
 
 @dataclass(frozen=True, slots=True)
 class ReferenceProducer(Producer):
-    """Canonical world data - fetched fresh for the domain. Deliberately NO ``.byo()``."""
+    """Canonical world data - fetched fresh for the domain. NO ``.supplied()``."""
 
 
 @dataclass(frozen=True, slots=True)
 class AuthoredProducer(Producer):
     """An artifact a user could have authored (mesh, network, deck, edited layer)."""
 
-    byo_uri: str | None = None
-    byo_validate: Any = None
+    supplied_uri: str | None = None
+    supplied_validate: Any = None
 
-    def byo(self, uri: str | None = None, *, validate: Any = CoversAOI) -> "AuthoredProducer":
-        """Accept a user-supplied artifact instead of building one (coverage-validated)."""
-        return replace(self, byo_uri=uri, byo_validate=validate)
+    def supplied(self, uri: str | None = None, *,
+                 validate: Any = CoversAOI) -> "AuthoredProducer":
+        """Take the artifact the caller supplied instead of building one.
+
+        Coverage-validated against the domain at resolution, because an artifact
+        that does not cover the modelled world silently models a smaller one.
+        """
+        return replace(self, supplied_uri=uri, supplied_validate=validate)
 
 
 class Fetch:
-    """Reference-data producers: fetch-fresh for the domain, never BYO-able."""
+    """Reference-data producers: fetch-fresh for the domain, never supplied."""
 
     @staticmethod
     def tool(name: str, **kwargs: Any) -> ReferenceProducer:
@@ -99,7 +109,7 @@ class Fetch:
 
 
 class Build:
-    """Authored-artifact producers: BYO-able, coverage-validated at resolution."""
+    """Authored-artifact producers: supplied-able, coverage-validated at resolution."""
 
     @staticmethod
     def tool(name: str, **kwargs: Any) -> AuthoredProducer:
@@ -123,8 +133,13 @@ class DataDecl:
     #: Absence is legal. Only meaningful on a producer-less slot; a declared
     #: producer either produces or fails.
     is_optional: bool = False
+    #: The GEOMETRY a producer-less slot accepts (point | polyline | polygon |
+    #: rectangle | raster | mesh). Declared so the slot says what shape of thing
+    #: it takes, which is the only thing a template CAN say about a context layer
+    #: whose source it deliberately does not name.
+    geometry: str | None = None
     #: How a supplied artifact is checked against the domain.
-    byo_validate: Any = CoversAOI
+    supplied_validate: Any = CoversAOI
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.isidentifier():
@@ -138,13 +153,33 @@ class DataDecl:
             )
 
     @property
-    def is_byo(self) -> bool:
-        return getattr(self.producer, "byo_uri", None) is not None
+    def is_supplied(self) -> bool:
+        return getattr(self.producer, "supplied_uri", None) is not None
 
     @property
     def producer_kwargs(self) -> Mapping[str, Any]:
         """The reads the producer declares - empty for a producer-less slot."""
         return {} if self.producer is None else self.producer.kwargs
+
+    def supplied(self, *, geometry: str | None = None,
+                 validate: Any = CoversAOI) -> "DataDecl":
+        """This slot is filled by something the caller SUPPLIES, not by a producer.
+
+        On a producer-less slot this is the whole declaration: the template names
+        the shape it accepts and nothing about where the thing comes from.
+        """
+        if self.producer is not None:
+            raise PlanValidationError(
+                f"Data {self.name!r} declares a producer AND .supplied(): a producer "
+                "that can be superseded says so on the producer "
+                "(Build.tool(...).supplied(...)), not on the slot."
+            )
+        if geometry is not None and geometry not in _GEOMETRIES:
+            raise PlanValidationError(
+                f"Data {self.name!r}: .supplied(geometry={geometry!r}) is not a "
+                f"declared shape (known: {sorted(_GEOMETRIES)})."
+            )
+        return replace(self, geometry=geometry, supplied_validate=validate)
 
     def optional(self) -> "DataDecl":
         """Absence is legal, and LABELLED: the run says the slot went unfilled."""

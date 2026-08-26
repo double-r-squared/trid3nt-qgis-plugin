@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 __all__ = [
-    "ByoCoverageError",
     "DeclarativeError",
     "GateRefusedError",
     "LeakScanTruncated",
@@ -14,6 +13,7 @@ __all__ = [
     "PlanValidationError",
     "RenderSourceMissingError",
     "StepFailedError",
+    "SuppliedCoverageError",
 ]
 
 
@@ -66,8 +66,8 @@ class GateRefusedError(DeclarativeError):
     error_code = "GATE_INPUT_REQUIRED"
 
 
-class ByoCoverageError(DeclarativeError):
-    error_code = "BYO_COVERAGE_MISMATCH"
+class SuppliedCoverageError(DeclarativeError):
+    error_code = "SUPPLIED_COVERAGE_MISMATCH"
 
 
 class RenderSourceMissingError(DeclarativeError):

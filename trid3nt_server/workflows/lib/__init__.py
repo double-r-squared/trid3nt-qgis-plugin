@@ -19,7 +19,7 @@ from .data import (
 from .docstring import render_docstring
 from .domain import Domain, current_domain
 from .errors import (
-    ByoCoverageError,
+    SuppliedCoverageError,
     DeclarativeError,
     GateRefusedError,
     LeakScanTruncated,
@@ -92,7 +92,7 @@ from . import user_input
 from .validate import validate_plan
 
 __all__ = [
-    "AuthoredProducer", "Build", "ByoCoverageError", "CATEGORICAL", "ChartSpec",
+    "AuthoredProducer", "Build", "CATEGORICAL", "ChartSpec",
     "CoversAOI",
     "D", "Data", "DataDecl", "DataRef", "DeclarativeError", "Derived", "Domain",
     "DrawGate", "EngineOps",
@@ -107,6 +107,7 @@ __all__ = [
     "RenderSourceMissingError", "ResampleSpec", "ResolvedParam",
     "ResolvedParams",
     "RunMode", "RunResult", "STAGES", "STATE", "Slot", "Step", "StepFailedError",
+    "SuppliedCoverageError",
     "StyleSpec",
     "StepLedger",
     "TemporalGapError", "TemporalShapeError", "TemporalSpec",
