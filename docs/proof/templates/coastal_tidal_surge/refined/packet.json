@@ -1,0 +1,255 @@
+{
+  "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "template": "coastal_tidal_surge",
+  "variant": "refined",
+  "tool": "coastal_tidal_surge",
+  "run_id": "01M0W1KVES5HTRWZHD3JY4V7B3",
+  "stem": "coastal_tidal_surge_refined",
+  "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined",
+  "panel_base": "coastal_tidal_surge_refined",
+  "mode": "render",
+  "assembled_at": "2026-08-26T00:48:45",
+  "assembler": "scripts/assemble_proof_packet.py",
+  "time_stepped": {
+    "frames": 41,
+    "slf": "res_coastal.slf",
+    "source": "s3://trid3nt-runs/01M0W1KVES5HTRWZHD3JY4V7B3/res_coastal.slf",
+    "method": "SELAFIN header + file length",
+    "npoin": 57021,
+    "nelem": 113088,
+    "nbv1": 6,
+    "varnames": [
+      "VELOCITY U      M/S",
+      "VELOCITY V      M/S",
+      "WATER DEPTH     M",
+      "FREE SURFACE    M",
+      "BOTTOM          M",
+      "FROUDE NUMBER"
+    ],
+    "bytes": 58152912,
+    "header_bytes": 2041788,
+    "frame_bytes": 1368564,
+    "recorded_ntimestep": 41
+  },
+  "published_layers": [
+    "Input: coastal tide/surge boundary (noaa_coops_tides)",
+    "Model results (time series): coast",
+    "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
+    "Peak inundation depth (coast)"
+  ],
+  "verdict": "PASS",
+  "missing": [],
+  "deliverables": [
+    {
+      "order": 1,
+      "kind": "panel",
+      "caption": "1. Input: coastal tide/surge boundary (noaa_coops_tides) - context/vector, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_01_input-coastal-tide-surge-boundary-noaa-coops-tides.png",
+      "layer": "Input: coastal tide/surge boundary (noaa_coops_tides)",
+      "bytes": 2559052,
+      "mtime": "2026-08-26T00:48:40",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 2,
+      "kind": "panel",
+      "caption": "2. Model results (time series): coast - context/mesh, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_02_model-results-time-series-coast.png",
+      "layer": "Model results (time series): coast",
+      "bytes": 2572472,
+      "mtime": "2026-08-26T00:48:40",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 3,
+      "kind": "panel",
+      "caption": "3. Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker) - context/raster, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_03_input-coastal-bed-bathymetry-coast-noaa-dem-all-topobathy-in-worker.png",
+      "layer": "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
+      "bytes": 2373995,
+      "mtime": "2026-08-26T00:48:41",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 4,
+      "kind": "panel",
+      "caption": "4. Peak inundation depth (coast) - primary/raster, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_04_peak-inundation-depth-coast.png",
+      "layer": "Peak inundation depth (coast)",
+      "bytes": 1810771,
+      "mtime": "2026-08-26T00:48:42",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 5,
+      "kind": "canvas_view",
+      "caption": "5. CANVAS VIEW - all 4 layers stacked in emission order, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_05_canvas-view.png",
+      "bytes": 2293890,
+      "mtime": "2026-08-26T00:48:42",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 6,
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 5 panels in emission order, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined.png",
+      "bytes": 4298975,
+      "mtime": "2026-08-26T00:48:43",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 7,
+      "kind": "chart",
+      "caption": "Chart coastal_stage_vs_inundation - the run's persisted spec through the plugin chart dock's own renderer, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_chart_coastal_stage_vs_inundation.png",
+      "chart": "coastal_stage_vs_inundation",
+      "bytes": 33630,
+      "mtime": "2026-08-26T00:48:43",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 8,
+      "kind": "animation",
+      "caption": "Animation - 41 frames on one run-scoped colour scale with a static legend, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_animation.gif",
+      "bytes": 5633780,
+      "mtime": "2026-08-26T00:48:38",
+      "verdict": "present",
+      "gif_checks": {
+        "frames": 41,
+        "size": [
+          1300,
+          1304
+        ],
+        "distinct_frames": 41,
+        "legend_x_frac": 0.875,
+        "legend_ramp_colours": 84,
+        "legend_covers_a_ramp": true,
+        "legend_drift_frames": [],
+        "field_moves": true
+      }
+    },
+    {
+      "order": 9,
+      "kind": "still",
+      "caption": "PEAK frame - the animation's own figure at its peak step, same colours and extent, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_peak_frame.png",
+      "bytes": 1994675,
+      "mtime": "2026-08-26T00:48:45",
+      "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "verdict": "present"
+    },
+    {
+      "order": 10,
+      "kind": "evidence",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_canary_evidence.json",
+      "bytes": 33498,
+      "mtime": "2026-08-25T01:48:33",
+      "verdict": "present"
+    }
+  ],
+  "render": {
+    "sheet": {
+      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined.png",
+      "bytes": 4298737,
+      "panels": 5,
+      "layers": [
+        "Input: coastal tide/surge boundary (noaa_coops_tides)",
+        "Model results (time series): coast",
+        "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
+        "Peak inundation depth (coast)"
+      ],
+      "not_rendered": [],
+      "off_canvas": [
+        "Model results (time series): coast"
+      ],
+      "panel_pngs": [
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_01_input-coastal-tide-surge-boundary-noaa-coops-tides.png",
+          "layer": "Input: coastal tide/surge boundary (noaa_coops_tides)"
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_02_model-results-time-series-coast.png",
+          "layer": "Model results (time series): coast"
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_03_input-coastal-bed-bathymetry-coast-noaa-dem-all-topobathy-in-worker.png",
+          "layer": "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)"
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_04_peak-inundation-depth-coast.png",
+          "layer": "Peak inundation depth (coast)"
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_05_canvas-view.png",
+          "layer": "CANVAS VIEW"
+        }
+      ]
+    },
+    "charts": [
+      {
+        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_chart_coastal_stage_vs_inundation.png",
+        "name": "coastal_stage_vs_inundation",
+        "title": "Peak inundation depth (coast)",
+        "render_summary": {
+          "views": 1,
+          "lines": 0,
+          "series": 0,
+          "rules": 0,
+          "bars": 0,
+          "points": 0,
+          "skipped": 0,
+          "x_log": false,
+          "y_log": false,
+          "legend_labels": []
+        },
+        "bytes": 33350
+      }
+    ],
+    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animation": {
+      "frames": 41,
+      "animated": true,
+      "variable": "WATER DEPTH     M",
+      "plane": "2d",
+      "peak_frame": 40,
+      "peak_time_s": 21600.0,
+      "peak_value": 7.795907020568848,
+      "vmin": 0.0,
+      "vmax": 3.7250596046447733,
+      "style_preset": "continuous_flood_depth",
+      "legend_note": "scaled to this run (p2-p98): 0 to 3.72506 m",
+      "colormap": "YlGnBu",
+      "bbox_ll": [
+        -85.02,
+        29.688188406522848,
+        -84.90000000197412,
+        29.80181977413572
+      ],
+      "local_origin_m": [
+        691576.7191423352,
+        3286075.6322496766
+      ],
+      "run_id": "01M0W1KVES5HTRWZHD3JY4V7B3",
+      "origin_bbox": [
+        -85.02,
+        29.69,
+        -84.9,
+        29.8
+      ],
+      "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_animation.gif",
+      "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_peak_frame.png",
+      "animation_bytes": 5633780,
+      "peak_bytes": 1994419
+    }
+  }
+}
