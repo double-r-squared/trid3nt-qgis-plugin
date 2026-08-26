@@ -4,7 +4,7 @@ Runs the REAL pieces the registered telemac_rain_on_grid template composes,
 end-to-end, on the Coweeta Creek NC catchment (pour point -83.40402 35.05746,
 site), THROUGH the rebuilt trid3nt-local/telemac:latest image:
 
-  phase "mesh"  -- acquire_watershed_mesh (pysheds delineation + NHD river +
+  phase "mesh"  -- generate_catchment_mesh (pysheds delineation + NHD river +
                    3DEP DEM + OceanMesh2D TIN, projected to UTM) -> watershed.slf;
                    fetch_landcover (NLCD 2021) sampled at the mesh nodes ->
                    per-node CN2 + Manning fields staged next to the mesh.
@@ -50,24 +50,30 @@ DESIGN_INTENSITY_MM_PER_HR = 25.0
 SIM_DURATION_S = 21600.0   # 6 h
 TIME_STEP_S = 3.0
 GRAPHIC_PERIOD = 200
+# The mesh band this proof runs at, spelled here rather than at the call site:
+# a driver is a saved invocation, so its values are its own declaration.
+MIN_EDGE_M = 40.0
+MAX_EDGE_M = 300.0
+GRADE = 0.2
 
 
 def phase_mesh() -> None:
-    from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as MA
-    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-        _sample_raster_at_nodes)
+    from trid3nt_server.workflows.mesh import watershed as W
+    from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+        landcover_cn_manning, node_curve_numbers)
     from trid3nt_server.tools import TOOL_REGISTRY
 
     RUNDIR.mkdir(parents=True, exist_ok=True)
     print(f"[mesh] acquiring Coweeta watershed mesh at {POUR_POINT} ...", flush=True)
-    mesh = MA.acquire_watershed_mesh(
-        pour_point=POUR_POINT, bbox=BBOX, output_dir=str(RUNDIR),
-        min_edge_length_m=40.0, max_edge_length_m=300.0, grade=0.2)
+    mesh = W.generate_catchment_mesh(
+        pour_point=POUR_POINT, bbox=BBOX, slug="watershed", output_dir=str(RUNDIR),
+        bed_dem=W.resolve_bed_dem(bbox=BBOX), rivers=W.resolve_river_network(bbox=BBOX),
+        min_edge_length_m=MIN_EDGE_M, max_edge_length_m=MAX_EDGE_M, grade=GRADE)
     print(f"[mesh] nodes={mesh.points_utm.shape[0]} cells={mesh.cells.shape[0]} "
           f"epsg={mesh.utm_epsg} area_km2={mesh.area_km2:.2f} "
           f"outlet={mesh.outlet_lonlat}", flush=True)
 
-    points_ll = np.asarray(mesh.meta["points_lonlat"], dtype=float)
+    points_ll = np.asarray(mesh.points_lonlat, dtype=float)
 
     # NLCD 2021 sampled at the mesh nodes -> per-node land cover.
     print("[mesh] fetch_landcover (NLCD 2021) ...", flush=True)
@@ -79,12 +85,11 @@ def phase_mesh() -> None:
     lc_path.write_bytes(
         read_object_bytes_s3(lc_uri) if str(lc_uri).startswith("s3://")
         else Path(lc_uri).read_bytes())
-    nlcd_vals = _sample_raster_at_nodes(lc_path, points_ll)
+    nlcd_vals = W.sample_raster_at_nodes(lc_path, points_ll)
     node_nlcd = [int(round(v)) for v in nlcd_vals]
 
-    cn2, manning = MA.assemble_node_fields(
-        node_nlcd=node_nlcd, uniform_cn=None, slopes_m_per_m=None,
-        steep_slope_correction=False)
+    manning = [landcover_cn_manning(c)[1] for c in node_nlcd]
+    cn2 = node_curve_numbers(node_nlcd, uniform_cn=None)
 
     (RUNDIR / "node_cn2.txt").write_text("\n".join(f"{v:.3f}" for v in cn2) + "\n")
     (RUNDIR / "node_manning.txt").write_text(

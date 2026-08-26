@@ -360,8 +360,15 @@ def aoi_bbox(evidence: dict, worker_metrics: dict) -> list[float] | None:
     recorded it - and the canary's DECLARED bbox is the same corner, sitting right
     there in the evidence. Reaching for it is recovery, not invention: a run whose
     frames land at the UTM false origin is a picture of nothing.
+
+    The run's OWN persisted answer sits between the two, for the legs whose mesh
+    is projected agent-side: their worker never sees a bbox to echo and their
+    question may name no bbox at all (a catchment is delineated from a pour
+    point), but the ``domain_bbox`` they publish records exactly where they
+    modelled. It is the run's product, which is what a packet check should cite.
     """
     for candidate in (worker_metrics.get("bbox"),
+                      (evidence.get("metrics") or {}).get("domain_bbox"),
                       (evidence.get("args") or {}).get("bbox")):
         if isinstance(candidate, (list, tuple)) and len(candidate) == 4:
             return [float(v) for v in candidate]

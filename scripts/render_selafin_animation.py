@@ -188,6 +188,11 @@ def pick_variable(varnames: list[str], token: str) -> str:
     raise SystemExit(f"no variable matching {token!r} among {varnames}")
 
 
+#: Below this easting a mesh cannot be in real UTM metres: the zone's western
+#: edge sits at 166 km, so anything near zero is local coordinates.
+_LOCAL_EASTING_M = 1000.0
+
+
 def local_origin(bbox, utm_epsg: int) -> tuple[float, float]:
     """The UTM corner a LOCAL-coordinate mesh was built from; ``(0, 0)`` with none."""
     if not (bbox and len(tuple(bbox)) == 4):
@@ -406,10 +411,16 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
         values = np.where(gate > float(mask_min), values, np.nan)
 
     x_org, y_org = local_origin(origin_bbox, utm_epsg)
-    if not x_org and float(np.nanmin(mesh_x)) < 1000.0:
-        # A mesh whose easting starts near ZERO is LOCAL, and reprojecting it with
-        # no origin puts the frames at the UTM false origin - thousands of km from
-        # the water. Silence here is how that defect hid in the first place.
+    # WHETHER an origin belongs is a fact about the FILE, not about the caller. A
+    # UTM easting is never below 160 km, so a mesh whose minimum sits near zero was
+    # written in LOCAL metres and needs its corner back; one that already carries
+    # real eastings is ABSOLUTE and adding a corner would shift it off the map by
+    # exactly that corner. Both mistakes land the frames at the false origin, and
+    # both used to be silent.
+    is_local = float(np.nanmin(mesh_x)) < _LOCAL_EASTING_M
+    if x_org and not is_local:
+        x_org = y_org = 0.0
+    elif not x_org and is_local:
         print(f"WARNING: {Path(slf_path).name} looks LOCAL (min easting "
               f"{float(np.nanmin(mesh_x)):.1f} m) and no origin bbox was given - "
               "the frames will land at the UTM false origin. Pass --origin-bbox.",
@@ -435,6 +446,22 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
             "local_origin_m": [float(x_org), float(y_org)]}
 
 
+def _epsg_from_outputs(bucket: str, run_id: str) -> int | None:
+    """The mesh CRS off the run's OWN outputs manifest; ``None`` when it has none.
+
+    A SELAFIN carries no CRS, and not every leg's worker echoes one: the
+    rain-on-grid mesh is projected AGENT-side, so its ``telemac_metrics.json``
+    records no zone at all. What every leg does write is ``outputs.json``, where
+    the mesh entry is stamped with the ``crs_authid`` it was published under -
+    the same fact, recorded by the party that knew it.
+    """
+    for entry in (_read_json(bucket, f"{run_id}/outputs.json") or {}).get("entries", []):
+        authid = str(entry.get("crs_authid") or "")
+        if authid.upper().startswith("EPSG:"):
+            return int(authid.split(":", 1)[1])
+    return None
+
+
 def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                units: str = "", quantity: str | None = None,
                title: str | None = None, bucket: str | None = None,
@@ -453,7 +480,7 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     worker = _read_json(bucket, f"{run_id}/telemac_metrics.json")
-    epsg = utm_epsg or worker.get("utm_epsg")
+    epsg = utm_epsg or worker.get("utm_epsg") or _epsg_from_outputs(bucket, run_id)
     if epsg is None:
         raise SystemExit(f"run {run_id} records no utm_epsg; pass utm_epsg")
     origin = origin_bbox if origin_bbox is not None else worker.get("bbox")

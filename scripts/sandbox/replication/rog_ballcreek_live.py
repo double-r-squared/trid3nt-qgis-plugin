@@ -16,7 +16,7 @@ so flashy sub-daily peaks are structurally under-represented -- a documented
 screening-grade limitation quantified in the results.
 
 Phases:
-  mesh   -- acquire_watershed_mesh at the Ball Creek pour point + NLCD node fields.
+  mesh   -- generate_catchment_mesh at the Ball Creek pour point + NLCD node fields.
   solve  -- stage a rain_on_grid manifest (constant intensity + rain window + AMC +
             uniform CN override + scaled Manning) and run the worker container.
 
@@ -50,26 +50,28 @@ TELEMAC_IMAGE = "trid3nt-local/telemac:latest"
 
 MIN_EDGE_M = 30.0
 MAX_EDGE_M = 200.0
+GRADE = 0.2
 TIME_STEP_S = 2.0
 
 
 def phase_mesh() -> None:
-    from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as MA
-    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-        _sample_raster_at_nodes)
+    from trid3nt_server.workflows.mesh import watershed as W
+    from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+        landcover_cn_manning, node_curve_numbers)
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
     RUNDIR.mkdir(parents=True, exist_ok=True)
     print(f"[mesh] acquiring Ball Creek watershed mesh at {POUR_POINT} ...", flush=True)
-    mesh = MA.acquire_watershed_mesh(
-        pour_point=POUR_POINT, bbox=BBOX, output_dir=str(RUNDIR),
-        min_edge_length_m=MIN_EDGE_M, max_edge_length_m=MAX_EDGE_M, grade=0.2)
+    mesh = W.generate_catchment_mesh(
+        pour_point=POUR_POINT, bbox=BBOX, slug="watershed", output_dir=str(RUNDIR),
+        bed_dem=W.resolve_bed_dem(bbox=BBOX), rivers=W.resolve_river_network(bbox=BBOX),
+        min_edge_length_m=MIN_EDGE_M, max_edge_length_m=MAX_EDGE_M, grade=GRADE)
     print(f"[mesh] nodes={mesh.points_utm.shape[0]} cells={mesh.cells.shape[0]} "
           f"epsg={mesh.utm_epsg} area_km2={mesh.area_km2:.2f} "
           f"outlet={mesh.outlet_lonlat}", flush=True)
 
-    points_ll = np.asarray(mesh.meta["points_lonlat"], dtype=float)
+    points_ll = np.asarray(mesh.points_lonlat, dtype=float)
     print("[mesh] fetch_landcover (NLCD 2021) ...", flush=True)
     lc = TOOL_REGISTRY["fetch_landcover"].fn(bbox=list(BBOX), dataset="nlcd_2021",
                                              resolution_m=30)
@@ -78,12 +80,11 @@ def phase_mesh() -> None:
     lc_path.write_bytes(
         read_object_bytes_s3(lc_uri) if str(lc_uri).startswith("s3://")
         else Path(lc_uri).read_bytes())
-    nlcd_vals = _sample_raster_at_nodes(lc_path, points_ll)
+    nlcd_vals = W.sample_raster_at_nodes(lc_path, points_ll)
     node_nlcd = [int(round(v)) for v in nlcd_vals]
 
-    cn2, manning = MA.assemble_node_fields(
-        node_nlcd=node_nlcd, uniform_cn=None, slopes_m_per_m=None,
-        steep_slope_correction=False)
+    manning = [landcover_cn_manning(c)[1] for c in node_nlcd]
+    cn2 = node_curve_numbers(node_nlcd, uniform_cn=None)
 
     (RUNDIR / "node_cn2.txt").write_text("\n".join(f"{v:.3f}" for v in cn2) + "\n")
     (RUNDIR / "node_manning.txt").write_text(

@@ -30,7 +30,11 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(HERE))
 
-from trid3nt_server.workflows.telemac.rain_on_grid import mesh_acquisition as MA  # noqa: E402
+from trid3nt_server.workflows.mesh import watershed as W  # noqa: E402
+from trid3nt_server.workflows.mesh.telemac_build import (  # noqa: E402
+    write_bottom_selafin)
+from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (  # noqa: E402
+    landcover_cn_manning, node_curve_numbers)
 
 COARSE_RUNDIR = Path(os.environ.get("ROG_RUNDIR", "/tmp/rog_ballcreek"))
 FINE_RUNDIR = Path("/home/nate/rog_ballcreek_fine")
@@ -50,7 +54,7 @@ def channel_band_histogram(rundir: Path, coarse: Path) -> dict:
     npz = np.load(rundir / "coastal_tin_mesh.npz")
     facts = json.loads((rundir / "mesh_facts.json").read_text())
     pts_ll = npz["points"]
-    pts_m, epsg = MA.reproject_nodes_to_utm(pts_ll)
+    pts_m, epsg = W.reproject_nodes_to_utm(pts_ll)
     X = np.asarray(pts_m)[:, 0]
     Y = np.asarray(pts_m)[:, 1]
     ikle = np.asarray(npz["cells"], np.int64)
@@ -92,31 +96,31 @@ def regen() -> dict:
     flow = gpd.read_file(COARSE_RUNDIR / "flowlines.fgb")
 
     # 2. exterior + river sizing points at the TIGHT band, mesh config, mesher.
-    boubox, river = MA.catchment_exterior_and_river_coords(
+    boubox, river = W.catchment_exterior_and_river_coords(
         catch, flow, min_edge_length_m=MIN_EDGE_FINE)
-    cfg = MA.build_mesh_config(
+    cfg = W.build_mesh_config(
         boubox, river, min_edge_length_m=MIN_EDGE_FINE,
-        max_edge_length_m=MAX_EDGE_FINE, grade=0.20)
-    image = os.environ.get("TRID3NT_MESH_IMAGE") or MA.DEFAULT_MESH_IMAGE
+        max_edge_length_m=MAX_EDGE_FINE, grade=W.DEFAULT_GRADE,
+        max_iter=W.DEFAULT_MAX_ITER)
+    image = os.environ.get("TRID3NT_MESH_IMAGE") or W.DEFAULT_MESH_IMAGE
     sandbox = Path(os.environ.get("TRID3NT_OCEANMESH_SANDBOX")
                    or (REPO / "scripts/sandbox/oceanmesh")).resolve()
     print(f"[finemesh] meshing tight band min={MIN_EDGE_FINE} max={MAX_EDGE_FINE} ...", flush=True)
-    points_ll, cells, stats = MA._run_mesh_container(
+    points_ll, cells, stats = W._run_mesh_container(
         FINE_RUNDIR, cfg, image=image, sandbox=sandbox)
     points_ll = np.asarray(points_ll, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
 
     # 3. bed from the cached bare-earth DEM; project + write the solve SELAFIN.
-    bed = MA._sample_raster_at_nodes(COARSE_RUNDIR / "dem_bed.tif", points_ll)
-    points_m, epsg = MA.reproject_nodes_to_utm(points_ll)
-    MA._write_bottom_selafin(str(FINE_RUNDIR / "watershed.slf"), points_m, cells, bed)
+    bed = W.sample_raster_at_nodes(COARSE_RUNDIR / "dem_bed.tif", points_ll)
+    points_m, epsg = W.reproject_nodes_to_utm(points_ll)
+    write_bottom_selafin(str(FINE_RUNDIR / "watershed.slf"), points_m, cells, bed)
 
     # 4. per-node CN2/Manning from the cached NLCD (same NLCD-distributed scheme).
-    nlcd_vals = MA._sample_raster_at_nodes(COARSE_RUNDIR / "nlcd.tif", points_ll)
+    nlcd_vals = W.sample_raster_at_nodes(COARSE_RUNDIR / "nlcd.tif", points_ll)
     node_nlcd = [int(round(v)) for v in nlcd_vals]
-    cn2, manning = MA.assemble_node_fields(
-        node_nlcd=node_nlcd, uniform_cn=None, slopes_m_per_m=None,
-        steep_slope_correction=False)
+    manning = [landcover_cn_manning(c)[1] for c in node_nlcd]
+    cn2 = node_curve_numbers(node_nlcd, uniform_cn=None)
     (FINE_RUNDIR / "node_cn2.txt").write_text("\n".join(f"{v:.3f}" for v in cn2) + "\n")
     (FINE_RUNDIR / "node_manning.txt").write_text("\n".join(f"{v:.3f}" for v in manning) + "\n")
 
