@@ -13,6 +13,12 @@ other engine in the family then had no animation at all. Here the run says what
 to read - which SELAFIN, which variable, which units - so one tool covers the
 family and a new template gets its GIF by naming its file.
 
+ONE SCALE FOR THE WHOLE GIF. The colour range is resolved once, over every frame
+at once, through the style contract (``--quantity`` names the published quantity,
+so this animation and the published raster of that quantity get the same ramp,
+the same range and the same legend sentence). A scale that moved with the frame
+would make the same colour mean a different value each tick.
+
 LOCAL COORDINATES. The open-water builds lay their mesh with node 0 at the AOI's
 SW corner, so a SELAFIN's metres are usually LOCAL. ``--origin-bbox`` (or, by
 default, the ``bbox`` the worker recorded in ``telemac_metrics.json``) is what
@@ -21,7 +27,8 @@ puts the frames back on the map; without it they land at the UTM false origin.
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
   render_selafin_animation.py --run-id <ULID> --slf res_coastal.slf \\
-      --var "WATER DEPTH" --units m --stem coastal_tidal_surge
+      --var "WATER DEPTH" --units m --quantity flood_depth \\
+      --stem coastal_tidal_surge
 """
 from __future__ import annotations
 
@@ -30,6 +37,7 @@ import json
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib
@@ -43,6 +51,7 @@ from matplotlib.tri import Triangulation  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "contracts"))
 sys.path.insert(0, str(REPO / "scripts" / "sandbox" / "oceanmesh"))
 
 import merc_render as MR  # noqa: E402
@@ -51,6 +60,11 @@ from trid3nt_server.workflows.telemac.postprocess_telemac import (  # noqa: E402
     read_selafin,
 )
 
+try:  # a standalone script must still run where the server package is not importable
+    from trid3nt_server.emission import styles as _STYLES  # noqa: E402
+except Exception:  # noqa: BLE001 - absence degrades to the local percentile scale
+    _STYLES = None
+
 #: Frames per second. Slow enough that a reader can follow a 10-40 frame solve.
 _FPS = 4
 #: Fraction of the mesh bbox padded, so nothing sits flush to the frame.
@@ -58,6 +72,90 @@ _PAD_FRAC = 0.06
 #: Render density: fine enough that the elements survive, coarse enough that a
 #: 40-frame GIF stays a few megabytes.
 _DPI = 130
+#: The clip the style contract's own band reader uses when a preset declares none.
+_DEFAULT_CLIP = (2.0, 98.0)
+
+
+@dataclass(frozen=True)
+class AnimationScale:
+    """ONE colour scale for a whole animation: the range, the ramp, the caption.
+
+    Carrying the caption alongside the numbers is what stops the picture and its
+    legend disagreeing: both are read off this single value, resolved once.
+    """
+
+    vmin: float
+    vmax: float
+    colormap: str
+    note: str
+    preset: str | None = None
+
+    @property
+    def range(self) -> tuple[float, float]:
+        return (self.vmin, self.vmax)
+
+
+def _finite(values) -> np.ndarray:
+    arr = np.asarray(values, dtype="float64")
+    return arr[np.isfinite(arr)]
+
+
+def _percentile_range(finite: np.ndarray, clip) -> tuple[float, float] | None:
+    """The clipped range over EVERY frame handed in, or ``None`` when there is none."""
+    if finite.size == 0:
+        return None
+    lo_pct, hi_pct = clip or _DEFAULT_CLIP
+    return (float(np.percentile(finite, lo_pct)), float(np.percentile(finite, hi_pct)))
+
+
+def _widen(rng: tuple[float, float]) -> tuple[float, float]:
+    """A zero-width range is not a scale - matplotlib collapses it, so pad it."""
+    lo, hi = float(rng[0]), float(rng[1])
+    if hi > lo:
+        return (lo, hi)
+    pad = max(abs(lo) * 0.01, 1e-6)
+    return (lo - pad, hi + pad)
+
+
+def _matplotlib_colormap(name: str | None) -> str:
+    """The contract's colormap under matplotlib's spelling; ``viridis`` when unknown.
+
+    The contract names ramps the way the tile renderer spells them (lowercase,
+    ``ylgnbu``); matplotlib spells the same ramp ``YlGnBu``. Matching case-blind is
+    what keeps ONE declared colormap on both the published raster and this GIF.
+    """
+    table = {key.lower(): key for key in matplotlib.colormaps}
+    return table.get((name or "").strip().lower(), "viridis")
+
+
+def resolve_animation_style(values, *, preset: str | None = None) -> AnimationScale:
+    """THE scale for an animation, resolved over EVERY frame at once.
+
+    The scope of a data-policy rescale is the RUN, never the frame: resolving here,
+    off the whole ``(time, node)`` array, is what makes one colour mean one value
+    for the length of the GIF. Routing it through the style contract's resolver is
+    what makes this GIF and the published raster of the same quantity agree on the
+    ramp, the range and the sentence the legend says about them.
+
+    Falls back to a plain p2-p98 over the same whole array when the server package
+    is not importable, so the script still runs standalone.
+    """
+    finite = _finite(values)
+    if _STYLES is None:
+        found = _percentile_range(finite, _DEFAULT_CLIP)
+        lo, hi = _widen(found or (0.0, 1.0))
+        how = "scaled to this run (p2-p98)" if found else "empty field"
+        return AnimationScale(lo, hi, "viridis", f"{how}: {lo:g} to {hi:g}", None)
+    resolved = _STYLES.resolve_style(
+        preset, read_range=lambda scale: _percentile_range(finite, scale.clip))
+    lo, hi = _widen(resolved.range or (0.0, 1.0))
+    return AnimationScale(lo, hi, _matplotlib_colormap(resolved.colormap),
+                          resolved.legend_note(), resolved.preset)
+
+
+def animation_scale(values, *, preset: str | None = None) -> tuple[float, float]:
+    """``(vmin, vmax)`` for a whole animation - the pure scale decision, alone."""
+    return resolve_animation_style(values, preset=preset).range
 
 
 def _s3():
@@ -102,6 +200,61 @@ def local_origin(bbox, utm_epsg: int) -> tuple[float, float]:
     return (min(x0, x1), min(y0, y1))
 
 
+def _global_palette(frames):
+    """ONE 256-colour palette derived from EVERY frame at once.
+
+    Derived off downscaled copies: the palette a median cut picks is the same, and
+    a 40-frame full-resolution montage is hundreds of megabytes for no gain.
+    """
+    from PIL import Image
+
+    w, h = frames[0].size
+    tw, th = max(w // 4, 1), max(h // 4, 1)
+    strip = Image.new("RGB", (tw, th * len(frames)))
+    for i, frame in enumerate(frames):
+        strip.paste(frame.convert("RGB").resize((tw, th), Image.Resampling.NEAREST),
+                    (0, i * th))
+    return strip.quantize(colors=256, method=Image.Quantize.MEDIANCUT)
+
+
+class StablePaletteWriter(PillowWriter):
+    """A GIF whose PALETTE is fixed once, over all frames, before anything is encoded.
+
+    Pillow's default is an adaptive palette PER FRAME, so unchanged pixels - the
+    colorbar above all - come out as slightly different colours in every frame.
+    That is the same dishonesty a per-frame vmin/vmax would be, moved out of the
+    scale and into the encoder: the legend appears to shift while the numbers
+    behind it did not. One palette, chosen over every frame at once, removes it,
+    and identical pixels stay identical bytes.
+    """
+
+    def finish(self) -> None:
+        from PIL import Image
+
+        master = _global_palette(self._frames)
+        frames = [f.convert("RGB").quantize(palette=master, dither=Image.Dither.NONE)
+                  for f in self._frames]
+        frames[0].save(self.outfile, save_all=True, append_images=frames[1:],
+                       duration=int(1000 / self.fps), loop=0)
+
+
+def plain_axes(bbox_ll, title: str):
+    """Axes with NO basemap - the offline seam, for a caller with no tile access.
+
+    Same figure geometry as the basemap axes so the colorbar lands in the same
+    place; the limits are left to the field being drawn.
+    """
+    xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
+                           np.array([bbox_ll[1], bbox_ll[3]]))
+    aspect = float(np.clip((yw[1] - yw[0]) / (xw[1] - xw[0]), 0.35, 1.8))
+    fig, ax = plt.subplots(figsize=(10.0, 10.0 * aspect * 0.92), dpi=_DPI)
+    ax.set_facecolor("#20242c")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title(title, fontsize=10)
+    return fig, ax
+
+
 def _axes_with_basemap(bbox_ll, title: str):
     zoom = MR.pick_zoom(bbox_ll, max_tiles=6)
     mosaic, extent = MR.fetch_basemap(bbox_ll, zoom)
@@ -140,11 +293,97 @@ def slice_plane(mesh: dict, values: np.ndarray, *, nplan: int, plane: str):
             f"  |  {plane} plane of {nplan}")
 
 
+def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
+                  units: str, title: str, run_id: str, source_name: str,
+                  variable: str, gif_path: Path, peak_path: Path,
+                  preset: str | None = None, still: str = "peak",
+                  plane_note: str = "", axes_factory=None) -> dict:
+    """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF + still.
+
+    THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN, and
+    the loop below only ever calls ``coll.set_array``. Nothing per-frame may touch
+    ``vmin``, ``vmax``, the norm or the colorbar: a scale that moves with the frame
+    makes one colour mean a different value each tick, so the reader watching the
+    ramp is watching the renderer, not the water.
+
+    ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax)``; it defaults to the ESRI
+    basemap axes and takes :func:`plain_axes` where there is no tile access.
+    """
+    values = np.asarray(values, dtype="float64")
+    scale = resolve_animation_style(values, preset=preset)
+    # WHICH frame the still shows. "peak" is right for a field that BUILDS (a
+    # rising tide, an arriving plume); "final" for one that DECAYS toward its
+    # answer (a cooling column, a settling sea), where the peak frame is the
+    # initial condition and shows the reader nothing the run did.
+    peak_frame = (int(values.shape[0] - 1) if still == "final"
+                  else int(np.nanargmax([np.nanmax(frame) for frame in values])))
+
+    fig, ax = (axes_factory or _axes_with_basemap)(bbox_ll, title)
+    coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=scale.colormap,
+                        vmin=scale.vmin, vmax=scale.vmax, alpha=0.85, zorder=2)
+    # The MESH is the modeled domain, drawn OVER the field: a wireframe hidden
+    # under an opaque field tells the reader nothing about what was solved. Its
+    # weight is ADAPTIVE, because one fixed line width cannot read across the
+    # domain sizes this family covers - 900 elements over a lake and 50,000 over a
+    # reach are two different pictures, and a width tuned for the dense one
+    # disappears on the sparse one (which is exactly what a reader reports as "I
+    # do not see a mesh"). The element count is the scale that matters, not the
+    # extent in metres.
+    n_elements = max(int(tri.triangles.shape[0]), 1)
+    ax.triplot(tri, color="white",
+               linewidth=float(np.clip(60.0 / n_elements ** 0.5, 0.12, 0.6)),
+               alpha=float(np.clip(0.25 + 1200.0 / n_elements, 0.30, 0.75)),
+               zorder=3)
+    # ONE colorbar, off that one scale, captioned with the POLICY that produced
+    # it: a reader cannot tell a fixed domain scale from a range read off this
+    # run's own values by looking at the colours, so the legend says which.
+    cbar = fig.colorbar(coll, ax=ax, fraction=0.025, pad=0.01)
+    cbar.set_label(f"{variable} ({units})\n{scale.note}", fontsize=8)
+    cbar.ax.tick_params(labelsize=7)
+    stamp = ax.text(0.012, 0.045, "", transform=ax.transAxes, fontsize=9,
+                    color="white", zorder=5,
+                    bbox=dict(facecolor="black", alpha=0.45, pad=3, edgecolor="none"))
+    ax.text(0.012, 0.955,
+            f"run {run_id}  |  {source_name}, {values.shape[0]} frames"
+            f"{plane_note}  |  wireframe = the meshed domain  |  ESRI World Imagery",
+            transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
+            bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
+
+    # A STEADY solve has one frame, and a one-frame GIF is a still pretending to
+    # be an animation. It gets the still and an honest "no animation" instead.
+    animated = values.shape[0] > 1
+    if animated:
+        writer = StablePaletteWriter(fps=_FPS)
+        with writer.saving(fig, str(gif_path), dpi=_DPI):
+            for i, moment in enumerate(times):
+                coll.set_array(values[i])
+                stamp.set_text(f"t = {float(moment):8.0f} s      "
+                               f"max {float(np.nanmax(values[i])):.3g} {units}")
+                writer.grab_frame()
+
+    # The PEAK frame as its own still, off the SAME figure - same colours, same
+    # extent, so the still and the animation cannot disagree.
+    coll.set_array(values[peak_frame])
+    stamp.set_text(f"{still.upper()} FRAME  t = "
+                   f"{float(times[peak_frame]):8.0f} s      "
+                   f"max {float(np.nanmax(values[peak_frame])):.3g} {units}")
+    fig.savefig(peak_path, bbox_inches="tight")
+    plt.close(fig)
+    return {"frames": int(values.shape[0]), "animated": animated,
+            "variable": variable,
+            "plane": plane_note.strip(" |") or "2d", "peak_frame": peak_frame,
+            "peak_time_s": float(times[peak_frame]),
+            "peak_value": float(np.nanmax(values[peak_frame])),
+            "vmin": scale.vmin, "vmax": scale.vmax,
+            "style_preset": scale.preset, "legend_note": scale.note,
+            "colormap": scale.colormap}
+
+
 def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            units: str, title: str, run_id: str, gif_path: Path,
            peak_path: Path, nplan: int = 1, plane: str = "surface",
            still: str = "peak", mask_var: str | None = None,
-           mask_min: float = 0.0) -> dict:
+           mask_min: float = 0.0, preset: str | None = None) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
@@ -179,74 +418,13 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
     lon, lat = np.asarray(lon), np.asarray(lat)
     mx, my = MR.ll_to_merc(lon, lat)
     tri = Triangulation(mx, my, triangles)
-
-    finite = values[np.isfinite(values)]
-    vmin = float(np.nanpercentile(finite, 2)) if finite.size else 0.0
-    vmax = float(np.nanpercentile(finite, 98)) if finite.size else 1.0
-    if vmax <= vmin:
-        vmax = vmin + 1e-6
-    # WHICH frame the still shows. "peak" is right for a field that BUILDS (a
-    # rising tide, an arriving plume); "final" for one that DECAYS toward its
-    # answer (a cooling column, a settling sea), where the peak frame is the
-    # initial condition and shows the reader nothing the run did.
-    peak_frame = (int(values.shape[0] - 1) if still == "final"
-                  else int(np.nanargmax([np.nanmax(frame) for frame in values])))
     bbox_ll = (float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max()))
 
-    fig, ax = _axes_with_basemap(bbox_ll, title)
-    coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap="viridis",
-                        vmin=vmin, vmax=vmax, alpha=0.85, zorder=2)
-    # The MESH is the modeled domain, drawn OVER the field: a wireframe hidden
-    # under an opaque field tells the reader nothing about what was solved. Its
-    # weight is ADAPTIVE, because one fixed line width cannot read across the
-    # domain sizes this family covers - 900 elements over a lake and 50,000 over a
-    # reach are two different pictures, and a width tuned for the dense one
-    # disappears on the sparse one (which is exactly what a reader reports as "I
-    # do not see a mesh"). The element count is the scale that matters, not the
-    # extent in metres.
-    n_elements = max(int(tri.triangles.shape[0]), 1)
-    ax.triplot(tri, color="white",
-               linewidth=float(np.clip(60.0 / n_elements ** 0.5, 0.12, 0.6)),
-               alpha=float(np.clip(0.25 + 1200.0 / n_elements, 0.30, 0.75)),
-               zorder=3)
-    cbar = fig.colorbar(coll, ax=ax, fraction=0.025, pad=0.01)
-    cbar.set_label(f"{name.strip()} ({units})", fontsize=8)
-    cbar.ax.tick_params(labelsize=7)
-    stamp = ax.text(0.012, 0.045, "", transform=ax.transAxes, fontsize=9,
-                    color="white", zorder=5,
-                    bbox=dict(facecolor="black", alpha=0.45, pad=3, edgecolor="none"))
-    ax.text(0.012, 0.955,
-            f"run {run_id}  |  {Path(slf_path).name}, {values.shape[0]} frames"
-            f"{plane_note}  |  wireframe = the meshed domain  |  ESRI World Imagery",
-            transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
-            bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
-
-    # A STEADY solve has one frame, and a one-frame GIF is a still pretending to
-    # be an animation. It gets the still and an honest "no animation" instead.
-    animated = values.shape[0] > 1
-    if animated:
-        writer = PillowWriter(fps=_FPS)
-        with writer.saving(fig, str(gif_path), dpi=_DPI):
-            for i, moment in enumerate(mesh["times"]):
-                coll.set_array(values[i])
-                stamp.set_text(f"t = {float(moment):8.0f} s      "
-                               f"max {float(np.nanmax(values[i])):.3g} {units}")
-                writer.grab_frame()
-
-    # The PEAK frame as its own still, off the SAME figure - same colours, same
-    # extent, so the still and the animation cannot disagree.
-    coll.set_array(values[peak_frame])
-    stamp.set_text(f"{still.upper()} FRAME  t = "
-                   f"{float(mesh['times'][peak_frame]):8.0f} s      "
-                   f"max {float(np.nanmax(values[peak_frame])):.3g} {units}")
-    fig.savefig(peak_path, bbox_inches="tight")
-    plt.close(fig)
-    return {"frames": int(values.shape[0]), "animated": animated,
-            "variable": name.strip(),
-            "plane": plane_note.strip(" |") or "2d", "peak_frame": peak_frame,
-            "peak_time_s": float(mesh["times"][peak_frame]),
-            "peak_value": float(np.nanmax(values[peak_frame])),
-            "vmin": vmin, "vmax": vmax}
+    return render_frames(tri, values, mesh["times"], bbox_ll=bbox_ll, units=units,
+                         title=title, run_id=run_id,
+                         source_name=Path(slf_path).name, variable=name.strip(),
+                         gif_path=gif_path, peak_path=peak_path, preset=preset,
+                         still=still, plane_note=plane_note)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -255,6 +433,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--slf", required=True, help="the run's time-stepped SELAFIN")
     ap.add_argument("--var", required=True, help="a token in the variable's name")
     ap.add_argument("--units", default="")
+    ap.add_argument("--quantity", default=None,
+                    help="the PUBLISHED quantity this field is (e.g. flood_depth); "
+                         "the style contract turns it into the same colormap and "
+                         "range the published raster of that quantity is painted on")
     ap.add_argument("--stem", required=True, help="output basename (the workflow file)")
     ap.add_argument("--title", default=None)
     ap.add_argument("--bucket", default=os.environ.get("TRID3NT_RUNS_BUCKET",
@@ -286,6 +468,10 @@ def main(argv: list[str] | None = None) -> int:
     origin = ([float(v) for v in ns.origin_bbox.split(",")] if ns.origin_bbox
               else worker.get("bbox"))
 
+    preset = None
+    if ns.quantity and _STYLES is not None:
+        preset, _fallback = _STYLES.resolve_style_preset(ns.quantity)
+
     slf = _download(ns.bucket, f"{ns.run_id}/{ns.slf}", ".slf")
     gif = out_dir / f"{ns.stem}_animation.gif"
     peak = out_dir / f"{ns.stem}_{ns.still}_frame.png"
@@ -296,7 +482,7 @@ def main(argv: list[str] | None = None) -> int:
                         run_id=ns.run_id, gif_path=gif, peak_path=peak,
                         nplan=int(ns.nplan or worker.get("nplan") or 1),
                         plane=ns.plane, still=ns.still, mask_var=ns.mask_var,
-                        mask_min=ns.mask_min)
+                        mask_min=ns.mask_min, preset=preset)
     finally:
         Path(slf).unlink(missing_ok=True)
     print(json.dumps({**result, "run_id": ns.run_id,

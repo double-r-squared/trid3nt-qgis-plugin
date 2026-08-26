@@ -26,7 +26,7 @@ from trid3nt_contracts.outputs_manifest import (
     build_entry,
     parse_outputs_manifest,
 )
-from trid3nt_server.emission import quantity_styles
+from trid3nt_server.emission import styles as quantity_styles
 from trid3nt_server.emission.outputs_seam import (
     build_layers_from_outputs,
     read_outputs_manifest,
@@ -228,12 +228,18 @@ def _row(layer, resolved):
 
 
 def test_byte_equivalence_seam_vs_register(tmp_path):
-    """The seam's PEAK row == the register path's, field-for-field, and every seam
-    FRAME renders with that same resolved style.
+    """The seam's PEAK row matches the register path's identity fields, its RANGE
+    spans the whole run, and every seam FRAME is painted on that one range.
 
-    publish_manifest.json carries the non-frame entries alone now (the metrics
-    carrier + legacy register-only fallback), so the register path has exactly the
-    peak to offer; the frames are the seam's alone."""
+    publish_manifest.json carries the non-frame entries alone (the metrics carrier
+    plus the legacy register-only fallback), so the register path has exactly the
+    peak to offer and the frames are the seam's alone. That asymmetry is what the
+    RANGE assertion below turns on: a data-driven scale is scoped to the RUN, and
+    the register path can only ever see one entry, so its range is the peak's own
+    while the seam's spans peak and frames together. The seam's range therefore
+    CONTAINS the register path's - which is the honest relation between a path that
+    sees the whole run and one that sees a single raster - and the two paths still
+    have to agree about everything that is not the range."""
     from workers._raster_postprocess import outputs_manifest as om
     from workers._raster_postprocess import postprocess as pp
     from trid3nt_contracts.publish_manifest import parse_publish_manifest
@@ -269,20 +275,45 @@ def test_byte_equivalence_seam_vs_register(tmp_path):
         om.append_entries(None, engine="sfincs", run_id=RID, new=res.outputs_entries)
     )
     new = build_layers_from_outputs(manifest, run_id=RID, bbox=None)
+    # Both sides must resolve WITH the entry's band stats: under policy=data a
+    # preset's range comes from those statistics, so omitting them on one side
+    # compares a raster against itself-without-its-own-data, not path vs path.
+    stats_by_uri = {e.uri: {"is_categorical": e.band_stats.is_categorical,
+                            "is_rgba": e.band_stats.is_rgba,
+                            "p2": e.band_stats.p2, "p98": e.band_stats.p98}
+                    for e in manifest.entries if e.band_stats is not None}
     new_stream = []
     for lyr in new.layers:
-        new_stream.append(_row(lyr, _resolved_style(lyr.style_preset, None, lyr.uri)))
+        new_stream.append(
+            _row(lyr, _resolved_style(lyr.style_preset, stats_by_uri.get(lyr.uri),
+                                      lyr.uri)))
 
     new_peak = [r for r in new_stream if r["role"] == "primary"]
-    assert new_peak == old_stream, (
-        "peak layer-event row diverged:\nOLD=%s\nNEW=%s" % (old_stream, new_peak)
-    )
-    # Every frame renders with the peak's resolved style/rescale/legend -- only
-    # the name, role and layer_id ordinal differ.
+    assert len(new_peak) == len(old_stream) == 1
+    for field in ("layer_id_modulo_runid", "name", "layer_type", "style_preset",
+                  "role", "units", "bbox", "rescale"):
+        assert new_peak[0][field] == old_stream[0][field], (
+            "peak layer-event row diverged on %s:\nOLD=%s\nNEW=%s"
+            % (field, old_stream, new_peak))
+
+    # The RANGE is where the two paths legitimately part. Both stash a continuous
+    # legend with the same colormap and units; the seam's spans the run, the
+    # register path's spans the one raster it was handed, so the first contains
+    # the second.
+    seam_kind, seam_cmap, seam_lo, seam_hi, seam_units = new_peak[0]["stashed_legend"]
+    reg_kind, reg_cmap, reg_lo, reg_hi, reg_units = old_stream[0]["stashed_legend"]
+    assert (seam_kind, seam_cmap, seam_units) == (reg_kind, reg_cmap, reg_units)
+    assert seam_lo <= reg_lo and seam_hi >= reg_hi, (
+        "the seam's run range %s does not contain the register path's peak range %s"
+        % ((seam_lo, seam_hi), (reg_lo, reg_hi)))
+
+    # THE RULE: one range for the whole run. Every frame is painted on the peak's
+    # legend, not on its own values - a per-frame range makes the same colour mean
+    # a different depth one frame later.
     frame_rows = [r for r in new_stream if r["role"] != "primary"]
     assert frame_rows
     for row in frame_rows:
-        for field in ("style_preset", "units", "bbox", "rescale", "stashed_legend"):
+        for field in ("style_preset", "units", "bbox", "stashed_legend"):
             assert row[field] == new_peak[0][field], field
     # The NEW path additionally carries per-frame t + group_id (additive item 7).
     temporal = [f for f in new.frames if f.t is not None]

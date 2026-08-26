@@ -9,12 +9,15 @@ import contextlib
 import dataclasses
 import importlib
 import warnings
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
+from pydantic import BaseModel
 
 from trid3nt_server.workflows.lib import (
     Build,
     CoversAOI,
+    D,
     Data,
     Domain,
     DrawGate,
@@ -22,23 +25,28 @@ from trid3nt_server.workflows.lib import (
     FormGate,
     LeakScanTruncated,
     ModifierIllegalError,
+    P,
     Param,
     ParamNotResolved,
     ParamRef,
     ParamRefLeakedError,
+    Physics,
     PlanValidationError,
     Ref,
     RenderSourceMissingError,
+    ResolvedParams,
     RunMode,
     StepFailedError,
     Step,
     When,
     Plan,
+    Workflow,
     doors,
     interpret,
     invocation_key,
     merge_provenance,
     provenance_entries,
+    register_workflow,
     render_docstring,
     resolve_params,
     validate_plan,
@@ -153,6 +161,21 @@ def stub_chart_leaks(*, result, params):
     return {"chart_id": "c1", "title": ParamRef("base")}
 
 
+class _StubProduct(BaseModel):
+    """A pydantic result, because the skeleton's publish stage ``model_copy``s one."""
+
+    uri: str = "s3://b/product.tif"
+    layer_id: str = "stub-product"
+    run_id: str | None = None
+    synthetic_inputs: list = []
+    fallback_note: str | None = None
+
+
+async def stub_product(**kwargs):
+    _CALLS.append("stub_product")
+    return _StubProduct()
+
+
 async def stub_deep(**kwargs):
     """A clean result deep enough to exhaust a shrunken scan budget."""
     _CALLS.append("stub_deep")
@@ -212,7 +235,7 @@ async def test_supplied_beats_default_and_question():
         [Param("a", desc="d", door=doors.SCENARIO, default=1.0, type=float)],
         {"a": 7.0}, question={"a": 3.0},
     )
-    assert p.get("a") == 7.0 and p.row("a").door == doors.USER
+    assert p.value_of("a") == 7.0 and p.row("a").door == doors.USER
 
 
 @pytest.mark.asyncio
@@ -221,7 +244,7 @@ async def test_question_beats_the_labeled_default():
         [Param("a", desc="d", door=doors.SCENARIO, default=1.0, type=float)], {},
         question={"a": 3.0},
     )
-    assert p.get("a") == 3.0 and p.row("a").basis == "prompt_interpreted"
+    assert p.value_of("a") == 3.0 and p.row("a").basis == "prompt_interpreted"
 
 
 @pytest.mark.asyncio
@@ -231,7 +254,7 @@ async def test_bounds_clamp_leaves_a_provenance_note():
                units="m")],
         {"a": 99.0},
     )
-    assert p.get("a") == 5.0
+    assert p.value_of("a") == 5.0
     assert p.row("a").clamped_from == 99.0
     assert "CLAMPED" in p.row("a").note
 
@@ -252,7 +275,7 @@ async def test_derivations_resolve_regardless_of_declaration_order():
         Param("out", desc="d", door=doors.DERIVED, resolve=f"{_HERE}.derive_double"),
         Param("base", desc="d", door=doors.SCENARIO, default=4.0, type=float),
     ], {})
-    assert p.get("out") == 8.0 and p.row("out").basis == "derived"
+    assert p.value_of("out") == 8.0 and p.row("out").basis == "derived"
 
 
 @pytest.mark.asyncio
@@ -270,14 +293,14 @@ async def test_a_bool_is_refused_for_a_bounded_param():
 @pytest.mark.asyncio
 async def test_optional_absent_param_resolves_to_none():
     p = await resolve_params([Param("a", desc="d", door=doors.USER, optional=True)], {})
-    assert p.get("a") is None
+    assert p.value_of("a") is None
 
 
 @pytest.mark.asyncio
 async def test_a_user_door_default_is_stamped_as_a_default_not_as_the_user():
     decl = [Param("a", desc="d", door=doors.USER, default=3.0, type=float)]
     p = await resolve_params(decl, {})
-    assert p.get("a") == 3.0 and p.row("a").basis == "default_demo"
+    assert p.value_of("a") == 3.0 and p.row("a").basis == "default_demo"
     p2 = await resolve_params(decl, {"a": 4.0})
     assert p2.row("a").basis == "user"
 
@@ -331,7 +354,7 @@ def test_named_applies_once():
 
 def test_gate_rejects_step_modifiers():
     for call in (lambda g: g.named("x"), lambda g: g.overrides_domain(),
-                 lambda g: g.render(preset="p"), lambda g: g.chart("c", builder=stub_chart)):
+                 lambda g: g.style(preset="p"), lambda g: g.chart("c", builder=stub_chart)):
         with pytest.raises(ModifierIllegalError):
             call(FormGate())
 
@@ -407,11 +430,11 @@ def test_validator_checks_data_producer_refs():
                       [Data("m", Build.tool("b", size=Ref("ghost")))])
 
 
-def test_validator_refuses_a_ref_into_an_untaken_branch():
+def test_validator_refuses_a_ref_into_a_guarded_branch():
     """A conditional step's name is not visible outside its branch - the branch
-    may not be taken, and a runtime REF_UNRESOLVED is not a contract."""
+    may not fire, and a runtime REF_UNRESOLVED is not a contract."""
     plan = Plan("w", None, (
-        When(False, Step(runner=f"{_HERE}.stub_step").named("maybe")),
+        When(P.base, Step(runner=f"{_HERE}.stub_step").named("maybe")),
         Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("maybe.uri")}),
     ))
     with pytest.raises(PlanValidationError, match="resolves to nothing"):
@@ -420,11 +443,48 @@ def test_validator_refuses_a_ref_into_an_untaken_branch():
 
 def test_validator_accepts_a_ref_inside_the_same_branch():
     plan = Plan("w", None, (
-        When(True,
+        When(P.base,
              Step(runner=f"{_HERE}.stub_step").named("here"),
              Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("here.uri")})),
     ))
     validate_plan(plan, _params())
+
+
+def test_when_refuses_a_concrete_condition():
+    """A concrete condition would decide the branch while the plan VALUE is being
+    built - which is before any gate, so before anything the user could approve."""
+    for concrete in (True, False, "yes", 1, 0.0, None):
+        with pytest.raises(PlanValidationError, match="not a late-bound condition"):
+            When(concrete, Step(runner=f"{_HERE}.stub_step"))
+
+
+def test_validator_refuses_a_when_on_an_undeclared_param():
+    """A branch condition must NAME something that resolves when it is reached."""
+    plan = Plan("w", None, (When(P.ghost, Step(runner=f"{_HERE}.stub_step")),))
+    with pytest.raises(PlanValidationError, match="not a declared param"):
+        validate_plan(plan, _params())
+
+
+def test_validator_refuses_a_when_on_a_step_that_is_not_visible_yet():
+    plan = Plan("w", None, (
+        When(Ref("later.flag"), Step(runner=f"{_HERE}.stub_step")),
+        Step(runner=f"{_HERE}.stub_second").named("later"),
+    ))
+    with pytest.raises(PlanValidationError, match="resolves to nothing"):
+        validate_plan(plan, _params())
+
+
+def test_a_form_gate_over_a_branch_on_a_revisable_param_is_legal():
+    """The old refusal is GONE, and its absence is the point: the interpreter
+    decides the branch after the gate, so a revision of what it reads reaches it."""
+    decl = [Param("flag", desc="run the extra step", door=doors.SCENARIO,
+                  default=False)]
+    plan = Plan("branchy", None, (
+        FormGate(),
+        When(P.flag, Step(runner=f"{_HERE}.stub_second").named("extra")),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ))
+    validate_plan(plan, decl)
 
 
 def test_validator_refuses_a_param_declared_twice():
@@ -448,29 +508,17 @@ async def test_resolver_refuses_a_param_declared_twice():
 def test_plan_construction_executes_nothing():
     Plan("w", None, (
         Step(runner=f"{_HERE}.stub_step").named("a"),
-        When(False, Step(runner=f"{_HERE}.stub_second")),
+        When(P.base, Step(runner=f"{_HERE}.stub_second")),
     ))
     assert _CALLS == []
 
 
-def test_untaken_branch_is_dropped_from_execution_but_kept_for_inspection():
-    plan = Plan("w", None, (When(False, Step(runner=f"{_HERE}.stub_second")),))
-    assert plan.flat() == ()
-    assert len(plan.declared()) == 1
-
-
-def test_a_nested_untaken_branch_is_dropped_too():
-    """A When inside a taken When is still guarded by its OWN condition."""
-    inner = Step(runner=f"{_HERE}.stub_second").named("inner")
-    plan = Plan("w", None, (When(True, When(False, inner)),))
-    assert plan.flat() == ()
-    assert plan.declared() == (inner,)
-
-
-def test_a_nested_taken_branch_still_runs():
-    inner = Step(runner=f"{_HERE}.stub_second").named("inner")
-    plan = Plan("w", None, (When(True, When(True, inner)),))
-    assert plan.flat() == (inner,)
+def test_declared_lists_a_guarded_step_whichever_way_the_branch_falls():
+    """The plan says what is DECLARED; which steps RUN is the interpreter's answer."""
+    guarded = Step(runner=f"{_HERE}.stub_second").named("maybe")
+    plan = Plan("w", None, (When(P.base, guarded),))
+    assert plan.declared() == (guarded,)
+    assert "when:base" in " ".join(plan.describe())
 
 
 # --- the interpreter ---------------------------------------------------------- #
@@ -584,21 +632,168 @@ async def test_run_mode_binds_the_runs_input_gate_mode_into_a_step():
     assert out.value["seen"]["input_mode"] == "user_gated"
 
 
+# --- the branch the INTERPRETER decides --------------------------------------- #
+def _flagged(**overrides):
+    return [Param("flag", desc="run the extra step", door=doors.SCENARIO,
+                  default=False, **overrides)]
+
+
 @pytest.mark.asyncio
-async def test_data_producers_run_after_the_plans_gates():
-    """A producer that fetched BEFORE the gate fetched against params the gate
-    exists to change."""
-    decl = [Param("pt", desc="d", door=doors.USER, optional=True)]
+async def test_a_guarded_step_runs_only_when_its_branch_fires():
+    """``Plan.declared()`` lists it either way; ``RunResult.executed`` is the answer."""
+    decl = _flagged()
+    guarded = Step(runner=f"{_HERE}.stub_second").named("maybe")
+    plan = Plan("guard_w", None, (
+        Step(runner=f"{_HERE}.stub_step").named("always"),
+        When(P.flag, guarded),
+    ))
+    assert [s.label for s in plan.declared()] == ["always", "maybe"]
+
+    out = await _run(plan, decl, {}, resume=False)
+    assert out.executed == ["always"] and _CALLS == ["stub_step"]
+    assert [s.label for s in plan.declared()] == ["always", "maybe"]
+
+    _CALLS.clear()
+    out = await _run(plan, decl, {"flag": True}, resume=False)
+    assert out.executed == ["always", "maybe"]
+    assert _CALLS == ["stub_step", "stub_second"]
+
+
+@pytest.mark.asyncio
+async def test_a_nested_branch_is_decided_by_its_own_condition():
+    """A When inside a fired When is still guarded by its OWN condition."""
+    decl = [Param("outer", desc="d", door=doors.SCENARIO, default=True),
+            Param("inner", desc="d", door=doors.SCENARIO, default=False)]
+    deep = Step(runner=f"{_HERE}.stub_second").named("deep")
+    plan = Plan("nest_w", None, (When(P.outer, When(P.inner, deep)),))
+
+    out = await _run(plan, decl, {}, resume=False)
+    assert out.executed == [] and _CALLS == []
+    assert plan.declared() == (deep,)          # declared, simply not reached
+
+    out = await _run(plan, decl, {"inner": True}, resume=False)
+    assert out.executed == ["deep"] and _CALLS == ["stub_second"]
+
+    _CALLS.clear()
+    out = await _run(plan, decl, {"outer": False, "inner": True}, resume=False)
+    assert out.executed == [] and _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_an_unfired_branch_never_pulls_the_data_behind_it():
+    """The point of demand-pulled producers: a branch that does not fire costs no
+    fetch, because the only thing that would have pulled the artifact is the step
+    the branch skipped."""
+    decl = _flagged()
+    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer"))]
+    plan = Plan("lazy_w", None, (
+        Step(runner=f"{_HERE}.stub_step").named("always"),
+        When(P.flag, Step(runner=f"{_HERE}.stub_second",
+                          kwargs={"m": Ref("mesh")}).named("maybe")),
+    ))
+    await _run(plan, decl, {}, data, resume=False)
+    assert _CALLS == ["stub_step"]              # stub_producer never ran
+
+    _CALLS.clear()
+    out = await _run(plan, decl, {"flag": True}, data, resume=False)
+    assert _CALLS == ["stub_step", "stub_producer", "stub_second"]
+    assert out.value["seen"]["m"] == "s3://b/produced.tif"
+
+
+@pytest.mark.asyncio
+async def test_a_branch_after_the_form_gate_reads_the_approved_revision(monkeypatch):
+    """The whole point of deciding the branch in the interpreter: the plan value is
+    built before any gate, so only a late-decided When can honour the approval."""
+    decl = _flagged()
+    plan = Plan("gate_branch", None, (
+        FormGate(),
+        When(P.flag, Step(runner=f"{_HERE}.stub_second").named("extra")),
+        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
+    ))
+
+    # Approved as declared: the branch stays shut.
+    _review({}, monkeypatch)
+    p = await resolve_params(decl, {})
+    out = await interpret(plan, p, decl, input_mode="user_gated", resume=False)
+    assert out.executed == ["solve"]
+
+    # The user flipped it at the card: the branch that runs is the APPROVED one.
+    _CALLS.clear()
+    _review({"flag": True}, monkeypatch)
+    p = await resolve_params(decl, {})
+    assert p.value_of("flag") is False               # the pre-review sheet says no
+    out = await interpret(plan, p, decl, input_mode="user_gated", resume=False)
+    assert out.executed == ["extra", "solve"]
+
+
+@pytest.mark.asyncio
+async def test_a_data_producer_runs_when_its_consumer_does_hence_after_the_gate(
+        monkeypatch):
+    """Producers are demand-pulled, so the fetch happens at the step that Refs the
+    artifact - which puts it after any gate declared in front of that step. A
+    producer that fetched earlier fetched against params the gate exists to change."""
+    _recording_review({}, monkeypatch)
+    decl = _params()
     data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer"))]
     plan = Plan("gated_data", None, (
-        DrawGate(param="pt", geometry="point"),
+        Step(runner=f"{_HERE}.stub_step").named("pre"),
         FormGate(),
-        Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),
+        Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}).named("post"),
     ))
-    out = await _run(plan, decl, {}, data, resume=False,
+    out = await _run(plan, decl, {}, data, resume=False, input_mode="user_gated",
                      domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
-    assert _CALLS == ["stub_producer", "stub_second"]
+    assert _CALLS == ["stub_step", "form_gate", "stub_producer", "stub_second"]
     assert out.value["seen"]["m"] == "s3://b/produced.tif"
+
+
+# --- a producer-less Data slot: context handed in, or labelled absence -------- #
+@pytest.mark.asyncio
+async def test_a_context_slot_is_satisfied_by_the_artifact_handed_in():
+    data = [Data("clip_zone")]
+    plan = Plan("slot_byo", None, (
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"z": Ref("clip_zone")}).named("a"),
+    ))
+    out = await _run(plan, _params(), {}, data, resume=False,
+                     byo={"clip_zone": "s3://mine/zone.gpkg"},
+                     domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    assert out.value["seen"]["z"] == "s3://mine/zone.gpkg"
+
+
+@pytest.mark.asyncio
+async def test_an_unsatisfied_required_context_slot_refuses_typed():
+    """Naming a default fetcher for a slot the template deliberately left open
+    would be the library inventing the source."""
+    data = [Data("clip_zone")]
+    plan = Plan("slot_req", None, (
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"z": Ref("clip_zone")}).named("a"),
+    ))
+    with pytest.raises(StepFailedError) as exc:
+        await _run(plan, _params(), {}, data, resume=False)
+    assert exc.value.error_code == "DATA_SLOT_UNSATISFIED"
+    assert exc.value.step == "data:clip_zone"
+    assert _CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_an_unsatisfied_optional_context_slot_binds_none_and_says_so():
+    """Absence is legal AND LABELLED: the run answered a slightly different
+    question than one that had the layer, and only the reader can weigh that."""
+    data = [Data("clip_zone").optional()]
+    plan = Plan("slot_opt", None, (
+        Step(runner=f"{_HERE}.stub_second",
+             kwargs={"z": Ref("clip_zone")}).named("a"),
+    ))
+    out = await _run(plan, _params(), {}, data, resume=False)
+    assert out.value["seen"]["z"] is None
+    assert len(out.notes) == 1 and "clip_zone" in out.notes[0]
+
+
+def test_a_producer_backed_data_may_not_be_optional():
+    """A producer either produces or fails typed, so there is no absence to describe."""
+    with pytest.raises(PlanValidationError, match="optional"):
+        Data("mesh", Build.tool(f"{_HERE}.stub_producer")).optional()
 
 
 @pytest.mark.asyncio
@@ -762,32 +957,32 @@ async def test_an_auxiliary_chart_failure_does_not_kill_the_run():
 
 
 @pytest.mark.asyncio
-async def test_a_step_that_produced_no_raster_to_render_is_FATAL():
-    """The honesty floor: a declared render whose source is not a raster means the
+async def test_a_step_that_produced_no_layer_to_style_is_FATAL():
+    """The honesty floor: a declared style whose source is not a layer means the
     step did not make the map layer it promised - that is a primary defect, not a
     styling note."""
     plan = Plan("aux_r", None, (
-        Step(runner=f"{_HERE}.stub_producer").named("a").render(preset="p"),
+        Step(runner=f"{_HERE}.stub_producer").named("a").style(preset="p"),
     ))
-    with pytest.raises(RenderSourceMissingError, match="no object-store raster"):
+    with pytest.raises(RenderSourceMissingError, match="no object-store layer"):
         await _run(plan, _params(), {}, resume=False)
 
 
 @pytest.mark.asyncio
-async def test_a_styling_failure_over_a_real_raster_is_only_a_note(monkeypatch):
-    """The other half of the split: there IS a raster, the styling of it failed."""
-    import trid3nt_server.emission.publish as _pl
+async def test_a_styling_failure_over_a_real_layer_is_only_a_note(monkeypatch):
+    """The other half of the split: there IS a layer, the re-painting of it failed."""
+    import trid3nt_server.emission.restyle as _rs
 
     def _boom(**kwargs):
-        raise RuntimeError("titiler-style-boom")
+        raise RuntimeError("restyle-boom")
 
-    monkeypatch.setattr(_pl, "publish_layer", _boom)
+    monkeypatch.setattr(_rs, "apply_style", _boom)
     plan = Plan("style_r", None, (
-        Step(runner=f"{_HERE}.stub_layer").named("a").render(preset="p"),
+        Step(runner=f"{_HERE}.stub_layer").named("a").style(preset="p"),
     ))
     out = await _run(plan, _params(), {}, resume=False)
     assert out.value.uri == "s3://b/real.tif"
-    assert len(out.notes) == 1 and "titiler-style-boom" in out.notes[0]
+    assert len(out.notes) == 1 and "restyle-boom" in out.notes[0]
 
 
 @pytest.mark.asyncio
@@ -876,12 +1071,13 @@ async def test_a_plan_reads_params_as_late_bound_refs_not_baked_values():
 
 @pytest.mark.asyncio
 async def test_a_param_ref_has_no_truth_value_at_construction_time():
-    """A construction-time branch must read the value explicitly, not accidentally
-    treat a description as True."""
+    """A construction-time ``if`` on a ref must refuse, and the refusal has to name
+    the one conditional the language has: a When the interpreter decides."""
     p = await resolve_params(_params(), {"base": 4.0})
-    with pytest.raises(PlanValidationError, match="p.get"):
-        When(p.base, Step(runner=f"{_HERE}.stub_step"))
-    assert When(p.get("base"), Step(runner=f"{_HERE}.stub_step")).taken
+    with pytest.raises(PlanValidationError, match=r"When\(P\.base, \.\.\.\)"):
+        bool(p.base)
+    with pytest.raises(PlanValidationError, match=r"When\(P\.base, \.\.\.\)"):
+        bool(P.base)
 
 
 @pytest.mark.asyncio
@@ -894,7 +1090,7 @@ async def test_an_undeclared_param_read_refuses_at_construction():
 def test_validator_refuses_a_param_ref_to_an_undeclared_param():
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
                               kwargs={"x": ParamRef("ghost")}),))
-    with pytest.raises(PlanValidationError, match="not a declared param"):
+    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
         validate_plan(plan, _params())
 
 
@@ -920,6 +1116,19 @@ def _review(revised, monkeypatch):
                              mode="user_gated", rounds_used=1)
 
     monkeypatch.setattr(_interp, "gate_input_review", _fake)
+
+
+def _recording_review(revised, monkeypatch):
+    """``_review``, plus a mark in ``_CALLS`` so gate ORDER is assertable."""
+    _review(revised, monkeypatch)
+    _interp = importlib.import_module("trid3nt_server.workflows.lib.interpreter")
+    approved = _interp.gate_input_review
+
+    async def _marked(**kw):
+        _CALLS.append("form_gate")
+        return await approved(**kw)
+
+    monkeypatch.setattr(_interp, "gate_input_review", _marked)
 
 
 @pytest.mark.asyncio
@@ -1003,11 +1212,8 @@ async def test_do_sag_declares_no_form_gate_in_front_of_its_self_gating_review()
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
-    p = await resolve_params(wf.params,
-                             {"location": "Eel River near Scotia, California"})
-    plan = wf.build_plan(p)
-    validate_plan(plan, wf.params, wf.data)
-    assert [s.kind for s in plan.declared() if hasattr(s, "kind")] == ["draw"]
+    validate_plan(wf.plan, wf.params, wf.data)
+    assert [s.kind for s in wf.plan.declared() if hasattr(s, "kind")] == ["draw"]
 
 
 # --- the completion tombstone: three ghost paths ----------------------------- #
@@ -1257,7 +1463,7 @@ async def test_a_user_supplied_physics_value_is_not_refused():
 def test_validator_refuses_a_param_ref_in_a_data_producer():
     """A producer consumes params too - the dataflow crosses the Param/Data line."""
     data = [Data("mesh", Build.tool("b", size=ParamRef("ghost")))]
-    with pytest.raises(PlanValidationError, match="not a declared param"):
+    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
         validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(), data)
 
 
@@ -1620,39 +1826,6 @@ def test_validator_refuses_a_gate_as_the_last_node():
         validate_plan(plan, _params())
 
 
-@pytest.mark.asyncio
-async def test_validator_refuses_a_form_gate_over_a_branch_on_a_revisable_param():
-    """A When is decided when the plan VALUE is built, i.e. before the review, so
-    the plan shape cannot honor a revision of what it branched on."""
-    decl = _params()
-    p = await resolve_params(decl, {"base": 4.0})
-    plan = Plan("branchy", None, (
-        FormGate(),
-        When(p.get("base") > 1.0,
-             Step(runner=f"{_HERE}.stub_step", consequential=True).named("hi")),
-    ))
-    with pytest.raises(PlanValidationError, match="branches"):
-        validate_plan(plan, decl, sheet=p)
-
-
-@pytest.mark.asyncio
-async def test_a_branch_on_a_constant_is_stable_across_a_review():
-    decl = [Param("mode", desc="sizing mode", door=doors.CONSTANT, default="fine"),
-            Param("temp", desc="temperature", door=doors.SCENARIO, default=20.0, type=float)]
-    p = await resolve_params(decl, {})
-    plan = Plan("branchy_ok", None, (
-        FormGate(),
-        When(p.get("mode") == "fine",
-             Step(runner=f"{_HERE}.stub_step", kwargs={"t": p.temp},
-                  consequential=True).named("hi")),
-    ))
-    validate_plan(plan, decl, sheet=p)
-    # The reads the INTERPRETER makes binding refs are not branch decisions, so a
-    # second validation of the same sheet must reach the same verdict.
-    p.get("temp")
-    validate_plan(plan, decl, sheet=p)
-
-
 # --- observation 6: a binding fault is a typed plan error -------------------- #
 _Point = collections.namedtuple("_Point", "lon lat")
 
@@ -1739,62 +1912,24 @@ async def test_the_run_warns_rather_than_silently_passing_a_truncated_scan(monke
     assert out.value["uri"] == "s3://b/k.tif"
 
 
-# --- R4-4: every public read path records a concrete read ------------------- #
+# --- the read-recording machinery is GONE: a read is just a read ------------- #
 @pytest.mark.asyncio
-async def test_every_public_read_path_records_a_concrete_read():
-    """The revisable-branch check reads this set, so a path that did not record was
-    a way to branch on a revisable value invisibly."""
-    for read in (lambda p: p.get("base"),
-                 lambda p: p.row("base"),
-                 lambda p: p.values_dict(),
-                 lambda p: p.rows(),
-                 lambda p: p.values_view().base,
-                 lambda p: p.values_view().get("base")):
-        p = await resolve_params(_params(), {})
-        read(p)
-        assert "base" in p.concrete_reads()
-
-
-@pytest.mark.asyncio
-async def test_a_late_bound_attribute_read_is_not_a_concrete_read():
+async def test_a_concrete_read_is_value_of_and_nothing_watches_it():
+    """The plan is STATIC - it reads no concrete value - so there is no
+    plan-construction read left to record, and the machinery that recorded one is
+    gone with the branch check it fed."""
+    for gone in ("get", "concrete_reads", "freeze_reads"):
+        assert not hasattr(ResolvedParams, gone)
     p = await resolve_params(_params(), {})
-    assert isinstance(p.base, ParamRef)
-    assert p.concrete_reads() == frozenset()
-
-
-@pytest.mark.asyncio
-async def test_the_revisable_branch_check_sees_a_values_view_read():
-    """The branch was decided from the pre-review sheet whichever door the value
-    came out of - the view is not a side entrance."""
-    decl = _params()
-    p = await resolve_params(decl, {})
-    branch = p.values_view().base > 0.0
-    plan = Plan("view_branch", None, (
-        FormGate(),
-        When(branch, Step(runner=f"{_HERE}.stub_second").named("t")),
-        Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
-    ))
-    with pytest.raises(PlanValidationError, match="branches"):
-        validate_plan(plan, decl, sheet=p)
-
-
-@pytest.mark.asyncio
-async def test_the_read_set_freezes_at_validation_even_with_no_branch_check():
-    """A conditional freeze let a REUSED sheet carry the first run's run-time reads
-    into the second validation and refuse a plan the first accepted."""
-    decl = _params()
-    p = await resolve_params(decl, {})
-    plain = Plan("freeze_a", None, (
-        Step(runner=f"{_HERE}.stub_step", kwargs={"q": p.base}).named("s"),
-    ))
-    await interpret(plain, p, decl, resume=False)
-    assert p.concrete_reads() == frozenset()
-    gated = Plan("freeze_b", None, (
-        FormGate(),
-        When(True, Step(runner=f"{_HERE}.stub_second").named("t")),
-        Step(runner=f"{_HERE}.stub_step", consequential=True).named("s"),
-    ))
-    validate_plan(gated, decl, sheet=p)
+    assert p.value_of("base") == 1.0
+    assert p.value_of("ghost", "fallback") == "fallback"
+    assert p.row("base").value == 1.0
+    assert p.values_dict()["base"] == 1.0
+    assert [r.name for r in p.rows()] == ["base", "pt"]
+    assert p.values_view().base == 1.0
+    assert p.values_view().get("base") == 1.0
+    # ...and the LATE-bound attribute read still describes rather than resolves.
+    assert isinstance(p.base, ParamRef) and p.base.name == "base"
 
 
 # --- R4-5: a re-key leaves a TOMBSTONE, not a replayable orphan ------------- #
@@ -1899,3 +2034,140 @@ async def test_a_chart_that_failed_leaves_no_spec_to_persist(monkeypatch):
 
 async def _noop():
     return None
+
+
+# ============================================================================ #
+# The plan is a STATIC value: built once, at declaration, checked there
+# ============================================================================ #
+class _StubFacade(Workflow):
+    """A facade realizing the EngineOps five, so registration gets past the hole
+    check and reaches the thing under test: the plan built in ``__init__``."""
+
+    engine = "stub"
+
+    def acquire_domain(self, **slots):
+        return (Step(runner=f"{_HERE}.stub_step").named("aoi"),)
+
+    def build_mesh(self, domain, policy, **slots):
+        return Step(runner=f"{_HERE}.stub_producer").named("mesh")
+
+    def author(self, *, mesh, physics, forcing):
+        return Step(runner=f"{_HERE}.stub_step").named("deck")
+
+    def solver_spec(self, **slots):
+        return Step(runner=f"{_HERE}.stub_step").named("solve")
+
+    def read_results(self, run, **slots):
+        return Step(runner=f"{_HERE}.stub_product").named("out")
+
+
+def _declare(params, plan_decl, data=(), name="declared_w"):
+    """Declare a workflow the way ``register_workflow`` does: the plan is built and
+    validated inside ``__init__``, so an authoring defect raises HERE."""
+    return _StubFacade(metadata=SimpleNamespace(name=name, engine="stub"),
+                       params=params, plan=plan_decl, data=data)
+
+
+def test_a_mistyped_param_read_is_refused_at_declaration_with_its_write_site():
+    """The refusal fires an import away from the line that wrote the ref, and the
+    sheet it is checked against runs to dozens of names - so the site and the
+    nearest declared spelling are the whole value of the message."""
+    def _plan(ops):
+        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": P.bse}).named("s"),)
+
+    with pytest.raises(PlanValidationError) as exc:
+        _declare(_params(), _plan)
+    message = str(exc.value)
+    assert "P.bse names no declared param" in message
+    assert "written at test_declarative_library.py:" in message
+    assert "Closest declared: base" in message
+
+
+def test_a_mistyped_data_read_is_refused_and_says_it_is_a_data_name():
+    """``D.terain`` is a Data typo, not a step nobody named - which namespace the
+    bad name came from is the difference between two very different hunts."""
+    def _plan(ops):
+        return (Step(runner=f"{_HERE}.stub_second",
+                     kwargs={"m": D.terain}).named("s"),)
+
+    data = [Data("terrain", Build.tool(f"{_HERE}.stub_producer"))]
+    with pytest.raises(PlanValidationError) as exc:
+        _declare(_params(), _plan, data)
+    message = str(exc.value)
+    assert "D.terain names no declared Data" in message
+    assert "written at test_declarative_library.py:" in message
+    assert "Declared Data: ['terrain']" in message
+
+
+def test_a_bad_plan_is_refused_at_register_workflow_not_at_run_time():
+    """Registration is the last moment an authoring defect is still an authoring
+    defect; after it, the same hole surfaces mid-run as an engine failure."""
+    from trid3nt_contracts.tool_registry import AtomicToolMetadata
+
+    def _plan(ops):
+        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": P.ghost}).named("s"),)
+
+    metadata = AtomicToolMetadata(name="never_registered_w", ttl_class="live-no-cache",
+                                  source_class="workflow_dispatch", cacheable=False,
+                                  engine="stub", tier="template")
+    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
+        register_workflow(_StubFacade, metadata, _params(), _plan)
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    assert "never_registered_w" not in TOOL_REGISTRY
+
+
+@pytest.mark.asyncio
+async def test_the_plan_is_built_once_at_declaration_not_per_run():
+    """A STATIC plan reads no concrete value, so rebuilding it per run would buy
+    nothing and cost the one guarantee it does buy: what was validated is what runs."""
+    built = []
+
+    def _plan(ops):
+        built.append(ops)
+        return (Step(runner=f"{_HERE}.stub_product").named("a"),)
+
+    wf = _declare(_params(), _plan, name="built_once_w")
+    assert len(built) == 1 and built[0] is wf
+    declared = wf.plan
+    assert wf.plan is declared
+
+    await wf.run({"base": 2.0})
+    await wf.run({"base": 3.0})
+    assert _CALLS == ["stub_product", "stub_product"]
+    assert len(built) == 1                      # two runs, one plan construction
+    assert wf.plan is declared
+
+
+def test_build_plan_takes_no_sheet():
+    """The signature IS the contract: a sheet argument is what a plan that read
+    concrete values needed, and there is no such plan any more."""
+    import inspect
+
+    def _plan(ops):
+        return (Step(runner=f"{_HERE}.stub_step").named("a"),)
+
+    wf = _declare(_params(), _plan, name="nosheet_w")
+    assert list(inspect.signature(wf.build_plan).parameters) == []
+    rebuilt = wf.build_plan()
+    assert [s.label for s in rebuilt.declared()] == [s.label for s in wf.plan.declared()]
+
+
+# --- a binding block is a process-lifetime value, so it is frozen DEEP -------- #
+def test_a_binding_block_is_frozen_all_the_way_down():
+    """A module-level block is shared by every run of the template, so a mutable
+    container inside one is a cross-run channel: a step that pops a key out of a
+    declared dict changes what the NEXT run declares."""
+    block = Physics("tracer", cfg={"scheme": "upwind", "rungs": [1, 2]},
+                    decay=P.base)
+
+    assert isinstance(block.cfg, MappingProxyType)
+    assert block.cfg["rungs"] == (1, 2)          # the nested list became a tuple
+    assert isinstance(block.values, MappingProxyType)
+    assert block.process == "tracer"
+    with pytest.raises(TypeError):
+        block.cfg["scheme"] = "central"
+    with pytest.raises(PlanValidationError):
+        block.cfg = {}
+    # a declared read passes through untouched - it is already a value
+    assert isinstance(block.decay, ParamRef) and block.decay.name == "base"

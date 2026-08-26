@@ -221,21 +221,21 @@ def _resolve(**supplied):
 def test_declared_bounds_clamp_and_label_the_domain_extent():
     """An out-of-window reach length is clamped AND the clamp is on the record."""
     p = _resolve(reach_length_km=50.0)
-    assert p.get("reach_length_km") == 15.0
+    assert p.value_of("reach_length_km") == 15.0
     assert "CLAMPED" in p.row("reach_length_km").note
 
     p2 = _resolve(reach_length_km=6.0)
-    assert p2.get("reach_length_km") == 6.0
+    assert p2.value_of("reach_length_km") == 6.0
     assert "CLAMPED" not in p2.row("reach_length_km").note
 
 
 def test_declared_bounds_keep_the_source_inside_the_reach():
     """spill_fraction=1.0 planted the source ON the outflow boundary and aborted
     the solve; the declared bound is what keeps it strictly interior."""
-    assert _resolve(spill_fraction=1.0).get("spill_fraction") == 0.9
-    assert _resolve(spill_fraction=0.0).get("spill_fraction") == 0.05
-    assert _resolve(sim_duration_s=999999.0).get("sim_duration_s") == 14400.0
-    assert _resolve(source_q_m3s=100.0).get("source_q_m3s") == 30.0
+    assert _resolve(spill_fraction=1.0).value_of("spill_fraction") == 0.9
+    assert _resolve(spill_fraction=0.0).value_of("spill_fraction") == 0.05
+    assert _resolve(sim_duration_s=999999.0).value_of("sim_duration_s") == 14400.0
+    assert _resolve(source_q_m3s=100.0).value_of("source_q_m3s") == 30.0
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
@@ -265,10 +265,10 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
     wf = _workflow()
     p = _resolve()
-    pl = wf.build_plan(p)
-    validate_plan(pl, wf.params, wf.data, sheet=p)
+    pl = wf.plan
+    validate_plan(pl, wf.params, wf.data)
 
-    steps = list(pl.flat())
+    steps = list(pl.declared())
     assert [s.label for s in steps][2:] == [
         "reach", "seed", "carrier_discharge", "deck", "solve", "plume"]
     # Both gates precede every step, so nothing consumes a value the review can

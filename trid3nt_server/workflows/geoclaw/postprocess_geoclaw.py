@@ -1106,7 +1106,7 @@ def build_geoclaw_mesh_layer(
 #: Signed vertical seafloor deformation (m): uplift(+)/subsidence(-) -> a diverging
 #: rdbu ramp centered on 0 (publish_layer pins the symmetric rescale so the dipole
 #: reads blue=subsidence / white=0 / red=uplift). Registered in
-#: publish_layer._QGIS_STYLE_REGISTRY.
+#: the style contract (contracts/trid3nt_contracts/styles.yaml).
 GEOCLAW_DEFORMATION_STYLE_PRESET: str = "diverging_seafloor_deformation"
 
 

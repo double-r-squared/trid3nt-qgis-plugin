@@ -133,7 +133,7 @@ _NATIVE_COMFORT_DEG2 = 0.5
 _BBOX_DECIMALS = 6
 
 #: NDVI colormap style preset  --  green vegetation ramp (RdYlGn rescaled -1..1).
-#: Registered in publish_layer._QGIS_STYLE_REGISTRY this sprint.
+#: Declared in the style contract (contracts/trid3nt_contracts/styles.yaml).
 _STYLE_PRESET = "ndvi"
 
 

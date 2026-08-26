@@ -126,7 +126,9 @@ def test_style_preset_resolves_in_the_qgis_registry(spec):
     """A preset absent from the registry silently renders a wrong colormap."""
     from trid3nt_server.emission import publish as pl
 
-    assert pl._registry_style_params(spec.output.style_preset) is not None
+    from trid3nt_server.emission.styles import known_preset
+
+    assert known_preset(spec.output.style_preset)
 
 
 def test_corpus_carries_natural_recharge_phrasings(spec):

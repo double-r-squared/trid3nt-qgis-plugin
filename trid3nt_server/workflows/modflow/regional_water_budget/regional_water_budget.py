@@ -180,19 +180,19 @@ async def modflow_regional_water_budget(
         layer.layer_id, sorted(layer.budget_partition_m3_day), result.executed,
         result.replayed, result.notes,
     )
-    point = ran.get("aoi_latlon")
+    point = ran.value_of("aoi_latlon")
     return {
         "schema_version": "v1",
         "budget_layer": layer.model_dump(mode="json"),
         "derived_params": {
-            "location_name": ran.get("location_name"),
+            "location_name": ran.value_of("location_name"),
             "aoi_latlon": [float(point[0]), float(point[1])] if point else None,
-            "zone_partition": ran.get("zone_partition"),
+            "zone_partition": ran.value_of("zone_partition"),
         },
         "summary": {
-            "location_name": ran.get("location_name"),
+            "location_name": ran.value_of("location_name"),
             "budget_partition_m3_day": dict(layer.budget_partition_m3_day),
-            "zone_partition": ran.get("zone_partition"),
+            "zone_partition": ran.value_of("zone_partition"),
             "aquifer_provenance": _aquifer_provenance(ran),
         },
     }

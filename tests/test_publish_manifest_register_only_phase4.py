@@ -242,15 +242,16 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(
     assert rec is not None
     assert rec.uri == "s3://runs/RUNRUNRUN/flood_depth_peak.tif"
 
-    # DATA-DRIVEN LEGEND: stashed keyed by the cog_uri, carrying the SAME
-    # pinned continuous_flood_depth ramp the style registry resolves
-    # (ylgnbu over 0-3 m) - mirrors publish_layer's raw-cog exit.
+    # DATA-DRIVEN LEGEND: stashed keyed by the cog_uri, carrying the SAME ramp
+    # the one resolver produced - and the SAME range the raster is painted on,
+    # which under this preset's declared `policy: data` is the run's own band
+    # statistics off the manifest, not a hardcoded 0-3 m.
     legend = pl.pop_legend_for_uri(peak.uri)
     assert legend is not None
     assert legend.kind == "continuous"
     assert legend.colormap == "ylgnbu"
-    assert legend.vmin == 0.0
-    assert legend.vmax == 3.0
+    stats = _depth_manifest_dict()["layers"][0]["band_stats"]
+    assert (legend.vmin, legend.vmax) == (stats["p2"], stats["p98"])
 
 
 def test_register_manifest_layers_needs_no_tile_server(

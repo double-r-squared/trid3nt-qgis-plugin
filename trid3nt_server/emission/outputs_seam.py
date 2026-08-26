@@ -1,18 +1,18 @@
-"""The emit-on-solve SEAM consumer -- ``outputs.json`` -> published ``LayerURI``s.
+"""The emit-on-solve seam consumer -- ``outputs.json`` -> published ``LayerURI``s.
 
-ADR 0280 item 4. A solver leg writes an append-only ``outputs.json`` manifest
-under its run prefix (``trid3nt_contracts.outputs_manifest``, ``schema_version``
-1); this module reads it at completion and turns every entry into the same
-registered, styled, legend-stashed ``LayerURI`` the register-only
-``publish_manifest.json`` path produced -- but keyed on the entry's physical
+A solver leg writes an append-only ``outputs.json`` manifest under its run
+prefix (``trid3nt_contracts.outputs_manifest``, ``schema_version`` 1); this
+module reads it at completion and turns every entry into a registered,
+styled, legend-stashed ``LayerURI``, keyed on the entry's physical
 ``quantity`` instead of a worker-baked ``style_preset``.
 
-Routing (Section 5):
+Routing:
   * ``raster`` with NO ``t``          -> ONE standalone layer (role ``primary``).
   * ``raster`` with ``t``, sharing a  -> a TEMPORAL GROUP (frames in ``t`` order,
-    ``quantity`` with siblings           role ``context``, the EXACT web grouping
-                                         token preserved so ``detectSequentialGroups``
-                                         forms the scrubber exactly as today).
+    ``quantity`` with siblings           role ``context``, the grouping token
+                                         preserved so the plugin's
+                                         ``detectSequentialGroups`` forms the
+                                         frame sequence).
   * ``vector``                        -> a vector layer.
   * ``mesh``                          -> a native SELAFIN ``layer_type="mesh"``
                                          layer (role ``context``, ``crs_authid``
@@ -20,24 +20,24 @@ Routing (Section 5):
                                          animates every frame from the one file.
   * ``scalar``                        -> parse + validate, log-only in v1.
 
-Byte-equivalence with ``register_manifest_layers`` (the migration bar, Section
-7.1): the emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id),
+The emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id),
 ``style_preset``, the resolved ``&rescale=..&colormap_name=..`` params + the
 data-driven legend, ``bbox``, ``role``, ``units``, and the temporal-group
-membership -- is IDENTICAL to what the register path renders for the same solved
-output. Styling resolves through ``styles.resolve_style_preset`` (a
-registered quantity -> its pinned registry preset, so ``band_stats`` is NOT
+membership -- must stay byte-identical to what ``register_manifest_layers``
+renders for the same solved output. Styling resolves through
+``styles.resolve_style_preset`` (a registered quantity -> its pinned preset
+in ``contracts/trid3nt_contracts/styles.yaml``, so ``band_stats`` is NOT
 consulted for it -- e.g. ``flood_depth`` -> ``continuous_flood_depth`` -> the
 pinned ``0,3`` / ``ylgnbu``); an UNREGISTERED quantity degrades to the honest
 neutral ramp, which is the ONE place a lazy per-COG stats touch happens (only
 when the entry carries no ``band_stats``).
 
-Idempotence (Section 5.2): ``layer_id`` is minted deterministically from
-``(quantity, t-ordinal, run_id)`` so a re-poll of an already-published entry
-resolves to the SAME id and is a no-op on ``observe_published_layer``.
+``layer_id`` is minted deterministically from ``(quantity, t-ordinal, run_id)``
+so a re-poll of an already-published entry resolves to the SAME id and is a
+no-op on ``observe_published_layer``.
 
 MISSING / unknown-schema manifest -> ``read_outputs_manifest`` returns ``None``
-and the caller runs its existing path unchanged (legacy engines byte-unchanged).
+and the caller runs its existing path unchanged.
 """
 
 from __future__ import annotations
@@ -75,13 +75,14 @@ logger = logging.getLogger("trid3nt_server.emission.outputs_seam")
 
 @dataclass(frozen=True)
 class PublishedFrame:
-    """Replay metadata for one published entry (ADR 0280 item 7).
+    """Replay metadata for one published entry.
 
     Carried ALONGSIDE the emitted ``LayerURI`` so the persistence layer can stamp
     the optional ``t`` / ``group_id`` / seam-resolved ``style_preset`` onto the
     case-layer record; a Case reopen rebuilds the temporal group from these
-    without re-polling ``outputs.json`` (which may be GC'd). Purely additive --
-    the live-emitted ``LayerURI`` itself is byte-identical to the register path.
+    without re-polling ``outputs.json`` (which may be GC'd). The live-emitted
+    ``LayerURI`` itself carries none of this -- it stays byte-identical to the
+    register path.
     """
 
     layer_id: str
@@ -98,8 +99,8 @@ class SeamPublishResult:
 
     ``layers`` is ordered [standalone/primary layers..., then each temporal
     group's frames in ``t`` order...] so a caller splits by ``role`` exactly as
-    it does for the register path. ``frames`` is the parallel replay metadata
-    (item 7). ``mesh_count`` / ``scalar_count`` record the log-only kinds.
+    it does for the register path. ``frames`` is the parallel replay metadata.
+    ``mesh_count`` / ``scalar_count`` record the log-only kinds.
     """
 
     layers: list[LayerURI] = field(default_factory=list)
@@ -168,60 +169,77 @@ def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
 # Layer id / grouping.
 # --------------------------------------------------------------------------- #
 def _quantity_base(quantity: str) -> str:
-    """Deterministic layer-id / group stem from a physical quantity.
-
-    ``flood_depth`` -> ``flood-depth`` (underscore -> hyphen). Reproduces the
-    register path's ``layer_id_stem`` family so byte-equivalence of ``layer_id``
-    (modulo run-id) holds: a non-temporal raster -> ``{base}-peak``, the Nth
-    temporal frame -> ``{base}-frame-{N:02d}``.
+    """``flood_depth`` -> ``flood-depth``: must match the register path's stem
+    so ``layer_id`` stays byte-equivalent (modulo run-id) between the two paths.
     """
     return (quantity or "").strip().lower().replace("_", "-")
 
 
+def _entry_range(entry: OutputEntry, style_preset: str) -> tuple[float, float] | None:
+    """The RUN range this one raster contributes - its band stats, or one read.
+
+    Producers usually precompute the stats onto the manifest, so the read is the
+    exception. A fixed-scale preset contributes nothing: nobody is going to use it.
+    """
+    bs = entry.band_stats
+    if bs is not None and (bs.is_categorical or bs.is_rgba):
+        return None
+    if not styles.needs_run_range(style_preset):
+        return None
+    if bs is not None and bs.p2 is not None and bs.p98 is not None:
+        return (float(bs.p2), float(bs.p98))
+    try:
+        return styles.band_range_reader(_read_raster_bytes(entry.uri))(
+            styles.scale_for(style_preset))
+    except Exception as exc:  # noqa: BLE001 -- degrade to the declared fallback
+        logger.warning(
+            "outputs_seam: the run-range read failed for %s (%s: %s) -- the "
+            "preset's declared fallback range stands.",
+            entry.uri, type(exc).__name__, exc)
+        return None
+
+
+def _run_ranges(manifest: OutputsManifest) -> dict[str, tuple[float, float] | None]:
+    """ONE range per quantity, spanning the whole run - peak and every frame.
+
+    The scope of a data-driven scale is the RUN, never the frame. Resolving each
+    frame against its own values makes the same colour mean a different depth in
+    the next frame, which is a dishonest animation rather than a better-contrasted
+    one. The peak entry is in the span too, so the still and the frames agree.
+    """
+    contributions: dict[str, list[tuple[float, float] | None]] = {}
+    for entry in manifest.entries:
+        if entry.kind != "raster":
+            continue
+        preset, _fallback = resolve_style_preset(entry.quantity)
+        contributions.setdefault(entry.quantity, []).append(
+            _entry_range(entry, preset))
+    return {q: styles.shared_range(found) for q, found in contributions.items()}
+
+
 def _style_and_legend(
-    entry: OutputEntry, *, style_preset: str
+    entry: OutputEntry, *, style_preset: str,
+    shared: tuple[float, float] | None = None,
 ) -> tuple[str, Any, bool]:
     """Resolve ``(style_params, legend, needed_cog_touch)`` for one raster entry.
 
     Mirrors ``register_manifest_layers._register_one_layer`` exactly. ``band_stats``
-    comes from the entry when the producer precomputed it (docker workers -- the
-    register-only-no-COG-read fast path); when ABSENT and the quantity is
-    UNREGISTERED (neutral ramp needs a real range), the seam does the ONE lazy
-    per-COG percentile touch (Section 5.2). A registry preset never needs stats.
+    comes from the entry when the producer precomputed it (the register-only,
+    no-COG-read fast path); when ABSENT and the quantity is UNREGISTERED (the
+    neutral ramp needs a real range), this does the ONE lazy per-COG percentile
+    touch. A registry preset never needs stats.
     """
     bs = entry.band_stats
     is_categorical = bool(bs.is_categorical) if bs else False
     is_rgba = bool(bs.is_rgba) if bs else False
-    p2 = bs.p2 if bs else None
-    p98 = bs.p98 if bs else None
-    needed_cog_touch = False
-
-    # Lazy stats touch: ONLY when the producer gave us no band stats AND the
-    # contract's declared policy for this preset wants the RUN's own range. A
-    # fixed-scale preset (a probability, a PGA in g) never re-reads the COG.
-    if (
-        bs is None
-        and not (is_categorical or is_rgba)
-        and styles.needs_run_range(style_preset)
-    ):
-        try:
-            found = styles.band_range_reader(_read_raster_bytes(entry.uri))(
-                styles.scale_for(style_preset))
-            if found is not None:
-                p2, p98 = found
-                needed_cog_touch = True
-        except Exception as exc:  # noqa: BLE001 -- degrade to the declared fallback
-            logger.warning(
-                "outputs_seam: the run-range read failed for %s (%s: %s) -- the "
-                "preset's declared fallback range stands.",
-                entry.uri, type(exc).__name__, exc)
+    needed_cog_touch = shared is not None and bs is None
 
     style_params = style_params_from_band_stats(
         style_preset,
         is_categorical=is_categorical,
         is_rgba=is_rgba,
-        p2=p2,
-        p98=p98,
+        p2=shared[0] if shared else (bs.p2 if bs else None),
+        p98=shared[1] if shared else (bs.p98 if bs else None),
         layer_uri=entry.uri,
     )
     legend = None
@@ -249,6 +267,7 @@ def _build_raster_layer(
     layer_id: str,
     role: str,
     bbox: tuple[float, float, float, float] | None,
+    shared: tuple[float, float] | None = None,
 ) -> LayerURI:
     """Register + build ONE raster ``LayerURI`` (register-path byte parity)."""
     style_preset, _fallback = resolve_style_preset(entry.quantity)
@@ -257,7 +276,7 @@ def _build_raster_layer(
     # by ``layer.uri`` in add_loaded_layer). The returned LayerURI therefore
     # carries legend=None -- byte-identical to register_manifest_layers, which
     # never attaches the legend to the LayerURI itself.
-    _style_and_legend(entry, style_preset=style_preset)
+    _style_and_legend(entry, style_preset=style_preset, shared=shared)
 
     observe_published_layer(layer_id, gcs_uri=entry.uri)
 
@@ -271,7 +290,7 @@ def _build_raster_layer(
         )
     layer = LayerURI(
         layer_id=layer_id,
-        name=entry.name,  # EXACT web grouping token -- never rename.
+        name=entry.name,  # EXACT grouping token the plugin matches on -- never rename.
         layer_type="raster",
         uri=entry.uri,
         style_preset=style_preset,
@@ -308,21 +327,24 @@ def build_layers_from_outputs(
     ``band_stats`` (the register-only fast path); the only COG touch is the
     unregistered-quantity neutral-ramp fallback.
 
-    ``frames_only`` (the M-class ruling, ADR 0282 OPTION a): when True, the seam
-    owns the TEMPORAL FRAMES ONLY -- standalone rasters (the peak/final field) and
-    vectors are NOT built or registered. The composer keeps its own typed peak
-    layer (with the narration scalars on it) and never consumes the seam's peak
-    entry, so the same COG uri is never registered twice. ``outputs.json`` still
-    carries the peak entry for completeness (a whole-run record); the seam simply
-    skips it. A ``kind="mesh"`` entry IS the temporal artifact (ADR 0283), so it is
-    ALWAYS built (under frames_only too). Default False = the S-class behaviour
-    (seam owns all publication).
+    ``frames_only``: when True, the seam owns the TEMPORAL FRAMES ONLY --
+    standalone rasters (the peak/final field) and vectors are NOT built or
+    registered. The composer keeps its own typed peak layer (with the
+    narration scalars on it) and never consumes the seam's peak entry, so the
+    same COG uri is never registered twice. ``outputs.json`` still carries the
+    peak entry for completeness (a whole-run record); the seam simply skips
+    it. A ``kind="mesh"`` entry IS the temporal artifact, so it is ALWAYS
+    built (under frames_only too). Default False: the seam owns all
+    publication.
     """
     result = SeamPublishResult()
+    #: ONE range per quantity over the whole run. Computed BEFORE any layer is
+    #: built, because the peak and its frames have to be painted on it together.
+    run_ranges = _run_ranges(manifest)
 
     # Split raster entries into non-temporal (standalone) and temporal (grouped
-    # by quantity). Non-raster kinds route per Section 5. Under ``frames_only``
-    # the standalone/vector buckets stay empty (the peak stays composer-built).
+    # by quantity). Under ``frames_only`` the standalone/vector buckets stay
+    # empty (the peak stays composer-built).
     standalone: list[OutputEntry] = []
     temporal_by_quantity: dict[str, list[OutputEntry]] = {}
     vectors: list[OutputEntry] = []
@@ -358,7 +380,8 @@ def build_layers_from_outputs(
             result.unknown_quantity_count += 1
         layer_id = f"{_quantity_base(entry.quantity)}-peak-{run_id}"
         layer = _build_raster_layer(
-            entry, run_id=run_id, layer_id=layer_id, role="primary", bbox=bbox
+            entry, run_id=run_id, layer_id=layer_id, role="primary", bbox=bbox,
+            shared=run_ranges.get(entry.quantity),
         )
         result.layers.append(layer)
         result.frames.append(
@@ -375,7 +398,7 @@ def build_layers_from_outputs(
     # --- Temporal groups (frames): role context, ordered by t (immutable-once-
     # written ordering + the supersede fallback take the LAST entry per (q,t)). ---
     for quantity, entries in temporal_by_quantity.items():
-        # Dedup on t keeping the last (Section 2 supersede), then sort ascending.
+        # Dedup on t keeping the last entry written (supersede), then sort ascending.
         by_t: dict[float, OutputEntry] = {}
         for e in entries:
             by_t[float(e.t)] = e  # last writer wins for a repeated (quantity, t)
@@ -388,7 +411,8 @@ def build_layers_from_outputs(
                 result.unknown_quantity_count += 1
             layer_id = f"{base}-frame-{ordinal:02d}-{run_id}"
             layer = _build_raster_layer(
-                entry, run_id=run_id, layer_id=layer_id, role="context", bbox=bbox
+                entry, run_id=run_id, layer_id=layer_id, role="context", bbox=bbox,
+                shared=run_ranges.get(quantity),
             )
             result.layers.append(layer)
             result.frames.append(
@@ -440,15 +464,14 @@ def build_layers_from_outputs(
             )
         )
 
-    # --- Native mesh siblings (SELAFIN, ADR 0283): role context. ---
+    # --- Native mesh siblings (SELAFIN): role context. ---
     # The mesh sibling is a native MDAL temporal artifact (QGIS animates its
     # dataset groups directly -- no per-frame COGs). It is NOT routed through the
     # raster styling seam (no COG touch): the plugin's ``_add_mesh`` drives the
     # dataset-group/CRS. ``crs_authid`` rides the entry (a SELAFIN carries no CRS).
-    # ``bbox`` stays None (MDAL derives the extent from the mesh) -- never the
-    # composer AOI, so it is byte-identical to the bespoke composer emit it
-    # supersedes. layer_id is minted off the quantity (``{base}-mesh-{run_id}``)
-    # for idempotence, standardized on the physical quantity like the raster stems.
+    # ``bbox`` stays None -- MDAL derives the extent from the mesh, never the
+    # composer AOI. layer_id is minted off the quantity (``{base}-mesh-{run_id}``)
+    # for idempotence, matching the raster stems' naming.
     for entry in meshes:
         preset, is_fallback = resolve_style_preset(entry.quantity)
         if is_fallback:

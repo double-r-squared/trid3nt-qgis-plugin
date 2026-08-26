@@ -91,9 +91,9 @@ def test_declared_params_and_plan_validate():
     wf = _workflow()
     p = asyncio.run(resolve_params(wf.params,
                                    {"location": "Eel River near Scotia, California"}))
-    validate_plan(wf.build_plan(p), wf.params, wf.data, sheet=p)
-    assert p.get("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
-    assert p.get("upstream_do_mgl") == p.get("do_saturation_mgl")        # saturated inflow
+    validate_plan(wf.plan, wf.params, wf.data)
+    assert p.value_of("do_saturation_mgl") == pytest.approx(9.022, abs=1e-3)  # Cs at 20 C
+    assert p.value_of("upstream_do_mgl") == p.value_of("do_saturation_mgl")   # saturated inflow
     assert p.row("k1_per_day").consequence == "numerical"    # never refuses in auto
 
 
@@ -102,12 +102,11 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     from trid3nt_server.workflows.lib import resolve_params
 
     wf = _workflow()
-    p = asyncio.run(resolve_params(wf.params, {"location": "x"}))
-    plan = wf.build_plan(p)
-    stages = [s.stage for s in plan.flat() if s.stage]
+    plan = wf.plan
+    stages = [s.stage for s in plan.declared() if s.stage]
     assert stages == ["acquire", "acquire", "acquire", "prep", "gates", "author",
                       "solve", "publish"]
-    assert [s.name for s in plan.flat()][-1] == "do_field"
+    assert [s.name for s in plan.declared()][-1] == "do_field"
 
 
 def test_declared_bounds_clamp_the_wq_knobs():
@@ -116,8 +115,9 @@ def test_declared_bounds_clamp_the_wq_knobs():
     wf = _workflow()
     p = asyncio.run(resolve_params(wf.params, {"location": "x", "reach_length_km": 900.0,
                                                "k1_per_day": 0.0}))
-    assert p.get("reach_length_km") == 15.0 and "CLAMPED" in p.row("reach_length_km").note
-    assert p.get("k1_per_day") == 0.01
+    assert p.value_of("reach_length_km") == 15.0 \
+        and "CLAMPED" in p.row("reach_length_km").note
+    assert p.value_of("k1_per_day") == 0.01
 
 
 @pytest.mark.asyncio
@@ -173,8 +173,7 @@ def test_the_plan_declares_the_run_mode_read_for_the_input_review():
     from trid3nt_server.workflows.lib import RunMode, resolve_params
 
     wf = _workflow()
-    p = asyncio.run(resolve_params(wf.params, {"location": "x"}))
-    review = next(s for s in wf.build_plan(p).flat()
+    review = next(s for s in wf.plan.declared()
                   if s.name == "reviewed_discharge")
     assert review.kwargs["input_mode"] is RunMode
     assert review.self_gating is True    # so no second FormGate may be declared
@@ -182,7 +181,7 @@ def test_the_plan_declares_the_run_mode_read_for_the_input_review():
 
 # --- the sag chart ----------------------------------------------------------- #
 def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
-    from trid3nt_server.workflows.lib import ResolvedParams
+    from trid3nt_server.workflows.lib import ParamValues
     from trid3nt_server.workflows.telemac.do_sag.do_sag import build_sag_chart
 
     result = SimpleNamespace(
@@ -191,7 +190,7 @@ def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
         sag_curve_bod_mgl=[20.0, 18.0], do_standard_mgl=5.0, do_min_mgl=8.0,
         do_min_distance_m=1000.0, do_violates_standard=False,
     )
-    payload = build_sag_chart(result=result, params=ResolvedParams({}))
+    payload = build_sag_chart(result=result, params=ParamValues({}))
     assert payload["title"] == "Dissolved oxygen sag (Eel_River_near_Scotia)"
     assert payload["title"].count("sag") == 1
 

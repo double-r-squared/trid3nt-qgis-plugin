@@ -29,7 +29,7 @@ from trid3nt_contracts.outputs_manifest import (
     parse_outputs_manifest,
 )
 from trid3nt_server.emission.outputs_seam import build_layers_from_outputs
-from trid3nt_server.emission.quantity_styles import resolve_style_preset
+from trid3nt_server.emission.styles import resolve_style_preset
 from trid3nt_server.workflows.modflow.postprocess_modflow import (
     PLUME_FRAME_QUANTITY_BASE,
     PLUME_STYLE_PRESET,

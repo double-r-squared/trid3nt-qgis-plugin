@@ -98,20 +98,20 @@ def test_the_declared_plan_is_the_open_water_sequence():
     """Review, acquire the AOI, author, solve, publish - and the plan VALIDATES."""
     from trid3nt_server.workflows.lib.validate import validate_plan
 
-    workflow, sheet = _sheet()
-    plan = workflow.build_plan(sheet)
-    assert [step.label for step in plan.flat()] == [
+    workflow, _sheet_unused = _sheet()
+    plan = workflow.plan
+    assert [step.label for step in plan.declared()] == [
         "form", "aoi", "deck", "solve", "inundation"]
-    assert [step.stage for step in plan.flat()][1:] == [
+    assert [step.stage for step in plan.declared()][1:] == [
         "acquire", "author", "solve", "publish"]
     # the AOI step is what rebinds the domain, so every producer after it reads it
-    assert plan.flat()[1].rebinds_domain
+    assert plan.declared()[1].rebinds_domain
     # the chart is a FUNCTION colocated in the template file
     from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
         build_stage_chart,
     )
-    assert plan.flat()[-1].charts[0].builder is build_stage_chart
-    validate_plan(plan, workflow.params, workflow.data, sheet=sheet)
+    assert plan.declared()[-1].charts[0].builder is build_stage_chart
+    validate_plan(plan, workflow.params, workflow.data)
 
 
 def test_the_open_water_domain_acquires_the_aoi_and_nothing_else():

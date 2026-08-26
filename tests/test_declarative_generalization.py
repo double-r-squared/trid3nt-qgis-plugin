@@ -45,7 +45,7 @@ from trid3nt_server.workflows.swmm.aquifer_baseflow import (
 def test_plan_validates_against_its_own_declaration(mod: Any) -> None:
     """Every Ref and ParamRef in the plan names something the workflow declares."""
     sheet = _sheet(mod.PARAMS)
-    validate_plan(mod.plan(sheet, None), mod.PARAMS, mod.DATA, sheet=sheet)
+    validate_plan(mod.plan(sheet, None), mod.PARAMS, mod.DATA)
 
 
 @pytest.mark.parametrize("mod", [budget_mod, swmm_mod])
@@ -159,9 +159,9 @@ async def test_the_run_hands_back_the_sheet_it_actually_ran_on(card_client) -> N
     await answer_form_card(card_client, {"q": 7.5})
     result = await task
 
-    assert sheet.get("q") == pytest.approx(1.0)
+    assert sheet.value_of("q") == pytest.approx(1.0)
     assert result.params is not None
-    assert result.params.get("q") == pytest.approx(7.5)
+    assert result.params.value_of("q") == pytest.approx(7.5)
     assert result.params.row("q").basis == "user"
     # ... and the step downstream of the gate ran on the revised value.
     assert result.value == pytest.approx(7.5)

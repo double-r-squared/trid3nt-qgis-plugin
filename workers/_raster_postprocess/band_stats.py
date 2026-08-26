@@ -3,7 +3,7 @@
 The agent's ``publish_layer._resolve_titiler_style_params`` re-downloads each COG
 to (a) probe RGBA/multiband (``_is_rgba_or_multiband``), (b) probe categorical
 palettes, and (c) compute the 2nd/98th-percentile generic-fallback rescale
-(``_band1_percentile_rescale``). For the known continuous presets (flood/wave)
+(the agent's band-range reader). For the known continuous presets (flood/wave)
 the agent registry already gives a deterministic rescale, so ``band_stats`` is
 belt-and-suspenders for those — but it makes the GENERIC-fallback + the
 categorical / RGBA passthrough guards COG-read-free for any worker raster.
@@ -33,7 +33,7 @@ def compute_band_stats(cog_path: Path) -> dict[str, Any]:
       OR any R/G/B/A colorinterp) -> the agent returns "" (TiTiler passthrough).
     * ``is_categorical`` is True when band 1 carries a color table (palette) ->
       the agent passes it through untouched.
-    * ``p2``/``p98`` mirror the agent's ``_band1_percentile_rescale`` (2nd/98th
+    * ``p2``/``p98`` mirror the agent's band-range reader (2nd/98th
       percentile of finite band-1 values, NaN/nodata masked, zero-width widened),
       so the agent's generic fallback never re-reads the COG.
 

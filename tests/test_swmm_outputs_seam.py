@@ -104,7 +104,7 @@ def _legacy_frame_stream(n_frames: int):
 
 
 def test_quantity_resolves_to_flood_depth_preset():
-    from trid3nt_server.emission.quantity_styles import resolve_style_preset
+    from trid3nt_server.emission.styles import resolve_style_preset
 
     preset, is_fallback = resolve_style_preset(SWMM_DEPTH_QUANTITY)
     assert preset == FLOOD_DEPTH_STYLE_PRESET and is_fallback is False

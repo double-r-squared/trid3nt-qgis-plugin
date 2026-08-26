@@ -145,10 +145,10 @@ async def test_plan_declares_the_native_cross_check_as_a_step():
 
     p = await resolve_params(PARAMS, {})
     built = plan(p, None)
-    validate_plan(built, PARAMS, (), sheet=p)
-    labels = [s.label for s in built.flat()]
+    validate_plan(built, PARAMS, ())
+    labels = [s.label for s in built.declared()]
     assert labels == ["form", "closed_form", "deck", "solve", "rdii"]
-    charts = [c.name for s in built.flat() for c in s.charts]
+    charts = [c.name for s in built.declared() for c in s.charts]
     assert charts == ["rdii_vs_runoff"]
 
 

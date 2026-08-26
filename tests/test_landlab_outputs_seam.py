@@ -99,7 +99,7 @@ def _legacy_frame_stream(n_frames: int):
 
 
 def test_overland_quantity_shares_flood_depth_preset():
-    from trid3nt_server.emission.quantity_styles import resolve_style_preset
+    from trid3nt_server.emission.styles import resolve_style_preset
 
     preset, is_fallback = resolve_style_preset(OVERLAND_QUANTITY)
     assert preset == OVERLAND_STYLE_PRESET and is_fallback is False

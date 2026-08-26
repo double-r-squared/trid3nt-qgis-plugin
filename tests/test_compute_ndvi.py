@@ -109,12 +109,12 @@ def test_tool_is_registered() -> None:
     assert meta.payload_mb_estimator_name == "estimate_payload_mb"
 
 
-def test_style_preset_is_in_titiler_registry() -> None:
+def test_style_preset_resolves_to_a_declared_ramp() -> None:
     """The ndvi preset must resolve to a real (rescale, colormap) so a
     single-band NDVI COG is never published as bare grayscale."""
-    from trid3nt_server.emission.publish import _registry_style_params
+    from trid3nt_server.emission.styles import resolve_style
 
-    params = _registry_style_params(_STYLE_PRESET)
+    params = resolve_style(_STYLE_PRESET).style_params()
     assert params is not None
     assert "rescale=-1,1" in params
     assert "colormap_name=rdylgn" in params

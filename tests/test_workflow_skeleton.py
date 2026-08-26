@@ -21,7 +21,6 @@ Offline. Nothing here solves; these pin the contract in
 
 from __future__ import annotations
 
-import copy
 import inspect
 from typing import Any
 
@@ -83,7 +82,7 @@ class _Layer:
 
 
 def _workflow(cls=Workflow, **kw):
-    return cls(metadata=_metadata("skeleton_probe"), params=(), plan=lambda p, d, o: (),
+    return cls(metadata=_metadata("skeleton_probe"), params=(), plan=lambda o: (),
                answer=("depth_max_m",), **kw)
 
 
@@ -203,7 +202,7 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     assert supplied["sim_duration_s"] == 600.0
     assert supplied["mesh_resolution"] == "coarse"
     sheet = asyncio.run(resolve_params(wf.params, supplied))
-    assert sheet.get("sim_duration_s") == 600.0
+    assert sheet.value_of("sim_duration_s") == 600.0
     assert sheet.row("sim_duration_s").basis == "user"
 
 
@@ -231,7 +230,7 @@ def _telemac():
     from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
     return TelemacWorkflow(metadata=_metadata("telemac_probe"), params=(),
-                           plan=lambda p, d, o: ())
+                           plan=lambda o: ())
 
 
 def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
@@ -271,37 +270,41 @@ def test_the_mesh_policy_reaches_the_deck_under_the_engine_s_own_names():
     assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
 
 
-def test_the_plan_reads_a_data_name_the_workflow_declares_and_refuses_one_it_does_not():
-    from trid3nt_server.workflows.lib import Data, Fetch, WireArgsError
-    from trid3nt_server.workflows.lib.workflow import DataRefs
+def test_the_plan_reads_a_data_name_through_the_declaration_namespace():
+    """``D`` carries no sheet and no workflow: a name is checked against the
+    template's own DATA at registration, which is what lets a binding block sit at
+    module level above the plan it feeds."""
+    from trid3nt_server.workflows.lib import D, DataRef
 
-    d = DataRefs((Data("rivers", Fetch.tool("pkg.mod.fetch")),))
-    assert d.rivers == Ref("rivers")
-    with pytest.raises(WireArgsError) as ei:
-        _ = d.terrain
-    assert "terrain" in str(ei.value)
+    ref = D.rivers
+    assert isinstance(ref, DataRef) and ref.path == "rivers"
+    assert ref.origin.startswith("test_workflow_skeleton.py:")
 
 
 def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
     ops = _telemac()
-    ops.plan_decl = lambda p, d, o: (Step(runner="pkg.mod.fn"),)
-    plan = ops.build_plan(None)
+    ops.plan_decl = lambda o: (Step(runner="pkg.mod.fn"),)
+    plan = ops.build_plan()
     assert plan.name == "telemac_probe"      # from the metadata
     assert plan.engine == "telemac2d"        # from the facade
 
 
-def test_an_undeclared_data_name_refuses_through_the_ATTRIBUTE_protocol():
-    """The refusal is typed AND an AttributeError: ``__getattr__`` is a protocol,
-    and hasattr / deepcopy / pickle probe it routinely."""
-    from trid3nt_server.workflows.lib import Data, Fetch, UndeclaredDataError
-    from trid3nt_server.workflows.lib.workflow import DataRefs
+def test_an_undeclared_data_name_refuses_at_registration_naming_its_write_site():
+    """``D`` cannot refuse at the attribute - it has no workflow to check against -
+    so the refusal moves to the VALIDATOR, which has the declared Data and can say
+    which namespace the bad name came from and where it was written."""
+    from trid3nt_server.workflows.lib import D, Data, Fetch
 
-    d = DataRefs((Data("rivers", Fetch.tool("pkg.mod.fetch")),))
-    assert issubclass(UndeclaredDataError, AttributeError)
-    assert not hasattr(d, "terrain")
-    assert copy.deepcopy(d)._names == ("rivers",)
-    with pytest.raises(UndeclaredDataError):
-        _ = d.terrain
+    def _plan(ops):
+        return (Step(runner="pkg.mod.fn", kwargs={"r": D.terain}).named("s"),)
+
+    with pytest.raises(PlanValidationError) as ei:
+        Workflow(metadata=_metadata("data_probe"), params=(), plan=_plan,
+                 data=(Data("terrain", Fetch.tool("pkg.mod.fetch")),))
+    message = str(ei.value)
+    assert "D.terain names no declared Data" in message
+    assert "written at test_workflow_skeleton.py:" in message
+    assert "Declared Data: ['terrain']" in message
 
 
 # --- (5b) a REQUIRED deck field no slot covers is refused at construction ---- #
@@ -354,7 +357,7 @@ def test_registration_refuses_a_facade_with_an_unrealized_operation():
 
     with pytest.raises(FacadeIncompleteError) as ei:
         register_workflow(HalfEngine, _metadata("half_probe"), (),
-                          lambda p, d, o: ())
+                          lambda o: ())
     assert "HalfEngine" in str(ei.value)
     assert "solver_spec" in str(ei.value) and "read_results" in str(ei.value)
 
@@ -363,7 +366,7 @@ def test_registration_refuses_something_that_is_not_a_facade_at_all():
     from trid3nt_server.workflows.lib import FacadeIncompleteError, register_workflow
 
     with pytest.raises(FacadeIncompleteError):
-        register_workflow(object, _metadata("not_a_facade"), (), lambda p, d, o: ())
+        register_workflow(object, _metadata("not_a_facade"), (), lambda o: ())
 
 
 # --- (7) a coercion's failure is triaged, never flattened ------------------- #

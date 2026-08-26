@@ -116,7 +116,7 @@ SECONDARY_QUANTITY_BY_TOKEN: dict[str, str] = {
 }
 
 #: The TiTiler style preset key the orchestrator registers in
-#: ``_QGIS_STYLE_REGISTRY`` (the shared-append snippet). Susceptibility =
+#: the style contract. Susceptibility =
 #: probability of failure in [0, 1], rendered with a reversed red->green diverging
 #: ramp (rdylgn_r) so HIGH susceptibility = RED, LOW = GREEN.
 LANDSLIDE_STYLE_PRESET: str = "continuous_landslide_susceptibility"

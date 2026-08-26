@@ -13,8 +13,8 @@ coverage lives in ``test_publish_manifest_register_only_phase4.py``).
 
 Coverage:
   (a) a CONTINUOUS raster publish carries a legend with the REAL vmin/vmax +
-      colormap (the percentile-fallback range for an unpinned preset; the pinned
-      semantic range for a registry preset -- whichever the raster RENDERS with);
+      colormap (the run's own p2/p98 range for a data-policy preset; the declared
+      domain range for a fixed one -- whichever the raster RENDERS with);
   (b) the legend range EQUALS the URL rescale range (no second, drifting read);
   (c) a CATEGORICAL (paletted/NLCD) raster carries kind="categorical" classes
       from the embedded GDAL color table (transparent slots dropped);
@@ -162,11 +162,20 @@ def test_continuous_legend_from_registry_preset() -> None:
     assert legend.label == "Flood depth"
 
 
-def test_continuous_legend_uses_real_percentile_range() -> None:
-    """An UNPINNED preset renders with the p2/p98 percentile rescale; the legend
-    carries the IDENTICAL real range (no retroactive hardcoded guess)."""
-    style_params = MOD._band1_percentile_rescale(_continuous_geotiff_bytes(0.0, 30.0))
-    assert style_params is not None  # real range read off the COG
+def test_continuous_legend_uses_real_percentile_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A data-policy preset renders with the p2/p98 range read off THIS raster;
+    the legend carries the IDENTICAL real range (no retroactive hardcoded guess).
+
+    The range is controlled by handing the resolver a real COG whose data span we
+    know, so the string under test is the one the chokepoint actually resolves.
+    """
+    monkeypatch.setattr(
+        MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 30.0)
+    )
+    style_params = MOD._resolve_qgis_style_params("gridmet_vs_unknown", "s3://b/x.tif")
+    assert style_params  # real range read off the COG
     legend = legend_for_published_layer("gridmet_vs_unknown", "s3://b/x.tif", style_params)
     assert legend is not None and legend.kind == "continuous"
     parsed_lo, parsed_hi, parsed_cmap = _parse_style_params(style_params)
@@ -283,8 +292,12 @@ def test_publish_continuous_raster_stashes_legend_by_s3_uri(
     # computed (the rescale/colormap now ride ONLY the legend, not a URL).
     legend = pop_legend_for_uri(out)
     assert legend is not None and legend.kind == "continuous"
-    style_params = MOD._band1_percentile_rescale(cog_bytes)
-    assert style_params is not None
+    # Re-resolve through the SAME chokepoint on the SAME bytes: the legend must
+    # be those numbers, not a second range read somewhere else.
+    style_params = MOD._resolve_qgis_style_params(
+        "gridmet_vs_unknown", "s3://bucket/runs/somerun/x.tif"
+    )
+    assert style_params
     url_lo, url_hi, url_cmap = _parse_style_params(style_params)
     assert legend.vmin == url_lo and legend.vmax == url_hi and legend.colormap == url_cmap
     assert legend.vmax > legend.vmin  # real, non-degenerate range

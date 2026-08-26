@@ -14,26 +14,40 @@ ASCII only.
 
 from __future__ import annotations
 
+import pytest
+
+from trid3nt_contracts.styles import preset
 from trid3nt_server.emission.publish import (
-    _QGIS_STYLE_REGISTRY,
     _infer_style_preset,
     _is_terrain_token_preset,
-    _registry_style_params,
 )
+from trid3nt_server.emission.styles import resolve_style
+
+_DECLARED = {
+    "impervious_surface_pct": ((0.0, 100.0), "reds"),
+    "population_density": ((0.0, 250.0), "magma"),
+    "slope_angle_deg": ((0.0, 60.0), "ylorrd"),
+    "aspect_compass_deg": ((0.0, 360.0), "hsv"),
+}
 
 
-def test_new_presets_registered():
-    assert _QGIS_STYLE_REGISTRY["impervious_surface_pct"] == ("0,100", "reds")
-    assert _QGIS_STYLE_REGISTRY["population_density"] == ("0,250", "magma")
-    assert _QGIS_STYLE_REGISTRY["slope_angle_deg"] == ("0,60", "ylorrd")
-    assert _QGIS_STYLE_REGISTRY["aspect_compass_deg"] == ("0,360", "hsv")
+@pytest.mark.parametrize("name", sorted(_DECLARED))
+def test_the_contract_declares_each_preset_with_its_domain_range(name):
+    rng, cmap = _DECLARED[name]
+    spec = preset(name)
+    assert spec is not None, f"{name} is not declared in the style contract"
+    # These four are DOMAIN-bounded (a percentage, a compass bearing, a slope
+    # angle), so the range is fixed and must not move with the raster.
+    assert spec.scale.policy == "fixed" and spec.scale.range == rng
+    assert spec.colormap == cmap
 
 
-def test_new_presets_resolve_to_expected_colormap():
-    assert _registry_style_params("impervious_surface_pct") == "&rescale=0,100&colormap_name=reds"
-    assert _registry_style_params("population_density") == "&rescale=0,250&colormap_name=magma"
-    assert _registry_style_params("slope_angle_deg") == "&rescale=0,60&colormap_name=ylorrd"
-    assert _registry_style_params("aspect_compass_deg") == "&rescale=0,360&colormap_name=hsv"
+@pytest.mark.parametrize("name", sorted(_DECLARED))
+def test_each_preset_resolves_to_its_declared_colormap(name):
+    rng, cmap = _DECLARED[name]
+    lo, hi = rng
+    assert resolve_style(name).style_params() == (
+        f"&rescale={lo:g},{hi:g}&colormap_name={cmap}")
 
 
 def test_hillshade_still_passthrough_slope_aspect_not():

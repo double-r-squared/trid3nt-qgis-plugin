@@ -335,7 +335,7 @@ async def swmm_aquifer_baseflow_to_node(
                      "chapter (two-zone aquifer + A1/B1 flow coefficients); "
                      "swmm5.org Aquifer/Groundwater objects"),
         "aquifer_soil_column": {
-            name: round(float(ran.get(name)), 4)
+            name: round(float(ran.value_of(name)), 4)
             for name in ("porosity", "wilting_point", "field_capacity",
                          "conductivity_in_hr")
         },

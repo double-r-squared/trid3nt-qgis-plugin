@@ -3,14 +3,13 @@
 Gemini is structurally bad at echoing long opaque URIs between turns
 (dropped/doubled path segments, layer_id-as-basename invention, hash-tail
 hallucination, a WMS display URL substituted for the data URI, invented
-cache hashes). Prompt-engineering patches (SYSTEM_PROMPT clauses) only
-lowered the rate; this module removes the failure mode architecturally:
+cache hashes). This module removes the failure mode architecturally:
 
 * Every tool result that carries URIs gets **registered** as
   ``handle → exact URI`` where the handle is the ``layer_id`` (or a minted
   stable key for bare URIs). Handles are surfaced to Gemini in the
   function_response, and the SYSTEM_PROMPT instructs it to pass handles --
-  never raw ``gs://`` paths.
+  never raw object-store paths.
 * Every URI-consuming tool param (``hazard_raster_uri``, ``assets_uri``,
   ``layer_uri``, …) **resolves** through the registry at dispatch:
 
@@ -49,14 +48,13 @@ Scoping rules:
 * Composer-internal publishes (``sfincs_flood`` →
   ``publish_layer``) are captured via a ``ContextVar`` observation hook:
   ``publish_layer`` calls :func:`observe_published_layer` with the
-  (validated) gs:// COG + the WMS display URL, so the registry knows BOTH
-  faces of a published layer even though the composer's envelope only
+  (validated) object-store COG + the WMS display URL, so the registry knows
+  BOTH faces of a published layer even though the composer's envelope only
   carries the WMS URL.
 
 Wired in ``server._invoke_tool_via_emitter`` (resolution before dispatch,
-registration after) -- see server.py. Unit coverage in
-``tests/test_uri_registry.py`` replays the known mangle-incident shapes with
-real logged values.
+registration after). Unit coverage in ``tests/test_uri_registry.py``
+replays the mangle shapes described above.
 """
 
 from __future__ import annotations
@@ -129,8 +127,8 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         # ``compute_skill_metrics`` (paired obs/sim table) and
         # ``compute_flood_extent_skill`` (modeled + benchmark wet/dry extent)
         # take handle/URI params like the ones above. ``run_handle``
-        # (read_run_diagnostics) is excluded per build-contract.md section
-        # 2.1 -- it self-resolves and must not be mangled here.
+        # (read_run_diagnostics) is excluded -- it self-resolves and must
+        # not be mangled here.
         "paired_table_uri",
         "model_extent_uri",
         "benchmark_extent_uri",
@@ -168,11 +166,10 @@ _ANNOUNCE_CAP = 8
 _ERROR_HANDLES_CAP = 10
 
 #: tools that consume a DEM as their primary input. When the branch-4
-#: "no layers yet" fallback fires for one of these, suggest ``fetch_dem`` --
-#: the generic ``sfincs_flood`` example was actively misleading
-#: for a terrain-derivative ask (live incident: a reconnect-empty registry +
-#: the generic suggestion steered the model away from the actually-needed
-#: ``fetch_dem`` call).
+#: "no layers yet" fallback fires for one of these, suggest ``fetch_dem``
+#: instead of the generic ``sfincs_flood`` example -- a flood-model example
+#: is misleading and irrelevant for a terrain-derivative ask, and can steer
+#: the model away from the actually-needed ``fetch_dem`` call.
 _DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
     {
         "compute_hillshade",
@@ -221,7 +218,7 @@ class UriRecord:
     """One registered layer/artifact: handle → its exact URI face(s)."""
 
     handle: str
-    uri: str | None = None  # canonical consumable URI (gs:// preferred)
+    uri: str | None = None  # canonical consumable data URI (object-store)
     wms_url: str | None = None  # QGIS display URL when known
     tool_name: str | None = None  # producer (for the inventory message)
     seq: int = 0  # registration order (recency tie-breaks)
@@ -270,23 +267,18 @@ def _looks_like_wms(value: str) -> bool:
 
 
 def _is_tile_template(value: str) -> bool:
-    """A TiTiler / XYZ tile-template URL -- a DISPLAY face, not a data URI.
+    """A tile-template URL (``.../cog/tiles/.../{z}/{x}/{y}.png?url=...``) --
+    a DISPLAY face, not a data URI.
 
-    LEGACY GUARD (TiTiler exit, 2026-07): ``publish_layer`` now emits the raw
-    ``s3://`` COG URI and no longer mints tile templates, but OLD persisted
-    cases (and the register-only manifest path) still carry template URIs
-    that rehydrate through here -- this guard MUST stay so those legacy
-    display faces keep routing/unwrapping correctly.
-
-    The AWS backend published rasters as TiTiler tile templates
-    (``https://<cf>/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2F…``)
-    rather than QGIS-Server WMS URLs. Like a WMS URL, the template is the
-    renderable face -- it carries ``{z}/{x}/{y}`` placeholders and cannot be
-    opened by an analytical tool (Pelicun, zonal stats). It must route to the
-    ``wms_url`` slot so it never displaces the registered ``s3://`` COG that
-    downstream ``*_uri`` params resolve to (live Pelicun read the
-    template instead of the COG and failed). ``_looks_like_wms`` misses it
-    (no ``service=wms`` / ``/wms`` / ``layers=``), hence this companion.
+    LEGACY GUARD: nothing in this stack mints these anymore, but OLD
+    persisted cases (and the register-only manifest path) still carry them
+    on rehydration -- this guard MUST stay so those display faces keep
+    routing/unwrapping correctly. Like a WMS URL, the template carries
+    ``{z}/{x}/{y}`` placeholders and cannot be opened by an analytical tool
+    (Pelicun, zonal stats); it must route to the ``wms_url`` slot so it
+    never displaces the registered data COG that downstream ``*_uri``
+    params resolve to. ``_looks_like_wms`` misses it (no ``service=wms`` /
+    ``/wms`` / ``layers=``), hence this companion.
     """
     if not value.startswith(("http://", "https://")):
         return False
@@ -313,11 +305,11 @@ def _wms_layer_id(value: str) -> str | None:
 
 
 def _titiler_cog_uri(value: str) -> str | None:
-    """Unquote the ``url=<s3/gs COG>`` query param of a TiTiler tile template.
+    """Unquote the ``url=<COG>`` query param of a tile-template display URL.
 
-    Mirrors :func:`pipeline_emitter._layer_identity_key`: a TiTiler display URL
-    (``https://<cf>/cog/tiles/.../{z}/{x}/{y}.png?url=s3%3A%2F%2F…``) embeds the
-    real data COG as its (URL-encoded) ``url=`` param. Returns the unquoted COG,
+    Mirrors :func:`pipeline_emitter._layer_identity_key`: a tile-template URL
+    (``.../cog/tiles/.../{z}/{x}/{y}.png?url=s3%3A%2F%2F…``) embeds the real
+    data COG as its (URL-encoded) ``url=`` param. Returns the unquoted COG,
     or ``None`` when there is no ``url=`` param (a foreign/malformed template).
     """
     try:
@@ -364,7 +356,7 @@ def _common_prefix_len(a: str, b: str) -> int:
 class SessionUriRegistry:
     """Handle → URI indirection table for ONE session.
 
-    Registration is additive (latest non-None face wins; a gs:// data URI is
+    Registration is additive (latest non-None face wins; a data URI is
     never clobbered by ``None``). Resolution implements the four branches
     documented in the module docstring. All methods are synchronous and
     in-memory -- the registry sits on the hot dispatch path.
@@ -841,12 +833,11 @@ class SessionUriRegistry:
                 return short_uri
             raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
-        # Branch 3-titiler -- a TiTiler tile-template DISPLAY URL: the underlying
-        # data COG is the unquoted ``url=`` query param (
-        # _is_tile_template). Recover it so a display URL handed to a *_uri param
-        # resolves to the s3 COG instead of failing open as an unreadable
-        # https:// string (the compute_layer_bounds UNKNOWN_LAYER_URI incident).
-        # Mirrors pipeline_emitter._layer_identity_key.
+        # Branch 3-titiler -- a tile-template DISPLAY URL: the underlying
+        # data COG is the unquoted ``url=`` query param (_is_tile_template).
+        # Recover it so a display URL handed to a *_uri param resolves to
+        # the object-store COG instead of failing open as an unreadable
+        # https:// string. Mirrors pipeline_emitter._layer_identity_key.
         if _is_tile_template(v):
             cog = _titiler_cog_uri(v)
             if cog:
@@ -871,8 +862,8 @@ class SessionUriRegistry:
                     return rec.uri
             raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
-        # Small-model PLACEHOLDER resolution (2026-07-08): local 8B models emit
-        # the producer (fetch_dem) and the consumer (publish_layer) in the SAME
+        # Small-model PLACEHOLDER resolution: local 8B models emit the
+        # producer (fetch_dem) and the consumer (publish_layer) in the SAME
         # iteration, passing stand-ins like 'LayerURI_from_fetch_dem' /
         # '<layer_uri_from_fetch_dem>' / 'fetch_dem_output' as the URI param.
         # Tool calls dispatch SEQUENTIALLY, so by the time the consumer
@@ -911,9 +902,7 @@ class SessionUriRegistry:
         # produced this path, so passing it through can only 404 downstream
         # (or worse, read the wrong object) -- raising here with the handle
         # inventory makes URI hallucination structurally impossible and feeds
-        # the retry loop a self-correcting message. (This supersedes the
-        # post-decommission fail-open: verbatim REGISTERED URIs still pass --
-        # branch 1 -- so old cases keep working via the dual-accept.)
+        # the retry loop a self-correcting message.
         logger.warning(
             "uri_registry[%s]: rejecting unregistered object-store uri "
             "%s.%s=%r",
@@ -1041,15 +1030,15 @@ class SessionUriRegistry:
     def _inventory_text(self, tool_name: str | None = None) -> str:
         """Compact handle inventory for the branch-4 error message.
 
-        when the registry genuinely has no layers, the "run the
+        When the registry genuinely has no layers, the "run the
         producing tool first" example is tool-aware -- a DEM-consuming tool
         (``_DEM_CONSUMING_TOOLS``) is told to ``fetch_dem`` for this AOI
-        instead of the generic ``sfincs_flood`` example, which
-        was actively misleading (and factually irrelevant) for a terrain
-        derivative ask. When the registry DOES have layers (the common
-        reconnect-repair case -- the registry was simply unseeded, not
-        genuinely empty) this branch never fires; the handle listing below
-        does, now capped at ``_ERROR_HANDLES_CAP`` (10, was 5).
+        instead of the generic ``sfincs_flood`` example, which is
+        misleading (and irrelevant) for a terrain-derivative ask. When the
+        registry DOES have layers (the common reconnect-repair case -- the
+        registry was simply unseeded, not genuinely empty) this branch never
+        fires; the handle listing below does, capped at
+        ``_ERROR_HANDLES_CAP``.
         """
         layer_recs = [
             r
@@ -1194,7 +1183,7 @@ def observe_published_layer(
     gcs_uri: str | None = None,
     wms_url: str | None = None,
 ) -> None:
-    """Record a published layer's BOTH faces (gs:// COG + WMS display URL).
+    """Record a published layer's BOTH faces (object-store COG + WMS display URL).
 
     Called from inside ``publish_layer`` (after URI validation/correction)
     so composer-internal publishes -- whose envelopes only carry the WMS URL --

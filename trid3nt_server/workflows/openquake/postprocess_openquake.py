@@ -57,7 +57,7 @@ __all__ = [
 
 #: The publish_layer style preset key the seismic hazard map renders with (the
 #: magma ramp 0..1 in g; an ADDITIVE registry preset, disjoint from the existing
-#: flood/plume keys -- never mutated). Merged into _QGIS_STYLE_REGISTRY by the
+#: flood/plume keys -- never mutated). Declared in the style contract by the
 #: orchestrator (see shared_appends.publish_layer_preset).
 SEISMIC_HAZARD_STYLE_PRESET: str = "continuous_seismic_pga"
 

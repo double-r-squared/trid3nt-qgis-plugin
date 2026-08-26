@@ -27,7 +27,7 @@ from trid3nt_contracts.outputs_manifest import (
     parse_outputs_manifest,
 )
 from trid3nt_server.emission.outputs_seam import build_layers_from_outputs
-from trid3nt_server.emission.quantity_styles import resolve_style_preset
+from trid3nt_server.emission.styles import resolve_style_preset
 from trid3nt_server.workflows.hecras.postprocess_hecras import (
     HECRAS_DEPTH_STYLE_PRESET,
     HECRAS_FRAME_NAME_STEM,

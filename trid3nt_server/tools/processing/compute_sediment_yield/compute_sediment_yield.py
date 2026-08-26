@@ -42,7 +42,7 @@ bucket (or ``_output_dir`` for offline tests) and returned as a
 house pattern) carrying summary scalars + honest ``notes``. The raster renders
 through the SAME publish path as every other compute_* raster tool: the
 wrap-site auto-publishes the s3 COG via ``publish_layer``, whose styling seam
-(``_registry_style_params``) resolves ``style_preset="sediment_yield_t_ha_yr"``
+(``emission.styles.resolve_style``) resolves ``style_preset="sediment_yield_t_ha_yr"``
 to a LOG-SCALED interval colormap (class breaks 1/5/10/50/100/500 t/ha/yr --
 half-decade steps -- because soil loss spans orders of magnitude; a linear
 rescale would render everything but the worst gullies as one flat color).

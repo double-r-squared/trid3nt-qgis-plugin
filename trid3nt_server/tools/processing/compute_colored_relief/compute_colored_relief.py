@@ -35,6 +35,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.cache import read_through
+from trid3nt_server.emission.cog import translate_to_cog as _translate_to_cog
 from trid3nt_server.tools.processing._gdal_runner import (
     read_raster_bytes,
     resolve_gdaldem,

@@ -1,6 +1,6 @@
 """The raster PUBLISH mechanism - overviews, styling, legend, registration.
 
-Emission is AUTOMATIC (NATE ruling b): there is no "display this" intent and no
+Emission is AUTOMATIC: there is no "display this" intent and no
 ``publish_layer`` tool for a model to call. Every renderable raster a tool
 returns rides :func:`trid3nt_server.emission.layer_uri_emit.publish_for_emission`
 through this module on its way to the map, intermediates included - the user
@@ -8,13 +8,6 @@ hides what they do not want to see in QGIS.
 
     ``publish_layer(layer_uri, layer_id, style_preset, ...)``
       -> ``str`` (the raster's raw ``s3://`` COG URI, ready for the envelope)
-
-This module lives in ``emission/`` because that is who consumes it. It used to
-live under ``tools/`` while ``emission/outputs_seam.py`` reached back into it
-for five styling symbols and ``pipeline_emitter`` lifted legends out of its
-module-global stash - a package-level import cycle held together by the fact
-that ``uri_registry`` imports nothing from ``tools``. The dependency is now one
-directional edge inside one package.
 
 **The path (s3 + QGIS-native rendering; the only publish path)**
 
@@ -32,10 +25,12 @@ legend/style fields, so the publish emits the raw ``s3://`` URI itself:
    WMS GetMap face.
 3. Rasters: enforce COG overviews (auto-translate when missing),
    resolve styling via ``_resolve_qgis_style_params`` (THE render
-   chokepoint: categorical/RGBA/terrain passthroughs, then the typed preset
-   registry, then band-stats percentile fallback, then a safe default),
-   stash the data-driven legend keyed by the ``s3://`` uri the envelope will
-   carry, and register the layer via ``observe_published_layer``.
+   chokepoint: categorical/RGBA/terrain passthroughs, then the contract-
+   declared preset in ``contracts/trid3nt_contracts/styles.yaml`` resolved
+   by ``emission/styles.py``, then band-stats percentile fallback, then a
+   safe default), stash the data-driven legend keyed by the ``s3://`` uri
+   the envelope will carry, and register the layer via
+   ``observe_published_layer``.
 
 QGIS-native rendering: nothing here mints
 ``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates or reads
@@ -107,15 +102,15 @@ class PublishLayerError(RuntimeError):
     The ``error_code`` attribute carries a SCREAMING_SNAKE_CASE code so the
     agent surface can render a useful failure narration and the pipeline strip
     shows ``UPSTREAM_API_ERROR``. ``retryable`` (contract; harvested
-    by ``adapter._classify_error``) tells Gemini whether re-issuing the call
-    with corrected args can succeed.
+    by ``adapter._classify_error``) tells the model whether re-issuing the
+    call with corrected args can succeed.
 
     Codes:
     - ``QGS_URI_PARSE_ERROR`` - malformed ``project_qgs_uri`` (vector-WMS seam).
-    - ``UNKNOWN_LAYER_HANDLE`` (2026-07-13, retryable) - ``layer_uri`` is a
+    - ``UNKNOWN_LAYER_HANDLE`` (retryable) - ``layer_uri`` is a
       bare placeholder token or fabricated scheme that no registry entry
       resolved; the message names the case's available handles so the model
-      retries with one verbatim (OPEN-17 small-model class).
+      retries with one verbatim.
     - ``LAYER_URI_NOT_FOUND`` (retryable) - ``layer_uri`` is not an ``s3://``
       COG on this deployment; the model should re-issue with the producing
       tool's layer handle or its ``s3://`` URI verbatim.
@@ -157,9 +152,9 @@ def _parse_qgs_key(qgs_uri: str) -> str:
 
     Used to build the MAP= parameter in the WMS URL. Both schemes share the
     ``<scheme>://<bucket>/<key>`` shape, so the key extraction is identical.
-    On the GCP path the .qgs lives at ``gs://...``; on AWS it lives
-    at ``s3://...``; the AWS QGIS-vector WMS branch (TRID3NT_QGIS_WMS_BASE set)
-    must accept the s3:// form or the branch fails.
+    Accepting ``gs://`` keeps old persisted project URIs parseable; the
+    QGIS-vector WMS branch (``TRID3NT_QGIS_WMS_BASE`` set) needs the
+    ``s3://`` form or the branch fails.
 
     Examples:
         ``s3://trid3nt-qgs/sample.qgs`` -> ``sample.qgs``
@@ -190,18 +185,16 @@ def _parse_qgs_key(qgs_uri: str) -> str:
 
 
 #: Env var that, WHEN SET, activates the s3-branch QGIS-vector publish route.
-#: It is the base URL of the AWS QGIS Server WMS endpoint (e.g.
-#: ``https://<cloudfront>/ogc/wms``). The route lands ahead of the AWS QGIS
-#: infra: until ``TRID3NT_QGIS_WMS_BASE`` is exported the
-#: s3 branch keeps the existing ``_benign_vector_noop`` (vectors already render
-#: inline via their producing fetch tool's GeoJSON), so LIVE behavior is
-#: UNCHANGED. Once the QGIS Server is stood up, exporting this var flips
-#: publish_layer to compose a styled WMS GetMap face for the vector.
+#: It is the base URL of a QGIS Server WMS endpoint. Dormant seam: until
+#: ``TRID3NT_QGIS_WMS_BASE`` is exported the s3 branch keeps the existing
+#: ``_benign_vector_noop`` (vectors already render inline via their
+#: producing fetch tool's GeoJSON), so behavior is unchanged. Exporting this
+#: var flips publish_layer to compose a styled WMS GetMap face for the vector.
 _QGIS_WMS_BASE_ENV: str = "TRID3NT_QGIS_WMS_BASE"
 
 
 def _get_qgis_wms_base() -> str:
-    """Return the configured AWS QGIS Server WMS base (trailing slash stripped).
+    """Return the configured QGIS Server WMS base (trailing slash stripped).
 
     Empty string when ``TRID3NT_QGIS_WMS_BASE`` is unset/blank - the caller
     treats that as "infra not yet stood up" and falls back to the benign no-op.
@@ -215,13 +208,12 @@ def _build_vector_wms_url(
     layer_id: str,
     qgs_key: str,
 ) -> str:
-    """Compose a styled WMS GetMap URL for a VECTOR on the AWS QGIS path.
+    """Compose a styled WMS GetMap URL for a VECTOR on the QGIS-vector path.
 
-    Mirrors the GCP ``_build_wms_url`` shape (``MAP=<.qgs key>&LAYERS=<id>``)
-    but points at ``TRID3NT_QGIS_WMS_BASE`` (the AWS QGIS Server) and carries
-    the standard WMS GetMap envelope so ``uri_registry._looks_like_wms``
-    recognizes it as a renderable display face. The MAP= param uses the same
-    ``/mnt/qgs/<key>`` mount convention as the GCP worker path.
+    Points at ``TRID3NT_QGIS_WMS_BASE`` and carries the standard WMS GetMap
+    envelope so ``uri_registry._looks_like_wms`` recognizes it as a
+    renderable display face. The MAP= param uses the ``/mnt/qgs/<key>``
+    mount convention the QGIS Server worker expects.
 
     Style seam: the family-aware ``_infer_style_preset`` (the same selector the
     raster paths use) is threaded into a ``STYLES=`` value so the QGIS Server
@@ -246,19 +238,20 @@ def _build_vector_wms_url(
 #: RGBA (colored relief) or single-band grayscale/Float32 (hillshade, slope,
 #: aspect, raw DEM) products - QGIS DEFAULT rendering visualizes them
 #: correctly, while the flood-depth pseudocolor ramp clamps them to a
-#: uniform/transparent tile (live 2026-06-10 "can't see the overlay").
+#: uniform/transparent tile.
 #: Token-boundary matching (not substring) so e.g. a layer_id like
 #: ``"demo-flood"`` does NOT match ``dem``.
 _TERRAIN_STYLE_TOKENS = frozenset(
-    # slope/aspect REMOVED 2026-06-24 (tools-backlog #3): they now carry real
-    # colormaps (slope_angle_deg ylorrd / aspect_compass_deg hsv) via the style
-    # registry, routed by _infer_style_preset below. dem/relief/hillshade/terrain/
-    # elevation STAY grayscale -- bare DEM + shaded relief render correctly unstyled.
+    # slope/aspect are NOT terrain tokens: they carry real colormaps
+    # (slope_angle_deg ylorrd / aspect_compass_deg hsv) via the style
+    # registry, routed by _infer_style_preset below. dem/relief/hillshade/
+    # terrain/elevation stay grayscale -- bare DEM + shaded relief render
+    # correctly unstyled.
     {"dem", "relief", "hillshade", "terrain", "elevation"}
 )
 
-#: tools-backlog #3 -- URI/id token -> the slope/aspect colormap preset, applied
-#: BEFORE the terrain passthrough so an auto-inferred slope/aspect layer is
+#: URI/id token -> the slope/aspect colormap preset, applied BEFORE the
+#: terrain passthrough so an auto-inferred slope/aspect layer is
 #: colormapped (not left grayscale and not mis-defaulted to flood depth).
 _SLOPE_ASPECT_PRESET_BY_TOKEN: dict[str, str] = {
     "slope": "slope_angle_deg",
@@ -269,12 +262,13 @@ _SLOPE_ASPECT_PRESET_BY_TOKEN: dict[str, str] = {
 def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
     """Family-aware default style preset.
 
-    Returns the slope/aspect colormap preset for those families (tools-backlog
-    #3), ``""`` (no preset → QGIS default rendering) for the remaining terrain
-    rasters (dem/relief/hillshade/terrain/elevation), else
-    ``"continuous_flood_depth"``  --  the pre-0269b default, so flood/plume
-    publishes that relied on it are unchanged. Tokenizes BOTH the resolved URI
-    and the layer_id on non-alphanumerics and matches    whole tokens against ``_TERRAIN_STYLE_TOKENS``.
+    Returns the slope/aspect colormap preset for those families, ``""``
+    (no preset -> QGIS default rendering) for the remaining terrain rasters
+    (dem/relief/hillshade/terrain/elevation), else
+    ``"continuous_flood_depth"`` as the default so flood/plume publishes
+    stay styled. Tokenizes BOTH the resolved URI and the layer_id on
+    non-alphanumerics and matches whole tokens against
+    ``_TERRAIN_STYLE_TOKENS``.
     """
     import re as _re
 
@@ -290,36 +284,32 @@ def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# F51: QGIS style resolver (s3 branch)
+# QGIS style resolver (s3 branch)
 #
 # A single-band float32 raster renders as AUTOSCALED GRAYSCALE unless the
 # resolved style-params carry an explicit ``&rescale=<lo>,<hi>`` and
 # ``&colormap_name=<name>`` (the rio-tiler string the QGIS plugin parses into
-# vmin/vmax/colormap). Before F51 only ``continuous_flood_depth`` and
-# ``continuous_plume_concentration`` got params (a 2-entry if/elif) - every
-# OTHER continuous preset (precip / temperature / wind / drought / fuel
-# moisture / satellite) fell through to ``style_params=""`` and rendered
-# invisible / washed-out.
+# vmin/vmax/colormap).
 #
 # ``_resolve_qgis_style_params`` is the single resolution point. CRITICAL
-# guards run FIRST so rasters that are ALREADY colorized are never corrupted by
-# a single-band rescale/colormap (the HIGH-severity terrain/RGBA regression a
-# rescale would otherwise introduce):
-#   - categorical / paletted COG (NLCD land cover) -> "" (embedded GDAL color
-# table wins);
+# guards run FIRST so rasters that are ALREADY colorized are never corrupted
+# by a single-band rescale/colormap (the HIGH-severity terrain/RGBA
+# regression a rescale would otherwise introduce):
+#   - categorical / paletted COG (NLCD land cover) -> "" (embedded GDAL
+#     color table wins);
 #   - RGB(A) / multiband COG (colored relief, blended landcover + hillshade
-#     composite - NATE's Toutle demo) -> "" (QGIS renders the baked colors
-#     directly);
+#     composite) -> "" (QGIS renders the baked colors directly);
 #   - terrain-token preset/URI (continuous_dem / hillshade / slope / aspect /
-#     relief / terrain / elevation) -> "" (grayscale terrain auto-scales, RGBA
-#     terrain renders directly - exactly as it did pre-F51).
-# Only AFTER those passthroughs does it apply a typed preset->(rescale,colormap)
-# REGISTRY (exact key first, then sensible substring/prefix) to SINGLE-BAND
-# weather SCALARS, then a GENERIC band-stats percentile fallback for any
-# single-band continuous preset not in the registry, then a SAFE non-empty
-# default. Colormap names are LOWERCASE rio-tiler names (viridis, blues, ylgnbu,
-# reds, rdbu, rdylbu_r, ylgn, ylorrd, gray, gray_r, ...) - rio-tiler casing is
-# lowercase (NOT matplotlib), do not change.
+#     relief / terrain / elevation) -> "" (grayscale terrain auto-scales,
+#     RGBA terrain renders directly).
+# Only AFTER those passthroughs does it delegate to the contract-declared
+# preset in ``contracts/trid3nt_contracts/styles.yaml``, resolved by
+# ``emission/styles.py``, for single-band weather SCALARS, falling back to a
+# generic band-stats percentile rescale for any preset the contract does not
+# cover, then a SAFE non-empty default. Colormap names are LOWERCASE
+# rio-tiler names (viridis, blues, ylgnbu, reds, rdbu, rdylbu_r, ylgn,
+# ylorrd, gray, gray_r, ...) - rio-tiler casing is lowercase (NOT
+# matplotlib), do not change.
 # --------------------------------------------------------------------------- #
 
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
@@ -329,10 +319,10 @@ def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
     when band count >= 3 OR any band's color interpretation is one of
     Red/Green/Blue/Alpha. Such rasters (colored relief, blended landcover +
     hillshade composites) are already colorized: a single-band ``&rescale`` +
-    ``&colormap_name`` would corrupt them, so the resolver returns ``""`` (empty
-    style_params = QGIS passthrough) for them, exactly as the pre-F51 path
-    did. Best-effort: returns False on any read failure so a real single-band
-    scalar still gets its rescale.
+    ``&colormap_name`` would corrupt them, so the resolver returns ``""``
+    (empty style_params = QGIS passthrough) for them. Best-effort: returns
+    False on any read failure so a real single-band scalar still gets its
+    rescale.
     """
     if not raster_bytes:
         return False
@@ -367,8 +357,8 @@ def _is_terrain_token_preset(style_preset: str | None, layer_uri: str) -> bool:
     non-alphanumerics and matches whole tokens, so e.g. ``"continuous_dem"``
     tokenizes to ``{continuous, dem}`` -> matches ``dem``. Terrain rasters
     (grayscale hillshade/slope/aspect, RGBA colored relief) render correctly
-    with NO rescale (the pre-F51 behavior), so the resolver returns ``""`` for
-    them before trying the registry / band-stats.
+    with NO rescale, so the resolver returns ``""`` for them before trying
+    the contract preset / band-stats.
     """
     import re as _re
 
@@ -460,21 +450,23 @@ def style_params_from_band_stats(
 
 
 # --------------------------------------------------------------------------- #
-# Data-driven legend KEY (NATE: "the color gradient/key must come FROM THE DATA
-# when we fetch the map -- it MUST mean something").
+# Data-driven legend KEY: the color gradient/key must come FROM THE DATA - it
+# must mean something.
 #
 # The legend is derived DIRECTLY from the resolved style_params string
-# (the SAME ``&rescale=lo,hi&colormap_name=name`` the raster render uses), so the
-# legend range and the painted raster range AGREE by construction -- there is no
-# second, separately-computed range to drift. For pinned-registry presets that is
-# the semantic fixed range (flood 0-3, seismic PGA 0-1, temperature 250-320 K);
-# for the generic fallback it is the REAL p2/p98 percentile range the resolver
-# already read off the COG. Categorical (paletted/NLCD) rasters carry NO
-# style_params (the embedded GDAL table colorizes them), so their legend comes
-# from ``_read_band1_colormap`` instead -- one ``LegendClass`` per table entry.
+# (the SAME ``&rescale=lo,hi&colormap_name=name`` the raster render uses), so
+# the legend range and the painted raster range AGREE by construction -- there
+# is no second, separately-computed range to drift. For contract-pinned
+# presets that is the semantic fixed range (flood 0-3, seismic PGA 0-1,
+# temperature 250-320 K); for the generic fallback it is the REAL p2/p98
+# percentile range the resolver already read off the COG. Categorical
+# (paletted/NLCD) rasters carry NO style_params (the embedded GDAL table
+# colorizes them), so their legend comes from ``_read_band1_colormap``
+# instead -- one ``LegendClass`` per table entry.
 #
-# Additive + fail-open: ANY failure here returns ``None`` so the publish proceeds
-# exactly as before (legend=None => the web legacy style_preset path renders it).
+# Fail-open: ANY failure here returns ``None`` so the publish proceeds
+# exactly as before (legend=None => the QGIS plugin falls back to rendering
+# from style_preset).
 # --------------------------------------------------------------------------- #
 
 #: Module-level side-table of the most-recent published-raster ``LegendKey``
@@ -594,14 +586,14 @@ def legend_for_published_layer(
     - ``style_params`` carries ``&rescale=lo,hi&colormap_name=name`` -> a
       ``kind="continuous"`` key with ``colormap=name``, ``vmin=lo``, ``vmax=hi``
       (the real p2/p98 range for unpinned presets; the pinned semantic range for
-      registry presets -- whichever the raster actually renders with).
+      contract presets -- whichever the raster actually renders with).
     - empty ``style_params`` (categorical / RGBA / terrain passthrough) -> probe
       the COG for an embedded GDAL color table and emit a ``kind="categorical"``
       key of one swatch per class. RGBA composites + grayscale terrain carry no
-      table, so they get ``None`` (legacy rendering -- there is no meaningful key).
+      table, so they get ``None`` (there is no meaningful key).
 
     Fail-open: returns ``None`` on ANY error so the publish is never blocked
-    (``legend=None`` => the web legacy ``style_preset`` path renders the layer
+    (``legend=None`` => the QGIS plugin renders the layer from style_preset
     exactly as before).
     """
     from trid3nt_contracts.execution import LegendKey
@@ -665,8 +657,9 @@ def _legend_label_for(style_preset: str | None) -> str | None:
     """A short human-readable legend title from the preset, or ``None``.
 
     Best-effort cosmetic: ``"continuous_flood_depth"`` -> ``"Flood depth"``. The
-    frontend renders it verbatim as the legend caption; ``None`` is fine (the web
-    falls back to the layer name). Pure presentation -- never affects the range.
+    QGIS plugin renders it verbatim as the legend caption; ``None`` is fine
+    (it falls back to the layer name). Pure presentation -- never affects
+    the range.
     """
     if not style_preset or style_preset == "auto":
         return None
@@ -718,24 +711,20 @@ def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
     return _LAST_LEGEND_BY_URI.get(display_uri)
 
 
-# NOTE: ``build_titiler_tile_url`` - the legacy
-# XYZ tile-TEMPLATE mint (``{base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
-# ?url=<cog>&rescale=..``) - was DELETED once its last importer
-# (``workflows.register_published_manifest``) swapped to emitting the raw
-# ``s3://`` ``cog_uri`` and stashing its legend by that uri, exactly like the
-# atomic publish above. Do not reintroduce a tile-template mint here.
+# NOTE: QGIS-native rendering emits the raw ``s3://`` COG uri directly (see
+# module docstring) - do not reintroduce an XYZ tile-template mint here.
 
 
 # --------------------------------------------------------------------------- #
-# F32: benign vector handling
+# Benign vector handling
 # --------------------------------------------------------------------------- #
 
 #: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY (see the module
 #: docstring + the inline-GeoJSON path). A vector reaching here is ALREADY on
 #: the map via its producing fetch tool (``add_loaded_layer`` inline GeoJSON),
-#: so a publish is unnecessary - and routing it through the raster tile
-#: path mints HANGING tiles that freeze the map. Token-tail matched against the
-#: resolved URI basename.
+#: so a publish is unnecessary - and GDAL cannot open a FlatGeobuf as a
+#: raster COG, so routing one through the raster path would fail to open,
+#: not render. Token-tail matched against the resolved URI basename.
 _VECTOR_EXTS = (
     ".fgb",
     ".geojson",
@@ -753,20 +742,16 @@ def _is_vector_uri(layer_uri: str) -> bool:
 
 
 def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
-    """Return a calm, NON-ERROR signal for a vector handed to publish_layer (F32).
+    """Return a calm, NON-ERROR signal for a vector handed to publish_layer.
 
     The agent keeps calling ``publish_layer`` on vector layers (roads/rivers)
     that ALREADY rendered inline via their producing fetch tool's GeoJSON
-    (``add_loaded_layer`` path). Pre-F32 this RAISED
-    ``PUBLISH_LAYER_VECTOR_NOT_RASTER`` → a scary red "Publishing layer… failed"
-    card on a layer the user can already see.
-
-    F32 turns that into a benign no-op: NO raise (so ``emit_tool_call``
-    ``mark_complete``s the step - green, not red), NO tile template, NO
-    ``observe_published_layer`` registration (so no hanging-tile face is minted).
-    The returned string is what the caller gets back - a clear, honest
-    "already rendered inline; no publish needed" rather than a failure it would
-    have to explain.
+    (``add_loaded_layer`` path); this is a benign no-op for that call: NO
+    raise (so ``emit_tool_call`` ``mark_complete``s the step - green, not
+    red), NO tile template, NO ``observe_published_layer`` registration (so
+    no hanging-tile face is minted). The returned string is what the caller
+    gets back - a clear, honest "already rendered inline; no publish needed"
+    rather than a failure it would have to explain.
     """
     logger.info(
         "publish_layer: benign vector no-op for layer_id=%s uri=%s - vector "
@@ -783,7 +768,7 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# DATA-ISLAND PHASE 0: durable browser-readable GeoJSON for every vector.
+# Durable browser-readable GeoJSON for every vector.
 #
 # Vectors are produced as FlatGeobuf (``.fgb``) which the browser CANNOT read,
 # and today the agent delivers them INLINE (it reads the .fgb back, parses to
@@ -792,14 +777,14 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 # readable copy of a vector layer, so a cold-opened case paints rasters but not
 # roads/rivers/footprints/mesh.
 #
-# This phase FREEZES a durable contract: every vector publish materializes a
-# GeoJSON FeatureCollection at a STABLE, per-Case key in the DURABLE runs bucket
-# (the same bucket that holds the case-view snapshot + solver decks), so a later
-# phase's case manifest / cold-view materializer can serve it with ZERO agent
+# Durable contract: every vector publish materializes a GeoJSON
+# FeatureCollection at a STABLE, per-Case key in the DURABLE runs bucket
+# (the same bucket that holds the case-view snapshot + solver decks), so a
+# case manifest / cold-view materializer can serve it with ZERO agent
 # involvement. The .fgb stays the DATA face (analytical tools open it); the
 # GeoJSON asset is the DISPLAY face (the browser fetches it).
 #
-# Frozen contract (engine tracks rebase onto this):
+# Contract:
 #   bucket : TRID3NT_RUNS_BUCKET (solver._get_runs_bucket - the DURABLE runs
 #            bucket, NOT the 30-day-TTL content-addressed cache bucket; a
 #            published layer must outlive cache eviction).
@@ -808,7 +793,7 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 #            URI - the DISPLAY face the QGIS plugin reads for the vector layer.
 #   faces  : observe_published_layer(layer_id, gcs_uri=<s3 .fgb DATA>,
 #            wms_url=<s3 .geojson DISPLAY>) - the GeoJSON never displaces the
-#            data uri (mirrors the raster tile-template / WMS branches).
+#            data uri (mirrors the vector-WMS branch above).
 # --------------------------------------------------------------------------- #
 
 #: Object-key prefix for durable per-Case vector GeoJSON assets in the runs
@@ -819,7 +804,7 @@ DURABLE_CASE_DATA_PREFIX: str = "case-data"
 def durable_vector_geojson_key(case_id: str, layer_id: str) -> str:
     """Return the runs-bucket object key for a Case's durable vector GeoJSON.
 
-    Frozen Phase-0 contract: ``case-data/<case_id>/<layer_id>.geojson``.
+    Frozen contract: ``case-data/<case_id>/<layer_id>.geojson``.
     One seam so the writer (here) and any later reader name it identically.
     """
     return f"{DURABLE_CASE_DATA_PREFIX}/{case_id}/{layer_id}.geojson"
@@ -833,8 +818,8 @@ def _vector_uri_to_geojson_bytes(layer_uri: str) -> bytes | None:
         geopandas; the same converter the inline path uses).
       - ``.geojson`` / ``.json`` -> validated FeatureCollection passed through.
 
-    Source bytes are read with the SAME boto3 EC2-instance-role client every
-    other s3 download in this module uses (``cache.read_object_bytes_s3``); a
+    Source bytes are read with the SAME boto3 client every other s3
+    download in this module uses (``cache.read_object_bytes_s3``); a
     local path is read directly (dev / test convenience). Returns ``None`` on
     ANY read / parse / unsupported-extension error (caller fails open).
     """
@@ -846,8 +831,8 @@ def _vector_uri_to_geojson_bytes(layer_uri: str) -> bytes | None:
 
             raw = read_object_bytes_s3(layer_uri)
         elif layer_uri.startswith(("gs://", "/vsigs/")):
-            # GCP is decommissioned; a gs:// vector here is unexpected on the
-            # AWS data island. Fail open (caller -> benign no-op).
+            # gs:// is not a live store here (MinIO/s3:// is); a gs:// vector
+            # is unexpected. Fail open (caller -> benign no-op).
             return None
         else:
             with open(layer_uri, "rb") as f:
@@ -899,17 +884,16 @@ def _vector_uri_to_geojson_bytes(layer_uri: str) -> bytes | None:
 def _write_durable_vector_geojson(
     layer_uri: str, layer_id: str, case_id: str
 ) -> str | None:
-    """Materialize a vector layer's GeoJSON to the DURABLE runs bucket (P0).
+    """Materialize a vector layer's GeoJSON to the DURABLE runs bucket.
 
     Reads ``layer_uri`` (FlatGeobuf / GeoJSON) to a GeoJSON FeatureCollection,
     writes it to ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson``
-    via the SAME boto3 EC2-instance-role client + runs-bucket convention every
-    run artifact uses (``solver._get_runs_bucket``), and returns the durable
-    ``s3://`` asset URI.
+    via the SAME boto3 client + runs-bucket convention every run artifact
+    uses (``solver._get_runs_bucket``), and returns the durable ``s3://``
+    asset URI.
 
-    FAIL-OPEN: returns ``None`` on ANY read / parse / write error (the caller
-    degrades to the existing benign no-op - data-source-fallback norm). NEVER
-    raises.
+    FAIL-OPEN: returns ``None`` on ANY read / parse / write error (the
+    caller degrades to the existing benign no-op). NEVER raises.
     """
     geojson_bytes = _vector_uri_to_geojson_bytes(layer_uri)
     if geojson_bytes is None:
@@ -953,7 +937,7 @@ def _write_durable_vector_geojson(
 
 
 # --------------------------------------------------------------------------- #
-# F33: overview enforcement (no-overview COGs render spotty / never paint)
+# Overview enforcement (no-overview COGs render spotty / never paint)
 # --------------------------------------------------------------------------- #
 
 
@@ -994,7 +978,7 @@ def _read_band1_colormap(src) -> dict | None:
 
     NLCD land cover (and other categorical rasters) ship a single-band
     palette-index COG with an EMBEDDED GDAL color table; QGIS colorizes from
-    it. The F33 overview-enforcement re-write must carry that table forward or
+    it. The overview-enforcement re-write must carry that table forward or
     the layer renders solid grey. rasterio raises ``ValueError`` when
     band 1 has no color table - the normal case for continuous rasters (DEM,
     hillshade, flood depth) - and we return ``None`` so callers do NOT fabricate
@@ -1038,7 +1022,7 @@ def _apply_band1_colormap(dst, cmap: dict | None) -> None:
 
 
 def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
-    """Translate flat raster bytes into a tiled COG WITH overviews (F33).
+    """Translate flat raster bytes into a tiled COG WITH overviews.
 
     Two paths. The COG-driver encode (``emission/cog.translate_to_cog``) tiles and
     builds overviews in one pass; it degrades to the flat input bytes rather than
@@ -1153,16 +1137,14 @@ def _build_cog_with_overviews_rasterio(raster_bytes: bytes) -> bytes | None:
 
 
 def _overview_factors(width: int, height: int) -> list[int]:
-    """Power-of-two decimation factors down to a ~256px overview (F33).
+    """Power-of-two decimation factors down to a ~256px overview.
 
-    For small rasters (max dimension < 512px) the 256px floor produces an empty
-    list, so _build_cog_with_overviews_rasterio skips overview generation and the
-    COG stays overview-free. QGIS then computes minzoom == maxzoom for tiny
-    COGs, and MapLibre silently renders nothing at the default CONUS zoom.
-
-    Fix: always include at least factor=2, even if the 256px floor is never met.
-    A single factor-2 overview (64-75px) is sufficient for QGIS to lower its
-    minzoom and for MapLibre to overzoom the tiles at any zoom level.
+    For small rasters (max dimension < 512px) the 256px floor alone would
+    produce an empty list, and QGIS then computes minzoom == maxzoom for a
+    tiny overview-free COG and renders nothing at the default CONUS zoom, so
+    this always includes at least factor=2 even when the 256px floor is
+    never met. A single factor-2 overview (64-75px) is sufficient for QGIS
+    to lower its minzoom and overzoom the tiles at any zoom level.
     """
     factors: list[int] = []
     factor = 2
@@ -1181,8 +1163,8 @@ def _overview_factors(width: int, height: int) -> list[int]:
 def _read_raster_bytes(layer_uri: str) -> bytes | None:
     """Read raster bytes for an ``s3://`` / local URI (None on failure).
 
-    Used by the F33 overview check. Fail-open: any read error returns ``None``
-    so the publish proceeds with the original URI (legacy behavior).
+    Used by the overview check. Fail-open: any read error returns ``None``
+    so the publish proceeds with the original URI.
     """
     try:
         if layer_uri.startswith("s3://"):
@@ -1252,18 +1234,18 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
 
 
 def _ensure_raster_has_overviews(layer_uri: str) -> str:
-    """Guarantee the published raster is a COG WITH overviews (F33).
+    """Guarantee the published raster is a COG WITH overviews.
 
     A no-overview COG renders SPOTTY (per-strip range requests time out cold;
-    QGIS can't downsample for low zooms), so before a raster's
-    tile template / WMS face is ever registered, validate the source COG has
-    overviews. When missing, auto-translate to a tiled+overview COG (reusing
-    ``emission.cog.translate_to_cog``, with a rasterio fallback), write it
-    to a fresh sibling object, log the auto-translate, and publish THAT instead.
+    QGIS can't downsample for low zooms), so before a raster is registered,
+    validate the source COG has overviews. When missing, auto-translate to a
+    tiled+overview COG (reusing ``emission.cog.translate_to_cog``, with a
+    rasterio fallback), write it to a fresh sibling object, log the
+    auto-translate, and publish THAT instead.
 
     Fail-open at every step: an unreadable raster, a missing rasterio, a failed
     translate, or a failed write all degrade to returning ``layer_uri``
-    unchanged (legacy behavior - never blocks a publish).
+    unchanged (never blocks a publish).
     """
     raster_bytes = _read_raster_bytes(layer_uri)
     if raster_bytes is None:
@@ -1308,14 +1290,14 @@ _CONSUMABLE_URI_SCHEMES = ("s3://", "gs://", "http://", "https://", "file://")
 def _looks_like_unresolved_handle(layer_uri: str) -> bool:
     """True when ``layer_uri`` cannot be a consumable URI or filesystem path.
 
-    OPEN-17 class (2026-07-13, live local-8B incident): small models call
-a publish in the SAME iteration as the producing tool with literal
-    placeholders ('LayerURI_from_previous_step') or invented pseudo-URIs
-    ('qgis://project1'). Those fail deep in the publish path with an
-    unhelpful GDAL/storage error. This predicate gates them at the door so
-    the caller gets a typed error that NAMES the actually available handles
-    instead. The class is rarer now that no model calls a publish tool, but
-    the guard still covers a composer handing on an unresolved handle.
+    Small models sometimes call a publish in the SAME iteration as the
+    producing tool with literal placeholders ('LayerURI_from_previous_step')
+    or invented pseudo-URIs ('qgis://project1'). Those fail deep in the
+    publish path with an unhelpful GDAL/storage error. This predicate gates
+    them at the door so the caller gets a typed error that NAMES the
+    actually available handles instead. The class is rarer now that no
+    model calls a publish tool, but the guard still covers a composer
+    handing on an unresolved handle.
 
     Conservative by construction -- everything a valid caller passes today is
     accepted: registered handles are already resolved to real URIs before this
@@ -1326,11 +1308,11 @@ a publish in the SAME iteration as the producing tool with literal
     if not v:
         return True
     # Angle brackets and literal ellipses are never valid in a real URI -
-    # they are template-placeholder shapes, BOTH observed live 2026-07-13:
-    # 'gs://<result-fetched_usgs_earthquakes-uri>' and
-    # 's3://.../earthquakes_layer.fgb' (the latter slipped past a scheme
-    # allowlist and hit the F32 benign vector no-op, minting a success-shaped
-    # "Layer published" for a fabricated URI). Tile-template braces
+    # they are template-placeholder shapes, e.g.
+    # 'gs://<result-fetched_usgs_earthquakes-uri>' and a fabricated
+    # 's3://.../earthquakes_layer.fgb' that slipped past a scheme allowlist
+    # and hit the benign vector no-op, minting a success-shaped "Layer
+    # published" for a URI that was never real. Tile-template braces
     # ({z}/{x}/{y}) remain VALID input for the legacy tile-template unwrap
     # branch (old persisted cases), so braces are NOT placeholder markers.
     if "<" in v or ">" in v or "..." in v:
@@ -1368,10 +1350,10 @@ def _unknown_handle_error(layer_uri: str) -> "PublishLayerError":
 
 
 def derive_layer_id(layer_uri: str, registry: Any | None = None) -> str:
-    """Derive a stable ``layer_id`` when the caller omitted one (2026-07-08).
+    """Derive a stable ``layer_id`` when the caller omitted one.
 
-    Local 8B models omit ``publish_layer``'s ``layer_id`` entirely (live
-    TypeError evidence). Derivation order:
+    Local 8B models omit ``publish_layer``'s ``layer_id`` entirely.
+    Derivation order:
 
     1. the registered layer handle whose URI equals the (already
        server-resolved) ``layer_uri`` - i.e. the producing tool's own
@@ -1419,7 +1401,7 @@ def _looks_like_ulid(value: str) -> bool:
 
     Matches ``new_ulid()``'s output shape without importing the ``ulid``
     package here -- a cheap regex is enough to recognize "this is not a
-    human name, it's an identifier" for the OPEN-9 name-derivation guard.
+    human name, it's an identifier" for the name-derivation guard.
     """
     import re as _re
 
@@ -1504,11 +1486,11 @@ def derive_readable_layer_name(
     style_preset: str | None,
     layer_uri: str,
 ) -> str:
-    """Derive a human-readable layer name for the UI's layer list (OPEN-9).
+    """Derive a human-readable layer name for the UI's layer list.
 
     Local 8B models routinely omit ``publish_layer``'s ``name``, and when
     ``layer_id`` ALSO degrades to a bare ULID (``derive_layer_id``'s last
-    resort), the published layer showed up in the UI as e.g.
+    resort), the published layer would show up in the UI as e.g.
     ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` -- meaningless to the user. Precedence:
 
     1. an explicit, non-empty ``name`` that is not ITSELF a bare-ULID shape
@@ -1571,10 +1553,10 @@ def style_preset_for_publish(
 ) -> str:
     """The preset a layer publishes under, when the producer named none.
 
-    Deliberately NOT called ``resolve_style_preset``: ``quantity_styles`` in
-    this same package already owns that name for a different question (which
-    ramp a solver QUANTITY gets). This one answers a boundary question - what
-    an unnamed raster publishes as.
+    Deliberately NOT called ``resolve_style_preset``: ``emission/styles.py``
+    already owns that name for a different question (which ramp a solver
+    QUANTITY gets). This one answers a boundary question - what an unnamed
+    raster publishes as.
 
     Honors an explicit non-empty ``style_preset`` (the producing tool asked for
     it). When it resolves EMPTY, defaults a flood/depth COG to
@@ -1609,9 +1591,9 @@ def publish_layer(
     #: coarse-versus-refined are painted against each other rather than each
     #: against itself.
     shared_range: tuple[float, float] | None = None,
-    # Absorb extra keywords. Kept after the tool died because the callers are
-    # ~30 composers plus the emission seam, and a new keyword on one of them
-    # must not break the other twenty-nine.
+    # Absorb extra keywords: callers are ~30 composers plus the emission
+    # seam, and a new keyword on one of them must not break the other
+    # twenty-nine.
     **_extra_ignored: Any,
 ) -> str:
     """Publish a COG raster: overviews, styling, legend, registration.
@@ -1653,7 +1635,7 @@ def publish_layer(
         PublishLayerError: unknown layer handle, or a non-``s3://`` raster URI.
             ``error_code`` carries a SCREAMING_SNAKE_CASE code.
     """
-    # OPEN-17 (2026-07-13): unknown/placeholder handle guard. A registered
+    # Unknown/placeholder handle guard. A registered
     # handle was already substituted with its real URI by the server's
     # ``uri_registry.resolve_params`` seam before this body runs, so a bare
     # token ('LayerURI_from_previous_step') or a fabricated scheme
@@ -1663,8 +1645,8 @@ def publish_layer(
     if _looks_like_unresolved_handle(layer_uri):
         raise _unknown_handle_error(layer_uri)
 
-    # 2026-07-08 small-model resilience: layer_id is optional. Local 8B models
-    # call publish_layer without it (live TypeError: missing 1 required
+    # Small-model resilience: layer_id is optional. Local 8B models call
+    # publish_layer without it (otherwise a TypeError: missing 1 required
     # positional argument: 'layer_id'). The server dispatch seam injects the
     # same derived id into params so the wrap-site emission still fires; this
     # in-tool derivation covers direct/programmatic callers.
@@ -1676,7 +1658,7 @@ def publish_layer(
             layer_uri,
         )
 
-    # OPEN-9: ``name`` is a transport-only carrier (see docstring) - the
+    # ``name`` is a transport-only carrier (see docstring) - the
     # actual LayerURI.name the client renders is computed by the server-side
     # wrap-site's ``derive_readable_layer_name`` call (it has the resolved
     # published URI + style_preset this function's caller does not see yet).
@@ -1690,7 +1672,7 @@ def publish_layer(
     # TRID3NT_TILE_SERVER_BASE, no XYZ template mint. The COG itself is the
     # published artifact; no .qgs mutation, no worker round-trip.
     #
-    # LEGACY republish (was the IDEMPOTENT guard):
+    # Legacy republish:
     # old persisted cases (and pre-swap composer registrations) carry legacy
     # tile-TEMPLATE display URLs. A re-publish of one is NOT an error - UNWRAP
     # the embedded ``url=`` s3 COG (the same trick
@@ -1718,27 +1700,23 @@ def publish_layer(
                 layer_id,
             )
             return layer_uri
-    # F32 (2026-06-16): publish_layer is RASTER-ONLY (see module docstring)
-    # but is repeatedly handed VECTOR artifacts (roads/rivers .fgb/.geojson)
-    # that ALREADY rendered inline via their producing fetch tool's GeoJSON
-    # (``add_loaded_layer`` path). Pre-F32 this RAISED a typed
-    # terminal error → a scary red "Publishing layer… failed" card on a
-    # layer the user can already see, AND QGIS cannot read a FlatGeobuf
-    # as a raster so wrapping it in a /cog tile template mints HANGING tiles
-    # that freeze the map. F32: return a BENIGN, non-error result instead -
-    # no raise (the step completes GREEN), no tile template, no
-    # ``observe_published_layer`` registration (no hanging-tile face), and a
-    # calm function_response so the agent narrates honestly and never
-    # re-calls publish_layer for the vector.
+    # publish_layer is RASTER-ONLY (see module docstring) but is repeatedly
+    # handed VECTOR artifacts (roads/rivers .fgb/.geojson) that ALREADY
+    # rendered inline via their producing fetch tool's GeoJSON
+    # (``add_loaded_layer`` path), and GDAL cannot open a FlatGeobuf as a
+    # raster. Return a BENIGN, non-error result instead - no raise (the step
+    # completes GREEN), no tile template, no ``observe_published_layer``
+    # registration (no hanging-tile face), and a calm function_response so
+    # the agent narrates honestly and never re-calls publish_layer for the
+    # vector.
     if _is_vector_uri(layer_uri):
-        # forward seam: WHEN the AWS QGIS Server is stood up and
+        # Dormant seam: WHEN a QGIS Server is stood up and
         # TRID3NT_QGIS_WMS_BASE is exported, route the vector through a
-        # styled WMS GetMap face (mirrors the GCP ``_build_wms_url`` shape
-        # MAP=<.qgs key>&LAYERS=<id>&... but pointed at the AWS WMS base).
-        # This NO-OPs on the live stack TODAY: the var is unset until the
-        # infra exists, so the existing benign no-op is returned and
-        # behavior is byte-for-byte unchanged (vectors render inline via
-        # their producing fetch tool's GeoJSON).
+        # styled WMS GetMap face (MAP=<.qgs key>&LAYERS=<id>&...). This
+        # NO-OPs on the live stack TODAY: the var is unset until the infra
+        # exists, so the existing benign no-op is returned and behavior is
+        # byte-for-byte unchanged (vectors render inline via their
+        # producing fetch tool's GeoJSON).
         wms_base = _get_qgis_wms_base()
         if wms_base:
             effective_qgs_uri = _get_effective_qgs_uri(project_qgs_uri)
@@ -1755,21 +1733,20 @@ def publish_layer(
             # Register BOTH faces: the s3:// vector (consumable DATA uri)
             # + the WMS GetMap URL (display face). ``_looks_like_wms``
             # routes the WMS URL to the wms/display slot so it never
-            # displaces the s3:// data uri (mirrors the raster branch).
+            # displaces the s3:// data uri.
             observe_published_layer(
                 layer_id, gcs_uri=layer_uri, wms_url=wms_url
             )
             return wms_url
-        # DATA-ISLAND PHASE 0: when no QGIS WMS base is configured
-        # (the live stack TODAY) write a DURABLE, browser-readable GeoJSON
-        # for this vector so the box-off cold path can paint it. The .fgb is
-        # the browser-unreadable DATA face; the GeoJSON asset is the DISPLAY
-        # face. ``case_id`` is threaded by the server wrapper
-        # (``_invoke_tool_via_emitter``: ``params.setdefault("case_id", ...)``
-        # for EVERY publish_layer call, raster OR vector) so an in-Case
-        # vector publish reaches here with the Case bound. FAIL-OPEN: any
-        # geopandas/read/write error returns the existing benign no-op
-        # (data-source-fallback norm; never raise).
+        # When no QGIS WMS base is configured (the live stack TODAY) write a
+        # DURABLE, browser-readable GeoJSON for this vector so the box-off
+        # cold path can paint it. The .fgb is the browser-unreadable DATA
+        # face; the GeoJSON asset is the DISPLAY face. ``case_id`` is
+        # threaded by the server wrapper (``_invoke_tool_via_emitter``:
+        # ``params.setdefault("case_id", ...)`` for EVERY publish_layer
+        # call, raster OR vector) so an in-Case vector publish reaches here
+        # with the Case bound. FAIL-OPEN: any geopandas/read/write error
+        # returns the existing benign no-op (never raise).
         if case_id:
             asset_uri = _write_durable_vector_geojson(
                 layer_uri, layer_id, case_id
@@ -1778,7 +1755,7 @@ def publish_layer(
                 # Register BOTH faces: the s3:// .fgb stays the DATA uri,
                 # the durable s3:// GeoJSON asset is the DISPLAY face. It is
                 # routed via ``wms_url`` so it NEVER displaces the data uri
-                # (mirrors the WMS / tile-template branches above).
+                # (mirrors the WMS branch above).
                 observe_published_layer(
                     layer_id, gcs_uri=layer_uri, wms_url=asset_uri
                 )
@@ -1802,21 +1779,20 @@ def publish_layer(
             "s3:// URI verbatim.",
             retryable=True,
         )
-    # F33: a no-overview COG renders SPOTTY (per-strip range requests time
-    # out cold; QGIS can't downsample for low zooms), so validate the COG
-    # has overviews and auto-translate to a tiled+overview COG before
-    # minting the tile template. Fail-open (publishes as-is) on any error.
+    # A no-overview COG renders SPOTTY (per-strip range requests time out
+    # cold; QGIS can't downsample for low zooms), so validate the COG has
+    # overviews and auto-translate to a tiled+overview COG before the
+    # raster is registered. Fail-open (publishes as-is) on any error.
     layer_uri = _ensure_raster_has_overviews(layer_uri)
 
-    # F51: Style -> render params. The resolver math is UNCHANGED (the render
-    # chokepoint + honesty floor); only where its output LANDS moved - the
-    # ``&rescale=..&colormap_name=..`` string no longer rides a tile-URL query
-    # (QGIS-native), it feeds the stashed LEGEND the plugin renders from.
-    # _resolve_qgis_style_params is the single resolution point:
+    # Style -> render params. The ``&rescale=..&colormap_name=..`` string
+    # does not ride a tile-URL query (QGIS-native); it feeds the stashed
+    # LEGEND the plugin renders from. _resolve_qgis_style_params is the
+    # single resolution point:
     #   - flood depths keep the blue ramp over 0-3 m; plume concentrations
     # keep the red ramp over 0-10 mg/L (byte-for-byte);
     #   - precip / temperature / wind / drought / fuel-moisture / satellite
-    #     resolve to physically-correct registry bands;
+    #     resolve to physically-correct contract bands;
     #   - anything unknown gets a band-1 2nd/98th-percentile auto-rescale
     #     (viridis) read from the COG bytes already in hand, with a SAFE
     #     non-empty default if the stats read fails;
@@ -1861,8 +1837,8 @@ def publish_layer(
     )
     # register the published layer in the session URI registry so
     # the ``flood-depth-peak-<id>``-style handle resolves to a consumable
-    # DATA uri for downstream tools (Pelicun, zonal stats). Under QGIS-native rendering the
-    # exit there is no separate display face: the raw s3:// COG IS both the
-    # data uri and the envelope uri the plugin renders.
+    # DATA uri for downstream tools (Pelicun, zonal stats). Under
+    # QGIS-native rendering there is no separate display face: the raw
+    # s3:// COG IS both the data uri and the envelope uri the plugin renders.
     observe_published_layer(layer_id, gcs_uri=layer_uri)
     return layer_uri

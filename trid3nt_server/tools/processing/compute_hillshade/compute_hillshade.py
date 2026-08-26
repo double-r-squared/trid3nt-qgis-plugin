@@ -64,6 +64,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.cache import CACHE_BUCKET, read_through
+from trid3nt_server.emission.cog import translate_to_cog as _translate_to_cog
 from trid3nt_server.tools.processing._gdal_runner import (
     read_raster_bytes,
     resolve_gdaldem,
@@ -129,15 +130,6 @@ def _get_gdaldem_bin() -> str:
             "or install gdal-bin.",
         )
     return binary
-
-
-def _translate_to_cog(input_path: str, gdaldem_bin: object | None = None) -> bytes:
-    """In-process COG encode (rasterio). ``gdaldem_bin`` accepted for back-compat, ignored.
-
-    Retained as the module-level entry point that publish_layer / fetch_landcover
-    import; delegates to the shared runner's rasterio COG encoder.
-    """
-    return translate_to_cog(input_path)
 
 
 def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:

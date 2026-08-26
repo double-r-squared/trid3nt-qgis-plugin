@@ -295,11 +295,11 @@ def test_bad_erosivity_raises(synthetic_inputs) -> None:
 
 
 def test_style_preset_resolves_log_colormap() -> None:
-    """The publish seam turns the preset into a log-spaced interval colormap."""
-    from trid3nt_server.emission.publish import _registry_style_params
+    """The one resolver turns the preset into a log-spaced interval colormap."""
+    from trid3nt_server.emission.styles import resolve_style
 
-    params = _registry_style_params("sediment_yield_t_ha_yr")
-    assert params is not None and params.startswith("&colormap=")
+    params = resolve_style("sediment_yield_t_ha_yr").style_params()
+    assert params and params.startswith("&colormap=")
     (key, encoded), = parse_qsl(params.lstrip("&"))
     assert key == "colormap"
     intervals = json.loads(encoded)

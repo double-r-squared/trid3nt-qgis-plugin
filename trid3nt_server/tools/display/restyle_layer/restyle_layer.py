@@ -45,7 +45,6 @@ _METADATA = AtomicToolMetadata(
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
-    supports_global_query=True,
 )
 
 

@@ -129,10 +129,15 @@ def test_geoclaw_producer_emits_outputs_entries(tmp_path):
 
 
 def test_geoclaw_byte_equivalence_seam_vs_register(tmp_path):
-    """The seam's PEAK row == the register path's on the render stream, and every
-    seam FRAME renders with that same resolved style; the layer_id stem swap
-    (geoclaw-depth -> flood-depth) is the sole explained, non-rendering
-    divergence. publish_manifest holds the peak alone (metrics carrier)."""
+    """The seam's PEAK row matches the register path's identity fields, its RANGE
+    spans the whole run, and every seam FRAME is painted on that one range.
+
+    Two explained divergences. The layer_id stem swap (geoclaw-depth ->
+    flood-depth, engine-prefixed to physical-quantity). And the RANGE: a
+    data-driven scale is scoped to the RUN, so the seam - which sees the peak and
+    every frame - spans them all, while publish_manifest holds the peak alone and
+    can only ever range over that one raster. The seam's range therefore CONTAINS
+    the register path's."""
     res = _make_run(tmp_path)
     assert res.status == "ok", res.error_message
 
@@ -151,19 +156,39 @@ def test_geoclaw_byte_equivalence_seam_vs_register(tmp_path):
         om.append_entries(None, engine="geoclaw", run_id=RID, new=res.outputs_entries)
     )
     new = build_layers_from_outputs(manifest, run_id=RID, bbox=None)
+    # Both sides resolve WITH the entry's band stats: under policy=data a preset's
+    # range comes from those statistics, so omitting them on one side would compare
+    # a raster against itself-without-its-own-data rather than path against path.
+    stats_by_uri = {e.uri: {"is_categorical": e.band_stats.is_categorical,
+                            "is_rgba": e.band_stats.is_rgba,
+                            "p2": e.band_stats.p2, "p98": e.band_stats.p98}
+                    for e in manifest.entries if e.band_stats is not None}
     new_stream = [
-        _render_row(lyr, _resolved_style(lyr.style_preset, None, lyr.uri))
+        _render_row(lyr, _resolved_style(lyr.style_preset,
+                                         stats_by_uri.get(lyr.uri), lyr.uri))
         for lyr in new.layers
     ]
 
     new_peak = [r for r in new_stream if r["role"] == "primary"]
-    assert new_peak == old_stream, (
-        "peak render row diverged:\nOLD=%s\nNEW=%s" % (old_stream, new_peak)
-    )
+    assert len(new_peak) == len(old_stream) == 1
+    for field in ("name", "layer_type", "style_preset", "role", "units", "bbox",
+                  "rescale"):
+        assert new_peak[0][field] == old_stream[0][field], (
+            "peak render row diverged on %s:\nOLD=%s\nNEW=%s"
+            % (field, old_stream, new_peak))
+
+    seam_kind, seam_cmap, seam_lo, seam_hi, seam_units = new_peak[0]["stashed_legend"]
+    reg_kind, reg_cmap, reg_lo, reg_hi, reg_units = old_stream[0]["stashed_legend"]
+    assert (seam_kind, seam_cmap, seam_units) == (reg_kind, reg_cmap, reg_units)
+    assert seam_lo <= reg_lo and seam_hi >= reg_hi, (
+        "the seam's run range %s does not contain the register path's peak range %s"
+        % ((seam_lo, seam_hi), (reg_lo, reg_hi)))
+
+    # THE RULE: one range for the whole run - every frame on the peak's legend.
     frame_rows = [r for r in new_stream if r["role"] != "primary"]
     assert frame_rows
     for row in frame_rows:
-        for field in ("style_preset", "units", "bbox", "rescale", "stashed_legend"):
+        for field in ("style_preset", "units", "bbox", "stashed_legend"):
             assert row[field] == new_peak[0][field], field
 
     # The one EXPLAINED divergence: layer_id stem. OLD is engine-prefixed

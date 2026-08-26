@@ -70,7 +70,6 @@ def _raster_spec(enabled: bool = True) -> OutputQuantitySpec:
         quantity_id="flood-depth",
         kind="raster",
         name="Peak flood depth",
-        style_preset="continuous_flood_depth",
         units="meters",
         role="primary",
         reader=_reader,
@@ -97,8 +96,7 @@ def test_default_off_spec_is_skipped() -> None:
 
 def test_reader_none_scaffold_spec_skipped() -> None:
     spec = OutputQuantitySpec(
-        quantity_id="q", kind="raster", name="Q", style_preset="p",
-        reader=None, default_on=True,
+        quantity_id="q", kind="raster", name="Q",         reader=None, default_on=True,
     )
     m = build_quantities_manifest("x", run_id="r", upload=_fake_upload, specs=[spec])
     assert m.layers == []
@@ -130,8 +128,7 @@ def test_raster_write_failure_raises_quantity_exec_error() -> None:
         return RasterField(grid=[[1.0]], src_crs="EPSG:4326", src_transform=None)
 
     spec = OutputQuantitySpec(
-        quantity_id="q", kind="raster", name="Q", style_preset="p",
-        reader=_reader, default_on=True,
+        quantity_id="q", kind="raster", name="Q",         reader=_reader, default_on=True,
     )
     with patch(
         "trid3nt_server.workflows.shared.publish_quantities.cog_io.write_cog_4326_from_grid",
@@ -150,8 +147,7 @@ def test_scalar_field_merges_into_metrics_no_layer() -> None:
         return ScalarField(values={"basin_total_m3": 12345.0, "converged": True})
 
     spec = OutputQuantitySpec(
-        quantity_id="s", kind="scalar", name="S", style_preset="p",
-        reader=_reader, default_on=True,
+        quantity_id="s", kind="scalar", name="S",         reader=_reader, default_on=True,
     )
     m = build_quantities_manifest("x", run_id="r", upload=_fake_upload, specs=[spec])
     assert m.layers == []
@@ -180,8 +176,7 @@ def _timeseries_spec(n_steps: int = 4) -> OutputQuantitySpec:
         )
 
     return OutputQuantitySpec(
-        quantity_id="flood-depth", kind="timeseries", name="Peak flood depth",
-        style_preset="continuous_flood_depth", units="meters",
+        quantity_id="flood-depth", kind="timeseries", name="Peak flood depth", units="meters",
         reader=_reader, default_on=True,
     )
 
@@ -220,8 +215,7 @@ def test_timeseries_corrupt_frame_degrades_to_peak_only() -> None:
                                quantity_label="Flood depth")
 
     spec = OutputQuantitySpec(
-        quantity_id="flood-depth", kind="timeseries", name="Peak flood depth",
-        style_preset="p", reader=_reader, default_on=True,
+        quantity_id="flood-depth", kind="timeseries", name="Peak flood depth", reader=_reader, default_on=True,
     )
 
     call = {"n": 0}
@@ -251,7 +245,6 @@ def test_timeseries_peak_failure_raises() -> None:
     peak = RasterField(grid=[[3.0]], src_crs="EPSG:4326", src_transform=None)
     spec = OutputQuantitySpec(
         quantity_id="q", kind="timeseries", name="Peak",
-        style_preset="p",
         reader=lambda _c: TimeseriesField(
             n_steps=3, read_step=lambda i: peak, peak=peak, quantity_label="Q"
         ),

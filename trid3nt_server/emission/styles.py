@@ -81,19 +81,33 @@ def resolve_style_preset(quantity: str) -> tuple[str, bool]:
 
     table = quantity_defaults()
     key = (quantity or "").strip().lower()
-    found = table.get(key)
-    if found is not None:
-        return found, False
+    for candidate in _spellings(key):
+        found = table.get(candidate)
+        if found is not None:
+            return found, False
     if QUANTITY_FAMILY_SEP in key:
-        family = table.get(key.split(QUANTITY_FAMILY_SEP, 1)[0])
-        if family is not None:
-            return family, False
+        family = key.split(QUANTITY_FAMILY_SEP, 1)[0]
+        for candidate in _spellings(family):
+            found = table.get(candidate)
+            if found is not None:
+                return found, False
     _UNKNOWN_FALLBACK_COUNT += 1
     logger.warning(
         "styles: unknown quantity %r -> neutral ramp (%s); add a quantity_defaults "
         "row to the style contract to give it a physical colormap (fallback #%d)",
         quantity, NEUTRAL_FALLBACK_PRESET, _UNKNOWN_FALLBACK_COUNT)
     return NEUTRAL_FALLBACK_PRESET, True
+
+
+def _spellings(key: str) -> tuple[str, ...]:
+    """The one quantity, however the producer punctuated it.
+
+    Two key spaces grew up side by side - the emit-on-solve seam writes
+    ``flood_depth`` and the output registry writes ``flood-depth`` - and they name
+    the same physical field. Accepting both is one rule; duplicating every row in
+    the contract would be the mirror all over again.
+    """
+    return (key, key.replace("-", "_"), key.replace("_", "-"))
 
 
 def unknown_quantity_fallback_count() -> int:

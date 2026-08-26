@@ -105,12 +105,12 @@ async def test_plan_is_one_forcing_and_three_variants():
 
     p = await resolve_params(PARAMS, {})
     built = plan(p, None)
-    validate_plan(built, PARAMS, (), sheet=p)
-    labels = [s.label for s in built.flat()]
+    validate_plan(built, PARAMS, ())
+    labels = [s.label for s in built.declared()]
     assert labels == ["form", "forcing", "deck_snow", "solve_snow",
                       "deck_rain", "solve_rain", "deck_plow", "solve_plow",
                       "snowmelt"]
-    charts = [c.name for s in built.flat() for c in s.charts]
+    charts = [c.name for s in built.declared() for c in s.charts]
     assert charts == ["swe_series", "runoff_snowmelt_vs_rain_only"]
 
 

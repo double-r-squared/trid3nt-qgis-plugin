@@ -2,15 +2,14 @@
 
 THE ONE PLACE a ``LayerURI`` destined for the client passes through before
 ``PipelineEmitter.add_loaded_layer`` tracks it and a ``session-state`` envelope
-carries it to the browser. Every site that hands a ``LayerURI`` to
+carries it to the QGIS plugin. Every site that hands a ``LayerURI`` to
 ``add_loaded_layer`` routes it through :func:`emit_layer_uri` first.
 
-No client surface fetches a raw ``gs://`` object today (Decision 11):
-rasters reach the client as QGIS Server WMS run.app URLs or, on the local
-build, are fetched directly by the QGIS plugin via ``/vsicurl/``; vectors
-reach the client as inline GeoJSON (``PipelineEmitter`` reads the ``gs://``
-uri server-side and ships the parsed FeatureCollection inline); charts embed
-their data inline.
+No client surface fetches a raw ``gs://`` object: rasters reach the client as
+a raw ``s3://`` COG the QGIS plugin fetches via ``/vsicurl/``, or as an
+http(s) tile/WMS URL; vectors reach the client as inline GeoJSON
+(``PipelineEmitter`` reads the ``s3://`` uri server-side and ships the parsed
+FeatureCollection inline); charts embed their data inline.
 
 The guardrail
 =============
@@ -56,13 +55,13 @@ async def publish_for_emission(
 ) -> LayerURI:
     """Publish a raster LayerURI on its way to the map. THE auto-emit step.
 
-    Emission is automatic (NATE ruling b): a tool that produced a renderable
-    raster has produced a layer, and the user hides what they do not want to
-    see rather than asking for each one. This is the ONE place that happens -
-    it runs inside :meth:`PipelineEmitter.emit_tool_call`'s LayerURI branch, on
-    the same seam ``emit_layer_uri`` guards, so a new raster-producing tool
-    gets overviews, styling and a legend by returning a ``LayerURI`` and
-    nothing else. There is no per-tool publish call site to add, and no
+    Emission is automatic: a tool that produced a renderable raster has
+    produced a layer, and the user hides what they do not want to see rather
+    than asking for each one. This is the ONE place that happens - it runs
+    inside :meth:`PipelineEmitter.emit_tool_call`'s LayerURI branch, on the
+    same seam ``emit_layer_uri`` guards, so a new raster-producing tool gets
+    overviews, styling and a legend by returning a ``LayerURI`` and nothing
+    else. There is no per-tool publish call site to add, and no
     ``auto_publish`` opt-out: an intermediate is still a layer.
 
     Only a RASTER carrying a raw ``s3://`` COG is published. Vectors render
@@ -179,8 +178,7 @@ def emit_layer_uri(
     layer's data; they are stamped here so a re-emitted layer never loses them
     (see :func:`stamp_fallbacks`).
 
-    Guardrail (the §1 fix promoted to an invariant -- Decision 11;
-    relaxed for ``s3://`` rasters by the TiTiler exit / QGIS-native swap):
+    Guardrail:
         * Renderable RASTER carrying a genuinely un-renderable uri (``gs://``,
           ``file://`` local paths the plugin cannot reach, or EMPTY) -> DROP
           (return ``None``). Emitting one only paints a broken layer row. This
@@ -195,15 +193,11 @@ def emit_layer_uri(
     uri = layer.uri or ""
 
     # The guardrail: renderable raster + a genuinely un-renderable uri -> drop.
-    # This is the publish-failure degraded-path leak (§1) turned into an
-    # invariant. Vectors carrying gs:// / s3:// are the inline-GeoJSON path
-    # and pass untouched.
-    #
-    # TiTiler exit / QGIS-native swap: raster s3:// now PASSES --
-    # publish_layer returns the raw s3:// COG uri and the QGIS plugin reads it
-    # via /vsicurl/, so the browser-era s3 drop is REVERSED. Still
-    # dropped (nothing can render them): gs:// (no reachable face on this
-    # stack), file:// local paths the plugin cannot reach, and EMPTY uris.
+    # Vectors carrying gs:// / s3:// are the inline-GeoJSON path and pass
+    # untouched. A raster s3:// PASSES: publish_layer returns the raw s3://
+    # COG uri and the QGIS plugin reads it via /vsicurl/. Still dropped
+    # (nothing can render them): gs:// (no reachable face on this stack),
+    # file:// local paths the plugin cannot reach, and EMPTY uris.
     if layer.layer_type == "raster" and (
         not uri or uri.startswith("gs://") or uri.startswith("file://")
     ):
@@ -229,12 +223,12 @@ async def publish_input_layer(
 ) -> bool:
     """BEST-EFFORT: surface an engine INPUT layer on the map (role="input").
 
-    Surface engine inputs: every engine run consumes renderable
-    inputs (OpenQuake fault traces, SFINCS DEM / rivers / landcover, SWMM
-    building footprints) but historically only the RESULT layer was published.
-    This is the ONE reusable seam composers call to also surface those inputs:
-    it wraps :func:`emit_layer_uri` (the guardrail) + ``emitter.add_loaded_layer``
-    exactly like the SWMM / SFINCS mesh-layer emit, with two hard rules baked in:
+    Every engine run consumes renderable inputs (OpenQuake fault traces,
+    SFINCS DEM / rivers / landcover, SWMM building footprints) in addition to
+    producing a result. This is the ONE reusable seam composers call to also
+    surface those inputs: it wraps :func:`emit_layer_uri` (the guardrail) +
+    ``emitter.add_loaded_layer`` exactly like the SWMM / SFINCS mesh-layer
+    emit, with two hard rules baked in:
 
       * ``role`` defaults to ``"input"`` and is FORCED onto the LayerURI (a copy is
         made if the incoming role differs) so an input renders non-intrusively
@@ -251,8 +245,8 @@ async def publish_input_layer(
     emitter. The result-layer publish is untouched; this only ADDS input rows.
 
     Note: a RASTER input must carry a renderable uri -- an http(s) tile/WMS URL
-    or a raw ``s3://`` COG (the QGIS plugin reads it via /vsicurl/; TiTiler
-    exit). A ``gs://`` / ``file://`` / empty-uri raster is correctly DROPPED
+    or a raw ``s3://`` COG (the QGIS plugin reads it via /vsicurl/). A
+    ``gs://`` / ``file://`` / empty-uri raster is correctly DROPPED
     here by the ``emit_layer_uri`` guardrail (nothing can render it); VECTORS
     carrying ``s3://`` inline server-side and pass straight through,
     so they need no round-trip.
@@ -334,10 +328,8 @@ async def publish_raster_input_cog(
     bucket / cache (NO re-upload): rounds the ``s3://`` COG through
     ``publish_layer`` (which registers its ``style_preset`` and returns a
     plugin-renderable uri), builds a ``role`` LayerURI, and hands it to
-    :func:`publish_input_layer`. This is the seam the flood-input DEM path
-    (model_flood_scenario) established inline; consolidated here so the
-    bathymetry-consuming coastal templates surface their fetched topobathy the
-    same way.
+    :func:`publish_input_layer`. The shared seam for any composer that needs
+    to surface a fetched raster input (e.g. bathymetry) this way.
 
     Best-effort contract: NEVER raises. Every failure (no emitter, a falsy uri,
     an object the store does not actually have (the dead-COG class -- a
@@ -360,8 +352,7 @@ async def publish_raster_input_cog(
         return False
     try:
         # Late import: keep this emission module free of a load-time dependency
-        # on the heavy publish_layer tool (rasterio / TiTiler), mirroring how the
-        # composers import it inline.
+        # on the heavy publish_layer tool (rasterio).
         from trid3nt_server.emission.publish import (
             PublishLayerError,
             publish_layer,

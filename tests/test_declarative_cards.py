@@ -215,7 +215,10 @@ async def test_every_draw_kind_asks_for_its_own_affordance(card_client, geometry
     assert (request.mode, request.purpose) == (mode, purpose)
 
 
-async def test_a_drawn_polygon_arrives_as_its_ring(card_client):
+async def test_a_drawn_polygon_arrives_as_an_OPEN_ring(card_client):
+    """The canvas closes its ring and a typed list usually does not, so the drawn
+    value goes through the same normalizer the typed one does and lands OPEN -
+    which is what keeps "how many vertices" from having two answers."""
     plan, p, decl = await _draw_plan("draw_poly", "polygon")
     ring = [[-124.2, 40.4], [-124.0, 40.4], [-124.0, 40.6], [-124.2, 40.4]]
     task = asyncio.ensure_future(
@@ -227,7 +230,7 @@ async def test_a_drawn_polygon_arrives_as_its_ring(card_client):
             "geometry": {"type": "Polygon", "coordinates": [ring]}}]},
     })
     await task
-    assert SEEN["pt"] == ring
+    assert SEEN["pt"] == ring[:-1]
 
 
 async def test_a_drawn_polyline_arrives_as_its_vertices(card_client):

@@ -188,9 +188,10 @@ def test_publish_swmm_quantities_emits_four_layers() -> None:
 
 
 def test_swmm_step3_style_presets_resolve() -> None:
-    from trid3nt_server.emission.publish import _QGIS_STYLE_REGISTRY
+    from trid3nt_server.emission.styles import resolve_style_preset
+    from trid3nt_contracts.styles import preset_names
     from trid3nt_contracts.output_quantities import get_output_registry
 
     for spec in get_output_registry("swmm"):
         if spec.default_on:
-            assert spec.style_preset in _QGIS_STYLE_REGISTRY
+            assert resolve_style_preset(spec.quantity_id)[0] in preset_names()

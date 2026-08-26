@@ -87,11 +87,11 @@ def _sheet(**overrides):
 def test_the_declared_plan_is_the_open_water_sequence():
     from trid3nt_server.workflows.lib.validate import validate_plan
 
-    workflow, sheet = _sheet()
-    plan = workflow.build_plan(sheet)
-    assert [step.label for step in plan.flat()] == [
+    workflow, _sheet_unused = _sheet()
+    plan = workflow.plan
+    assert [step.label for step in plan.declared()] == [
         "form", "aoi", "deck", "solve", "column"]
-    validate_plan(plan, workflow.params, workflow.data, sheet=sheet)
+    validate_plan(plan, workflow.params, workflow.data)
 
 
 def test_the_3d_deck_carries_both_layer_files():
