@@ -30,6 +30,7 @@ from .data import DataDecl
 from .errors import DeclarativeError, PlanValidationError
 from .params import Param, doors
 from .plan import Plan, Ref, Step
+from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, resolve_params
 from .validate import validate_plan
 from .interpreter import RunResult, interpret
@@ -150,6 +151,7 @@ class Workflow(EngineOps):
                  plan: Callable[..., Any], data: Sequence[DataDecl] = (),
                  answer: Sequence[str] = (),
                  provenance: Sequence[str | tuple[str, str]] = (),
+                 sensitivity: Sequence[tuple[str, str]] = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
@@ -161,6 +163,9 @@ class Workflow(EngineOps):
         #: the answer. A pair names the note's key where the value's name plus
         #: "_note" is not what the answer has always called it.
         self.answer_provenance = tuple(_provenance_row(row) for row in provenance)
+        #: Which ANSWER fields sit in a resolution-sensitive class. The skeleton
+        #: turns this into the run's honesty label; see ``resolution.py``.
+        self.sensitivity = SensitivityDecl(sensitivity)
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
         #: The plan is STATIC - it reads no concrete value - so it is built and
@@ -183,9 +188,15 @@ class Workflow(EngineOps):
     def checks(self, result: Any, run: RunResult) -> tuple[str, ...]:
         """Validation checks over the finished result, as NOTES the caller narrates.
 
-        Silent default: no checks. A check reports; it never retracts a solved run.
+        The one universal check is the RESOLUTION-SENSITIVITY label: an answer in a
+        class the mesh decides says so, and says which way a coarse mesh reads it.
+        Every engine gets it free the moment its template declares the classes; a
+        template that declares none produces no note. A check reports; it never
+        retracts a solved run.
         """
-        return ()
+        params = getattr(run, "params", None)
+        sheet = params.rows() if params is not None else ()
+        return sensitivity_notes(self.sensitivity, self.metadata, result, sheet)
 
     # -- the spine --------------------------------------------------------- #
 
@@ -371,6 +382,7 @@ def register_workflow(
     data: Sequence[DataDecl] = (),
     answer: Sequence[str] = (),
     provenance: Sequence[str | tuple[str, str]] = (),
+    sensitivity: Sequence[tuple[str, str]] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     doc: Mapping[str, Any] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
@@ -405,7 +417,8 @@ def register_workflow(
 
     _refuse_incomplete_facade(facade)
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
-                      answer=answer, provenance=provenance, coerce=coerce)
+                      answer=answer, provenance=provenance,
+                      sensitivity=sensitivity, coerce=coerce)
 
     async def _run(**wire: Any) -> Any:
         return await workflow.run(wire)

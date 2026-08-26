@@ -34,6 +34,7 @@ from trid3nt_server.workflows.shared.tide_series import BED_DATUM
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    mesh_resolution_label,
     mesh_sizing_provenance,
     solved_domain_bbox,
     surface_in_worker_bed_input,
@@ -54,21 +55,21 @@ _OUTPUTS = [
     "telemac_metrics.json",
 ]
 
-#: The default simulated window when neither a duration nor a series span says
-#: otherwise: 30 hours, about two full tidal cycles.
-_FALLBACK_DURATION_S = 108000.0
-
 
 async def write_coastal_deck(
     *,
     aoi: dict[str, Any],
     water_level: dict[str, Any] | None = None,
-    mesh_resolution_m: float = 180.0,
+    mesh_resolution_m: float | None = None,
     datum_offset_m: float | None = None,
     ocean_edge: str = "auto",
     duration_hours: float | None = None,
-    time_step_s: float = 20.0,
-    bathy_source: str = "noaa_demall",
+    time_step_s: float,
+    bathy_source: str,
+    friction_law: int,
+    friction_coefficient: float,
+    wind_speed_mps: float,
+    wind_direction_from_deg: float,
     output_interval_min: float | None = None,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker's coastal config + the run meta.
@@ -79,16 +80,32 @@ async def write_coastal_deck(
     carries no series at all: the deterministic offline path.
     """
     from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_COASTAL_SOLVER_NAME
+    # Lazily, because the template package imports this module: the labeled
+    # defaults live with the params that promise them, and a top-level import
+    # here would close the cycle.
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.declarations import (
+        DEFAULT_GRID_SPACING_M,
+        SYNTHETIC_WINDOW_HOURS,
+    )
 
     synthetic = str(bathy_source).strip().lower() == "synthetic"
+    mesh_resolution_m = (float(mesh_resolution_m) if mesh_resolution_m is not None
+                         else DEFAULT_GRID_SPACING_M)
     series = list((water_level or {}).get("series") or [])
     if not synthetic and not series:
         raise OpenWaterError(
             "the coastal domain has no water-level series to drive its seaward "
             "boundary; supply a station and window, or ask for the synthetic "
             "plane-beach bed.", error_code="COASTAL_TIDE_EMPTY")
-    duration_s = (float(duration_hours) * 3600.0 if duration_hours
-                  else (float(series[-1][0]) if series else _FALLBACK_DURATION_S))
+    # Three rungs, all named: what was ASKED for, else the SERIES' own span, else
+    # - only on the seriesless synthetic bed - the labeled analytic window.
+    if duration_hours:
+        duration_s, duration_basis = float(duration_hours) * 3600.0, "user"
+    elif series:
+        duration_s, duration_basis = float(series[-1][0]), "series"
+    else:
+        duration_s = SYNTHETIC_WINDOW_HOURS * 3600.0
+        duration_basis = "synthetic"
     datum = str((water_level or {}).get("series_datum") or "MLLW")
 
     # The series is on a TIDAL datum, the bed on a GEODETIC one. 0.0 is an
@@ -118,6 +135,10 @@ async def write_coastal_deck(
         "datum_offset_m": float(datum_offset_m),
         "duration_s": float(duration_s),
         "time_step_s": float(time_step_s),
+        "friction_law": int(friction_law),
+        "friction_coefficient": float(friction_coefficient),
+        "wind_speed_mps": float(wind_speed_mps),
+        "wind_dir_from_deg": float(wind_direction_from_deg),
     }
     # The output cadence rides ONLY when it was asked for, so an unasked run
     # stays byte-identical to the worker's computed ~40-frame default.
@@ -148,6 +169,9 @@ async def write_coastal_deck(
         "station_name": (water_level or {}).get("station_name"),
         "series_window": (water_level or {}).get("window"),
         "series_points": len(series),
+        "duration_s": float(duration_s),
+        "duration_basis": duration_basis,
+        "wind_speed_mps": float(wind_speed_mps),
     }
 
 
@@ -188,12 +212,37 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             param="ocean_edge", value=str(metrics["ocean_edge"]), basis="derived",
             consequence="numerical",
             note="the bbox edge the seaward liquid boundary was placed on"))
+    # WHICH rung set the simulated window. It used to be three silent branches,
+    # one of which was a 30 h constant nothing declared.
+    basis = deck.get("duration_basis")
+    rows.append(SyntheticInput(
+        param="duration_hours",
+        value=round(float(deck["duration_s"]) / 3600.0, 3), units="h",
+        basis="user" if basis == "user" else "derived", consequence="numerical",
+        note=("the window you asked for" if basis == "user"
+              else "the fetched gauge series' own span" if basis == "series"
+              else "the labeled analytic window for a synthetic plane-beach run, "
+                   "which carries no series to take a span from")))
+    if float(deck.get("wind_speed_mps") or 0.0) > 0.0:
+        rows.append(SyntheticInput(
+            param="wind_speed_mps", value=round(float(deck["wind_speed_mps"]), 2),
+            units="m/s", basis="user", consequence="physics",
+            note="a constant wind over the domain, adding local set-up on top of "
+                 "the boundary series"))
     return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 
-def _honesty_note(deck: dict[str, Any]) -> str:
+def _honesty_note(deck: dict[str, Any], product_note: str | None = None) -> str:
+    """What the RUN was, prefixed by what the LAYER is.
+
+    The postprocess writes the product sentence (which of the split pair this is
+    and how dry-at-t0 was decided); this writes the scenario sentence. Joining
+    them here keeps one note on the layer instead of one overwriting the other.
+    """
     observed = deck["series_type"] == "observed"
     return (
+        (f"{product_note} " if product_note else "")
+        +
         "Planning-grade coastal inundation SCREENING: TELEMAC-2D shallow water "
         "with TIDAL FLATS wetting/drying over a regular "
         f"{deck['mesh_size_m']:g} m grid of real NOAA DEM_all topobathy, driven at "
@@ -240,24 +289,37 @@ async def publish_coastal_products(*, deck: dict[str, Any],
             worker_metrics=metrics)
     finally:
         Path(slf_path).unlink(missing_ok=True)
-    if not layers:
-        raise OpenWaterError("postprocess_coastal produced no layer.",
-                             error_code="COASTAL_NO_LAYERS")
-    raw = layers[0]
+    if len(layers) < 2:
+        raise OpenWaterError(
+            "postprocess_coastal produced no inundation/water-depth layer pair.",
+            error_code="COASTAL_NO_LAYERS")
+    raw, water_depth = layers[0], layers[1]
 
+    mesh_label = mesh_resolution_label("real NOAA DEM_all topobathy", deck, metrics)
     published = await publish_product_layer(
         raw, style_preset=TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
         update={
-            "mesh_resolution_label": (
-                f"real NOAA DEM_all topobathy grid "
-                f"{metrics.get('dx_m', deck['mesh_size_m']):g} m"
-                + (" (coarsened under node budget)" if metrics.get("coarsened") else "")),
-            "fallback_note": _honesty_note(deck),
+            "mesh_resolution_label": mesh_label,
+            "fallback_note": _honesty_note(deck, raw.fallback_note),
             "synthetic_inputs": _provenance(deck, metrics),
             # The run prefix travels WITH the layer so the skeleton writes this
             # run's own chart spec + answer metrics under it.
             "run_id": run_id,
         })
+
+    # The CONTEXT half of the split: the full water-depth field, on the canvas
+    # beside the answer, so "where is the water" and "where did the tide go" are
+    # two visible layers rather than one raster meaning both. Surfaced through the
+    # input/context seam, which forces role=context and drops the bbox so it never
+    # fights the answer for the camera.
+    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+
+    await publish_input_layer(
+        emitter,
+        await publish_product_layer(
+            water_depth, style_preset=TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
+            update={"mesh_resolution_label": mesh_label, "run_id": run_id}),
+        role="context")
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry plus the SELAFIN mesh
     # entry, and the seam owns publication of the rising-tide temporal artifact.

@@ -15,8 +15,10 @@ so the answer is a steady-state agitation coefficient Kd = Hs/H0 in which
 diffraction fringes, standing waves and resonance are visible rather than
 averaged away. Three question classes:
 
-  * ``diffraction`` - a breakwater shelters a berthing area, and on a real Great
-                      Lakes harbour the ACTUAL surveyed structure is meshed.
+  * ``diffraction`` - a breakwater shelters a berthing area. WHICH breakwater is
+                      the caller's to supply: hand the ``structure`` slot a layer
+                      (``fetch_osm_breakwaters`` finds the surveyed one) or a
+                      drawn line. Nothing supplied = open water, labeled.
   * ``resonance``   - a narrow-mouth basin amplifies swell at its seiche periods.
   * ``shoal``       - a nearshore reef refracts and FOCUSES waves down-wave.
 """
@@ -28,6 +30,8 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
+    D,
+    Data,
     Forcing,
     FormGate,
     MeshPolicy,
@@ -50,11 +54,21 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "artemis_harbor_agitation",
 _HARBOR_HALF_DEG = 0.06
 
 
-#: NO declared Data. The harbour bed is sampled INSIDE the solver container and
-#: the surveyed structure is a bare-Overpass way-geometry fetch the deck makes
-#: only when it is going to mesh one - declaring it would fetch OSM for every
-#: analytic run too. Both are on the in-worker-fetch migration queue.
-DATA = ()
+#: The thing that SHELTERS, as a CONTEXT SLOT - the exemplar of the shape.
+#:
+#: There is no producer, and that is the declaration: this template will not name
+#: a default source for somebody's breakwater. It says what SHAPE it accepts
+#: (a polyline) and stops, because "which structure" is the caller's question,
+#: not the engine's. Fill it with a layer (``fetch_osm_breakwaters`` for the
+#: surveyed one, or any line layer), or with a line drawn on the canvas, or with
+#: a barrier that does not exist yet - the last is the design question this tool
+#: is actually for, and a baked "go fetch the real one" could never have answered
+#: it. ``.optional()`` makes absence legal and LABELLED: the domain solves as
+#: open water and the run says so on the layer and in provenance.
+#:
+#: The harbour bed is still sampled INSIDE the solver container - that one is on
+#: the in-worker-fetch migration queue.
+DATA = (Data("structure").supplied(geometry="polyline").optional(),)
 
 
 # -- the binding blocks --------------------------------------------------- #
@@ -69,7 +83,10 @@ PHYSICS = Physics("harbor_agitation",
                   wave_direction_deg=P.wave_direction_deg,
                   wave_height_m=P.wave_height_m,
                   reflection_coef=P.reflection_coef,
-                  breakwater=P.breakwater,
+                  # The slot, read late. Because producers are demand-pulled, an
+                  # unfilled slot costs no fetch and binds to None - so the
+                  # barrier is meshed WHEN the slot is filled and never otherwise.
+                  structure=D.structure,
                   bathy_source=P.bathy_source)
 
 MESH = MeshPolicy(resolution=None, target_edge_m=P.target_resolution_m)
@@ -192,8 +209,15 @@ artemis_harbor_agitation = register_workflow(
     data=DATA,
     answer=ANSWER,
     provenance=(("wave_period_s", "wave_period_note"),
-                ("breakwater", "breakwater_note"),
+                ("structure", "structure_note"),
                 ("target_resolution_m", "target_resolution_note")),
+    # A phase-RESOLVING solve is the most mesh-dependent of the family: Kd peaks
+    # inside a diffraction fringe, and the sheltered/exposed pair is read inside
+    # the shadow gradient. The measured coarse-vs-refined move on both is -30 to
+    # -50%. The sheltering RATIO between them converges and is not labeled.
+    sensitivity=(("kd_max", "peak"),
+                 ("kd_sheltered", "gradient"),
+                 ("kd_exposed", "gradient")),
     coerce=(
         location_or_bbox("artemis_harbor_agitation", code_prefix="ARTEMIS",
                          hint="For a natural prompt like 'is the marina at <place> "

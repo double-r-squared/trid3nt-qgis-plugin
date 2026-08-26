@@ -130,6 +130,14 @@ GRADATION_PRESETS: dict[str, list[list[float]]] = {
 _SUBSTANCE_MAX_CHARS = 24
 
 
+#: The grain-size window GAIA's transport formulae are authored for, in microns.
+#: It MIRRORS river_dye's declared ``grain_size_um`` bounds and exists because a
+#: gradation curve arrives as a list, which no per-value door can police. One
+#: constant, two clamp sites - it used to be the same two numbers written three
+#: times, counting the declaration.
+GRAIN_UM_MIN, GRAIN_UM_MAX = 5.0, 2000.0
+
+
 def sanitize_substance(value: Any, *, limit: int = _SUBSTANCE_MAX_CHARS,
                        default: str = "dye") -> str:
     """A safe substance label. Label only - never solver-affecting on its own."""
@@ -171,7 +179,7 @@ def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
             continue
         if not (um > 0.0) or fr < 0.0:
             continue
-        out.append([min(max(um, 5.0), 2000.0), fr])
+        out.append([min(max(um, GRAIN_UM_MIN), GRAIN_UM_MAX), fr])
     if len(out) < 2:
         return None
     out.sort(key=lambda p: p[0])
@@ -264,7 +272,7 @@ def resolve_grain(payload: Any, sediment_type: str | None,
         sed_type = sanitize_substance(sediment_type, limit=8, default=sed_type)
     if grain_size_um is not None:
         sed_grain_um = float(grain_size_um)
-    return sed_type, float(min(max(sed_grain_um, 5.0), 2000.0))
+    return sed_type, float(min(max(sed_grain_um, GRAIN_UM_MIN), GRAIN_UM_MAX))
 
 
 def substance_class() -> Any:

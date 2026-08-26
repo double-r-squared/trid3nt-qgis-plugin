@@ -182,6 +182,10 @@ tomawac_wave_field = register_workflow(
     provenance=(("wind_speed_mps", "wind_note"),
                 ("bathy_source", "bathy_note"),
                 ("target_resolution_m", "target_resolution_note")),
+    # Hs at the UPWIND end sits in the steep fetch-growth gradient, where a coarse
+    # grid flattens it: measured -62%. Hs MAX over the lake is a saturated
+    # maximum - a converged class - and carries no label.
+    sensitivity=(("hs_upwind_m", "gradient"),),
     coerce=(
         location_or_bbox("tomawac_wave_field", code_prefix="TOMAWAC",
                          hint="For a natural prompt like 'how big do the waves get "

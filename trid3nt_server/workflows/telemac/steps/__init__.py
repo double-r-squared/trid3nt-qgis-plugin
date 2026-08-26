@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from .agitation import (
     Agitation,
-    fetch_osm_breakwaters,
     publish_agitation_products,
     write_agitation_deck,
 )
@@ -110,7 +109,7 @@ __all__ = [
     "sanitize_substance", "slug", "solve_reach", "stage_manifest",
     "substance_class",
     "suggest_mesh_size_m", "suggest_time_step_s", "upstream_do_mgl",
-    "fetch_osm_breakwaters", "publish_agitation_products",
+    "publish_agitation_products",
     "publish_stratified_products",
     "publish_wave_products", "waqtel_o2_process", "write_agitation_deck",
     "write_stratified_deck",

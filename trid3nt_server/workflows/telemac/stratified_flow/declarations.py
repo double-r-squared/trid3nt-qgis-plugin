@@ -9,7 +9,15 @@ from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
 
-__all__ = ["DOC", "PARAMS"]
+__all__ = ["DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC", "PARAMS"]
+
+#: The grid spacings a run is laid at when the caller names none. They live HERE,
+#: beside the param whose ``derived_when_absent`` sentence promises them, because
+#: a number in the step and a sentence in the contract are two sources of truth
+#: for one fact and they drift. The step imports these.
+DEFAULT_REAL_RES_M = 2000.0
+DEFAULT_IDEALIZED_RES_M = 250.0
+
 
 
 PARAMS: tuple[Param, ...] = (
@@ -65,10 +73,14 @@ PARAMS: tuple[Param, ...] = (
     Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
           bounds=(50.0, 20000.0), units="m", consequence="numerical",
           derived_when_absent=(
-              "the horizontal grid is laid at the labeled default spacing - 2000 m "
-              "over a real lake, 250 m in the idealized basin"),
+              f"the horizontal grid is laid at the labeled default spacing - "
+              f"{DEFAULT_REAL_RES_M:g} m over a real lake, "
+              f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
           desc="Explicit HORIZONTAL grid node spacing; the vertical is nplan"),
-    Param("sim_duration_hours", door=doors.SCENARIO, default=5.0, bounds=(1.0, 24.0),
+    # CONSTANT, not SCENARIO: the window is a settling time, not a scenario. The
+    # answer is the column's SETTLED state, so this is "long enough", the same
+    # shape as tomawac's fetch-limited window. The user keeps the lever.
+    Param("sim_duration_hours", door=doors.CONSTANT, default=5.0, bounds=(1.0, 24.0),
           units="h", consequence="numerical",
           desc="Simulated duration - long enough for the column to settle or mix"),
     Param("compute_class", door=doors.CONSTANT, default="medium",

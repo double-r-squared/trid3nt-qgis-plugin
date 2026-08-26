@@ -1,0 +1,8 @@
+fetch_osm_breakwaters:
+- show me the breakwater protecting this harbor
+- what structure shelters the marina here
+- fetch the surveyed breakwater geometry for this port
+- overlay the coastal wave barriers on the map
+- I need the groyne field along this shoreline
+- get the harbor breakwater so the agitation run can mesh it
+- which structures protect the berths at this harbour

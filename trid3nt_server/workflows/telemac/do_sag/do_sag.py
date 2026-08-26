@@ -201,6 +201,10 @@ telemac_do_sag = register_workflow(
     # edge length; on an honoured (or absent) override both fields read null.
     provenance=(("discharge_m3s", "discharge_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
+    # WHERE the sag sits is a local-feature LOCATION and moves with the element
+    # that resolves it. The DO minimum itself is a saturated maximum - a
+    # converged class - so it carries no label.
+    sensitivity=(("do_min_distance_m", "location"),),
     coerce=(
         location_or_bbox("telemac_do_sag", code_prefix="TELEMAC"),
         user_input.point("outfall_coords", label="outfall_coords",

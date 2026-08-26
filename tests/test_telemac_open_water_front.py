@@ -40,6 +40,13 @@ _APALACH = {"name": "Apalachicola Bay", "slug": "apalachicola",
             "lon": -84.96, "lat": 29.745,
             "bbox": [-85.02341, 29.69107, -84.90118, 29.80442]}
 
+#: The non-question coastal physics, declared on the template (door CONSTANT /
+#: SCENARIO). Stated here rather than leaning on a signature default, which would
+#: be a second source of truth for the same numbers.
+_COASTAL_PHYSICS = dict(bathy_source="synthetic", time_step_s=20.0, friction_law=3,
+                        friction_coefficient=40.0, wind_speed_mps=0.0,
+                        wind_direction_from_deg=0.0)
+
 
 # --------------------------------------------------------------------------- #
 # requires_utm: an idealized domain is not a georeference failure.
@@ -47,6 +54,7 @@ _APALACH = {"name": "Apalachicola Bay", "slug": "apalachicola",
 
 @pytest.mark.parametrize("wave_mode,expected", [
     ("resonance", False), ("shoal", False), ("diffraction", True)])
+
 def test_agitation_deck_requires_utm_only_on_the_real_harbour(wave_mode, expected):
     deck = asyncio.run(write_agitation_deck(
         aoi=_MARQUETTE, wave_mode=wave_mode, bathy_source="noaa_greatlakes",
@@ -72,7 +80,7 @@ def test_stratified_deck_requires_utm_only_on_the_real_lake(flow_mode, expected)
 
 def test_coastal_and_wave_decks_always_require_utm():
     coastal = asyncio.run(write_coastal_deck(
-        aoi=_APALACH, bathy_source="synthetic", mesh_resolution_m=250.0))
+        aoi=_APALACH, mesh_resolution_m=250.0, **_COASTAL_PHYSICS))
     wave = asyncio.run(write_wave_deck(
         aoi=_MARQUETTE, bathy_source="noaa_greatlakes", mesh_resolution_m=3000.0))
     assert coastal["requires_utm"] is True
@@ -165,7 +173,7 @@ def test_solved_domain_bbox_refuses_a_malformed_bbox():
 def test_the_coastal_deck_no_longer_carries_a_second_unrounded_bbox():
     """One bbox travels: the staged one. Two was how the origin drifted."""
     deck = asyncio.run(write_coastal_deck(
-        aoi=_APALACH, bathy_source="synthetic", mesh_resolution_m=250.0))
+        aoi=_APALACH, mesh_resolution_m=250.0, **_COASTAL_PHYSICS))
     assert "domain_bbox" not in deck
     assert deck["config"]["bbox"] == [round(v, 4) for v in _APALACH["bbox"]]
 

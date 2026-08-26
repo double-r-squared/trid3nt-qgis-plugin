@@ -29,6 +29,7 @@ __all__ = [
     "point",
     "polygon_ring",
     "polyline_coords",
+    "polyline_set",
     "lonlat_point",
 ]
 
@@ -105,6 +106,50 @@ def polyline_coords(value: Any, *, label: str = "line",
     if len(coords) < 2:
         raise _refuse(f"{label} needs at least two vertices to be a line.", code)
     return coords
+
+
+def polyline_set(value: Any, *, label: str = "lines",
+                 code: str = _DEFAULT_CODE) -> list[list[list[float]]] | None:
+    """One or MANY drawn/typed lines as ``[[[lon, lat], ...], ...]``.
+
+    The plural of :func:`polyline_coords`, and the shape a context slot that
+    accepts ``geometry="polyline"`` normalizes to: a breakwater field is several
+    ways, a single sketched barrier is one, and the consumer must not have to
+    care which arrived. A GeoJSON-ish mapping (the draw gate's reply, a Feature,
+    a FeatureCollection) unwraps here rather than in each consumer, which is the
+    whole point of the species living in one place.
+    """
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        if value.get("type") == "FeatureCollection":
+            features = value.get("features") or []
+            out: list[list[list[float]]] = []
+            for feature in features:
+                one = polyline_set(feature, label=label, code=code)
+                if one:
+                    out.extend(one)
+            if not out:
+                raise _refuse(f"{label} carries no line geometry.", code)
+            return out
+        geometry = value.get("geometry") or value
+        coords = geometry.get("coordinates") if isinstance(geometry, Mapping) else None
+        if coords is None:
+            raise _refuse(f"{label} carries no line coordinates.", code)
+        value = coords if geometry.get("type") == "MultiLineString" else [coords]
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
+        raise _refuse(f"{label} {value!r} is not a line or a list of lines.", code)
+    # One line is a list of PAIRS; many lines is a list of LISTS of pairs. The
+    # first element decides, which is why an empty value refuses above rather
+    # than reading as "many lines, none of them".
+    first = value[0]
+    if isinstance(first, Sequence) and not isinstance(first, (str, bytes)) \
+            and first and isinstance(first[0], Sequence) \
+            and not isinstance(first[0], (str, bytes)):
+        lines = [polyline_coords(line, label=label, code=code) for line in value]
+        return [line for line in lines if line]
+    one = polyline_coords(value, label=label, code=code)
+    return [one] if one else None
 
 
 def polygon_ring(value: Any, *, label: str = "polygon",

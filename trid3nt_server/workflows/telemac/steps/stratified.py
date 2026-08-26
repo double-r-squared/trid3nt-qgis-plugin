@@ -34,6 +34,7 @@ from trid3nt_server.workflows.shared.publish_product_layer import (
 from .open_water import (
     OpenWaterError,
     download_open_water_result,
+    mesh_resolution_label,
     mesh_sizing_provenance,
 )
 from .wave import great_lake_for, real_lake_bathy_label
@@ -56,8 +57,6 @@ _OUTPUTS = [
     "bc_t3d.cli", "full_listing.log", "telemac_metrics.json",
 ]
 
-_DEFAULT_REAL_RES_M = 2000.0
-_DEFAULT_IDEALIZED_RES_M = 250.0
 
 #: A salt wedge is the ANALYTIC lock-exchange V&V (a real estuary would need a
 #: tidal liquid boundary), so it never takes the real-bathymetry path.
@@ -81,13 +80,19 @@ async def write_stratified_deck(
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker's 3D config + the run meta."""
     from trid3nt_server.workflows.telemac.run_telemac import TELEMAC3D_SOLVER_NAME
+    # Lazily: the template package imports this module, so the labeled
+    # defaults are read where they are used rather than at import time.
+    from trid3nt_server.workflows.telemac.stratified_flow.declarations import (
+        DEFAULT_IDEALIZED_RES_M,
+        DEFAULT_REAL_RES_M,
+    )
 
     asked = str(bathy_source or "auto").strip().lower()
     lake = great_lake_for(float(aoi["lon"]), float(aoi["lat"]))
     real = str(flow_mode) not in _IDEALIZED_ONLY_MODES and (
         asked == "noaa_greatlakes" or (asked == "auto" and lake is not None))
     resolution = (float(mesh_resolution_m) if mesh_resolution_m is not None
-                  else (_DEFAULT_REAL_RES_M if real else _DEFAULT_IDEALIZED_RES_M))
+                  else (DEFAULT_REAL_RES_M if real else DEFAULT_IDEALIZED_RES_M))
 
     config: dict[str, Any] = {
         "name": aoi["slug"],
@@ -238,11 +243,9 @@ async def publish_stratified_products(*, deck: dict[str, Any],
                              error_code="TELEMAC3D_NO_LAYERS")
 
     update = {
-        "mesh_resolution_label": (
-            f"{'real NOAA lake bathy' if deck['real_bathymetry'] else 'idealized'} "
-            f"grid {metrics.get('dx_m', deck['mesh_size_m']):g} m, "
-            f"{deck['nplan']} sigma planes"
-            + (" (coarsened under node budget)" if metrics.get("coarsened") else "")),
+        "mesh_resolution_label": mesh_resolution_label(
+            "real NOAA lake bathy" if deck["real_bathymetry"] else "idealized",
+            deck, metrics, suffix=f", {deck['nplan']} sigma planes"),
         "fallback_note": _honesty_note(deck),
         "synthetic_inputs": _provenance(deck, metrics),
         "run_id": run_id,

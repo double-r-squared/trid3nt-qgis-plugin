@@ -35,6 +35,7 @@ from .solve import read_run_metrics
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
 
 __all__ = [
+    "mesh_resolution_label",
     "OpenWaterError",
     "mesh_sizing_provenance",
     "SolveOpenWater",
@@ -273,6 +274,25 @@ async def surface_in_worker_bed_input(emitter: Any, *, run_metrics: dict[str, An
 #: half of that last place is the REPORT's precision, not a move the builder made.
 #: Without this an ask of 33.33 m built at 33.3 m raised a 3 cm "override" note.
 _DX_REPORT_TOL_M = 0.05
+
+
+def mesh_resolution_label(bed: str, deck: Mapping[str, Any],
+                         metrics: Mapping[str, Any], *, suffix: str = "") -> str:
+    """What grid the run was SOLVED on, in one sentence, for the layer to carry.
+
+    Four open-water publishers were each writing this f-string, and the four
+    agreed only by accident: one said "idealized analytic" where the others said
+    "idealized", and any of them could have drifted on the coarsening clause
+    without the others noticing. ``bed`` names what the bed IS (the one thing that
+    genuinely differs per template); ``suffix`` carries an extra fact a domain has
+    and the others do not, such as TELEMAC-3D's sigma-plane count.
+
+    The spacing is the one the WORKER reports, falling back to the one the deck
+    asked for - never the other way round, or a run the node budget coarsened
+    would advertise the spacing it did not use.
+    """
+    return (f"{bed} grid {metrics.get('dx_m', deck['mesh_size_m']):g} m{suffix}"
+            + (" (coarsened under node budget)" if metrics.get("coarsened") else ""))
 
 
 def mesh_sizing_provenance(asked_m: Any, metrics: Mapping[str, Any]) -> list[Any]:

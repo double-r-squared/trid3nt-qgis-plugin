@@ -279,8 +279,14 @@ def compute_class() -> Any:
         if not value:
             return {}
         if value not in _ALLOWED_COMPUTE:
-            logger.warning("unknown compute_class %r coerced to 'medium'", raw)
-            value = "medium"
+            # REFUSED, not substituted. Silently seating 'medium' gave a caller
+            # who asked for 'xlarge' a medium solve, no provenance row saying so,
+            # and a warning only the log ever saw.
+            raise TelemacDyeScenarioError(
+                "TELEMAC_COMPUTE_CLASS_UNKNOWN",
+                f"compute_class {raw!r} is not a rung this dispatcher serves; the "
+                f"ladder is {sorted(_ALLOWED_COMPUTE)}. Omit it to take the "
+                "template's declared default.")
         return {"compute_class": value}
 
     _coerce.__name__ = "compute_class"

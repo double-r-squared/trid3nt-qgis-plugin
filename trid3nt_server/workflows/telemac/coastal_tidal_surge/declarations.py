@@ -9,7 +9,19 @@ from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
 
-__all__ = ["DOC", "PARAMS"]
+__all__ = ["DEFAULT_GRID_SPACING_M", "DOC", "PARAMS", "SYNTHETIC_WINDOW_HOURS"]
+
+
+#: The grid spacing a coastal run is laid at when nobody names one. It lives HERE,
+#: beside the param whose ``derived_when_absent`` describes it, because the number
+#: and the sentence that promises it have to be one thing.
+DEFAULT_GRID_SPACING_M = 180.0
+
+#: The window a SYNTHETIC plane-beach run simulates. A real run takes its window
+#: from the gauge series it was handed; the analytic bed has no series, so this is
+#: the only rung left - about two full tidal cycles. Declared rather than sitting
+#: in the deck writer, because a silent third rung is a window nobody chose.
+SYNTHETIC_WINDOW_HOURS = 30.0
 
 
 PARAMS: tuple[Param, ...] = (
@@ -48,7 +60,8 @@ PARAMS: tuple[Param, ...] = (
     # -- the domain --------------------------------------------------------- #
     Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
           bounds=(20.0, 5000.0), units="m", consequence="numerical",
-          derived_when_absent="the grid is laid at the labeled 180 m default spacing",
+          derived_when_absent=(f"the grid is laid at the labeled "
+                               f"{DEFAULT_GRID_SPACING_M:g} m default spacing"),
           desc="Explicit grid node spacing; the coastal grid floor is 20 m and a wide "
                "AOI is coarsened under the node budget"),
     Param("ocean_edge", door=doors.USER, optional=True, consequence="numerical",
@@ -61,10 +74,34 @@ PARAMS: tuple[Param, ...] = (
           desc="Bed source: noaa_demall (real topobathy) | synthetic (an analytic "
                "plane beach - the deterministic offline path, not a real coast)"),
 
+    # -- the bed and the air (worker knobs, now reachable) ------------------ #
+    # These four were CoastalConfig fields the deck writer never filled, so the
+    # image's own defaults were the only values a coastal run could ever have.
+    # The declared defaults reproduce them exactly; what changes is that they are
+    # now on the form, in provenance, and tunable without an image rebuild.
+    Param("friction_law", door=doors.CONSTANT, default=3, type=int,
+          bounds=(1.0, 7.0), consequence="physics",
+          desc="TELEMAC bottom-friction law: 3 = Strickler"),
+    Param("friction_coefficient", door=doors.SCENARIO, default=40.0,
+          bounds=(5.0, 100.0), units="m^(1/3)/s", consequence="physics",
+          desc="Strickler coefficient Ks; ~40 is mixed sand and marsh, lower is "
+               "rougher (denser vegetation) and slows the flooding front"),
+    Param("wind_speed_mps", door=doors.SCENARIO, default=0.0, bounds=(0.0, 80.0),
+          units="m/s", consequence="physics",
+          desc="Constant wind over the domain, which adds local set-up on top of "
+               "the boundary series; 0 runs with no wind block at all"),
+    Param("wind_direction_from_deg", door=doors.SCENARIO, default=0.0,
+          bounds=(0.0, 360.0), units="deg", consequence="physics",
+          desc="Compass direction the wind blows FROM; only read when "
+               "wind_speed_mps is above zero"),
+
     # -- numerics (the advanced fold) --------------------------------------- #
     Param("duration_hours", door=doors.USER, optional=True, bounds=(0.1, 720.0),
           units="h", consequence="numerical",
-          derived_when_absent="the simulated window is the fetched series' own span",
+          derived_when_absent=(
+              "the simulated window is the fetched series' OWN span; a synthetic "
+              "plane-beach run, which has no series, takes the labeled "
+              "{SYNTHETIC_WINDOW_HOURS:g} h window"),
           desc="Simulated window; unset runs the whole gauge series"),
     Param("time_step_s", door=doors.CONSTANT, default=20.0, bounds=(1.0, 600.0),
           units="s", consequence="numerical", desc="Solver time step"),

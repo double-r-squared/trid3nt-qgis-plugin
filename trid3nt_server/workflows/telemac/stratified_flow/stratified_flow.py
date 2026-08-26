@@ -200,6 +200,9 @@ telemac3d_stratified_flow = register_workflow(
     provenance=(("wind_speed_mps", "wind_note"),
                 ("bathy_source", "bathy_note"),
                 ("target_resolution_m", "target_resolution_note")),
+    # The surface-to-bottom temperature difference is read ACROSS the thermocline,
+    # the steepest gradient in the domain: measured -25% on the coarse mesh.
+    sensitivity=(("stratification_dt", "gradient"),),
     coerce=(
         location_or_bbox("telemac3d_stratified_flow", code_prefix="TELEMAC3D",
                          hint="For a natural prompt like 'does <lake> stratify', "

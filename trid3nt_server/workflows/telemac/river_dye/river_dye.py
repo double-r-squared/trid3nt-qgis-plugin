@@ -238,6 +238,13 @@ telemac_river_dye = register_workflow(
     # edge length; on an honoured (or absent) override both fields read null.
     provenance=(("discharge_m3s", "discharge_note"),
                 ("mesh_resolution_m", "mesh_resolution_note")),
+    # The dye maximum is the canonical peak class: measured 6x LOW on the coarse
+    # mesh, because a concentration peak lives inside one element. How far the
+    # plume REACHED is a front location and moves with it.
+    sensitivity=(("dye_cmax_mgl", "peak"),
+                 ("plume_reach_m", "location"),
+                 ("max_deposition_mm", "peak"),
+                 ("max_scour_mm", "peak")),
     coerce=(
         location_or_bbox("telemac_river_dye", code_prefix="TELEMAC",
                          hint="For a natural prompt like 'dye spill in the river "

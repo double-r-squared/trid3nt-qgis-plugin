@@ -9,7 +9,15 @@ from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
 
-__all__ = ["DOC", "PARAMS"]
+__all__ = ["DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC", "PARAMS"]
+
+#: The grid spacings a run is laid at when the caller names none. They live HERE,
+#: beside the param whose ``derived_when_absent`` sentence promises them, because
+#: a number in the step and a sentence in the contract are two sources of truth
+#: for one fact and they drift. The step imports these.
+DEFAULT_REAL_RES_M = 2000.0
+DEFAULT_IDEALIZED_RES_M = 1500.0
+
 
 
 PARAMS: tuple[Param, ...] = (
@@ -63,13 +71,19 @@ PARAMS: tuple[Param, ...] = (
     Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
           bounds=(150.0, 20000.0), units="m", consequence="numerical",
           derived_when_absent=(
-              "the grid is laid at the labeled default spacing - 2000 m over a real "
-              "lake, 1500 m in the idealized basin"),
+              f"the grid is laid at the labeled default spacing - "
+              f"{DEFAULT_REAL_RES_M:g} m over a real lake, "
+              f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
           desc="Explicit grid node spacing; 150 m is the finest the wave grid authors "
                "and a large lake is coarsened under the node budget"),
 
     # -- numerics (the advanced fold) --------------------------------------- #
-    Param("sim_duration_hours", door=doors.SCENARIO, default=4.0, bounds=(1.0, 24.0),
+    # CONSTANT, not SCENARIO: this window is not a choice about the storm, it is
+    # how long the sea needs to STOP CHANGING. The answer is the fetch-limited
+    # steady state, so a shorter window reports an unconverged sea and a longer
+    # one reports the same numbers more slowly - neither is a different question.
+    # The user keeps the lever; the model is not offered it.
+    Param("sim_duration_hours", door=doors.CONSTANT, default=4.0, bounds=(1.0, 24.0),
           units="h", consequence="numerical",
           desc="Simulated storm duration - long enough for the sea to reach its "
                "fetch-limited steady state"),

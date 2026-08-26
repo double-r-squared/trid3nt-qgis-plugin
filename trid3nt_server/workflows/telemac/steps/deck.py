@@ -49,17 +49,32 @@ _FRICTION_LAWS = (2, 3, 4)
 _DREDGE_MODES = ("scheduled", "criterion")
 
 
+#: The two bank sources, plus the spellings each one answers to. Anything else
+#: REFUSES: collapsing an unrecognized value to nhd_area meant a typo silently
+#: chose the real-bank path, which is a different mesh and a different answer.
+_BANK_SOURCES: dict[str, tuple[str, ...]] = {
+    "constant_ribbon": ("constant_ribbon", "constant", "ribbon", "constant_width"),
+    "nhd_area": ("nhd_area", "nhdarea", "nhd", "auto"),
+}
+
+
 def normalize_bank_source(value: Any) -> str:
     """Coerce a bank_source to the closed set {nhd_area, constant_ribbon}.
 
-    Default and any unknown spelling -> ``nhd_area`` (the real-bank path with its
-    typed unavailable gate); ribbon synonyms collapse to ``constant_ribbon``, so
-    the manifest always carries a canonical value.
+    Absent takes the declared default (the real-bank path with its typed
+    unavailable gate); a known synonym canonicalizes; anything else is a typed
+    refusal naming what it could have been.
     """
-    v = str(value or "nhd_area").strip().lower().replace("-", "_")
-    if v in ("constant_ribbon", "constant", "ribbon", "constant_width"):
-        return "constant_ribbon"
-    return "nhd_area"
+    if value is None or not str(value).strip():
+        return "nhd_area"
+    v = str(value).strip().lower().replace("-", "_")
+    for canonical, spellings in _BANK_SOURCES.items():
+        if v in spellings:
+            return canonical
+    raise TelemacDyeScenarioInputError(
+        f"bank_source {value!r} is neither of the two the mesher builds: "
+        "'nhd_area' (sample real NHDArea water polygons for per-station banks) "
+        "or 'constant_ribbon' (mesh the assumed constant channel width).")
 
 
 def stage_manifest(reach: dict[str, Any], run_tag: str, *,
@@ -246,16 +261,21 @@ def _do_sag_block(cfg: dict[str, Any] | None) -> dict[str, Any]:
     """
     if cfg is None:
         return {}
+    # NO fallbacks. Every one of these is a declared Param on telemac_do_sag with
+    # its own labeled default, and the waqtel step that builds ``cfg`` resolves
+    # all of them before this runs - so a ``.get(k, 20.0)`` here was a SECOND
+    # copy of the contract's number, free to drift from the one on the form.
+    # A missing key is now a KeyError at the seam that lost it.
     return {
         "substance_class": "do_sag",
-        "do_sag_bod_mgl": float(cfg.get("bod_mgl", 20.0)),
-        "do_sag_upstream_do_mgl": float(cfg.get("upstream_do_mgl", 9.0)),
-        "do_sat_mgl": float(cfg.get("saturation_mgl", 9.0)),
-        "do_water_temp_c": float(cfg.get("water_temp_c", 20.0)),
-        "do_k1_per_day": float(cfg.get("k1_per_day", 0.3)),
-        "do_k2_per_day": float(cfg.get("k2_per_day", 0.9)),
-        "do_k2_formula": int(cfg.get("k2_formula", 0)),
-        "do_standard_mgl": float(cfg.get("standard_mgl", 5.0)),
+        "do_sag_bod_mgl": float(cfg["bod_mgl"]),
+        "do_sag_upstream_do_mgl": float(cfg["upstream_do_mgl"]),
+        "do_sat_mgl": float(cfg["saturation_mgl"]),
+        "do_water_temp_c": float(cfg["water_temp_c"]),
+        "do_k1_per_day": float(cfg["k1_per_day"]),
+        "do_k2_per_day": float(cfg["k2_per_day"]),
+        "do_k2_formula": int(cfg["k2_formula"]),
+        "do_standard_mgl": float(cfg["standard_mgl"]),
     }
 
 

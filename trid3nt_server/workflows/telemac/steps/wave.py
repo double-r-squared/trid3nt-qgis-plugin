@@ -35,6 +35,7 @@ from trid3nt_server.workflows.shared.publish_product_layer import (
 
 from .open_water import (
     download_open_water_result,
+    mesh_resolution_label,
     mesh_sizing_provenance,
     solved_domain_bbox,
     surface_in_worker_bed_input,
@@ -70,10 +71,6 @@ GREAT_LAKES: dict[str, tuple[float, float, float, float]] = {
     "ontario": (-79.9, 43.2, -76.0, 44.3),
 }
 
-#: Labeled grid spacings when the caller names none. The real path is coarser
-#: because a lake is large; both are self-labeled on the layer.
-_DEFAULT_REAL_RES_M = 2000.0
-_DEFAULT_IDEALIZED_RES_M = 1500.0
 
 
 def real_lake_bathy_label(lake: str | None) -> str:
@@ -117,12 +114,18 @@ async def write_wave_deck(
     dissipation in it would answer a different question than the one asked.
     """
     from trid3nt_server.workflows.telemac.run_telemac import TOMAWAC_SOLVER_NAME
+    # Lazily: the template package imports this module, so the labeled
+    # defaults are read where they are used rather than at import time.
+    from trid3nt_server.workflows.telemac.wave_field.declarations import (
+        DEFAULT_IDEALIZED_RES_M,
+        DEFAULT_REAL_RES_M,
+    )
 
     asked = str(bathy_source or "auto").strip().lower()
     lake = great_lake_for(float(aoi["lon"]), float(aoi["lat"]))
     real = asked == "noaa_greatlakes" or (asked == "auto" and lake is not None)
     resolution = (float(mesh_resolution_m) if mesh_resolution_m is not None
-                  else (_DEFAULT_REAL_RES_M if real else _DEFAULT_IDEALIZED_RES_M))
+                  else (DEFAULT_REAL_RES_M if real else DEFAULT_IDEALIZED_RES_M))
     friction = (str(wave_mode) == "bottom_friction" if bottom_friction is None
                 else bool(bottom_friction))
 
@@ -263,10 +266,9 @@ async def publish_wave_products(*, deck: dict[str, Any],
             "peak_period_max_s": metrics.get("peak_period_max_s"),
             "wind_speed_mps": metrics.get("wind_speed_mps"),
             "mesh_size_m": metrics.get("dx_m"),
-            "mesh_resolution_label": (
-                f"{'real NOAA lake bathy' if deck['real_bathymetry'] else 'idealized'} "
-                f"grid {metrics.get('dx_m', deck['mesh_size_m']):g} m"
-                + (" (coarsened under node budget)" if metrics.get("coarsened") else "")),
+            "mesh_resolution_label": mesh_resolution_label(
+                "real NOAA lake bathy" if deck["real_bathymetry"] else "idealized",
+                deck, metrics),
             "fallback_note": _honesty_note(deck),
             "synthetic_inputs": _provenance(deck, metrics),
             "run_id": run_id,

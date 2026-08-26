@@ -81,6 +81,10 @@ PHYSICS = Physics("coastal_surge",
                   datum_offset_m=P.datum_offset_m, ocean_edge=P.ocean_edge,
                   duration_hours=P.duration_hours, time_step_s=P.time_step_s,
                   bathy_source=P.bathy_source,
+                  friction_law=P.friction_law,
+                  friction_coefficient=P.friction_coefficient,
+                  wind_speed_mps=P.wind_speed_mps,
+                  wind_direction_from_deg=P.wind_direction_from_deg,
                   output_interval_min=P.output_interval_min)
 
 FORCING = Forcing(water_level=D.tides)
@@ -112,7 +116,8 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
 #: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
 #: beside the chart spec so verification cites the run's own figures rather than
 #: recomputing them from the raster.
-ANSWER = ("peak_depth_m", "flooded_land_km2", "wet_area_km2", "peak_wl_m",
+ANSWER = ("peak_depth_m", "inundation_peak_depth_m", "inundation_basis",
+          "flooded_land_km2", "wet_area_km2", "peak_wl_m",
           "sl_peak_m", "series_type", "series_datum", "datum_offset_m",
           "station_id", "station_name", "ocean_edge", "mesh_size_m")
 
@@ -136,7 +141,14 @@ def build_stage_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     bars = [{"quantity": "Boundary stage (peak)", "m": float(sl_peak)}]
     if peak_wl is not None:
         bars.append({"quantity": "Water level (peak)", "m": float(peak_wl)})
-    bars.append({"quantity": "Inundation depth (peak)", "m": float(peak_depth)})
+    bars.append({"quantity": "Water depth (peak, all water)", "m": float(peak_depth)})
+    # Since the products split, the deepest INUNDATION and the deepest water are
+    # two numbers. Naming only one of them on a chart about flooding is how the
+    # permanent bay used to read as the answer.
+    inundation = getattr(result, "inundation_peak_depth_m", None)
+    if inundation is not None:
+        bars.append({"quantity": "Inundation depth (peak, initially-dry land)",
+                     "m": float(inundation)})
 
     kind = str(getattr(result, "series_type", None) or "observed")
     datum = getattr(result, "series_datum", None) or "MLLW"
@@ -159,8 +171,10 @@ def build_stage_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
         title=title,
         caption=(
             f"Driven by the {kind} CO-OPS series ({datum} datum): peak boundary "
-            f"stage {float(sl_peak):.3g} m, deepest inundation "
+            f"stage {float(sl_peak):.3g} m, deepest water "
             f"{float(peak_depth):.3g} m"
+            + (f", deepest INUNDATION over initially-dry land "
+               f"{float(inundation):.3g} m" if inundation is not None else "")
             + (f", {float(flooded):.3g} km2 of land newly flooded"
                if flooded is not None else "")
             + ". Planning-grade screening, not a calibrated hindcast."
@@ -201,6 +215,11 @@ coastal_tidal_surge = register_workflow(
     provenance=(("datum_offset_m", "datum_offset_note"),
                 ("series_type", "series_type_note"),
                 ("target_resolution_m", "target_resolution_note")),
+    # Flooded LAND is an area bounded by a wet/dry front, which lands between
+    # nodes: measured 4x low on the coarse mesh. The inundation peak is a
+    # magnitude maximum over that same front.
+    sensitivity=(("flooded_land_km2", "extent"),
+                 ("inundation_peak_depth_m", "peak")),
     coerce=(
         location_or_bbox("coastal_tidal_surge", code_prefix="COASTAL",
                          hint="For a natural prompt like 'storm surge flooding near "

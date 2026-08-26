@@ -27,6 +27,8 @@ from .. import hooks as _hooks
 from ..errors import router_empty_error, router_input_error, router_upstream_error
 
 __all__ = [
+    "build_request_breakwaters",
+    "parse_response_breakwaters",
     "build_request_roads",
     "parse_response_roads",
     "build_request_pois",
@@ -557,4 +559,107 @@ def parse_response_river(
                 "geometry": {"type": "LineString", "coordinates": seg},
                 "properties": dict(props),
             })
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# fetch_osm_breakwaters -- man_made=breakwater ways -> WHOLE-STRUCTURE LineStrings.
+#
+# The third member of the way-geometry family, and the one that is deliberately
+# NOT bbox-clipped. A breakwater is meshed as a SOLID BARRIER: clipping one at the
+# AOI edge opens a gap in the middle of a structure that has none, and waves would
+# pour through a hole the survey does not contain. The roads and river members clip
+# because a road is a network you measure inside an area; this is an object you
+# either have or do not.
+#
+# ``man_made=pier`` is excluded on purpose: a pier is the berthing dock being
+# sheltered, not a wave barrier, and meshing one solid answers a different
+# question. ``groyne`` and ``breakwater`` are both barriers and both ride.
+# --------------------------------------------------------------------------- #
+
+#: The OSM ``man_made`` values that are wave BARRIERS. Closed vocabulary: the
+#: value is interpolated into an Overpass regex, so an invented one would be an
+#: injection site as well as a wrong answer.
+_BARRIER_VALUES: tuple[str, ...] = ("breakwater", "groyne")
+
+
+def _build_barrier_ql(bbox: tuple[float, float, float, float],
+                      values: tuple[str, ...]) -> str:
+    """Overpass QL for ``man_made`` barrier ways touching ``bbox`` (``out geom``)."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    s, w, n, e = min_lat, min_lon, max_lat, max_lon
+    joined = "|".join(values)
+    return (
+        f"[out:json][timeout:{_OVERPASS_QL_TIMEOUT}];"
+        f"(way[\"man_made\"~\"^({joined})$\"]({s},{w},{n},{e}););"
+        f"out geom;"
+    )
+
+
+def _resolve_barrier_values(sc: str, sfx: str, structure_type: Any) -> tuple[str, ...]:
+    """Validate the requested barrier vocabulary; unknown -> typed input error."""
+    if structure_type is None:
+        return _BARRIER_VALUES
+    if isinstance(structure_type, str):
+        tokens = [t for t in structure_type.replace(",", " ").split() if t]
+    elif isinstance(structure_type, (list, tuple)):
+        tokens = [str(t).strip() for t in structure_type if str(t).strip()]
+    else:
+        raise router_input_error(
+            sc, f"structure_type must be a str or list of str; got "
+            f"{type(structure_type).__name__}", sfx)
+    out: list[str] = []
+    for tok in tokens:
+        low = tok.lower()
+        if low not in _BARRIER_VALUES:
+            raise router_input_error(
+                sc, f"unsupported structure_type {tok!r}; allowed OSM man_made "
+                f"barrier values: {', '.join(_BARRIER_VALUES)}. A pier is "
+                "deliberately excluded - it is the dock being sheltered, not a "
+                "wave barrier.", sfx)
+        if low not in out:
+            out.append(low)
+    return tuple(out) if out else _BARRIER_VALUES
+
+
+@_hooks.register_hook("overpass_breakwaters.build_request")
+def build_request_breakwaters(spec: SourceSpec,
+                              params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
+    """Validate the barrier vocabulary, build the QL, one POST per mirror."""
+    values = _resolve_barrier_values(
+        spec.error_code_prefix, spec.input_error_suffix, params.get("structure_type"))
+    bbox = tuple(float(v) for v in params["bbox"])
+    return _mirror_plans(spec, _build_barrier_ql(bbox, values))
+
+
+@_hooks.register_hook("overpass_breakwaters.parse_response")
+def parse_response_breakwaters(
+    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
+) -> list[dict[str, Any]]:
+    """Project barrier ways to WHOLE LineStrings - unclipped, two vertices minimum.
+
+    Empty is a legitimate answer, not an error: an open-water AOI with no
+    structure is exactly the case a harbour-agitation run has to be able to solve
+    and label. The consumer decides what absence means; this reports it.
+    """
+    from shapely.geometry import LineString  # noqa: F401 - parity with the family
+
+    out: list[dict[str, Any]] = []
+    for el in _elements(spec, bodies):
+        if not isinstance(el, dict) or el.get("type") != "way":
+            continue
+        coords = _way_coords(el.get("geometry"))
+        if len(coords) < 2:
+            continue
+        tags = el.get("tags") if isinstance(el.get("tags"), dict) else {}
+        out.append({
+            "type": "Feature",
+            "geometry": {"type": "LineString",
+                         "coordinates": [[float(x), float(y)] for x, y in coords]},
+            "properties": {
+                "osm_id": el.get("id"),
+                "name": tags.get("name"),
+                "man_made": tags.get("man_made"),
+            },
+        })
     return out

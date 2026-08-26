@@ -9,7 +9,15 @@ from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
 
-__all__ = ["DOC", "PARAMS"]
+__all__ = ["DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC", "PARAMS"]
+
+#: The grid spacings a run is laid at when the caller names none. They live HERE,
+#: beside the param whose ``derived_when_absent`` sentence promises them, because
+#: a number in the step and a sentence in the contract are two sources of truth
+#: for one fact and they drift. The step imports these.
+DEFAULT_REAL_RES_M = 40.0
+DEFAULT_IDEALIZED_RES_M = 8.0
+
 
 
 PARAMS: tuple[Param, ...] = (
@@ -45,15 +53,11 @@ PARAMS: tuple[Param, ...] = (
           desc="Structure / quay-wall reflection coefficient: 1 fully reflecting "
                "(a vertical quay), 0 fully absorbing (a rubble slope)"),
 
-    # -- the structure ------------------------------------------------------ #
-    Param("breakwater", door=doors.USER, optional=True, consequence="scenario",
-          type=tuple[float, float, float, float] | list[float],
-          derived_when_absent=(
-              "the ACTUAL surveyed breakwater is fetched from OpenStreetMap and "
-              "meshed as a thin solid barrier; if OSM has none, a LABELED "
-              "schematic segment stands in and says so"),
-          desc="Pin the barrier as a segment (lon0, lat0, lon1, lat1) EPSG:4326; "
-               "supplying it suppresses the OSM lookup"),
+    # -- the structure -----------------------------------------------------  #
+    # NOT a Param. The thing that shelters is a CONTEXT SLOT (``DATA`` in
+    # agitation.py): the template says it accepts a polyline and says nothing
+    # about where one comes from, because naming a default source for somebody's
+    # breakwater is an opinion the question does not carry.
 
     # -- the domain --------------------------------------------------------- #
     Param("bathy_source", door=doors.SCENARIO, default="auto",
@@ -64,8 +68,9 @@ PARAMS: tuple[Param, ...] = (
     Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
           bounds=(20.0, 2000.0), units="m", consequence="numerical",
           derived_when_absent=(
-              "the grid is laid at the labeled default spacing - 40 m over a real "
-              "harbour, 8 m in the analytic domain"),
+              f"the grid is laid at the labeled default spacing - "
+              f"{DEFAULT_REAL_RES_M:g} m over a real harbour, "
+              f"{DEFAULT_IDEALIZED_RES_M:g} m in the analytic domain"),
           desc="Explicit grid node spacing; a phase-resolving solve needs several "
                "nodes per WAVELENGTH, so this is much finer than a spectral run"),
     Param("compute_class", door=doors.CONSTANT, default="medium",
@@ -78,13 +83,14 @@ DOC = dict(
     routing=(
         "THE tool for \"how much does swell amplify inside this harbour\", \"wave "
         "agitation / tranquility in the basin\", \"does this breakwater shelter the "
-        "berths\", \"harbour resonance / seiche\", \"diffraction behind a breakwater\", "
-        "\"reef/shoal wave sheltering or focusing\". ARTEMIS phase-RESOLVING elliptic "
-        "mild-slope (Berkhoff) - diffraction fringes, standing waves and resonance are "
-        "the answer, not an average. THREE question classes via `wave_mode`: "
-        "`diffraction` (default; on a real Great Lakes harbour the ACTUAL surveyed "
-        "OSM breakwater is meshed), `resonance`, `shoal`. Returns a dimensionless "
-        "agitation field. Supply a harbour `location` OR a `bbox`."
+        "berths\", \"harbour resonance / seiche\", \"diffraction behind a "
+        "breakwater\", \"reef/shoal sheltering or focusing\". ARTEMIS "
+        "phase-RESOLVING elliptic mild-slope (Berkhoff): diffraction fringes, "
+        "standing waves and resonance are the answer, not an average. THREE "
+        "classes via `wave_mode`: `diffraction` (default), `resonance`, `shoal`. "
+        "Supply a harbour `location` or `bbox`. THE STRUCTURE IS A SLOT: pass "
+        "`structure=` a breakwater layer (`fetch_osm_breakwaters`) or a drawn "
+        "line; omit it and the domain solves as OPEN WATER, labeled."
     ),
     not_for=(
         "the offshore SEA STATE or fetch-limited wind-wave growth "
@@ -94,6 +100,12 @@ DOC = dict(
     ),
     params=PARAMS,
     controls=(
+        ("structure",
+         "The barrier to mesh as a thin solid obstacle: a polyline LAYER (the uri "
+         "or handle from fetch_osm_breakwaters, or any line layer the user has) or "
+         "a drawn/typed line as [[lon, lat], ...]. Producer-less BY DESIGN - this "
+         "tool will never go and find a structure you did not name. Absent = an "
+         "open-water solve, and the run says so."),
         ("input_mode",
          '"user_gated" presents the resolved incident wave and the structure for '
          'review/edit before the solve and WAITS; "auto" (session default) proceeds '

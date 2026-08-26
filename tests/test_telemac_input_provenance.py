@@ -79,12 +79,21 @@ def test_a_supplied_compute_class_still_reads_as_the_users() -> None:
     assert (row.value, row.door, row.basis) == ("large", "user", "user")
 
 
-def test_an_unknown_rung_still_warns_and_falls_back() -> None:
-    """A rung the dispatcher cannot serve is corrected, not passed through."""
+def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
+    """A rung the dispatcher cannot serve is a REFUSAL, not a quiet 'medium'.
+
+    It used to log a warning and seat 'medium', so a caller who asked for
+    'xlarge' got a medium solve with no provenance row saying so and nothing on
+    any surface a reader looks at.
+    """
+    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
     from trid3nt_server.workflows.telemac.steps.solve import compute_class
 
     coerce = compute_class()
-    assert coerce({"compute_class": "enormous"}) == {"compute_class": "medium"}
+    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+        coerce({"compute_class": "enormous"})
+    assert excinfo.value.error_code == "TELEMAC_COMPUTE_CLASS_UNKNOWN"
+    assert "enormous" in str(excinfo.value)
     assert coerce({"compute_class": "  Small "}) == {"compute_class": "small"}
 
 

@@ -94,35 +94,42 @@ def test_the_declared_plan_is_the_open_water_sequence():
     validate_plan(plan, workflow.params, workflow.data)
 
 
-def test_a_pinned_breakwater_suppresses_the_osm_lookup():
-    """The caller named the structure; going and finding a different one would
-    model something else."""
-    from unittest.mock import patch
+def test_a_supplied_structure_is_meshed_whatever_form_it_arrived_in():
+    """A drawn line and a fetched layer must be the same barrier by deck time.
 
+    Both routes go through the one supplied-geometry reader, which is the
+    no-double-middleware law at our own front door: the solve cannot tell, and
+    must not be able to tell, whether the caller sketched the breakwater or
+    fetched the surveyed one.
+    """
     from trid3nt_server.workflows.telemac.steps.agitation import write_agitation_deck
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    with patch("trid3nt_server.workflows.telemac.steps.agitation."
-               "fetch_osm_breakwaters") as fetch:
-        deck = asyncio.run(write_agitation_deck(
-            aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
-            breakwater=[-87.39, 46.53, -87.37, 46.54], mesh_resolution_m=30.0))
-    fetch.assert_not_called()
-    assert deck["breakwater_pinned"] is True
-    assert deck["config"]["breakwater"] == [-87.39, 46.53, -87.37, 46.54]
-    assert "breakwater_polylines" not in deck["config"]
+    drawn = [[-87.39, 46.53], [-87.37, 46.54]]
+    deck = asyncio.run(write_agitation_deck(
+        aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
+        structure=drawn, mesh_resolution_m=30.0))
+    assert deck["config"]["breakwater_polylines"] == [
+        [[-87.39, 46.53], [-87.37, 46.54]]]
+
+    # the draw gate's reply shape reaches the same deck
+    sketched = asyncio.run(write_agitation_deck(
+        aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
+        structure={"type": "Feature",
+                   "geometry": {"type": "LineString", "coordinates": drawn}},
+        mesh_resolution_m=30.0))
+    assert (sketched["config"]["breakwater_polylines"]
+            == deck["config"]["breakwater_polylines"])
 
 
-def test_an_exhausted_osm_fetch_falls_back_to_a_LABELED_schematic():
-    """An upstream outage degrades to a schematic that SAYS it is one.
+def test_an_unfilled_structure_slot_solves_open_water_and_says_so():
+    """Absence is an ANSWER, not a reason to go looking.
 
-    The row is what keeps the answer honest: kd_sheltered from a schematic barrier
-    is a different number than from the surveyed one, and nothing else on the
-    layer would say which was meshed.
+    The step used to call Overpass itself here and, when that came back empty,
+    mesh "a LABELED schematic breakwater" nobody asked for - inventing the very
+    thing the run was asked to evaluate.
     """
-    from unittest.mock import patch
-
     from trid3nt_server.workflows.telemac.steps.agitation import (
         _structure_row,
         write_agitation_deck,
@@ -130,14 +137,27 @@ def test_an_exhausted_osm_fetch_falls_back_to_a_LABELED_schematic():
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    with patch("trid3nt_server.workflows.telemac.steps.agitation."
-               "fetch_osm_breakwaters", return_value=[]):
-        deck = asyncio.run(write_agitation_deck(
-            aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
+    deck = asyncio.run(write_agitation_deck(
+        aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
     assert deck["breakwater_polylines"] is None
+    assert "breakwater_polylines" not in deck["config"]
     row = _structure_row(deck)
-    assert row.value == "schematic_demo" and row.basis == "default_demo"
-    assert "LABELED schematic" in row.note
+    assert row.param == "structure" and row.value is None
+    assert "OPEN WATER" in row.note
+
+
+def test_the_step_module_makes_no_network_call_of_its_own():
+    """The breakwater-class guard: a step INTERPRETS declarations, it never fetches."""
+    import inspect
+
+    from trid3nt_server.workflows.telemac.steps import agitation as mod
+
+    source = inspect.getsource(mod)
+    for primitive in ("urllib", "urlopen", "requests.get", "requests.post", "httpx",
+                      "put_object", "_get_s3_client"):
+        assert primitive not in source, (
+            f"{primitive!r} is back in the agitation step module: a step that "
+            "fetches bypasses the router's cache, ladders and provenance")
 
 
 def test_only_diffraction_gets_a_real_harbour():

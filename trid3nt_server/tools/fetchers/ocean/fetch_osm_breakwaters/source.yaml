@@ -1,0 +1,82 @@
+schema_version: v1
+name: fetch_osm_breakwaters
+source_class: osm_breakwaters
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://overpass-api.de/api/interpreter
+  kumi:
+    url: https://overpass.kumi.systems/api/interpreter
+  coffee:
+    url: https://overpass.private.coffee/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  structure_type:
+    type: str_list
+    default:
+    - breakwater
+    - groyne
+hooks:
+  build_request: overpass_breakwaters.build_request
+  parse_response: overpass_breakwaters.parse_response
+ingest:
+  http_source:
+    endpoint_fallback: true
+  properties:
+  - osm_id
+  - name
+  - man_made
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style_preset: osm_breakwaters
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 40.0
+  kb_per_feature: 2.0
+  floor_mb: 0.01
+caveats:
+- OpenStreetMap man_made=breakwater / groyne ways via the Overpass API (3-mirror fallback). Global, keyless.
+  Ways are returned WHOLE, not clipped to the bbox - a barrier clipped at the AOI edge would open a gap
+  the real structure does not have. An area with no surveyed structure returns a valid 0-feature layer,
+  not an error.
+docstring: "Surveyed coastal wave BARRIERS (breakwaters, groynes) as LineStrings, from OpenStreetMap.\n\
+  \n**What it does:** Queries the OpenStreetMap Overpass API for ways tagged\n``man_made=breakwater``\
+  \ or ``man_made=groyne`` that touch the requested\nbbox, and returns each one as a WHOLE LineString\
+  \ in EPSG:4326, serialized\nto FlatGeobuf and cached for 30 days. Ways are deliberately NOT clipped\n\
+  to the bbox: a barrier is a solid object, and cutting one at the AOI edge\nwould put a gap in the middle\
+  \ of a structure that has none. The vector\nrenders inline on the map automatically -- do NOT call ``publish_layer``\n\
+  on it.\n\n**When to use:**\n- The user asks what protects a harbour, marina or berthing area, or\n \
+  \ wants the breakwater drawn on the map.\n- Feeding ``artemis_harbor_agitation``'s ``structure`` slot:\
+  \ fetch the\n  surveyed barrier, then hand the returned layer to the agitation run so\n  the solver meshes\
+  \ the REAL structure as a thin solid barrier rather\n  than solving open water.\n- Any shoreline-protection\
+  \ inventory or coastal-structure context overlay.\n\n**When NOT to use:**\n- DO NOT use for PIERS or docks\
+  \ -- ``man_made=pier`` is excluded by\n  design. A pier is the berthing structure being sheltered, not\
+  \ a wave\n  barrier; meshing one solid answers a different question. Use\n  ``fetch_overpass_pois`` with\
+  \ an explicit tag if you want piers.\n- DO NOT use for levees, seawalls or revetments -- those carry\
+  \ different\n  OSM tags and are not in this tool's closed vocabulary.\n- DO NOT use for engineering-grade\
+  \ structure geometry: OSM breakwater\n  ways are volunteer-surveyed centrelines with no crest elevation\
+  \ and no\n  cross-section.\n\n**Parameters:**\n- ``bbox`` (tuple[float, float, float, float]): ``(min_lon,\
+  \ min_lat,\n  max_lon, max_lat)`` in EPSG:4326. Required.\n- ``structure_type`` (list[str] | None, default\
+  \ None): which OSM\n  ``man_made`` barrier values to include. ``None`` returns both\n  ``breakwater``\
+  \ and ``groyne``. Any other value is a typed input error.\n\n**Returns:** A ``LayerURI`` pointing at\
+  \ a FlatGeobuf in the cache bucket.\n``layer_type=\"vector\"``, ``role=\"context\"``, ``units=None``.\
+  \ Properties\nper feature: ``osm_id`` (int), ``name`` (str | None), ``man_made`` (str).\nAn AOI with\
+  \ no surveyed barrier returns a valid 0-feature layer -- that\nis an honest answer, and the open-water\
+  \ solve it implies is labeled.\n\n**Cross-tool dependencies:**\n- Pairs with ``artemis_harbor_agitation``\
+  \ (hand the layer to its\n  ``structure`` slot) and with ``fetch_topobathy`` for the bed beneath.\n\
+  - Overpass inserts a polite delay before each network request; cache\n  hits skip it."

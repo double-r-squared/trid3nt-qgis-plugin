@@ -485,24 +485,38 @@ class Telemac3dLayerURI(LayerURI):
 
 
 class TelemacCoastalLayerURI(LayerURI):
-    """A ``LayerURI`` for a TELEMAC-2D coastal tidal/surge PEAK-INUNDATION-DEPTH
-    field.
+    """A ``LayerURI`` for a TELEMAC-2D coastal tidal/surge depth field.
+
+    TWO layers carry this type, and they answer different questions. The PRIMARY
+    is peak depth over land that was DRY at t=0 - the planning quantity, the same
+    discrimination ``flooded_land_km2`` counts. Beside it, ``role="context"``, the
+    TOTAL peak water depth including the permanently submerged bay: where the
+    water is, rather than where the tide went. One raster used to be both, which
+    is how a permanently submerged bay floor came to render in an "inundation
+    depth" ramp.
 
     The storm-tide analogue of the other TELEMAC layers: an open-water coastal
     domain (real NOAA DEM_all topobathy) with ONE seaward liquid boundary driven
     in time by a NOAA CO-OPS / GTSM water-level series through the LIQUID
     BOUNDARIES FILE (SL(1)); SAINT-VENANT + TIDAL FLATS wetting/drying floods the
-    low coast as the boundary stage rises. The primary artifact is the per-node
-    MAX-over-time WATER DEPTH (peak inundation depth) COG. Extends ``LayerURI``
-    field-for-field and adds the storm-tide scalars the agent cites rather than
-    invents (invariant 1):
+    low coast as the boundary stage rises. Extends ``LayerURI`` field-for-field
+    and adds the storm-tide scalars the agent cites rather than invents
+    (invariant 1). Both layers carry the SAME scalars - they describe the run, not
+    the raster:
 
         peak_depth_m: peak water depth anywhere in the domain over the run, m
-            (>= 0) -- the deepest inundation the tide/surge produced.
+            (>= 0) -- the whole water column, permanent water included.
         flooded_land_km2: newly-inundated LAND area, km^2 (>= 0) -- mesh cells
             dry at t0 (bed above the initial water line) but wet at peak stage.
             This is THE discriminant: a surge series floods far more land than the
             calm astronomical tide over the SAME domain.
+        inundation_peak_depth_m: OPTIONAL deepest INUNDATION, m (>= 0) -- the peak
+            depth over initially-dry land only, which is what the primary raster
+            paints. Lower than ``peak_depth_m`` wherever permanent water is deeper
+            than the flooding.
+        inundation_basis: OPTIONAL label for HOW dry-at-t0 was decided (the bed
+            against the datum-corrected initial water line, or frame 0 of WATER
+            DEPTH) -- the reader is entitled to check which land was excluded.
         wet_area_km2: OPTIONAL total wetted area at peak stage, km^2 (>= 0).
         peak_wl_m: OPTIONAL peak free-surface water level over wet nodes, m
             (the crest stage reached).
@@ -518,14 +532,16 @@ class TelemacCoastalLayerURI(LayerURI):
         mesh_size_m: OPTIONAL grid node spacing (m, > 0) the solve used.
         mesh_resolution_label: OPTIONAL human label for the resolution choice.
 
-    ``layer_type`` is ``"raster"`` (the peak-depth COG); the rising-tide animation
-    plays from the coastal result SELAFIN mesh sibling that ``export_case_to_qgis``
-    discovers via ``TELEMAC_COASTAL_DEPTH_STYLE_PRESET``. The raster carries a
-    data-driven ``legend``.
+    ``layer_type`` is ``"raster"`` on both; the rising-tide animation plays from
+    the coastal result SELAFIN mesh sibling that ``export_case_to_qgis`` discovers
+    via ``TELEMAC_COASTAL_DEPTH_STYLE_PRESET``. Both rasters carry a data-driven
+    ``legend``, each over its OWN range.
     """
 
     peak_depth_m: float = Field(ge=0.0)
     flooded_land_km2: float = Field(ge=0.0)
+    inundation_peak_depth_m: float | None = Field(default=None, ge=0.0)
+    inundation_basis: str | None = Field(default=None)
     wet_area_km2: float | None = Field(default=None, ge=0.0)
     peak_wl_m: float | None = Field(default=None)
     sl_peak_m: float | None = Field(default=None)

@@ -11,6 +11,15 @@ from __future__ import annotations
 import asyncio
 
 
+
+#: The non-question physics every coastal deck carries. Declared on the template
+#: (door=CONSTANT / SCENARIO), so a deck-contract test states them explicitly
+#: rather than leaning on a signature default that would be a second source of
+#: truth for the same numbers.
+_PHYSICS = dict(time_step_s=20.0, bathy_source="noaa_demall", friction_law=3,
+                friction_coefficient=40.0, wind_speed_mps=0.0,
+                wind_direction_from_deg=0.0)
+
 def test_coastal_tidal_surge_registered_as_engine_template():
     from trid3nt_server.tools import TOOL_REGISTRY
     entry = TOOL_REGISTRY.get("coastal_tidal_surge")
@@ -172,7 +181,7 @@ def test_the_coastal_deck_carries_what_solves_it():
         water_level={"series": [[0.0, 0.5], [360.0, 1.4]], "series_datum": "MLLW",
                      "series_type": "observed", "station_id": "8728690",
                      "datum_offset_m": -0.232},
-        mesh_resolution_m=250.0, duration_hours=6.0))
+        mesh_resolution_m=250.0, duration_hours=6.0, **_PHYSICS))
     assert deck["solver"] == "telemac_coastal" and deck["section"] == "coastal"
     assert deck["result_basename"] == "res_coastal.slf"
     assert deck["config"]["duration_s"] == 21600.0
@@ -204,7 +213,7 @@ def test_an_unreconciled_tide_datum_refuses_rather_than_flooding_the_marsh():
             water_level={"series": [[0.0, 0.5], [360.0, 1.4]],
                          "series_datum": "MLLW", "series_type": "observed",
                          "station_id": "8728690"},
-            mesh_resolution_m=250.0, duration_hours=6.0))
+            mesh_resolution_m=250.0, duration_hours=6.0, **_PHYSICS))
     assert excinfo.value.error_code == "COASTAL_DATUM_UNRECONCILED"
 
 
@@ -217,7 +226,8 @@ def test_an_explicit_zero_offset_is_an_override_not_a_default():
              "bbox": (-85.02, 29.69, -84.90, 29.80)},
         water_level={"series": [[0.0, 0.5], [360.0, 1.4]], "series_datum": "MLLW",
                      "series_type": "observed", "station_id": "8728690"},
-        mesh_resolution_m=250.0, duration_hours=6.0, datum_offset_m=0.0))
+        mesh_resolution_m=250.0, duration_hours=6.0, datum_offset_m=0.0,
+        **_PHYSICS))
     assert deck["datum_offset_m"] == 0.0
 
 
@@ -228,7 +238,7 @@ def test_the_synthetic_beach_needs_no_datum_reconciliation():
     deck = asyncio.run(write_coastal_deck(
         aoi={"slug": "coast", "name": "coast",
              "bbox": (-85.02, 29.69, -84.90, 29.80)},
-        bathy_source="synthetic", mesh_resolution_m=250.0))
+        mesh_resolution_m=250.0, **{**_PHYSICS, "bathy_source": "synthetic"}))
     assert deck["datum_offset_m"] == 0.0
 
 
@@ -242,7 +252,7 @@ def test_a_coastal_deck_with_no_series_refuses_typed():
     with pytest.raises(OpenWaterError) as excinfo:
         asyncio.run(write_coastal_deck(
             aoi={"slug": "coast", "name": "coast", "bbox": (-85.0, 29.7, -84.9, 29.8)},
-            water_level=None))
+            water_level=None, **_PHYSICS))
     assert excinfo.value.error_code == "COASTAL_TIDE_EMPTY"
 
 

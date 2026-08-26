@@ -473,10 +473,12 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
         layers, _metrics = await asyncio.to_thread(
             postprocess_telemac_do, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             reach_name=reach_name,
-            saturation_mgl=float(do_sag_config.get("saturation_mgl", 9.0)),
-            upstream_do_mgl=float(do_sag_config.get("upstream_do_mgl", 9.0)),
-            bod_upstream_mgl=float(do_sag_config.get("bod_mgl", 20.0)),
-            standard_mgl=float(do_sag_config.get("standard_mgl", 5.0)))
+            # Read, never re-defaulted: these were the THIRD copy of four
+            # declared do_sag defaults (declarations.py, deck.py, here).
+            saturation_mgl=float(do_sag_config["saturation_mgl"]),
+            upstream_do_mgl=float(do_sag_config["upstream_do_mgl"]),
+            bod_upstream_mgl=float(do_sag_config["bod_mgl"]),
+            standard_mgl=float(do_sag_config["standard_mgl"]))
     finally:
         Path(slf_path).unlink(missing_ok=True)
 
