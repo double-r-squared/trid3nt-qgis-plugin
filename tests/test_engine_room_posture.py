@@ -76,16 +76,23 @@ def test_a_spec_that_writes_its_own_network_and_declares_one_is_refused():
         _with_declared_network(spec, spec.build_argv("RID", Path("/tmp/r"), []))
 
 
-def test_the_four_open_water_telemac_specs_declare_no_network():
-    """The DoD, asserted: every migrated family runs with the network denied."""
+def test_every_telemac_spec_declares_no_network():
+    """The FAMILY DoD, asserted: the whole image runs with the network denied.
+
+    The reach spec is the one that carried the exception, because the reach
+    pipeline navigated NLDI, re-seeded off two flowline queries, queried NHDArea
+    and walked its own DEM ladder from inside the container. All four are staged
+    now, so the posture is no longer per-leg - it is the image's.
+
+    Note the reach spec also serves the rain-on-grid catchment, so this one line
+    is what puts BOTH remaining legs behind the denied network.
+    """
     import trid3nt_server.workflows.telemac.run_telemac  # noqa: F401
     from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
     for name in ("telemac_coastal", "tomawac_wave", "artemis_agitation",
-                 "telemac3d_strat"):
+                 "telemac3d_strat", "telemac_river_dye"):
         assert LOCAL_SOLVER_SPEC_REGISTRY[name]().network == "none", name
-    # The reach family still fetches in-worker; it must NOT claim the posture.
-    assert LOCAL_SOLVER_SPEC_REGISTRY["telemac_river_dye"]().network is None
 
 
 # --------------------------------------------------------------------------- #

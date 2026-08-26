@@ -193,7 +193,14 @@ def _classify_exit(
 
 
 def telemac_local_spec() -> "Any":
-    """Build the TELEMAC river-dye ``LocalSolverSpec`` for the local-docker backend."""
+    """Build the TELEMAC river-dye ``LocalSolverSpec`` for the local-docker backend.
+
+    The reach family and the rain-on-grid catchment both run through this spec.
+    It was the LAST leg of the image still holding in-container fetches - the
+    NLDI seed ladder, the navigate that IS the centerline, the NHDArea banks and
+    the Copernicus/3DEP bed. All four are staged now, so this declares
+    ``network="none"`` with the other four and the WHOLE image is an engine room.
+    """
     from trid3nt_server.workflows.solver.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     return LocalSolverSpec(
@@ -201,6 +208,7 @@ def telemac_local_spec() -> "Any":
         workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
         args_key="telemac_args",
         build_argv=_telemac_build_argv(_telemac_image()),
+        network="none",
         stdout_name="telemac.stdout",
         stderr_name="telemac.stderr",
         stdout_uri_field="telemac_stdout_uri",

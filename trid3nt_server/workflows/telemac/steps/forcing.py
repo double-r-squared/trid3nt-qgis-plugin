@@ -383,7 +383,7 @@ async def _surface_discharge_station_layer(layer: Any) -> None:
     the generic auto-emission, which would only know the REQUESTED time, not
     the resolved one), so this is the only station layer that reaches the
     canvas: exactly one, honestly captioned. BEST-EFFORT (mirrors
-    ``products._surface_bed_bathymetry_input``): never raises, and a missing
+    the input-surfacing floor): never raises, and a missing
     station layer never voids the discharge resolution.
     """
     if layer is None:

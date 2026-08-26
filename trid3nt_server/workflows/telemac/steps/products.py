@@ -39,12 +39,6 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 
 #: DEM-source label for the bed-COG provenance name (the worker records which DEM
 #: rung actually sampled the bed).
-_BED_DEM_SOURCE_LABELS: dict[str, str] = {
-    "cop-dem-glo-30": "Copernicus GLO-30",
-    "usgs-3dep": "USGS 3DEP",
-}
-
-
 def _s3_object_exists(s3: Any, bucket: str, key: str) -> bool:
     """True when the object physically exists.
 
@@ -188,35 +182,6 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
         "fallback_note": honesty, **update})
 
 
-async def _surface_bed_bathymetry_input(emitter: Any, metrics: dict[str, Any],
-                                  run_id: str, reach_name: str) -> bool:
-    """Surface the bed bathymetry the worker sampled, as a context input layer.
-
-    The bed is fetched + fitted INSIDE the container, so the honest surfacing path
-    is the worker-envelope seam: the worker writes the bed it solved on next to
-    the result and records the key. NEVER raises - a missing bed COG must not void
-    a solve.
-    """
-    bed_cog = metrics.get("bed_cog")
-    if emitter is None or not bed_cog:
-        return False
-    try:
-        from trid3nt_server.workflows.solver.solver import _get_runs_bucket
-        from trid3nt_server.emission.layer_uri_emit import publish_raster_input_cog
-
-        source_label = _BED_DEM_SOURCE_LABELS.get(
-            str(metrics.get("bed_cog_source") or ""), "3DEP/Copernicus")
-        return await publish_raster_input_cog(
-            emitter, cog_uri=f"s3://{_get_runs_bucket()}/{run_id}/{bed_cog}",
-            layer_id=f"input-river-bed-{new_ulid()}",
-            name=(f"Input: river bed bathymetry ({reach_name}, "
-                  f"{source_label}-sampled, in-worker)"),
-            style_preset="continuous_dem", role="context")
-    except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
-        logger.warning("telemac bed input absent (the solve is unaffected): %s", exc)
-        return False
-
-
 def _download_gaia(run_id: str) -> str | None:
     """Download ``gaia_river.slf``; ``None`` when the run wrote none (fail-open)."""
     from trid3nt_server.workflows.solver.solver import (
@@ -354,8 +319,6 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     reach_name, substance = deck["reach_name"], deck["substance"]
     slf_path, _ = await asyncio.to_thread(download_result_selafin, run_id)
 
-    await _surface_bed_bathymetry_input(emitter, solve.get("metrics") or {},
-                                  run_id, reach_name)
     try:
         layers, _metrics = await asyncio.to_thread(
             postprocess_telemac, slf_path, run_id=run_id, utm_epsg=utm_epsg,
@@ -467,8 +430,6 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     reach_name = deck["reach_name"]
     slf_path, _ = await asyncio.to_thread(download_result_selafin, run_id)
-    await _surface_bed_bathymetry_input(emitter, solve.get("metrics") or {},
-                                  run_id, reach_name)
     try:
         layers, _metrics = await asyncio.to_thread(
             postprocess_telemac_do, slf_path, run_id=run_id, utm_epsg=utm_epsg,

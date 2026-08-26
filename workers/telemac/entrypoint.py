@@ -89,7 +89,6 @@ DEFAULT_OUTPUTS = [
     "t2d_river.waqtel",    # decay class: the WAQTEL steering file (forcing evidence)
     "gaia_river.slf",      # sediment class: GAIA result (CUMUL BED EVOL deposition)
     "gaia_river.cas",      # sediment class: the GAIA steering file (evidence)
-    "bed_bathymetry.tif",  #: the in-worker-sampled river bed as a 4326 COG
     "res_agitation.slf",   # agitation class: raw ARTEMIS result (mesh sibling)
     "agit_field.slf",      # agitation class: single-frame WAVE HEIGHT field -> Kd COG
     "art_agit.cas",        # agitation class: the ARTEMIS steering deck (evidence)
@@ -187,7 +186,25 @@ class TelemacManifestUnknownFieldsError(ValueError):
 #: -10 adds the universal cadence lever ``output_interval_min`` (minutes between
 #: GRAPHIC PRINTOUTS -> graphic_period, ADR 0283) to ReachConfig; None keeps the
 #: byte-identical default. INERT until this image is rebuilt.
-_PARSER_VERSION = "telemac-reach-10"
+#: -11 is the FETCH MIGRATION: the six in-container fetches are gone and the
+#: geometry arrives staged (river_centerline.geojson, river_banks.geojson,
+#: bed_source.tif), so ReachConfig DROPS the four seed-ladder fields the server
+#: now resolves (river_name, seed_from_release, seed_release_lon,
+#: seed_release_lat) and the run writes no bed_bathymetry.tif - the bed input is
+#: the staged source raster the emit-on-fetch seam surfaces. It ADDS
+#: ``bed_source`` (the dataset label the server staged, which a worker that
+#: opens a file cannot know) and records the mesh's own 4326 ``bbox``, which the
+#: solve path never did. This leg runs ``--network none``.
+_PARSER_VERSION = "telemac-reach-11"
+
+
+def _mesh_bbox4326(mesh: dict, tr: Any) -> list[float]:
+    """The 4326 extent of the mesh this run actually built."""
+    from pyproj import Transformer
+
+    back = Transformer.from_crs(tr.target_crs, 4326, always_xy=True)
+    lon, lat = back.transform(mesh["X"], mesh["Y"])
+    return [float(lon.min()), float(lat.min()), float(lon.max()), float(lat.max())]
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -258,9 +275,9 @@ def run_pipeline(
              cfg.name, cfg.seed_lon, cfg.seed_lat, cfg.nav_direction,
              cfg.distance_km, cfg.channel_width_m)
 
-    # 1. real river centerline
-    ll, fmeta = B.fetch_river_centerline(cfg)
-    LOG.info("centerline fetched: %s", fmeta)
+    # 1. the real river centerline, staged into the run directory
+    ll, fmeta = B.fetch_river_centerline(cfg, str(data_dir))
+    LOG.info("centerline read: %s", fmeta)
 
     # 2. project / resample / smooth
     cl, pmeta = B.process_centerline(ll, cfg)
@@ -286,14 +303,7 @@ def run_pipeline(
         _bank_t0 = time.time()
         _banks_available = False
         try:
-            lon0, lat0 = ll[:, 0].min(), ll[:, 1].min()
-            lon1, lat1 = ll[:, 0].max(), ll[:, 1].max()
-            # pad must cover FAR channels behind mid-river islands (NATE
-            # 2026-07-18: Fisher/Cottonwood back-channels were unmeshed - the
-            # 0.01deg pad + corridor clipped them off laterally)
-            pad = 0.03
-            polys = B.fetch_bank_polygons(
-                (lon0 - pad, lat0 - pad, lon1 + pad, lat1 + pad))
+            polys = B.fetch_bank_polygons(str(data_dir))
             if polys:
                 polys_utm = []
                 for ext, holes in polys:
@@ -496,22 +506,15 @@ def run_pipeline(
                  metrics["wall_s"])
         return metrics
 
-    # 4. Copernicus DEM bed + gentle downstream slope
-    Z, bed = B.fetch_dem_bed(mesh, cfg, tr)
+    # 4. the staged DEM bed + gentle downstream slope. The bed the run was GIVEN
+    # is surfaced by the server's emit-on-fetch seam as the continuous source
+    # raster, so there is no node-sampled COG to write here any more - that
+    # existed only because a container fetch could not reach the emit seam, and
+    # it painted the input as a scatter of the samples the solver kept rather
+    # than as the terrain the run was handed.
+    Z, bed = B.fetch_dem_bed(mesh, cfg, tr, str(data_dir))
     mesh["bed_z"] = Z  # oil release snaps to the local thalweg (deepest node)
     LOG.info("dem bed: %s", bed)
-
-    # 4b.: write the in-worker-sampled bed as a small 4326 COG so the
-    # composer can surface the river bed bathymetry as a role=context input.
-    # Best-effort: a bed-COG hiccup NEVER voids a CORRECT END solve.
-    bed_cog_meta: dict[str, Any] = {}
-    try:
-        bed_cog_meta = B.write_bed_cog(
-            mesh, Z, cfg, tr, str(data_dir / B.BED_COG_FILENAME))
-        bed_cog_meta["bed_cog_source"] = bed.get("dem_source")
-        LOG.info("bed COG written: %s", bed_cog_meta)
-    except Exception as exc:  # noqa: BLE001 -- input surfacing is never fatal
-        LOG.warning("bed COG write failed (non-fatal, bed input absent): %s", exc)
 
     # project the user-picked release point (lonlat) into the mesh UTM
     # so spill_point can honor it (validated there within 2 channel widths).
@@ -703,7 +706,14 @@ def run_pipeline(
         "cas": "t2d_river.cas",
         "reach_name": cfg.name,
         "seed_comid": fmeta.get("seed_comid"),
+        "centerline_comids": fmeta.get("centerline_comids"),
         "n_flowlines": fmeta.get("n_flowlines"),
+        # WHERE this run modelled, in 4326. The mesh preview has always echoed
+        # its extent and the solve never did, so a reader of a solved reach had
+        # no way to check that a LOCAL-metre result was put back on the right
+        # piece of the map - and a frame drawn at the UTM false origin looked
+        # exactly like a frame drawn on the water.
+        "bbox": _mesh_bbox4326(mesh, tr),
         "utm_epsg": pmeta.get("utm_epsg"),
         "centerline_length_m": pmeta.get("centerline_length_m"),
         "npoin": int(mesh["npoin"]),
@@ -747,10 +757,6 @@ def run_pipeline(
         "enforced_slope": bed.get("enforced_slope"),
         "bed_drop_m": bed.get("bed_drop_m"),
         "reach_len_m": bed.get("reach_len_m"),
-        # the in-worker-sampled bed COG key (+ its finite range) so the
-        # composer surfaces the river bed bathymetry as a role=context input.
-        # Empty dict when the best-effort write failed (bed input simply absent).
-        **bed_cog_meta,
         "wall_s": wall_s,
     }
 

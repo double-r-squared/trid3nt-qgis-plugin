@@ -22,6 +22,7 @@ from trid3nt_server.workflows.lib import Step
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 from .reach import (
     coerce_lonlat_point,
+    resolve_reach_river,
     suggest_mesh_size_m,
     suggest_time_step_s,
 )
@@ -78,11 +79,17 @@ def normalize_bank_source(value: Any) -> str:
 
 
 def stage_manifest(reach: dict[str, Any], run_tag: str, *,
-                   mesh_only: bool = False) -> str:
+                   mesh_only: bool = False,
+                   inputs: list[dict[str, str]] | None = None) -> str:
     """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
 
     ``mesh_only`` flags the fast mesh-preview mode: build the mesh, write the
     wireframe + gate stats, skip the solve.
+
+    ``inputs`` is what the launcher stages into the run directory before the
+    container starts, ``{gs_uri, dest}`` per entry. It carries the centerline,
+    the banks and the bed this pipeline used to fetch for itself, which is why
+    the worker needs no network.
     """
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
@@ -91,12 +98,8 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_STAGING_FAILED",
             "TRID3NT_CACHE_BUCKET must be set to stage the TELEMAC manifest.")
-    # bed_bathymetry.tif: the in-worker-sampled bed COG (_surface_bed_bathymetry_input
-    # reads its filename from telemac_metrics.json bed_cog and publishes it as a
-    # context input). The write is best-effort worker-side, so an absent file is
-    # a silent glob miss here, not an upload failure.
     outputs = ["r2d_river.slf", "river.slf", "river.cli", "t2d_river.cas",
-               "full_listing.log", "telemac_metrics.json", "bed_bathymetry.tif"]
+               "full_listing.log", "telemac_metrics.json"]
     # The GAIA deposition SELAFIN + its steering file ship for a sediment run so
     # the postprocess can build the bed-evolution COG. A non-sediment run never
     # produces them, so the supervisor's output glob simply skips them.
@@ -108,7 +111,7 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
     manifest: dict[str, Any] = {
         "reach": reach,
         "run_id": run_tag,
-        "inputs": [],        # the pipeline self-fetches NHDPlus + the DEM
+        "inputs": list(inputs or []),
         "telemac_args": [],  # the image CMD drives the entrypoint
         "outputs": outputs,
     }
@@ -372,14 +375,34 @@ async def write_reach_deck(
         reach_name=reach["slug"],
         label="Outfall" if do_sag_config else "Release point")
 
+    # The river this reach is MESHED on, fetched here and staged into the run
+    # directory. It runs after the release marker so the canvas shows the point
+    # first and the river it sits on second, and BEFORE the deck is assembled
+    # because the seed the worker is handed is the one this ladder resolved.
+    run_tag = new_ulid()
+    river = await resolve_reach_river(
+        reach=reach, seed=seed, run_tag=run_tag,
+        reach_length_km=float(reach_length_km),
+        bank_source=normalize_bank_source(bank_source),
+        release=seed_pair)
+    logger.info("telemac reach river: seed=(%.5f,%.5f) rung=%s comids=%s "
+                "centerline=%s bed=%s",
+                river["provenance"]["seed_lon"], river["provenance"]["seed_lat"],
+                river["provenance"]["seed_rung"],
+                river["provenance"]["centerline_comids"],
+                river["provenance"]["centerline_sha256"][:12],
+                river["provenance"]["bed_source"])
+
     rain_mm_day = (rain or {}).get("mm_per_day")
     deck: dict[str, Any] = {
         "name": reach["slug"],
-        "seed_lon": round(seed_lon, 6),
-        "seed_lat": round(seed_lat, 6),
+        # The seed the CENTERLINE was resolved from, not the one the ladder was
+        # handed: the manifest is the run's record of what it meshed, and the two
+        # differ whenever a re-seed rung fired.
+        "seed_lon": round(float(river["provenance"]["seed_lon"]), 6),
+        "seed_lat": round(float(river["provenance"]["seed_lat"]), 6),
         **_resolved_physics(friction_coefficient, friction_law,
                             velocity_diffusivity, tracer_diffusivity),
-        **({"river_name": reach["river_name"]} if reach.get("river_name") else {}),
         **class_block,
         **_do_sag_block(do_sag_config),
         # Wind rides ONLY when a positive speed was asked for; absent otherwise, so
@@ -393,6 +416,12 @@ async def write_reach_deck(
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),
         "bank_source": normalize_bank_source(bank_source),
+        # WHICH dataset the staged bed came from. The worker opens a file and
+        # cannot know, so the label travels with the file - otherwise the run's
+        # own metrics could not tell a GLO-30 bed from the 3DEP one the ladder
+        # fell to, which is exactly the substitution the loudness floor exists
+        # to keep visible.
+        "bed_source": str(river["provenance"]["bed_source"] or "staged"),
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
         **({"output_interval_min": float(output_interval_min)}
@@ -403,13 +432,6 @@ async def write_reach_deck(
         **({"release_lon": round(release_pair[0], 6),
             "release_lat": round(release_pair[1], 6)}
            if release_pair is not None else {}),
-        # Which point the worker resolves the CENTERLINE from. Absent means the
-        # geocoded reach seed stands - which is what a gate-picked click leaves,
-        # so a click moves the source without re-meshing a different water body.
-        **({"seed_from_release": True,
-            "seed_release_lon": round(seed_pair[0], 6),
-            "seed_release_lat": round(seed_pair[1], 6)}
-           if seed_pair is not None else {}),
         "spill_frac": float(min(max(spill_fraction, 0.0), 1.0)),
         "pulse_window_s": float(spill_duration_s),
         "source_q_m3s": float(source_q_m3s),
@@ -418,7 +440,9 @@ async def write_reach_deck(
     }
     return {
         "deck": deck,
-        "run_tag": new_ulid(),
+        "run_tag": run_tag,
+        "inputs": river["inputs"],
+        "river": river["provenance"],
         "substance": substance,
         "substance_class": substance_class,
         "erodible_bed": bool(erodible),

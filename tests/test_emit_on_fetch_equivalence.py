@@ -121,13 +121,19 @@ def test_purpose_words_map_to_input_names_the_helpers_used():
 
 
 def test_deleted_surface_helpers_are_gone():
-    """The four seam-covered per-family helpers were removed (the bed-bathymetry
-    worker-COG helper is the only surviving _surface_*input*)."""
+    """Every per-family input-surfacing helper is gone; the seam is the only path.
+
+    The bed-bathymetry one was the last holdout, and its exemption was real
+    while it rode a COG the worker sampled inside the container - route() never
+    saw that fetch, so no seam could surface it. The reach bed is a declared
+    router fetch now, so the exemption expired with the thing it excused.
+    """
     gone = [
         "_surface_landlab_dem_input",
         "_surface_watershed_mesh_inputs",
         "_surface_landcover_input",
         "_surface_river_geometry_input",
+        "_surface_bed_bathymetry_input",
     ]
     joined = "\n".join(
         p.read_text("utf-8")
@@ -136,6 +142,3 @@ def test_deleted_surface_helpers_are_gone():
     )
     for name in gone:
         assert f"def {name}" not in joined, f"{name} should be deleted (seam covers it)"
-    assert re.search(r"def\s+_surface_bed_bathymetry_input", joined), (
-        "the in-worker bed-COG helper must survive (the seam cannot cover it)"
-    )

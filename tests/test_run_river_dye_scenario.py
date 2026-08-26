@@ -314,6 +314,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac.steps import reach as reach_steps
     from trid3nt_server.workflows.telemac.steps import forcing as forcing_steps
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
+    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
 
     def _fake_registry_fn(name):
         if name == "geocode_location":
@@ -334,6 +335,29 @@ def _install_step_mocks(captured: dict):
     def _fake_seed(uri):
         captured["seed_uri"] = uri
         return (-114.31, 42.58)  # a mid-reach point on the Snake
+
+    async def _fake_river(*, reach, seed, run_tag, reach_length_km, bank_source,
+                          release=None, nav_direction="DM", with_bed=True):
+        # The river fetch itself is exercised against its own fakes in
+        # test_telemac_reach_river.py; here it stands in, so this chain test
+        # stays about the chain.
+        captured["river_reach_km"] = reach_length_km
+        captured["river_bank_source"] = bank_source
+        captured["river_release"] = release
+        return {
+            "inputs": [{"gs_uri": "s3://cache/c.geojson", "dest": "river_centerline.geojson"},
+                       {"gs_uri": "s3://cache/b.geojson", "dest": "river_banks.geojson"},
+                       {"gs_uri": "s3://cache/bed.tif", "dest": "bed_source.tif"}],
+            "provenance": {"seed_lon": seed["lon"], "seed_lat": seed["lat"],
+                           "seed_rung": "position-named-flowline",
+                           "centerline_uri": "s3://cache/c.fgb",
+                           "centerline_sha256": "0" * 64,
+                           "centerline_comids": [123],
+                           "centerline_extent": [-114.4, 42.5, -114.2, 42.7],
+                           "banks_uri": "s3://cache/b.fgb", "bed_uri": "s3://cache/bed.tif",
+                           "bed_source": "cop-dem-glo-30"},
+            "seed_lon": seed["lon"], "seed_lat": seed["lat"],
+        }
 
     def _fake_stage(reach, run_tag, **_kw):
         captured["reach"] = reach
@@ -363,6 +387,7 @@ def _install_step_mocks(captured: dict):
     return [
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
+        patch.object(deck_steps, "resolve_reach_river", _fake_river),
         patch.object(forcing_steps, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
@@ -463,6 +488,7 @@ def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
+    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
     from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
 
     async def _boom(**_kw):
@@ -480,6 +506,7 @@ def test_a_retryable_gate_propagates_so_its_suggestions_survive(tmp_path, monkey
     """The banks gate carries .suggestions the adapter harvests off the RAISED
     exception; flattening it into an envelope destroys that retry channel."""
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
+    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
     from trid3nt_server.workflows.telemac.steps.errors import (
         TelemacBanksUnavailableError,
     )
@@ -592,6 +619,7 @@ _HONORED_METRICS = {**_BASE_METRICS, "release_point_used": True,
 
 def _worker_metrics(metrics: dict):
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
+    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
 
     return patch.object(solve_steps, "read_run_metrics", lambda rid: dict(metrics))
 

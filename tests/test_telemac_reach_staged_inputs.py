@@ -1,12 +1,14 @@
-"""stage_manifest declares the in-worker bed COG for the river_dye/do_sag deck path.
+"""stage_manifest carries the reach's STAGED INPUTS, and declares no bed COG.
 
-Regression for the dead-COG 404: the worker ALWAYS attempts to write
-bed_bathymetry.tif (best-effort) for a non-mesh_only solve and records it as
-metrics.bed_cog, but stage_manifest's outputs list never named the file, so the
-local-docker supervisor's glob-upload never uploaded it -- the context layer
-published from that record 404s. Covers both templates that ride
-write_reach_deck -> solve_reach -> stage_manifest: river_dye (plain reach) and
-do_sag (substance_class="do_sag" reach).
+The worker used to fetch its own bed and write a node-sampled COG beside the
+result so the composer had something to publish; the manifest had to name that
+file or the supervisor's glob-upload never uploaded it. Both halves of that are
+gone. The bed arrives as a staged input the launcher walks into the run
+directory, the emit-on-fetch seam surfaces the CONTINUOUS source raster, and a
+declared output nothing writes would be a name with no file behind it.
+
+What replaces the old pins is the staging contract itself: an ``inputs`` row per
+staged artifact, for the solve path and the mesh preview alike.
 """
 
 from __future__ import annotations
@@ -26,47 +28,73 @@ class _FakeS3:
         self.put = kw
 
 
-def _stage(monkeypatch, reach: dict, *, mesh_only: bool = False) -> dict:
+def _stage(monkeypatch, reach: dict, *, mesh_only: bool = False,
+           inputs: list[dict[str, str]] | None = None) -> dict:
     import trid3nt_server.workflows.solver.solver as solver_mod
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    stage_manifest(reach, "RUNTAG", mesh_only=mesh_only)
+    stage_manifest(reach, "RUNTAG", mesh_only=mesh_only, inputs=inputs)
     assert fake.put is not None
     return json.loads(fake.put["Body"])
 
 
-def test_river_dye_manifest_declares_bed_cog(monkeypatch):
-    """A plain river_dye reach (no substance_class) still ships bed_bathymetry.tif
-    -- the worker's DEM-bed step (and its best-effort COG write) runs regardless
-    of substance."""
-    manifest = _stage(monkeypatch, {"name": "test-reach"})
-    assert "bed_bathymetry.tif" in manifest["outputs"]
+_SOLVE_INPUTS = [
+    {"gs_uri": "s3://cache/telemac/RUNTAG/river_centerline.geojson",
+     "dest": "river_centerline.geojson"},
+    {"gs_uri": "s3://cache/telemac/RUNTAG/river_banks.geojson",
+     "dest": "river_banks.geojson"},
+    {"gs_uri": "s3://cache/copernicus/bed.tif", "dest": "bed_source.tif"},
+]
 
 
-def test_do_sag_manifest_declares_bed_cog(monkeypatch):
-    """The do_sag deck sets substance_class="do_sag" (via _do_sag_block); the bed
-    COG must still be declared -- it is not the sediment-only gaia_river.slf case."""
-    manifest = _stage(monkeypatch, {"name": "test-reach", "substance_class": "do_sag"})
-    assert "bed_bathymetry.tif" in manifest["outputs"]
+@pytest.mark.parametrize("reach", [
+    {"name": "test-reach"},
+    {"name": "test-reach", "substance_class": "do_sag"},
+    {"name": "test-reach", "substance_class": "sediment"},
+])
+def test_every_reach_class_stages_the_same_three_inputs(monkeypatch, reach):
+    """The centerline, the banks and the bed ride whatever the substance is.
+
+    They are the GEOMETRY the reach is meshed on, so a dye run, a DO-sag run and
+    a GAIA sediment run all need the same three files - which is why they are
+    staged by the deck writer rather than by a per-class branch.
+    """
+    manifest = _stage(monkeypatch, reach, inputs=_SOLVE_INPUTS)
+    assert [row["dest"] for row in manifest["inputs"]] == [
+        "river_centerline.geojson", "river_banks.geojson", "bed_source.tif"]
 
 
-def test_sediment_manifest_declares_bed_cog_alongside_gaia(monkeypatch):
-    """A sediment run keeps BOTH the gaia deposition outputs and the bed COG."""
-    manifest = _stage(monkeypatch, {"name": "test-reach", "substance_class": "sediment"})
-    assert "bed_bathymetry.tif" in manifest["outputs"]
+def test_no_reach_run_declares_a_bed_cog_output(monkeypatch):
+    """The node-lattice bed COG is dead; nothing may name it as an output."""
+    for reach in ({"name": "r"}, {"name": "r", "substance_class": "do_sag"},
+                  {"name": "r", "substance_class": "sediment"}):
+        manifest = _stage(monkeypatch, reach, inputs=_SOLVE_INPUTS)
+        assert "bed_bathymetry.tif" not in manifest["outputs"]
+
+
+def test_sediment_keeps_its_gaia_outputs(monkeypatch):
+    manifest = _stage(monkeypatch, {"name": "r", "substance_class": "sediment"},
+                      inputs=_SOLVE_INPUTS)
     assert "gaia_river.slf" in manifest["outputs"]
     assert "gaia_river.cas" in manifest["outputs"]
 
 
-def test_mesh_only_manifest_omits_bed_cog(monkeypatch):
-    """mesh_only returns before the worker ever fetches the DEM bed (step 4 in
-    entrypoint.py) -- the file is never written, so it must not be declared
-    (a glob-listed-but-never-written file is harmless, but this pins the
-    intentional mesh_only output set)."""
-    manifest = _stage(monkeypatch, {"name": "test-reach"}, mesh_only=True)
-    assert "bed_bathymetry.tif" not in manifest["outputs"]
+def test_mesh_only_stages_geometry_but_no_bed(monkeypatch):
+    """A preview meshes and stops, so it is staged with the two geometry files
+    and no bed - a raster it never samples is a fetch nobody asked for."""
+    manifest = _stage(monkeypatch, {"name": "r"}, mesh_only=True,
+                      inputs=_SOLVE_INPUTS[:2])
+    assert [row["dest"] for row in manifest["inputs"]] == [
+        "river_centerline.geojson", "river_banks.geojson"]
+    assert manifest["mesh_only"] is True
+
+
+def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
+    """The key is always present: the worker's contract reads it unconditionally."""
+    manifest = _stage(monkeypatch, {"name": "r"})
+    assert manifest["inputs"] == []
 
 
 def test_stage_manifest_requires_cache_bucket(monkeypatch):

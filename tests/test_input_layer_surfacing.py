@@ -409,91 +409,6 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
 
 
 # ===========================================================================
-# ADR 0244: the in-worker river bed bathymetry (a worker-COG, NOT router-fetched
-# -> the seam does not cover it, so this bespoke surfacing is KEPT + allowlisted
-# in the sweep below). The worker samples + fits the bed inside the container and
-# writes it as a 4326 COG (bed_bathymetry.tif) + records bed_cog in
-# telemac_metrics.json; the composer rides that object through
-# publish_raster_input_cog as a role=context input.
-# ===========================================================================
-import trid3nt_server.workflows.telemac.steps.products as river_dye  # noqa: E402
-
-
-@pytest.mark.asyncio
-async def test_river_dye_surfaces_in_worker_bed_bathymetry_as_context(monkeypatch):
-    """The bed COG the worker recorded in the result envelope reaches the emitter
-    as a role="context" continuous_dem raster with a provenance name (cannot
-    silently drop the in-worker bed NATE asked to visualize)."""
-    from trid3nt_server.workflows.solver import solver as solver_mod
-
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-    emitter = _emitter()
-
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
-        assert layer_uri == "s3://test-runs/RID/bed_bathymetry.tif"
-        return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
-
-    with patch(_COG_EXISTS_TARGET, return_value=True), \
-         patch(_PUBLISH_LAYER_TARGET, side_effect=_mock_publish_layer):
-        ok = await river_dye._surface_bed_bathymetry_input(
-            emitter,
-            {"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "usgs-3dep"},
-            "RID",
-            "Snake River near Twin Falls, Idaho",
-        )
-
-    assert ok is True
-    assert len(emitter._loaded_layers) == 1
-    row = emitter._loaded_layers[0]
-    assert row.role == "context"
-    assert row.layer_type == "raster"
-    assert row.style_preset == "continuous_dem"
-    assert row.uri == "s3://test-runs/RID/bed_bathymetry.tif"
-    assert row.name.startswith("Input: river bed bathymetry (")
-    assert "USGS 3DEP" in row.name
-    assert row.layer_id.startswith("input-river-bed-")
-
-
-@pytest.mark.asyncio
-async def test_river_dye_bed_bathymetry_absent_key_and_none_emitter_noop():
-    """No bed_cog key in the envelope (older image / write failed) surfaces
-    nothing; a None emitter is a no-op -- both NEVER raise."""
-    assert await river_dye._surface_bed_bathymetry_input(
-        None, {"bed_cog": "bed_bathymetry.tif"}, "RID", "X"
-    ) is False
-    emitter = _emitter()
-    ok = await river_dye._surface_bed_bathymetry_input(emitter, {}, "RID", "X")
-    assert ok is False
-    assert emitter._loaded_layers == []
-    assert emitter._loaded_layers == []
-
-
-@pytest.mark.asyncio
-async def test_river_dye_bed_cog_recorded_but_object_missing_skips_loudly(
-    monkeypatch, caplog
-):
-    """THE FRESH-404 REPRO CLASS: telemac_metrics.json records bed_cog (the
-    worker wrote the filename) but the object was never uploaded (the
-    stage_manifest outputs-list gap). head_object (mocked) reports absent ->
-    no 404 layer, a loud skip, never raises."""
-    from trid3nt_server.workflows.solver import solver as solver_mod
-
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-    emitter = _emitter()
-    with patch(_COG_EXISTS_TARGET, return_value=False), \
-         caplog.at_level(
-             "WARNING", logger="trid3nt_server.emission.layer_uri_emit"):
-        ok = await river_dye._surface_bed_bathymetry_input(
-            emitter,
-            {"bed_cog": "bed_bathymetry.tif", "bed_cog_source": "usgs-3dep"},
-            "RID", "Snake River near Twin Falls, Idaho",
-        )
-    assert ok is False
-    assert emitter._loaded_layers == []
-    assert "SKIPPING" in "\n".join(r.getMessage() for r in caplog.records)
-
-
-# ===========================================================================
 # (SWEEP) ADR 0244 single-path guard.
 #
 # After the S2 collapse the emit-on-fetch router seam (route() ->
@@ -507,11 +422,10 @@ async def test_river_dye_bed_cog_recorded_but_object_missing_skips_loudly(
 #   * MESH previews          - the generated mesh is not a router fetch.
 #   * RESULT / derived COGs   - a solver's own secondary output layer.
 #   * IN-WORKER COGs          - bathymetry sampled inside the solver container,
-#                               which never touches route() (river_dye bed,
-#                               telemac3d bottom, swan bathy). The four
-#                               open-water TELEMAC domains are NO LONGER in this
-#                               class: their bed is a declared router fetch and
-#                               the seam surfaces it.
+#                               which never touches route() (telemac3d bottom,
+#                               swan bathy). No TELEMAC domain is in this class
+#                               any more: every bed the family solves on is a
+#                               declared router fetch and the seam surfaces it.
 #   * BARE-OSM fetches        - agitation's breakwaters bypass the router (an
 #                               S3 loose end, ADR 0244 S3).
 #   * USER-DATA overlays      - a point/vector built from a user-supplied
@@ -550,13 +464,14 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
     "telemac/steps/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam (ADR 0309)"),
     "telemac/steps/mesh_preview.py": (1, "the approve-mesh wireframe preview"),
-    "telemac/steps/products.py": (4, "deposition + oil-slick + DO-field results + in-worker bed COG"),
+    "telemac/steps/products.py": (3, "deposition + oil-slick + DO-field results"),
     "telemac/steps/stratified.py": (1, "the TELEMAC-3D BOTTOM companion layer - the surface layer rides the dispatch seam, so only its pair-mate is emitted here"),
 }
 
-# The ONE bespoke input-surfacing helper that survives: it rides an IN-WORKER bed
-# COG (recorded in the solver envelope), which the router seam cannot cover.
-_ALLOWLISTED_SURFACE_HELPERS = {"_surface_bed_bathymetry_input"}
+# NONE survive. The last bespoke input-surfacing helper rode an in-worker bed COG
+# the router seam could not cover; the reach family's bed is a declared fetch now,
+# so the helper and its COG are both gone and the seam is the only path.
+_ALLOWLISTED_SURFACE_HELPERS: set[str] = set()
 
 # Immediate paren only (a real call ``name(...``); a prose mention like
 # "publish_input_layer (never raises)" has a space and must NOT count.

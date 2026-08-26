@@ -35,12 +35,13 @@ import logging
 import os
 import subprocess
 import time
-import urllib.parse
-import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from _staged_bed import sample_staged_bed
+from _staged_reach import staged_bank_polygons, staged_flowlines
 
 LOG = logging.getLogger("trid3nt.worker.telemac.build")
 from pathlib import Path
@@ -113,23 +114,6 @@ class ReachConfig:
     # interior mesh node to this point (validated within 2 channel widths).
     release_lon: float = None           # type: ignore[assignment]
     release_lat: float = None           # type: ignore[assignment]
-    # 2026-07-18 release-seeding: when True, a plausible release point ALSO
-    # seeds the centerline/corridor resolution (nearest flowline to the
-    # RELEASE, not the geocode center). Fix for bare release coords with no
-    # river name meshing the water body nearest the CITY (a Longview prompt
-    # meshed the Cowlitz instead of the Columbia, and the built mesh did not
-    # even contain the requested release point). The composer arms it ONLY
-    # for CALL-provided coords; a gate-picked map click moves the SOURCE,
-    # never the reach (the approved solve must reproduce the previewed
-    # mesh). See resolve_centerline_seed.
-    seed_from_release: bool = False
-    # 2026-07-18 decouple: when the approve-mesh gate click moved the
-    # SOURCE (overwriting release_lon/release_lat), the manifest threads the
-    # ORIGINAL call coords here so the reach seed still follows the pair the
-    # preview meshed from - the click moves the source only, never the reach.
-    # Absent (the common case) the release coords seed as before.
-    seed_release_lon: float = None      # type: ignore[assignment]
-    seed_release_lat: float = None      # type: ignore[assignment]
     # EXPLICIT bank source (NATE oceanmesh-wave leg 1 - no inexplicit mesh-source
     # fallbacks): "nhd_area" (default) samples USGS NHDArea river polygons for
     # per-station left/right bank offsets (mesh follows the REAL river);
@@ -138,12 +122,11 @@ class ReachConfig:
     # typed gate) rather than silently ribboning - the DEM_FALLBACK_GATE pattern.
     # Legacy manifest spellings map: "auto" -> nhd_area, "constant" -> constant_ribbon.
     bank_source: str = "nhd_area"
-    # wrong-watercourse fix: when the prompt NAMES the river, re-seed
-    # onto the NAMED GNIS mainstem before the NLDI position-snap. A raw
-    # geocode-point snap near a confluence (Longview = Columbia x Cowlitz)
-    # routinely lands on the tributary or a slough; the named-flowline query
-    # (proven manually on the Columbia, comid 24520442) disambiguates.
-    river_name: str = ""
+    # WHICH dataset the staged bed raster came from, told by the server that
+    # fetched it. The worker cannot know: it opens a file. Recording the label
+    # is what keeps "Copernicus GLO-30" and "the 3DEP the ladder fell to"
+    # distinguishable in the run's own metrics.
+    bed_source: str = "staged"
     # M3 substance classes: "tracer" = the existing dissolved-tracer path;
     # "oil" ALSO activates the TELEMAC oil-spill module (steering file presence
     # auto-activates in v9) - a floating particle slick rides on TOP of the
@@ -365,156 +348,17 @@ class ReachConfig:
             )
 
 
-_NLDI = "https://api.water.usgs.gov/nldi/linked-data"
-_UA = "trid3nt-local-spike (agent@trid3nt.dev)"
-
-
 # ---------------------------------------------------------------------------
-# 1. REAL river geometry via USGS NLDI NHDPlus
+# 1. REAL river geometry, staged into the run directory
+#
+# The seed ladder (an NLDI position snap plus two NHDPlus_HR flowline re-seeds)
+# and the NLDI navigate that IS the model centerline used to run from inside this
+# container. They are server tier now: a fetch changes if the box moves, and the
+# ladder's fail-open degrade cost this pipeline REPEATABILITY - a slow re-seed
+# query silently meshed a different reach and nothing recorded which had
+# happened. What stays here is the geometry: stitching the staged flowlines into
+# one ordered path is the mesher's own business and needs no network.
 # ---------------------------------------------------------------------------
-def _http_get(url: str, timeout: float = 60.0) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
-
-
-def _snap_comid(lon: float, lat: float) -> int:
-    url = f"{_NLDI}/comid/position?coords=POINT({lon}%20{lat})"
-    fc = json.loads(_http_get(url))
-    p = fc["features"][0]["properties"]
-    return int(p.get("comid") or p.get("nhdplus_comid"))
-
-
-_NHDPLUS_HR = "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer"
-
-
-def _named_flowline_seed(
-    name: str, lon: float, lat: float, search_deg: float = 0.15
-) -> tuple[float, float] | None:
-    """Nearest vertex of the NAMED GNIS flowline to (lon, lat), or None.
-
-    Queries NHDPlus_HR layer 3 (NetworkNHDFlowline) by gnis_name within a
-    ~search_deg envelope around the raw seed. Fail-OPEN: any error / no match
-    returns None and the caller keeps the raw position-snap (honest degrade).
-    """
-    safe = name.replace("'", "''").strip()
-    if not safe:
-        return None
-    env = json.dumps({
-        "xmin": lon - search_deg, "ymin": lat - search_deg,
-        "xmax": lon + search_deg, "ymax": lat + search_deg,
-        "spatialReference": {"wkid": 4326},
-    })
-    q = urllib.parse.urlencode({
-        "f": "geojson",
-        "where": f"UPPER(gnis_name)=UPPER('{safe}')",
-        "geometry": env, "geometryType": "esriGeometryEnvelope",
-        "inSR": 4326, "outSR": 4326,
-        "spatialRel": "esriSpatialRelIntersects",
-        "outFields": "gnis_name", "returnGeometry": "true",
-        "maxAllowableOffset": 0.0005, "resultRecordCount": 200,
-    })
-    try:
-        fc = json.loads(_http_get(f"{_NHDPLUS_HR}/3/query?{q}", timeout=45.0))
-    except Exception as exc:  # noqa: BLE001 -- network fail-open to raw seed
-        LOG.warning("named-flowline seed query failed (%s) - raw seed kept", exc)
-        return None
-    best: tuple[float, float] | None = None
-    best_d2 = float("inf")
-    for feat in fc.get("features") or []:
-        geom = feat.get("geometry") or {}
-        lines = (
-            [geom.get("coordinates")]
-            if geom.get("type") == "LineString"
-            else geom.get("coordinates") or []
-        )
-        for line in lines:
-            for v in line or []:
-                d2 = (v[0] - lon) ** 2 + (v[1] - lat) ** 2
-                if d2 < best_d2:
-                    best_d2, best = d2, (float(v[0]), float(v[1]))
-    return best
-
-
-def _mainstem_flowline_seed(
-    lon: float,
-    lat: float,
-    search_deg: float = 0.05,
-    max_reseed_km: float = 6.0,
-) -> tuple[float, float] | None:
-    """Re-seed a NAME-FREE reach onto the dominant nearby mainstem, or None.
-
-    When no ``river_name`` disambiguates the reach, the bare position-snap
-    (``_snap_comid``) lands on whatever NHDFlowline is geometrically nearest;
-    at a confluence that is often a short low-order tributary stub (live:
-    Longview = Columbia x Cowlitz snapped a 292 m order-3 stub). This queries
-    NHDPlus_HR layer 3 within ``search_deg`` of the seed and prefers the
-    highest ``streamorde`` channel, tie-broken by ``totdasqkm`` (total upstream
-    drainage) then proximity -- but ONLY when that mainstem STRICTLY outranks
-    the nearest flowline and its nearest vertex is within ``max_reseed_km``
-    (bounded so a genuine small-creek study is never yanked onto a distant
-    river). Fail-OPEN: any error / no improvement returns None and the caller
-    keeps the raw position-snap (honest degrade).
-    """
-    env = json.dumps({
-        "xmin": lon - search_deg, "ymin": lat - search_deg,
-        "xmax": lon + search_deg, "ymax": lat + search_deg,
-        "spatialReference": {"wkid": 4326},
-    })
-    q = urllib.parse.urlencode({
-        "f": "geojson", "where": "1=1",
-        "geometry": env, "geometryType": "esriGeometryEnvelope",
-        "inSR": 4326, "outSR": 4326,
-        "spatialRel": "esriSpatialRelIntersects",
-        "outFields": "gnis_name,streamorde,totdasqkm",
-        "returnGeometry": "true",
-        "maxAllowableOffset": 0.0005, "resultRecordCount": 500,
-    })
-    try:
-        fc = json.loads(_http_get(f"{_NHDPLUS_HR}/3/query?{q}", timeout=45.0))
-    except Exception as exc:  # noqa: BLE001 -- network fail-open to raw seed
-        LOG.warning("mainstem-seed query failed (%s) - raw seed kept", exc)
-        return None
-    # (streamorde, totdasqkm, dist_deg, (vx, vy)) per flowline.
-    cands: list[tuple[int, float, float, tuple[float, float]]] = []
-    for feat in fc.get("features") or []:
-        p = feat.get("properties") or {}
-        geom = feat.get("geometry") or {}
-        lines = (
-            [geom.get("coordinates")]
-            if geom.get("type") == "LineString"
-            else geom.get("coordinates") or []
-        )
-        best_d2 = float("inf")
-        best_v: tuple[float, float] | None = None
-        for line in lines:
-            for v in line or []:
-                d2 = (v[0] - lon) ** 2 + (v[1] - lat) ** 2
-                if d2 < best_d2:
-                    best_d2, best_v = d2, (float(v[0]), float(v[1]))
-        if best_v is None:
-            continue
-        order = int(p.get("streamorde") or 0)
-        drainage = float(p.get("totdasqkm") or 0.0)
-        cands.append((order, drainage, best_d2 ** 0.5, best_v))
-    if not cands:
-        return None
-    nearest = min(cands, key=lambda c: c[2])
-    # Mainstem = highest order, then most drainage, then nearest.
-    mainstem = max(cands, key=lambda c: (c[0], c[1], -c[2]))
-    reseed_km = mainstem[2] * 111.0
-    if mainstem[0] <= nearest[0] or reseed_km > max_reseed_km:
-        # The nearest flowline is already the (equal-)dominant channel, or the
-        # only mainstem lies beyond the re-seed radius -- keep the raw seed.
-        return None
-    LOG.info(
-        "mainstem re-seed: nearest order %d vs mainstem order %d "
-        "(drainage %.0f km2) at %.2f km -> re-seeding",
-        nearest[0], mainstem[0], mainstem[1], reseed_km,
-    )
-    return mainstem[3]
-
-
 def _stitch_flowlines(features) -> list[tuple[float, float]]:
     """Order flowline segments head-to-tail into one upstream->downstream path."""
     import shapely.geometry as sg
@@ -553,102 +397,24 @@ def _stitch_flowlines(features) -> list[tuple[float, float]]:
     return path
 
 
-def resolve_centerline_seed(
-    seed_lon: float,
-    seed_lat: float,
-    release_lon=None,
-    release_lat=None,
-    seed_from_release: bool = False,
-    seed_release_lon=None,
-    seed_release_lat=None,
-):
-    """The (lon, lat, kind) the centerline/corridor resolution centers on.
+def fetch_river_centerline(cfg: ReachConfig, data_dir: str):
+    """Return (lonlat centerline array, meta dict) from the STAGED flowlines.
 
-    Pure decision function (no network; offline-tested in
-    tests/test_release_seed_preference.py). The release point wins over the
-    geocode seed ONLY when the manifest armed ``seed_from_release`` AND the
-    coords are plausible EPSG:4326 (numeric, lon in [-180, 180], lat in
-    [-90, 90] - NaN/inf fail the range gate). Anything else keeps the seed
-    byte-for-byte, so the proven location-seeded paths are unchanged.
-    ``kind`` is ``"position"`` (geocode seed kept) or ``"release-position"``.
-
-    2026-07-18 decouple: ``seed_release_lon``/``seed_release_lat`` are
-    the ORIGINAL call coords the preview meshed from, threaded separately
-    when an approve-mesh gate click overwrote ``release_lon``/``release_lat``
-    (the click moves the SOURCE only). When armed they take precedence for
-    the reach seed; an implausible pair degrades to the release coords, so
-    the pre-existing manifests (keys absent) behave byte-identically.
+    The seed the server resolved, the COMID it snapped and the reaches it
+    navigated all arrived as one GeoJSON file. Stitching them head-to-tail into
+    one upstream->downstream path is what is left, and it is pure geometry.
     """
-    base = (float(seed_lon), float(seed_lat), "position")
-    if not seed_from_release:
-        return base
-    for lon_v, lat_v in (
-        (seed_release_lon, seed_release_lat),
-        (release_lon, release_lat),
-    ):
-        try:
-            lon = float(lon_v)
-            lat = float(lat_v)
-        except (TypeError, ValueError):
-            continue
-        if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
-            continue
-        return (lon, lat, "release-position")
-    return base
-
-
-def fetch_river_centerline(cfg: ReachConfig):
-    """Return (lonlat centerline array, meta dict) from real NHDPlus flowlines."""
-    seed_lon, seed_lat, seed_kind = resolve_centerline_seed(
-        cfg.seed_lon, cfg.seed_lat,
-        getattr(cfg, "release_lon", None), getattr(cfg, "release_lat", None),
-        seed_from_release=bool(getattr(cfg, "seed_from_release", False)),
-        seed_release_lon=getattr(cfg, "seed_release_lon", None),
-        seed_release_lat=getattr(cfg, "seed_release_lat", None),
-    )
-    if seed_kind == "release-position":
-        LOG.info(
-            "release-seeded reach: corridor resolution centered on the release "
-            "point (%.5f,%.5f), not the geocode seed (%.5f,%.5f)",
-            seed_lon, seed_lat, cfg.seed_lon, cfg.seed_lat,
-        )
-    if cfg.river_name:
-        named = _named_flowline_seed(cfg.river_name, seed_lon, seed_lat)
-        if named is not None:
-            named_kind = ("named-flowline" if seed_kind == "position"
-                          else "release-named-flowline")
-            LOG.info(
-                "named-flowline re-seed %r: (%.5f,%.5f) -> (%.5f,%.5f)",
-                cfg.river_name, seed_lon, seed_lat, named[0], named[1],
-            )
-            seed_lon, seed_lat, seed_kind = named[0], named[1], named_kind
-        else:
-            LOG.warning(
-                "named-flowline re-seed %r found nothing - raw seed kept",
-                cfg.river_name,
-            )
-    else:
-        # No river_name to disambiguate: prefer the dominant nearby mainstem
-        # over the bare nearest-flowline snap, so a seed near a confluence does
-        # not land on a short low-order tributary stub (Bug-1
-        # reach-selection residual). Fail-open to the raw seed.
-        main = _mainstem_flowline_seed(seed_lon, seed_lat)
-        if main is not None:
-            LOG.info(
-                "mainstem re-seed (no river_name): (%.5f,%.5f) -> (%.5f,%.5f)",
-                seed_lon, seed_lat, main[0], main[1],
-            )
-            seed_lon, seed_lat = main
-            seed_kind = f"{seed_kind}-mainstem"
-    comid = _snap_comid(seed_lon, seed_lat)
-    url = f"{_NLDI}/comid/{comid}/navigation/{cfg.nav_direction}/flowlines?distance={cfg.distance_km}"
-    fc = json.loads(_http_get(url))
-    feats = fc["features"]
-    path = _stitch_flowlines(feats)
-    ll = np.array(path, dtype=float)
+    feats = staged_flowlines(data_dir)
+    ll = np.array(_stitch_flowlines(feats), dtype=float)
+    comids = sorted({int(c) for c in
+                     ((f.get("properties") or {}).get("nhdplus_comid") for f in feats)
+                     if c is not None})
     meta = dict(
-        seed_comid=comid, n_flowlines=len(feats), n_raw_vertices=len(ll),
-        seed_kind=seed_kind,
+        seed_comid=(comids[0] if comids else None),
+        centerline_comids=comids,
+        n_flowlines=len(feats),
+        n_raw_vertices=len(ll),
+        seed_kind="staged",
     )
     return ll, meta
 
@@ -811,61 +577,23 @@ def validate_reach_geometry(cl: "np.ndarray", cfg: "ReachConfig") -> None:
         raise ReachDegenerateError(reach_len, width)
 
 
-_NHDAREA_URL = (
-    "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
-    "MapServer/8/query"
-)
+def fetch_bank_polygons(data_dir: str):
+    """The STAGED NHDArea water polygons, as (exterior_ring, [hole_rings]) arrays.
 
-
-def fetch_bank_polygons(bbox4326, timeout=30.0):
-    """NHDArea water polygons intersecting ``bbox4326`` (lonlat) as a list of
-    (exterior_ring, [hole_rings]) lonlat arrays. None on ANY failure/empty -
-    on the nhd_area path the caller raises BanksUnavailableError (no inexplicit
-    ribbon fallback)."""
-    import json as _json
+    ``None`` means the staged collection is EMPTY - no NHDArea polygon covers
+    this reach - which on the ``nhd_area`` path is what the caller turns into the
+    typed BanksUnavailableError. A MISSING file raises instead: a staging failure
+    is not a coverage hole and must not read as one.
+    """
     import os as _os
-    import urllib.parse
-    import urllib.request
 
-    # Test seam (leg 1 forced-empty gate drive): force an empty NHDArea response
-    # so the nhd_area banks gate can be exercised on a reach that does have
-    # coverage. Env-gated only; the live path is untouched when unset.
+    # Test seam (leg 1 forced-empty gate drive): force an empty bank set so the
+    # nhd_area banks gate can be exercised on a reach that does have coverage.
+    # Env-gated only; the live path is untouched when unset.
     if _os.environ.get("TRID3NT_TELEMAC_FORCE_BANKS_EMPTY"):
         LOG.warning("fetch_bank_polygons: FORCED empty (TRID3NT_TELEMAC_FORCE_BANKS_EMPTY)")
         return None
-
-    params = urllib.parse.urlencode({
-        "geometry": ",".join(f"{v:.6f}" for v in bbox4326),
-        "geometryType": "esriGeometryEnvelope",
-        "inSR": "4326", "outSR": "4326",
-        "spatialRel": "esriSpatialRelIntersects",
-        "outFields": "ftype", "f": "geojson",
-        # big-river hardening (Columbia hang): server-side simplification
-        # (~5 m at mid-latitudes) + a record cap - the reach bbox only needs
-        # local bank detail, not the full mainstem polygon.
-        "maxAllowableOffset": "0.00005",
-        "resultRecordCount": "200",
-    })
-    try:
-        with urllib.request.urlopen(f"{_NHDAREA_URL}?{params}", timeout=timeout) as r:
-            data = _json.loads(r.read().decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001 -- degrade, never dead-end
-        LOG.warning("NHDArea fetch failed (%s); constant-width fallback", exc)
-        return None
-    polys = []
-    for f in data.get("features") or []:
-        g = f.get("geometry") or {}
-        if g.get("type") == "Polygon":
-            rings = g.get("coordinates") or []
-            if rings:
-                polys.append((np.asarray(rings[0], dtype=float),
-                              [np.asarray(rr, dtype=float) for rr in rings[1:]]))
-        elif g.get("type") == "MultiPolygon":
-            for rings in g.get("coordinates") or []:
-                if rings:
-                    polys.append((np.asarray(rings[0], dtype=float),
-                                  [np.asarray(rr, dtype=float) for rr in rings[1:]]))
-    return polys or None
+    return staged_bank_polygons(data_dir)
 
 
 def estimate_bank_offsets(cl, polys_utm, max_half=800.0, step=4.0,
@@ -1544,165 +1272,26 @@ def build_channel_mesh_guarded(
 # ---------------------------------------------------------------------------
 # 4. DEM bed onto mesh nodes + enforced gentle downstream slope
 # ---------------------------------------------------------------------------
-# DEM retry ladder knobs. 2026-07-18 the Planetary Computer STAC
-# endpoint served Azure Front Door 503 HTML and the old one-shot fetch killed
-# runs outright; the data-source norm is primary -> fallback -> honest typed
-# error. Module-level so tests (and a hot ops fix) can shrink the ladder.
-_DEM_STAC_ATTEMPTS = 3
-_DEM_STAC_BACKOFF_S = (5.0, 20.0, 60.0)
-_3DEP_IMAGE_URL = ("https://elevation.nationalmap.gov/arcgis/rest/services/"
-                   "3DEPElevation/ImageServer/exportImage")
-
-
-def _retryable_dem_excs():
-    """Network-shaped exceptions worth a retry on the STAC rung.
-
-    pystac_client is guard-imported: it is always in the worker image but may
-    be absent in offline test envs (the ladder still works without it).
-    """
-    import requests
-    import rasterio
-
-    excs = [requests.exceptions.RequestException,
-            rasterio.errors.RasterioIOError]
-    try:
-        from pystac_client.exceptions import APIError
-        excs.append(APIError)
-    except ImportError:
-        pass
-    return tuple(excs)
-
-
-def _sample_dem_stac(lon, lat, bbox):
-    """Primary DEM rung: Planetary Computer STAC cop-dem-glo-30 point sample.
-
-    Returns per-node elevations (NaN where unsampled), or None when the
-    catalog has no tiles for the bbox (deterministic - retries cannot help).
-    """
-    import planetary_computer as pc
-    import pystac_client
-    import rasterio
-
-    cat = pystac_client.Client.open(
-        "https://planetarycomputer.microsoft.com/api/stac/v1")
-    items = list(cat.search(collections=["cop-dem-glo-30"], bbox=bbox).items())
-    if not items:
-        return None
-    z_raw = np.full(len(lon), np.nan)
-    with rasterio.Env(GDAL_HTTP_MAX_RETRY="3", GDAL_HTTP_TIMEOUT="30"):
-        for it in items:
-            href = pc.sign(it).assets["data"].href
-            with rasterio.open("/vsicurl/" + href) as src:
-                samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
-                                dtype=float).ravel()
-                nod = src.nodata
-                if nod is not None:
-                    samp[samp == nod] = np.nan
-                take = np.isnan(z_raw) & ~np.isnan(samp)
-                z_raw[take] = samp[take]
-    return z_raw
-
-
-def _sample_dem_3dep(lon, lat, bbox):
-    """Fallback DEM rung: USGS 3DEP ImageServer exportImage point sample.
-
-    Exports ONE bbox GeoTIFF at ~1 arcsecond (the GLO-30-equivalent grid, so
-    the bed fit sees the same resolution class) and samples the SAME lon/lat
-    node points the STAC rung samples - identical z_raw contract downstream.
-    """
-    import requests
-    import rasterio  # noqa: F401 -- MemoryFile needs the rasterio env
-    from rasterio.io import MemoryFile
-
-    # ~1 arcsec pixels over the padded bbox; the ImageServer caps exports at
-    # 4100 px/side so clamp (a capped reach just samples slightly coarser)
-    ncols = int(np.clip(round((bbox[2] - bbox[0]) * 3600.0), 64, 4000))
-    nrows = int(np.clip(round((bbox[3] - bbox[1]) * 3600.0), 64, 4000))
-    resp = requests.get(_3DEP_IMAGE_URL, params={
-        "bbox": ",".join(str(v) for v in bbox),
-        "bboxSR": "4326",
-        "imageSR": "4326",
-        "size": f"{ncols},{nrows}",
-        "format": "tiff",
-        "pixelType": "F32",
-        "f": "image",
-    }, timeout=180)
-    resp.raise_for_status()
-    body = resp.content
-    if body[:4] not in (b"II*\x00", b"MM\x00*"):
-        # ArcGIS reports errors as HTTP-200 JSON/HTML - keep that honest
-        raise RuntimeError(f"3DEP exportImage returned non-tiff: {body[:160]!r}")
-    with MemoryFile(body) as mf, mf.open() as src:
-        samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
-                        dtype=float).ravel()
-        nod = src.nodata
-        if nod is not None:
-            samp[samp == nod] = np.nan
-    samp[~np.isfinite(samp)] = np.nan
-    samp[samp < -1.0e4] = np.nan  # ocean/void sentinels (e.g. -3.4e38)
-    if not np.isfinite(samp).any():
-        raise RuntimeError("3DEP exportImage returned no valid elevations for "
-                           f"bbox {bbox} (outside 3DEP coverage?)")
-    return samp
-
-
-def _fetch_dem_samples(lon, lat, bbox):
-    """DEM ladder: STAC x3 (5/20/60 s backoff) -> 3DEP -> typed error.
-
-    Returns (z_raw, dem_source). Both rungs exhausted raises the plain
-    RuntimeError the pipeline already surfaces as a typed metrics error
-    (entrypoint.main catches it -> status=error) - no new error shape.
-    """
-    retryable = _retryable_dem_excs()
-    last_err = "unreached"
-    for attempt in range(1, _DEM_STAC_ATTEMPTS + 1):
-        try:
-            z = _sample_dem_stac(lon, lat, bbox)
-        except retryable as exc:
-            last_err = f"{type(exc).__name__}: {exc}"
-            LOG.warning("dem: STAC attempt %d/%d failed (%s)",
-                        attempt, _DEM_STAC_ATTEMPTS, last_err)
-            # No sleep after the FINAL attempt - go straight to the fallback
-            # (a full outage should cost 5+20 s of backoff, not 85 s).
-            if attempt < _DEM_STAC_ATTEMPTS:
-                time.sleep(_DEM_STAC_BACKOFF_S[min(attempt - 1,
-                                                   len(_DEM_STAC_BACKOFF_S) - 1)])
-            continue
-        except Exception as exc:  # noqa: BLE001 -- malformed item/JSON etc.
-            # Non-retryable STAC failure modes (KeyError on a malformed item,
-            # JSON decode on an HTTP-200 garbage body) must still reach the
-            # 3DEP rung rather than escaping raw - retrying them is useless.
-            last_err = f"{type(exc).__name__}: {exc}"
-            LOG.warning("dem: STAC non-retryable failure (%s) - skipping to "
-                        "fallback", last_err)
-            break
-        if z is None:
-            last_err = f"no cop-dem-glo-30 tiles for bbox {bbox}"
-            LOG.warning("dem: %s", last_err)
-            break
-        if not np.isfinite(z).any():
-            last_err = "STAC sample returned no valid elevations"
-            LOG.warning("dem: %s for bbox %s", last_err, bbox)
-            break
-        return z, "cop-dem-glo-30"
-    LOG.warning("dem: falling back to USGS 3DEP for bbox %s", bbox)
-    try:
-        return _sample_dem_3dep(lon, lat, bbox), "usgs-3dep"
-    except Exception as exc:  # noqa: BLE001 -- both rungs down -> honest error
-        raise RuntimeError(
-            f"DEM fetch failed for bbox {bbox}: Planetary Computer STAC "
-            f"({last_err}) then USGS 3DEP fallback "
-            f"({type(exc).__name__}: {exc})") from exc
-
-
-def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
-    """Sample Copernicus GLO-30 DEM at mesh nodes; fit a gentle downstream bed.
+# The bed the reach is fitted from arrives STAGED. What was here - a
+# three-attempt Planetary Computer STAC ladder with a USGS 3DEP ImageServer
+# fallback - is the server's ladder now, where its retries, its cache, its
+# provenance and its cross-dataset labelling all already exist. The staged
+# raster carries the SOURCE pixels (the router asks GLO-30 for its own
+# 1-arcsecond lattice), so the elevations sampled below are the elevations this
+# function used to fetch for itself.
+def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr, data_dir: str):
+    """Sample the STAGED DEM at mesh nodes; fit a gentle downstream bed.
 
     Real canyon DEM is the SURFACE (canyon rim + water), noisy along the thalweg.
-    We (a) sample raw DEM at each node (lon/lat), (b) compute along-channel
-    distance s per node, (c) fit bed = z0 - slope*s using a robust downstream
-    trend clamped to [min_bed_slope, max_bed_slope] so flow always moves.
-    Both the measured DEM drop and the enforced slope are reported.
+    We (a) sample the staged raster at each node (lon/lat), (b) compute
+    along-channel distance s per node, (c) fit bed = z0 - slope*s using a robust
+    downstream trend clamped to [min_bed_slope, max_bed_slope] so flow always
+    moves. Both the measured DEM drop and the enforced slope are reported.
+
+    A node OUTSIDE the staged window samples NaN, exactly as a coverage hole
+    does, so a window that does not cover the mesh would quietly shrink the fit's
+    support instead of failing. Every node reading NaN is therefore a refusal:
+    the bed cannot be fitted from a raster that does not reach the reach.
     """
     X, Y = mesh["X"], mesh["Y"]
     # node lon/lat (inverse transform)
@@ -1710,18 +1299,18 @@ def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
     from pyproj import Transformer
     back = Transformer.from_crs(inv.target_crs, 4326, always_xy=True)
     lon, lat = back.transform(X, Y)
-    pad = 0.01
-    bbox = [float(lon.min() - pad), float(lat.min() - pad),
-            float(lon.max() + pad), float(lat.max() + pad)]
 
-    # retry ladder + 3DEP fallback (never a one-shot fetch)
-    z_raw, dem_source = _fetch_dem_samples(lon, lat, bbox)
+    z_raw = sample_staged_bed(lon, lat, data_dir)
 
     # along-channel distance s: project each node onto the centerline polyline
     cl = mesh["centerline"]
     s_node = _project_s(X, Y, cl)
 
     valid = ~np.isnan(z_raw)
+    if not valid.any():
+        raise RuntimeError(
+            f"the staged bed raster covers none of the {len(z_raw)} mesh nodes "
+            "(every sample is nodata); the bed cannot be fitted.")
     # robust linear fit z ~ z0 - slope * s
     A = np.column_stack([np.ones(valid.sum()), s_node[valid]])
     coef, *_ = np.linalg.lstsq(A, z_raw[valid], rcond=None)
@@ -1733,7 +1322,7 @@ def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
     Z = z_up - slope * s_node
     # fill any nan raw with fitted
     dem_meta = dict(
-        dem_source=dem_source,
+        dem_source=str(getattr(cfg, "bed_source", "staged")),
         dem_min=float(np.nanmin(z_raw)), dem_max=float(np.nanmax(z_raw)),
         n_dem_nan=int((~valid).sum()),
         measured_slope=float(measured_slope),
@@ -1765,121 +1354,6 @@ def _project_s(X, Y, cl):
                 best_d = dd; best_s = cum[j] + t * np.sqrt(L2)
         s[i] = best_s
     return s
-
-
-# ---------------------------------------------------------------------------
-# 4b. Bed-bathymetry COG (in-worker input surfacing)
-# ---------------------------------------------------------------------------
-# The bed is sampled + fitted INSIDE this worker (fetch_dem_bed), so the composer
-# has no emitter/uri for it -- the honest way to surface NATE's "if there is a
-# river bed bathymetry I want it visualized" is for the worker to write the bed it
-# actually solved on as a small EPSG:4326 COG next to the result and record its
-# key in the result envelope; the composer then rounds it through
-# publish_raster_input_cog as a role=context input. This generalizes: any future
-# in-worker fetch surfaces the same way (write COG + record key -> composer emits).
-#: pixel budget for the bed COG (kept SMALL -- it is a spot-check backdrop, not an
-#: analysis raster; the reach is long+thin so we cap the long side, not total).
-BED_COG_MAX_PX_PER_SIDE: int = 512
-BED_COG_MIN_PX_PER_SIDE: int = 16
-#: filename the supervisor uploads + the composer keys off (recorded in metrics).
-BED_COG_FILENAME: str = "bed_bathymetry.tif"
-
-
-def write_bed_cog(mesh: dict, Z, cfg: "ReachConfig", tr, path: str) -> dict:
-    """Rasterize the solved bed elevations ``Z`` (mesh nodes) to a small 4326 COG.
-
-    Reprojects the mesh nodes UTM -> EPSG:4326, linearly interpolates the per-node
-    bed elevation onto a modest regular grid clipped to the channel footprint
-    (nearest-node distance, so griddata does not paint the whole convex hull), and
-    writes a tiled COG carrying the bed the TELEMAC solve actually ran on. Returns
-    a metrics dict (``bed_cog`` filename + ``bed_cog_min_m`` / ``bed_cog_max_m`` /
-    ``bed_cog_px``). Raises on any failure -- the caller wraps it best-effort so a
-    bed-COG hiccup never voids a CORRECT END solve.
-    """
-    import math
-
-    import numpy as np
-    import rasterio
-    from rasterio.transform import from_bounds
-    from scipy.interpolate import griddata
-    from scipy.spatial import cKDTree
-    from pyproj import Transformer
-
-    X, Y = np.asarray(mesh["X"], dtype=float), np.asarray(mesh["Y"], dtype=float)
-    z = np.asarray(Z, dtype=float)
-    back = Transformer.from_crs(tr.target_crs, 4326, always_xy=True)
-    lon, lat = back.transform(X, Y)
-    lon = np.asarray(lon, dtype=float)
-    lat = np.asarray(lat, dtype=float)
-    finite = np.isfinite(lon) & np.isfinite(lat) & np.isfinite(z)
-    if finite.sum() < 3:
-        raise RuntimeError("bed COG: fewer than 3 finite mesh nodes to rasterize")
-    lon, lat, z = lon[finite], lat[finite], z[finite]
-
-    min_lon, max_lon = float(lon.min()), float(lon.max())
-    min_lat, max_lat = float(lat.min()), float(lat.max())
-    # size the grid so the LONG side hits the pixel cap (a long thin reach), the
-    # short side scaled to keep square-ish ground pixels, both clamped to a sane
-    # floor -- keeps the COG small (a spot-check backdrop).
-    span_lon = max(max_lon - min_lon, 1e-9)
-    span_lat = max(max_lat - min_lat, 1e-9)
-    mean_lat = 0.5 * (min_lat + max_lat)
-    w_m = span_lon * 111_320.0 * max(math.cos(math.radians(mean_lat)), 1e-6)
-    h_m = span_lat * 111_320.0
-    if w_m >= h_m:
-        ncols = BED_COG_MAX_PX_PER_SIDE
-        nrows = int(round(BED_COG_MAX_PX_PER_SIDE * h_m / max(w_m, 1e-9)))
-    else:
-        nrows = BED_COG_MAX_PX_PER_SIDE
-        ncols = int(round(BED_COG_MAX_PX_PER_SIDE * w_m / max(h_m, 1e-9)))
-    nrows = int(np.clip(nrows, BED_COG_MIN_PX_PER_SIDE, BED_COG_MAX_PX_PER_SIDE))
-    ncols = int(np.clip(ncols, BED_COG_MIN_PX_PER_SIDE, BED_COG_MAX_PX_PER_SIDE))
-
-    gdx, gdy = span_lon / ncols, span_lat / nrows
-    xc = min_lon + (np.arange(ncols) + 0.5) * gdx
-    yc = max_lat - (np.arange(nrows) + 0.5) * gdy  # north -> south (COG row 0 = N)
-    gx, gy = np.meshgrid(xc, yc)
-    pts = np.column_stack([lon, lat])
-    grid = griddata(pts, z, (gx, gy), method="linear")
-    grid = np.asarray(grid, dtype="float32")
-    # clip to the channel: a cell whose nearest node is > ~1.5 mean-cell away is
-    # outside the meshed reach -> nodata (never paint the convex hull).
-    tree = cKDTree(pts)
-    dist, _ = tree.query(np.column_stack([gx.ravel(), gy.ravel()]), k=1)
-    clip = 1.5 * float(max(gdx, gdy))
-    grid[(dist.reshape(nrows, ncols) > clip)] = np.nan
-    grid[~np.isfinite(grid)] = np.nan
-    if not np.isfinite(grid).any():
-        raise RuntimeError("bed COG: grid is entirely nodata after clipping")
-
-    nodata = -9999.0
-    out = np.where(np.isfinite(grid), grid, nodata).astype("float32")
-    transform = from_bounds(min_lon, min_lat, max_lon, max_lat, ncols, nrows)
-    profile = dict(
-        driver="COG", dtype="float32", count=1, height=nrows, width=ncols,
-        crs="EPSG:4326", transform=transform, nodata=nodata,
-        compress="deflate", blocksize=256,
-    )
-    if os.path.exists(path):
-        os.remove(path)
-    try:
-        with rasterio.open(path, "w", **profile) as dst:
-            dst.write(out, 1)
-    except Exception:  # noqa: BLE001 -- some rasterio builds lack the COG driver
-        # Fall back to a tiled GTiff (publish_layer re-tiles it anyway); still a
-        # valid georeferenced raster the plugin can read.
-        profile.update(driver="GTiff", tiled=True, blockxsize=256, blockysize=256)
-        profile.pop("blocksize", None)
-        with rasterio.open(path, "w", **profile) as dst:
-            dst.write(out, 1)
-
-    finite_vals = grid[np.isfinite(grid)]
-    return {
-        "bed_cog": os.path.basename(path),
-        "bed_cog_min_m": round(float(finite_vals.min()), 3),
-        "bed_cog_max_m": round(float(finite_vals.max()), 3),
-        "bed_cog_px": [int(nrows), int(ncols)],
-    }
 
 
 # ---------------------------------------------------------------------------

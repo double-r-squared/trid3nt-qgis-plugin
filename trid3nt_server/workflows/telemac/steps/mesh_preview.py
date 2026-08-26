@@ -32,6 +32,7 @@ from .reach import (
     fetch_reach_flowline,
     geocode_reach,
     reach_seed,
+    resolve_reach_river,
     suggest_mesh_size_m,
     suggest_time_step_s,
 )
@@ -133,20 +134,27 @@ async def preview_telemac_mesh(params: dict[str, Any], *,
     mesh_node_estimate = sizing.node_estimate
     mesh_resolution_label = sizing.label
     time_step_s = suggest_time_step_s(mesh_size_m)
+    # The preview meshes the SAME river the approved solve will, resolved through
+    # the same ladder from the same seed - so the reach the user approves is the
+    # reach that solves. It skips the bed alone: a mesh preview samples no
+    # elevations, so fetching a raster it would not read is work nobody asked for.
+    bank_mode = normalize_bank_source(params.get("bank_source"))
+    preview_tag = new_ulid()
+    river = await resolve_reach_river(
+        reach=reach, seed=seed, run_tag=preview_tag,
+        reach_length_km=reach_length_km, bank_source=bank_mode,
+        release=release_pair, with_bed=False)
     deck: dict[str, Any] = {
         "name": reach["slug"],
-        "seed_lon": round(seed["lon"], 6),
-        "seed_lat": round(seed["lat"], 6),
-        **({"river_name": reach["river_name"]} if reach.get("river_name") else {}),
-        # Call-provided release coords seed the worker's centerline here AND in the
-        # approved solve, so the reach the user approves is the reach that solves.
+        "seed_lon": round(float(river["provenance"]["seed_lon"]), 6),
+        "seed_lat": round(float(river["provenance"]["seed_lat"]), 6),
         **({"release_lon": round(release_pair[0], 6),
-            "release_lat": round(release_pair[1], 6),
-            "seed_from_release": True} if release_pair is not None else {}),
+            "release_lat": round(release_pair[1], 6)}
+           if release_pair is not None else {}),
         "nav_direction": "DM",
         "distance_km": reach_length_km,
         "channel_width_m": channel_width_m,
-        "bank_source": normalize_bank_source(params.get("bank_source")),
+        "bank_source": bank_mode,
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
     }
@@ -159,7 +167,8 @@ async def preview_telemac_mesh(params: dict[str, Any], *,
     for attempt in (1, 2):
         run_tag = new_ulid()
         manifest_uri = await asyncio.to_thread(stage_manifest, deck, run_tag,
-                                               mesh_only=True)
+                                               mesh_only=True,
+                                               inputs=river["inputs"])
         logger.info("preview_telemac_mesh dispatch run_tag=%s seed=(%.5f,%.5f) "
                     "h=%.3g dt=%.3g", run_tag, seed["lon"], seed["lat"],
                     mesh_size_m, time_step_s)
