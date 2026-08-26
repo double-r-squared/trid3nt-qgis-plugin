@@ -198,9 +198,18 @@ def test_a_non_tracer_contaminant_beats_a_tracer_substance():
     assert kept["substance"] == "sewage"
 
 
-def test_an_invented_compute_class_coerces_to_the_ladder():
-    supplied, _ = _norm(location="X", compute_class="dye_spill")
-    assert supplied["compute_class"] == "medium"
+def test_an_invented_compute_class_refuses_at_the_ladder():
+    """A rung the dispatcher cannot serve is REFUSED, not quietly re-seated.
+
+    It used to become 'medium' with a log line and no provenance row, so a caller
+    who asked for a bigger box got a smaller solve and nothing on any surface a
+    reader looks at said so.
+    """
+    supplied, err = _norm(location="X", compute_class="dye_spill")
+    assert supplied == {}
+    assert err["status"] == "error"
+    assert err["error_code"] == "TELEMAC_COMPUTE_CLASS_UNKNOWN"
+    assert "dye_spill" in err["error_message"]
 
 
 def test_a_wind_bearing_wraps_rather_than_clamping():
