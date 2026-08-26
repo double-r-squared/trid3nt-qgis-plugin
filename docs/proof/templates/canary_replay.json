@@ -1,0 +1,110 @@
+[
+  {
+    "canary": "artemis_harbor_agitation/coarse",
+    "tool": "artemis_harbor_agitation",
+    "wall_seconds": 40.7,
+    "keys_compared": 18,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "artemis_harbor_agitation/refined",
+    "tool": "artemis_harbor_agitation",
+    "wall_seconds": 40.4,
+    "keys_compared": 18,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "artemis_harbor_resonance_idealized/coarse",
+    "tool": "artemis_harbor_agitation",
+    "wall_seconds": 0.0,
+    "verdict": "FAILED",
+    "error": {
+      "code": "PHYSICS_INPUT_REQUIRED",
+      "message": "artemis_harbor_agitation PHYSICS_INPUT_REQUIRED: artemis_harbor_agitation cannot run without a live session to approve these on -- these physics-consequential inputs have no real data source and fell back to invented demo defaults, which would silently ruin the simulation (law 9): reflection_coef (S"
+    }
+  },
+  {
+    "canary": "coastal_tidal_surge/coarse",
+    "tool": "coastal_tidal_surge",
+    "wall_seconds": 0.0,
+    "verdict": "FAILED",
+    "error": {
+      "code": "PHYSICS_INPUT_REQUIRED",
+      "message": "coastal_tidal_surge PHYSICS_INPUT_REQUIRED: coastal_tidal_surge cannot run without a live session to approve these on -- these physics-consequential inputs have no real data source and fell back to invented demo defaults, which would silently ruin the simulation (law 9): friction_law (TELEMAC bottom"
+    }
+  },
+  {
+    "canary": "coastal_tidal_surge/refined",
+    "tool": "coastal_tidal_surge",
+    "wall_seconds": 0.0,
+    "verdict": "FAILED",
+    "error": {
+      "code": "PHYSICS_INPUT_REQUIRED",
+      "message": "coastal_tidal_surge PHYSICS_INPUT_REQUIRED: coastal_tidal_surge cannot run without a live session to approve these on -- these physics-consequential inputs have no real data source and fell back to invented demo defaults, which would silently ruin the simulation (law 9): friction_law (TELEMAC bottom"
+    }
+  },
+  {
+    "canary": "telemac3d_stratified_flow/coarse",
+    "tool": "telemac3d_stratified_flow",
+    "wall_seconds": 41.1,
+    "keys_compared": 16,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "telemac3d_stratified_flow/refined",
+    "tool": "telemac3d_stratified_flow",
+    "wall_seconds": 61.5,
+    "keys_compared": 16,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "telemac_do_sag/coarse",
+    "tool": "telemac_do_sag",
+    "wall_seconds": 51.3,
+    "keys_compared": 15,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "telemac_do_sag/refined",
+    "tool": "telemac_do_sag",
+    "wall_seconds": 61.2,
+    "keys_compared": 15,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "telemac_rain_on_grid/coarse",
+    "tool": "telemac_rain_on_grid",
+    "wall_seconds": 0.0,
+    "verdict": "FAILED",
+    "error": {
+      "code": "PHYSICS_INPUT_REQUIRED",
+      "message": "telemac_rain_on_grid PHYSICS_INPUT_REQUIRED: telemac_rain_on_grid cannot run without a live session to approve these on -- these physics-consequential inputs have no real data source and fell back to invented demo defaults, which would silently ruin the simulation (law 9): steep_slope_correction (Ap"
+    }
+  },
+  {
+    "canary": "telemac_river_dye/coarse",
+    "tool": null,
+    "verdict": "SKIPPED - not registered"
+  },
+  {
+    "canary": "telemac_river_dye/refined",
+    "tool": "telemac_river_dye",
+    "wall_seconds": 71.4,
+    "keys_compared": 15,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "tomawac_wave_field/coarse",
+    "tool": "tomawac_wave_field",
+    "wall_seconds": 41.3,
+    "keys_compared": 15,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "tomawac_wave_field/refined",
+    "tool": "tomawac_wave_field",
+    "wall_seconds": 72.2,
+    "keys_compared": 15,
+    "verdict": "IDENTICAL"
+  }
+]

@@ -1,0 +1,372 @@
+{
+  "parent_args": {
+    "location": "Eel River near Scotia, California",
+    "outfall_coords": [
+      -124.0983,
+      40.4921
+    ],
+    "discharge_bod_mgl": 20.0,
+    "water_temp_c": 20.0,
+    "do_standard_mgl": 5.0,
+    "k1_per_day": 0.3,
+    "k2_per_day": 0.9,
+    "reach_length_km": 0.5,
+    "sim_duration_s": 600.0,
+    "mesh_resolution": "coarse",
+    "mesh_resolution_m": 10.0,
+    "discharge_m3s": 60.0,
+    "output_interval_min": 0.333,
+    "input_mode": "auto",
+    "restart_clean": true
+  },
+  "parent": {
+    "do_min_mgl": 9.0081,
+    "do_min_distance_m": 123.5,
+    "do_violates_standard": false,
+    "do_upstream_mgl": 9.022,
+    "do_saturation_mgl": 9.022,
+    "mesh_size_m": 10.0,
+    "mesh_node_estimate": 698,
+    "run_id": "01M0ZXQT1F3JDJDJQP567RW117",
+    "uri": "s3://trid3nt-runs/01M0ZXQT1F3JDJDJQP567RW117/overviews/01M0ZXSBC33A97Z9WGRKW7GXMH.tif",
+    "sag_curve_sha256": "9f20504742f41640"
+  },
+  "reuse_plan": {
+    "cut_index": 4,
+    "cut_node": "waqtel",
+    "inherited_nodes": [
+      "carrier_discharge",
+      "data:rivers",
+      "draw",
+      "reach",
+      "seed"
+    ],
+    "reexecuted_nodes": [
+      "waqtel",
+      "reviewed_discharge",
+      "deck",
+      "solve",
+      "do_field",
+      "do_field.chart:do_sag_curve"
+    ]
+  },
+  "parent_record_digests": {
+    "reach": {
+      "sha256": "77fa41bcfa69fd0f5a22175aedf6f29e75a0d71e081ffb879ba0002ab7b599de",
+      "bytes": 258
+    },
+    "seed": {
+      "sha256": "09cd2b2259abec6aa321151244c90d5be7ba2ea6ebf31d86aed548569d7f84fb",
+      "bytes": 115
+    },
+    "carrier_discharge": {
+      "sha256": "8b17b7a4149f4347f8e193bbe409c8c568699cb02d57b245a0f7c119c6eabf10",
+      "bytes": 145
+    },
+    "waqtel": {
+      "sha256": "5bf67842d29666021e6564fc17d38ab9e1bd56c7af999601b509e79d242ea5c5",
+      "bytes": 166
+    },
+    "reviewed_discharge": {
+      "sha256": "8b17b7a4149f4347f8e193bbe409c8c568699cb02d57b245a0f7c119c6eabf10",
+      "bytes": 145
+    },
+    "deck": {
+      "sha256": "94c3699e70c7a2c170cdadcc600aef129fbff883a31d8f81fa72140dd78fda19",
+      "bytes": 2335
+    },
+    "solve": {
+      "sha256": "612886ef0c37cfb4c4e35cbaf7a5be78543e1cbe5622953d9c4bfb791fe7cd3b",
+      "bytes": 1393,
+      "artifacts": [
+        {
+          "uri": "s3://trid3nt-runs/01M0ZXQT1F3JDJDJQP567RW117/r2d_river.slf",
+          "bytes": 4673664,
+          "sha256": "cf239569696a8efabffe8540b39fcc04c0962f06024023124788f848fff90609"
+        }
+      ]
+    },
+    "do_field": {
+      "sha256": "a17363747ed989291a8cc567803a6664c29f4631716050efa2eab13fead7c0e5",
+      "bytes": 2760,
+      "artifacts": [
+        {
+          "uri": "s3://trid3nt-runs/01M0ZXQT1F3JDJDJQP567RW117/overviews/01M0ZXSBC33A97Z9WGRKW7GXMH.tif",
+          "bytes": 8013,
+          "sha256": "8a7014f433ad98b6ca9460837f67621af1a1372832808aa2125f954aa3304bf5"
+        }
+      ]
+    },
+    "do_field.chart:do_sag_curve": {
+      "sha256": "a485361fcdde4b21b0be3e496d672182e0821c87fcbcaea1b77cf63cf0cef9d6",
+      "bytes": 42
+    },
+    "data:rivers": {
+      "sha256": "dc9f782142322c81a73a0a036f682ca36cc2f5bb9d5ba9d00cdffc39be2e4ef3",
+      "bytes": 89
+    }
+  },
+  "child": {
+    "do_min_mgl": 8.9804,
+    "do_min_distance_m": 123.5,
+    "do_violates_standard": false,
+    "do_upstream_mgl": 9.022,
+    "do_saturation_mgl": 9.022,
+    "mesh_size_m": 10.0,
+    "mesh_node_estimate": 698,
+    "run_id": "01M0ZXSBKG4S1360F18BQ4S5FJ",
+    "uri": "s3://trid3nt-runs/01M0ZXSBKG4S1360F18BQ4S5FJ/overviews/01M0ZXTWT1MHEMD555GYHXPR4T.tif",
+    "sag_curve_sha256": "1030c6b4ea56e16c"
+  },
+  "child_record_digests": {
+    "reach": {
+      "sha256": "77fa41bcfa69fd0f5a22175aedf6f29e75a0d71e081ffb879ba0002ab7b599de",
+      "bytes": 258
+    },
+    "seed": {
+      "sha256": "09cd2b2259abec6aa321151244c90d5be7ba2ea6ebf31d86aed548569d7f84fb",
+      "bytes": 115
+    },
+    "carrier_discharge": {
+      "sha256": "8b17b7a4149f4347f8e193bbe409c8c568699cb02d57b245a0f7c119c6eabf10",
+      "bytes": 145
+    },
+    "waqtel": {
+      "sha256": "8e816e3e3d921fe0edaa5c9672806540bfbcd098ce5e132a3c6ee0419f7f4aa1",
+      "bytes": 166
+    },
+    "reviewed_discharge": {
+      "sha256": "8b17b7a4149f4347f8e193bbe409c8c568699cb02d57b245a0f7c119c6eabf10",
+      "bytes": 145
+    },
+    "deck": {
+      "sha256": "cda155c97ba77735bda04f22fcea87104eddc406b419f2a40e6d9cba0e803b73",
+      "bytes": 2335
+    },
+    "solve": {
+      "sha256": "8083b1b0d3403999845f463b300119b6ec4b8b8450f8613cc3270ebbb9147df3",
+      "bytes": 1393,
+      "artifacts": [
+        {
+          "uri": "s3://trid3nt-runs/01M0ZXSBKG4S1360F18BQ4S5FJ/r2d_river.slf",
+          "bytes": 4673664,
+          "sha256": "c3666f020cf1230d6d3a390c16099f63c0c2c79faf51470b23d02ec3af2cf49f"
+        }
+      ]
+    },
+    "do_field": {
+      "sha256": "9738882a93deddd2ef8c5f212db87a3583a2009bcf0aea43f8bcebc0162bbac5",
+      "bytes": 2764,
+      "artifacts": [
+        {
+          "uri": "s3://trid3nt-runs/01M0ZXSBKG4S1360F18BQ4S5FJ/overviews/01M0ZXTWT1MHEMD555GYHXPR4T.tif",
+          "bytes": 8269,
+          "sha256": "6584b5094b8cee2e21ca6bb5bc295169c6e6ee96e1e92b817929823d1a853471"
+        }
+      ]
+    },
+    "do_field.chart:do_sag_curve": {
+      "sha256": "a485361fcdde4b21b0be3e496d672182e0821c87fcbcaea1b77cf63cf0cef9d6",
+      "bytes": 42
+    }
+  },
+  "reuse": {
+    "inherited_nodes_compared": [
+      "carrier_discharge",
+      "reach",
+      "seed"
+    ],
+    "byte_identical": [
+      "carrier_discharge",
+      "reach",
+      "seed"
+    ],
+    "differs": [],
+    "reexecuted_nodes_that_moved": [
+      "waqtel",
+      "deck",
+      "solve",
+      "do_field"
+    ],
+    "data_not_demanded": [
+      "data:rivers"
+    ]
+  },
+  "reuse_byte_identical": true,
+  "deck_inputs": {
+    "parent": [
+      {
+        "dest": "river_centerline.geojson",
+        "uri": "s3://trid3nt-cache/telemac/01M0ZXQSVN6KSRYJNG788B3HS2/river_centerline.geojson",
+        "bytes": 580,
+        "sha256": "f3ad45bee49fa5685af44969eb669b431daf1b5d053916f9e9b31c7536413dd4"
+      },
+      {
+        "dest": "river_banks.geojson",
+        "uri": "s3://trid3nt-cache/telemac/01M0ZXQSVN6KSRYJNG788B3HS2/river_banks.geojson",
+        "bytes": 145348,
+        "sha256": "c99da7dae9f294207efb6be9520c2563af4243a83f59ae3ac253d0b94d6572dc"
+      },
+      {
+        "dest": "bed_source.tif",
+        "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/e84f19d88df38bbdd6ecc470a07998c9.tif",
+        "bytes": 131210,
+        "sha256": "d148f2a313315b73a490157201bcfc8f516641832adfba622ebd10c4c2ebc3e4"
+      }
+    ],
+    "child": [
+      {
+        "dest": "river_centerline.geojson",
+        "uri": "s3://trid3nt-cache/telemac/01M0ZXSBGG9DBGWGPXQ9TFZAH2/river_centerline.geojson",
+        "bytes": 580,
+        "sha256": "f3ad45bee49fa5685af44969eb669b431daf1b5d053916f9e9b31c7536413dd4"
+      },
+      {
+        "dest": "river_banks.geojson",
+        "uri": "s3://trid3nt-cache/telemac/01M0ZXSBGG9DBGWGPXQ9TFZAH2/river_banks.geojson",
+        "bytes": 145348,
+        "sha256": "c99da7dae9f294207efb6be9520c2563af4243a83f59ae3ac253d0b94d6572dc"
+      },
+      {
+        "dest": "bed_source.tif",
+        "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/e84f19d88df38bbdd6ecc470a07998c9.tif",
+        "bytes": 131210,
+        "sha256": "d148f2a313315b73a490157201bcfc8f516641832adfba622ebd10c4c2ebc3e4"
+      }
+    ]
+  },
+  "deck_input_parity": [
+    {
+      "dest": "river_centerline.geojson",
+      "same_object": false,
+      "same_bytes": true
+    },
+    {
+      "dest": "river_banks.geojson",
+      "same_object": false,
+      "same_bytes": true
+    },
+    {
+      "dest": "bed_source.tif",
+      "same_object": true,
+      "same_bytes": true
+    }
+  ],
+  "child_journal": {
+    "parent_run_id": "01M0ZXQT1F3JDJDJQP567RW117",
+    "overrides": [
+      "k1_per_day"
+    ],
+    "executed": [
+      "waqtel",
+      "reviewed_discharge",
+      "deck",
+      "solve",
+      "do_field",
+      "do_field.chart:do_sag_curve"
+    ],
+    "replayed": [
+      "reach",
+      "seed",
+      "carrier_discharge"
+    ],
+    "notes": [
+      "RESOLUTION-SENSITIVE: do_min_distance_m sit in a class the mesh decides (WHERE a local feature sits - the feature moves with the element that resolves it). This run was solved at 10 m on the spacing you asked for, which is a refinement, not a demonstrated convergence - the class stays sensitive.",
+      "derived from run 01M0ZXQT1F3JDJDJQP567RW117 by overriding k1_per_day"
+    ],
+    "k1_row": {
+      "name": "k1_per_day",
+      "value": 0.9,
+      "door": "user",
+      "basis": "user",
+      "units": "1/day",
+      "consequence": "numerical",
+      "note": "override of run 01M0ZXQT1F3JDJDJQP567RW117",
+      "clamped_from": null,
+      "real_source": null
+    }
+  },
+  "direction": {
+    "override": {
+      "k1_per_day": 0.9
+    },
+    "parent_do_min_mgl": 9.0081,
+    "child_do_min_mgl": 8.9804,
+    "expected": "a higher deoxygenation rate consumes more oxygen, so the sag minimum must be LOWER",
+    "holds": true
+  },
+  "whatif_second_child": {
+    "do_min_mgl": 9.0082,
+    "do_min_distance_m": 123.5,
+    "do_violates_standard": false,
+    "do_upstream_mgl": 9.022,
+    "do_saturation_mgl": 9.022,
+    "mesh_size_m": 10.0,
+    "mesh_node_estimate": 698,
+    "run_id": "01M0ZXTX2QA76X6M3NRSVGSNTX",
+    "uri": "s3://trid3nt-runs/01M0ZXTX2QA76X6M3NRSVGSNTX/overviews/01M0ZXWEC8W6DSDHSM865KM9T7.tif",
+    "sag_curve_sha256": "4bf1f11632760af2"
+  },
+  "whatif_fan": [
+    {
+      "run_id": "01M0ZXSBKG4S1360F18BQ4S5FJ",
+      "overrides": [
+        "k1_per_day"
+      ],
+      "do_min_mgl": 8.9804
+    },
+    {
+      "run_id": "01M0ZXTX2QA76X6M3NRSVGSNTX",
+      "overrides": [
+        "k2_per_day"
+      ],
+      "do_min_mgl": 9.0082
+    }
+  ],
+  "failure_recovery": {
+    "bad_call": {
+      "bank_source": "riverbank"
+    },
+    "outcome": {
+      "status": "error",
+      "error_code": "TELEMAC_DYE_SCENARIO_INPUT_INVALID",
+      "error_message": "step 'reviewed_discharge' failed: bank_source 'riverbank' is neither of the two the mesher builds: 'nhd_area' (sample real NHDArea water polygons for per-station banks) or 'constant_ribbon' (mesh the assumed constant channel width). This attempt is recorded as run 01M0ZXWF1AT7944AGH884TAZK8, with reach, seed, carrier_discharge, waqtel already done: rerun_workflow(run_id='01M0ZXWF1AT7944AGH884TAZK8"
+    },
+    "attempt_run_id": "01M0ZXWF1AT7944AGH884TAZK8",
+    "recovered": {
+      "status": "ok",
+      "do_min_mgl": 9.0081,
+      "mesh_size_m": 10.0,
+      "run_id": "01M0ZXWF560CDFVFF6HC884JAD"
+    },
+    "inherited_from_the_failed_attempt": [
+      "carrier_discharge",
+      "reach",
+      "seed",
+      "waqtel"
+    ]
+  },
+  "typed_refusals": {
+    "undeclared_name": {
+      "error_code": "RERUN_OVERRIDE_UNKNOWN",
+      "message": "telemac_do_sag declares no ['nonsense_param']; it takes ['bank_source', 'bbox', 'channel_width_m', 'compute_class', 'discharge_bod_mgl', 'discharge_m3s', 'do_saturation_mgl', 'do_standard_mgl', 'event_time', 'k1_per_day', 'k2_per_day', 'location', 'mesh_resolution', 'mesh_resolution_m', 'outfall_coords', 'output_interval_min', 'reach_length_km', 'sim_duration_s', 'upstream_do_mgl', 'water_temp_c']. An override is seated by NAME and is never absorbed silently."
+    },
+    "inert_override": {
+      "error_code": "RERUN_OVERRIDE_INERT",
+      "message": "every override already equals run 01M0ZXQT1F3JDJDJQP567RW117's own value (['k1_per_day']), so the child would BE the parent."
+    },
+    "law_inversion": {
+      "law_switched_coefficient_left": {
+        "accepted": false,
+        "error_code": "COUPLED_VALIDITY_REFUSED",
+        "message": "coastal_tidal_surge: friction_law=4.0 with friction_coefficient=40.0 reads the coefficient as the WRONG quantity. Laws 2 and 3 (Chezy, Strickler) take a Ks around 15-90 where higher is smoother; law 4 (Manning) takes an n around 0.011-0.1 where higher is rougher, and the two are reciprocals (n = 1/Ks). This pair sits on the wrong side of that crossover, so the run would model a bed roughness nobody asked for. Re-confirm the coefficient in the units the law you chose reads - naming BOTH values is the only way past this."
+      },
+      "both_named": {
+        "accepted": true
+      },
+      "atypical_but_right_quantity": {
+        "accepted": true
+      }
+    }
+  }
+}

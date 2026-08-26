@@ -1,0 +1,52 @@
+[
+  {
+    "canary": "artemis_harbor_resonance_idealized/coarse",
+    "tool": "artemis_harbor_agitation",
+    "approved_defaults": {
+      "reflection_coef": 1.0
+    },
+    "wall_seconds": 40.7,
+    "keys_compared": 18,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "coastal_tidal_surge/coarse",
+    "tool": "coastal_tidal_surge",
+    "approved_defaults": {
+      "friction_law": 3,
+      "friction_coefficient": 40.0,
+      "wind_speed_mps": 0.0,
+      "wind_direction_from_deg": 0.0
+    },
+    "wall_seconds": 42.6,
+    "keys_compared": 18,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "coastal_tidal_surge/refined",
+    "tool": "coastal_tidal_surge",
+    "approved_defaults": {
+      "friction_law": 3,
+      "friction_coefficient": 40.0,
+      "wind_speed_mps": 0.0,
+      "wind_direction_from_deg": 0.0
+    },
+    "wall_seconds": 93.3,
+    "keys_compared": 18,
+    "verdict": "IDENTICAL"
+  },
+  {
+    "canary": "telemac_rain_on_grid/coarse",
+    "tool": "telemac_rain_on_grid",
+    "approved_defaults": {
+      "steep_slope_correction": false,
+      "landcover_dataset": "nlcd_2021",
+      "soil_store": false,
+      "soil_recovery_hr": 120.0,
+      "soil_spinup_days": 45
+    },
+    "wall_seconds": 61.4,
+    "keys_compared": 27,
+    "verdict": "IDENTICAL"
+  }
+]
