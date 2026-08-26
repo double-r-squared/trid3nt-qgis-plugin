@@ -86,17 +86,29 @@ class ProofAnimation:
     #: ``("VELOCITY U", "VELOCITY V")`` is the vector magnitude; the solver writes
     #: components and the QUESTION is the speed.
     derived: tuple[str, ...] = ()
-    #: Draw the vector FIELD over the colour field: ``"streamlines"`` traces the
-    #: flow direction from the same two components ``derived`` builds the
-    #: magnitude from, so one picture carries direction AND speed instead of
-    #: asking a reader to hold two panels in their head.
+    #: Draw the vector FIELD over the colour field, off the same two components
+    #: ``derived`` builds the magnitude from. ``"streamlines"`` traces the flow
+    #: DIRECTION as a continuous line, one arrowhead per trace; ``"quiver"``
+    #: draws one arrow per grid cell instead - a discrete read that a coarse
+    #: grid or a single frozen frame carries more calmly than a trace does.
+    #: (``"particles"`` - discrete advected markers rather than either - is a
+    #: FUTURE value; nothing here reads it yet.)
     #:
     #: CONSTRAINT, not history: this styling is the reference for QGIS-native
-    #: mesh vector rendering when mesh-layer publishing lands. The dock's vector
-    #: symbology must reproduce what these frames show - streamlines over a
-    #: magnitude ramp at a declared density - or the proof sheet and the product
-    #: will be showing the same run two different ways.
+    #: mesh vector rendering when mesh-layer publishing lands. The dock ships
+    #: arrows, streamlines and traces natively, and the declared vocabulary here
+    #: maps onto that set - streamlines over a magnitude ramp at a declared
+    #: density, quiver at a declared arrow size on a declared grid - or the
+    #: proof sheet and the product will be showing the same run two different
+    #: ways.
     vectors: str | None = None
+    #: The vector style the PEAK/FINAL STILL draws, when it differs from the
+    #: moving GIF's own ``vectors``. ``None`` means "same as the animation". A
+    #: moving field reads as a traced flow; one frozen frame reads calmer as
+    #: discrete arrows on a coarser, further-decimated grid, because a still has
+    #: no motion to imply and a dense trace frozen in place is noise a moving
+    #: GIF does not carry.
+    still_vectors: str | None = None
     #: Streamline seeding density, matplotlib's own ``density`` argument. 1.4
     #: keeps a catchment-scale network legible: enough traces to see the
     #: drainage concentrate, few enough that they do not merge into a wash.
@@ -105,8 +117,23 @@ class ProofAnimation:
     #: axis. Streamlines need a REGULAR field and the solve is on a triangular
     #: mesh, so this is a declared DECIMATION - 200 across the wider axis, which
     #: resolves a 40 m mesh over a 30 km2 catchment without paying for a trace
-    #: through every element.
+    #: through every element. A ``"quiver"`` still reads a further-decimated cut
+    #: of this same grid - fewer, larger-spaced arrows for a calmer static read.
     vector_grid_n: int = 200
+    #: matplotlib's own arrow-prominence scale for whichever primitive
+    #: ``vectors``/``still_vectors`` draws (streamplot's ``arrowsize``, or an
+    #: equivalent multiplier on quiver's head dimensions): 1.0 is that
+    #: primitive's OWN default. 0.7 is the family's baseline; a dense trace at
+    #: high seeding density needs it turned DOWN further, because a same-size
+    #: arrowhead on every one of several hundred traces is what reads as
+    #: clutter, not the traces themselves.
+    arrow_size: float = 0.7
+    #: The ``(min, max)`` line width a streamline trace's LOCAL magnitude tapers
+    #: between - matplotlib's own per-point ``linewidth`` array on
+    #: ``streamplot``, scaled off the SAME ``(vmin, vmax)`` the colour ramp
+    #: reads, so width and colour agree about which point on the trace is fast.
+    #: The taper carries speed; the arrowhead is secondary.
+    vector_lw: tuple[float, float] = (0.35, 1.1)
     #: Overrides the preset's ramp TRANSFORM (``linear`` | ``log`` | ``sqrt``).
     #: A field spanning orders of magnitude - millimetre sheet flow against
     #: centimetre channel accumulation - has no linear ramp that shows both: the
@@ -189,7 +216,17 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
             name="flow_dynamics",
             variable="VELOCITY MAGNITUDE", units="m/s", quantity="flow_velocity",
             derived=("VELOCITY U", "VELOCITY V"),
-            vectors="streamlines", vector_density=1.4, vector_grid_n=200,
+            vectors="streamlines", still_vectors="quiver",
+            vector_density=1.4, vector_grid_n=200,
+            # A same-size arrowhead on every one of several hundred moving
+            # traces reads as clutter rather than as several hundred traces, so
+            # the arrowhead is turned down to a THIRD of the family baseline and
+            # the trace's own width - tapered by the LOCAL magnitude between the
+            # declared bounds - carries speed instead. The still switches
+            # primitive entirely: a frozen quiver arrow per cell reads calmer
+            # than a frozen trace, which a moving GIF does not need to worry
+            # about because it is never frozen.
+            arrow_size=0.23, vector_lw=(0.3, 1.3),
             mask_var="WATER DEPTH", mask_threshold=0.0, still="peak",
             reason="speed is what shows the water MOVING - runoff concentrating "
                    "off the hillslopes into the drainage network - which a depth "
@@ -197,7 +234,8 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
                    "order of magnitude rather than three. Streamlines over the "
                    "magnitude ramp so the frame carries DIRECTION as well as "
                    "speed: a scalar speed field says the water is fast without "
-                   "saying where it is going."),
+                   "saying where it is going, with the trace's width - not its "
+                   "arrowhead - carrying how fast."),
     ),
     "telemac_river_dye": (
         ProofAnimation(

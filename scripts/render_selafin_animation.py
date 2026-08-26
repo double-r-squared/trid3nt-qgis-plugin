@@ -39,6 +39,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 
@@ -74,15 +75,18 @@ _PAD_FRAC = 0.06
 _DPI = 130
 #: The clip the style contract's own band reader uses when a preset declares none.
 _DEFAULT_CLIP = (2.0, 98.0)
-#: Streamline stroke, adaptive on the traced grid the same way the mesh wireframe
-#: is adaptive on its element count: a fixed weight legible over a 200-point grid
-#: is a smear over a 600-point one.
-_STREAM_LW = (14.0, 0.35, 1.1)
-#: Streamlines read as WHITE with a dark casing under them. A magnitude ramp runs
+#: Vectors read as WHITE with a dark casing under them. A magnitude ramp runs
 #: dark at one end and bright at the other, so a single-colour trace disappears
 #: over half of any field it is drawn on.
 _STREAM_COLOR = "#ffffff"
 _STREAM_CASING = "#101318"
+#: The casing drawn under a vector is wider than the vector itself by this
+#: factor - visible as a dark outline rather than as its own shape.
+_STREAM_CASING_RATIO = 2.2
+#: A ``"quiver"`` still reads a COARSER cut of the same interpolation grid than
+#: a moving trace does - this many times fewer points per axis - because a
+#: frozen arrow per cell is meant to be sparse and calm, not a decimated trace.
+_QUIVER_GRID_DECIMATE = 3
 
 
 @dataclass(frozen=True)
@@ -349,6 +353,86 @@ def _interpolate(tri: Triangulation, node_values, gx, gy):
     return np.ma.filled(LinearTriInterpolator(tri, node_values)(gx, gy), 0.0)
 
 
+def _speed_and_norm(u, v, scale: "AnimationScale"):
+    """A grid's local speed, and that speed normalised into the COLOUR ramp's
+    own ``(vmin, vmax)`` - so a vector's taper and the field's own colour agree
+    about which point is fast, off one resolved range rather than two."""
+    speed = np.hypot(u, v)
+    span = max(scale.vmax - scale.vmin, 1e-9)
+    return speed, np.clip((speed - scale.vmin) / span, 0.0, 1.0)
+
+
+def _draw_streamlines(ax, gx, gy, u, v, *, density: float, arrow_size: float,
+                      lw_bounds: tuple[float, float], scale: "AnimationScale"):
+    """A traced flow field: ONE arrowhead per line (matplotlib's own streamplot
+    default), the LINE WIDTH tapered by local magnitude between ``lw_bounds`` -
+    the taper carries speed, the arrowhead is secondary and sized off
+    ``arrow_size``, matplotlib's own ``arrowsize`` scale where 1.0 is that
+    primitive's default."""
+    speed, norm = _speed_and_norm(u, v, scale)
+    if not np.any(speed > 0):
+        return []  # a frame with no flow has no trace to draw
+    lo, hi = lw_bounds
+    lw_field = lo + (hi - lo) * norm
+    artists = []
+    for colour, lw, alpha, zorder in (
+            (_STREAM_CASING, lw_field * _STREAM_CASING_RATIO, 0.5, 3.5),
+            (_STREAM_COLOR, lw_field, 0.9, 3.6)):
+        traced = ax.streamplot(gx, gy, u, v, density=density, color=colour,
+                               linewidth=lw, arrowsize=arrow_size, zorder=zorder)
+        traced.lines.set_alpha(alpha)
+        artists.extend([traced.lines, traced.arrows])
+    return artists
+
+
+def _draw_quiver(ax, gx, gy, u, v, *, arrow_size: float, scale: "AnimationScale"):
+    """One arrow per grid cell - the DISCRETE read a coarse or frozen grid
+    carries more calmly than a traced line. ``arrow_size`` scales quiver's own
+    head dimensions the same way it scales streamplot's ``arrowsize``: 1.0 is
+    matplotlib's own default head.
+
+    The arrow LENGTH is pinned explicitly rather than left to quiver's own
+    autoscale: autoscale divides a target length by the grid's AVERAGE
+    magnitude, and the interpolation grid pads past the mesh's own concave
+    boundary with exact zeros, so a field with only a sparse interior of real
+    flow collapses that average toward zero and streaks the few nonzero
+    arrows far past the plot. Pinning it off the SAME ``(vmin, vmax)`` the
+    colour ramp reads - the fastest value in the run spans one grid cell -
+    keeps length and colour agreeing about which point is fast, regardless of
+    how much of the grid outside the mesh is exact zero.
+    """
+    if not np.any(np.hypot(u, v) > 0):
+        return []
+    dx = float(abs(gx[0, 1] - gx[0, 0])) if gx.shape[1] > 1 else 1.0
+    dy = float(abs(gy[1, 0] - gy[0, 0])) if gy.shape[0] > 1 else dx
+    cell = min(dx, dy) or 1.0
+    quiver_scale = max(scale.vmax, 1e-12) / (0.85 * cell)
+    artists = []
+    for colour, width, alpha, zorder in (
+            (_STREAM_CASING, 0.0075, 0.5, 3.5),
+            (_STREAM_COLOR, 0.0040, 0.9, 3.6)):
+        q = ax.quiver(gx, gy, u, v, color=colour, width=width, alpha=alpha,
+                     scale=quiver_scale, scale_units="xy", angles="xy",
+                     headwidth=3.0 * arrow_size, headlength=5.0 * arrow_size,
+                     headaxislength=4.5 * arrow_size, zorder=zorder)
+        artists.append(q)
+    return artists
+
+
+def _draw_vectors(style: str | None, ax, gx, gy, u, v, *, density: float,
+                  arrow_size: float, lw_bounds: tuple[float, float],
+                  scale: "AnimationScale"):
+    """The declared vector primitive, dispatched by name. Unknown or ``None``
+    draws nothing - the vocabulary is closed, never a silent fallback."""
+    if style == "streamlines":
+        return _draw_streamlines(ax, gx, gy, u, v, density=density,
+                                 arrow_size=arrow_size, lw_bounds=lw_bounds,
+                                 scale=scale)
+    if style == "quiver":
+        return _draw_quiver(ax, gx, gy, u, v, arrow_size=arrow_size, scale=scale)
+    return []
+
+
 def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   units: str, title: str, run_id: str, source_name: str,
                   variable: str, gif_path: Path, peak_path: Path,
@@ -356,7 +440,9 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   plane_note: str = "", axes_factory=None,
                   transform: str | None = None, vector_uv=None,
                   vectors: str | None = None, vector_density: float = 1.4,
-                  vector_grid_n: int = 200) -> dict:
+                  vector_grid_n: int = 200, arrow_size: float = 0.7,
+                  vector_lw: tuple[float, float] = (0.35, 1.1),
+                  still_vectors: str | None = None) -> dict:
     """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF + still.
 
     THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN, and
@@ -367,6 +453,14 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
 
     ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax)``; it defaults to the ESRI
     basemap axes and takes :func:`plain_axes` where there is no tile access.
+
+    ``vectors`` is the DECLARED vocabulary the moving GIF draws in -
+    ``"streamlines"`` (traced, magnitude-tapered width, one arrowhead per
+    trace) or ``"quiver"`` (one arrow per grid cell) - and ``still_vectors``
+    overrides it for the peak/final STILL alone, defaulting to ``vectors``
+    when unset. ``arrow_size`` and ``vector_lw`` are declared, not derived:
+    the caller states the arrow's prominence and the width taper's bounds
+    rather than this function guessing them from the grid.
     """
     values = np.asarray(values, dtype="float64")
     scale = resolve_animation_style(values, preset=preset, transform=transform)
@@ -424,44 +518,55 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     cbar = fig.colorbar(coll, ax=ax, fraction=0.025, pad=0.01)
     cbar.set_label(f"{variable} ({units})\n{scale.note}", fontsize=8)
     cbar.ax.tick_params(labelsize=7)
-    # STREAMLINES over the magnitude ramp: direction and speed in one frame. The
-    # trace is redrawn per frame because the flow field is what MOVES - the
-    # colour scale above is not, and nothing here touches it.
-    streaming = vectors == "streamlines" and vector_uv is not None
-    stream_state: dict[str, Any] = {"artists": []}
-    if streaming:
-        gx, gy = _stream_field(tri, vector_grid_n)
-        stream_lw = float(np.clip(_STREAM_LW[0] / max(gx.size, 1) ** 0.25,
-                                  _STREAM_LW[1], _STREAM_LW[2]))
+    # THE VECTOR FIELD over the magnitude ramp: direction (and, for
+    # streamlines, speed via the width taper) in one frame. Redrawn per frame
+    # because the flow field is what MOVES - the colour scale above is not,
+    # and nothing here touches it. ANIM_STYLE and STILL_STYLE can differ: a
+    # moving trace reads calmer as discrete arrows once it is frozen, so the
+    # still gets its OWN, further-decimated grid rather than reusing the
+    # trace's.
+    have_vectors = vector_uv is not None
+    anim_style = vectors if have_vectors and vectors in ("streamlines", "quiver") else None
+    still_style = (still_vectors if still_vectors in ("streamlines", "quiver")
+                   else anim_style) if have_vectors else None
+    anim_grid = _stream_field(tri, vector_grid_n) if anim_style else None
+    still_grid = (anim_grid if still_style == anim_style else
+                  _stream_field(tri, max(vector_grid_n // _QUIVER_GRID_DECIMATE, 12))
+                  if still_style else None)
+    vector_state: dict[str, Any] = {"artists": []}
 
-        def _draw_streamlines(index: int) -> None:
-            for artist in stream_state["artists"]:
-                try:
-                    artist.remove()
-                except (ValueError, NotImplementedError):
-                    pass
-            stream_state["artists"] = []
-            u = _interpolate(tri, vector_uv[0][index], gx, gy)
-            v = _interpolate(tri, vector_uv[1][index], gx, gy)
-            if not np.any(np.hypot(u, v) > 0):
-                return  # a frame with no flow has no streamline to trace
-            for colour, width, alpha, zorder in (
-                    (_STREAM_CASING, stream_lw * 2.6, 0.5, 3.5),
-                    (_STREAM_COLOR, stream_lw, 0.9, 3.6)):
-                traced = ax.streamplot(
-                    gx, gy, u, v, density=vector_density, color=colour,
-                    linewidth=width, arrowsize=0.7, zorder=zorder)
-                traced.lines.set_alpha(alpha)
-                stream_state["artists"].extend([traced.lines, traced.arrows])
+    def _draw_frame_vectors(style, grid, index: int) -> None:
+        for artist in vector_state["artists"]:
+            try:
+                artist.remove()
+            except (ValueError, NotImplementedError):
+                pass
+        gx, gy = grid
+        u = _interpolate(tri, vector_uv[0][index], gx, gy)
+        v = _interpolate(tri, vector_uv[1][index], gx, gy)
+        vector_state["artists"] = _draw_vectors(
+            style, ax, gx, gy, u, v, density=vector_density,
+            arrow_size=arrow_size, lw_bounds=vector_lw, scale=scale)
+
     stamp = ax.text(0.012, 0.045, "", transform=ax.transAxes, fontsize=9,
                     color="white", zorder=5,
                     bbox=dict(facecolor="black", alpha=0.45, pad=3, edgecolor="none"))
+    vector_note = ""
+    if anim_style:
+        gx, gy = anim_grid
+        vector_note += (f"  |  {anim_style}: density {vector_density:g}, "
+                        f"arrow {arrow_size:g} on a {gx.shape[1]}x{gx.shape[0]} "
+                        "interpolated grid")
+        if anim_style == "streamlines":
+            vector_note += f", width tapered {vector_lw[0]:g}-{vector_lw[1]:g}"
+    if still_style and still_style != anim_style:
+        sgx, sgy = still_grid
+        vector_note += (f"  |  still: {still_style} on a decimated "
+                        f"{sgx.shape[1]}x{sgy.shape[0]} grid")
     ax.text(0.012, 0.955,
             f"run {run_id}  |  {source_name}, {values.shape[0]} frames"
             f"{plane_note}  |  wireframe = the meshed domain"
-            + (f"  |  streamlines: density {vector_density:g} on a "
-               f"{gx.shape[1]}x{gx.shape[0]} interpolated grid" if streaming else "")
-            + "  |  ESRI World Imagery",
+            + vector_note + "  |  ESRI World Imagery",
             transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
             bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
 
@@ -473,8 +578,8 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
         with writer.saving(fig, str(gif_path), dpi=_DPI):
             for i, moment in enumerate(times):
                 coll.set_array(values[i])
-                if streaming:
-                    _draw_streamlines(i)
+                if anim_style:
+                    _draw_frame_vectors(anim_style, anim_grid, i)
                 stamp.set_text(
                     f"t = {float(moment):8.0f} s      "
                     + (f"max {frame_max[i]:.3g} {units}"
@@ -482,10 +587,11 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                 writer.grab_frame()
 
     # The PEAK frame as its own still, off the SAME figure - same colours, same
-    # extent, so the still and the animation cannot disagree.
+    # extent, so the still and the animation cannot disagree. Its OWN vector
+    # style/grid, which may differ from the moving GIF's.
     coll.set_array(values[peak_frame])
-    if streaming:
-        _draw_streamlines(peak_frame)
+    if still_style:
+        _draw_frame_vectors(still_style, still_grid, peak_frame)
     stamp.set_text(f"{still.upper()} FRAME  t = "
                    f"{float(times[peak_frame]):8.0f} s      "
                    + (f"max {frame_max[peak_frame]:.3g} {units}"
@@ -503,10 +609,15 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
             "vmax": (float(norm.vmax) if norm is not None else scale.vmax),
             "style_preset": scale.preset, "legend_note": scale.note,
             "transform": scale.transform, "colormap": scale.colormap,
-            "vectors": vectors if streaming else None,
-            "vector_density": vector_density if streaming else None,
-            "vector_grid": ([int(gx.shape[1]), int(gx.shape[0])]
-                            if streaming else None)}
+            "vectors": anim_style, "still_vectors": still_style,
+            "vector_density": vector_density if anim_style else None,
+            "arrow_size": arrow_size if (anim_style or still_style) else None,
+            "vector_lw": (list(vector_lw) if anim_style == "streamlines"
+                         else None),
+            "vector_grid": ([int(anim_grid[0].shape[1]), int(anim_grid[0].shape[0])]
+                            if anim_style else None),
+            "still_vector_grid": ([int(still_grid[0].shape[1]), int(still_grid[0].shape[0])]
+                                  if still_style else None)}
 
 
 def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
@@ -518,7 +629,9 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            initial_water_level: float | None = None,
            derived: tuple[str, ...] = (), transform: str | None = None,
            vectors: str | None = None, vector_density: float = 1.4,
-           vector_grid_n: int = 200) -> dict:
+           vector_grid_n: int = 200, arrow_size: float = 0.7,
+           vector_lw: tuple[float, float] = (0.35, 1.1),
+           still_vectors: str | None = None) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
@@ -603,10 +716,12 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
                            gif_path=gif_path, peak_path=peak_path, preset=preset,
                            still=still, plane_note=plane_note + dry_land_note,
                            transform=transform,
-                           vector_uv=(tuple(components[:2]) if vectors
+                           vector_uv=(tuple(components[:2])
+                                      if (vectors or still_vectors)
                                       and len(components) >= 2 else None),
                            vectors=vectors, vector_density=vector_density,
-                           vector_grid_n=vector_grid_n)
+                           vector_grid_n=vector_grid_n, arrow_size=arrow_size,
+                           vector_lw=vector_lw, still_vectors=still_vectors)
     # WHERE the frames actually landed. A LOCAL mesh rendered with no origin lands
     # at the UTM false origin, thousands of km from the water, and every other
     # number in this report stays perfectly healthy while it does - so the extent
@@ -640,7 +755,10 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                still: str = "peak", initial_water_level: float | None = None,
                name_infix: str = "", derived: tuple[str, ...] = (),
                transform: str | None = None, vectors: str | None = None,
-               vector_density: float = 1.4, vector_grid_n: int = 200) -> dict:
+               vector_density: float = 1.4, vector_grid_n: int = 200,
+               arrow_size: float = 0.7,
+               vector_lw: tuple[float, float] = (0.35, 1.1),
+               still_vectors: str | None = None) -> dict:
     """One run's SELAFIN -> its GIF + still, straight off the object store.
 
     The importable seam under ``main``: the packet assembler renders through this
@@ -677,7 +795,8 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                         initial_water_level=initial_water_level,
                         derived=derived, transform=transform, vectors=vectors,
                         vector_density=vector_density,
-                        vector_grid_n=vector_grid_n)
+                        vector_grid_n=vector_grid_n, arrow_size=arrow_size,
+                        vector_lw=vector_lw, still_vectors=still_vectors)
     finally:
         Path(local).unlink(missing_ok=True)
     return {**result, "run_id": run_id, "origin_bbox": origin,

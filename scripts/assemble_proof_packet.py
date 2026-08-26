@@ -354,9 +354,11 @@ def _declaration_row(animation: ProofAnimation, declared: int) -> dict:
             "mask_threshold": animation.mask_threshold,
             "dry_land_only": animation.dry_land_only,
             "derived": list(animation.derived), "transform": animation.transform,
-            "vectors": animation.vectors,
+            "vectors": animation.vectors, "still_vectors": animation.still_vectors,
             "vector_density": animation.vector_density,
             "vector_grid_n": animation.vector_grid_n,
+            "arrow_size": animation.arrow_size,
+            "vector_lw": list(animation.vector_lw),
             "still": animation.still, "plane": animation.plane,
             "suffix": suffixed(animation, declared),
             "reason": animation.reason,
@@ -375,7 +377,10 @@ def _field_label(animation: ProofAnimation) -> str:
         bits.append("over INITIALLY-DRY land only")
     if animation.vectors:
         bits.append(f"with {animation.vectors} (density "
-                    f"{animation.vector_density:g})")
+                    f"{animation.vector_density:g}, arrow "
+                    f"{animation.arrow_size:g})")
+        if animation.still_vectors and animation.still_vectors != animation.vectors:
+            bits.append(f"still as {animation.still_vectors}")
     if animation.transform and animation.transform != "linear":
         bits.append(f"on a {animation.transform.upper()} ramp")
     return " ".join(bits) + f" ({animation.units})"
@@ -455,6 +460,8 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
             derived=animation.derived, transform=animation.transform,
             vectors=animation.vectors, vector_density=animation.vector_density,
             vector_grid_n=animation.vector_grid_n,
+            arrow_size=animation.arrow_size, vector_lw=animation.vector_lw,
+            still_vectors=animation.still_vectors,
             name_infix=suffixed(animation, len(declared)),
             title=f"{stem} - {_field_label(animation)} - run {run_id}")
     return report
