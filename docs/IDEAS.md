@@ -1658,3 +1658,37 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   GAUGES AND SENSORS our substrate can fetch live; the US simply has the
   best observation infrastructure, so it dominates. Cases elsewhere are
   legal when the observations are fetchable through our fetchers.
+
+- ANIMATED FIELD IS DECLARED, NEVER DEFAULTED (NATE 2026-08-26, caught in the
+  first assembled packet). The packet assembler's mechanical re-render painted
+  coastal WATER DEPTH because the variable choice lived in hand-typed
+  `--var`/`--mask-var` flags and the script fell back to a default. Depth over a
+  tidal bay is bathymetry-dominated and barely moves; the ruled field is FREE
+  SURFACE masked to `WATER DEPTH > 0.02` (the coastal worker's own WET_TOL, the
+  same discriminant `peak_wl_max_m`/`flooded_land_km2` use - TELEMAC sets FREE
+  SURFACE = BOTTOM on dry nodes, so unmasked it is scaled by the highest hill).
+  MEASURED: the ruled field changes a median 430,025 px/step against depth's
+  77,183. FIX: `trid3nt_server/testing/proof_animations.PROOF_ANIMATIONS` -
+  per-template variable / mask_var / mask_threshold / still / plane / physics
+  reason / exempt_reason, homed beside the canary declarations and re-exported
+  from `canaries.py` so the two read as one declaration surface. A time-stepped
+  template with NO declaration refuses to render an animation; there is no
+  default variable anywhere.
+  QUEUED, two style-contract gaps the declaration had to work around: there is
+  no `water_level` / water-surface-elevation row and no `dissolved_oxygen` row,
+  so coastal and do_sag declare `quantity=None` and take the neutral ramp rather
+  than borrow `flood_depth`'s label for a field that is not that quantity. Two
+  `quantity_defaults` rows would close it.
+
+- DOUBLE DEM FETCH (NATE spot-check 2026-08-26, rain_on_grid packet):
+  design is sound (delineation DEM over the broad pre-catchment box vs
+  bed DEM over the catchment through the 3dep->copernicus ladder) BUT
+  this run exposed two defects, both fetch-migration-wave scope:
+  (1) 3DEP FELL BACK AT COWEETA (US lidar heartland - should hit);
+  the provenance names the winner but NOT the firing reason - the
+  fallback norm demands "3DEP FAILED: <error> -> copernicus" LOUD in the
+  label; diagnose the actual 3DEP failure. (2) SAME-SOURCE REUSE RULE:
+  when a ladder resolves to the same source+resolution as an
+  already-fetched raster covering the window, CLIP from the raster in
+  hand instead of refetching (the watershed front half-designed this;
+  the fallback path does not participate).
