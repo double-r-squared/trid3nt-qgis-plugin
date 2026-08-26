@@ -153,14 +153,16 @@ class TelemacReachDegenerateError(TelemacDyeScenarioError):
             "TELEMAC_REACH_DEGENERATE",
             "The reach geometry is degenerate: the channel is wider than the "
             f"reach is long{geom_txt}, so the mesh could not be built. Retry "
-            "with a longer reach_length_km, an explicit river_name (re-seeds "
-            "onto the named mainstem instead of a short tributary stub), or "
-            'bank_source="constant_ribbon" with a smaller channel_width_m.',
+            "with a longer reach_length_km, a location that NAMES the river "
+            "(the seed ladder re-seeds onto the named mainstem instead of a "
+            "short tributary stub), or bank_source=\"constant_ribbon\" with a "
+            "smaller channel_width_m.",
         )
         self.suggestions = [  # type: ignore[attr-defined]
             "Retry with a longer reach_length_km (mesh more of the river).",
-            "Name the river explicitly (river_name) to re-seed onto the "
-            "mainstem rather than a short tributary stub.",
+            "Give a location that NAMES the river (\"Eel River near Scotia, "
+            "California\") so the seed ladder lands on the named mainstem "
+            "rather than a short tributary stub.",
             'Retry with bank_source="constant_ribbon" and a smaller '
             "channel_width_m.",
         ]
