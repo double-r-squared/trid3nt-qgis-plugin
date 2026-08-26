@@ -82,8 +82,12 @@ def test_solver_registered():
         "model_flood_scenario"
     )
     assert SFINCS_QUADTREE_SOLVER_NAME in LOCAL_SOLVER_SPEC_REGISTRY
-    # The regular "sfincs" spec is NOT overridden (regular path untouched).
-    assert "sfincs" not in LOCAL_SOLVER_SPEC_REGISTRY
+    # The two SFINCS paths are DISTINCT registry entries. The regular one used to
+    # be absent because the dispatcher special-cased it by name; it registers
+    # itself now (ADR 0317), so what this asserts is that the quadtree spec did
+    # not take its slot.
+    assert LOCAL_SOLVER_SPEC_REGISTRY["sfincs"] is not (
+        LOCAL_SOLVER_SPEC_REGISTRY[SFINCS_QUADTREE_SOLVER_NAME])
 
 
 def test_build_argv_is_network_host_build_solve():

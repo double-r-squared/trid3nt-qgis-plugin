@@ -380,12 +380,16 @@ def test_local_submit_stages_deck_and_launches_mf6(
 # 3. Supervisor completion.json — EXACT MODFLOW entrypoint schema
 # --------------------------------------------------------------------------- #
 
-#: The EXACT key set workers/modflow/entrypoint.py writes.
+#: The EXACT key set the local supervisor writes for MODFLOW: what
+#: workers/modflow/entrypoint.py writes, PLUS the two AGENT-SIDE stamps a
+#: worker-written completion.json cannot carry.
 _MODFLOW_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
     "solver",  # V&V wave (ADR 0021): engine-identity field for read_run_diagnostics
+    "code_sha",  # ADR 0317: WHICH CODE dispatched this run
+    "code_dirty",
     "converged",
     "model_crs",
     "mf6_stdout_uri",
