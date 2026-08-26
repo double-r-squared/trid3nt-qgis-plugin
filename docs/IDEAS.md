@@ -1382,3 +1382,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   returns through the BYO door as the approved domain. No custom editor
   built (leverage-libraries); joins the mesh wave charter, blocked-by
   the SELAFIN local-coords fix where applicable.
+
+- .SUPPLIED() RENAME + THE SLATE PRINCIPLE (NATE 2026-08-25): .byo() ->
+  .supplied() everywhere (matches the user_supplied ladder rung +
+  "supplied on this invocation" provenance - one word, three surfaces;
+  no alias, demolition in the same commit). ARCHITECTURE CLARIFIED:
+  mesh AUTHORING is its own pipeline - enforcement ops (obstacle,
+  barrier, refine, boundary tagging) are AUTHORING TOOLS in the mesh
+  front, composable standalone (fetch/draw polyline -> generate base
+  mesh -> conformal cut -> tag boundaries -> optional QGIS hand-edit)
+  producing a MESH ARTIFACT; the sim workflow is a SLATE consuming it
+  via .supplied() with zero baked opinions, its generated default a
+  labeled fallback not a stance. Two routes, one mechanism set. The
+  artemis BYO rematch is route 1 end to end - it proves the slate
+  principle, not just the meshing.
