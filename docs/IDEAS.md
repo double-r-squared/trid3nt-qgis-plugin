@@ -1347,3 +1347,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   rerun-with-overrides primitive). Mesh wave waits behind calibration;
   NOTE: calibration may surface open-boundary needs early - surface to
   NATE if so, do not scope-expand silently.
+
+- MESH WAVE ACCEPTANCE CASE RULED (NATE 2026-08-25): the ARTEMIS BYO
+  REMATCH - when the mesh features land, rerun the Marquette harbor
+  agitation with a BYO OceanMesh-generated mesh (adaptive sizing: fine
+  at the breakwater/shore, coarse offshore) fed through the BYO door,
+  the breakwater as an ENFORCEMENT obstacle (punched hole in OUR mesh),
+  open boundaries declared at the harbor mouth, zoom-crop proof of the
+  slit in the finer triangulation. Direct comparison vs the worker's
+  uniform-grid run (same harbor, same forcing, same question): does
+  adaptive fidelity sharpen Kd fringes + the sheltering answer. One run
+  exercises every mesh-charter pillar end to end.
