@@ -472,19 +472,29 @@ def resolve_bed_dem(*, resolution_m: int = DEFAULT_BED_RESOLUTION_M,
                      f"ladder {rungs}"),
         }
     except Exception as exc:  # noqa: BLE001 - a LOUD cross-dataset fallback
+        # WHY the rung fired is the fact a reader needs and the one that used to
+        # be thrown away: the note said only that 3DEP "was unavailable", so a
+        # transient timeout and a genuine coverage hole read identically, and the
+        # only record of the difference was a log line nobody keeps.
+        reason = f"{type(exc).__name__}: {exc}"
+        code = getattr(exc, "error_code", None)
+        if code:
+            reason = f"{code} ({reason})"
         logger.warning(
             "mesh bed: USGS 3DEP bare-earth unavailable for bbox=%s (%s); falling "
-            "back to Copernicus GLO-30, a DSM that INCLUDES forest canopy", bbox, exc)
+            "back to Copernicus GLO-30, a DSM that INCLUDES forest canopy",
+            bbox, reason)
         layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox, purpose="mesh bed")
         return {
             "uri": layer.uri if hasattr(layer, "uri") else layer["uri"],
             "source": "copernicus_glo30",
             "resolution_m": 30,
             "cross_dataset": True,
-            "note": ("mesh bed DEM CROSS-DATASET FALLBACK: USGS 3DEP bare-earth was "
-                     "unavailable for this AOI, so Copernicus GLO-30 was used "
-                     "instead. That is a SURFACE model (canopy-inclusive), so bed "
-                     f"elevations under forest may be biased high. Ladder {rungs}."),
+            "fallback_reason": reason,
+            "note": (f"mesh bed DEM CROSS-DATASET FALLBACK. 3DEP FAILED: {reason} "
+                     "-> Copernicus GLO-30. That is a SURFACE model "
+                     "(canopy-inclusive), so bed elevations under forest may be "
+                     f"biased high. Ladder {rungs}."),
         }
 
 

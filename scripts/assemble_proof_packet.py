@@ -536,6 +536,21 @@ def _item(order: int, kind: str, caption: str, *, path: Path | None = None,
     return row
 
 
+def _code_staleness(completion: dict, tool: str) -> dict | None:
+    """The run's code stamp, read against THIS tree. ``None`` = nothing to say.
+
+    The engine is resolved from the completion's own ``solver`` when it has one,
+    falling back to the tool name, which carries the engine as its prefix for
+    every template in the fleet.
+    """
+    sys.path.insert(0, str(REPO))
+    from trid3nt_server.workflows.solver.code_provenance import staleness
+
+    engine = str(completion.get("solver") or tool or "")
+    return staleness(code_sha=completion.get("code_sha"), engine=engine,
+                     code_dirty=completion.get("code_dirty"))
+
+
 def assemble(template: str, variant: str, *, run_id: str | None = None,
              check: bool = False, bucket: str | None = None) -> dict:
     """Assemble and VERIFY one template+variant proof packet. Writes packet.json."""
@@ -800,10 +815,16 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         f"this whole packet was assembled from, run {run_id}",
         path=evidence_path, missing=missing, **stamp))
 
+    # STALE-vs-CODE: the run's own stamp against the tree reading it. A packet
+    # re-read weeks later must SAY that the engine moved rather than let a reader
+    # assume today's code produced these numbers.
+    staleness_warning = _code_staleness(completion, tool)
+
     packet = {
         "what": "the delivery checklist for one template+variant, assembled and "
                 "verified mechanically; send exactly what `deliverables` lists, "
                 "in order",
+        "code_staleness": staleness_warning,
         "template": template, "variant": variant, "tool": tool, "run_id": run_id,
         "stem": stem, "directory": str(directory), "panel_base": base,
         "mode": "check" if check else "render",

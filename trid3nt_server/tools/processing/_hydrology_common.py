@@ -172,6 +172,13 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
         )
     return uri
 
+#: What the delineation DEM IS FOR, carried onto the emitted layer. D8 routing
+#: needs a natively GEOGRAPHIC grid, so this raster is Copernicus GLO-30 by
+#: METHOD rather than by preference - and a run that also fetches a 3DEP bed puts
+#: two DEMs on the canvas. Without this the user sees two and is told nothing.
+_DEM_PURPOSE = "D8 flow routing (geographic grid); not the model bed"
+
+
 def _stage_dem(
     bbox: tuple[float, float, float, float],
     dem_uri: str | None,
@@ -186,7 +193,8 @@ def _stage_dem(
     try:
         from trid3nt_server.tools import TOOL_REGISTRY
 
-        layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox)
+        layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox,
+                                                         purpose=_DEM_PURPOSE)
     except HydrologyPrimitivesError:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -194,7 +202,8 @@ def _stage_dem(
             f"fetch_copernicus_dem failed for bbox={bbox}: {exc}"
         ) from exc
     local = _stage_uri_local(layer.uri, tmpdir, "dem")
-    notes.append("DEM: Copernicus GLO-30 (30 m) via fetch_copernicus_dem.")
+    notes.append("DEM: Copernicus GLO-30 (30 m) via fetch_copernicus_dem, for "
+                 f"{_DEM_PURPOSE}.")
     return local
 
 def _condition_dem(dem_path: str) -> tuple[Any, Any, Any]:

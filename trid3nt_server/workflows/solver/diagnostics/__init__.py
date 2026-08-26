@@ -144,6 +144,28 @@ def _normalize_engine(raw: Any) -> str | None:
     return None
 
 
+def _code_staleness_warnings(completion: dict[str, Any]) -> list[str]:
+    """The run-vs-code warning as a ``warnings[]`` line, or no lines at all.
+
+    A diagnostics envelope is read to decide whether to TRUST a run; "the engine
+    changed after this ran" belongs in exactly that list. Never raises: a
+    provenance answer must not be able to fail a health read.
+    """
+    try:
+        from trid3nt_server.workflows.solver.code_provenance import staleness
+
+        warning = staleness(
+            code_sha=completion.get("code_sha"),
+            engine=str(completion.get("solver") or ""),
+            code_dirty=completion.get("code_dirty"),
+        )
+    except Exception:  # noqa: BLE001 -- provenance never fails a health read
+        logger.warning("read_run_diagnostics: code-staleness check failed",
+                       exc_info=True)
+        return []
+    return [warning["message"]] if warning else []
+
+
 def _recover_engine(completion: dict[str, Any]) -> str:
     """Engine identity: the ``solver`` field (fix), else the stdout-field stem."""
     raw = completion.get("solver")
@@ -297,7 +319,7 @@ def read_run_diagnostics(
         "instability": diag.instability,
         "nonconverged_pct": diag.nonconverged_pct,
         "dry_cells": diag.dry_cells,
-        "warnings": list(diag.warnings),
+        "warnings": list(diag.warnings) + _code_staleness_warnings(completion),
         "engine_specific": dict(diag.engine_specific),
         "sources": {
             "completion_json": completion_source,
