@@ -3,17 +3,17 @@
   "template": "coastal_tidal_surge",
   "variant": "coarse",
   "tool": "coastal_tidal_surge",
-  "run_id": "01M0YBNZP4C0P60BRFTYK9ZD2J",
+  "run_id": "01M0YJ57Y53S6NS70THCDX933E",
   "stem": "coastal_tidal_surge",
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse",
   "panel_base": "coastal_tidal_surge_canary",
   "mode": "check",
-  "assembled_at": "2026-08-26T00:49:13",
+  "assembled_at": "2026-08-26T01:27:34",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
     "frames": 41,
     "slf": "res_coastal.slf",
-    "source": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/res_coastal.slf",
+    "source": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/res_coastal.slf",
     "method": "SELAFIN header + file length",
     "npoin": 2397,
     "nelem": 4600,
@@ -31,6 +31,19 @@
     "frame_bytes": 57588,
     "recorded_ntimestep": 41
   },
+  "animation_declaration": {
+    "declared": true,
+    "variable": "FREE SURFACE",
+    "units": "m",
+    "quantity": null,
+    "mask_var": "WATER DEPTH",
+    "mask_threshold": 0.02,
+    "still": "peak",
+    "plane": "surface",
+    "reason": "depth is bathymetry-dominated; the surge lives in the free surface. Masked to wet nodes because TELEMAC sets FREE SURFACE = BOTTOM on dry land, so an unmasked field is scaled by the highest hill in the domain and the tide reads as a flat wash.",
+    "exempt_reason": null,
+    "declared_in": "trid3nt_server/testing/proof_animations.py"
+  },
   "published_layers": [
     "Input: coastal tide/surge boundary (noaa_coops_tides)",
     "Total water depth at peak (coast)",
@@ -41,131 +54,133 @@
   "verdict": "REFUSED",
   "missing": [
     "panels: 2 panel GENERATIONS live in this directory (newest base 'coastal_tidal_surge_canary'; also ['coastal_tidal_surge']). A reader handed this folder cannot tell which set belongs to the run - delete the superseded generation or move it to an addendum.",
-    "panel: coastal_tidal_surge_canary_panel_01_input-coastal-tide-surge-boundary-noaa-coops-tides.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "panel: coastal_tidal_surge_canary_panel_02_total-water-depth-at-peak-coast.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "panel: coastal_tidal_surge_canary_panel_03_model-results-time-series-coast.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "panel: coastal_tidal_surge_canary_panel_04_input-coastal-bed-bathymetry-coast-noaa-dem-all-topobathy-in-worker.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "panel: coastal_tidal_surge_canary_panel_05_peak-inundation-depth-over-initially-dry-land-coast.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "canvas_view: coastal_tidal_surge_canary_panel_06_canvas-view.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "contact_sheet: coastal_tidal_surge_canary_canvas_layers.png carries run-id stamp None, not '01M0YBNZP4C0P60BRFTYK9ZD2J' - the caption cannot be tied to this run",
-    "chart: coastal_tidal_surge_chart_coastal_stage_vs_inundation.png is STALE - written 2026-08-25T03:10:03, the evidence JSON it claims to show was written 2026-08-25T23:22:05; it is a previous run's artifact sitting in this run's packet",
-    "animation: coastal_tidal_surge_animation.gif is STALE - written 2026-08-25T01:34:05, the evidence JSON it claims to show was written 2026-08-25T23:22:05; it is a previous run's artifact sitting in this run's packet",
-    "still: coastal_tidal_surge_peak_frame.png is STALE - written 2026-08-25T01:34:06, the evidence JSON it claims to show was written 2026-08-25T23:22:05; it is a previous run's artifact sitting in this run's packet"
+    "panel: coastal_tidal_surge_canary_panel_01_input-coastal-tide-surge-boundary-noaa-coops-tides.png is STALE - written 2026-08-25T23:44:55, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "panel: coastal_tidal_surge_canary_panel_02_total-water-depth-at-peak-coast.png is STALE - written 2026-08-25T23:44:56, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "panel: coastal_tidal_surge_canary_panel_03_model-results-time-series-coast.png is STALE - written 2026-08-25T23:44:58, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "panel: coastal_tidal_surge_canary_panel_04_input-coastal-bed-bathymetry-coast-noaa-dem-all-topobathy-in-worker.png is STALE - written 2026-08-25T23:44:59, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "panel: coastal_tidal_surge_canary_panel_05_peak-inundation-depth-over-initially-dry-land-coast.png is STALE - written 2026-08-25T23:45:00, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "canvas_view: coastal_tidal_surge_canary_panel_06_canvas-view.png is STALE - written 2026-08-25T23:45:02, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "contact_sheet: coastal_tidal_surge_canary_canvas_layers.png is STALE - written 2026-08-25T23:44:54, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "chart: coastal_tidal_surge_chart_coastal_stage_vs_inundation.png is STALE - written 2026-08-25T03:10:03, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "animation: coastal_tidal_surge_animation.gif is STALE - written 2026-08-25T01:34:05, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet",
+    "still: coastal_tidal_surge_peak_frame.png is STALE - written 2026-08-25T01:34:06, the evidence JSON it claims to show was written 2026-08-26T01:15:27; it is a previous run's artifact sitting in this run's packet"
   ],
   "deliverables": [
     {
       "order": 1,
       "kind": "panel",
-      "caption": "1. Input: coastal tide/surge boundary (noaa_coops_tides) - context/vector, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "1. Input: coastal tide/surge boundary (noaa_coops_tides) - context/vector, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_panel_01_input-coastal-tide-surge-boundary-noaa-coops-tides.png",
       "layer": "Input: coastal tide/surge boundary (noaa_coops_tides)",
       "bytes": 2553063,
       "mtime": "2026-08-25T23:44:55",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 2,
       "kind": "panel",
-      "caption": "2. Total water depth at peak (coast) - context/raster, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "2. Total water depth at peak (coast) - context/raster, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_panel_02_total-water-depth-at-peak-coast.png",
       "layer": "Total water depth at peak (coast)",
       "bytes": 2043714,
       "mtime": "2026-08-25T23:44:56",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 3,
       "kind": "panel",
-      "caption": "3. Model results (time series): coast - context/mesh, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "3. Model results (time series): coast - context/mesh, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_panel_03_model-results-time-series-coast.png",
       "layer": "Model results (time series): coast",
       "bytes": 3153545,
       "mtime": "2026-08-25T23:44:58",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 4,
       "kind": "panel",
-      "caption": "4. Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker) - context/raster, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "4. Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker) - context/raster, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_panel_04_input-coastal-bed-bathymetry-coast-noaa-dem-all-topobathy-in-worker.png",
       "layer": "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
       "bytes": 2472935,
       "mtime": "2026-08-25T23:44:59",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 5,
       "kind": "panel",
-      "caption": "5. Peak inundation depth over initially-dry land (coast) - primary/raster, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "5. Peak inundation depth over initially-dry land (coast) - primary/raster, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_panel_05_peak-inundation-depth-over-initially-dry-land-coast.png",
       "layer": "Peak inundation depth over initially-dry land (coast)",
       "bytes": 2319545,
       "mtime": "2026-08-25T23:45:00",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 6,
       "kind": "canvas_view",
-      "caption": "6. CANVAS VIEW - all 5 layers stacked in emission order, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "6. CANVAS VIEW - all 5 layers stacked in emission order, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_panel_06_canvas-view.png",
       "bytes": 3089219,
       "mtime": "2026-08-25T23:45:02",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 7,
       "kind": "contact_sheet",
-      "caption": "Contact sheet - every emitted layer, 6 panels in emission order, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "Contact sheet - every emitted layer, 6 panels in emission order, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_canvas_layers.png",
       "bytes": 5688969,
       "mtime": "2026-08-25T23:44:54",
-      "run_id_stamp": null,
-      "verdict": "UNSTAMPED"
+      "verdict": "STALE",
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 8,
       "kind": "chart",
-      "caption": "Chart coastal_stage_vs_inundation - the run's persisted spec through the plugin chart dock's own renderer, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "Chart coastal_stage_vs_inundation - the run's persisted spec through the plugin chart dock's own renderer, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_chart_coastal_stage_vs_inundation.png",
       "chart": "coastal_stage_vs_inundation",
       "bytes": 42811,
       "mtime": "2026-08-25T03:10:03",
       "verdict": "STALE",
-      "evidence_mtime": "2026-08-25T23:22:05"
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 9,
       "kind": "animation",
-      "caption": "Animation - 41 frames on one run-scoped colour scale with a static legend, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "Animation - FREE SURFACE masked to WATER DEPTH > 0.02 (m), 41 frames on one run-scoped colour scale with a static legend, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_animation.gif",
+      "declared_field": "FREE SURFACE masked to WATER DEPTH > 0.02 (m)",
+      "declared_reason": "depth is bathymetry-dominated; the surge lives in the free surface. Masked to wet nodes because TELEMAC sets FREE SURFACE = BOTTOM on dry land, so an unmasked field is scaled by the highest hill in the domain and the tide reads as a flat wash.",
       "bytes": 23746806,
       "mtime": "2026-08-25T01:34:05",
       "verdict": "STALE",
-      "evidence_mtime": "2026-08-25T23:22:05"
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 10,
       "kind": "still",
-      "caption": "PEAK frame - the animation's own figure at its peak step, same colours and extent, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "PEAK frame - FREE SURFACE masked to WATER DEPTH > 0.02 (m), the animation's own figure at its peak step, same colours and extent, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_peak_frame.png",
       "bytes": 1554810,
       "mtime": "2026-08-25T01:34:06",
       "verdict": "STALE",
-      "evidence_mtime": "2026-08-25T23:22:05"
+      "evidence_mtime": "2026-08-26T01:15:27"
     },
     {
       "order": 11,
       "kind": "evidence",
-      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0YJ57Y53S6NS70THCDX933E",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/coarse/coastal_tidal_surge_canary_evidence.json",
       "bytes": 36547,
-      "mtime": "2026-08-25T23:22:05",
+      "mtime": "2026-08-26T01:15:27",
       "verdict": "present"
     }
   ]

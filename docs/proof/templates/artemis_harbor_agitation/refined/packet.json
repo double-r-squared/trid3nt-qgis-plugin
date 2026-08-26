@@ -8,7 +8,7 @@
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined",
   "panel_base": "artemis_harbor_agitation_refined",
   "mode": "render",
-  "assembled_at": "2026-08-26T00:49:06",
+  "assembled_at": "2026-08-26T01:27:33",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
     "frames": 1,
@@ -29,6 +29,17 @@
     "frame_bytes": 97180,
     "recorded_ntimestep": null
   },
+  "animation_declaration": {
+    "variable": "WAVE HEIGHT",
+    "units": "m",
+    "quantity": null,
+    "mask_var": null,
+    "mask_threshold": 0.0,
+    "still": "peak",
+    "plane": "surface",
+    "reason": "the steady wave height field, rendered as the run's one still.",
+    "declared_in": "trid3nt_server/testing/proof_animations.py"
+  },
   "published_layers": [
     "Surveyed breakwater (aoi)",
     "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
@@ -44,7 +55,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_01_surveyed-breakwater-aoi.png",
       "layer": "Surveyed breakwater (aoi)",
       "bytes": 1666136,
-      "mtime": "2026-08-26T00:49:03",
+      "mtime": "2026-08-26T01:27:30",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -55,7 +66,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_02_input-lake-bed-bathymetry-aoi-noaa-great-lakes-lake-datum-in-worker.png",
       "layer": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
       "bytes": 1674510,
-      "mtime": "2026-08-26T00:49:04",
+      "mtime": "2026-08-26T01:27:31",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -66,7 +77,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_03_wave-agitation-kd-aoi.png",
       "layer": "Wave agitation Kd (aoi)",
       "bytes": 1459258,
-      "mtime": "2026-08-26T00:49:04",
+      "mtime": "2026-08-26T01:27:31",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -76,7 +87,7 @@
       "caption": "4. CANVAS VIEW - all 3 layers stacked in emission order, run 01M0W257083QD36RSRVBEKEBMP",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_panel_04_canvas-view.png",
       "bytes": 1779935,
-      "mtime": "2026-08-26T00:49:05",
+      "mtime": "2026-08-26T01:27:32",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -86,7 +97,7 @@
       "caption": "Contact sheet - every emitted layer, 4 panels in emission order, run 01M0W257083QD36RSRVBEKEBMP",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined.png",
       "bytes": 2987873,
-      "mtime": "2026-08-26T00:49:05",
+      "mtime": "2026-08-26T01:27:32",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -97,7 +108,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_chart_harbor_agitation.png",
       "chart": "harbor_agitation",
       "bytes": 79322,
-      "mtime": "2026-08-26T00:49:05",
+      "mtime": "2026-08-26T01:27:32",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -106,16 +117,16 @@
       "kind": "animation",
       "path": null,
       "verdict": "exempt",
-      "reason": "ARTEMIS solves a steady boundary-value problem for a single monochromatic sea state (elliptic mild-slope, Berkhoff); the deck has no simulation clock, so the run produces ONE field and there is no time evolution to animate. The peak frame IS the whole answer.",
-      "caption": "Animation - EXEMPT. ARTEMIS solves a steady boundary-value problem for a single monochromatic sea state (elliptic mild-slope, Berkhoff); the deck has no simulation clock, so the run produces ONE field and there is no time evolution to animate. The peak frame IS the whole answer."
+      "reason": "ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it solves a boundary-value problem for a single monochromatic sea state and returns ONE field, the steady agitation coefficient Kd. The deck has no simulation clock at all, which is why the run records no ntimestep - there is no time evolution to animate, and the single field IS the whole answer.",
+      "caption": "Animation - EXEMPT. ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it solves a boundary-value problem for a single monochromatic sea state and returns ONE field, the steady agitation coefficient Kd. The deck has no simulation clock at all, which is why the run records no ntimestep - there is no time evolution to animate, and the single field IS the whole answer."
     },
     {
       "order": 8,
       "kind": "still",
-      "caption": "PEAK frame - the steady field, which IS the whole answer rather than one sample of it, run 01M0W257083QD36RSRVBEKEBMP",
+      "caption": "PEAK frame - WAVE HEIGHT (m), which IS the whole answer rather than one sample of it, run 01M0W257083QD36RSRVBEKEBMP",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_harbor_agitation/refined/artemis_harbor_agitation_refined_peak_frame.png",
-      "bytes": 1946407,
-      "mtime": "2026-08-26T00:49:06",
+      "bytes": 1946406,
+      "mtime": "2026-08-26T01:27:33",
       "run_id_stamp": "01M0W257083QD36RSRVBEKEBMP",
       "verdict": "present"
     },
@@ -181,6 +192,17 @@
       }
     ],
     "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animation_declaration": {
+      "variable": "WAVE HEIGHT",
+      "units": "m",
+      "quantity": null,
+      "mask_var": null,
+      "mask_threshold": 0.0,
+      "still": "peak",
+      "plane": "surface",
+      "reason": "the steady wave height field, rendered as the run's one still.",
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    },
     "animation": {
       "frames": 1,
       "animated": false,

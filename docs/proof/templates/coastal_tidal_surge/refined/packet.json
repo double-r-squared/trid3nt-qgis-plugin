@@ -8,7 +8,7 @@
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined",
   "panel_base": "coastal_tidal_surge_refined",
   "mode": "render",
-  "assembled_at": "2026-08-26T00:48:45",
+  "assembled_at": "2026-08-26T01:29:05",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
     "frames": 41,
@@ -31,6 +31,17 @@
     "frame_bytes": 1368564,
     "recorded_ntimestep": 41
   },
+  "animation_declaration": {
+    "variable": "FREE SURFACE",
+    "units": "m",
+    "quantity": null,
+    "mask_var": "WATER DEPTH",
+    "mask_threshold": 0.02,
+    "still": "peak",
+    "plane": "surface",
+    "reason": "depth is bathymetry-dominated; the surge lives in the free surface. Masked to wet nodes because TELEMAC sets FREE SURFACE = BOTTOM on dry land, so an unmasked field is scaled by the highest hill in the domain and the tide reads as a flat wash.",
+    "declared_in": "trid3nt_server/testing/proof_animations.py"
+  },
   "published_layers": [
     "Input: coastal tide/surge boundary (noaa_coops_tides)",
     "Model results (time series): coast",
@@ -47,7 +58,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_01_input-coastal-tide-surge-boundary-noaa-coops-tides.png",
       "layer": "Input: coastal tide/surge boundary (noaa_coops_tides)",
       "bytes": 2559052,
-      "mtime": "2026-08-26T00:48:40",
+      "mtime": "2026-08-26T01:29:00",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -58,7 +69,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_02_model-results-time-series-coast.png",
       "layer": "Model results (time series): coast",
       "bytes": 2572472,
-      "mtime": "2026-08-26T00:48:40",
+      "mtime": "2026-08-26T01:29:01",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -69,7 +80,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_03_input-coastal-bed-bathymetry-coast-noaa-dem-all-topobathy-in-worker.png",
       "layer": "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
       "bytes": 2373995,
-      "mtime": "2026-08-26T00:48:41",
+      "mtime": "2026-08-26T01:29:01",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -80,7 +91,7 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_04_peak-inundation-depth-coast.png",
       "layer": "Peak inundation depth (coast)",
       "bytes": 1810771,
-      "mtime": "2026-08-26T00:48:42",
+      "mtime": "2026-08-26T01:29:02",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -90,7 +101,7 @@
       "caption": "5. CANVAS VIEW - all 4 layers stacked in emission order, run 01M0W1KVES5HTRWZHD3JY4V7B3",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_panel_05_canvas-view.png",
       "bytes": 2293890,
-      "mtime": "2026-08-26T00:48:42",
+      "mtime": "2026-08-26T01:29:03",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -100,7 +111,7 @@
       "caption": "Contact sheet - every emitted layer, 5 panels in emission order, run 01M0W1KVES5HTRWZHD3JY4V7B3",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined.png",
       "bytes": 4298975,
-      "mtime": "2026-08-26T00:48:43",
+      "mtime": "2026-08-26T01:29:03",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -111,17 +122,19 @@
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_chart_coastal_stage_vs_inundation.png",
       "chart": "coastal_stage_vs_inundation",
       "bytes": 33630,
-      "mtime": "2026-08-26T00:48:43",
+      "mtime": "2026-08-26T01:29:04",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
     {
       "order": 8,
       "kind": "animation",
-      "caption": "Animation - 41 frames on one run-scoped colour scale with a static legend, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "caption": "Animation - FREE SURFACE masked to WATER DEPTH > 0.02 (m), 41 frames on one run-scoped colour scale with a static legend, run 01M0W1KVES5HTRWZHD3JY4V7B3",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_animation.gif",
-      "bytes": 5633780,
-      "mtime": "2026-08-26T00:48:38",
+      "declared_field": "FREE SURFACE masked to WATER DEPTH > 0.02 (m)",
+      "declared_reason": "depth is bathymetry-dominated; the surge lives in the free surface. Masked to wet nodes because TELEMAC sets FREE SURFACE = BOTTOM on dry land, so an unmasked field is scaled by the highest hill in the domain and the tide reads as a flat wash.",
+      "bytes": 13234404,
+      "mtime": "2026-08-26T01:28:59",
       "verdict": "present",
       "gif_checks": {
         "frames": 41,
@@ -131,7 +144,7 @@
         ],
         "distinct_frames": 41,
         "legend_x_frac": 0.875,
-        "legend_ramp_colours": 84,
+        "legend_ramp_colours": 77,
         "legend_covers_a_ramp": true,
         "legend_drift_frames": [],
         "field_moves": true
@@ -140,10 +153,10 @@
     {
       "order": 9,
       "kind": "still",
-      "caption": "PEAK frame - the animation's own figure at its peak step, same colours and extent, run 01M0W1KVES5HTRWZHD3JY4V7B3",
+      "caption": "PEAK frame - FREE SURFACE masked to WATER DEPTH > 0.02 (m), the animation's own figure at its peak step, same colours and extent, run 01M0W1KVES5HTRWZHD3JY4V7B3",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_peak_frame.png",
-      "bytes": 1994675,
-      "mtime": "2026-08-26T00:48:45",
+      "bytes": 2078434,
+      "mtime": "2026-08-26T01:29:05",
       "run_id_stamp": "01M0W1KVES5HTRWZHD3JY4V7B3",
       "verdict": "present"
     },
@@ -216,19 +229,30 @@
       }
     ],
     "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animation_declaration": {
+      "variable": "FREE SURFACE",
+      "units": "m",
+      "quantity": null,
+      "mask_var": "WATER DEPTH",
+      "mask_threshold": 0.02,
+      "still": "peak",
+      "plane": "surface",
+      "reason": "depth is bathymetry-dominated; the surge lives in the free surface. Masked to wet nodes because TELEMAC sets FREE SURFACE = BOTTOM on dry land, so an unmasked field is scaled by the highest hill in the domain and the tide reads as a flat wash.",
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    },
     "animation": {
       "frames": 41,
       "animated": true,
-      "variable": "WATER DEPTH     M",
+      "variable": "FREE SURFACE    M",
       "plane": "2d",
       "peak_frame": 40,
       "peak_time_s": 21600.0,
-      "peak_value": 7.795907020568848,
-      "vmin": 0.0,
-      "vmax": 3.7250596046447733,
-      "style_preset": "continuous_flood_depth",
-      "legend_note": "scaled to this run (p2-p98): 0 to 3.72506 m",
-      "colormap": "YlGnBu",
+      "peak_value": 2.5902557373046875,
+      "vmin": 0.735057783126831,
+      "vmax": 0.9463955402374268,
+      "style_preset": "neutral_ramp",
+      "legend_note": "scaled to this run (p2-p98): 0.735058 to 0.946396",
+      "colormap": "viridis",
       "bbox_ll": [
         -85.02,
         29.688188406522848,
@@ -248,8 +272,8 @@
       ],
       "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_animation.gif",
       "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/coastal_tidal_surge/refined/coastal_tidal_surge_refined_peak_frame.png",
-      "animation_bytes": 5633780,
-      "peak_bytes": 1994419
+      "animation_bytes": 13234404,
+      "peak_bytes": 2078131
     }
   }
 }
