@@ -295,8 +295,12 @@ class Workflow(EngineOps):
         metrics = self.answer(result)
         run_id = self._run_id(result, run)
         await self._persist(run_id, run.charts, metrics)
+        # The journal takes the MERGED notes, not the interpreter's alone: a
+        # resolution-sensitivity label that lived only on the layer would be gone
+        # the moment the layer was, and the journal is the record that outlives
+        # the artifacts.
         await asyncio.to_thread(self._journal, run_id, run, result, metrics,
-                                wall_seconds)
+                                wall_seconds, notes)
         logger.info("%s complete layer_id=%s answer=%s executed=%s replayed=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
                     {k: v for k, v in metrics.items() if not isinstance(v, list)},
@@ -335,7 +339,8 @@ class Workflow(EngineOps):
         return (run.results.get(self.solve_step) or {}).get("run_id")
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
-                 metrics: Mapping[str, Any], wall_seconds: float) -> None:
+                 metrics: Mapping[str, Any], wall_seconds: float,
+                 notes: Sequence[str] = ()) -> None:
         """Append this run to the run journal - one seam, every engine.
 
         The publish stage is where a run has everything the record needs at once:
@@ -352,7 +357,7 @@ class Workflow(EngineOps):
             provenance=getattr(result, "synthetic_inputs", None) or [],
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
-            executed=run.executed, replayed=run.replayed, notes=run.notes,
+            executed=run.executed, replayed=run.replayed, notes=list(notes),
         ))
 
     @staticmethod

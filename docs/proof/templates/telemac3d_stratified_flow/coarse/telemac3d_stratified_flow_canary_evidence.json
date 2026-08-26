@@ -21,8 +21,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0Y610WHC1GVEC6AFJJJ3XM7",
-  "case_id": "01M0Y6114KYWG6EVYDCRCS3ZAF",
+  "session_id": "01M0YBVHT2H6MFB78JP1FSF0WS",
+  "case_id": "01M0YBVJ456A21ARJG4PEAS9MZ",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -34,7 +34,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0Y62MRS4BJ6WHF5KZFD88ZH",
+      "chart_id": "01M0YBX6MA8VKXCN8W08FQDQ45",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -196,15 +196,15 @@
       "title": "Surface temperature (aoi)",
       "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0Y611QHWCRBEK9EAPZYAMK5"
+      "created_turn_id": "01M0YBVJTXBJ6HC4C54F43YS4K"
     }
   ],
   "layers": [
     {
-      "layer_id": "telemac3d-bottom-01M0Y611S9AYKBXKY3J7RB3DFF",
+      "layer_id": "telemac3d-bottom-01M0YBVJWWYPAKE44TYH46MTC1",
       "name": "Bottom temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/telemac3d_bottom.tif",
+      "uri": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/telemac3d_bottom.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "input",
@@ -225,10 +225,10 @@
       }
     },
     {
-      "layer_id": "01M0Y62N0AAQDVY1RKDCGBJQXC",
+      "layer_id": "01M0YBX6ZJ5YKFPQ16DNWW0ZJJ",
       "name": "Surface temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/telemac3d_surface.tif",
+      "uri": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/telemac3d_surface.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "primary",
@@ -357,20 +357,6 @@
         "note": "supplied on this invocation"
       },
       {
-        "name": "sim_duration_hours",
-        "value": 1.0,
-        "units": "h",
-        "door": "scenario",
-        "basis": "user",
-        "source_badge": "you supplied this",
-        "bounds": [
-          1.0,
-          24.0
-        ],
-        "advanced": false,
-        "note": "supplied on this invocation"
-      },
-      {
         "name": "thermocline_depth_m",
         "value": 8.0,
         "units": "m",
@@ -436,16 +422,30 @@
         "bounds": null,
         "advanced": true,
         "note": "supplied on this invocation"
+      },
+      {
+        "name": "sim_duration_hours",
+        "value": 1.0,
+        "units": "h",
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          24.0
+        ],
+        "advanced": true,
+        "note": "supplied on this invocation"
       }
     ],
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0Y611S9AYKBXKY3J7RB3DFF",
+  "run_id": "01M0YBVJWWYPAKE44TYH46MTC1",
   "chart_spec": {
     "vertical_profile": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0Y62MRS4BJ6WHF5KZFD88ZH",
+      "chart_id": "01M0YBX6MA8VKXCN8W08FQDQ45",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -664,7 +664,7 @@
       23.39,
       23.808
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/telemac3d_surface.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/telemac3d_surface.tif",
     "wind_note": "calm - the thermocline persists and no wind circulation is driven",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -672,8 +672,8 @@
     "target_resolution_note": "Explicit HORIZONTAL grid node spacing; the vertical is nplan [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0Y611S9AYKBXKY3J7RB3DFF/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YBVJWWYPAKE44TYH46MTC1/metrics.json"
   },
   "product_errors": {}
 }

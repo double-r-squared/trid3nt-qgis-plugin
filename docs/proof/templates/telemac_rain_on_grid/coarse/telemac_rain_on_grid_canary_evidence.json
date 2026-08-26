@@ -13,8 +13,8 @@
     "input_mode": "auto",
     "restart_clean": true
   },
-  "session_id": "01M0VZ7FQ6KMYA6KZ61BYK8EAH",
-  "case_id": "01M0VZ7FZPG8EB37BJG8ZQY8GH",
+  "session_id": "01M0YBX97A521VAH657C4R1Q2S",
+  "case_id": "01M0YBX9FG0WZK25D0NCBW6K9G",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -76263,10 +76263,10 @@
       }
     },
     {
-      "layer_id": "model-results-mesh-01M0VZ7XCBD74RVXWAKKBFWX0J",
+      "layer_id": "model-results-mesh-01M0YBXQ24KYCNNW586H4KP3WW",
       "name": "Model results (time series): watershed",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0VZ7XCBD74RVXWAKKBFWX0J/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M0YBXQ24KYCNNW586H4KP3WW/r2d_rog.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -76278,10 +76278,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0VZ9EE0QR7JHV8X5G7M0WEP",
+      "layer_id": "01M0YBZ84QR4T6XQN4W81R8YKR",
       "name": "Max water depth (watershed)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VZ7XCBD74RVXWAKKBFWX0J/telemac_depth_max.tif",
+      "uri": "s3://trid3nt-runs/01M0YBXQ24KYCNNW586H4KP3WW/overviews/01M0YBZ88B3AWBSC0KSA09DG0R.tif",
       "style_preset": "continuous_water_surface_elevation",
       "visible": true,
       "role": "primary",
@@ -76300,27 +76300,12 @@
         "units": "m",
         "label": "Max water depth (m)"
       }
-    },
-    {
-      "layer_id": "01M0VZ9EE0QR7JHV8X5G7M0WEP",
-      "name": "Max water depth (watershed)",
-      "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0VZ7XCBD74RVXWAKKBFWX0J/overviews/01M0VZ9EZ9YH060VP530B5T9QZ.tif",
-      "style_preset": "continuous_water_surface_elevation",
-      "visible": true,
-      "role": "primary",
-      "temporal": false,
-      "wms_url": null,
-      "opacity": null,
-      "z_index": 6,
-      "crs_authid": null,
-      "legend": null
     }
   ],
   "draw_card": null,
   "form_card": null,
   "plain_warnings": [],
-  "run_id": "01M0VZ7XCBD74RVXWAKKBFWX0J",
+  "run_id": "01M0YBXQ24KYCNNW586H4KP3WW",
   "chart_spec": null,
   "metrics": null,
   "product_uris": {},

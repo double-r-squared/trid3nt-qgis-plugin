@@ -16,8 +16,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0W82321P62ENR3THSNYRWF0",
-  "case_id": "01M0W823AKT297X3W3831G3TAA",
+  "session_id": "01M0YBQ9Y3R1XEHFMFV2DDQAK4",
+  "case_id": "01M0YBQA67YWGFJYWPR38FKP0A",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -29,7 +29,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W83CKHGB0VRBRYAQ2859PA",
+      "chart_id": "01M0YBRK1X7CMYKFZHNBB4NFG5",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -488,15 +488,15 @@
       "title": "Wave agitation Kd (aoi)",
       "caption": "Forced by a prescribed 8 s incident wave: Phase-resolving screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W82431S29N016BPHYC614C"
+      "created_turn_id": "01M0YBQARJ9VA4AZS49H5VGJE6"
     }
   ],
   "layers": [
     {
-      "layer_id": "01M0W83CTC88TGECV6EBHKZ44Q",
+      "layer_id": "01M0YBRK9CDE9F6X4WS2QZGNPG",
       "name": "Wave agitation Kd (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/overviews/01M0W83CHFDJNR0GJ36C46BF1C.tif",
+      "uri": "s3://trid3nt-runs/01M0YBQAS7BQ08C466H2KQK86J/overviews/01M0YBRJZNF26FZHCWT7CDZYY2.tif",
       "style_preset": "continuous_wave_agitation",
       "visible": true,
       "role": "primary",
@@ -508,12 +508,12 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 0.193028,
-        "vmax": 5.41745,
+        "vmin": 0.0,
+        "vmax": 5.769,
         "classes": null,
         "value_field": null,
-        "units": null,
-        "label": "Wave agitation"
+        "units": "Kd",
+        "label": "Agitation coefficient Kd = Hs / H0"
       }
     }
   ],
@@ -537,17 +537,6 @@
         "bounds": null,
         "advanced": false,
         "note": "supplied on this invocation"
-      },
-      {
-        "name": "breakwater",
-        "value": null,
-        "units": null,
-        "door": "user",
-        "basis": "user",
-        "source_badge": "not supplied",
-        "bounds": null,
-        "advanced": false,
-        "note": "not supplied (declared optional)"
       },
       {
         "name": "location",
@@ -667,11 +656,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0W82461ABWBYN3PZ5WEAYRZ",
+  "run_id": "01M0YBQAS7BQ08C466H2KQK86J",
   "chart_spec": {
     "harbor_agitation": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W83CKHGB0VRBRYAQ2859PA",
+      "chart_id": "01M0YBRK1X7CMYKFZHNBB4NFG5",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -1365,16 +1354,16 @@
       1.604
     ],
     "agitation_curve_kind": "resonance_sweep",
-    "layer_uri": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/overviews/01M0W83CHFDJNR0GJ36C46BF1C.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0YBQAS7BQ08C466H2KQK86J/overviews/01M0YBRJZNF26FZHCWT7CDZYY2.tif",
     "wave_period_note": "prescribed monochromatic incident wave period",
-    "breakwater": "derived",
-    "breakwater_note": "not supplied; the ACTUAL surveyed breakwater is fetched from OpenStreetMap and meshed as a thin solid barrier; if OSM has none, a LABELED schematic segment stands in and says so",
+    "structure": null,
+    "structure_note": null,
     "target_resolution_m": "derived",
     "target_resolution_note": "not supplied; the grid is laid at the labeled default spacing - 40 m over a real harbour, 8 m in the analytic domain"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W82461ABWBYN3PZ5WEAYRZ/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0YBQAS7BQ08C466H2KQK86J/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YBQAS7BQ08C466H2KQK86J/metrics.json"
   },
   "product_errors": {}
 }

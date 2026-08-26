@@ -20,8 +20,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0Y5Y7M3RDQGZ5NSQWBBY769",
-  "case_id": "01M0Y5Y7W4AXBGX0GFC4F0DREH",
+  "session_id": "01M0YBSZW42PCTKE0BMFJ85VMD",
+  "case_id": "01M0YBT04CMTTP58A3BMG0CACX",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -33,7 +33,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0Y5ZJKJQ76QXT5TW13PH6ZQ",
+      "chart_id": "01M0YBVD6VW9KBX26K954Q4879",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -164,15 +164,15 @@
       "title": "Significant wave height (aoi)",
       "caption": "Fetch-limited growth under a prescribed 20 m/s wind: Hs 0.379 m at the upwind shore rising to 0.716 m downwind. Spectral screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0Y5Y96T6A553ZGVQ070HFK6"
+      "created_turn_id": "01M0YBT0T12FVW49Y5YA4SBSB3"
     }
   ],
   "layers": [
     {
-      "layer_id": "input-lake-bed-01M0Y5ZJGSG5WQ12J79M9JNDZN",
+      "layer_id": "input-lake-bed-01M0YBVD479VG4H8X7HCYY6EQG",
       "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0Y5Y97QA5Q0HG33F9NEZD9R/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0YBT0VX0J9GJ83E32PP2QQ9/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -184,10 +184,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0Y5ZJV306BZ7ZRJMXS9NEEK",
+      "layer_id": "01M0YBVDE4JQRAWPVBYTZVCPM6",
       "name": "Significant wave height (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0Y5Y97QA5Q0HG33F9NEZD9R/tomawac_hs.tif",
+      "uri": "s3://trid3nt-runs/01M0YBT0VX0J9GJ83E32PP2QQ9/tomawac_hs.tif",
       "style_preset": "continuous_significant_wave_height",
       "visible": true,
       "role": "primary",
@@ -330,20 +330,6 @@
         "note": "supplied on this invocation"
       },
       {
-        "name": "sim_duration_hours",
-        "value": 1.0,
-        "units": "h",
-        "door": "scenario",
-        "basis": "user",
-        "source_badge": "you supplied this",
-        "bounds": [
-          1.0,
-          24.0
-        ],
-        "advanced": false,
-        "note": "supplied on this invocation"
-      },
-      {
         "name": "wind_direction_deg",
         "value": 270.0,
         "units": "deg",
@@ -381,16 +367,30 @@
         "bounds": null,
         "advanced": true,
         "note": "supplied on this invocation"
+      },
+      {
+        "name": "sim_duration_hours",
+        "value": 1.0,
+        "units": "h",
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          24.0
+        ],
+        "advanced": true,
+        "note": "supplied on this invocation"
       }
     ],
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0Y5Y97QA5Q0HG33F9NEZD9R",
+  "run_id": "01M0YBT0VX0J9GJ83E32PP2QQ9",
   "chart_spec": {
     "wave_fetch_growth": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0Y5ZJKJQ76QXT5TW13PH6ZQ",
+      "chart_id": "01M0YBVD6VW9KBX26K954Q4879",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -589,7 +589,7 @@
       0.7164,
       0.7164
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0Y5Y97QA5Q0HG33F9NEZD9R/tomawac_hs.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0YBT0VX0J9GJ83E32PP2QQ9/tomawac_hs.tif",
     "wind_note": "prescribed steady storm wind (no wave-forcing fetcher exists)",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -597,8 +597,8 @@
     "target_resolution_note": "Explicit grid node spacing; 150 m is the finest the wave grid authors and a large lake is coarsened under the node budget [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0Y5Y97QA5Q0HG33F9NEZD9R/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0Y5Y97QA5Q0HG33F9NEZD9R/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0YBT0VX0J9GJ83E32PP2QQ9/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YBT0VX0J9GJ83E32PP2QQ9/metrics.json"
   },
   "product_errors": {}
 }

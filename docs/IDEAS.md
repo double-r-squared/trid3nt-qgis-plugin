@@ -1450,3 +1450,82 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   for. The portability test survives purely as a purity heuristic for
   classifying code out of the box. Nothing else from the cloud framing
   carries.
+
+- WORKER-PURITY INVENTORY, TELEMAC (wave B audit 2026-08-25, MIGRATED half in
+  ADR 0315, REST QUEUED): the six builders + entrypoint were walked and every
+  baked literal classified. MIGRATED this wave: the coastal leg's four
+  unreachable knobs (friction_law, friction_coefficient, wind_speed_mps,
+  wind_direction_from_deg were CoastalConfig fields the deck writer never
+  filled, so the image's defaults were the only values a coastal run could
+  have); four NARRATE-ON-ADJUST violations now echo (the rescaled inflow
+  discharge, the coastal mesh origin, the ARTEMIS shoal's silent override of
+  wave_height_m/wave_period_s, the one parser stamp). STILL QUEUED, as
+  migrate-to-manifest: (1) FOUR auto-spacing divisors (max(Lx,Ly)/120 in
+  coastal+tomawac+artemis, /40 in telemac3d) and FOUR grid floors (20/150/20/400
+  m) plus three MORE contradicting local floors in artemis and telemac3d - every
+  one is the opinionated-mesh lever and every floor is DUPLICATED against the
+  matching Param's declared bounds, two sources of truth for one number; (2) the
+  TOMAWAC spectral discretisation (ndir 24, nfreq 32, fmin 0.04, fratio 1.1) -
+  the core numerics budget with no Params at all, plus the JONSWAP friction
+  0.038 and the Battjes-Janssen GAMMA1/GAMMA2; (3) the TELEMAC-3D turbulence
+  constants (four 1.E-4 diffusions, LAW OF BOTTOM FRICTION 5 + 0.01, iturbv 2)
+  and its two hardcoded timesteps (dt=20 stratification, dt=10 wind) written
+  into the solve body rather than the config; (4) the river_dye centerline
+  family - resample_ds_m 18, smooth_window 7, the 15/9-point smoothers, the 30 m
+  run-accept radius, the release-point accept radius 2*width, min/max bed slope,
+  init_depth_m 2.5 - none declared, several NATE named by name; (5) the six
+  hardcoded fetch endpoints (NGDC DEM_all x4, Planetary Computer STAC, USGS
+  3DEP, NLDI, NHDPlus_HR layers 3 and 8) which ride the in-worker-fetch
+  migration, the other half of the same end state; (6) the coastal WET_TOL 0.02
+  that the flooded-area discriminant is computed on, and four DIFFERENT wet-node
+  AOI-acceptability thresholds (0.05/0.05/0.20/0.25) across four legs; (7)
+  tomawac_build.py:534 stamps utm_epsg=32615 on the idealized path regardless of
+  anything - a hardcoded CRS. Two remaining NARR violations: smooth_tries
+  (logged, not echoed) and the oil clearance-snap coordinates.
+
+- LOCAL-COORDINATE RESULT MESHES, the LATENT three (wave B 2026-08-25): coastal
+  is FIXED (ADR 0315 - the geometry SELAFIN carries X-ORIGIN/Y-ORIGIN, verified
+  on the canary at 691577/3286076 -> lon -85.02..-84.90, lat 29.69..29.80).
+  telemac3d, tomawac and artemis write the SAME shape - local metres with a zero
+  origin - and are latent rather than broken only because none of them publishes
+  a mesh layer and each postprocessor re-adds the origin itself. The one-line
+  fix per leg is the same `add_mesh(orig=...)`; the origin values are already
+  computed and discarded at telemac3d_build.py:638-639, tomawac_build.py:450-451
+  and artemis_build.py:589 (artemis's build_mesh even HAS unused x0/y0
+  parameters). Do it with the decision about whether the AOI templates ship mesh
+  layers at all, which is the same canvas-products cluster as res3d and the
+  3D-rendering track.
+
+- STEPS AUDIT, THE QUEUED ROWS (wave B 2026-08-25; 41 files walked, verdict
+  table in the wave report). REMEDIATED this wave: the breakwater-class offender
+  and everything that existed to support it; the three prose-holds-a-number
+  resolution default pairs (now in the declarations that promise them); the four
+  mesh_resolution_label copies (one helper); the do_sag defaults' second AND
+  third copies (deck.py and products.py now READ the resolved config); the grain
+  clamp's two copies; the coastal 180 m and 30 h constants; three silent
+  substitutions turned into typed refusals (unknown compute_class, unknown
+  bank_source, and the sediment-class truncation's sibling). QUEUED, each with
+  its reason: (a) the five undeclared AOI half-widths (_HARBOR_HALF_DEG,
+  _COAST_HALF_DEG, _BASIN_HALF_DEG, _LAKE_HALF_DEG, DEFAULT_RIVER_AOI_HALF_DEG)
+  - they should be declared Params, but five new form rows across five templates
+  belongs with the granularity-gate wave that already owns "resolution is a user
+  lever"; (b) `write_reach_deck`'s ten signature defaults duplicating
+  river_dye/declarations.py - a caller sweep first, because mesh_preview and two
+  drive scripts call it outside the plan; (c) `_DISCHARGE_QUERY_HALF_DEG` 0.03,
+  which decides WHICH reach carries the flow - a real physics dial, and it rides
+  the queued nearest-to-seed discharge_resolve change; (d) `wave.py`'s
+  bottom_friction self-arming rule, which wants a DERIVED door reading another
+  param and therefore a resolve-fn seam that does not exist; (e) `GREAT_LAKES`,
+  a coverage table that belongs on the fetcher spec (`supports_global_query` +
+  a coverage bbox), not in a step module; (f) `Param` has no `choices=`, so
+  deck.py's `_BEDLOAD_FORMULAE`/`_FRICTION_LAWS` closed sets still drop an
+  out-of-set value silently - a lib change; (g) `k2_formula = 0` (constant k2) is
+  a solver-mode choice with no Param and no provenance row - exposing the
+  O'Connor-Dobbins formulae is a physics decision; (h) rain_on_grid's whole
+  class-C set (17 bare signature defaults, the invented AOI-centroid pour point,
+  the unreachable Huang slope correction, the 24-hour solve timeout, the
+  duplicated UTM-zone formula) is blocked on migrating that template onto the
+  skeleton, which is the job rather than a fix; (i) `_mesh_override_provenance`
+  vs `mesh_sizing_provenance` - two implementations of "narrate the grid ask the
+  run moved", learned at different times (deck-time vs metrics-time), so
+  unifying them is a design call not a de-duplication.

@@ -1,0 +1,169 @@
+{
+  "bbox": [
+    -87.39234,
+    46.52812,
+    -87.36788,
+    46.55021
+  ],
+  "modes": [
+    {
+      "mode": "fetched",
+      "run_id": "01M0YC497EKTW9HHEN97XS6M5Q",
+      "step_state": "complete",
+      "layers": [
+        {
+          "layer_id": "input-lake-bed-01M0YC5HJF08PEWRTQYJ2T0N82",
+          "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+          "layer_type": "raster",
+          "uri": "s3://trid3nt-runs/01M0YC497EKTW9HHEN97XS6M5Q/bed_bathymetry.tif",
+          "style_preset": "continuous_dem",
+          "visible": true,
+          "role": "context",
+          "temporal": false,
+          "wms_url": null,
+          "opacity": null,
+          "z_index": 0,
+          "crs_authid": null,
+          "legend": null
+        },
+        {
+          "layer_id": "01M0YC5J0MHACSKFBCAB1FMM1Q",
+          "name": "Wave agitation Kd (aoi)",
+          "layer_type": "raster",
+          "uri": "s3://trid3nt-runs/01M0YC497EKTW9HHEN97XS6M5Q/overviews/01M0YC5HGFWEX08WXDKB22WTWD.tif",
+          "style_preset": "continuous_wave_agitation",
+          "visible": true,
+          "role": "primary",
+          "temporal": false,
+          "wms_url": null,
+          "opacity": null,
+          "z_index": 1,
+          "crs_authid": null,
+          "legend": {
+            "kind": "continuous",
+            "colormap": "viridis",
+            "vmin": 0.0,
+            "vmax": 1.55,
+            "classes": null,
+            "value_field": null,
+            "units": "Kd",
+            "label": "Agitation coefficient Kd = Hs / H0"
+          }
+        }
+      ],
+      "kd_max": 1.797,
+      "kd_sheltered": 0.162,
+      "kd_exposed": 0.122,
+      "hs_max_m": 1.7973,
+      "mesh_size_m": 40.0,
+      "structure": "supplied_9_lines",
+      "structure_note": "the structure supplied for this run (9 lines), meshed as a thin solid barrier"
+    },
+    {
+      "mode": "drawn",
+      "run_id": "01M0YC5KTG72MQRJ620QAD4JET",
+      "step_state": "complete",
+      "layers": [
+        {
+          "layer_id": "input-lake-bed-01M0YC6W3JF34GGXZ0B8TJK39H",
+          "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+          "layer_type": "raster",
+          "uri": "s3://trid3nt-runs/01M0YC5KTG72MQRJ620QAD4JET/bed_bathymetry.tif",
+          "style_preset": "continuous_dem",
+          "visible": true,
+          "role": "context",
+          "temporal": false,
+          "wms_url": null,
+          "opacity": null,
+          "z_index": 0,
+          "crs_authid": null,
+          "legend": null
+        },
+        {
+          "layer_id": "01M0YC6WKZN3X6EQ4AG3QHWES6",
+          "name": "Wave agitation Kd (aoi)",
+          "layer_type": "raster",
+          "uri": "s3://trid3nt-runs/01M0YC5KTG72MQRJ620QAD4JET/overviews/01M0YC6W1M1GEHZGDDGMP213EM.tif",
+          "style_preset": "continuous_wave_agitation",
+          "visible": true,
+          "role": "primary",
+          "temporal": false,
+          "wms_url": null,
+          "opacity": null,
+          "z_index": 1,
+          "crs_authid": null,
+          "legend": {
+            "kind": "continuous",
+            "colormap": "viridis",
+            "vmin": 0.0,
+            "vmax": 1.547,
+            "classes": null,
+            "value_field": null,
+            "units": "Kd",
+            "label": "Agitation coefficient Kd = Hs / H0"
+          }
+        }
+      ],
+      "kd_max": 1.801,
+      "kd_sheltered": 0.093,
+      "kd_exposed": 0.296,
+      "hs_max_m": 1.8013,
+      "mesh_size_m": 40.0,
+      "structure": "supplied_1_lines",
+      "structure_note": "the structure supplied for this run (1 line), meshed as a thin solid barrier"
+    },
+    {
+      "mode": "omitted",
+      "run_id": "01M0YC6YCJNEAG7VZW6ZDA4KGK",
+      "step_state": "complete",
+      "layers": [
+        {
+          "layer_id": "input-lake-bed-01M0YC87DYSYWDYFRG19MCJ7MX",
+          "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+          "layer_type": "raster",
+          "uri": "s3://trid3nt-runs/01M0YC6YCJNEAG7VZW6ZDA4KGK/bed_bathymetry.tif",
+          "style_preset": "continuous_dem",
+          "visible": true,
+          "role": "context",
+          "temporal": false,
+          "wms_url": null,
+          "opacity": null,
+          "z_index": 0,
+          "crs_authid": null,
+          "legend": null
+        },
+        {
+          "layer_id": "01M0YC87RVKB43VRC2FXRTAZ9G",
+          "name": "Wave agitation Kd (aoi)",
+          "layer_type": "raster",
+          "uri": "s3://trid3nt-runs/01M0YC6YCJNEAG7VZW6ZDA4KGK/overviews/01M0YC87BX70FNPPCYCX847TYA.tif",
+          "style_preset": "continuous_wave_agitation",
+          "visible": true,
+          "role": "primary",
+          "temporal": false,
+          "wms_url": null,
+          "opacity": null,
+          "z_index": 1,
+          "crs_authid": null,
+          "legend": {
+            "kind": "continuous",
+            "colormap": "viridis",
+            "vmin": 0.0,
+            "vmax": 1.547,
+            "classes": null,
+            "value_field": null,
+            "units": "Kd",
+            "label": "Agitation coefficient Kd = Hs / H0"
+          }
+        }
+      ],
+      "kd_max": 1.801,
+      "kd_sheltered": 0.0,
+      "kd_exposed": 0.112,
+      "hs_max_m": 1.8013,
+      "mesh_size_m": 40.0,
+      "structure": null,
+      "structure_note": "NO structure was supplied, so the domain was solved as OPEN WATER: every Kd here is the unsheltered response. Hand the slot a breakwater layer (fetch_osm_breakwaters) or a drawn line to model one."
+    }
+  ]
+}

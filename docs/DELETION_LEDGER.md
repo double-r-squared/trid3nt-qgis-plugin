@@ -535,3 +535,67 @@ LayerURI-shaped dict returns as an inert blob).
   hurricane-case end-to-end validation this script does, with a recorded run.
 - Decided by: NATE (decision 3, 2026-08-25): "keep until we replace it with
   something better."
+
+## The buried Overpass breakwater fetch in the ARTEMIS deck writer - DELETED 2026-08-25
+
+**What:** `fetch_osm_breakwaters()` (39 lines), `_OVERPASS_MIRRORS` (three
+hardcoded endpoints), `_stage_breakwater_layer()` (30 lines: geopandas ->
+FlatGeobuf -> direct `boto3 put_object` -> a hand-built `LayerURI`), and
+`_coerce_segment()` (the pinned 4-float segment normalizer), all in
+`trid3nt_server/workflows/telemac/steps/agitation.py`; plus the
+`fetch_osm_breakwaters` re-export from `steps/__init__.py`; plus the
+`breakwater` Param on `agitation/declarations.py`.
+
+**CONDITION to delete:** met by ADR 0315. A step that fetches bypasses the
+router's cache, fallback ladders, provenance, staleness handling and typed
+refusals (the no-double-middleware law), and it was doing so to seat an opinion
+the question never carried - "if you named no structure, I will go and find the
+real one" - inside the one tool whose entire question is whether a particular
+structure shelters anything. The replacement is the `fetch_osm_breakwaters`
+router spec plus the producer-less
+`Data("structure").supplied(geometry="polyline").optional()` slot. The staging
+re-upload dies with it: a supplied layer is already on the canvas, so a second
+copy of somebody else's layer was the double-emission the input-surfacing guard
+exists to catch.
+
+**Also deleted with it:** the "LABELED schematic breakwater" fallback the step
+meshed when its own Overpass call came back empty - a structure nobody asked for
+in a run about whether a structure helps. Absence is now an open-water solve,
+labeled on the layer, in provenance and in the run journal.
+
+**Decided by:** NATE (TELEMAC workflows refactor, wave B). Proved live in all
+three fill modes: `docs/proof/templates/artemis_harbor_agitation/addendum/artemis_harbor_agitation_structure_slot_evidence.json`.
+
+**Status:** DELETED (commit on the wave-B branch). A regression guard rides in
+`tests/test_artemis_harbor_agitation.py::test_the_step_module_makes_no_network_call_of_its_own`,
+which fails if any network primitive returns to that module.
+
+## The coastal deck's undeclared 30-hour window - DELETED 2026-08-25
+
+**What:** `_FALLBACK_DURATION_S = 108000.0` in
+`trid3nt_server/workflows/telemac/steps/coastal.py`, the third and silent rung
+under `duration_hours`.
+
+**CONDITION to delete:** met by ADR 0315. `duration_hours` declares
+`derived_when_absent="the simulated window is the fetched series' own span"`, and
+this constant was a window nobody had declared, reached whenever there was no ask
+AND no series. It is now `SYNTHETIC_WINDOW_HOURS` beside the param whose sentence
+promises it, named in that sentence, and every run emits a `duration_hours`
+provenance row saying which of the three rungs set it.
+
+**Decided by:** NATE (wave B, the sim-duration door review). **Status:** DELETED.
+
+## The second COASTAL_PARSER_VERSION - DELETED 2026-08-25
+
+**What:** `_COASTAL_PARSER_VERSION = "coastal-tidal-2"` in
+`workers/telemac/entrypoint.py`, a second declaration of a stamp
+`telemac_coastal_build.py` already owned - and which disagreed with it
+(`"coastal-tidal-3"`), so the metrics echoed one version and the strict-field
+refusal message quoted another. A manual provenance check gave different answers
+depending on which file it greped.
+
+**CONDITION to delete:** met the moment the disagreement was found (the
+worker-purity audit). The entrypoint now imports the builder's stamp lazily, like
+every other worker-payload symbol.
+
+**Decided by:** the wave-B worker-purity audit. **Status:** DELETED.
