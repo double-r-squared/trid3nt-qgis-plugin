@@ -314,16 +314,21 @@ async def model_generate_mesh(
 #   area_km2, outlet_lonlat|None, open_boundary_info, local_slf, sizing sources.
 # --------------------------------------------------------------------------- #
 def _build_watershed(pp, aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
-    """Reuse the proven ``acquire_watershed_mesh`` as the watershed
-    provider -- the catchment IS the domain, refined by distance-to-river."""
+    """The shared mesh front's CATCHMENT strategy -- the basin IS the domain,
+    refined by distance to its river network.
+
+    The bed raster and the flowlines are resolved HERE because this tool has no
+    plan and therefore no declared ``Data``: the strategy itself never fetches,
+    which is what lets the declarative template hand it artifacts the router
+    already produced."""
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.rain_on_grid import (
-        mesh_acquisition as MA,
-    )
+    from trid3nt_server.workflows.mesh import watershed as W
 
-    wm = MA.acquire_watershed_mesh(
-        pour_point=pp, bbox=aoi, output_dir=rundir,
+    wm = W.generate_catchment_mesh(
+        pour_point=pp, bbox=aoi, slug="watershed", output_dir=rundir,
+        bed_dem=W.resolve_bed_dem(bbox=aoi),
+        rivers=W.resolve_river_network(bbox=aoi),
         min_edge_length_m=float(min_edge), max_edge_length_m=float(max_edge),
         grade=float(grade))
     return {
@@ -331,7 +336,7 @@ def _build_watershed(pp, aoi, rundir, min_edge, max_edge, grade) -> dict[str, An
         "cells": np.asarray(wm.cells, dtype=np.int64),
         "bed": np.asarray(wm.bed_elev, dtype=float),
         "utm_epsg": int(wm.utm_epsg),
-        "points_lonlat": np.asarray(wm.meta["points_lonlat"], dtype=float),
+        "points_lonlat": np.asarray(wm.points_lonlat, dtype=float),
         "area_km2": float(wm.area_km2),
         "outlet_lonlat": tuple(wm.outlet_lonlat) if wm.outlet_lonlat else None,
         "open_boundary_info": {},  # inland catchment: single closed boundary
@@ -391,9 +396,8 @@ def _build_coastal(aoi, rundir, min_edge, max_edge, grade) -> dict[str, Any]:
     cells = np.asarray(npz["cells"], dtype=np.int64)
     bed = _sample_raster(dem_path, points_ll)
 
-    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-        reproject_nodes_to_utm,
-    )
+    from trid3nt_server.workflows.mesh.watershed import reproject_nodes_to_utm
+
     points_m, epsg = reproject_nodes_to_utm(points_ll)
     return {
         "points_utm": points_m, "cells": cells, "bed": bed, "utm_epsg": int(epsg),
@@ -426,9 +430,7 @@ def _stage_and_record(
     from trid3nt_server.workflows.mesh.artifact import (
         MeshArtifact, stash_mesh_artifact, write_mesh_artifact_sidecar,
     )
-    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-        _write_bottom_selafin,
-    )
+    from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
 
     pts = np.asarray(built["points_utm"], dtype=float)
     cells = np.asarray(built["cells"], dtype=np.int64)
@@ -448,7 +450,7 @@ def _stage_and_record(
     if built.get("local_slf") and Path(built["local_slf"]).exists():
         slf_local.write_bytes(Path(built["local_slf"]).read_bytes())
     else:
-        _write_bottom_selafin(str(slf_local), pts, cells, bed)
+        write_bottom_selafin(str(slf_local), pts, cells, bed)
 
     # 2. upload to the case cache bucket (the plugin reads .2dm via MDAL /vsicurl/).
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
@@ -727,7 +729,6 @@ def _bed_provenance(layer: Any) -> str:
 
 
 def _sample_raster(raster_path: Path, points_lonlat: Any) -> Any:
-    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-        _sample_raster_at_nodes,
-    )
-    return _sample_raster_at_nodes(raster_path, points_lonlat)
+    from trid3nt_server.workflows.mesh.watershed import sample_raster_at_nodes
+
+    return sample_raster_at_nodes(raster_path, points_lonlat)

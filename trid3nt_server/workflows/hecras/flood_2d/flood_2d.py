@@ -493,9 +493,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
         import rasterio
         from shapely.geometry import mapping
         from trid3nt_server.tools import TOOL_REGISTRY
-        from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-            _delineate_catchment,
-        )
+        from trid3nt_server.workflows.mesh.watershed import delineate_catchment
 
         rundir = Path(workdir) / "channel"
         rundir.mkdir(parents=True, exist_ok=True)
@@ -523,7 +521,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
                     from pyproj import Transformer
                     px, py = Transformer.from_crs(
                         src.crs, "EPSG:4326", always_xy=True).transform(px, py)
-        catch, _outlet, area_km2, cell_count = _delineate_catchment(
+        catch, _outlet, area_km2, cell_count = delineate_catchment(
             rundir, list(bbox), (float(px), float(py)), str(dem_uri))
         catch_path = rundir / "catchment.geojson"
         catch_path.write_text(_json.dumps({"type": "FeatureCollection", "features": [

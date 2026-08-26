@@ -40,8 +40,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 __all__ = [
+    "amc_condition_for",
     "scs_potential_retention_mm",
     "scs_runoff_mm",
     "huang_steep_slope_cn",
@@ -216,6 +218,35 @@ def paper_exponential_steep_slope_cn(cn2: float, slope_m_per_m: float) -> float:
 # ---------------------------------------------------------------------------
 # Antecedent-moisture conversion (matches TELEMAC's runoff_scs_cn.f exactly).
 # ---------------------------------------------------------------------------
+
+
+#: The SCS antecedent-moisture words, and the condition each one names. Both the
+#: wet/dry vocabulary a question is asked in and the I/II/III the literature uses
+#: resolve to the integer the engine's ``ANTECEDENT MOISTURE CONDITIONS`` keyword
+#: takes. ONE table, because a value that arrives typed and a value that arrives
+#: through the form must mean the same condition.
+_AMC_CONDITIONS: dict[str, int] = {
+    "dry": 1, "i": 1, "1": 1,
+    "normal": 2, "ii": 2, "2": 2,
+    "wet": 3, "iii": 3, "3": 3,
+}
+
+
+def amc_condition_for(value: Any) -> int:
+    """The SCS antecedent-moisture CONDITION (1/2/3) a declared word names.
+
+    REFUSES an unknown word rather than falling back to normal. Silently seating
+    AMC II for a caller who asked for "saturated" answers a wetter question with a
+    drier catchment, which is a wrong answer in the unsafe direction and no log
+    line makes it right.
+    """
+    word = str(value).strip().lower()
+    found = _AMC_CONDITIONS.get(word)
+    if found is None:
+        raise CNInfiltrationError(
+            f"antecedent_moisture {value!r} is not an SCS condition; the three are "
+            "'dry' (AMC I), 'normal' (AMC II) and 'wet' (AMC III).")
+    return found
 
 
 def amc_convert_cn(cn2: float, amc: int) -> float:

@@ -37,6 +37,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
 __all__ = [
     "mesh_resolution_label",
     "OpenWaterError",
+    "dispatch_and_wait",
     "mesh_sizing_provenance",
     "SolveOpenWater",
     "download_open_water_result",
@@ -94,6 +95,64 @@ def stage_open_water_manifest(*, section: str, config: dict[str, Any],
     return f"s3://{cache_bucket}/{key}"
 
 
+async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: str,
+                           label: str, timeout_s: float,
+                           grid_resolution_m: float | None = None,
+                           active_cell_count: int | None = None) -> tuple[Any, str]:
+    """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
+
+    The supervision dance every TELEMAC front performs identically: mint the
+    dispatch and sim cards, bind the emitter so the worker's own progress reaches
+    them, poll to completion, and route the terminal card whichever way the run
+    ends - CANCELLED included, which is the clause a hand-copied version drops.
+    Returns ``(run_result, batch_run_id)`` and judges nothing: what a non-complete
+    status MEANS is the caller's typed error to raise, because the code it carries
+    is the caller's contract.
+    """
+    from trid3nt_server.emission.pipeline_emitter import (
+        current_emitter,
+        mint_dispatch_and_sim_cards,
+        route_sim_terminal,
+    )
+    from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
+    from trid3nt_server.workflows.solver.solver import (
+        EmitterBinding,
+        run_solver,
+        set_emitter_binding,
+        wait_for_completion,
+    )
+
+    emitter = current_emitter()
+    handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
+                        compute_class=compute_class)
+    run_id = handle.run_id
+    sim_step_id = await mint_dispatch_and_sim_cards(
+        emitter=emitter, solver=solver, handle=handle, compute_class=compute_class)
+    if emitter is not None and sim_step_id is not None:
+        set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
+    progress = asyncio.ensure_future(drive_live_solve_progress(
+        emitter=emitter, run_id=run_id, solver=solver,
+        grid_resolution_m=grid_resolution_m, active_cell_count=active_cell_count,
+        vcpus=None, eta_seconds=None))
+
+    run_result = None
+    try:
+        run_result = await wait_for_completion(handle, timeout_s=timeout_s)
+    except asyncio.CancelledError:
+        logger.info("telemac %s solve cancelled awaiting solver", label)
+        await route_sim_terminal(emitter, sim_step_id, run_result=None)
+        raise
+    finally:
+        progress.cancel()
+        try:
+            await progress
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+        set_emitter_binding(None)
+    await route_sim_terminal(emitter, sim_step_id, run_result=run_result)
+    return run_result, (getattr(run_result, "run_id", None) or run_id)
+
+
 async def solve_open_water(*, deck: dict[str, Any],
                            compute_class: str = "medium") -> dict[str, Any]:
     """Stage the deck's manifest, dispatch it, wait, and return the run handle.
@@ -111,19 +170,7 @@ async def solve_open_water(*, deck: dict[str, Any],
     rasterizes the local metres in a placeholder frame instead. Refusing there
     refuses a run that is working exactly as designed.
     """
-    from trid3nt_server.emission.pipeline_emitter import (
-        current_emitter,
-        mint_dispatch_and_sim_cards,
-        route_sim_terminal,
-    )
-    from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
-    from trid3nt_server.workflows.solver.solver import (
-        EmitterBinding,
-        _get_runs_bucket,
-        run_solver,
-        set_emitter_binding,
-        wait_for_completion,
-    )
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     solver, section = deck["solver"], deck["section"]
     run_tag = deck["run_tag"]
@@ -133,36 +180,10 @@ async def solve_open_water(*, deck: dict[str, Any],
     logger.info("telemac %s staged manifest run_tag=%s name=%s -> %s",
                 section, run_tag, deck["config"].get("name"), manifest_uri)
 
-    emitter = current_emitter()
-    handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
-                        compute_class=compute_class)
-    run_id = handle.run_id
-    sim_step_id = await mint_dispatch_and_sim_cards(
-        emitter=emitter, solver=solver, handle=handle, compute_class=compute_class)
-    if emitter is not None and sim_step_id is not None:
-        set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
-    progress = asyncio.ensure_future(drive_live_solve_progress(
-        emitter=emitter, run_id=run_id, solver=solver,
-        grid_resolution_m=deck.get("mesh_size_m"), active_cell_count=None,
-        vcpus=None, eta_seconds=None))
-
-    run_result = None
-    try:
-        run_result = await wait_for_completion(handle, timeout_s=_SOLVE_TIMEOUT_S)
-    except asyncio.CancelledError:
-        logger.info("telemac %s solve cancelled awaiting solver", section)
-        await route_sim_terminal(emitter, sim_step_id, run_result=None)
-        raise
-    finally:
-        progress.cancel()
-        try:
-            await progress
-        except (asyncio.CancelledError, Exception):  # noqa: BLE001
-            pass
-        set_emitter_binding(None)
-    await route_sim_terminal(emitter, sim_step_id, run_result=run_result)
-
-    batch_run_id = getattr(run_result, "run_id", None) or run_id
+    run_result, batch_run_id = await dispatch_and_wait(
+        solver=solver, manifest_uri=manifest_uri, compute_class=compute_class,
+        label=section, timeout_s=_SOLVE_TIMEOUT_S,
+        grid_resolution_m=deck.get("mesh_size_m"))
     if run_result is None or run_result.status != "complete":
         raise OpenWaterError(
             f"the TELEMAC {section} solve did not complete "

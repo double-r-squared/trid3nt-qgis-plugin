@@ -45,6 +45,22 @@ from .forcing import (
 )
 from .mesh_preview import preview_telemac_mesh
 from .products import Products, publish_do_products, publish_dye_products
+from .rain_on_grid import (
+    AcquireCatchment,
+    Catchment,
+    CatchmentPolicy,
+    RainOnGrid,
+    RainOnGridError,
+    SolveRainOnGrid,
+    acquire_catchment,
+    build_catchment_mesh,
+    node_infiltration_fields,
+    publish_rain_on_grid_products,
+    resolve_rain_event,
+    solve_rain_on_grid,
+    write_bottom_selafin,
+    write_rain_on_grid_deck,
+)
 from .reach import (
     DEFAULT_RIVER_AOI_HALF_DEG,
     Geocode,
@@ -85,6 +101,11 @@ from .water_quality import (
 from .wave import Wave, publish_wave_products, write_wave_deck
 
 __all__ = [
+    "AcquireCatchment", "Catchment", "CatchmentPolicy", "RainOnGrid",
+    "RainOnGridError", "SolveRainOnGrid", "acquire_catchment",
+    "build_catchment_mesh", "node_infiltration_fields",
+    "publish_rain_on_grid_products", "resolve_rain_event", "solve_rain_on_grid",
+    "write_bottom_selafin", "write_rain_on_grid_deck",
     "Agitation", "CarrierDischarge", "Coastal",
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
     "MESH_NODE_CAP", "OpenWaterError", "Products", "ReachSeed",

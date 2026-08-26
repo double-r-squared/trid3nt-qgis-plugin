@@ -34,19 +34,23 @@ from trid3nt_server.workflows.lib import (
 )
 from trid3nt_server.workflows.shared.aoi import AcquireAoi
 from trid3nt_server.workflows.telemac.steps import (
+    AcquireCatchment,
     Agitation,
     CarrierDischarge,
     Coastal,
     Geocode,
     Products,
+    RainOnGrid,
     ReachSeed,
     Solve,
     SolveOpenWater,
+    SolveRainOnGrid,
     Stratified,
     Wave,
     WriteDeck,
     write_agitation_deck,
     write_coastal_deck,
+    write_rain_on_grid_deck,
     write_reach_deck,
     write_stratified_deck,
     write_wave_deck,
@@ -87,6 +91,14 @@ def _open_water_solve(*, compute_class: Any) -> Step:
     return SolveOpenWater.telemac(deck=Ref("deck"), compute_class=compute_class)
 
 
+def _rain_on_grid_solve(*, compute_class: Any) -> Step:
+    return SolveRainOnGrid.telemac(deck=Ref("deck"), compute_class=compute_class)
+
+
+def _read_rain_on_grid(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
+    return RainOnGrid.products(deck=Ref("deck"), solve=solve).named("flood_depth")
+
+
 def _read_dye(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Products.dye(deck=Ref("deck"), solve=solve,
                         carrier_discharge=forcing.values.get("carrier")).named("plume")
@@ -117,6 +129,7 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
 
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
+_RAIN_FORCING: Mapping[str, str] = {"rain": "rain"}
 
 #: The known TELEMAC physics processes. See :class:`_Process`.
 _PROCESSES: dict[str, _Process] = {
@@ -145,6 +158,14 @@ _PROCESSES: dict[str, _Process] = {
     "stratified_3d": _Process(
         domain_kw="aoi", deck=Stratified.deck, writer=write_stratified_deck,
         solve=_open_water_solve, read=_read_stratified, forcing_fields={}),
+    "rainfall_runoff": _Process(
+        domain_kw="catchment", deck=RainOnGrid.deck, writer=write_rain_on_grid_deck,
+        solve=_rain_on_grid_solve, read=_read_rain_on_grid,
+        forcing_fields=_RAIN_FORCING,
+        # The infiltration SURFACE is a mesh-node field, so it is a step result the
+        # deck reads rather than a value the sheet carries - the same shape as the
+        # reach family's mid-reach seed.
+        extra_fields={"infiltration": Ref("infiltration")}),
 }
 
 #: The universal SIZING ask, translated into the deck fields a TELEMAC writer
@@ -164,9 +185,9 @@ _CORRIDOR_FIELDS: dict[str, str] = {
 
 #: Which domain SHAPES ``acquire_domain`` knows, and what each one is for. A
 #: reach is a corridor along a flowline; an open-water domain is a grid over an
-#: AOI. The shape is the template's declaration, never inferred from which slots
-#: happen to be filled.
-_SHAPES = ("reach", "open_water")
+#: AOI; a catchment is the terrain that drains to one point. The shape is the
+#: template's declaration, never inferred from which slots happen to be filled.
+_SHAPES = ("reach", "open_water", "catchment")
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,13 +263,13 @@ class TelemacWorkflow(Workflow):
 
     def acquire_domain(self, *, location: Any, bbox: Any, shape: str = "reach",
                        rivers: Any = None, discharge: Any = None,
-                       event_time: Any = None,
+                       event_time: Any = None, pour_point: Any = None,
                        aoi_half_deg: float | tuple[float, float] = 0.06,
                        aoi_name: str = "aoi",
                        code_prefix: str = "TELEMAC") -> tuple[Step, ...]:
         """The steps that establish the modeled world and its resolved state.
 
-        Two domain SHAPES, declared rather than inferred:
+        Three domain SHAPES, declared rather than inferred:
 
         * ``reach`` - place -> reach centre -> mid-reach seed -> the carrier
           discharge AT that seed. Three steps because the modeled world is not
@@ -258,6 +279,10 @@ class TelemacWorkflow(Workflow):
         * ``open_water`` - place or extent -> the AOI, and nothing else. A coastal
           strip, a lake fetch and a harbour basin are all bounded by the ask
           itself; there is no flowline to find and no carrier to resolve.
+        * ``catchment`` - the OUTLET first, then the analysis window around it.
+          The basin's shape is the terrain's answer rather than the geocoder's, so
+          a place bbox cannot bound it: the AOI is derived from the pour point
+          unless the caller drew one.
 
         New acquisition inputs arrive as keywords WITH DEFAULTS, so a template
         that does not want one is untouched.
@@ -266,6 +291,16 @@ class TelemacWorkflow(Workflow):
             raise PlanValidationError(
                 f"acquire_domain shape {shape!r} is not a TELEMAC domain shape "
                 f"(known: {list(_SHAPES)}).")
+        if shape == "catchment":
+            if isinstance(aoi_half_deg, (list, tuple)):
+                raise PlanValidationError(
+                    "a catchment AOI is a SQUARE buffer around the outlet, so "
+                    "aoi_half_deg is one number; a (dlon, dlat) pair describes a "
+                    "domain whose shape the ask decides, which a catchment's is not.")
+            return (AcquireCatchment(location=location, bbox=bbox,
+                                     pour_point=pour_point, half_deg=aoi_half_deg,
+                                     default_name=aoi_name,
+                                     code_prefix=code_prefix).named("aoi"),)
         if shape == "open_water":
             return (AcquireAoi(location=location, bbox=bbox, half_deg=aoi_half_deg,
                                default_name=aoi_name,

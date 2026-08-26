@@ -38,6 +38,7 @@ __all__ = [
     "ArtemisAgitationLayerURI",
     "Telemac3dLayerURI",
     "TelemacCoastalLayerURI",
+    "TelemacRainOnGridLayerURI",
 ]
 
 #: Style preset for the coastal tidal/surge PEAK-INUNDATION-DEPTH raster (ADR
@@ -553,3 +554,76 @@ class TelemacCoastalLayerURI(LayerURI):
     ocean_edge: str | None = Field(default=None)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)
+
+
+class TelemacRainOnGridLayerURI(TelemacWseLayerURI):
+    """A ``LayerURI`` for a TELEMAC-2D RAIN-ON-GRID peak flood-depth raster.
+
+    A rain-on-grid run answers two questions at once, and the deliverable carries
+    both: WHERE the water stood (the peak max-over-time depth raster this layer
+    points at) and HOW MUCH left the basin (the outlet hydrograph, whose series
+    rides here so the chart dock draws the run's own numbers rather than a
+    rederivation). It extends the peak-depth layer field-for-field and adds the
+    catchment scalars the agent narrates rather than invents (Invariant 1):
+
+        catchment_area_km2: the delineated basin area upstream of the outlet.
+            Every volume below is only readable against it.
+        peak_discharge_m3s / peak_discharge_time_s: the hydrograph crest and when
+            it arrived - the flash-flood headline.
+        rainfall_volume_m3 / runoff_volume_m3: what fell on the catchment and what
+            left through the outlet over the simulated window.
+        runoff_coefficient: runoff / rainfall, the dimensionless summary of how
+            much the infiltration surface absorbed. ``None`` when no rain fell.
+        max_depth_peak_m / max_velocity_peak_ms: the deepest and fastest the
+            overland sheet got anywhere, at any time.
+        continuity_rel_error: the solver's own mass-balance residual. A run whose
+            volumes do not close is not a run whose hydrograph means anything, so
+            the number is published rather than checked in private.
+        runoff_path: which infiltration path ran - ``"native"`` (constant design
+            storm through the engine's SCS-CN), ``"native_hyetograph"`` (a real
+            time-varying hyetograph driving the same SCS-CN per timestep) or
+            ``"soil_store"`` (the continuous soil-moisture store).
+        amc_condition: the SCS antecedent-moisture condition (1 dry, 2 normal,
+            3 wet) the curve numbers were converted under.
+        rain_intensity_mm_per_hr: the constant design-storm rate, when one drove
+            the run.
+        outlet_hydrograph_t_s / outlet_hydrograph_q_m3s: the outlet discharge
+            series the chart spec is built from.
+        mesh_node_count / mesh_element_count / mesh_size_m /
+        mesh_resolution_label: what the catchment was discretized as, so mesh
+        resolution stays a visible, narratable lever.
+        catchment_provenance: whether the mesh was GENERATED for this run or
+            SUPPLIED on the invocation.
+        domain_bbox: the EPSG:4326 extent the run actually modelled - the mesh's
+            own node bounds, not the analysis window it was delineated inside. The
+            basin is a fraction of the search buffer, so the two are different
+            answers to "where is this".
+        catchment_name: what the modelled basin is CALLED - the chart titles
+            itself with the catchment rather than with the raster that happens to
+            be the map anchor.
+
+    ``layer_type`` is ``"raster"``; the animation plays from the native
+    ``r2d_rog.slf`` mesh sibling the results seam publishes beside it.
+    """
+
+    catchment_area_km2: float | None = Field(default=None, ge=0.0)
+    peak_discharge_m3s: float | None = Field(default=None)
+    peak_discharge_time_s: float | None = Field(default=None, ge=0.0)
+    rainfall_volume_m3: float | None = Field(default=None, ge=0.0)
+    runoff_volume_m3: float | None = Field(default=None)
+    runoff_coefficient: float | None = Field(default=None)
+    max_depth_peak_m: float | None = Field(default=None, ge=0.0)
+    max_velocity_peak_ms: float | None = Field(default=None, ge=0.0)
+    continuity_rel_error: float | None = Field(default=None)
+    runoff_path: str | None = Field(default=None)
+    amc_condition: int | None = Field(default=None, ge=1, le=3)
+    rain_intensity_mm_per_hr: float | None = Field(default=None, ge=0.0)
+    outlet_hydrograph_t_s: list[float] | None = Field(default=None)
+    outlet_hydrograph_q_m3s: list[float] | None = Field(default=None)
+    mesh_node_count: int | None = Field(default=None, ge=0)
+    mesh_element_count: int | None = Field(default=None, ge=0)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
+    mesh_resolution_label: str | None = Field(default=None)
+    catchment_provenance: str | None = Field(default=None)
+    catchment_name: str | None = Field(default=None)
+    domain_bbox: list[float] | None = Field(default=None)
