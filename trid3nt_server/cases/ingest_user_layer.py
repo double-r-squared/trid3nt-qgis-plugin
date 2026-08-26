@@ -480,9 +480,11 @@ async def _ingest_raster(
     from trid3nt_server.emission.publish import style_preset_for_publish
     from trid3nt_server.emission.publish import derive_readable_layer_name
 
-    resolved_style = style_preset_for_publish(
-        style_preset=None, layer_uri=tile_template, layer_id=layer_id
-    )
+    # A user upload declares no quantity: the bytes are a raster of unknown
+    # physical meaning, and its filename is not a measurement. It publishes on
+    # the neutral ramp over its own range, never on a physical band inferred
+    # from what the file happens to be called.
+    resolved_style = style_preset_for_publish(style_preset=None)
     layer_name = derive_readable_layer_name(name, layer_id, resolved_style, tile_template)
 
     summary = {

@@ -82,9 +82,13 @@ async def publish_for_emission(
 
     from .publish import PublishLayerError, publish_layer, style_preset_for_publish
 
-    style_preset = style_preset_for_publish(
-        style_preset=layer.style_preset, layer_uri=uri, layer_id=layer.layer_id
-    )
+    # The ``LayerURI`` contract declares a ``style_preset`` and forbids extra
+    # fields, so no quantity travels on this seam: a producer that computed one
+    # (the solver outputs seam, the quantity publisher) already resolved it
+    # through the style contract before the layer reached here. A layer that
+    # arrives with no preset therefore has no declared quantity either, and
+    # publishes neutral rather than on a ramp guessed from its uri.
+    style_preset = style_preset_for_publish(style_preset=layer.style_preset)
     try:
         # OFFLOAD: publish runs rasterio / GDAL over the COG. Keep it off the
         # event loop so the WS keepalive stays responsive.

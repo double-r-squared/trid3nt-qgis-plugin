@@ -57,6 +57,20 @@ presets:
     rescale: {policy: fixed, range: [0, 360], transform: linear}
     units: "deg"
     label: "Aspect compass deg"
+  categorical_aspect:
+    kind: continuous
+    # The same cyclic compass field aspect_compass_deg declares, under the name
+    # the terrain publishes carry. hsv so 0 and 360 paint the same colour.
+    colormap: hsv
+    rescale: {policy: fixed, range: [0, 360], transform: linear}
+    units: "deg"
+    label: "Aspect"
+  categorical_landcover:
+    kind: categorical
+    # No class table here: a land-cover COG carries its own embedded GDAL colour
+    # table and the publish path leaves a paletted raster unrescaled, so the
+    # classes are read off the raster rather than declared twice.
+    label: "Land Cover"
   continuous_conduit_velocity:
     kind: continuous
     colormap: viridis
@@ -64,6 +78,15 @@ presets:
               range: [0, 5]}   # range = the no-band-stats fallback
     units: "m/s"
     label: "Conduit velocity"
+  continuous_dem:
+    kind: continuous
+    # A bare elevation model is a TERRAIN-family raster: the publish path leaves
+    # it unrescaled so it renders as auto-scaled grayscale, and this row states
+    # what it IS for the legend and the layer name.
+    colormap: gray
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0]}
+    units: "m"
+    label: "Elevation"
   continuous_dewatering_rate:
     kind: continuous
     colormap: reds
@@ -176,6 +199,12 @@ presets:
               range: [0, 5]}   # range = the no-band-stats fallback
     units: "m"
     label: "Hydroperiod m"
+  continuous_impervious_surface:
+    kind: continuous
+    colormap: reds
+    rescale: {policy: fixed, range: [0, 100], transform: linear}
+    units: "%"
+    label: "Impervious Surface"
   continuous_landslide_susceptibility:
     kind: continuous
     colormap: rdylgn_r
@@ -227,6 +256,16 @@ presets:
     rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
               range: [0, 1]}   # range = the no-band-stats fallback
     units: "m/m"
+    label: "Slope"
+  continuous_slope_pct:
+    kind: continuous
+    # Rise over run as a PERCENT, which is unbounded above (a cliff exceeds
+    # 100%), so the range is read off the raster; continuous_slope carries the
+    # m/m spelling and slope_angle_deg the degree spelling of the same field.
+    colormap: ylorrd
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 100]}   # range = the no-band-stats fallback
+    units: "%"
     label: "Slope"
   continuous_subsidence_cm:
     kind: continuous
@@ -438,6 +477,21 @@ presets:
     rescale: {policy: fixed, range: [0, 60], transform: linear}
     units: "deg"
     label: "Slope angle deg"
+  standard_colored_relief:
+    kind: continuous
+    # An RGB(A) raster whose colours are already BAKED IN by the relief render.
+    # The publish path leaves a multiband raster unrescaled, so no colormap here
+    # can reach it; the row exists to name it.
+    colormap: gray
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0]}
+    label: "Colored Relief"
+  standard_hillshade:
+    kind: continuous
+    # Byte-valued illumination, not a physical measurement: a fixed 0-255 domain
+    # scale under a grayscale ramp is what a shaded relief IS.
+    colormap: gray
+    rescale: {policy: fixed, range: [0, 255], transform: linear}
+    label: "Hillshade"
   water_table_depth_m:
     kind: continuous
     colormap: rdylbu_r

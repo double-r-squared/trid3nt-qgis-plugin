@@ -260,15 +260,23 @@ _SLOPE_ASPECT_PRESET_BY_TOKEN: dict[str, str] = {
 
 
 def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
-    """Family-aware default style preset.
+    """The RENDERING-FAMILY default for a raster whose producer named no preset.
 
-    Returns the slope/aspect colormap preset for those families, ``""``
-    (no preset -> QGIS default rendering) for the remaining terrain rasters
-    (dem/relief/hillshade/terrain/elevation), else
-    ``"continuous_flood_depth"`` as the default so flood/plume publishes
-    stay styled. Tokenizes BOTH the resolved URI and the layer_id on
-    non-alphanumerics and matches whole tokens against
-    ``_TERRAIN_STYLE_TOKENS``.
+    This routes on how a raster must be PAINTED, never on what it measures: a
+    filename is not a measurement, so nothing here may conclude a physical
+    quantity from one. Slope and aspect carry their own colormaps; the remaining
+    terrain rasters (dem/relief/hillshade/terrain/elevation) are RGBA or
+    grayscale and render correctly unstyled, so they take ``""``.
+
+    Everything else takes the NEUTRAL ramp - a single-hue colormap over the
+    field's own range, labelled for an unknown quantity. A named physical ramp
+    here would paint a quantity nobody declared in the colours and legend of one
+    somebody guessed. A producer that knows its quantity declares it and gets
+    the contract's ramp; the price of not declaring is a neutral picture, not a
+    wrong one.
+
+    Tokenizes BOTH the resolved URI and the layer_id on non-alphanumerics and
+    matches whole tokens, so ``demo`` never trips ``dem``.
     """
     import re as _re
 
@@ -280,7 +288,7 @@ def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
             return preset
     if tokens & _TERRAIN_STYLE_TOKENS:
         return ""
-    return "continuous_flood_depth"
+    return styles.NEUTRAL_FALLBACK_PRESET
 
 
 # --------------------------------------------------------------------------- #
@@ -642,30 +650,23 @@ def legend_for_published_layer(
         return None
 
 
-#: Legend captions the preset name cannot derive honestly. The derived caption
-#: is the preset name with its underscores removed, so a MODELLED product reads
-#: as a measured one ("Aquifer saturated thickness m"). Where the distinction
-#: matters to whoever reads the legend, the caption is written out here.
-_LEGEND_LABEL_OVERRIDES: dict[str, str] = {
-    "water_table_depth_m": "Water table depth (modelled)",
-    "aquifer_saturated_thickness_m": "Surficial saturated thickness (modelled)",
-    "aquifer_transmissivity_m2_day": "Surficial aquifer transmissivity (modelled)",
-}
-
-
 def _legend_label_for(style_preset: str | None) -> str | None:
     """A short human-readable legend title from the preset, or ``None``.
 
-    Best-effort cosmetic: ``"continuous_flood_depth"`` -> ``"Flood depth"``. The
-    QGIS plugin renders it verbatim as the legend caption; ``None`` is fine
-    (it falls back to the layer name). Pure presentation -- never affects
-    the range.
+    The caption is DECLARED on the preset in the style contract, because a
+    caption derived from the preset name alone cannot state what the name does
+    not carry: a modelled surface reads as a measured one. The derivation below
+    is the fallback for a preset the contract does not declare.
+
+    Best-effort cosmetic: the QGIS plugin renders the result verbatim as the
+    legend caption and ``None`` is fine (it falls back to the layer name). Never
+    affects the range.
     """
     if not style_preset or style_preset == "auto":
         return None
-    override = _LEGEND_LABEL_OVERRIDES.get(style_preset)
-    if override is not None:
-        return override
+    declared = styles.preset_label(style_preset)
+    if declared:
+        return declared
     cleaned = style_preset
     for prefix in ("continuous_", "categorical_", "diverging_"):
         if cleaned.startswith(prefix):
@@ -1380,22 +1381,6 @@ def derive_layer_id(layer_uri: str, registry: Any | None = None) -> str:
     return f"layer-{new_ulid()}"
 
 
-#: Known ``style_preset`` -> human label. Extend as new presets land; presets
-#: not listed here fall through to the token-cleanup path in
-#: ``_label_from_style_preset`` (strip a family prefix, title-case the rest).
-_STYLE_PRESET_LABELS: dict[str, str] = {
-    "standard_hillshade": "Hillshade",
-    "continuous_flood_depth": "Flood Depth",
-    "continuous_slope_pct": "Slope",
-    "categorical_aspect": "Aspect",
-    "standard_colored_relief": "Colored Relief",
-    "continuous_dem": "Elevation",
-    "categorical_landcover": "Land Cover",
-    "continuous_impervious_surface": "Impervious Surface",
-    "diverging_bed_evolution": "Sediment Deposition",
-}
-
-
 def _looks_like_ulid(value: str) -> bool:
     """True for a 26-char Crockford-base32 ULID shape (case-insensitive).
 
@@ -1422,18 +1407,23 @@ def _looks_like_hash_or_id(value: str) -> bool:
 
 
 def _label_from_style_preset(style_preset: str | None) -> str | None:
-    """Human label for a ``style_preset``, or ``None`` if uninformative."""
+    """Human label for a ``style_preset``, or ``None`` if uninformative.
+
+    A preset's label is part of what the preset IS, so it is read from the STYLE
+    CONTRACT and nowhere else. The token cleanup below is the FALLBACK for a
+    preset the contract does not declare - never a second table of labels.
+    """
     if not style_preset:
         return None
-    label = _STYLE_PRESET_LABELS.get(style_preset)
+    label = styles.preset_label(style_preset)
     if label:
         return label
-    if style_preset in ("auto", ""):
+    if style_preset == "auto":
         return None
     import re as _re
 
     # Strip a family prefix (e.g. "continuous_"/"standard_"/"categorical_")
-    # and title-case what remains, so an unlisted-but-descriptive preset
+    # and title-case what remains, so an undeclared-but-descriptive preset
     # (e.g. "continuous_ndvi") still yields a readable label ("Ndvi").
     cleaned = _re.sub(r"^(standard_|continuous_|categorical_)", "", style_preset)
     cleaned = cleaned.replace("_", " ").replace("-", " ").strip()
@@ -1522,54 +1512,33 @@ def derive_readable_layer_name(
 # Style-preset resolution at the publish boundary
 # --------------------------------------------------------------------------- #
 
-#: Tokens that mark a FLOOD / DEPTH COG (vs terrain / land-cover / plume /
-#: generic rasters). A flood-depth COG that arrives with an EMPTY style_preset
-#: is defaulted to ``continuous_flood_depth`` (white->blue->green): an empty
-#: preset makes QGIS fall back to viridis and paint a redundant styleless flood
-#: layer. Token-boundary matched (not substring) so e.g. ``demo`` never trips
-#: ``dem``.
-_FLOOD_DEPTH_STYLE_TOKENS: frozenset[str] = frozenset(
-    {"flood", "depth", "inundation", "floodepth"}
-)
-_DEFAULT_FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
-
-
-def _is_flood_depth_cog(layer_uri: str, layer_id: str) -> bool:
-    """True when the resolved URI or layer_id tokenizes to a FLOOD/DEPTH raster.
-
-    Token-boundary matching on non-alphanumerics so ``flood-depth-peak-<run_id>``
-    and a ``.../flood_depth_peak.tif`` URI both match, while ``demo``/``dem`` do
-    not. Conservative: an unrecognized raster returns False (keeps the QGIS
-    default for non-flood rasters).
-    """
-    import re as _re
-
-    tokens = set(_re.split(r"[^a-z0-9]+", f"{layer_uri} {layer_id}".lower()))
-    return bool(tokens & _FLOOD_DEPTH_STYLE_TOKENS)
-
-
 def style_preset_for_publish(
-    *, style_preset: str | None, layer_uri: str, layer_id: str
+    *, style_preset: str | None, quantity: str | None = None
 ) -> str:
-    """The preset a layer publishes under, when the producer named none.
+    """The preset a layer publishes under, from what its producer DECLARED.
 
     Deliberately NOT called ``resolve_style_preset``: ``emission/styles.py``
-    already owns that name for a different question (which ramp a solver
-    QUANTITY gets). This one answers a boundary question - what an unnamed
-    raster publishes as.
+    already owns that name for the contract lookup this delegates to. This one
+    answers the boundary question - what a layer arriving at publish is styled
+    as - and the whole rule is three steps:
 
-    Honors an explicit non-empty ``style_preset`` (the producing tool asked for
-    it). When it resolves EMPTY, defaults a flood/depth COG to
-    ``continuous_flood_depth`` so a re-publish is never styleless (which QGIS
-    renders as viridis). Non-flood rasters keep ``""`` - terrain auto-scales
-    and paletted COGs use their embedded color table.
+    1. an explicit non-empty ``style_preset``: the producer named its own ramp;
+    2. the declared ``quantity``, resolved through the style contract's
+       ``quantity_defaults`` table;
+    3. the NEUTRAL ramp, for a layer whose physical meaning nobody declared.
+
+    A raster's QUANTITY is never inferred from its filename or its layer id. A
+    name is not a measurement, so a ramp guessed from one paints a physical
+    band over values that may not be in it; the neutral ramp over the field's
+    own range is the honest picture of an undeclared quantity.
     """
-    preset = (style_preset or "").strip()
-    if preset:
-        return preset
-    if _is_flood_depth_cog(layer_uri, layer_id):
-        return _DEFAULT_FLOOD_DEPTH_STYLE_PRESET
-    return ""
+    named = (style_preset or "").strip()
+    if named:
+        return named
+    declared = (quantity or "").strip()
+    if not declared:
+        return styles.NEUTRAL_FALLBACK_PRESET
+    return styles.resolve_style_preset(declared)[0]
 
 
 # --------------------------------------------------------------------------- #

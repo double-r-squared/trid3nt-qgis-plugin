@@ -1,32 +1,29 @@
-"""Regression tests: the spurious SECOND (viridis) flood layer never appears.
+"""One flood layer, never two, and it is styled by DECLARATION.
 
-Bug (live finding — "two flood layers, one viridis"): a single flood request
-rendered TWO map rows of the same peak-depth data —
+A single flood request must put exactly ONE map row of the peak-depth data on
+the canvas. Three independent things can break that, and each gets a class:
 
-  * the styled "Peak flood depth" layer the workflow publishes internally, AND
-  * a styleless duplicate the LLM painted by issuing a SEPARATE publish_layer on
-    the SAME underlying SFINCS COG (empty style_preset -> TiTiler viridis), under
-    a DIFFERENT display URL + layer_id, so the uri-only dedup never merged them.
+PRIMARY (``adapter.summarize_tool_result``): a scenario wrapper's
+already-published LayerURI is summarized with explicit ``published`` /
+``on_map`` / ``wms_url`` signals, so the model recognizes the layer is already
+on the map and does not issue a second publish of the same COG.
 
-Three layers of defense, one test class each:
+THE STYLE BOUNDARY (``publish.style_preset_for_publish``): a layer publishes
+under the preset its PRODUCER DECLARED - an explicit preset, else the declared
+quantity resolved through the style contract, else the neutral ramp. A preset
+is never inferred from a filename or a layer id.
 
-PRIMARY (adapter.summarize_tool_result): a scenario wrapper's already-published
-LayerURI is summarized with explicit ``published`` / ``on_map`` / ``wms_url``
-signals so the LLM recognizes the layer is on the map and does NOT re-publish.
+THE DEDUP RULE (``pipeline_emitter.add_loaded_layer``): two publishes of the
+SAME underlying COG under different display URLs collapse to ONE loaded layer,
+while two genuinely distinct COGs must still coexist as two rows.
 
-SAFETY NET #1 (server wrap-site style preset): if a flood/depth COG is
-re-published with an EMPTY style_preset, it is defaulted to
-``continuous_flood_depth`` so the layer is never styleless (= never viridis).
-
-SAFETY NET #2 (pipeline_emitter.add_loaded_layer dedup-by-identity): two
-publishes of the SAME underlying COG (different display URLs) collapse to ONE
-loaded_layer instead of two rows.
-
-These are the THREE cases the kickoff asks for, plus an F97 coexistence guard so
-a future identity-key change cannot wrongly merge two genuinely-distinct layers.
+Every appended layer also carries a stable, monotonic ``z_index``, and an
+in-place re-publish reuses the superseded layer's slot rather than renumbering.
 """
 
 from __future__ import annotations
+
+import inspect
 
 import pytest
 
@@ -40,6 +37,7 @@ from trid3nt_server.adapters.adapter import (
 )
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, _layer_identity_key
 from trid3nt_server.emission.publish import style_preset_for_publish
+from trid3nt_server.emission.styles import NEUTRAL_FALLBACK_PRESET
 
 
 # --------------------------------------------------------------------------- #
@@ -48,7 +46,7 @@ from trid3nt_server.emission.publish import style_preset_for_publish
 
 
 class _Sink:
-    async def __call__(self, text: str) -> None:  # noqa: D401 — swallow frames
+    async def __call__(self, text: str) -> None:  # noqa: D401 - swallow frames
         return None
 
 
@@ -72,7 +70,7 @@ def _published_flood_layer_uri(run_id: str) -> LayerURI:
 
 
 # --------------------------------------------------------------------------- #
-# (c) PRIMARY — the scenario function_response carries the already-published
+# (c) PRIMARY - the scenario function_response carries the already-published
 #     signal so the LLM does not re-publish.
 # --------------------------------------------------------------------------- #
 
@@ -87,7 +85,7 @@ class TestScenarioPublishedSignal:
         assert summary["published"] is True
         assert summary["on_map"] is True
         assert summary["publish_status"] == "published"
-        # The prompt's escape clause also keys on a "wms_url" field — it must be
+        # The prompt's escape clause also keys on a "wms_url" field - it must be
         # present and carry the renderable URL.
         assert summary["wms_url"] == result.uri
         # The canonical handle + metadata the loop needs to narrate.
@@ -111,7 +109,7 @@ class TestScenarioPublishedSignal:
 
     def test_non_scenario_layer_uri_is_not_flagged_published(self) -> None:
         """A LayerURI from a NON-scenario tool (e.g. a fetcher) must NOT get the
-        published signal — it falls through to the normal summary path."""
+        published signal - it falls through to the normal summary path."""
         layer = _published_flood_layer_uri("R")
         summary = summarize_tool_result("fetch_wdpa_protected_areas", layer)
         assert "published" not in summary
@@ -119,7 +117,7 @@ class TestScenarioPublishedSignal:
 
     def test_raw_gs_cog_not_flagged_published(self) -> None:
         """A scenario result whose uri is a RAW gs:// COG (storage, not on the
-        map) must NOT be flagged published — only an http(s) WMS uri is."""
+        map) must NOT be flagged published - only an http(s) WMS uri is."""
         raw = LayerURI(
             layer_id="flood-depth-peak-R",
             name="Peak flood depth",
@@ -134,7 +132,7 @@ class TestScenarioPublishedSignal:
 
     def test_failed_scenario_envelope_unaffected(self) -> None:
         """A FAILED modeled envelope (empty layers, honesty floor) must still
-        surface status=error — the published-signal branch must not swallow it."""
+        surface status=error - the published-signal branch must not swallow it."""
         failed = {
             "envelope_type": "modeled",
             "layers": [],
@@ -146,64 +144,68 @@ class TestScenarioPublishedSignal:
 
 
 # --------------------------------------------------------------------------- #
-# (a) SAFETY NET — a re-published flood COG with empty style_preset gets a
-#     non-empty depth style at the wrap-site.
+# (a) THE STYLE BOUNDARY - the preset comes from what the producer DECLARED,
+#     and a filename is not a declaration.
 # --------------------------------------------------------------------------- #
 
 
-class TestWrapSiteStylePreset:
-    def test_empty_preset_flood_cog_defaults_to_continuous_flood_depth(self) -> None:
-        # The wrap-site display URL embeds the flood COG; preset arrives empty.
+class TestPublishBoundaryPreset:
+    def test_declared_flood_depth_quantity_gets_the_flood_preset(self) -> None:
         preset = style_preset_for_publish(
-            style_preset="",
-            layer_uri=(
-                "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-                "?url=s3://runs/R/flood_depth_peak.tif"
-            ),
-            layer_id="chattanooga-100-year",
+            style_preset="", quantity="flood_depth"
         )
         assert preset == "continuous_flood_depth"
-        assert preset  # never styleless -> never viridis
 
-    def test_empty_preset_detected_via_layer_id_token(self) -> None:
-        preset = style_preset_for_publish(
-            style_preset=None,
-            layer_uri="https://titiler.example/cog/tiles/{z}/{x}/{y}.png?url=s3://x.tif",
-            layer_id="peak-flood-depth-R",
-        )
-        assert preset == "continuous_flood_depth"
+    def test_the_hyphenated_spelling_of_the_same_quantity_agrees(self) -> None:
+        assert style_preset_for_publish(
+            style_preset=None, quantity="swmm-depth"
+        ) == "continuous_flood_depth"
 
     def test_explicit_preset_is_honored(self) -> None:
-        # An explicit non-empty preset is never overridden.
+        # The producer named its own ramp; a declared quantity never overrides it.
         preset = style_preset_for_publish(
-            style_preset="continuous_dem",
-            layer_uri="https://t/cog?url=s3://flood_depth.tif",
-            layer_id="flood",
+            style_preset="continuous_dem", quantity="flood_depth"
         )
         assert preset == "continuous_dem"
 
-    def test_non_flood_raster_keeps_empty_preset(self) -> None:
-        # A terrain / generic raster with empty preset stays "" (QGIS default) —
-        # the safety net must not over-style non-flood layers.
-        preset = style_preset_for_publish(
-            style_preset="",
-            layer_uri="https://t/cog?url=s3://boulder_hillshade.tif",
-            layer_id="boulder-hillshade",
-        )
-        assert preset == ""
+    def test_undeclared_quantity_publishes_neutral(self) -> None:
+        # No preset and no quantity: the layer's physical meaning is unknown, so
+        # it gets the neutral ramp over its own range, not a physical band.
+        preset = style_preset_for_publish(style_preset="", quantity=None)
+        assert preset == NEUTRAL_FALLBACK_PRESET
+        assert preset != "continuous_flood_depth"
 
-    def test_demo_token_does_not_match_dem_or_flood(self) -> None:
-        # Token-boundary matching: "demo" must not trip flood/depth/dem tokens.
+    def test_unregistered_quantity_publishes_neutral(self) -> None:
         preset = style_preset_for_publish(
-            style_preset="",
-            layer_uri="https://t/cog?url=s3://demo_relief.tif",
-            layer_id="demo-relief",
+            style_preset=None, quantity="no_such_quantity"
         )
-        assert preset == ""
+        assert preset == NEUTRAL_FALLBACK_PRESET
+
+    def test_the_boundary_cannot_see_a_filename(self) -> None:
+        """The anti-guess pin: a file name and a layer id are NAMES, not
+        measurements, so the boundary is not given either one. A COG called
+        ``flood_depth_peak.tif`` cannot acquire a flood ramp here, because
+        nothing here is told what the file is called."""
+        params = set(inspect.signature(style_preset_for_publish).parameters)
+        assert params == {"style_preset", "quantity"}, params
+
+    def test_a_flood_named_layer_with_no_declaration_stays_neutral(self) -> None:
+        # The layer the old filename guess styled as flood depth. Its producer
+        # declared nothing, so it publishes neutral.
+        layer = LayerURI(
+            layer_id="flood-depth-peak-R",
+            name="flood_depth_peak.tif",
+            layer_type="raster",
+            uri="s3://runs/R/flood_depth_peak.tif",
+            style_preset="",
+        )
+        assert style_preset_for_publish(
+            style_preset=layer.style_preset
+        ) == NEUTRAL_FALLBACK_PRESET
 
 
 # --------------------------------------------------------------------------- #
-# (b) SAFETY NET — two publishes of the SAME underlying COG (different display
+# (b) SAFETY NET - two publishes of the SAME underlying COG (different display
 #     URLs) dedup to ONE loaded_layer.
 # --------------------------------------------------------------------------- #
 
@@ -227,7 +229,7 @@ class TestDedupByIdentity:
         )
         await emitter.add_loaded_layer(workflow_layer)
 
-        # 2. A redundant LLM re-publish of the SAME COG — DIFFERENT display URL
+        # 2. A redundant LLM re-publish of the SAME COG - DIFFERENT display URL
         #    (different tile-template query order / id) AND a different layer_id.
         llm_republish = LayerURI(
             layer_id="chattanooga-100-year",
@@ -241,7 +243,7 @@ class TestDedupByIdentity:
         )
         await emitter.add_loaded_layer(llm_republish)
 
-        # Exactly ONE loaded layer — the two publishes of the same COG merged.
+        # Exactly ONE loaded layer - the two publishes of the same COG merged.
         layers = emitter.loaded_layers
         assert len(layers) == 1, [(l.layer_id, l.uri) for l in layers]
         # The later publish supersedes in place (its id is what the row carries).
@@ -262,7 +264,7 @@ class TestDedupByIdentity:
 
     @pytest.mark.asyncio
     async def test_plain_cog_keys_to_itself(self) -> None:
-        # A bare gs:// COG (no query string) keys to its own uri — legacy behavior.
+        # A bare gs:// COG (no query string) keys to its own uri - legacy behavior.
         assert _layer_identity_key("gs://b/dem.tif") == "gs://b/dem.tif"
 
     @pytest.mark.asyncio
@@ -298,7 +300,7 @@ class TestDedupByIdentity:
 
 
 # --------------------------------------------------------------------------- #
-# z-index-fix — every appended layer carries a STABLE, MONOTONIC z_index, and
+# z-index-fix - every appended layer carries a STABLE, MONOTONIC z_index, and
 # an in-place re-publish REUSES the superseded layer's slot (no renumbering).
 # --------------------------------------------------------------------------- #
 
@@ -361,11 +363,11 @@ class TestStableMonotonicZIndex:
         await emitter.add_loaded_layer(republish)
 
         layers = emitter.loaded_layers
-        # Still three rows — the re-publish merged into layer 2's slot.
+        # Still three rows - the re-publish merged into layer 2's slot.
         assert len(layers) == 3, [(l.layer_id, l.z_index) for l in layers]
         by_id = {l.layer_id: l.z_index for l in layers}
         assert "layer-2" not in by_id  # superseded id is gone
-        # The re-publish REUSES the superseded slot — it does NOT jump to the top
+        # The re-publish REUSES the superseded slot - it does NOT jump to the top
         # and does NOT renumber any sibling.
         assert by_id["layer-2-restyled"] == z2_before
         assert by_id["layer-1"] == before["layer-1"]

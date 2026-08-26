@@ -123,9 +123,13 @@ def test_legacy_template_input_unwraps_to_s3(monkeypatch: pytest.MonkeyPatch) ->
     the embedded url= COG is unwrapped and flows through the raster path."""
     out = publish_layer(layer_uri=LEGACY_TEMPLATE, layer_id="flood-demo")
     assert out == S3_URI
-    # ...and the fresh legend is stashed under the NEW s3 envelope uri.
+    # ...and the fresh legend is stashed under the NEW s3 envelope uri. Nothing
+    # declared a quantity here, so the legend is the NEUTRAL one: the layer_id
+    # says "flood" and a name is not a measurement, so no depth ramp may be read
+    # off it.
     legend = pop_legend_for_uri(out)
-    assert legend is not None and legend.colormap == "ylgnbu"
+    assert legend is not None
+    assert legend.colormap == "viridis" and legend.label == "Value"
 
 
 def test_legacy_http_template_also_unwraps() -> None:
