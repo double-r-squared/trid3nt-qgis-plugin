@@ -26,8 +26,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_contracts import new_ulid
-
 from trid3nt_server.workflows.lib import DeclarativeError, Step
 
 from .solve import read_run_metrics

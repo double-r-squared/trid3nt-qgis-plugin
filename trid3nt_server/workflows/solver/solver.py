@@ -158,7 +158,6 @@ shared.
 from __future__ import annotations
 
 import asyncio
-import contextvars
 import glob as _glob
 import json
 import logging

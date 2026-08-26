@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any, Sequence
 
 logger = logging.getLogger("trid3nt_server.fallbacks.persist")

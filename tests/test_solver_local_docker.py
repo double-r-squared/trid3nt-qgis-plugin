@@ -379,14 +379,20 @@ def test_local_manifest_dest_traversal_rejected(
 # --------------------------------------------------------------------------- #
 
 #: The EXACT key set the local supervisor writes. Mirrors
-#: workers/sfincs/entrypoint.py PLUS the ``solver`` engine-identity
-#: field the V&V wave added (ADR 0021) so read_run_diagnostics can recover the
-#: engine directly instead of inferring it from the stdout field name.
+#: workers/sfincs/entrypoint.py PLUS two agent-side additions: the ``solver``
+#: engine-identity field (ADR 0021) so read_run_diagnostics can recover the
+#: engine directly instead of inferring it from the stdout field name, and the
+#: ``code_sha`` / ``code_dirty`` stamp (ADR 0317) so a reader of this artifact
+#: can ask whether the engine has changed since it ran. Both are written by the
+#: supervisor, never by a worker, so a worker-written completion.json lacks them
+#: and the readers of both fall back rather than requiring them.
 _ENTRYPOINT_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
     "solver",
+    "code_sha",
+    "code_dirty",
     "sfincs_stdout_uri",
     "sfincs_stderr_uri",
     "output_uris",

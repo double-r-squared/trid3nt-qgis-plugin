@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from typing import Any, Mapping
 
 logger = logging.getLogger("trid3nt_server.workflows.shared.run_products")
