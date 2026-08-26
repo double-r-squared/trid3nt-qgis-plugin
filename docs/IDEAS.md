@@ -1692,3 +1692,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   already-fetched raster covering the window, CLIP from the raster in
   hand instead of refetching (the watershed front half-designed this;
   the fallback path does not participate).
+
+- COASTAL t0 WETTING RESOLVED + RUN-VS-CODE STALENESS GAP (2026-08-26):
+  the inspected 50 m run PREDATES the datum fix (offset 0.0 vs the
+  independently re-verified -0.232) - wet-at-t0 split: 84.2% genuine
+  intertidal, 15.8% (19 km2) stale-forcing bias (persistent, never
+  drains - drain-transient hypothesis refuted 99.92% stay wet),
+  disconnected fill negligible (37 nodes). NO spin-up change warranted.
+  Fix = the family-close flagship RERUN through current code, ACCEPTANCE
+  = t0 wet area drops ~19 km2 to ~101 km2 (a predicted number, not a
+  refresh). NEW MECHANICAL GAP: nothing checks RUN-vs-CODE staleness -
+  runs record the dispatch git-sha in the manifest; the packet lists
+  commits touching the engine's paths since that sha ("this run predates
+  N relevant fixes" as a named warning). Queue to the assembler/journal
+  lane.
