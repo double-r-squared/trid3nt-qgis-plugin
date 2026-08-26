@@ -1645,3 +1645,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sweep - mechanical scan: grep for ADR-\d+/SRS/FR-\d+/job-\d+/NATE in
   *.py comments/docstrings, rewrite each as the constraint it protects
   or delete if it protects nothing.
+
+- MALPASSET: CHOP, NO HARVEST + US-ONLY RULE REFINED (NATE 2026-08-26):
+  the L2 malpasset harness is NOT kept for prior art - the calibration
+  track builds FRESH (published methods remain design references via
+  paper-first, but no code inheritance). The whole constellation
+  (cases/malpasset_obs.py, scripts/run_l2_malpasset.py, tests, fixtures,
+  staged case data) chops in the stale sweep - NOTE it has a live import
+  in postprocess_telemac.py, so the chop waits for wave C to land
+  (fence). RULE REFINED: "US-only" was an INFRASTRUCTURE scope, not a
+  nationality rule - spot-check/validation/calibration cases go wherever
+  GAUGES AND SENSORS our substrate can fetch live; the US simply has the
+  best observation infrastructure, so it dominates. Cases elsewhere are
+  legal when the observations are fetchable through our fetchers.
