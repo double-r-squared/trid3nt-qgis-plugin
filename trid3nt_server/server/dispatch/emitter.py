@@ -1186,31 +1186,23 @@ async def _dispatch_tool_and_persist(
     user-readable summary of the tool result (the stringified result for
     primitive returns, or a marker for complex returns).
 
-    B-rev FIX: ``_invoke_tool_via_emitter`` now raises ``ToolNotFoundError``
-    when the directive references an unregistered tool name. This caller is
-    the ``/invoke`` directive path -- a manual operator-debug surface dispatched
-    via ``asyncio.create_task`` (no awaiter exists to catch propagated
-    exceptions). To prevent the typed exception from surfacing as an
-    unhandled-task "exception was never retrieved" warning, we catch it here
-    and route it through ``_send_error`` so the operator's chat surface
-    receives a structured ``error`` envelope (``TOOL_NOT_FOUND`` /
-    ``retryable=False``) -- the same shape the model's multi-turn loop produces
-    via ``summarize_tool_result``. Other typed routing exceptions
-    (``PayloadWarningCancelledError``) are also caught so the manual surface
-    sees the cancellation reason explicitly instead of disappearing.
-
-    Honesty-floor fix: the two named catches above cover ONLY the
-    routing failures; every OTHER typed tool exception (``MeshAcquisitionError``,
-    ``TelemacRainOnGridError``, ``HydrologyAoiTooLargeError``, ...) also has no
-    awaiter on this ``asyncio.create_task`` path -- pre-fix it escaped as an
+    NOTHING MAY ESCAPE THIS FRAME. It is the ``/invoke`` directive path, a manual
+    operator-debug surface dispatched via ``asyncio.create_task``, so there is no
+    awaiter to catch a propagated exception: anything that escapes becomes an
     "asyncio Task exception was never retrieved" log line while the CLIENT
-    received NO error envelope (the plugin silently showed nothing; a seeder saw
-    NO_RESULT). The broad ``except Exception`` below closes that hole: it routes
-    the tool's OWN typed ``error_code`` / ``retryable`` through ``_send_error``
-    (falling back to ``TOOL_EXECUTION_FAILED`` / non-retryable when the exception
-    is untyped), so a failing direct invocation always reaches the client as a
-    structured ``error``. It surfaces the exception's real code verbatim -- an
-    upstream-provider error carries its own code out honestly and is NOT
+    receives no error envelope at all and the plugin shows nothing.
+
+    So every failure leaves through ``_send_error`` as a structured ``error``
+    envelope, the same shape the model's multi-turn loop produces via
+    ``summarize_tool_result``. The named catches cover the routing failures
+    (``ToolNotFoundError`` -> ``TOOL_NOT_FOUND`` / ``retryable=False``;
+    ``PayloadWarningCancelledError`` -> the cancellation reason stated rather
+    than disappearing). The broad ``except Exception`` below covers every OTHER
+    typed tool exception (``MeshGenerationError``, ``TelemacRainOnGridError``,
+    ``HydrologyAoiTooLargeError``, ...), routing the tool's OWN ``error_code`` /
+    ``retryable`` and falling back to ``TOOL_EXECUTION_FAILED`` / non-retryable
+    only when the exception is untyped. The exception's real code goes out
+    VERBATIM: an upstream-provider error carries its own code and must never be
     relabelled as an internal failure.
     """
     # Entry-time Case capture -- see _dispatch_model_turn_and_persist.

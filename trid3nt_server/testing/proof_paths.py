@@ -1,10 +1,9 @@
 """Where a template's proofs live: ``docs/proof/templates/<template>/<variant>/``.
 
-The proof pile used to be flat and name-prefixed, so finding "the refined coastal
-run's animation" meant reading four hundred filenames. Folders inherit the two
-facts that were already encoded in every name - WHICH template and WHICH variant
-of it - and the filenames stay exactly as they were, because the renders are
-cited by name in ADRs and evidence JSONs.
+The folder carries the two facts a proof is found by - WHICH template and WHICH
+variant of it - so no filename has to encode them. The filenames themselves must
+not change: renders are cited by name from decision notes and evidence JSONs, and
+a rename silently breaks every citation.
 
 FOUR variants, and no more, because a fifth would be a category nobody agreed on:
 
@@ -27,8 +26,8 @@ import os
 
 __all__ = ["PROOF_ROOT", "VARIANTS", "evidence_path", "proof_dir"]
 
-#: ``docs/proof/templates`` - the audit folder. Never cleaned or pruned without
-#: NATE's explicit say-so.
+#: ``docs/proof/templates`` - the audit folder. Never cleaned or pruned
+#: automatically: a delivered proof is evidence and outlives the run that made it.
 PROOF_ROOT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "docs", "proof", "templates")

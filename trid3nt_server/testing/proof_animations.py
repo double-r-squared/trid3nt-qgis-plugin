@@ -11,12 +11,11 @@ reads as a flat wash. The masked pair is the answer: FREE SURFACE where WATER
 DEPTH > 0.02 m, which is exactly the ``WET_TOL`` discriminant the coastal worker's
 own ``peak_wl_max_m`` / ``final_wl_max_m`` scalars are computed on.
 
-That choice used to live in ``--var`` / ``--mask-var`` flags a person typed, which
-means it lived in whoever remembered to type them. It lives HERE now, beside the
-canary declarations, for the same reason the canaries' locations and windows do: a
-delivered proof that came off a remembered command line is not repeatable, and a
-mechanical re-render that fell back to a default variable delivered the wrong
-picture with every check passing.
+That choice lives HERE, beside the canary declarations, and never on a command
+line, for the same reason the canaries' locations and windows do: a delivered
+proof that came off a remembered flag is not repeatable, and a mechanical
+re-render that falls back to a default variable delivers the wrong picture with
+every check passing.
 
 THERE IS NO DEFAULT. A time-stepped template with no entry in
 :data:`PROOF_ANIMATIONS` REFUSES to render an animation - the packet assembler

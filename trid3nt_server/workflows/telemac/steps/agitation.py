@@ -11,9 +11,9 @@ that shelters, but WHICH thing is not something this step gets to decide. The
 template declares a producer-less ``structure`` slot; whatever fills it - a layer
 from ``fetch_osm_breakwaters``, a line the user drew, a barrier they are proposing
 - is meshed as a thin solid barrier. Nothing fills it and the run solves OPEN
-WATER and says so. This module used to reach out to Overpass itself when the
-caller named no structure, which chose a default the question never asked for and
-did it outside the fetcher router's cache, ladders and provenance.
+WATER and says so. This module must never reach out to Overpass itself when the
+caller names no structure: that chooses a default the question never asked for,
+and does it outside the fetcher router's cache, ladders and provenance.
 """
 
 from __future__ import annotations
@@ -171,10 +171,10 @@ def _bathy_label(real: bool, wave_mode: str, lake: str | None) -> str:
 def _structure_row(deck: dict[str, Any]) -> SyntheticInput:
     """WHAT was meshed as the barrier, or that nothing was.
 
-    Two cases, not three: the structure the caller SUPPLIED, or open water. The
-    third case used to be "a LABELED schematic breakwater" this step invented when
-    an Overpass call it made itself came back empty - a structure nobody asked for,
-    in a run about whether a structure shelters anything.
+    Two cases, not three: the structure the caller SUPPLIED, or open water. There
+    is no third case for an invented schematic breakwater - a structure nobody
+    asked for, in a run about whether a structure shelters anything, is the one
+    answer this row must never be able to report.
     """
     lines = deck.get("breakwater_polylines")
     if lines:

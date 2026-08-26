@@ -83,11 +83,10 @@ class RunRiverSeepageError(RuntimeError):
         self.error_code = error_code
 
 
-# FOLD (engine-door refactor): run_river_seepage_job is NO LONGER a registered
-# tool. It folded into the ``modflow_river_seepage`` template together with its
-# composer; it stays here as the UNREGISTERED internal engine surface (mirrors
-# run_modflow_archetype_job / run_modflow_multi_species_job) that the template
-# imports and calls directly.
+# run_river_seepage_job is the UNREGISTERED internal engine surface for the
+# ``modflow_river_seepage`` template, which imports and calls it directly. It must
+# stay unregistered: a model routes to the template, never to the engine surface
+# underneath it. Same shape as run_modflow_archetype_job / run_modflow_multi_species_job.
 async def run_river_seepage_job(
     spill_location_latlon: tuple[float, float] | list[float] | str | None = None,
     contaminant: str | None = None,

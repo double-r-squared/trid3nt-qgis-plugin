@@ -139,9 +139,8 @@ async def run_modflow_multi_species_job(
     staging = None
     try:
         # --- Step 1: build the multi_species deck (off-loop) -----------------
-        # FOLD (engine-door refactor): build_and_stage_modflow_deck now forwards
-        # species (its multi_species branch builds the FLAT N-GWT deck the deleted
-        # build_multi_species_staging used to build) - ONE build/stage seam.
+        # ONE build/stage seam: build_and_stage_modflow_deck forwards species, and
+        # its multi_species branch is the only place the FLAT N-GWT deck is built.
         staging = await asyncio.to_thread(build_and_stage_modflow_deck, run_args)
 
         # --- Step 2: run the solver (local or local-exec/Batch) --------------

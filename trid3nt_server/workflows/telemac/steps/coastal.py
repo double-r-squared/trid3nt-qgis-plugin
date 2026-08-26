@@ -212,8 +212,9 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             param="ocean_edge", value=str(metrics["ocean_edge"]), basis="derived",
             consequence="numerical",
             note="the bbox edge the seaward liquid boundary was placed on"))
-    # WHICH rung set the simulated window. It used to be three silent branches,
-    # one of which was a 30 h constant nothing declared.
+    # WHICH rung set the simulated window. Every rung states itself: a window set
+    # by a constant nothing declared is indistinguishable from one the user asked
+    # for unless the basis rides the row.
     basis = deck.get("duration_basis")
     rows.append(SyntheticInput(
         param="duration_hours",

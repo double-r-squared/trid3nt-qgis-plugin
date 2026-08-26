@@ -97,9 +97,8 @@ def _package_tools_dir() -> Path:
 
 def _package_workflows_dir() -> Path:
     """The ``trid3nt_server/workflows`` directory - engine templates and their
-    co-located corpus files (the ``trid3nt_server/data`` category-era fossil
-    that used to hold the per-engine simulation shims is deleted; every shim
-    now lives under ``tools/`` or ``workflows/``)."""
+    co-located corpus files. Every per-engine simulation shim lives under
+    ``tools/`` or ``workflows/``; there is no third location to search."""
     import trid3nt_server
 
     return Path(trid3nt_server.__file__).resolve().parent / "workflows"

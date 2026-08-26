@@ -68,10 +68,10 @@ MAX_K = 25
 #: input, chart, spatial query). retrieve_visible_tools and the openai
 #: tool-gating floor both union this set.
 #:
-#: ``publish_layer`` used to sit here. It is no longer a tool at all: emission
-#: is automatic, so there is no "display this" intent left for the model to
-#: route to (the mechanism lives in ``trid3nt_server/emission/publish.py`` and
-#: runs on every renderable layer without being asked).
+#: No publish tool belongs in this floor: emission is automatic, so there is no
+#: "display this" intent for the model to route to. The mechanism lives in
+#: ``trid3nt_server/emission/publish.py`` and runs on every renderable layer
+#: without being asked.
 CORE_FLOOR: frozenset[str] = frozenset(
     {
         "sfincs_flood",

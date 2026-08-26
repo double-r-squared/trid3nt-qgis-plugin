@@ -8,8 +8,8 @@ remain subprocess-backed (rasterio has no equivalent).
 COG ENCODING IS NOT HERE. Turning a flat GeoTIFF into a tiled
 COG-with-overviews is a PUBLICATION concern - it is what makes a raster
 renderable rather than what makes it correct - so it lives with the rest of
-emission (``trid3nt_server/emission/cog.py``). It used to sit here, and
-``emission/publish.py`` reached backwards into a terrain TOOL to get at it.
+emission (``trid3nt_server/emission/cog.py``). Keeping it there is what stops
+``emission/publish.py`` reaching backwards into a terrain TOOL to get at it.
 
 Callers supply their own typed-error factory to ``run_gdal`` / ``read_raster_bytes``
 so each tool keeps its own error class + SCREAMING_SNAKE code.

@@ -76,7 +76,7 @@ _HYDROGRAPH = "rog_outlet_hydrograph.json"
 #: returns.
 _SOLVE_TIMEOUT_S = 86400.0
 
-#: Seconds in an hour, spelled once because eight expressions used to spell it.
+#: Seconds in an hour, spelled once so no expression in this module spells it again.
 _HOUR_S = 3600.0
 
 #: The engine key the mesh precondition gate checks a case mesh's geometry against.

@@ -132,9 +132,9 @@ _SUBSTANCE_MAX_CHARS = 24
 
 #: The grain-size window GAIA's transport formulae are authored for, in microns.
 #: It MIRRORS river_dye's declared ``grain_size_um`` bounds and exists because a
-#: gradation curve arrives as a list, which no per-value door can police. One
-#: constant, two clamp sites - it used to be the same two numbers written three
-#: times, counting the declaration.
+#: gradation curve arrives as a list, which no per-value door can police. ONE
+#: constant, two clamp sites: the declaration and both clamps must read the same
+#: two numbers from here, never restate them.
 GRAIN_UM_MIN, GRAIN_UM_MAX = 5.0, 2000.0
 
 

@@ -183,9 +183,9 @@ class CatchmentMesh:
 def utm_epsg_for(lon: float, lat: float) -> int:
     """The WGS84 UTM zone EPSG a lon/lat falls in - ONE implementation.
 
-    Two copies of this arithmetic used to live a file apart (one for the pour
-    point, one for the mesh centroid), which is two chances for a zone to
-    disagree with itself on a run that straddles a boundary.
+    The pour point and the mesh centroid must read their zone from this one
+    function: a second copy of the arithmetic is a second chance for a zone to
+    disagree with itself on a run that straddles a zone boundary.
     """
     zone = int((float(lon) + 180.0) // 6.0) + 1
     return (32600 if float(lat) >= 0.0 else 32700) + zone

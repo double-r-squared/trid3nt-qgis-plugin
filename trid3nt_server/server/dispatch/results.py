@@ -1,9 +1,9 @@
 """Post-tool result handling: code-exec/chart emission, tool-dispatch persistence.
 
-Auto-publishing a raster used to live here as a second call site parallel to the
-emission seam. It now rides the ONE seam
-(``emission/layer_uri_emit.publish_for_emission``), so nothing in the dispatch
-layer decides whether a layer is visible.
+Auto-publishing a raster rides the ONE emission seam
+(``emission/layer_uri_emit.publish_for_emission``). Nothing in the dispatch layer
+decides whether a layer is visible: a second call site here would make visibility
+depend on which path a result happened to take.
 """
 
 from __future__ import annotations

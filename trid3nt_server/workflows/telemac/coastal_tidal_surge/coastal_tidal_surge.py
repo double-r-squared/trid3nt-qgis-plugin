@@ -142,9 +142,9 @@ def build_stage_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     if peak_wl is not None:
         bars.append({"quantity": "Water level (peak)", "m": float(peak_wl)})
     bars.append({"quantity": "Water depth (peak, all water)", "m": float(peak_depth)})
-    # Since the products split, the deepest INUNDATION and the deepest water are
-    # two numbers. Naming only one of them on a chart about flooding is how the
-    # permanent bay used to read as the answer.
+    # The deepest INUNDATION and the deepest water are two different numbers. A
+    # chart about flooding must name both: naming only the deeper one lets the
+    # permanently submerged bay read as the answer.
     inundation = getattr(result, "inundation_peak_depth_m", None)
     if inundation is not None:
         bars.append({"quantity": "Inundation depth (peak, initially-dry land)",
