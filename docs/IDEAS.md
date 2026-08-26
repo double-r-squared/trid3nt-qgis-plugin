@@ -2004,3 +2004,10 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   of it, or the unre-pinned ones become landmines for the next wave. Worth a check
   in the canary runner: when one variant's evidence is newer than another's by
   more than a wave, say so.
+
+- REFERENCES ARE BENCHMARKS, NEVER SHAPE (NATE 2026-08-26): external
+  systems/packages/papers (tpilz, JMSE, walkthroughs) serve to JUDGE our
+  ergonomics and ground our physics - the architecture's shape derives
+  from our own conclusions and rulings, never from imitating a
+  reference. Cite them as measuring sticks in reports; never as design
+  drivers in ADRs.
