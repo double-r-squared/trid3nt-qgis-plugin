@@ -68,7 +68,6 @@ from trid3nt_server.tools.processing._gdal_runner import (
     read_raster_bytes,
     resolve_gdaldem,
     run_gdal,
-    translate_to_cog,
 )
 
 __all__ = [

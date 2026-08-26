@@ -124,7 +124,12 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
         return None
     std = float(getattr(result, "do_standard_mgl", None) or 5.0)
 
+    from trid3nt_server.emission.styles import preset_units
     from trid3nt_server.tools.processing.charts_common import build_chart_payload
+
+    # The UNITS come from the style contract, so the chart's axis and the DO
+    # layer's legend cannot disagree about what this field is measured in.
+    units = preset_units("continuous_plume_concentration") or "mg/L"
 
     do_vals = [{"x_km": round(xs[i] / 1000.0, 4), "v": do[i], "series": "Dissolved O2"}
                for i in range(len(xs))]
@@ -138,7 +143,7 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
                  "x": {"field": "x_km", "type": "quantitative",
                        "title": "Downstream distance (km)"},
                  "y": {"field": "v", "type": "quantitative",
-                       "title": "Concentration (mg/L)"},
+                       "title": f"Concentration ({units})"},
                  "color": {"field": "series", "type": "nominal", "title": None}}},
             {"mark": {"type": "rule", "strokeDash": [6, 4], "color": "#c0392b"},
              "data": {"values": [{"y": std}]},
@@ -157,8 +162,8 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
         vega_lite_spec=vega_lite_spec,
         title=title,
         caption=(
-            f"Streeter-Phelps DO sag: minimum {dmin} mg/L at {dloc} m downstream "
-            f"({verdict} the {std:g} mg/L standard, dashed). CBOD decay drives the "
+            f"Streeter-Phelps DO sag: minimum {dmin} {units} at {dloc} m downstream "
+            f"({verdict} the {std:g} {units} standard, dashed). CBOD decay drives the "
             f"sag; reaeration recovers it. Screening/permit grade."
         ),
     )

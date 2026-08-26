@@ -470,6 +470,7 @@ _register_router_specs()
 
 # -- display (live map overlays that compose a service URL, transferring no data
 # bytes -- NOT fetchers) --
+from .display.restyle_layer.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
 from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: E402,F401
 
 # -- processing (compute / clip / extract / vector-edit / charts) --

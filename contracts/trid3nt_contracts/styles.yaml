@@ -1,0 +1,501 @@
+# The STYLE CONTRACT: one file, so a mirror is impossible.
+#
+# Two sections, and they belong together because splitting them is exactly how
+# the mirror grew: `presets` says what a style IS (its kind, its scale policy,
+# its colormap, its units and its legend label), and `quantity_defaults` says
+# which preset a published QUANTITY gets by default. A producer declares the
+# quantity it computed; nothing in engine code names a preset.
+#
+# SCALE VOCABULARY - one schema, four entry points (this contract's default, a
+# template's `.style()` modifier, a declared param knob, and the `restyle_layer`
+# tool's arguments). Later stages override earlier ones and every override is
+# labelled on the legend:
+#
+#   policy:    data | fixed   - `data` reads the range off the raster itself.
+#   range:     [lo, hi]       - required when policy is `fixed`.
+#   transform: linear | log | sqrt | percentile
+#   clip:      [lo, hi]       - percentile bounds under transform `percentile`,
+#                               absolute bounds otherwise. Optional.
+#
+# `policy: data` is the DEFAULT for model output: a hardcoded scale makes an
+# output less informative the moment the run leaves the range somebody guessed.
+# The SCOPE of `data` is the RUN, never the frame - the range is computed once
+# over the whole time axis and every frame and legend uses that one range.
+# Fixed ranges stay for domain-standard bounded quantities (PGA 0-1, a
+# probability, a temperature in K).
+#
+# The resolver is `trid3nt_server/emission/styles.py`. Nothing else resolves a
+# style.
+
+schema_version: 1
+
+defaults:
+  kind: continuous
+  colormap: viridis
+  transform: linear
+  rescale:
+    policy: data
+    clip: [2.0, 98.0]
+    transform: percentile
+
+presets:
+  aquifer_saturated_thickness_m:
+    kind: continuous
+    colormap: gnbu
+    rescale: {policy: fixed, range: [0, 150], transform: linear}
+    units: "m"
+    label: "Surficial saturated thickness (modelled)"
+  aquifer_transmissivity_m2_day:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: fixed, range: [1, 1000], transform: linear}
+    units: "m^2/day"
+    label: "Surficial aquifer transmissivity (modelled)"
+  aspect_compass_deg:
+    kind: continuous
+    colormap: hsv
+    rescale: {policy: fixed, range: [0, 360], transform: linear}
+    units: "deg"
+    label: "Aspect compass deg"
+  continuous_conduit_velocity:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 5]}   # range = the no-band-stats fallback
+    units: "m/s"
+    label: "Conduit velocity"
+  continuous_dewatering_rate:
+    kind: continuous
+    colormap: reds
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 5000]}   # range = the no-band-stats fallback
+    units: "m^3/day"
+    label: "Dewatering rate"
+  continuous_discharge_m3s:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 50]}   # range = the no-band-stats fallback
+    units: "m^3/s"
+    label: "Discharge m3s"
+  continuous_drainage_area:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 1000000]}   # range = the no-band-stats fallback
+    units: "m^2"
+    label: "Drainage area"
+  continuous_drawdown_m:
+    kind: continuous
+    colormap: reds
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 10]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Drawdown m"
+  continuous_factor_of_safety:
+    kind: continuous
+    colormap: rdylgn
+    rescale: {policy: fixed, range: [0, 2], transform: linear}
+    units: "ratio"
+    label: "Factor of safety"
+  continuous_fire_arrival_hr:
+    kind: continuous
+    colormap: inferno
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 24]}   # range = the no-band-stats fallback
+    units: "h"
+    label: "Fire arrival hr"
+  continuous_fire_spread_rate:
+    kind: continuous
+    colormap: oranges
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 30]}   # range = the no-band-stats fallback
+    units: "m/min"
+    label: "Fire spread rate"
+  continuous_flame_length_m:
+    kind: continuous
+    colormap: ylorrd
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 10]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Flame length m"
+  continuous_flood_depth:
+    kind: continuous
+    colormap: ylgnbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 3]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Flood depth"
+  continuous_flooding_losses:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 5]}   # range = the no-band-stats fallback
+    units: "m^3/s"
+    label: "Flooding losses"
+  continuous_gmf_spread:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: fixed, range: [1, 2.5], transform: linear}
+    units: "ratio"
+    label: "Gmf spread"
+  continuous_head_m:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 50]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Head m"
+  continuous_hydroperiod_m:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 5]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Hydroperiod m"
+  continuous_landslide_susceptibility:
+    kind: continuous
+    colormap: rdylgn_r
+    rescale: {policy: fixed, range: [0, 1], transform: linear}
+    units: "probability"
+    label: "Landslide susceptibility"
+  continuous_liquefaction_probability:
+    kind: continuous
+    colormap: ylgnbu
+    rescale: {policy: fixed, range: [0, 1], transform: linear}
+    units: "probability"
+    label: "Liquefaction probability"
+  continuous_mounding_m:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 10]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Mounding m"
+  continuous_plume_concentration:
+    kind: continuous
+    colormap: reds
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 10]}   # range = the no-band-stats fallback
+    units: "mg/L"
+    label: "Plume concentration"
+  continuous_ponded_volume:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 1000]}   # range = the no-band-stats fallback
+    units: "m^3"
+    label: "Ponded volume"
+  continuous_relative_wetness:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: fixed, range: [0, 1], transform: linear}
+    units: "fraction"
+    label: "Relative wetness"
+  continuous_seismic_pga:
+    kind: continuous
+    colormap: magma
+    rescale: {policy: fixed, range: [0, 1], transform: linear}
+    units: "g"
+    label: "Seismic pga"
+  continuous_slope:
+    kind: continuous
+    colormap: ylorrd
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 1]}   # range = the no-band-stats fallback
+    units: "m/m"
+    label: "Slope"
+  continuous_subsidence_cm:
+    kind: continuous
+    colormap: inferno
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 50]}   # range = the no-band-stats fallback
+    units: "cm"
+    label: "Subsidence cm"
+  continuous_temperature_c:
+    kind: continuous
+    colormap: inferno
+    rescale: {policy: fixed, range: [0, 40], transform: linear}
+    units: "C"
+    label: "Temperature c"
+  continuous_wave_height:
+    kind: continuous
+    colormap: gnbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 6]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Wave height"
+  diverging_bed_evolution:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [-20, 20]}   # range = the no-band-stats fallback
+    units: "mm"
+    label: "Bed evolution"
+  diverging_conduit_flow:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [-10, 10]}   # range = the no-band-stats fallback
+    units: "m^3/s"
+    label: "Conduit flow"
+  diverging_river_seepage:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [-100, 100]}   # range = the no-band-stats fallback
+    units: "m^3/day"
+    label: "River seepage"
+  diverging_seafloor_deformation:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [-5, 5]}   # range = the no-band-stats fallback
+    units: "m"
+    label: "Seafloor deformation"
+  era5_10m_u_wind:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: fixed, range: [-25, 25], transform: linear}
+    units: "m/s"
+    label: "Era5 10m u wind"
+  era5_10m_v_wind:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: fixed, range: [-25, 25], transform: linear}
+    units: "m/s"
+    label: "Era5 10m v wind"
+  era5_2m_temperature:
+    kind: continuous
+    colormap: rdylbu_r
+    rescale: {policy: fixed, range: [250, 320], transform: linear}
+    units: "K"
+    label: "Era5 2m temperature"
+  era5_total_precipitation:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: fixed, range: [0, 100], transform: linear}
+    units: "mm"
+    label: "Era5 total precipitation"
+  goes_ir:
+    kind: continuous
+    colormap: gray_r
+    rescale: {policy: fixed, range: [180, 330], transform: linear}
+    units: "K"
+    label: "Goes ir"
+  goes_visible:
+    kind: continuous
+    colormap: gray
+    rescale: {policy: fixed, range: [0, 1], transform: linear}
+    units: "reflectance"
+    label: "Goes visible"
+  goes_wv:
+    kind: continuous
+    colormap: gray_r
+    rescale: {policy: fixed, range: [180, 330], transform: linear}
+    units: "K"
+    label: "Goes wv"
+  gridmet_fm100:
+    kind: continuous
+    colormap: ylgn
+    rescale: {policy: fixed, range: [0, 40], transform: linear}
+    units: "%"
+    label: "Gridmet fm100"
+  gridmet_fm1000:
+    kind: continuous
+    colormap: ylgn
+    rescale: {policy: fixed, range: [0, 40], transform: linear}
+    units: "%"
+    label: "Gridmet fm1000"
+  gridmet_pdsi:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: fixed, range: [-6, 6], transform: linear}
+    units: "index"
+    label: "Gridmet pdsi"
+  gridmet_pr:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: fixed, range: [0, 100], transform: linear}
+    units: "mm"
+    label: "Gridmet pr"
+  gridmet_tmmn:
+    kind: continuous
+    colormap: rdylbu_r
+    rescale: {policy: fixed, range: [250, 320], transform: linear}
+    units: "K"
+    label: "Gridmet tmmn"
+  gridmet_tmmx:
+    kind: continuous
+    colormap: rdylbu_r
+    rescale: {policy: fixed, range: [250, 320], transform: linear}
+    units: "K"
+    label: "Gridmet tmmx"
+  gridmet_vs:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: fixed, range: [0, 25], transform: linear}
+    units: "m/s"
+    label: "Gridmet vs"
+  groundwater_recharge_mm_yr:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: fixed, range: [0, 800], transform: linear}
+    units: "mm/yr"
+    label: "Groundwater recharge mm yr"
+  hrrr_10m_u_wind:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: fixed, range: [-25, 25], transform: linear}
+    units: "m/s"
+    label: "Hrrr 10m u wind"
+  hrrr_10m_v_wind:
+    kind: continuous
+    colormap: rdbu
+    rescale: {policy: fixed, range: [-25, 25], transform: linear}
+    units: "m/s"
+    label: "Hrrr 10m v wind"
+  hrrr_10m_wind_speed:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: fixed, range: [0, 25], transform: linear}
+    units: "m/s"
+    label: "Hrrr 10m wind speed"
+  hrrr_2m_temperature:
+    kind: continuous
+    colormap: rdylbu_r
+    rescale: {policy: fixed, range: [250, 320], transform: linear}
+    units: "K"
+    label: "Hrrr 2m temperature"
+  impervious_surface_pct:
+    kind: continuous
+    colormap: reds
+    rescale: {policy: fixed, range: [0, 100], transform: linear}
+    units: "%"
+    label: "Impervious surface pct"
+  mobi_biodiversity:
+    kind: continuous
+    colormap: ylgn
+    rescale: {policy: fixed, range: [0, 40], transform: linear}
+    units: "species"
+    label: "Mobi biodiversity"
+  ndvi:
+    kind: continuous
+    colormap: rdylgn
+    rescale: {policy: fixed, range: [-1, 1], transform: linear}
+    units: "index"
+    label: "Ndvi"
+  population_density:
+    kind: continuous
+    colormap: magma
+    rescale: {policy: fixed, range: [0, 250], transform: linear}
+    units: "people/km^2"
+    label: "Population density"
+  precipitation_mm:
+    kind: continuous
+    colormap: blues
+    rescale: {policy: fixed, range: [0, 100], transform: linear}
+    units: "mm"
+    label: "Precipitation mm"
+  slope_angle_deg:
+    kind: continuous
+    colormap: ylorrd
+    rescale: {policy: fixed, range: [0, 60], transform: linear}
+    units: "deg"
+    label: "Slope angle deg"
+  water_table_depth_m:
+    kind: continuous
+    colormap: rdylbu_r
+    rescale: {policy: fixed, range: [0, 50], transform: linear}
+    units: "m"
+    label: "Water table depth (modelled)"
+  wind_speed:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: fixed, range: [0, 25], transform: linear}
+    units: "m/s"
+    label: "Wind speed"
+  sediment_yield_t_ha_yr:
+    kind: categorical
+    units: "t/ha/yr"
+    label: "Sediment yield"
+    # RUSLE annual soil loss spans orders of magnitude, so a linear rescale
+    # paints everything below the worst gullies one flat colour. The breaks are
+    # log-spaced and are the SAME table the legend key is built from.
+    classes:
+      - [0.0, 1.0, "#ffffcc", "< 1 (very low)"]
+      - [1.0, 5.0, "#ffeda0", "1-5 (low)"]
+      - [5.0, 10.0, "#fed976", "5-10 (moderate)"]
+      - [10.0, 50.0, "#feb24c", "10-50 (high)"]
+      - [50.0, 100.0, "#fd8d3c", "50-100 (very high)"]
+      - [100.0, 500.0, "#f03b20", "100-500 (severe)"]
+      - [500.0, 1000000000.0, "#bd0026", ">= 500 (extreme)"]
+  neutral_ramp:
+    kind: continuous
+    colormap: viridis
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0]}
+    label: "Value"
+    # The honest ramp for a quantity nobody registered: a single-hue colormap
+    # over the field's OWN range. Never a physical band - an unknown quantity
+    # has no known physical range.
+  mesh_grid:
+    kind: mesh
+    label: "Mesh"
+    # A routing style, not a band rescale: a mesh layer renders through MDAL.
+
+# quantity -> preset. The producer declares the QUANTITY; this table owns the
+# style. Both key spaces live here: the emit-on-solve seam's `outputs.json`
+# quantity names and the output registry's hyphenated quantity ids.
+quantity_defaults:
+  bed_evolution: diverging_bed_evolution
+  budget-partition: continuous_head_m
+  conduit_flow: diverging_conduit_flow
+  conduit_velocity: continuous_conduit_velocity
+  dewatering-rate: continuous_dewatering_rate
+  dewatering_rate: continuous_dewatering_rate
+  discharge: continuous_discharge_m3s
+  drainage_area: continuous_drainage_area
+  drawdown: continuous_drawdown_m
+  dye_concentration: continuous_plume_concentration
+  factor_of_safety: continuous_factor_of_safety
+  fire_arrival: continuous_fire_arrival_hr
+  fire_spread_rate: continuous_fire_spread_rate
+  flame_length: continuous_flame_length_m
+  flood_depth: continuous_flood_depth
+  flooding_losses: continuous_flooding_losses
+  hazard-curves: continuous_seismic_pga
+  head: continuous_head_m
+  hydroperiod: continuous_hydroperiod_m
+  landlab-discharge: continuous_discharge_m3s
+  landlab-drainage-area: continuous_drainage_area
+  landlab-factor-of-safety: continuous_factor_of_safety
+  landlab-relative-wetness: continuous_relative_wetness
+  landlab-slope: continuous_slope
+  landlab-susceptibility: continuous_landslide_susceptibility
+  landslide_susceptibility: continuous_landslide_susceptibility
+  liquefaction_probability: continuous_liquefaction_probability
+  model_results: mesh_grid
+  mounding: continuous_mounding_m
+  plume-concentration: continuous_plume_concentration
+  plume-concentration-ts: continuous_plume_concentration
+  plume_concentration: continuous_plume_concentration
+  ponded_volume: continuous_ponded_volume
+  recovery-efficiency: continuous_head_m
+  relative_wetness: continuous_relative_wetness
+  river-seepage: diverging_river_seepage
+  river_seepage: diverging_river_seepage
+  seafloor_deformation: diverging_seafloor_deformation
+  seismic-hazard: continuous_seismic_pga
+  seismic_pga: continuous_seismic_pga
+  slope: continuous_slope
+  subsidence: continuous_subsidence_cm
+  swmm-conduit-flow: diverging_conduit_flow
+  swmm-conduit-velocity: continuous_conduit_velocity
+  swmm-depth: continuous_flood_depth
+  swmm-flooding-losses: continuous_flooding_losses
+  swmm-ponded-volume: continuous_ponded_volume
+  temperature: continuous_temperature_c
+  uhs: continuous_seismic_pga
+  water-table: continuous_head_m
+  water_table: continuous_head_m
+  wave_height: continuous_wave_height

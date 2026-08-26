@@ -25,7 +25,7 @@ Byte-equivalence with ``register_manifest_layers`` (the migration bar, Section
 ``style_preset``, the resolved ``&rescale=..&colormap_name=..`` params + the
 data-driven legend, ``bbox``, ``role``, ``units``, and the temporal-group
 membership -- is IDENTICAL to what the register path renders for the same solved
-output. Styling resolves through ``quantity_styles.resolve_style_preset`` (a
+output. Styling resolves through ``styles.resolve_style_preset`` (a
 registered quantity -> its pinned registry preset, so ``band_stats`` is NOT
 consulted for it -- e.g. ``flood_depth`` -> ``continuous_flood_depth`` -> the
 pinned ``0,3`` / ``ylgnbu``); an UNREGISTERED quantity degrades to the honest
@@ -54,13 +54,13 @@ from trid3nt_contracts.outputs_manifest import (
 )
 
 from trid3nt_server.emission.publish import (
-    _band1_percentile_rescale,
     _read_raster_bytes,
     _stash_legend_for_uri,
     legend_for_published_layer,
     style_params_from_band_stats,
 )
-from trid3nt_server.emission.quantity_styles import resolve_style_preset
+from trid3nt_server.emission import styles
+from trid3nt_server.emission.styles import resolve_style_preset
 from trid3nt_server.emission.uri_registry import observe_published_layer
 
 __all__ = [
@@ -196,36 +196,25 @@ def _style_and_legend(
     p98 = bs.p98 if bs else None
     needed_cog_touch = False
 
-    # Lazy stats touch: ONLY when the producer gave us nothing AND the preset is
-    # the neutral fallback (an unregistered quantity), so a registered/pinned
-    # quantity (the common docker case) never re-reads the COG.
+    # Lazy stats touch: ONLY when the producer gave us no band stats AND the
+    # contract's declared policy for this preset wants the RUN's own range. A
+    # fixed-scale preset (a probability, a PGA in g) never re-reads the COG.
     if (
         bs is None
-        and style_preset == "neutral_ramp"
         and not (is_categorical or is_rgba)
+        and styles.needs_run_range(style_preset)
     ):
         try:
-            raw = _read_raster_bytes(entry.uri)
-            rescale = _band1_percentile_rescale(raw)  # "&rescale=lo,hi&colormap_name=viridis" | None
-            if rescale:
-                # Reuse the generic path: hand the parsed lo/hi back through
-                # style_params_from_band_stats as p2/p98 so the resulting string
-                # is byte-identical to the register path's generic fallback.
-                from trid3nt_server.emission.publish import (
-                    _parse_style_params,
-                )
-
-                lo, hi, _cmap = _parse_style_params(rescale)
-                p2, p98 = lo, hi
+            found = styles.band_range_reader(_read_raster_bytes(entry.uri))(
+                styles.scale_for(style_preset))
+            if found is not None:
+                p2, p98 = found
                 needed_cog_touch = True
-        except Exception as exc:  # noqa: BLE001 -- degrade to the safe default
+        except Exception as exc:  # noqa: BLE001 -- degrade to the declared fallback
             logger.warning(
-                "outputs_seam: lazy stats touch failed for %s (%s: %s) -- "
-                "neutral ramp falls back to the safe default.",
-                entry.uri,
-                type(exc).__name__,
-                exc,
-            )
+                "outputs_seam: the run-range read failed for %s (%s: %s) -- the "
+                "preset's declared fallback range stands.",
+                entry.uri, type(exc).__name__, exc)
 
     style_params = style_params_from_band_stats(
         style_preset,

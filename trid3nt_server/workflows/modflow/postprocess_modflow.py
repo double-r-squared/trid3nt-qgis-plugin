@@ -1261,7 +1261,7 @@ _SECONDS_PER_DAY: float = 86400.0
 
 #: The seam ``quantity`` family for MODFLOW concentration frames. A per-species
 #: run mints ``plume_concentration__<slug>`` (the family fallback in
-#: emission.quantity_styles resolves every one to continuous_plume_concentration)
+#: emission.styles resolves every one to continuous_plume_concentration)
 #: so the N species never collide on the seam's (quantity, t) temporal grouping
 #: -- their save-times are identical (one shared GWF time discretization).
 PLUME_FRAME_QUANTITY_BASE: str = "plume_concentration"
@@ -1740,7 +1740,7 @@ def postprocess_multi_species(
         # --- emit-on-solve: this species' concentration frame stream ---------
         # Per-species quantity ``plume_concentration__<slug>`` so N species never
         # collide on the seam's (quantity, t) grouping (they share ONE time
-        # discretization -> identical save-times); the quantity_styles family
+        # discretization -> identical save-times); the style contract's family
         # fallback styles every one as continuous_plume_concentration. Best-effort:
         # a frame read/write miss for one species is logged + skipped (the typed
         # peaks + the other species stay intact).

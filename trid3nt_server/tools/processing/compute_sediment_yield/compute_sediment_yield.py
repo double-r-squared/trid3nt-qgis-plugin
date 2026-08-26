@@ -69,6 +69,7 @@ import numpy as np
 from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
+from trid3nt_server.emission.styles import legend_classes
 from trid3nt_server.tools import register_tool
 
 __all__ = [
@@ -81,7 +82,6 @@ __all__ = [
     "SedimentYieldUpstreamError",
     "C_BY_IO_LULC_CLASS",
     "SEDIMENT_YIELD_LOG_CLASSES",
-    "hex_to_rgba",
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.processing.compute_sediment_yield.compute_sediment_yield")
@@ -210,23 +210,14 @@ C_BY_IO_LULC_CLASS: dict[int, float] = {
     11: 0.08,
 }
 
-#: LOG-SCALED render classes for the published layer: (min, max, "#rrggbb",
-#: label) in t/ha/yr. Breaks at 1/5/10/50/100/500 are half-decade (log10) steps
-#: -- soil loss spans orders of magnitude, so equal-color-per-decade classing
-#: is the standard erosion-map convention (a linear ramp would flatten
-#: everything below the worst gullies into one color). Colors are the ylorrd
-#: family. ``publish_layer._registry_style_params`` turns this table into a
-#: TiTiler interval ``&colormap=`` for ``style_preset="sediment_yield_t_ha_yr"``,
-#: and the returned LayerURI's ``legend`` is built from the SAME table so the
-#: key always matches the paint.
-SEDIMENT_YIELD_LOG_CLASSES: tuple[tuple[float, float, str, str], ...] = (
-    (0.0, 1.0, "#ffffcc", "< 1 (very low)"),
-    (1.0, 5.0, "#ffeda0", "1-5 (low)"),
-    (5.0, 10.0, "#fed976", "5-10 (moderate)"),
-    (10.0, 50.0, "#feb24c", "10-50 (high)"),
-    (50.0, 100.0, "#fd8d3c", "50-100 (very high)"),
-    (100.0, 500.0, "#f03b20", "100-500 (severe)"),
-    (500.0, 1.0e9, "#bd0026", ">= 500 (extreme)"),
+#: LOG-SCALED render classes for the published layer, READ FROM THE STYLE
+#: CONTRACT. Soil loss spans orders of magnitude, so the half-decade breaks at
+#: 1/5/10/50/100/500 are the standard erosion-map convention - and they are a
+#: STYLE declaration, so they live in ``trid3nt_contracts/styles.yaml`` under the
+#: ``sediment_yield_t_ha_yr`` preset. Reading them here is what keeps this layer's
+#: legend key and its paint the same table rather than two that agree today.
+SEDIMENT_YIELD_LOG_CLASSES: tuple[tuple[float, float, str, str], ...] = tuple(
+    legend_classes("sediment_yield_t_ha_yr")
 )
 
 _NODATA: float = -9999.0
@@ -237,12 +228,6 @@ _METADATA = AtomicToolMetadata(
     source_class="workflow_dispatch",
     cacheable=False,
 )
-
-
-def hex_to_rgba(color: str) -> list[int]:
-    """``"#rrggbb"`` -> ``[r, g, b, 255]``."""
-    c = color.lstrip("#")
-    return [int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16), 255]
 
 
 # ---------------------------------------------------------------------------

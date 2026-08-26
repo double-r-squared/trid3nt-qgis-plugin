@@ -13,6 +13,7 @@ authors = [{ name = "schema specialist" }]
 dependencies = [
     "pydantic>=2,<3",
     "python-ulid>=2,<4",
+    "PyYAML>=6",
 ]
 
 [project.optional-dependencies]
@@ -28,7 +29,7 @@ where = ["."]
 include = ["trid3nt_contracts*"]
 
 [tool.setuptools.package-data]
-trid3nt_contracts = ["py.typed"]
+trid3nt_contracts = ["py.typed", "styles.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

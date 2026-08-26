@@ -161,7 +161,7 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
         param = by_name.get(name)
         if param is None or resolved.row(name) is None:
             continue
-        if resolved.get(name) == value:
+        if resolved.value_of(name) == value:
             continue
         rows[name] = _finish(param, value, doors.GATE, note)
         changed.append(name)

@@ -219,10 +219,10 @@ def _physical_answer(layer: BudgetPartitionLayerURI, p: Any) -> dict[str, Any]:
     """The run's ANSWER, as the numbers a reader has to be able to check."""
     return {
         "budget_partition_m3_day": dict(layer.budget_partition_m3_day),
-        "zone_partition": p.get("zone_partition"),
-        "aquifer_k_ms": p.get("aquifer_k_ms"),
-        "porosity": p.get("porosity"),
-        "location_name": p.get("location_name"),
+        "zone_partition": p.value_of("zone_partition"),
+        "aquifer_k_ms": p.value_of("aquifer_k_ms"),
+        "porosity": p.value_of("porosity"),
+        "location_name": p.value_of("location_name"),
         "layer_uri": layer.uri,
     }
 

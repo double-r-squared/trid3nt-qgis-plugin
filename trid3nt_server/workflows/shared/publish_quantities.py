@@ -12,7 +12,8 @@ bespoke postprocess.
 Routing:
 
   - ``RasterField``  -> ``cog_io.write_cog_4326_from_grid`` (+ upload) -> ONE
-    manifest raster layer (the spec's name / style_preset / role / units).
+    manifest raster layer (the spec's name / role / units; the style comes
+    from the contract, keyed by the spec's quantity_id).
   - ``TimeseriesField`` -> ``frames.emit_timeseries_layers`` (the shared corrupt
     -frame-degrades-to-peak + "< 2 never groups" guards) -> a PEAK manifest layer
     (role "primary", "Peak <q>") + N frame layers (role "context", "<q> step N").
@@ -34,6 +35,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from trid3nt_server.emission.styles import resolve_style_preset
 from trid3nt_contracts.output_quantities import (
     OutputQuantitySpec,
     RasterField,
@@ -121,7 +123,7 @@ def _build_raster_layer(
         name=name or spec.name,
         layer_type="raster",
         role=role or spec.role,
-        style_preset=spec.style_preset,
+        style_preset=resolve_style_preset(spec.quantity_id)[0],
         units=spec.units,
         cog_uri=uri,
         frame_no=frame_no,

@@ -30,6 +30,7 @@ from trid3nt_server.tools import register_tool
 
 __all__ = [
     "ChartToolError",
+    "axis_title",
     "build_chart_payload",
     "is_chart_emission_result",
     "build_hazard_curve_chart",
@@ -301,6 +302,22 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 # Shared payload builder - single place every tool constructs the contract.
 # ---------------------------------------------------------------------------
+
+
+def axis_title(quantity: str, *, fallback: str | None = None) -> str:
+    """The axis title for a published QUANTITY - from the style contract.
+
+    A chart of a quantity and the map layer of that same quantity must not
+    disagree about what it is called or what it is measured in, so both read one
+    vocabulary. ``fallback`` covers a quantity the contract has no row for; an
+    unregistered quantity is a missing contract row, not a reason to invent a
+    label here.
+    """
+    from trid3nt_server.emission.styles import quantity_axis
+
+    label, units = quantity_axis(quantity)
+    label = label or fallback or quantity.replace("_", " ").capitalize()
+    return f"{label} ({units})" if units else label
 
 
 def build_chart_payload(

@@ -86,7 +86,7 @@ from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.cache import read_through
 # shared in-process COG encoder (tiled + overviews) so the composite renders
 # fast over TiTiler like every other derived COG.
-from trid3nt_server.tools.processing._gdal_runner import translate_to_cog as _translate_to_cog
+from trid3nt_server.emission.cog import translate_to_cog as _translate_to_cog
 
 __all__ = [
     "compute_blended_composite",

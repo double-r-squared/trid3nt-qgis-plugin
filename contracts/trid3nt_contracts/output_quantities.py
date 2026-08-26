@@ -42,7 +42,7 @@ worker module that cannot import pydantic-heavy ``trid3nt_contracts``. A frozen
 dataclass is the lowest-common-denominator both sides can host identically. The
 ``reader`` is an OPTIONAL ``Callable`` bound on the consuming side (the agent
 executor binds rasterio/engine readers; a worker mirror would bind worker
-readers) - the DECLARATIVE half (id, kind, style_preset, units, role, label) is
+readers) - the DECLARATIVE half (id, kind, units, role, label) is
 what travels, the reader is bound where the heavy deps live.
 
 DEFAULT-OFF: the per-engine ``OUTPUT_QUANTITIES`` registry ships as an EMPTY
@@ -146,11 +146,13 @@ class OutputQuantitySpec:
     Fields:
         quantity_id: stable id (the layer-id STEM + the registry key), e.g.
             ``"flood-depth"`` / ``"flood-velocity"`` / ``"plume-concentration"``.
+            It is also the STYLE key: a producer declares the QUANTITY and the
+            style contract (``styles.yaml``) owns quantity -> preset, so nothing
+            here names a colormap.
         kind: ``raster`` | ``timeseries`` | ``scalar`` (routes the executor).
         name: the human + web-grouping LayerURI name (e.g. "Peak flood depth").
             For a ``timeseries`` the executor derives the peak/frame names from
             the ``TimeseriesField.quantity_label`` instead; ``name`` is the peak.
-        style_preset: the publish_layer / TiTiler style-preset KEY.
         units: the layer units string (e.g. "meters", "mg/L", "g").
         role: the LayerURI role (peak = "primary", frames = "context").
         reader: OPTIONAL callable ``(ctx) -> FieldResult`` bound on the consuming
@@ -168,7 +170,6 @@ class OutputQuantitySpec:
     quantity_id: str
     kind: FieldKind
     name: str
-    style_preset: str
     units: str = ""
     role: str = "primary"
     reader: Callable[..., FieldResult] | None = None
@@ -180,7 +181,7 @@ class OutputQuantitySpec:
 # Per-engine registry (STEP 3: MODFLOW / Landlab / OpenQuake / SWMM migrated).
 # --------------------------------------------------------------------------- #
 #: engine -> ordered tuple of OutputQuantitySpec. The DECLARATIVE half lives
-#: here (id / kind / style_preset / units / role / label); the ``reader`` is
+#: here (id / kind / units / role / label); the ``reader`` is
 #: bound on the AGENT side (this module ships in ``trid3nt_contracts`` which must
 #: stay pydantic/rasterio-free, so a reader that needs rasterio/flopy/pyswmm
 #: cannot live here). Each engine's agent-side ``*_quantity_readers`` module
@@ -203,7 +204,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="swmm-depth",
             kind="timeseries",
             name="Peak flood depth",
-            style_preset="continuous_flood_depth",
             units="meters",
             role="primary",
             default_on=False,
@@ -214,7 +214,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="swmm-flooding-losses",
             kind="raster",
             name="Node flooding rate",
-            style_preset="continuous_flooding_losses",
             units="m^3/s",
             role="context",
             default_on=True,
@@ -225,7 +224,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="swmm-ponded-volume",
             kind="raster",
             name="Ponded volume",
-            style_preset="continuous_ponded_volume",
             units="m^3",
             role="context",
             default_on=True,
@@ -236,7 +234,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="swmm-conduit-flow",
             kind="raster",
             name="Conduit flow",
-            style_preset="diverging_conduit_flow",
             units="m^3/s",
             role="context",
             default_on=True,
@@ -247,7 +244,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="swmm-conduit-velocity",
             kind="raster",
             name="Conduit velocity",
-            style_preset="continuous_conduit_velocity",
             units="m/s",
             role="context",
             default_on=True,
@@ -260,7 +256,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="plume-concentration",
             kind="raster",
             name="Contaminant Plume (peak concentration)",
-            style_preset="continuous_plume_concentration",
             units="mg/L",
             role="primary",
             default_on=False,
@@ -271,7 +266,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="plume-concentration-ts",
             kind="timeseries",
             name="Plume concentration",
-            style_preset="continuous_plume_concentration",
             units="mg/L",
             role="primary",
             default_on=True,
@@ -282,7 +276,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="water-table",
             kind="raster",
             name="Water table (head)",
-            style_preset="continuous_head_m",
             units="meters",
             role="context",
             default_on=True,
@@ -293,7 +286,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="river-seepage",
             kind="raster",
             name="River Seepage (gaining / losing reach)",
-            style_preset="diverging_river_seepage",
             units="m^3/day",
             role="primary",
             default_on=False,
@@ -304,7 +296,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="drawdown",
             kind="raster",
             name="Pumping drawdown (head decline)",
-            style_preset="continuous_drawdown_m",
             units="meters",
             role="primary",
             default_on=True,
@@ -315,7 +306,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="dewatering-rate",
             kind="raster",
             name="Mine dewatering rate",
-            style_preset="continuous_dewatering_rate",
             units="m^3/day",
             role="primary",
             default_on=True,
@@ -326,7 +316,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="budget-partition",
             kind="scalar",
             name="Regional water budget partition",
-            style_preset="continuous_head_m",
             units="m^3/day",
             role="context",
             default_on=True,
@@ -337,7 +326,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="mounding",
             kind="raster",
             name="Recharge mounding (head rise)",
-            style_preset="continuous_mounding_m",
             units="meters",
             role="primary",
             default_on=True,
@@ -348,7 +336,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="recovery-efficiency",
             kind="scalar",
             name="ASR recovery efficiency",
-            style_preset="continuous_head_m",
             units="fraction",
             role="context",
             default_on=True,
@@ -359,7 +346,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="hydroperiod",
             kind="raster",
             name="Wetland hydroperiod (seasonal head range)",
-            style_preset="continuous_hydroperiod_m",
             units="meters",
             role="primary",
             default_on=True,
@@ -373,7 +359,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="landlab-susceptibility",
             kind="raster",
             name="Landslide susceptibility",
-            style_preset="continuous_landslide_susceptibility",
             units="probability",
             role="primary",
             default_on=False,
@@ -385,7 +370,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="landlab-drainage-area",
             kind="raster",
             name="Drainage area",
-            style_preset="continuous_drainage_area",
             units="m^2",
             role="context",
             default_on=True,
@@ -395,7 +379,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="landlab-slope",
             kind="raster",
             name="Topographic slope",
-            style_preset="continuous_slope",
             units="m/m",
             role="context",
             default_on=True,
@@ -405,7 +388,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="landlab-relative-wetness",
             kind="raster",
             name="Relative wetness",
-            style_preset="continuous_relative_wetness",
             units="fraction",
             role="context",
             default_on=True,
@@ -415,7 +397,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="landlab-discharge",
             kind="raster",
             name="Surface-water discharge",
-            style_preset="continuous_discharge_m3s",
             units="m^3/s",
             role="context",
             default_on=True,
@@ -425,7 +406,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="landlab-factor-of-safety",
             kind="raster",
             name="Factor of safety",
-            style_preset="continuous_factor_of_safety",
             units="dimensionless",
             role="context",
             default_on=True,
@@ -438,7 +418,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="seismic-hazard",
             kind="raster",
             name="Seismic hazard map",
-            style_preset="continuous_seismic_pga",
             units="g",
             role="primary",
             default_on=False,
@@ -449,7 +428,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="hazard-curves",
             kind="scalar",
             name="Hazard curves",
-            style_preset="continuous_seismic_pga",
             units="g",
             role="context",
             default_on=True,
@@ -460,7 +438,6 @@ OUTPUT_QUANTITIES: dict[str, tuple[OutputQuantitySpec, ...]] = {
             quantity_id="uhs",
             kind="scalar",
             name="Uniform hazard spectrum",
-            style_preset="continuous_seismic_pga",
             units="g",
             role="context",
             default_on=True,

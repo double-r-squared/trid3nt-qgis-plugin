@@ -88,7 +88,7 @@ from trid3nt_server.tools.cache import read_through
 # shared in-process COG encoder (tiled + overviews) so the enhanced image
 # renders fast over TiTiler like every other derived COG; falls back to flat
 # bytes internally on any encode failure.
-from trid3nt_server.tools.processing._gdal_runner import translate_to_cog as _translate_to_cog
+from trid3nt_server.emission.cog import translate_to_cog as _translate_to_cog
 
 __all__ = [
     "enhance_satellite_image",

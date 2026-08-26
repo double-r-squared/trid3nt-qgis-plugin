@@ -35,10 +35,9 @@ A workflow file has three parts, none of which execute anything:
    meshes, decks). Each carries its PRODUCER description
    (`Fetch.dem()`, `BuildMesh.channel(...)`) which the runner executes
    - or an explicit BYO artifact satisfies it instead.
-3. `plan(p, d)` - a PURE function returning the step tree. No awaits,
-   no side effects: real Python conditionals during construction, a
-   fully-inspectable plan value as the output (the declarative-UI
-   `body()` idiom).
+3. `plan(ops)` - a PURE function returning the step tree. No awaits, no side
+   effects, and NO SHEET: it reads no concrete value, so it is built ONCE at
+   registration and the interpreter walks the same value on every run.
 
 The runner INTERPRETS the plan: it can print it (the step list),
 render the form from it, step it in the dock, validate every `Ref`
@@ -47,7 +46,8 @@ before execution, derive the dataflow DAG ("which params feed step
 serialize the plan as the run's provenance record.
 
 ```python
-PARAMS = [
+# declarations.py, one file over
+PARAMS = (
     Param("location",       door=doors.QUESTION, desc="River reach, as a place name."),
     Param("spill_fraction", door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
           desc="Initial plume span as a fraction of reach width."),
@@ -55,62 +55,100 @@ PARAMS = [
           desc="Where the substance enters the water."),
     Param("mesh_size_m",    door=doors.DERIVED, resolve="telemac.suggest_mesh_size",
           user_lever=True, desc="Target element edge length."),
-]
-DATA = [
+)
+
+# the template file
+DATA = (
     Data("terrain", Fetch.dem()),                       # reference: fetch-fresh, never byo
     Data("rivers",  Fetch.river_geometry()),
     Data("rain",    Fetch.rain().ladder("era5_domain_mean")),
-    Data("mesh",    BuildMesh.channel(banks=Ref("banks"), size=Ref("mesh_size_m"))
-                       .byo(validate=CoversAOI)),       # authored: byo-able, validated
-]
+    Data("breakwaters").optional(),                     # a context SLOT: no producer
+)
 
-def plan(p, d, ops):
+# -- the binding blocks --------------------------------------------------- #
+PHYSICS  = Physics("tracer", substance=P.substance, release=P.release_coords)
+FORCING  = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain)
+MESH     = MeshPolicy(resolution=P.mesh_resolution, target_edge_m=P.mesh_size_m)
+CORRIDOR = CorridorPolicy(extent_km=P.reach_length_km, width_m=P.channel_width_m)
+
+
+def plan(ops):
     return [
-        Geocode.river(p.location).named("reach"),
-        When(p.delineate,
-             Delineate.watershed(dem=d.terrain).overrides_domain()),
-        BankReach(rivers=d.rivers, seed=Ref("reach.seed")).named("banks"),
+        FormGate(),
         DrawGate(param="release_coords", geometry="point",
                  prompt="Click where the substance enters the river"),
-        FormGate(),
-        WriteDeck.telemac(mesh=d.mesh, forcing=d.rain,
-                          substance=p.substance, release=p.release_coords),
-        Solve(),
-        Postprocess()
-            .render(preset="dye_concentration")
-            .chart("concentration_timeseries", builder=dye_chart),
+        Geocode.river(P.location).named("reach"),
+        When(P.delineate,
+             Delineate.watershed(dem=D.terrain).overrides_domain()),
+        ops.author(mesh=ops.build_mesh(Ref("reach"), MESH, corridor=CORRIDOR),
+                   physics=PHYSICS, forcing=FORCING),
+        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=FORCING)
+           .chart("concentration_timeseries", builder=dye_chart),
     ]
 ```
 
 The plan returns the STEP SEQUENCE. The skeleton names and engines it (from the
 registration metadata and the facade), and `ops` is the engine facade whose five
-operations the mechanism steps above are reached through once a template is
-migrated. A chart's `builder` is the FUNCTION, colocated in this same file.
+operations the mechanism steps are reached through. A chart's `builder` is the
+FUNCTION, colocated in the template file.
 
-`p.<name>` yields a LATE-BOUND `ParamRef`, not the value: the plan is built
-once, before the gates it declares have run, so it must DESCRIBE the read and
-let the interpreter perform it against the current sheet. That is what makes a
-form-gate revision reach the run (what-was-approved == what-ran). A real
-construction-time branch reads the value explicitly - `When(p.get("delineate"),
-...)` - and `bool(ParamRef)` refuses rather than silently reading True.
+### The static-plan rule
 
-Every CONCRETE read path on the sheet records the name it hands over -
-`get`, `row`, `rows`, `values_dict`, and the `values_view()` view's attribute
-access alike. That record is what lets the validator refuse a plan that declares
-a `FormGate` and also branches on a value that gate can revise; a read path that
-did not record was a side entrance to the same frozen branch. The set closes at
-validation, so a sheet reused for a second run carries no run-time reads into it.
+`P.<name>` yields a LATE-BOUND `ParamRef` and `D.<name>` a `DataRef`, never the
+value. They are MODULE-LEVEL namespaces carrying no sheet and no workflow, which
+is the whole point: a binding block can sit above `plan()` as a plain frozen
+value, and the plan becomes a pure assembly of blocks rather than a function that
+has to be called with a sheet before it means anything. Every name is checked
+against the template's own PARAMS/DATA AT REGISTRATION, and the refusal carries
+the `file.py:line` where the ref was written plus the nearest declared spellings -
+because the error fires an import away from the line that caused it.
 
-A `When` body is a SCOPE: a step named inside it is Ref-able only from inside it,
-because the branch may not be taken and a Ref from outside would be a runtime
-`REF_UNRESOLVED` waiting to happen. That has a consequence worth stating, since
-it decides plan shapes (ADR 0307): an OPTIONAL VARIANT whose result the answer
-step must read cannot be `When`-guarded. Either the variant is declared
-unconditionally, or the branch and everything that reads it move inside one
-composite - and hiding a solve inside a composite is what this library exists to
-undo. Both SWMM wave-A templates chose to declare: the RDII cross-check and the
-snowmelt plow variant are always-on plan nodes, and both were things the template
-claimed to be about anyway.
+The blocks are DEEP-frozen. They live at module scope for the life of the process
+and every run reads the same object, so a nested mapping or list inside one would
+be a cross-run channel: a step that popped a key out of a declared dict would
+change what the next run declares.
+
+The plan reads NO concrete value, which has three consequences:
+
+- it is built ONCE, at registration, and validated there - a `P.` typo, an
+  unreachable `Ref`, a misplaced gate or a physics process the facade does not
+  model is an AUTHORING error that never reaches a caller as a run failure;
+- there is no read-recording machinery, because there are no construction-time
+  reads to record. `ResolvedParams.get` is gone; the concrete read is
+  `value_of`, and it belongs to the interpreter and to code running WITH a sheet;
+- EVERY conditional is a `When`, and the interpreter decides it AFTER the gates.
+
+### `When` - the one conditional
+
+A `When` condition is a late-bound read (`P.<param>`, `D.<data>`, or
+`Ref("step.field")`); a concrete value is refused, because a branch decided while
+the plan value is being built is decided before anything the user could approve.
+The interpreter binds the condition against the CURRENT sheet at the moment the
+branch is reached, so an approved form-gate revision decides which body runs -
+the same what-was-approved-is-what-ran promise the late-bound reads give a step's
+arguments.
+
+A guarded body is also a SCOPE: a step named inside it is Ref-able only from
+inside it, because the branch may not fire and a Ref from outside would be a
+runtime `REF_UNRESOLVED` waiting to happen. That decides plan shapes: an OPTIONAL
+VARIANT whose result the answer step must read cannot be `When`-guarded - either
+the variant is declared unconditionally, or the branch and everything that reads
+it move inside one composite, and hiding a solve inside a composite is what this
+library exists to undo. Both SWMM wave-A templates chose to declare.
+
+Guarded steps still carry stable ledger indices (every declared node is numbered,
+fired or not), so an attempt that took a different branch than the one before it
+can still replay what it shares.
+
+### The declarations sibling
+
+Every template folder carries `declarations.py`, holding exactly PARAMS and DOC.
+The template file keeps the QUESTION docstring, DATA, the binding blocks, `plan`,
+ANSWER, the chart function, the metadata and the registration - so the RECIPE
+reads on one page while the CONTRACT, which runs to forty rows, is one file over.
+Python rather than JSON, because types, `resolve=` hooks and the three render
+surfaces all keep working.
 
 A step that runs its OWN input review declares `self_gating=True`; a plan may
 not put a `FormGate` in front of one, because the composite reads its own
@@ -143,8 +181,20 @@ a byo mesh's footprint). The Case camera follows the final domain.
 ## Param vs Data
 
 Param = a VALUE (fits in a form cell; doors; bounds; form-editable).
-Data = an ARTIFACT (object store; produced or BYO'd; ladders +
-coverage validation; emitted to the canvas as it arrives). Boundary
+Data = an ARTIFACT (object store; produced, BYO'd, handed in, or absent;
+ladders + coverage validation; emitted to the canvas as it arrives).
+
+Producers are DEMAND-PULLED: one runs when a step that `Ref`s it executes, which
+is what makes a `When`-guarded consumer whose branch does not fire cost no fetch.
+
+A `Data` may declare NO producer at all - a CONTEXT SLOT. The template names the
+artifact it can use and says nothing about where it comes from, because naming a
+default fetcher for a breakwater or a clip zone is an opinion the question does
+not carry. What satisfies one arrives from outside (a layer the user already has,
+a file URI, a gate's answer) or nothing does, and `.optional()` says that absence
+is legal - and LABELLED: the run reports which slot went unfilled, because it
+answered a slightly different question than one that had the layer. An
+unsatisfied REQUIRED slot refuses typed. Boundary
 rule for drawn geometry: a handful of vertices parameterizing the
 question = Param (via draw gate); a feature layer participating as a
 dataset (obstruction geometry, clip zone) = Data with the draw gate
@@ -308,14 +358,13 @@ waits per the hybrid rule).
 
 ## Steps beyond fetch/solve
 
-- PRE/POST/RENDER as declared steps. The render toolset promotes the
-  single publish_layer styling seam into declared primitives;
-  zero-as-transparent is a RENDERING choice only (rasters keep their
-  zeros - law 9 applies to pixels) and arrives WITH that toolset, since
-  publish_layer has no zero-handling knob to declare against today.
-  Render steps are agent-callable conversationally. A render's SOURCE
-  is not auxiliary: a step that declared a render and produced no
-  raster failed, and says so.
+- STYLE as a declaration MODIFIER, not a step. Emission is AUTOMATIC on every
+  surface, and the style contract already answers "how is this quantity painted"
+  for every product, so `.style(preset=|colormap=|policy=|range=|transform=|clip=)`
+  exists only for the ad hoc case the defaults cannot express. Absence means the
+  contract default. The `.render` verb is RETIRED: renders are the plugin's job,
+  and workflows describe products. The honesty floor survives the swap - a step
+  that declared a style and produced no layer to paint failed, and says so.
 - CHART STEPS: the chart SPEC (kind + data + axes) is the persisted
   product; the plugin chart dock is the ONE renderer. Closes the
   chart-restore gap; ends server-side figure generation (matplotlib
@@ -613,6 +662,65 @@ fallback ladders, provenance, staleness, typed refusals - lives ONCE
 and is authoritative. No step tier, engine facade, or skeleton stage
 re-implements or re-wraps it at another level of abstraction: the
 acquire stage INTERPRETS `Data` declarations; it never fetches.
+
+### The emission contract - one page
+
+PRODUCERS DECLARE PRODUCTS; EMISSION PERFORMS THEM; NOTHING ELSE MAY PUBLISH.
+That is the whole contract, and the rest of this section is what each clause
+costs.
+
+**A producer declares a QUANTITY, never a style.** A step that computed a depth
+field says `flood_depth`. Which colours that gets, over what range, in what units
+and under what legend label is the STYLE CONTRACT's answer
+(`contracts/trid3nt_contracts/styles.yaml`), which holds the preset table and the
+quantity -> preset defaults IN ONE FILE so a mirror between them is not
+constructible. A preset constant imported into engine code is the coupling this
+replaces.
+
+**One resolver.** `trid3nt_server/emission/styles.py` turns a preset plus a raster
+into a concrete scale and into the sentence the legend says about it. The
+data-driven rescale LOGIC is code and stays code (reading band statistics is not a
+declaration); the POLICY is declared. `emission/publish.py` keeps only the three
+RASTER guards - an embedded palette, an RGB(A) composite, a terrain token - because
+those are facts about the file, not about the style, and each is a way a
+single-band rescale would corrupt an already-coloured image.
+
+**Scale vocabulary, one schema, four entry points.** `policy` (data | fixed),
+`range`, `transform` (linear | log | sqrt | percentile), `clip`. The four entries
+are the contract default, a template's `.style()` modifier, a declared param knob,
+and the `restyle_layer` tool's arguments. Later stages override earlier ones field
+by field, every override is labelled, and the data underneath never changes.
+
+**`policy: data` is the default for model output**, because a hardcoded scale
+makes an output less informative the moment a run leaves the range somebody
+guessed. Two boundaries make it honest rather than merely nicer:
+
+- the SCOPE of "data" is the RUN, never the frame. The range is computed once over
+  the whole time axis and every frame and legend uses that one range. Per-frame
+  scoping is what made the same colour mean different values in successive
+  animation frames;
+- a COMPARISON set shares ONE range - before/after, coarse-versus-refined,
+  calibration iterations - because those layers are read against each other.
+
+Fixed ranges remain for domain-standard bounded quantities (a probability, a PGA
+in g, a temperature in K). LEGENDS ALWAYS STATE WHICH POLICY RAN AND OVER WHAT
+RANGE, because the colours cannot.
+
+**Style is DISPLAY STATE.** Rescaling recomputes nothing and changes no number, so
+the policy is available both up front and after the fact: `restyle_layer` re-emits
+the DISPLAY FACE of an already-published layer, and takes several layer ids plus
+`shared_scale` for an honest comparison. It deliberately cannot make a layer
+visible - a URI nothing published is a typed refusal - because that would be the
+deleted `publish_layer` tool wearing a new name.
+
+**Charts read the same vocabulary.** A chart's axis title and a layer's legend
+label come from one place, so the picture and the map cannot disagree about what a
+field is called or what it is measured in.
+
+**Coherence.** A published raster's maximum and the run's headline scalar for the
+same quantity agree within a stated tolerance, and the resolved range CONTAINS the
+headline - otherwise the caption states the gap. A number in prose that the
+picture cannot show is the dishonest case this pins.
 
 ### Emission unification (publish_layer dies)
 

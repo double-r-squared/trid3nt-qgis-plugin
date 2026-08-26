@@ -1,0 +1,11 @@
+restyle_layer:
+- rescale that flood depth layer so I can see the deeper water
+- the plume raster is all one colour, stretch the scale to its actual range
+- put these two runs on the same colour scale so I can compare them
+- show the sediment layer on a log scale instead
+- change the colour ramp on the water table layer to blues
+- clip the outliers out of the legend on that raster
+- the legend only goes to 3 m but the model peaked at 9, fix the scale
+- use a fixed 0 to 30 scale on the concentration map
+- repaint the before and after layers on one shared range
+- restyle that layer with the drawdown preset

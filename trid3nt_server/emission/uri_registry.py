@@ -84,6 +84,7 @@ __all__ = [
     "deactivate_registry",
     "get_uri_registry",
     "lookup_handle_for_uri",
+    "lookup_uri_for_handle",
     "observe_published_layer",
     "reset_uri_registries_for_tests",
 ]
@@ -1122,6 +1123,26 @@ def activate_registry(reg: SessionUriRegistry) -> Token:
 
 def deactivate_registry(token: Token) -> None:
     _ACTIVE_REGISTRY.reset(token)
+
+
+def lookup_uri_for_handle(handle: str) -> str | None:
+    """The DATA uri a layer handle stands for - the inverse of the lookup below.
+
+    A tool that acts on an ALREADY-published layer (re-painting it, comparing two)
+    is handed the handle the user sees, and the handle is the only thing it should
+    need. Accepts a short ``L<n>`` handle as readily as a full layer id, because
+    those are the two names a layer actually has. ``None`` outside an active
+    dispatch, or for a handle nothing published.
+    """
+    reg = _ACTIVE_REGISTRY.get()
+    if reg is None or not handle:
+        return None
+    key = handle.strip()
+    short = reg._short_to_uri.get(key.upper())
+    if short:
+        return short
+    record = reg._records.get(key)
+    return record.uri if record is not None else None
 
 
 def lookup_handle_for_uri(

@@ -65,6 +65,10 @@ import tempfile
 from typing import Any
 
 from trid3nt_contracts import new_ulid
+from trid3nt_contracts.styles import ScaleSpec
+
+from . import styles
+from .cog import translate_to_cog
 from .uri_registry import observe_published_layer
 
 __all__ = [
@@ -318,334 +322,6 @@ def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
 # lowercase (NOT matplotlib), do not change.
 # --------------------------------------------------------------------------- #
 
-#: Exact preset / variable key -> (rescale "lo,hi", colormap_name). Physically
-#: correct band + colormap per family. KEEP flood/plume byte-for-byte.
-_QGIS_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
-    # Hydrology (UNCHANGED - pre-F51 behavior pinned by tests).
-    "continuous_flood_depth": ("0,3", "ylgnbu"),
-    "continuous_plume_concentration": ("0,10", "reds"),
-    # SnapWave significant wave height (m) - wave animation. A
-    # CYAN/BLUE ramp (gnbu) over 0..6 m, visibly DISTINCT from depth's ylgnbu so
-    # the wave layer group never looks identical to the flood-depth group on the
-    # Mexico Beach coastal case. ADDITIVE - depth/plume stay byte-identical.
-    "continuous_wave_height": ("0,6", "gnbu"),
-    # Precipitation (mm).
-    "precipitation_mm": ("0,100", "blues"),
-    "gridmet_pr": ("0,100", "blues"),
-    "era5_total_precipitation": ("0,100", "blues"),
-    # Temperature (Kelvin) - exact members; *temperature* prefix catches more.
-    "hrrr_2m_temperature": ("250,320", "rdylbu_r"),
-    "gridmet_tmmx": ("250,320", "rdylbu_r"),
-    "gridmet_tmmn": ("250,320", "rdylbu_r"),
-    "era5_2m_temperature": ("250,320", "rdylbu_r"),
-    # Wind speed (derived scalar, m/s).
-    "wind_speed": ("0,25", "viridis"),
-    "hrrr_10m_wind_speed": ("0,25", "viridis"),
-    "gridmet_vs": ("0,25", "viridis"),
-    # Signed wind components (m/s) - diverging ramp centered on 0.
-    "hrrr_10m_u_wind": ("-25,25", "rdbu"),
-    "hrrr_10m_v_wind": ("-25,25", "rdbu"),
-    "era5_10m_u_wind": ("-25,25", "rdbu"),
-    "era5_10m_v_wind": ("-25,25", "rdbu"),
-    # Drought + fuel moisture.
-    "gridmet_pdsi": ("-6,6", "rdbu"),
-    "gridmet_fm100": ("0,40", "ylgn"),
-    "gridmet_fm1000": ("0,40", "ylgn"),
-    # GOES satellite - visible reflectance vs brightness-temperature bands.
-    "goes_visible": ("0,1", "gray"),
-    "goes_ir": ("180,330", "gray_r"),
-    "goes_wv": ("180,330", "gray_r"),
-    # NEW engines (parallel lanes) - ADDITIVE; flood/plume/wave above
-    # stay byte-identical. River<->aquifer seepage is SIGNED (gaining vs losing
-    # reach) -> a diverging rdbu ramp centered on 0; seismic PGA in [0,1] g -> a
-    # perceptually-uniform magma ramp; landslide susceptibility/probability in
-    # [0,1] -> a red(high)->green(low) rdylgn_r ramp.
-    "diverging_river_seepage": ("-100,100", "rdbu"),
-    # GAIA sediment bed-evolution (deposition/erosion, mm): a SIGNED field
-    # (deposition positive / erosion negative) -> a diverging rdbu ramp centered
-    # on 0, same pattern as river seepage. The deposition COG carries a data-
-    # driven legend (mm-scale) so the actual range renders; this registry range is
-    # the fallback (a fixed mm band would wash out sub-mm event deposition).
-    "diverging_bed_evolution": ("-20,20", "rdbu"),
-    # GeoClaw Okada coseismic seafloor deformation (m): a SIGNED field
-    # (uplift positive / subsidence negative) -> a diverging rdbu ramp centered on
-    # 0 so the dipole reads blue=subsidence / white=0 / red=uplift. The +/-5 m band
-    # spans a great-earthquake (Mw ~8-9) source; a smaller event's data-driven
-    # band_stats legend still renders its own range. Same pattern as river seepage /
-    # bed evolution above.
-    "diverging_seafloor_deformation": ("-5,5", "rdbu"),
-    # sprint-WQ: SWMM per-cell peak washoff CONCENTRATION (mg/L) - a sequential
-    # YlOrBr ramp (low->high pollutant load), visibly distinct from depth's
-    # SWMM WQ concentration (SWMM-WQ-1 fix 2026-07-21): INTENTIONALLY NOT a fixed
-    # entry. Pollutant concentration ranges span orders of magnitude across
-    # pollutants AND sites -- TSS is ~0-300 mg/L but E. coli is #/L in the 1e3-1e7
-    # range, so a single fixed rescale saturates one of them. The
-    # ``continuous_concentration`` preset therefore falls through to the GENERIC
-    # p2/p98 PERCENTILE fallback below, which auto-scales EACH pollutant COG to
-    # its OWN data range (viridis ramp). Do not re-add a fixed rescale here.
-    "continuous_seismic_pga": ("0,1", "magma"),
-    "continuous_landslide_susceptibility": ("0,1", "rdylgn_r"),
-    # Earthquake-triggered liquefaction probability in [0,1] -> a sequential
-    # blue ramp (dry/low -> saturated/high), visibly distinct from the
-    # landslide rdylgn_r map when both perils render together. The scenario GMF
-    # across-realization spread is a dimensionless geometric-std factor (~1..2+)
-    # -> a viridis ramp over a modest band; the paired mean COG uses the PGA
-    # magma preset.
-    "continuous_liquefaction_probability": ("0,1", "ylgnbu"),
-    "continuous_gmf_spread": ("1,2.5", "viridis"),
-    # conservation reference scenario -- ADDITIVE. NDVI is the canonical
-    # vegetation index in [-1, 1]; bare/water near 0, healthy canopy ~0.6-0.9 ->
-    # a green-up rdylgn ramp rescaled to the full physical range. MoBI
-    # imperiled-species importance is strictly positive (low->high); a ylgn ramp
-    # over a typical richness band reads as a biodiversity hotspot map.
-    # (NAIP RGB is a multiband COG -- handled by the RGBA/multiband passthrough
-    # in _resolve_qgis_style_params, NOT a single-band registry entry, so
-    # "naip_rgb" is intentionally absent here.)
-    "ndvi": ("-1,1", "rdylgn"),
-    "mobi_biodiversity": ("0,40", "ylgn"),
-    # ----------------------------------------------------------------------- #
-    # engine-coverage-levers STEP 3 -- NEW published output quantities.
-    # ADDITIVE; every entry above stays byte-identical. A SPEC.style_preset that
-    # is NOT in this registry silently falls through to a percentile rescale
-    # (a physically-wrong colormap), so a CI guard
-    # (test_output_quantity_style_presets_resolve) asserts every engine
-    # OUTPUT_QUANTITIES style_preset resolves HERE.
-    #
-    # MODFLOW head / water-table (m, local datum). A continuous head surface
-    # rendered with a perceptually-uniform viridis ramp over a generous head
-    # band so the gradient reads as a potentiometric surface. (The plume
-    # timeseries reuses continuous_plume_concentration above -- not a new key.)
-    "continuous_head_m": ("0,50", "viridis"),
-    # MODFLOW archetype products: distinct semantic ramps
-    # so drawdown (water DECLINE) and mounding (water RISE) never render with the
-    # same colormap. Registered so the OUTPUT_QUANTITIES style_preset specs validate.
-    "continuous_drawdown_m": ("0,10", "reds"),  # head decline under pumping
-    "continuous_dewatering_rate": ("0,5000", "reds"),  # DRN outflow (m3/day)
-    "continuous_mounding_m": ("0,10", "blues"),  # head rise under recharge (MAR)
-    # CSUB land subsidence (sprint sim-addons): ground compaction in cm, positive
-    # DOWN (subsidence). A sequential hot ramp so a deep bowl reads as intense; a
-    # subsidence run only produces positive values (pumping compaction), so a
-    # 0-based range is correct. Registered so the SubsidenceLayerURI style_preset
-    # validates instead of silently falling back to the percentile default.
-    "continuous_subsidence_cm": ("0,50", "inferno"),  # ground compaction (cm, +down)
-    "continuous_hydroperiod_m": ("0,5", "viridis"),  # seasonal water-table range
-    # MODFLOW GWE heat transport: the temperature COG renders the peak
-    # temperature EXCESS above the undisturbed aquifer in degC (a warm plume /
-    # ATES charged footprint). A sequential "hot" inferno ramp over a 0..40 degC
-    # band reads as heat (0 = ambient/cool, bright = the injection well core).
-    # EXACT key so it never falls through to the Kelvin "temperature" substring
-    # rule (250,320 rdylbu_r); a demo dT is ~30 degC so 0..40 keeps the core hot.
-    "continuous_temperature_c": ("0,40", "inferno"),
-    # Landlab discarded fields the component chain already computes. Drainage
-    # area spans many orders of magnitude -> a high-contrast viridis (the
-    # percentile fallback would also work, but pinning a key keeps the colormap
-    # stable across runs); slope is a 0..1 rise/run gradient -> a ylorrd "steep
-    # = hot" ramp; relative wetness in [0,1] -> a blues "wetter = darker" ramp;
-    # overland discharge (m^3/s) -> the same blues family as wetness but a wider
-    # band; the deterministic factor-of-safety field is dimensionless with
-    # FoS<1 = failure -> a rdylgn ramp (low/red = unstable, high/green = stable)
-    # rescaled 0..2 so FoS=1 sits at the diverging midpoint.
-    "continuous_drainage_area": ("0,1000000", "viridis"),
-    "continuous_slope": ("0,1", "ylorrd"),
-    "continuous_relative_wetness": ("0,1", "blues"),
-    "continuous_discharge_m3s": ("0,50", "blues"),
-    "continuous_factor_of_safety": ("0,2", "rdylgn"),
-    # SWMM additional node/link outputs the Output API already exposes.
-    # Node FLOODING_LOSSES (surface flooding rate, cfs/cms) and PONDED_VOLUME
-    # (ponded water volume) read as "how much water is ponding / where does it
-    # surcharge" -> a blues ramp; conduit FLOW_RATE (signed, m^3/s) -> a
-    # diverging rdbu centered on 0 (direction-aware); conduit FLOW_VELOCITY
-    # (m/s) -> a viridis speed ramp.
-    "continuous_flooding_losses": ("0,5", "blues"),
-    "continuous_ponded_volume": ("0,1000", "blues"),
-    "diverging_conduit_flow": ("-10,10", "rdbu"),
-    "continuous_conduit_velocity": ("0,5", "viridis"),
-    # tools-backlog #3 -- per-tool colormaps replacing the generic continuous_dem
-    # placeholder. ADDITIVE; entries above stay byte-identical. Impervious surface
-    # is 0..100 percent -> a reds "more paved = redder" ramp; population is
-    # people-per-pixel (WorldPop ~100 m / ACS) -> a magma density ramp. Slope ANGLE
-    # in DEGREES (0..90; most terrain <60) -> a "steep = hot" ylorrd ramp; aspect is
-    # a COMPASS direction (0..360) -> the cyclic hsv ramp so North reads the same
-    # hue at 0 and 360. To reach these, "slope"/"aspect" were removed from
-    # _TERRAIN_STYLE_TOKENS (the terrain passthrough now keeps ONLY dem/relief/
-    # hillshade/terrain/elevation grayscale; hillshade SHOULD stay grayscale as
-    # shaded relief). the backend colormaps land HERE; the
-    # Orchestrator finishes by wiring the frontend legends + substrate.
-    "impervious_surface_pct": ("0,100", "reds"),
-    "population_density": ("0,250", "magma"),
-    "slope_angle_deg": ("0,60", "ylorrd"),
-    "aspect_compass_deg": ("0,360", "hsv"),
-    # (ELMFIRE wildfire spread) -- ADDITIVE; entries above stay
-    # byte-identical. Time-of-arrival is HOURS from ignition over a typical
-    # scenario window (<= 24 h band; early arrival = dark, the advancing front
-    # = bright) -> the perceptually-uniform inferno "fire" ramp; flame length
-    # in METRES (postprocess converts ELMFIRE's feet once; most surface fires
-    # < 10 m) -> a "longer = hotter" ylorrd ramp; spread rate in m/min
-    # (ELMFIRE ft/min converted once; head-fire rates are typically < 30
-    # m/min) -> an oranges intensity ramp, visibly distinct from flame length.
-    "continuous_fire_arrival_hr": ("0,24", "inferno"),
-    "continuous_flame_length_m": ("0,10", "ylorrd"),
-    "continuous_fire_spread_rate": ("0,30", "oranges"),
-    # Staged CONUS groundwater recharge in mm/yr. The CONUS mean is ~148 mm/yr
-    # and the bulk of the country sits under 800; the wet-coast tail runs past
-    # 4000, so a 0-800 blues ramp keeps the arid/humid contrast readable instead
-    # of collapsing everything below the Olympic Peninsula into one flat hue.
-    "groundwater_recharge_mm_yr": ("0,800", "blues"),
-    # Staged Zell-Sanford CONUS surficial groundwater. Depth to water is a
-    # WETNESS reading, so the ramp runs blue (at the surface) to red (deep):
-    # 0-50 m holds the CONUS mean of ~19.9 m and nearly all of the humid east,
-    # and the arid tail past 50 m clamps to the dry end rather than flattening
-    # everything east of the Rockies into one hue. Saturated thickness is a
-    # QUANTITY, so it takes a sequential ramp over 0-150 m (CONUS mean ~54.9 m,
-    # bounded by the model's prescribed zone bottoms, 5-150 m CONUS-wide).
-    "water_table_depth_m": ("0,50", "rdylbu_r"),
-    "aquifer_saturated_thickness_m": ("0,150", "gnbu"),
-    # ADR 0298 Decision 7 -- transmissivity registered as its own spec
-    # (fetch_aquifer_transmissivity). M2/DAY, long-tailed (the paper's own
-    # west/east contrast is 14.05 vs 87.94 m2/day on the CONUS median, but a
-    # handful of western alluvial basins run past 100,000), so the rescale
-    # band is 1-1000 m2/day -- wide enough to hold the bulk of the CONUS
-    # distribution including the median-east tail, clamping only the rare
-    # hyper-transmissive alluvial-basin cells to the top of the ramp instead
-    # of collapsing the whole distribution below them. A viridis intensity
-    # ramp, visibly distinct from aquifer_saturated_thickness_m's gnbu --
-    # same model, different quantity.
-    "aquifer_transmissivity_m2_day": ("1,1000", "viridis"),
-}
-
-#: Safe non-empty default - never let a continuous raster fall through to an
-#: empty ``style_params`` (which gives stock per-tile grayscale autoscale).
-_QGIS_STYLE_SAFE_DEFAULT = "&rescale=0,1&colormap_name=viridis"
-
-
-def _sediment_yield_log_style_params() -> str:
-    """LOG-SCALED interval ``&colormap=`` for ``sediment_yield_t_ha_yr``.
-
-    RUSLE annual soil loss spans orders of magnitude (0.01 .. 1000+ t/ha/yr),
-    so a linear ``&rescale`` would paint everything below the worst gullies as
-    one flat color. Instead we emit a rio-tiler INTERVAL colormap
-    (``[[[min, max], [r, g, b, a]], ...]``) whose class breaks are the
-    log-spaced 1/5/10/50/100/500 t/ha/yr table owned by
-    ``compute_sediment_yield.SEDIMENT_YIELD_LOG_CLASSES`` (single source of
-    truth -- compute_sediment_yield builds its LayerURI ``legend`` from the
-    SAME table, so
-    the key always matches the paint). Lazy import mirrors the
-    ``_published_scenario_tool_names`` pattern (no import-order coupling).
-    ADDITIVE: every existing ``&rescale=..&colormap_name=..`` entry is
-    byte-identical.
-    """
-    import json as _json
-    from urllib.parse import quote
-
-    from trid3nt_server.tools.processing.compute_sediment_yield.compute_sediment_yield import (
-        SEDIMENT_YIELD_LOG_CLASSES,
-        hex_to_rgba,
-    )
-
-    intervals = [
-        [[lo, hi], hex_to_rgba(color)]
-        for lo, hi, color, _label in SEDIMENT_YIELD_LOG_CLASSES
-    ]
-    return "&colormap=" + quote(_json.dumps(intervals), safe="")
-
-
-def _registry_style_params(preset: str) -> str | None:
-    """Return ``&rescale=..&colormap_name=..`` for a known preset, else ``None``.
-
-    Exact key first, then sensible substring/prefix matching so future variants
-    (e.g. ``era5_2m_temperature_max``, ``hrrr_2m_temperature_anomaly``) still
-    land in the right physical band. ``hrrr_smoke_*`` is intentionally EXCLUDED
-    here (its range is ~1e-9..1e-6) so it falls through to the band-stats
-    generic auto-rescale below.
-    """
-    key = (preset or "").lower()
-    if not key:
-        return None
-    # 0. RUSLE soil loss -> LOG-SCALED interval colormap (t/ha/yr spans orders
-    #    of magnitude; see _sediment_yield_log_style_params).
-    if key == "sediment_yield_t_ha_yr":
-        return _sediment_yield_log_style_params()
-    # 1. Exact match.
-    hit = _QGIS_STYLE_REGISTRY.get(key)
-    if hit is not None:
-        rescale, cmap = hit
-        return f"&rescale={rescale}&colormap_name={cmap}"
-    # 2. hrrr_smoke_* -> generic band-stats fallback (tiny range).
-    if "smoke" in key:
-        return None
-    # 3. Family substring/prefix matching (order matters - most specific first).
-    #    (substring, (rescale, colormap))
-    family_rules: tuple[tuple[str, tuple[str, str]], ...] = (
-        # Signed wind components before generic "wind"/"temperature".
-        ("u_wind", ("-25,25", "rdbu")),
-        ("v_wind", ("-25,25", "rdbu")),
-        ("wind_speed", ("0,25", "viridis")),
-        ("temperature", ("250,320", "rdylbu_r")),
-        ("pdsi", ("-6,6", "rdbu")),
-        ("fm100", ("0,40", "ylgn")),
-        ("fm1000", ("0,40", "ylgn")),
-    )
-    for needle, (rescale, cmap) in family_rules:
-        if needle in key:
-            return f"&rescale={rescale}&colormap_name={cmap}"
-    # Precipitation family - PRECISE match, NOT a loose ``precip`` substring,
-    # so ``precipitable_water`` (and other ``precip*`` look-alikes) do NOT get
-    # the 0,100 mm precip ramp. Exact keys are already handled above; here we
-    # accept only a guarded prefix on the conventional precip variable names.
-    if (
-        key.endswith("_precip")
-        or key.endswith("_precipitation")
-        or key.endswith("precipitation_mm")
-        or key.endswith("_pr")
-        or "_precipitation_" in key
-    ):
-        return "&rescale=0,100&colormap_name=blues"
-    return None
-
-
-def _band1_percentile_rescale(raster_bytes: bytes | None) -> str | None:
-    """Compute ``&rescale=<p2>,<p98>&colormap_name=viridis`` from band-1 stats.
-
-    Reads band 1 from the in-hand COG bytes via a rasterio ``MemoryFile``,
-    masks nodata + non-finite values, and emits the 2nd/98th percentile rescale
-    with a perceptually-uniform ``viridis`` ramp. Returns ``None`` when the
-    bytes are missing, unreadable, or band 1 has NO finite values - callers
-    degrade to the SAFE default. Single-value / tiny-range bands are widened so
-    ``rescale`` is never a zero-width interval (which QGIS rejects).
-    """
-    if not raster_bytes:
-        return None
-    try:
-        import numpy as np
-        import rasterio
-        from rasterio.io import MemoryFile
-    except Exception as exc:  # noqa: BLE001 - deps unavailable: safe-default
-        logger.debug("band-stats deps unavailable (%s: %s)", type(exc).__name__, exc)
-        return None
-    try:
-        with MemoryFile(raster_bytes) as mem, mem.open() as src:
-            band = src.read(1, masked=True)
-            arr = np.ma.filled(band.astype("float64"), np.nan)
-            finite = arr[np.isfinite(arr)]
-            if finite.size == 0:
-                return None
-            lo = float(np.percentile(finite, 2))
-            hi = float(np.percentile(finite, 98))
-    except Exception as exc:  # noqa: BLE001 - unreadable / not a raster
-        logger.debug(
-            "band-stats read failed (%s: %s)", type(exc).__name__, exc
-        )
-        return None
-    if not (lo == lo and hi == hi):  # NaN guard (paranoia)
-        return None
-    if hi <= lo:
-        # Single-value / zero-width: widen around the value so QGIS accepts
-        # a non-degenerate range. Use a relative pad, with an absolute floor.
-        pad = max(abs(lo) * 0.01, 1e-6)
-        lo, hi = lo - pad, hi + pad
-    return f"&rescale={lo:g},{hi:g}&colormap_name=viridis"
-
-
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
     """True if the COG is RGB(A)/multiband - QGIS renders it DIRECTLY.
 
@@ -703,106 +379,61 @@ def _is_terrain_token_preset(style_preset: str | None, layer_uri: str) -> bool:
 
 
 def _resolve_qgis_style_params(
-    style_preset: str | None, layer_uri: str
+    style_preset: str | None, layer_uri: str, *,
+    override: "ScaleSpec | None" = None,
+    shared: tuple[float, float] | None = None,
 ) -> str:
-    """Resolve the ``&rescale=..&colormap_name=..`` style-params string (parsed by the QGIS plugin) for the s3 publish path.
+    """The ``&rescale=..&colormap_name=..`` string the QGIS plugin parses.
 
-    Resolution order (F51, hardened by the terrain/RGBA regression fix):
+    THE RENDER CHOKEPOINT. Three RASTER guards live here because they are facts
+    about the file rather than about the style, and each one is a way a
+    single-band rescale would CORRUPT an already-colorized image:
 
-    1. CATEGORICAL GUARD - if the COG carries an embedded band-1 GDAL color
-       table (NLCD land cover etc.), return ``""`` so QGIS colorizes from the
-       EMBEDDED palette and is NEVER washed out by a rescale.
-    2. RGBA / MULTIBAND PASSTHROUGH - if the COG is RGB(A) / >=3 bands (colored
-       relief, blended landcover + hillshade composite), return ``""``: QGIS
-       renders the baked colors directly; a single-band rescale/colormap would
-       CORRUPT it. This covers NATE's Toutle landcover+hillshade composite
-       regardless of preset.
-    3. TERRAIN-TOKEN PASSTHROUGH - if the preset / URI tokenizes to a terrain
-       token (``continuous_dem`` -> ``dem``, hillshade / slope / aspect / relief
-       / terrain / elevation), return ``""``: grayscale terrain auto-scales and
-       RGBA terrain renders directly, exactly as it did pre-F51.
-    4. REGISTRY - a typed preset/variable -> (rescale, colormap) lookup (exact
-       key, then family substring/prefix). Flood + plume are pinned here
-       byte-for-byte; single-band weather scalars (precip / temperature / wind /
-       drought / fuel-moisture / satellite) get their physically-correct band.
-    5. GENERIC FALLBACK - for any single-band continuous preset NOT in the
-       registry (and for ``hrrr_smoke_*``), compute the band-1 2nd/98th
-       percentile rescale with a viridis ramp from the in-hand COG bytes.
-    6. SAFE DEFAULT - if the stats read fails for ANY reason, emit
-       ``&rescale=0,1&colormap_name=viridis``. NEVER returns empty for a
-       single-band continuous scalar raster.
+    1. an embedded band-1 GDAL colour table (NLCD land cover) - the palette wins;
+    2. RGB(A) / >=3 bands (coloured relief, a landcover+hillshade composite) -
+       the baked colours render directly;
+    3. a terrain-family preset or URI (dem / hillshade / slope / aspect / relief /
+       elevation) - grayscale terrain auto-scales and RGBA terrain renders as is.
 
-    The COG bytes are read ONCE here and reused for the categorical-palette
-    probe, the RGBA/multiband probe, and the percentile fallback (no double
-    download).
+    Everything after that is the STYLE decision, and it is not made here: the
+    contract declares the preset and ``emission/styles.py`` resolves it, reading
+    this raster's own range only when the declared policy asks for it. The COG
+    bytes are read ONCE and shared by all three probes and the range read.
     """
     raster_bytes = _read_raster_bytes(layer_uri)
 
-    # 1. Categorical / paletted raster -> NO rescale (embedded palette wins).
     if raster_bytes is not None:
         try:
-            import rasterio
             from rasterio.io import MemoryFile
 
             with MemoryFile(raster_bytes) as mem, mem.open() as src:
                 if _read_band1_colormap(src) is not None:
                     logger.info(
-                        "publish_layer (style) %s carries an embedded band-1 "
-                        "color table - leaving style_params empty so QGIS "
-                        "colorizes from the palette",
-                        layer_uri,
-                    )
+                        "publish_layer (style) %s carries an embedded band-1 colour "
+                        "table - leaving style_params empty so QGIS colorizes from "
+                        "the palette", layer_uri)
                     return ""
         except Exception as exc:  # noqa: BLE001 - palette probe is best-effort
-            logger.debug(
-                "palette probe skipped (%s: %s)", type(exc).__name__, exc
-            )
+            logger.debug("palette probe skipped (%s: %s)", type(exc).__name__, exc)
 
-    # 2. RGBA / multiband composite -> NO rescale (QGIS renders directly).
-    #    Colored relief + blended landcover/hillshade composites are already
-    #    colorized; a single-band rescale/colormap would corrupt them. Pre-F51
-    #    these published with EMPTY style_params and rendered correctly.
     if _is_rgba_or_multiband(raster_bytes):
         logger.info(
-            "publish_layer (style) %s is RGB(A)/multiband - leaving "
-            "style_params empty so QGIS renders the baked colors directly "
-            "(no single-band rescale/colormap)",
-            layer_uri,
-        )
+            "publish_layer (style) %s is RGB(A)/multiband - leaving style_params "
+            "empty so QGIS renders the baked colours directly", layer_uri)
         return ""
 
-    # 3. Terrain-family preset/URI -> NO rescale. Grayscale hillshade/slope/
-    #    aspect auto-scales and RGBA colored relief renders directly, as it did
-    #    pre-F51. ``continuous_dem`` tokenizes to include ``dem`` -> matches.
     if _is_terrain_token_preset(style_preset, layer_uri):
         logger.info(
-            "publish_layer (style) preset=%r uri=%s is a TERRAIN-family raster "
-            "- leaving style_params empty (grayscale/RGBA terrain renders "
-            "correctly with no rescale)",
-            style_preset,
-            layer_uri,
-        )
+            "publish_layer (style) preset=%r uri=%s is a TERRAIN-family raster - "
+            "leaving style_params empty", style_preset, layer_uri)
         return ""
 
-    # 4. Typed registry (exact + family). Flood/plume + single-band weather
-    #    scalars pinned here.
-    params = _registry_style_params(style_preset or "")
-    if params is not None:
-        return params
-
-    # 5. Generic band-stats percentile fallback (also hrrr_smoke_*).
-    params = _band1_percentile_rescale(raster_bytes)
-    if params is not None:
-        return params
-
-    # 6. Safe, NEVER-empty default.
-    logger.info(
-        "publish_layer (style) no registry/stats match for preset=%r uri=%s - "
-        "using safe default rescale",
-        style_preset,
-        layer_uri,
-    )
-    return _QGIS_STYLE_SAFE_DEFAULT
+    resolved = styles.resolve_style(
+        style_preset, read_range=styles.band_range_reader(raster_bytes),
+        override=override, shared=shared)
+    logger.info("publish_layer (style) preset=%r uri=%s -> %s",
+                style_preset, layer_uri, resolved.legend_note())
+    return resolved.style_params()
 
 
 def style_params_from_band_stats(
@@ -814,48 +445,18 @@ def style_params_from_band_stats(
     p98: float | None = None,
     layer_uri: str = "",
 ) -> str:
-    """Resolve the ``&rescale=..&colormap_name=..`` style-params string (parsed by the QGIS plugin) WITHOUT a COG download.
+    """The same string, WITHOUT a COG download - the register-only fast path.
 
-    The register-only fast path (SFINCS postprocess offload, Phase 4): the worker
-    precomputes ``band_stats`` per COG, so the agent resolves the SAME style
-    params ``_resolve_qgis_style_params`` would, but from the manifest stats
-    instead of re-reading the COG. Resolution order mirrors that function exactly:
-
-    1. CATEGORICAL passthrough (``is_categorical``) -> ``""`` (embedded palette
-       wins).
-    2. RGBA / multiband passthrough (``is_rgba``) -> ``""`` (baked colors render
-       directly).
-    3. TERRAIN-token passthrough (preset / uri tokenizes to a terrain token) ->
-       ``""``.
-    4. REGISTRY (exact key, then family substring/prefix) - flood/plume/wave +
-       weather scalars pinned byte-for-byte.
-    5. GENERIC fallback from ``p2``/``p98`` (NO COG read) - the manifest's
-       precomputed substitute for ``_band1_percentile_rescale``.
-    6. SAFE non-empty default.
+    The worker precomputed the band stats onto the manifest, so the agent asks the
+    ONE resolver the same question with the percentiles already in hand. The three
+    raster guards arrive as flags for the same reason.
     """
-    # 1. Categorical / paletted -> embedded palette wins.
-    if is_categorical:
+    if is_categorical or is_rgba:
         return ""
-    # 2. RGBA / multiband composite -> QGIS renders baked colors directly.
-    if is_rgba:
-        return ""
-    # 3. Terrain-family preset/URI -> grayscale/RGBA terrain renders directly.
     if _is_terrain_token_preset(style_preset, layer_uri):
         return ""
-    # 4. Typed registry (exact + family).
-    params = _registry_style_params(style_preset or "")
-    if params is not None:
-        return params
-    # 5. Generic percentile rescale from the worker-precomputed band stats.
-    if p2 is not None and p98 is not None:
-        lo, hi = float(p2), float(p98)
-        if lo == lo and hi == hi:  # NaN guard
-            if hi <= lo:
-                pad = max(abs(lo) * 0.01, 1e-6)
-                lo, hi = lo - pad, hi + pad
-            return f"&rescale={lo:g},{hi:g}&colormap_name=viridis"
-    # 6. Safe, NEVER-empty default.
-    return _QGIS_STYLE_SAFE_DEFAULT
+    return styles.resolve_style(
+        style_preset, read_range=styles.fixed_range_reader(p2, p98)).style_params()
 
 
 # --------------------------------------------------------------------------- #
@@ -1439,48 +1040,31 @@ def _apply_band1_colormap(dst, cmap: dict | None) -> None:
 def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
     """Translate flat raster bytes into a tiled COG WITH overviews (F33).
 
-    Strategy:
-    1. PREFERRED - reuse ``compute_hillshade._translate_to_cog`` (the GDAL COG
-       driver path the kickoff mandates: tiled + overviews in one pass). It
-       resolves ``gdal_translate`` next to the ``gdaldem`` binary and falls
-       back to flat bytes when the binary is missing - so we verify the result
-       actually gained overviews before trusting it.
-    2. FALLBACK - rasterio (``rio-cogeo`` if present, else a manual
-       tiled-profile copy + ``build_overviews``) for environments without the
-       GDAL CLI on PATH.
+    Two paths. The COG-driver encode (``emission/cog.translate_to_cog``) tiles and
+    builds overviews in one pass; it degrades to the flat input bytes rather than
+    raising, so the result is CHECKED for overviews before it is trusted. The
+    rasterio fallback (``rio-cogeo`` if present, else a tiled-profile copy plus
+    ``build_overviews``) covers whatever the first path could not encode.
 
     Returns the new COG bytes, or ``None`` when no path could produce a real
     overview-bearing COG (caller then fails-open and publishes the original).
     """
-    # 1. GDAL CLI path (reuse, do not reimplement - kickoff mandate).
     in_tmp: str | None = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as in_f:
             in_tmp = in_f.name
             in_f.write(raster_bytes)
         try:
-            from trid3nt_server.tools.processing.compute_hillshade.compute_hillshade import (
-                _get_gdaldem_bin,
-                _translate_to_cog,
-            )
-
-            gdaldem_bin = _get_gdaldem_bin()  # raises if unavailable
-            cog_bytes = _translate_to_cog(in_tmp, gdaldem_bin)
-            # _translate_to_cog degrades to flat bytes when gdal_translate is
-            # absent - verify overviews actually landed before trusting it.
+            cog_bytes = translate_to_cog(in_tmp)
             if _raster_has_overviews(cog_bytes):
                 return cog_bytes
             logger.info(
-                "publish_layer: GDAL _translate_to_cog produced no overviews "
-                "(binary missing?) - trying rasterio fallback",
-            )
-        except Exception as exc:  # noqa: BLE001 - gdaldem unavailable / failed
+                "publish_layer: the COG encode produced no overviews - trying the "
+                "rasterio fallback")
+        except Exception as exc:  # noqa: BLE001 - encode unavailable / failed
             logger.info(
-                "publish_layer: GDAL COG translate path unavailable (%s: %s) - "
-                "trying rasterio fallback",
-                type(exc).__name__,
-                exc,
-            )
+                "publish_layer: the COG encode path is unavailable (%s: %s) - "
+                "trying the rasterio fallback", type(exc).__name__, exc)
     finally:
         if in_tmp is not None:
             try:
@@ -1674,7 +1258,7 @@ def _ensure_raster_has_overviews(layer_uri: str) -> str:
     QGIS can't downsample for low zooms), so before a raster's
     tile template / WMS face is ever registered, validate the source COG has
     overviews. When missing, auto-translate to a tiled+overview COG (reusing
-    ``compute_hillshade._translate_to_cog``, with a rasterio fallback), write it
+    ``emission.cog.translate_to_cog``, with a rasterio fallback), write it
     to a fresh sibling object, log the auto-translate, and publish THAT instead.
 
     Fail-open at every step: an unreadable raster, a missing rasterio, a failed
@@ -2017,6 +1601,14 @@ def publish_layer(
     project_qgs_uri: str | None = None,
     case_id: str | None = None,
     name: str | None = None,
+    #: A declared SPECIALIZATION of the contract's scale for this one layer -
+    #: the `.style()` modifier, a param knob, or `restyle_layer`. Absent means
+    #: the contract default, which is what nearly every publish wants.
+    scale: "ScaleSpec | None" = None,
+    #: One range shared across a COMPARED set, so before/after and
+    #: coarse-versus-refined are painted against each other rather than each
+    #: against itself.
+    shared_range: tuple[float, float] | None = None,
     # Absorb extra keywords. Kept after the tool died because the callers are
     # ~30 composers plus the emission seam, and a new keyword on one of them
     # must not break the other twenty-nine.
@@ -2236,7 +1828,8 @@ def publish_layer(
     effective_preset = style_preset
     if effective_preset is None or effective_preset == "auto":
         effective_preset = _infer_style_preset(layer_uri, layer_id)
-    style_params = _resolve_qgis_style_params(effective_preset, layer_uri)
+    style_params = _resolve_qgis_style_params(
+        effective_preset, layer_uri, override=scale, shared=shared_range)
     # DATA-DRIVEN LEGEND: derive the render KEY from the SAME resolved
     # style_params (so the legend range equals the painted range by
     # construction) and stash it keyed by the ENVELOPE uri - the raw s3://

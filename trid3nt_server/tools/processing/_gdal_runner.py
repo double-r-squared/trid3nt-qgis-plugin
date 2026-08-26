@@ -2,10 +2,14 @@
 
 Owns the single GDAL-CLI binary resolution (env override -> PATH), the
 PROJ/GDAL data-dir env wiring, the single subprocess invocation (timeout +
-returncode -> typed error), the shared raster-bytes reader, and the in-process
-COG encode. Only ``gdaldem`` and ``gdal_contour`` remain subprocess-backed
-(rasterio has no gdaldem/gdal_contour equivalent); COG encoding is in-process
-via the rasterio COG driver.
+returncode -> typed error), and the shared raster-bytes reader. Only ``gdaldem`` and ``gdal_contour``
+remain subprocess-backed (rasterio has no equivalent).
+
+COG ENCODING IS NOT HERE. Turning a flat GeoTIFF into a tiled
+COG-with-overviews is a PUBLICATION concern - it is what makes a raster
+renderable rather than what makes it correct - so it lives with the rest of
+emission (``trid3nt_server/emission/cog.py``). It used to sit here, and
+``emission/publish.py`` reached backwards into a terrain TOOL to get at it.
 
 Callers supply their own typed-error factory to ``run_gdal`` / ``read_raster_bytes``
 so each tool keeps its own error class + SCREAMING_SNAKE code.
@@ -17,7 +21,6 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -139,71 +142,3 @@ def read_raster_bytes(uri: str, *, on_error: Callable[[str], Exception]) -> byte
             return f.read()
     except OSError as exc:
         raise on_error(f"Could not read local path {uri!r}: {exc}") from exc
-
-
-def translate_to_cog(input_path: str, _gdal_bin: object | None = None) -> bytes:
-    """Encode a flat GeoTIFF into tiled COG-with-overviews bytes (in-process rasterio).
-
-    The rasterio ``COG`` driver tiles + builds overviews in one pass, so the
-    product renders without a per-strip range request. Preserves dtype, CRS,
-    transform, nodata, band color-interpretation, and a band-1 palette color
-    table (paletted rasters like NLCD land cover). Best-effort: returns the
-    input bytes unchanged on any failure (never raises).
-
-    ``_gdal_bin`` is accepted for backward-compatible call sites and ignored --
-    COG encoding no longer shells out to ``gdal_translate``.
-    """
-    out_tmp: str | None = None
-    try:
-        import rasterio
-
-        with rasterio.open(input_path) as src:
-            profile = {
-                "driver": "COG",
-                "width": src.width,
-                "height": src.height,
-                "count": src.count,
-                "dtype": src.dtypes[0],
-                "crs": src.crs,
-                "transform": src.transform,
-                "compress": "DEFLATE",
-            }
-            if src.nodata is not None:
-                profile["nodata"] = src.nodata
-            data = src.read()
-            colorinterp = src.colorinterp
-            try:
-                cmap = src.colormap(1)
-            except (ValueError, KeyError):
-                cmap = None
-            except Exception:  # noqa: BLE001 -- any read failure -> no colormap
-                cmap = None
-        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as of:
-            out_tmp = of.name
-        with rasterio.open(out_tmp, "w", OVERVIEW_RESAMPLING="NEAREST", **profile) as dst:
-            dst.write(data)
-            try:
-                dst.colorinterp = colorinterp
-            except Exception:  # noqa: BLE001 -- colorinterp set is best-effort
-                pass
-            if cmap:
-                try:
-                    dst.write_colormap(1, cmap)
-                except Exception:  # noqa: BLE001 -- colormap copy is best-effort
-                    pass
-        with open(out_tmp, "rb") as f:
-            return f.read()
-    except Exception as exc:  # noqa: BLE001 -- COG encode is best-effort
-        logger.warning(
-            "translate_to_cog: rasterio COG encode failed (%s: %s); returning flat bytes",
-            type(exc).__name__,
-            exc,
-        )
-        with open(input_path, "rb") as f:
-            return f.read()
-    finally:
-        if out_tmp is not None:
-            try:
-                os.unlink(out_tmp)
-            except OSError:
-                pass

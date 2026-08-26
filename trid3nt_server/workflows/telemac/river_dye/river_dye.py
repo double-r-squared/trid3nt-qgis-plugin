@@ -155,10 +155,14 @@ def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     peak_t = getattr(result, "dye_peak_time_s", None)
     if cmax is None or peak_t is None:
         return None
+    from trid3nt_server.emission.styles import preset_units
     from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     where = params.get("location") or getattr(result, "name", None) or "the reach"
     substance = params.get("substance") or "dye"
+    # The UNITS come from the style contract, so the chart's axis and the layer's
+    # legend cannot disagree about what this field is measured in.
+    units = preset_units("continuous_plume_concentration") or "mg/L"
     return build_chart_payload(
         vega_lite_spec={
             "mark": {"type": "line", "point": True},
@@ -167,11 +171,11 @@ def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
             "encoding": {
                 "x": {"field": "t_s", "type": "quantitative", "title": "Time (s)"},
                 "y": {"field": "dye_mgl", "type": "quantitative",
-                      "title": f"{str(substance).capitalize()} concentration (mg/L)"},
+                      "title": f"{str(substance).capitalize()} concentration ({units})"},
             },
         },
         title=f"Peak {substance} concentration - {where}",
-        caption=(f"Reach peak {substance} concentration {float(cmax):.3g} mg/L, "
+        caption=(f"Reach peak {substance} concentration {float(cmax):.3g} {units}, "
                  f"arriving {float(peak_t):.0f} s after release (idealized-bed demo)."),
     )
 
