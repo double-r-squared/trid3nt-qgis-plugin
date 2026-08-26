@@ -16,8 +16,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YYH7SKDANFM90V59WD1JQB",
-  "case_id": "01M0YYH821A0M6QDPQ7WRYXGQ9",
+  "session_id": "01M0ZQ9EC7MQ6F22M4C5HTNXMR",
+  "case_id": "01M0ZQ9EQ4W7QYD53BWVY0B8TR",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -29,7 +29,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YYJGZF85ZQ0X4XD91N5PHB",
+      "chart_id": "01M0ZQAS6WJQXKVXZZRZC616C0",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -488,15 +488,15 @@
       "title": "Wave agitation Kd (aoi)",
       "caption": "Forced by a prescribed 8 s incident wave: Phase-resolving screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YYH8NT74DM3FJWW8C2SXE5"
+      "created_turn_id": "01M0ZQ9GDB7XC9J99T8P3DFCY7"
     }
   ],
   "layers": [
     {
-      "layer_id": "01M0YYJH70CREDFYSNGXWMGR13",
+      "layer_id": "01M0ZQASEJS8Y8EHTFGK01XVB2",
       "name": "Wave agitation Kd (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YYH8PSTCFQ0KMP75ZBZ2KW/overviews/01M0YYJGXJYPKJGXA6TCQ0Z5EE.tif",
+      "uri": "s3://trid3nt-runs/01M0ZQ9GH1BZDF4GZRT9DFA9ZX/overviews/01M0ZQAS4Y55BBFYX740XE6SQ5.tif",
       "style_preset": "continuous_wave_agitation",
       "visible": true,
       "role": "primary",
@@ -656,11 +656,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YYH8PSTCFQ0KMP75ZBZ2KW",
+  "run_id": "01M0ZQ9GH1BZDF4GZRT9DFA9ZX",
   "chart_spec": {
     "harbor_agitation": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YYJGZF85ZQ0X4XD91N5PHB",
+      "chart_id": "01M0ZQAS6WJQXKVXZZRZC616C0",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -1354,7 +1354,7 @@
       1.604
     ],
     "agitation_curve_kind": "resonance_sweep",
-    "layer_uri": "s3://trid3nt-runs/01M0YYH8PSTCFQ0KMP75ZBZ2KW/overviews/01M0YYJGXJYPKJGXA6TCQ0Z5EE.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZQ9GH1BZDF4GZRT9DFA9ZX/overviews/01M0ZQAS4Y55BBFYX740XE6SQ5.tif",
     "wave_period_note": "prescribed monochromatic incident wave period",
     "structure": null,
     "structure_note": null,
@@ -1362,8 +1362,8 @@
     "target_resolution_note": "not supplied; the grid is laid at the labeled default spacing - 40 m over a real harbour, 8 m in the analytic domain"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YYH8PSTCFQ0KMP75ZBZ2KW/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YYH8PSTCFQ0KMP75ZBZ2KW/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZQ9GH1BZDF4GZRT9DFA9ZX/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZQ9GH1BZDF4GZRT9DFA9ZX/metrics.json"
   },
   "product_errors": {}
 }

@@ -13,8 +13,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YYZ7YME6Z83QBV0QZTPKDE",
-  "case_id": "01M0YYZ87941XKYCBKXW505QMW",
+  "session_id": "01M0ZPDHZ5C410Y4H6KEA604XK",
+  "case_id": "01M0ZPDJ9F6E043TDXQ2MMJANQ",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -26,7 +26,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YZ16EPPDYAVJKMT8FJRVC8",
+      "chart_id": "01M0ZPFMBJ3QVM5GXKY60SC57W",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -105,7 +105,7 @@
       "title": "Outlet hydrograph - watershed",
       "caption": "Peak outflow 0 m3/s from a 30.5 km2 catchment, 25 mm/h storm, runoff coefficient 0. Planning-grade single-storm screening: infiltrated water is permanently lost, so there is no baseflow limb.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YYZ8WJNHHHMJ5TYRY2EGM5"
+      "created_turn_id": "01M0ZPDK0TR5ZCDWX6TBQGPERK"
     }
   ],
   "layers": [
@@ -76347,10 +76347,10 @@
       }
     },
     {
-      "layer_id": "model-results-mesh-01M0YYZM4Z6DXJFB8HC7ZDD9JH",
+      "layer_id": "model-results-mesh-01M0ZPE1ZEVAY084SYHH0X5HNH",
       "name": "Model results (time series): watershed",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M0ZPE1ZEVAY084SYHH0X5HNH/r2d_rog.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -76362,10 +76362,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0YZ16XM4AHTVGRDCDAF9EG9",
+      "layer_id": "01M0ZPFMKAKVFS8VT7TJZQ9RN1",
       "name": "Max water depth (watershed)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/overviews/01M0YZ16ABQ5P2AKXV3X1GSBA2.tif",
+      "uri": "s3://trid3nt-runs/01M0ZPE1ZEVAY084SYHH0X5HNH/overviews/01M0ZPFM77S4AX4VPVGT42PEHM.tif",
       "style_preset": "continuous_water_surface_elevation",
       "visible": true,
       "role": "primary",
@@ -76732,11 +76732,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YYZM4Z6DXJFB8HC7ZDD9JH",
+  "run_id": "01M0ZPE1ZEVAY084SYHH0X5HNH",
   "chart_spec": {
     "rain_on_grid_outlet_hydrograph": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YZ16EPPDYAVJKMT8FJRVC8",
+      "chart_id": "01M0ZPFMBJ3QVM5GXKY60SC57W",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -76841,7 +76841,7 @@
       -83.39982025301708,
       35.073210729988745
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/overviews/01M0YZ16ABQ5P2AKXV3X1GSBA2.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZPE1ZEVAY084SYHH0X5HNH/overviews/01M0ZPFM77S4AX4VPVGT42PEHM.tif",
     "rain_event": "design_storm",
     "rain_event_note": "a CONSTANT design storm of 25 mm/h over 1 h - a hypothetical event, not a record. Ladder aorc_hourly -> design_storm.",
     "sim_duration_hr": 2.0,
@@ -76854,8 +76854,8 @@
     "mesh_bed_note": "mesh bed DEM: USGS 3DEP bare-earth (10 m); ladder usgs_3dep_bare_earth -> copernicus_glo30"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YYZM4Z6DXJFB8HC7ZDD9JH/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZPE1ZEVAY084SYHH0X5HNH/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZPE1ZEVAY084SYHH0X5HNH/metrics.json"
   },
   "product_errors": {}
 }

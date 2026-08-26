@@ -1,0 +1,269 @@
+{
+  "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "working_tree_dirty",
+    "code_sha": "d909f4269fb24c78650849d2fde99fbd1e119e87",
+    "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
+  },
+  "template": "tomawac_wave_field",
+  "variant": "refined",
+  "tool": "tomawac_wave_field",
+  "run_id": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+  "stem": "tomawac_wave_field_refined",
+  "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined",
+  "panel_base": "tomawac_wave_field_refined",
+  "mode": "render",
+  "assembled_at": "2026-08-26T12:09:47",
+  "assembler": "scripts/assemble_proof_packet.py",
+  "time_stepped": {
+    "frames": 2,
+    "slf": "res_wave.slf",
+    "source": "s3://trid3nt-runs/01M0ZQ0YSB5BBWW708PBY1CSNV/res_wave.slf",
+    "method": "SELAFIN header + file length",
+    "npoin": 17136,
+    "nelem": 33744,
+    "nbv1": 5,
+    "varnames": [
+      "WAVE HEIGHT HM0 M",
+      "MEAN DIRECTION  DEG",
+      "WATER DEPTH     M",
+      "MEAN PERIOD TM01S",
+      "PEAK PERIOD TPD S"
+    ],
+    "bytes": 1296512,
+    "header_bytes": 610968,
+    "frame_bytes": 342772,
+    "recorded_ntimestep": null
+  },
+  "animation_declarations": [
+    {
+      "name": "default",
+      "variable": "WAVE HEIGHT HM0",
+      "units": "m",
+      "quantity": "wave_height",
+      "mask_var": "WATER DEPTH",
+      "mask_threshold": 0.02,
+      "dry_land_only": false,
+      "derived": [],
+      "transform": null,
+      "vectors": null,
+      "still_vectors": null,
+      "vector_density": 1.4,
+      "vector_grid_n": 200,
+      "arrow_size": 0.7,
+      "vector_lw": [
+        0.35,
+        1.1
+      ],
+      "still": "peak",
+      "plane": "surface",
+      "suffix": "",
+      "reason": "the significant wave height is the sea state the run reports; it GROWS with fetch and duration, so the peak frame is the answer.",
+      "exempt_reason": null,
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    }
+  ],
+  "notes": [],
+  "published_layers": [
+    "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+    "Significant wave height (aoi)"
+  ],
+  "verdict": "PASS",
+  "missing": [],
+  "deliverables": [
+    {
+      "order": 1,
+      "kind": "panel",
+      "caption": "1. Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m) - context/raster, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+      "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+      "bytes": 496880,
+      "mtime": "2026-08-26T12:09:46",
+      "run_id_stamp": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "verdict": "present"
+    },
+    {
+      "order": 2,
+      "kind": "panel",
+      "caption": "2. Significant wave height (aoi) - primary/raster, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_panel_02_significant-wave-height-aoi.png",
+      "layer": "Significant wave height (aoi)",
+      "bytes": 176927,
+      "mtime": "2026-08-26T12:09:46",
+      "run_id_stamp": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "verdict": "present"
+    },
+    {
+      "order": 3,
+      "kind": "canvas_view",
+      "caption": "3. CANVAS VIEW - all 2 layers stacked in emission order, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_panel_03_canvas-view.png",
+      "bytes": 446262,
+      "mtime": "2026-08-26T12:09:46",
+      "run_id_stamp": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "verdict": "present"
+    },
+    {
+      "order": 4,
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 3 panels in emission order, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined.png",
+      "bytes": 454089,
+      "mtime": "2026-08-26T12:09:47",
+      "run_id_stamp": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "verdict": "present"
+    },
+    {
+      "order": 5,
+      "kind": "chart",
+      "caption": "Chart wave_fetch_growth - the run's persisted spec through the plugin chart dock's own renderer, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_chart_wave_fetch_growth.png",
+      "chart": "wave_fetch_growth",
+      "bytes": 51640,
+      "mtime": "2026-08-26T12:09:47",
+      "run_id_stamp": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "verdict": "present"
+    },
+    {
+      "order": 6,
+      "kind": "animation",
+      "caption": "Animation [default] - WAVE HEIGHT HM0 masked to WATER DEPTH > 0.02 (m), 2 frames on one run-scoped colour scale with a static legend, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_animation.gif",
+      "animation": "default",
+      "declared_field": "WAVE HEIGHT HM0 masked to WATER DEPTH > 0.02 (m)",
+      "declared_reason": "the significant wave height is the sea state the run reports; it GROWS with fetch and duration, so the peak frame is the answer.",
+      "bytes": 647485,
+      "mtime": "2026-08-26T12:09:45",
+      "verdict": "present",
+      "gif_checks": {
+        "frames": 2,
+        "size": [
+          1300,
+          872
+        ],
+        "distinct_frames": 2,
+        "legend_x_frac": 0.875,
+        "legend_ramp_colours": 74,
+        "legend_covers_a_ramp": true,
+        "legend_drift_frames": [],
+        "field_moves": true
+      }
+    },
+    {
+      "order": 7,
+      "kind": "still",
+      "caption": "PEAK frame [default] - WAVE HEIGHT HM0 masked to WATER DEPTH > 0.02 (m), the animation's own figure at its peak step, same colours and extent, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_peak_frame.png",
+      "animation": "default",
+      "bytes": 997459,
+      "mtime": "2026-08-26T12:09:47",
+      "run_id_stamp": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "verdict": "present"
+    },
+    {
+      "order": 8,
+      "kind": "evidence",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0ZQ0YSB5BBWW708PBY1CSNV",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_canary_evidence.json",
+      "bytes": 40602,
+      "mtime": "2026-08-26T12:00:13",
+      "verdict": "present"
+    }
+  ],
+  "render": {
+    "sheet": {
+      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined.png",
+      "bytes": 453852,
+      "panels": 3,
+      "layers": [
+        "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+        "Significant wave height (aoi)"
+      ],
+      "not_rendered": [],
+      "off_canvas": [],
+      "panel_pngs": [
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+          "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_panel_02_significant-wave-height-aoi.png",
+          "layer": "Significant wave height (aoi)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_panel_03_canvas-view.png",
+          "layer": "CANVAS VIEW"
+        }
+      ]
+    },
+    "charts": [
+      {
+        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_chart_wave_fetch_growth.png",
+        "name": "wave_fetch_growth",
+        "title": "Significant wave height (aoi)",
+        "render_summary": {
+          "views": 1,
+          "lines": 1,
+          "series": 1,
+          "rules": 0,
+          "bars": 0,
+          "points": 153,
+          "skipped": 0,
+          "x_log": false,
+          "y_log": false,
+          "legend_labels": []
+        },
+        "bytes": 51371
+      }
+    ],
+    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animations": {
+      "default": {
+        "frames": 2,
+        "animated": true,
+        "variable": "WAVE HEIGHT HM0 M",
+        "plane": "2d",
+        "peak_frame": 1,
+        "peak_time_s": 3600.0,
+        "peak_value": 0.7165858745574951,
+        "dry_frames": [],
+        "vmin": 0.02003166824579239,
+        "vmax": 0.7165422880649567,
+        "style_preset": "continuous_wave_height",
+        "legend_note": "scaled to this run (p2-p98): 0.0200317 to 0.716542 m",
+        "transform": "percentile",
+        "colormap": "GnBu",
+        "vectors": null,
+        "still_vectors": null,
+        "vector_density": null,
+        "arrow_size": null,
+        "vector_lw": null,
+        "vector_grid": null,
+        "still_vector_grid": null,
+        "bbox_ll": [
+          -87.60560366378678,
+          46.699999999999996,
+          -86.59999999687385,
+          47.20069821058403
+        ],
+        "local_origin_m": [
+          454130.0084720558,
+          5172001.871532832
+        ],
+        "run_id": "01M0ZQ0YSB5BBWW708PBY1CSNV",
+        "origin_bbox": [
+          -87.6,
+          46.7,
+          -86.6,
+          47.2
+        ],
+        "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_animation.gif",
+        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/tomawac_wave_field/refined/tomawac_wave_field_refined_peak_frame.png",
+        "animation_bytes": 647485,
+        "peak_bytes": 997144
+      }
+    }
+  }
+}

@@ -20,8 +20,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0W1SSFGR953XHRK9P17AAG9",
-  "case_id": "01M0W1SSQG4G5PEA4NZA3B3JKX",
+  "session_id": "01M0ZQ0XH5WA5HJ4Y0YCNGJ84Y",
+  "case_id": "01M0ZQ0XTB65MX0YXT9FV19AJS",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -33,7 +33,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W1W2A9KE4X9CV2JM3RSGZ0",
+      "chart_id": "01M0ZQ37CZP3XMBXW2CG1TQT07",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -672,15 +672,15 @@
       "title": "Significant wave height (aoi)",
       "caption": "Fetch-limited growth under a prescribed 20 m/s wind: Hs 0.142 m at the upwind shore rising to 0.717 m downwind. Spectral screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W1STDG7M86YRY752P13XNX"
+      "created_turn_id": "01M0ZQ0YFJP8048PRYXDBHDEYK"
     }
   ],
   "layers": [
     {
-      "layer_id": "input-lake-bed-01M0W1W27J3EFQG9XKQBZFXYB7",
-      "name": "Input: lake bed bathymetry (aoi, NOAA Great Lakes lake-datum, in-worker)",
+      "layer_id": "input-ncei_dem_mosaic-675132065060",
+      "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0ZQ0YNN6JK5DGA0T4PNTTZ3.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -692,10 +692,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0W1W2H0H1YPD4ENW7HXACSB",
+      "layer_id": "01M0ZQ3831SY8EN4GJ9RHJRBF9",
       "name": "Significant wave height (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/tomawac_hs.tif",
+      "uri": "s3://trid3nt-runs/01M0ZQ0YSB5BBWW708PBY1CSNV/tomawac_hs.tif",
       "style_preset": "continuous_significant_wave_height",
       "visible": true,
       "role": "primary",
@@ -707,12 +707,12 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 0.204535,
-        "vmax": 0.716563,
+        "vmin": 0.0,
+        "vmax": 0.7166,
         "classes": null,
         "value_field": null,
-        "units": null,
-        "label": "Significant wave height"
+        "units": "m",
+        "label": "Significant wave height Hs (m)"
       }
     }
   ],
@@ -838,20 +838,6 @@
         "note": "supplied on this invocation"
       },
       {
-        "name": "sim_duration_hours",
-        "value": 1.0,
-        "units": "h",
-        "door": "scenario",
-        "basis": "user",
-        "source_badge": "you supplied this",
-        "bounds": [
-          1.0,
-          24.0
-        ],
-        "advanced": false,
-        "note": "supplied on this invocation"
-      },
-      {
         "name": "wind_direction_deg",
         "value": 270.0,
         "units": "deg",
@@ -889,16 +875,30 @@
         "bounds": null,
         "advanced": true,
         "note": "supplied on this invocation"
+      },
+      {
+        "name": "sim_duration_hours",
+        "value": 1.0,
+        "units": "h",
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          24.0
+        ],
+        "advanced": true,
+        "note": "supplied on this invocation"
       }
     ],
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0W1STE456CZZ133AGXPQVKE",
+  "run_id": "01M0ZQ0YSB5BBWW708PBY1CSNV",
   "chart_spec": {
     "wave_fetch_growth": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W1W2A9KE4X9CV2JM3RSGZ0",
+      "chart_id": "01M0ZQ37CZP3XMBXW2CG1TQT07",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -1859,14 +1859,16 @@
       0.7166,
       0.7166
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/tomawac_hs.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZQ0YSB5BBWW708PBY1CSNV/tomawac_hs.tif",
     "wind_note": "prescribed steady storm wind (no wave-forcing fetcher exists)",
     "bathy_source": "noaa_greatlakes",
-    "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)"
+    "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
+    "target_resolution_m": 500.0,
+    "target_resolution_note": "Explicit grid node spacing; 150 m is the finest the wave grid authors and a large lake is coarsened under the node budget [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W1STE456CZZ133AGXPQVKE/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZQ0YSB5BBWW708PBY1CSNV/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZQ0YSB5BBWW708PBY1CSNV/metrics.json"
   },
   "product_errors": {}
 }

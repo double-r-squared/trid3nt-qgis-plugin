@@ -21,8 +21,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0W26MPJXZXEHWY4DMRTNMZ0",
-  "case_id": "01M0W26N2PVADT5HF11H7XB89K",
+  "session_id": "01M0ZQDG1ECZKMFZTNXK2J2Z06",
+  "case_id": "01M0ZQDGAHWQYXEFHYVRD74CJD",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -34,7 +34,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W28MCYVHK5YVXP76W7AFSD",
+      "chart_id": "01M0ZQFES2VW2XN7GTA588GW49",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -48,63 +48,63 @@
               "state": "final"
             },
             {
-              "sigma": 0.083,
+              "sigma": 0.078,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.167,
+              "sigma": 0.1863,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.25,
+              "sigma": 0.3222,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.333,
+              "sigma": 0.4732,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.417,
+              "sigma": 0.6195,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.5,
-              "v": 15.0,
+              "sigma": 0.7438,
+              "v": 15.057,
               "state": "final"
             },
             {
-              "sigma": 0.583,
-              "v": 15.001,
+              "sigma": 0.8382,
+              "v": 15.719,
               "state": "final"
             },
             {
-              "sigma": 0.667,
-              "v": 15.021,
+              "sigma": 0.9037,
+              "v": 16.985,
               "state": "final"
             },
             {
-              "sigma": 0.75,
-              "v": 15.274,
+              "sigma": 0.9466,
+              "v": 20.881,
               "state": "final"
             },
             {
-              "sigma": 0.833,
-              "v": 16.035,
+              "sigma": 0.9736,
+              "v": 21.473,
               "state": "final"
             },
             {
-              "sigma": 0.917,
-              "v": 16.976,
+              "sigma": 0.9901,
+              "v": 21.774,
               "state": "final"
             },
             {
               "sigma": 1.0,
-              "v": 18.379,
+              "v": 21.952,
               "state": "final"
             },
             {
@@ -113,63 +113,63 @@
               "state": "initial"
             },
             {
-              "sigma": 0.083,
+              "sigma": 0.078,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.167,
+              "sigma": 0.1863,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.25,
+              "sigma": 0.3222,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.333,
+              "sigma": 0.4732,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.417,
+              "sigma": 0.6195,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.5,
-              "v": 15.0,
+              "sigma": 0.7438,
+              "v": 15.01,
               "state": "initial"
             },
             {
-              "sigma": 0.583,
-              "v": 15.0,
+              "sigma": 0.8382,
+              "v": 15.266,
               "state": "initial"
             },
             {
-              "sigma": 0.667,
-              "v": 15.0,
+              "sigma": 0.9037,
+              "v": 17.092,
               "state": "initial"
             },
             {
-              "sigma": 0.75,
-              "v": 15.0,
+              "sigma": 0.9466,
+              "v": 20.384,
               "state": "initial"
             },
             {
-              "sigma": 0.833,
-              "v": 15.0,
+              "sigma": 0.9736,
+              "v": 22.476,
               "state": "initial"
             },
             {
-              "sigma": 0.917,
-              "v": 15.0,
+              "sigma": 0.9901,
+              "v": 23.397,
               "state": "initial"
             },
             {
               "sigma": 1.0,
-              "v": 25.0,
+              "v": 23.808,
               "state": "initial"
             }
           ]
@@ -194,44 +194,35 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Surface temperature (aoi)",
-      "caption": "Top-to-bottom difference surviving the run: 3.379 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. 3D screening, not a calibrated study.",
+      "caption": "Top-to-bottom difference surviving the run: 6.952 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0W26P8ASBDB8GHG3G1MBME7"
+      "created_turn_id": "01M0ZQDH5A93W5YQWECPF6F81H"
     }
   ],
   "layers": [
     {
-      "layer_id": "telemac3d-bottom-01M0W26P94NG18KSKYQGZ1D8C3",
-      "name": "Bottom temperature (aoi)",
+      "layer_id": "input-ncei_dem_mosaic-675132065060",
+      "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W26P94NG18KSKYQGZ1D8C3/telemac3d_bottom.tif",
-      "style_preset": "continuous_stratified_flow",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0ZQDHCC5HSFKJPEEGS67DBX.tif",
+      "style_preset": "continuous_dem",
       "visible": true,
-      "role": "input",
+      "role": "context",
       "temporal": false,
       "wms_url": null,
       "opacity": null,
       "z_index": 0,
       "crs_authid": null,
-      "legend": {
-        "kind": "continuous",
-        "colormap": "viridis",
-        "vmin": 15.0,
-        "vmax": 25.0,
-        "classes": null,
-        "value_field": null,
-        "units": "degC",
-        "label": "Surface temperature (degC)"
-      }
+      "legend": null
     },
     {
-      "layer_id": "01M0W28MKDBTSFQ9322W205EFM",
-      "name": "Surface temperature (aoi)",
+      "layer_id": "telemac3d-bottom-01M0ZQDHGVDYN8NM4T25AT56NV",
+      "name": "Bottom temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0W26P94NG18KSKYQGZ1D8C3/telemac3d_surface.tif",
+      "uri": "s3://trid3nt-runs/01M0ZQDHGVDYN8NM4T25AT56NV/telemac3d_bottom.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
-      "role": "primary",
+      "role": "input",
       "temporal": false,
       "wms_url": null,
       "opacity": null,
@@ -240,12 +231,36 @@
       "legend": {
         "kind": "continuous",
         "colormap": "viridis",
-        "vmin": 16.174,
-        "vmax": 22.9856,
+        "vmin": 15.0,
+        "vmax": 23.59018,
         "classes": null,
         "value_field": null,
-        "units": null,
-        "label": "Stratified flow"
+        "units": "degC",
+        "label": "Surface temperature (degC)"
+      }
+    },
+    {
+      "layer_id": "01M0ZQFF120TVJ0C4SGDRWXE7N",
+      "name": "Surface temperature (aoi)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-runs/01M0ZQDHGVDYN8NM4T25AT56NV/telemac3d_surface.tif",
+      "style_preset": "continuous_stratified_flow",
+      "visible": true,
+      "role": "primary",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 2,
+      "crs_authid": null,
+      "legend": {
+        "kind": "continuous",
+        "colormap": "viridis",
+        "vmin": 15.0,
+        "vmax": 23.59018,
+        "classes": null,
+        "value_field": null,
+        "units": "degC",
+        "label": "Surface temperature (degC)"
       }
     }
   ],
@@ -357,20 +372,6 @@
         "note": "supplied on this invocation"
       },
       {
-        "name": "sim_duration_hours",
-        "value": 1.0,
-        "units": "h",
-        "door": "scenario",
-        "basis": "user",
-        "source_badge": "you supplied this",
-        "bounds": [
-          1.0,
-          24.0
-        ],
-        "advanced": false,
-        "note": "supplied on this invocation"
-      },
-      {
         "name": "thermocline_depth_m",
         "value": 8.0,
         "units": "m",
@@ -436,16 +437,30 @@
         "bounds": null,
         "advanced": true,
         "note": "supplied on this invocation"
+      },
+      {
+        "name": "sim_duration_hours",
+        "value": 1.0,
+        "units": "h",
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          24.0
+        ],
+        "advanced": true,
+        "note": "supplied on this invocation"
       }
     ],
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0W26P94NG18KSKYQGZ1D8C3",
+  "run_id": "01M0ZQDHGVDYN8NM4T25AT56NV",
   "chart_spec": {
     "vertical_profile": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0W28MCYVHK5YVXP76W7AFSD",
+      "chart_id": "01M0ZQFES2VW2XN7GTA588GW49",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -459,63 +474,63 @@
               "state": "final"
             },
             {
-              "sigma": 0.083,
+              "sigma": 0.078,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.167,
+              "sigma": 0.1863,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.25,
+              "sigma": 0.3222,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.333,
+              "sigma": 0.4732,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.417,
+              "sigma": 0.6195,
               "v": 15.0,
               "state": "final"
             },
             {
-              "sigma": 0.5,
-              "v": 15.0,
+              "sigma": 0.7438,
+              "v": 15.057,
               "state": "final"
             },
             {
-              "sigma": 0.583,
-              "v": 15.001,
+              "sigma": 0.8382,
+              "v": 15.719,
               "state": "final"
             },
             {
-              "sigma": 0.667,
-              "v": 15.021,
+              "sigma": 0.9037,
+              "v": 16.985,
               "state": "final"
             },
             {
-              "sigma": 0.75,
-              "v": 15.274,
+              "sigma": 0.9466,
+              "v": 20.881,
               "state": "final"
             },
             {
-              "sigma": 0.833,
-              "v": 16.035,
+              "sigma": 0.9736,
+              "v": 21.473,
               "state": "final"
             },
             {
-              "sigma": 0.917,
-              "v": 16.976,
+              "sigma": 0.9901,
+              "v": 21.774,
               "state": "final"
             },
             {
               "sigma": 1.0,
-              "v": 18.379,
+              "v": 21.952,
               "state": "final"
             },
             {
@@ -524,63 +539,63 @@
               "state": "initial"
             },
             {
-              "sigma": 0.083,
+              "sigma": 0.078,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.167,
+              "sigma": 0.1863,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.25,
+              "sigma": 0.3222,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.333,
+              "sigma": 0.4732,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.417,
+              "sigma": 0.6195,
               "v": 15.0,
               "state": "initial"
             },
             {
-              "sigma": 0.5,
-              "v": 15.0,
+              "sigma": 0.7438,
+              "v": 15.01,
               "state": "initial"
             },
             {
-              "sigma": 0.583,
-              "v": 15.0,
+              "sigma": 0.8382,
+              "v": 15.266,
               "state": "initial"
             },
             {
-              "sigma": 0.667,
-              "v": 15.0,
+              "sigma": 0.9037,
+              "v": 17.092,
               "state": "initial"
             },
             {
-              "sigma": 0.75,
-              "v": 15.0,
+              "sigma": 0.9466,
+              "v": 20.384,
               "state": "initial"
             },
             {
-              "sigma": 0.833,
-              "v": 15.0,
+              "sigma": 0.9736,
+              "v": 22.476,
               "state": "initial"
             },
             {
-              "sigma": 0.917,
-              "v": 15.0,
+              "sigma": 0.9901,
+              "v": 23.397,
               "state": "initial"
             },
             {
               "sigma": 1.0,
-              "v": 25.0,
+              "v": 23.808,
               "state": "initial"
             }
           ]
@@ -605,14 +620,14 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Surface temperature (aoi)",
-      "caption": "Top-to-bottom difference surviving the run: 3.379 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. 3D screening, not a calibrated study.",
+      "caption": "Top-to-bottom difference surviving the run: 6.952 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
       "created_turn_id": null
     }
   },
   "metrics": {
-    "stratification_metric": 3.3786,
-    "stratification_dt": 3.3786,
+    "stratification_metric": 6.9524,
+    "stratification_dt": 6.9524,
     "flow_mode": "stratification",
     "variable_label": "Surface temperature",
     "variable_units": "degC",
@@ -621,17 +636,17 @@
     "mesh_size_m": 1150.0,
     "profile_sigma": [
       0.0,
-      0.083,
-      0.167,
-      0.25,
-      0.333,
-      0.417,
-      0.5,
-      0.583,
-      0.667,
-      0.75,
-      0.833,
-      0.917,
+      0.078,
+      0.1863,
+      0.3222,
+      0.4732,
+      0.6195,
+      0.7438,
+      0.8382,
+      0.9037,
+      0.9466,
+      0.9736,
+      0.9901,
       1.0
     ],
     "profile_values": [
@@ -641,13 +656,13 @@
       15.0,
       15.0,
       15.0,
-      15.0,
-      15.001,
-      15.021,
-      15.274,
-      16.035,
-      16.976,
-      18.379
+      15.057,
+      15.719,
+      16.985,
+      20.881,
+      21.473,
+      21.774,
+      21.952
     ],
     "profile_values_initial": [
       15.0,
@@ -656,15 +671,15 @@
       15.0,
       15.0,
       15.0,
-      15.0,
-      15.0,
-      15.0,
-      15.0,
-      15.0,
-      15.0,
-      25.0
+      15.01,
+      15.266,
+      17.092,
+      20.384,
+      22.476,
+      23.397,
+      23.808
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0W26P94NG18KSKYQGZ1D8C3/telemac3d_surface.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0ZQDHGVDYN8NM4T25AT56NV/telemac3d_surface.tif",
     "wind_note": "calm - the thermocline persists and no wind circulation is driven",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -672,8 +687,8 @@
     "target_resolution_note": "target_resolution_m 1000 RAISED to 1150 m by the node budget for this domain; the field was solved at 1150 m"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0W26P94NG18KSKYQGZ1D8C3/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0W26P94NG18KSKYQGZ1D8C3/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0ZQDHGVDYN8NM4T25AT56NV/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0ZQDHGVDYN8NM4T25AT56NV/metrics.json"
   },
   "product_errors": {}
 }
