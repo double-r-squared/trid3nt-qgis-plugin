@@ -656,6 +656,56 @@ past - PHYSICS ANSWERS still owe parity (R3 stands: same question ->
 same answer; "no back compat" is about API shape, never about results
 drifting). Every removal gets a DELETION_LEDGER row.
 
+### Rerun-with-overrides - the recalibration interface (ADR 0319)
+
+**A run derives from a run.** `rerun_workflow(run_id, overrides={...})` is the one
+way any question gets asked again with something moved, and it serves three
+consumers with one implementation: failure recovery, manual what-if, and
+calibration loops (a loop is this primitive driven by a proposer, never a second
+re-run path).
+
+The sheet comes from the PARENT, not from the wire - a re-invocation would
+re-resolve every door and the two runs would differ in more than the value named.
+Overrides seat through the USER door labelled `override of run <parent_id>`,
+dependent derivations re-derive, and a row the user pinned keeps precedence.
+
+Reuse is read off the PLAN, by the same `declared_reads` walk the validator and
+the binder use (`plan.py` - one definition, three readers). The first node an
+override reaches is a CUT: work before it is inherited, work from it on is
+re-done. A PREFIX, deliberately - a step also reads the domain the steps before
+it bound, and no declaration names that.
+
+Inheritance is the LEDGER, not a copy: the parent's own records are planted under
+the child's invocation key (`StepLedger.seed`) and the ordinary resume path
+replays them, so the child never asks for the artifacts it reuses. They are the
+parent's objects at the parent's URIs.
+
+The completion TOMBSTONE stays exactly as it was - it is what keeps a
+`live-no-cache` tool from becoming a result cache. A finished run's records are
+copied out to a RUN SNAPSHOT keyed by run id (`snapshot.py`), reachable only by a
+caller that NAMES that run. A failed attempt is recorded the same way under a
+fresh id the error envelope names, which is what makes failure recovery reuse the
+work that already succeeded.
+
+CONSTANT-door params ARE overridable here. The door governs what the MODEL's plan
+schema offers; naming a value explicitly, having seen an answer, is the
+sanctioned way a fixed quantity moves.
+
+### Coupled validity - rules one Param cannot express
+
+A bound is a statement about ONE value. `Validity(name, reads, holds, message)`
+declares a cross-param rule: a predicate over the resolved sheet plus the message
+it refuses with, checked at resolve time on BOTH lanes. The library owns the
+mechanism (`validity.py`); the engine or template owns the rule, because only
+they know what their params mean together. A rule that reads an undeclared param
+refuses at REGISTRATION - a guard that can never fire is worse than none.
+
+The reference rule is `friction_coefficient_matches_law` on
+`coastal_tidal_surge`: TELEMAC's friction law fixes whether the coefficient is a
+Strickler Ks or its reciprocal, a Manning n. It refuses on the CROSSOVER, not on
+each law's plausible band - an atypical value the caller means still proceeds; a
+value on the wrong side is not atypical, it is the other quantity.
+
 ### The no-double-middleware law
 
 Fetcher invocations are DATA. The fetcher router's middleware - cache,

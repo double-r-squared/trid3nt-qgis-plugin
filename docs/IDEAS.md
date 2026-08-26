@@ -2011,3 +2011,36 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   from our own conclusions and rulings, never from imitating a
   reference. Cite them as measuring sticks in reports; never as design
   drivers in ADRs.
+
+- RERUN-WITH-OVERRIDES LANDED, AND set_telemac_parameters IS GONE (2026-08-26,
+  ADR 0319). Decision 1 is built: a run derives from a run, the parent's
+  records are planted under the child's ledger key so inherited work is the
+  parent's own objects, and coupled-validity rules carry the setter's law-aware
+  bounds as a declared predicate. The measured lesson worth keeping: the reuse
+  a derivation gets is exactly as fine-grained as the PLAN'S NODE BOUNDARIES.
+  `telemac_do_sag` stages its terrain inside the `deck` step, so a `k1_per_day`
+  override - which has nothing to do with terrain - re-executes the step that
+  stages it. Nothing was wrong (the bed is content-addressed and the same object
+  came back), but the general rule is: a value a template wants reusable across
+  overrides gets its OWN node, and node granularity is now a template-authoring
+  decision with a visible consequence. QUEUED for whoever next opens the reach
+  family's plan shape.
+
+- CALIBRATION-LOOP GAP, NAMED (2026-08-26, ADR 0319). The primitive is the
+  loop's engine and the three pieces it still needs are: OBSERVATIONS to score
+  against, an OBJECTIVE that turns answer-vs-observation into a scalar, and a
+  PROPOSER that picks the next override. The hard rule for that wave: the driver
+  CONSUMES `rerun_workflow` and never grows its own re-run path - two
+  implementations would disagree about what a derived run is.
+
+- CANARY REPLAY IS A DIRECT CALL NOW (2026-08-26). `scripts/replay_canary_evidence.py`
+  re-issues every committed canary from its own evidence file (`tool` + `args`)
+  and diffs the ANSWER field-for-field, so family parity is one command instead
+  of a WS session per template. Two things it surfaced: (1) four canaries were
+  recorded in `user_gated` sessions and CANNOT run headless at all - law 9
+  refuses their physics-consequential labeled defaults with no card to approve
+  them on - so the driver has an `--approve-defaults` flag that supplies those
+  declared defaults BY NAME and reports which rows it approved; (2)
+  `telemac_river_dye/coarse`'s evidence file predates the `tool`/`args`/`metrics`
+  fields and describes a run nobody can re-issue. WORTH DOING: re-record that one
+  so the family has no unreplayable member.

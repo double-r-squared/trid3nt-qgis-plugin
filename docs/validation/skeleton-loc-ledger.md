@@ -457,7 +457,37 @@ working rather than a guess: `dispatch_and_wait` moved to `open_water.py` on its
 CONFIRMED second consumer, not preemptively. It nets about zero in lines and
 removes the second copy of a cancellation clause that a hand-copied version drops.
 
+## Wave D - rerun-with-overrides + coupled validity (2026-08-26, ADR 0319)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-26 | D - rerun-with-overrides | lib skeleton, EXISTING files (`workflow.py` +89 the `run`/`execute` split, the validity hook, the failure-attempt recorder, the snapshot write; `interpreter.py` +10 the carried records minus the de-duplicated walk; `ledger.py` +21 `seed()`; `plan.py` +23 `declared_reads`, the ONE walk; `resolver.py` +6 the `door=` / `occasion=` seams; `journal.py` +9 the parent/overrides columns; `__init__.py` +7; `validate.py` **-18**, its private twin of the walk deleted) | 3354 | 3501 | +147 | +4046 |
+| 2026-08-26 | D - rerun-with-overrides | lib skeleton, NEW files (`snapshot.py` 181 - the derivable past a finished run leaves; `rerun/derive.py` 148 - the primitive; `validity.py` 111 - the coupled-rule species; `reuse.py` 89 - where reuse stops; `rerun_workflow.py` 85 - the one registered surface; `rerun/__init__.py` 8) | 0 | 622 | +622 | +4668 |
+| 2026-08-26 | D - rerun-with-overrides | template files (`coastal_tidal_surge/declarations.py` +58 - the law-crossover predicate, the `VALIDITY` tuple and the two re-written friction rows; `coastal_tidal_surge.py` +4 - the `validity=` declaration and its two-line reason) | 400 | 462 | +62 | +4730 |
+| 2026-08-26 | D - rerun-with-overrides | deleted outright (`telemac/set_parameters/set_telemac_parameters.py` 559 + its empty `__init__.py`; `corpus.yaml` is not `.py` and is not counted) | 559 | 0 | **-559** | **+4171** |
+
+**Verdict: +272, and it is the honest shape for this one.** The setter deletion
+pays back 559 of the 769 lines the primitive cost, which is the closest this
+campaign has come to a capability landing for free - but the reason to look
+twice is that the two numbers are not the same KIND of line. The 559 deleted
+were ONE engine's recalibration, hand-written against a `.cas` text format, with
+no equivalent for the other nine engines. The 769 added are the whole fleet's,
+and the next engine's recalibration costs zero new lines: no per-engine setter,
+no per-engine bounds table, no per-engine envelope. The per-template cost of a
+coupled rule is what the coastal row measures, and it is 62 lines for a
+predicate, a message and a declaration.
+
+What this row does NOT claim: `_setter_envelope.py` (433) is still alive for the
+three unmigrated setters and is not counted as absorbed. It comes off the board
+when the last of them migrates, and the campaign net will move again then.
+
+NOT COUNTED, by the rule at the head of this file: `tests/test_rerun_with_overrides.py`
+(575), `scripts/proof_rerun_with_overrides.py` (351),
+`scripts/replay_canary_evidence.py` (182), and the 4-line net in
+`tools/__init__.py` (one registration import out, one in, plus the comment
+saying which three setters are now the pre-migration lane).
+
 ## Corrected campaign net
 
-**The campaign net is +3899** - the true running sum of every delta in the table
-above, from wave 2's first row to wave C's last.
+**The campaign net is +4171** - the true running sum of every delta in the tables
+above, from wave 2's first row to wave D's last.
