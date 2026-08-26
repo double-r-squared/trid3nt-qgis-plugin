@@ -2109,3 +2109,25 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   digital-twin door. Emission unchanged and generalizes across DATA
   TYPES (raster/mesh/vector/series/chart) on the one seam, never new
   seams.
+
+- BRIDGE + TEMPLATE FRAME NAMED; MESH = A SUBSTRATE (NATE 2026-08-26):
+  the architecture is BOTH patterns, orthogonal - Template Method
+  vertically (the plan is the fixed verb spine; templates supply
+  values never structure) x Bridge horizontally (every domain-varying
+  step has an agnostic left face and a per-engine right face; the
+  right face = the engine's official library where one exists). MESH
+  STEP ISOLATED LIKE THE FETCHERS: workflow declares only the MESH
+  slot (shape + policies = frozen ASKS, never meshes); ONE router,
+  supplied-first then registered strategies (watershed TIN,
+  coastal_water_edge, hecras_rog, oceanmesh...); every path converges
+  on MeshArtifact; compat gate refuses loudly. MeshHandle dissolves
+  into MeshArtifact when strategies build eagerly (mesh wave).
+  QGIS-TRANSLATION PLACEMENT (recommended, awaiting nod): split along
+  the bridge - mesh/ owns SOLVER-facing formats (.slf/.gr3/bundle);
+  EMISSION owns the DISPLAY face (domain mesh -> MDAL layer; the
+  _write_2dm writer moves out of generate_mesh onto the seam) - razor:
+  feeds a solver = mesh/, feeds a screen = emission. Emission stays
+  DECLARATIVE (styles.yaml, .style(), restyle_layer), generalizing by
+  DATA TYPE (raster/mesh/vector/series/chart), never by engine.
+  Target-arch UML published: the Bridge Blueprint artifact
+  (supersedes the Skeleton Blueprint as the forward picture).
