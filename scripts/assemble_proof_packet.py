@@ -36,6 +36,14 @@ WHAT IT VERIFIES, MECHANICALLY
   * NOTHING IS STALE. Any deliverable older than the evidence JSON it claims to
     show is reported STALE with both mtimes, because a proof pile that keeps the
     previous run's GIF beside this run's panels reads as complete and is not.
+  * THE ANIMATED FIELD IS DECLARED, NEVER DEFAULTED.
+    ``trid3nt_server.testing.proof_animations`` rules which variable each
+    template's animation paints, which mask gates it, which still to keep and
+    WHY; a time-stepped template with no declaration REFUSES rather than
+    animating whatever the renderer would have picked. That refusal exists
+    because the alternative already shipped once: a default painted coastal
+    WATER DEPTH - bathymetry-dominated, barely moving - where the ruled field
+    was FREE SURFACE masked to wet nodes, and every other check passed.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
@@ -55,19 +63,22 @@ import os
 import re
 import struct
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
+from trid3nt_server.testing.proof_animations import (  # noqa: E402
+    PROOF_ANIMATIONS,
+    ProofAnimation,
+)
 from trid3nt_server.testing.proof_paths import (  # noqa: E402
     VARIANTS,
     proof_dir,
 )
 
-__all__ = ["Animation", "ANIMATIONS", "assemble", "main", "selafin_frame_count"]
+__all__ = ["assemble", "main", "selafin_frame_count"]
 
 #: Where the colorbar strip starts, as a fraction of image width. The animation
 #: renderer builds its figure at matplotlib's default subplot margins and steals
@@ -91,65 +102,6 @@ _PANEL_RE = re.compile(r"^(?P<base>.+)_panel_(?P<index>\d{2})_(?P<slug>.+)\.png$
 
 class PacketError(RuntimeError):
     """The packet cannot be assembled at all, and the message says why."""
-
-
-# --------------------------------------------------------------------------- #
-# The one DECLARATION in this file: what a template's animation shows.
-# --------------------------------------------------------------------------- #
-@dataclass(frozen=True)
-class Animation:
-    """Which field of a run's result SELAFIN the delivered animation paints.
-
-    The SELAFIN file itself comes from the run's ``completion.json``
-    (``result_slf``) and the frame count from the file - only WHICH VARIABLE is a
-    choice, and a choice is a declaration rather than something inferred from a
-    filename. ``steady_reason`` is the other half: a solver with no simulation
-    clock declares WHY it owes no animation, so the exemption is a stated physics
-    fact in the packet instead of a hole nobody noticed.
-    """
-
-    var: str | None = None
-    units: str = ""
-    quantity: str | None = None
-    still: str = "peak"
-    mask_var: str | None = None
-    mask_min: float = 0.0
-    plane: str = "surface"
-    steady_reason: str | None = None
-
-
-#: Per TOOL, because a tool is what an evidence JSON names. Variable tokens are
-#: matched against the SELAFIN's own padded names, so a token that stops matching
-#: refuses loudly instead of animating a neighbouring variable.
-ANIMATIONS: dict[str, Animation] = {
-    "coastal_tidal_surge": Animation(
-        var="WATER DEPTH", units="m", quantity="flood_depth", still="peak"),
-    "telemac_rain_on_grid": Animation(
-        var="WATER DEPTH", units="m", quantity="flood_depth", still="peak"),
-    "telemac_river_dye": Animation(
-        var="DYE", units="mg/L", quantity="dye_concentration", still="peak"),
-    # A sag DECAYS toward its answer: the peak frame is the initial condition and
-    # shows the reader nothing the run did, so the still is the final frame.
-    "telemac_do_sag": Animation(
-        var="DISSOLVED O2", units="mgO2/l", still="final"),
-    # The column settles rather than builds, and the surface plane of the prism
-    # stack is the one the thermocline question is asked about.
-    "telemac3d_stratified_flow": Animation(
-        var="TEMPERATURE", units="degC", still="final", plane="surface"),
-    "tomawac_wave_field": Animation(
-        var="WAVE HEIGHT", units="m", quantity="wave_height", still="peak"),
-    # ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it
-    # solves a boundary-value problem for ONE monochromatic sea state and returns
-    # ONE field, the steady agitation coefficient Kd. Its deck has no simulation
-    # clock at all, which is why the run records no ntimestep.
-    "artemis_harbor_agitation": Animation(
-        var="WAVE HEIGHT", units="m", still="peak",
-        steady_reason="ARTEMIS solves a steady boundary-value problem for a "
-                      "single monochromatic sea state (elliptic mild-slope, "
-                      "Berkhoff); the deck has no simulation clock, so the run "
-                      "produces ONE field and there is no time evolution to "
-                      "animate. The peak frame IS the whole answer."),
-}
 
 
 # --------------------------------------------------------------------------- #
@@ -388,12 +340,27 @@ def _panel_groups(directory: Path) -> dict[str, list[tuple[int, Path]]]:
     return {base: sorted(items) for base, items in groups.items()}
 
 
+def _declaration_row(animation: ProofAnimation | None) -> dict:
+    """The declaration, as the packet reports it - what was ruled, and why."""
+    if animation is None:
+        return {"declared": False,
+                "note": "no entry in PROOF_ANIMATIONS for this tool"}
+    return {"declared": True, "variable": animation.variable,
+            "units": animation.units, "quantity": animation.quantity,
+            "mask_var": animation.mask_var,
+            "mask_threshold": animation.mask_threshold,
+            "still": animation.still, "plane": animation.plane,
+            "reason": animation.reason,
+            "exempt_reason": animation.exempt_reason,
+            "declared_in": "trid3nt_server/testing/proof_animations.py"}
+
+
 # --------------------------------------------------------------------------- #
 # Rendering the packet
 # --------------------------------------------------------------------------- #
 def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
             *, template: str, variant: str, run_id: str, bucket: str,
-            animation: Animation | None, frames: int, s3) -> dict:
+            animation: ProofAnimation | None, frames: int, s3) -> dict:
     """Every deliverable, rendered fresh, in checklist order. Returns a report."""
     tool = str(evidence.get("tool") or template)
     title = f"{tool} - run {run_id}"
@@ -412,10 +379,17 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
         report["charts"] = []
         report["chart_error"] = str(exc)
 
-    if animation is None:
+    # NO DEFAULT VARIABLE, EVER. An undeclared template REFUSES rather than
+    # animating whatever the renderer would have picked: the one regression this
+    # script has shipped was a fallback painting WATER DEPTH (bathymetry-
+    # dominated, barely moves) where the ruled field was a masked FREE SURFACE.
+    if animation is None or animation.variable is None:
         report["animation_error"] = (
-            f"tool {tool!r} has no entry in ANIMATIONS, so this script cannot say "
-            "which field its animation paints - declare one rather than guess")
+            f"tool {tool!r} has no declared field in "
+            "trid3nt_server/testing/proof_animations.PROOF_ANIMATIONS, so this "
+            "script cannot say which variable its animation paints. Declare one "
+            "- with its mask and its physics reason - rather than let a default "
+            "choose the picture.")
     elif frames >= 1:
         # ONE call for both cases. A steady result takes the same path and comes
         # back with ``animation: None`` and its still rendered, so the exemption
@@ -427,13 +401,20 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
             "telemac_metrics.json / the canary's declared bbox" if origin
             else "NONE - neither the worker metrics nor the evidence args carry a "
                  "bbox, so a LOCAL mesh cannot be put back on the map")
+        report["animation_declaration"] = {
+            "variable": animation.variable, "units": animation.units,
+            "quantity": animation.quantity, "mask_var": animation.mask_var,
+            "mask_threshold": animation.mask_threshold, "still": animation.still,
+            "plane": animation.plane, "reason": animation.reason,
+            "declared_in": "trid3nt_server/testing/proof_animations.py"}
         report["animation"] = _sibling("render_selafin_animation").render_run(
-            run_id=run_id, slf=str(completion.get("result_slf")), var=animation.var,
-            stem=stem, out_dir=directory, units=animation.units,
-            quantity=animation.quantity, bucket=bucket, plane=animation.plane,
-            mask_var=animation.mask_var, mask_min=animation.mask_min,
-            still=animation.still, origin_bbox=origin,
-            title=f"{stem} - {animation.var} - run {run_id}")
+            run_id=run_id, slf=str(completion.get("result_slf")),
+            var=animation.variable, stem=stem, out_dir=directory,
+            units=animation.units, quantity=animation.quantity, bucket=bucket,
+            plane=animation.plane, mask_var=animation.mask_var,
+            mask_min=animation.mask_threshold, still=animation.still,
+            origin_bbox=origin,
+            title=f"{stem} - {animation.variable} - run {run_id}")
     return report
 
 
@@ -528,7 +509,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     bucket = bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
     missing: list[str] = []
-    animation = ANIMATIONS.get(tool)
+    animation = PROOF_ANIMATIONS.get(tool)
 
     # ------------------------------------------------------------------ #
     # 1. Is this run time-stepped? MEASURED off its own SELAFIN.
@@ -682,11 +663,18 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         # be read back as text, so its tie to this run is the pair of checks a
         # picture cannot fake: the frame count must equal the SELAFIN's, and it
         # must not predate the evidence beside it.
+        field = (f"{animation.variable}"
+                 + (f" masked to {animation.mask_var} > {animation.mask_threshold} "
+                    if animation.mask_var else " ")
+                 + f"({animation.units})") if animation else "(undeclared)"
         row = _item(order, "animation",
-                    f"Animation - {frames} frames on one run-scoped colour scale "
-                    f"with a static legend, run {run_id}",
+                    f"Animation - {field}, {frames} frames on one run-scoped "
+                    f"colour scale with a static legend, run {run_id}",
                     path=gif, evidence_mtime=evidence_mtime, missing=missing,
-                    require_stamp=False, **stamp)
+                    require_stamp=False,
+                    extra={"declared_field": field,
+                           "declared_reason": animation.reason if animation else None},
+                    **stamp)
         if row["verdict"] == "present":
             try:
                 checks = verify_gif(gif)
@@ -726,15 +714,15 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         order += 1
         still = animation.still if animation else "peak"
         path = directory / f"{stem}_{still}_frame.png"
-        caption = (f"{still.upper()} frame - the animation's own figure at its "
-                   f"{still} step, same colours and extent, run {run_id}")
+        caption = (f"{still.upper()} frame - {field}, the animation's own figure "
+                   f"at its {still} step, same colours and extent, run {run_id}")
         if path in fresh:
             stamp_png(path, caption=caption, **stamp)
         deliverables.append(_item(order, "still", caption, path=path,
                                   evidence_mtime=evidence_mtime, missing=missing,
                                   **stamp))
     else:
-        reason = (animation.steady_reason if animation and animation.steady_reason
+        reason = (animation.exempt_reason if animation and animation.exempt_reason
                   else f"the run's result SELAFIN carries {frames} frame(s): a "
                        "single-frame (steady) result has nothing to animate")
         deliverables.append({
@@ -744,8 +732,10 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         order += 1
         still = animation.still if animation else "peak"
         path = directory / f"{stem}_{still}_frame.png"
-        caption = (f"{still.upper()} frame - the steady field, which IS the whole "
-                   f"answer rather than one sample of it, run {run_id}")
+        field = (f"{animation.variable} ({animation.units})" if animation
+                 and animation.variable else "the steady field")
+        caption = (f"{still.upper()} frame - {field}, which IS the whole answer "
+                   f"rather than one sample of it, run {run_id}")
         if path in fresh:
             stamp_png(path, caption=caption, **stamp)
         deliverables.append(_item(order, "still", caption, path=path,
@@ -769,6 +759,8 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         "assembled_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "assembler": "scripts/assemble_proof_packet.py",
         "time_stepped": measured,
+        "animation_declaration": (render_report.get("animation_declaration")
+                                  or _declaration_row(animation)),
         "published_layers": [layer.get("name") for layer in layers],
         "verdict": "REFUSED" if missing else "PASS",
         "missing": missing,

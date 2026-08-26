@@ -35,10 +35,17 @@ import sys
 from typing import Any
 
 from .live_run import GateAnswers, LiveRun, RunEvidence, run_live
+from .proof_animations import PROOF_ANIMATIONS
 from .proof_paths import evidence_path as _proof_evidence_path
 from .proof_paths import split_variant
 
-__all__ = ["CANARIES", "assemble_packet", "evidence_path", "main", "run"]
+__all__ = ["CANARIES", "PROOF_ANIMATIONS", "assemble_packet", "evidence_path",
+           "main", "run"]
+
+#: Re-exported so the canary registry and the animation ruling read as one
+#: declaration surface: this file says WHAT to run, ``proof_animations`` says
+#: WHICH field of the result the delivered animation paints and why. Both are
+#: declarations, neither is inferred, and the packet assembler reads both.
 
 #: Where a canary's evidence lands: ``docs/proof/templates/<template>/<variant>/``,
 #: beside the renders the diagnostic lane writes from it. The FOLDER is

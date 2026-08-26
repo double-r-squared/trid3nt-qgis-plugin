@@ -69,6 +69,32 @@ What it will not let past:
   * **Frames drawn off the water.** The animation's extent is checked against the
     run's own AOI, so a LOCAL mesh rendered without its origin is caught rather
     than shipped.
+  * **An undeclared animated field.** WHICH variable a template's animation
+    paints is DECLARED in `trid3nt_server/testing/proof_animations.py` -
+    variable, mask variable and threshold, `still=peak|final`, and the physics
+    reason in one line - and a time-stepped template with no declaration REFUSES
+    rather than animating whatever a default would have chosen.
+
+### Why the animated field is declared and not defaulted
+
+The declaration exists because the alternative shipped once. The coastal
+animation was rendered from a default WATER DEPTH, and depth over a tidal bay is
+bathymetry-dominated: the deep channel stays deep, the shallows stay shallow, and
+a six-hour surge barely moves the picture. The ruled field is FREE SURFACE masked
+to wet nodes (`WATER DEPTH > 0.02 m`) - masked because TELEMAC sets
+`FREE SURFACE = BOTTOM` on dry land, so an unmasked field is scaled by the
+highest hill in the domain. The 0.02 m is the coastal worker's own `WET_TOL`, the
+same discriminant `peak_wl_max_m` and `flooded_land_km2` are computed on, so the
+picture and the scalars cannot disagree about which nodes hold water.
+
+Measured on the two renders of the same run: the ruled field changes a median
+430,025 pixels per frame step against WATER DEPTH's 77,183. "Barely moves" was a
+number, not an impression.
+
+The declaration also states where it declines to claim a quantity. The style
+contract has no water-surface-elevation row, so coastal's animation takes the
+neutral ramp rather than borrowing the published flood-depth raster's label and
+colours for a field that is not that quantity.
 
 `trid3nt_server/testing/canaries.py` calls it at close-out, so every canary
 either produces a `packet.json` or exits non-zero.
