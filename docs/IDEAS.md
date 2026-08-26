@@ -1929,3 +1929,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   an engine-wide sweep and NOT smuggled into an engine wave. Also open: the schema
   `Literal` has no `xlarge` while the alias map, `run_solver`'s docstring and
   `telemac/steps/solve.py` all accept one.
+
+- RIVER TRUTH RULED (NATE 2026-08-26, ruling a): NLDI EVERYWHERE - the
+  NLDI mainstem centerline is promoted to a server-side router spec like
+  every other fetch, and it becomes the DISPLAYED river input layer (the
+  meshed river is the visible river; zero physics change - the mesh was
+  always NLDI). OSM waterways demote to optional context (pretty map
+  under the plumbing). Unblocks the reach-family migration = the last
+  six in-worker fetches = --network none for the whole TELEMAC image =
+  the family CLOSES.
