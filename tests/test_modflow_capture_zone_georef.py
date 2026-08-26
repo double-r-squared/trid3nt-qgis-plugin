@@ -329,7 +329,7 @@ def _patch_dem(
         captured["run_args"] = run_args
         return _fake_layer(layer_source)
 
-    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.workflows.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
     monkeypatch.setattr(
@@ -581,7 +581,7 @@ def _patch_measured(
         # The adapter would label a supplied vector "dem"; the composer relabels it.
         return _fake_layer("dem")
 
-    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.workflows.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
     monkeypatch.setattr(

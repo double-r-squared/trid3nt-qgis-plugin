@@ -847,7 +847,7 @@ async def _run_archetype(
     validation lives INSIDE the substep so a non-typed result raises here,
     marking the child red (honesty floor) before the error re-raises.
     """
-    from trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool import run_modflow_archetype_job
+    from trid3nt_server.workflows.modflow.run_modflow_archetype_tool import run_modflow_archetype_job
 
     async with substep(current_emitter(), "run_modflow_archetype_job"):
         result = await _maybe_emit(

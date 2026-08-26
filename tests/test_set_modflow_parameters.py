@@ -43,7 +43,7 @@ from trid3nt_server.workflows.lib._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )
-from trid3nt_server.data.simulation.modflow.set_modflow_parameters.set_modflow_parameters import (  # noqa: E402
+from trid3nt_server.workflows.modflow.set_parameters.set_modflow_parameters import (  # noqa: E402
     set_modflow_parameters,
 )
 

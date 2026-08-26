@@ -95,12 +95,14 @@ def _package_tools_dir() -> Path:
     return Path(trid3nt_server.__file__).resolve().parent / "tools"
 
 
-def _package_data_dir() -> Path:
-    """The ``trid3nt_server/data`` directory - category-era fossil, still holds the
-    per-engine simulation shims and their co-located corpus files."""
+def _package_workflows_dir() -> Path:
+    """The ``trid3nt_server/workflows`` directory - engine templates and their
+    co-located corpus files (the ``trid3nt_server/data`` category-era fossil
+    that used to hold the per-engine simulation shims is deleted; every shim
+    now lives under ``tools/`` or ``workflows/``)."""
     import trid3nt_server
 
-    return Path(trid3nt_server.__file__).resolve().parent / "data"
+    return Path(trid3nt_server.__file__).resolve().parent / "workflows"
 
 
 class _CorpusFormatError(Exception):
@@ -150,13 +152,14 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
     """Compose the flat corpus: every ``tools/**/corpus.yaml`` and every
-    ``data/**/corpus.yaml`` (the per-engine simulation shims) merged with the
-    residual ``tools/tool_query_corpus.yaml``. Same shape/content as the
+    ``workflows/**/corpus.yaml`` (the engine templates + former per-engine
+    simulation shims, now homed there) merged with the residual
+    ``tools/tool_query_corpus.yaml``. Same shape/content as the
     pre-restructure monolith (flat composition, no tiers).
     """
     tools_dir = _package_tools_dir()
     composed: dict[str, list[str]] = {}
-    for base in (tools_dir, _package_data_dir()):
+    for base in (tools_dir, _package_workflows_dir()):
         for cpath in sorted(base.rglob("corpus.yaml")):
             composed.update(_read_corpus_yaml(cpath))
     composed.update(_read_corpus_yaml(tools_dir / "tool_query_corpus.yaml"))

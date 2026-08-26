@@ -60,7 +60,7 @@ async def run_archetype(
     and a declared step should not make its module an import-time dependency of
     the workflow package.
     """
-    from trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool import (
+    from trid3nt_server.workflows.modflow.run_modflow_archetype_tool import (
         run_modflow_archetype_job,
     )
     from trid3nt_server.emission.layer_uri_emit import emit_layer_uri

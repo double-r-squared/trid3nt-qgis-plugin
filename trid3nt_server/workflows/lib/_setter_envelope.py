@@ -62,7 +62,7 @@ __all__ = [
     "utc_now_iso",
 ]
 
-logger = logging.getLogger("trid3nt_server.data.simulation.param_setters")
+logger = logging.getLogger("trid3nt_server.workflows.param_setters")
 
 
 # --------------------------------------------------------------------------- #

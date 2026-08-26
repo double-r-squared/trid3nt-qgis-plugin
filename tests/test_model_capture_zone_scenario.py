@@ -125,7 +125,7 @@ async def test_composer_full_chain_capture_zone(monkeypatch: pytest.MonkeyPatch)
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.workflows.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -169,7 +169,7 @@ async def test_composer_full_chain_wellhead_protection(monkeypatch: pytest.Monke
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.workflows.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -201,7 +201,7 @@ async def test_composer_surfaces_run_error_dict(monkeypatch: pytest.MonkeyPatch)
             "error_message": "PRT backward tracking produced no pathlines",
         }
 
-    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.workflows.modflow.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _err_run)
 

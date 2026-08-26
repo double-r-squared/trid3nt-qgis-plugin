@@ -520,13 +520,13 @@ from .processing.spatial_query import spatial_query  # noqa: E402,F401
 # the 5 per-engine readers into one registered tool; the internal per-engine
 # parser modules under .simulation.diagnostics are NOT registered).
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
-from trid3nt_server.data.simulation.model_debris_flow import model_debris_flow  # noqa: E402,F401
+from trid3nt_server.tools.processing.model_debris_flow import model_debris_flow  # noqa: E402,F401
 # engine-door refactor (ELMFIRE slice): the model_fire_spread engine tool is
 # DELETED from tools/simulation/. The ELMFIRE engine tool is now the
 # elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template") registered in
 # workflows/elmfire/fire_spread/fire_spread.py (imported below); the run_elmfire
 # door lists + gate-expands it.
-from trid3nt_server.data.simulation.pelicun.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
+from trid3nt_server.workflows.pelicun.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
 # LANDLAB: landlab_susceptibility is the TEMPLATE (engine="landlab",
 # tier="template") registered in workflows/landlab/susceptibility/susceptibility.py
 # (imported below); the run_landlab door lists + gate-expands it.
@@ -552,10 +552,10 @@ from trid3nt_server.data.simulation.pelicun.postprocess_pelicun import postproce
 # gate-expand them. run_telemac names the door, not a direct-solve wrapper.
 # derive-not-mutate parameter setters (write a child deck/setup,
 # leave the parent immutable).
-from trid3nt_server.data.simulation.modflow.set_modflow_parameters import set_modflow_parameters  # noqa: E402,F401
-from trid3nt_server.data.simulation.sfincs.set_sfincs_parameters import set_sfincs_parameters  # noqa: E402,F401
-from trid3nt_server.data.simulation.swmm.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
-from trid3nt_server.data.simulation.telemac.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401 - relocated beside the run_telemac door (engine-door refactor, TELEMAC slice); stays tier=general
+from trid3nt_server.workflows.modflow.set_parameters import set_modflow_parameters  # noqa: E402,F401
+from trid3nt_server.workflows.sfincs.set_parameters import set_sfincs_parameters  # noqa: E402,F401
+from trid3nt_server.workflows.swmm.set_parameters import set_swmm_parameters  # noqa: E402,F401
+from trid3nt_server.workflows.telemac.set_parameters import set_telemac_parameters  # noqa: E402,F401 - relocated beside the run_telemac door (engine-door refactor, TELEMAC slice); stays tier=general
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- engine templates (door dissolution): the 10 engine "door"
 # concierge tools were DELETED. Each engine's tier=template members are ordinary

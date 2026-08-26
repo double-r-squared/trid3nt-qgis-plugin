@@ -73,7 +73,7 @@ from trid3nt_server.workflows.modflow.run_modflow import (
 )
 from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
 
-logger = logging.getLogger("trid3nt_server.data.simulation.modflow.run_modflow_multi_species_tool")
+logger = logging.getLogger("trid3nt_server.workflows.modflow.contaminant_plume.run_modflow_multi_species_tool")
 
 __all__ = [
     "run_modflow_multi_species_job",

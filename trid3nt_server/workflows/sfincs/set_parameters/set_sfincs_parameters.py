@@ -37,7 +37,7 @@ from trid3nt_server.workflows.lib._setter_envelope import (
 
 __all__ = ["set_sfincs_parameters", "SFINCS_PARAM_BOUNDS"]
 
-logger = logging.getLogger("trid3nt_server.data.simulation.sfincs.set_sfincs_parameters.set_sfincs_parameters")
+logger = logging.getLogger("trid3nt_server.workflows.sfincs.set_parameters.set_sfincs_parameters")
 
 
 #: Physical bounds, named table, per-parameter literature source (lane-D brief).

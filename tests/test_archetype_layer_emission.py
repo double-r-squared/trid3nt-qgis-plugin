@@ -69,7 +69,7 @@ async def test_run_archetype_loads_headline_layer():
     token = _CURRENT_EMITTER.set(emitter)
     try:
         with patch(
-            "trid3nt_server.data.simulation.modflow."
+            "trid3nt_server.workflows.modflow."
             "run_modflow_archetype_tool.run_modflow_archetype_job",
             _fake_job,
         ):
@@ -103,7 +103,7 @@ async def test_run_archetype_raises_and_loads_nothing_on_error_dict():
     token = _CURRENT_EMITTER.set(emitter)
     try:
         with patch(
-            "trid3nt_server.data.simulation.modflow."
+            "trid3nt_server.workflows.modflow."
             "run_modflow_archetype_tool.run_modflow_archetype_job",
             _fake_job,
         ):

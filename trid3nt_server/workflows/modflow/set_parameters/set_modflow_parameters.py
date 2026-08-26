@@ -39,7 +39,7 @@ from trid3nt_server.workflows.lib._setter_envelope import (
 
 __all__ = ["set_modflow_parameters", "MODFLOW_PARAM_BOUNDS"]
 
-logger = logging.getLogger("trid3nt_server.data.simulation.modflow.set_modflow_parameters.set_modflow_parameters")
+logger = logging.getLogger("trid3nt_server.workflows.modflow.set_parameters.set_modflow_parameters")
 
 
 #: Physical bounds, named table, per-parameter literature source (lane-D brief).

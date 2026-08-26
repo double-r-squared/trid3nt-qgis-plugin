@@ -445,17 +445,17 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
     dissolution: templates are ordinary retrieval-pool members now, so
     their phrasings must reach the index just like any tool's), then merges the
     residual ``tools/tool_query_corpus.yaml`` (tools registered outside either
-    tree). ``data/`` is still walked because the per-engine simulation shims
-    live there until each engine is absorbed. Flat composition -- no tier
-    semantics.
+    tree). ``trid3nt_server/data`` is GONE (the category-era fossil was
+    evicted -- every former per-engine simulation shim now lives under
+    ``tools/`` or ``workflows/`` and is reached by those two walks). Flat
+    composition -- no tier semantics.
     """
     here = Path(__file__).resolve()
     server_dir = here.parents[3]  # .../trid3nt_server
     tools_dir = server_dir / "tools"
-    data_dir = server_dir / "data"
     workflows_dir = server_dir / "workflows"
     composed: dict[str, list[str]] = {}
-    for base in (tools_dir, data_dir, workflows_dir):
+    for base in (tools_dir, workflows_dir):
         for cpath in sorted(base.rglob("corpus.yaml")):
             composed.update(_read_corpus_yaml(cpath))
     # Merge the residual (support/category-registered tools).
@@ -469,7 +469,7 @@ def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
 
     Default: compose the co-located per-tool ``corpus.yaml`` files (walked
     under ``tools/`` AND ``workflows/`` -- the engine templates) with the
-    residual ``data/tool_query_corpus.yaml``. An
+    residual ``tools/tool_query_corpus.yaml``. An
     explicit ``path`` argument or the ``TRID3NT_TOOL_CORPUS_YAML`` env override
     reads a single monolithic file instead (test / experiment pinning) -- the
     legacy single-file behaviour is preserved for those callers.

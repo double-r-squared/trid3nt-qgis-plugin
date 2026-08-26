@@ -261,7 +261,7 @@ def _bounds_from_vector(path: str) -> tuple[float, float, float, float]:
         )
 
     # Reuse the postprocess_pelicun reproject-to-4326 convention.
-    from trid3nt_server.data.simulation.pelicun.postprocess_pelicun.postprocess_pelicun import _bbox_from_gdf
+    from trid3nt_server.workflows.pelicun.postprocess_pelicun.postprocess_pelicun import _bbox_from_gdf
 
     minx, miny, maxx, maxy = _bbox_from_gdf(gdf)
     return (float(minx), float(miny), float(maxx), float(maxy))

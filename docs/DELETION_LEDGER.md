@@ -518,7 +518,11 @@ LayerURI-shaped dict returns as an inert blob).
 
 ## set_telemac_parameters + set_sfincs/set_swmm/set_modflow siblings - QUEUED 2026-08-25
 - What: the four setter tools (copy-on-write deck recalibration + law-aware
-  bounds), ~2k LOC family on workflows/lib/_setter_envelope.py.
+  bounds), ~2k LOC family on workflows/lib/_setter_envelope.py. RELOCATED
+  2026-08-26 (data/ eviction) from trid3nt_server/data/simulation/<engine>/set_<engine>_parameters/
+  to trid3nt_server/workflows/<engine>/set_parameters/ (workflows/modflow/set_parameters,
+  workflows/sfincs/set_parameters, workflows/swmm/set_parameters,
+  workflows/telemac/set_parameters) - path change only, condition unchanged.
 - CONDITION to delete: the skeleton rerun-with-overrides capability +
   coupled-validity rules land (calibration track wave 1) and reproduce the
   same recalibration LIVE (stage-parent, override friction, byte-identical
@@ -599,3 +603,67 @@ worker-purity audit). The entrypoint now imports the builder's stamp lazily, lik
 every other worker-payload symbol.
 
 **Decided by:** the wave-B worker-purity audit. **Status:** DELETED.
+
+## trid3nt_server/data/ (the category-era fossil) - DELETED 2026-08-26
+
+**What:** the last of `trid3nt_server/data/` - the top-level `__init__.py`
+fossil, `data/simulation/__init__.py`, and the six per-engine husks
+(`data/simulation/{modflow,pelicun,sfincs,swmm,telemac,model_debris_flow}/`)
+that still held live tenants: `model_debris_flow` (the registered
+post-fire debris-flow tool), `postprocess_pelicun` (registered general
+tool), the four `set_<engine>_parameters` deck-recalibration setters, and
+three unregistered MODFLOW internal engine surfaces
+(`run_modflow_archetype_tool`, `run_modflow_multi_species_tool`,
+`run_river_seepage_tool`) backing the archetype/contaminant-plume/
+river-seepage templates.
+
+**CONDITION to delete:** every remaining tenant relocated to its
+placement-rule home, with zero dead code found (every module had a live
+importer, confirmed by grep + git log). No candidate qualified for
+straight deletion this wave - the whole directory emptied by MOVE, not by
+demotion.
+
+**Where each tenant went:** `model_debris_flow/` -> `tools/processing/model_debris_flow/`
+(sibling of `compute_sediment_yield`, the established processing-tool
+folder convention - not an "engine family", so it never belonged under
+`workflows/`). `pelicun/postprocess_pelicun/` -> `workflows/pelicun/postprocess_pelicun/`
+(intact - a registered general tool with its own retrieval corpus, moved
+whole rather than flattened to match the other engines' flat
+`postprocess_<engine>.py`, because those aren't independently retrievable
+tools and this one is). `modflow/set_modflow_parameters/`,
+`sfincs/set_sfincs_parameters/`, `swmm/set_swmm_parameters/`,
+`telemac/set_telemac_parameters/` -> `workflows/<engine>/set_parameters/`
+per the standing placement rule (ledger row above, path updated in
+place). `modflow/run_modflow_archetype_tool.py` -> `workflows/modflow/`
+top level (multi-template consumer: `steps/archetype.py` AND
+`sustainable_yield/sustainable_yield.py`, so it sits beside `run_modflow.py`
+rather than inside either template dir). `modflow/run_modflow_multi_species_tool.py`
+-> `workflows/modflow/contaminant_plume/` (single consumer). `modflow/run_river_seepage_tool/`
+-> `workflows/modflow/river_seepage/run_river_seepage_tool/` (single
+consumer, subpackage moved intact). Every internal logger namespace string
+and the `_setter_envelope.py` logger tag were repointed to match; the
+`tools/__init__.py` registration imports, `compute_layer_bounds.py`'s
+`_bbox_from_gdf` import, the four `workflows/modflow/*` engine-bridge call
+sites, and 18 test files were rewritten to the new paths - no compat shim.
+`search_tools._compose_corpus_from_tree` and `catalog_http._compose_corpus_from_tree`
+(the latter was ALSO missing the `workflows/**/corpus.yaml` walk entirely -
+a pre-existing gap, fixed in the same pass since the fix is one line and
+the alternative was leaving the catalog HTTP endpoint blind to every
+engine template's retrieval corpus) both dropped the `data/` walk.
+
+**Live evidence:** `python -c "import trid3nt_server"` + `import
+trid3nt_server.mcp_server` clean; registry set byte-identical
+pre/post-move (253/253, zero added, zero removed); offline slices f-o
+(4 failed - the pre-existing `fetch_resolution_gate` environmental set,
+unchanged) and a-e (4 failed - `test_catalog_surfacing` x3 +
+`test_emit_on_fetch_equivalence` x1, pre-existing drift from concurrent
+in-flight work in the fenced `workflows/telemac/rain_on_grid/` /
+`workflows/mesh/` area, unrelated to this wave, confirmed absent from the
+touched-file list) both held at their pre-move baseline; retrieval
+spot-check (`set_telemac_parameters`, `model_debris_flow`,
+`postprocess_pelicun`, `set_modflow_parameters`) all resolve in the top-8
+for their canonical phrasings; grep-to-zero on `trid3nt_server.data` /
+`trid3nt_server/data` across live .py/.yaml/.toml/.cfg/.ini (historical
+ADRs and frozen build-report/spec docs excluded per convention).
+
+**Decided by:** NATE (data/ eviction directive, 2026-08-26). **Status:** DELETED.

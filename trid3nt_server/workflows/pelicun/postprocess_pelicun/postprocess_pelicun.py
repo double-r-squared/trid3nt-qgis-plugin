@@ -78,7 +78,7 @@ __all__ = [
 ]
 
 
-logger = logging.getLogger("trid3nt_server.data.simulation.pelicun.postprocess_pelicun.postprocess_pelicun")
+logger = logging.getLogger("trid3nt_server.workflows.pelicun.postprocess_pelicun.postprocess_pelicun")
 
 
 # ---------------------------------------------------------------------------

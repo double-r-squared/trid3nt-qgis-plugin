@@ -56,7 +56,7 @@ from trid3nt_server.workflows.lib._setter_envelope import (
 
 __all__ = ["set_telemac_parameters", "TELEMAC_FRICTION_LAWS", "friction_coefficient_bound"]
 
-logger = logging.getLogger("trid3nt_server.data.simulation.telemac.set_telemac_parameters.set_telemac_parameters")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.set_parameters.set_telemac_parameters")
 
 
 # --------------------------------------------------------------------------- #

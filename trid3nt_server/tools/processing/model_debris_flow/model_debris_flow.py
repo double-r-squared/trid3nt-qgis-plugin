@@ -100,7 +100,7 @@ __all__ = [
     "DebrisFlowUpstreamError",
 ]
 
-logger = logging.getLogger("trid3nt_server.data.simulation.model_debris_flow.model_debris_flow")
+logger = logging.getLogger("trid3nt_server.tools.processing.model_debris_flow.model_debris_flow")
 
 
 # ---------------------------------------------------------------------------

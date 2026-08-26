@@ -462,7 +462,7 @@ async def model_contaminant_plume(
         ) from exc
 
     # --- run the (N>=1)-species solver inside a substep + validate the result --
-    from trid3nt_server.data.simulation.modflow.run_modflow_multi_species_tool import (
+    from trid3nt_server.workflows.modflow.contaminant_plume.run_modflow_multi_species_tool import (
         run_modflow_multi_species_job,
     )
 

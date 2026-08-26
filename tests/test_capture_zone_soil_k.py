@@ -61,7 +61,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, *, sand: float | None, clay: float |
         captured["run_args"] = run_args
         return _fake_layer()
 
-    import trid3nt_server.data.simulation.modflow.run_modflow_archetype_tool as _tool
+    import trid3nt_server.workflows.modflow.run_modflow_archetype_tool as _tool
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
     uris: dict[str, str] = {}
