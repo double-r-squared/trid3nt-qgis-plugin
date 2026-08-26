@@ -40,6 +40,7 @@ from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.coastal_tidal_surge.declarations import (
     DOC,
     PARAMS,
+    VALIDITY,
 )
 from trid3nt_server.workflows.telemac.coastal_tidal_surge.series_type import (
     series_type,
@@ -235,6 +236,9 @@ coastal_tidal_surge = register_workflow(
     # magnitude maximum over that same front.
     sensitivity=(("flooded_land_km2", "extent"),
                  ("inundation_peak_depth_m", "peak")),
+    # The friction coefficient's MEANING is set by the law beside it, which no
+    # per-param bound can see. See declarations.VALIDITY.
+    validity=VALIDITY,
     coerce=(
         location_or_bbox("coastal_tidal_surge", code_prefix="COASTAL",
                          hint="For a natural prompt like 'storm surge flooding near "

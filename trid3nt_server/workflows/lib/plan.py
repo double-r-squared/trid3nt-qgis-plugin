@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any, Callable, Literal, Mapping
+from typing import Any, Callable, Iterable, Literal, Mapping
 
 from .errors import ModifierIllegalError, PlanValidationError
 
@@ -34,7 +34,30 @@ __all__ = [
     "Step",
     "StyleSpec",
     "When",
+    "declared_reads",
 ]
+
+
+def declared_reads(value: Any, kind: type) -> Iterable[Any]:
+    """Every declared read of ``kind`` sitting inside a declared container.
+
+    The ONE walk. The validator checks these reads resolve, the interpreter binds
+    them and evicts on them, and a derivation decides from them which steps its
+    overrides reach - three readers that must agree about what a plan value reads.
+
+    ``Mapping`` rather than ``dict``: a binding block is deep-frozen into
+    ``MappingProxyType``, which is a Mapping and not a dict, so a walk that
+    descended dicts alone would call a ref hidden in a declared block invisible.
+    Sets and frozensets are walked for the same reason.
+    """
+    if isinstance(value, kind):
+        yield value
+    elif isinstance(value, Mapping):
+        for v in value.values():
+            yield from declared_reads(v, kind)
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        for v in value:
+            yield from declared_reads(v, kind)
 
 
 def declaration_site(depth: int = 2) -> str:

@@ -1,0 +1,13 @@
+rerun_workflow:
+- run that again with a rougher bed
+- rerun the last simulation but change the friction coefficient
+- same model run with a higher decay rate
+- redo that run with the discharge doubled
+- try the previous run again at a finer mesh resolution
+- what if the reaeration rate were higher - rerun it
+- the run failed on that parameter, run it again with a corrected value
+- calibrate the model by re-running with an adjusted roughness
+- derive a new run from run 01M0ZP13 with different parameters
+- compare two versions of the same simulation with one value changed
+- switch the telemac friction law to Manning and rerun
+- re-run the oxygen sag with a different deoxygenation rate

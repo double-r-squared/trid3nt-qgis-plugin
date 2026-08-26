@@ -18,7 +18,7 @@ from typing import Any
 
 from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
 
-__all__ = ["LedgerRecord", "StepLedger", "invocation_key"]
+__all__ = ["LedgerRecord", "StepLedger", "invocation_key", "records_from_docs"]
 
 logger = logging.getLogger("trid3nt_server.workflows.lib.ledger")
 
@@ -103,8 +103,8 @@ class StepLedger:
             # tombstone is present-and-complete, so a finished run cannot replay
             # even though its document survives to be swept.
             if raw and _fresh(raw) and not raw.get("complete"):
-                records = _read_records(raw.get("records"))
-                data_records = _read_records(raw.get("data_records"))
+                records = records_from_docs(raw.get("records"))
+                data_records = records_from_docs(raw.get("data_records"))
         except Exception as exc:  # noqa: BLE001 - a missing/corrupt ledger only costs a replay
             logger.warning("step ledger %s unreadable (%s); starting fresh", key, exc)
         return cls(key=key, workflow=workflow, records=records,
@@ -139,6 +139,26 @@ class StepLedger:
         label = _data_label(name)
         rec = replace(rec, index=_DATA_INDEX, node=label)
         self.data_records = [r for r in self.data_records if r.node != label] + [rec]
+        await self._persist()
+
+    async def seed(self, records: list[LedgerRecord],
+                   data_records: list[LedgerRecord]) -> None:
+        """Plant the work a DERIVED run inherits from its parent.
+
+        A rerun-with-overrides starts from work its parent already did, which the
+        parent's OWN ledger no longer holds - completion tombstones it, and that
+        tombstone is what stops a live-no-cache tool becoming a result cache. The
+        records arrive from the parent's run SNAPSHOT instead and land here, so
+        the ordinary resume path replays them and nothing downstream needs to know
+        a derivation happened.
+
+        The document is REPLACED, not merged: this key may carry a tombstone from
+        an identical earlier derivation, and inheriting past a tombstone is the
+        whole point of being asked.
+        """
+        self.records = sorted(records, key=lambda r: r.index)
+        self.data_records = list(data_records)
+        self.completed = False
         await self._persist()
 
     async def clear(self) -> None:
@@ -223,7 +243,8 @@ def _data_label(name: str) -> str:
     return f"data:{name}"
 
 
-def _read_records(raw: Any) -> list[LedgerRecord]:
+def records_from_docs(raw: Any) -> list[LedgerRecord]:
+    """Records back off the store - here and in the run snapshot, one reader."""
     if not isinstance(raw, list):
         return []
     return [LedgerRecord(**{**r, "artifact_uris": tuple(r.get("artifact_uris") or ())})

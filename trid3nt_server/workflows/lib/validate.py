@@ -5,12 +5,12 @@ Ref integrity, modifier legality and gate placement, all as typed refusals.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Sequence
 
 from .data import DataDecl
 from .errors import PlanValidationError
 from .params import Param, doors, refuse_duplicate_params
-from .plan import DataRef, Gate, ParamRef, Plan, Ref, When
+from .plan import DataRef, Gate, ParamRef, Plan, Ref, When, declared_reads
 
 __all__ = ["validate_plan"]
 
@@ -219,26 +219,8 @@ def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[st
 
 
 def _walk_refs(value: Any) -> Iterable[Ref]:
-    yield from _walk(value, Ref)
+    yield from declared_reads(value, Ref)
 
 
 def _walk_param_refs(value: Any) -> Iterable[ParamRef]:
-    yield from _walk(value, ParamRef)
-
-
-def _walk(value: Any, kind: type) -> Iterable[Any]:
-    """Every declared read inside a container, whatever KIND of container it is.
-
-    ``Mapping`` rather than ``dict``: a binding block is deep-frozen into
-    ``MappingProxyType``, which is a Mapping and not a dict, so a walk that
-    descended dicts alone would call a ref hidden in a declared block invisible -
-    and the validator would pass a plan the binder then has to bind blind.
-    """
-    if isinstance(value, kind):
-        yield value
-    elif isinstance(value, Mapping):
-        for v in value.values():
-            yield from _walk(v, kind)
-    elif isinstance(value, (list, tuple, set, frozenset)):
-        for v in value:
-            yield from _walk(v, kind)
+    yield from declared_reads(value, ParamRef)

@@ -550,12 +550,16 @@ from trid3nt_server.workflows.pelicun.postprocess_pelicun import postprocess_pel
 # (engine="telemac", tier="template", workflows/telemac/river_dye/river_dye.py,
 # imported below) are the TEMPLATEs; the run_swmm / run_telemac doors list +
 # gate-expand them. run_telemac names the door, not a direct-solve wrapper.
+# RERUN-WITH-OVERRIDES: derive a run from a run, with named values moved. The
+# skeleton's recalibration interface - what-if, failure recovery, calibration
+# loops - and the successor to the per-engine parameter setters below.
+from trid3nt_server.workflows.lib.rerun import rerun_workflow  # noqa: E402,F401
 # derive-not-mutate parameter setters (write a child deck/setup,
-# leave the parent immutable).
+# leave the parent immutable). PRE-MIGRATION: these three predate the skeleton
+# and die at their engines' migrations, when rerun_workflow covers them.
 from trid3nt_server.workflows.modflow.set_parameters import set_modflow_parameters  # noqa: E402,F401
 from trid3nt_server.workflows.sfincs.set_parameters import set_sfincs_parameters  # noqa: E402,F401
 from trid3nt_server.workflows.swmm.set_parameters import set_swmm_parameters  # noqa: E402,F401
-from trid3nt_server.workflows.telemac.set_parameters import set_telemac_parameters  # noqa: E402,F401 - relocated beside the run_telemac door (engine-door refactor, TELEMAC slice); stays tier=general
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- engine templates (door dissolution): the 10 engine "door"
 # concierge tools were DELETED. Each engine's tier=template members are ordinary

@@ -143,16 +143,21 @@ def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedPar
 def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
                    revised: Mapping[str, Any],
                    *, note: str = "revised at input review",
+                   door: str = doors.GATE,
                    ) -> tuple[ResolvedParams, list[str]]:
-    """Re-seat values a user gave at a gate, through the GATE door.
+    """Re-seat values a PERSON gave, through the door they gave them at.
 
     The declared bounds and the non-numeric refusal still apply - a gate is an
     answer surface, not a bypass - and every genuinely changed row is re-stamped
     ``basis=user`` so the run's provenance says the user set it. ``note`` is what
     the row records about HOW it was answered (edited on the form, drawn on the
-    canvas); it reaches the provenance entry the result carries. Returns the new
-    sheet plus the names that actually changed. Names that are not declared params
-    cannot be seated and are reported by the caller, never silently absorbed.
+    canvas, named as an override of a past run); it reaches the provenance entry
+    the result carries. ``door`` is which of the two user-authority doors seated
+    it - GATE for an answer given at a card, USER for a value named up front,
+    which is what a rerun's overrides are. Both stamp ``basis=user``; the door is
+    what says whether a card was involved. Returns the new sheet plus the names
+    that actually changed. Names that are not declared params cannot be seated and
+    are reported by the caller, never silently absorbed.
     """
     by_name = {p.name: p for p in declared}
     rows: dict[str, ResolvedParam] = {}
@@ -163,15 +168,16 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
             continue
         if resolved.value_of(name) == value:
             continue
-        rows[name] = _finish(param, value, doors.GATE, note)
+        rows[name] = _finish(param, value, door, note)
         changed.append(name)
     return (resolved.replacing(rows) if rows else resolved), changed
 
 
 async def rederive_revised(
     declared: Sequence[Param], resolved: ResolvedParams, changed: Sequence[str],
+    *, occasion: str = "input review",
 ) -> tuple[ResolvedParams, list[str], list[str]]:
-    """Re-run the derivations over an APPROVED sheet, to the same fixpoint.
+    """Re-run the derivations over a REVISED sheet, to the same fixpoint.
 
     A revision that leaves derived rows on their pre-revision values ships a sheet
     that contradicts itself - saturation computed from 20 C beside an approved
@@ -207,7 +213,7 @@ async def rederive_revised(
                 continue
             fresh = await _rederive_row(param, rows, current,
                                         f"re-derived by {param.resolve} after "
-                                        f"input review revised {revision}")
+                                        f"{occasion} revised {revision}")
             if fresh is None:
                 continue
             rows[param.name] = updates[param.name] = fresh
@@ -225,7 +231,7 @@ async def rederive_revised(
         fresh = await _rederive_row(param, rows, current, "")
         if fresh is None:
             continue
-        note = (f"the sheet approved at input review would derive "
+        note = (f"the sheet {occasion} produced would derive "
                 f"{wire_value(fresh.value)}, but this value was set explicitly "
                 "and stands")
         rows[param.name] = updates[param.name] = replace(

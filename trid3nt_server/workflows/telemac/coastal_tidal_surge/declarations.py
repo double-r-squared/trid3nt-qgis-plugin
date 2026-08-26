@@ -7,9 +7,10 @@ that describe every value it can take live here instead of in front of them.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import Param, doors
+from trid3nt_server.workflows.lib import Param, Validity, doors
 
-__all__ = ["DEFAULT_GRID_SPACING_M", "DOC", "PARAMS", "SYNTHETIC_WINDOW_HOURS"]
+__all__ = ["DEFAULT_GRID_SPACING_M", "DOC", "FRICTION_LAW_NAMES", "PARAMS",
+           "SYNTHETIC_WINDOW_HOURS", "VALIDITY"]
 
 
 #: The grid spacing a coastal run is laid at when nobody names one. It lives HERE,
@@ -81,11 +82,21 @@ PARAMS: tuple[Param, ...] = (
     # now on the form, in provenance, and tunable without an image rebuild.
     Param("friction_law", door=doors.CONSTANT, default=3, type=int,
           bounds=(1.0, 7.0), consequence="physics",
-          desc="TELEMAC bottom-friction law: 3 = Strickler"),
+          desc="TELEMAC bottom-friction law: 2 = Chezy, 3 = Strickler (default), "
+               "4 = Manning. The law fixes what friction_coefficient MEANS"),
+    # The declared band spans all three laws because the coefficient's plausible
+    # range is LAW-dependent and a Param bound is about one value: a Manning n
+    # (0.011-0.1) and a Strickler Ks (15-90) cannot share a band. The floor is
+    # the only law-independent physical fact - a friction coefficient is
+    # positive. Which side of the crossover the value belongs on is the coupled
+    # rule below, not a bound.
     Param("friction_coefficient", door=doors.SCENARIO, default=40.0,
-          bounds=(5.0, 100.0), units="m^(1/3)/s", consequence="physics",
-          desc="Strickler coefficient Ks; ~40 is mixed sand and marsh, lower is "
-               "rougher (denser vegetation) and slows the flooding front"),
+          bounds=(0.001, 200.0), units="m^(1/3)/s (Strickler Ks) or s/m^(1/3) "
+                                       "(Manning n)",
+          consequence="physics",
+          desc="Bed-friction coefficient, read under friction_law: Strickler/Chezy "
+               "Ks ~15-90 (higher is SMOOTHER; ~40 is mixed sand and marsh) or "
+               "Manning n ~0.011-0.1 (higher is ROUGHER; n = 1/Ks)"),
     Param("wind_speed_mps", door=doors.SCENARIO, default=0.0, bounds=(0.0, 80.0),
           units="m/s", consequence="physics",
           desc="Constant wind over the domain, which adds local set-up on top of "
@@ -110,6 +121,53 @@ PARAMS: tuple[Param, ...] = (
           desc="Result-writing cadence; unset keeps the deck's own graphic period"),
     Param("compute_class", door=doors.CONSTANT, default="medium",
           consequence="numerical", desc="Solve sizing class"),
+)
+
+
+#: TELEMAC's LAW OF BOTTOM FRICTION ids, as the coefficient's own meaning.
+FRICTION_LAW_NAMES: dict[int, str] = {2: "Chezy", 3: "Strickler", 4: "Manning"}
+
+#: Where a Strickler/Chezy coefficient stops and a Manning one begins. The two
+#: are RECIPROCALS (n = 1/Ks), so the plausible bands sit either side of 1: a
+#: rough floodplain is Ks ~10 and n ~0.1, and nothing physical lands on both
+#: sides. Comparing against the crossover rather than against each law's band is
+#: deliberate - an ATYPICAL value the caller means (a glass-smooth Ks of 120) is
+#: theirs to set, while a value on the wrong side of the crossover is not
+#: atypical, it is the other quantity.
+_FRICTION_CROSSOVER = 1.0
+
+
+def _friction_matches_law(v) -> bool:  # noqa: ANN001 - a ParamValues view
+    """Is the coefficient the quantity this law reads it as?
+
+    The classic TELEMAC error: switch LAW OF BOTTOM FRICTION to Manning and leave
+    FRICTION COEFFICIENT at a Strickler 40. The deck is valid, the solve runs, and
+    it models a bed roughness three orders of magnitude off what was asked for.
+    """
+    if int(v.friction_law) not in FRICTION_LAW_NAMES:
+        return True             # a law this rule says nothing about
+    manning = int(v.friction_law) == 4
+    return (float(v.friction_coefficient) < _FRICTION_CROSSOVER) is manning
+
+
+#: The coupled rules this template's sheet has to satisfy - see workflows/lib/validity.py.
+VALIDITY = (
+    Validity(
+        name="friction_coefficient_matches_law",
+        reads=("friction_law", "friction_coefficient"),
+        holds=_friction_matches_law,
+        message=(
+            "friction_law={friction_law} with friction_coefficient="
+            "{friction_coefficient} reads the coefficient as the WRONG quantity. "
+            "Laws 2 and 3 (Chezy, Strickler) take a Ks around 15-90 where higher "
+            "is smoother; law 4 (Manning) takes an n around 0.011-0.1 where "
+            "higher is rougher, and the two are reciprocals (n = 1/Ks). This "
+            "pair sits on the wrong side of that crossover, so the run would "
+            "model a bed roughness nobody asked for. Re-confirm the coefficient "
+            "in the units the law you chose reads - naming BOTH values is the "
+            "only way past this."
+        ),
+    ),
 )
 
 

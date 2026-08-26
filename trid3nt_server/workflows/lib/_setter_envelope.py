@@ -1,11 +1,18 @@
-"""Shared machinery for the group-D parameter setters.
+"""Shared machinery for the group-D parameter setters. PRE-MIGRATION ONLY.
 
+CONSTRAINT: this module is consumed by exactly three callers -
 ``set_sfincs_parameters`` / ``set_swmm_parameters`` / ``set_modflow_parameters``
-(the V&V-wave calibration primitives, docs/validation/build-contract.md section
-3.4) all share the same shape: copy-on-write a parent model directory/file into
+- and by nothing else. Their capability is the skeleton's now: recalibration is
+``rerun_workflow`` (``workflows/lib/rerun/``), which derives a child run from a
+parent's resolved sheet and inherits the work the overrides do not reach. These
+three predate their engines' migration to the skeleton and die with it; this
+file dies with the last of them. Nothing new may import it.
+
+The three share the same shape: copy-on-write a parent model directory/file into
 a fresh child, apply named-parameter changes via the engine package's own API,
-read the written values back, and return one ``SetterEnvelope`` dict. This
-module is the common seam so that shape is not hand-rolled three times.
+read the written values back, and return one ``SetterEnvelope`` dict (see
+docs/validation/build-contract.md section 3.4). This module is the common seam so
+that shape is not hand-rolled three times.
 
 Bounds policy (conformed to build-contract.md section 3.4):
 ``plausibility[].in_range=false`` is a WARNING carried honestly in the

@@ -25,14 +25,16 @@ import logging
 import time
 from typing import Any, Callable, Mapping, Sequence
 
-from . import journal
+from . import journal, snapshot
 from .data import DataDecl
 from .errors import DeclarativeError, PlanValidationError
-from .params import Param, doors
+from .params import Param, ResolvedParams, doors
 from .plan import Plan, Ref, Step
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, resolve_params
+from .snapshot import Derivation
 from .validate import validate_plan
+from .validity import Validity, check_validity, refuse_undeclared_reads
 from .interpreter import RunResult, interpret
 
 __all__ = ["EngineOps", "FacadeIncompleteError",
@@ -152,6 +154,7 @@ class Workflow(EngineOps):
                  answer: Sequence[str] = (),
                  provenance: Sequence[str | tuple[str, str]] = (),
                  sensitivity: Sequence[tuple[str, str]] = (),
+                 validity: Sequence[Validity] = (),
                  coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = ()) -> None:
         self.metadata = metadata
         self.name = metadata.name
@@ -166,6 +169,11 @@ class Workflow(EngineOps):
         #: Which ANSWER fields sit in a resolution-sensitive class. The skeleton
         #: turns this into the run's honesty label; see ``resolution.py``.
         self.sensitivity = SensitivityDecl(sensitivity)
+        #: Cross-param rules a single Param declaration cannot express - checked
+        #: on every lane, because a sheet is a sheet whether it came from a fresh
+        #: invocation or from a derivation of one. See ``validity.py``.
+        self.validity = tuple(validity)
+        refuse_undeclared_reads(self.validity, self.params)
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
         #: The plan is STATIC - it reads no concrete value - so it is built and
@@ -201,18 +209,41 @@ class Workflow(EngineOps):
     # -- the spine --------------------------------------------------------- #
 
     async def run(self, wire: Mapping[str, Any]) -> Any:
-        """The absorbed tool body: normalize, resolve, interpret, post, publish."""
+        """The absorbed tool body: normalize, resolve, then the shared spine."""
         supplied, err = self._normalize(dict(wire))
         if err is not None:
             return err
-        input_mode = wire.get("input_mode")
+        return await self.execute(
+            self._resolve(supplied), input_mode=wire.get("input_mode"),
+            resume=not bool(wire.get("restart_clean")),
+            supplied=self._supplied_artifacts(wire))
+
+    async def execute(self, resolving: Any, *, input_mode: str | None = None,
+                      resume: bool = True,
+                      supplied: Mapping[str, Any] | None = None,
+                      derived_from: Derivation | None = None) -> Any:
+        """Run the plan on a resolved sheet: interpret, post, publish.
+
+        The spine BOTH lanes share. A fresh invocation resolves its sheet from the
+        wire; a rerun-with-overrides resolves it from its parent's. From here on
+        the two runs are the same run, which is what keeps a derived run's
+        gates, ledger, journal line and answer artifact identical to an original's
+        instead of a second implementation of them.
+
+        ``resolving`` is the sheet or an awaitable of it, so the resolve itself
+        lands inside this method's error envelope - a bounds refusal is a refusal
+        about the run, and reporting it any other way would give one class of
+        typed error two shapes.
+        """
+        supplied_artifacts = dict(supplied or {})
         started = time.monotonic()
         try:
-            p = await resolve_params(self.params, supplied)
+            p = await resolving if inspect.isawaitable(resolving) else resolving
+            check_validity(self.validity, p, workflow=self.name)
             run = await interpret(
                 self.plan, p, self.params, self.data,
-                input_mode=input_mode, resume=not bool(wire.get("restart_clean")),
-                supplied=self._supplied_artifacts(wire),
+                input_mode=input_mode, resume=resume,
+                supplied=supplied_artifacts,
             )
         except asyncio.CancelledError:
             raise
@@ -227,7 +258,13 @@ class Workflow(EngineOps):
                 raise
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
-        return await self._publish(run, time.monotonic() - started)
+        return await self._publish(run, time.monotonic() - started,
+                                   input_mode=input_mode,
+                                   supplied=supplied_artifacts,
+                                   derived_from=derived_from)
+
+    async def _resolve(self, supplied: Mapping[str, Any]) -> ResolvedParams:
+        return await resolve_params(self.params, supplied)
 
     # -- normalize --------------------------------------------------------- #
 
@@ -278,9 +315,16 @@ class Workflow(EngineOps):
 
     # -- post + publish ---------------------------------------------------- #
 
-    async def _publish(self, run: RunResult, wall_seconds: float = 0.0) -> Any:
+    async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
+                       input_mode: str | None = None,
+                       supplied: Mapping[str, Any] | None = None,
+                       derived_from: Derivation | None = None) -> Any:
         result = run.value
         notes = list(run.notes) + [n for n in self.checks(result, run) if n]
+        if derived_from is not None:
+            notes.append(
+                f"derived from run {derived_from.parent_run_id} by overriding "
+                + ", ".join(derived_from.overrides))
         update: dict[str, Any] = {
             "synthetic_inputs": merge_provenance(
                 getattr(result, "synthetic_inputs", None) or [], run.entries),
@@ -300,7 +344,16 @@ class Workflow(EngineOps):
         # the moment the layer was, and the journal is the record that outlives
         # the artifacts.
         await asyncio.to_thread(self._journal, run_id, run, result, metrics,
-                                wall_seconds, notes)
+                                wall_seconds, notes, derived_from)
+        # The snapshot rides the same moment for the same reason: this is where a
+        # run holds its own past whole - the sheet it ran on, the records it left,
+        # the artifacts it was handed - and any later point would be reassembling
+        # it from products that are allowed to disappear.
+        await snapshot.write_snapshot(
+            run_id=run_id, workflow=self.name, input_mode=input_mode,
+            sheet=run.params.rows() if run.params is not None else (),
+            records=run.records, data_records=run.data_records,
+            supplied=dict(supplied or {}), derived_from=derived_from)
         logger.info("%s complete layer_id=%s answer=%s executed=%s replayed=%s notes=%s",
                     self.name, getattr(result, "layer_id", None),
                     {k: v for k, v in metrics.items() if not isinstance(v, list)},
@@ -340,7 +393,8 @@ class Workflow(EngineOps):
 
     def _journal(self, run_id: str | None, run: RunResult, result: Any,
                  metrics: Mapping[str, Any], wall_seconds: float,
-                 notes: Sequence[str] = ()) -> None:
+                 notes: Sequence[str] = (),
+                 derived_from: Derivation | None = None) -> None:
         """Append this run to the run journal - one seam, every engine.
 
         The publish stage is where a run has everything the record needs at once:
@@ -358,6 +412,8 @@ class Workflow(EngineOps):
             result=result, wall_seconds=round(wall_seconds, 3),
             origin=journal.run_origin(live_session=current_emitter() is not None),
             executed=run.executed, replayed=run.replayed, notes=list(notes),
+            parent_run_id=derived_from.parent_run_id if derived_from else None,
+            overrides=derived_from.overrides if derived_from else (),
         ))
 
     @staticmethod
@@ -388,6 +444,7 @@ def register_workflow(
     answer: Sequence[str] = (),
     provenance: Sequence[str | tuple[str, str]] = (),
     sensitivity: Sequence[tuple[str, str]] = (),
+    validity: Sequence[Validity] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
     doc: Mapping[str, Any] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
@@ -423,7 +480,7 @@ def register_workflow(
     _refuse_incomplete_facade(facade)
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
                       answer=answer, provenance=provenance,
-                      sensitivity=sensitivity, coerce=coerce)
+                      sensitivity=sensitivity, validity=validity, coerce=coerce)
 
     async def _run(**wire: Any) -> Any:
         return await workflow.run(wire)

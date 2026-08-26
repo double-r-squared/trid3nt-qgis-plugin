@@ -94,14 +94,23 @@ def build_record(*, run_id: str | None, template: str, engine: str | None,
                  provenance: Sequence[Any], result: Any,
                  wall_seconds: float | None, origin: str,
                  executed: Sequence[str], replayed: Sequence[str],
-                 notes: Sequence[str]) -> dict[str, Any]:
-    """One run record, from what the publish stage already holds."""
+                 notes: Sequence[str], parent_run_id: str | None = None,
+                 overrides: Sequence[str] = ()) -> dict[str, Any]:
+    """One run record, from what the publish stage already holds.
+
+    ``parent_run_id`` + ``overrides`` are what make the journal a CHAIN rather
+    than a pile: a what-if fan and a calibration loop are both a parent with
+    children, and the line has to say which parent and which values moved or the
+    relationship is only recoverable by diffing sheets.
+    """
     return {
         "run_id": run_id,
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "template": template,
         "engine": engine,
         "origin": origin,
+        "parent_run_id": parent_run_id,
+        "overrides": list(overrides),
         "sheet": [_row(row) for row in sheet],
         "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],

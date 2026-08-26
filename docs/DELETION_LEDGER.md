@@ -516,7 +516,7 @@ LayerURI-shaped dict returns as an inert blob).
 | `compute_change_detection`, `compute_flood_depth_damage`, `compute_sediment_yield`, `compute_model_residuals`, `compute_exposure_summary` (the five NOT demoted) | trid3nt_server/tools/processing | KEPT, with per-module reasons recorded so this is a decision and not an omission. FOUR fail the EMIT gate - each paints a layer (categorical gain/loss FGB, per-structure damage points, styled log-class RUSLE COG, diverging residual points) that no registered fetcher produces and the playground cannot write. `compute_exposure_summary` clears EMIT (it is tabular, the zonal profile) but fails on a live consumer: `compose_case_report.py:354` imports `get_session_exposure` and reads a Case-keyed in-process session store a sandbox return value cannot repopulate. `compute_sediment_yield` additionally has a hard importer - `emission/publish.py:540` reads its `SEDIMENT_YIELD_LOG_CLASSES` as the single source of truth for the publish styling ladder. `compute_model_residuals` is PROTECTED-VNV and `extract_model_at_observations` defines itself by reference to it. | REJECTED for this wave (decision record). Re-open conditions, per module: change_detection / flood_depth_damage / sediment_yield / model_residuals - a registered primitive that paints an arbitrary array or feature set exists; sediment_yield ALSO needs its log-class table moved to `emission/quantity_styles.py` first (its own ledger row above); exposure_summary - the Case report reads exposure from persisted Case state rather than an in-process store, at which point the tool is the zonal recipe with two fetchers in front of it. | cleanup wave phase 2 |
 | `tests/test_publish_layer_map_emission_job0272.py` (232 lines, 5 cases) | tests | its whole premise is void: it guarded the job-0272 wrap-site, which existed because "the atomic `publish_layer` returns a bare WMS URL string" and `emit_tool_call` only feeds `add_loaded_layer` on a typed `LayerURI`. There is no atomic publish_layer, and the publish now happens INSIDE the seam that feeds `add_loaded_layer`, on a value that is already a `LayerURI` - so the failure it guards is unreachable by construction rather than merely unobserved. Condition: the replacement assertion exists somewhere. | DELETED (cleanup wave phase 2, commit 0041b1e0, ADR 0313). CONDITION MET twice over: `tests/test_auto_publish_droppable_raster.py::test_raster_s3_publishes_once_and_reaches_the_map` asserts the PUBLISHED uri reaches `loaded_layers`, which is the thing job-0272 was about, and the readable-name precedence the file's other two cases covered (`derive_readable_layer_name`, bare-ULID -> style-preset label) is already covered by `tests/test_publish_layer.py` items 3 and 4 against the same function, which survives in `emission/publish.py` and still has a live caller in `cases/ingest_user_layer.py:481`. reopen: never - a test whose setup has to construct a tool that does not exist is not testing the product. | cleanup wave phase 2 |
 
-## set_telemac_parameters + set_sfincs/set_swmm/set_modflow siblings - QUEUED 2026-08-25
+## set_telemac_parameters - DELETED 2026-08-26 (siblings still QUEUED)
 - What: the four setter tools (copy-on-write deck recalibration + law-aware
   bounds), ~2k LOC family on workflows/lib/_setter_envelope.py. RELOCATED
   2026-08-26 (data/ eviction) from trid3nt_server/data/simulation/<engine>/set_<engine>_parameters/
@@ -524,12 +524,43 @@ LayerURI-shaped dict returns as an inert blob).
   workflows/sfincs/set_parameters, workflows/swmm/set_parameters,
   workflows/telemac/set_parameters) - path change only, condition unchanged.
 - CONDITION to delete: the skeleton rerun-with-overrides capability +
-  coupled-validity rules land (calibration track wave 1) and reproduce the
-  same recalibration LIVE (stage-parent, override friction, byte-identical
-  untouched deck lines equivalent, law-inversion refusal) - then all four
-  die together.
+  coupled-validity rules land and reproduce the same recalibration LIVE
+  (stage-parent, override friction, byte-identical untouched inputs
+  equivalent, law-inversion refusal).
+- CONDITION MET for the TELEMAC member, 2026-08-26 (ADR 0319), and it is
+  DELETED - module + corpus.yaml + package dir + the `tools/__init__.py`
+  registration import + tests/test_set_telemac_parameters.py (559 + 462 LOC).
+  The replacement is `rerun_workflow` (workflows/lib/rerun/), and the mapping is
+  one-for-one:
+  * stage-parent copy-on-write -> the child inherits the parent's own LEDGER
+    RECORDS for every node the overrides do not reach, so the reused artifacts
+    are the parent's objects at the parent's URIs. Byte-identity is not a copy
+    that has to be checked, it is the same object; the parent is untouched
+    because nothing writes to it.
+  * named-parameter changes -> `overrides={param: value}`, seated through the
+    USER door and labelled `override of run <parent_id>`, with the derivations
+    that read them re-derived and user-pinned rows keeping precedence.
+  * law-aware bounds -> a declared `Validity` rule
+    (`friction_coefficient_matches_law` on coastal_tidal_surge) that REFUSES
+    the law inversion typed instead of warning, while an atypical-but-correct
+    quantity still proceeds - the setter's own bounds policy, minus the silent
+    acceptance.
+  * SetterEnvelope -> the child is an ordinary run: it publishes a layer, an
+    answer, a journal line naming its parent and its overrides, and a snapshot
+    of its own. What the setter returned as a dict about a deck, the primitive
+    returns as the ANSWER the deck was written to get.
+  The one capability NOT carried over is editing a deck the workbench did not
+  author (`parent_model_uri` pointing at a hand-built .cas). That was never
+  reachable from the product - nothing produced such a URI - and importing a
+  foreign deck is the DESCRIBE_MODEL idea in docs/IDEAS.md, not a setter.
+- SIBLINGS still QUEUED: set_sfincs / set_swmm / set_modflow are OUTSIDE the
+  TELEMAC sample and unmigrated. They keep `workflows/lib/_setter_envelope.py`
+  alive as a pre-migration legacy lane (the module now states that constraint at
+  the top); each dies at its engine's skeleton migration, and the envelope dies
+  with the last of them. The new primitive does NOT import it.
 - Decided by: NATE (decision 1, 2026-08-25): "this should be the behavior
-  we have now, work its sentiment into the skeleton."
+  we have now, work its sentiment into the skeleton."; sample-purity ruling
+  2026-08-26 (delete in the SAME series, condition met not waited on).
 
 ## scripts/run_l2_validation_harness.py - QUEUED 2026-08-25 (keep-until-superseded)
 - What: the 1,477-line Harvey L2 V&V harness (repaired/repointed in wave 2c;

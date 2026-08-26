@@ -31,7 +31,7 @@ from .errors import (
     RenderSourceMissingError,
     StepFailedError,
 )
-from .interpreter import RunResult, interpret
+from .interpreter import PlanNode, RunResult, expand_plan, interpret
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import (
     Derived,
@@ -89,13 +89,16 @@ from .resolver import (
     reseat_revised,
     resolve_params,
 )
+from .snapshot import Derivation, RunSnapshot, read_snapshot
 from . import user_input
 from .validate import validate_plan
+from .validity import CoupledValidityError, Validity, check_validity
 
 __all__ = [
     "AuthoredProducer", "Build", "CATEGORICAL", "ChartSpec",
-    "CoversAOI",
-    "D", "Data", "DataDecl", "DataRef", "DeclarativeError", "Derived", "Domain",
+    "CoupledValidityError", "CoversAOI",
+    "D", "Data", "DataDecl", "DataRef", "DeclarativeError", "Derivation",
+    "Derived", "Domain",
     "DrawGate", "EngineOps",
     "FacadeIncompleteError", "Fetch", "Forcing",
     "FormGate", "Gate", "GateRefusedError",
@@ -103,22 +106,26 @@ __all__ = [
     "P", "Param",
     "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
-    "ParamValues", "Physics", "Plan",
+    "ParamValues", "Physics", "Plan", "PlanNode",
     "PlanValidationError", "Producer", "RATE", "Ref", "ReferenceProducer",
     "RenderSourceMissingError", "ResampleSpec", "ResolvedParam",
     "ResolvedParams",
-    "RunMode", "RunResult", "STAGES", "STATE", "Slot", "Step", "StepFailedError",
+    "RunMode", "RunResult", "RunSnapshot",
+    "STAGES", "STATE", "Slot", "Step", "StepFailedError",
     "SuppliedCoverageError",
     "SuppliedGeometryError",
     "StyleSpec",
     "StepLedger",
     "TemporalGapError", "TemporalShapeError", "TemporalSpec",
     "TemporalUnitsError", "Transformed", "UnitsSpec",
-    "When", "WireArgsError",
-    "Workflow", "convert_units", "current_domain", "deep_freeze", "doors",
+    "Validity", "When", "WireArgsError",
+    "Workflow", "check_validity", "convert_units", "current_domain",
+    "deep_freeze", "doors",
+    "expand_plan",
     "interpret",
     "invocation_key",
-    "merge_provenance", "provenance_entries", "rederive_revised",
+    "merge_provenance", "provenance_entries", "read_snapshot",
+    "rederive_revised",
     "register_workflow",
     "render_docstring", "reseat_revised", "resolve_params", "transform_series",
     "transform_value", "user_input", "validate_plan",

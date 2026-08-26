@@ -57,11 +57,12 @@ from .plan import (
     Step,
     StyleSpec,
     When,
+    declared_reads,
 )
 from .resolver import provenance_entries, rederive_revised, reseat_revised
 from .validate import validate_plan
 
-__all__ = ["RunResult", "interpret"]
+__all__ = ["PlanNode", "RunResult", "expand_plan", "interpret"]
 
 logger = logging.getLogger("trid3nt_server.workflows.lib.interpreter")
 
@@ -90,10 +91,17 @@ class RunResult:
     #: product, so the caller can persist the run's own chart rather than leaving
     #: a verifier to rebuild one from the scalars and hope it matches.
     charts: dict[str, Any] = field(default_factory=dict)
+    #: One record per node this run completed, REPLAYED ones included. The ledger
+    #: tombstones itself at completion, so these are gone from it the moment the
+    #: plan ends; a derivation of this run reads them from the snapshot the
+    #: publish stage writes out of here. Replayed records carry forward unchanged,
+    #: which is what lets a grandchild inherit work its parent never re-executed.
+    records: list[LedgerRecord] = field(default_factory=list)
+    data_records: list[LedgerRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
-class _Node:
+class PlanNode:
     """One ledger-tracked execution unit.
 
     ``guards`` are the indices of the ``When`` nodes whose bodies enclose it. Every
@@ -131,7 +139,7 @@ async def interpret(
     if not resume:
         await ledger.clear()
 
-    nodes = _expand(plan)
+    nodes = expand_plan(plan)
     emitter = current_emitter()
     begin_substeps(emitter, len(nodes))
 
@@ -178,6 +186,7 @@ async def interpret(
                 value = _rehydrate(cached)
                 if value is not _UNREPLAYABLE:
                     _adopt(env, node, value, out, replayed=True, record=cached)
+                    out.records.append(cached)
                     logger.info("plan %s node %d %s REPLAYED from ledger",
                                 plan.name, node.index, node.label)
                     continue
@@ -192,9 +201,12 @@ async def interpret(
             # Adopt BEFORE recording: a domain-rebinding step must record the
             # domain it LEAVES, not the one it started under.
             _adopt(env, node, value, out, replayed=False)
-            await ledger.record(_record(node, value), final=node.index == final_index)
+            record = _record(node, value)
+            out.records.append(record)
+            await ledger.record(record, final=node.index == final_index)
         out.domain = current_domain()
         out.charts = dict(env.charts)
+        out.data_records = list(env.data_records)
         # An unfilled context slot is LABELLED, never silent: the run answered a
         # slightly different question than one that had the layer, and the reader
         # is the only one who can decide whether that matters.
@@ -215,7 +227,7 @@ async def interpret(
     return out
 
 
-def _final_recordable_index(nodes: Sequence[_Node]) -> int | None:
+def _final_recordable_index(nodes: Sequence[PlanNode]) -> int | None:
     """The LAST node whose completion is ledgered - gates and branches leave none."""
     return max((n.index for n in nodes if n.kind not in ("gate", "when")),
                default=None)
@@ -232,7 +244,7 @@ def _carry_notes(exc: BaseException, notes: Sequence[str]) -> None:
         exc.add_note(f"also missing from this run: {note}")
 
 
-def _note_aux_failure(out: RunResult, plan_name: str, node: _Node,
+def _note_aux_failure(out: RunResult, plan_name: str, node: PlanNode,
                       exc: BaseException) -> None:
     """An AUXILIARY node (chart/render) never kills the run - it says what is missing.
 
@@ -245,36 +257,36 @@ def _note_aux_failure(out: RunResult, plan_name: str, node: _Node,
     out.notes.append(f"the {kind} {node.label!r} could not be produced: {exc}")
 
 
-def _expand(plan: Plan) -> tuple[_Node, ...]:
+def expand_plan(plan: Plan) -> tuple[PlanNode, ...]:
     """Number EVERY declared node, guarded ones included, in declaration order."""
-    nodes: list[_Node] = []
+    nodes: list[PlanNode] = []
     _expand_into(nodes, plan.steps, ())
     return tuple(nodes)
 
 
-def _expand_into(nodes: list[_Node], declared: tuple[Any, ...],
+def _expand_into(nodes: list[PlanNode], declared: tuple[Any, ...],
                  guards: tuple[int, ...]) -> None:
     for node in declared:
         i = len(nodes)
         if isinstance(node, When):
-            nodes.append(_Node(i, node.label, "declarative.when", "when",
+            nodes.append(PlanNode(i, node.label, "declarative.when", "when",
                                _WHEN_STEP, node.condition, guards))
             _expand_into(nodes, node.body, guards + (i,))
             continue
         if isinstance(node, Gate):
-            nodes.append(_Node(i, node.label, node.runner, "gate", node,
+            nodes.append(PlanNode(i, node.label, node.runner, "gate", node,
                                guards=guards))
             continue
-        nodes.append(_Node(i, node.label, node.runner, "step", node, guards=guards))
+        nodes.append(PlanNode(i, node.label, node.runner, "step", node, guards=guards))
         for spec in node.styles:
-            nodes.append(_Node(len(nodes), f"{node.label}.style", node.runner,
+            nodes.append(PlanNode(len(nodes), f"{node.label}.style", node.runner,
                                "style", node, spec, guards))
         for spec in node.charts:
-            nodes.append(_Node(len(nodes), f"{node.label}.chart:{spec.name}",
+            nodes.append(PlanNode(len(nodes), f"{node.label}.chart:{spec.name}",
                                spec.builder_path, "chart", node, spec, guards))
 
 
-#: A ``When`` node carries no work of its own; ``_Node.step`` is typed as a Step
+#: A ``When`` node carries no work of its own; ``PlanNode.step`` is typed as a Step
 #: and this stands in so the branch marker fits the same list.
 _WHEN_STEP = Step(runner="declarative.when")
 
@@ -294,6 +306,9 @@ class _Env:
     supplied: dict[str, Any] = field(default_factory=dict)
     #: Absences worth narrating: an optional Data nothing satisfied.
     absences: list[str] = field(default_factory=list)
+    #: One record per produced Data, replayed ones included - the Data half of what
+    #: a derivation of this run inherits.
+    data_records: list[LedgerRecord] = field(default_factory=list)
 
 
 async def _reseat_after_gate(env: _Env, revision: "_Revision", plan: Plan,
@@ -387,6 +402,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
     if cached is not None and await _artifacts_live(cached):
         value = _rehydrate(cached)
         if value is not _UNREPLAYABLE:
+            env.data_records.append(cached)
             logger.info("data %s REPLAYED from ledger", decl.name)
             return value
     label = _data_step_label(decl.name)
@@ -401,9 +417,11 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
         kwargs.setdefault("temporal", producer.temporal)
     async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
         value = await _call_runner(producer.runner, kwargs, label)
+    record = _record_for(decl.name, producer.runner, value)
+    env.data_records.append(dataclasses.replace(
+        record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
-        await env.ledger.record_data(
-            decl.name, _record_for(decl.name, producer.runner, value))
+        await env.ledger.record_data(decl.name, record)
     return value
 
 
@@ -427,7 +445,7 @@ def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
         )
 
 
-async def _run_node(node: _Node, env: _Env, emitter: Any) -> Any:
+async def _run_node(node: PlanNode, env: _Env, emitter: Any) -> Any:
     async with substep(emitter, node.label):
         if node.kind == "step":
             kwargs = await _bind(dict(node.step.kwargs), env, node.label)
@@ -464,7 +482,7 @@ async def _call_fn(fn: Any, kwargs: dict[str, Any], label: str) -> Any:
         ) from exc
 
 
-async def _run_chart(node: _Node, env: _Env) -> Any:
+async def _run_chart(node: PlanNode, env: _Env) -> Any:
     spec: ChartSpec = node.spec
     source = env.results.get(node.step.name or node.step.label)
     payload = await _call_fn(
@@ -484,7 +502,7 @@ async def _run_chart(node: _Node, env: _Env) -> Any:
     return {"chart": spec.name, "emitted": True}
 
 
-async def _run_style(node: _Node, env: _Env) -> Any:
+async def _run_style(node: PlanNode, env: _Env) -> Any:
     """Re-emit a step's layer under its declared style OVERRIDE.
 
     Emission already happened - the step's own publisher put the layer on the map
@@ -691,7 +709,7 @@ def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
         raise GateRefusedError(reason, error_code=_PHYSICS_INPUT_REQUIRED)
 
 
-def _adopt(env: _Env, node: _Node, value: Any, out: RunResult, *, replayed: bool,
+def _adopt(env: _Env, node: PlanNode, value: Any, out: RunResult, *, replayed: bool,
            record: LedgerRecord | None = None) -> None:
     name = node.step.name or node.step.label
     if node.kind == "step":
@@ -792,28 +810,11 @@ async def _deref(ref: Ref, env: _Env) -> Any:
 
 
 def _refs(value: Any) -> Iterable[Ref]:
-    yield from _declared_reads(value, Ref)
+    yield from declared_reads(value, Ref)
 
 
 def _param_refs(value: Any) -> Iterable[ParamRef]:
-    yield from _declared_reads(value, ParamRef)
-
-
-def _declared_reads(value: Any, kind: type) -> Iterable[Any]:
-    """The declared reads a producer makes - the twin of the validator's walk.
-
-    ``Mapping``, so a read hidden in a deep-frozen block still counts as consumed:
-    eviction after a gate revision is decided from this walk, and a missed read
-    would keep an artifact fetched against the sheet the review replaced.
-    """
-    if isinstance(value, kind):
-        yield value
-    elif isinstance(value, Mapping):
-        for v in value.values():
-            yield from _declared_reads(v, kind)
-    elif isinstance(value, (list, tuple, set, frozenset)):
-        for v in value:
-            yield from _declared_reads(v, kind)
+    yield from declared_reads(value, ParamRef)
 
 
 #: How many nodes the leak scan walks PER SURFACE before it stops looking. A leaked
@@ -973,7 +974,7 @@ class _Unreplayable:
 _UNREPLAYABLE = _Unreplayable()
 
 
-def _record(node: _Node, value: Any) -> LedgerRecord:
+def _record(node: PlanNode, value: Any) -> LedgerRecord:
     return _record_for(node.label, node.runner, value, index=node.index)
 
 
