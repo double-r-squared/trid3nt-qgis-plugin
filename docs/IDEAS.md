@@ -1407,3 +1407,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   surge (animated, richest layers, freshest machinery). The six coarse
   per-template runs DEMOTE to silent internal parity pins - never
   rendered, never delivered, no packets; suite-level tripwires only.
+
+- WORKER DOCTRINE + FETCH-MIGRATION-FIRST RULED (NATE 2026-08-25): a
+  WORKER is the ENGINE ROOM - the solver binary + minimal glue to run it
+  on a fully-staged run directory and write results/metrics. NOTHING
+  else: no fetchers (in-worker fetches migrate to router specs, staged
+  via the manifest-inputs mechanism), no mesh builders (extract to the
+  mesh front - the mesh wave IS this extraction), no baked values (the
+  manifest feeds them, adjustments narrate), no publishing. DoD =
+  --network none: a worker that cannot reach the internet provably
+  contains no fetchers. The workers today are fossilized composers -
+  every smell is a doctrine violated below the waterline. ORDER RULED:
+  batch wave B (purity audit = the inventory) -> rain_on_grid (7th) ->
+  IN-WORKER FETCH MIGRATION (bed bathymetry etc through the substrate,
+  --network none gate) -> CALIBRATION (on a thin worker with visible,
+  laddered, provenance-stamped inputs - half the point of calibrating)
+  -> mesh wave pulls the mesh builders. The worker dissolution completes
+  across these waves, not as one.
