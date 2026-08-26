@@ -1331,3 +1331,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   OceanMesh BYO boundary-tagging question; reviewable at the mesh gate.
   Misrepresented coastal connectivity = quiet physics corruption
   (reflections that should radiate).
+
+- DECISION 6 RULED (NATE 2026-08-25): (1) STATIC-PLAN RULE BLESSED -
+  all-P/D, module binding blocks, plan(ops), When-only conditionals,
+  deep-freeze + error provenance + validator re-point; p-view read
+  recording and p.get DELETED. Settle at six. (2) The batch is a TELEMAC
+  WORKFLOWS REFACTOR incl a STEPS AUDIT - spot-check every telemac steps
+  file for breakwater-class offenders (tool-shaped fetch code, baked
+  opinions) and remediate with the architecture. (3) MODFLOW family and
+  the 3D build DEFERRED. (4) rain_on_grid refactored AFTER the batch
+  with the finalized philosophy (TELEMAC 7 of 7). (5) CALIBRATION NEXT
+  after the 7th: coastal surge vs a REAL EVENT against event-relevant
+  gauges (CO-OPS observed water levels; research-first per standing
+  doctrine, NATE-first methodology sign-off BEFORE runs; consumes the
+  rerun-with-overrides primitive). Mesh wave waits behind calibration;
+  NOTE: calibration may surface open-boundary needs early - surface to
+  NATE if so, do not scope-expand silently.
