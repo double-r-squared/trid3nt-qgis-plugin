@@ -2056,3 +2056,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   lib sits beside it). References-are-benchmarks applies to the
   ARCHITECTURE; for ENGINE-NATIVE IO the official implementation is the
   presumptive winner (leverage-libraries rule).
+
+- TELEMAC PARK-WORK LIST (recon verdict 2026-08-26: we did NOT reinvent
+  much - workers already wrap official TelemacFile; server clean-room
+  reader JUSTIFIED by weight (compiled Hermes .so = full env); cas/cli
+  plain-text authoring stays). Sized S: (1) THE DICO - wire the engine's
+  own keyword dictionary as deck validation + param bounds source + the
+  full-engine-control searchable layer (the one genuinely new leverage);
+  (2) dedupe assemble_proof_packet's internal copy of read_selafin
+  (~90 LOC); (3) decision note codifying the server/worker IO split so
+  nobody "fixes" the intentional clean-room reader; (4) FEEDSTOCK: mine
+  the official per-module examples tree (bump/donau/artemis/tomawac/
+  gaia cases) as V&V template candidates - the modflow6-examples pattern
+  for TELEMAC; (5) telapy = the future coupling door, not now. Executes
+  at the post-calibration park.
