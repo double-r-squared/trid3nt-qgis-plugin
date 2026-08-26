@@ -329,8 +329,29 @@ def _draw_raster(ax, payload: dict, *, alpha: float):
             vmin, vmax = (float(np.percentile(finite, 2)),
                           float(np.percentile(finite, 98)))
         cmap = "gray"
-    return ax.imshow(band, extent=payload["extent"], origin="upper", cmap=cmap,
+    return ax.imshow(band, extent=payload["extent"], origin="upper",
+                     cmap=_mpl_cmap(cmap),
                      vmin=vmin, vmax=vmax, alpha=alpha, zorder=2)
+
+
+def _mpl_cmap(name: str):
+    """The product's colormap, spelled the way matplotlib spells it.
+
+    The style contract's vocabulary is rio-tiler's, which is lowercase, and
+    matplotlib's is CamelCase for every ColorBrewer ramp - so a layer whose
+    legend names ``rdylbu`` (the dissolved-oxygen field does) raised a hard
+    ValueError here and took the whole delivery packet down with it, while
+    ``viridis`` and ``gray`` happened to spell the same in both and hid the
+    mismatch. Resolved case-insensitively against matplotlib's own registry
+    rather than against a second hand-written table that could drift from the
+    first; an unknown name keeps its spelling so the error still names it.
+    """
+    import matplotlib as mpl
+
+    if not isinstance(name, str) or name in mpl.colormaps:
+        return name
+    lowered = {key.lower(): key for key in mpl.colormaps}
+    return lowered.get(name.lower(), name)
 
 
 def _adaptive(spec: tuple[float, float, float], n: int) -> float:

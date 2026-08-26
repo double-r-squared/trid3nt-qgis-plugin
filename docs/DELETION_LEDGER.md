@@ -995,3 +995,60 @@ different store with a different auth posture.
 
 **Decided by:** the fetch-migration wave's solver tightening (ADR 0317).
 **Status:** DELETED.
+
+## The reach family's six in-container fetches - DELETED
+
+**What:** in `workers/telemac/telemac_river_dye_build.py` - `_http_get`,
+`_snap_comid`, `_named_flowline_seed`, `_mainstem_flowline_seed`,
+`resolve_centerline_seed`, the NLDI navigate inside `fetch_river_centerline`,
+the NHDArea query inside `fetch_bank_polygons`, and the whole DEM ladder
+(`_retryable_dem_excs`, `_sample_dem_stac`, `_sample_dem_3dep`,
+`_fetch_dem_samples`, plus the `_DEM_STAC_*` / `_3DEP_IMAGE_URL` /
+`_NLDI` / `_NHDPLUS_HR` / `_NHDAREA_URL` constants and the `urllib` imports).
+Four `ReachConfig` fields died with them (`river_name`, `seed_from_release`,
+`seed_release_lon`, `seed_release_lat`) because they were seed-ladder inputs and
+the ladder is server tier now.
+
+**Why it died:** a fetch changes if the box moves, so it is server tier - and
+these six were outside emit-on-fetch, the cache, provenance, the declared
+fallback ladders and the retry doctrine. Two of them were fail-OPEN, which cost
+REPEATABILITY as well as visibility: a slow NHDPlus query kept the raw seed,
+meshed a different reach, and left nothing in the record saying so.
+
+**What replaces them:** `steps/reach.resolve_reach_river` - the seed ladder over
+`fetch_nhdplus_hr_flowlines`, the centerline over `fetch_nhdplus_nldi_navigate`,
+the banks over `fetch_nhd_area_water`, the bed over `fetch_copernicus_dem`
+(3DEP fallback) - staged into the run directory through the manifest `inputs`
+the launcher already walked. The worker opens files.
+
+**Decided by:** ADR 0318. **Status:** DELETED.
+
+## The reach bed COG and its surfacing helper - DELETED
+
+**What:** `telemac_river_dye_build.write_bed_cog` + `BED_COG_*`,
+`entrypoint.py`'s best-effort COG write and its `bed_bathymetry.tif` output
+declaration, `products._surface_bed_bathymetry_input` and
+`_BED_DEM_SOURCE_LABELS`, plus `tests/test_telemac_bed_bathymetry_manifest.py`
+(replaced by `test_telemac_reach_staged_inputs.py`).
+
+**Why it died:** the COG existed ONLY because a container fetch could not reach
+the emit seam, and it painted the input as a scatter of the node samples the
+solver kept rather than as the terrain the run was handed - the third node-dot
+instance NATE caught. The staged source raster is continuous and IS the data the
+nodes are sampled from, and emit-on-fetch surfaces it for free. This closes the
+last bespoke `_surface_*input*` helper: the seam is now the only path.
+
+**Decided by:** ADR 0318. **Status:** DELETED.
+
+## The two worker test files whose seams moved to the server - DELETED
+
+**What:** `workers/telemac/tests/test_release_seed_preference.py` and
+`workers/telemac/tests/test_dem_fallback.py`.
+
+**Why they died:** each pinned a pure decision seam inside a function this wave
+deleted - the release-vs-geocode seed preference and the STAC-then-3DEP DEM
+ladder. Both behaviours moved to `steps/reach.py` and are pinned there
+(`tests/test_telemac_reach_river.py`), so keeping the worker copies would have
+been two tests of code that no longer exists.
+
+**Decided by:** ADR 0318. **Status:** DELETED.

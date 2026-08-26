@@ -44,3 +44,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0297 - staged-dataset fetchers; groundwater recharge lands, aquifer thickness parks](0297-staged-dataset-fetchers-groundwater-recharge.md)
 - [0301 - the Anthropic Messages API adapter](0301-anthropic-adapter.md)
 - [0302 - the tool registry as an MCP surface (v1, stdio)](0302-mcp-server-v1.md)
+- [0318 - the reach family migration: the meshed river becomes the visible river](0318-the-reach-family-migration-and-the-river-that-is-visible.md)

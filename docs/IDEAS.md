@@ -1952,3 +1952,55 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   primitive instead of discovering a missing one. The other three
   setters are outside the sample - they die at their engines'
   migrations.
+
+- REACH-FAMILY MIGRATION LANDED, AND THE COPERNICUS DEFERRAL CLOSED BY FIXING THE
+  SAMPLING (2026-08-26, ADR 0318). All six in-worker fetches are server tier; the
+  TELEMAC image runs `--network none` on every leg. The measured lesson worth
+  keeping: ADR 0317's RMS 3.87 m was NOT a data difference, it was the router
+  resampling a 1-arcsecond source onto a lattice of its own (142x124 px where the
+  source is 3600 px/deg). The `stac_float` executor gained a declared
+  `px_per_deg` sizing whose PHASE is read off the source's header - and the phase
+  is the whole trick, because a global 1-arcsecond DEM tile is pixel-is-POINT, so
+  a lattice snapped to the prime meridian lands every destination pixel centre
+  exactly BETWEEN two source centres and is measurably WORSE than the metric grid
+  it replaces (RMS 1.26 vs 1.03 m). Snapped to the source's own origin with
+  NEAREST: exact per-point parity, 0.000000 m. GENERAL RULE: before accepting a
+  tolerance on a migrated fetch, check whether the difference is the DATA or the
+  DESTINATION GRID - the second one is fixable and the first one is not.
+
+- FAIL-OPEN COSTS REPEATABILITY, NOT JUST VISIBILITY (2026-08-26, ADR 0318,
+  closing the do_sag flake). The reach seed ladder degraded to the raw seed on any
+  exception, so a slow query meshed a different river and the record could not say
+  which run had happened. The repair is a DISTINCTION, not a retry: "the query
+  answered and the answer was no improvement" is a decision and gets a named rung;
+  a fetch failure raises. Plus a checkable determinism artifact - the run records
+  a sha256 of the staged centerline bytes, so "the same run twice" is verifiable
+  rather than an impression. Worth copying to every other silent-ladder site.
+
+- 2026-08-26 THE PROOF RENDERER SPOKE THE WRONG COLORMAP DIALECT (found + fixed,
+  ADR 0318). The style contract's colormap names are rio-tiler's (lowercase);
+  matplotlib spells every ColorBrewer ramp CamelCase. `render_all_layers_proof`
+  handed the legend name straight to `imshow`, so ANY layer whose legend names
+  `rdylbu` (dissolved oxygen) took the whole delivery packet down with a hard
+  ValueError - while `viridis` and `gray` spell the same in both dialects and hid
+  the mismatch for as long as nobody delivered a DO packet. TWO-VOCABULARY CLASS:
+  the same disease as `medium` vs `standard`. Resolved case-insensitively against
+  matplotlib's own registry rather than a second hand-written table.
+
+- 2026-08-26 STALE PANEL GENERATIONS IN FIVE PROOF FOLDERS (found by the
+  assembler, cleaned). A layer roster that changes renames the panels, so the
+  previous generation sits in the folder under names nothing writes any more and
+  the count check refuses. Caught in do_sag, river_dye, coastal, tomawac and
+  telemac3d refined folders. WORTH A GATE: the assembler already knows the
+  expected panel set, so it could OFFER the superseded list rather than only
+  refusing on the count - "these N files are from a previous roster" is a more
+  actionable refusal than "found 14, expected 9".
+
+- 2026-08-26 TWO REFINED OPEN-WATER PINS WERE STALE, NOT MOVED (ADR 0318). The
+  tomawac and telemac3d REFINED baselines were last written at 33e879cf, before
+  ADR 0317's own bed migration - that wave re-ran and re-pinned only the COARSE
+  legs of those two families. So a comparison this wave made read as a regression
+  and was not one. LESSON: a wave that re-pins a family must re-pin EVERY variant
+  of it, or the unre-pinned ones become landmines for the next wave. Worth a check
+  in the canary runner: when one variant's evidence is newer than another's by
+  more than a wave, say so.
