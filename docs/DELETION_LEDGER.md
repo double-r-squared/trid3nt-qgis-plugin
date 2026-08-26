@@ -667,3 +667,83 @@ for their canonical phrasings; grep-to-zero on `trid3nt_server.data` /
 ADRs and frozen build-report/spec docs excluded per convention).
 
 **Decided by:** NATE (data/ eviction directive, 2026-08-26). **Status:** DELETED.
+
+## `rain_on_grid/mesh_acquisition.py` - DELETED 2026-08-26
+
+**What:** the 765-line watershed-mesh module inside the `telemac_rain_on_grid`
+template folder: `WatershedMesh`, `acquire_watershed_mesh`, `use_supplied_mesh`,
+`use_supplied_mesh_2dm`, `assemble_node_fields`, `_delineate_catchment`,
+`_resolve_bare_earth_dem`, `_sample_raster_at_nodes`, `_write_bottom_selafin` and
+the rest.
+
+**CONDITION to delete:** met by ADR 0316. A catchment is a domain SHAPE, not a
+TELEMAC fact, so the generation strategy is `workflows/mesh/watershed.py` and the
+SELAFIN writer is `workflows/mesh/telemac_build.py`, the thin per-solver writer
+beside `hecras_build`. The module's location was already provably wrong: the
+standalone `generate_mesh` TOOL imported four symbols out of it and
+`hecras_flood_2d` a fifth, so a shared tool was reaching into one engine's
+template for its meshing. All three callers now share one home; the per-question
+half (`cn_infiltration.py`) stays in the template folder where it belongs.
+
+**Decided by:** the placement rule (wave C). **Status:** DELETED.
+
+## `telemac_rain_on_grid`'s `observed_gauge_id` - DELETED 2026-08-26
+
+**What:** a template argument whose docstring promised it "wires NSE/R2 vs a
+USGS-NWIS gauge". It was staged into the worker manifest and the worker never read
+the field - `rog_build.py` and `entrypoint.py` contain no reference to it.
+
+**CONDITION to delete:** met the moment the promise was checked against the
+worker. A documented capability nothing implements is worse than an absent one: it
+invites a caller to ask for a comparison that will not happen and will not say so.
+The gauge grading is real and lives where it runs, in the Ball Creek replication
+drivers (`rog_ballcreek_events.py`, `rog_ballcreek_calib.py`), which grade against
+EDI weir observations.
+
+**Decided by:** the honesty floor (wave C). **Status:** DELETED.
+
+## `telemac_rain_on_grid`'s `mesh_uri` and `mrms_window` - DELETED 2026-08-26
+
+**What:** two wire arguments of the composer. `mesh_uri` named a user-supplied
+SELAFIN; `mrms_window` named a real storm window.
+
+**CONDITION to delete:** met by ADR 0315's context-slot ruling and by the
+argument's own dishonesty. `mesh_uri` is superseded by
+`Data("mesh").supplied(geometry="mesh").optional()`, where the slot's own name IS
+the wire argument - a producer-less slot needs no separate uri knob. `mrms_window`
+never fetched MRMS: the resolver reads AORC, deliberately, because MRMS only
+covers ~2020-10 onward and a replication window predating it would silently return
+nothing. It is `rain_window`. No alias survives either rename - the demolition
+clause is about API shape, and both shapes were wrong.
+
+**Decided by:** ADR 0316. **Status:** DELETED.
+
+## The rain-on-grid AOI-centroid pour point - DELETED 2026-08-26
+
+**What:** `pp = ((aoi[0] + aoi[2]) / 2.0, (aoi[1] + aoi[3]) / 2.0)` in the
+composer - the catchment outlet, invented from the middle of the analysis window
+when the caller named none. The docstring claimed it was "the AOI centroid's
+lowest snapped stream cell"; the code used the raw centroid.
+
+**CONDITION to delete:** met by the steps audit, which named it. The pour point
+decides which basin is delineated AT ALL, so a guessed one silently models a
+different catchment - and the prose describing a snap that never ran made it
+unfalsifiable. It is now a required USER param behind a `DrawGate`: `user_gated`
+asks on the canvas, `auto` refuses typed. Door 6, never invention.
+
+**Decided by:** ADR 0316. **Status:** DELETED.
+
+## The contradicting catchment max-edge default - DELETED 2026-08-26
+
+**What:** `acquire_watershed_mesh(max_edge_length_m: float = 400.0)` against its
+only call site, `max_edge_length_m=300.0`. Two numbers for one dial, of which only
+the call site's ever ran, and a reader of either one would have been wrong about
+the other.
+
+**CONDITION to delete:** met by the migration. `DEFAULT_MAX_EDGE_M = 300.0` lives
+once, in the shared mesh front, and the template's `mesh_max_edge_m` param takes
+its default from it - so the number and the sentence that promises it are one
+thing, and the standalone mesh tool reads the same constant.
+
+**Decided by:** the steps audit's duplicated-default class (wave C).
+**Status:** DELETED.

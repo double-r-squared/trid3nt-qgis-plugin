@@ -10,11 +10,11 @@
     "sim_duration_hr": 2.0,
     "antecedent_moisture": "normal",
     "compute_class": "medium",
-    "input_mode": "auto",
+    "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YBX97A521VAH657C4R1Q2S",
-  "case_id": "01M0YBX9FG0WZK25D0NCBW6K9G",
+  "session_id": "01M0YHHE9TQBRM07AQHC0AB5EV",
+  "case_id": "01M0YHHEJMQZKFPXW1VFBWB3PM",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -22,24 +22,93 @@
   "step_state": "complete",
   "step_error": "",
   "turn_complete": true,
-  "charts": 0,
-  "chart_payloads": [],
-  "layers": [
+  "charts": 1,
+  "chart_payloads": [
     {
-      "layer_id": "input-copernicus_dem-98b7524a54a0",
-      "name": "Input: copernicus dem (copernicus_dem)",
-      "layer_type": "raster",
-      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/df44211455a3c2c4400e95813fba978a.tif",
-      "style_preset": "continuous_dem",
-      "visible": true,
-      "role": "context",
-      "temporal": false,
-      "wms_url": null,
-      "opacity": null,
-      "z_index": 0,
-      "crs_authid": null,
-      "legend": null
-    },
+      "envelope_type": "chart-emission",
+      "chart_id": "01M0YHKC3BPS42F0AGYDH2QTM2",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": true
+        },
+        "data": {
+          "values": [
+            {
+              "t_h": 0.0,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.16666666666666666,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.3333333333333333,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.5,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.6666666666666666,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 0.8333333333333334,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.0,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.1666666666666667,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.3333333333333333,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.5,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.6666666666666667,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.8333333333333333,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 2.0,
+              "q_m3s": 0.0001
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "t_h",
+            "type": "quantitative",
+            "title": "Time since storm start (h)"
+          },
+          "y": {
+            "field": "q_m3s",
+            "type": "quantitative",
+            "title": "Outlet discharge (m3/s)"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Outlet hydrograph - watershed",
+      "caption": "Peak outflow 0 m3/s from a 30.5 km2 catchment, 25 mm/h storm, runoff coefficient 0. Planning-grade single-storm screening: infiltrated water is permanently lost, so there is no baseflow limb.",
+      "source_layer_uri": null,
+      "created_turn_id": "01M0YHHF8299XJBBBA6CVRYYYT"
+    }
+  ],
+  "layers": [
     {
       "layer_id": "input-river_geometry-6637de86e4d3",
       "name": "Input: river geometry (river_geometry)",
@@ -51,7 +120,7 @@
       "temporal": false,
       "wms_url": null,
       "opacity": null,
-      "z_index": 1,
+      "z_index": 0,
       "crs_authid": null,
       "legend": null,
       "inline_geojson": {
@@ -74998,6 +75067,21 @@
       }
     },
     {
+      "layer_id": "input-copernicus_dem-98b7524a54a0",
+      "name": "Input: copernicus dem (copernicus_dem)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/df44211455a3c2c4400e95813fba978a.tif",
+      "style_preset": "continuous_dem",
+      "visible": true,
+      "role": "context",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 1,
+      "crs_authid": null,
+      "legend": null
+    },
+    {
       "layer_id": "input-dem-8d93b69c623c",
       "name": "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus)",
       "layer_type": "raster",
@@ -76263,10 +76347,10 @@
       }
     },
     {
-      "layer_id": "model-results-mesh-01M0YBXQ24KYCNNW586H4KP3WW",
+      "layer_id": "model-results-mesh-01M0YHHSFGCHXW726XDMPQSNHN",
       "name": "Model results (time series): watershed",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0YBXQ24KYCNNW586H4KP3WW/r2d_rog.slf",
+      "uri": "s3://trid3nt-runs/01M0YHHSFGCHXW726XDMPQSNHN/r2d_rog.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -76278,10 +76362,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0YBZ84QR4T6XQN4W81R8YKR",
+      "layer_id": "01M0YHKCDZ5VDXPHHV4WSSNKV0",
       "name": "Max water depth (watershed)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YBXQ24KYCNNW586H4KP3WW/overviews/01M0YBZ88B3AWBSC0KSA09DG0R.tif",
+      "uri": "s3://trid3nt-runs/01M0YHHSFGCHXW726XDMPQSNHN/overviews/01M0YHKBVFKTH4TAYQNN6JRZRP.tif",
       "style_preset": "continuous_water_surface_elevation",
       "visible": true,
       "role": "primary",
@@ -76303,14 +76387,475 @@
     }
   ],
   "draw_card": null,
-  "form_card": null,
+  "form_card": {
+    "workflow": "telemac_rain_on_grid",
+    "title": "Review the storm, the catchment and the mesh band",
+    "rows": [
+      {
+        "name": "bbox",
+        "value": null,
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "curve_number",
+        "value": null,
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": [
+          30.0,
+          100.0
+        ],
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "location",
+        "value": null,
+        "units": null,
+        "door": "question",
+        "basis": "prompt_interpreted",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "output_interval_min",
+        "value": null,
+        "units": "min",
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": [
+          0.1,
+          1440.0
+        ],
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "pour_point",
+        "value": [
+          -83.404,
+          35.0575
+        ],
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "rain_window",
+        "value": null,
+        "units": null,
+        "door": "question",
+        "basis": "prompt_interpreted",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "soil_store_capacity_mm",
+        "value": null,
+        "units": "mm",
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": [
+          1.0,
+          2000.0
+        ],
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "antecedent_moisture",
+        "value": "normal",
+        "units": null,
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "design_storm_mm_per_hr",
+        "value": 25.0,
+        "units": "mm/h",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.1,
+          500.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "mesh_max_edge_m",
+        "value": 300.0,
+        "units": "m",
+        "door": "scenario",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          20.0,
+          5000.0
+        ],
+        "advanced": false,
+        "note": "declared scenario default"
+      },
+      {
+        "name": "mesh_min_edge_m",
+        "value": 40.0,
+        "units": "m",
+        "door": "scenario",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          5.0,
+          500.0
+        ],
+        "advanced": false,
+        "note": "declared scenario default"
+      },
+      {
+        "name": "sim_duration_hr",
+        "value": 2.0,
+        "units": "h",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.1,
+          720.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "soil_recovery_hr",
+        "value": 120.0,
+        "units": "h",
+        "door": "scenario",
+        "basis": "default_demo",
+        "source_badge": "labeled default - NOT a site measurement",
+        "bounds": [
+          1.0,
+          8760.0
+        ],
+        "advanced": false,
+        "note": "declared scenario default"
+      },
+      {
+        "name": "soil_store",
+        "value": false,
+        "units": null,
+        "door": "scenario",
+        "basis": "default_demo",
+        "source_badge": "labeled default - NOT a site measurement",
+        "bounds": null,
+        "advanced": false,
+        "note": "declared scenario default"
+      },
+      {
+        "name": "steep_slope_correction",
+        "value": false,
+        "units": null,
+        "door": "scenario",
+        "basis": "default_demo",
+        "source_badge": "labeled default - NOT a site measurement",
+        "bounds": null,
+        "advanced": false,
+        "note": "declared scenario default"
+      },
+      {
+        "name": "storm_duration_hr",
+        "value": 1.0,
+        "units": "h",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.1,
+          240.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "bed_dem_resolution_m",
+        "value": 10.0,
+        "units": "m",
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          1.0,
+          90.0
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "compute_class",
+        "value": "medium",
+        "units": null,
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": true,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "landcover_dataset",
+        "value": "nlcd_2021",
+        "units": null,
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default - NOT a site measurement",
+        "bounds": null,
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "mesh_grade",
+        "value": 0.2,
+        "units": null,
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          0.05,
+          0.5
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "mesh_max_iter",
+        "value": 60.0,
+        "units": null,
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          5.0,
+          500.0
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "outlet_node_count",
+        "value": 8.0,
+        "units": null,
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          1.0,
+          64.0
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "outlet_snap_cells",
+        "value": 8.0,
+        "units": null,
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          1.0,
+          64.0
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "river_source",
+        "value": "nhdplus_hr",
+        "units": null,
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": null,
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "soil_spinup_days",
+        "value": 45.0,
+        "units": "d",
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default - NOT a site measurement",
+        "bounds": [
+          1.0,
+          730.0
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      },
+      {
+        "name": "time_step_s",
+        "value": 3.0,
+        "units": "s",
+        "door": "constant",
+        "basis": "default_demo",
+        "source_badge": "labeled default",
+        "bounds": [
+          0.1,
+          60.0
+        ],
+        "advanced": true,
+        "note": "declared constant default"
+      }
+    ],
+    "edited": {}
+  },
   "plain_warnings": [],
-  "run_id": "01M0YBXQ24KYCNNW586H4KP3WW",
-  "chart_spec": null,
-  "metrics": null,
-  "product_uris": {},
-  "product_errors": {
-    "chart_spec": "NoSuchKey: An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist.",
-    "metrics": "NoSuchKey: An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."
-  }
+  "run_id": "01M0YHHSFGCHXW726XDMPQSNHN",
+  "chart_spec": {
+    "rain_on_grid_outlet_hydrograph": {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M0YHKC3BPS42F0AGYDH2QTM2",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": true
+        },
+        "data": {
+          "values": [
+            {
+              "t_h": 0.0,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.16666666666666666,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.3333333333333333,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.5,
+              "q_m3s": -0.0
+            },
+            {
+              "t_h": 0.6666666666666666,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 0.8333333333333334,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.0,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.1666666666666667,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.3333333333333333,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.5,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.6666666666666667,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 1.8333333333333333,
+              "q_m3s": 0.0
+            },
+            {
+              "t_h": 2.0,
+              "q_m3s": 0.0001
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "t_h",
+            "type": "quantitative",
+            "title": "Time since storm start (h)"
+          },
+          "y": {
+            "field": "q_m3s",
+            "type": "quantitative",
+            "title": "Outlet discharge (m3/s)"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Outlet hydrograph - watershed",
+      "caption": "Peak outflow 0 m3/s from a 30.5 km2 catchment, 25 mm/h storm, runoff coefficient 0. Planning-grade single-storm screening: infiltrated water is permanently lost, so there is no baseflow limb.",
+      "source_layer_uri": null,
+      "created_turn_id": null
+    }
+  },
+  "metrics": {
+    "catchment_area_km2": 30.5125,
+    "peak_discharge_m3s": 0.0,
+    "peak_discharge_time_s": 0.0,
+    "rainfall_volume_m3": 338.01,
+    "runoff_volume_m3": 0.0,
+    "runoff_coefficient": 0.0,
+    "max_depth_peak_m": 0.0273,
+    "max_velocity_peak_ms": 0.0036,
+    "continuity_rel_error": 2.713884e-15,
+    "amc_condition": 2,
+    "rain_intensity_mm_per_hr": 25.0,
+    "n_frames": 13,
+    "mesh_size_m": 40.0,
+    "mesh_node_count": 4986,
+    "mesh_element_count": 9781,
+    "catchment_provenance": "generated",
+    "domain_bbox": [
+      -83.4770304670296,
+      35.02183518806534,
+      -83.39982025301708,
+      35.073210729988745
+    ],
+    "layer_uri": "s3://trid3nt-runs/01M0YHHSFGCHXW726XDMPQSNHN/overviews/01M0YHKBVFKTH4TAYQNN6JRZRP.tif",
+    "rain_event": "design_storm",
+    "rain_event_note": "a CONSTANT design storm of 25 mm/h over 1 h - a hypothetical event, not a record. Ladder aorc_hourly -> design_storm.",
+    "sim_duration_hr": 2.0,
+    "sim_duration_note": "the window you asked for",
+    "runoff_path": "native",
+    "runoff_path_note": "constant design-storm intensity 25 mm/h -> native SCS-CN runoff model (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2).",
+    "mesh_domain": "9781 elements over 30.5 km2",
+    "mesh_domain_note": "the catchment was delineated at the pour point and meshed for this run",
+    "mesh_bed": "usgs_3dep_bare_earth",
+    "mesh_bed_note": "mesh bed DEM: USGS 3DEP bare-earth (10 m); ladder usgs_3dep_bare_earth -> copernicus_glo30"
+  },
+  "product_uris": {
+    "chart_spec": "s3://trid3nt-runs/01M0YHHSFGCHXW726XDMPQSNHN/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YHHSFGCHXW726XDMPQSNHN/metrics.json"
+  },
+  "product_errors": {}
 }

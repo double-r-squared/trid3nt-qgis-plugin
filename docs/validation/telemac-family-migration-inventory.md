@@ -140,3 +140,58 @@ which is the later commit working, and the file is refreshed here.
 
 Run ids are excluded from the comparison for the obvious reason, and so are
 `layer_uri` and wall times.
+
+---
+
+## Wave C - `telemac_rain_on_grid`, the seventh (2026-08-26, ADR 0316)
+
+The one wave B left. Its reason for being last held: it was the only template
+whose migration sat inside the mesh-gate wave's territory. What made it
+migratable was that ADR 0315 had already ruled the shape - mesh is
+SUPPLIED-optional `Data`, a producer-less context slot with no baked source - so
+the byo path needed no new species.
+
+| template | migrated | template LOC | parity | proofs |
+|---|---|---|---|---|
+| `telemac_rain_on_grid` | THIS WAVE | 1835 -> 952 (template folder), the mesher re-homed | manifest BYTE-IDENTICAL bar run tag; `watershed.slf` / `node_cn2.txt` / `node_manning.txt` sha256 IDENTICAL; worker metrics 31/31 IDENTICAL | coarse packet PASS, 12 deliverables incl. the 13-frame GIF |
+
+The family is 7 of 7.
+
+### Where the composer's contents went
+
+| was | is | why |
+|---|---|---|
+| `rain_on_grid.py` composer body | `telemac/steps/rain_on_grid.py` | the TELEMAC mechanism: deck, solve, publish, provenance |
+| `mesh_acquisition.py` generation | `mesh/watershed.py` | a catchment is a domain SHAPE, not a TELEMAC fact |
+| `mesh_acquisition._write_bottom_selafin` | `mesh/telemac_build.py` | the front's thin per-solver writer, beside `hecras_build` |
+| `cn_infiltration.py` | UNCHANGED, template sibling | SCS curve numbers vary per QUESTION, so they drop all the way |
+| PARAMS + DOC | `rain_on_grid/declarations.py` | the uniform sibling norm |
+
+### The legacy top-level files, re-checked
+
+Nothing this migration touched leaves a legacy file readerless.
+`postprocess_telemac.py` gains a reader (the rain-on-grid publisher calls
+`postprocess_telemac_wse`), `results_mesh_seam.py` keeps both its readers,
+`run_telemac.py` is still the solver registry, and `release_layer.py` and
+`streeter_phelps.py` are untouched. `_bed_input.py` and `_template_card.py` died
+in wave B and stay dead.
+
+`workflows/mesh/precondition_gate.py` was checked for the opposite reason - the
+context slot could have orphaned it - and keeps three readers: this template,
+`hecras_flood_2d` and the three SCHISM templates.
+
+### What the audit's class-C set turned into
+
+The steps audit parked rain_on_grid's whole set behind this migration. Row by row:
+
+- **the 17 bare signature defaults** - now 24 declared `Param` rows plus three
+  labeled module constants (`POUR_POINT_BUFFER_DEG`, `NLCD_NATIVE_RESOLUTION_M`,
+  and the mesher's own default band in the shared front).
+- **the invented AOI-centroid pour point** - DELETED; a required USER param behind
+  a `DrawGate`, refused typed in auto mode.
+- **the unreachable Huang slope correction** - now a declared param, wired to node
+  slopes read off the mesh's own piecewise-linear bed.
+- **the 24-hour solve timeout** - a labeled `_SOLVE_TIMEOUT_S` beside the
+  open-water front's, with the reason it is an order of magnitude larger stated.
+- **the duplicated UTM-zone formula** - one `utm_epsg_for(lon, lat)` in the mesh
+  front; both former copies read it.

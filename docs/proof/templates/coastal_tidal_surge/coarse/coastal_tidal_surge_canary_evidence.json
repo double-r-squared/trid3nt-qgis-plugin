@@ -20,8 +20,8 @@
     "input_mode": "user_gated",
     "restart_clean": true
   },
-  "session_id": "01M0YBNX54026ENJJX9JGJ7FYA",
-  "case_id": "01M0YBNXDSWPT8B0JPTXRB663R",
+  "session_id": "01M0YJ54HZ18VTE07CKAD7DF8F",
+  "case_id": "01M0YJ54VGTKFPDNKVDZWNS6GQ",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -33,7 +33,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YBQ8F2XVNVKAGVCD2XG64J",
+      "chart_id": "01M0YJ6V3BAV7MCY3BCBRY8433",
       "vega_lite_spec": {
         "mark": {
           "type": "bar"
@@ -76,15 +76,15 @@
       "title": "Peak inundation depth over initially-dry land (coast)",
       "caption": "Driven by the observed CO-OPS series (MLLW datum): peak boundary stage 2.61 m, deepest water 6.65 m, deepest INUNDATION over initially-dry land 0.152 m, 0.0307 km2 of land newly flooded. Planning-grade screening, not a calibrated hindcast.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0YBNY18YGRJRP4XGQMEB0Y6"
+      "created_turn_id": "01M0YJ55J5A1V7GJCDRVB0B9SV"
     }
   ],
   "layers": [
     {
-      "layer_id": "input-noaa_coops_tides-ea84d2251a42",
+      "layer_id": "input-noaa_coops_tides-bdabd133e962",
       "name": "Input: coastal tide/surge boundary (noaa_coops_tides)",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/e6fb60c43425fda821d154cfa1032e59.fgb",
+      "uri": "s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/5d4b2a1ea83acff209ef4870ede00e91.fgb",
       "style_preset": "coops_water_level",
       "visible": true,
       "role": "context",
@@ -127,10 +127,10 @@
       }
     },
     {
-      "layer_id": "telemac-coastal-depth-01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "layer_id": "telemac-coastal-depth-01M0YJ57Y53S6NS70THCDX933E",
       "name": "Total water depth at peak (coast)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/overviews/01M0YBQ88XPT4P6EE719QEKPYY.tif",
+      "uri": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/overviews/01M0YJ6TVC5WY8KC9Q1K2G5F8K.tif",
       "style_preset": "continuous_coastal_inundation_depth",
       "visible": true,
       "role": "context",
@@ -151,10 +151,10 @@
       }
     },
     {
-      "layer_id": "model-results-mesh-01M0YBNZP4C0P60BRFTYK9ZD2J",
+      "layer_id": "model-results-mesh-01M0YJ57Y53S6NS70THCDX933E",
       "name": "Model results (time series): coast",
       "layer_type": "mesh",
-      "uri": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/res_coastal.slf",
+      "uri": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/res_coastal.slf",
       "style_preset": "mesh_grid",
       "visible": true,
       "role": "context",
@@ -166,10 +166,10 @@
       "legend": null
     },
     {
-      "layer_id": "input-coastal-bed-01M0YBQ8CEAY93J8QNTK9YMMFV",
+      "layer_id": "input-coastal-bed-01M0YJ6V06CAWD8ZAMQ66W9JS9",
       "name": "Input: coastal bed bathymetry (coast, NOAA DEM_all topobathy, in-worker)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/bed_bathymetry.tif",
+      "uri": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/bed_bathymetry.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -181,10 +181,10 @@
       "legend": null
     },
     {
-      "layer_id": "01M0YBQ8NZ0JTV0ZR495XBPZ90",
+      "layer_id": "01M0YJ6VAR04GYB6F0VD8ZN0GT",
       "name": "Peak inundation depth over initially-dry land (coast)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/overviews/01M0YBQ838QMJMR16KRCWJG4CP.tif",
+      "uri": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/overviews/01M0YJ6TK4G9Q5E8MM81J0VCR4.tif",
       "style_preset": "continuous_coastal_inundation_depth",
       "visible": true,
       "role": "primary",
@@ -444,11 +444,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0YBNZP4C0P60BRFTYK9ZD2J",
+  "run_id": "01M0YJ57Y53S6NS70THCDX933E",
   "chart_spec": {
     "coastal_stage_vs_inundation": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0YBQ8F2XVNVKAGVCD2XG64J",
+      "chart_id": "01M0YJ6V3BAV7MCY3BCBRY8433",
       "vega_lite_spec": {
         "mark": {
           "type": "bar"
@@ -509,15 +509,15 @@
     "station_name": "Apalachicola",
     "ocean_edge": "E",
     "mesh_size_m": 250.0,
-    "layer_uri": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/overviews/01M0YBQ838QMJMR16KRCWJG4CP.tif",
+    "layer_uri": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/overviews/01M0YJ6TK4G9Q5E8MM81J0VCR4.tif",
     "datum_offset_note": "reconciles the MLLW tide datum with the NAVD88 bed datum; the gauge's own published datum table, not a regional constant",
     "series_type_note": "OBSERVED storm-surge record",
     "target_resolution_m": 250.0,
     "target_resolution_note": "Explicit grid node spacing; the coastal grid floor is 20 m and a wide AOI is coarsened under the node budget [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0YBNZP4C0P60BRFTYK9ZD2J/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M0YJ57Y53S6NS70THCDX933E/metrics.json"
   },
   "product_errors": {}
 }

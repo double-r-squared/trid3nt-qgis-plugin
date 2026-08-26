@@ -122,6 +122,10 @@ wave 3's +1408.
 | 2026-08-25 | B - TELEMAC engine-specific | NEW spec fetcher (`fetchers/ocean/fetch_osm_breakwaters/` - `source.yaml` + `corpus.yaml` + `__init__.py`) and its hook pair (`hooks/overpass.py` +105 `overpass_breakwaters.build_request` / `.parse_response`), commit `a67cc188` | 0 | 195 | +195 | +1790 |
 | 2026-08-25 | B - TELEMAC engine-specific | worker code (`telemac_coastal_build.py` +23 the kept origin + `add_mesh(orig=)` + the echoed corner; `entrypoint.py` +12 the echoed rescaled discharge and the one parser stamp; `artemis_build.py` +11 the echoed shoal overrides), commit `075ad814` | 1387 | 1433 | +46 | +1836 |
 | 2026-08-25 | B - TELEMAC engine-specific | proof-path seam (`testing/proof_paths.py` 77 NEW; `canaries.py` -6 onto it, the render + drive scripts +23), commit `33e879cf` | 2827 | 2921 | +94 | **+1930** |
+| 2026-08-26 | C - `telemac_rain_on_grid` | the TEMPLATE folder (`rain_on_grid.py` 680 -> 282, `declarations.py` 259 NEW, `cn_infiltration.py` +31 the one AMC normalizer, `__init__.py` 20 -> 10; `mesh_acquisition.py` **-765**, re-homed) | 1835 | 952 | **-883** | +1047 |
+| 2026-08-26 | C - `telemac_rain_on_grid` | the shared MESH FRONT (`mesh/watershed.py` 753 NEW - the catchment generation strategy plus its three `Data` producers; `mesh/telemac_build.py` 83 NEW - the thin per-solver SELAFIN writer; `generate_mesh.py` +1 net onto both) | 733 | 1570 | +837 | +1884 |
+| 2026-08-26 | C - `telemac_rain_on_grid` | the TELEMAC family steps (`steps/rain_on_grid.py` 941 NEW - acquire, mesh, infiltration, rain, deck, solve, publish; `steps/open_water.py` +21 the extracted `dispatch_and_wait` its second consumer earned; `steps/__init__.py` +21 the exports; `workflow.py` +35 the catchment shape and the seventh process row) | 850 | 1868 | +1018 | +2902 |
+| 2026-08-26 | C - `telemac_rain_on_grid` | contracts + harness (`telemac_contracts.py` +74 `TelemacRainOnGridLayerURI` - the 19 typed answer scalars the composer had nowhere to put; `flood_2d.py` -2 onto the shared delineator) | 1713 | 1785 | +72 | **+2974** |
 
 **Wave 2 verdict (corrected): net +487 - invested in the skeleton, not yet
 repaid; watch.** The +467 first published here undercounted by 20 product lines
@@ -308,3 +312,54 @@ record, the same command without those exclusions reads +6428 / -4294 = +2134,
 the difference being the test migration to the static contract (four new test
 files: the user-input species, the run journal, the animation legend stability
 and the raster-headline coherence check).
+
+**Wave C verdict: net +1044, running net +2974 - the last composer died and the
+ledger got its worst-looking row for the best reason. Honest: this wave BUILT more
+than it absorbed.**
+
+The template folder is the row the migration was aiming at, and it landed:
+**1835 -> 952, -48%**, with `mesh_acquisition.py` deleted outright. That is the
+whole of what "migrate the template" was supposed to mean, and it is the only row
+here that measures it.
+
+Everything else is what the composer had NOT been doing. Read the three additive
+rows for what is actually in them:
+
+- `mesh/watershed.py` (753) is not new code so much as code that was in the wrong
+  place, plus the three `Data` producers the composer performed as buried fetches.
+  The relocation is provably overdue: `generate_mesh` was importing four symbols
+  out of a TELEMAC template's private module and `hecras_flood_2d` a fifth.
+- `steps/rain_on_grid.py` (941) carries the deck, the solve and the publish the
+  composer had - and then the provenance rows, the honesty note, the chart, the
+  resolution label, the two-artifact narration and the typed answer it did NOT.
+  638 of those lines are code and 303 are constraint prose, which this ledger
+  counts on purpose.
+- `telemac_contracts.py` (+74) is nineteen answer scalars that previously existed
+  only inside a log line.
+
+The composer declared ZERO params, persisted NO metrics and NO chart spec, emitted
+NO provenance rows and carried NO honesty note; its canary had read `NoSuchKey`
+for both products since the day it was written. A migration that adds a 24-row
+contract, a persisted answer, a chart and a labeled provenance trail is going to
+be net-positive in lines, and pretending otherwise would mean deleting the
+explanation to make the number look better - which is exactly what the counting
+rule at the head of this file exists to prevent.
+
+WHAT WOULD HAVE MADE IT NEGATIVE, and did not: there was no fourth template to
+share the catchment front with. The reach family paid for `steps/reach.py` across
+three templates and the open-water family paid for `open_water.py` across four.
+The catchment front has ONE consumer today. The honest read is that this row is an
+INVESTMENT with no second consumer yet, and the thing to watch is whether the next
+basin-shaped template (SWMM's `urban_flood`, whose AOI giant tranche is queued)
+lands on it for free. If it writes its own delineator, this row was overhead.
+
+COUNTING NOTE. The canary declaration's move to `user_gated` (+7 in
+`testing/canaries.py`, with the law-9 reason stated beside it) landed inside
+`a7febb61`, the concurrent proof-packet lane's commit, because the two waves were
+editing that file at the same time. It is NOT counted in the rows above; it is
+named here so the arithmetic and the history agree.
+
+One de-duplication did land and is worth naming because it is the reuse-sweep norm
+working rather than a guess: `dispatch_and_wait` moved to `open_water.py` on its
+CONFIRMED second consumer, not preemptively. It nets about zero in lines and
+removes the second copy of a cancellation clause that a hand-copied version drops.
