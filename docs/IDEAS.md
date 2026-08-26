@@ -1565,3 +1565,40 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   all pre-fix animations get re-rendered, and the max-vs-colorbar
   question (2.59 m label vs 0.94 bar) gets settled in the same pass
   (if the ramp deliberately clips, the legend must SAY so).
+
+- PROOF PACKET = THE DELIVERY MECHANISM (NATE 2026-08-26, "the checklist as a
+  script that cannot forget"). `scripts/assemble_proof_packet.py --template X
+  --variant coarse|refined|postmigration|addendum` renders the full NATE
+  checklist (every published layer as a full-size panel in emission order, the
+  canvas view, the contact sheet, every chart dock-true, the GIF + its
+  peak-or-final still) and writes `packet.json` beside it: the ORDERED
+  deliverable paths + a one-line caption + a per-item verdict. The delivery step
+  is now "send exactly what packet.json lists", zero judgement. It REFUSES with
+  a named missing-list on: a missing GIF where the run's own SELAFIN MEASURES
+  more than one frame (header + file-length arithmetic, cross-checked against
+  the worker's ntimestep - the decision is measured, never remembered); a GIF
+  whose frames are not all distinct or whose colorbar strip is not byte-identical
+  across frames; a short panel set; a zero-byte file; a PNG whose
+  `trid3nt_run_id` stamp is not this run's; anything older than the evidence JSON
+  beside it (STALE, with both mtimes); and frames drawn off the run's AOI.
+  `--check` audits an old folder without rendering. Wired into
+  `canaries.main`, so every canary close produces a packet or exits non-zero.
+  FIRST CATCHES: (a) the wave-B coarse coastal folder - stale GIF/chart/sheet and
+  TWO panel generations in one directory; (b) every GIF in the repo predated the
+  StablePaletteWriter fix and drifts its legend; (c) the refined coastal run's
+  telemac_metrics (parser coastal-tidal-2) records no bbox, so its animation had
+  been landing at the UTM false origin - the assembler now falls back to the
+  canary's declared bbox and refuses when the drawn extent misses the AOI.
+
+- DELETION POSTURE BIFURCATED + THE CAMPAIGN THESIS (NATE 2026-08-26):
+  THESIS on record - the whole-repo goal is cohesion: TELEMAC is the
+  sculpting SAMPLE refactored n times; then the switch flips and the
+  fleet migrates once onto the settled architecture; stale code weighs
+  down every future refactor, so shrinking is itself a goal. POSTURE:
+  (1) WORKFLOW/physics surfaces = CAREFUL - parity binding,
+  keep-until-superseded w/ named conditions (blanket coherence). (2)
+  EVERYTHING ELSE = AGGRESSIVE - evidence of staleness is sufficient
+  cause, delete now, ledger line for traceability only, no conditions,
+  no supersession ceremony. Unlocks: the scripts/ audit (34k), server/
+  web-era sweep, dead-path tests, composer leftovers outside workflows -
+  chartered as the STALE SWEEP wave once the current three agents land.
