@@ -1938,3 +1938,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   under the plumbing). Unblocks the reach-family migration = the last
   six in-worker fetches = --network none for the whole TELEMAC image =
   the family CLOSES.
+
+- SAMPLE PURITY RULED (NATE 2026-08-26): the TELEMAC sample must always
+  be END-STATE-PURE - no interim solutions inside its boundary (interim
+  code inside the sample lies about the architecture; "interim" may
+  exist only OUTSIDE, as pre-migration code that dies at its engine's
+  migration). Generalization style: reusable INTERFACES + small HOOKS
+  any new model fills - never per-engine code for a shareable need.
+  CONSEQUENCE: rerun-with-overrides + coupled-validity rules become the
+  NEXT TELEMAC-scoped skeleton wave (after the reach close), landing
+  WITH set_telemac_parameters deleted in the same series (ledger
+  condition met, not waited on); calibration then consumes a landed
+  primitive instead of discovering a missing one. The other three
+  setters are outside the sample - they die at their engines'
+  migrations.
