@@ -12,6 +12,10 @@ Two tiers, mirroring the modflow archetype test discipline:
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
+import time
+from pathlib import Path
 
 import pytest
 
@@ -243,3 +247,122 @@ def test_mvr_routing_conserves_mass():
 def test_unknown_case_raises():
     with pytest.raises(core.ModflowValidationError):
         core.run_validation_case("not_a_case")
+
+
+# --------------------------------------------------------------------------- #
+# Temp-workspace ownership: every mf_vv_ directory has a reaper (no mf6).
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def temp_root(tmp_path, monkeypatch):
+    """Point the module's whole temp surface at an isolated directory.
+
+    ``tempfile.tempdir`` backs both ``gettempdir`` (what the sweep walks) and
+    ``mkdtemp`` (where the factory mints), so one patch redirects both and the
+    real system temp root is never swept by these tests.
+    """
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    return tmp_path
+
+
+def _age(path: Path, seconds_old: float) -> None:
+    stamp = time.time() - seconds_old
+    os.utime(path, (stamp, stamp))
+
+
+def _stale() -> float:
+    return core._STALE_WORKSPACE_AGE_S + 60.0
+
+
+def test_factory_reaps_stale_workspaces_and_spares_fresh_and_foreign(temp_root):
+    stale = temp_root / "mf_vv_glover_stale"
+    fresh = temp_root / "mf_vv_glover_fresh"
+    foreign = temp_root / "someone_elses_stale_dir"
+    for d in (stale, fresh, foreign):
+        d.mkdir()
+        (d / "mfsim.nam").write_text("deck")
+    _age(stale, _stale())
+    _age(foreign, _stale())
+
+    ws = core._new_ws("probe")
+    try:
+        assert not stale.exists()          # leaked past the threshold: reaped
+        assert fresh.is_dir()              # inside the threshold: a live solve
+        assert foreign.is_dir()            # not our prefix: never touched
+        assert Path(ws).parent == temp_root
+        assert Path(ws).name.startswith("mf_vv_probe_")
+    finally:
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+def test_reaper_spares_a_live_workspace_past_the_stale_age(temp_root):
+    with core._workspace("probe") as ws:
+        _age(Path(ws), _stale())
+        core._reap_stale_workspaces()
+        assert Path(ws).is_dir()
+
+
+def test_reaper_swallows_an_undeletable_entry(temp_root, monkeypatch):
+    blocked = temp_root / "mf_vv_blocked_x"
+    other = temp_root / "mf_vv_other_x"
+    for d in (blocked, other):
+        d.mkdir()
+        _age(d, _stale())
+
+    real_rmtree = shutil.rmtree
+
+    def _refusing(path, *args, **kwargs):
+        if Path(path).name == blocked.name:
+            raise PermissionError(13, "not this process's directory")
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(core.shutil, "rmtree", _refusing)
+
+    core._reap_stale_workspaces()  # must not propagate
+
+    assert blocked.is_dir()        # the refusal left it alone
+    assert not other.exists()      # and did not abort the rest of the sweep
+
+
+def test_workspace_context_removes_its_own_directory(temp_root):
+    with core._workspace("probe") as ws:
+        (Path(ws) / "mfsim.nam").write_text("deck")
+        assert Path(ws).is_dir()
+        assert ws in core._LIVE_WORKSPACES
+    assert not Path(ws).exists()
+    assert ws not in core._LIVE_WORKSPACES
+
+
+def test_workspace_context_removes_its_own_directory_on_raise(temp_root):
+    held = {}
+    with pytest.raises(RuntimeError):
+        with core._workspace("probe") as ws:
+            held["ws"] = ws
+            (Path(ws) / "mfsim.nam").write_text("deck")
+            raise RuntimeError("solve blew up")
+    assert not Path(held["ws"]).exists()
+    assert held["ws"] not in core._LIVE_WORKSPACES
+
+
+def test_scoped_workspace_passes_a_reaped_workspace_to_the_solve(temp_root):
+    seen = {}
+
+    @core._scoped_workspace("probe")
+    def _fake_solve(ws, *, knob):
+        seen["ws"] = ws
+        seen["knob"] = knob
+        (Path(ws) / "mfsim.nam").write_text("deck")
+        return "solved"
+
+    assert _fake_solve(knob=3) == "solved"
+    assert seen["knob"] == 3
+    assert not Path(seen["ws"]).exists()
+
+
+@_needs_mf6
+def test_solved_case_leaves_no_workspace_behind():
+    root = Path(tempfile.gettempdir())
+    before = set(root.glob("mf_vv_*"))
+    core.run_validation_case("maw_crossaquifer")
+    assert set(root.glob("mf_vv_*")) <= before

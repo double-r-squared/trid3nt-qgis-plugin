@@ -70,15 +70,18 @@ decks are AUTHORED synthetic benchmarks labeled ``SyntheticInput(basis=
 from __future__ import annotations
 
 import csv
+import functools
 import logging
 import math
 import os
 import shutil
 import tempfile
+import time
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 
@@ -319,8 +322,94 @@ def resolve_mf6_binary() -> str | None:
     return None
 
 
+# --------------------------------------------------------------------------- #
+# Temp workspaces. A deck plus its mf6 outputs is tens of megabytes and /tmp is
+# often a tmpfs, so every workspace this module mints must have an owner that
+# removes it. The reaper is the second line: a process killed mid-solve leaves
+# its workspace behind, and only a later run can collect it.
+# --------------------------------------------------------------------------- #
+
+#: Every workspace this module creates carries this prefix. The reaper removes
+#: NOTHING in the temp root that does not.
+_WORKSPACE_PREFIX = "mf_vv_"
+
+#: Age past which an unclaimed workspace is a leak rather than a live solve.
+#: The slowest case here is minutes, so an hour is well clear of any run in
+#: progress; a run that does outlive it is protected by _LIVE_WORKSPACES.
+_STALE_WORKSPACE_AGE_S: float = 3600.0
+
+#: Workspaces this process holds open. The reaper skips them, so a solve running
+#: past the stale age cannot have its own deck deleted out from under it.
+_LIVE_WORKSPACES: set[str] = set()
+
+
+def _reap_stale_workspaces() -> None:
+    """Remove leaked ``mf_vv_*`` workspaces from the temp root. Never raises.
+
+    Another user's workspace, an unreadable temp root, an entry that vanishes
+    mid-sweep: none of that is this module's problem, so every failure is
+    swallowed. Reaping is opportunistic housekeeping and must not fail a solve.
+    """
+    cutoff = time.time() - _STALE_WORKSPACE_AGE_S
+    try:
+        entries = list(Path(tempfile.gettempdir()).iterdir())
+    except Exception:  # noqa: BLE001 - an unreadable temp root reaps nothing
+        return
+    for entry in entries:
+        if not entry.name.startswith(_WORKSPACE_PREFIX):
+            continue
+        try:
+            if str(entry) in _LIVE_WORKSPACES or not entry.is_dir():
+                continue
+            if entry.stat().st_mtime > cutoff:
+                continue
+            shutil.rmtree(entry, ignore_errors=True)
+        except Exception:  # noqa: BLE001 - one undeletable entry stops nothing
+            continue
+
+
 def _new_ws(prefix: str) -> str:
-    return tempfile.mkdtemp(prefix=f"mf_vv_{prefix}_")
+    """Mint a temp workspace, sweeping leaked ones first.
+
+    The caller OWNS the returned directory. ``_workspace`` is the owning form
+    and is what every solve path uses; a direct call hands the path out to
+    outlive the call (deck-contract inspection) and is collected by the sweep.
+    """
+    _reap_stale_workspaces()
+    return tempfile.mkdtemp(prefix=f"{_WORKSPACE_PREFIX}{prefix}_")
+
+
+@contextmanager
+def _workspace(prefix: str) -> Iterator[str]:
+    """A workspace whose lifetime is exactly this ``with`` block.
+
+    Every solve reads what it needs out of the deck and the mf6 output files
+    into scalars before returning, so nothing outside the block may hold a path
+    into the directory. Removal is unconditional: a raising solve leaks nothing.
+    """
+    ws = _new_ws(prefix)
+    _LIVE_WORKSPACES.add(ws)
+    try:
+        yield ws
+    finally:
+        _LIVE_WORKSPACES.discard(ws)
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+def _scoped_workspace(prefix: str):
+    """Hand the wrapped solve a workspace as its first argument, then reap it.
+
+    The solve borrows the directory; it does not own it. Its own callers see an
+    unchanged signature, so the case registry keeps calling it with the case
+    knobs alone.
+    """
+    def decorate(fn):
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> SolvedValidation:
+            with _workspace(prefix) as ws:
+                return fn(ws, *args, **kwargs)
+        return wrapper
+    return decorate
 
 
 # --------------------------------------------------------------------------- #
@@ -486,8 +575,9 @@ def _run(sim) -> bool:
     return bool(ok)
 
 
-def _solve_newton_dry_rewet() -> SolvedValidation:
-    sims, ws, botm = build_newton_dry_rewet()
+@_scoped_workspace("newton")
+def _solve_newton_dry_rewet(ws: str) -> SolvedValidation:
+    sims, ws, botm = build_newton_dry_rewet(ws)
     heads: dict[str, np.ndarray] = {}
     converged: dict[str, bool] = {}
     for name, sim in sims.items():
@@ -571,8 +661,9 @@ def _solve_newton_dry_rewet() -> SolvedValidation:
     )
 
 
-def _solve_maw_crossaquifer() -> SolvedValidation:
-    sim, ws, analytical, params = build_maw_crossaquifer()
+@_scoped_workspace("maw")
+def _solve_maw_crossaquifer(ws: str) -> SolvedValidation:
+    sim, ws, analytical, params = build_maw_crossaquifer(ws)
     ok = _run(sim)
     computed: float | None = None
     if ok:
@@ -633,8 +724,9 @@ def _solve_maw_crossaquifer() -> SolvedValidation:
     )
 
 
-def _solve_hfb_barrier() -> SolvedValidation:
-    sims, ws, analytical_q = build_hfb_barrier()
+@_scoped_workspace("hfb")
+def _solve_hfb_barrier(ws: str) -> SolvedValidation:
+    sims, ws, analytical_q = build_hfb_barrier(ws)
     import flopy  # noqa: F401 - ensure flopy present for output readers
 
     flux_by_ncol: dict[int, float] = {}
@@ -873,14 +965,16 @@ def _run_prt(ws: str, gwf_dir: str, direction: str, releasepts: list[tuple]) -> 
     return dict(tracks)
 
 
-def _solve_prt_capture_zone(direction: str = "backward", n_particles: int = 40) -> SolvedValidation:
+@_scoped_workspace("prt")
+def _solve_prt_capture_zone(ws: str, direction: str = "backward",
+                            n_particles: int = 40) -> SolvedValidation:
     import flopy  # noqa: F401 - ensure flopy present
 
     if direction not in ("forward", "backward"):
         raise ModflowValidationError(
             f"prt direction must be 'forward' or 'backward'; got {direction!r}"
         )
-    sim, ws, gwf_dir = build_prt_gwf()
+    sim, ws, gwf_dir = build_prt_gwf(ws)
     ok, _buff = sim.run_simulation(silent=True)
     if not ok:
         raise ModflowValidationError("PRT GWF flow solve did not converge")
@@ -1057,8 +1151,9 @@ def build_henry_saltwater(ws: str | None = None):
     return sim, ws
 
 
-def _solve_henry_saltwater() -> SolvedValidation:
-    sim, ws = build_henry_saltwater()
+@_scoped_workspace("henry")
+def _solve_henry_saltwater(ws: str) -> SolvedValidation:
+    sim, ws = build_henry_saltwater(ws)
     ok, _buff = sim.run_simulation(silent=True)
     if not ok:
         raise ModflowValidationError("Henry BUY+GWT solve did not converge")
@@ -1239,12 +1334,15 @@ def _glover_leak_series(sub: str, name: str):
     return t, leak
 
 
-def _solve_sfr_stream_depletion() -> SolvedValidation:
-    sim_p, sub_p, name = build_glover_sfr(pump=True)
+@_scoped_workspace("glover")
+def _solve_sfr_stream_depletion(ws: str) -> SolvedValidation:
+    # Both decks share the workspace; build_glover_sfr puts each in its own
+    # ``pump``/``nopump`` subdirectory, so one reap collects the pair.
+    sim_p, sub_p, name = build_glover_sfr(pump=True, ws=ws)
     okp, _ = sim_p.run_simulation(silent=True)
     if not okp:
         raise ModflowValidationError("SFR stream-depletion pumping solve did not converge")
-    sim_n, sub_n, _ = build_glover_sfr(pump=False)
+    sim_n, sub_n, _ = build_glover_sfr(pump=False, ws=ws)
     okn, _ = sim_n.run_simulation(silent=True)
     if not okn:
         raise ModflowValidationError("SFR stream-depletion baseline solve did not converge")
@@ -1413,10 +1511,11 @@ def build_mvr_routing(ws: str | None = None):
     return sim, ws, name
 
 
-def _solve_mvr_routing() -> SolvedValidation:
+@_scoped_workspace("mvr")
+def _solve_mvr_routing(ws: str) -> SolvedValidation:
     import flopy
 
-    sim, ws, name = build_mvr_routing()
+    sim, ws, name = build_mvr_routing(ws)
     ok, _ = sim.run_simulation(silent=True)
     if not ok:
         raise ModflowValidationError("MVR routing solve did not converge")
