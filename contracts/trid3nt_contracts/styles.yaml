@@ -57,14 +57,6 @@ presets:
     rescale: {policy: fixed, range: [0, 360], transform: linear}
     units: "deg"
     label: "Aspect compass deg"
-  categorical_aspect:
-    kind: continuous
-    # The same cyclic compass field aspect_compass_deg declares, under the name
-    # the terrain publishes carry. hsv so 0 and 360 paint the same colour.
-    colormap: hsv
-    rescale: {policy: fixed, range: [0, 360], transform: linear}
-    units: "deg"
-    label: "Aspect"
   categorical_landcover:
     kind: categorical
     # No class table here: a land-cover COG carries its own embedded GDAL colour
@@ -199,12 +191,6 @@ presets:
               range: [0, 5]}   # range = the no-band-stats fallback
     units: "m"
     label: "Hydroperiod m"
-  continuous_impervious_surface:
-    kind: continuous
-    colormap: reds
-    rescale: {policy: fixed, range: [0, 100], transform: linear}
-    units: "%"
-    label: "Impervious Surface"
   continuous_landslide_susceptibility:
     kind: continuous
     colormap: rdylgn_r
@@ -256,16 +242,6 @@ presets:
     rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
               range: [0, 1]}   # range = the no-band-stats fallback
     units: "m/m"
-    label: "Slope"
-  continuous_slope_pct:
-    kind: continuous
-    # Rise over run as a PERCENT, which is unbounded above (a cliff exceeds
-    # 100%), so the range is read off the raster; continuous_slope carries the
-    # m/m spelling and slope_angle_deg the degree spelling of the same field.
-    colormap: ylorrd
-    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
-              range: [0, 100]}   # range = the no-band-stats fallback
-    units: "%"
     label: "Slope"
   continuous_subsidence_cm:
     kind: continuous
