@@ -2070,3 +2070,24 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   gaia cases) as V&V template candidates - the modflow6-examples pattern
   for TELEMAC; (5) telapy = the future coupling door, not now. Executes
   at the post-calibration park.
+
+- TELAPY RULED IN + THE STEPPABLE-ENGINE BRIDGE (NATE 2026-08-26,
+  supersedes the recon's not-now on telapy): the post-calibration
+  TELEMAC park-work centers on adopting telapy behind OUR solve-stage
+  bridge - a SteppableEngine interface (BMI-lite: initialize/step/get/
+  set/probe/finalize), one engine-blind GENERIC STEP DRIVER as the box
+  entrypoint, telapy as the first adapter (T2D/T3D/ART/WAC), Mf6Xmi +
+  Pyswmm as thin future adapters, SubprocessFallback w/ honest
+  capability flags for API-less engines. THE BOX CONTRACT IS UNCHANGED
+  (staged dir in, results out, --network none, stateless across jobs) -
+  only the interior changes. Unlocks: per-step gauge PROBES (the
+  calibration objective in-flight), live frame streaming, early-stop
+  guards, WARM-RESTART calibration sessions (one session = one box
+  job). TWO-AUTHORITY LAW: the deck/manifest is the sole authored
+  record; runtime set() legal only in sanctioned loops and journaled as
+  overrides. Examples = feedstock + V&V pins, not running workflows;
+  meshing generation unchanged (telapy does not mesh). Blueprint
+  section 5 carries the UML. Handrolled code that the library
+  supersedes DELETES per the demolition clause. Sequencing: calibration
+  v1 runs on the current subprocess path; the bridge lands at the park
+  and calibration v2 gains the warm loop.
