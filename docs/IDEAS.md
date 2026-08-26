@@ -1541,3 +1541,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   method would be a style-contract entry. Canary-evolution discussion
   QUEUED at the mesh wave's close (interim refined coastal -> the
   artemis BYO rematch w/ authored conformal mesh).
+
+- BED-INPUT DOTS = THIRD NODE-DOT INSTANCE (NATE spot-check 2026-08-26,
+  co-reviewed): the worker-written bed_bathymetry.tif is node SAMPLES
+  written as isolated pixels - the in-worker fetch path the barycentric
+  fix (result rasterizers only) never touched. NO interim patch - the
+  producer dies in the fetch-migration wave: bed input becomes a STAGED
+  server-fetched artifact (ladder/provenance/visibility) and the input
+  layer becomes the continuous clipped source raster at native
+  resolution (more honest as an "input": what the run was GIVEN, not a
+  scatter of what the solver kept). ACCEPTANCE DELIVERABLE of the
+  fetch-migration wave: this exact panel re-rendered continuous.
