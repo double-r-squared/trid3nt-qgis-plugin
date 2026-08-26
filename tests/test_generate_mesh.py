@@ -31,9 +31,7 @@ from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import (
     _write_2dm,
 )
 from trid3nt_server.workflows.mesh.precondition_gate import gate_supplied_mesh
-from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-    read_2dm_mesh,
-)
+from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
 
 
 def _artifact(**over) -> MeshArtifact:
@@ -105,13 +103,11 @@ def test_read_2dm_rejects_empty():
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.workflows.telemac.rain_on_grid.mesh_acquisition import (
-        MeshAcquisitionError,
-    )
+    from trid3nt_server.workflows.mesh.watershed import MeshGenerationError
 
     p = Path(tempfile.mkdtemp()) / "empty.2dm"
     p.write_text("MESH2D\n")
-    with pytest.raises(MeshAcquisitionError):
+    with pytest.raises(MeshGenerationError):
         read_2dm_mesh(str(p))
 
 

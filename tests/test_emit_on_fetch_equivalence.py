@@ -42,15 +42,13 @@ _FAMILY_INPUTS: dict[str, dict[str, object]] = {
         ],
     },
     "rain_on_grid": {
-        # the DEM bed + river live in mesh_acquisition; the NLCD in rain_on_grid.
-        "file": "telemac/rain_on_grid/mesh_acquisition.py",
+        # the DEM bed, river and land cover all live in the shared mesh front's
+        # CATCHMENT strategy - domain-SHAPE fetches, not a TELEMAC fact.
+        "file": "mesh/watershed.py",
         "fetches": [
             ('fetch_river_geometry"].fn(', "river geometry"),
             ('fetch_dem"].fn(', "mesh bed"),
             ('fetch_copernicus_dem"].fn(', "mesh bed"),
-        ],
-        "extra_file": "telemac/rain_on_grid/rain_on_grid.py",
-        "extra_fetches": [
             ('fetch_landcover"].fn(', "land cover"),
         ],
     },
@@ -90,9 +88,6 @@ def test_rain_on_grid_input_fetches_declare_purpose():
     src = (_WORKFLOWS / fam["file"]).read_text("utf-8")
     for token, word in fam["fetches"]:
         _assert_fetch_carries_purpose(src, token, word)
-    extra = (_WORKFLOWS / fam["extra_file"]).read_text("utf-8")
-    for token, word in fam["extra_fetches"]:
-        _assert_fetch_carries_purpose(extra, token, word)
 
 
 def test_sfincs_input_fetches_declare_purpose():

@@ -195,7 +195,7 @@ async def test_payload_warning_gate_composes_on_run_path(
 
 
 class _TypedToolError(RuntimeError):
-    """A stand-in for a tool's typed exception (MeshAcquisitionError etc.)."""
+    """A stand-in for a tool's typed exception (MeshGenerationError etc.)."""
 
     error_code = "TELEMAC_ROG_POUR_POINT_OFF_DEM"
     retryable = False
