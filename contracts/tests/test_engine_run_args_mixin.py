@@ -130,9 +130,9 @@ def test_get_output_registry_known_and_unknown() -> None:
 
 
 def test_output_quantity_spec_is_frozen() -> None:
-    spec = OutputQuantitySpec(
-        quantity_id="q", kind="raster", name="Q", style_preset="p"
-    )
+    # quantity_id IS the style key -- the style contract owns quantity -> preset,
+    # so no spec field names a preset or a colormap.
+    spec = OutputQuantitySpec(quantity_id="q", kind="raster", name="Q")
     assert spec.default_on is False  # DEFAULT-OFF
     assert spec.role == "primary" and spec.reader is None
     with pytest.raises(Exception):

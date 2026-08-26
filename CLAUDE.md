@@ -24,19 +24,29 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   mesh/qgis/postprocess legs. Worker code is INERT until its image is
   rebuilt: absolute -f/context paths, provenance-check the new code is
   IN the image, smoke through the image - never through mounted source.
-- `contracts/` - typed wire + registry contracts. `plugin/` - the QGIS
-  dock (installs as `trid3nt`). `tests/` - the offline suite.
+- `contracts/` - typed wire + registry contracts, with their own suite
+  in `contracts/tests` (slice 5) and their committed JSON Schema mirror
+  in `contracts/schemas` (regenerated, never hand-edited).
+- `plugin/` - the QGIS dock (installs as `trid3nt`). `tests/` - the
+  offline suite (slices 1-4).
   `scripts/` - drivers, smokes, image builds. `docs/` - decisions
   (ADRs), design (feature guides), validation, proof/templates (NEVER
   delete anything there).
 
 ## The laws
 
-1. Four-slice suite from repo root with `venvs/agent`:
+1. Five-slice suite from repo root with `venvs/agent`. Slices 1-4 are
+   the offline suite:
    `env -u TRID3NT_CACHE_BUCKET python -m pytest tests/test_[a-e]*.py
    -p no:cacheprovider --timeout=300 -q` (then `[f-o]`, `[p-r]`,
-   `[s-z]`). Baseline failures are EXACTLY 4 fetch_resolution in
-   [f-o] + 0 in [p-r]. Anything else: investigate - a flake claim
+   `[s-z]`). Slice 5 is the contracts suite:
+   `env -u TRID3NT_CACHE_BUCKET python -m pytest contracts/tests
+   -p no:cacheprovider --timeout=300 -q`. Slice 5 must stay its OWN
+   invocation: `tests/` and `contracts/tests/` are both packages named
+   `tests`, so a single pytest run covering both dies on
+   ImportPathMismatchError. Baseline is EXACTLY 4 fetch_resolution
+   failures in [f-o], 0 in [p-r], and slice 5 fully green at 789
+   passed / 0 failed. Anything else: investigate - a flake claim
    requires an isolation rerun as proof.
 2. Run gates FOREGROUND and wait for each summary line. Never
    background a gate and exit - your run dies with your process, and

@@ -492,9 +492,9 @@ class TelemacCoastalLayerURI(LayerURI):
     is peak depth over land that was DRY at t=0 - the planning quantity, the same
     discrimination ``flooded_land_km2`` counts. Beside it, ``role="context"``, the
     TOTAL peak water depth including the permanently submerged bay: where the
-    water is, rather than where the tide went. One raster used to be both, which
-    is how a permanently submerged bay floor came to render in an "inundation
-    depth" ramp.
+    water is, rather than where the tide went. The two must stay separate
+    rasters: one raster carrying both paints a permanently submerged bay floor
+    in an "inundation depth" ramp, which reads as flooding that never happened.
 
     The storm-tide analogue of the other TELEMAC layers: an open-water coastal
     domain (real NOAA DEM_all topobathy) with ONE seaward liquid boundary driven

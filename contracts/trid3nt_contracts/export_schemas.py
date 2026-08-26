@@ -37,7 +37,7 @@ _EXPORTS: list[tuple[str, type[BaseModel]]] = [
     # sprint-08 additions (Mode 1 catalog substrate, §F.1.2)
     ("catalog_entry_document", collections.CatalogEntryDocument),
     ("catalog_audit_log_document", collections.CatalogAuditLogDocument),
-    # PipelineStepSummary — exported standalone so the
+    # PipelineStepSummary - exported standalone so the
     # extended field surface (progress_percent / error_code / error_message)
     # is independently inspectable by the client mirror + agent emitter
     # (sprint-06 M4 pre-flight; closes OQ-W-26).
@@ -71,15 +71,33 @@ def default_output_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "schemas"
 
 
+#: The exact command that rewrites ``contracts/schemas`` from the live models.
+#: The drift gate quotes this verbatim, so it must stay runnable from repo root.
+REGEN_COMMAND = "./venvs/agent/bin/python -m trid3nt_contracts.export_schemas"
+
+
+def render_schemas() -> dict[str, str]:
+    """Serialize every contract's JSON Schema IN MEMORY: filename -> file text.
+
+    The single serialization path. ``export`` writes exactly what this returns,
+    so a drift gate can compare committed bytes against it without touching the
+    filesystem. Rendering must therefore be pure: no I/O, no mkdir.
+    """
+    rendered: dict[str, str] = {}
+    for stem, model in [*_EXPORTS, *_ws_message_exports()]:
+        schema = model.model_json_schema()
+        # sort_keys + trailing newline => stable, diff-friendly output.
+        rendered[f"{stem}.json"] = json.dumps(schema, indent=2, sort_keys=True) + "\n"
+    return rendered
+
+
 def export(output_dir: Path) -> list[Path]:
     """Write every contract's JSON Schema to ``output_dir``. Returns the paths."""
     output_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for stem, model in [*_EXPORTS, *_ws_message_exports()]:
-        schema = model.model_json_schema()
-        path = output_dir / f"{stem}.json"
-        # sort_keys + trailing newline => stable, diff-friendly output.
-        path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n")
+    for filename, text in render_schemas().items():
+        path = output_dir / filename
+        path.write_text(text)
         written.append(path)
     return written
 
