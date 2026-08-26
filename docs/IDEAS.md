@@ -1602,3 +1602,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   no supersession ceremony. Unlocks: the scripts/ audit (34k), server/
   web-era sweep, dead-path tests, composer leftovers outside workflows -
   chartered as the STALE SWEEP wave once the current three agents land.
+
+- tools/meta/ CHOP CANDIDATE (NATE 2026-08-26): "meta" is a junk-drawer
+  category-era label - named target for the STALE SWEEP wave. Expected
+  verdict: death by dispersal - code_exec_tool -> its own proper home
+  (the playground is load-bearing doctrine, not "meta"),
+  spatial_input_tool -> beside the gate/user-input machinery,
+  list_run_frames -> emission/display seam, compose_case_report ->
+  staleness check (who invokes it? aggressive posture applies),
+  passthroughs -> inspect. The folder dies even where the tenants live.
