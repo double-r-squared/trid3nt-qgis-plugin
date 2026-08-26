@@ -1632,3 +1632,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   until the calibration design harvests its shape; then dies under
   US-only, superseded by coastal-surge-vs-CO-OPS as the V&V exemplar,
   ledger row citing supersession.
+
+- DOCUMENTATION STANDARD CARRIED FORWARD (NATE 2026-08-26): code
+  comments/docstrings state CONSTRAINTS ONLY - no ADR/SRS/job-id
+  references, no HISTORY narration, and NO PERSON ATTRIBUTION ("NATE
+  ruling/NATE-provided/per NATE" in code is a violation - names live in
+  decision records: IDEAS, ADRs, ledgers, commit messages; the code
+  states the rule itself, not who made it or when). EFFECTIVE
+  IMMEDIATELY in every wave charter so the problem stops growing; the
+  BACKLOG (old ADR refs, name refs, era narration across the tree)
+  remediates in a DOCUMENTATION REFACTOR WAVE folded into the stale
+  sweep - mechanical scan: grep for ADR-\d+/SRS/FR-\d+/job-\d+/NATE in
+  *.py comments/docstrings, rewrite each as the constraint it protects
+  or delete if it protects nothing.
