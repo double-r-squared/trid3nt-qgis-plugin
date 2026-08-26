@@ -1,7 +1,7 @@
 # Worker LOC ledger - the worker dissolution
 
 Counting command: find workers/<dir> -name '*.py' | grep -v __pycache__ | xargs wc -l (physical lines);
-tests counted separately (files matching test_*). Baseline row 0 taken at $(git rev-parse --short HEAD)
+tests counted separately (files matching test_*). Baseline row 0 taken at 07764c32~1 (= 3c7053e2)
 BEFORE any dissolution wave. Target doctrine (IDEAS 2026-08-25): a worker is the
 ENGINE ROOM - solver + glue on a staged run dir; fetchers/mesh builders/baked
 values/fat tests all migrate or die. DoD = --network none.
