@@ -2091,3 +2091,21 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   supersedes DELETES per the demolition clause. Sequencing: calibration
   v1 runs on the current subprocess path; the bridge lands at the park
   and calibration v2 gains the warm loop.
+
+- THE FIVE-CATEGORY INPUT TAXONOMY + VERBS (NATE 2026-08-26): adopt the
+  classical simulation decomposition as the DECLARED classification of
+  every Param/slot member - GEOMETRY (mesh/domain) / BOUNDARY
+  CONDITIONS / INITIAL CONDITIONS / PHYSICAL PARAMETERS / NUMERICAL
+  PARAMETERS (spatial resolution, time steps) - retiring the ad-hoc
+  consequence vocabulary. Buys: form card grouped by category,
+  agnostic setter/rerun vocabulary ("override a boundary condition"
+  means the same on every engine), per-category sensitivity labeling,
+  trivial cross-engine generalization. VERBS as the mental model:
+  select (retrieval/template roster) -> collect (doors + substrate,
+  categorized) -> [author bridge adapts the agnostic JSON sheet to the
+  domain] -> solve -> emit. STEPPING DEMOTED to a capability flag on
+  the SteppableEngine bridge - run-to-completion stays the default
+  verb; stepping serves only warm calibration, live streaming, and the
+  digital-twin door. Emission unchanged and generalizes across DATA
+  TYPES (raster/mesh/vector/series/chart) on the one seam, never new
+  seams.
