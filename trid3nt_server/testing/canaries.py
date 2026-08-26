@@ -14,13 +14,18 @@ home, one registry, one runner:
 
     venvs/agent/bin/python -m trid3nt_server.testing.canaries <name>
 
-writes the run's evidence JSON and then assembles the DELIVERY PACKET from it -
-``scripts/assemble_proof_packet.py``, which renders every panel, chart and
-animation the checklist demands, verifies them mechanically, and writes the
-ordered ``packet.json`` a reader is handed. A canary that solves but cannot be
-delivered exits non-zero, because "did we send the GIF" is not a question anybody
-should be answering from memory. Proof RENDERING stays out of the product tree by
-ruling; the declaration does not.
+writes the run's evidence JSON and, for a DELIVERING variant, assembles the
+delivery packet from it - ``scripts/assemble_proof_packet.py``, which renders
+every panel, chart and animation the checklist demands, verifies them
+mechanically, and writes the ordered ``packet.json`` a reader is handed. Such a
+canary that solves but cannot be delivered exits non-zero, because "did we send
+the GIF" is not a question anybody should be answering from memory. Proof
+RENDERING stays out of the product tree by ruling; the declaration does not.
+
+THE COARSE VARIANT DELIVERS NOTHING. It is the SILENT-PIN lane - its evidence
+JSON is the whole artifact, compared run against run to catch drift - so it
+assembles no packet and its folder holds no delivery renders. Only the flagship
+refined variant is handed to a reader.
 
 DEMO VALUES LIVE IN THE DECLARATION. A canary's location, window and station are
 here, in a labeled declaration, never as a constant inside workflow code.
@@ -41,6 +46,11 @@ from .proof_paths import split_variant
 
 __all__ = ["CANARIES", "PROOF_ANIMATIONS", "assemble_packet", "evidence_path",
            "main", "run"]
+
+#: The variant that delivers NOTHING. Its evidence JSON is the whole artifact and
+#: its folder must stay free of delivery renders, so the packet step is skipped
+#: for it rather than pointed at a folder that may not hold what it would write.
+_SILENT_PIN_VARIANT = "coarse"
 
 #: Re-exported so the canary registry and the animation ruling read as one
 #: declaration surface: this file says WHAT to run, ``proof_animations`` says
@@ -132,9 +142,14 @@ CANARIES: dict[str, LiveRun] = {
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),
-    # The sheltering question on a real harbour: the surveyed breakwater comes
-    # from OSM and is meshed as a thin solid barrier over the real lake bed, so
-    # the sheltered/exposed pair is a measurement rather than a schematic.
+    # The OPEN-WATER pin for the phase-resolving diffraction solve. No
+    # ``structure`` is supplied, so the slot binds to None and the domain solves
+    # unsheltered - every Kd here is the free-field response, not a sheltering
+    # measurement. What it pins is the pairing underneath: the real NOAA Great
+    # Lakes lake-datum bed feeding a Berkhoff solve on one AOI, so a drift in the
+    # Kd field has exactly one cause. Filling the slot is a THREE-way contract -
+    # a fetched layer, a drawn polyline, or nothing - and belongs where all three
+    # run against each other: scripts/drive_artemis_structure_slot.py.
     "artemis_harbor_agitation": LiveRun(
         tool="artemis_harbor_agitation",
         args={
@@ -438,6 +453,11 @@ def main(argv: list[str] | None = None) -> int:
         # An evidence file written somewhere other than the canonical proof path
         # has no variant folder to assemble into, so the packet step is skipped
         # rather than pointed at a directory it does not own.
+        return 0
+    if split_variant(ns.name)[1] == _SILENT_PIN_VARIANT:
+        # The coarse variant is the SILENT-PIN lane: it carries its evidence JSON
+        # and nothing else. Assembling a packet here would write the delivery
+        # artifacts the flagship folder owns into a folder that must not hold them.
         return 0
     try:
         packet = assemble_packet(ns.name)
