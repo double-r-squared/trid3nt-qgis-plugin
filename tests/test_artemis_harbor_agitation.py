@@ -123,12 +123,32 @@ def test_a_supplied_structure_is_meshed_whatever_form_it_arrived_in():
             == deck["config"]["breakwater_polylines"])
 
 
-def test_an_unfilled_structure_slot_solves_open_water_and_says_so():
+def test_an_unfilled_structure_slot_asks_for_nothing():
     """Absence is an ANSWER, not a reason to go looking.
 
-    The step used to call Overpass itself here and, when that came back empty,
-    mesh "a LABELED schematic breakwater" nobody asked for - inventing the very
-    thing the run was asked to evaluate.
+    The step interprets the slot and nothing else: an unfilled slot puts no
+    structure on the deck, so nothing downstream can read a request that was
+    never made.
+    """
+    from trid3nt_server.workflows.telemac.steps.agitation import (
+        write_agitation_deck,
+    )
+
+    aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
+           "bbox": (-87.392, 46.528, -87.368, 46.550)}
+    deck = asyncio.run(write_agitation_deck(
+        aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
+    assert deck["breakwater_polylines"] is None
+    assert "breakwater_polylines" not in deck["config"]
+
+
+def test_the_structure_row_reports_the_solve_not_the_request():
+    """The deck says what was ASKED for; only the solve knows what was MESHED.
+
+    The real-bathymetry builder meshes a schematic barrier when the deck names
+    none, so reading the request back would report open water on a domain that
+    carries a barrier. Three answers, and none of them may read alike: meshed
+    nothing, meshed something nobody asked for, and did not say.
     """
     from trid3nt_server.workflows.telemac.steps.agitation import (
         _structure_row,
@@ -139,11 +159,23 @@ def test_an_unfilled_structure_slot_solves_open_water_and_says_so():
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
     deck = asyncio.run(write_agitation_deck(
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
-    assert deck["breakwater_polylines"] is None
-    assert "breakwater_polylines" not in deck["config"]
-    row = _structure_row(deck)
-    assert row.param == "structure" and row.value is None
-    assert "OPEN WATER" in row.note
+
+    confirmed = _structure_row(deck, {"structure_present": False, "bw_label": ""})
+    assert confirmed.value is None and "OPEN WATER" in confirmed.note
+
+    meshed = _structure_row(
+        deck, {"structure_present": True,
+               "bw_label": "schematic demo breakwater (labeled)"})
+    assert meshed.value == "not_supplied_but_meshed"
+    assert "did NOT run open water" in meshed.note
+    assert "schematic demo breakwater" in meshed.note
+    assert "OPEN WATER" not in meshed.note, (
+        "a domain carrying an unrequested barrier must never read as open water")
+
+    silent = _structure_row(deck, {})
+    assert silent.value is None and "UNMEASURED" in silent.note
+    assert "OPEN WATER" not in silent.note, (
+        "an unmeasured structure is not the same fact as no structure")
 
 
 def test_the_step_module_makes_no_network_call_of_its_own():

@@ -168,28 +168,56 @@ def _bathy_label(real: bool, wave_mode: str, lake: str | None) -> str:
             "real bathymetry for this AOI)")
 
 
-def _structure_row(deck: dict[str, Any]) -> SyntheticInput:
-    """WHAT was meshed as the barrier, or that nothing was.
+def _structure_row(deck: dict[str, Any], metrics: dict[str, Any]) -> SyntheticInput:
+    """WHAT was meshed as the barrier, read off the SOLVE and not off the deck.
 
-    Two cases, not three: the structure the caller SUPPLIED, or open water. There
-    is no third case for an invented schematic breakwater - a structure nobody
-    asked for, in a run about whether a structure shelters anything, is the one
-    answer this row must never be able to report.
+    The deck says what was ASKED for; only the worker knows what it meshed, and
+    it echoes that as ``bw_label`` / ``structure_present``. This row must report
+    the echo, because a run whose domain carries a barrier the caller never
+    supplied is exactly the answer a sheltering question must never quietly
+    give, and reading the request back would report the absence rather than the
+    barrier.
+
+    A solve that echoes nothing gets a row that says so. An unmeasured structure
+    is not the same fact as no structure, and the two must not read alike.
     """
     lines = deck.get("breakwater_polylines")
+    echoed = str(metrics.get("bw_label") or "").strip()
+    present = metrics.get("structure_present")
+
     if lines:
         return SyntheticInput(
             param="structure", value=f"supplied_{len(lines)}_lines",
             basis="user", consequence="scenario",
             note=(f"the structure supplied for this run ({len(lines)} line"
                   f"{'s' if len(lines) != 1 else ''}), meshed as a thin solid "
-                  "barrier"))
+                  f"barrier{'; the solve reports: ' + echoed if echoed else ''}"))
+
+    if present and echoed:
+        return SyntheticInput(
+            param="structure", value="not_supplied_but_meshed",
+            basis="derived", consequence="scenario",
+            note=("NO structure was supplied, but the solve did NOT run open "
+                  f"water: it reports {echoed}. Every Kd here is sheltered by a "
+                  "barrier this run never asked for, so it is not a free-field "
+                  "response and not a measurement of anything supplied. Hand the "
+                  "slot a breakwater layer (fetch_osm_breakwaters) or a drawn "
+                  "line to model a structure you chose."))
+
+    if present is None:
+        return SyntheticInput(
+            param="structure", value=None, basis="derived", consequence="scenario",
+            note=("NO structure was supplied, and the solve reported nothing "
+                  "about what it meshed, so whether this domain carries a "
+                  "barrier is UNMEASURED. Do not read these Kd values as a "
+                  "free-field response."))
+
     return SyntheticInput(
         param="structure", value=None, basis="derived", consequence="scenario",
-        note="NO structure was supplied, so the domain was solved as OPEN WATER: "
-             "every Kd here is the unsheltered response. Hand the slot a "
-             "breakwater layer (fetch_osm_breakwaters) or a drawn line to model "
-             "one.")
+        note="NO structure was supplied, and the solve confirms it meshed none: "
+             "the domain was solved as OPEN WATER and every Kd here is the "
+             "unsheltered response. Hand the slot a breakwater layer "
+             "(fetch_osm_breakwaters) or a drawn line to model one.")
 
 
 def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[SyntheticInput]:
@@ -212,7 +240,7 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             note=deck["bathy_label"]),
     ]
     if deck["wave_mode"] == "diffraction":
-        rows.append(_structure_row(deck))
+        rows.append(_structure_row(deck, metrics))
     return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
 
 

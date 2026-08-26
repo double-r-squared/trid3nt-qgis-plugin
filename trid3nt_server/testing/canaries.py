@@ -142,14 +142,19 @@ CANARIES: dict[str, LiveRun] = {
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),
-    # The OPEN-WATER pin for the phase-resolving diffraction solve. No
-    # ``structure`` is supplied, so the slot binds to None and the domain solves
-    # unsheltered - every Kd here is the free-field response, not a sheltering
-    # measurement. What it pins is the pairing underneath: the real NOAA Great
-    # Lakes lake-datum bed feeding a Berkhoff solve on one AOI, so a drift in the
-    # Kd field has exactly one cause. Filling the slot is a THREE-way contract -
-    # a fetched layer, a drawn polyline, or nothing - and belongs where all three
-    # run against each other: scripts/drive_artemis_structure_slot.py.
+    # The UNFILLED-SLOT pin for the phase-resolving diffraction solve. No
+    # ``structure`` is supplied, and what the domain then carries is the worker's
+    # answer, not this declaration's: the real-bathymetry builder still meshes a
+    # schematic barrier when the deck names none, and forces the incident heading
+    # to 90 deg when it does, so the Kd field here is NOT a free-field response
+    # and the declared wave_direction_deg is not necessarily what was solved. The
+    # structure row reads the solve's own echo rather than this deck, so the
+    # provenance states whichever happened. What the canary pins is the pairing
+    # underneath: the real NOAA Great Lakes lake-datum bed feeding a Berkhoff
+    # solve on one AOI, so a drift in the Kd field has exactly one cause.
+    # Filling the slot is a THREE-way contract - a fetched layer, a drawn
+    # polyline, or nothing - and belongs where all three run against each other:
+    # scripts/drive_artemis_structure_slot.py.
     "artemis_harbor_agitation": LiveRun(
         tool="artemis_harbor_agitation",
         args={
