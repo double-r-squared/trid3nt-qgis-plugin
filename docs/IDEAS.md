@@ -1358,3 +1358,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   uniform-grid run (same harbor, same forcing, same question): does
   adaptive fidelity sharpen Kd fringes + the sheltering answer. One run
   exercises every mesh-charter pillar end to end.
+
+- CONFORMAL ENFORCEMENT REQUIRED (NATE 2026-08-25, BYO rematch
+  refinement): enforcement geometry must be CONFORMING in the generated
+  mesh - the obstacle/barrier polyline becomes a CONSTRAINED BOUNDARY:
+  nodes placed ON the polyline, element edges coincident with it, zero
+  gap/offset between the declared geometry and the mesh (vs the worker's
+  stair-step grid approximation, offset up to cell/2). OceanMesh/gmsh
+  support this natively (shoreline-conforming meshing). ACCEPTANCE
+  (rides the artemis BYO rematch): measured max distance from the
+  barrier polyline to the nearest coincident mesh edge ~ 0 within vertex
+  tolerance, plus the zoom-crop showing edges tracking the line exactly.
