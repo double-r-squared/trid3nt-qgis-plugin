@@ -1424,3 +1424,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   laddered, provenance-stamped inputs - half the point of calibrating)
   -> mesh wave pulls the mesh builders. The worker dissolution completes
   across these waves, not as one.
+
+- WORKER DOCTRINE RATIONALE: CLOUD-READY BY ENCAPSULATION (NATE
+  2026-08-25): the black box is not hygiene, it is deployment strategy -
+  compose the sim's complete inputs server-side, ship the staged run
+  directory to the box WHEREVER it lives (local docker today, EC2/Batch
+  tomorrow), collect results. The staged dir IS the job submission
+  (stage->submit->collect, the native HPC grammar); this is why the
+  compute tier was preserved - compute_class maps to container resources
+  locally, instance types/queues in cloud, values unchanged. MIGRATION
+  TEST for the fetch-migration wave: "would this code change if the box
+  moved to EC2?" - yes -> server tier (fetchers/publishing/values), no ->
+  stays (staged-inputs->solver-files, run binary, write results).
+  Dividends: statelessness = spot/s2z safe; --network none locally =
+  no-egress groups in cloud (one guarantee, two enforcements); the run
+  dir = the reproducibility artifact the rerun primitive + calibration
+  pin. FUTURE DOOR, not built: a declared box-side reduce stage if cloud
+  result-transfer costs ever bite (mechanism only, manifest-listed).
