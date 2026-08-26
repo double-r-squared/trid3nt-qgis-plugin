@@ -241,3 +241,26 @@ moved every sampled node.
 one that died, and it dies the same way - but only once its bed is a declared
 producer too, and that is blocked on a NATE ruling and a measured parity question
 (ADR 0317, "What this ADR deliberately does not do").
+
+### Gate results, verbatim
+
+| gate | result |
+|---|---|
+| image provenance | every product `.py` in `trid3nt-local/telemac:latest` sha256-identical to `workers/telemac/`; only `test_entrypoint.py` differs, trimmed by `.dockerignore` |
+| network denial | `docker run --network none trid3nt-local/telemac:latest` -> `socket.create_connection('gis.ngdc.noaa.gov', 443)` raises `gaierror [Errno -3] Temporary failure in name resolution` |
+| byte parity of the migrated fetch | router body 262982 bytes sha256 `ffa0579f...` == worker body 262982 bytes sha256 `ffa0579f...` (coastal canary bbox) |
+| family canaries | 8 runs. coastal / tomawac / telemac3d / river_dye-refined / rain_on_grid / artemis-resonance metric-IDENTICAL; artemis-agitation MOVED by the demo_bw chop; do_sag-refined identical on re-run (flake, see ADR 0317) |
+| artemis refined flagship packet | PASS, 8 deliverables, 2 layers |
+| offline suite | 12370 passed, 17 skipped, 1 xfailed, **0 failed** (the documented baseline was 6: fetch_resolution x4 + river_dye x2) |
+| contracts | 789 passed |
+| ws_smoke | all_passed=True |
+| retrieval, `retrieve_visible_tools(prompt, None, 8)` | `fetch_ncei_dem_mosaic` 6/6 HIT, top-2 on every query |
+
+BLOCKED, upstream, not by this wave: the REFINED coastal flagship packet. NOAA
+CO-OPS returned HTTP 504 on both `mdapi/.../stations.json` and
+`mdapi/.../stations/8728690/datums.json` for over half an hour. The refusal is the
+correct one and reads verbatim: "CO-OPS station 8728690 published datums could not
+be read (HTTP Error 504: Gateway Timeout); the MLLW series cannot be reconciled
+with the [NAVD88 bed]" - a typed `TIDE_SERIES_UNAVAILABLE`, never an assumed zero
+offset. The datum numbers the flagship pins are carried by the COARSE pin, which
+ran green and identical: `datum_offset_m -0.232`, `peak_wl_m 3.4863`.
