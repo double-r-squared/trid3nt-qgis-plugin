@@ -60,7 +60,6 @@ def sidecar_uri(spec: SourceSpec, params: dict[str, Any], ext: str) -> str:
 def _write_sidecar(spec: SourceSpec, params: dict[str, Any], ext: str, payload: dict[str, Any]) -> None:
     """Best-effort put_object of the declared sidecar (never fails the fetch)."""
     try:
-        import boto3
 
         uri = sidecar_uri(spec, params, ext)
         rest = uri[len("s3://"):]

@@ -1323,7 +1323,6 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     so the handler degrades to the live Overpass-by-id fallback.
     """
     try:
-        import boto3
 
         from trid3nt_server.tools.cache import CACHE_BUCKET, cache_path
         # fetch_buildings is folded to the router: the sidecar identity

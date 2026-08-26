@@ -49,7 +49,6 @@ def persist_run_activations(
     try:
         from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
-        import boto3
 
         bucket = _get_runs_bucket()
         key = f"{run_id}/{ACTIVATIONS_KEY}"

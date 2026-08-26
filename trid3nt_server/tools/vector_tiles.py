@@ -475,7 +475,6 @@ def write_pmtiles_to_object_store(pmtiles_bytes: bytes, key: str) -> str:
     client-reachable URL via the (future) serving face; this helper never hands
     the client a bucket URI directly (Invariant 5).
     """
-    import boto3  # type: ignore[import-not-found]
 
     bucket = (
         os.environ.get("TRID3NT_RUNS_BUCKET")

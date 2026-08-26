@@ -720,7 +720,7 @@ async def _read_vector_uri_as_geojson(uri: str) -> dict[str, Any] | None:
     failure. Runs in a thread pool so the synchronous read + pyogrio call
     doesn't block the asyncio loop.
     """
-    # s3:// reads go through boto3 (EC2 instance-role);
+    # s3:// reads go through the ONE object-store seam;
     # everything else is a local path read via fsspec.
     if "://" in uri:
         key = uri.split("://", 1)[1].split("/", 1)[-1]
