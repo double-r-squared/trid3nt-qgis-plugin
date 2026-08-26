@@ -922,9 +922,19 @@ def _solve_shoal(cfg: ArtemisConfig, data_dir: str, run_id):
     """Berkhoff-Booij-Radder (1982) elliptic shoal focusing (idealized; gotcha 7)."""
     dx = float(cfg.target_resolution_m or 0.15)
     dx = max(min(dx, 0.25), 0.1)
+    # The Berkhoff shoal is a laboratory V&V case: its incident wave is part of
+    # the published setup, so a harbour-scale ask is REPLACED rather than solved.
+    # That is legitimate; doing it silently was not - the run reported the wave
+    # the caller asked for while solving a different one. Both overrides are
+    # echoed in the metrics below.
     H0 = float(cfg.wave_height_m if cfg.wave_height_m and cfg.wave_height_m < 0.2
                else 0.0464)
     T = float(cfg.wave_period_s if 0.5 <= cfg.wave_period_s <= 2.0 else 1.0)
+    overrides = {}
+    if abs(H0 - float(cfg.wave_height_m or 0.0)) > 1e-9:
+        overrides["wave_height_m_asked"] = float(cfg.wave_height_m or 0.0)
+    if abs(T - float(cfg.wave_period_s or 0.0)) > 1e-9:
+        overrides["wave_period_s_asked"] = float(cfg.wave_period_s or 0.0)
     Lx, Ly = 30.0, 35.0
     mesh = build_mesh(Lx, Ly, dx, berkhoff_bottom, dy=dx)
     wdir = -90.0
@@ -979,6 +989,7 @@ def _solve_shoal(cfg: ArtemisConfig, data_dir: str, run_id):
         "chart_kind": "shoal_axis_transect",
         "bathy_label": "EXACT Berkhoff-Booij-Radder (1982) elliptic-shoal "
                        "bathymetry (analytic refraction-focusing V&V)",
+        **overrides,
     })
     LOG.info("artemis shoal ok: kd_focus_peak=%.2f wall=%s",
              metrics["kd_focus_peak"], metrics.get("wall_s"))

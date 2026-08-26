@@ -332,6 +332,11 @@ def run_pipeline(
                     bank_source = "nhd_area"
                     _banks_available = True
                     bank_stats = {
+                        # ECHOED, always: the discharge the solve actually ran on.
+                        # The rescale above was only ever LOGGED, so a run whose
+                        # carrier flow the worker had raised still narrated the
+                        # value the caller asked for.
+                        "inflow_q_m3s": float(cfg.inflow_q_m3s),
                         "bank_valid_frac": frac,
                         "bank_width_min_m": round(float(2 * halfw.min()), 1),
                         "bank_width_mean_m": round(float(2 * halfw.mean()), 1),
@@ -1257,10 +1262,11 @@ class CoastalManifestUnknownFieldsError(ValueError):
 #: COASTAL PARSER VERSION -- bump on a CoastalConfig field
 #: addition/rename/retirement OR a coastal worker-output-contract change; doubles
 #: as the coastal-tidal worker-image/behavior provenance marker.
-#: -2 adds the universal cadence lever ``output_interval_min`` (minutes between
-#: frames -> graphic_period, ADR 0283) to CoastalConfig; None keeps the computed
-#: ~40-frame default. INERT until this image is rebuilt.
-_COASTAL_PARSER_VERSION = "coastal-tidal-2"
+#: THE stamp is the BUILDER's, read where it is needed rather than restated here:
+#: a second copy gave the metrics and the refusal message two different version
+#: numbers for one parser. Declared in
+#: ``telemac_coastal_build.COASTAL_PARSER_VERSION``, and imported lazily like
+#: every other worker-payload symbol so this module still imports offline.
 
 
 def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
@@ -1272,7 +1278,10 @@ def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
     not a CoastalConfig field (solve takes it as an argument); 'mode' is the
     routing key, not a field.
     """
-    from telemac_coastal_build import CoastalConfig  # noqa: WPS433 -- worker payload
+    from telemac_coastal_build import (  # noqa: WPS433 -- worker payload
+        COASTAL_PARSER_VERSION,
+        CoastalConfig,
+    )
 
     import dataclasses
 
@@ -1289,7 +1298,7 @@ def _coastal_config(data_dir: Path, overrides: dict[str, Any]) -> Any:
     if unknown:
         raise CoastalManifestUnknownFieldsError(
             f"manifest.json['coastal'] carries unknown field(s) {sorted(unknown)} "
-            f"that parser {_COASTAL_PARSER_VERSION} does not read -- this SILENTLY "
+            f"that parser {COASTAL_PARSER_VERSION} does not read -- this SILENTLY "
             f"no-ops the intended coastal knob(s) rather than applying them. Either "
             f"the caller has a typo, or the worker image is stale (rebuild it -- "
             f"ADR 0148). Known CoastalConfig fields: {sorted(valid)}."

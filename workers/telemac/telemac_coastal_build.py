@@ -50,8 +50,14 @@ import numpy as np
 LOG = logging.getLogger("telemac_coastal")
 
 #: worker-image / behavior provenance marker (mirrors _TOMAWAC_PARSER_VERSION).
-#: -2 adds the output_interval_min cadence lever (ADR 0283).
-COASTAL_PARSER_VERSION = "coastal-tidal-3"
+#: THE ONE STAMP for this leg - the entrypoint imports it rather than declaring a
+#: second, because two stamps for one parser gave a manual provenance check two
+#: answers depending on which file it read.
+#: -2 added the output_interval_min cadence lever (ADR 0283).
+#: -4 fills the geometry SELAFIN's X-ORIGIN / Y-ORIGIN header so the published
+#: result mesh lands on the domain rather than at the UTM false origin, and
+#: echoes the origin in the metrics.
+COASTAL_PARSER_VERSION = "coastal-tidal-4"
 
 #: NOAA NGDC DEM_all topobathy mosaic ImageServer -- the SAME real-bathymetry
 #: source the TOMAWAC lake path samples (negative below the DEM's own vertical
@@ -302,6 +308,12 @@ def build_coastal_mesh(cfg: CoastalConfig):
         coarsened = True
 
     mesh = _build_grid(Lx, Ly, dx)
+    # The grid is laid LOCAL (node 0 at 0,0), so the domain's SW corner in UTM is
+    # what makes it a place. It is kept on the mesh (not just used and dropped)
+    # because the SELAFIN header carries it: X-ORIGIN / Y-ORIGIN are INTEGER
+    # metres in the Fortran (read_mesh_info.f), so they round here.
+    mesh["x_origin_m"] = int(round(min(x0, x1)))
+    mesh["y_origin_m"] = int(round(min(y0, y1)))
     back = Transformer.from_crs(epsg, 4326, always_xy=True)
     xabs = mesh["X"] + min(x0, x1)
     yabs = mesh["Y"] + min(y0, y1)
@@ -378,6 +390,7 @@ def build_coastal_mesh(cfg: CoastalConfig):
     # rather than from what was built is how a rounded corner offsets the field.
     meta = dict(utm_epsg=epsg, dx_m=round(dx, 1), coarsened=coarsened,
                 bbox=[float(v) for v in bbox],
+                x_origin_m=mesh["x_origin_m"], y_origin_m=mesh["y_origin_m"],
                 ocean_edge=ocean_edge, n_ocean_nodes=n_ocean,
                 n_wet_nodes=int(wet.sum()), depth_max_m=depth_max,
                 topo_max_m=topo_max, bathy_source=src)
@@ -388,13 +401,26 @@ def build_coastal_mesh(cfg: CoastalConfig):
 # 2. SELAFIN geometry + boundary-conditions (.cli) writers (river_dye family)
 # ---------------------------------------------------------------------------
 def write_slf(mesh, path):
+    """The coastal GEOMETRY SELAFIN - local metres, with the origin in the header.
+
+    The mesh coordinates are local (node 0 at the domain's SW corner) and stay
+    that way, because the solver's own arithmetic is happiest near zero. What was
+    missing is the header telling a reader WHERE zero is: SELAFIN carries
+    X-ORIGIN / Y-ORIGIN in IPARAM(3)/(4), TELEMAC copies them from the geometry
+    into the results file (``read_mesh_info.f`` -> ``write_mesh.f``), and MDAL
+    honours them - so the animated result mesh lands on the bay instead of at the
+    UTM zone's false origin, ~1600 km away. Integer metres: the Fortran declares
+    X_ORIG as an INTEGER.
+    """
     from data_manip.extraction.telemac_file import TelemacFile
     if os.path.exists(path):
         os.remove(path)
     tf = TelemacFile(path, access="w")
     tf.add_header(f"COASTAL {os.path.basename(path)}",
                   date=np.array([2026, 8, 14, 0, 0, 0]))
-    tf.add_mesh(mesh["X"], mesh["Y"], mesh["ikle"], z=mesh["Z"])
+    tf.add_mesh(mesh["X"], mesh["Y"], mesh["ikle"], z=mesh["Z"],
+                orig=(int(mesh.get("x_origin_m") or 0),
+                      int(mesh.get("y_origin_m") or 0)))
     tf._ipob3 = mesh["ipob"].astype(np.int32)
     tf._ipob2 = tf._ipob3
     tf._nptfr = int(mesh["nptfr"])
