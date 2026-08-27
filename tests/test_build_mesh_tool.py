@@ -399,3 +399,57 @@ def test_probes_measure_the_lattice(tmp_path):
     assert probes["min_angle_deg"] == pytest.approx(90.0, abs=1e-6)
     assert probes["edge_length_m"]["mean"] == pytest.approx(400.0, rel=0.05)
     assert len(probes["edge_length_m"]["histogram"]["counts"]) == 10
+
+
+# --------------------------------------------------------------------------- #
+# The measured edge travels with the artifact, and the timestep reads it.
+# --------------------------------------------------------------------------- #
+def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    art = session.accept()
+    assert art.probes["node_count"] == art.node_count
+    assert art.probes["edge_length_m"]["min"] > 0.0
+
+
+def test_the_measured_minimum_edge_is_read_off_the_artifact(tmp_path):
+    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+
+    art = MeshSession(_declaration(), workdir=tmp_path).accept()
+    assert measured_min_edge_m(art) == pytest.approx(
+        art.probes["edge_length_m"]["min"])
+
+
+@pytest.mark.parametrize("art", [
+    None,
+    _artifact(),                                        # never probed
+    _artifact(probes={"node_count": 12}),               # probed, but cell-less
+    _artifact(probes={"edge_length_m": {"min": 0.0}}),  # a degenerate measurement
+])
+def test_an_unmeasured_mesh_reports_no_minimum_edge(art):
+    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+
+    assert measured_min_edge_m(art) is None
+
+
+def test_the_timestep_follows_the_measured_edge_not_the_requested_one():
+    """Gate-time refinement tightens dt without anybody restating the number.
+
+    The ask stays at a coarse edge and the mesh that was BUILT is finer, so the
+    CFL-safe step has to come off the mesh; reading the ask would hand the solver
+    a step the mesh it runs on cannot carry.
+    """
+    from trid3nt_server.workflows.telemac.steps.reach import suggest_time_step_s
+
+    requested = suggest_time_step_s(40.0)
+    refined = suggest_time_step_s(
+        40.0, mesh=_artifact(probes={"edge_length_m": {"min": 8.0}}))
+    assert requested == 1.0
+    assert refined == pytest.approx(0.4)
+
+
+def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
+    """An estimate made before any mesh exists has only the ask to go on."""
+    from trid3nt_server.workflows.telemac.steps.reach import suggest_time_step_s
+
+    assert suggest_time_step_s(10.0) == suggest_time_step_s(10.0, mesh=None)
+    assert suggest_time_step_s(10.0, mesh=_artifact()) == 0.5

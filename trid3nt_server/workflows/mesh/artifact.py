@@ -43,6 +43,7 @@ __all__ = [
     "write_mesh_artifact_sidecar",
     "read_mesh_artifact_sidecar",
     "find_case_mesh_artifacts",
+    "measured_min_edge_m",
     "mesh_compatible_with_engine",
     "open_boundary_node_count",
     "materialize_hecras_mesh_inputs",
@@ -82,6 +83,11 @@ class MeshArtifact:
     utm_epsg: int | None = None
     #: The ``mesh_recipe.jsonl`` (spec + ordered edit chain) this mesh replays from.
     recipe_uri: str | None = None
+    #: What was MEASURED on the accepted topology - counts, the edge-length band and
+    #: its histogram, min angle, boundary segments, plus whatever the mesher measured
+    #: about its own build. A consumer that needs the finest edge reads it here
+    #: rather than re-deriving it from the ask, which is only what was requested.
+    probes: dict[str, Any] = field(default_factory=dict)
     engine_compat: list[str] = field(default_factory=list)
     gr3_uri: str | None = None
     fort14_uri: str | None = None
@@ -130,6 +136,23 @@ def open_boundary_node_count(art: MeshArtifact) -> int:
         return int((art.open_boundary_info or {}).get("open_node_count", 0) or 0)
     except Exception:  # noqa: BLE001
         return 0
+
+
+def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
+    """The SHORTEST edge measured on this mesh, in metres; ``None`` when unmeasured.
+
+    A stability criterion is a statement about the mesh that exists, not about the
+    edge somebody asked for - and gate-time refinement moves the two apart. A mesh
+    whose cells the engine realizes has no edges here to measure, and says so by
+    answering None rather than by quoting the ask back."""
+    edges = ((art.probes if art is not None else None) or {}).get("edge_length_m")
+    if not isinstance(edges, dict):
+        return None
+    try:
+        value = float(edges.get("min"))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0.0 else None
 
 
 #: Engine -> the mesh format + facts that engine's solver REQUIRES. A mesh is

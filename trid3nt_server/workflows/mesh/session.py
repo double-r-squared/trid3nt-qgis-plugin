@@ -176,6 +176,7 @@ class MeshSession:
             node_count=mesh.node_count, element_count=mesh.element_count,
             bbox=_lonlat_bbox(mesh), engine_compat=engine_compat,
             utm_epsg=mesh.meta.get("utm_epsg"), provenance=provenance,
+            probes=self.probes(),
             recipe_uri=recipe_uri, case_id=self.case_id,
             **self._staged_files(mesh), **declared)
         stash_mesh_artifact(self.case_id, art)

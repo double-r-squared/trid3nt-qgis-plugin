@@ -114,9 +114,19 @@ _TELEMAC_NODE_STEPS_PER_S: float = 377_000.0
 _TELEMAC_SOLVE_OVERHEAD_S: float = 45.0
 
 
-def suggest_time_step_s(mesh_size_m: float) -> float:
-    """CFL-safe TELEMAC timestep for a given mesh edge length."""
-    h = max(float(mesh_size_m), MESH_H_FLOOR_M)
+def suggest_time_step_s(mesh_size_m: float, *, mesh: Any = None) -> float:
+    """CFL-safe TELEMAC timestep for the mesh a run will actually solve on.
+
+    A BUILT mesh knows its own shortest edge, and that is what the stability
+    criterion is about; ``mesh_size_m`` is the edge that was REQUESTED, which is
+    all an estimate made before any mesh exists can honestly use. So a mesh
+    artifact wins when one is supplied - refine a region at the gate and dt
+    tightens with it, without anybody restating the number.
+    """
+    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+
+    measured = measured_min_edge_m(mesh)
+    h = max(float(mesh_size_m if measured is None else measured), MESH_H_FLOOR_M)
     dt = TIMESTEP_REF_S * min(1.0, h / MESH_TIMESTEP_REF_M)
     return round(max(dt, TIMESTEP_FLOOR_S), 3)
 
