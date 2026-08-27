@@ -63,7 +63,8 @@ def test_build_mesh_registered_and_the_standalone_builder_is_gone():
 
 def test_the_roster_is_every_mesher_the_wave_lifted():
     assert registered_meshers() == (
-        "coastal_edge", "corridor_tin", "hecras_rog", "reg_grid", "watershed")
+        "coastal_edge", "corridor_tin", "hecras_rog", "om2d", "reg_grid",
+        "telapy_mesh", "watershed")
 
 
 def test_the_edge_band_declaration_survived_the_dissolution():

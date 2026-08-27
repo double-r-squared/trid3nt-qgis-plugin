@@ -24,3 +24,11 @@ build_mesh:
 - generate a HEC-RAS mesh refined to the channel network for a design-storm run
 - mesh the river reach I am modeling, following the real banks not a ribbon
 - build the corridor mesh for this reach before authoring the deck
+- use OceanMesh2D to mesh this coast, sized by distance to shore and by depth
+- adopt a mesh somebody else built and let me edit it here
+- bring my own geometry file in as the domain instead of generating one
+- punch a breakwater out of the mesh and keep the cut on its outline
+- cut an island or a structure out of the water and mesh around it
+- refine the mesh inside the region I drew, leave the rest alone
+- mark the seaward edge as the open boundary so a tide can be forced there
+- classify which side of the domain is open water and which is a wall

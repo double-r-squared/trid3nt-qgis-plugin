@@ -581,3 +581,29 @@ NOT COUNTED: the 37 lines added to `tests/test_mesh_meshers.py` (515 -> 552).
 **The campaign net is +5763** - the true running sum of every delta in the
 tables above, from wave 2's first row to the mesh wave's slices 2 and 3 and their
 review.
+
+## Mesh wave - slices 2 + 6: the two library wrappers, and the measured cut (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh slices 2+6 | `meshers/om2d.py` NEW - the OceanMesh2D wrapper: the shoreline domain, the bed the sizing reads, the box seam, the four edit actions, the measured conformal offset and the per-side bed the seaward designation is chosen on | 0 | 631 | +631 | +6394 |
+| 2026-08-27 | mesh slices 2+6 | `meshers/telapy_mesh.py` NEW - the TELEMAC-geometry wrapper: adoption through HermesFile, the punch/refine/classify ops, and the `.slf`+`.cli` pair every mesher writes through it | 0 | 505 | +505 | +6899 |
+| 2026-08-27 | mesh slices 2+6 | `meshers/__init__.py` (+45 - `checked_refine`, the by-name check for the knobs inside a refine block; `Mesher.deterministic`, a measured claim about the library) | 349 | 394 | +45 | +6944 |
+| 2026-08-27 | mesh slices 2+6 | `workflows/mesh/tool.py` (+9 - the two new meshers on the roster and in the tool's own routing docstring) | 434 | 443 | +9 | +6953 |
+| 2026-08-27 | mesh slices 2+6 | `workflows/mesh/session.py` (+7 - the recipe's spec line carries `determinism: false` for a mesher that does not reproduce itself) | 494 | 501 | +7 | +6960 |
+| 2026-08-27 | mesh slices 2+6 | `workflows/mesh/artifact.py` (+3 - `cli_uri`, the TELEMAC boundary file written from this geometry's own numbering) | 369 | 372 | +3 | +6963 |
+
+**Verdict: +1,200, and it is the whole of two new capabilities.** Nothing was
+replaced here - `om2d` and `telapy_mesh` are meshers the tool did not have, so
+every line is addition rather than absorption. What the size buys, per file:
+`om2d` carries a rebuild state (an obstacle and a refine region are INPUTS to
+DistMesh, so an edit re-enters the box rather than patching arrays), the
+conformal measurement, and the format fan-out from one topology pass;
+`telapy_mesh` carries the adoption, the four ops, and the `.slf`/`.cli` pair
+that `om2d` also writes through it rather than duplicating.
+
+The two in-container drivers (`scripts/sandbox/oceanmesh/_om2d_incontainer.py`
+295, `scripts/sandbox/telemac/_telapy_mesh_incontainer.py` 305) are NOT COUNTED
+by the rule at the head of this file - they are scripts, mounted into the boxes
+where oceanmesh and telapy live. Neither is `tests/test_mesh_om2d_telapy.py`
+(502) nor the ten corpus phrasings.
