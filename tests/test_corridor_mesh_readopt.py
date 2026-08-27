@@ -9,7 +9,14 @@ Offline. Two seams meet here:
      now rewrites the bundle from the adopted nodes and cells, and a mesher that
      cannot rewrite what its solve needs refuses at the edit instead.
 
-  2. THE BUNDLE. The worker's half of the hand-off carries 23 keys and every one of
+  2. THE GUARD. The boundary walk the edit runs terminates only on a boundary that
+     is a permutation of its own nodes, so the two layer shapes QGIS hands back
+     that are not - a collapsed face and a duplicated one - are refused by name
+     before it starts. Both are driven under a timeout, because the failure a
+     bounded walk prevents is a turn that never comes back rather than a wrong
+     answer.
+
+  3. THE BUNDLE. The worker's half of the hand-off carries 23 keys and every one of
      them is read on the solve path, so the round trip is pinned key by key, along
      with the refusal a bundle disagreeing with its own node count raises and the
      absent-file answer that lets a run mesh for itself.
@@ -21,6 +28,7 @@ supplied here rather than built; everything downstream of it is the real code.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -224,7 +232,89 @@ def test_a_bundle_carrying_mesh_refuses_the_hand_edit_at_the_gate(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# 2. Accept, then stage the deck: the repro end to end.
+# 2. The layer shapes a hand-edit leaves that no boundary walk can follow.
+# --------------------------------------------------------------------------- #
+#: How long a bounded edit is given to come back. The refusals below are reached
+#: without touching the network or a container, so any wait at all is the walk
+#: failing to terminate rather than the machine being slow.
+_EDIT_TIMEOUT_S = 20.0
+
+
+def _refusal_from_edit(session: MeshSession, layer: Path) -> BaseException | None:
+    """Apply the hand-edit off the calling thread -> what it raised, if anything.
+
+    The edit runs a boundary walk, and an unbounded walk parks the turn that
+    demanded it rather than answering wrongly. Driving it on its own thread is what
+    turns that into a failing assertion instead of a suite that never ends.
+    """
+    raised: list[BaseException | None] = []
+
+    def _apply() -> None:
+        try:
+            session.edit("apply_layer_edits", layer=str(layer))
+            raised.append(None)
+        except BaseException as exc:  # noqa: BLE001 -- the refusal is the result
+            raised.append(exc)
+
+    worker = threading.Thread(target=_apply, daemon=True)
+    worker.start()
+    worker.join(_EDIT_TIMEOUT_S)
+    assert not worker.is_alive(), (
+        f"the hand-edit did not return within {_EDIT_TIMEOUT_S:.0f}s: the "
+        "boundary walk is unbounded")
+    return raised[0]
+
+
+def _write_layer(path: Path, points, cells) -> Path:
+    path.write_text(write_2dm_arrays(points, cells, np.zeros(points.shape[0])))
+    return path
+
+
+def test_a_hand_edit_that_collapses_a_face_refuses_instead_of_walking_forever(
+        tmp_path):
+    """A triangle whose third vertex repeats its second is QGIS's own output.
+
+    Dragging a vertex onto its neighbour leaves the layer a triangle with two
+    identical corners. Its collapsed edge is then walked twice by one face, which
+    leaves the boundary a cycle that never returns to where the walk began.
+    """
+    built = _corridor_mesh(tmp_path)
+    session = _session(tmp_path, built)
+    points = np.asarray(session.mesh.points, dtype=float)
+    cells = np.array(session.mesh.cells, dtype=np.int64, copy=True)
+    # The second-row, first triangle: its collapse is the one that leaves a walk
+    # with somewhere to go and nowhere to close.
+    cells[12] = (cells[12][0], cells[12][1], cells[12][1])
+    layer = _write_layer(tmp_path / "collapsed.2dm", points, cells)
+
+    raised = _refusal_from_edit(session, layer)
+
+    assert isinstance(raised, MeshToolError), raised
+    assert raised.error_code == "MESH_CORRIDOR_NON_MANIFOLD"
+
+
+def test_a_hand_edit_that_duplicates_a_face_refuses_by_name(tmp_path):
+    """One triangle listed twice: a copy-paste in the layer, not a new element.
+
+    The duplicate lands a third face on each of its edges, so the boundary edge it
+    covered stops being one and the walk runs off the end of a ring that no longer
+    closes.
+    """
+    built = _corridor_mesh(tmp_path)
+    session = _session(tmp_path, built)
+    points = np.asarray(session.mesh.points, dtype=float)
+    cells = np.asarray(session.mesh.cells, dtype=np.int64)
+    layer = _write_layer(tmp_path / "duplicated.2dm", points,
+                         np.vstack([cells, cells[0][None, :]]))
+
+    raised = _refusal_from_edit(session, layer)
+
+    assert isinstance(raised, MeshToolError), raised
+    assert raised.error_code == "MESH_CORRIDOR_NON_MANIFOLD"
+
+
+# --------------------------------------------------------------------------- #
+# 3. Accept, then stage the deck: the repro end to end.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_a_hand_edited_corridor_is_accepted_and_the_deck_stages_it(
@@ -294,7 +384,7 @@ def test_a_bed_less_corridor_is_telemac_compatible_because_the_deck_fits_the_bed
 
 
 # --------------------------------------------------------------------------- #
-# 3. The worker's half of the hand-off.
+# 4. The worker's half of the hand-off.
 # --------------------------------------------------------------------------- #
 def test_the_staged_bundle_round_trips_every_key_the_solve_reads(tmp_path):
     points, cells = _ribbon()

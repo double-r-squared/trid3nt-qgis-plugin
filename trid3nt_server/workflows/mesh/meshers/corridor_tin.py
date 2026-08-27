@@ -449,7 +449,15 @@ def _oriented(points: Any, cells: Any) -> Any:
 
 
 def _boundary_rings(cells: Any) -> list[Any]:
-    """The closed boundary walks, outer ring first, in domain-on-the-left order."""
+    """The closed boundary walks, outer ring first, in domain-on-the-left order.
+
+    The walk closes only where each boundary node is left by one edge and entered
+    by one, so the shapes a hand-edit leaves that are not that - an edge more than
+    two triangles share, an edge from a node to itself, a node entered or left
+    twice - are refused before the walk starts rather than walked into. The walk
+    is bounded by the boundary edge count besides, so no layer that reaches it can
+    park a turn on a cycle that never returns to where it began.
+    """
     import numpy as np
 
     counts: dict[tuple[int, int], int] = {}
@@ -460,14 +468,33 @@ def _boundary_rings(cells: Any) -> list[Any]:
             key = (min(u, v), max(u, v))
             counts[key] = counts.get(key, 0) + 1
             directed[key] = (u, v)
+    shared = sorted(k for k, n in counts.items() if n > 2)
+    if shared:
+        raise MeshToolError(
+            "MESH_CORRIDOR_NON_MANIFOLD",
+            f"the edited layer has {len(shared)} edge(s) that more than two "
+            f"triangles meet along (the first joins its nodes {shared[0][0] + 1} "
+            f"and {shared[0][1] + 1}), which is what a duplicated or overlapping "
+            "triangle leaves behind; such a layer has no boundary, and so no "
+            "IPOBO ranking a solve could be staged with.")
     boundary = [directed[k] for k, n in counts.items() if n == 1]
+    collapsed = sorted(u for u, v in boundary if u == v)
+    if collapsed:
+        raise MeshToolError(
+            "MESH_CORRIDOR_NON_MANIFOLD",
+            f"the edited layer's boundary runs from its node {collapsed[0] + 1} "
+            "back to itself, which is what a triangle with a repeated vertex "
+            "leaves behind; that is not an edge a boundary walk can follow, so "
+            "the layer has no IPOBO ranking a solve could be staged with.")
     nxt = {u: v for u, v in boundary}
-    if len(nxt) != len(boundary):
+    into = {v: u for u, v in boundary}
+    if len(nxt) != len(boundary) or len(into) != len(boundary):
         raise MeshToolError(
             "MESH_CORRIDOR_NON_MANIFOLD",
             f"the edited layer's boundary is not a set of simple closed walks "
-            f"({len(boundary)} boundary edges leave {len(nxt)} distinct nodes), so "
-            "it has no IPOBO ranking a solve could be staged with.")
+            f"({len(boundary)} boundary edges leave {len(nxt)} and enter "
+            f"{len(into)} distinct nodes), so it has no IPOBO ranking a solve "
+            "could be staged with.")
     rings: list[Any] = []
     unvisited = set(nxt)
     while unvisited:
@@ -475,6 +502,12 @@ def _boundary_rings(cells: Any) -> list[Any]:
         walk = [start]
         cur = nxt[start]
         while cur != start:
+            if cur not in nxt or len(walk) >= len(boundary):
+                raise MeshToolError(
+                    "MESH_CORRIDOR_NON_MANIFOLD",
+                    f"the boundary walk from the edited layer's node {start + 1} "
+                    f"does not close over its {len(boundary)} boundary edges, so "
+                    "the layer has no IPOBO ranking a solve could be staged with.")
             walk.append(cur)
             cur = nxt[cur]
         unvisited -= set(walk)
