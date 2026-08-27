@@ -1,4 +1,4 @@
-<title>Mesh Grounding</title>
+<title>Domain and Mesh</title>
 <style>
   :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
           --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
@@ -25,159 +25,134 @@
   th { background: var(--code-bg); }
   .scroll { overflow-x: auto; }
   .rev { font-size: .85em; }
+  .open { border: 2px solid var(--line); background: var(--code-bg); padding: .6em .9em; }
 </style>
 
-<h1>Mesh Grounding</h1>
-<p class="rev">rev 10 &middot; 2026-08-27 &middot; full rewrite: the converged design only, superseded framings left to git history. DESIGN SPEC - implementation HELD for the follow-up wave. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<h1>Domain and Mesh</h1>
+<p class="rev">rev 11 &middot; 2026-08-27 &middot; ALL EXECUTION HELD - the wave is STOPPED; this page is the design discussion's current state, with every open decision marked as NATE's. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
-<h2>1. Status: what is landed, what this spec changes</h2>
-<p>The mesh wave landed the mesh tool per the parent spec, and the current design KEEPS nearly all of it. Nothing in this spec is implemented yet; it is the follow-up wave's charter. No code implements any superseded framing (capability param, domain param, named constructors - spec-only history), so nothing is thrown away.</p>
+<h2>1. Status</h2>
 <table>
-<tr><th>landed (kept as-is)</th><th>refactored by this spec</th></tr>
-<tr><td>the tool + one router; MeshSession (edit/probes/snapshot/restart/accept); mesh_recipe.jsonl; MeshArtifact + compat gate + sidecars; the gate loop (generated tools mounted per open session); telapy's seats (format/boundary authority, adoption, surgery); shared writers (one gr3 writer); emission display face; the 7 migrated templates; ops.solve / ops.read</td><td>(a) per-mesher spec-field validation becomes the CONSTITUENT rule table; (b) MESH declarations take the constituent surface; (c) builder auto-routing; (d) for_ consumer contract; (e) session polish (staged-once, snapshot cache, lazy batching); (f) the GROUNDING unification (section 3)</td></tr>
+<tr><th>what</th><th>state</th></tr>
+<tr><td>mesh wave</td><td><b>STOPPED</b> mid round-3 remediation, on NATE's rule: design decisions - including fix DIRECTIONS in remediation prompts - require his go. Landed-and-verified through round 2: the tool, sessions, gate machinery, 7-template migration, renames, determinism honesty, dt-tightening, reach family through the session, approve-mesh server chop. Suite zero-failure at last verification. Commits local.</td></tr>
+<tr><td>this spec</td><td>DESIGN ONLY. Nothing below is implemented; section 6 lists the decisions awaiting NATE before anything moves.</td></tr>
+<tr><td>frozen subsystems</td><td>fetch, styles/emission, the run paradigm, the static plan - untouched by everything here.</td></tr>
 </table>
 
 <h2>2. How meshing works (primer)</h2>
-<p>An unstructured mesh is a domain cut into triangles. Quality = triangle SHAPE (minimum angle) + SIZING, a field h(x) of target edge lengths. Everything a mesher does serves honoring h(x) with well-shaped triangles.</p>
 <ul>
-<li><b>Sizing functions</b> are coastal domain knowledge - distance-to-shore, wavelength (depth-dependent), bathymetric gradient, gradation cap - and are oceanmesh's real specialty; om2d keeps this seat in every design.</li>
-<li><b>Generation families</b>: DistMesh force-relaxation (oceanmesh - organic quality, iterative, hence measured nondeterminism), Delaunay/frontal insertion (gmsh/jigsaw - deterministic orders possible, constraints embed during insertion), structured grids (trivially deterministic).</li>
-<li><b>Conformality</b>: an outline is conformal when its vertices ARE mesh nodes (zero offset). Constraints must feed INTO generation; retrofitting into a finished mesh measured 80.1 m offset here. This is why "edit" means "change inputs and regenerate" across the field.</li>
-<li><b>Cost</b>: nodes scale as area/h^2 - screening meshes regenerate in seconds (measured 3.5 s end-to-end), so regeneration is the economical common path; only large fine meshes hurt (the deferred patch-local design activates on measured pain).</li>
-<li><b>Boundaries</b>: the exterior loop splits into contiguous OPEN stretches (forcing enters) vs LAND; TELEMAC wants IPOBO a permutation + .cli rows, SCHISM wants gr3 segment blocks - telapy's bookkeeping seat.</li>
+<li><b>Quality</b> = triangle shape (minimum angle) + sizing h(x), the target-edge-length field. Sizing functions (distance-to-shore, wavelength, bathymetric gradient, gradation cap) are oceanmesh's specialty and its permanent seat.</li>
+<li><b>Generation</b>: DistMesh relaxation (oceanmesh - iterative, measured nondeterministic), Delaunay/frontal insertion (gmsh/jigsaw - deterministic orders possible, constraints embed during insertion), structured grids (trivially deterministic).</li>
+<li><b>Conformality</b>: an outline is conformal when its vertices ARE mesh nodes. Constraints must feed INTO generation (retrofit measured 80.1 m offset here) - the structural reason "edit" means "regenerate" across the field.</li>
+<li><b>Cost</b>: nodes ~ area/h&sup2;; screening meshes regenerate in seconds (measured 3.5 s end-to-end) - regeneration is the economical common path; patch-local editing stays a deferred design for measured large-mesh pain.</li>
+<li><b>Boundaries</b>: contiguous OPEN stretches vs LAND; IPOBO permutations, .cli rows, gr3 blocks - telapy's bookkeeping seat, the last mile for every mesh.</li>
 </ul>
 
-<h2>3. The grounding structure - one domain record, progressively filled</h2>
-<p>There is one AOI, threaded through everything, and today two plan bindings wrap it: <code>Ref("aoi")</code> (the bare bbox) and <code>Ref("reach")</code> (bbox + flowline + mid-reach seed + carrier discharge at the seed - the supplemental grounding that says where the river is, where a release is valid, and what flow carries it). Same role, split names.</p>
-<p><b>Scheduled refactor: unify them into one GROUNDING record.</b> The bbox contains the basis; fetches fill it in. One structure, always carrying <code>aoi</code>, gaining fields as they land:</p>
-<pre><code class="py">grounding
-  .aoi          # always present - the bbox (geocode or canvas)
-  .bed          # filled by the DEM fetch
-  .shoreline    # filled by the shoreline fetch -&gt; water/land partition exists
-  .flowline     # filled by NLDI -&gt; river structure exists
-  .seed         # snapped onto the flowline -&gt; valid release point exists
-  .discharge    # read at the seed -&gt; carrier flow exists
-  .pour_point   # -&gt; catchment structure exists</code></pre>
-<p>Filled fields ARE the constituents; presence is what unlocks capabilities (section 5) AND scenario validity (a dye release is placeable because <code>seed</code>/<code>flowline</code> exist - the same mechanism grounds mesh edits and release points). Templates keep declaring their fetches in DATA; <code>acquire_domain</code> becomes the builder of this record; the reach/aoi name pair disappears from the surface.</p>
+<h2>3. The domain model (discussion-stage - NATE's proposal, awaiting his freeze)</h2>
+<p><b>Derive, never override.</b> The domain is the base spatial extent - the bbox from geocode or canvas - and it is IMMUTABLE and always reachable. Specialized extents are DERIVED from it as their own named values; nothing is lost, nothing aggregates:</p>
+<pre><code class="py">domain   = bbox                                  # the base - never overridden
+basin    = delineate(domain, pour_point)         # derived subdomain (terrain's answer)
+corridor = corridor_of(domain, flowline, width_m=200)
+county   = clip(domain, admin_polygon)
+
+MESH = tool.build_mesh(aoi=basin, bed=D.dem, ...)  # mesh EXACTLY the area of interest</code></pre>
+<ul>
+<li><b>No over-meshing, no hand-authoring</b>: the mesh gets the basin, not the box around it.</li>
+<li><b>Fetch-wide, mesh-narrow</b>: fetches stage over <code>domain</code> once; meshing consumes the subdomain; a moved pour point re-derives the subdomain with ZERO re-fetch (the wide raster still covers it) - composing with staged-once economics.</li>
+<li><b>The base stays reachable</b> for operations needing data outside the subdomain (upstream gauges, context rain, basemaps); multiple subdomains coexist as siblings.</li>
+<li><b>Derivation is provenance</b>: each subdomain carries parent + operation + inputs, journal-friendly like the mesh recipe.</li>
+<li><b>This is the plan's own law</b>: step results are deep-frozen named values; refs never rebind. The model names what the substrate already does.</li>
+</ul>
+<h3>3.1 Inputs live in ONE place - no bundles, no records</h3>
+<p>Constituents (<code>bed</code>, <code>shoreline</code>, <code>flowline</code>) are ordinary DATA refs passed explicitly to what needs them - singly homed, plain in-and-out, no aggregating transport. (An earlier "grounding record" draft was REJECTED for making inputs live in two places.) The reach bundle DISSOLVES into named plan values with the coupling preserved by dataflow, not structure:</p>
+<pre><code class="py">flowline  = fetch(domain)            # where the river is
+seed      = snap_to(flowline)        # a valid release point exists
+discharge = read_at(seed)            # the carrier flow exists
+
+# each consumer names exactly what it needs:
+mesh(aoi=corridor, flowline=flowline)   # meshing
+forcing(carrier=discharge)              # forcing
+release_gate(valid_on=flowline)         # scenario validity</code></pre>
+<p>A gate-drawn value and a fetched value are the same argument - no operation cares who authored its inputs.</p>
 
 <h2>4. The signature</h2>
 <pre><code class="py">MESH = tool.build_mesh(
     kind   = "unstructured_tri",   # discretization - defaulted when obvious
     mesher = "auto",               # builder auto-routed from the constituents; pin to override
     for_   = "telemac",            # consumer contract - auto-injected in templates
-    aoi    = P.aoi,                # threaded, like every tool
+    aoi    = basin,                # the extent THIS mesh covers (domain or any subdomain)
     bed    = D.dem,                # constituents: ordinary data refs
     shoreline = D.shoreline,
-    # flowline = D.rivers,
     refine = {"edge_length": P.edge_length, "min_spacing": 25},
-)
-
-# the common path - a place and whatever is true about it:
-tool.build_mesh(aoi=aoi, shoreline="fetch:gshhs_shoreline")</code></pre>
+)</code></pre>
 <ul>
-<li><b>No words that imply.</b> There is no domain label anywhere: "coastal" is not a thing you say, it is a thing that is TRUE when aoi + bed + shoreline are present.</li>
-<li><b>Frozen and lazy in templates</b> (a declaration block beside DATA and PARAMS; builds nothing at import; demand-pulled). <b>Standalone it builds now</b> and stashes for case discovery.</li>
-<li><b>Sourcing is DATA-first</b> in templates (declared ladders, gate visibility, journaling); in-tool <code>"fetch:"</code> specs are standalone sugar through the SAME fetch router - one seam, two spellings. Staged-once session economics make them equal in cost.</li>
-<li><b>for_</b> binds the session to the consumer's requirements (the existing <code>ENGINE_MESH_REQUIREMENTS</code>, read at build time): declaration-time refusals, consumer-adaptive edits (.cli/LIHBOR vs contiguous gr3 segments), live "solve-ready" probes, <code>accept()</code> as a contract, writers narrowed to the declared engine + display. List-valued for one mesh feeding two engines.</li>
+<li><b>No words that imply</b>: no domain labels anywhere - "coastal" is TRUE when aoi + bed + shoreline are present, never said.</li>
+<li><b>Frozen and lazy in templates</b> (a declaration beside DATA and PARAMS); standalone it builds now and stashes for discovery.</li>
+<li><b>DATA-first sourcing</b>; in-tool <code>"fetch:"</code> specs are standalone sugar through the same router.</li>
+<li><b>for_</b> reads <code>ENGINE_MESH_REQUIREMENTS</code> at build time: declaration-time refusals, consumer-adaptive edits, live solve-readiness probes, <code>accept()</code> as a contract, writers narrowed. List-valued.</li>
 </ul>
 
 <h2>5. Capabilities derive from presence</h2>
 <table>
-<tr><th>the grounding carries</th><th>which offers</th></tr>
-<tr><td>bare <code>aoi</code></td><td>a grid over the box; <code>refine_region</code>, <code>apply_layer_edits</code></td></tr>
+<tr><th>the call carries</th><th>which offers</th></tr>
+<tr><td>bare <code>aoi</code></td><td>a grid over the extent; <code>refine_region</code>, <code>apply_layer_edits</code></td></tr>
 <tr><td>+ <code>shoreline</code></td><td>water/land partition -&gt; <code>add_obstacle</code>, <code>set_boundary</code></td></tr>
 <tr><td>+ <code>flowline</code></td><td>corridor verbs; valid release areas</td></tr>
 <tr><td>+ <code>pour_point</code></td><td>catchment behavior: closed boundary; <code>set_boundary</code> never appears</td></tr>
 </table>
-<p>The ONLY capability mechanism. Unoffered verbs are never mounted at the gate and never visible to the agent; a direct call to one refuses by naming the missing constituent ("add_obstacle needs a water/land partition; supply a shoreline") - the error and the onboarding hint are the same sentence, and capabilities disclose progressively as the user defines more. Builders register per CONSTITUENT PATTERN; registration REFUSES AT IMPORT unless every verb the table offers for that pattern is implemented - guaranteed by construction, never checked at call time.</p>
+<p>The only capability mechanism. Unoffered verbs are never mounted; direct calls refuse by naming the missing constituent - the error and the onboarding hint are one sentence. Builders register per constituent pattern; registration refuses at import unless the pattern's verbs are implemented. The session: demand-pulled build, staged-once inputs, offered verbs at the gate, regenerate-on-edit, snapshot-cache undo, recipe as the record, <code>accept()</code> under the <code>for_</code> contract.</p>
 
-<h2>6. The session</h2>
-<ol>
-<li><b>Declare</b>: constituents named; the capability set - the gate's tool list, the form's affordances - known statically before any build.</li>
-<li><b>Resolve</b>: explicit mesh wins; case-discovered compatible artifacts offered; else the declaration builds.</li>
-<li><b>Build</b> (demand-pulled): the router selects the builder for the constituent pattern; inputs staged ONCE and reused by every rebuild; probes + wireframe snapshot out.</li>
-<li><b>Gate</b> (USER-GATED; AUTO builds inline): editable MDAL layer; exactly the offered verbs mounted; edits journal into the recipe; REGENERATE-ON-EDIT is the common path (economical at common sizes); <code>restart</code> truncates to the declared prefix; the snapshot cache returns the exact mesh previously inspected for any prefix (session-stable despite generator nondeterminism); QGIS hand-edits re-enter as <code>apply_layer_edits</code> with the layer hashed, honestly non-replayable; <code>accept()</code> enforces the <code>for_</code> contract.</li>
-<li><b>Formats + artifact</b>: for_-narrowed writers, telapy last mile (IPOBO permutation, contiguous .cli, gr3 blocks), display face through emission; MeshArtifact + recipe + probes into author -&gt; solve, unchanged.</li>
-</ol>
-<p><b>The recipe is the record</b>: spec line + ordered edits, journaled; deterministic flags are MEASURED claims per builder; replay = exact from the snapshot cache in-session, equivalent rebuild cold.</p>
+<h2>6. OPEN - decisions that are NATE's, nothing moves before his ruling</h2>
+<div class="open">
+<p><b>D1 - freeze the domain model?</b> Sections 3-3.1 (derive-not-override, reach dissolution, inputs singly homed). Recommendation: freeze as written.</p>
+<p><b>D2 - hand-edit staging semantics</b> (verifier finding, reproduced: a hand-edited corridor session accepts, then deck staging refuses <code>TELEMAC_MESH_NOT_ACCEPTED</code> - a late failure the user cannot understand). Recommendation: after adoption the session regenerates solver files through the telapy write path; if impossible for a mesher, the EDIT refuses at the gate; invariant: <code>accept()</code> implies stageable. Alternatives: forbid hand-edits on bed-less meshes outright, or keep late refusal (not recommended).</p>
+<p><b>D3 - the gate's revision channel</b> (verifier finding: the mesh gate emits none of the four fields the shipped plugin can populate revisions from - USER-GATED reach cards are proceed/cancel only, every edit unreachable). Recommendation: emit numeric knobs as a param_sheet the shipped client already renders, routed server-side to the gate's edit path; plugin changes only if unavoidable, synced via install_plugin.sh, flagged for NATE's live pass. Alternative: extend the plugin's card vocabulary for mesh edits (bigger, nicer, needs NATE's UI eye).</p>
+<p><b>D4 - finish the approve-mesh chop client-side?</b> (verifier finding: plugin release_point_required handling, the picker row, two BK3B drivers survive with no producer.) Recommendation: chop per clean-as-you-go, ledger rows, drivers deleted or rewritten against the new gate.</p>
+<p><b>D5 - prove the worker bundle?</b> (verifier finding: workers/telemac/_staged_mesh.py has zero test references; no live solve has adopted an accepted mesh.) Recommendation: port the verifier's round-trip check into the suite + one live coarse adopted-mesh solve, hash-verified.</p>
+<p><b>D6 - resume the wave?</b> With D2-D5 ruled, the stopped wave resumes: remediation to the ruled directions, final verification, then the artemis flagship. The rev-11 design work (D1, constituent rules, auto-routing, for_, session polish) is the SEPARATE follow-up wave, after.</p>
+</div>
 
-<h2>7. Scheduled refactors (the follow-up wave, in order)</h2>
-<ol>
-<li>The GROUNDING record (section 3): acquire_domain builds it; Ref("aoi")/Ref("reach") dissolve from the surface; seed/discharge consumers read the record.</li>
-<li>Constituent rule table + import-time pattern enforcement, replacing per-mesher field validation.</li>
-<li>Builder auto-routing (mesher="auto").</li>
-<li>for_ consumer contract.</li>
-<li>Session polish: staged-once inputs, prefix-keyed snapshot cache, lazy batched realization.</li>
-<li>MESH declarations in the 7 templates take the constituent surface (small diffs; deck parity must hold).</li>
-</ol>
-<p>HELD until the mesh wave closes clean and NATE releases the hold. Deferred separately, recorded: patch-local edits (gmsh planar patch vs OCSMesh remesh_by_shape, MATLAB remesh_patch precedent) - activates on measured large-mesh pain only.</p>
+<h2>7. Deferred, recorded</h2>
+<p>Patch-local edits (gmsh planar patch vs OCSMesh <code>remesh_by_shape</code>; MATLAB <code>remesh_patch</code> precedent; three measurements defined) - activates only on measured large-mesh pain. Roadmap unchanged: wave close -&gt; follow-up wave -&gt; SCHISM probe -&gt; fleet roll -&gt; calibration last.</p>
 
-<h2>8. Acceptance bar</h2>
-<table>
-<tr><th>gate</th><th>test</th></tr>
-<tr><td>capability honesty</td><td>for each registered builder pattern: every offered verb executes; every unoffered verb refuses naming the missing constituent</td></tr>
-<tr><td>import guarantee</td><td>a builder registering a pattern without implementing its verbs fails at import (test registers a deliberately deficient builder)</td></tr>
-<tr><td>determinism</td><td>3-run hash per builder; flags match measurement; recipe stamps follow</td></tr>
-<tr><td>conformality</td><td>constrained outline max offset 0.0 m, surviving cleanup, in probes</td></tr>
-<tr><td>economics</td><td>zero re-fetch across rebuilds (staged-once audited); one gate cycle = at most one rebuild; restart/undo instant from the cache</td></tr>
-<tr><td>grounding unification</td><td>reach templates run identically through the grounding record: deck byte-parity; seed/discharge consumers unchanged</td></tr>
-<tr><td>suite</td><td>five slices, zero failures</td></tr>
-</table>
-
-<h2>9. The current picture</h2>
+<h2>8. The current picture</h2>
 <div class="scroll">
 <pre class="mermaid">
 classDiagram
-    class Template {
-        DATA: declared fetches
-        acquire_domain -> GROUNDING record
-        MESH = tool.build_mesh(kind, mesher=auto, for_, aoi, constituents)
-        static plan, as today
+    class Domain {
+        the base bbox - immutable, threaded
+        always reachable
     }
-    class Grounding {
-        .aoi always
-        .bed .shoreline .flowline
-        .seed .discharge .pour_point
-        filled by fetches, progressively
-        presence = capabilities + scenario validity
+    class Subdomain {
+        derived: delineate | corridor_of | clip
+        named siblings, provenance-carrying
+    }
+    class NamedValues {
+        flowline, seed, discharge...
+        singly homed; coupling by dataflow
+        fetched OR gate-drawn - same argument
     }
     class BuildMesh {
-        frozen + lazy in templates
-        builds now standalone
-        DATA-first; "fetch:" sugar -> same router
-    }
-    class ConstituentRules {
-        presence -> offered verbs
-        enforced at builder registration
-    }
-    class Router {
-        builder per constituent pattern
-        explicit > discovered > declared
-        refuses unknown fields BY NAME
+        kind, mesher=auto, for_, aoi, constituents
+        frozen + lazy in templates; builds now standalone
+        capabilities from PRESENCE
     }
     class MeshSession {
-        offered verbs mounted at gate only
+        offered verbs at the gate only
         regenerate-on-edit; staged-once; snapshot cache
-        restart -> declared prefix
-        accept() enforces for_
+        accept() under the for_ contract
         recipe = the record
     }
     class MeshArtifact {
         probes + recipe + formats
-        display face via emission
+        display via emission; telapy last mile
     }
-    class Telapy {
-        format + boundary authority (last mile)
-        adoption + surgery for supplied meshes
-    }
-    Template --> Grounding : acquire_domain
-    Grounding --> BuildMesh : constituents
-    BuildMesh --> ConstituentRules : capability set, statically
-    BuildMesh --> Router : demand-pulled
-    Router --> MeshSession : opens
+    Domain --> Subdomain : derive, never override
+    Domain --> NamedValues : fetches fill
+    Subdomain --> BuildMesh : aoi
+    NamedValues --> BuildMesh : constituents
+    BuildMesh --> MeshSession : demand-pulled
     MeshSession --> MeshArtifact : accept()
-    MeshArtifact --> Telapy : .slf/.cli last mile
-    MeshArtifact --> Template : author -> solve, unchanged
 </pre>
 </div>
 
