@@ -76,6 +76,36 @@ def _open_nodes_on_side(
     return [ext_loop[i] for i in np.where(thr)[0]]
 
 
+def _contiguous_runs(loop: list[int], removed: set[int]) -> list[list[int]]:
+    """The maximal runs of ``loop`` that avoid ``removed``, walked as a cycle.
+
+    A boundary segment a solver reads is one continuous walk, so removing the
+    open stretches from a loop yields SEVERAL land segments rather than one list
+    that jumps across them.
+    """
+    if not loop:
+        return []
+    if not removed:
+        return [list(loop)]
+    n = len(loop)
+    start = next((i for i, node in enumerate(loop) if node in removed), None)
+    if start is None:
+        return [list(loop)]
+    runs: list[list[int]] = []
+    current: list[int] = []
+    for offset in range(n):
+        node = loop[(start + offset) % n]
+        if node in removed:
+            if current:
+                runs.append(current)
+                current = []
+        else:
+            current.append(node)
+    if current:
+        runs.append(current)
+    return runs
+
+
 def write_fort14(
     points: np.ndarray,
     cells: np.ndarray,
@@ -83,14 +113,18 @@ def write_fort14(
     depths: float | Sequence[float] | np.ndarray = 10.0,
     grid_name: str = "trid3nt_coastal_tin",
     open_boundary_side: str | None = None,
+    open_sections: Sequence[Sequence[int]] | None = None,
 ) -> str:
     """Emit ADCIRC ``fort.14`` text from a coastal TIN.
 
     ``points`` (N,2) lon/lat (EPSG:4326); ``cells`` (M,3) 0-indexed triangles.
-    ``depths`` positive-down bathymetry (scalar or per-node). Open boundary =
-    the exterior-loop nodes on ``open_boundary_side`` (IBTYPEE 0 elevation-
-    specified); every other boundary loop is a mainland/island flux boundary
-    (IBTYPE 0 mainland exterior, IBTYPE 1 island). Returns the fort.14 string.
+    ``depths`` positive-down bathymetry (scalar or per-node). ``open_sections``
+    are node runs already identified as contiguous ocean stretches and each
+    becomes one IBTYPEE 0 elevation-specified boundary; failing that,
+    ``open_boundary_side`` cuts one from the exterior loop. Every other stretch
+    is a mainland/island flux boundary (IBTYPE 0 mainland exterior, IBTYPE 1
+    island), split at the open stretches so each land boundary is contiguous
+    too. Returns the fort.14 string.
     """
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
@@ -117,8 +151,12 @@ def write_fort14(
         oriented.append(loop)
     loops = oriented
 
-    open_nodes = _open_nodes_on_side(points, loops[0] if loops else [], open_boundary_side)
-    open_set = set(open_nodes)
+    sections = ([[int(n) for n in seg] for seg in open_sections]
+                if open_sections else
+                [_open_nodes_on_side(points, loops[0] if loops else [],
+                                     open_boundary_side)])
+    sections = [seg for seg in sections if seg]
+    open_set = {n for seg in sections for n in seg}
 
     L: list[str] = []
     L.append(grid_name)
@@ -130,12 +168,14 @@ def write_fort14(
         a, b, c = cells[e] + 1
         L.append(f"{e + 1} 3 {a} {b} {c}")
 
-    # Open boundary block (elevation-specified forcing boundary).
-    if open_nodes:
-        L.append("1 = Number of open boundaries")
-        L.append(f"{len(open_nodes)} = Total number of open boundary nodes")
-        L.append(f"{len(open_nodes)} = Number of nodes for open boundary 1")
-        L.extend(str(n + 1) for n in open_nodes)
+    # Open boundary block (elevation-specified forcing boundaries).
+    total_open = sum(len(seg) for seg in sections)
+    if sections:
+        L.append(f"{len(sections)} = Number of open boundaries")
+        L.append(f"{total_open} = Total number of open boundary nodes")
+        for si, seg in enumerate(sections, start=1):
+            L.append(f"{len(seg)} = Number of nodes for open boundary {si}")
+            L.extend(str(n + 1) for n in seg)
     else:
         L.append("0 = Number of open boundaries")
         L.append("0 = Total number of open boundary nodes")
@@ -143,9 +183,9 @@ def write_fort14(
     # Land/flux boundary block.
     land: list[tuple[list[int], int]] = []
     for li, loop in enumerate(loops):
-        seg = [n for n in loop if n not in open_set]
-        if len(seg) >= 2:
-            land.append((seg, 0 if li == 0 else 1))
+        for seg in _contiguous_runs(loop, open_set):
+            if len(seg) >= 2:
+                land.append((seg, 0 if li == 0 else 1))
     total_land = sum(len(s) for s, _ in land)
     L.append(f"{len(land)} = Number of land boundaries")
     L.append(f"{total_land} = Total number of land boundary nodes")

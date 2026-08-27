@@ -150,6 +150,34 @@ def extract_boundary_loops(cells: np.ndarray) -> list[list[int]]:
     return loops
 
 
+def _contiguous_runs(loop: list[int], removed: set[int]) -> list[list[int]]:
+    """The maximal runs of ``loop`` that avoid ``removed``, walked as a cycle.
+
+    A boundary segment SCHISM reads is one continuous walk, so removing the open
+    stretches from a loop yields SEVERAL land segments rather than one list that
+    jumps across them.
+    """
+    if not loop:
+        return []
+    n = len(loop)
+    start = next((i for i, node in enumerate(loop) if node in removed), None)
+    if start is None:
+        return [list(loop)]
+    runs: list[list[int]] = []
+    current: list[int] = []
+    for offset in range(n):
+        node = loop[(start + offset) % n]
+        if node in removed:
+            if current:
+                runs.append(current)
+                current = []
+        else:
+            current.append(node)
+    if current:
+        runs.append(current)
+    return runs
+
+
 def tin_to_hgrid(
     points: np.ndarray,
     cells: np.ndarray,
@@ -157,6 +185,7 @@ def tin_to_hgrid(
     depth: float | Sequence[float] | np.ndarray = 10.0,
     grid_name: str = "trid3nt_coastal_tin",
     open_boundary_side: str | None = None,
+    open_sections: Sequence[Sequence[int]] | None = None,
     clean_boundary: bool = True,
 ) -> str:
     """Convert a coastal TIN (lon/lat nodes + triangle cells) to hgrid.gr3 text.
@@ -166,9 +195,14 @@ def tin_to_hgrid(
     positive-down bathymetry -- a scalar placeholder (spike) or a per-node array
     (landing, sampled from fetch_dem). Element orientation is normalized to CCW
     (SCHISM's requirement); boundary loops are extracted and written as land
-    segments, with the loop nodes on ``open_boundary_side`` ('south'|'north'|
-    'east'|'west') optionally reclassified into one open-ocean segment so a
-    downstream ipre/solve has a forcing boundary. Returns the gr3 ASCII string.
+    segments.
+
+    ``open_sections`` are node runs a mesher already identified as contiguous
+    ocean stretches; each becomes one open-boundary segment, so NOPE equals the
+    number of stretches the mesh actually has. Failing that,
+    ``open_boundary_side`` ('south'|'north'|'east'|'west') cuts one segment from
+    the exterior loop. Land segments are the runs BETWEEN the open stretches, so
+    every written segment is a continuous walk. Returns the gr3 ASCII string.
     """
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
@@ -235,9 +269,14 @@ def tin_to_hgrid(
         oriented.append(loop)
     loops = oriented
 
-    # optional open-boundary designation: the loop nodes on the named side.
+    # optional open-boundary designation: the identified stretches, else the loop
+    # nodes on the named side.
     open_nodes: list[int] = []
-    if open_boundary_side and loops:
+    sections: list[list[int]] = []
+    if open_sections:
+        sections = [[int(n) for n in seg] for seg in open_sections if len(seg)]
+        open_nodes = [n for seg in sections for n in seg]
+    elif open_boundary_side and loops:
         ext = loops[0]  # exterior loop
         lon = points[ext, 0]
         lat = points[ext, 1]
@@ -252,6 +291,7 @@ def tin_to_hgrid(
         else:
             raise ValueError(f"bad open_boundary_side {open_boundary_side!r}")
         open_nodes = [ext[i] for i in np.where(thr)[0]]
+        sections = [open_nodes] if open_nodes else []
 
     open_set = set(open_nodes)
     lines: list[str] = []
@@ -268,22 +308,23 @@ def tin_to_hgrid(
         lines.append(f"{e + 1} 3 {a} {b} {c}")
 
     # --- open boundary block ---------------------------------------------------
-    if open_nodes:
-        lines.append("1 = Number of open boundaries")
+    if sections:
+        lines.append(f"{len(sections)} = Number of open boundaries")
         lines.append(f"{len(open_nodes)} = Total number of open boundary nodes")
-        lines.append(f"{len(open_nodes)} = Number of nodes for open boundary 1")
-        lines.extend(str(n + 1) for n in open_nodes)
+        for si, seg in enumerate(sections, start=1):
+            lines.append(f"{len(seg)} = Number of nodes for open boundary {si}")
+            lines.extend(str(n + 1) for n in seg)
     else:
         lines.append("0 = Number of open boundaries")
         lines.append("0 = Total number of open boundary nodes")
 
-    # --- land boundary block (exterior + islands, minus open-boundary nodes) ---
+    # --- land boundary block (exterior + islands, between the open stretches) ---
     land_segments: list[tuple[list[int], int]] = []
     for li, loop in enumerate(loops):
-        seg = [n for n in loop if n not in open_set]
-        if len(seg) >= 2:
-            # itype: 0 == mainland (exterior loop), 1 == island (interior loops)
-            land_segments.append((seg, 0 if li == 0 else 1))
+        for seg in _contiguous_runs(loop, open_set):
+            if len(seg) >= 2:
+                # itype: 0 == mainland (exterior loop), 1 == island (interior loops)
+                land_segments.append((seg, 0 if li == 0 else 1))
     total_land = sum(len(s) for s, _ in land_segments)
     lines.append(f"{len(land_segments)} = Number of land boundaries")
     lines.append(f"{total_land} = Total number of land boundary nodes")

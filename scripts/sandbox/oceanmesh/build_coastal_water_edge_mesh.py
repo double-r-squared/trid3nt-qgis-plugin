@@ -39,6 +39,7 @@ log = logging.getLogger("coastal_water_edge_mesh")
 
 REPO = Path("/home/nate/Documents/trid3nt-local")
 SANDBOX = REPO / "scripts/sandbox/oceanmesh"
+DRIVERS = REPO / "trid3nt_server/workflows/mesh/meshers/drivers"
 OUT_ROOT = SANDBOX / "_runs"
 PROOF_RENDERS = REPO / "docs/proof/templates"
 PROOF_MESHES = REPO / "docs/proof/templates/oceanmesh_meshes"
@@ -158,9 +159,9 @@ def run(aoi: str) -> dict:
     }
     (rundir / "mesh_config.json").write_text(json.dumps(conf), encoding="utf-8")
     cp = sg_docker([
-        "run", "--rm", "-v", f"{SANDBOX}:/sandbox", "-v", f"{rundir}:/data",
+        "run", "--rm", "-v", f"{DRIVERS}:/drivers:ro", "-v", f"{rundir}:/data",
         "--entrypoint", "python", MESH_IMAGE,
-        "/sandbox/_mesh_water_edge_incontainer.py", "/data/mesh_config.json", "/data",
+        "/drivers/coastal_edge_driver.py", "/data/mesh_config.json", "/data",
     ])
     if cp.returncode != 0 or not (rundir / "coastal_tin_mesh.npz").exists():
         raise RuntimeError(f"mesh worker failed for {aoi}:\n{cp.stdout[-2500:]}\n{cp.stderr[-2500:]}")

@@ -111,3 +111,28 @@ def test_per_node_depth_array():
     nnp = int(txt.splitlines()[1].split()[1])
     got = float(txt.splitlines()[2 + nnp - 1].split()[3])
     assert abs(got - 16.0) < 1e-6
+
+
+def test_open_sections_write_one_block_each_and_split_the_land_boundary():
+    """A mesher that identified contiguous ocean stretches hands them straight
+    through: NOPE counts the stretches, and the land segments are the runs
+    BETWEEN them rather than one list that jumps across."""
+    xy = np.array([[x, y] for y in (0.0, 1.0, 2.0) for x in (0.0, 1.0, 2.0)])
+    cells = []
+    for row in range(2):
+        for col in range(2):
+            a = row * 3 + col
+            cells += [[a, a + 1, a + 4], [a, a + 4, a + 3]]
+    cells = np.asarray(cells, dtype=np.int64)
+
+    txt = G.tin_to_hgrid(xy, cells, depth=5.0, open_sections=[[0, 1], [7, 8]],
+                         clean_boundary=False)
+    assert "2 = Number of open boundaries" in txt
+    assert "4 = Total number of open boundary nodes" in txt
+    assert "2 = Number of land boundaries" in txt
+
+
+def test_contiguous_runs_walks_a_loop_as_a_cycle():
+    assert G._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 2}) == [[3, 4, 5, 0]]
+    assert G._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 4}) == [[2, 3], [5, 0]]
+    assert G._contiguous_runs([0, 1, 2], set()) == [[0, 1, 2]]
