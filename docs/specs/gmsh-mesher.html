@@ -28,8 +28,25 @@
 </style>
 
 <h1>Coastal Mesher Kernel</h1>
-<p class="rev">rev 4 &middot; 2026-08-27 &middot; landscape report landed: patch concept validated (MATLAB om2d remesh_patch); spike tests TWO vehicles, gmsh patch vs OCSMesh remesh_by_shape. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 5 &middot; 2026-08-27 &middot; economics revised (regeneration IS economical for the common small-mesh case); capability param ruled; patch-local deferred to measured large-mesh pain; meshing primer added. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
+<h2>0. How meshing works (primer)</h2>
+<p>An unstructured mesh is a domain cut into triangles. Two things define its quality: the SHAPE of the triangles (minimum angle - skinny slivers break solvers) and the SIZING - a field h(x) giving the target edge length at every point. Everything a mesher does is in service of honoring h(x) with well-shaped triangles.</p>
+<h3>0.1 Sizing functions - oceanmesh's actual specialty</h3>
+<p>Coastal sizing is domain knowledge: <i>distance-to-shore</i> (fine at the coast, coarse offshore), <i>wavelength</i> (enough elements per tidal wavelength, which depends on depth), <i>bathymetric gradient</i> (fine where the bed is steep), and a <i>gradation cap</i> (neighboring sizes may differ by at most g percent, so fine regions blend smoothly into coarse ones). This composed h(x) grid is what om2d computes better than any general-purpose tool - it is why om2d stays in every wiring.</p>
+<h3>0.2 Generation families</h3>
+<table>
+<tr><th>family</th><th>how</th><th>who</th><th>character</th></tr>
+<tr><td>DistMesh (force relaxation)</td><td>scatter points, treat edges as springs with rest length h(x), iterate to equilibrium</td><td>oceanmesh</td><td>organic, high quality; ITERATIVE - tiny floating-point differences cascade, which is exactly why om2d is nondeterministic</td></tr>
+<tr><td>Delaunay refinement / frontal</td><td>insert points one at a time where triangles violate h(x) or quality, in a defined order</td><td>gmsh, jigsaw, triangle</td><td>deterministic insertion orders are possible; constraints (breaklines) embed naturally during insertion</td></tr>
+<tr><td>structured / regular</td><td>lay a grid, optionally bend it (curvilinear)</td><td>reg_grid, SFINCS/SWAN inputs</td><td>trivially deterministic; no boundary fitting</td></tr>
+</table>
+<h3>0.3 Conformality, and why edits usually mean regeneration</h3>
+<p>A breakline or obstacle outline is CONFORMAL when its vertices ARE mesh nodes and its segments ARE element edges - zero offset. The natural way to get that is to feed the constraint INTO generation (om2d pfix, gmsh embedding): the mesher builds around it. Retrofitting a constraint into a finished mesh is hard - there is no node where you need one, and moving/inserting nodes ripples into neighboring triangle quality. That is the structural reason the community default for "edit a mesh" is "change the inputs and regenerate", and why the surgical alternatives measured badly here (80.1 m offset).</p>
+<h3>0.4 Cost scaling - why regeneration is fine in the common case</h3>
+<p>Node count scales like area / h^2. A screening-resolution coastal AOI is hundreds to tens of thousands of nodes - seconds to regenerate (measured: 285-node spot-check mesh in 3.5 s end-to-end; the Duck NC om2d build well under a minute in-container). Regeneration only starts to hurt at large fine meshes (hundreds of thousands of nodes, minutes per build) - which is the flagship/production end, not the common case.</p>
+<h3>0.5 Boundaries and formats</h3>
+<p>After generation, the exterior loop gets classified: OPEN stretches (where tide/surge forcing enters - must be contiguous runs of nodes) vs LAND. Solvers are strict bookkeepers about this: TELEMAC wants IPOBO as a permutation of boundary nodes plus a .cli row per node; SCHISM wants gr3 open/land segment blocks. That bookkeeping is telapy's seat. The triangulation + bed elevation at nodes + boundary tags then serialize to .slf / .gr3 / fort.14 / .2dm through the shared writers.</p>
 <h2>1. Where things stand (measured, from the mesh wave)</h2>
 <table>
 <tr><th>fact</th><th>evidence</th></tr>
@@ -39,7 +56,7 @@
 <tr><td>surgical punch on an existing mesh is non-conformal</td><td>telapy element-removal punch: 80.1 m outline offset, measured</td></tr>
 <tr><td>telapy's own edit primitives are unfinished</td><td><code>cleave_max_7_nodes</code> raises unfinished; <code>filter_mesh_resolution</code> broken - evidence of NO user base for pretel editing</td></tr>
 <tr><td>telapy is the format/boundary authority, already load-bearing</td><td>every mesh exits through <code>write_telemac_pair</code> (set_mesh/set_bnd), <code>Conlim.set_numliq</code>, <code>get_ipobo</code> (R1 fix)</td></tr>
-<tr><td>per-edit rebuild ruled uneconomical</td><td>session-economics ruling: lazy batched realization, staged-once inputs, prefix-keyed snapshot cache (sibling landing, benefits every wiring)</td></tr>
+<tr><td>regeneration is ECONOMICAL for the common case (REVISED)</td><td>small/screening meshes rebuild in seconds (primer 0.4, measured); regeneration is also the community default. The earlier "uneconomical" ruling narrows to LARGE fine meshes only</td></tr>
 <tr><td>gmsh .msh is an official TELEMAC import</td><td><code>telapy parser_gmsh.py</code>: <code>MSH(Selafin)</code>, in the worker image</td></tr>
 <tr><td>PATCH EDITING IS OM2D'S OWN TRODDEN CONCEPT, unported</td><td>MATLAB OceanMesh2D ships <code>remesh_patch</code> + <code>extract_subdomain</code>; neither made the python port. Wiring C = porting a known capability, not inventing one (landscape report)</td></tr>
 <tr><td>gmsh: TELEMAC-mainstream, surge-world outlier</td><td>first-class MSH parser + STBTEL route + real forum usage for TELEMAC; no coastal wrapper exists in the ADCIRC/SCHISM world (landscape report)</td></tr>
@@ -55,8 +72,8 @@
 <li><b>Session economics</b> (sibling ruling): lazy batched realization, staged-once inputs, snapshot-cache undo - lands for every wiring.</li>
 </ul>
 
-<h3>2.1 Proposed alongside (awaiting a nod): capability names for meshers</h3>
-<p>Mesher names are currently implementation names (<code>om2d</code>, <code>telapy_mesh</code>), against the capability-naming norm. Proposed: <code>coastal</code> / <code>adopt</code> / <code>corridor</code> / <code>grid</code> - then the kernel behind <code>coastal</code> is swappable without the registry ever lying, and the A/B choice below becomes invisible to templates.</p>
+<h3>2.1 RULED: capability is the param</h3>
+<p>The user-facing param names the CAPABILITY, not the implementation: <code>coastal</code> / <code>adopt</code> / <code>corridor</code> / <code>grid</code>. More intuitive, and each capability tailors its own edit-action set; the kernel behind it is swappable without the registry ever lying.</p>
 <pre><code class="py">MESH = tool.build_mesh(
     mesher = "coastal",           # capability name; the kernel is internal
     kind   = "unstructured_tri",
@@ -65,8 +82,16 @@
     bed    = D.dem,
 ).edit("add_obstacle", D.breakwaters)</code></pre>
 
-<h2>3. The kernel wiring: patch-local edits (primary), gmsh-generates (alternative)</h2>
-<h3>3.0 PRIMARY - wiring C, as proposed by the user: om2d builds, gmsh edits in place</h3>
+<h2>3. Resolution: the painless / efficient / compatible ranking</h2>
+<table>
+<tr><th>option</th><th>painless</th><th>efficient</th><th>compatible</th><th>verdict</th></tr>
+<tr><td><b>1. Regenerate-on-edit + session polish</b> (lazy batching, staged-once inputs, snapshot-cache undo)</td><td>BEST - zero new deps, zero custom mesh math; it is what landed, polished</td><td>fine for the common case (seconds, primer 0.4); replay = equivalent rebuild, session-stable via the cache</td><td>the community-typical workflow (landscape report: the field default)</td><td><b>ADOPT NOW - the common path</b></td></tr>
+<tr><td><b>2. Patch-local edits</b> (gmsh planar patch or OCSMesh remesh_by_shape; MATLAB remesh_patch precedent)</td><td>moderate - custom carve/stitch plumbing, vehicle spike needed</td><td>best at scale: byte-stable base + deterministic patches</td><td>concept trodden in om2d MATLAB, unported</td><td><b>DEFERRED - revisit when a LARGE mesh measurably hurts at the gate</b></td></tr>
+<tr><td><b>3. telapy last mile + adoption</b></td><td colspan="3">already landed and load-bearing; unchanged</td><td><b>KEPT</b></td></tr>
+</table>
+<p>Net: the common case follows the typical community workflow (regenerate), made pleasant by the session polish; the clever machinery waits for evidence it is needed. The section below records the deferred patch design so it is not relitigated from scratch when scale arrives.</p>
+<h3>3.pre DEFERRED design record: patch-local edits</h3>
+<h3>3.0 Wiring C (deferred primary candidate): om2d builds, the kernel patch-edits in place</h3>
 <p>The om2d mesh exists as the base, built ONCE and held in the prefix-keyed snapshot cache. An edit is PATCH-LOCAL: carve the region around the edit, hand gmsh the patch as a planar polygon with its boundary nodes FIXED, embed the obstacle outline (or size field) inside, re-mesh the patch, stitch back.</p>
 <ul>
 <li><b>In place, literally</b>: outside the patch the base mesh is byte-identical, not equivalent.</li>

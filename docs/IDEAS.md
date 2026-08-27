@@ -2280,3 +2280,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   on Duck NC: seam min-angle, outline offset 0.0, 3-run determinism,
   friction. Report: docs/research/coastal-mesh-edit-landscape.md;
   spec: docs/specs/gmsh-mesher.html rev 4.
+
+- REMESH ECONOMY REVISED + CAPABILITY PARAM RULED (NATE 2026-08-27,
+  after his own research): regeneration-on-edit IS economical for the
+  COMMON small-mesh case and is the community-typical workflow - the
+  "uneconomical" ruling narrows to LARGE fine meshes only. Resolution:
+  ADOPT regenerate + session polish now (lazy batched realization,
+  staged-once inputs, snapshot-cache undo - these stand); PATCH-LOCAL
+  editing DEFERRED to measured large-mesh pain, its design recorded in
+  the spec so it is not relitigated (gmsh planar patch vs OCSMesh
+  remesh_by_shape spike, MATLAB remesh_patch precedent). CAPABILITY IS
+  THE PARAM: mesher names become capabilities (coastal/adopt/corridor/
+  grid), each tailoring its own edit-action set, kernels swappable
+  behind them. Spec rev 5 adds a HOW-MESHING-WORKS primer (sizing
+  functions, generation families, conformality, cost scaling,
+  boundary bookkeeping) - specs teach as well as specify.
