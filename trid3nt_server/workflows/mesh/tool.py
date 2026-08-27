@@ -239,9 +239,18 @@ def resolve_mesh(
     cannot solve on it, that is a refusal rather than a quiet substitution.
     """
     if explicit is not None:
-        art = explicit if isinstance(explicit, MeshArtifact) else (
-            read_mesh_artifact_sidecar(str(explicit), s3_client)
-            if s3_client is not None else None)
+        if isinstance(explicit, MeshArtifact):
+            art: MeshArtifact | None = explicit
+        elif s3_client is None:
+            # Naming the caller's missing reader rather than blaming the mesh: the
+            # two are different failures and only one is the user's to fix.
+            raise MeshToolError(
+                "MESH_EXPLICIT_UNREADABLE",
+                f"the mesh supplied for this run ({explicit!r}) is a uri and no "
+                "object-store reader was supplied to resolve it, so what it is "
+                "cannot be checked against the engine.")
+        else:
+            art = read_mesh_artifact_sidecar(str(explicit), s3_client)
         if art is None:
             raise MeshToolError(
                 "MESH_EXPLICIT_UNREADABLE",

@@ -506,7 +506,21 @@ NOT COUNTED, by the rule at the head of this file:
 `tests/test_build_mesh_tool.py` (351), `workflows/mesh/corpus.yaml` (not `.py`),
 and the 5-line registration import plus comment in `tools/__init__.py`.
 
+## Mesh wave - slice 1 review: typed refusals on the build seam (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh slice 1 review | `workflows/mesh/session.py` (+23 - `_refuse_unbound`: a late-bound spec field or edit input is refused as `MESH_SPEC_UNBOUND` at the build seam instead of failing inside the mesh library on the shape of a placeholder) | 422 | 445 | +23 | +5353 |
+| 2026-08-27 | mesh slice 1 review | `workflows/mesh/tool.py` (+9 net - an explicit mesh uri with no object-store reader names the missing reader rather than blaming the mesh for carrying no record) | 351 | 360 | +9 | +5362 |
+
+**Verdict: +32, all of it refusal text.** Both rows close the same gap: a
+failure that was arriving untyped (a `TypeError` from inside the grid math) or
+under the wrong cause (the caller's missing reader reported as the mesh's
+missing record) now leaves as a named mesh refusal.
+
+NOT COUNTED: the 50 lines added to `tests/test_build_mesh_tool.py` (351 -> 401).
+
 ## Corrected campaign net
 
-**The campaign net is +5330** - the true running sum of every delta in the tables
-above, from wave 2's first row to the mesh wave's slice 1.
+**The campaign net is +5362** - the true running sum of every delta in the tables
+above, from wave 2's first row to the mesh wave's slice 1 review.

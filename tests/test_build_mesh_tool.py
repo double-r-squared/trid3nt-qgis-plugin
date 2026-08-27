@@ -171,9 +171,27 @@ def test_explicit_mesh_an_engine_cannot_read_refuses():
 
 
 def test_explicit_mesh_with_no_readable_record_refuses():
+    reader = _FailingReader()
+    with pytest.raises(MeshToolError) as excinfo:
+        resolve_mesh(_declaration(), explicit="s3://cache/mesh/unknown/mesh.2dm",
+                     s3_client=reader)
+    assert excinfo.value.error_code == "MESH_EXPLICIT_UNREADABLE"
+    assert "no readable mesh artifact record" in str(excinfo.value)
+
+
+def test_explicit_mesh_uri_with_no_reader_names_the_missing_reader():
+    """The caller's missing reader is not the supplied mesh's fault."""
     with pytest.raises(MeshToolError) as excinfo:
         resolve_mesh(_declaration(), explicit="s3://cache/mesh/unknown/mesh.2dm")
     assert excinfo.value.error_code == "MESH_EXPLICIT_UNREADABLE"
+    assert "no object-store reader was supplied" in str(excinfo.value)
+
+
+class _FailingReader:
+    """An object store with no sidecar under the asked-for key."""
+
+    def get_object(self, **_kwargs):
+        raise KeyError("no such object")
 
 
 def test_case_discovery_beats_the_declared_default():
@@ -216,6 +234,38 @@ def test_a_declaration_builds_nothing(tmp_path):
     assert len(declaration.edits) == 1
     with pytest.raises(ValueError):
         MeshSession(declaration, workdir=tmp_path).probes()
+
+
+def test_building_an_unbound_declaration_refuses_by_name(tmp_path):
+    """A placeholder must not reach the mesh library as a value it cannot read."""
+    from trid3nt_server.workflows.lib.plan import ParamRef
+
+    declaration = tool.build_mesh(mesher="reg_grid", aoi=_AOI,
+                                  resolution_m=ParamRef("mesh_resolution_m"))
+    with pytest.raises(MeshToolError) as excinfo:
+        MeshSession(declaration, workdir=tmp_path).probes()
+    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
+    assert "reg_grid.resolution_m" in str(excinfo.value)
+
+
+def test_an_unbound_declared_edit_input_refuses_at_build(tmp_path):
+    from trid3nt_server.workflows.lib.plan import ParamRef
+
+    declaration = _declaration().edit("set_resolution", ParamRef("cell_size_m"))
+    with pytest.raises(MeshToolError) as excinfo:
+        MeshSession(declaration, workdir=tmp_path).probes()
+    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
+    assert "set_resolution.resolution_m" in str(excinfo.value)
+
+
+def test_an_unbound_session_edit_input_refuses(tmp_path):
+    from trid3nt_server.workflows.lib.plan import ParamRef
+
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    with pytest.raises(MeshToolError) as excinfo:
+        session.edit("set_resolution", ParamRef("cell_size_m"))
+    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
+    assert session.chain == ()
 
 
 def test_edit_chaining_returns_a_new_frozen_declaration():

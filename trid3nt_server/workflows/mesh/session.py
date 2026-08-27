@@ -37,6 +37,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     MeshToolError,
     get_mesher,
     input_digest,
+    is_late_bound,
 )
 from trid3nt_server.workflows.mesh.tool import (
     DeclaredEdit,
@@ -111,6 +112,7 @@ class MeshSession:
         bound = validate_edit(self.mesher.name, act.name,
                               bind_edit_inputs(self.mesher.name, act.name,
                                                values, inputs))
+        _refuse_unbound(self.spec, (DeclaredEdit(act.name, bound),))
         self._mesh = act.apply(self._mesh, **dict(bound))
         self._chain.append(DeclaredEdit(act.name, bound))
         self._display = None
@@ -235,8 +237,29 @@ def _edit_line(mesher: Mesher, edit: DeclaredEdit) -> dict[str, Any]:
     return line
 
 
+def _refuse_unbound(spec: MeshSpec, chain: Sequence[DeclaredEdit]) -> None:
+    """Refuse to build a declaration the interpreter has not bound yet.
+
+    A declared field holds ``P.<name>`` / ``D.<name>`` / ``Ref(...)`` until a
+    resolved sheet binds it, and a mesh library handed a placeholder fails deep
+    inside itself on the shape of the value rather than on what is actually
+    wrong.
+    """
+    unbound = [f"{spec.mesher}.{name}" for name, value in spec.fields.items()
+               if is_late_bound(value)]
+    unbound += [f"{edit.action}.{name}" for edit in chain
+                for name, value in edit.inputs.items() if is_late_bound(value)]
+    if unbound:
+        raise MeshToolError(
+            "MESH_SPEC_UNBOUND",
+            f"{sorted(unbound)} are late-bound reads rather than values, so this "
+            "mesh cannot be built: bind the declaration against a resolved sheet "
+            "before demanding the mesh.")
+
+
 def _build_chain(mesher: Mesher, spec: MeshSpec,
                  chain: Sequence[DeclaredEdit]) -> Mesh:
+    _refuse_unbound(spec, chain)
     mesh = mesher.build(dict(spec.fields))
     for edit in chain:
         act = mesher.action(edit.action)
