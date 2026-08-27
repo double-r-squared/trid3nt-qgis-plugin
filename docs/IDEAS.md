@@ -2411,3 +2411,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   queued for its own attention after the wave. Stale trid3nt-mcp
   script in the venv bin clears on the next natural editable
   reinstall (not forced mid-wave).
+
+- GEOMETRY-BY-NAME + CANVAS PICKER (NATE 2026-08-27, ruled direction):
+  geometry-valued edit inputs enter the gate card BY REFERENCE - build
+  the object in QGIS, fetch it, or generate it, then feed the OBJECT/
+  LAYER NAME: a string row on the SAME param_sheet channel D3 landed
+  (no new protocol). Server resolves name -> case layer -> geometry ->
+  session.edit; name SHOWS, durable layer id TRAVELS; ambiguous typed
+  names refuse listing matches; not-found/wrong-type/empty refuse
+  typed naming what the action needed. QGIS native feature SELECTION
+  = the subset operator (layer name = all features; selection = the
+  subset). PICKER UX: a card row arms a canvas pick mode - candidates
+  attention-flash/highlight, chosen name fills the row - built on the
+  EXISTING SpatialInputCard/draw-gate machinery. LANDS: model wave
+  (rev 18) for the resolution seam + rows; picker is plugin UI
+  needing NATE's live pass.
