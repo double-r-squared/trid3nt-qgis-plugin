@@ -314,6 +314,8 @@ async def build_mesh(
     kind: str | None = None,
     location: str | None = None,
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
+    min_edge_length_m: float | None = None,
+    max_edge_length_m: float | None = None,
     **fields: Any,
 ) -> Any:
     """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready mesh artifact.
@@ -354,9 +356,12 @@ async def build_mesh(
             structured_grid).
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
         bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-        fields: the chosen mesher's own declared fields (pour_point,
-            min_edge_length_m, max_edge_length_m, grade, open_boundary_side,
-            resolution_m, extent_km, width_m, banks, refine).
+        min_edge_length_m: finest cell/triangle edge (m); the CHANNEL cell for
+            ``hecras_rog``. Declined by name by a mesher that sizes another way.
+        max_edge_length_m: coarsest edge (m); the HILLSLOPE cell for ``hecras_rog``.
+        fields: the chosen mesher's own remaining declared fields (pour_point,
+            grade, open_boundary_side, resolution_m, extent_km, width_m, banks,
+            refine).
     """
     import asyncio
 
@@ -368,6 +373,14 @@ async def build_mesh(
         raise MeshToolError(
             "MESH_STAGING_UNAVAILABLE",
             "TRID3NT_CACHE_BUCKET must be set to stage a built mesh into the case.")
+
+    # The edge band is on the SIGNATURE because it is the granularity lever three
+    # of the meshers share and the one whose floor the tool declares; a mesher that
+    # does not size by an edge band refuses it by name at the router.
+    for name, value in (("min_edge_length_m", min_edge_length_m),
+                        ("max_edge_length_m", max_edge_length_m)):
+        if value is not None:
+            fields = {name: float(value), **fields}
 
     declared = get_mesher(mesher).fields
     if "aoi" in declared and "aoi" not in fields:
