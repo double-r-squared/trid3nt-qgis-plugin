@@ -28,7 +28,7 @@
 </style>
 
 <h1>Coastal Mesher Kernel</h1>
-<p class="rev">rev 8 &middot; 2026-08-27 &middot; CONVERGED: the domain vocabulary is DROPPED - constituents + presence-derived capabilities; DATA-first sourcing; no words that imply. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 9 &middot; 2026-08-27 &middot; the current picture: domain bindings (Ref aoi / Ref reach) related to constituents; class view redrawn to the converged design. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>0. How meshing works (primer)</h2>
 <p>An unstructured mesh is a domain cut into triangles. Two things define its quality: the SHAPE of the triangles (minimum angle - skinny slivers break solvers) and the SIZING - a field h(x) giving the target edge length at every point. Everything a mesher does is in service of honoring h(x) with well-shaped triangles.</p>
@@ -105,6 +105,14 @@
 <li><b>Artifact</b>: MeshArtifact + recipe + probes -&gt; author -&gt; solve, unchanged.</li>
 </ol>
 <p><b>Doability</b>: modest - the landed registry carries per-mesher actions and fields; templates already pass exactly these refs (domain=Ref("reach"), aoi=Ref("aoi")). Delta: the constituent rule table + import-time pattern enforcement + auto builder selection in the existing router. One coherent landing in the follow-up wave with for_, the session polish, and the rename.</p>
+<h3>2.1.4 Domain bindings vs constituents - Ref("aoi") and Ref("reach")</h3>
+<p>Both are the plan's binding of "the modeled world", produced by <code>acquire_domain</code> under the template's declared shape - same ROLE, genuinely different THINGS, and the names honestly say which contents you get:</p>
+<table>
+<tr><th>binding</th><th>shape</th><th>contents</th><th>consumers</th></tr>
+<tr><td><code>Ref("aoi")</code></td><td>open_water (and catchment, where the AOI is DERIVED from the pour point)</td><td>a rectangle - the ask bounds itself; no flowline, no carrier</td><td>meshing, fetches</td></tr>
+<tr><td><code>Ref("reach")</code></td><td>reach</td><td>THREE steps: flowline -&gt; mid-reach seed -&gt; carrier discharge AT the seed ("the modeled world is not established until the flow that carries everything through it is")</td><td>meshing (its geometry), FORCING (discharge at the seed), release plumbing</td></tr>
+</table>
+<p>Under this spec nothing renames and nothing merges: the MESH declaration reads each binding for the CONSTITUENTS it actually carries (Ref("aoi") = the bare aoi; Ref("reach") contributes aoi + flowline, unlocking the corridor verbs), while the reach's seed/discharge side flows to forcing exactly as today. Things are what they carry, not what they are called - the same philosophy as the rest of the converged design.</p>
 <h3>2.2 RULED: the for= consumer declaration</h3>
 <p><code>for=</code> names the upstream consumer(s) - the engine(s) that will solve on this mesh - and binds the session to their requirements profile (the existing <code>ENGINE_MESH_REQUIREMENTS</code> registry, read at BUILD time instead of only at the consume gate):</p>
 <ul>
@@ -188,56 +196,63 @@
 <li>mmg adoption under wiring A - a follow-on evaluation gated on measured pain, not part of this decision.</li>
 </ul>
 
-<h2>6. Class-view delta</h2>
+<h2>6. The current picture</h2>
 <div class="scroll">
 <pre class="mermaid">
 classDiagram
-    class Mesher {
+    class Template {
+        DATA: declared fetches (bed, shoreline, flowline...)
+        acquire_domain -> Ref aoi | Ref reach
+        MESH = tool.build_mesh(kind, mesher=auto, for_, aoi, constituents)
+        static plan, as today
+    }
+    class BuildMesh {
+        +build_mesh(kind, mesher="auto", for_, aoi, **constituents)
+        frozen + lazy in templates; builds now standalone
+        capabilities from PRESENCE (rule table)
+        DATA-first sourcing; "fetch:" sugar -> same router
+    }
+    class ConstituentRules {
+        bare aoi -> refine_region, apply_layer_edits
+        +shoreline -> add_obstacle, set_boundary
+        +flowline -> corridor verbs
+        +pour point -> closed catchment
+        enforced at builder registration (import)
+    }
+    class Router {
+        selects builder per constituent pattern
+        explicit mesh > case discovery > declared build
+        refuses unknown fields BY NAME
+    }
+    class Builder {
         <<interface>>
-        +build(spec) mesh
-        +actions: registry
+        registers per constituent pattern
+        om2d pipeline | corridor_tin | watershed | reg_grid
+        deterministic: MEASURED claim
     }
-    class Coastal {
-        capability name (proposed)
-        sizing: oceanmesh (fixed)
-        kernel: INTERNAL, swappable
-        IO seam: checked arrays
+    class MeshSession {
+        offered verbs mounted at the gate only
+        regenerate-on-edit (economical common case)
+        staged-once inputs; snapshot cache; restart -> declared prefix
+        accept() enforces the for_ contract
+        recipe = the record
     }
-    class KernelA {
-        om2d DistMesh generates
-        edits: regenerate (economics fix)
-        mmg local remesh if needed
+    class MeshArtifact {
+        probes + recipe + formats
+        display face via emission (MDAL)
     }
-    class KernelB {
-        gmsh model generates from sizing field
-        edits mutate the model, in-process
-        embedded curves = conformal
+    class Telapy {
+        format + boundary authority (last mile, every builder)
+        adoption + surgery for supplied meshes
     }
-    class TelapyMesh {
-        adopt / surgery - unchanged
-        format + boundary authority for ALL kernels
-    }
-    Mesher <|.. Coastal
-    Mesher <|.. TelapyMesh
-    Coastal --> KernelA : wiring A (open)
-    Coastal --> KernelB : wiring B (open)
-    KernelA --> TelapyMesh : .slf/.cli last mile
-    KernelB --> TelapyMesh : .slf/.cli last mile
+    Template --> BuildMesh : MESH declaration
+    BuildMesh --> ConstituentRules : capability set, statically
+    BuildMesh --> Router : demand-pulled
+    Router --> Builder : constituent pattern
+    Builder --> MeshSession : opens
+    MeshSession --> MeshArtifact : accept()
+    MeshArtifact --> Telapy : .slf/.cli last mile
+    MeshArtifact --> Template : author -> solve, unchanged
 </pre>
 </div>
-
-<script>
-  document.querySelectorAll('pre:not(.mermaid) > code').forEach(function (el) {
-    var t = el.textContent
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    el.innerHTML = t.replace(
-      /(#[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|\b(def|class|return|import|from|as|if|elif|else|for|while|in|not|and|or|None|True|False|lambda|with|yield|raise|try|except|pass)\b|\b(\d+(?:\.\d+)?)\b/g,
-      function (m, com, str, kw, num) {
-        if (com) return '<span class="c">' + com + '</span>';
-        if (str) return '<span class="s">' + str + '</span>';
-        if (kw)  return '<span class="k">' + kw + '</span>';
-        if (num) return '<span class="n">' + num + '</span>';
-        return m;
-      });
-  });
-</script>
+<p>Deferred, recorded above: patch-local edits (activates on measured large-mesh pain). Unchanged: the run paradigm, fetch, styles, emission, the static plan.</p>
