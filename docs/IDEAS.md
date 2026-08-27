@@ -2398,3 +2398,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   running wave at its completion (against workflow-blueprint + the
   D2-D5 rulings) and is baked into every future wave script as the
   mandatory final stage.
+
+- MCP PURGED (NATE 2026-08-27): mcp_server.py (351 LOC, zero
+  consumers) + test + design doc + .mcp.json.example + the mcp dep +
+  trid3nt-mcp entrypoint all chopped (ledger lines; decision 0302
+  stays as history). KEPT + SCHEDULED SEPARATELY: the persistence
+  seam is NAMED after MCP (MCPClientProtocol / FileMCPClient in
+  persistence.py, covered by the doubly-stale-named
+  test_mongo_mcp_wiring.py) but is the LIVE case-persistence path -
+  purging it is a rename refactor (DocumentStoreProtocol or similar +
+  test rename + comment scrub of "MCP" mentions in loop.py/tools),
+  queued for its own attention after the wave. Stale trid3nt-mcp
+  script in the venv bin clears on the next natural editable
+  reinstall (not forced mid-wave).
