@@ -244,9 +244,16 @@ class MeshSession:
 
     # -- the recipe -------------------------------------------------------- #
     def recipe_lines(self) -> list[dict[str, Any]]:
-        """The recipe as records: the spec, then one per edit in chain order."""
-        return [{"spec": self.spec.to_json()},
-                *(_edit_line(self.mesher, e) for e in self._chain)]
+        """The recipe as records: the spec, then one per edit in chain order.
+
+        A mesher whose library does not reproduce itself says so on the spec line,
+        so a replay of this recipe is read as an equivalent rebuild rather than as
+        a promise of the same mesh.
+        """
+        spec: dict[str, Any] = {"spec": self.spec.to_json()}
+        if not self.mesher.deterministic:
+            spec["determinism"] = False
+        return [spec, *(_edit_line(self.mesher, e) for e in self._chain)]
 
     def _journal(self) -> None:
         self.recipe_path.write_text(

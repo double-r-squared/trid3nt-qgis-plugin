@@ -85,6 +85,9 @@ class MeshArtifact:
     engine_compat: list[str] = field(default_factory=list)
     gr3_uri: str | None = None
     fort14_uri: str | None = None
+    #: The TELEMAC boundary-conditions file written from THIS geometry's own
+    #: boundary numbering; only valid against the ``slf_uri`` beside it.
+    cli_uri: str | None = None
     outlet_lonlat: tuple[float, float] | None = None
     pour_point_lonlat: tuple[float, float] | None = None
     open_boundary_info: dict[str, Any] = field(default_factory=dict)

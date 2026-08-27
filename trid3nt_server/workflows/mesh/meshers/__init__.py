@@ -28,6 +28,7 @@ __all__ = [
     "MeshToolError",
     "Mesher",
     "apply_layer_edits_action",
+    "checked_refine",
     "get_mesher",
     "input_digest",
     "is_late_bound",
@@ -164,6 +165,41 @@ class MeshField:
         return value
 
 
+def checked_refine(where: str, refine: Any,
+                   declared: Mapping[str, float]) -> dict[str, float]:
+    """The refine knobs a mesher declares, checked BY NAME -> numbers with defaults.
+
+    A ``refine`` block is a mapping, so the field check can only say it is one; the
+    knobs inside it are checked here, against the same rule the outer fields obey -
+    an undeclared knob is refused by name rather than dropped on the floor where it
+    would read as a lever that did nothing.
+    """
+    given = dict(refine or {})
+    unknown = [k for k in given if k not in declared]
+    if unknown:
+        raise MeshToolError(
+            "MESH_SPEC_UNKNOWN_KNOB",
+            f"{where}: refine declares no knob {unknown[0]!r} "
+            f"({nearest_names(unknown[0], declared)}). Unknown knobs: "
+            f"{sorted(unknown)}.")
+    resolved: dict[str, float] = {}
+    for name, default in declared.items():
+        value = given.get(name, default)
+        if is_late_bound(value):
+            raise MeshToolError(
+                "MESH_SPEC_UNBOUND",
+                f"{where}: refine[{name!r}] is a late-bound read ({value!r}) rather "
+                "than a value, so this mesh cannot be built; bind the declaration "
+                "against a resolved sheet before demanding the mesh.")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise MeshToolError(
+                "MESH_SPEC_BAD_TYPE",
+                f"{where}: refine[{name!r}] takes a number, got "
+                f"{type(value).__name__} ({value!r}).")
+        resolved[name] = float(value)
+    return resolved
+
+
 @dataclass(frozen=True)
 class EditAction:
     """A named edit: one library call, its typed inputs, and whether it replays.
@@ -248,12 +284,19 @@ class Mesh:
 
 @dataclass(frozen=True)
 class Mesher:
-    """A registered mesh library: its build, its spec fields, its edit actions."""
+    """A registered mesh library: its build, its spec fields, its edit actions.
+
+    ``deterministic`` is a MEASURED claim about the library, not a hope: a mesher
+    declares False when identical inputs have been observed to produce different
+    meshes, and the recipe carries that so a replay is read as an equivalent
+    rebuild rather than as the same mesh.
+    """
 
     name: str
     build: Callable[[Mapping[str, Any]], Mesh]
     actions: Mapping[str, EditAction] = field(default_factory=dict)
     fields: Mapping[str, MeshField] = field(default_factory=dict)
+    deterministic: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "actions", MappingProxyType(dict(self.actions)))
@@ -277,6 +320,7 @@ def register_mesher(
     build: Callable[[Mapping[str, Any]], Mesh],
     actions: Iterable[EditAction] = (),
     fields: Iterable[MeshField] = (),
+    deterministic: bool = True,
 ) -> Mesher:
     """Record a mesher under ``name`` -> the registered :class:`Mesher`.
 
@@ -291,7 +335,8 @@ def register_mesher(
     mesher = Mesher(
         name=key, build=build,
         actions={a.name: a for a in actions},
-        fields={f.name: f for f in fields})
+        fields={f.name: f for f in fields},
+        deterministic=bool(deterministic))
     _MESHERS[key] = mesher
     return mesher
 
