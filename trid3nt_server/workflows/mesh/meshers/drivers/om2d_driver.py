@@ -5,22 +5,32 @@ Runs INSIDE ``trid3nt-local/mesh:latest``, the only place the CHLNDDEV
 file and a rundir and shells it; nothing here imports trid3nt code.
 
 Contract (host <-> container over the mounted /data dir):
-  argv[1] = /data/om2d_config.json   argv[2] = /data
-  config keys: bbox [xmin,ymin,xmax,ymax], shoreline_shp, dem_path (optional -
-  enables wavelength sizing), min_edge_length_m, max_edge_length_m, gradation,
-  obstacles [{geojson, constrain}], refine_regions [{geojson, edge_length_m}],
-  max_iter, seed, wl.
-Emits /data/om2d_mesh.npz (points (N,2) lon/lat, cells (M,3) 0-based, pfix (K,2))
-and /data/om2d_stats.json.
+  argv[1] = <op>   argv[2] = /data/om2d_config.json   argv[3] = /data
 
-An obstacle is subtracted from the signed distance function, so the mesh has a
-HOLE where it sits, and its outline vertices are passed as ``pfix`` so DistMesh
-locks them: that is what makes the cut conformal. The offset is MEASURED on the
-host from the returned pfix, never asserted here.
+  build            config keys: bbox [xmin,ymin,xmax,ymax], shoreline_shp,
+                   dem_path (optional - enables wavelength sizing),
+                   min_edge_length_m, max_edge_length_m, gradation,
+                   obstacles [{geojson, constrain}],
+                   refine_regions [{geojson, edge_length_m}], max_iter, seed, wl.
+                   Emits /data/om2d_mesh.npz (points (N,2) lon/lat, cells (M,3)
+                   0-based, pfix (K,2)) and /data/om2d_stats.json.
+  ocean_boundary   config keys: mesh_npz (points, cells, bed positive up),
+                   depth_threshold, min_nodes_threshold. Emits
+                   /data/om2d_sections.json: the CONTIGUOUS ocean-boundary
+                   sections oceanmesh itself identifies, plus the winded boundary
+                   walk they index into.
+
+An obstacle is subtracted from the signed distance function through
+``om.Difference``, so the mesh has a HOLE where it sits, and its outline vertices
+are passed as ``pfix`` so DistMesh locks them: that is what makes the cut
+conformal. The offset is MEASURED on the host from the returned pfix, never
+asserted here.
 
 A refine region is written onto the sizing GRID's own lattice before gradation
 limiting, so the transition into it obeys the same gradation the rest of the mesh
-does rather than being a discontinuity DistMesh has to absorb.
+does rather than being a discontinuity DistMesh has to absorb. An obstacle seeds
+the same lattice with the finest edge inside a band around its outline and lets
+``om.enforce_mesh_gradation`` grow the size away from it.
 """
 
 from __future__ import annotations
@@ -35,6 +45,11 @@ from scipy.spatial import cKDTree
 from shapely import contains_xy
 from shapely.geometry import shape as _shape
 from shapely.ops import unary_union
+
+
+#: How wide the finest-edge band around an obstacle outline is, in units of that
+#: finest edge. One edge is the narrowest band a triangle can actually resolve.
+_OBSTACLE_BAND_EDGES = 1.0
 
 
 def _m_per_deg(mid_lat_deg: float) -> float:
@@ -88,10 +103,14 @@ def _thin(points: np.ndarray, spacing: float) -> np.ndarray:
     return np.asarray(kept, dtype=float)
 
 
-class _Holes:
-    """The union of the obstacle geometries, as a signed distance in degrees."""
+class _Holes(om.Domain):
+    """The obstacle union as an oceanmesh domain: a signed distance in degrees.
 
-    def __init__(self, geoms, step: float) -> None:
+    Being a ``Domain`` is what lets ``om.Difference`` subtract it from the
+    shoreline domain with the library's own set algebra.
+    """
+
+    def __init__(self, geoms, step: float, bbox) -> None:
         self.union = unary_union(geoms)
         pts: list[tuple[float, float]] = []
         for geom in geoms:
@@ -102,6 +121,7 @@ class _Holes:
         # actually hold (a closed ring's repeated first vertex goes with them).
         self.outline = _thin(np.asarray(pts, dtype=float), 0.5 * step)
         self.tree = cKDTree(self.outline)
+        super().__init__(bbox, self.signed)
 
     def signed(self, x: np.ndarray) -> np.ndarray:
         xq = np.nan_to_num(np.asarray(x, dtype=float), nan=1.0e9)
@@ -110,10 +130,7 @@ class _Holes:
         return np.where(inside, -d, d)
 
 
-def main() -> int:
-    cfg = json.load(open(sys.argv[1]))
-    out = sys.argv[2].rstrip("/")
-
+def op_build(cfg: dict, out: str) -> int:
     xmin, ymin, xmax, ymax = (float(v) for v in cfg["bbox"])
     om_bbox = (xmin, xmax, ymin, ymax)
     mpd = _m_per_deg(0.5 * (ymin + ymax))
@@ -154,7 +171,7 @@ def main() -> int:
     holes = None
     if obstacles:
         holes = _Holes([g for spec in obstacles for g in _load_geoms(spec["geojson"])],
-                       min_deg)
+                       min_deg, om_bbox)
 
     regions = list(cfg.get("refine_regions") or [])
     if regions or holes is not None:
@@ -170,11 +187,11 @@ def main() -> int:
                           % float(spec["edge_length_m"]))
         if holes is not None:
             # The cut can only follow the outline if the mesh is fine enough there
-            # to hold it: an obstacle sizes its own surroundings the way the
-            # shoreline does, growing at the same gradation away from the cut.
+            # to hold it, so the band around the outline is SEEDED at the finest
+            # edge; the growth away from it is enforce_mesh_gradation's, below.
             near = np.abs(holes.signed(flat)).reshape(xg.shape)
-            values = np.minimum(values, min_deg + gradation * near)
-            active.append("obstacle_sizing(distance_to_outline)")
+            values = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg, min_deg, values)
+            active.append("obstacle_band(%g*min_edge,graded)" % _OBSTACLE_BAND_EDGES)
         values = np.clip(values, min_deg, max_deg)
         edge_length.values = values
         edge_length.hmin = float(np.nanmin(values[np.isfinite(values) & (values > 0)]))
@@ -188,15 +205,11 @@ def main() -> int:
     domain = sdf
     pfix = np.empty((0, 2), dtype=float)
     if holes is not None:
-        base = sdf.eval
-
-        def domain(x):  # noqa: F811 -- the holed domain replaces the bare shoreline
-            return np.maximum(base(x), -holes.signed(x))
-
+        domain = om.Difference([sdf, holes])
         if any(spec.get("constrain", True) for spec in obstacles):
             # A constrained vertex on land would pin a node the shoreline excludes,
             # so only the outline inside the water domain is locked.
-            pfix = holes.outline[base(holes.outline) < 0.0]
+            pfix = holes.outline[sdf.eval(holes.outline) < 0.0]
         active.append("obstacles(%d,pfix=%d)" % (len(obstacles), int(pfix.shape[0])))
 
     points, cells = om.generate_mesh(
@@ -289,6 +302,110 @@ def main() -> int:
     json.dump(stats, open(out + "/om2d_stats.json", "w"), indent=2)
     print("OM2D_OK", json.dumps(stats))
     return 0
+
+
+def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
+    """The connected pieces of a triangulation, as boolean cell masks.
+
+    A domain cut by a shoreline can come back as two water bodies in one array,
+    and the winding walk oceanmesh identifies sections along traces ONE of them,
+    so each piece is offered its own identification.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    rows = np.repeat(np.arange(cells.shape[0]), 3)
+    incidence = coo_matrix(
+        (np.ones(rows.shape[0]), (rows, cells.ravel())),
+        shape=(cells.shape[0], npoin))
+    count, label = connected_components(
+        incidence @ incidence.T, directed=False)
+    return [label == k for k in range(count)]
+
+
+def op_ocean_boundary(cfg: dict, out: str) -> int:
+    """The CONTIGUOUS ocean-boundary sections oceanmesh identifies from the bed.
+
+    ``identify_ocean_boundary_sections`` returns the first and last node of each
+    section; the winding walk it indexes into is what turns those endpoints back
+    into the run of nodes between them, so the walk is rebuilt with the same
+    library call and returned with the sections.
+    """
+    from oceanmesh.edges import get_winded_boundary_edges
+
+    npz = np.load(cfg["mesh_npz"])
+    points = np.asarray(npz["points"], dtype=float)
+    cells = np.asarray(npz["cells"], dtype=np.int64)
+    bed = np.asarray(npz["bed"], dtype=float)
+    threshold = float(cfg["depth_threshold"])
+    min_nodes = int(cfg.get("min_nodes_threshold", 10))
+
+    sections: list[dict] = []
+    walks: list[list[int]] = []
+    for mask in _components(cells, points.shape[0]):
+        kept = np.unique(cells[mask])
+        remap = np.full(points.shape[0], -1, dtype=np.int64)
+        remap[kept] = np.arange(kept.shape[0])
+        sub_cells = remap[cells[mask]]
+        sub_points, sub_bed = points[kept], bed[kept]
+
+        winded = get_winded_boundary_edges(sub_cells).flatten()
+        first_seen = np.unique(winded, return_index=True)[1]
+        walk = [int(kept[winded[i]]) for i in sorted(first_seen)]
+        walks.append(walk)
+        at = {node: index for index, node in enumerate(walk)}
+
+        try:
+            ends = om.identify_ocean_boundary_sections(
+                sub_points, sub_cells, sub_bed, depth_threshold=threshold,
+                min_nodes_threshold=min_nodes)
+        except TypeError as exc:
+            # The section walk leaves its end node unset when the deep nodes on a
+            # walk never close a run, and then indexes with it.
+            raise ValueError(
+                "oceanmesh could not close an ocean-boundary section at "
+                f"depth_threshold={threshold} m with min_nodes_threshold="
+                f"{min_nodes} on a walk of {len(walk)} boundary nodes "
+                f"({exc}); state a threshold this boundary crosses cleanly"
+            ) from exc
+        for start, stop in ends:
+            i, j = at[int(kept[start])], at[int(kept[stop])]
+            nodes = walk[i:j + 1] if i <= j else walk[i:] + walk[:j + 1]
+            sections.append({
+                "nodes": nodes,
+                "node_count": len(nodes),
+                "mean_bed_m": round(float(bed[nodes].mean()), 3),
+                "min_bed_m": round(float(bed[nodes].min()), 3),
+                "centroid": [round(float(points[nodes, 0].mean()), 6),
+                             round(float(points[nodes, 1].mean()), 6)],
+            })
+
+    walked = [n for walk in walks for n in walk]
+    report = {
+        "library": "oceanmesh.identify_ocean_boundary_sections v%s"
+                   % getattr(om, "__version__", "?"),
+        "depth_threshold_m": threshold,
+        "min_nodes_threshold": min_nodes,
+        "components": len(walks),
+        "walks": walks,
+        "walk_node_counts": [len(w) for w in walks],
+        "boundary_bed_min_m": round(float(bed[walked].min()), 3),
+        "boundary_bed_max_m": round(float(bed[walked].max()), 3),
+        "sections": sections,
+    }
+    json.dump(report, open(out + "/om2d_sections.json", "w"), indent=2)
+    print("OM2D_SECTIONS_OK", json.dumps(
+        {k: v for k, v in report.items() if k != "walks"})[:2000])
+    return 0
+
+
+_OPS = {"build": op_build, "ocean_boundary": op_ocean_boundary}
+
+
+def main() -> int:
+    op = sys.argv[1]
+    cfg = json.load(open(sys.argv[2]))
+    return _OPS[op](cfg, sys.argv[3].rstrip("/"))
 
 
 if __name__ == "__main__":

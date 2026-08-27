@@ -4,7 +4,7 @@ Runs INSIDE ``trid3nt-local/telemac:latest``, the only place ``telapy`` and
 ``pretel`` are installed. The host mesher mounts this file and a rundir and
 shells it once per operation; nothing here imports trid3nt code.
 
-  python _telapy_mesh_incontainer.py <op> /data/config.json /data
+  python telapy_mesh_driver.py <op> /data/config.json /data
 
 Ops, and the official surface each one delegates to:
 
@@ -12,7 +12,7 @@ Ops, and the official surface each one delegates to:
   write   HermesFile.set_mesh + set_bnd -> the SELAFIN geometry and its .cli,
           then Conlim.set_numliq for the liquid-boundary numbering
   punch   element removal inside a polygon + pretel remove_extra_nodes and
-          get_ipobo to re-derive the boundary
+          get_ipobo to re-derive the boundary and its IPOBO
   refine  node insertion at a requested spacing inside a polygon, re-triangulated
           through the Delaunay pretel itself meshes with, filtered back to the
           domain the boundary contours describe
@@ -61,18 +61,30 @@ def _load_geoms(path: str) -> list:
     return [_shape(doc)]
 
 
+def _boundary(x, y, ikle):
+    """pretel's own boundary walk -> ``(ipobo, contours)``, which agree by construction.
+
+    ``get_ipobo`` returns the closed contours it walked (each already stripped of
+    its repeated closing node) and an IPOBO numbered along them with ONE count
+    continuing across contours - which is what TELEMAC's permutation of 1..NPTFR
+    means, and what a per-contour count would break. Its own array numbers
+    ``contour[1:]``, leaving the first node of every contour at 0 where TELEMAC
+    would read a boundary node as interior, so the walk is the authority here and
+    every node on it is numbered once, in walk order.
+    """
+    _, pbounds = get_ipobo(x, y, np.asarray(ikle, dtype=np.int32), debug=False)
+    contours = [[int(n) for n in ring] for ring in pbounds]
+    ipobo = np.zeros(len(x), dtype=np.int32)
+    position = 0
+    for ring in contours:
+        for node in ring:
+            position += 1
+            ipobo[node] = position
+    return ipobo, contours
+
+
 def _contours(x, y, ikle) -> list[list[int]]:
-    _, contours = get_ipobo(x, y, np.asarray(ikle, dtype=np.int32), debug=False)
-    return [list(int(n) for n in c) for c in contours]
-
-
-def _ipobo(npoin: int, contours) -> np.ndarray:
-    """SELAFIN IPOBO: the 1-based position along the boundary, 0 in the interior."""
-    ipobo = np.zeros(npoin, dtype=np.int32)
-    for contour in contours:
-        for pos, node in enumerate(contour):
-            ipobo[int(node)] = pos + 1
-    return ipobo
+    return _boundary(x, y, ikle)[1]
 
 
 def _domain_polygon(x, y, contours):
@@ -134,10 +146,9 @@ def op_read(cfg: dict) -> dict:
                 "carries triangles")
         x = np.asarray(geo.get_mesh_coord(1), dtype=float)
         y = np.asarray(geo.get_mesh_coord(2), dtype=float)
+        # get_mesh_connectivity already returns 0-based (nelem, ndp).
         ikle = np.asarray(geo.get_mesh_connectivity(), dtype=np.int64)
         ikle = ikle.reshape((int(nelem), 3))
-        if ikle.min() >= 1:
-            ikle = ikle - 1
         # get_data_var_list returns (names, units), not a flat name list.
         names = geo.get_data_var_list() or ([], [])
         variables = [str(v).strip() for v in names[0]]
@@ -162,16 +173,22 @@ def op_read(cfg: dict) -> dict:
 
 def op_write(cfg: dict) -> dict:
     from data_manip.formats.conlim import Conlim
-    from telapy.api.hermes import BND_POINT, HermesFile
+    from telapy.api.hermes import BND_POINT, TRIANGLE, HermesFile
 
-    x, y, ikle, bottom, contours = _load(cfg["mesh_npz"])
-    if not contours:
-        contours = _contours(x, y, ikle)
+    x, y, ikle, bottom, _ = _load(cfg["mesh_npz"])
+    # The IPOBO written into the geometry and the contours the .cli is numbered
+    # from come from ONE walk of THIS connectivity: a boundary file numbered from
+    # any other walk classifies the wrong nodes.
+    ipobo, contours = _boundary(x, y, ikle)
     npoin = int(x.shape[0])
-    ipobo = _ipobo(npoin, contours)
     order = np.argsort(ipobo[ipobo > 0])
     bnodes = np.where(ipobo > 0)[0][order]
     nptfr = int(bnodes.shape[0])
+    distinct = int(np.unique(ipobo[ipobo > 0]).shape[0])
+    if distinct != nptfr:
+        raise ValueError(
+            f"IPOBO holds {nptfr} nonzero entries but only {distinct} distinct "
+            "values; TELEMAC requires a permutation of 1..NPTFR")
     open_nodes = set(int(n) for n in (cfg.get("open_nodes") or []))
     codes = np.array([_OPEN if int(n) in open_nodes else _LAND for n in bnodes],
                      dtype=np.int32)
@@ -184,8 +201,12 @@ def op_write(cfg: dict) -> dict:
     try:
         geo.set_header(cfg.get("title", "TRID3NT MESH")[:72],
                        1, ["BOTTOM          "], ["M               "])
-        geo.set_mesh(2, 20, 3, nptfr, 0, int(ikle.shape[0]), npoin,
-                     (ikle.flatten() + 1).astype(np.int32), ipobo,
+        # hermes derives NDP from the element type, so a wrong type writes a
+        # header that disagrees with the connectivity beside it; and set_mesh
+        # transposes and 1-bases the connectivity itself, so it takes the
+        # (nelem, ndp) 0-based array as it stands.
+        geo.set_mesh(2, TRIANGLE, 3, nptfr, 0, int(ikle.shape[0]), npoin,
+                     np.asarray(ikle, dtype=np.int32), ipobo,
                      np.arange(1, npoin + 1, dtype=np.int32), x, y, 1,
                      [2024, 1, 1], [0, 0, 0], 0.0, 0.0)
         zeros = np.zeros(nptfr, dtype=float)
@@ -200,11 +221,45 @@ def op_write(cfg: dict) -> dict:
     finally:
         geo.close()
 
+    # Conlim.set_numliq walks a contour looking for its first solid node and
+    # indexes past the end when there is none, so a fully-liquid contour is named
+    # here rather than surfacing as an upstream IndexError.
+    for index, contour in enumerate(contours):
+        if all(int(n) in open_nodes for n in contour):
+            raise ValueError(
+                f"boundary contour {index} ({len(contour)} nodes) is entirely "
+                "open; a TELEMAC domain needs at least one solid node per contour "
+                "to number its liquid boundaries")
     bnd = Conlim(cfg["cli"])
     bnd.set_numliq(contours)
     return {"npoin": npoin, "nelem": int(ikle.shape[0]), "nptfr": nptfr,
             "open_nodes": len(open_nodes), "n_liquid_boundaries": int(bnd.nfrliq),
-            "n_contours": len(contours)}
+            "n_contours": len(contours),
+            "ipobo_distinct": distinct, "ipobo_max": int(ipobo.max()),
+            "ipobo_is_permutation": bool(distinct == nptfr
+                                         and int(ipobo.max()) == nptfr),
+            "contour_lengths": [len(c) for c in contours],
+            "cli_contour_runs": _contour_runs(bnodes, contours)}
+
+
+def _contour_runs(bnodes, contours) -> int:
+    """How many CONTIGUOUS stretches the written row order breaks the contours into.
+
+    One run per contour is the whole point: a .cli whose rows interleave two
+    contours describes a boundary no walk of the geometry produces.
+    """
+    where = {}
+    for index, contour in enumerate(contours):
+        for node in contour:
+            where[int(node)] = index
+    runs = 0
+    previous = None
+    for node in bnodes:
+        current = where.get(int(node), -1)
+        if current != previous:
+            runs += 1
+            previous = current
+    return runs
 
 
 def _drop_orphans(x, y, cells, bottom):

@@ -1,4 +1,4 @@
-"""In-container WATER-EDGE coastal mesher for the sandbox.
+"""In-container WATER-EDGE coastal mesher for the ``coastal_edge`` mesher.
 
 Runs INSIDE the GPL-isolated ``trid3nt-local/mesh:latest`` image (mounted, not
 baked). Meshes the interior of a HIGH-RES water polygon (OSM coastline + NHD
