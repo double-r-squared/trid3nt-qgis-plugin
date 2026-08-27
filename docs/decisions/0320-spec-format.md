@@ -7,8 +7,11 @@ Ruled 2026-08-27, during the workflow-blueprint trim.
 Every architecture/design spec is one self-contained HTML page, committed
 under `docs/specs/` and published as an artifact for review. The format:
 
-- **Vocabulary table first** when terms are load-bearing - the fixed words,
-  what each means, what it never means.
+- **Content = two things only**: where the architecture stands (current
+  state, with frozen/unchanged subsystems named as such) and what is being
+  added (plus what the addition removes or moves). Clarifications,
+  vocabulary discussion, and analysis stay in conversation or IDEAS - not
+  in the spec.
 - **One numbered section per concern**. Prose states constraints,
   not narrative; every sentence should survive as a requirement.
 - **Code snippets** show the surface as it will actually be written - real
@@ -17,7 +20,7 @@ under `docs/specs/` and published as an artifact for review. The format:
 - **UML** for structure: class diagrams (mermaid) for the static shape,
   simple flow/state diagrams (also mermaid) for loops and
   pipelines. Diagrams depict the mechanism, with labeled arrows.
-- **Plain presentation.** Reference-style HTML: default typography, thin-bordered tables, bordered code blocks (visually distinct from prose and diagrams), mermaid for ALL diagrams - no decorative styling, fonts, or hand-drawn SVG.
+- **Plain presentation.** Reference-style HTML: default typography, thin-bordered tables, bordered code blocks with PYTHON SYNTAX COLORING (the self-contained inline highlighter from workflow-blueprint.html - artifacts load no external libs), mermaid for ALL diagrams - no decorative styling, fonts, or hand-drawn SVG.
 - **Plain language.** No design-pattern names, no jargon - describe what the
   code does ("a fixed spine of steps; engine-touching steps delegate to the
   official library"), not which pattern it resembles. Pattern vocabulary is
