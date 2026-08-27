@@ -41,7 +41,9 @@ from trid3nt_server.workflows.mesh.meshers import (
 from trid3nt_server.workflows.mesh.meshers import coastal_edge as _coastal_edge  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import corridor_tin as _corridor_tin  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import hecras as _hecras  # noqa: F401,E402
+from trid3nt_server.workflows.mesh.meshers import om2d as _om2d  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
+from trid3nt_server.workflows.mesh.meshers import telapy_mesh as _telapy_mesh  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import watershed as _watershed  # noqa: F401,E402
 
 __all__ = [
@@ -331,6 +333,12 @@ async def build_mesh(
     at the router - a field the chosen mesher does not declare is refused by name
     rather than ignored. The roster:
 
+    * ``om2d`` - OceanMesh2D: the GSHHG shoreline cuts the water domain, sized by
+      distance to shore and by wavelength over the fetched bed. Obstacles punch
+      out of it with their outlines constrained in, regions refine, and a named
+      side becomes the open boundary.
+    * ``telapy_mesh`` - adopt an EXISTING TELEMAC geometry (a ``.slf`` someone
+      else authored) through TELEMAC's own reader, then edit it.
     * ``watershed`` - the basin upstream of a ``pour_point`` IS the domain,
       triangulated and refined toward its channel network, with a sampled bed.
     * ``coastal_edge`` - the OSM coastline + NHD water polygon is the domain,
@@ -347,11 +355,12 @@ async def build_mesh(
     triangle size (for ``hecras_rog`` they ARE the channel and hillslope target
     cell sizes), ``grade`` limits how fast the two may transition. Both edges are
     declared >= 5 m; a finer ask is quoted the floor and the AOI-dependent
-    <= 8-sides-per-cell acceptance rather than silently snapped. US-only.
+    <= 8-sides-per-cell acceptance rather than silently snapped. ``om2d`` takes
+    the same band inside its ``refine`` block instead. US-only.
 
     Params:
-        mesher: which mesh library builds it (watershed | coastal_edge |
-            corridor_tin | hecras_rog | reg_grid).
+        mesher: which mesh library builds it (om2d | telapy_mesh | watershed |
+            coastal_edge | corridor_tin | hecras_rog | reg_grid).
         kind: the mesh shape that mesher makes (unstructured_tri | graded_cells |
             structured_grid).
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
@@ -361,7 +370,7 @@ async def build_mesh(
         max_edge_length_m: coarsest edge (m); the HILLSLOPE cell for ``hecras_rog``.
         fields: the chosen mesher's own remaining declared fields (pour_point,
             grade, open_boundary_side, resolution_m, extent_km, width_m, banks,
-            refine).
+            refine, bed, geometry, crs_authid).
     """
     import asyncio
 
