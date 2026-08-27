@@ -1,4 +1,4 @@
-<title>Gmsh Mesher</title>
+<title>Coastal Mesher Kernel</title>
 <style>
   :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
           --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
@@ -27,71 +27,90 @@
   .rev { font-size: .85em; }
 </style>
 
-<h1>Gmsh Mesher</h1>
-<p class="rev">rev 1 &middot; 2026-08-27 &middot; decision spec: gmsh joins the mesher registry, composing oceanmesh sizing with the gmsh geometry kernel. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent spec: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<h1>Coastal Mesher Kernel</h1>
+<p class="rev">rev 3 &middot; 2026-08-27 &middot; NATE's wiring adopted as primary: om2d builds the base, gmsh PATCH-EDITS in place; gmsh-generates demoted to alternative. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>1. Where things stand (measured, from the mesh wave)</h2>
 <table>
 <tr><th>fact</th><th>evidence</th></tr>
-<tr><td>oceanmesh is a sizing library with a DistMesh generator attached; editing was never its job</td><td>every om2d edit = full re-realization through the container; no local re-mesh API exists</td></tr>
-<tr><td>om2d generation is nondeterministic</td><td>3 runs, byte-identical config + staged bed, 3 distinct meshes (313/341/328 nodes); seed passed, drift is elsewhere</td></tr>
-<tr><td>pfix conformality is fragile</td><td><code>delete_boundary_faces</code> destroyed a constrained ring (0.0 -&gt; 396.7 m) until guarded; final 0.0 m is achieved but defended, not guaranteed</td></tr>
-<tr><td>surgical punch is non-conformal</td><td>telapy element-removal punch: measured outline offset 80.1 m</td></tr>
-<tr><td>pretel has no working local refine</td><td><code>cleave_max_7_nodes</code> raises unfinished; <code>filter_mesh_resolution</code> has a broken call</td></tr>
-<tr><td>per-edit rebuild is uneconomical</td><td>each edit = container build + input staging; ruled against (session-economics ruling, IDEAS 2026-08-27)</td></tr>
-<tr><td>gmsh .msh is a first-class TELEMAC import</td><td><code>telapy parser_gmsh.py</code>: <code>MSH(Selafin)</code> - official path, in the worker image</td></tr>
+<tr><td>oceanmesh = sizing intelligence + a DistMesh generator; editing was never its job</td><td>every om2d edit today = full re-realization; no local re-mesh API</td></tr>
+<tr><td>om2d generation is nondeterministic</td><td>3 runs, byte-identical config, 3 distinct meshes; seed passed, drift elsewhere</td></tr>
+<tr><td>pfix conformality is defended, not guaranteed</td><td><code>delete_boundary_faces</code> destroyed a constrained ring (0.0 -&gt; 396.7 m) until guarded; final 0.0 m holds under guard</td></tr>
+<tr><td>surgical punch on an existing mesh is non-conformal</td><td>telapy element-removal punch: 80.1 m outline offset, measured</td></tr>
+<tr><td>telapy's own edit primitives are unfinished</td><td><code>cleave_max_7_nodes</code> raises unfinished; <code>filter_mesh_resolution</code> broken - evidence of NO user base for pretel editing</td></tr>
+<tr><td>telapy is the format/boundary authority, already load-bearing</td><td>every mesh exits through <code>write_telemac_pair</code> (set_mesh/set_bnd), <code>Conlim.set_numliq</code>, <code>get_ipobo</code> (R1 fix)</td></tr>
+<tr><td>per-edit rebuild ruled uneconomical</td><td>session-economics ruling: lazy batched realization, staged-once inputs, prefix-keyed snapshot cache (sibling landing, benefits every wiring)</td></tr>
+<tr><td>gmsh .msh is an official TELEMAC import</td><td><code>telapy parser_gmsh.py</code>: <code>MSH(Selafin)</code>, in the worker image</td></tr>
+<tr><td>gmsh coastal precedent is REGIONAL, unverified</td><td>seamsh (SLIM) / qmesh (Thetis) exist in the European/TELEMAC corner; absent from the US surge world (SMS, OM2D, JIGSAW/OCSMesh). Landscape research in flight: <code>docs/research/coastal-mesh-edit-landscape.md</code></td></tr>
 </table>
 
-<h2>2. What is being added: <code>meshers/gmsh.py</code></h2>
-<p>One new registered mesher. The registry absorbs it with zero surface change - the tool signature, session, recipe, and gate are untouched. The composition splits responsibility by what each library is actually good at:</p>
-<table>
-<tr><th>job</th><th>owner</th><th>how</th></tr>
-<tr><td>coastal sizing intelligence</td><td>oceanmesh (kept)</td><td>wavelength / bathymetric-gradient / feature sizing + gradation compute the edge-length grid, exactly as today</td></tr>
-<tr><td>geometry</td><td>gmsh OCC kernel</td><td>shoreline polygons become the model; an obstacle is a boolean cut whose outline is EMBEDDED - its nodes are mesh topology, zero offset by construction, not by cleanup-pass luck</td></tr>
-<tr><td>generation</td><td>gmsh</td><td>triangulates the model against the om2d sizing grid loaded as a background size field; fixed <code>Mesh.RandomSeed</code>, pinned version</td></tr>
-<tr><td>editing</td><td>gmsh</td><td>the session retains the MODEL (geometry + fields); an edit mutates the model and re-meshes from it in-process - no container round trip, no input re-staging, sizing preserved</td></tr>
-<tr><td>open-boundary segmentation</td><td>oceanmesh (kept)</td><td><code>identify_ocean_boundary_sections</code> on the generated points/cells, as remediated</td></tr>
-<tr><td>formats</td><td>shared writers (kept)</td><td>.msh native (official TELEMAC import) + the existing .slf/.cli/.gr3/fort.14/.2dm writers; one gr3 writer stands</td></tr>
-</table>
+<h2>2. Ruled (stands regardless of wiring)</h2>
+<ul>
+<li><b>One user-facing coastal mesher.</b> No <code>mesher="gmsh"</code> at the registry surface - the edit kernel is an INTERNAL backend of the coastal mesher, tightly coupled, invisible to templates and users. Rev 1's sibling-mesher framing is withdrawn.</li>
+<li><b>Checked IO at the kernel seam.</b> The internal boundary is <code>(points, cells, sizing)</code> arrays; every crossing is round-trip verified (node counts, hashes, boundary integrity, IPOBO permutation - the checks the meshers review built).</li>
+<li><b>telapy keeps its three proven seats, unchanged:</b> format/boundary authority (the last mile for every TELEMAC mesh, any kernel), adoption of supplied meshes, surgery where regeneration would destroy user work. It is NOT the edit kernel: its punch is non-conformal (80.1 m) and its refine primitives are unfinished - promoting it means maximum reinvention.</li>
+<li><b>Session economics</b> (sibling ruling): lazy batched realization, staged-once inputs, snapshot-cache undo - lands for every wiring.</li>
+</ul>
 
-<h3>2.1 Surface - unchanged by design</h3>
-<pre><code class="py"># the template says one word differently; everything else is identical
-MESH = tool.build_mesh(
-    mesher = "gmsh",              # was "om2d" - the registry is the whole diff
+<h3>2.1 Proposed alongside (awaiting a nod): capability names for meshers</h3>
+<p>Mesher names are currently implementation names (<code>om2d</code>, <code>telapy_mesh</code>), against the capability-naming norm. Proposed: <code>coastal</code> / <code>adopt</code> / <code>corridor</code> / <code>grid</code> - then the kernel behind <code>coastal</code> is swappable without the registry ever lying, and the A/B choice below becomes invisible to templates.</p>
+<pre><code class="py">MESH = tool.build_mesh(
+    mesher = "coastal",           # capability name; the kernel is internal
     kind   = "unstructured_tri",
     aoi    = P.aoi,
     refine = {"edge_length": P.edge_length, "min_spacing": 25, "gradation": 0.15},
     bed    = D.dem,
 ).edit("add_obstacle", D.breakwaters)</code></pre>
 
-<h3>2.2 Edit actions mapped</h3>
-<pre><code class="py">add_obstacle      # occ boolean cut + embedded outline curve -> conformal by construction
-refine_region     # Threshold/Box size field added to the model -> local re-mesh
-set_boundary      # unchanged: identify_ocean_boundary_sections on the output
-apply_layer_edits # unchanged: adoption path (telapy surgery), gmsh model marked stale</code></pre>
+<h2>3. The kernel wiring: patch-local edits (primary), gmsh-generates (alternative)</h2>
+<h3>3.0 PRIMARY - wiring C, as proposed by the user: om2d builds, gmsh edits in place</h3>
+<p>The om2d mesh exists as the base, built ONCE and held in the prefix-keyed snapshot cache. An edit is PATCH-LOCAL: carve the region around the edit, hand gmsh the patch as a planar polygon with its boundary nodes FIXED, embed the obstacle outline (or size field) inside, re-mesh the patch, stitch back.</p>
+<ul>
+<li><b>In place, literally</b>: outside the patch the base mesh is byte-identical, not equivalent.</li>
+<li><b>Conformal by construction inside the patch</b>: embedding on a planar surface is gmsh's front door; the discrete classify/reparametrize fragility mostly evaporates on flat 2D.</li>
+<li><b>Replay identity restored</b>: base nondeterministic ONCE then cached; edits replay deterministically on the cached base (pinned gmsh version + seed, fixed patch boundary). Recipe replay = cached base + deterministic patches = the same mesh.</li>
+<li><b>Caveats, both testable in a prototype</b>: patch-seam quality (min-angle at the stitch boundary goes in the probes, measured); the carve-and-stitch machinery is custom plumbing - scoped and well-defined, but ours.</li>
+</ul>
+<p>Prototype gate before commitment: one afternoon-scale spike - punch a breakwater outline into an existing om2d Duck NC mesh via a gmsh patch; measure seam min-angle, outline offset (must be 0.0), and rebuild determinism (3-run hash on the patch).</p>
+<h3>3.0.1 The A/B frame this supersedes</h3>
+<table>
+<tr><th></th><th>A - om2d generates; mmg discrete edits (now a FOOTNOTE)</th><th>B - om2d sizes; gmsh generates + edits the model (ALTERNATIVE if the patch prototype disappoints)</th></tr>
+<tr><td>generation</td><td>DistMesh, exactly as published/landed (trodden)</td><td>gmsh from om2d's sizing grid as background field (trodden in the TELEMAC/European corner IF seamsh evidence holds)</td></tr>
+<tr><td>add_obstacle (the flagship edit)</td><td>retrofit into an existing triangulation - nobody's primitive; mmg level-set punch is the honest candidate, polyline-exact embedding is the shim risk</td><td>outline EMBEDDED at generation - zero offset by construction</td></tr>
+<tr><td>refine_region</td><td>mmg metric-driven local remesh (mature, in-image binary)</td><td>size-field update on the model, local re-mesh</td></tr>
+<tr><td>determinism / recipe replay</td><td>nondeterminism stands: replay = equivalent rebuild, permanently</td><td>plausibly restores sha256-identical replay (MUST be proven, 3-run hash)</td></tr>
+<tr><td>edit economics</td><td>tolerable via the economics fix; local remesh only if still painful</td><td>solved at the root: model mutation, in-process</td></tr>
+<tr><td>rework of landed code</td><td>minimal</td><td>generation half of the om2d driver replaced; sizing half kept</td></tr>
+<tr><td>shim risk</td><td>in the EDITS (discrete embedding)</td><td>in the GENERATION handoff (sizing-field fidelity)</td></tr>
+</table>
 
-<h3>2.3 Venue and state</h3>
-<p>gmsh ships as a self-contained manylinux wheel with no difficult native deps, so it installs into the SERVER env for true in-process edits (oceanmesh stays in the mesh image for sizing-grid computation; the sizing grid crosses once per session as an artifact). The session holds the gmsh model; realization is demand-pulled and batched per the session-economics ruling; realized meshes land in the prefix-keyed snapshot cache. The recipe stays the record - the model is reconstructible from spec + chain.</p>
+<h3>3.1 The decision rule</h3>
+<ul>
+<li><b>C (primary) commits if</b> the patch prototype passes its three measurements: seam min-angle acceptable, embedded-outline offset 0.0 m, patch rebuild deterministic (3-run hash).</li>
+<li><b>B takes over if</b> the prototype disappoints AND the landscape report shows gmsh-coastal generation (seamsh practice) is walked enough to trust.</li>
+<li><b>Fallback if both fail</b>: om2d regenerate-on-edit with the economics fix (lazy batching + snapshot cache) - correct, merely slower.</li>
+<li><b>Either way</b>: the registry surface, session, recipe, gate, telapy seats, and shared writers are identical - the choice is invisible above the kernel seam.</li>
+</ul>
 
-<h2>3. Acceptance bar (all hard, all measured)</h2>
+<h2>4. Acceptance bar (applies to whichever kernel wins)</h2>
 <table>
 <tr><th>gate</th><th>test</th></tr>
-<tr><td>determinism</td><td>3 builds, one config: sha256-identical meshes. FAIL -&gt; gmsh registers <code>deterministic=False</code> honestly and the comparison period decides its fate</td></tr>
-<tr><td>conformality</td><td>embedded breakwater outline: measured max offset must be 0.0 m and SURVIVE all cleanup; probes report it as today</td></tr>
-<tr><td>sizing fidelity</td><td>Duck NC AOI, same sizing grid: edge-length histogram vs om2d-native within tolerance; NATE visual pass on the wireframes side by side</td></tr>
-<tr><td>edit economics</td><td>measured per-edit wall time and zero re-fetch (staged-once inputs audited); one gate cycle = at most one re-mesh</td></tr>
-<tr><td>engine ingestion</td><td>the .msh imports through telapy parser_gmsh in-image; .slf/.gr3 round-trip checks as in the meshers review (IPOBO permutation, contiguous .cli)</td></tr>
+<tr><td>determinism</td><td>3 builds, one config: sha256-identical - or the kernel registers <code>deterministic=False</code> honestly</td></tr>
+<tr><td>conformality</td><td>breakwater outline: measured max offset 0.0 m, SURVIVING all cleanup; reported in probes</td></tr>
+<tr><td>sizing fidelity</td><td>Duck NC AOI, same sizing grid: edge-length histogram within tolerance of om2d-native; NATE visual pass side by side</td></tr>
+<tr><td>edit economics</td><td>measured per-edit wall time; zero re-fetch (staged-once audited); one gate cycle = at most one re-mesh</td></tr>
+<tr><td>engine ingestion</td><td>.slf/.cli/.gr3 round-trips as in the meshers review (IPOBO permutation, contiguous .cli); .msh through parser_gmsh if B</td></tr>
 <tr><td>suite</td><td>five slices, zero failures</td></tr>
 </table>
 
-<h2>4. Out of spec</h2>
+<h2>5. Out of spec</h2>
 <ul>
-<li><b>om2d generator retirement</b> - decided only after the fidelity comparison; the om2d mesher stays registered untouched through the comparison period.</li>
-<li><b>telapy adoption path</b> - unchanged; supplied meshes and hand-edits keep the surgical route.</li>
-<li><b>session-economics remediation</b> - a sibling landing (already ruled), benefits every mesher, not gated on gmsh.</li>
+<li>om2d generator retirement - only after the comparison period, only if B wins.</li>
+<li>telapy adoption/surgery path - unchanged in every outcome.</li>
+<li>mmg adoption under wiring A - a follow-on evaluation gated on measured pain, not part of this decision.</li>
 </ul>
 
-<h2>5. Class-view delta</h2>
+<h2>6. Class-view delta</h2>
 <div class="scroll">
 <pre class="mermaid">
 classDiagram
@@ -100,23 +119,32 @@ classDiagram
         +build(spec) mesh
         +actions: registry
     }
-    class OceanMesh2D {
-        sizing functions KEPT
-        generator: comparison period
+    class Coastal {
+        capability name (proposed)
+        sizing: oceanmesh (fixed)
+        kernel: INTERNAL, swappable
+        IO seam: checked arrays
     }
-    class GmshMesher {
-        +model: geometry + size fields (session-held)
-        build: om2d sizing grid -> background field -> generate
-        edits mutate the MODEL, re-mesh in-process
-        embedded curves = conformal by construction
+    class KernelA {
+        om2d DistMesh generates
+        edits: regenerate (economics fix)
+        mmg local remesh if needed
+    }
+    class KernelB {
+        gmsh model generates from sizing field
+        edits mutate the model, in-process
+        embedded curves = conformal
     }
     class TelapyMesh {
-        adoption / surgery - unchanged
+        adopt / surgery - unchanged
+        format + boundary authority for ALL kernels
     }
-    Mesher <|.. OceanMesh2D
-    Mesher <|.. GmshMesher
+    Mesher <|.. Coastal
     Mesher <|.. TelapyMesh
-    GmshMesher --> OceanMesh2D : consumes sizing grid
+    Coastal --> KernelA : wiring A (open)
+    Coastal --> KernelB : wiring B (open)
+    KernelA --> TelapyMesh : .slf/.cli last mile
+    KernelB --> TelapyMesh : .slf/.cli last mile
 </pre>
 </div>
 
