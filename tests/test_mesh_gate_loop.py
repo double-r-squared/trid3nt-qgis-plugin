@@ -437,6 +437,69 @@ async def test_a_knob_the_action_never_declared_refuses_by_name(
     assert "edge_length_m" in str(excinfo.value)
 
 
+def _card_rows(session) -> list[str]:
+    """The gate card's row names for ``session``, built without a mesh.
+
+    The sheet is assembled from the mesher's REGISTRY, so a mesher that only
+    builds inside a container still answers what its card would carry.
+    """
+    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
+                                        round_idx=1, max_rounds=3)
+    return [row.name for row in sheet.rows]
+
+
+def test_a_vocabulary_knob_gets_a_row_and_names_its_roster(tmp_path):
+    """A card that skipped every action mixing a shape with a word was restart-only.
+
+    The library wrappers declare the open-boundary designation as a side and a
+    type - two words off a roster - beside a drawn region, and skipping a whole
+    action over the drawn input left their gate with nothing to answer on.
+    """
+    declaration = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
+                                  aoi=_AOI, refine={"edge_length": 400.0})
+    session = MeshSession(declaration, workdir=tmp_path)
+
+    names = _card_rows(session)
+
+    assert "set_boundary.side" in names
+    assert "set_boundary.type" in names
+    # The number beside a drawn region is a knob too; the region itself is not.
+    assert "refine_region.edge_length" in names
+    assert not [n for n in names if n.endswith((".geometry", ".layer"))]
+    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
+                                        round_idx=1, max_rounds=3)
+    side = next(r for r in sheet.rows if r.name == "set_boundary.side")
+    for choice in get_mesher("om2d").actions["set_boundary"].inputs["side"].choices:
+        assert choice in side.desc
+
+
+def test_a_mesher_with_no_vocabulary_knob_keeps_the_card_it_had(tmp_path):
+    """The corridor's knobs are numbers; per-input rows change nothing for it."""
+    declaration = tool.build_mesh(
+        mesher="corridor_tin", kind="unstructured_tri",
+        domain={"reach": {"slug": "eel"}, "seed": {"lon": -117.0, "lat": 37.0}},
+        extent_km=0.12, width_m=60.0, banks="nhd_area")
+    session = MeshSession(declaration, workdir=tmp_path)
+
+    assert _card_rows(session) == ["set_resolution.edge_length_m",
+                                  "set_extent.extent_km", "restart"]
+
+
+@pytest.mark.asyncio
+async def test_a_word_off_the_declared_roster_refuses_by_name(tmp_path):
+    """The roster is the declaration's; typing past it is refused, not passed on."""
+    declaration = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
+                                  aoi=_AOI)
+    session = MeshSession(declaration, workdir=tmp_path)
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate._apply_gate_revision(
+            session, {"set_boundary.side": "sideways"})
+
+    assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
+    assert "seaward" in str(excinfo.value)
+
+
 @pytest.mark.asyncio
 async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
         tmp_path, monkeypatch):

@@ -433,21 +433,28 @@ def _sheet_edits(session: MeshSession,
 
 
 def _as_declared(key: str, declared: MeshField, value: Any) -> Any:
-    """A card row's text as the type its action declared.
+    """A card row's text as the type its action declared, checked against it.
 
     A row rendered with no current value has nothing for the client to infer a
-    type from, so it sends what the editor holds; the declaration is what says
-    the knob is a number.
+    type from, so it sends what the editor holds; the declaration is what says the
+    knob is a number, and what says which words a vocabulary knob answers to. A
+    value off that roster is refused here, where the reply names the row the user
+    typed in, rather than deeper down where it names only the field.
     """
-    if not _is_numeric(declared) or not isinstance(value, str):
-        return value
-    try:
-        return float(value)
-    except ValueError:
+    if _is_numeric(declared) and isinstance(value, str):
+        try:
+            value = float(value)
+        except ValueError:
+            raise MeshToolError(
+                "MESH_GATE_REVISION_UNREADABLE",
+                f"the gate reply set {key!r} to {value!r}, and "
+                f"{declared.name!r} takes a number.") from None
+    if declared.choices and value not in declared.choices:
         raise MeshToolError(
             "MESH_GATE_REVISION_UNREADABLE",
-            f"the gate reply set {key!r} to {value!r}, and "
-            f"{declared.name!r} takes a number.") from None
+            f"the gate reply set {key!r} to {value!r}, and {declared.name!r} "
+            f"takes one of {[c for c in declared.choices]}.")
+    return value
 
 
 #: What joins an action to one of its inputs in a card row's name. A row name is
@@ -459,29 +466,65 @@ _KNOB_SEPARATOR = "."
 _RESTART_ROW = "restart"
 
 
-def _numeric_knob_rows(session: MeshSession) -> list[Any]:
-    """One editable row per NUMERIC edit input the open mesher registers.
+def _knob_rows(session: MeshSession) -> list[Any]:
+    """One editable row per edit INPUT a property grid can carry.
 
-    An action whose inputs include a geometry or a layer is not a knob a property
-    grid can carry - the value is a file the user draws or edits, not a number -
-    so it stays on the mounted tools and off the card.
+    Per input, not per action: an action that mixes a drawn geometry with a number
+    still offers the number, because dropping the whole action over the one input a
+    grid cannot hold leaves a mesher whose every action mixes them - and the card
+    with nothing on it but the truncation.
+
+    What a grid cannot hold is a value the user draws or edits somewhere else: a
+    geometry, a layer, an extent. Those stay on the mounted tools, and only they
+    are skipped.
     """
     from trid3nt_contracts.payload_warning import ParamSheetRow
 
     rows: list[Any] = []
     for action in session.mesher.actions.values():
-        declared = list(action.inputs.values())
-        if not declared or any(f.hashed or not _is_numeric(f) for f in declared):
-            continue
-        for field_declared in declared:
+        for declared in action.inputs.values():
+            if not _renderable(declared):
+                continue
             rows.append(ParamSheetRow(
-                name=f"{action.name}{_KNOB_SEPARATOR}{field_declared.name}",
+                name=f"{action.name}{_KNOB_SEPARATOR}{declared.name}",
                 value=None, door="gate", basis="user",
-                desc=(field_declared.doc or action.doc or action.name)[:512],
+                desc=_knob_desc(action, declared)[:512],
                 source_badge=f"{action.name} - leave blank to keep this mesh",
                 user_lever=True,
                 note=(action.doc or "")[:512] or None))
     return rows
+
+
+def _knob_desc(action: EditAction, declared: MeshField) -> str:
+    """The row label: what the input means, what it may become, what it needs.
+
+    A vocabulary knob's roster is not carried anywhere else on a row, so it is
+    spelled out here or the user is typing into an editor with no visible answers.
+    An action that also demands a drawn input names the tool that carries it, so a
+    row that cannot be submitted alone says so on the card rather than refusing
+    after the user has already answered.
+    """
+    text = declared.doc or action.doc or declared.name
+    if declared.choices:
+        text = f"{text} - one of {', '.join(str(c) for c in declared.choices)}"
+    drawn = [f.name for f in action.inputs.values()
+             if f.required and not _renderable(f)]
+    if drawn:
+        text = (f"{text} - this edit also takes {', '.join(drawn)}, which only "
+                f"{edit_tool_name(action.name)} can carry")
+    return text
+
+
+def _renderable(declared: MeshField) -> bool:
+    """Can a property-grid row carry this input's value?
+
+    A number can, and so can a word off a declared roster. Everything else is a
+    file or a shape the user produces elsewhere, and an editor over it would take
+    text no action could use.
+    """
+    if declared.hashed:
+        return False
+    return _is_numeric(declared) or _is_vocabulary(declared)
 
 
 def _is_numeric(declared: MeshField) -> bool:
@@ -489,18 +532,23 @@ def _is_numeric(declared: MeshField) -> bool:
         kind in (int, float) for kind in declared.types)
 
 
+def _is_vocabulary(declared: MeshField) -> bool:
+    return bool(declared.choices) and all(
+        isinstance(choice, str) for choice in declared.choices)
+
+
 def _mesh_param_sheet(session: MeshSession, *, tool_name: str,
                       round_idx: int, max_rounds: int) -> Any:
-    """The gate card's edit surface: the numeric knobs, plus the truncation.
+    """The gate card's edit surface: the knobs a grid can carry, plus the truncation.
 
     The card the shipped client renders for a sheet is the one gate surface that
     carries values back, so every revision the loop can act on is offered as a row
-    here; a mesher registering no numeric knob still gets the truncation row, and
-    the mounted edit tools remain the surface for everything a number cannot say.
+    here; a mesher registering no such knob still gets the truncation row, and the
+    mounted edit tools remain the surface for everything a row cannot say.
     """
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
-    rows = _numeric_knob_rows(session)
+    rows = _knob_rows(session)
     rows.append(ParamSheetRow(
         name=_RESTART_ROW, value="no", door="gate", basis="user",
         desc="type yes to throw away the gate-time edits and rebuild the mesh "
