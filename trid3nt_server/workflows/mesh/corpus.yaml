@@ -1,0 +1,14 @@
+# Mesh-router routing phrasings: walked into the main retrieval index directly
+# (workflows/**/corpus.yaml). Question class = "build the mesh a solver runs on",
+# never place-based.
+build_mesh:
+- build the computational mesh for this area with a specific mesher
+- author the model domain and let me inspect it before running anything
+- make a uniform grid over this extent at a given cell size
+- build a structured grid for the domain and keep it in the case
+- generate the mesh a solver runs on, then let me edit it
+- I want to build the mesh first and choose the mesh library myself
+- create the model grid at a cell size I pick, refine it, then accept it
+- build a mesh, show me its node and element counts, and let me restart it
+- rebuild the mesh from its recipe so the same spec gives the same mesh
+- set up the domain lattice for a structured solver over this bounding box
