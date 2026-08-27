@@ -2191,3 +2191,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   The spec = the mesh tool (ratified section C) + the emission
   display-face placement, over today's unchanged run + emission
   machinery. Workflow Blueprint artifact rev 4 = the trimmed spec.
+
+- SPEC FORMAT FORMALIZED (NATE 2026-08-27): every future spec = one
+  self-contained HTML page in docs/specs/, published as an artifact:
+  vocabulary table when terms are load-bearing, one section per
+  concern, CODE SNIPPETS of the real surface, UML (mermaid class
+  diagrams + simple flow/state diagrams) as the abstraction, PLAIN
+  LANGUAGE (no pattern names/jargon), everything buildable (exclusions
+  marked out-of-spec in place), revision line in the header. Full
+  ruling: docs/decisions/0320-spec-format.md. First instance:
+  docs/specs/workflow-blueprint.html (the mesh-tool spec, rev 4).
