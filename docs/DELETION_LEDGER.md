@@ -912,7 +912,16 @@ builds fresh, with published methods as design references under paper-first and 
 code inheritance. Superseded as the V&V exemplar by coastal-surge-vs-CO-OPS.
 
 **Decided by:** NATE (malpasset chop-no-harvest ruling, 2026-08-26). **Status:**
-QUEUED (condition: the stale sweep).
+DELETED (stale-sweep 2026-08-27). One consumer the prior registration missed:
+`tests/test_postprocess_telemac_wse.py` dynamically loaded
+`scripts/run_l2_malpasset.py` (via `importlib`) to test the driver's
+`adjust_deck_friction` helper -- that test-only import, not a product import;
+the two driver-friction tests and the `_load_driver` loader were removed from
+that file with the chop (the file's own WSE tests, which use "malpasset-like"
+node coordinates purely as an arbitrary synthetic fixture name, are untouched
+and still pass). `trid3nt_server/workflows/telemac/postprocess_telemac.py`'s
+sole mention remains the pre-verified provenance comment, not an import --
+left in place, unmodified, per the workflows/ no-touch rule.
 
 ## `workers/telemac/artemis_build.py`'s `demo_bw` branch - DELETED
 
@@ -1083,3 +1092,17 @@ ladder. Both behaviours moved to `steps/reach.py` and are pinned there
 been two tests of code that no longer exists.
 
 **Decided by:** ADR 0318. **Status:** DELETED.
+
+## Stale-sweep 2026-08-27 one-liners (Area A: malpasset chop-no-harvest)
+
+- trid3nt_server/cases/malpasset_obs.py: malpasset observation-layer builder, chop-no-harvest, zero live product importers (stale-sweep 2026-08-27)
+- scripts/run_l2_malpasset.py: malpasset L2 calibration harness driver, chop-no-harvest ruling (stale-sweep 2026-08-27)
+- tests/test_malpasset_obs.py: test of the deleted malpasset_obs.py harness (stale-sweep 2026-08-27)
+- tests/fixtures/telemac_malpasset/: malpasset deck fixtures, zero remaining consumers (stale-sweep 2026-08-27)
+- data/cases/malpasset/: staged malpasset case data, chop-no-harvest ruling (stale-sweep 2026-08-27)
+- tests/test_postprocess_telemac_wse.py driver-friction tests + _load_driver helper: tested the deleted run_l2_malpasset.py driver only (stale-sweep 2026-08-27)
+- scripts/sandbox/oceanmesh/_runs/: mesh-build run artifacts (downloaded DEM rasters, intermediate shoreline clips, npz meshes) for the 5 already-persisted meshes in docs/proof/templates/oceanmesh_meshes/, regeneratable via build_coastal_mesh.py / build_coastal_water_edge_mesh.py / build_watershed_mesh.py (stale-sweep 2026-08-27)
+- scripts/sandbox/oceanmesh/_work/: scratch logs + one temp topobathy tif from mesh-build runs, superseded by the persisted _runs summaries (stale-sweep 2026-08-27)
+- scripts/sandbox/hecras/_ref/: full 350MB-source-derived HEC BaldEagleCrkMulti2D reference folder, already trimmed into the product fixture workers/hecras/fixtures/baldeagle_connection/ (PROVENANCE.md documents the SHA-pinned public re-download) (stale-sweep 2026-08-27)
+- scripts/sandbox/pysheds_watershed/_work/: scratch DEM tifs + summary from a watershed-delineation proof run, regeneratable via proof_watershed.py (stale-sweep 2026-08-27)
+- scripts/sandbox/oceanmesh/__pycache__/, scripts/sandbox/replication/__pycache__/, scripts/sandbox/telemac/__pycache__/, scripts/__pycache__/: compiled bytecode caches (stale-sweep 2026-08-27)
