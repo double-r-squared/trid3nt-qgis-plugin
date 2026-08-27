@@ -68,7 +68,8 @@ class MeshArtifact:
 
     mesh_id: str
     name: str
-    mode: str  # "watershed" | "coastal_water_edge" | "hecras_rog" | a mesher name
+    mode: str  # the MESHER that built it: watershed | coastal_edge | corridor_tin
+    #            | hecras_rog | reg_grid
     display_uri: str  # s3:// display face (a .2dm mesh, or a cell-polygon vector)
     slf_uri: str | None
     crs_authid: str

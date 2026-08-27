@@ -369,16 +369,53 @@ async def build_mesh(
             "MESH_STAGING_UNAVAILABLE",
             "TRID3NT_CACHE_BUCKET must be set to stage a built mesh into the case.")
 
-    aoi = coerce_bbox_value(bbox) if bbox is not None else None
-    if aoi is None and location:
-        geo = await asyncio.to_thread(
-            TOOL_REGISTRY["geocode_location"].fn, query=location)
-        aoi = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
-    if aoi is not None:
-        fields = {"aoi": tuple(float(v) for v in aoi), **fields}
+    declared = get_mesher(mesher).fields
+    if "aoi" in declared and "aoi" not in fields:
+        aoi = coerce_bbox_value(bbox) if bbox is not None else None
+        if aoi is None and location:
+            geo = await asyncio.to_thread(
+                TOOL_REGISTRY["geocode_location"].fn, query=location)
+            aoi = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
+        if aoi is not None:
+            fields = {"aoi": tuple(float(v) for v in aoi), **fields}
+    elif "domain" in declared and "domain" not in fields:
+        # A mesher whose domain is a DOMAIN rather than a box gets one acquired for
+        # it: an extent alone does not say which river a corridor follows.
+        fields = {"domain": await _acquire_domain(location, bbox), **fields}
 
     declaration = tool.build_mesh(mesher=mesher, kind=kind, **fields)
     name = location or f"{mesher} mesh"
     session = MeshSession(declaration, case_id=current_turn_case(), name=name)
     await asyncio.to_thread(session.accept)
     return session.snapshot()
+
+
+async def _acquire_domain(location: str | None, bbox: Any) -> dict[str, Any]:
+    """The reach a corridor follows, plus the mid-reach seed it is navigated from.
+
+    The SAME acquisition a template's plan runs, reached from a standalone call so
+    the mesh a user builds by hand is the mesh a template would have built.
+    """
+    from trid3nt_server.workflows.lib import Domain
+    from trid3nt_server.workflows.lib.domain import bind_domain, reset_domain
+    from trid3nt_server.workflows.telemac.steps.reach import (
+        fetch_reach_flowline,
+        geocode_reach,
+        reach_seed,
+    )
+
+    coerced = coerce_bbox_value(bbox) if bbox is not None else None
+    if not location and coerced is None:
+        raise MeshToolError(
+            "MESH_DOMAIN_UNRESOLVED",
+            "a corridor follows a named river reach, so name the place (or draw "
+            "the extent it runs through); there is nothing here to navigate from.")
+    reach = await geocode_reach(location=location,
+                                bbox=None if location else tuple(coerced))
+    token = bind_domain(Domain(bbox=reach["bbox"], label=reach["name"]))
+    try:
+        rivers = await fetch_reach_flowline(prefetched=None)
+        seed = await reach_seed(reach=reach, rivers=rivers)
+    finally:
+        reset_domain(token)
+    return {"reach": reach, "seed": seed}
