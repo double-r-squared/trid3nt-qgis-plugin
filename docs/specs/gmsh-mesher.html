@@ -29,7 +29,7 @@
 </style>
 
 <h1>Domain and Mesh</h1>
-<p class="rev">rev 16 &middot; 2026-08-27 &middot; + the containment rule: extent within staged coverage = crop; outside = restage from the beginning via the rerun primitive. ALL EXECUTION HELD - the wave is stopped; open decisions are NATE's, section 6. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 17 &middot; 2026-08-27 &middot; chat examples corrected to the REAL !run shape (kwargs/JSON, positional rejected); the edit-fold + restart spec/chain safety documented. ALL EXECUTION HELD - the wave is stopped; open decisions are NATE's, section 6. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>1. Status</h2>
 <table>
@@ -59,10 +59,17 @@ SUBDOMAIN = tool.process(P.aoi, "delineate", pour_point=P.pour_point)
 MESH      = tool.build_mesh(extent=SUBDOMAIN, bed=D.dem, ...)   # derived extent
 MESH      = tool.build_mesh(extent=P.aoi, bed=D.dem, ...)       # common case - STILL written out
 
-# in chat - the SAME tools, ad hoc:
-#   !run process aoi delineate pour_point=...   -> subdomain
-#   !run build_mesh extent=<that> ...           -> the mesh, right there
+# in chat - the SAME tools, ad hoc. The REAL !run shape (client-parsed,
+# dispatched as TOOL_REGISTRY[name].fn(**args) - the same call the model makes;
+# literals-only kwargs or a JSON object; POSITIONAL ARGS REJECTED; the threaded
+# AOI needs no argument):
+#   !run process(op="delineate", pour_point=[-83.40, 35.05])
+#   !run build_mesh(extent="ref:subdomain", bed="fetch:ncei_dem_mosaic")
+# tweaks NEVER re-declare the build - the session mounts one tool per edit
+# action while open (the fold):
+#   !run mesh_edit_refine_region(edge_length=10, geometry="...")
 </code></pre>
+<p><b>Clear-safety, by construction</b>: the recipe is a SPEC LINE (extent, kind, for_, constituents - everything compat-bearing) plus an EDIT CHAIN; <code>restart</code> truncates the chain to the declared prefix and CANNOT touch the spec - so "clear" rebuilds the declared default with identical compatibility, never a generic mesh. Backstops regardless: <code>accept()</code> enforces the for_ contract, and the compat gate re-checks at consume. (Session REOPEN on an accepted mesh - load spec + chain, continue appending - is a natural later extension, not yet built.)</p>
 <p>The reach dissolves into this model as named values with coupling by dataflow: <code>flowline = fetch(aoi)</code>; <code>seed = snap_to(flowline)</code>; <code>discharge = read_at(seed)</code> - meshing takes <code>flowline</code>, forcing takes <code>discharge</code>, the release gate validates on <code>flowline</code>. A gate-drawn value and a fetched value are the same argument; no tool cares who authored its inputs. (An earlier "grounding record" bundling these was REJECTED: inputs live in ONE place.)</p>
 
 <h2>4. The mesh declaration</h2>
