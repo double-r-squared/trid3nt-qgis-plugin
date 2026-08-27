@@ -26,7 +26,6 @@ from trid3nt_server.workflows.lib import (
     DrawGate,
     Fetch,
     Forcing,
-    MeshPolicy,
     P,
     Physics,
     Ref,
@@ -34,6 +33,7 @@ from trid3nt_server.workflows.lib import (
     register_workflow,
     user_input,
 )
+from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.do_sag.declarations import DOC, PARAMS
 from trid3nt_server.workflows.telemac.steps import (
@@ -41,7 +41,7 @@ from trid3nt_server.workflows.telemac.steps import (
     WaqtelO2,
     event_time,
 )
-from trid3nt_server.workflows.telemac.workflow import CorridorPolicy, TelemacWorkflow
+from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_sag_chart", "plan", "telemac_do_sag"]
 
@@ -71,11 +71,18 @@ PHYSICS = Physics("waqtel_o2",
 
 FORCING = Forcing(carrier=Ref("reviewed_discharge"))
 
-MESH = MeshPolicy(resolution=P.mesh_resolution, target_edge_m=P.mesh_resolution_m)
-
-CORRIDOR = CorridorPolicy(extent_km=P.reach_length_km,
-                          width_m=P.channel_width_m,
-                          boundary_source=P.bank_source)
+#: The MESH ASK, frozen at declaration and building nothing at import. Every field
+#: is checked at the router against what the ``corridor_tin`` mesher declares, so a
+#: knob it does not read is refused by name rather than ignored.
+MESH = tool.build_mesh(
+    mesher="corridor_tin",
+    kind="unstructured_tri",
+    domain=Ref("reach"),
+    extent_km=P.reach_length_km,
+    width_m=P.channel_width_m,
+    banks=P.bank_source,
+    refine={"edge_length": P.mesh_resolution_m, "mode": P.mesh_resolution},
+)
 
 
 def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
@@ -94,10 +101,9 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         ReviewResolvedInputs(carrier_discharge=Ref("carrier_discharge"),
                              bank_source=P.bank_source, workflow=ops.name,
                              input_mode=RunMode).named("reviewed_discharge"),
-        ops.author(mesh=ops.build_mesh(Ref("reach"), MESH, corridor=CORRIDOR),
-                   physics=PHYSICS, forcing=FORCING),
-        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
-        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=FORCING)
+        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
+        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
            .chart("do_sag_curve", builder=build_sag_chart),
     ]
 

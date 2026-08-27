@@ -32,7 +32,7 @@ from trid3nt_contracts.telemac_contracts import (
     TelemacRainOnGridLayerURI,
 )
 
-from trid3nt_server.workflows.lib import DeclarativeError, Step, deep_freeze
+from trid3nt_server.workflows.lib import DeclarativeError, Step
 from trid3nt_server.workflows.mesh import watershed as W
 from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
 from trid3nt_server.workflows.shared.aoi import aoi_slug
@@ -43,7 +43,6 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.rain_on_grid"
 __all__ = [
     "AcquireCatchment",
     "Catchment",
-    "CatchmentPolicy",
     "RainOnGrid",
     "RainOnGridError",
     "SolveRainOnGrid",
@@ -145,41 +144,6 @@ def AcquireCatchment(*, location: Any, bbox: Any, pour_point: Any,  # noqa: N802
 # --------------------------------------------------------------------------- #
 # 2. mesh: the catchment, triangulated, with a BOTTOM SELAFIN beside it.
 # --------------------------------------------------------------------------- #
-class CatchmentPolicy:
-    """The CATCHMENT-shaped part of a mesh ask, owned by the front that meshes one.
-
-    An edge-length BAND, a gradation and an outlet-snap window describe one domain
-    shape, not every shape - so by the placement rule they sit beside the only
-    mesher that reads them rather than on the universal :class:`MeshPolicy`, whose
-    single ``target_edge_m`` cannot express a band. It lives HERE rather than
-    beside ``CorridorPolicy`` on the facade because the step that reads it is
-    here, and the facade already imports this tier.
-
-    Deep-frozen: a binding block lives at module scope for the life of the process
-    and every run reads the same object.
-    """
-
-    __slots__ = ("min_edge_m", "max_edge_m", "grade", "max_iter", "snap_search_cells")
-
-    def __init__(self, *, min_edge_m: Any, max_edge_m: Any, grade: Any,
-                 max_iter: Any, snap_search_cells: Any) -> None:
-        for slot, value in (("min_edge_m", min_edge_m), ("max_edge_m", max_edge_m),
-                            ("grade", grade), ("max_iter", max_iter),
-                            ("snap_search_cells", snap_search_cells)):
-            object.__setattr__(self, slot, deep_freeze(value))
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        raise AttributeError("CatchmentPolicy is frozen; declare a new one instead.")
-
-    def as_kwargs(self) -> dict[str, Any]:
-        """The policy unpacked into plain kwargs, at PLAN-CONSTRUCTION time.
-
-        Unpacked here rather than passed whole, so ``Step.kwargs`` stays the plain
-        mapping the interpreter already binds late-bound reads inside.
-        """
-        return {slot: getattr(self, slot) for slot in self.__slots__}
-
-
 async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
                            slug: str) -> tuple[Any, str | None]:
     """Offer a mesh this CASE already holds; ``(mesh | None, note | None)``.
@@ -898,12 +862,24 @@ class Catchment:
     """The catchment mesh and its node fields, as declared steps."""
 
     @staticmethod
-    def mesh(*, aoi: Any, supplied: Any, bed_dem: Any, rivers: Any,
-             policy: CatchmentPolicy) -> Step:
-        """Delineate and triangulate the catchment - or adopt the mesh handed in."""
+    def mesh(*, mesh: Any, supplied: Any, bed_dem: Any, rivers: Any) -> Step:
+        """Delineate and triangulate the catchment - or adopt the mesh handed in.
+
+        The sizing comes off the template's MESH declaration, which the router has
+        already checked against the ``watershed`` mesher's own declared fields, so
+        the knobs this step forwards are the knobs that mesher accepts. Unpacked at
+        PLAN-CONSTRUCTION time so ``Step.kwargs`` stays the plain mapping the
+        interpreter binds late-bound reads inside.
+        """
+        fields = mesh.spec.fields
         return Step(runner=f"{_STEPS}.rain_on_grid.build_catchment_mesh", stage="mesh",
-                    kwargs={"aoi": aoi, "supplied": supplied, "bed_dem": bed_dem,
-                            "rivers": rivers, **policy.as_kwargs()})
+                    kwargs={"aoi": fields["aoi"], "supplied": supplied,
+                            "bed_dem": bed_dem, "rivers": rivers,
+                            "min_edge_m": fields["min_edge_length_m"],
+                            "max_edge_m": fields["max_edge_length_m"],
+                            "grade": fields["grade"],
+                            "max_iter": fields["max_iter"],
+                            "snap_search_cells": fields["snap_search_cells"]})
 
     @staticmethod
     def infiltration(*, mesh: Any, landcover: Any, curve_number: Any,

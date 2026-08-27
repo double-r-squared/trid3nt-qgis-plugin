@@ -52,7 +52,6 @@ from .products import Products, publish_do_products, publish_dye_products
 from .rain_on_grid import (
     AcquireCatchment,
     Catchment,
-    CatchmentPolicy,
     RainOnGrid,
     RainOnGridError,
     SolveRainOnGrid,
@@ -105,7 +104,7 @@ from .water_quality import (
 from .wave import Wave, publish_wave_products, write_wave_deck
 
 __all__ = [
-    "AcquireCatchment", "Catchment", "CatchmentPolicy", "RainOnGrid",
+    "AcquireCatchment", "Catchment", "RainOnGrid",
     "RainOnGridError", "SolveRainOnGrid", "acquire_catchment",
     "build_catchment_mesh", "node_infiltration_fields",
     "publish_rain_on_grid_products", "resolve_rain_event", "solve_rain_on_grid",

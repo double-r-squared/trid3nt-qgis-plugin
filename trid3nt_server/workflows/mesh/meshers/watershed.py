@@ -27,6 +27,10 @@ from trid3nt_server.workflows.mesh.meshers import (
     apply_layer_edits_action,
     register_mesher,
 )
+from trid3nt_server.workflows.mesh.watershed import (
+    DEFAULT_MAX_ITER,
+    DEFAULT_OUTLET_SNAP_CELLS,
+)
 
 __all__ = ["WATERSHED", "build"]
 
@@ -39,16 +43,25 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("unstructured_tri",),
               default="unstructured_tri",
               doc="unstructured_tri - a catchment interior is triangulated"),
-    MeshField("aoi", types=(tuple, list), required=True,
-              doc="(min_lon, min_lat, max_lon, max_lat) the delineation runs inside"),
+    MeshField("aoi", types=(tuple, list, dict), required=True,
+              doc="(min_lon, min_lat, max_lon, max_lat) the delineation runs "
+                  "inside, or the acquired catchment window that carries one "
+                  "along with its outlet"),
     MeshField("pour_point", types=(tuple, list),
-              doc="(lon, lat) catchment outlet; the AOI centre when unstated"),
+              doc="(lon, lat) catchment outlet; the window's own outlet, else the "
+                  "AOI centre, when unstated"),
     MeshField("min_edge_length_m", types=(int, float), default=40.0,
               doc="finest triangle edge, in the channel band"),
     MeshField("max_edge_length_m", types=(int, float), default=300.0,
               doc="coarsest triangle edge, on the hillslopes"),
     MeshField("grade", types=(int, float), default=0.20,
               doc="gradation limit; smaller means smoother size transitions"),
+    MeshField("max_iter", types=(int,), default=DEFAULT_MAX_ITER,
+              doc="how many triangulation iterations the sizing is allowed"),
+    MeshField("snap_search_cells", types=(int,),
+              default=DEFAULT_OUTLET_SNAP_CELLS,
+              doc="how far, in routing cells, the outlet may be snapped to find "
+                  "the channel it drains"),
 )
 
 
@@ -56,13 +69,15 @@ def build(spec: Mapping[str, Any]) -> Mesh:
     """Delineate the catchment at the pour point and triangulate its interior."""
     from trid3nt_server.workflows.mesh import watershed as strategy
 
-    aoi = tuple(float(v) for v in spec["aoi"])
-    pour = spec.get("pour_point")
+    aoi, window_outlet = _window(spec["aoi"])
+    pour = spec.get("pour_point") or window_outlet
     pour_point = (tuple(float(v) for v in pour) if pour is not None
                   else ((aoi[0] + aoi[2]) / 2.0, (aoi[1] + aoi[3]) / 2.0))
     min_edge = float(spec.get("min_edge_length_m", 40.0))
     max_edge = float(spec.get("max_edge_length_m", 300.0))
     grade = float(spec.get("grade", 0.20))
+    max_iter = int(spec.get("max_iter", DEFAULT_MAX_ITER))
+    snap_search_cells = int(spec.get("snap_search_cells", DEFAULT_OUTLET_SNAP_CELLS))
     rundir = _rundir()
 
     # The resolved artifacts are HELD rather than passed inline: their notes are the
@@ -73,7 +88,8 @@ def build(spec: Mapping[str, Any]) -> Mesh:
     catchment = strategy.generate_catchment_mesh(
         pour_point=pour_point, bbox=aoi, slug="watershed", output_dir=str(rundir),
         bed_dem=bed_dem, rivers=rivers,
-        min_edge_length_m=min_edge, max_edge_length_m=max_edge, grade=grade)
+        min_edge_length_m=min_edge, max_edge_length_m=max_edge, grade=grade,
+        max_iter=max_iter, snap_search_cells=snap_search_cells)
 
     import numpy as np
 
@@ -108,6 +124,8 @@ def build(spec: Mapping[str, Any]) -> Mesh:
                     "min_edge_length_m": min_edge,
                     "max_edge_length_m": max_edge,
                     "grade": grade,
+                    "max_iter": max_iter,
+                    "snap_search_cells": snap_search_cells,
                     "sizing_source": sizing_source,
                     "dem_source": dem_source,
                     # A degraded bed must travel WITH the mesh: a solver reading
@@ -121,6 +139,24 @@ def build(spec: Mapping[str, Any]) -> Mesh:
                 min_edge, max_edge, grade, points.shape[0], cells.shape[0],
                 sizing_source, dem_source),
         })
+
+
+def _window(aoi: Any) -> tuple[tuple[float, float, float, float], Any]:
+    """The delineation extent, and the outlet the window carries -> ``(bbox, outlet)``.
+
+    An acquired catchment window is a record whose ``bbox`` bounds the search and
+    whose ``pour_point`` is the outlet the user placed; a bare extent is only the
+    first half, and the outlet then has to be stated separately.
+    """
+    if isinstance(aoi, Mapping):
+        bbox = aoi.get("bbox")
+        if bbox is None:
+            raise MeshToolError(
+                "MESH_WATERSHED_NO_EXTENT",
+                f"the catchment window names no 'bbox' ({sorted(aoi)}), so there is "
+                "no extent for the delineation to run inside.")
+        return tuple(float(v) for v in bbox), aoi.get("pour_point")
+    return tuple(float(v) for v in aoi), None
 
 
 def _rundir() -> Path:
@@ -226,7 +262,9 @@ def _set_edge_band(mesh: Mesh, *, min_edge_length_m: float,
         "max_edge_length_m": (float(max_edge_length_m)
                               if max_edge_length_m is not None
                               else built["max_edge_length_m"]),
-        "grade": built["grade"]})
+        "grade": built["grade"],
+        "max_iter": built["max_iter"],
+        "snap_search_cells": built["snap_search_cells"]})
 
 
 WATERSHED = register_mesher(

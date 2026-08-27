@@ -5,7 +5,7 @@ everything that never varies between questions - the normalize -> resolve ->
 interpret spine, the post + publish stages, the typed error envelope, the chart
 HOOK and its persistence, the answer artifact, and the registration factory - and
 the engine facade (:class:`EngineOps`, realized as ``TelemacWorkflow`` and
-friends) realizes exactly five operations. The mechanics behind the invariants -
+friends) realizes exactly four operations. The mechanics behind the invariants -
 gate cards, chart building and emission, solve supervision, ledger + resume, the
 leak guard - are the interpreter's, and stay there.
 
@@ -52,7 +52,7 @@ class WireArgsError(DeclarativeError):
 
 
 class FacadeIncompleteError(DeclarativeError):
-    """A registered workflow's facade leaves one of the EngineOps five unrealized.
+    """A registered workflow's facade leaves one of the EngineOps four unrealized.
 
     An AUTHORING error, refused at registration (import) time: a facade with a hole
     in it would otherwise run until the plan reached the missing operation and then
@@ -65,52 +65,46 @@ class FacadeIncompleteError(DeclarativeError):
 
 
 class EngineOps:
-    """The engine facade: five operations, and nothing else.
+    """The engine facade: four operations, and nothing else.
 
     The facade's value is STABILITY - the interface never changes while the
-    mechanisms behind it (meshers, deck writers, result readers) evolve freely.
-    Facades are named by engine only; a domain qualifier in the name would weld a
-    domain assumption into the engine, and domain shape arrives through
+    mechanisms behind it (deck writers, result readers) evolve freely. Facades are
+    named by engine only; a domain qualifier in the name would weld a domain
+    assumption into the engine, and domain shape arrives through
     ``acquire_domain``'s slots instead.
+
+    Meshing is NOT one of the four: a mesh ask is a declaration block
+    (``tool.build_mesh``) the template writes beside DATA and PARAMS, and ``author``
+    consumes it. A mesh built by one mesher feeds several engines, so it stands
+    outside any one engine's facade.
     """
 
     #: The solver family a plan built by this facade records.
     engine: str = ""
 
-    #: What ``solver_spec`` NAMES its step. The skeleton reads the run prefix off
-    #: that step when the result carries none, and a facade that renamed its solve
-    #: would otherwise lose the run id to a literal guess. Declared, never assumed.
+    #: What ``solve`` NAMES its step. The skeleton reads the run prefix off that
+    #: step when the result carries none, and a facade that renamed its solve would
+    #: otherwise lose the run id to a literal guess. Declared, never assumed.
     solve_step: str = ""
 
     #: The operations a facade must realize to be registrable.
-    MUST_FILL: tuple[str, ...] = ("acquire_domain", "build_mesh", "author",
-                                  "solver_spec", "read_results")
+    MUST_FILL: tuple[str, ...] = ("acquire_domain", "author", "solve", "read")
 
     def acquire_domain(self, **slots: Any) -> tuple[Step, ...]:
         """The steps that establish the modeled world and its resolved state."""
         raise NotImplementedError(f"{type(self).__name__} realizes no acquire_domain.")
 
-    def build_mesh(self, domain: Any, policy: Any, **slots: Any) -> Any:
-        """The mesh, from an acquired domain and an engine-neutral :class:`MeshPolicy`.
-
-        FROZEN interface: user-supplied meshes, the shared generation front and the
-        mesh gate all arrive behind it without the declaration changing. Domain
-        SHAPE that is not universal (a corridor's extent and width, a basin's
-        outlet) arrives as an engine slot, never as a field on the neutral policy.
-        """
-        raise NotImplementedError(f"{type(self).__name__} realizes no build_mesh.")
-
     def author(self, *, mesh: Any, physics: Any, forcing: Any) -> Step:
-        """Serialize the mesh + physics + forcing slots into the engine's own deck."""
+        """Serialize the mesh ask + physics + forcing into the engine's own deck."""
         raise NotImplementedError(f"{type(self).__name__} realizes no author.")
 
-    def solver_spec(self, **slots: Any) -> Step:
+    def solve(self, **slots: Any) -> Step:
         """The declared solve: which image, which limits, which sizing class."""
-        raise NotImplementedError(f"{type(self).__name__} realizes no solver_spec.")
+        raise NotImplementedError(f"{type(self).__name__} realizes no solve.")
 
-    def read_results(self, run: Any, **slots: Any) -> Step:
+    def read(self, run: Any, **slots: Any) -> Step:
         """Read the solve's raw output into the question's published deliverable."""
-        raise NotImplementedError(f"{type(self).__name__} realizes no read_results.")
+        raise NotImplementedError(f"{type(self).__name__} realizes no read.")
 
 
 def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
@@ -142,7 +136,7 @@ class Workflow(EngineOps):
 
     HOOKS have SILENT defaults: an unfilled hook does nothing, and no engine
     subtype ever restates one. ABSTRACT SLOTS must be filled: the physics the
-    template declares and the :class:`EngineOps` five.
+    template declares and the :class:`EngineOps` four.
 
     The contract also names a sensor/context-layer hook. It is deliberately NOT
     here: the steps that fetch inputs already emit their own through the one
@@ -491,7 +485,7 @@ def register_workflow(
     in ``extra_args``), so the model-facing schema is generated from the same
     declaration the run resolves.
 
-    The facade is checked for HOLES first: the EngineOps five are must-fill slots,
+    The facade is checked for HOLES first: the EngineOps four are must-fill slots,
     and registration is the last moment an unfilled one is still an authoring
     error rather than a mid-run failure.
 
@@ -546,7 +540,7 @@ def register_workflow(
 def _refuse_incomplete_facade(facade: type[Workflow]) -> None:
     """A facade with an unrealized operation never reaches a caller as a run failure.
 
-    The design contract calls the EngineOps five must-fill slots and promises the
+    The design contract calls the EngineOps four must-fill slots and promises the
     library refuses to register a template that leaves one empty; this is that
     refusal. Without it the hole surfaces mid-run - after the geocode, the fetches
     and possibly the solve - as a bare ``NotImplementedError`` flattened into an
@@ -561,7 +555,7 @@ def _refuse_incomplete_facade(facade: type[Workflow]) -> None:
                 if getattr(facade, op, None) is getattr(EngineOps, op)]
     if unfilled:
         raise FacadeIncompleteError(
-            f"{facade.__name__} realizes no {unfilled} - the EngineOps five are "
+            f"{facade.__name__} realizes no {unfilled} - the EngineOps four are "
             "must-fill. Implement them on the facade, or register against one that "
             "does.")
 

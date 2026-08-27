@@ -39,24 +39,20 @@ from trid3nt_server.workflows.lib import (
     Fetch,
     Forcing,
     FormGate,
-    MeshPolicy,
     P,
     Physics,
     Ref,
     register_workflow,
     user_input,
 )
+from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
     DOC,
     NLCD_NATIVE_RESOLUTION_M,
     PARAMS,
     POUR_POINT_BUFFER_DEG,
 )
-from trid3nt_server.workflows.telemac.steps import (
-    Catchment,
-    CatchmentPolicy,
-    compute_class,
-)
+from trid3nt_server.workflows.telemac.steps import Catchment, compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_hydrograph_chart", "plan",
@@ -117,19 +113,22 @@ PHYSICS = Physics("rainfall_runoff",
 
 FORCING = Forcing(rain=D.rain)
 
-#: The UNIVERSAL sizing ask - the finest edge the catchment is resolved at. The
-#: deck reads it only to record what was ASKED for; what the mesh was BUILT at
-#: comes back on the mesh step.
-MESH = MeshPolicy(resolution=None, target_edge_m=P.mesh_min_edge_m)
-
-#: The CATCHMENT-shaped rest of the ask, which the universal policy's single
-#: target edge cannot express: a band, a gradation, and how far the outlet may be
-#: snapped to find the channel.
-CATCHMENT = CatchmentPolicy(min_edge_m=P.mesh_min_edge_m,
-                            max_edge_m=P.mesh_max_edge_m,
-                            grade=P.mesh_grade,
-                            max_iter=P.mesh_max_iter,
-                            snap_search_cells=P.outlet_snap_cells)
+#: The MESH ASK, frozen at declaration and building nothing at import. The
+#: acquired window carries the extent the delineation runs inside and the outlet
+#: the basin drains to; the band, the gradation and the outlet-snap window are the
+#: ``watershed`` mesher's own declared fields, checked at the router. The deck
+#: reads the finest edge only to record what was ASKED for; what the mesh was
+#: BUILT at comes back on the mesh step.
+MESH = tool.build_mesh(
+    mesher="watershed",
+    kind="unstructured_tri",
+    aoi=Ref("aoi"),
+    min_edge_length_m=P.mesh_min_edge_m,
+    max_edge_length_m=P.mesh_max_edge_m,
+    grade=P.mesh_grade,
+    max_iter=P.mesh_max_iter,
+    snap_search_cells=P.outlet_snap_cells,
+)
 
 
 def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
@@ -148,17 +147,16 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                             pour_point=P.pour_point,
                             aoi_half_deg=POUR_POINT_BUFFER_DEG,
                             aoi_name="watershed", code_prefix="TELEMAC_ROG"),
-        Catchment.mesh(aoi=Ref("aoi"), supplied=D.mesh, bed_dem=D.bed_dem,
-                       rivers=D.rivers, policy=CATCHMENT).named("watershed_mesh"),
+        Catchment.mesh(mesh=MESH, supplied=D.mesh, bed_dem=D.bed_dem,
+                       rivers=D.rivers).named("watershed_mesh"),
         Catchment.infiltration(mesh=Ref("watershed_mesh"), landcover=D.landcover,
                                curve_number=P.curve_number,
                                steep_slope_correction=P.steep_slope_correction,
                                antecedent_moisture=P.antecedent_moisture
                                ).named("infiltration"),
-        ops.author(mesh=ops.build_mesh(Ref("watershed_mesh"), MESH),
-                   physics=PHYSICS, forcing=FORCING),
-        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
-        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=FORCING)
+        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
+        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
            .chart("rain_on_grid_outlet_hydrograph", builder=build_hydrograph_chart),
     ]
 

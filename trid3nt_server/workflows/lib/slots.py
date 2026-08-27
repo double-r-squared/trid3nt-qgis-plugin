@@ -10,22 +10,21 @@ descriptions, and the facade unpacks it while the plan is being built, so what
 reaches ``Step.kwargs`` is a plain mapping the interpreter already knows how to
 bind. Nothing here reaches run time.
 
-A slot is also a BINDING BLOCK: a template writes PHYSICS / FORCING / MESH /
-CORRIDOR at module level, above ``plan(ops)``, and the plan reads them. That makes
-them process-lifetime values shared by every run, so they are DEEP-frozen - a
-nested mapping or list inside one would otherwise be a mutable global that one
-run could edit for the next.
+A slot is also a BINDING BLOCK: a template writes PHYSICS / FORCING at module
+level, above ``plan(ops)``, beside the MESH declaration the mesh tool owns, and
+the plan reads them. That makes them process-lifetime values shared by every run,
+so they are DEEP-frozen - a nested mapping or list inside one would otherwise be a
+mutable global that one run could edit for the next.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
 
 from .errors import PlanValidationError
 
-__all__ = ["Forcing", "MeshPolicy", "Physics", "Slot", "deep_freeze"]
+__all__ = ["Forcing", "Physics", "Slot", "deep_freeze"]
 
 
 def deep_freeze(value: Any) -> Any:
@@ -119,30 +118,3 @@ class Forcing(Slot):
     """WHAT DRIVES the run: inflow, rain, wind, tide - the world pushing on it."""
 
     kind = "forcing"
-
-
-@dataclass(frozen=True, slots=True)
-class MeshPolicy:
-    """The engine-NEUTRAL mesh ask: HOW FINELY to resolve, and nothing else.
-
-    Sizing is the only part of the ask that is genuinely universal - every
-    unstructured solver, structured grid and node-link network answers "how fine".
-    SHAPE is not: an extent, a cross-stream width and a bank source describe a
-    CORRIDOR, and a corridor is one domain among many. By the placement rule they
-    belong to the facade that meshes corridors (``telemac.workflow.CorridorPolicy``),
-    not to the universal policy, and they reach ``build_mesh`` as an engine slot.
-
-    Fixed-field because the sizing ask is the same question everywhere, and
-    ``EngineOps.build_mesh(domain, policy, **slots)`` is the frozen interface the
-    generation strategies evolve behind.
-    """
-
-    #: Sizing MODE: auto | fine | coarse. A word, because the user asks in words.
-    resolution: Any = "auto"
-    #: An explicit target element edge length that overrides the mode.
-    target_edge_m: Any = None
-
-    def __post_init__(self) -> None:
-        for field_name in ("resolution", "target_edge_m"):
-            object.__setattr__(self, field_name,
-                               deep_freeze(getattr(self, field_name)))

@@ -76,7 +76,7 @@ def declaration_site(depth: int = 2) -> str:
 
 #: The universal stage sequence the skeleton walks. A step names the stage it
 #: belongs to so the plan reads as the sequence rather than as a list of runners;
-#: the facade's five operations are what stamp it.
+#: the facade's four operations and the mesh declaration are what stamp it.
 STAGES: tuple[str, ...] = ("acquire", "prep", "mesh", "gates", "author", "solve",
                            "post", "publish")
 
@@ -350,7 +350,7 @@ class Step:
     styles: tuple[StyleSpec, ...] = ()
     charts: tuple[ChartSpec, ...] = ()
     #: Which universal stage this step belongs to (see ``STAGES``). Stamped by the
-    #: engine facade's five operations; a step a template declares directly leaves
+    #: engine facade's four operations; a step a template declares directly leaves
     #: it empty and simply reads as unstaged.
     stage: str = ""
 

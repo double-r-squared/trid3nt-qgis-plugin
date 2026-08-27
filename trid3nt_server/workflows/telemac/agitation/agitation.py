@@ -35,12 +35,12 @@ from trid3nt_server.workflows.lib import (
     Fetch,
     Forcing,
     FormGate,
-    MeshPolicy,
     P,
     Physics,
     Ref,
     register_workflow,
 )
+from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
 from trid3nt_server.workflows.telemac.agitation.declarations import DOC, PARAMS
@@ -108,7 +108,15 @@ PHYSICS = Physics("harbor_agitation",
                   bathy_source=P.bathy_source,
                   bed=D.bed)
 
-MESH = MeshPolicy(resolution=None, target_edge_m=P.target_resolution_m)
+#: The MESH ASK, frozen at declaration and building nothing at import. An
+#: open-water deck runs on a uniform lattice over the acquired AOI, and the router
+#: checks every field against what the ``reg_grid`` mesher declares.
+MESH = tool.build_mesh(
+    mesher="reg_grid",
+    kind="structured_grid",
+    aoi=Ref("aoi"),
+    resolution_m=P.target_resolution_m,
+)
 
 
 def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
@@ -123,10 +131,10 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="open_water",
                             aoi_half_deg=_HARBOR_HALF_DEG, aoi_name="aoi",
                             code_prefix="ARTEMIS"),
-        ops.author(mesh=ops.build_mesh(Ref("aoi"), MESH), physics=PHYSICS,
+        ops.author(mesh=MESH, physics=PHYSICS,
                    forcing=Forcing()),
-        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
-        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=Forcing())
+        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read(Ref("solve"), physics=PHYSICS, forcing=Forcing())
            .chart("harbor_agitation", builder=build_agitation_chart),
     ]
 

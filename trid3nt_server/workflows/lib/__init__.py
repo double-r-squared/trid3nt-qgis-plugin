@@ -59,7 +59,7 @@ from .plan import (
     Step,
     When,
 )
-from .slots import Forcing, MeshPolicy, Physics, Slot, deep_freeze
+from .slots import Forcing, Physics, Slot, deep_freeze
 from .workflow import (
     EngineOps,
     FacadeIncompleteError,
@@ -102,7 +102,7 @@ __all__ = [
     "DrawGate", "EngineOps",
     "FacadeIncompleteError", "Fetch", "Forcing",
     "FormGate", "Gate", "GateRefusedError",
-    "LeakScanTruncated", "LedgerRecord", "MeshPolicy", "ModifierIllegalError",
+    "LeakScanTruncated", "LedgerRecord", "ModifierIllegalError",
     "P", "Param",
     "ParamNotResolved",
     "ParamOutOfRangeError", "ParamRef", "ParamRefLeakedError",
