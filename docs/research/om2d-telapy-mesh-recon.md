@@ -77,7 +77,8 @@ Formulas (from the sandbox's own derivation notes, matching the paper):
 Mesh generation:
 ```python
 points, cells = om.generate_mesh(signed_distance_function, edge_length_function,
-    stereo=False, max_iter=100)     # returns numpy arrays
+    stereo=False, max_iter=100, seed=0, pfix=None)   # returns numpy arrays
+                                   # seed EXISTS and seeds the initial cloud
 om.generate_multiscale_mesh([sdf1, sdf2], [edge1, edge2], blend_width=None,
     blend_max_iter=50, max_iter=75)
 ```
@@ -108,8 +109,13 @@ meshio.write_points_cells("output.vtk", points, [("triangle", cells)], file_form
 Everything else (`.2dm`, `fort.14` ADCIRC, SELAFIN `.slf`, SCHISM `hgrid.gr3`)
 is written by **this repo's own code**, not by oceanmesh:
 - `scripts/sandbox/oceanmesh/mesh_formats.py`: `write_fort14()`, `write_2dm()`,
-  `mesh_quality_report()`, plus `_clean_and_orient()` / `_open_nodes_on_side()`
-  helpers for boundary segmentation.
+  `mesh_quality_report()`, plus `_clean_and_orient()` for the shared topology
+  pass. Open-boundary SEGMENTATION is oceanmesh's own
+  `identify_ocean_boundary_sections(points, cells, topobathymetry,
+  depth_threshold, min_nodes_threshold)`, which returns the first and last node
+  of each CONTIGUOUS ocean stretch along `edges.get_winded_boundary_edges`'s
+  walk; `_open_nodes_on_side()` (a coordinate percentile) is the pre-mesh-wave
+  sandbox helper and produces non-contiguous stretches.
 - `scripts/sandbox/oceanmesh/selafin_io.py`: `write_selafin()` (writes SELAFIN
   geometry directly from `points, cells`, node field `BOTTOM` = elevation,
   positive-up convention -- flagged as an open question against TELEMAC setups
@@ -127,20 +133,18 @@ is written by **this repo's own code**, not by oceanmesh:
 
 ### Determinism (recipe-replay / sha256-identical rebuilds)
 
-**No explicit random-seed parameter exists anywhere in the oceanmesh API**
-(confirmed: neither the README/API surface nor a `seed`/`random_state`/
-`np.random` call anywhere in the sandbox driver scripts). `generate_mesh` runs
-DistMesh, which is iterative but not documented as RNG-seeded in the public
-API. This means reproducibility is *plausible* (same inputs -> same
-convergence path) but **not confirmed** -- it has not been empirically tested
-here with a rebuild-and-diff. Before relying on it for sha256-identical
-recipe-replay, run the same build twice from an identical recipe (same AOI,
-same DEM, same shoreline file, same knobs) inside the pinned `mesh:latest`
-image and diff the output arrays/files byte-for-byte. If DistMesh internally
-touches `np.random` (e.g., for initial point jitter) without exposing a seed
-knob, the fallback is to pin the container's global numpy seed before the
-call, or fall back to comparing mesh topology/geometry with a tolerance
-instead of exact hashing.
+CORRECTION (2026-08-27, measured in the pinned image): **`generate_mesh` DOES
+take a `seed` parameter** and seeds numpy's global generator with it before
+DistMesh lays down its initial point cloud. The `om2d` mesher passes
+`seed=0` on every build, so the initial cloud is not the source of drift.
+
+Determinism nonetheless remains **measured False**: three rebuilds from one
+identical config (same AOI, same staged bed, same shoreline, same seed) inside
+`mesh:latest` returned two distinct meshes, so the nondeterminism is elsewhere
+in the convergence path, not in the seed. `om2d` therefore registers
+`deterministic=False` and the recipe records it, so a replay is read as an
+equivalent rebuild rather than a sha256-identical one. Do not re-derive a
+"no seed exists" conclusion from this file's earlier text.
 
 ---
 
@@ -386,7 +390,7 @@ build(spec) -> mesh
      clean/orient + open-boundary-node segmentation computed ONCE, then fed
      to every writer so boundary numbering is consistent across formats:
        - _clean_and_orient(points, cells)
-       - _open_nodes_on_side(...) -> ordered open-boundary node loops
+       - om.identify_ocean_boundary_sections(...) -> contiguous ocean sections
 
   4. WRITE (fan-out from the one topology pass; never re-detect boundaries per writer)
        - SELAFIN:  selafin_io.write_selafin() [[or Selafin().append_header_slf()
@@ -411,11 +415,10 @@ build(spec) -> mesh
      back with TelemacFile / Selafin() to confirm npoin/nelem/IKLE/X/Y and
      var list round-trip before calling a mesh "done."
 
-  7. DETERMINISM -- before recipe-replay is trusted for sha256-identical
-     rebuilds: run step 2 twice from an identical spec inside the pinned
-     mesh:latest image and diff points/cells byte-for-byte. No seed knob is
-     exposed by oceanmesh's public API, so reproducibility must be verified
-     empirically, not assumed from the absence of an obvious RNG call.
+  7. DETERMINISM -- MEASURED, not assumed: generate_mesh takes seed= and the
+     om2d mesher passes it, yet three rebuilds from one identical config
+     returned two distinct meshes, so a replay rebuilds an EQUIVALENT mesh and
+     the recipe says so.
 ```
 
 Boundary-condition generation (`.cli`) is the one piece not yet built

@@ -603,7 +603,38 @@ conformal measurement, and the format fan-out from one topology pass;
 that `om2d` also writes through it rather than duplicating.
 
 The two in-container drivers (`scripts/sandbox/oceanmesh/_om2d_incontainer.py`
-295, `scripts/sandbox/telemac/_telapy_mesh_incontainer.py` 305) are NOT COUNTED
-by the rule at the head of this file - they are scripts, mounted into the boxes
-where oceanmesh and telapy live. Neither is `tests/test_mesh_om2d_telapy.py`
+295, `scripts/sandbox/telemac/_telapy_mesh_incontainer.py` 305) were NOT COUNTED
+by the rule at the head of this file - they were scripts, mounted into the boxes
+where oceanmesh and telapy live. The review remediation moved them into
+`trid3nt_server/workflows/mesh/meshers/drivers/` and they are counted from
+there; see the remediation section at the foot of this file. Neither is `tests/test_mesh_om2d_telapy.py`
 (502) nor the ten corpus phrasings.
+
+## Mesh wave - slices 2 + 6 review remediation: the wrappers stop reimplementing (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh 2+6 remediation | `meshers/drivers/om2d_driver.py` MOVED into the product tree and now COUNTED (from `scripts/sandbox/oceanmesh/_om2d_incontainer.py`, 295 uncounted); +117 for the `ocean_boundary` op - the per-component walk, the library's own section identification, and the op dispatch | 0 | 412 | +412 | +7375 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/drivers/telapy_mesh_driver.py` MOVED and now COUNTED (from `scripts/sandbox/telemac/`, 305 uncounted); +55 for the one-count IPOBO walk, the permutation check, the contour-run measurement and the fully-liquid-contour refusal | 0 | 360 | +360 | +7735 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/drivers/coastal_edge_driver.py` MOVED and now COUNTED (from `scripts/sandbox/oceanmesh/_mesh_water_edge_incontainer.py`, 245 uncounted); content unchanged but for its header | 0 | 245 | +245 | +7980 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/drivers/__init__.py` NEW - `drivers_dir()`, the one path a mesher mounts | 0 | 21 | +21 | +8001 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/om2d.py` (+74 - the contiguous-section resolution, its two typed refusals, the evidence every section rides back in, and the op-aware box seam) | 631 | 705 | +74 | +8075 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/telapy_mesh.py` (-5 - the sandbox path constant and its repo-root helper die with the move) | 505 | 500 | -5 | +8070 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/coastal_edge.py` (+4 - the drivers mount, and the fetch-shape readers replacing two attribute reads) | 383 | 387 | +4 | +8074 |
+| 2026-08-27 | mesh 2+6 remediation | `meshers/__init__.py` (+35 - `fetch_activation_rows` / `fetch_fallback_note`: one reader for both shapes a fetch answers in) | 394 | 429 | +35 | +8109 |
+
+**Verdict: +1,038 counted, and 845 of it is a MOVE, not new code.** The three
+in-container drivers were product code living in `scripts/sandbox/`; they now
+sit beside the meshers that shell them and are counted like everything else, so
+the "sandbox" line in this ledger stops hiding a third of the mesh tool. The
+172 lines the remediation actually added are the two library calls the drivers
+had inlined (`om.Difference`, `om.enforce_mesh_gradation` on a seeded obstacle
+band), the section identification the open boundary now comes from, and the
+IPOBO permutation and contour-run checks that would have caught the defect
+this remediation fixes.
+
+NOT COUNTED by the rule at the head of this file: `workers/schism/schism_gr3.py`
+294 -> 335 (+41, `open_sections=` and the contiguous land-run split - the one
+gr3 writer, worker tree), `scripts/sandbox/oceanmesh/mesh_formats.py` 245 -> 285
+(+40, the same two changes in `write_fort14`), and
+`tests/test_mesh_om2d_telapy.py` 502 -> 738 (+236).
