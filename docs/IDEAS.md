@@ -2295,3 +2295,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   behind them. Spec rev 5 adds a HOW-MESHING-WORKS primer (sizing
   functions, generation families, conformality, cost scaling,
   boundary bookkeeping) - specs teach as well as specify.
+
+- FOR= CONSUMER DECLARATION RULED (NATE 2026-08-27): build_mesh gains
+  for=<engine(s)> - the upstream consumer declaration binding the
+  session to ENGINE_MESH_REQUIREMENTS at BUILD time: declaration-time
+  refusals (swan+unstructured refuses before building), ADAPTIVE edit
+  tools (set_boundary -> .cli/LIHBOR for telemac, contiguous gr3
+  segments for schism), live "solve-ready for <engine>" probes during
+  editing, accept() as a CONTRACT (refuses until requirements hold),
+  format writers narrowed to the declared engine + display. Templates
+  AUTO-INJECT for= from their engine; standalone optional +
+  list-valued; omitted = today's generic behavior. Orthogonal to and
+  composes with the capability param. Wire name "for", python kwarg
+  for_. Spec rev 6.

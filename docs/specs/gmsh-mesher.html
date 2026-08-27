@@ -28,7 +28,7 @@
 </style>
 
 <h1>Coastal Mesher Kernel</h1>
-<p class="rev">rev 5 &middot; 2026-08-27 &middot; economics revised (regeneration IS economical for the common small-mesh case); capability param ruled; patch-local deferred to measured large-mesh pain; meshing primer added. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 6 &middot; 2026-08-27 &middot; + the for= consumer declaration: engine requirements move INTO the session (adaptive edits, live solve-readiness, accept as a contract). Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>0. How meshing works (primer)</h2>
 <p>An unstructured mesh is a domain cut into triangles. Two things define its quality: the SHAPE of the triangles (minimum angle - skinny slivers break solvers) and the SIZING - a field h(x) giving the target edge length at every point. Everything a mesher does is in service of honoring h(x) with well-shaped triangles.</p>
@@ -74,6 +74,25 @@
 
 <h3>2.1 RULED: capability is the param</h3>
 <p>The user-facing param names the CAPABILITY, not the implementation: <code>coastal</code> / <code>adopt</code> / <code>corridor</code> / <code>grid</code>. More intuitive, and each capability tailors its own edit-action set; the kernel behind it is swappable without the registry ever lying.</p>
+<h3>2.2 RULED: the for= consumer declaration</h3>
+<p><code>for=</code> names the upstream consumer(s) - the engine(s) that will solve on this mesh - and binds the session to their requirements profile (the existing <code>ENGINE_MESH_REQUIREMENTS</code> registry, read at BUILD time instead of only at the consume gate):</p>
+<ul>
+<li>declaration-time refusal: <code>for="swan"</code> + unstructured refuses before anything builds;</li>
+<li>adaptive edits: <code>set_boundary</code> under telemac drives .cli/LIHBOR; under schism enforces contiguous gr3 segments + min open-node counts;</li>
+<li>live readiness: probes carry "solve-ready for &lt;engine&gt;: yes/no + why" DURING editing;</li>
+<li><code>accept()</code> is a contract: refuses unless the declared engine's requirements hold - wrong-water-body, non-contiguous segments, missing bed all die inside the session;</li>
+<li>writers: the declared engine's format is guaranteed, unneeded formats skipped (display face always);</li>
+<li>defaults painless: templates AUTO-INJECT for= from their own engine; standalone takes it optionally, LIST-valued (for=["telemac","schism"] - one mesh, two engines); omitted = today's generic best-effort + consume-time check.</li>
+</ul>
+<pre><code class="py">MESH = tool.build_mesh(
+    mesher = "coastal",            # HOW it is built (capability)
+    for_   = "telemac",            # WHO consumes it (auto-injected in templates)
+    kind   = "unstructured_tri",
+    aoi    = P.aoi,
+    refine = {"edge_length": P.edge_length, "min_spacing": 25, "gradation": 0.15},
+    bed    = D.dem,
+).edit("add_obstacle", D.breakwaters)
+# ("for" is a python keyword; the wire name is "for", the python kwarg for_)</code></pre>
 <pre><code class="py">MESH = tool.build_mesh(
     mesher = "coastal",           # capability name; the kernel is internal
     kind   = "unstructured_tri",
