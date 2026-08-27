@@ -55,9 +55,10 @@ basin    = delineate(domain, pour_point)         # derived subdomain (terrain's 
 corridor = corridor_of(domain, flowline, width_m=200)
 county   = clip(domain, admin_polygon)
 
-MESH = tool.build_mesh(aoi=basin, bed=D.dem, ...)  # mesh EXACTLY the area of interest</code></pre>
+# subdomains feed NON-mesh consumers explicitly (reporting clips, charts, sampling);
+# the MESH slot never takes an extent in a template - see 3.0</code></pre>
 <ul>
-<li><b>No over-meshing, no hand-authoring</b>: the mesh gets the basin, not the box around it.</li>
+<li><b>Derived extents are for explicit dataflow</b>, never for silently changing what gets meshed (3.0).</li>
 <li><b>Fetch-wide, mesh-narrow</b>: fetches stage over <code>domain</code> once; meshing consumes the subdomain; a moved pour point re-derives the subdomain with ZERO re-fetch (the wide raster still covers it) - composing with staged-once economics.</li>
 <li><b>The base stays reachable</b> for operations needing data outside the subdomain (upstream gauges, context rain, basemaps); multiple subdomains coexist as siblings.</li>
 <li><b>Derivation is provenance</b>: each subdomain carries parent + operation + inputs, journal-friendly like the mesh recipe.</li>
@@ -96,7 +97,8 @@ release_gate(valid_on=flowline)         # scenario validity</code></pre>
     kind   = "unstructured_tri",   # discretization - defaulted when obvious
     mesher = "auto",               # builder auto-routed from the constituents; pin to override
     for_   = "telemac",            # consumer contract - auto-injected in templates
-    aoi    = basin,                # the extent THIS mesh covers (domain or any subdomain)
+                                   # NO extent parameter: the mesh reads the threaded AOI (3.0);
+                                   # the only override is the runtime set_extent edit
     bed    = D.dem,                # constituents: ordinary data refs
     shoreline = D.shoreline,
     refine = {"edge_length": P.edge_length, "min_spacing": 25},
