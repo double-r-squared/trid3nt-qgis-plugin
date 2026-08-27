@@ -2131,3 +2131,35 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   DATA TYPE (raster/mesh/vector/series/chart), never by engine.
   Target-arch UML published: the Bridge Blueprint artifact
   (supersedes the Skeleton Blueprint as the forward picture).
+
+- THE MESH TOOL SHAPE LOCKED (NATE 2026-08-26, clean-slate walkthrough;
+  fetch + styles FROZEN as settled subsystems): mesh = a TOOL FAMILY
+  like fetch. Declaration block beside DATA/PARAMS:
+  MESH = tool.build_mesh(engine=om2d|telapy|hecras|reg_grid,
+  kind=structured_grid|unstructured_tri|unstructured_quad_flex|
+  curvilinear|node_link, aoi, refine={edge_length,min_spacing,
+  gradation}, bed=D.dem) - FROZEN at declaration, LAZY (nothing builds
+  at import; demand-pulled). Same tool standalone = builds now +
+  stashes in case. Policy zoo (MeshPolicy/CorridorPolicy/
+  CatchmentPolicy) DIES into spec fields; spec typed AT THE ROUTER
+  (each mesh engine declares its consumed fields; loud refusal).
+  MESH ENGINE distinct from SOLVER ENGINE (one OM2D build feeds
+  TELEMAC/SWAN/SCHISM). Runtime SESSION opens over the declaration;
+  .edit(action, **inputs) from a per-engine EDIT-ACTION REGISTRY (thin
+  hooks wrapping the official library: OceanMesh2D toolkit, telapy
+  mesh.py) - declared edits form the recipe PREFIX
+  (.edit("add_obstacle", D.breakwaters)); gate edits APPEND; restart
+  truncates to the prefix; accept -> MeshArtifact (multi-format +
+  MDAL display). ALL THREE SURFACES CONVERGE on actions (direct
+  params / agent GENERATED tools mounted only while session open /
+  future QGIS drawing delivers geometry into the same actions - an
+  action never cares who authored its inputs). QGIS hand-edit
+  round-trip = edit("apply_layer_edits", layer) - one recorded
+  action, layer hashed, honestly non-replayable. RECIPE IS THE RECORD
+  (spec + ordered chain, journaled, deterministic replay). AGENT
+  EYES = numeric probes (nodes, edge-length histogram, min-angle,
+  boundary segments, obstacles) + wireframe SNAPSHOT read with
+  vision; human at gate stays the final eye. Supplied mesh:
+  explicit-first, case-discovery-second, declared-spec default.
+  Static plan spine KEPT; boundaries defined in the same gate loop.
+  Bridge Blueprint artifact rev 2 = the picture.
