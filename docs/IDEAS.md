@@ -2426,3 +2426,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   EXISTING SpatialInputCard/draw-gate machinery. LANDS: model wave
   (rev 18) for the resolution seam + rows; picker is plugin UI
   needing NATE's live pass.
+
+- TWO-POINT BOUNDARY PICK + UI-REWORK SEQUENCING (NATE 2026-08-27):
+  set_boundary's natural card input = TWO PICKED POINTS on the mesh
+  exterior (DrawGate-style) - the stretch between them IS the open
+  boundary (contiguity free by construction; prevents the wrong-
+  water-body class the compass-side pick hit live). SEQUENCING RULED:
+  make-it-work-now with the current card channels (numeric +
+  string-choice rows, geometry by TYPED name); the interaction design
+  (canvas picker, attention flash, two-point draw, card polish) is a
+  DEDICATED PLUGIN-UI REWORK PASS immediately after the 7 workflows
+  ship - NATE-led, his long-standing itch. Model wave carries only
+  the server-side name->layer->geometry resolution seam so the UI
+  pass finds its substrate ready.
