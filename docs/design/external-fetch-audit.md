@@ -270,15 +270,19 @@ Every host directory bind-mounted into a solver container by product code:
 
 | Host dir | Container path | Product call site |
 |---|---|---|
-| `scripts/sandbox/oceanmesh` | `/sandbox` | `workflows/telemac/rain_on_grid/mesh_acquisition.py:313-314`; `workflows/mesh/meshers/coastal_edge.py::_water_domain` |
+| `scripts/sandbox/oceanmesh` | `/sandbox` | `workflows/telemac/rain_on_grid/mesh_acquisition.py:313-314` |
+| `trid3nt_server/workflows/mesh/meshers/drivers` | `/drivers` (ro) | `meshers/om2d.py::_run_op`; `meshers/telapy_mesh.py::_run`; `meshers/coastal_edge.py::_run_container` |
 | per-run `<rundir>` (ephemeral) | `/data` | `data/simulation/solver/solver.py:625`; `run_hecras.py:166`; `run_schism.py:159`; `run_telemac.py:188/280/373/467/562`; `data/meta/passthroughs.py:187`; `mesh/coastal_tin.py:114` |
 | per-run `<rundir>` (ephemeral) | `/deck` | `workflows/elmfire/run_elmfire.py:839` |
 | `$TRID3NT_GSHHG_SHP` parent | `/shoreline` | `workflows/schism/tidal_hydro/tidal_hydro.py:733` -- data file, no code |
 
-`scripts/sandbox/oceanmesh` is the only persistent host CODE tree mounted into a
-container. Both of its in-container entrypoints are CLEAN: no network import, no
-URL literal, pure geometry/oceanmesh/rasterio/scipy
-(`_mesh_watershed_incontainer.py`, `_mesh_water_edge_incontainer.py`).
+Two persistent host CODE trees are mounted into containers, and every
+in-container entrypoint in both is CLEAN: no network import, no URL literal,
+pure geometry/oceanmesh/telapy/rasterio/scipy. `scripts/sandbox/oceanmesh`
+carries `_mesh_watershed_incontainer.py`; the mesh tool's own drivers
+(`om2d_driver.py`, `telapy_mesh_driver.py`, `coastal_edge_driver.py`) moved into
+`trid3nt_server/workflows/mesh/meshers/drivers` and mount read-only at
+`/drivers`.
 
 So there are **no IN-CONTAINER-FETCH findings outside `workers/telemac/`**. The
 fetching in that directory (`water_edge.py`) was pulled OUT of the container and
