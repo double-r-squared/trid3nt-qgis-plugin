@@ -395,7 +395,7 @@ are postures, not fetches.
 | workers/hecras + hecras2025 | 0 | 0 | -- | 0 | 2 | -- | 2 |
 | workers/canopy | 0 (1 UNRESOLVED) | 0 | -- | 1 | 1 (unpinned) | -- | -- |
 | workers/qgis, _raster_postprocess | 0 | 0 | -- | 0 | 0 | -- | -- |
-| server: mesh/generate_mesh | -- | -- | 1 (row 9) | -- | -- | -- | -- |
+| server: mesh/meshers | -- | -- | 1 (row 9) | -- | -- | -- | -- |
 | server: workflows/geoclaw | -- | -- | 2 (rows 10,11) | -- | -- | -- | -- |
 | server: workflows/telemac | -- | 1 (row 12) | 1 (row 12) | -- | -- | -- | -- |
 | server: workflows/schism | -- | -- | 1 (row 13) | -- | -- | -- | -- |
@@ -601,13 +601,15 @@ the fetched object is physics-consequential and by how hot the path is.
    user never sees. ADR 0231 records this row as SURFACED; it is not. A user
    comparing the visible layer to the result is comparing two different rivers.
 
-2. **Row 9 -- `generate_mesh`'s coastal water edge
-   (`generate_mesh.py:352-366` -> `scripts/sandbox/oceanmesh/water_edge.py`).**
+2. **Row 9 -- the `coastal_edge` mesher's water edge
+   (`workflows/mesh/meshers/coastal_edge.py::_water_domain` ->
+   `scripts/sandbox/oceanmesh/water_edge.py`).**
    A `scripts/sandbox/` module `sys.path`-injected into the LIVE DAEMON and run
    in-process, carrying a raw `urllib` Overpass + NHD fetcher with its own private
-   mirror ladder -- on the UNCONDITIONAL fallthrough default of `_infer_mode`.
-   Directly contradicts ADR 0112's "coded data-fetchers = 0, one router" on a hot
-   path, and it is a sandbox module that never graduated.
+   mirror ladder. The mode inference that made this an unconditional fallthrough
+   default is gone -- a caller now NAMES the mesher -- but the bypass itself is
+   unchanged. Directly contradicts ADR 0112's "coded data-fetchers = 0, one
+   router", and it is a sandbox module that never graduated.
 
 3. **Row 4 -- the private in-worker DEM ladder
    (`telemac_river_dye_build.py:1649-1695`).** A CROSS-DATASET substitution
