@@ -25,6 +25,7 @@ import numpy as np
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
+from trid3nt_server.emission.mesh_display import write_2dm
 from trid3nt_server.mesh.grid_geometry import M_PER_DEG_LAT
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
@@ -50,11 +51,7 @@ from trid3nt_server.workflows.mesh.tool import (
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.session")
 
-__all__ = ["MeshSession", "mesh_digest", "replay_recipe", "write_2dm"]
-
-#: The SMS element tag for a cell of N nodes. A mesh of any other arity has no
-#: display face here and says so rather than being silently reshaped.
-_ELEMENT_TAG: Mapping[int, str] = {3: "E3T", 4: "E4Q"}
+__all__ = ["MeshSession", "mesh_digest", "replay_recipe"]
 
 
 class MeshSession:
@@ -314,31 +311,6 @@ def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]) 
 # --------------------------------------------------------------------------- #
 # Display face + probes.
 # --------------------------------------------------------------------------- #
-def write_2dm(mesh: Mesh) -> str:
-    """Write the mesh as an SMS ``.2dm`` string MDAL opens as a mesh layer.
-
-    A bed-less mesh writes a zero node column because the format requires one;
-    the artifact's ``has_bathymetry`` is what says whether an elevation was ever
-    sampled.
-    """
-    tag = _ELEMENT_TAG.get(mesh.nodes_per_cell)
-    if tag is None:
-        raise MeshToolError(
-            "MESH_DISPLAY_UNSUPPORTED_CELL",
-            f"a {mesh.nodes_per_cell}-node cell has no .2dm element tag "
-            f"(supported: {sorted(_ELEMENT_TAG)}).")
-    pts = np.asarray(mesh.points, dtype=float)
-    cells = np.asarray(mesh.cells, dtype=np.int64) + 1
-    bed = (np.zeros(pts.shape[0], dtype=float) if mesh.bed is None
-           else np.asarray(mesh.bed, dtype=float))
-    lines = ["MESH2D"]
-    for i, row in enumerate(cells, start=1):
-        lines.append(f"{tag} {i} " + " ".join(str(int(v)) for v in row) + " 1")
-    for i, (x, y) in enumerate(pts, start=1):
-        lines.append(f"ND {i} {x:.6f} {y:.6f} {float(bed[i - 1]):.6f}")
-    return "\n".join(lines) + "\n"
-
-
 def mesh_digest(mesh: Mesh) -> str:
     """``sha256:<hex>`` over the mesh's display text - one number per geometry."""
     import hashlib

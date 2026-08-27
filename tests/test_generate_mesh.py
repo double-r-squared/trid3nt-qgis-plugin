@@ -26,10 +26,8 @@ from trid3nt_server.workflows.mesh.artifact import (
     stash_mesh_artifact,
     stashed_mesh_artifacts,
 )
-from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import (
-    _infer_mode,
-    _write_2dm,
-)
+from trid3nt_server.emission.mesh_display import write_2dm_arrays
+from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import _infer_mode
 from trid3nt_server.workflows.mesh.precondition_gate import gate_supplied_mesh
 from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
 
@@ -81,7 +79,7 @@ def test_2dm_round_trip():
                     [500000.0, 3880100.0], [500100.0, 3880100.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])
     z = np.array([610.0, 612.5, 615.0, 611.0])
-    text = _write_2dm(pts, cells, z)
+    text = write_2dm_arrays(pts, cells, z)
     assert text.startswith("MESH2D")
     assert "E3T 1 1 2 3 1" in text
     assert "ND 1 500000.000000 3880000.000000 610.000000" in text

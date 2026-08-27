@@ -524,3 +524,17 @@ NOT COUNTED: the 50 lines added to `tests/test_build_mesh_tool.py` (351 -> 401).
 
 **The campaign net is +5362** - the true running sum of every delta in the tables
 above, from wave 2's first row to the mesh wave's slice 1 review.
+
+## Mesh wave - slice 3: the display face moves to emission (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh slice 3 | `emission/mesh_display.py` NEW - the one `.2dm` writer, in both faces (a built mesh, and the raw `(points, cells, z)` arrays a producer holds) | 0 | 68 | +68 | +5430 |
+| 2026-08-27 | mesh slice 3 | `workflows/mesh/session.py` (-24 - the mesh-typed writer and its element-tag table leave for emission; the session imports it) | 445 | 421 | -24 | +5406 |
+| 2026-08-27 | mesh slice 3 | `workflows/mesh/generate_mesh/generate_mesh.py` (-21 - the array-typed writer leaves for the same home) | 811 | 790 | -21 | +5385 |
+
+**Verdict: +23 for collapsing two writers into one.** The two `.2dm` writers
+that existed wrote the same format with different signatures; what lands in
+emission is one implementation with the two entry points its callers actually
+have, and the arity check that used to exist on only one of them now guards
+both.

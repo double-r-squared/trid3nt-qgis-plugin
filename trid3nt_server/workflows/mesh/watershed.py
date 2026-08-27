@@ -385,7 +385,7 @@ def polygon_area_km2(geom: Any) -> float:
 def read_2dm_mesh(twodm_path: str) -> tuple[Any, Any, Any]:
     """Parse an SMS ``.2dm`` -> ``(points (N,2), cells (M,3) 0-based, z (N,))``.
 
-    The inverse of ``generate_mesh._write_2dm``: ``ND id x y z`` node rows and
+    The inverse of the display face's ``.2dm`` writer: ``ND id x y z`` node rows and
     ``E3T id n1 n2 n3 mat`` triangle rows, both 1-based. Nodes come back in id
     order; coordinates are the mesh's native metres (the artifact's ``utm_epsg``
     names the CRS).

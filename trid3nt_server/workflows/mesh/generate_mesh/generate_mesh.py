@@ -43,6 +43,7 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
+from trid3nt_server.emission.mesh_display import write_2dm_arrays
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 
@@ -454,7 +455,7 @@ def _stage_and_record(
 
     # 1. write the MDAL .2dm (display) + the SELAFIN (solve) in UTM metres.
     twodm_local = rundir / "mesh.2dm"
-    twodm_local.write_text(_write_2dm(pts, cells, bed))
+    twodm_local.write_text(write_2dm_arrays(pts, cells, bed))
     slf_local = rundir / "mesh.slf"
     if built.get("local_slf") and Path(built["local_slf"]).exists():
         slf_local.write_bytes(Path(built["local_slf"]).read_bytes())
@@ -551,29 +552,6 @@ def _stage_and_record(
         uri=twodm_uri, style_preset="mesh_wireframe", role="primary",
         bbox=lonlat_bbox, crs_authid=crs_authid, synthetic_inputs=synthetic,
         fallback_note=built.get("bed_fallback_note"))
-
-
-# --------------------------------------------------------------------------- #
-# Minimal MDAL-loadable 2DM (SMS) writer -- self-contained ASCII mesh.
-# --------------------------------------------------------------------------- #
-def _write_2dm(points: Any, cells: Any, z: Any) -> str:
-    """Write an SMS ``.2dm`` (MESH2D) string: E3T triangles + ND nodes (1-based).
-
-    MDAL reads this directly as a ``QgsMeshLayer``; node ``z`` becomes the
-    "Bed Elevation" dataset. Coordinates are the mesh's native metres (the
-    LayerURI ``crs_authid`` names the CRS, since a 2dm carries none)."""
-    import numpy as np
-
-    pts = np.asarray(points, dtype=float)
-    cel = np.asarray(cells, dtype=np.int64)
-    zz = np.asarray(z, dtype=float)
-    lines = ["MESH2D"]
-    for i, (a, b, c) in enumerate(cel, start=1):
-        lines.append(f"E3T {i} {int(a) + 1} {int(b) + 1} {int(c) + 1} 1")
-    for i, (x, y) in enumerate(pts, start=1):
-        zi = float(zz[i - 1]) if i - 1 < zz.size else 0.0
-        lines.append(f"ND {i} {x:.6f} {y:.6f} {zi:.6f}")
-    return "\n".join(lines) + "\n"
 
 
 # --------------------------------------------------------------------------- #

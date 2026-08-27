@@ -22,11 +22,11 @@ from trid3nt_server.workflows.mesh.artifact import (
     stash_mesh_artifact,
 )
 from trid3nt_server.workflows.mesh.meshers import MeshToolError, get_mesher
+from trid3nt_server.emission.mesh_display import write_2dm
 from trid3nt_server.workflows.mesh.session import (
     MeshSession,
     mesh_digest,
     replay_recipe,
-    write_2dm,
 )
 from trid3nt_server.workflows.mesh.tool import (
     MeshDeclaration,
