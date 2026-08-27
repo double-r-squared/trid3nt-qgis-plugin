@@ -2174,3 +2174,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   charter, kickoff, docstring and sub-agent prompt. Scope note
   ratified: the bigger mesh wave is WORTH IT - "before none of the
   functionality existed in one area."
+
+- SPEC TRIMMED, THREE CORRECTIONS (NATE 2026-08-27): (1) the
+  FIVE-CATEGORY INPUT TAXONOMY is DESCRIPTIVE VOCABULARY ONLY - words
+  for talking about inputs in forms/docs/gates. NO code change: the
+  resolved sheet, doors, journal, rerun and the consequence= tags stay
+  exactly as they are; the earlier "retire consequence vocabulary"
+  clause is WITHDRAWN. (2) Design-pattern language (bridge/template
+  method) DEMOTED to private analysis vocabulary - the spec describes
+  the architecture plainly ("fixed spine of steps; engine-touching
+  steps delegate to the official library"); no pattern names in
+  charters/kickoffs/docstrings. (3) STEPPABLE ENGINE REMOVED FROM THE
+  SPEC - the existing run paradigm (box dispatch, run to completion)
+  carries everything; telapy stepping is a later free win, still
+  parked post-calibration but NOT part of the target architecture.
+  The spec = the mesh tool (ratified section C) + the emission
+  display-face placement, over today's unchanged run + emission
+  machinery. Workflow Blueprint artifact rev 4 = the trimmed spec.
