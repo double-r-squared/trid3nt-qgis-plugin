@@ -2063,7 +2063,7 @@ async def _noop():
 # The plan is a STATIC value: built once, at declaration, checked there
 # ============================================================================ #
 class _StubFacade(Workflow):
-    """A facade realizing the EngineOps five, so registration gets past the hole
+    """A facade realizing the EngineOps four, so registration gets past the hole
     check and reaches the thing under test: the plan built in ``__init__``."""
 
     engine = "stub"
@@ -2071,16 +2071,13 @@ class _StubFacade(Workflow):
     def acquire_domain(self, **slots):
         return (Step(runner=f"{_HERE}.stub_step").named("aoi"),)
 
-    def build_mesh(self, domain, policy, **slots):
-        return Step(runner=f"{_HERE}.stub_producer").named("mesh")
-
     def author(self, *, mesh, physics, forcing):
         return Step(runner=f"{_HERE}.stub_step").named("deck")
 
-    def solver_spec(self, **slots):
+    def solve(self, **slots):
         return Step(runner=f"{_HERE}.stub_step").named("solve")
 
-    def read_results(self, run, **slots):
+    def read(self, run, **slots):
         return Step(runner=f"{_HERE}.stub_product").named("out")
 
 

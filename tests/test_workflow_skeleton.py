@@ -31,7 +31,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.lib import (
     EngineOps,
     Forcing,
-    MeshPolicy,
     Param,
     Physics,
     PlanValidationError,
@@ -42,13 +41,12 @@ from trid3nt_server.workflows.lib import (
 )
 
 
-# --- (1) the five operations are abstract ----------------------------------- #
+# --- (1) the four operations are abstract ----------------------------------- #
 @pytest.mark.parametrize("call", [
     lambda ops: ops.acquire_domain(),
-    lambda ops: ops.build_mesh(None, MeshPolicy()),
     lambda ops: ops.author(mesh=None, physics=None, forcing=None),
-    lambda ops: ops.solver_spec(),
-    lambda ops: ops.read_results(None),
+    lambda ops: ops.solve(),
+    lambda ops: ops.read(None),
 ])
 def test_an_unrealized_engine_operation_refuses_by_name(call):
     class BareEngine(EngineOps):
@@ -234,9 +232,17 @@ def _telemac():
                            plan=lambda o: ())
 
 
+def _corridor(**fields):
+    """The MESH declaration a reach template writes, with test values for its ask."""
+    from trid3nt_server.workflows.mesh.tool import tool
+
+    return tool.build_mesh(mesher="corridor_tin", kind="unstructured_tri",
+                           domain=Ref("reach"), **fields)
+
+
 def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
     ops = _telemac()
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy())
+    mesh = _corridor()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("tracer", not_a_deck_field=1.0),
                    forcing=Forcing(carrier=Ref("carrier_discharge")))
@@ -245,21 +251,17 @@ def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
 
 def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
     ops = _telemac()
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy())
+    mesh = _corridor()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("magnetohydrodynamics"),
                    forcing=Forcing(carrier=Ref("carrier_discharge")))
     assert "magnetohydrodynamics" in str(ei.value)
 
 
-def test_the_mesh_policy_reaches_the_deck_under_the_engine_s_own_names():
-    from trid3nt_server.workflows.telemac.workflow import CorridorPolicy
-
+def test_the_mesh_declaration_reaches_the_deck_under_the_engine_s_own_names():
     ops = _telemac()
-    mesh = ops.build_mesh(
-        Ref("reach"), MeshPolicy(resolution="coarse", target_edge_m=100.0),
-        corridor=CorridorPolicy(extent_km=0.5, width_m=60.0,
-                                boundary_source="nhd_area"))
+    mesh = _corridor(extent_km=0.5, width_m=60.0, banks="nhd_area",
+                     refine={"edge_length": 100.0, "mode": "coarse"})
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge"), rain=None))
     assert deck.name == "deck" and deck.stage == "author"
@@ -318,7 +320,7 @@ def test_a_required_deck_field_no_slot_covers_refuses_at_plan_construction():
     round-trips after the declaration that was already wrong.
     """
     ops = _telemac()
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy())
+    mesh = _corridor()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                    forcing=Forcing())
@@ -330,13 +332,13 @@ def test_a_required_deck_field_no_slot_covers_refuses_at_plan_construction():
 def test_the_covered_declaration_still_authors():
     """The guard refuses a HOLE, not every plan: the cohort shape still passes."""
     ops = _telemac()
-    mesh = ops.build_mesh(Ref("reach"), MeshPolicy())
+    mesh = _corridor()
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge")))
     assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
 
 
-# --- (6) the EngineOps five are must-fill at REGISTRATION -------------------- #
+# --- (6) the EngineOps four are must-fill at REGISTRATION ------------------- #
 def test_registration_refuses_a_facade_with_an_unrealized_operation():
     """The design doc promises the library refuses to register a template that
     leaves a must-fill slot empty. A hole that reaches run time surfaces as a bare
@@ -350,9 +352,6 @@ def test_registration_refuses_a_facade_with_an_unrealized_operation():
         def acquire_domain(self, **slots):
             return ()
 
-        def build_mesh(self, domain, policy, **slots):
-            return None
-
         def author(self, *, mesh, physics, forcing):
             return Step(runner="pkg.mod.fn")
 
@@ -360,7 +359,7 @@ def test_registration_refuses_a_facade_with_an_unrealized_operation():
         register_workflow(HalfEngine, _metadata("half_probe"), (),
                           lambda o: ())
     assert "HalfEngine" in str(ei.value)
-    assert "solver_spec" in str(ei.value) and "read_results" in str(ei.value)
+    assert "solve" in str(ei.value) and "read" in str(ei.value)
 
 
 def test_registration_refuses_something_that_is_not_a_facade_at_all():
@@ -487,21 +486,19 @@ def test_a_slot_that_declares_no_shape_still_reaches_the_wire_as_a_string():
     assert sig.parameters["clip_zone"].default is None
 
 
-# --- a corridor policy is a binding block, so it is frozen DEEP -------------- #
-def test_a_corridor_policy_is_frozen_all_the_way_down():
-    """A template writes CORRIDOR at module level and every run reads that same
-    object, so a mutable container inside one is a channel from one run to the
-    next: a step that edits the declared list changes what the NEXT run declares."""
-    from trid3nt_server.workflows.telemac.workflow import CorridorPolicy
+# --- a mesh declaration is a binding block, so it is frozen DEEP ------------- #
+def test_a_mesh_declaration_is_frozen_all_the_way_down():
+    """A template writes MESH at module level and every run reads that same object,
+    so a mutable container inside one is a channel from one run to the next: a step
+    that edits the declared mapping changes what the NEXT run declares."""
+    refine = {"edge_length": 100.0, "mode": "coarse"}
+    mesh = _corridor(extent_km=0.5, refine=refine)
 
-    banks = ["nhd_area", "assumed_ribbon"]
-    policy = CorridorPolicy(extent_km=0.5, width_m={"left": 30.0, "right": [1, 2]},
-                            boundary_source=banks)
-
-    assert policy.boundary_source == ("nhd_area", "assumed_ribbon")
-    assert isinstance(policy.width_m, MappingProxyType)
-    assert policy.width_m["right"] == (1, 2)     # the nested list became a tuple
+    assert isinstance(mesh.spec.fields, MappingProxyType)
+    assert isinstance(mesh.spec.fields["refine"], MappingProxyType)
     with pytest.raises(TypeError):
-        policy.width_m["left"] = 99.0
-    banks.append("invented_later")               # the caller's list is not the policy's
-    assert policy.boundary_source == ("nhd_area", "assumed_ribbon")
+        mesh.spec.fields["refine"]["edge_length"] = 99.0
+    with pytest.raises(TypeError):
+        mesh.spec.fields["extent_km"] = 99.0
+    refine["edge_length"] = 99.0                 # the caller's dict is not the ask's
+    assert mesh.spec.fields["refine"]["edge_length"] == 100.0

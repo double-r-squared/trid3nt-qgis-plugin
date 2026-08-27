@@ -151,32 +151,39 @@ def test_an_unknown_domain_shape_refuses_at_plan_construction():
     assert "estuary" in str(excinfo.value)
 
 
+def _lattice(**fields):
+    """The MESH declaration an open-water template writes, over the acquired AOI."""
+    from trid3nt_server.workflows.lib import Ref
+    from trid3nt_server.workflows.mesh.tool import tool
+
+    return tool.build_mesh(mesher="reg_grid", kind="structured_grid",
+                           aoi=Ref("aoi"), **fields)
+
+
 def test_an_unknown_physics_process_refuses_before_anything_runs():
-    from trid3nt_server.workflows.lib import Forcing, MeshPolicy, Physics
+    from trid3nt_server.workflows.lib import Forcing, Physics
     from trid3nt_server.workflows.lib import PlanValidationError
     from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
     import pytest
     facade = TelemacWorkflow.__new__(TelemacWorkflow)
-    mesh = facade.build_mesh("aoi", MeshPolicy(resolution=None, target_edge_m=250.0))
     with pytest.raises(PlanValidationError) as excinfo:
-        facade.author(mesh=mesh, physics=Physics("tsunami"), forcing=Forcing())
+        facade.author(mesh=_lattice(resolution_m=250.0), physics=Physics("tsunami"),
+                      forcing=Forcing())
     assert "tsunami" in str(excinfo.value)
 
 
-def test_a_grid_domain_declares_no_corridor_fields():
-    """An undeclared corridor member is ABSENT, not None.
+def test_a_lattice_declares_no_corridor_fields():
+    """A field the chosen mesher never declared reaches no deck.
 
-    Passing None would null out the writer's own default - which is how a grid
-    domain would silently hand a corridor writer a reach with no length.
+    A corridor's length and bank source are the corridor mesher's; passing them
+    from a lattice ask would null out a writer default that a grid domain never
+    asked about.
     """
-    from trid3nt_server.workflows.lib import MeshPolicy
-    from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+    from trid3nt_server.workflows.telemac.workflow import mesh_deck_fields
 
-    facade = TelemacWorkflow.__new__(TelemacWorkflow)
-    fields = facade.build_mesh(
-        "aoi", MeshPolicy(resolution=None, target_edge_m=250.0)).deck_fields()
-    assert fields == {"mesh_resolution_m": 250.0}
+    assert mesh_deck_fields(_lattice(resolution_m=250.0)) == {
+        "mesh_resolution_m": 250.0}
 
 
 def test_the_coastal_deck_carries_what_solves_it():

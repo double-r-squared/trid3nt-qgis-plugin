@@ -371,16 +371,13 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
         def acquire_domain(self, **slots):
             return ()
 
-        def build_mesh(self, domain, policy, **slots):
-            return None
-
         def author(self, *, mesh, physics, forcing):
             return Step(runner=f"{_PROBE}.locate")
 
-        def solver_spec(self, **slots):
+        def solve(self, **slots):
             return Step(runner=f"{_PROBE}.locate")
 
-        def read_results(self, run, **slots):
+        def read(self, run, **slots):
             return Step(runner=f"{_PROBE}.locate")
 
     def plan(ops):
@@ -429,16 +426,13 @@ def _coastal_probe() -> Workflow:
         def acquire_domain(self, **slots):
             return ()
 
-        def build_mesh(self, domain, policy, **slots):
-            return None
-
         def author(self, *, mesh, physics, forcing):
             return Step(runner=f"{_PROBE}.friction_ok")
 
-        def solver_spec(self, **slots):
+        def solve(self, **slots):
             return Step(runner=f"{_PROBE}.friction_ok")
 
-        def read_results(self, run, **slots):
+        def read(self, run, **slots):
             return Step(runner=f"{_PROBE}.friction_ok")
 
     def plan(ops):

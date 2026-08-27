@@ -79,7 +79,8 @@ def test_the_edge_band_declaration_survived_the_dissolution():
 
 @pytest.mark.parametrize("mesher,expected", [
     ("watershed", {"kind", "aoi", "pour_point", "min_edge_length_m",
-                   "max_edge_length_m", "grade"}),
+                   "max_edge_length_m", "grade", "max_iter",
+                   "snap_search_cells"}),
     ("coastal_edge", {"kind", "aoi", "min_edge_length_m", "max_edge_length_m",
                       "grade", "open_boundary_side"}),
     ("corridor_tin", {"kind", "domain", "extent_km", "width_m", "banks",
