@@ -149,8 +149,13 @@ def gate_tool_registry(
     try:
         if k <= 0 or not ranked:
             return None
+        from trid3nt_server.tools import mounted_tool_names
+
         keep: set[str] = {name for name, _score in ranked[:k]}
         keep |= META_TOOL_FLOOR
+        # A session-mounted tool is unrankable (the index predates it), so it
+        # rides the floor for as long as it is mounted.
+        keep |= set(mounted_tool_names())
         if used_tools:
             keep |= {t for t in used_tools if isinstance(t, str)}
         keep |= named_tools_in_text(user_text, registry.keys())

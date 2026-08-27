@@ -318,6 +318,7 @@ async def build_mesh(
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
     min_edge_length_m: float | None = None,
     max_edge_length_m: float | None = None,
+    input_mode: str | None = None,
     **fields: Any,
 ) -> Any:
     """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready mesh artifact.
@@ -351,6 +352,13 @@ async def build_mesh(
       realized and validated by the HEC-RAS engine's own mesh factory.
     * ``reg_grid`` - the uniform lattice a structured deck runs on.
 
+    ``input_mode="user_gated"`` stops at the MESH GATE instead of finishing: the
+    mesh lands on the map as an editable mesh layer, its probes come back, and
+    one tool per edit action the chosen mesher registers is mounted for as long
+    as the session stays open - refine it, hand-edit the layer in QGIS and feed
+    it back, then ``mesh_accept`` (or ``mesh_restart`` to drop the edits). AUTO
+    (the default) builds and accepts inline.
+
     Edge levers: ``min_edge_length_m`` / ``max_edge_length_m`` bound the cell or
     triangle size (for ``hecras_rog`` they ARE the channel and hillslope target
     cell sizes), ``grade`` limits how fast the two may transition. Both edges are
@@ -368,14 +376,20 @@ async def build_mesh(
         min_edge_length_m: finest cell/triangle edge (m); the CHANNEL cell for
             ``hecras_rog``. Declined by name by a mesher that sizes another way.
         max_edge_length_m: coarsest edge (m); the HILLSLOPE cell for ``hecras_rog``.
+        input_mode: ``user_gated`` to review + edit the mesh at the gate before
+            it is accepted; ``auto`` (default) builds and accepts inline.
         fields: the chosen mesher's own remaining declared fields (pour_point,
             grade, open_boundary_side, resolution_m, extent_km, width_m, banks,
             refine, bed, geometry, crs_authid).
     """
     import asyncio
 
-    from trid3nt_server.emission.pipeline_emitter import current_turn_case
+    from trid3nt_server.emission.pipeline_emitter import (
+        current_emitter, current_turn_case,
+    )
+    from trid3nt_server.gates.input_review import resolve_input_gate_mode
     from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.mesh.gate import open_mesh_gate, present_mesh
     from trid3nt_server.workflows.mesh.session import MeshSession
 
     if not (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip():
@@ -408,6 +422,11 @@ async def build_mesh(
     declaration = tool.build_mesh(mesher=mesher, kind=kind, **fields)
     name = location or f"{mesher} mesh"
     session = MeshSession(declaration, case_id=current_turn_case(), name=name)
+    if (resolve_input_gate_mode(input_mode) == "user_gated"
+            and current_emitter() is not None):
+        # The mesh stops at the gate: presented, editable, and NOT yet the
+        # case's mesh - accepting it is the user's next act, not this call's.
+        return await present_mesh(open_mesh_gate(session))
     await asyncio.to_thread(session.accept)
     return session.snapshot()
 

@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY, mounted_tool_names
 from trid3nt_server.tools.search.search_tools import search_tools as _dd
 from trid3nt_server.tools.search.search_tools.search_tools import (
     _NAME_RANKER_GENERICS,
@@ -312,8 +312,10 @@ def retrieve_visible_tools(
 
     # --- Core floor + the Case's accumulated visible set (ALWAYS included). ---
     # The accrued set carries every tool once made visible this Case -> the
-    # NEVER-HIDE-MID-TASK guarantee.
-    floor: set[str] = set(CORE_FLOOR)
+    # NEVER-HIDE-MID-TASK guarantee. A MOUNTED tool joins the floor for as long
+    # as its session is open: it did not exist when the index was built, so no
+    # ranking channel can surface it.
+    floor: set[str] = set(CORE_FLOOR) | set(mounted_tool_names())
     if accrued:
         floor |= set(accrued)
 

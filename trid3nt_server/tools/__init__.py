@@ -57,6 +57,10 @@ __all__ = [
     "RegisteredTool",
     "ToolRegistrationError",
     "TOOL_REGISTRY",
+    "MOUNTED_TOOLS",
+    "mount_tool",
+    "mounted_tool_names",
+    "unmount_tool",
     "register_tool",
     "get_registered_tools",
     "clear_registry_for_tests",
@@ -190,6 +194,45 @@ def register_tool(
     return _decorator
 
 
+#: Names in ``TOOL_REGISTRY`` that a live session MOUNTED rather than an import
+#: registered. They come and go with the thing they act on, so every visibility
+#: floor must carry them by name: the retrieval index is built from the tools
+#: that existed when it was built and can never rank one of these.
+MOUNTED_TOOLS: set[str] = set()
+
+
+def mount_tool(metadata: AtomicToolMetadata,
+               fn: Callable[..., Any]) -> str:
+    """Add one session-scoped tool to the registry -> its name.
+
+    A name already registered - mounted or imported - is refused rather than
+    replaced: the caller would be shadowing a tool it does not own.
+    """
+    name = metadata.name
+    existing = TOOL_REGISTRY.get(name)
+    if existing is not None:
+        raise ToolRegistrationError(
+            f"tool {name!r} is already registered (from module "
+            f"{existing.module!r}); a mounted tool cannot shadow it.")
+    TOOL_REGISTRY[name] = RegisteredTool(
+        metadata=metadata, fn=fn, module=getattr(fn, "__module__", "<mounted>"))
+    MOUNTED_TOOLS.add(name)
+    return name
+
+
+def unmount_tool(name: str) -> None:
+    """Remove a MOUNTED tool. An imported tool is never removed by this seam."""
+    if name not in MOUNTED_TOOLS:
+        return
+    MOUNTED_TOOLS.discard(name)
+    TOOL_REGISTRY.pop(name, None)
+
+
+def mounted_tool_names() -> frozenset[str]:
+    """The currently mounted tool names, as a visibility floor."""
+    return frozenset(MOUNTED_TOOLS)
+
+
 def get_registered_tools() -> list[RegisteredTool]:
     """Return a stable-ordered snapshot of the current registry.
 
@@ -208,6 +251,7 @@ def clear_registry_for_tests() -> None:
     or want to swap implementations call this in a fixture.
     """
     TOOL_REGISTRY.clear()
+    MOUNTED_TOOLS.clear()
 
 
 # ---------------------------------------------------------------------------
