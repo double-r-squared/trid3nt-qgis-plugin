@@ -29,8 +29,11 @@ from trid3nt_server.workflows.mesh.meshers import (
     MeshField,
     MeshToolError,
     apply_layer_edits_action,
+    fetch_activation_rows,
+    fetch_fallback_note,
     register_mesher,
 )
+from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.coastal_edge")
 
@@ -38,7 +41,9 @@ __all__ = ["COASTAL_EDGE", "build"]
 
 #: The GPL-isolated OceanMesh2D image and the in-container mesher mounted into it.
 _MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
-_INCONTAINER_SCRIPT = "_mesh_water_edge_incontainer.py"
+_INCONTAINER_SCRIPT = "coastal_edge_driver.py"
+#: The water-polygon builder is still a sandbox module; it is IMPORTED here, never
+#: shelled.
 _SANDBOX = "scripts/sandbox/oceanmesh"
 _CONTAINER_TIMEOUT_S = 2400
 
@@ -114,7 +119,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
 
     sizing_source = _sizing_source(rundir)
     dem_source = _bed_provenance(bed_layer)
-    fallback_note = getattr(bed_layer, "fallback_note", None)
+    fallback_note = fetch_fallback_note(bed_layer)
     return Mesh(
         points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}", bed=bed,
         meta={
@@ -229,13 +234,12 @@ def _write_container_inputs(rundir: Path, aoi: tuple[float, ...], water: Any,
 
 
 def _run_container(rundir: Path) -> None:
-    sandbox = _repo_root() / _SANDBOX
     image = os.environ.get("TRID3NT_MESH_IMAGE") or _MESH_IMAGE_DEFAULT
     argv = [
         "docker", "run", "--rm",
-        "-v", f"{sandbox}:/sandbox", "-v", f"{rundir}:/data",
+        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
         "--entrypoint", "python", image,
-        f"/sandbox/{_INCONTAINER_SCRIPT}", "/data/mesh_config.json", "/data"]
+        f"/drivers/{_INCONTAINER_SCRIPT}", "/data/mesh_config.json", "/data"]
     logger.info("coastal_edge mesher: %s", " ".join(argv))
     cp = subprocess.run(argv, capture_output=True, text=True,
                         timeout=_CONTAINER_TIMEOUT_S)
@@ -321,11 +325,11 @@ def _sizing_source(rundir: Path) -> str:
 
 def _bed_provenance(layer: Any) -> str:
     """What ACTUALLY painted the bed, from the ladder's activation rows."""
-    rows = [r for r in (getattr(layer, "fallbacks", None) or []) if r.coverage > 0.0]
+    rows = fetch_activation_rows(layer)
     if rows:
         return "topobathy: " + ", ".join(
-            f"{r.rung} {r.coverage * 100:.0f}%" for r in rows)
-    note = getattr(layer, "fallback_note", None)
+            f"{rung} {coverage * 100:.0f}%" for rung, coverage in rows)
+    note = fetch_fallback_note(layer)
     return (f"topobathy ({note})" if note
             else "topobathy (source UNMEASURED: the fetch reported no activation "
                  "rows)")

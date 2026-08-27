@@ -29,6 +29,8 @@ __all__ = [
     "Mesher",
     "apply_layer_edits_action",
     "checked_refine",
+    "fetch_activation_rows",
+    "fetch_fallback_note",
     "get_mesher",
     "input_digest",
     "is_late_bound",
@@ -121,6 +123,39 @@ def input_digest(value: Any) -> str:
     except OSError:
         pass
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _field_of(layer: Any, name: str) -> Any:
+    """One field of a fetched layer, whichever shape the registry handed back.
+
+    A fetcher returns a typed layer OR the same layer as a mapping, so reading only
+    the attribute reports UNMEASURED provenance for a fetch that measured it.
+    """
+    if isinstance(layer, Mapping):
+        return layer.get(name)
+    return getattr(layer, name, None)
+
+
+def fetch_activation_rows(layer: Any) -> list[tuple[str, float]]:
+    """The ladder rungs that ACTUALLY served a fetch -> ``[(rung, coverage), ...]``.
+
+    Rows with zero coverage are rungs the ladder considered and did not use, so
+    they are dropped rather than narrated as sources.
+    """
+    rows: list[tuple[str, float]] = []
+    for row in (_field_of(layer, "fallbacks") or []):
+        rung = _field_of(row, "rung")
+        coverage = _field_of(row, "coverage")
+        if rung is None or coverage is None or float(coverage) <= 0.0:
+            continue
+        rows.append((str(rung), float(coverage)))
+    return rows
+
+
+def fetch_fallback_note(layer: Any) -> str | None:
+    """The one-line narration a fetch attached to a substitution, in either shape."""
+    note = _field_of(layer, "fallback_note")
+    return str(note) if note else None
 
 
 @dataclass(frozen=True)

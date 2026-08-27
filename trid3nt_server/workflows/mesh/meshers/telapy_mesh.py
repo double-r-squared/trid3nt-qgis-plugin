@@ -38,14 +38,14 @@ from trid3nt_server.workflows.mesh.meshers import (
     apply_layer_edits_action,
     register_mesher,
 )
+from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.telapy_mesh")
 
 __all__ = ["TELAPY_MESH", "build", "write_telemac_pair"]
 
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
-_INCONTAINER_SCRIPT = "_telapy_mesh_incontainer.py"
-_SANDBOX = "scripts/sandbox/telemac"
+_INCONTAINER_SCRIPT = "telapy_mesh_driver.py"
 _CONTAINER_TIMEOUT_S = 1800
 
 _SIDES = ("south", "north", "east", "west")
@@ -193,11 +193,6 @@ def _rundir() -> Path:
     return rundir
 
 
-def _repo_root() -> Path:
-    # .../trid3nt_server/workflows/mesh/meshers/telapy_mesh.py
-    return Path(__file__).resolve().parents[4]
-
-
 def _stage_input(source: str, rundir: Path) -> Path:
     """Put the adopted geometry where the box can read it."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -220,14 +215,14 @@ def _stage_input(source: str, rundir: Path) -> Path:
 
 def _run(rundir: Path, op: str, config: Mapping[str, Any]) -> dict[str, Any]:
     """One telapy operation in its box -> the stats it reported."""
-    sandbox = _repo_root() / _SANDBOX
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
     name = f"telapy_{op}.json"
     (rundir / name).write_text(json.dumps(dict(config)))
     argv = [
         "docker", "run", "--rm", "--network", "none",
-        "-v", f"{sandbox}:/sandbox", "-v", f"{rundir}:/data", image, "python",
-        f"/sandbox/{_INCONTAINER_SCRIPT}", op, f"/data/{name}", "/data"]
+        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
+        image, "python",
+        f"/drivers/{_INCONTAINER_SCRIPT}", op, f"/data/{name}", "/data"]
     logger.info("telapy_mesh %s: %s", op, " ".join(argv))
     cp = subprocess.run(argv, capture_output=True, text=True,
                         timeout=_CONTAINER_TIMEOUT_S)

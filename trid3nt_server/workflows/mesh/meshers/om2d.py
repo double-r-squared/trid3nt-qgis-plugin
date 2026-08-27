@@ -15,6 +15,12 @@ the sizing function and the distance function are inputs to DistMesh, not
 post-processing - so the mesh stays one converged triangulation rather than a
 patched one.
 
+An open boundary is a CONTIGUOUS stretch of the boundary walk, identified by
+oceanmesh's own ``identify_ocean_boundary_sections`` from the bed: a solver reads
+one liquid boundary as one continuous forcing edge, so a set of scattered nodes
+that happens to sit on the same side of the domain is not a boundary. The same
+sections number the ``.cli``, the ``hgrid.gr3`` and the ``fort.14``.
+
 Conformality is MEASURED, never asserted: the obstacle outline goes in as
 DistMesh's constrained ``pfix`` points and the offset that survives is reported
 in the probes, in metres.
@@ -39,8 +45,11 @@ from trid3nt_server.workflows.mesh.meshers import (
     MeshToolError,
     apply_layer_edits_action,
     checked_refine,
+    fetch_activation_rows,
+    fetch_fallback_note,
     register_mesher,
 )
+from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
 
@@ -48,7 +57,9 @@ __all__ = ["OM2D", "build"]
 
 #: The GPL-isolated OceanMesh2D image and the driver mounted into it.
 _MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
-_INCONTAINER_SCRIPT = "_om2d_incontainer.py"
+_INCONTAINER_SCRIPT = "om2d_driver.py"
+#: The shared TIN format writers still live beside the sandbox proofs that also
+#: call them; they are IMPORTED here, never shelled.
 _SANDBOX = "scripts/sandbox/oceanmesh"
 _CONTAINER_TIMEOUT_S = 2400
 
@@ -61,8 +72,18 @@ _BED_FALLBACK = ("etopo_bathy_base",)
 #: difference between a replayable recipe and a mesh that drifts per rebuild.
 _SEED = 0
 
-_SIDES = ("south", "north", "east", "west")
-_BOUNDARY_SIDES = _SIDES + ("seaward",)
+_BOUNDARY_SIDES = ("south", "north", "east", "west", "seaward")
+
+#: Which coordinate a compass name ranks the identified sections on, and whether
+#: the named direction is the high end of it.
+_COMPASS = {"south": (1, False), "north": (1, True),
+            "west": (0, False), "east": (0, True)}
+
+#: The bed a boundary node must reach for oceanmesh to read it as ocean, and the
+#: shortest run of them that counts as a section. Both are the library's own
+#: defaults, and both are on the action so a shallow domain can state its own.
+_DEPTH_THRESHOLD_M = -50.0
+_MIN_SECTION_NODES = 10
 
 #: The refine knobs, and what each one means to the sizing function.
 _REFINE_KNOBS = {"edge_length": 400.0, "min_spacing": 40.0, "gradation": 0.15}
@@ -287,16 +308,16 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     dst = rundir / "bed.tif"
     dst.write_bytes(read_object_bytes_s3(uri) if str(uri).startswith("s3://")
                     else Path(uri).read_bytes())
-    return dst, _bed_provenance(name, layer), getattr(layer, "fallback_note", None)
+    return dst, _bed_provenance(name, layer), fetch_fallback_note(layer)
 
 
 def _bed_provenance(name: str, layer: Any) -> str:
     """What ACTUALLY painted the bed, from the ladder's own activation rows."""
-    rows = [r for r in (getattr(layer, "fallbacks", None) or []) if r.coverage > 0.0]
+    rows = fetch_activation_rows(layer)
     if rows:
         return f"{name}: " + ", ".join(
-            f"{r.rung} {r.coverage * 100:.0f}%" for r in rows)
-    note = getattr(layer, "fallback_note", None)
+            f"{rung} {coverage * 100:.0f}%" for rung, coverage in rows)
+    note = fetch_fallback_note(layer)
     if note:
         return f"{name} ({note})"
     if layer is None:
@@ -347,21 +368,28 @@ def read_geometry(source: Any) -> dict[str, Any]:
 
 
 def _run_container(rundir: Path, shoreline_dir: Path) -> None:
-    sandbox = _repo_root() / _SANDBOX
+    _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz",
+            shoreline_dir=shoreline_dir)
+
+
+def _run_op(rundir: Path, op: str, config_name: str, produces: str, *,
+            shoreline_dir: Path | None = None) -> None:
+    """One driver op in the OceanMesh2D box, or a typed refusal carrying its output."""
     image = os.environ.get("TRID3NT_MESH_IMAGE") or _MESH_IMAGE_DEFAULT
     argv = [
         "docker", "run", "--rm", "--network", "none",
-        "-v", f"{sandbox}:/sandbox", "-v", f"{rundir}:/data",
-        "-v", f"{shoreline_dir}:/shoreline:ro",
-        "--entrypoint", "python", image,
-        f"/sandbox/{_INCONTAINER_SCRIPT}", "/data/om2d_config.json", "/data"]
-    logger.info("om2d mesher: %s", " ".join(argv))
+        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data"]
+    if shoreline_dir is not None:
+        argv += ["-v", f"{shoreline_dir}:/shoreline:ro"]
+    argv += ["--entrypoint", "python", image,
+             f"/drivers/{_INCONTAINER_SCRIPT}", op, f"/data/{config_name}", "/data"]
+    logger.info("om2d mesher %s: %s", op, " ".join(argv))
     cp = subprocess.run(argv, capture_output=True, text=True,
                         timeout=_CONTAINER_TIMEOUT_S)
-    if cp.returncode != 0 or not (rundir / "om2d_mesh.npz").exists():
+    if cp.returncode != 0 or not (rundir / produces).exists():
         raise MeshToolError(
             "MESH_BUILD_FAILED",
-            f"the om2d mesher failed (rc={cp.returncode}):\n"
+            f"the om2d mesher {op} failed (rc={cp.returncode}):\n"
             f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
 
 
@@ -424,31 +452,37 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
 
     formats = _sandbox_formats()
     loops = formats.extract_boundary_loops(np.asarray(cells, dtype=np.int64))
-    exterior = loops[0] if loops else []
 
     info: dict[str, Any] = {"source": "GSHHG shoreline domain"}
     probes: dict[str, Any] = {"boundary_loops_measured": len(loops)}
-    side = None
-    open_nodes: list[int] = []
+    sections: list[dict[str, Any]] = []
     if boundary is not None and str(boundary.get("type", "open")) == "open":
-        side, side_bed = _resolve_side(str(boundary["side"]), lonlat, exterior,
-                                       bed_up, formats)
-        open_nodes = formats._open_nodes_on_side(lonlat, exterior, side)
-        info.update({"open_boundary_side": side,
-                     "requested_side": str(boundary["side"]),
-                     "open_node_count": len(open_nodes),
-                     "designated_by": "om2d"})
-        if side_bed:
-            # Which side the bed said was deepest, and by how much: a domain that
-            # touches two water bodies can open onto the wrong one, and the numbers
-            # the choice was made from are what let a reader see it.
-            info["side_mean_bed_m"] = side_bed
-        probes["open_node_count"] = len(open_nodes)
+        sections, evidence = _open_sections(rundir, lonlat, cells, bed_up, boundary)
+        info.update({
+            "requested_side": str(boundary["side"]),
+            "open_boundary_sections": len(sections),
+            "open_node_count": sum(len(s["nodes"]) for s in sections),
+            "section_node_counts": [len(s["nodes"]) for s in sections],
+            "section_mean_bed_m": [s["mean_bed_m"] for s in sections],
+            "section_centroid": [s["centroid"] for s in sections],
+            "sections_offered": [
+                {"nodes": s["node_count"], "mean_bed_m": s["mean_bed_m"],
+                 "centroid": s["centroid"]} for s in evidence["sections"]],
+            "identified_by": evidence["library"],
+            "depth_threshold_m": evidence["depth_threshold_m"],
+            "min_nodes_threshold": evidence["min_nodes_threshold"],
+            "sections_identified": len(evidence["sections"]),
+            "boundary_walks_measured": evidence["walk_node_counts"],
+            "designated_by": "om2d"})
+        probes["open_boundary_sections"] = len(sections)
+        probes["open_node_count"] = int(info["open_node_count"])
     elif boundary is not None:
         info.update({"designation": "land",
                      "requested_side": str(boundary["side"]),
                      "designated_by": "om2d"})
 
+    open_nodes = [n for s in sections for n in s["nodes"]]
+    node_lists = [list(s["nodes"]) for s in sections]
     files: dict[str, str] = {}
     pair = write_telemac_pair(
         rundir, x=points_m[:, 0], y=points_m[:, 1], cells=cells, bed=bed_up,
@@ -458,9 +492,9 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
     probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
     probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
 
-    if open_nodes and bed_up is not None:
+    if node_lists and bed_up is not None:
         depth_down = -np.asarray(bed_up, dtype=float)
-        gr3 = _gr3(lonlat, cells, depth_down, side)
+        gr3 = _gr3(lonlat, cells, depth_down, node_lists)
         if gr3 is not None:
             local = rundir / "hgrid.gr3"
             local.write_text(gr3, encoding="utf-8")
@@ -468,12 +502,13 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
         fort14 = rundir / "fort.14"
         fort14.write_text(formats.write_fort14(
             lonlat, cells, depths=depth_down, grid_name="trid3nt_om2d",
-            open_boundary_side=side), encoding="utf-8")
+            open_sections=node_lists), encoding="utf-8")
         files["fort14_uri"] = str(fort14)
     return files, info, probes
 
 
-def _gr3(lonlat: Any, cells: Any, depth_down: Any, side: str) -> str | None:
+def _gr3(lonlat: Any, cells: Any, depth_down: Any,
+         open_sections: list[list[int]]) -> str | None:
     """The SCHISM geometry, through the repo's one gr3 writer.
 
     Best-effort: the mesh is complete without it, so a bridge failure leaves the
@@ -487,43 +522,67 @@ def _gr3(lonlat: Any, cells: Any, depth_down: Any, side: str) -> str | None:
         return load_gr3_bridge().tin_to_hgrid(
             np.asarray(lonlat, dtype=float), np.asarray(cells, dtype=np.int64),
             depth=np.asarray(depth_down, dtype=float), grid_name="trid3nt_om2d",
-            open_boundary_side=side, clean_boundary=False)
+            open_sections=open_sections, clean_boundary=False)
     except Exception as exc:  # noqa: BLE001 -- the gr3 is an addition, never fatal
         logger.warning("om2d: hgrid.gr3 emission failed (%s); the mesh stays "
                        "TELEMAC-only", exc)
         return None
 
 
-def _resolve_side(side: str, lonlat: Any, exterior: Any, bed_up: Any,
-                  formats: Any) -> tuple[str, dict[str, float]]:
-    """A named side, or the one the bed says faces open water, and the evidence.
+def _open_sections(rundir: Path, lonlat: Any, cells: Any, bed_up: Any,
+                   boundary: Mapping[str, Any]) -> tuple[list[dict[str, Any]],
+                                                         dict[str, Any]]:
+    """The contiguous open-boundary sections this designation selects, and its evidence.
 
-    ``seaward`` is not a compass direction, so it is MEASURED: the side whose
-    boundary nodes sit deepest is the one the domain opens onto. The per-side mean
-    comes back with it, because on a domain touching two water bodies the deepest
-    side is not always the intended one.
+    Every candidate is a run of boundary nodes oceanmesh itself read as ocean, so
+    a compass name SELECTS among those sections rather than cutting its own from a
+    coordinate percentile: the one lying furthest in the named direction.
+    ``seaward`` names no direction and takes the deepest. Either way every
+    identified section, its centroid and its mean bed ride back in the evidence,
+    so a section the choice left out is visible rather than silently dropped.
     """
-    import numpy as np
-
-    if side != "seaward":
-        return side, {}
+    side = str(boundary["side"])
     if bed_up is None:
         raise MeshToolError(
-            "MESH_SEAWARD_UNMEASURABLE",
-            "'seaward' is resolved from the bed and this mesh carries none; name "
-            f"the side outright ({', '.join(_SIDES)}).")
-    bed = np.asarray(bed_up, dtype=float)
-    depths = {}
-    for candidate in _SIDES:
-        nodes = formats._open_nodes_on_side(lonlat, exterior, candidate)
-        if nodes:
-            depths[candidate] = round(float(bed[nodes].mean()), 2)
-    if not depths:
+            "MESH_OPEN_BOUNDARY_UNMEASURABLE",
+            "an open boundary is identified from the bed and this mesh carries "
+            "none, so no stretch of its boundary can be called ocean.")
+    threshold = float(boundary.get("depth_threshold", _DEPTH_THRESHOLD_M))
+    min_nodes = int(boundary.get("min_section_nodes", _MIN_SECTION_NODES))
+    report = _identify_sections(rundir, lonlat, cells, bed_up, threshold, min_nodes)
+    found = list(report["sections"])
+    if not found:
         raise MeshToolError(
-            "MESH_SEAWARD_UNMEASURABLE",
-            "no boundary nodes were found on any side, so the seaward edge cannot "
-            "be measured.")
-    return min(depths, key=lambda k: depths[k]), depths
+            "MESH_OPEN_BOUNDARY_UNIDENTIFIED",
+            f"oceanmesh found no boundary stretch of at least {min_nodes} nodes at "
+            f"or below {threshold} m on this mesh; its boundary bed runs "
+            f"{report['boundary_bed_min_m']} m to {report['boundary_bed_max_m']} m, "
+            "so state a depth_threshold this domain actually reaches.")
+    if side == "seaward":
+        chosen = [min(found, key=lambda s: s["mean_bed_m"])]
+    else:
+        axis, high = _COMPASS[side]
+        pick = max if high else min
+        chosen = [pick(found, key=lambda s: s["centroid"][axis])]
+    return chosen, report
+
+
+def _identify_sections(rundir: Path, lonlat: Any, cells: Any, bed_up: Any,
+                       threshold: float, min_nodes: int) -> dict[str, Any]:
+    """Run oceanmesh's own section identification in its box -> the report it wrote."""
+    import numpy as np
+
+    np.savez(rundir / "sections_in.npz",
+             points=np.asarray(lonlat, dtype=float),
+             cells=np.asarray(cells, dtype=np.int64),
+             bed=np.asarray(bed_up, dtype=float))
+    (rundir / "om2d_sections_config.json").write_text(json.dumps({
+        "mesh_npz": "/data/sections_in.npz",
+        "depth_threshold": threshold,
+        "min_nodes_threshold": min_nodes}))
+    _run_op(rundir, "ocean_boundary", "om2d_sections_config.json",
+            "om2d_sections.json")
+    return json.loads((rundir / "om2d_sections.json").read_text())
 
 
 def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
@@ -580,10 +639,14 @@ def _refine_region(mesh: Mesh, *, geometry: str, edge_length: float) -> Mesh:
     return _realize(state)
 
 
-def _set_boundary(mesh: Mesh, *, side: str, type: str = "open") -> Mesh:  # noqa: A002
+def _set_boundary(mesh: Mesh, *, side: str, type: str = "open",  # noqa: A002
+                  depth_threshold: float = _DEPTH_THRESHOLD_M,
+                  min_section_nodes: int = _MIN_SECTION_NODES) -> Mesh:
     """Designate a side of the domain boundary as open water or as land."""
     state = _state_of(mesh)
-    state["boundary"] = {"side": str(side), "type": str(type)}
+    state["boundary"] = {"side": str(side), "type": str(type),
+                         "depth_threshold": float(depth_threshold),
+                         "min_section_nodes": int(min_section_nodes)}
     return _realize(state)
 
 
@@ -613,12 +676,22 @@ OM2D = register_mesher(
             inputs={
                 "side": MeshField(
                     "side", types=(str,), required=True, choices=_BOUNDARY_SIDES,
-                    doc="which side of the domain to classify; 'seaward' is "
-                        "measured from the bed"),
+                    doc="which side of the domain to classify; 'seaward' takes the "
+                        "deepest identified section rather than a direction"),
                 "type": MeshField(
                     "type", types=(str,), choices=("open", "land"), default="open",
                     doc="open - a liquid boundary a solve forces at; land - a "
-                        "solid wall")},
+                        "solid wall"),
+                "depth_threshold": MeshField(
+                    "depth_threshold", types=(int, float),
+                    default=_DEPTH_THRESHOLD_M,
+                    doc="the bed elevation (negative down) a boundary node must "
+                        "reach to be read as ocean; a shallow domain states its "
+                        "own or the designation refuses"),
+                "min_section_nodes": MeshField(
+                    "min_section_nodes", types=(int,), default=_MIN_SECTION_NODES,
+                    doc="the shortest run of ocean nodes that counts as one "
+                        "section")},
             doc="Classify a side of the boundary as open water or as land."),
         apply_layer_edits_action(),
     ),
