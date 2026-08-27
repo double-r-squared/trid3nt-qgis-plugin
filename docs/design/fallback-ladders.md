@@ -246,7 +246,7 @@ guard against naked substitution).
   hatch's cost (it turns the coverage question off, so the result carries the
   warning without per-rung numbers). `skip_cudem` (a cost lever) and
   `skip_land` (which leg runs) were never fallback policy and are untouched.
-- A COMPOSER THAT NEEDS A BED DECLARES ITS RUNG. `generate_mesh`'s coastal
-  water-edge builder joined the four `fetch_topobathy` callers; a coastal mesh
+- A COMPOSER THAT NEEDS A BED DECLARES ITS RUNG. The `coastal_edge` mesher
+  joined the four `fetch_topobathy` callers; a coastal mesh
   is the wet domain, so a bed it cannot get honestly is a REFUSAL, not a land
   DEM. `tests/test_fallback_sweep_guard.py` holds the call-site guard.
