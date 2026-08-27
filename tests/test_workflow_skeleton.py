@@ -3,7 +3,7 @@
 Offline. Nothing here solves; these pin the contract in
 ``docs/design/declarative-workflows.md`` "The Workflow Skeleton" (ADR 0312):
 
-  1. the five EngineOps are ABSTRACT - an unrealized one refuses by name;
+  1. the four EngineOps are ABSTRACT - an unrealized one refuses by name;
   2. hooks have SILENT defaults, and a FILLED hook reaches the result;
   3. the registration factory synthesizes the wire signature from the declared
      params (``wire=False`` and every CONSTANT-door param stay off it, aliases and
@@ -12,7 +12,7 @@ Offline. Nothing here solves; these pin the contract in
   5. the slot/signature check runs BOTH ways: a member the deck writer does not
      accept, and a required member no slot covers, are both refused while the
      plan value is being BUILT;
-  6. the facade's five are MUST-FILL - a hole refuses at registration, so a
+  6. the facade's four are MUST-FILL - a hole refuses at registration, so a
      NotImplementedError never reaches a caller as an engine internal error;
   7. a coercion's failure is triaged, not flattened: retryable propagates, typed
      keeps its code, a bug in our own coercion reads as INTERNAL_ERROR;
@@ -502,3 +502,79 @@ def test_a_mesh_declaration_is_frozen_all_the_way_down():
         mesh.spec.fields["extent_km"] = 99.0
     refine["edge_length"] = 99.0                 # the caller's dict is not the ask's
     assert mesh.spec.fields["refine"]["edge_length"] == 100.0
+
+
+# --- every TELEMAC template declares its mesh through the one tool ----------- #
+_TEMPLATES = (
+    ("telemac_river_dye", "trid3nt_server.workflows.telemac.river_dye.river_dye",
+     "corridor_tin"),
+    ("telemac_do_sag", "trid3nt_server.workflows.telemac.do_sag.do_sag",
+     "corridor_tin"),
+    ("coastal_tidal_surge",
+     "trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge",
+     "reg_grid"),
+    ("artemis_harbor_agitation",
+     "trid3nt_server.workflows.telemac.agitation.agitation", "reg_grid"),
+    ("tomawac_wave_field",
+     "trid3nt_server.workflows.telemac.wave_field.wave_field", "reg_grid"),
+    ("telemac3d_stratified_flow",
+     "trid3nt_server.workflows.telemac.stratified_flow.stratified_flow", "reg_grid"),
+    ("telemac_rain_on_grid",
+     "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid", "watershed"),
+)
+
+
+def _template(module_path: str):
+    import importlib
+
+    return importlib.import_module(module_path)
+
+
+@pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
+def test_a_template_declares_its_mesh_as_a_frozen_tool_ask(name, module_path, mesher):
+    """The ask is a value, not a build: importing a template meshes nothing."""
+    from trid3nt_server.workflows.mesh.tool import MeshDeclaration
+
+    mesh = _template(module_path).MESH
+    assert isinstance(mesh, MeshDeclaration)
+    assert mesh.spec.mesher == mesher
+    assert mesh.edits == ()
+
+
+@pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
+def test_the_deck_the_template_authors_reads_the_declared_mesh_fields(
+        name, module_path, mesher):
+    """Every deck ask carries the sizing the template declared, under the deck's
+    own name for it - which is the whole of what the mesh declaration owes the
+    author step."""
+    module = _template(module_path)
+    workflow = getattr(module, name).workflow
+    author = [n for n in workflow.plan_decl(workflow)
+              if getattr(n, "stage", "") == "author"]
+    assert len(author) == 1
+    assert "mesh_resolution_m" in author[0].kwargs
+
+
+def test_the_reach_templates_carry_the_corridor_shape_into_the_deck():
+    """The corridor fields did not die with the policy class: they are the
+    corridor mesher's declared fields and they still reach the reach writer."""
+    module = _template("trid3nt_server.workflows.telemac.river_dye.river_dye")
+    workflow = module.telemac_river_dye.workflow
+    deck = [n for n in workflow.plan_decl(workflow)
+            if getattr(n, "stage", "") == "author"][0]
+    for field in ("reach_length_km", "channel_width_m", "bank_source",
+                  "mesh_resolution", "mesh_resolution_m"):
+        assert field in deck.kwargs
+    assert deck.kwargs["reach"] == Ref("reach")
+
+
+def test_the_catchment_mesh_step_reads_the_declared_band():
+    """The ex-CatchmentPolicy knobs are watershed-mesher spec fields now, and the
+    mesh step still receives every one of them."""
+    module = _template("trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
+    workflow = module.telemac_rain_on_grid.workflow
+    mesh_step = [n for n in workflow.plan_decl(workflow)
+                 if getattr(n, "stage", "") == "mesh"][0]
+    assert set(mesh_step.kwargs) == {
+        "aoi", "supplied", "bed_dem", "rivers", "min_edge_m", "max_edge_m",
+        "grade", "max_iter", "snap_search_cells"}
