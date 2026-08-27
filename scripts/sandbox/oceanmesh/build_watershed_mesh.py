@@ -14,7 +14,7 @@ MDAL + SERAFIN verification) via build_coastal_mesh + water_edge.
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  TMPDIR=scripts/sandbox/oceanmesh/_work \
+  TMPDIR=/tmp \
   PYTHONPATH=.:contracts:workers/schism:scripts/sandbox/oceanmesh \
     venvs/agent/bin/python scripts/sandbox/oceanmesh/build_watershed_mesh.py --case coweeta_river
 """

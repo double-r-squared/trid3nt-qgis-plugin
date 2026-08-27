@@ -3,7 +3,6 @@
 fidelity-first drives (hecras_flood_2d rain-on-grid @ 20 m solver floor,
 landlab_groundwater_water_table @ 10 m 3DEP-native). Reads the published COG
 straight from the MinIO run bucket via boto3 (matches the pattern in
-scripts/run_l2_malpasset.py -- GDAL /vsis3/ does not see the boto3 MinIO env),
 overlays it on ESRI World Imagery in EPSG:3857, adds a pinned scale bar and a
 caption with resolution basis + run numbers. ASCII only.
 """
