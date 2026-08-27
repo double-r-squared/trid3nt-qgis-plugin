@@ -450,6 +450,7 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "hecras/flood_2d/flood_2d.py": (1, "mesh preview"),
     "hecras/levee_breach/levee_breach.py": (1, "mesh preview"),
     "hecras/riverine_flood/riverine_flood.py": (1, "mesh preview"),
+    "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
     "modflow/capture_zone/capture_zone.py": (2, "observed-wells user-data overlay + backward-PRT pathlines (result-derived context, not a router fetch)"),
     "modflow/thermal_plume/thermal_plume.py": (1, "injection-well user-data point"),
     "openquake/scenario_gmf/scenario_gmf.py": (1, "computed GMF-spread result COG"),
