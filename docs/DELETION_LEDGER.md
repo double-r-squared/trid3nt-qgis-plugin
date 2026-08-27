@@ -1152,3 +1152,20 @@ both. Mesh display is a data type on the emission seam: geometry that feeds a
 solver is the mesh front's business, geometry that feeds a screen is emission's.
 
 **Status:** DELETED (superseded, not removed - the behaviour moved).
+
+## `tests/test_generate_mesh.py` - DELETED 2026-08-27
+
+**What:** the standalone mesh builder's suite, 455 lines.
+
+**Why it died:** its subject is gone. Its four mode-inference tests tested a
+selector that no longer exists - a caller NAMES the mesher now - and every other
+test in it was about behaviour the meshers, the artifact and the precondition
+gate still carry.
+
+**Superseded by:** `tests/test_mesh_meshers.py` (552 lines), which keeps the
+engine-compatibility, sidecar, case-stash, gate and HEC-RAS bundle tests verbatim
+and replaces the mode-inference four with the roster, the per-mesher field
+declarations, the corridor's typed domain refusals and the adopted-layer
+topology check.
+
+**Status:** DELETED (superseded).
