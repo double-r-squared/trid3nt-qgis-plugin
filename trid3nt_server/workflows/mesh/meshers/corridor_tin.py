@@ -136,6 +136,11 @@ async def _build(spec: Mapping[str, Any]) -> Mesh:
                 "outflow_nodes": metrics.get("n_outflow_nodes"),
             },
             "artifact": {
+                # A corridor is bed-less and still TELEMAC's to solve: the reach
+                # deck stages this topology and fits the bed onto it from the
+                # terrain that run acquires, so the geometry file alone understates
+                # what the mesh is good for.
+                "engine_compat": ["telemac"],
                 "provenance": {
                     "extent_km": extent_km,
                     "width_m": width_m,
@@ -333,6 +338,235 @@ def _set_extent(mesh: Mesh, *, extent_km: float) -> Mesh:
         "refine": {"edge_length": built["mesh_size_m"]}})
 
 
+# --------------------------------------------------------------------------- #
+# Re-adopting a hand-edited corridor.
+# --------------------------------------------------------------------------- #
+#: How far a new boundary node may sit from the nearest boundary node whose role
+#: the build classified before that role stops describing it. One channel width is
+#: the corridor's own cross-stream scale, so a node further than this from every
+#: classified node is on a stretch the hand-edit reshaped rather than a moved copy
+#: of one the build already ruled on.
+_ROLE_CARRY_LIMIT_WIDTHS = 1.0
+
+
+def _readopt(previous: Mesh, adopted: Mesh) -> Mesh:
+    """Rewrite the corridor's solver files from the adopted nodes and cells.
+
+    The solve does not read a corridor's SELAFIN - it rebuilds one from the
+    topology bundle with the bed fitted to the reach at authoring time - so the
+    bundle is what a hand-edit has to reproduce: the boundary walk, the IPOBO
+    ranking derived from it, the per-node boundary-condition codes, and which
+    stretch of the boundary the flow enters and leaves by.
+
+    Geometry states the first three. The last is the BUILD's classification, and
+    an edited layer carries none of it, so every new boundary node takes the role
+    of the nearest node the build classified - exact for the nodes the edit left
+    alone - and the distance that carry spanned is reported rather than assumed.
+    """
+    import numpy as np
+
+    from workers.telemac._staged_mesh import (
+        STAGED_MESH_FILENAME,
+        staged_mesh_bundle,
+        write_mesh_bundle,
+    )
+
+    from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
+
+    built = _previous_bundle(previous, staged_mesh_bundle)
+    points = np.asarray(adopted.points, dtype=float)
+    cells = _oriented(points, np.asarray(adopted.cells, dtype=np.int64))
+    rings = _boundary_rings(cells)
+    ring = np.concatenate(rings)
+
+    width_m = float(dict(previous.meta["artifact"]["provenance"])["width_m"])
+    roles, carried_m = _carry_roles(points[ring], built,
+                                    limit_m=width_m * _ROLE_CARRY_LIMIT_WIDTHS)
+    mesh = _bundle_dict(points, cells, rings, ring, roles, built)
+
+    rundir = _readopt_rundir()
+    files = {
+        "slf_uri": str(write_bottom_selafin(
+            str(rundir / "river.slf"), points, cells,
+            np.zeros(points.shape[0], dtype=float), title="TRID3NT REACH CORRIDOR")),
+        "cli_uri": _write_cli(mesh, rundir / "river.cli"),
+        "topology_uri": write_mesh_bundle(mesh, str(rundir / STAGED_MESH_FILENAME)),
+    }
+    probes = {**{k: v for k, v in dict(previous.meta.get("probes") or {}).items()
+                 if k in ("domain_mode", "water_coverage_frac")},
+              "island_count": len(rings) - 1,
+              "inflow_nodes": int(mesh["n_in"]),
+              "outflow_nodes": int(mesh["n_out"]),
+              "boundary_role_carry_m": carried_m}
+    artifact = {**dict(adopted.meta.get("artifact") or {}),
+                "engine_compat": ["telemac"]}
+    return Mesh(points=points, cells=cells, crs_authid=adopted.crs_authid,
+                bed=None, meta={**dict(adopted.meta), "files": files,
+                                "probes": probes, "artifact": artifact})
+
+
+def _previous_bundle(previous: Mesh, reader: Any) -> dict[str, Any]:
+    """The topology bundle the edited mesh was hand-edited FROM."""
+    from pathlib import Path
+
+    uri = dict(previous.meta.get("files") or {}).get("topology_uri")
+    if not uri or not Path(str(uri)).is_file():
+        raise MeshToolError(
+            "MESH_CORRIDOR_NO_TOPOLOGY",
+            f"the corridor this layer was edited from carries no readable topology "
+            f"bundle ({uri!r}), so the boundary roles the build classified cannot "
+            "be carried onto the edited nodes and the edit would leave a mesh no "
+            "solve could be staged on.")
+    built = reader(str(Path(str(uri)).parent))
+    if built is None:
+        raise MeshToolError(
+            "MESH_CORRIDOR_NO_TOPOLOGY",
+            f"the topology bundle beside {uri!r} is not the corridor bundle a "
+            "solve is staged from.")
+    return built
+
+
+def _readopt_rundir() -> Any:
+    import os
+    from pathlib import Path
+
+    rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
+              / f"mesh-{new_ulid()}")
+    rundir.mkdir(parents=True, exist_ok=True)
+    return rundir
+
+
+def _oriented(points: Any, cells: Any) -> Any:
+    """Triangles wound counter-clockwise, which is what puts the domain on the left."""
+    import numpy as np
+
+    a, b, c = cells[:, 0], cells[:, 1], cells[:, 2]
+    x, y = points[:, 0], points[:, 1]
+    twice_area = ((x[b] - x[a]) * (y[c] - y[a]) - (x[c] - x[a]) * (y[b] - y[a]))
+    fixed = np.array(cells, dtype=np.int64, copy=True)
+    fixed[twice_area < 0] = fixed[twice_area < 0][:, ::-1]
+    return fixed
+
+
+def _boundary_rings(cells: Any) -> list[Any]:
+    """The closed boundary walks, outer ring first, in domain-on-the-left order."""
+    import numpy as np
+
+    counts: dict[tuple[int, int], int] = {}
+    directed: dict[tuple[int, int], tuple[int, int]] = {}
+    for tri in cells:
+        for k in range(3):
+            u, v = int(tri[k]), int(tri[(k + 1) % 3])
+            key = (min(u, v), max(u, v))
+            counts[key] = counts.get(key, 0) + 1
+            directed[key] = (u, v)
+    boundary = [directed[k] for k, n in counts.items() if n == 1]
+    nxt = {u: v for u, v in boundary}
+    if len(nxt) != len(boundary):
+        raise MeshToolError(
+            "MESH_CORRIDOR_NON_MANIFOLD",
+            f"the edited layer's boundary is not a set of simple closed walks "
+            f"({len(boundary)} boundary edges leave {len(nxt)} distinct nodes), so "
+            "it has no IPOBO ranking a solve could be staged with.")
+    rings: list[Any] = []
+    unvisited = set(nxt)
+    while unvisited:
+        start = next(iter(unvisited))
+        walk = [start]
+        cur = nxt[start]
+        while cur != start:
+            walk.append(cur)
+            cur = nxt[cur]
+        unvisited -= set(walk)
+        rings.append(np.asarray(walk, dtype=np.int64))
+    rings.sort(key=len, reverse=True)
+    return rings
+
+
+def _carry_roles(ring_xy: Any, built: Mapping[str, Any],
+                 *, limit_m: float) -> tuple[Any, dict[str, float]]:
+    """Each new boundary node's role, taken from the nearest classified node."""
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    old_ring = np.asarray(built["ring"], dtype=np.int64)
+    old_xy = np.column_stack([np.asarray(built["X"], dtype=float)[old_ring],
+                              np.asarray(built["Y"], dtype=float)[old_ring]])
+    old_cls = np.asarray(built["cls"], dtype=object)
+    distance, index = cKDTree(old_xy).query(np.asarray(ring_xy, dtype=float), k=1)
+    roles = np.asarray([str(old_cls[int(i)]) for i in index], dtype=object)
+    beyond = float(distance.max()) if distance.size else 0.0
+    if beyond > limit_m:
+        raise MeshToolError(
+            "MESH_CORRIDOR_ROLES_UNCARRIABLE",
+            f"an edited boundary node sits {beyond:.1f} m from the nearest node "
+            f"the build classified (limit {limit_m:.1f} m, one channel width), so "
+            "whether the flow enters or leaves there is not something this edit "
+            "can answer. Re-run the corridor build instead of reshaping its ends.")
+    return roles, {"max": beyond, "median": float(np.median(distance))
+                   if distance.size else 0.0,
+                   "measured": "distance from each edited boundary node to the "
+                               "nearest node the build classified"}
+
+
+#: The boundary-condition codes each role writes, as TELEMAC's
+#: (LIHBOR, LIUBOR, LIVBOR, LITBOR) quadruple.
+_ROLE_CODES: Mapping[str, tuple[int, int, int, int]] = {
+    "wall": (2, 2, 2, 2),
+    "inflow": (4, 5, 5, 5),
+    "outflow": (5, 4, 4, 4),
+}
+
+
+def _bundle_dict(points: Any, cells: Any, rings: list[Any], ring: Any,
+                 roles: Any, built: Mapping[str, Any]) -> dict[str, Any]:
+    """The built-mesh dict the worker's bundle writer takes."""
+    import numpy as np
+
+    npoin = int(points.shape[0])
+    nptfr = int(ring.size)
+    ipob = np.zeros(npoin, dtype=np.int32)
+    for rank, node in enumerate(ring, start=1):
+        ipob[int(node)] = rank
+    codes = np.asarray([_ROLE_CODES[str(r)] for r in roles], dtype=np.int64)
+    in_nodes = {int(n) for n, r in zip(ring, roles) if str(r) == "inflow"}
+    out_nodes = {int(n) for n, r in zip(ring, roles) if str(r) == "outflow"}
+    if not in_nodes or not out_nodes:
+        raise MeshToolError(
+            "MESH_CORRIDOR_NO_FLOW_BOUNDARY",
+            f"the edited corridor has {len(in_nodes)} inflow and "
+            f"{len(out_nodes)} outflow boundary nodes; a reach solve forces "
+            "discharge in at one end cap and out at the other, so a mesh missing "
+            "either cannot be solved on.")
+    return {
+        "X": points[:, 0], "Y": points[:, 1], "ikle": cells, "npoin": npoin,
+        "ring": ring, "ipob": ipob, "nptfr": nptfr,
+        "lihbor": codes[:, 0], "liubor": codes[:, 1],
+        "livbor": codes[:, 2], "litbor": codes[:, 3],
+        "cls": roles, "in_nodes": in_nodes, "out_nodes": out_nodes,
+        "n_in": len(in_nodes), "n_out": len(out_nodes),
+        "n_islands": len(rings) - 1, "boundary_rings": rings,
+        "centerline": np.asarray(built["centerline"], dtype=float),
+        "domain_mode": built.get("domain_mode"),
+        "water_coverage_frac": built.get("water_coverage_frac"),
+        "banks_ok": bool(built.get("banks_ok")),
+        "smooth_tries": int(built.get("smooth_tries") or 0),
+    }
+
+
+def _write_cli(mesh: Mapping[str, Any], path: Any) -> str:
+    """The boundary-conditions file, in the fixed column order TELEMAC reads."""
+    ring = mesh["ring"]
+    lines = [
+        f"{int(mesh['lihbor'][k])} {int(mesh['liubor'][k])} "
+        f"{int(mesh['livbor'][k])}  0.000 0.000 0.000 0.000  "
+        f"{int(mesh['litbor'][k])}  0.000 0.000 0.000 "
+        f"{int(ring[k]) + 1:>11d} {k + 1:>11d}   # {mesh['cls'][k]}"
+        for k in range(int(mesh["nptfr"]))]
+    path.write_text("\n".join(lines) + "\n")
+    return str(path)
+
+
 CORRIDOR_TIN = register_mesher(
     "corridor_tin",
     build,
@@ -350,7 +584,7 @@ CORRIDOR_TIN = register_mesher(
                 doc="the new corridor length along the flow axis, in km")},
             doc="Re-navigate the reach and re-triangulate a longer or shorter "
                 "corridor."),
-        apply_layer_edits_action(),
+        apply_layer_edits_action(regenerate=_readopt),
     ),
     fields=_FIELDS,
 )

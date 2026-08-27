@@ -180,9 +180,10 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
         bed=z[:3],
         meta={"utm_epsg": 32616,
               "files": {"gr3_uri": "/stale/hgrid.gr3", "slf_uri": "/stale/mesh.slf"},
-              "bundle": {"seeds": "/stale/seeds.geojson"},
               "probes": {"open_node_count": 93},
-              "artifact": {"provenance": {"mesher": "coastal_edge"}}})
+              "artifact": {"engine_compat": ["telemac", "schism"],
+                           "open_boundary_info": {"open_node_count": 93},
+                           "provenance": {"mesher": "coastal_edge"}}})
 
     after = get_mesher("coastal_edge").action("apply_layer_edits").apply(
         before, layer=str(p))
@@ -190,6 +191,10 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
     assert after.node_count == 4 and after.element_count == 2
     for key in ("files", "bundle", "probes"):
         assert key not in after.meta, f"{key} survived the adopted layer"
+    # The CLAIMS made about those cells go with them: the edited mesh states its
+    # engine compatibility afresh from what it can actually back.
+    for key in ("engine_compat", "open_boundary_info"):
+        assert key not in after.meta["artifact"], f"{key} survived the adopted layer"
     # What is ABOUT the domain rather than about its cells still rides.
     assert after.meta["utm_epsg"] == 32616
     assert after.meta["artifact"]["provenance"]["mesher"] == "coastal_edge"

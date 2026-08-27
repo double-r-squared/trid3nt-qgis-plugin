@@ -20,8 +20,9 @@ ride TWO existing seams so both a same-session run and a cold reopen can find th
     in a later session (its key is the mesh key with the basename swapped).
 
 ``mesh_compatible_with_engine`` is the honest gatekeeper: it answers whether a
-given engine can actually consume this mesh (TELEMAC needs a bathymetric SELAFIN;
-SCHISM an hgrid; SWAN a fort.14) and, on a mismatch, WHY -- so the consuming
+given engine can actually consume this mesh (TELEMAC a bathymetric SELAFIN or an
+accepted corridor topology; SCHISM an hgrid with open boundaries; SWAN nothing,
+its worker being regular-grid only) and, on a mismatch, WHY -- so the consuming
 template can decline loudly instead of force-fitting.
 """
 
@@ -169,7 +170,12 @@ def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
 ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
     # TELEMAC-2D geometry is SELAFIN with a BOTTOM node field (the bed the
     # shallow-water solve needs); rain-on-grid + river-dye consume it.
+    # A CORRIDOR mesh is the declared exception: it is bed-less by construction
+    # because the reach deck stages its topology bundle and fits elevation onto
+    # those nodes from the terrain that run acquires, so its bed exists by the time
+    # the solve reads a geometry.
     "telemac": {"uri_field": "slf_uri", "needs_bathymetry": True,
+                "bed_fitted_at_authoring_field": "topology_uri",
                 "format": "SELAFIN (.slf, BOTTOM)"},
     # SCHISM reads an hgrid.gr3 with depths AND open/land boundary segmentation:
     # bare bathymetry is not enough, the solve needs a designated seaward open
@@ -235,7 +241,9 @@ def mesh_compatible_with_engine(
         return False, (
             f"mesh {art.name!r} carries no {req['format']} geometry that "
             f"{engine} requires (this mesh was built as mode={art.mode!r})")
-    if req.get("needs_bathymetry") and not art.has_bathymetry:
+    fitted_field = req.get("bed_fitted_at_authoring_field")
+    bed_fitted = bool(fitted_field and getattr(art, str(fitted_field), None))
+    if req.get("needs_bathymetry") and not art.has_bathymetry and not bed_fitted:
         return False, (
             f"mesh {art.name!r} has no sampled bathymetry; {engine} needs a "
             "bed-carrying geometry")

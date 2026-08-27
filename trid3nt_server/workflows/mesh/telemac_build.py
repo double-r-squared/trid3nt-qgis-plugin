@@ -22,13 +22,18 @@ from typing import Any
 __all__ = ["write_bottom_selafin"]
 
 
-def write_bottom_selafin(path: str, points_m: Any, cells: Any, z: Any) -> str:
+def write_bottom_selafin(path: str, points_m: Any, cells: Any, z: Any,
+                         title: str = "TRID3NT WATERSHED RAIN-ON-GRID TIN") -> str:
     """Write the single-variable (BOTTOM) SELAFIN geometry the solver reads.
 
     The thin per-solver writer of the shared mesh front: the neutral artifact is
     nodes, triangles and a bed, and this is what TELEMAC wants that to look like.
     Byte-for-byte the ``selafin_io.write_selafin`` layout, so the mesh round-trips
     through MDAL and through the solver identically.
+
+    ``title`` is the 80-character header a reader shows for the geometry; a caller
+    meshing something other than a rain-on-grid catchment names it, so the file
+    does not describe itself as a domain it is not.
     """
     import numpy as np
 
@@ -45,7 +50,7 @@ def write_bottom_selafin(path: str, points_m: Any, cells: Any, z: Any) -> str:
 
     ipobo = _ipobo_from_cells(n_points, cel)
     with open(path, "wb") as fh:
-        _rec(fh, "TRID3NT WATERSHED RAIN-ON-GRID TIN".ljust(80)[:80].encode("ascii"))
+        _rec(fh, title.ljust(80)[:80].encode("ascii"))
         _rec(fh, struct.pack(">2i", 1, 0))
         _rec(fh, ("BOTTOM".ljust(16)[:16] + "M".ljust(16)[:16]).encode("ascii"))
         iparam = [0] * 10

@@ -416,16 +416,27 @@ def registered_meshers() -> tuple[str, ...]:
     return tuple(sorted(_MESHERS))
 
 
-def apply_layer_edits_action() -> EditAction:
+def apply_layer_edits_action(
+        regenerate: Callable[[Mesh, Mesh], Mesh] | None = None) -> EditAction:
     """The hand-edit action every mesher can offer: an edited layer BECOMES the mesh.
 
     Recorded with the layer's digest and ``replayable: false`` - the edits live in
     the layer rather than in the recipe, so a replay refuses rather than
     reproducing a different mesh under the same recipe.
+
+    ``regenerate(previous, adopted) -> Mesh`` is the mesher's rewrite of everything
+    bound to the topology the edit replaced: the per-solver files it wrote and the
+    quantities it measured on the old cells. A mesher whose solve consumes a record
+    only IT can write MUST supply one, because a session that accepted a mesh
+    missing that record would hand the run a mesh it cannot stage.
     """
+
+    def apply(mesh: Mesh, *, layer: str) -> Mesh:
+        return _apply_layer_edits(mesh, layer=layer, regenerate=regenerate)
+
     return EditAction(
         name="apply_layer_edits",
-        apply=_apply_layer_edits,
+        apply=apply,
         inputs={"layer": MeshField(
             "layer", types=(str,), required=True, hashed=True,
             doc="path to the edited .2dm mesh layer")},
@@ -440,14 +451,51 @@ def apply_layer_edits_action() -> EditAction:
 #: mesh's name.
 _TOPOLOGY_BOUND_META = ("files", "bundle", "probes")
 
+#: Claims about the topology that a mesher DECLARED for the artifact. They describe
+#: the cells the edit replaced, so an adopted mesh states them afresh from what it
+#: can actually back rather than inheriting the pre-edit mesh's word.
+_TOPOLOGY_BOUND_CLAIMS = ("engine_compat", "open_boundary_info")
 
-def _apply_layer_edits(mesh: Mesh, *, layer: str) -> Mesh:
+
+def _apply_layer_edits(mesh: Mesh, *, layer: str,
+                       regenerate: Callable[[Mesh, Mesh], Mesh] | None) -> Mesh:
     from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
 
+    _refuse_unadoptable(mesh, regenerate)
     points, cells, z = read_2dm_mesh(str(layer))
     carried = {k: v for k, v in mesh.meta.items()
                if k not in _TOPOLOGY_BOUND_META}
+    artifact = {k: v for k, v in dict(carried.get("artifact") or {}).items()
+                if k not in _TOPOLOGY_BOUND_CLAIMS}
+    if artifact or "artifact" in carried:
+        carried["artifact"] = artifact
     # A .2dm always carries a node z column, so the edited layer cannot say whether
     # a bed was ever sampled; the mesh it replaces is what knows.
-    return Mesh(points=points, cells=cells, crs_authid=mesh.crs_authid,
-                bed=(z if mesh.has_bed else None), meta=carried)
+    adopted = Mesh(points=points, cells=cells, crs_authid=mesh.crs_authid,
+                   bed=(z if mesh.has_bed else None), meta=carried)
+    return adopted if regenerate is None else regenerate(mesh, adopted)
+
+
+def _refuse_unadoptable(mesh: Mesh, regenerate: Any) -> None:
+    """Refuse a hand-edit whose result no solve could be staged from.
+
+    An accepted mesh is a promise that a run can be staged on it, so the refusal
+    belongs HERE - at the edit - rather than at the deck, where it would arrive
+    after the user already accepted.
+    """
+    if regenerate is not None:
+        return
+    if mesh.meta.get("bundle"):
+        raise MeshToolError(
+            "MESH_EDIT_NOT_STAGEABLE",
+            "this mesh's cells are re-realized by the engine from the authoring "
+            "inputs its mesher staged, and an edited .2dm layer is not those "
+            f"inputs ({sorted(dict(mesh.meta['bundle']))}); the hand-edit would "
+            "leave a mesh no run could be staged on. Change the mesh through the "
+            "mesher's own edit actions instead.")
+    if not mesh.has_cells:
+        raise MeshToolError(
+            "MESH_EDIT_NOT_STAGEABLE",
+            "this mesh states no cells of its own - the engine realizes them - so "
+            "an adopted layer cannot be reconciled with what a solve would be "
+            "staged from.")
