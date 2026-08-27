@@ -6,7 +6,13 @@ nothing gates this wave. Frozen on launch, per convention.
 
 The spec is `docs/specs/workflow-blueprint.html` (rev 7, ratified
 2026-08-27). This kickoff is its execution plan; where they disagree, the
-spec wins. Vocabulary per the spec: engine = solver; mesher = mesh library;
+spec wins. Library recon (read FIRST for slices 2 and 6):
+`docs/research/om2d-telapy-mesh-recon.md` - oceanmesh runs only inside
+the trid3nt-local/mesh:latest image (pip is broken), emits (points,
+cells) arrays only (all format writers are ours; schism_gr3.tin_to_hgrid
+stays the single gr3 writer), determinism is UNVERIFIED (empirical
+rebuild-and-diff before trusting sha256 replay), and telapy's edit
+surface is hermes.py / selafin.py / conlim.py / pretel/meshes.py. Vocabulary per the spec: engine = solver; mesher = mesh library;
 fetcher = data spec; box = the network-isolated container.
 
 ## Objective
