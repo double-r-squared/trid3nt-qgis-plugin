@@ -2361,3 +2361,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (spec-only history, nothing thrown away). Follow-up wave order:
   grounding record -> constituent rules -> auto-routing -> for_ ->
   session polish -> template surface diffs.
+
+- NATE'S GO ON THE DOMAIN/MESH MODEL (2026-08-27, spec rev 18):
+  threaded-AOI framing DEAD - aoi is a REQUIRED, DEFAULTED, USER-
+  EDITABLE DECLARATION (move/redraw legitimate; containment rule
+  prices it: crop within staged coverage, restage-via-rerun outside,
+  binary test). extent ALWAYS declared in templates (context is
+  valuable, the line is free). MESHER EXPLICIT, NEVER AUTO. SCOPE:
+  (1) wrap ALL of OceanMesh2D's exposed functions as the om2d
+  mesher's param/edit surface - "the wrapping was the whole deal" -
+  with tests; (2) migrate the 7 telemac templates to the model;
+  (3) telapy wrapper maybe after; gmsh + cross-tool edit extension
+  LATER once the feature exists. !run shape unchanged (kwargs/JSON,
+  positional rejected). Clear-safety already structural (spec line
+  vs edit chain). D2-D5 (wave verifier findings) remain the open
+  rulings before the stopped wave can close.

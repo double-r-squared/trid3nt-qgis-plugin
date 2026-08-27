@@ -29,7 +29,7 @@
 </style>
 
 <h1>Domain and Mesh</h1>
-<p class="rev">rev 17 &middot; 2026-08-27 &middot; chat examples corrected to the REAL !run shape (kwargs/JSON, positional rejected); the edit-fold + restart spec/chain safety documented. ALL EXECUTION HELD - the wave is stopped; open decisions are NATE's, section 6. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 18 &middot; 2026-08-27 &middot; NATE'S GO: the threaded-AOI framing is DEAD (aoi = a required, defaulted, user-editable DECLARATION); mesher is EXPLICIT, never auto; scope = wrap ALL of OceanMesh2D's exposed functions first (telapy maybe after, gmsh later); migrate the 7 templates. D2-D5 remain the open rulings. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>1. Status</h2>
 <table>
@@ -50,7 +50,7 @@
 <h2>3. How data is used in a workflow - the model</h2>
 <p>One substrate, three facts:</p>
 <ol>
-<li><b>The AOI is threaded.</b> One value (geocode or canvas), fed to every tool as the default spatial context. It is never mutated by anything.</li>
+<li><b>The AOI is a DECLARATION - required and defaulted.</b> An explicit declared param (geocode or canvas fills the default), visible in every template, and USER-EDITABLE: moving or redrawing the box is legitimate, and the containment rule (4.1) prices it - crop within coverage, restage-via-rerun outside. The old "threaded, never mutated" framing is dead.</li>
 <li><b>Tools all the way down.</b> Fetchers, processing operations, the mesh builder, and workflows share ONE invocation substrate: each is declarable inside a template AND directly invocable (<code>!run</code>) in chat. A processing operation like delineation is just a tool whose output is a value.</li>
 <li><b>Derived values are named and passed explicitly.</b> A tool's output becomes a named value (a plan ref in templates, a variable in chat) that downstream tools take as ordinary parameters. Explicit parameters ARE the dataflow - visible at the call site, journaled, nothing hidden, nothing aggregated.</li>
 </ol>
@@ -79,7 +79,8 @@ MESH      = tool.build_mesh(extent=P.aoi, bed=D.dem, ...)       # common case - 
                                    # P.aoi = the threaded AOI (the common case);
                                    # a derived value (SUBDOMAIN) narrows, in plain sight
     kind   = "unstructured_tri",   # discretization - defaulted when obvious
-    mesher = "auto",               # builder auto-routed from the constituents; pin to override
+    mesher = "om2d",               # EXPLICIT, always - never auto; the builder is a
+                                   #   visible, deliberate choice
     for_   = "telemac",            # consumer contract - auto-injected in templates
     bed    = D.dem,                # constituents: ordinary data refs
     shoreline = D.shoreline,
@@ -105,7 +106,7 @@ MESH      = tool.build_mesh(extent=P.aoi, bed=D.dem, ...)       # common case - 
 
 <h2>6. OPEN - NATE's decisions, nothing moves before his ruling</h2>
 <div class="open">
-<p><b>D1 - freeze the data model?</b> Sections 3-4: threaded AOI, tools-all-the-way-down, explicit named dataflow, the <code>extent</code> parameter (ALWAYS declared in templates), the containment rule (crop within coverage / restage-via-rerun outside), reach dissolution, capabilities from presence. Sub-question: adopt the staging buffer (4.1)? Recommendation: freeze as written, buffer yes.</p>
+<p><b>D1 - RULED (NATE's go, 2026-08-27).</b> The data model is frozen as amended: aoi = required + defaulted + user-editable declaration; extent always declared; the containment rule; explicit mesher (never auto); reach dissolution; capabilities from presence. SCOPE ORDER RULED: (1) wrap ALL of OceanMesh2D's exposed functions as the om2d mesher's params/edit surface - the wrapping WAS the whole deal - with test coverage; (2) migrate the 7 TELEMAC templates to this model; (3) telapy wrapper maybe after; gmsh and cross-tool edit extension LATER, once the feature exists. Staging buffer: pending.</p>
 <p><b>D2 - hand-edit staging semantics</b> (verifier finding, reproduced: a hand-edited corridor session accepts, then deck staging refuses - a late failure). Recommendation: after adoption the session regenerates solver files via the telapy path; if impossible, the EDIT refuses at the gate; invariant: <code>accept()</code> implies stageable.</p>
 <p><b>D3 - the gate's revision channel</b> (verifier finding: the mesh gate emits none of the fields the shipped plugin can populate revisions from - USER-GATED reach cards are proceed/cancel only). Recommendation: emit numeric knobs as a param_sheet the shipped client already renders, routed server-side to the gate's edit path; plugin changes only if unavoidable, install-synced, flagged for NATE's live pass.</p>
 <p><b>D4 - finish the approve-mesh chop client-side?</b> (orphaned release_point_required handling, picker row, two BK3B drivers survive with no producer). Recommendation: chop per clean-as-you-go, ledger rows.</p>
