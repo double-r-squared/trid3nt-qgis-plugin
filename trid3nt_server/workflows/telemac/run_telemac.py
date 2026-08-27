@@ -74,7 +74,7 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "centerline_length_m",
     "lb_order",
     "wall_s",
-    # mesh-only preview runs (the approve-mesh gate reads these).
+    # mesh-only runs (the mesh session reads these).
     "mesh_only",
     "mesh_size_m",
     "time_step_s",

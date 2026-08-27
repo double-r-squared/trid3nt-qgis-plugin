@@ -47,7 +47,6 @@ from .forcing import (
     resolve_rain_forcing,
     review_resolved_inputs,
 )
-from .mesh_preview import preview_telemac_mesh
 from .products import Products, publish_do_products, publish_dye_products
 from .rain_on_grid import (
     AcquireCatchment,
@@ -69,7 +68,9 @@ from .reach import (
     Geocode,
     MESH_H_FLOOR_M,
     MESH_NODE_CAP,
+    ReachMesh,
     ReachSeed,
+    build_corridor_mesh,
     coerce_lonlat_point,
     estimate_telemac_solve_seconds,
     fetch_reach_flowline,
@@ -127,13 +128,14 @@ __all__ = [
     "event_time",
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline", "geocode_reach", "named_watercourse",
-    "normalize_bank_source", "preview_telemac_mesh", "publish_do_products",
+    "normalize_bank_source", "publish_do_products",
     "publish_dye_products", "reach_seed", "read_run_metrics",
     "resolve_carrier_discharge", "resolve_gradation", "resolve_rain_forcing",
     "review_resolved_inputs",
     "sanitize_substance", "slug", "solve_reach", "stage_manifest",
     "substance_class",
     "suggest_mesh_size_m", "suggest_time_step_s", "upstream_do_mgl",
+    "ReachMesh", "build_corridor_mesh",
     "publish_agitation_products",
     "publish_stratified_products",
     "publish_wave_products", "waqtel_o2_process", "write_agitation_deck",

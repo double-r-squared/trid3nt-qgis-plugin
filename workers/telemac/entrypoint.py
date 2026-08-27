@@ -370,18 +370,27 @@ def run_pipeline(
             # turns this into the TELEMAC_BANKS_UNAVAILABLE tool-retry gate).
             raise B.BanksUnavailableError(float(cfg.channel_width_m))
 
-    # 3. Gmsh mesh (tagged boundary)
-    mesh = B.build_channel_mesh_guarded(cl, cfg)
-    LOG.info("mesh: npoin=%d nelem=%d nptfr=%d in=%d out=%d banks_ok=%s smooth_tries=%d",
+    # 3. the corridor mesh: the one STAGED with this run when a mesh session
+    # authored and accepted it, else built here. Adoption is the only path that
+    # can honour an accepted mesh, because the mesh a solve runs on has to BE the
+    # mesh the user looked at rather than an equivalent rebuild of it.
+    import _staged_mesh as SM  # noqa: WPS433 -- worker payload
+
+    mesh = SM.staged_mesh_bundle(str(data_dir))
+    mesh_origin = "staged" if mesh is not None else "built"
+    if mesh is None:
+        mesh = B.build_channel_mesh_guarded(cl, cfg)
+    LOG.info("mesh (%s): npoin=%d nelem=%d nptfr=%d in=%d out=%d banks_ok=%s "
+             "smooth_tries=%d", mesh_origin,
              mesh["npoin"], len(mesh["ikle"]), mesh["nptfr"], mesh["n_in"],
              mesh["n_out"], mesh["banks_ok"], mesh["smooth_tries"])
 
-    # MESH_ONLY (approve-mesh gate): stop after the mesh is built. The DEM
+    # MESH_ONLY (the mesh session's build): stop after the mesh is built. The DEM
     # bed is SKIPPED entirely - bed elevation only sets node Z (BOTTOM), never
-    # connectivity, so npoin/nelem/edge stats shown at the gate are EXACT for the
+    # connectivity, so npoin/nelem/edge stats read here are EXACT for the
     # eventual solve mesh - and skipping it sidesteps the untimed DEM fetch
-    # plus ~30 s wall. Writes river.slf (Z=0) + river.cli +
-    # mesh_preview.geojson (triangle edges, EPSG:4326) + gate-stat metrics.
+    # plus ~30 s wall. Writes river.slf (Z=0) + river.cli + river_mesh.npz (the
+    # topology a later solve adopts) + mesh_preview.geojson + the mesh metrics.
     if mesh_only:
         import numpy as _np  # noqa: WPS433 -- local alias for clarity
 
@@ -389,6 +398,7 @@ def run_pipeline(
         cli = str(data_dir / "river.cli")
         B.write_slf(mesh, _np.zeros(int(mesh["npoin"])), slf)
         B.write_cli(mesh, cli)
+        SM.write_mesh_bundle(mesh, str(data_dir / SM.STAGED_MESH_FILENAME))
 
         X, Y, ik = mesh["X"], mesh["Y"], np.asarray(mesh["ikle"])  # 0-based ikle
         # unique undirected edges -> lengths (vectorized)

@@ -19,12 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trid3nt_contracts.tool_registry import (
-    AtomicToolMetadata,
-    GateSpec,
-    LeverSpec,
-    ResolutionSpec,
-)
+from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
     D,
@@ -44,6 +39,7 @@ from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.river_dye.coercions import release_points
 from trid3nt_server.workflows.telemac.river_dye.declarations import DOC, PARAMS
 from trid3nt_server.workflows.telemac.steps import (
+    ReachMesh,
     compute_class,
     event_time,
     substance_class,
@@ -134,6 +130,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                  prompt="Click where the substance enters the river"),
         *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers,
                             discharge=P.discharge_m3s, event_time=P.event_time),
+        ReachMesh.corridor(mesh=MESH, seed=Ref("seed")).named("corridor_mesh"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
@@ -203,6 +200,10 @@ _TELEMAC_RIVER_DYE_RES_SPEC = ResolutionSpec(
     ),
 )
 
+#: The mesh gate this template stops at is the STANDARD one - the mesh step opens
+#: a session, presents the built corridor as an editable layer with its probes,
+#: and takes every edit action the ``corridor_tin`` mesher registers - so this
+#: template declares no solver gate of its own.
 _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     name="telemac_river_dye",
     ttl_class="live-no-cache",
@@ -210,29 +211,17 @@ _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     cacheable=False,
     engine="telemac",
     tier="template",
-    gate_spec=GateSpec(
-        kind="solver",
-        estimate_provider="trid3nt_server.gates.cards.solver_confirm:estimate_telemac_mesh",
-        pin_provider="trid3nt_server.gates.cards.solver_confirm:pin_telemac_mesh",
-        levers=(LeverSpec(name="mesh resolution", param="mesh_resolution_m", unit="m"),),
-        title="TELEMAC approve-mesh",
-        rationale="A consequential TELEMAC solve: preview + approve the river mesh before the run.",
-    ),
     resolution_specs=(_TELEMAC_RIVER_DYE_RES_SPEC,),
 )
 
 
-#: Wire ALIASES the model uses for values PARAMS already declares, plus the
-#: approve-mesh decision tail (underscore -> stripped from the model's schema).
+#: Wire ALIASES the model uses for values PARAMS already declares.
 #: ``release_points`` folds them into the declared params before any door.
 _EXTRA_ARGS: tuple[tuple[str, Any], ...] = (
     ("contaminant", str | None),
     ("release_lon", float | None),
     ("release_lat", float | None),
     ("spill_location_latlon", str | None),
-    ("_release_seeds_reach", bool | None),
-    ("_seed_release_lon", float | None),
-    ("_seed_release_lat", float | None),
 )
 
 

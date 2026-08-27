@@ -170,9 +170,9 @@ async def _gate_on_confirm(
             gate_spec.estimate_provider,
             params,
             tool_name=tool_name,
-            # Only the TELEMAC approve-mesh provider reads the emitter (to paint
-            # the preview layer); every other provider ignores it. getattr so a
-            # minimal/headless state without an emitter still gates.
+            # A provider that paints a layer before its card reads the emitter;
+            # every other one ignores it. getattr so a minimal/headless state
+            # without an emitter still gates.
             emitter=getattr(state, "emitter", None),
         )
     except Exception:  # noqa: BLE001 -- never mask param errors with a gate

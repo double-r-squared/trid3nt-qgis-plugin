@@ -44,8 +44,9 @@ __all__ = [
     "MESH_H_FLOOR_M",
     "MESH_NODE_CAP",
     "MeshSizing",
+    "ReachMesh",
     "ReachSeed",
-    "SOLVE_TIME_BUDGET_S",
+    "build_corridor_mesh",
     "coerce_lonlat_point",
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
@@ -91,7 +92,7 @@ MESH_CELLS_ACROSS_BY_PRESET: dict[str, float] = {
 MESH_NODE_CAP: int = 60000
 #: Triangulated-ribbon node density (nodes ~= area / (k * h^2)). Calibrated on two
 #: live meshes of the 8 km x 60 m Snake reach (h=20 -> 3011 nodes; h=10 -> 10230),
-#: so the node estimate the approve-mesh gate shows tracks reality within ~15%.
+#: so the node estimate tracks a built mesh within ~15%.
 _MESH_NODE_K: float = 0.43
 #: Absolute gmsh edge-length floor (below it quality + solve cost degrade).
 MESH_H_FLOOR_M: float = 3.0
@@ -103,10 +104,6 @@ TIMESTEP_REF_S: float = 1.0
 MESH_TIMESTEP_REF_M: float = 20.0
 #: Floor on the coupled timestep (a runaway-fine mesh cannot drive dt to zero).
 TIMESTEP_FLOOR_S: float = 0.2
-#: Wall-clock target for the SUGGESTED mesh's solve; finer rungs stay on the
-#: ladder with their own honest estimates.
-SOLVE_TIME_BUDGET_S: float = 2700.0
-
 #: Conservative throughput in node-steps/second, calibrated on two live runs
 #: (rates 0.377M and 0.618M/s; the SLOWER is taken so estimates err HIGH).
 _TELEMAC_NODE_STEPS_PER_S: float = 377_000.0
@@ -873,3 +870,82 @@ def ReachSeed(*, reach: Any, rivers: Any) -> Step:  # noqa: N802 - a value const
     """The mid-reach seed on the fetched flowline."""
     return Step(runner=f"{_STEPS}.reach.reach_seed", stage="acquire",
                 kwargs={"reach": reach, "rivers": rivers})
+
+
+class ReachMesh:
+    """The corridor mesh, as the declared step that opens a mesh session over it."""
+
+    #: The label the mesh gate's card carries. It names the ask - a reach corridor
+    #: mesh - rather than whichever template demanded it, because the same gate
+    #: presents the same mesh to every one of them.
+    GATE_LABEL: str = "telemac_reach_mesh"
+
+    @staticmethod
+    def corridor(*, mesh: Any, seed: Any) -> Step:
+        """Build the declared corridor mesh under the mesh gate.
+
+        The sizing, extent, width and bank source come off the template's MESH
+        declaration, which the router has already checked against the
+        ``corridor_tin`` mesher's own declared fields. They are unpacked at
+        PLAN-CONSTRUCTION time so ``Step.kwargs`` stays the plain mapping the
+        interpreter binds late-bound reads inside.
+
+        The SEED rides separately: a corridor is navigated from a point on the
+        flowline, and that point is a step result rather than anything the
+        declaration can name.
+        """
+        fields = mesh.spec.fields
+        return Step(runner=f"{_STEPS}.reach.build_corridor_mesh", stage="mesh",
+                    kwargs={"reach": fields["domain"], "seed": seed,
+                            "extent_km": fields.get("extent_km"),
+                            "width_m": fields.get("width_m"),
+                            "banks": fields.get("banks"),
+                            "refine": fields.get("refine")})
+
+
+async def build_corridor_mesh(*, reach: dict[str, Any], seed: dict[str, Any],
+                              extent_km: Any, width_m: Any, banks: Any,
+                              refine: Any) -> dict[str, Any]:
+    """The corridor mesh a reach solve runs on -> the accepted mesh's record.
+
+    The declaration is rebuilt here against the resolved sheet and a session opens
+    over it: the mesh is built, presented at the mesh gate with its probes and its
+    editable layer, edited or restarted if the user says so, and accepted. What
+    comes back is the ACCEPTED topology, which the deck then hands the solve -
+    otherwise the mesh a human approved and the mesh a solver ran on would be two
+    different objects that happen to agree.
+    """
+    import asyncio
+
+    from trid3nt_server.emission.pipeline_emitter import current_turn_case
+    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+    from trid3nt_server.workflows.mesh.gate import gate_mesh_build
+    from trid3nt_server.workflows.mesh.session import MeshSession
+    from trid3nt_server.workflows.mesh.tool import tool
+
+    declared = {k: v for k, v in (("extent_km", extent_km), ("width_m", width_m),
+                                  ("banks", banks), ("refine", refine))
+                if v is not None}
+    declaration = tool.build_mesh(
+        mesher="corridor_tin", kind="unstructured_tri",
+        domain={"reach": dict(reach), "seed": dict(seed)}, **declared)
+    session = await asyncio.to_thread(
+        MeshSession, declaration, case_id=current_turn_case(),
+        name=f"{reach.get('name') or reach.get('slug')} corridor")
+    art = await gate_mesh_build(session, tool_name=ReachMesh.GATE_LABEL)
+    logger.info("corridor mesh accepted: %s -> %d nodes / %d elements, "
+                "min edge %s m", art.mesh_id, art.node_count, art.element_count,
+                measured_min_edge_m(art))
+    return {
+        "artifact": art,
+        "mesh_id": art.mesh_id,
+        "slf_uri": art.slf_uri,
+        "cli_uri": art.cli_uri,
+        "topology_uri": art.topology_uri,
+        "display_uri": art.display_uri,
+        "recipe_uri": art.recipe_uri,
+        "node_count": art.node_count,
+        "element_count": art.element_count,
+        "min_edge_m": measured_min_edge_m(art),
+        "provenance": dict(art.provenance or {}),
+    }

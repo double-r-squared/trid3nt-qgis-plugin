@@ -8,7 +8,7 @@ These pin:
 
   1. Tool registration + metadata (workflow_dispatch, uncacheable).
   2. Wire-arg normalization: the AOI rules, the three release-point shapes, the
-     approve-mesh reach-seed decoupling, the contaminant promotion.
+     release-point / reach-seed decoupling, the contaminant promotion.
   3. Declared bounds + the non-numeric refusal replacing the old inline clamps.
   4. The plan: its shape, its gate placement, and that it validates.
   5. The chain geocode -> seed -> carrier discharge -> deck -> solve -> products,
@@ -174,21 +174,18 @@ def test_a_malformed_release_point_refuses_it_never_falls_back():
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
 
 
-def test_the_approve_mesh_tail_decouples_the_reach_seed_from_the_click():
-    """A CALL-provided release also seeds the reach; a GATE-PICKED click moves the
-    source only, so the approved solve cannot mesh a different water body."""
+def test_the_reach_seed_is_the_call_release_and_only_the_call_release():
+    """A CALL-provided release also seeds the reach; a DRAWN click moves the
+    source only, so the meshed water body cannot change under the user.
+
+    The split is structural: coercions run on the wire args, before any door and
+    so before any gate, which is why a drawn point can reach ``release_coords``
+    and reach ``reach_seed_coords`` by no path at all."""
     call, _ = _norm(location="X", release_lon=-114.31, release_lat=42.58)
     assert call["reach_seed_coords"] == (-114.31, 42.58)
 
-    click, _ = _norm(location="X", release_lon=-114.31, release_lat=42.58,
-                     _release_seeds_reach=False)
-    assert click["release_coords"] == (-114.31, 42.58)
-    assert "reach_seed_coords" not in click
-
-    pinned, _ = _norm(location="X", release_lon=-114.20, release_lat=42.60,
-                      _release_seeds_reach=True, _seed_release_lon=-114.31,
-                      _seed_release_lat=42.58)
-    assert pinned["reach_seed_coords"] == (-114.31, 42.58)
+    drawn, _ = _norm(location="X")
+    assert "release_coords" not in drawn and "reach_seed_coords" not in drawn
 
 
 def test_a_non_tracer_contaminant_beats_a_tracer_substance():
@@ -279,7 +276,8 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
     steps = list(pl.declared())
     assert [s.label for s in steps][2:] == [
-        "reach", "seed", "carrier_discharge", "deck", "solve", "plume"]
+        "reach", "seed", "carrier_discharge", "corridor_mesh", "deck",
+        "solve", "plume"]
     # Both gates precede every step, so nothing consumes a value the review can
     # still revise.
     assert all(isinstance(s, Gate) for s in steps[:2])
@@ -359,6 +357,21 @@ def _install_step_mocks(captured: dict):
             "seed_lon": seed["lon"], "seed_lat": seed["lat"],
         }
 
+    async def _fake_corridor_mesh(*, reach, seed, extent_km, width_m, banks,
+                                  refine):
+        """The mesh session stands in: this chain test is about the chain.
+
+        No artifact rides back, so the deck's timestep falls to the REQUESTED
+        edge - which is what keeps this chain's deck the historical one.
+        """
+        captured["mesh_ask"] = {"extent_km": extent_km, "width_m": width_m,
+                                "banks": banks, "refine": dict(refine or {})}
+        return {"artifact": None, "mesh_id": "MESH01",
+                "slf_uri": "s3://cache/mesh/MESH01/river.slf",
+                "cli_uri": "s3://cache/mesh/MESH01/river.cli",
+                "topology_uri": "s3://cache/mesh/MESH01/river_mesh.npz",
+                "min_edge_m": None}
+
     def _fake_stage(reach, run_tag, **_kw):
         captured["reach"] = reach
         captured["run_tag"] = run_tag
@@ -388,6 +401,7 @@ def _install_step_mocks(captured: dict):
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
         patch.object(deck_steps, "resolve_reach_river", _fake_river),
+        patch.object(reach_steps, "build_corridor_mesh", _fake_corridor_mesh),
         patch.object(forcing_steps, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",

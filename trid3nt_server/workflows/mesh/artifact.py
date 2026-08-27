@@ -94,6 +94,11 @@ class MeshArtifact:
     #: The TELEMAC boundary-conditions file written from THIS geometry's own
     #: boundary numbering; only valid against the ``slf_uri`` beside it.
     cli_uri: str | None = None
+    #: The mesher's record of the ACCEPTED TOPOLOGY, for an engine whose solve
+    #: needs more than a geometry file states. A SELAFIN says which nodes lie on a
+    #: boundary and never which stretch of it is the inflow, so a mesh whose
+    #: boundary carries roles ships them here beside the geometry.
+    topology_uri: str | None = None
     outlet_lonlat: tuple[float, float] | None = None
     pour_point_lonlat: tuple[float, float] | None = None
     open_boundary_info: dict[str, Any] = field(default_factory=dict)

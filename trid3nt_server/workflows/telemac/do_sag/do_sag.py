@@ -37,6 +37,7 @@ from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.do_sag.declarations import DOC, PARAMS
 from trid3nt_server.workflows.telemac.steps import (
+    ReachMesh,
     ReviewResolvedInputs,
     WaqtelO2,
     event_time,
@@ -101,6 +102,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         ReviewResolvedInputs(carrier_discharge=Ref("carrier_discharge"),
                              bank_source=P.bank_source, workflow=ops.name,
                              input_mode=RunMode).named("reviewed_discharge"),
+        ReachMesh.corridor(mesh=MESH, seed=Ref("seed")).named("corridor_mesh"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)

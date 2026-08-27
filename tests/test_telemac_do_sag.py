@@ -104,8 +104,8 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     wf = _workflow()
     plan = wf.plan
     stages = [s.stage for s in plan.declared() if s.stage]
-    assert stages == ["acquire", "acquire", "acquire", "prep", "gates", "author",
-                      "solve", "publish"]
+    assert stages == ["acquire", "acquire", "acquire", "prep", "gates", "mesh",
+                      "author", "solve", "publish"]
     assert [s.name for s in plan.declared()][-1] == "do_field"
 
 
@@ -241,6 +241,10 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review):
     monkeypatch.setattr(forcing_mod, "resolve_carrier_discharge",
                         _step("discharge", {"m3s": 2.0, "basis": "fetched",
                                             "note": "NWM 2.0 m3/s"}))
+    monkeypatch.setattr(reach_mod, "build_corridor_mesh",
+                        _step("mesh", {"mesh_id": "M", "slf_uri": "s3://m/river.slf",
+                                       "topology_uri": "s3://m/river_mesh.npz",
+                                       "min_edge_m": 9.0}))
     monkeypatch.setattr(deck_mod, "write_reach_deck",
                         _step("deck", {"deck": {"name": "eel"}, "run_tag": "T"}))
     monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
@@ -252,7 +256,8 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review):
 async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                                                                     tmp_path):
     """The migrated plan itself, not a stand-in: geocode -> flowline -> seed ->
-    discharge -> waqtel -> review -> deck -> solve -> DO products, with the
+    discharge -> waqtel -> review -> corridor mesh -> deck -> solve -> DO
+    products, with the
     outfall riding as the reach SEED (it pins which water body is meshed), never
     as a dye release point."""
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
@@ -285,8 +290,8 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
         outfall_coords=[-124.11, 40.51], input_mode="user_gated")
 
     assert not isinstance(out, dict), out
-    assert order == ["geocode", "rivers", "seed", "discharge", "review", "deck",
-                     "solve", "products"]
+    assert order == ["geocode", "rivers", "seed", "discharge", "review", "mesh",
+                     "deck", "solve", "products"]
     # the outfall pins the MESHED water body, so it rides as the reach seed
     assert seen["deck"]["reach_seed_coords"] == (-124.11, 40.51)
     assert "release_coords" not in seen["deck"]

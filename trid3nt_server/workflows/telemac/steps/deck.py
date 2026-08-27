@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Mapping
 
 from trid3nt_contracts import new_ulid
 
@@ -106,8 +106,10 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
     if str((reach or {}).get("substance_class") or "") == "sediment":
         outputs += ["gaia_river.slf", "gaia_river.cas"]
     if mesh_only:
-        outputs = ["river.slf", "river.cli", "mesh_preview.geojson",
-                   "telemac_metrics.json"]
+        # river_mesh.npz is the accepted topology a later solve adopts, so it
+        # comes back with the geometry rather than dying with the run directory.
+        outputs = ["river.slf", "river.cli", "river_mesh.npz",
+                   "mesh_preview.geojson", "telemac_metrics.json"]
     manifest: dict[str, Any] = {
         "reach": reach,
         "run_id": run_tag,
@@ -286,6 +288,7 @@ async def write_reach_deck(
     *,
     reach: dict[str, Any],
     seed: dict[str, Any],
+    mesh: dict[str, Any],
     carrier_discharge: dict[str, Any],
     rain: dict[str, Any] | None = None,
     release_coords: Any = None,
@@ -327,6 +330,11 @@ async def write_reach_deck(
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the worker ReachConfig + the run meta.
 
+    The MESH is the accepted one: its geometry and its boundary roles are staged
+    for the solve, so the run is solved on the triangulation that was presented
+    rather than on an equivalent rebuild, and the timestep follows the edge that
+    mesh was BUILT at rather than the edge that was asked for.
+
     Also puts the RELEASE POINT on the canvas: where the substance enters is what
     the downstream distance is measured from, so it is a physical input, and the
     layer says out loud whether the user placed it or the pipeline derived it.
@@ -342,7 +350,7 @@ async def write_reach_deck(
     mesh_size_m = sizing.mesh_size_m
     mesh_node_estimate = sizing.node_estimate
     mesh_resolution_label = sizing.label
-    time_step_s = suggest_time_step_s(mesh_size_m)
+    time_step_s = suggest_time_step_s(mesh_size_m, mesh=mesh.get("artifact"))
     logger.info("telemac mesh granularity: %s -> h=%.3g m (~%d nodes, dt=%.3g s, "
                 "reach=%.3g km x %.3g m)%s", mesh_resolution_label, mesh_size_m,
                 mesh_node_estimate, time_step_s, reach_length_km, channel_width_m,
@@ -441,8 +449,9 @@ async def write_reach_deck(
     return {
         "deck": deck,
         "run_tag": run_tag,
-        "inputs": river["inputs"],
+        "inputs": [*river["inputs"], *_accepted_mesh_inputs(mesh)],
         "river": river["provenance"],
+        "mesh_id": mesh.get("mesh_id"),
         "substance": substance,
         "substance_class": substance_class,
         "erodible_bed": bool(erodible),
@@ -463,6 +472,32 @@ async def write_reach_deck(
         "rain_mm_per_day": rain_mm_day,
         "rain_rung": (rain or {}).get("rung"),
     }
+
+
+#: The accepted mesh's record -> the manifest ``dest`` the worker adopts it under.
+#: The topology bundle is what makes adoption possible at all: a SELAFIN states
+#: which nodes are on a boundary and never which stretch of it the flow enters by.
+_ACCEPTED_MESH_DESTS: dict[str, str] = {"topology_uri": "river_mesh.npz"}
+
+
+def _accepted_mesh_inputs(mesh: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Manifest rows staging the accepted mesh into the solve's run directory.
+
+    A mesh record missing its topology refuses: silently falling back to a
+    worker-side rebuild would solve on a mesh nobody accepted, under the accepted
+    mesh's name.
+    """
+    rows: list[dict[str, str]] = []
+    for field_name, dest in _ACCEPTED_MESH_DESTS.items():
+        uri = (mesh or {}).get(field_name)
+        if not uri:
+            raise TelemacDyeScenarioError(
+                "TELEMAC_MESH_NOT_ACCEPTED",
+                f"the corridor mesh for this run carries no {field_name}, so the "
+                "accepted topology cannot be staged and the solve would mesh one "
+                f"of its own instead (mesh record: {sorted((mesh or {}))}).")
+        rows.append({"gs_uri": str(uri), "dest": dest})
+    return rows
 
 
 class WriteDeck:

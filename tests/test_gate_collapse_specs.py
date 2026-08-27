@@ -31,12 +31,17 @@ _EXPECTED_SOLVER = {
     "openquake_psha",
     "openquake_scenario_gmf",
     "openquake_secondary_perils",
-    "telemac_river_dye",
     "elmfire_fire_spread",
     "geoclaw_inundation",
     "geoclaw_tsunami_gauge_timeseries",
 }
 _EXPECTED_FETCH = {"fetch_dem", "fetch_topobathy", "fetch_landcover"}
+
+#: A template that stops at the STANDARD mesh gate declares no solver GateSpec of
+#: its own: the mesh session presents the mesh it built and mounts the mesher's
+#: own edit actions, which is a superset of what a per-template approve-mesh card
+#: could offer. Listed so its absence reads as the design rather than as a loss.
+_MESH_GATED = {"telemac_river_dye"}
 
 
 # --- membership is derived from metadata --- #
@@ -46,6 +51,12 @@ def test_every_solver_tool_declares_a_solver_gate_spec() -> None:
         gs = TOOL_REGISTRY[name].metadata.gate_spec
         assert gs is not None, f"{name} lost its gate_spec"
         assert gs.kind == "solver", name
+
+
+def test_a_mesh_gated_template_declares_no_solver_gate_spec() -> None:
+    for name in _MESH_GATED:
+        assert TOOL_REGISTRY[name].metadata.gate_spec is None, name
+        assert name not in _core.SOLVER_CONFIRM_TOOLS, name
 
 
 def test_every_fetch_tool_declares_a_fetch_gate_spec() -> None:

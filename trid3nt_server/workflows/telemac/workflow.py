@@ -134,6 +134,11 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Stratified.products(deck=Ref("deck"), solve=solve).named("column")
 
 
+#: Plan-value deck fields every reach writer takes: the mid-reach seed the
+#: corridor is navigated from, and the ACCEPTED corridor mesh the solve runs on.
+#: Both are step results rather than sheet values, so neither can be declared.
+_REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("corridor_mesh")}
+
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
 _RAIN_FORCING: Mapping[str, str] = {"rain": "rain"}
@@ -144,17 +149,17 @@ _PROCESSES: dict[str, _Process] = {
         domain_kw="reach", domain_ref=Ref("reach"),
         deck=WriteDeck.telemac, writer=write_reach_deck,
         solve=_reach_solve, read=_read_dye, forcing_fields=_REACH_FORCING,
-        extra_fields={"seed": Ref("seed")}),
+        extra_fields=_REACH_EXTRA),
     "morphodynamics": _Process(
         domain_kw="reach", domain_ref=Ref("reach"),
         deck=WriteDeck.telemac, writer=write_reach_deck,
         solve=_reach_solve, read=_read_dye, forcing_fields=_REACH_FORCING,
-        extra_fields={"seed": Ref("seed")}),
+        extra_fields=_REACH_EXTRA),
     "waqtel_o2": _Process(
         domain_kw="reach", domain_ref=Ref("reach"),
         deck=WriteDeck.telemac, writer=write_reach_deck,
         solve=_reach_solve, read=_read_dissolved_oxygen,
-        forcing_fields=_REACH_FORCING, extra_fields={"seed": Ref("seed")}),
+        forcing_fields=_REACH_FORCING, extra_fields=_REACH_EXTRA),
     "coastal_surge": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
         deck=Coastal.deck, writer=write_coastal_deck,

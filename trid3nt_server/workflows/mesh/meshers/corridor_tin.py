@@ -109,7 +109,8 @@ async def _build(spec: Mapping[str, Any]) -> Mesh:
         "time_step_s": suggest_time_step_s(sizing.mesh_size_m),
     }
     run_id, metrics = await _triangulate(ask, run_tag, river["inputs"])
-    points, cells = await asyncio.to_thread(_read_geometry, run_id)
+    files = await asyncio.to_thread(_stage_outputs, run_id)
+    points, cells = await asyncio.to_thread(_read_geometry, files["slf_uri"])
 
     utm_epsg = int(metrics.get("utm_epsg") or 0)
     if utm_epsg <= 0:
@@ -123,6 +124,10 @@ async def _build(spec: Mapping[str, Any]) -> Mesh:
             "utm_epsg": utm_epsg,
             "lonlat_bbox": tuple(float(v) for v in metrics["bbox4326"]),
             "domain": domain,
+            # The accepted topology travels WITH the mesh, so the solve that
+            # consumes it runs on this triangulation rather than an equivalent
+            # rebuild of it.
+            "files": files,
             "probes": {
                 "domain_mode": metrics.get("domain_mode"),
                 "island_count": metrics.get("n_islands"),
@@ -228,22 +233,47 @@ async def _triangulate(ask: Mapping[str, Any], run_tag: str,
     return run_id, metrics
 
 
-def _read_geometry(run_id: str) -> tuple[Any, Any]:
+#: What the mesh-only build leaves behind, and the artifact field each one lands
+#: under. The SELAFIN is the geometry; the ``.cli`` is only valid against that
+#: geometry's own boundary numbering; the topology bundle carries what neither
+#: file can - which stretch of the boundary is the inflow and which the outflow.
+_BUILD_OUTPUTS: Mapping[str, str] = {
+    "slf_uri": "river.slf",
+    "cli_uri": "river.cli",
+    "topology_uri": "river_mesh.npz",
+}
+
+
+def _stage_outputs(run_id: str) -> dict[str, str]:
+    """Bring the build's geometry files local -> ``{artifact field: local path}``."""
+    import os
+    from pathlib import Path
+
+    from trid3nt_contracts import new_ulid
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+
+    rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
+              / f"mesh-{new_ulid()}")
+    rundir.mkdir(parents=True, exist_ok=True)
+    client, bucket = _get_s3_client(), _get_runs_bucket()
+    staged: dict[str, str] = {}
+    for field_name, basename in _BUILD_OUTPUTS.items():
+        local = rundir / basename
+        local.write_bytes(client.get_object(
+            Bucket=bucket, Key=f"{run_id}/{basename}")["Body"].read())
+        staged[field_name] = str(local)
+    return staged
+
+
+def _read_geometry(slf_path: str) -> tuple[Any, Any]:
     """Read the built geometry back -> ``(points (N,2) metres, cells (M,3))``."""
-    import tempfile
     from pathlib import Path
 
     import numpy as np
 
-    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
     from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
 
-    body = _get_s3_client().get_object(
-        Bucket=_get_runs_bucket(), Key=f"{run_id}/river.slf")["Body"].read()
-    with tempfile.TemporaryDirectory() as tmp:
-        local = Path(tmp) / "river.slf"
-        local.write_bytes(body)
-        geometry = read_selafin(local)
+    geometry = read_selafin(Path(slf_path))
     points = np.column_stack([np.asarray(geometry["x"], dtype=float),
                               np.asarray(geometry["y"], dtype=float)])
     return points, np.asarray(geometry["ikle"], dtype=np.int64)
