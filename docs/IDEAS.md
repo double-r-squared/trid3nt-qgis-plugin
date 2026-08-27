@@ -2230,3 +2230,25 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   SWMM -> HEC-RAS); (5) CALIBRATION LAST, on the settled system.
   (SWAN rejected as the probe: its worker is regular-grid-only;
   consuming om2d meshes would be NEW capability, not a migration.)
+
+- MESH SESSION ECONOMICS (NATE 2026-08-27, correcting the landed om2d
+  edit path): per-edit eager re-realization REJECTED - it re-fetched
+  staged inputs (violates the reuse-resources rule) and rebuilt per
+  edit. Ruling, three parts: (1) LAZY BATCHED REALIZATION - edit()
+  mutates accumulated state only; realization fires on demand
+  (present/probes/accept), one gate cycle = one rebuild regardless of
+  edit count; (2) STAGED-ONCE INPUTS - bed/shoreline/fetched
+  geometries staged into the session exactly once, reused by every
+  realize, zero refetch; (3) PREFIX-KEYED SNAPSHOT CACHE - every
+  realized mesh cached in the session keyed by recipe-prefix hash;
+  undo/restart = instant restore, no rebuild; also pins om2d
+  nondeterminism within a session (prefix P always returns the mesh
+  the user inspected). Re-realization SEMANTICS stand for conformal
+  generative edits (measured: surgical punch = 80.1 m outline offset
+  vs 0.0 m constrained - DistMesh has no local re-mesh); telapy
+  adoption path stays pure surgical mutation. Lands as a remediation
+  stage after the mesh wave's current leg.
+- MESH SPOT-CHECK DRIVER (NATE 2026-08-27): a standing test workflow
+  for basic mesh builds - direct TOOL_REGISTRY invocation of
+  build_mesh with coarse defaults, prints probes + emitted layer uri,
+  for QGIS spot checks whenever mesh functionality lands.
