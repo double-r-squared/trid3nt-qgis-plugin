@@ -2163,3 +2163,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   explicit-first, case-discovery-second, declared-spec default.
   Static plan spine KEPT; boundaries defined in the same gate loop.
   Bridge Blueprint artifact rev 2 = the picture.
+
+- VOCABULARY FIXED: MESHER, NOT ENGINE (NATE 2026-08-26): "engine" is
+  RESERVED for solvers (TELEMAC/MODFLOW/SWMM/HEC-RAS - the thing a box
+  runs). The mesh-building libraries behind tool.build_mesh are
+  MESHERS (arg name: mesher=om2d|telapy_mesh|hecras|reg_grid), not
+  registered engines. Full ladder: engine=solver, mesher=mesh library,
+  fetcher=data spec behind the fetch router, worker/box=the
+  network-isolated container an engine runs in. Stick to this in every
+  charter, kickoff, docstring and sub-agent prompt. Scope note
+  ratified: the bigger mesh wave is WORTH IT - "before none of the
+  functionality existed in one area."
