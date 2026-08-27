@@ -795,6 +795,19 @@ param sheet of `<action>.<input>` rows plus the truncation row, rendered by the
 card the plugin already had. The client half of the deleted approve-mesh gate
 (-135) had no producer left at all.
 
+LIVE (`scripts/proof_corridor_hand_edit_solve.py`, Eel River near Scotia,
+California, 45 m ask over a 3 km reach): the corridor built through its box at
+788 nodes / 1337 elements; one interior triangle was split at its centroid the
+way a QGIS refinement would, giving 789 / 1339 - counts no rebuild of the same
+corridor could report, which is what makes the run's own numbers discriminate.
+Boundary roles carried a measured 0.25 m at worst. The accepted mesh staged
+`s3://trid3nt-cache/mesh/01M12NH049B6WYPJ8KEFX8DJRA/river_mesh.npz`, the DO-sag
+deck consumed it, and run `01M12NJXWPK89EDQ536AH689J4` completed
+`status=ok exit_code=0 correct_end=true wall_s=14.0` reporting `npoin=789
+nelem=1339 nptfr=237 n_inflow_nodes=7 n_outflow_nodes=7`. The solve ran on the
+EDITED geometry. What this run does NOT claim is physics: 900 s of a coarse
+reach leaves the tracer field at zero, and the assertion here is provenance.
+
 NOT COUNTED by the rule at the head of this file:
 `tests/test_corridor_mesh_readopt.py` (new, 331 lines),
 `tests/test_mesh_gate_loop.py` +129, `tests/test_mesh_meshers.py` +6,
