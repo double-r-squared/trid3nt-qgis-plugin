@@ -912,7 +912,7 @@ builds fresh, with published methods as design references under paper-first and 
 code inheritance. Superseded as the V&V exemplar by coastal-surge-vs-CO-OPS.
 
 **Decided by:** NATE (malpasset chop-no-harvest ruling, 2026-08-26). **Status:**
-DELETED (stale-sweep 2026-08-27). One consumer the prior registration missed:
+DELETED (commit 7808c311). One consumer the prior registration missed:
 `tests/test_postprocess_telemac_wse.py` dynamically loaded
 `scripts/run_l2_malpasset.py` (via `importlib`) to test the driver's
 `adjust_deck_friction` helper -- that test-only import, not a product import;
