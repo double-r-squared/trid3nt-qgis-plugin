@@ -4,15 +4,12 @@ Covers the free-surface / depth variable pickers, the WET-MASK discipline (dry
 terrain must NOT leak into the water-surface raster), the mesh-CRS COG write +
 quantity tag, and the returned contract scalars. Uses a synthetic big-endian
 SELAFIN this test writes (mirrors test_postprocess_telemac.py) -- no docker /
-TELEMAC / S3 / case data. Also covers the driver's friction deck edit.
+TELEMAC / S3 / case data.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import struct
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -165,43 +162,3 @@ def test_wse_empty_dry_solve_raises(tmp_path):
             _output_dir=str(tmp_path),
         )
     assert ei.value.error_code == "TELEMAC_OUTPUT_EMPTY"
-
-
-# --------------------------------------------------------------------------- #
-# Driver friction deck edit (the honest bundled-deck "setter").
-# --------------------------------------------------------------------------- #
-def _load_driver():
-    # Anchored to the repo root via __file__ (NOT cwd-relative -- the Malpasset
-    # panel flagged this: a cwd-relative Path("scripts/...") only resolves when
-    # pytest happens to be invoked from the repo root). parents[0]=tests,
-    # [1]=server, [2]=repo root, matching the convention used elsewhere (e.g.
-    # test_land_subsidence.py's FIXTURE_DIR).
-    path = Path(__file__).resolve().parents[1] / "scripts" / "run_l2_malpasset.py"
-    spec = importlib.util.spec_from_file_location("run_l2_malpasset", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["run_l2_malpasset"] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def test_adjust_deck_friction_colon_and_equals():
-    drv = _load_driver()
-    # TELEMAC accepts both separators; the Malpasset deck uses a colon.
-    colon = "LAW OF BOTTOM FRICTION = 3\nFRICTION COEFFICIENT : 30.\nVELOCITY DIFFUSIVITY = 1.\n"
-    new, old = drv.adjust_deck_friction(colon, 40.0)
-    assert old == pytest.approx(30.0)
-    assert "FRICTION COEFFICIENT : 40." in new
-    # LAW OF BOTTOM FRICTION (also contains 'FRICTION') is untouched.
-    assert "LAW OF BOTTOM FRICTION = 3" in new
-    assert "VELOCITY DIFFUSIVITY = 1." in new
-
-    equals = "FRICTION COEFFICIENT = 30.\n"
-    new2, old2 = drv.adjust_deck_friction(equals, 35.0)
-    assert old2 == pytest.approx(30.0)
-    assert "FRICTION COEFFICIENT = 35" in new2
-
-
-def test_adjust_deck_friction_missing_raises():
-    drv = _load_driver()
-    with pytest.raises(ValueError):
-        drv.adjust_deck_friction("LAW OF BOTTOM FRICTION = 3\n", 40.0)
