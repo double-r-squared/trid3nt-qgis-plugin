@@ -29,7 +29,7 @@
 </style>
 
 <h1>Domain and Mesh</h1>
-<p class="rev">rev 12 &middot; 2026-08-27 &middot; ALL EXECUTION HELD; D1 sharpened: the extent ladder - bbox by default (never miss the area), overridable at workflow and runtime through the standard doors. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 13 &middot; 2026-08-27 &middot; ALL EXECUTION HELD; extent rule corrected: ONE threaded AOI, the mesh slot defaults to it, override is RUNTIME-ONLY (user ask or drawn) - no workflow-level substitution. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>1. Status</h2>
 <table>
@@ -63,16 +63,21 @@ MESH = tool.build_mesh(aoi=basin, bed=D.dem, ...)  # mesh EXACTLY the area of in
 <li><b>Derivation is provenance</b>: each subdomain carries parent + operation + inputs, journal-friendly like the mesh recipe.</li>
 <li><b>This is the plan's own law</b>: step results are deep-frozen named values; refs never rebind. The model names what the substrate already does.</li>
 </ul>
-<h3>3.0 The extent ladder - bbox by default, overridable at every stage</h3>
-<p>The cost asymmetry decides the default: over-meshing wastes compute (recoverable); premature narrowing loses correctness (a wrongly-derived basin silently clips the answer's area - unrecoverable). So mesh generation is UNOPINIONATED by default and narrowing is always a supplied opinion:</p>
-<pre><code class="py">aoi = domain                      # DEFAULT - the bbox; never misses the area
-aoi = delineate(domain, pour)     # WORKFLOW override - the template declares a derived subdomain
-aoi = drawn_geometry              # RUNTIME override - the gate asks for / the user redraws the area</code></pre>
+<h3>3.0 The extent rule - one AOI, mesh-slot default, runtime-only override</h3>
+<p>There is exactly ONE AOI - threaded through the plan, consumed by every function, never overridden by anything. The mesh slot's extent DEFAULTS to it, and mesh generation is unopinionated over it by the cost asymmetry: over-meshing wastes compute (recoverable); premature narrowing loses correctness (unrecoverable - the missed area is simply absent from the answer).</p>
+<pre><code class="py"># templates write NO aoi line at all - the mesh slot reads the threaded AOI.
+# there is no syntax by which a workflow can substitute the extent.
+
+# the ONLY override is runtime, ad hoc, at the user's initiative:
+session.edit("set_extent", geometry=drawn)   # they ask, or they draw -
+                                             # journaled, basis=user, restart-able,
+                                             # narrow OR widen</code></pre>
 <ul>
-<li><b>Polymorphic</b>: bbox, derived polygon, drawn polygon are the same type to the mesher; only provenance differs, recorded as the slot's basis (default / declared / user) like every param.</li>
-<li><b>The runtime override is a session edit</b>: set_extent(geometry) - regenerate over the new extent, journaled in the recipe, restart-able; narrow OR widen (the user can drag the box bigger when the default would miss the surge).</li>
-<li><b>Derived subdomains are efficiency/precision opt-ins, never correctness gates</b>; resolution (the user's granularity lever) manages the bbox default's cost.</li>
-<li><b>Fetch-wide holds under every rung</b>: staging happens over the base domain regardless of which rung fills aoi - overrides never re-fetch.</li>
+<li><b>Why no workflow-level override</b>: a declared aoi=basin buried in a MESH slot is hidden undefined behavior - the user fed an AOI, every other consumer reads it, and the mesh silently consumed something else. The divergence is invisible on the surface. Forbidden by construction: the slot has no extent parameter in templates.</li>
+<li><b>Delineation-shaped questions stay legal</b> as the MESHER'S DECLARED BEHAVIOR, not a slot substitution: pour_point present means "the terrain that drains to this point" IS the question, stated visibly in the declaration - and the derived extent is PRESENTED at the gate, where the user sees exactly what got meshed and can override at runtime. Declared-and-presented derivation: legal. Silent substitution: forbidden. Runtime user override: the one path.</li>
+<li><b>Polymorphic and provenance-labeled</b>: the threaded bbox, a mesher-derived extent, and a drawn geometry are the same type to generation; the slot records which filled it (default / mesher-derived / user).</li>
+<li><b>Fetch-wide holds under every case</b>: staging happens over the threaded AOI regardless - runtime overrides never re-fetch.</li>
+<li><b>Derived subdomains (section 3) remain first-class values</b> for NON-mesh consumers - reporting clips, charts, sampling - where naming an extent is explicit dataflow, not substitution.</li>
 </ul>
 <h3>3.1 Inputs live in ONE place - no bundles, no records</h3>
 <p>Constituents (<code>bed</code>, <code>shoreline</code>, <code>flowline</code>) are ordinary DATA refs passed explicitly to what needs them - singly homed, plain in-and-out, no aggregating transport. (An earlier "grounding record" draft was REJECTED for making inputs live in two places.) The reach bundle DISSOLVES into named plan values with the coupling preserved by dataflow, not structure:</p>
@@ -115,7 +120,7 @@ release_gate(valid_on=flowline)         # scenario validity</code></pre>
 
 <h2>6. OPEN - decisions that are NATE's, nothing moves before his ruling</h2>
 <div class="open">
-<p><b>D1 - freeze the domain model?</b> Sections 3-3.1 as sharpened by 3.0: derive-not-override; the extent ladder (bbox default, workflow + runtime overrides through the standard doors, runtime override as a journaled session edit); reach dissolution; inputs singly homed. Recommendation: freeze as written.</p>
+<p><b>D1 - freeze the domain model?</b> Sections 3-3.1 as corrected by 3.0: ONE threaded AOI, mesh slot defaults to it, runtime-only user override (set_extent, journaled), no workflow-level substitution, delineation legal as declared-and-presented mesher behavior; derive-not-override for subdomains consumed by non-mesh operations; reach dissolution; inputs singly homed. Recommendation: freeze as written.</p>
 <p><b>D2 - hand-edit staging semantics</b> (verifier finding, reproduced: a hand-edited corridor session accepts, then deck staging refuses <code>TELEMAC_MESH_NOT_ACCEPTED</code> - a late failure the user cannot understand). Recommendation: after adoption the session regenerates solver files through the telapy write path; if impossible for a mesher, the EDIT refuses at the gate; invariant: <code>accept()</code> implies stageable. Alternatives: forbid hand-edits on bed-less meshes outright, or keep late refusal (not recommended).</p>
 <p><b>D3 - the gate's revision channel</b> (verifier finding: the mesh gate emits none of the four fields the shipped plugin can populate revisions from - USER-GATED reach cards are proceed/cancel only, every edit unreachable). Recommendation: emit numeric knobs as a param_sheet the shipped client already renders, routed server-side to the gate's edit path; plugin changes only if unavoidable, synced via install_plugin.sh, flagged for NATE's live pass. Alternative: extend the plugin's card vocabulary for mesh edits (bigger, nicer, needs NATE's UI eye).</p>
 <p><b>D4 - finish the approve-mesh chop client-side?</b> (verifier finding: plugin release_point_required handling, the picker row, two BK3B drivers survive with no producer.) Recommendation: chop per clean-as-you-go, ledger rows, drivers deleted or rewritten against the new gate.</p>
