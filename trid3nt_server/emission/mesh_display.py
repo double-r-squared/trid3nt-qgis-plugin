@@ -15,7 +15,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
-__all__ = ["MESH_ELEMENT_TAG", "MeshDisplayError", "write_2dm", "write_2dm_arrays"]
+__all__ = ["MESH_ELEMENT_TAG", "MeshDisplayError", "mesh_display_path", "write_2dm",
+           "write_2dm_arrays"]
 
 #: The SMS element tag for a cell of N nodes. A cell of any other arity has no
 #: display face here and says so rather than being silently reshaped.
@@ -28,6 +29,19 @@ class MeshDisplayError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
+
+
+def mesh_display_path(mesh: Any) -> str | None:
+    """The display file the MESHER wrote itself, or ``None`` to write a ``.2dm``.
+
+    A mesh whose cells an engine re-realizes carries no connectivity for the
+    ``.2dm`` format to hold, so its mesher draws its own face - cell polygons -
+    and names it here. Every node/cell mesh leaves this unset and takes the one
+    writer above.
+    """
+    declared = dict(getattr(mesh, "meta", None) or {}).get("files") or {}
+    path = declared.get("display_uri")
+    return str(path) if path else None
 
 
 def write_2dm(mesh: Any) -> str:

@@ -8,7 +8,7 @@ produces the neutral triple can be written through it, which is what keeps the
 strategies and the writers independent.
 
 It lives in the mesh front rather than in the TELEMAC step tier because BOTH
-callers are outside that tier's question: the standalone ``generate_mesh`` tool
+callers are outside that tier's question: a standalone ``build_mesh`` call
 writes a TELEMAC-compatible mesh artifact with it, and the rain-on-grid step
 writes its solve geometry with it. A writer only one of them could reach would
 be a placement leak wearing a convenience's clothes.

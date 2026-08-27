@@ -47,7 +47,7 @@ POUR_POINT_BUFFER_DEG: float = 0.14
 
 # The catchment mesher's defaults are IMPORTED, not restated: they live beside the
 # mesher in the shared mesh front, which is the other caller's only home for them
-# (the standalone generate_mesh tool has no param sheet). The composer this
+# (a standalone mesh build has no param sheet). The composer this
 # replaces held 40 m at its CALL site and 400 m in the signature default it
 # overrode - two numbers for one dial, only one of which ever ran.
 

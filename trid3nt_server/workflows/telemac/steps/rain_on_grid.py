@@ -184,7 +184,7 @@ async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
                            slug: str) -> tuple[Any, str | None]:
     """Offer a mesh this CASE already holds; ``(mesh | None, note | None)``.
 
-    Mesh creation is an explicit user act (the standalone ``generate_mesh`` tool),
+    Mesh creation is an explicit user act (a standalone ``build_mesh`` call),
     never auto-guessed inside a model template - so when the declared slot is
     unfilled the template ASKS rather than assuming. Accepted, the case mesh is
     adopted end to end; declined, absent or incompatible, the catchment is
@@ -735,7 +735,7 @@ def _provenance(deck: Mapping[str, Any],
                   f"{float(catchment['area_km2']):.3g} km2",
             basis="user" if catchment["provenance"] == "supplied" else "derived",
             consequence="numerical",
-            real_source_if_any=("generate_mesh"
+            real_source_if_any=("build_mesh"
                                 if catchment["provenance"] == "supplied" else None),
             note=("solved on a mesh SUPPLIED for this invocation"
                   if catchment["provenance"] == "supplied"

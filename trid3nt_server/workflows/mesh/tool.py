@@ -31,12 +31,18 @@ from trid3nt_server.workflows.mesh.artifact import (
     read_mesh_artifact_sidecar,
 )
 from trid3nt_server.workflows.mesh.meshers import (
+    EDGE_RESOLUTION_SPECS,
     MeshToolError,
     get_mesher,
     is_late_bound,
     nearest_names,
 )
-from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401 - registration
+# Importing a mesher REGISTERS it; the roster is this block and nothing else.
+from trid3nt_server.workflows.mesh.meshers import coastal_edge as _coastal_edge  # noqa: F401,E402
+from trid3nt_server.workflows.mesh.meshers import corridor_tin as _corridor_tin  # noqa: F401,E402
+from trid3nt_server.workflows.mesh.meshers import hecras as _hecras  # noqa: F401,E402
+from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
+from trid3nt_server.workflows.mesh.meshers import watershed as _watershed  # noqa: F401,E402
 
 __all__ = [
     "DeclaredEdit",
@@ -292,6 +298,7 @@ _METADATA = AtomicToolMetadata(
     ttl_class="live-no-cache",
     cacheable=False,
     tier="general",
+    resolution_specs=EDGE_RESOLUTION_SPECS,
 )
 
 
@@ -311,28 +318,45 @@ async def build_mesh(
 ) -> Any:
     """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready mesh artifact.
 
-    THE tool for "mesh this area", "build the grid / domain a solver runs on",
-    "make me a mesh I can inspect before running a model", "author the model
-    domain and keep it in the case". Mesh creation is an EXPLICIT act and lives
-    HERE: a model template that finds this mesh in the case ASKS before consuming
-    it, and never invents one behind your back.
+    THE tool for "mesh this watershed / coastline / river reach", "build the grid
+    or domain a solver runs on", "make me a mesh I can inspect before running a
+    model", "author the model domain and keep it in the case". Mesh creation is an
+    EXPLICIT act and lives HERE: a model template that finds this mesh in the case
+    ASKS before consuming it, and never invents one behind your back.
 
     ``mesher`` names the mesh library that builds it and ``kind`` the shape of
     mesh it makes; every other argument is a field that mesher DECLARES, checked
     at the router - a field the chosen mesher does not declare is refused by name
-    rather than ignored.
+    rather than ignored. The roster:
 
-    ``reg_grid`` builds the uniform lattice a structured deck runs on: give it
-    ``bbox`` (or a ``location`` to geocode) and ``resolution_m``, the cell size in
-    metres. It carries no bed, so a solver that needs bathymetry declines it
-    honestly rather than reading a zero-filled bed as ground.
+    * ``watershed`` - the basin upstream of a ``pour_point`` IS the domain,
+      triangulated and refined toward its channel network, with a sampled bed.
+    * ``coastal_edge`` - the OSM coastline + NHD water polygon is the domain,
+      refined by distance to shore and by wavelength over depth. Naming an
+      ``open_boundary_side`` also emits the SCHISM geometry; without one the mesh
+      is closed and SCHISM honestly declines it.
+    * ``corridor_tin`` - a river reach: the water it actually occupies, cut at the
+      two end transects that become inflow and outflow. Bed-less by construction.
+    * ``hecras_rog`` - a coarse hillslope cell mesh grading down to the channel,
+      realized and validated by the HEC-RAS engine's own mesh factory.
+    * ``reg_grid`` - the uniform lattice a structured deck runs on.
+
+    Edge levers: ``min_edge_length_m`` / ``max_edge_length_m`` bound the cell or
+    triangle size (for ``hecras_rog`` they ARE the channel and hillslope target
+    cell sizes), ``grade`` limits how fast the two may transition. Both edges are
+    declared >= 5 m; a finer ask is quoted the floor and the AOI-dependent
+    <= 8-sides-per-cell acceptance rather than silently snapped. US-only.
 
     Params:
-        mesher: which mesh library builds it (registered: reg_grid).
-        kind: the mesh shape (reg_grid: structured_grid).
+        mesher: which mesh library builds it (watershed | coastal_edge |
+            corridor_tin | hecras_rog | reg_grid).
+        kind: the mesh shape that mesher makes (unstructured_tri | graded_cells |
+            structured_grid).
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
         bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-        fields: the chosen mesher's own declared fields (reg_grid: resolution_m).
+        fields: the chosen mesher's own declared fields (pour_point,
+            min_edge_length_m, max_edge_length_m, grade, open_boundary_side,
+            resolution_m, extent_km, width_m, banks, refine).
     """
     import asyncio
 

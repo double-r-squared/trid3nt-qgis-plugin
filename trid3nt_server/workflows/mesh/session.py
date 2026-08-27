@@ -25,7 +25,7 @@ import numpy as np
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.emission.mesh_display import write_2dm
+from trid3nt_server.emission.mesh_display import mesh_display_path, write_2dm
 from trid3nt_server.mesh.grid_geometry import M_PER_DEG_LAT
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
@@ -129,33 +129,55 @@ class MeshSession:
         return _probes(self.mesh, [e.action for e in self._chain])
 
     def snapshot(self) -> LayerURI:
-        """The mesh's DISPLAY face for the current chain, as an MDAL mesh layer."""
+        """The mesh's DISPLAY face for the current chain, as a map layer.
+
+        A node/cell mesh is an MDAL ``.2dm``; a mesh whose cells the engine
+        re-realizes carries the display face its own mesher wrote, and the row
+        names the type that file actually is.
+        """
         _, uri = self._display_face()
         mesh = self.mesh
         return LayerURI(
             layer_id=f"mesh-{self.mesh_id}", name=f"Mesh: {self.name}",
-            layer_type="mesh", uri=uri, style_preset="mesh_wireframe",
-            role="primary", bbox=_lonlat_bbox(mesh), crs_authid=mesh.crs_authid)
+            layer_type=("mesh" if mesh.has_cells else "vector"), uri=uri,
+            style_preset="mesh_wireframe", role="primary",
+            bbox=_lonlat_bbox(mesh), crs_authid=mesh.crs_authid,
+            synthetic_inputs=_synthetic_inputs(mesh),
+            fallback_note=mesh.meta.get("fallback_note"))
 
     def accept(self) -> MeshArtifact:
-        """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`."""
+        """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`.
+
+        The facts only the MESHER knows - what painted its bed, which side it
+        opened, the authoring inputs an engine re-realizes it from - ride in on the
+        mesh's own ``meta`` and are recorded here, so the artifact states what was
+        built rather than what this file could infer about it.
+        """
         mesh = self.mesh
+        declared = dict(mesh.meta.get("artifact") or {})
+        # The counts a bundle-realized mesh declares are already read through the
+        # mesh's own properties; passing them again would name one field twice.
+        declared.pop("node_count", None)
+        declared.pop("element_count", None)
         _, display_uri = self._display_face()
         slf_uri = self._selafin()
         recipe_uri = self._stage(self.recipe_path)
         has_bed = mesh.has_bed
+        engine_compat = list(declared.pop("engine_compat", None)
+                             or (["telemac"] if slf_uri and has_bed else []))
+        provenance = {"mesher": self.mesher.name,
+                      "spec": self.spec.to_json(),
+                      "edits": [e.action for e in self._chain],
+                      **dict(declared.pop("provenance", None) or {})}
         art = MeshArtifact(
             mesh_id=self.mesh_id, name=self.name, mode=self.mesher.name,
             display_uri=display_uri, slf_uri=slf_uri,
             crs_authid=mesh.crs_authid, has_bathymetry=has_bed,
             node_count=mesh.node_count, element_count=mesh.element_count,
-            bbox=_lonlat_bbox(mesh),
-            engine_compat=(["telemac"] if slf_uri and has_bed else []),
-            utm_epsg=mesh.meta.get("utm_epsg"),
-            provenance={"mesher": self.mesher.name,
-                        "spec": self.spec.to_json(),
-                        "edits": [e.action for e in self._chain]},
-            recipe_uri=recipe_uri, case_id=self.case_id)
+            bbox=_lonlat_bbox(mesh), engine_compat=engine_compat,
+            utm_epsg=mesh.meta.get("utm_epsg"), provenance=provenance,
+            recipe_uri=recipe_uri, case_id=self.case_id,
+            **self._staged_files(mesh), **declared)
         stash_mesh_artifact(self.case_id, art)
         if str(display_uri).startswith("s3://"):
             write_mesh_artifact_sidecar(art, _s3_client())
@@ -167,14 +189,19 @@ class MeshSession:
     # -- files ------------------------------------------------------------- #
     def _display_face(self) -> tuple[Path, str]:
         if self._display is None:
-            local = self.workdir / "mesh.2dm"
-            local.write_text(write_2dm(self.mesh))
+            declared = mesh_display_path(self.mesh)
+            local = Path(declared) if declared else self.workdir / "mesh.2dm"
+            if declared is None:
+                local.write_text(write_2dm(self.mesh))
             self._display = (local, self._stage(local))
         return self._display
 
     def _selafin(self) -> str | None:
         """The TELEMAC geometry, when this mesh IS one: triangles with a real bed."""
         mesh = self.mesh
+        declared = dict(mesh.meta.get("files") or {}).get("slf_uri")
+        if declared:
+            return self._stage(Path(declared))
         if mesh.nodes_per_cell != 3 or not mesh.has_bed:
             return None
         from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
@@ -182,6 +209,25 @@ class MeshSession:
         local = self.workdir / "mesh.slf"
         write_bottom_selafin(str(local), mesh.points, mesh.cells, mesh.bed)
         return self._stage(local)
+
+    def _staged_files(self, mesh: Mesh) -> dict[str, Any]:
+        """Stage the per-solver files and the authoring bundle the mesher wrote.
+
+        ``meta["files"]`` maps an artifact URI field to a LOCAL path; ``meta[
+        "bundle"]`` maps an engine's authoring-input key to one. Both land beside
+        this mesh's other objects, so a bundle is not a second store.
+        """
+        out: dict[str, Any] = {}
+        for name, local in dict(mesh.meta.get("files") or {}).items():
+            if name in ("slf_uri", "display_uri") or not local:
+                continue
+            out[name] = self._stage(Path(local))
+        bundle = {key: self._stage(Path(local))
+                  for key, local in dict(mesh.meta.get("bundle") or {}).items()
+                  if local}
+        if bundle:
+            out["hecras_inputs"] = bundle
+        return out
 
     def _stage(self, local: Path) -> str:
         """Upload ``local`` beside this mesh's other objects -> its uri.
@@ -388,7 +434,34 @@ def _boundary_loops(boundary: Any) -> int:
     return loops
 
 
+def _synthetic_inputs(mesh: Mesh) -> list[Any]:
+    """The mesher's own input rows for the layer, built from what it declared.
+
+    A build that substituted a dataset or read a real source says so ON the layer;
+    a mesher that declared nothing contributes nothing rather than a manufactured
+    row.
+    """
+    from trid3nt_contracts.common import SyntheticInput
+
+    return [SyntheticInput(**dict(row))
+            for row in (mesh.meta.get("synthetic_inputs") or [])]
+
+
 def _probes(mesh: Mesh, chain: Sequence[str]) -> dict[str, Any]:
+    if not mesh.has_cells:
+        # The cells are the engine's to realize from the staged authoring inputs,
+        # so every edge-derived probe would be a statement about a topology this
+        # process never saw. What it can measure is what it reports.
+        return {
+            "node_count": mesh.node_count,
+            "element_count": mesh.element_count,
+            "nodes_per_cell": 0,
+            "crs_authid": mesh.crs_authid,
+            "has_bed": mesh.has_bed,
+            "cells_realized_by_engine": True,
+            **dict(mesh.meta.get("probes") or {}),
+            "edits_applied": list(chain),
+        }
     pts = np.asarray(mesh.points, dtype=float)
     cells = np.asarray(mesh.cells, dtype=np.int64)
     scale = _metre_scale(mesh)
@@ -413,5 +486,9 @@ def _probes(mesh: Mesh, chain: Sequence[str]) -> dict[str, Any]:
         "boundary_edges": int(boundary.shape[0]),
         "boundary_nodes": int(np.unique(boundary).size),
         "boundary_loops": _boundary_loops(boundary),
+        # What the MESHER measured about its own build - island count, how much of
+        # the mapped water the domain covered, which boundary it opened. Nothing
+        # here can be recomputed from nodes and cells alone.
+        **dict(mesh.meta.get("probes") or {}),
         "edits_applied": list(chain),
     }

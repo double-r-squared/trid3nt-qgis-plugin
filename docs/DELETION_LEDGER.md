@@ -1107,3 +1107,45 @@ been two tests of code that no longer exists.
 - scripts/sandbox/hecras/_ref/: full 350MB-source-derived HEC BaldEagleCrkMulti2D reference folder, already trimmed into the product fixture workers/hecras/fixtures/baldeagle_connection/ (PROVENANCE.md documents the SHA-pinned public re-download) (stale-sweep 2026-08-27)
 - scripts/sandbox/pysheds_watershed/_work/: scratch DEM tifs + summary from a watershed-delineation proof run, regeneratable via proof_watershed.py (stale-sweep 2026-08-27)
 - scripts/sandbox/oceanmesh/__pycache__/, scripts/sandbox/replication/__pycache__/, scripts/sandbox/telemac/__pycache__/, scripts/__pycache__/: compiled bytecode caches (stale-sweep 2026-08-27)
+
+## The standalone mesh builder - DISSOLVED into the one mesh router (2026-08-27)
+
+**What:** `trid3nt_server/workflows/mesh/generate_mesh/` entire (976 lines):
+`generate_mesh.py` (the registered tool, its mode inference, its watershed and
+coastal water-edge build providers, its stage-and-record, its SCHISM gr3
+emission and its `.2dm` writer), `hecras_build.py` (the graded-seed build and
+record), `__init__.py`, and `corpus.yaml` (its routing phrasings, merged into
+the router's own).
+
+**Why it died:** it was a second mesh entry point. Its standalone-tool role IS
+`build_mesh` called standalone, and its three builders are registered meshers -
+`watershed`, `coastal_edge` and `hecras_rog` - each declaring its own fields and
+its own edits instead of being selected by a mode string inferred from which
+arguments happened to be present. Its display writer moved to
+`emission/mesh_display.py`; its stage-and-record is the mesh session's; its
+edge-band `ResolutionSpec` declarations ride `build_mesh`'s metadata; its SCHISM
+gr3 emission belongs to the coastal mesher, which is the only shape that has a
+seaward boundary.
+
+**Trace evidence:** zero importers of the package remain
+(`grep -rn "workflows.mesh.generate_mesh"` over the tree returns nothing); the
+registered tool is gone from `TOOL_REGISTRY` (260, was 261) and the catalog
+identity gate is green; the two showcases and the live HEC-RAS proof driver now
+invoke `build_mesh` with an explicit `mesher`; the fallback sweep guards that
+pinned its coastal bed fetch, its bed provenance and its sizing claim now pin the
+same behaviours on `meshers/coastal_edge.py` and `meshers/watershed.py`.
+
+**Status:** DELETED.
+
+## The duplicate `.2dm` writer - DELETED (2026-08-27)
+
+**What:** `generate_mesh._write_2dm` (the array-shaped writer) and
+`workflows/mesh/session.write_2dm` (the mesh-shaped one).
+
+**Why they died:** two implementations of one ASCII format, differing only in
+what they took. `emission/mesh_display.py` holds the one writer with both entry
+points, and the cell-arity check that guarded only the session's copy now guards
+both. Mesh display is a data type on the emission seam: geometry that feeds a
+solver is the mesh front's business, geometry that feeds a screen is emission's.
+
+**Status:** DELETED (superseded, not removed - the behaviour moved).

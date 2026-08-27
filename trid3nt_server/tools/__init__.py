@@ -721,15 +721,13 @@ from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge im
 # idealized closed basin. Physics proven through the baked telemac3d binary; the 3D
 # refinement tier that unblocks the AED2 lake-ecology + dune-migration STOPs.
 from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
-# generate_mesh: the standalone mesh builder. Promotes the
-# watershed + coastal water-edge sandbox meshers behind ONE tool (mode
-# inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact
-# (facts + solver geometries) a model template discovers via the precondition gate.
-from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import generate_mesh as _generate_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
 # build_mesh: the one mesh router. A parametric spec plus a per-mesher registry of
 # named edit actions wrapping the official mesh libraries; declared in a template it
 # is a frozen lazy ask, called standalone it builds now and stashes the artifact in
-# the case. Importing it registers the meshers behind it.
+# the case. Importing it registers every mesher behind it - the catchment, the
+# coastal water edge, the river corridor, the HEC-RAS graded cell mesh and the
+# regular grid - and emits an MDAL display layer plus the durable mesh artifact a
+# model template discovers through the precondition gate.
 from trid3nt_server.workflows.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
 # hecras_riverine_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
 # one folder under workflows/hecras/riverine_flood/. TEMPLATE-FIRST: reparameterizes

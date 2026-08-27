@@ -1,6 +1,6 @@
 """Case-scoped mesh artifact record + discovery seam.
 
-A mesh built by the standalone ``generate_mesh`` tool is TWO things in one case:
+A mesh ``build_mesh`` built is TWO things in one case:
 
   * a DISPLAY layer -- an MDAL-loadable ``.2dm`` (``layer_type="mesh"``) that
     lands in ``loaded_layers`` via the normal ``LayerURI`` auto-emit path, so a
@@ -141,7 +141,7 @@ ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
                 "format": "SELAFIN (.slf, BOTTOM)"},
     # SCHISM reads an hgrid.gr3 with depths AND open/land boundary segmentation:
     # bare bathymetry is not enough, the solve needs a designated seaward open
-    # boundary to force tides / T-S at. A generate_mesh WATERSHED mesh is an
+    # boundary to force tides / T-S at. A WATERSHED mesh is an
     # inland closed catchment (no open boundary) -> honestly declined; a COASTAL
     # mesh built with an open_boundary_side carries one.
     "schism": {"uri_field": "gr3_uri", "needs_bathymetry": True,

@@ -13,7 +13,7 @@ Two routes converge on one value, exactly as the mesh charter rules:
   * :func:`generate_catchment_mesh` - the GENERATED default, a labeled fallback
     rather than a stance;
   * :func:`adopt_supplied_mesh` / :func:`adopt_supplied_mesh_2dm` - a mesh the
-    user AUTHORED elsewhere (the standalone ``generate_mesh`` tool, an SMS
+    user AUTHORED elsewhere (a standalone ``build_mesh`` call, an SMS
     ``.2dm``, a hand-edited artifact), adopted as-is.
 
 Both yield a :class:`CatchmentMesh`, so a consumer cannot tell which route ran
@@ -95,8 +95,8 @@ _M_PER_DEG = 111_320.0
 
 # -- the catchment mesher's OWN defaults, in ONE place --------------------- #
 # Two callers reach this front: the declarative rain-on-grid template, whose
-# params promise these numbers in prose, and the standalone ``generate_mesh``
-# tool, which has no param sheet at all. A default that lived in either caller
+# params promise these numbers in prose, and the ``watershed`` mesher, whose
+# standalone ask has no param sheet at all. A default that lived in either caller
 # would be a second source of truth for one dial - which is the exact defect the
 # composer this replaces carried (40 m at the call site, 400 m in the signature
 # it overrode, and only one of them ever ran).

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Live proof for generate_mesh mode=hecras + the RoG consume gate.
+"""Live proof for the hecras_rog mesher + the RoG consume gate.
 
 Drives the live daemon through the SAME headless WS path the QGIS plugin + the
 seed_showcase driver use (reuses those proven client helpers -- no guessed event
 shapes). Three paths, honest end-to-end:
 
-  (a) generate_mesh(mesh_mode=hecras) on Coweeta Creek -> a channel-refined HEC-RAS
+  (a) build_mesh(mesher="hecras_rog") on Coweeta Creek -> a channel-refined HEC-RAS
       cell mesh: an inspectable wireframe layer + a durable artifact in the case;
   (b) hecras_flood_2d rain-on-grid in the SAME case, input_mode=user_gated -> the
       mesh precondition gate FIRES ("use this mesh?"); we accept (proceed) -> the run
@@ -96,15 +96,15 @@ async def main():
         await _handshake(ws, session_id)
 
         # (a) build the HEC-RAS mesh into a fresh case.
-        case_a = await _create_case(ws, session_id, "proof: generate_mesh hecras (Coweeta)")
-        print(f"[a] generate_mesh hecras  case={case_a}", flush=True)
-        summary["a_generate_mesh"] = await _invoke(
-            ws, session_id, case_a, "generate_mesh",
-            {"mesh_mode": "hecras", "bbox": COWEETA_BBOX,
+        case_a = await _create_case(ws, session_id, "proof: build_mesh hecras_rog (Coweeta)")
+        print(f"[a] build_mesh hecras_rog  case={case_a}", flush=True)
+        summary["a_build_mesh"] = await _invoke(
+            ws, session_id, case_a, "build_mesh",
+            {"mesher": "hecras_rog", "bbox": COWEETA_BBOX,
              "pour_point": list(POUR_POINT), "min_edge_length_m": 22.0,
              "max_edge_length_m": 90.0},
             timeout_s=900)
-        summary["a_generate_mesh"]["case_id"] = case_a
+        summary["a_build_mesh"]["case_id"] = case_a
 
         # (b) consume it: RoG in the SAME case, user_gated so the mesh gate emits.
         print(f"[b] hecras_flood_2d RoG (consume) case={case_a}", flush=True)

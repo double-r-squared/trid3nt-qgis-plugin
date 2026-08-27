@@ -1,7 +1,7 @@
 """Mesh precondition gate -- "use this case's mesh?".
 
 NATE's precondition-polymorphism design: mesh creation is an EXPLICIT user act
-(the standalone ``generate_mesh`` tool), never auto-guessed inside a model
+(a standalone ``build_mesh`` call), never auto-guessed inside a model
 template. A model template instead ASKS, at run start, whether to consume a mesh
 that already exists in the active case:
 
@@ -73,7 +73,7 @@ def _synthetic_input_for(art: MeshArtifact, engine: str) -> SyntheticInput:
         param="mesh_domain",
         value=f"{art.name} ({art.element_count} elements)",
         basis="user",
-        real_source_if_any=f"generate_mesh (mode={art.mode})",
+        real_source_if_any=f"build_mesh (mesher={art.mode})",
         note=f"user-supplied mesh consumed by {engine} instead of AOI authoring",
     )
 

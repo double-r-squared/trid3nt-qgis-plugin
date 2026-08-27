@@ -83,10 +83,10 @@ _COASTAL_NOTE_TMPL: str = (
     "(sfincs_flood for fast screening)."
 )
 
-#: The honesty floor when a user-supplied case mesh (generate_mesh) replaces the
+#: The honesty floor when a user-supplied case mesh (build_mesh) replaces the
 #: internal TIN: real domain geometry, the template's existing screening forcing.
 _COASTAL_SUPPLIED_NOTE_TMPL: str = (
-    "BAROTROPIC TIDAL SCREENING on a USER-SUPPLIED case mesh (generate_mesh): real "
+    "BAROTROPIC TIDAL SCREENING on a USER-SUPPLIED case mesh (build_mesh): real "
     "shoreline + real node-sampled bathymetry REPLACE the internal oceanmesh TIN; a "
     "spatially-uniform {constituents} tidal boundary (amplitude {amp} m) re-keyed to "
     "the mesh's open ({open_side}) side -- a screening tidal forcing, NOT a "
@@ -162,7 +162,7 @@ async def schism_tidal_hydro(
       - ``coastal_tin``: an oceanmesh TIN for a REAL US coastal AOI (name it via
         ``location_query`` or ``bbox``), bathymetry sampled from our terrain tools,
         a constituent tidal boundary -> a clipped max-elevation COG + mesh + chart.
-        If this case already holds a SCHISM-compatible generate_mesh mesh, the
+        If this case already holds a SCHISM-compatible built mesh, the
         precondition gate offers to solve on THAT (real shoreline + bathymetry)
         instead of building a fresh TIN.
 
@@ -647,7 +647,7 @@ async def _build_coastal_tin_deck(
     typed error, never a silent dead-end.
     """
     # 0. Precondition gate: if this case holds a SCHISM-compatible mesh
-    # (built explicitly by generate_mesh with an open boundary), offer to solve on
+    # (built explicitly by build_mesh with an open boundary), offer to solve on
     # it -- real shoreline + real sampled bathymetry replace the internal oceanmesh
     # TIN, the tidal boundary re-keyed to the mesh's open side. Accepted -> the
     # supplied-mesh deck; declined/absent/incompatible -> the internal TIN below.
@@ -675,7 +675,7 @@ async def _build_coastal_tin_deck(
         review_entries = [
             SyntheticInput(param="mesh_source", value="coastal_tin (user-supplied mesh)",
                            basis="user",
-                           note=(mesh_gate_note or "generate_mesh: real shoreline + real "
+                           note=(mesh_gate_note or "build_mesh: real shoreline + real "
                                  "sampled bathymetry replaced the internal oceanmesh TIN") +
                                 f" -- {deck['n_nodes']} nodes / {deck['n_elements']} elements"),
             SyntheticInput(param="bathymetry",

@@ -485,7 +485,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
     is the lowest-elevation DEM cell in the bbox. The catchment is delineated there and
     the channel network is ``fetch_river_geometry``. Returns ``(catchment_geojson_path,
     flowlines_path)`` or ``(None, None)`` on any failure -- the caller then degrades to
-    the uniform mesh honestly. Shared with ``generate_mesh`` mode=hecras."""
+    the uniform mesh honestly. Shared with the ``hecras_rog`` mesher."""
     import json as _json
 
     try:
@@ -509,7 +509,7 @@ def acquire_channel_inputs(bbox: list[float], workdir: str, pour_point=None):
         dem_local = rundir / "dem.tif"
         _download_object(str(dem_uri), dem_local)
         if pour_point is not None:
-            # the user-named catchment outlet (matches generate_mesh's pour_point).
+            # the user-named catchment outlet (matches the mesher's pour_point).
             px, py = float(pour_point[0]), float(pour_point[1])
         else:
             # pour point = lowest-elevation cell (the outlet the catchment drains to)
@@ -852,7 +852,7 @@ async def model_hecras_flood_2d_rog(
     diffusion = eq_key != "full_swe"
 
     # --- consume a pre-built HEC-RAS mesh from the case, if one exists + the
-    # user accepts. A generate_mesh mode=hecras artifact carries the graded seeds +
+    # user accepts. An hecras_rog mesh artifact carries the graded seeds +
     # breaklines + local terrain frame; the gate offers it (labeled default USE), and
     # an accepted mesh is re-realized + solved directly (no fresh delineation / seeding
     # / channel acquisition). Declined / absent / incompatible -> unchanged 0209/0210. --

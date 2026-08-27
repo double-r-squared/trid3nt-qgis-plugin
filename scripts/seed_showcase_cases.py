@@ -446,23 +446,24 @@ SHOWCASE: list[Showcase] = [
              "back as typed scalars, and the run's own chart spec + metrics land "
              "in its object-store prefix.", 600,
              title_suffix="Eel River near Scotia, declarative v1"),
-    Showcase("generate_mesh",
-             {"location": "Coweeta Creek, North Carolina",
+    Showcase("build_mesh",
+             {"mesher": "watershed",
+              "location": "Coweeta Creek, North Carolina",
               "pour_point": (-83.40402, 35.05746),
               "min_edge_length_m": 40.0, "max_edge_length_m": 400.0},
-             "standalone mesh builder: watershed mode (pour_point) on the "
-             "Coweeta Creek NC catchment. Delineate -> distance-to-river-refined "
-             "OceanMesh2D triangulation (GPL-isolated mesh:latest) -> UTM SELAFIN "
-             "+ MDAL .2dm display layer + a durable mesh artifact a model template "
-             "discovers via the precondition gate. Emits the mesh wireframe as a "
-             "layer_type=mesh row (crs_authid=EPSG:32617).",
+             "the watershed mesher on the Coweeta Creek NC catchment. Delineate "
+             "-> distance-to-river-refined OceanMesh2D triangulation "
+             "(GPL-isolated mesh:latest) -> UTM SELAFIN + MDAL .2dm display "
+             "layer + a durable mesh artifact a model template discovers via the "
+             "precondition gate. Emits the mesh wireframe as a layer_type=mesh "
+             "row (crs_authid=EPSG:32617).",
              1800),
-    Showcase("generate_mesh",
-             {"mesh_mode": "hecras",
+    Showcase("build_mesh",
+             {"mesher": "hecras_rog",
               "bbox": [-83.47, 35.02, -83.36, 35.10],
               "pour_point": (-83.40402, 35.05746),
               "min_edge_length_m": 22.0, "max_edge_length_m": 90.0},
-             "standalone HEC-RAS rain-on-grid mesh: mesh_mode=hecras on the "
+             "the HEC-RAS rain-on-grid mesher on the "
              "Coweeta Creek NC catchment. Delineate -> graded Poisson-disk seeds "
              "(22 m channel / 90 m hillslope) + main-stem breaklines -> realized + "
              "validated through the in-container meshprobe (<= 8 sides/cell) -> the "

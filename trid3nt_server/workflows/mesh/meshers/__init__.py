@@ -21,6 +21,7 @@ from typing import Any, Callable, Iterable, Mapping
 from types import MappingProxyType
 
 __all__ = [
+    "EDGE_RESOLUTION_SPECS",
     "EditAction",
     "Mesh",
     "MeshField",
@@ -42,6 +43,42 @@ class MeshToolError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
+
+
+def _edge_resolution_specs() -> tuple[Any, ...]:
+    """The DECLARED edge-length ranges every mesher's edge band is bounded by.
+
+    Both are MESH-GENERATOR constraints with a practical 5 m floor: a finer edge
+    reliably trips HEC-RAS's <= 8-sides-per-cell acceptance on any non-trivial AOI
+    and over-refines a TIN. There is NO fixed coarse ceiling - realizability is
+    AOI-dependent and enforced at build time by a typed refusal (> 8-sided cells,
+    a triangulator failure), never a silent snap. The declaration carries the
+    floor and the 8-side reality so a gate card can quote them.
+    """
+    from trid3nt_contracts.tool_registry import ResolutionSpec
+
+    native = "3DEP 10 m (fetch_dem) terrain native"
+    return (
+        ResolutionSpec(
+            param="min_edge_length_m", unit="m", min_value=5.0,
+            native_hint=native, constraint_source="solver",
+            rationale=(
+                "finest cell/triangle edge; below ~5 m the seed cloud reliably "
+                "trips HEC's <= 8-sides-per-cell acceptance (AOI-dependent, "
+                "enforced by a typed build error), and over-refines a TIN; no "
+                "fixed coarse ceiling (grade + AOI govern)")),
+        ResolutionSpec(
+            param="max_edge_length_m", unit="m", min_value=5.0,
+            native_hint=native, constraint_source="solver",
+            rationale=(
+                "coarsest background edge; bounded below by the 5 m floor, no "
+                "fixed ceiling (a coarser hillslope background is valid; "
+                "realizability is the AOI-dependent 8-side/grade build check, a "
+                "typed error not a silent snap)")),
+    )
+
+
+EDGE_RESOLUTION_SPECS = _edge_resolution_specs()
 
 
 def nearest_names(name: str, known: Iterable[str]) -> str:
@@ -164,6 +201,12 @@ class Mesh:
     triangles or ``(M, 4)`` quads, 0-based, both numpy arrays. ``bed`` is the node
     elevation positive up, or ``None`` when no bed was sampled - a solver that
     needs bathymetry declines a bed-less mesh rather than reading zeros as ground.
+
+    Both are ``None`` for a mesh whose realized topology lives in an ENGINE BUNDLE
+    rather than in arrays: the engine re-realizes the nodes and cells from the
+    authoring inputs the mesher staged, so there is no geometry here to claim. Such
+    a mesh states its counts in ``meta["artifact"]`` and carries its own display
+    face, because the formats that write connectivity have nothing to write.
     """
 
     points: Any
@@ -175,17 +218,28 @@ class Mesh:
     def __post_init__(self) -> None:
         object.__setattr__(self, "meta", MappingProxyType(dict(self.meta)))
 
+    def _declared_count(self, name: str) -> int:
+        return int((self.meta.get("artifact") or {}).get(name, 0))
+
     @property
     def node_count(self) -> int:
+        if self.points is None:
+            return self._declared_count("node_count")
         return int(self.points.shape[0])
 
     @property
     def element_count(self) -> int:
+        if self.cells is None:
+            return self._declared_count("element_count")
         return int(self.cells.shape[0])
 
     @property
     def nodes_per_cell(self) -> int:
-        return int(self.cells.shape[1])
+        return 0 if self.cells is None else int(self.cells.shape[1])
+
+    @property
+    def has_cells(self) -> bool:
+        return self.cells is not None
 
     @property
     def has_bed(self) -> bool:

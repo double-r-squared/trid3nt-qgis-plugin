@@ -99,7 +99,7 @@ def test_the_spec_card_key_says_what_the_mechanism_is():
 # --------------------------------------------------------------------------- #
 # SHAPE 2 -- a capability that fetches a DIFFERENT source than its name claims.
 #
-# ``generate_mesh._fetch_topobathy`` fetched ``fetch_dem(source="3dep")`` -- land
+# The coastal mesher's bed fetch reached for ``fetch_dem(source="3dep")`` -- land
 # only -- wrote it as ``topobathy.tif`` and sampled it into a COASTAL mesh's bed.
 # Every wet node got the land DEM's flat ~0 m ocean fill: a fake landmass, the
 # same class as the SWAN bathymetry rectangle.
@@ -110,17 +110,17 @@ def test_the_coastal_mesh_bed_comes_from_a_topobathy_source():
     import importlib
 
     gm = importlib.import_module(
-        "trid3nt_server.workflows.mesh.generate_mesh.generate_mesh"
+        "trid3nt_server.workflows.mesh.meshers.coastal_edge"
     )
 
-    src = inspect.getsource(gm._fetch_coastal_bed)
+    src = inspect.getsource(gm._fetch_bed)
     assert 'TOOL_REGISTRY["fetch_topobathy"]' in src
     assert "fetch_dem" not in src, (
         "fetch_dem is LAND-ONLY: sampling it into a coastal mesh bed paints a "
         "fake landmass under every wet node"
     )
-    assert "fallback=_COASTAL_BED_FALLBACK" in src
-    assert gm._COASTAL_BED_FALLBACK == ("etopo_bathy_base",)
+    assert "fallback=_BED_FALLBACK" in src
+    assert gm._BED_FALLBACK == ("etopo_bathy_base",)
     assert get_ladder("fetch_topobathy").alternative("etopo_bathy_base") is not None
 
 
@@ -130,7 +130,7 @@ def test_the_coastal_mesh_reports_the_bed_that_actually_painted():
     import importlib
 
     gm = importlib.import_module(
-        "trid3nt_server.workflows.mesh.generate_mesh.generate_mesh"
+        "trid3nt_server.workflows.mesh.meshers.coastal_edge"
     )
 
     class _Row:
@@ -143,7 +143,7 @@ def test_the_coastal_mesh_reports_the_bed_that_actually_painted():
 
     prov = gm._bed_provenance(_Layer())
     assert "cudem_nearshore 50%" in prov and "regional_fine 50%" in prov
-    assert "CoNED" not in inspect.getsource(gm._build_coastal)
+    assert "CoNED" not in inspect.getsource(gm.build)
 
 
 def test_the_coastal_mesh_never_invents_a_bed_provenance():
@@ -154,7 +154,7 @@ def test_the_coastal_mesh_never_invents_a_bed_provenance():
     import importlib
 
     gm = importlib.import_module(
-        "trid3nt_server.workflows.mesh.generate_mesh.generate_mesh"
+        "trid3nt_server.workflows.mesh.meshers.coastal_edge"
     )
 
     class _Row:
@@ -185,11 +185,11 @@ def test_the_coastal_mesh_sizing_claim_comes_from_the_mesher(tmp_path):
     import json
 
     gm = importlib.import_module(
-        "trid3nt_server.workflows.mesh.generate_mesh.generate_mesh"
+        "trid3nt_server.workflows.mesh.meshers.coastal_edge"
     )
 
-    coastal_src = inspect.getsource(gm._build_coastal)
-    assert '"sizing_source": _sizing_source(' in coastal_src
+    coastal_src = inspect.getsource(gm.build)
+    assert "sizing_source = _sizing_source(rundir)" in coastal_src
     assert "wavelength-to-depth sizing" not in coastal_src, (
         "the composer must not assert a sizing term it cannot observe -- "
         "requesting the term (mesh_config wavelength=True) is not evidence it bound"
@@ -214,11 +214,13 @@ def test_the_mesh_carries_its_bed_note_into_the_artifact_provenance():
     import importlib
 
     gm = importlib.import_module(
-        "trid3nt_server.workflows.mesh.generate_mesh.generate_mesh"
+        "trid3nt_server.workflows.mesh.meshers.coastal_edge"
     )
 
-    src = inspect.getsource(gm._stage_and_record)
-    assert '"bed_fallback_note": built.get("bed_fallback_note")' in src
+    for module in ("coastal_edge", "watershed"):
+        mesher = importlib.import_module(
+            f"trid3nt_server.workflows.mesh.meshers.{module}")
+        assert '"bed_fallback_note": fallback_note' in inspect.getsource(mesher.build)
 
 
 @pytest.mark.asyncio

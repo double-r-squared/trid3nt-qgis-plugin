@@ -530,7 +530,7 @@ async def model_schism_baroclinic_circulation(
     logger.info("baroclinic discharge: %s m3/s (%s)", deck_discharge_m3s, _q_res.source)
 
     # Precondition gate: if this case holds a SCHISM-compatible mesh
-    # (built explicitly by generate_mesh with an open boundary), offer to solve on
+    # (built explicitly by build_mesh with an open boundary), offer to solve on
     # it -- real shoreline + real bathymetry replace the idealized lattice.
     # Accepted -> the supplied-mesh path; declined/absent/incompatible -> the
     # idealized channel below, unchanged.
@@ -566,7 +566,7 @@ async def model_schism_baroclinic_circulation(
                               f"coarse {'shoreline-clipped' if shoreline_clipped else 'rectangular'} "
                               f"channel ({deck['n_nodes']} nodes x {deck['n_layers']} layers)"),
                        basis="user" if used_supplied_mesh else "default_demo", consequence="aoi",
-                       note=((mesh_gate_note or "consumed a user-supplied mesh (generate_mesh): real "
+                       note=((mesh_gate_note or "consumed a user-supplied mesh (build_mesh): real "
                               "shoreline + real sampled bathymetry; the salinity IC gradient + tidal/"
                               "river forcing remain idealized")
                              if used_supplied_mesh else

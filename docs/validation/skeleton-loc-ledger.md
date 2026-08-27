@@ -520,10 +520,6 @@ missing record) now leaves as a named mesh refusal.
 
 NOT COUNTED: the 50 lines added to `tests/test_build_mesh_tool.py` (351 -> 401).
 
-## Corrected campaign net
-
-**The campaign net is +5362** - the true running sum of every delta in the tables
-above, from wave 2's first row to the mesh wave's slice 1 review.
 
 ## Mesh wave - slice 3: the display face moves to emission (2026-08-27)
 
@@ -538,3 +534,32 @@ that existed wrote the same format with different signatures; what lands in
 emission is one implementation with the two entry points its callers actually
 have, and the arity check that used to exist on only one of them now guards
 both.
+
+## Mesh wave - slices 2 + 3: the lifts, and generate_mesh dissolves (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh slices 2+3 | `workflows/mesh/generate_mesh/` DELETED (`generate_mesh.py` 789 + `hecras_build.py` 184 + `__init__.py` 3 - the standalone tool, its mode inference, its two build providers, its stage-and-record and its SCHISM gr3 emission) | 976 | 0 | -976 | +4409 |
+| 2026-08-27 | mesh slices 2+3 | meshers, NEW files (`meshers/watershed.py` 249 - the catchment ask and the provenance it copies from its resolvers; `meshers/coastal_edge.py` 383 - the water-edge domain, its container seam and the open-boundary designation; `meshers/corridor_tin.py` 326 - the reach corridor, wrapping the triangulator where it lives; `meshers/hecras.py` 235 - the graded-seed cell mesh and its authoring bundle) | 0 | 1193 | +1193 | +5602 |
+| 2026-08-27 | mesh slices 2+3 | `meshers/__init__.py` (+54 - a mesh whose cells an engine re-realizes, and the edge-band declarations the dissolved tool carried) | 285 | 339 | +54 | +5656 |
+| 2026-08-27 | mesh slices 2+3 | `workflows/mesh/session.py` (+73 - the artifact facts only the mesher knows: its own display face, its per-solver files, its authoring bundle, its input rows, and probes for a mesh with no cells of its own) | 417 | 490 | +73 | +5729 |
+| 2026-08-27 | mesh slices 2+3 | `workflows/mesh/tool.py` (+24 - the mesher roster the import block registers, the edge-band specs on the tool, and a docstring that routes to five meshers instead of one) | 360 | 384 | +24 | +5753 |
+
+**Verdict: +368 across the lifts, and 976 lines of tool came off the board.**
+The four builders that were reachable only through one tool's mode inference are
+now four files a template can name, each declaring its own fields and its own
+edits; what used to be a 176-line stage-and-record function is the session's, and
+what used to be a mode string is the mesher's name. The number is honest about
+what the lift costs: a mesher that used to lean on a shared composer now states
+its own provenance and its own artifact facts, which is why four files come to
+1,193 lines against the 976 they replace - but only one of them is ever read to
+answer "how is a coastal mesh built".
+
+NOT COUNTED, by the rule at the head of this file: `tests/test_mesh_meshers.py`
+(the renamed `test_generate_mesh.py`, 455 -> 515), the corpus YAML, and the
+registration comment in `tools/__init__.py`.
+
+## Corrected campaign net
+
+**The campaign net is +5753** - the true running sum of every delta in the
+tables above, from wave 2's first row to the mesh wave's slices 2 and 3.
