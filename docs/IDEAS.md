@@ -2209,3 +2209,7 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Ref("solve") wiring all unchanged. Lands with the mesh wave's
   template rewrites (every plan line is touched then anyway), not as
   a standalone churn wave.
+
+- RENAME ops.read_results -> ops.read (NATE 2026-08-27): full symmetry
+  with the verb spine (mesh/author/solve/read). Pure rename, rides the
+  mesh wave with ops.solve.
