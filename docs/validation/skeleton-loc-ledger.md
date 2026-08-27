@@ -766,3 +766,38 @@ NOT COUNTED by the rule at the head of this file:
 `tests/test_build_mesh_tool.py` 455 -> 537, `tests/test_mesh_om2d_telapy.py`
 +24, plus the stub rows in `test_telemac_do_sag.py`, `test_run_river_dye_scenario.py`,
 `test_rerun_with_overrides.py` and `test_gate_collapse_specs.py`.
+
+## Mesh wave - re-verify round 2: the client half, and the late refusals (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | r2 G1 | `mesh/meshers/__init__.py` (+48 - the hand-edit's regeneration hook, the claims an adopted mesh restates, and the refusal for a mesh nothing could be staged from) | 453 | 501 | +48 | +8522 |
+| 2026-08-27 | r2 G1 | `mesh/meshers/corridor_tin.py` (+234 - the corridor's re-adoption: boundary walk, IPOBO ranking, carried roles, and the three files rewritten from the edited nodes) | 356 | 590 | +234 | +8756 |
+| 2026-08-27 | r2 G1 | `mesh/telemac_build.py` (+5 - the geometry names the domain it actually is) | 83 | 88 | +5 | +8761 |
+| 2026-08-27 | r2 minor | `mesh/artifact.py` (+8 - a corridor is bed-less and still TELEMAC's to solve; the SWAN line stops describing a format nothing reads) | 400 | 408 | +8 | +8769 |
+| 2026-08-27 | r2 G2 | `mesh/gate.py` (+122 - the card's own knob rows, and the reply routed back into the actions those knobs turn) | 437 | 559 | +122 | +8891 |
+| 2026-08-27 | r2 G3 | `plugin/ui/cards.py` (-105 - the release-point picker row, its map tool, its click handler and its teardown) | 3100 | 2995 | -105 | +8786 |
+| 2026-08-27 | r2 G3 | `plugin/ui/gate.py` (-27 - the two release-point readers and the decision branch on them) | 1483 | 1456 | -27 | +8759 |
+| 2026-08-27 | r2 G3 | `plugin/ui/dock.py` (-3 - the card no longer needs the canvas) | 2838 | 2835 | -3 | +8756 |
+
+**Verdict: +282 net across eight files, and every refusal moved to where the
+user can still act on it.** The corridor's 234 lines are the price of an honest
+hand-edit: a reach solve is staged from a topology bundle rather than a geometry
+file, so adopting an edited layer means rewriting that bundle - the boundary
+walk and its IPOBO ranking come out of the cells, and which stretch is the
+inflow comes from the nearest node the build already classified, with the
+distance that carry spanned reported rather than assumed. What a mesher cannot
+rewrite it now refuses AT THE EDIT; a session can no longer accept a mesh the
+deck would decline afterwards.
+
+The gate's +122 buys the only revision channel the shipped client can reach: a
+param sheet of `<action>.<input>` rows plus the truncation row, rendered by the
+card the plugin already had. The client half of the deleted approve-mesh gate
+(-135) had no producer left at all.
+
+NOT COUNTED by the rule at the head of this file:
+`tests/test_corridor_mesh_readopt.py` (new, 331 lines),
+`tests/test_mesh_gate_loop.py` +129, `tests/test_mesh_meshers.py` +6,
+`plugin/tests/headless_mesh_gate_drive.py` +
+`plugin/tests/validate_mesh_gate_driver_offline.py` (rewritten from the two
+deleted bk3b drivers).

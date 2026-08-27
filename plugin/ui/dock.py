@@ -2397,10 +2397,7 @@ class Trid3ntDock(QDockWidget):
         if sheet is not None:
             card = FormCard(warning, sheet, self._on_gate_decision)
         else:
-            card = GateCard(
-                warning, self._on_gate_decision,
-                iface=self.iface, to_lonlat=self._point_to_lonlat4326,
-            )
+            card = GateCard(warning, self._on_gate_decision)
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
         # BUG 4 (live-feedback 2026-07-12, NATE: the card sat "at the bottom
         # and the response chat is above") / Item N5 (2026-07-19): the

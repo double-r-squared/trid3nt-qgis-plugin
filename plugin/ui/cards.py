@@ -1175,22 +1175,11 @@ class GateCard(QFrame):
     one-line summary.
     """
 
-    def __init__(self, warning: gate.PayloadWarning, on_decide, parent=None,
-                 iface=None, to_lonlat=None):
+    def __init__(self, warning: gate.PayloadWarning, on_decide, parent=None):
         super().__init__(parent)
         self._warning = warning
         self._on_decide = on_decide
         self._decided: Optional[str] = None
-        # BK-6 release-point picker state (only active when the envelope
-        # flags release_point_required; None-safe everywhere else).
-        self._iface = iface
-        self._to_lonlat = to_lonlat
-        self._release_point = None  # (lon, lat) EPSG:4326 once placed
-        self._rp_tool = None
-        self._rp_prev_tool = None
-        self._rp_marker = None
-        self.rp_button = None
-        self.rp_status = None
         self.setObjectName("gatecard")  # STYLE-1: scope the fill, no text highlight
         self.setStyleSheet(_GATE_CARD_STYLE)
         self.setFrameShape(QFrame.Shape.StyledPanel)
@@ -1285,25 +1274,10 @@ class GateCard(QFrame):
             row.addWidget(self.frames_lbl, 1)
             lay.addLayout(row)
 
-        # -- BK-6: release-point picker row (telemac approve-mesh gates) ------- #
-        if gate.release_point_required(warning):
-            rp_row = QHBoxLayout()
-            self.rp_button = QPushButton("Select release point")
-            self.rp_button.setCheckable(True)
-            self.rp_button.toggled.connect(self._toggle_release_pick)
-            rp_row.addWidget(self.rp_button)
-            self.rp_status = QLabel("no point placed yet")
-            self.rp_status.setWordWrap(True)
-            self.rp_status.setStyleSheet(_GATE_NOTE_STYLE)
-            rp_row.addWidget(self.rp_status, 1)
-            lay.addLayout(rp_row)
-
         # -- buttons ----------------------------------------------------------- #
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
-        self.proceed_btn = QPushButton(
-            "Continue" if gate.release_point_required(warning) else "Proceed"
-        )
+        self.proceed_btn = QPushButton("Proceed")
         self.proceed_btn.clicked.connect(self._proceed)
         btn_row.addWidget(self.proceed_btn)
         self.cancel_btn = QPushButton("Cancel")
@@ -1367,85 +1341,7 @@ class GateCard(QFrame):
             chosen_resolution_m=self._chosen_resolution(),
             interval_min=self._edited_float(self.interval_edit),
             duration_hr=self._edited_float(self.duration_edit),
-            release_point=self._release_point,
         )
-
-    # -- BK-6: release-point map picking --------------------------------------- #
-
-    def _toggle_release_pick(self, checked: bool) -> None:
-        """Mirror of the dock's probe tool discipline: ON saves the current
-        canvas tool and installs a point-emit tool; OFF restores it -- the
-        canvas is never left on a tool the user did not ask for."""
-        try:
-            canvas = self._iface.mapCanvas()
-        except Exception:  # noqa: BLE001 -- headless / no iface
-            return
-        if checked:
-            if self._rp_tool is None:
-                from qgis.gui import QgsMapToolEmitPoint
-
-                self._rp_tool = QgsMapToolEmitPoint(canvas)
-                self._rp_tool.canvasClicked.connect(self._on_release_clicked)
-            self._rp_prev_tool = canvas.mapTool()
-            canvas.setMapTool(self._rp_tool)
-        else:
-            if canvas.mapTool() is self._rp_tool:
-                canvas.setMapTool(self._rp_prev_tool)
-            self._rp_prev_tool = None
-
-    def _on_release_clicked(self, point, _button) -> None:
-        """Place (or MOVE -- click again) the release point. The click must
-        land inside the previewed mesh bbox (small pad); the worker does the
-        exact interior-node validation on submit."""
-        try:
-            canvas = self._iface.mapCanvas()
-            authid = canvas.mapSettings().destinationCrs().authid()
-            lonlat = self._to_lonlat(point, authid) if self._to_lonlat else None
-        except Exception:  # noqa: BLE001
-            lonlat = None
-        if lonlat is None:
-            if self.rp_status is not None:
-                self.rp_status.setText("could not read the clicked point - try again")
-            return
-        lon, lat = lonlat
-        bb = gate.release_point_bbox(self._warning)
-        pad = 0.02  # ~2 km grace around the mesh bbox
-        if bb and not (bb[0] - pad <= lon <= bb[2] + pad
-                       and bb[1] - pad <= lat <= bb[3] + pad):
-            if self.rp_status is not None:
-                self.rp_status.setText(
-                    f"({lat:.4f}, {lon:.4f}) is OUTSIDE the previewed mesh - "
-                    "click inside the wireframe"
-                )
-            return
-        self._release_point = (lon, lat)
-        try:
-            from qgis.gui import QgsVertexMarker
-
-            if self._rp_marker is None:
-                self._rp_marker = QgsVertexMarker(canvas)
-                self._rp_marker.setIconType(QgsVertexMarker.ICON_CROSS)
-                self._rp_marker.setColor(Qt.GlobalColor.red)
-                self._rp_marker.setPenWidth(3)
-                self._rp_marker.setIconSize(14)
-            self._rp_marker.setCenter(point)
-        except Exception:  # noqa: BLE001 -- marker is cosmetic
-            pass
-        if self.rp_status is not None:
-            self.rp_status.setText(
-                f"release point: ({lat:.5f}, {lon:.5f}) - click again to move"
-            )
-        self._refresh_estimates()
-
-    def _release_pick_teardown(self, drop_marker: bool) -> None:
-        if self.rp_button is not None and self.rp_button.isChecked():
-            self.rp_button.setChecked(False)  # restores the previous map tool
-        if drop_marker and self._rp_marker is not None:
-            try:
-                self._iface.mapCanvas().scene().removeItem(self._rp_marker)
-            except Exception:  # noqa: BLE001
-                pass
-            self._rp_marker = None
 
     # -- actions --------------------------------------------------------------- #
 
@@ -1465,9 +1361,8 @@ class GateCard(QFrame):
             return  # locked -- a gate is answered exactly once
         self._decided = decision.decision
         self._on_decide(self._warning.warning_id, decision.decision, decision.revised_args)
-        self._release_pick_teardown(drop_marker=(decision.decision == "cancel"))
         for widget in (self.proceed_btn, self.cancel_btn, self.res_combo,
-                       self.interval_edit, self.duration_edit, self.rp_button):
+                       self.interval_edit, self.duration_edit):
             if widget is not None:
                 widget.setEnabled(False)
         summary = {
