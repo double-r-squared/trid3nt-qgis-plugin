@@ -44,8 +44,8 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    -p no:cacheprovider --timeout=300 -q`. Slice 5 must stay its OWN
    invocation: `tests/` and `contracts/tests/` are both packages named
    `tests`, so a single pytest run covering both dies on
-   ImportPathMismatchError. Baseline is EXACTLY 4 fetch_resolution
-   failures in [f-o], 0 in [p-r], and slice 5 fully green at 789
+   ImportPathMismatchError. Baseline is EXACTLY ZERO failures in
+   every slice, with the contracts slice fully green at 789
    passed / 0 failed. Anything else: investigate - a flake claim
    requires an isolation rerun as proof.
 2. Run gates FOREGROUND and wait for each summary line. Never
