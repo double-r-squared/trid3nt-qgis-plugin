@@ -2450,3 +2450,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   onto the exterior walk (snap -> contiguous covered node stretch =
   the open boundary) and REPORTS the measured snap distance, never
   asserts the match.
+
+- TESTING LANE EMPHASIS (NATE 2026-08-27): until the subsystems are
+  fleshed out there is NO user/UI testing - the lane is DIRECT
+  INVOCATION with all params (!run / drivers) plus SCRIPTED tests,
+  not UI glue. Wave + model-wave acceptance runs through the driver
+  lane and offline suites; plugin-visible changes stay recorded for
+  NATE's eventual live pass but block nothing; the UI rework pass
+  stays parked at its slot in the sequence.
