@@ -9,13 +9,13 @@ under `docs/specs/` and published as an artifact for review. The format:
 
 - **Vocabulary table first** when terms are load-bearing - the fixed words,
   what each means, what it never means.
-- **One section per concern**, eyebrow-labeled. Prose states constraints,
+- **One numbered section per concern**. Prose states constraints,
   not narrative; every sentence should survive as a requirement.
 - **Code snippets** show the surface as it will actually be written - real
   names, declaration blocks, call sites. A signature block beats a paragraph
   describing one.
 - **UML** for structure: class diagrams (mermaid) for the static shape,
-  simple flow/state diagrams (inline SVG or mermaid) for loops and
+  simple flow/state diagrams (also mermaid) for loops and
   pipelines. Diagrams depict the mechanism, with labeled arrows.
 - **Plain presentation.** Reference-style HTML: default typography, thin-bordered tables, bordered code blocks (visually distinct from prose and diagrams), mermaid for ALL diagrams - no decorative styling, fonts, or hand-drawn SVG.
 - **Plain language.** No design-pattern names, no jargon - describe what the
