@@ -569,8 +569,11 @@ def test_the_reach_templates_carry_the_corridor_shape_into_the_deck():
 
 
 def test_the_catchment_mesh_step_reads_the_declared_band():
-    """The ex-CatchmentPolicy knobs are watershed-mesher spec fields now, and the
-    mesh step still receives every one of them."""
+    """Every knob the watershed mesher declares reaches the step that builds one.
+
+    The band, the gradation and the outlet-snap window shape the catchment; a knob
+    the declaration carries and the step drops would read as a lever that did
+    nothing."""
     module = _template("trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)
