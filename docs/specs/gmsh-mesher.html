@@ -28,7 +28,7 @@
 </style>
 
 <h1>Coastal Mesher Kernel</h1>
-<p class="rev">rev 6 &middot; 2026-08-27 &middot; + the for= consumer declaration: engine requirements move INTO the session (adaptive edits, live solve-readiness, accept as a contract). Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 7 &middot; 2026-08-27 &middot; the converged signature: domain / kind / mesher=auto as separate axes; the (domain, kind) edit-operation matrix, guaranteed at import; the common path collapses to one word + a place. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>0. How meshing works (primer)</h2>
 <p>An unstructured mesh is a domain cut into triangles. Two things define its quality: the SHAPE of the triangles (minimum angle - skinny slivers break solvers) and the SIZING - a field h(x) giving the target edge length at every point. Everything a mesher does is in service of honoring h(x) with well-shaped triangles.</p>
@@ -72,8 +72,41 @@
 <li><b>Session economics</b> (sibling ruling): lazy batched realization, staged-once inputs, snapshot-cache undo - lands for every wiring.</li>
 </ul>
 
-<h3>2.1 RULED: capability is the param</h3>
-<p>The user-facing param names the CAPABILITY, not the implementation: <code>coastal</code> / <code>adopt</code> / <code>corridor</code> / <code>grid</code>. More intuitive, and each capability tailors its own edit-action set; the kernel behind it is swappable without the registry ever lying.</p>
+<h3>2.1 RULED: three axes - domain, kind, mesher (supersedes "capability is the param")</h3>
+<p>The earlier capability ruling conflated the question class into the mesher param; the converged shape gives each axis its own name, each answering a different question:</p>
+<table>
+<tr><th>axis</th><th>question</th><th>values</th><th>who supplies it</th></tr>
+<tr><td><code>domain</code></td><td>what kind of PLACE</td><td><code>coastal | river | catchment | open_water</code></td><td>the user - the one required word of intent</td></tr>
+<tr><td><code>kind</code></td><td>what discretization</td><td><code>structured_grid | unstructured_tri | unstructured_quad_flex | curvilinear | node_link</code></td><td>DEFAULTED per domain; override when it matters</td></tr>
+<tr><td><code>mesher</code></td><td>which BUILDER</td><td><code>auto</code> (default) or a pinned builder</td><td>the system, auto-routed from (domain, kind); visible for power users and probes</td></tr>
+</table>
+<pre><code class="py">MESH = tool.build_mesh(
+    domain = "coastal",           # the question class - required
+    kind   = "unstructured_tri",  # defaulted per domain
+    mesher = "auto",              # builder auto-routed; pin to override
+    for_   = "telemac",           # consumer (auto-injected in templates)
+    aoi    = P.aoi,
+    refine = {"edge_length": P.edge_length, "min_spacing": 25},
+    bed    = D.dem,
+)
+MESH.edits   # -&gt; ("add_obstacle", "refine_region", "set_boundary", "apply_layer_edits")
+             #    known STATICALLY at declaration, before anything builds
+
+# THE COMMON PATH - one word of intent plus a place:
+tool.build_mesh(domain="coastal", aoi=aoi)</code></pre>
+<p>Open (two small calls): the axis name <code>domain</code> vs <code>type</code> (lean: domain - "type" collides with python and with kind; domain matches the taxonomy's own geometry language); and whether <code>mesher</code> stays visible-but-optional (lean: yes - the SCHISM probe and power users pin builders, everyone else never types it).</p>
+<h3>2.1.1 RULED: the (domain, kind) edit-operation matrix - guaranteed at import</h3>
+<p>A contract table, sibling to <code>ENGINE_MESH_REQUIREMENTS</code>: each (domain, kind) cell declares its edit-operation set. A builder registers FOR CELLS, and registration REFUSES AT IMPORT unless it implements every verb in the cell's set - "guaranteed to work" is unviolable by construction, never checked at call time. A verb not in the cell simply IS NOT OFFERED: never mounted at the gate, never visible to the agent (set_boundary does not exist on a closed catchment, rather than refusing on one). Typed refusal survives only for direct calls to unoffered verbs, naming the cell's actual set. This supersedes both per-mesher action introspection and refusal-as-implementation: selection-by-declaration beats refusal-at-call.</p>
+<h3>2.1.2 The meshing process, end to end</h3>
+<ol>
+<li><b>Declare</b> (frozen, lazy): (domain, kind) validated against the matrix at declaration; the edit set - and therefore the gate's tool list and the form's affordances - known before any build.</li>
+<li><b>Resolve</b>: explicit mesh wins; case-discovered artifacts (filtered by domain/kind/for_ compat) offered; else the declared spec builds the default.</li>
+<li><b>Build</b> (demand-pulled): router auto-selects the cell's builder (coastal-tri -&gt; om2d pipeline, river -&gt; corridor_tin, catchment -&gt; watershed, structured -&gt; reg_grid); inputs staged once; probes + wireframe snapshot.</li>
+<li><b>Gate</b> (USER-GATED; AUTO inline): editable MDAL layer; exactly the cell's verbs mounted as generated tools; edits journal into the recipe; REGENERATE-ON-EDIT as the economical common path; restart truncates to the declared prefix; accept() enforces the for_ contract.</li>
+<li><b>Formats</b>: for_-narrowed writers; telapy last mile; display face through emission.</li>
+<li><b>Artifact</b>: MeshArtifact + recipe + probes -&gt; author -&gt; solve, unchanged.</li>
+</ol>
+<p><b>Doability</b>: modest - the landed registry already carries per-mesher actions and fields. Delta: the domain axis (reshaping the already-ruled capability param), the matrix table + import-time enforcement, auto builder selection in the existing router. Rides the follow-up wave with for_, the session polish, and the rename - one coherent landing after the current wave closes.</p>
 <h3>2.2 RULED: the for= consumer declaration</h3>
 <p><code>for=</code> names the upstream consumer(s) - the engine(s) that will solve on this mesh - and binds the session to their requirements profile (the existing <code>ENGINE_MESH_REQUIREMENTS</code> registry, read at BUILD time instead of only at the consume gate):</p>
 <ul>

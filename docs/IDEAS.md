@@ -2308,3 +2308,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   list-valued; omitted = today's generic behavior. Orthogonal to and
   composes with the capability param. Wire name "for", python kwarg
   for_. Spec rev 6.
+
+- THREE-AXIS MESH SIGNATURE CONVERGED (NATE 2026-08-27, supersedes
+  "capability is the param"): domain (coastal|river|catchment|
+  open_water - the required word of intent) / kind (defaulted per
+  domain) / mesher (auto-routed builder, visible-but-optional) +
+  for_ + fields. THE (domain, kind) EDIT-OPERATION MATRIX: a contract
+  table sibling to ENGINE_MESH_REQUIREMENTS; builders register FOR
+  CELLS and registration REFUSES AT IMPORT unless every cell verb is
+  implemented - guaranteed by construction. Unoffered verbs are NOT
+  MOUNTED (selection-by-declaration beats refusal-at-call; typed
+  refusal only for direct calls to unoffered verbs). Common path =
+  tool.build_mesh(domain="coastal", aoi=...) - one word + a place.
+  MESH.edits known statically at declaration. Lands in the follow-up
+  wave with for_, session polish, rename. Spec rev 7. Two small
+  opens: axis name domain-vs-type (lean domain), mesher visibility
+  (lean visible-but-optional).
