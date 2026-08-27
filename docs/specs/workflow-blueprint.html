@@ -263,12 +263,13 @@ def plan(ops):
         DrawGate(param="release_coords", geometry="point", ...),
         *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers, ...),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),   # demand-pulls the build
-        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read_results(Ref("solve"), ...).chart("dye_concentration", ...),
     ]</code></pre>
 
 <h3>5.3 What each change buys</h3>
 <ul>
+<li><b><code>ops.solver_spec</code> renames to <code>ops.solve</code></b> &mdash; the plan names what the step is, not how it is implemented; pure rename, riding this same wave.</li>
 <li><b>Two policy classes collapse into one declaration block.</b> The corridor shape fields do not die &mdash; they become spec fields the registered <code>corridor_tin</code> mesher declares and the router validates loudly. (<code>corridor_tin</code> is today's reach mesher lifted out of the deck writer; a candidate for later replacement by om2d, not pretended done.)</li>
 <li><b>The custom approve-mesh gate is deleted.</b> The template-specific <code>GateSpec(kind="solver", estimate_provider=..., pin_provider=...)</code> metadata (~15 lines) is subsumed by the standard mesh gate loop &mdash; an upgrade: today the user can only preview and pin resolution; now every registered edit action is available at that gate ("refine near the release point", hand-edit the MDAL layer).</li>
 <li><b>A supplied mesh works here for free</b> (explicit argument or case discovery), which today's template cannot accept.</li>
