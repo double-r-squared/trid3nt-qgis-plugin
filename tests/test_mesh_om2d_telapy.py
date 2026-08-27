@@ -116,9 +116,22 @@ def test_the_geometry_input_is_hashed_so_the_recipe_records_its_source():
 # --------------------------------------------------------------------------- #
 # Determinism: a measured claim, journaled where a replay reads it.
 # --------------------------------------------------------------------------- #
-def test_om2d_declares_itself_nondeterministic():
-    assert get_mesher("om2d").deterministic is False
-    assert get_mesher("watershed").deterministic is True
+#: Every mesher that shells the OceanMesh2D image, with the flag it registers and
+#: the 3-run rebuild-and-diff that flag was MEASURED by (docs/research/
+#: om2d-telapy-mesh-recon.md carries the specs and the hashes). A flag no
+#: measurement stands behind is a replayability promise nobody checked, so the
+#: evidence is named here rather than the value simply asserted.
+_MEASURED_DETERMINISM = (
+    ("om2d", False, "3 rebuilds -> 2 distinct meshes"),
+    ("coastal_edge", True, "3 rebuilds -> sha256 e2025226, 424 nodes/693 elements"),
+    ("watershed", True, "3 rebuilds -> sha256 1236ce84, 363 nodes/657 elements"),
+)
+
+
+@pytest.mark.parametrize("mesher,measured,evidence", _MEASURED_DETERMINISM)
+def test_each_mesher_registers_the_determinism_it_was_measured_at(
+        mesher, measured, evidence):
+    assert get_mesher(mesher).deterministic is measured, evidence
 
 
 def test_the_recipe_carries_the_determinism_a_replay_should_not_assume(tmp_path):
@@ -506,6 +519,18 @@ def test_the_cli_is_handed_exactly_the_section_nodes(monkeypatch, tmp_path):
     assert info["_written_open_nodes"] == [1, 3]
     assert info["open_node_count"] == 2
     assert info["open_boundary_sections"] == 1
+
+
+def test_no_fort14_is_written_because_no_engine_reads_one(monkeypatch, tmp_path):
+    """SWAN is the only unstructured-mesh consumer this repo could have, and its
+    worker is regular-grid only - so an ADCIRC fort.14 was a file the build wrote
+    and nothing opened. The shared writer stays; the build stops calling it."""
+    _stub_sections(monkeypatch, [_section([1, 3], -30.0, (-75.74, 36.14))])
+    files, _, _ = _emit_with(monkeypatch, tmp_path, {"side": "east"})
+    assert "fort14_uri" not in files
+    assert not (tmp_path / "fort.14").exists()
+    # the writer itself is untouched and still writes what it always did
+    assert callable(OM2D._sandbox_formats().write_fort14)
 
 
 def test_a_land_designation_opens_nothing_and_identifies_nothing(

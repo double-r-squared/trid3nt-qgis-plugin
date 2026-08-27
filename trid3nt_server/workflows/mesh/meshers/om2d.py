@@ -19,7 +19,7 @@ An open boundary is a CONTIGUOUS stretch of the boundary walk, identified by
 oceanmesh's own ``identify_ocean_boundary_sections`` from the bed: a solver reads
 one liquid boundary as one continuous forcing edge, so a set of scattered nodes
 that happens to sit on the same side of the domain is not a boundary. The same
-sections number the ``.cli``, the ``hgrid.gr3`` and the ``fort.14``.
+sections number the ``.cli`` and the ``hgrid.gr3``.
 
 Conformality is MEASURED, never asserted: the obstacle outline goes in as
 DistMesh's constrained ``pfix`` points and the offset that survives is reported
@@ -442,9 +442,12 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
 
     TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
     boundary-conditions file is only valid against the geometry whose boundary
-    numbering it was written from. SCHISM's ``hgrid.gr3`` and the ADCIRC
-    ``fort.14`` carry their own boundary blocks and are written from the same
-    node list.
+    numbering it was written from. SCHISM's ``hgrid.gr3`` carries its own boundary
+    block and is written from the same node list.
+
+    Only formats an engine READS are written: no worker here consumes an ADCIRC
+    ``fort.14`` (the SWAN worker is regular-grid only), so the shared writer stays
+    available and nothing calls it on a build.
     """
     import numpy as np
 
@@ -499,11 +502,6 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
             local = rundir / "hgrid.gr3"
             local.write_text(gr3, encoding="utf-8")
             files["gr3_uri"] = str(local)
-        fort14 = rundir / "fort.14"
-        fort14.write_text(formats.write_fort14(
-            lonlat, cells, depths=depth_down, grid_name="trid3nt_om2d",
-            open_sections=node_lists), encoding="utf-8")
-        files["fort14_uri"] = str(fort14)
     return files, info, probes
 
 

@@ -384,4 +384,9 @@ COASTAL_EDGE = register_mesher(
         apply_layer_edits_action(),
     ),
     fields=_FIELDS,
+    # MEASURED, not assumed: three rebuilds from one identical spec (the southern
+    # New Jersey coast AOI, 300/1500 m band, grade 0.20) returned one mesh - 424
+    # nodes / 693 elements, sha256 e2025226 on all three - so a replay of a
+    # coastal_edge recipe reproduces the mesh rather than an equivalent of it.
+    deterministic=True,
 )

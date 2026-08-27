@@ -284,4 +284,9 @@ WATERSHED = register_mesher(
         apply_layer_edits_action(),
     ),
     fields=_FIELDS,
+    # MEASURED, not assumed: three rebuilds from one identical spec (the Coweeta
+    # Creek outlet, 200/1000 m band, grade 0.20) returned one mesh - 363 nodes /
+    # 657 elements, sha256 1236ce84 on all three - so a replay of a watershed
+    # recipe reproduces the mesh rather than an equivalent of it.
+    deterministic=True,
 )

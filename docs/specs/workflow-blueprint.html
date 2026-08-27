@@ -28,7 +28,7 @@
 </style>
 
 <h1>Workflow Blueprint</h1>
-<p class="rev">rev 7 &middot; 2026-08-27 &middot; + file layout and the river-dye worked example. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
+<p class="rev">rev 8 &middot; 2026-08-27 &middot; + file layout and the river-dye worked example; solver-format row states SWAN as regular-grid only. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
 
 <h2>1. Where the architecture stands</h2>
 <p>A workflow is a fixed spine of steps; templates supply values, never structure. Each step that touches an engine delegates to that engine's official library. Terminology: an <i>engine</i> is a solver (TELEMAC, MODFLOW, SWMM, HEC-RAS); a <i>mesher</i> is a mesh-building library; a <i>fetcher</i> is a data spec; the <i>box</i> is the network-isolated container an engine runs in.</p>
@@ -126,7 +126,7 @@ flowchart LR
 <tr><th>axis</th><th>types</th></tr>
 <tr><td>kind (the tool's vocabulary)</td><td><code>structured_grid &middot; unstructured_tri &middot; unstructured_quad_flex &middot; curvilinear &middot; node_link</code></td></tr>
 <tr><td>mesher (who builds it)</td><td><code>om2d</code> (OceanMesh2D) &middot; <code>telapy_mesh</code> (mesh.py) &middot; <code>hecras</code> (graded-seed mesher) &middot; <code>reg_grid</code></td></tr>
-<tr><td>solver format (what the deck writer consumes)</td><td>SELAFIN .slf +BOTTOM (TELEMAC) &middot; hgrid.gr3 +open boundary (SCHISM) &middot; fort.14 (SWAN unstructured) &middot; authoring bundle (HEC-RAS) &middot; regular grid (SFINCS/SWAN)</td></tr>
+<tr><td>solver format (what the deck writer consumes)</td><td>SELAFIN .slf +BOTTOM (TELEMAC) &middot; hgrid.gr3 +open boundary (SCHISM) &middot; authoring bundle (HEC-RAS) &middot; regular grid (SFINCS, SWAN). SWAN is regular-grid ONLY &mdash; its worker has no unstructured path, so no <code>fort.14</code> is written on a build; the ADCIRC writer stays available for the day one is read.</td></tr>
 <tr><td>display face (QGIS-compat, editable)</td><td>MDAL .2dm mesh layer &mdash; never a picture</td></tr>
 </table>
 

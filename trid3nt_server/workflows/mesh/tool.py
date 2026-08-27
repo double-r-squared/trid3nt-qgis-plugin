@@ -406,6 +406,20 @@ async def build_mesh(
             fields = {name: float(value), **fields}
 
     declared = get_mesher(mesher).fields
+    if "aoi" not in declared and "domain" not in declared:
+        # A mesher that takes neither an AOI nor a domain is handed an existing
+        # geometry, so an extent would reach nothing. Refused BY NAME, the same as
+        # any other field this mesher never declared - a dropped extent reads as a
+        # lever that shaped a mesh it never touched.
+        spatial = [name for name, value in
+                   (("location", location), ("bbox", bbox)) if value is not None]
+        if spatial:
+            raise MeshToolError(
+                "MESH_SPEC_UNKNOWN_FIELD",
+                f"mesher {mesher!r} declares no field {spatial[0]!r}: it adopts the "
+                f"geometry it is given rather than cutting one from an extent "
+                f"({nearest_names(spatial[0], declared)}). Named extents: "
+                f"{sorted(spatial)}.")
     if "aoi" in declared and "aoi" not in fields:
         aoi = coerce_bbox_value(bbox) if bbox is not None else None
         if aoi is None and location:

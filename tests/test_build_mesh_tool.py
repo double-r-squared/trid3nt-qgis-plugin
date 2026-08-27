@@ -453,3 +453,85 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
 
     assert suggest_time_step_s(10.0) == suggest_time_step_s(10.0, mesh=None)
     assert suggest_time_step_s(10.0, mesh=_artifact()) == 0.5
+
+
+# --------------------------------------------------------------------------- #
+# The router refuses what a mesher never declared - including an extent.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_a_mesher_that_takes_no_extent_refuses_one_by_name(monkeypatch):
+    """``telapy_mesh`` adopts a geometry, so an AOI reaches nothing inside it.
+
+    Dropping it silently read as a lever that shaped the mesh - the user names an
+    extent, gets a mesh of whatever file was handed over, and nothing says the
+    two never met.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
+    fn = TOOL_REGISTRY["build_mesh"].fn
+    for spatial in ({"bbox": (-75.8, 36.1, -75.7, 36.2)}, {"location": "Norfolk"}):
+        with pytest.raises(MeshToolError) as excinfo:
+            await fn(mesher="telapy_mesh", geometry="/tmp/nowhere.slf", **spatial)
+        assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
+        assert next(iter(spatial)) in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_a_mesher_that_declares_an_aoi_still_takes_one(monkeypatch):
+    """The refusal is about what THIS mesher declares, not about extents."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
+    seen: dict = {}
+
+    def _accept(self, action, *values, **inputs):  # noqa: ANN001
+        seen.update(self.spec.fields)
+        raise MeshToolError("MESH_BUILD_FAILED", "stopped after validation")
+
+    monkeypatch.setattr(MeshSession, "accept",
+                        lambda self: _accept(self, None))
+    with pytest.raises(MeshToolError):
+        await TOOL_REGISTRY["build_mesh"].fn(
+            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0)
+    assert seen["aoi"] == (-75.8, 36.1, -75.7, 36.2)
+
+
+# --------------------------------------------------------------------------- #
+# A registered action's inputs are its generated tool's parameters.
+# --------------------------------------------------------------------------- #
+def test_an_optional_input_before_a_required_one_refuses_at_registration():
+    """The generated tool is a REAL signature in declaration order, and Python
+    has no required parameter after one that defaults - so the source would not
+    compile, at whatever later moment a gate first opened over this mesher."""
+    from trid3nt_server.workflows.mesh.meshers import (
+        EditAction,
+        MeshField,
+        MeshToolError,
+        register_mesher,
+    )
+
+    action = EditAction(
+        name="misdeclared", apply=lambda mesh, **_kw: mesh,
+        inputs={"tolerance_m": MeshField("tolerance_m", types=(int, float)),
+                "geometry": MeshField("geometry", types=(str,), required=True)})
+    with pytest.raises(MeshToolError) as excinfo:
+        register_mesher("mesher_with_a_misdeclared_action", lambda spec: None,
+                        actions=(action,))
+    assert excinfo.value.error_code == "MESH_ACTION_INPUT_ORDER"
+    assert "geometry" in str(excinfo.value) and "tolerance_m" in str(excinfo.value)
+
+
+def test_every_registered_action_compiles_into_a_real_signature():
+    """The guard's own premise, checked against the whole roster."""
+    import inspect
+
+    from trid3nt_server.workflows.mesh.gate import _edit_tool
+    from trid3nt_server.workflows.mesh.meshers import registered_meshers
+
+    for name in registered_meshers():
+        for action in get_mesher(name).actions.values():
+            _metadata, fn = _edit_tool("MESH01", action)
+            assert list(inspect.signature(fn).parameters) == list(action.inputs)

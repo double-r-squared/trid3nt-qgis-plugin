@@ -146,6 +146,21 @@ in the convergence path, not in the seed. `om2d` therefore registers
 equivalent rebuild rather than a sha256-identical one. Do not re-derive a
 "no seed exists" conclusion from this file's earlier text.
 
+The two OTHER meshers that shell the same image were measured the same way
+(2026-08-27, three full rebuilds each from one identical spec, hashing
+`points`+`cells`), and both came back **deterministic True**:
+
+| mesher | spec | result |
+|---|---|---|
+| `coastal_edge` | AOI `(-75.10, 39.05, -74.85, 39.33)`, band 300/1500 m, grade 0.20 | 3/3 `sha256 e2025226d35b166f69467ede426cf289765103e0acfe38ee9d84d2ce6f0ca9a8`, 424 nodes / 693 elements |
+| `watershed` | AOI `(-83.50, 34.98, -83.32, 35.14)`, pour point `(-83.40402, 35.05746)`, band 200/1000 m, grade 0.20 | 3/3 `sha256 1236ce849db52bcaaa6b37e2b3601a4ff5699a00f2c5bdf379dd8acf1442f59b`, 363 nodes / 657 elements |
+
+Both drive `generate_mesh` through their own SDF and sizing callbacks and pass no
+`seed`, which lands on the signature's own `seed=0` default - so the initial cloud
+is fixed for them too. What separates them from `om2d` is the rest of the chain
+(`om2d` adds obstacle constraint points, region sizing and a second in-container
+op), and that is where its measured drift lives.
+
 ---
 
 ## 2. telapy mesh handling (TELEMAC worker image)

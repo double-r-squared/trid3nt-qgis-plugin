@@ -350,6 +350,27 @@ class Mesher:
 _MESHERS: dict[str, Mesher] = {}
 
 
+def _refuse_optional_before_required(action: EditAction) -> None:
+    """Refuse an action whose generated tool signature could not compile.
+
+    A registered action becomes an agent tool whose REAL parameters are its
+    declared inputs in declaration order, and Python has no parameter that is
+    required after one that defaults. Caught here, at the declaration, rather than
+    as a SyntaxError when a gate opens over the mesher months later.
+    """
+    seen_optional: str | None = None
+    for name, declared in action.inputs.items():
+        if not declared.required:
+            seen_optional = seen_optional or name
+        elif seen_optional is not None:
+            raise MeshToolError(
+                "MESH_ACTION_INPUT_ORDER",
+                f"edit action {action.name!r} declares the required input {name!r} "
+                f"after the optional {seen_optional!r}; an action's inputs are its "
+                "generated tool's parameters in declaration order, so every "
+                "required input must be declared before the first optional one.")
+
+
 def register_mesher(
     name: str,
     build: Callable[[Mapping[str, Any]], Mesh],
@@ -367,6 +388,9 @@ def register_mesher(
         raise MeshToolError(
             "MESH_DUPLICATE_MESHER",
             f"a mesher named {key!r} is already registered.")
+    actions = tuple(actions)
+    for action in actions:
+        _refuse_optional_before_required(action)
     mesher = Mesher(
         name=key, build=build,
         actions={a.name: a for a in actions},
