@@ -1127,8 +1127,11 @@ edge-band `ResolutionSpec` declarations ride `build_mesh`'s metadata; its SCHISM
 gr3 emission belongs to the coastal mesher, which is the only shape that has a
 seaward boundary.
 
-**Trace evidence:** zero importers of the package remain
-(`grep -rn "workflows.mesh.generate_mesh"` over the tree returns nothing); the
+**Trace evidence:** zero importers of the package remain (`grep -rn
+"workflows.mesh.generate_mesh"` over `trid3nt_server/`, `tests/`, `scripts/`,
+`workers/`, `contracts/` and `plugin/` returns nothing; the surviving hits are
+this ledger, the LOC ledger, the blueprint and the decision records, all of
+which are history rather than callers); the
 registered tool is gone from `TOOL_REGISTRY` (260, was 261) and the catalog
 identity gate is green; the two showcases and the live HEC-RAS proof driver now
 invoke `build_mesh` with an explicit `mesher`; the fallback sweep guards that
