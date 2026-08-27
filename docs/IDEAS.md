@@ -2376,3 +2376,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   positional rejected). Clear-safety already structural (spec line
   vs edit chain). D2-D5 (wave verifier findings) remain the open
   rulings before the stopped wave can close.
+
+- D2-D5 RULED, WAVE-CLOSE-FIRST (NATE 2026-08-27): all four verifier
+  recommendations ADOPTED - D2 accept() implies stageable (hand-edit
+  regenerates via telapy or the edit refuses at the gate); D3 numeric
+  knobs as param_sheet the shipped client renders (plugin changes only
+  if unavoidable, flagged for NATE's live pass); D4 approve-mesh chop
+  finished client-side; D5 worker-bundle round-trip test + one live
+  adopted-mesh solve. SEQUENCE: close the stopped wave (remediation ->
+  final verify -> artemis flagship) THEN the model wave (aoi
+  declaration, om2d full wrapper, 7-template migration per spec rev
+  18).
