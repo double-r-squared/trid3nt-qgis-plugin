@@ -2252,3 +2252,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   for basic mesh builds - direct TOOL_REGISTRY invocation of
   build_mesh with coarse defaults, prints probes + emitted layer uri,
   for QGIS spot checks whenever mesh functionality lands.
+
+- GMSH MESHER RULED IN (NATE 2026-08-27): gmsh joins the registry as a
+  third mesher COMPOSING oceanmesh - om2d keeps the sizing
+  intelligence (its actual strength; NATE: "narrow generation and
+  refinement responsibility"), gmsh takes geometry (OCC boolean cuts),
+  generation (background size field from the om2d grid, pinned
+  RandomSeed), and EDITING (session-held model, in-process re-mesh -
+  solves edit economics at the root). Embedded curves = zero-offset
+  conformality BY CONSTRUCTION. .msh is an official TELEMAC import
+  (telapy parser_gmsh). Hard acceptance bar: determinism 3-run
+  sha256, conformality survives cleanup, sizing fidelity vs om2d on
+  Duck NC, measured edit economics, engine ingestion, suite zero.
+  om2d generator stays registered through the comparison period;
+  telapy adoption path unchanged. Decision spec:
+  docs/specs/gmsh-mesher.html (artifact published).
