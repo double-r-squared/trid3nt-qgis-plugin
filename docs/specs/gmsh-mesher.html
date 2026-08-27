@@ -29,7 +29,7 @@
 </style>
 
 <h1>Domain and Mesh</h1>
-<p class="rev">rev 15 &middot; 2026-08-27 &middot; full rewrite (revisions rewrite from current understanding, never accrete); extent is ALWAYS declared in templates. ALL EXECUTION HELD - the wave is stopped; open decisions are NATE's, section 6. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 16 &middot; 2026-08-27 &middot; + the containment rule: extent within staged coverage = crop; outside = restage from the beginning via the rerun primitive. ALL EXECUTION HELD - the wave is stopped; open decisions are NATE's, section 6. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>1. Status</h2>
 <table>
@@ -85,12 +85,20 @@ MESH      = tool.build_mesh(extent=P.aoi, bed=D.dem, ...)       # common case - 
 <li><b>No words that imply</b>: no domain labels anywhere - "coastal" is TRUE when bed + shoreline are present, never said.</li>
 </ul>
 
+<h3>4.1 The containment rule - what an extent change costs</h3>
+<p>An extent change is judged by GEOMETRIC CONTAINMENT against the STAGED COVERAGE (the footprint the fetches actually staged over):</p>
+<table>
+<tr><th>new extent</th><th>path</th><th>what happens</th></tr>
+<tr><td>within coverage</td><td><b>CROP</b> - a cheap, journaled <code>set_extent</code> session edit</td><td>no refetch: rasters crop, vectors clip, the mesh rebuilds over the new extent; fetched inputs stand, only mesh-downstream recomputes</td></tr>
+<tr><td>outside coverage (moved, or even slightly larger)</td><td><b>RESTAGE</b> - not an edit: the change escalates to <code>rerun</code> with the new bbox</td><td>a box that leaves coverage is a NEW AOI, and everything anchored to the old one is suspect (the flowline may not be in the new box; seed and discharge hang off it). The existing rerun-with-overrides primitive computes the invalidation cut and re-resolves from the beginning. The gate says so honestly: "the drawn area leaves fetched coverage - this becomes a fresh run over the new area."</td></tr>
+</table>
+<p>Containment is BINARY - no fuzzy tolerance: partial coverage produces silently wrong answers at the edge (mesh nodes outside the DEM footprint have no bed; boundary segments outside the shoreline clip misclassify). Crop is only safe when coverage is total. OPTIONAL refinement (NATE's call): stage fetches with a small declared buffer over the AOI so the common slight-outward nudge stays on the crop path; the test stays binary against the buffered coverage.</p>
 <h2>5. The session</h2>
 <p>Frozen and lazy in templates (a declaration beside DATA and PARAMS; demand-pulled); builds now standalone. On demand: inputs staged ONCE over the threaded AOI (extent changes never re-fetch), build, probes + wireframe snapshot. USER-GATED presents the editable MDAL layer with exactly the offered verbs mounted; AUTO builds inline. Edits journal into the recipe; REGENERATE-ON-EDIT is the common path; <code>restart</code> truncates to the declared prefix; the snapshot cache returns the exact previously-inspected mesh per prefix. <code>accept()</code> enforces the <code>for_</code> contract (consumer requirements read at build time: adaptive boundary handling, live solve-readiness, narrowed writers). Formats exit through telapy (the last mile); display face through emission; MeshArtifact + recipe + probes into author -&gt; solve, unchanged. The recipe is the record; deterministic flags are MEASURED claims.</p>
 
 <h2>6. OPEN - NATE's decisions, nothing moves before his ruling</h2>
 <div class="open">
-<p><b>D1 - freeze the data model?</b> Sections 3-4: threaded AOI, tools-all-the-way-down, explicit named dataflow, the <code>extent</code> parameter (default AOI, declarable, runtime-changeable), reach dissolution, capabilities from presence. Recommendation: freeze as written.</p>
+<p><b>D1 - freeze the data model?</b> Sections 3-4: threaded AOI, tools-all-the-way-down, explicit named dataflow, the <code>extent</code> parameter (ALWAYS declared in templates), the containment rule (crop within coverage / restage-via-rerun outside), reach dissolution, capabilities from presence. Sub-question: adopt the staging buffer (4.1)? Recommendation: freeze as written, buffer yes.</p>
 <p><b>D2 - hand-edit staging semantics</b> (verifier finding, reproduced: a hand-edited corridor session accepts, then deck staging refuses - a late failure). Recommendation: after adoption the session regenerates solver files via the telapy path; if impossible, the EDIT refuses at the gate; invariant: <code>accept()</code> implies stageable.</p>
 <p><b>D3 - the gate's revision channel</b> (verifier finding: the mesh gate emits none of the fields the shipped plugin can populate revisions from - USER-GATED reach cards are proceed/cancel only). Recommendation: emit numeric knobs as a param_sheet the shipped client already renders, routed server-side to the gate's edit path; plugin changes only if unavoidable, install-synced, flagged for NATE's live pass.</p>
 <p><b>D4 - finish the approve-mesh chop client-side?</b> (orphaned release_point_required handling, picker row, two BK3B drivers survive with no producer). Recommendation: chop per clean-as-you-go, ledger rows.</p>
