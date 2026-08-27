@@ -28,7 +28,7 @@
 </style>
 
 <h1>Workflow Blueprint</h1>
-<p class="rev">rev 6 &middot; 2026-08-27 &middot; restructured: current state + additions only. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
+<p class="rev">rev 7 &middot; 2026-08-27 &middot; + file layout and the river-dye worked example. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
 
 <h2>1. Where the architecture stands</h2>
 <p>A workflow is a fixed spine of steps; templates supply values, never structure. Each step that touches an engine delegates to that engine's official library. Terminology: an <i>engine</i> is a solver (TELEMAC, MODFLOW, SWMM, HEC-RAS); a <i>mesher</i> is a mesh-building library; a <i>fetcher</i> is a data spec; the <i>box</i> is the network-isolated container an engine runs in.</p>
@@ -196,7 +196,7 @@ classDiagram
 </pre>
 </div>
 
-<h2>3. What this removes or moves</h2>
+<h2>3. What this removes or moves</h2><!-- section 4: file layout; section 5: worked example -->
 <table>
 <tr><th>item</th><th>fate</th></tr>
 <tr><td><code>MeshPolicy</code>, <code>CorridorPolicy</code>, <code>CatchmentPolicy</code></td><td>deleted &mdash; their fields become <code>build_mesh</code> spec fields, validated per mesher at the router</td></tr>
@@ -204,6 +204,76 @@ classDiagram
 <tr><td>deck-writer-internal meshers</td><td>become registered meshers behind the tool</td></tr>
 <tr><td><code>_write_2dm</code> (inside <code>generate_mesh</code>)</td><td>moves to emission &mdash; the display face is a data type on the one seam. Razor: feeds a solver &rarr; mesh/'s business; feeds a screen &rarr; emission's</td></tr>
 </table>
+
+<h2>4. Where the files live</h2>
+<pre><code>trid3nt_server/workflows/mesh/            # the mesh tool package (exists; gets rebuilt)
+    tool.py               # tool.build_mesh — the one router: spec validation,
+                          #   explicit-first / discovery / default resolution order
+    session.py            # MeshSession: edit/probes/snapshot/restart/accept,
+                          #   mesh_recipe.jsonl journaling
+    artifact.py           # MeshArtifact + mesh_compatible_with_engine (exists, stays)
+    meshers/
+        __init__.py       # the mesher registry
+        om2d.py           # OceanMesh2D wrapper + its edit actions
+        telapy_mesh.py    # telapy mesh.py wrapper + its actions
+        corridor_tin.py   # today's reach mesher, lifted out of the deck writer
+        hecras.py         # the graded-seed mesher (from generate_mesh/hecras_build)
+        reg_grid.py       # regular grid
+
+trid3nt_server/emission/mesh_display.py   # the .2dm/MDAL display face
+                                          #   (_write_2dm moves here from generate_mesh)</code></pre>
+<p>Each mesher file registers its own edit actions beside its build &mdash; adding a mesher is one file, exactly as adding a fetcher is one spec. What empties out: <code>workflows/mesh/generate_mesh/</code> dissolves (its builders become registered meshers; its standalone-tool role IS <code>tool.build_mesh</code> called standalone); <code>lib/slots.py</code> sheds MeshPolicy; <code>telemac/workflow.py</code> sheds CorridorPolicy and MeshHandle. The existing templates are the migration targets &mdash; each one's mesh declaration is rewritten as in section 5.</p>
+
+<h2>5. Worked example: <code>telemac_river_dye</code></h2>
+<p>The delta on the real template (<code>workflows/telemac/river_dye/river_dye.py</code>, 261 lines): only the two mesh policy blocks, one line of <code>plan</code>, and the custom approve-mesh gate metadata change. DATA, PHYSICS, FORCING, ANSWER, the chart, coercions, sensitivity and provenance are untouched.</p>
+
+<h3>5.1 Before (today, <code>river_dye.py:110-135</code>)</h3>
+<pre><code class="py">MESH = MeshPolicy(resolution=P.mesh_resolution, target_edge_m=P.mesh_resolution_m)
+
+CORRIDOR = CorridorPolicy(extent_km=P.reach_length_km,
+                          width_m=P.channel_width_m,
+                          boundary_source=P.bank_source)
+
+def plan(ops):
+    return [
+        FormGate(title="Review the river-tracer scenario"),
+        DrawGate(param="release_coords", geometry="point", ...),
+        *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers, ...),
+        ops.author(mesh=ops.build_mesh(Ref("reach"), MESH, corridor=CORRIDOR),
+                   physics=PHYSICS, forcing=FORCING),
+        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read_results(Ref("solve"), ...).chart("dye_concentration", ...),
+    ]</code></pre>
+
+<h3>5.2 After</h3>
+<pre><code class="py">MESH = tool.build_mesh(
+    mesher = "corridor_tin",         # today's reach mesher, registered behind the tool
+    kind   = "unstructured_tri",
+    domain = Ref("reach"),           # the corridor acquire_domain binds
+    refine = {"edge_length": P.mesh_resolution_m, "mode": P.mesh_resolution},
+    extent_km = P.reach_length_km,   # ex-CorridorPolicy fields, validated
+    width_m   = P.channel_width_m,   #   by the corridor_tin mesher at the router
+    banks     = P.bank_source,
+    bed    = "fetch:usgs_3dep",
+)
+
+def plan(ops):
+    return [
+        FormGate(title="Review the river-tracer scenario"),
+        DrawGate(param="release_coords", geometry="point", ...),
+        *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers, ...),
+        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),   # demand-pulls the build
+        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read_results(Ref("solve"), ...).chart("dye_concentration", ...),
+    ]</code></pre>
+
+<h3>5.3 What each change buys</h3>
+<ul>
+<li><b>Two policy classes collapse into one declaration block.</b> The corridor shape fields do not die &mdash; they become spec fields the registered <code>corridor_tin</code> mesher declares and the router validates loudly. (<code>corridor_tin</code> is today's reach mesher lifted out of the deck writer; a candidate for later replacement by om2d, not pretended done.)</li>
+<li><b>The custom approve-mesh gate is deleted.</b> The template-specific <code>GateSpec(kind="solver", estimate_provider=..., pin_provider=...)</code> metadata (~15 lines) is subsumed by the standard mesh gate loop &mdash; an upgrade: today the user can only preview and pin resolution; now every registered edit action is available at that gate ("refine near the release point", hand-edit the MDAL layer).</li>
+<li><b>A supplied mesh works here for free</b> (explicit argument or case discovery), which today's template cannot accept.</li>
+<li><b><code>ResolutionSpec</code> and everything else stays</b> &mdash; the 3 m floor declaration, sensitivity labels, provenance rows, coercions: untouched.</li>
+</ul>
 
 <script>
   // minimal self-contained highlighter for the python-style blocks (no external libs load in artifacts)
