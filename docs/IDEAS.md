@@ -2439,3 +2439,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ship - NATE-led, his long-standing itch. Model wave carries only
   the server-side name->layer->geometry resolution seam so the UI
   pass finds its substrate ready.
+
+- BOUNDARY INPUT CORRECTED (NATE 2026-08-27, supersedes the two-point
+  pick line above): two points on a closed loop are UNDERDETERMINED
+  (two stretches - a guess). The boundary's data structure is a
+  POLYLINE, so the selectable thing IS the polyline/polygon feature -
+  drawn, fetched, or derived, fed by name/selection. This collapses
+  to ONE geometry input primitive for obstacles, refine regions AND
+  boundaries (no special modes). Server maps the selected polyline
+  onto the exterior walk (snap -> contiguous covered node stretch =
+  the open boundary) and REPORTS the measured snap distance, never
+  asserts the match.
