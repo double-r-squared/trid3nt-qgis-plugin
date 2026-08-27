@@ -711,7 +711,8 @@ solves on is still built inside the TELEMAC deck writer and the worker, so no
 `MeshSession` opens on that template and the standard mesh gate still does not
 fire there. Deleting the card now would remove the user's only mesh review with
 nothing in its place. CONDITION unchanged: `author` demand-pulls a `corridor_tin`
-build and the reach deck consumes the accepted `MeshArtifact`.
+build and the reach deck consumes the accepted `MeshArtifact`. (Met in the
+lens-1 remediation section below; all four are deleted there.)
 
 Slice 7 lands the seam and its measurement, not new call sites: the accepted
 artifact carries its probes and `suggest_time_step_s` prefers the measured
@@ -719,4 +720,49 @@ minimum edge. Every TELEMAC caller today is an ESTIMATE path - the reach deck an
 the mesh preview both derive dt before any mesh exists - so they pass no artifact
 and read the requested edge, which is the honest answer at that moment. The
 tightening becomes live for the reach family under the same condition as the gate
-chop above.
+chop above. (Met in the lens-1 remediation section below: the reach deck passes
+the accepted artifact.)
+
+## Mesh wave - panel lens-1 remediation: the reach family reaches the gate (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | lens-1 F1 | `mesh/meshers/watershed.py` + `coastal_edge.py` (+10 - the measured determinism each registers, with the 3-run evidence) | 674 | 684 | +10 | +8649 |
+| 2026-08-27 | lens-1 (a) | `mesh/meshers/__init__.py` (+24 - an action's inputs are its generated tool's parameters, refused in declaration order) | 429 | 453 | +24 | +8673 |
+| 2026-08-27 | lens-1 (b) | `mesh/tool.py` (+14 - a mesher that declares no extent refuses one by name) | 462 | 476 | +14 | +8687 |
+| 2026-08-27 | lens-1 (c) | `mesh/meshers/om2d.py` (-2 - the ADCIRC emission drops; the shared writer stays) | 704 | 702 | -2 | +8685 |
+| 2026-08-27 | lens-1 F3 | `mesh/meshers/corridor_tin.py` (+30 - the build's geometry, its `.cli` and its topology bundle staged onto the mesh) | 326 | 356 | +30 | +8715 |
+| 2026-08-27 | lens-1 F3 | `mesh/artifact.py` (+5 - `topology_uri`: what a geometry file cannot say about its own boundary) | 395 | 400 | +5 | +8720 |
+| 2026-08-27 | lens-1 F3 | `telemac/steps/reach.py` (+76 - `ReachMesh.corridor` + `build_corridor_mesh`, the session the demand-pull opens) | 875 | 951 | +76 | +8796 |
+| 2026-08-27 | lens-1 F2+F3 | `telemac/steps/deck.py` (+35 - the accepted mesh staged for the solve, and dt read off it) | 475 | 510 | +35 | +8831 |
+| 2026-08-27 | lens-1 F3 | `telemac/workflow.py` +5, `telemac/steps/__init__.py` +2, `do_sag` +2, `river_dye` -11, `river_dye/coercions.py` +4 | 1055 | 1057 | +2 | +8833 |
+| 2026-08-27 | lens-1 F3 | `telemac/steps/mesh_preview.py` (-277 - DELETED; the standard mesh gate presents the same build) | 277 | 0 | -277 | +8556 |
+| 2026-08-27 | lens-1 F3 | `gates/cards/solver_confirm.py` + `gates/cards/__init__.py` (-211 - the template-specific approve-mesh card and its two providers) | 1420 | 1209 | -211 | +8345 |
+| 2026-08-27 | lens-1 F3 | `workers/telemac/_staged_mesh.py` + `entrypoint.py` (+129 - the worker's half of the hand-off: write the accepted topology, adopt one when staged) | 1581 | 1710 | +129 | +8474 |
+
+**Verdict: -165 net across nineteen files, and the mesh gate is the only mesh
+gate.** The reach family used to reach its mesh twice - once as a preview built
+for a card, once again inside the solve - and neither pass produced an artifact
+anything downstream could read. It now builds once, through a `MeshSession` over
+the `corridor_tin` declaration, and the solve adopts what was accepted. The 488
+lines that came out are the second path; the 129 that went into the worker are
+what makes adoption possible at all, since a SELAFIN states which nodes lie on a
+boundary and never which stretch of it the flow enters by.
+
+DECK PARITY, measured rather than asserted: `tests/test_telemac_reach_mesh_session.py`
+restates the reach deck from the ask - every field, both reach shapes - and the
+writer matches it field for field. The only line the refactor could have moved is
+`time_step_s`, and it moves ONLY when the artifact reports an edge finer than the
+one that was asked for, which is what slice 7's seam was built to do.
+
+LIVE: `corridor_tin` built through the rebuilt image (Scotia, California, 25 m
+ask) -> 4191 nodes / 7660 elements, min measured edge 5.0 m, and the accepted
+mesh staged `river.slf`, `river.cli` and `river_mesh.npz` beside its display face
+and recipe. At that mesh the deck's dt reads 0.25 s off the measurement where the
+ask alone would have written 1.0 s.
+
+NOT COUNTED by the rule at the head of this file:
+`tests/test_telemac_reach_mesh_session.py` (new, 218 lines),
+`tests/test_build_mesh_tool.py` 455 -> 537, `tests/test_mesh_om2d_telapy.py`
++24, plus the stub rows in `test_telemac_do_sag.py`, `test_run_river_dye_scenario.py`,
+`test_rerun_with_overrides.py` and `test_gate_collapse_specs.py`.
