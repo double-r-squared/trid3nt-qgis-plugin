@@ -1,4 +1,4 @@
-<title>Coastal Mesher Kernel</title>
+<title>Mesh Grounding</title>
 <style>
   :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
           --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
@@ -27,232 +27,172 @@
   .rev { font-size: .85em; }
 </style>
 
-<h1>Coastal Mesher Kernel</h1>
-<p class="rev">rev 9 &middot; 2026-08-27 &middot; the current picture: domain bindings (Ref aoi / Ref reach) related to constituents; class view redrawn to the converged design. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<h1>Mesh Grounding</h1>
+<p class="rev">rev 10 &middot; 2026-08-27 &middot; full rewrite: the converged design only, superseded framings left to git history. DESIGN SPEC - implementation HELD for the follow-up wave. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
-<h2>0. How meshing works (primer)</h2>
-<p>An unstructured mesh is a domain cut into triangles. Two things define its quality: the SHAPE of the triangles (minimum angle - skinny slivers break solvers) and the SIZING - a field h(x) giving the target edge length at every point. Everything a mesher does is in service of honoring h(x) with well-shaped triangles.</p>
-<h3>0.1 Sizing functions - oceanmesh's actual specialty</h3>
-<p>Coastal sizing is domain knowledge: <i>distance-to-shore</i> (fine at the coast, coarse offshore), <i>wavelength</i> (enough elements per tidal wavelength, which depends on depth), <i>bathymetric gradient</i> (fine where the bed is steep), and a <i>gradation cap</i> (neighboring sizes may differ by at most g percent, so fine regions blend smoothly into coarse ones). This composed h(x) grid is what om2d computes better than any general-purpose tool - it is why om2d stays in every wiring.</p>
-<h3>0.2 Generation families</h3>
+<h2>1. Status: what is landed, what this spec changes</h2>
+<p>The mesh wave landed the mesh tool per the parent spec, and the current design KEEPS nearly all of it. Nothing in this spec is implemented yet; it is the follow-up wave's charter. No code implements any superseded framing (capability param, domain param, named constructors - spec-only history), so nothing is thrown away.</p>
 <table>
-<tr><th>family</th><th>how</th><th>who</th><th>character</th></tr>
-<tr><td>DistMesh (force relaxation)</td><td>scatter points, treat edges as springs with rest length h(x), iterate to equilibrium</td><td>oceanmesh</td><td>organic, high quality; ITERATIVE - tiny floating-point differences cascade, which is exactly why om2d is nondeterministic</td></tr>
-<tr><td>Delaunay refinement / frontal</td><td>insert points one at a time where triangles violate h(x) or quality, in a defined order</td><td>gmsh, jigsaw, triangle</td><td>deterministic insertion orders are possible; constraints (breaklines) embed naturally during insertion</td></tr>
-<tr><td>structured / regular</td><td>lay a grid, optionally bend it (curvilinear)</td><td>reg_grid, SFINCS/SWAN inputs</td><td>trivially deterministic; no boundary fitting</td></tr>
-</table>
-<h3>0.3 Conformality, and why edits usually mean regeneration</h3>
-<p>A breakline or obstacle outline is CONFORMAL when its vertices ARE mesh nodes and its segments ARE element edges - zero offset. The natural way to get that is to feed the constraint INTO generation (om2d pfix, gmsh embedding): the mesher builds around it. Retrofitting a constraint into a finished mesh is hard - there is no node where you need one, and moving/inserting nodes ripples into neighboring triangle quality. That is the structural reason the community default for "edit a mesh" is "change the inputs and regenerate", and why the surgical alternatives measured badly here (80.1 m offset).</p>
-<h3>0.4 Cost scaling - why regeneration is fine in the common case</h3>
-<p>Node count scales like area / h^2. A screening-resolution coastal AOI is hundreds to tens of thousands of nodes - seconds to regenerate (measured: 285-node spot-check mesh in 3.5 s end-to-end; the Duck NC om2d build well under a minute in-container). Regeneration only starts to hurt at large fine meshes (hundreds of thousands of nodes, minutes per build) - which is the flagship/production end, not the common case.</p>
-<h3>0.5 Boundaries and formats</h3>
-<p>After generation, the exterior loop gets classified: OPEN stretches (where tide/surge forcing enters - must be contiguous runs of nodes) vs LAND. Solvers are strict bookkeepers about this: TELEMAC wants IPOBO as a permutation of boundary nodes plus a .cli row per node; SCHISM wants gr3 open/land segment blocks. That bookkeeping is telapy's seat. The triangulation + bed elevation at nodes + boundary tags then serialize to .slf / .gr3 / fort.14 / .2dm through the shared writers.</p>
-<h2>1. Where things stand (measured, from the mesh wave)</h2>
-<table>
-<tr><th>fact</th><th>evidence</th></tr>
-<tr><td>oceanmesh = sizing intelligence + a DistMesh generator; editing was never its job</td><td>every om2d edit today = full re-realization; no local re-mesh API</td></tr>
-<tr><td>om2d generation is nondeterministic</td><td>3 runs, byte-identical config, 3 distinct meshes; seed passed, drift elsewhere</td></tr>
-<tr><td>pfix conformality is defended, not guaranteed</td><td><code>delete_boundary_faces</code> destroyed a constrained ring (0.0 -&gt; 396.7 m) until guarded; final 0.0 m holds under guard</td></tr>
-<tr><td>surgical punch on an existing mesh is non-conformal</td><td>telapy element-removal punch: 80.1 m outline offset, measured</td></tr>
-<tr><td>telapy's own edit primitives are unfinished</td><td><code>cleave_max_7_nodes</code> raises unfinished; <code>filter_mesh_resolution</code> broken - evidence of NO user base for pretel editing</td></tr>
-<tr><td>telapy is the format/boundary authority, already load-bearing</td><td>every mesh exits through <code>write_telemac_pair</code> (set_mesh/set_bnd), <code>Conlim.set_numliq</code>, <code>get_ipobo</code> (R1 fix)</td></tr>
-<tr><td>regeneration is ECONOMICAL for the common case (REVISED)</td><td>small/screening meshes rebuild in seconds (primer 0.4, measured); regeneration is also the community default. The earlier "uneconomical" ruling narrows to LARGE fine meshes only</td></tr>
-<tr><td>gmsh .msh is an official TELEMAC import</td><td><code>telapy parser_gmsh.py</code>: <code>MSH(Selafin)</code>, in the worker image</td></tr>
-<tr><td>PATCH EDITING IS OM2D'S OWN TRODDEN CONCEPT, unported</td><td>MATLAB OceanMesh2D ships <code>remesh_patch</code> + <code>extract_subdomain</code>; neither made the python port. Wiring C = porting a known capability, not inventing one (landscape report)</td></tr>
-<tr><td>gmsh: TELEMAC-mainstream, surge-world outlier</td><td>first-class MSH parser + STBTEL route + real forum usage for TELEMAC; no coastal wrapper exists in the ADCIRC/SCHISM world (landscape report)</td></tr>
-<tr><td>OCSMesh remesh_by_shape edits EXISTING meshes</td><td>NOAA, active v1.7.0 2026-07; raster sizing; risks: jigsawpy binary failed to resolve in this repo's sandbox (measured), v2 refactor mid-flight, determinism undocumented</td></tr>
-<tr><td>seamsh narrow + stale; qmesh dead</td><td>seamsh last release 2025-01, home-group adoption only; qmesh README calls itself a stopgap. Full ranking: <code>docs/research/coastal-mesh-edit-landscape.md</code></td></tr>
+<tr><th>landed (kept as-is)</th><th>refactored by this spec</th></tr>
+<tr><td>the tool + one router; MeshSession (edit/probes/snapshot/restart/accept); mesh_recipe.jsonl; MeshArtifact + compat gate + sidecars; the gate loop (generated tools mounted per open session); telapy's seats (format/boundary authority, adoption, surgery); shared writers (one gr3 writer); emission display face; the 7 migrated templates; ops.solve / ops.read</td><td>(a) per-mesher spec-field validation becomes the CONSTITUENT rule table; (b) MESH declarations take the constituent surface; (c) builder auto-routing; (d) for_ consumer contract; (e) session polish (staged-once, snapshot cache, lazy batching); (f) the GROUNDING unification (section 3)</td></tr>
 </table>
 
-<h2>2. Ruled (stands regardless of wiring)</h2>
+<h2>2. How meshing works (primer)</h2>
+<p>An unstructured mesh is a domain cut into triangles. Quality = triangle SHAPE (minimum angle) + SIZING, a field h(x) of target edge lengths. Everything a mesher does serves honoring h(x) with well-shaped triangles.</p>
 <ul>
-<li><b>One user-facing coastal mesher.</b> No <code>mesher="gmsh"</code> at the registry surface - the edit kernel is an INTERNAL backend of the coastal mesher, tightly coupled, invisible to templates and users. Rev 1's sibling-mesher framing is withdrawn.</li>
-<li><b>Checked IO at the kernel seam.</b> The internal boundary is <code>(points, cells, sizing)</code> arrays; every crossing is round-trip verified (node counts, hashes, boundary integrity, IPOBO permutation - the checks the meshers review built).</li>
-<li><b>telapy keeps its three proven seats, unchanged:</b> format/boundary authority (the last mile for every TELEMAC mesh, any kernel), adoption of supplied meshes, surgery where regeneration would destroy user work. It is NOT the edit kernel: its punch is non-conformal (80.1 m) and its refine primitives are unfinished - promoting it means maximum reinvention.</li>
-<li><b>Session economics</b> (sibling ruling): lazy batched realization, staged-once inputs, snapshot-cache undo - lands for every wiring.</li>
+<li><b>Sizing functions</b> are coastal domain knowledge - distance-to-shore, wavelength (depth-dependent), bathymetric gradient, gradation cap - and are oceanmesh's real specialty; om2d keeps this seat in every design.</li>
+<li><b>Generation families</b>: DistMesh force-relaxation (oceanmesh - organic quality, iterative, hence measured nondeterminism), Delaunay/frontal insertion (gmsh/jigsaw - deterministic orders possible, constraints embed during insertion), structured grids (trivially deterministic).</li>
+<li><b>Conformality</b>: an outline is conformal when its vertices ARE mesh nodes (zero offset). Constraints must feed INTO generation; retrofitting into a finished mesh measured 80.1 m offset here. This is why "edit" means "change inputs and regenerate" across the field.</li>
+<li><b>Cost</b>: nodes scale as area/h^2 - screening meshes regenerate in seconds (measured 3.5 s end-to-end), so regeneration is the economical common path; only large fine meshes hurt (the deferred patch-local design activates on measured pain).</li>
+<li><b>Boundaries</b>: the exterior loop splits into contiguous OPEN stretches (forcing enters) vs LAND; TELEMAC wants IPOBO a permutation + .cli rows, SCHISM wants gr3 segment blocks - telapy's bookkeeping seat.</li>
 </ul>
 
-<h3>2.1 RULED: no domain vocabulary - constituents and presence (supersedes the three-axis and capability rulings)</h3>
-<p>There never was a domain param in the product: the AOI has always been THREADED - canvas/case AOI through the tools, templates binding their shape via acquire_domain, fetchers feeding off the same AOI. Every domain vocabulary drafted in this discussion (the label, then named constructors) still IMPLIED - a word affecting behavior beside a definition it could contradict. Dropped entirely. The domain IS the AOI plus the declared constituents; "coastal" stops being a thing you say and becomes a thing that is TRUE.</p>
+<h2>3. The grounding structure - one domain record, progressively filled</h2>
+<p>There is one AOI, threaded through everything, and today two plan bindings wrap it: <code>Ref("aoi")</code> (the bare bbox) and <code>Ref("reach")</code> (bbox + flowline + mid-reach seed + carrier discharge at the seed - the supplemental grounding that says where the river is, where a release is valid, and what flow carries it). Same role, split names.</p>
+<p><b>Scheduled refactor: unify them into one GROUNDING record.</b> The bbox contains the basis; fetches fill it in. One structure, always carrying <code>aoi</code>, gaining fields as they land:</p>
+<pre><code class="py">grounding
+  .aoi          # always present - the bbox (geocode or canvas)
+  .bed          # filled by the DEM fetch
+  .shoreline    # filled by the shoreline fetch -&gt; water/land partition exists
+  .flowline     # filled by NLDI -&gt; river structure exists
+  .seed         # snapped onto the flowline -&gt; valid release point exists
+  .discharge    # read at the seed -&gt; carrier flow exists
+  .pour_point   # -&gt; catchment structure exists</code></pre>
+<p>Filled fields ARE the constituents; presence is what unlocks capabilities (section 5) AND scenario validity (a dye release is placeable because <code>seed</code>/<code>flowline</code> exist - the same mechanism grounds mesh edits and release points). Templates keep declaring their fetches in DATA; <code>acquire_domain</code> becomes the builder of this record; the reach/aoi name pair disappears from the surface.</p>
+
+<h2>4. The signature</h2>
 <pre><code class="py">MESH = tool.build_mesh(
-    kind   = "unstructured_tri",   # defaulted when obvious
-    mesher = "auto",               # builder auto-routed; pin to override
-    for_   = "telemac",            # consumer contract (auto-injected in templates)
+    kind   = "unstructured_tri",   # discretization - defaulted when obvious
+    mesher = "auto",               # builder auto-routed from the constituents; pin to override
+    for_   = "telemac",            # consumer contract - auto-injected in templates
     aoi    = P.aoi,                # threaded, like every tool
-    bed    = D.dem,                # constituents: data refs, like any DATA
-    shoreline = D.shoreline,       # PRESENT -&gt; a water/land partition exists
-    # flowline = D.rivers,         # PRESENT -&gt; corridor structure exists
-    refine = {"edge_length": P.edge_length},
-)</code></pre>
-<h3>2.1.1 RULED: capabilities derive from PRESENCE - the constituent rule table</h3>
+    bed    = D.dem,                # constituents: ordinary data refs
+    shoreline = D.shoreline,
+    # flowline = D.rivers,
+    refine = {"edge_length": P.edge_length, "min_spacing": 25},
+)
+
+# the common path - a place and whatever is true about it:
+tool.build_mesh(aoi=aoi, shoreline="fetch:gshhs_shoreline")</code></pre>
+<ul>
+<li><b>No words that imply.</b> There is no domain label anywhere: "coastal" is not a thing you say, it is a thing that is TRUE when aoi + bed + shoreline are present.</li>
+<li><b>Frozen and lazy in templates</b> (a declaration block beside DATA and PARAMS; builds nothing at import; demand-pulled). <b>Standalone it builds now</b> and stashes for case discovery.</li>
+<li><b>Sourcing is DATA-first</b> in templates (declared ladders, gate visibility, journaling); in-tool <code>"fetch:"</code> specs are standalone sugar through the SAME fetch router - one seam, two spellings. Staged-once session economics make them equal in cost.</li>
+<li><b>for_</b> binds the session to the consumer's requirements (the existing <code>ENGINE_MESH_REQUIREMENTS</code>, read at build time): declaration-time refusals, consumer-adaptive edits (.cli/LIHBOR vs contiguous gr3 segments), live "solve-ready" probes, <code>accept()</code> as a contract, writers narrowed to the declared engine + display. List-valued for one mesh feeding two engines.</li>
+</ul>
+
+<h2>5. Capabilities derive from presence</h2>
 <table>
-<tr><th>the declaration carries</th><th>which offers</th></tr>
-<tr><td>bare aoi</td><td>a grid over the box; refine_region, apply_layer_edits (honest: that is all that is defined)</td></tr>
-<tr><td>+ shoreline</td><td>water/land partition -&gt; add_obstacle, set_boundary</td></tr>
-<tr><td>+ flowline (+ banks)</td><td>corridor verbs</td></tr>
-<tr><td>+ pour point</td><td>catchment behavior: closed boundary; set_boundary never appears</td></tr>
+<tr><th>the grounding carries</th><th>which offers</th></tr>
+<tr><td>bare <code>aoi</code></td><td>a grid over the box; <code>refine_region</code>, <code>apply_layer_edits</code></td></tr>
+<tr><td>+ <code>shoreline</code></td><td>water/land partition -&gt; <code>add_obstacle</code>, <code>set_boundary</code></td></tr>
+<tr><td>+ <code>flowline</code></td><td>corridor verbs; valid release areas</td></tr>
+<tr><td>+ <code>pour_point</code></td><td>catchment behavior: closed boundary; <code>set_boundary</code> never appears</td></tr>
 </table>
-<p>The ONLY capability mechanism - no (domain, kind) matrix, no per-mesher introspection. An unoffered verb is never mounted; a direct call to one refuses by naming the missing constituent ("add_obstacle needs a water/land partition; supply a shoreline") - the error and the onboarding hint are the same sentence, and capabilities DISCLOSE PROGRESSIVELY as the user defines more. Builders register per CONSTITUENT PATTERN ("builds domains carrying a shoreline"); registration refuses at import unless every verb the rule table offers for that pattern is implemented - guaranteed by construction.</p>
-<h3>2.1.2 RULED: constituent sourcing - DATA-first, in-tool fetch as standalone sugar</h3>
-<p>Templates declare constituents in the DATA block: the fetch is DECLARED (ladder and fallbacks visible, the review gate sees it, the journal records it) and resolves by demand-pull before the build consumes it - the readable form, and the canonical one. Standalone calls may pass fetch specs directly (shoreline="fetch:gshhs_shoreline"), which expand to the SAME fetch router - one seam, two spellings, never a second fetch path. Staged-once session economics make the two equivalent in cost: fetched once, reused by every rebuild.</p>
-<h3>2.1.3 The meshing process, end to end</h3>
+<p>The ONLY capability mechanism. Unoffered verbs are never mounted at the gate and never visible to the agent; a direct call to one refuses by naming the missing constituent ("add_obstacle needs a water/land partition; supply a shoreline") - the error and the onboarding hint are the same sentence, and capabilities disclose progressively as the user defines more. Builders register per CONSTITUENT PATTERN; registration REFUSES AT IMPORT unless every verb the table offers for that pattern is implemented - guaranteed by construction, never checked at call time.</p>
+
+<h2>6. The session</h2>
 <ol>
-<li><b>Declare</b> (frozen, lazy): constituents named; the capability set - and so the gate tool list and form affordances - known statically from presence, before any build.</li>
-<li><b>Resolve</b>: explicit mesh wins; case-discovered artifacts (constituent/for_ compatible) offered; else the declaration builds.</li>
-<li><b>Build</b> (demand-pulled): router selects the builder for the constituent pattern; inputs staged once; probes + wireframe snapshot.</li>
-<li><b>Gate</b> (USER-GATED; AUTO inline): editable MDAL layer; exactly the offered verbs mounted; edits journal into the recipe; regenerate-on-edit as the economical common path; restart truncates to the declared prefix; accept() enforces the for_ contract.</li>
-<li><b>Formats</b>: for_-narrowed writers; telapy last mile; display face through emission.</li>
-<li><b>Artifact</b>: MeshArtifact + recipe + probes -&gt; author -&gt; solve, unchanged.</li>
+<li><b>Declare</b>: constituents named; the capability set - the gate's tool list, the form's affordances - known statically before any build.</li>
+<li><b>Resolve</b>: explicit mesh wins; case-discovered compatible artifacts offered; else the declaration builds.</li>
+<li><b>Build</b> (demand-pulled): the router selects the builder for the constituent pattern; inputs staged ONCE and reused by every rebuild; probes + wireframe snapshot out.</li>
+<li><b>Gate</b> (USER-GATED; AUTO builds inline): editable MDAL layer; exactly the offered verbs mounted; edits journal into the recipe; REGENERATE-ON-EDIT is the common path (economical at common sizes); <code>restart</code> truncates to the declared prefix; the snapshot cache returns the exact mesh previously inspected for any prefix (session-stable despite generator nondeterminism); QGIS hand-edits re-enter as <code>apply_layer_edits</code> with the layer hashed, honestly non-replayable; <code>accept()</code> enforces the <code>for_</code> contract.</li>
+<li><b>Formats + artifact</b>: for_-narrowed writers, telapy last mile (IPOBO permutation, contiguous .cli, gr3 blocks), display face through emission; MeshArtifact + recipe + probes into author -&gt; solve, unchanged.</li>
 </ol>
-<p><b>Doability</b>: modest - the landed registry carries per-mesher actions and fields; templates already pass exactly these refs (domain=Ref("reach"), aoi=Ref("aoi")). Delta: the constituent rule table + import-time pattern enforcement + auto builder selection in the existing router. One coherent landing in the follow-up wave with for_, the session polish, and the rename.</p>
-<h3>2.1.4 Domain bindings vs constituents - Ref("aoi") and Ref("reach")</h3>
-<p>Both are the plan's binding of "the modeled world", produced by <code>acquire_domain</code> under the template's declared shape - same ROLE, genuinely different THINGS, and the names honestly say which contents you get:</p>
-<table>
-<tr><th>binding</th><th>shape</th><th>contents</th><th>consumers</th></tr>
-<tr><td><code>Ref("aoi")</code></td><td>open_water (and catchment, where the AOI is DERIVED from the pour point)</td><td>a rectangle - the ask bounds itself; no flowline, no carrier</td><td>meshing, fetches</td></tr>
-<tr><td><code>Ref("reach")</code></td><td>reach</td><td>THREE steps: flowline -&gt; mid-reach seed -&gt; carrier discharge AT the seed ("the modeled world is not established until the flow that carries everything through it is")</td><td>meshing (its geometry), FORCING (discharge at the seed), release plumbing</td></tr>
-</table>
-<p>Under this spec nothing renames and nothing merges: the MESH declaration reads each binding for the CONSTITUENTS it actually carries (Ref("aoi") = the bare aoi; Ref("reach") contributes aoi + flowline, unlocking the corridor verbs), while the reach's seed/discharge side flows to forcing exactly as today. Things are what they carry, not what they are called - the same philosophy as the rest of the converged design.</p>
-<h3>2.2 RULED: the for= consumer declaration</h3>
-<p><code>for=</code> names the upstream consumer(s) - the engine(s) that will solve on this mesh - and binds the session to their requirements profile (the existing <code>ENGINE_MESH_REQUIREMENTS</code> registry, read at BUILD time instead of only at the consume gate):</p>
-<ul>
-<li>declaration-time refusal: <code>for="swan"</code> + unstructured refuses before anything builds;</li>
-<li>adaptive edits: <code>set_boundary</code> under telemac drives .cli/LIHBOR; under schism enforces contiguous gr3 segments + min open-node counts;</li>
-<li>live readiness: probes carry "solve-ready for &lt;engine&gt;: yes/no + why" DURING editing;</li>
-<li><code>accept()</code> is a contract: refuses unless the declared engine's requirements hold - wrong-water-body, non-contiguous segments, missing bed all die inside the session;</li>
-<li>writers: the declared engine's format is guaranteed, unneeded formats skipped (display face always);</li>
-<li>defaults painless: templates AUTO-INJECT for= from their own engine; standalone takes it optionally, LIST-valued (for=["telemac","schism"] - one mesh, two engines); omitted = today's generic best-effort + consume-time check.</li>
-</ul>
-<pre><code class="py">MESH = tool.build_mesh(
-    mesher = "coastal",            # HOW it is built (capability)
-    for_   = "telemac",            # WHO consumes it (auto-injected in templates)
-    kind   = "unstructured_tri",
-    aoi    = P.aoi,
-    refine = {"edge_length": P.edge_length, "min_spacing": 25, "gradation": 0.15},
-    bed    = D.dem,
-).edit("add_obstacle", D.breakwaters)
-# ("for" is a python keyword; the wire name is "for", the python kwarg for_)</code></pre>
-<pre><code class="py">MESH = tool.build_mesh(
-    mesher = "coastal",           # capability name; the kernel is internal
-    kind   = "unstructured_tri",
-    aoi    = P.aoi,
-    refine = {"edge_length": P.edge_length, "min_spacing": 25, "gradation": 0.15},
-    bed    = D.dem,
-).edit("add_obstacle", D.breakwaters)</code></pre>
+<p><b>The recipe is the record</b>: spec line + ordered edits, journaled; deterministic flags are MEASURED claims per builder; replay = exact from the snapshot cache in-session, equivalent rebuild cold.</p>
 
-<h2>3. Resolution: the painless / efficient / compatible ranking</h2>
-<table>
-<tr><th>option</th><th>painless</th><th>efficient</th><th>compatible</th><th>verdict</th></tr>
-<tr><td><b>1. Regenerate-on-edit + session polish</b> (lazy batching, staged-once inputs, snapshot-cache undo)</td><td>BEST - zero new deps, zero custom mesh math; it is what landed, polished</td><td>fine for the common case (seconds, primer 0.4); replay = equivalent rebuild, session-stable via the cache</td><td>the community-typical workflow (landscape report: the field default)</td><td><b>ADOPT NOW - the common path</b></td></tr>
-<tr><td><b>2. Patch-local edits</b> (gmsh planar patch or OCSMesh remesh_by_shape; MATLAB remesh_patch precedent)</td><td>moderate - custom carve/stitch plumbing, vehicle spike needed</td><td>best at scale: byte-stable base + deterministic patches</td><td>concept trodden in om2d MATLAB, unported</td><td><b>DEFERRED - revisit when a LARGE mesh measurably hurts at the gate</b></td></tr>
-<tr><td><b>3. telapy last mile + adoption</b></td><td colspan="3">already landed and load-bearing; unchanged</td><td><b>KEPT</b></td></tr>
-</table>
-<p>Net: the common case follows the typical community workflow (regenerate), made pleasant by the session polish; the clever machinery waits for evidence it is needed. The section below records the deferred patch design so it is not relitigated from scratch when scale arrives.</p>
-<h3>3.pre DEFERRED design record: patch-local edits</h3>
-<h3>3.0 Wiring C (deferred primary candidate): om2d builds, the kernel patch-edits in place</h3>
-<p>The om2d mesh exists as the base, built ONCE and held in the prefix-keyed snapshot cache. An edit is PATCH-LOCAL: carve the region around the edit, hand gmsh the patch as a planar polygon with its boundary nodes FIXED, embed the obstacle outline (or size field) inside, re-mesh the patch, stitch back.</p>
-<ul>
-<li><b>In place, literally</b>: outside the patch the base mesh is byte-identical, not equivalent.</li>
-<li><b>Conformal by construction inside the patch</b>: embedding on a planar surface is gmsh's front door; the discrete classify/reparametrize fragility mostly evaporates on flat 2D.</li>
-<li><b>Replay identity restored</b>: base nondeterministic ONCE then cached; edits replay deterministically on the cached base (pinned gmsh version + seed, fixed patch boundary). Recipe replay = cached base + deterministic patches = the same mesh.</li>
-<li><b>Caveats, both testable in a prototype</b>: patch-seam quality (min-angle at the stitch boundary goes in the probes, measured); the carve-and-stitch machinery is custom plumbing - scoped and well-defined, but ours.</li>
-</ul>
-<p>Prototype gate before commitment - TWO vehicles, same measurements, same Duck NC base mesh, MATLAB <code>remesh_patch</code> semantics as the reference: (1) gmsh planar patch with embedded outline; (2) OCSMesh <code>remesh_by_shape</code> (if its jigsawpy backend resolves in the mesh image at all - an environment failure is itself a disqualifying measurement). Gates per vehicle: seam min-angle, outline offset 0.0 m, 3-run determinism hash, and install/runtime friction recorded honestly. Measurements pick the vehicle.</p>
-<h3>3.0.1 The A/B frame this supersedes</h3>
-<table>
-<tr><th></th><th>A - om2d generates; mmg discrete edits (now a FOOTNOTE)</th><th>B - om2d sizes; gmsh generates + edits the model (ALTERNATIVE if the patch prototype disappoints)</th></tr>
-<tr><td>generation</td><td>DistMesh, exactly as published/landed (trodden)</td><td>gmsh from om2d's sizing grid as background field (trodden in the TELEMAC/European corner IF seamsh evidence holds)</td></tr>
-<tr><td>add_obstacle (the flagship edit)</td><td>retrofit into an existing triangulation - nobody's primitive; mmg level-set punch is the honest candidate, polyline-exact embedding is the shim risk</td><td>outline EMBEDDED at generation - zero offset by construction</td></tr>
-<tr><td>refine_region</td><td>mmg metric-driven local remesh (mature, in-image binary)</td><td>size-field update on the model, local re-mesh</td></tr>
-<tr><td>determinism / recipe replay</td><td>nondeterminism stands: replay = equivalent rebuild, permanently</td><td>plausibly restores sha256-identical replay (MUST be proven, 3-run hash)</td></tr>
-<tr><td>edit economics</td><td>tolerable via the economics fix; local remesh only if still painful</td><td>solved at the root: model mutation, in-process</td></tr>
-<tr><td>rework of landed code</td><td>minimal</td><td>generation half of the om2d driver replaced; sizing half kept</td></tr>
-<tr><td>shim risk</td><td>in the EDITS (discrete embedding)</td><td>in the GENERATION handoff (sizing-field fidelity)</td></tr>
-</table>
+<h2>7. Scheduled refactors (the follow-up wave, in order)</h2>
+<ol>
+<li>The GROUNDING record (section 3): acquire_domain builds it; Ref("aoi")/Ref("reach") dissolve from the surface; seed/discharge consumers read the record.</li>
+<li>Constituent rule table + import-time pattern enforcement, replacing per-mesher field validation.</li>
+<li>Builder auto-routing (mesher="auto").</li>
+<li>for_ consumer contract.</li>
+<li>Session polish: staged-once inputs, prefix-keyed snapshot cache, lazy batched realization.</li>
+<li>MESH declarations in the 7 templates take the constituent surface (small diffs; deck parity must hold).</li>
+</ol>
+<p>HELD until the mesh wave closes clean and NATE releases the hold. Deferred separately, recorded: patch-local edits (gmsh planar patch vs OCSMesh remesh_by_shape, MATLAB remesh_patch precedent) - activates on measured large-mesh pain only.</p>
 
-<h3>3.1 The decision rule</h3>
-<ul>
-<li><b>C (primary) commits if</b> the patch prototype passes its three measurements: seam min-angle acceptable, embedded-outline offset 0.0 m, patch rebuild deterministic (3-run hash).</li>
-<li><b>B takes over if</b> the prototype disappoints AND the landscape report shows gmsh-coastal generation (seamsh practice) is walked enough to trust.</li>
-<li><b>Fallback if both fail</b>: om2d regenerate-on-edit with the economics fix (lazy batching + snapshot cache) - correct, merely slower.</li>
-<li><b>Either way</b>: the registry surface, session, recipe, gate, telapy seats, and shared writers are identical - the choice is invisible above the kernel seam.</li>
-</ul>
-
-<h2>4. Acceptance bar (applies to whichever kernel wins)</h2>
+<h2>8. Acceptance bar</h2>
 <table>
 <tr><th>gate</th><th>test</th></tr>
-<tr><td>determinism</td><td>3 builds, one config: sha256-identical - or the kernel registers <code>deterministic=False</code> honestly</td></tr>
-<tr><td>conformality</td><td>breakwater outline: measured max offset 0.0 m, SURVIVING all cleanup; reported in probes</td></tr>
-<tr><td>sizing fidelity</td><td>Duck NC AOI, same sizing grid: edge-length histogram within tolerance of om2d-native; NATE visual pass side by side</td></tr>
-<tr><td>edit economics</td><td>measured per-edit wall time; zero re-fetch (staged-once audited); one gate cycle = at most one re-mesh</td></tr>
-<tr><td>engine ingestion</td><td>.slf/.cli/.gr3 round-trips as in the meshers review (IPOBO permutation, contiguous .cli); .msh through parser_gmsh if B</td></tr>
+<tr><td>capability honesty</td><td>for each registered builder pattern: every offered verb executes; every unoffered verb refuses naming the missing constituent</td></tr>
+<tr><td>import guarantee</td><td>a builder registering a pattern without implementing its verbs fails at import (test registers a deliberately deficient builder)</td></tr>
+<tr><td>determinism</td><td>3-run hash per builder; flags match measurement; recipe stamps follow</td></tr>
+<tr><td>conformality</td><td>constrained outline max offset 0.0 m, surviving cleanup, in probes</td></tr>
+<tr><td>economics</td><td>zero re-fetch across rebuilds (staged-once audited); one gate cycle = at most one rebuild; restart/undo instant from the cache</td></tr>
+<tr><td>grounding unification</td><td>reach templates run identically through the grounding record: deck byte-parity; seed/discharge consumers unchanged</td></tr>
 <tr><td>suite</td><td>five slices, zero failures</td></tr>
 </table>
 
-<h2>5. Out of spec</h2>
-<ul>
-<li>om2d generator retirement - only after the comparison period, only if B wins.</li>
-<li>telapy adoption/surgery path - unchanged in every outcome.</li>
-<li>mmg adoption under wiring A - a follow-on evaluation gated on measured pain, not part of this decision.</li>
-</ul>
-
-<h2>6. The current picture</h2>
+<h2>9. The current picture</h2>
 <div class="scroll">
 <pre class="mermaid">
 classDiagram
     class Template {
-        DATA: declared fetches (bed, shoreline, flowline...)
-        acquire_domain -> Ref aoi | Ref reach
+        DATA: declared fetches
+        acquire_domain -> GROUNDING record
         MESH = tool.build_mesh(kind, mesher=auto, for_, aoi, constituents)
         static plan, as today
     }
+    class Grounding {
+        .aoi always
+        .bed .shoreline .flowline
+        .seed .discharge .pour_point
+        filled by fetches, progressively
+        presence = capabilities + scenario validity
+    }
     class BuildMesh {
-        +build_mesh(kind, mesher="auto", for_, aoi, **constituents)
-        frozen + lazy in templates; builds now standalone
-        capabilities from PRESENCE (rule table)
-        DATA-first sourcing; "fetch:" sugar -> same router
+        frozen + lazy in templates
+        builds now standalone
+        DATA-first; "fetch:" sugar -> same router
     }
     class ConstituentRules {
-        bare aoi -> refine_region, apply_layer_edits
-        +shoreline -> add_obstacle, set_boundary
-        +flowline -> corridor verbs
-        +pour point -> closed catchment
-        enforced at builder registration (import)
+        presence -> offered verbs
+        enforced at builder registration
     }
     class Router {
-        selects builder per constituent pattern
-        explicit mesh > case discovery > declared build
+        builder per constituent pattern
+        explicit > discovered > declared
         refuses unknown fields BY NAME
     }
-    class Builder {
-        <<interface>>
-        registers per constituent pattern
-        om2d pipeline | corridor_tin | watershed | reg_grid
-        deterministic: MEASURED claim
-    }
     class MeshSession {
-        offered verbs mounted at the gate only
-        regenerate-on-edit (economical common case)
-        staged-once inputs; snapshot cache; restart -> declared prefix
-        accept() enforces the for_ contract
+        offered verbs mounted at gate only
+        regenerate-on-edit; staged-once; snapshot cache
+        restart -> declared prefix
+        accept() enforces for_
         recipe = the record
     }
     class MeshArtifact {
         probes + recipe + formats
-        display face via emission (MDAL)
+        display face via emission
     }
     class Telapy {
-        format + boundary authority (last mile, every builder)
+        format + boundary authority (last mile)
         adoption + surgery for supplied meshes
     }
-    Template --> BuildMesh : MESH declaration
+    Template --> Grounding : acquire_domain
+    Grounding --> BuildMesh : constituents
     BuildMesh --> ConstituentRules : capability set, statically
     BuildMesh --> Router : demand-pulled
-    Router --> Builder : constituent pattern
-    Builder --> MeshSession : opens
+    Router --> MeshSession : opens
     MeshSession --> MeshArtifact : accept()
     MeshArtifact --> Telapy : .slf/.cli last mile
     MeshArtifact --> Template : author -> solve, unchanged
 </pre>
 </div>
-<p>Deferred, recorded above: patch-local edits (activates on measured large-mesh pain). Unchanged: the run paradigm, fetch, styles, emission, the static plan.</p>
+
+<script>
+  document.querySelectorAll('pre:not(.mermaid) > code').forEach(function (el) {
+    var t = el.textContent
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    el.innerHTML = t.replace(
+      /(#[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|\b(def|class|return|import|from|as|if|elif|else|for|while|in|not|and|or|None|True|False|lambda|with|yield|raise|try|except|pass)\b|\b(\d+(?:\.\d+)?)\b/g,
+      function (m, com, str, kw, num) {
+        if (com) return '<span class="c">' + com + '</span>';
+        if (str) return '<span class="s">' + str + '</span>';
+        if (kw)  return '<span class="k">' + kw + '</span>';
+        if (num) return '<span class="n">' + num + '</span>';
+        return m;
+      });
+  });
+</script>

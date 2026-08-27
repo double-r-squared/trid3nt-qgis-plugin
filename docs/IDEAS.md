@@ -2341,3 +2341,23 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   visibility, journal); in-tool "fetch:" specs = standalone sugar
   through the SAME router. kind/mesher=auto/for_ survive. Supersedes
   the capability-param and three-axis rulings. Spec rev 8.
+
+- GROUNDING UNIFICATION SCHEDULED + SPEC REWRITTEN CLEAN (NATE
+  2026-08-27): NATE's read confirmed - the AOI (bbox) contains the
+  BASIS of the reach; the reach is supplemental grounding filled in
+  by fetches (flowline -> where the river is, seed -> valid release
+  point, discharge -> carrier flow). REFACTOR SCHEDULED: unify
+  Ref("aoi")/Ref("reach") into ONE progressively-filled GROUNDING
+  record (aoi always present; bed/shoreline/flowline/seed/discharge/
+  pour_point fill as fetches land); filled fields ARE the
+  constituents; presence unlocks BOTH mesh capabilities and scenario
+  validity (release placeable because seed exists) - one mechanism.
+  acquire_domain becomes the record's builder; seed/discharge
+  consumers read the record; deck byte-parity required. Spec
+  REWRITTEN whole (rev 10, retitled "Mesh Grounding") - current
+  meaning only, superseded framings left to git history; explicitly
+  a DESIGN spec with implementation HELD; keeps-vs-refactors delta
+  table confirms NO landed code implements superseded framings
+  (spec-only history, nothing thrown away). Follow-up wave order:
+  grounding record -> constituent rules -> auto-routing -> for_ ->
+  session polish -> template surface diffs.
