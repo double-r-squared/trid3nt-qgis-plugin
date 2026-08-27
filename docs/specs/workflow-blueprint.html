@@ -1,263 +1,75 @@
 <title>Workflow Blueprint</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  :root {
-    --ground: #F6F8F7;
-    --panel: #FFFFFF;
-    --ink: #17242B;
-    --muted: #5A6B72;
-    --line: #D3DCDF;
-    --accent: #0E7C86;
-    --accent-soft: #E2F0F1;
-    --warm: #B3541E;
-    --code-bg: #EEF3F2;
-  }
-  :root:not([data-theme="light"]) { }
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4; }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --ground: #101B20;
-      --panel: #16242B;
-      --ink: #E5ECEE;
-      --muted: #8FA1A8;
-      --line: #24343B;
-      --accent: #3FB6C0;
-      --accent-soft: #16333A;
-      --warm: #E08A55;
-      --code-bg: #1B2C34;
-    }
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a; }
   }
-  :root[data-theme="dark"] {
-    --ground: #101B20;
-    --panel: #16242B;
-    --ink: #E5ECEE;
-    --muted: #8FA1A8;
-    --line: #24343B;
-    --accent: #3FB6C0;
-    --accent-soft: #16333A;
-    --warm: #E08A55;
-    --code-bg: #1B2C34;
-  }
-  body {
-    background: var(--ground);
-    color: var(--ink);
-    font-family: "Public Sans", system-ui, sans-serif;
-    line-height: 1.55;
-    margin: 0;
-    padding: 2.5rem 1.25rem 5rem;
-  }
-  main { max-width: 1000px; margin: 0 auto; }
-  h1, h2, h3 { font-family: "Saira", system-ui, sans-serif; line-height: 1.15; text-wrap: balance; }
-  h1 { font-size: 2.4rem; font-weight: 700; margin: 0 0 .4rem; letter-spacing: .01em; }
-  h2 { font-size: 1.45rem; font-weight: 600; margin: 0 0 .75rem; }
-  h3 { font-size: 1.05rem; font-weight: 600; margin: 1.4rem 0 .4rem; }
-  .sub { color: var(--muted); font-size: 1.02rem; max-width: 62ch; margin: 0 0 1rem; }
-  .eyebrow {
-    font-family: "IBM Plex Mono", monospace; font-size: .72rem; font-weight: 500;
-    letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
-    margin: 0 0 .35rem;
-  }
-  section {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 1.75rem 2rem 2rem;
-    margin: 1.5rem 0;
-  }
-  p { max-width: 72ch; }
-  code, .mono { font-family: "IBM Plex Mono", monospace; font-size: .86em; }
-  code { background: var(--code-bg); padding: .08em .35em; border-radius: 3px; }
-  pre.code {
-    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
-    padding: .9rem 1.1rem; overflow-x: auto; font-family: "IBM Plex Mono", monospace;
-    font-size: .8rem; line-height: 1.55;
-  }
-  pre.code code { background: none; padding: 0; }
-  figure { margin: 1.25rem 0; }
-  figcaption { color: var(--muted); font-size: .85rem; margin-top: .5rem; max-width: 72ch; }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  h3 { font-size: 1.05em; margin-top: 1.2em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
   .scroll { overflow-x: auto; }
-  svg { max-width: 100%; height: auto; display: block; }
-  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
-  th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-family: "Saira", sans-serif; font-weight: 600; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
-  td.mono { font-size: .82rem; white-space: nowrap; }
-  .pill {
-    display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: .72rem;
-    border: 1px solid var(--accent); color: var(--accent); border-radius: 999px;
-    padding: .05rem .55rem; margin-right: .3rem;
-  }
-  .note {
-    border-left: 3px solid var(--warm); background: var(--code-bg);
-    padding: .7rem 1rem; border-radius: 0 4px 4px 0; max-width: 72ch;
-    font-size: .95rem;
-  }
-  ul { max-width: 72ch; }
-  li { margin: .25rem 0; }
-  header { margin-bottom: .5rem; }
-  .meta { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: .78rem; }
+  .rev { font-size: .85em; }
 </style>
 
-<main>
-<header>
-  <p class="eyebrow">TRID3NT · Spec</p>
-  <h1>Workflow Blueprint</h1>
-  <p class="sub">The spec as ruled. Fetch and styling are frozen subsystems; the run paradigm is unchanged; the new work is the mesh tool. Everything here is buildable — nothing is aspiration.</p>
-  <p class="meta">2026-08-27 rev 4 · trimmed to spec: pattern jargon dropped, inputs descriptive-only, stepping removed</p>
-</header>
+<h1>Workflow Blueprint</h1>
+<p class="rev">rev 5 &middot; 2026-08-27 &middot; plain-reference format per <code>docs/decisions/0320-spec-format.md</code>. Fetch and styling are frozen subsystems; the run paradigm is unchanged; the new construction is the mesh tool. Everything on this page is buildable.</p>
 
-<section>
-  <p class="eyebrow">Vocabulary — fixed, stick to it</p>
-  <table>
-    <tr><th>Word</th><th>Means</th><th>Never means</th></tr>
-    <tr><td class="mono">engine</td><td>a solver: TELEMAC, MODFLOW, SWMM, HEC-RAS — the thing a box runs</td><td>a mesh library, a fetcher, a renderer</td></tr>
-    <tr><td class="mono">mesher</td><td>a mesh-building library behind <code>tool.build_mesh</code>: om2d, telapy_mesh, hecras, reg_grid</td><td>an engine</td></tr>
-    <tr><td class="mono">fetcher</td><td>a data spec behind the one fetch router</td><td>anything that computes</td></tr>
-    <tr><td class="mono">worker / box</td><td>the network-isolated container an engine runs in</td><td>the engine itself</td></tr>
-  </table>
-</section>
+<h2>1. Vocabulary</h2>
+<table>
+<tr><th>word</th><th>means</th><th>never means</th></tr>
+<tr><td><code>engine</code></td><td>a solver: TELEMAC, MODFLOW, SWMM, HEC-RAS &mdash; the thing a box runs</td><td>a mesh library, a fetcher, a renderer</td></tr>
+<tr><td><code>mesher</code></td><td>a mesh-building library behind <code>tool.build_mesh</code>: om2d, telapy_mesh, hecras, reg_grid</td><td>an engine</td></tr>
+<tr><td><code>fetcher</code></td><td>a data spec behind the one fetch router</td><td>anything that computes</td></tr>
+<tr><td><code>worker / box</code></td><td>the network-isolated container an engine runs in</td><td>the engine itself</td></tr>
+</table>
 
-<section>
-  <p class="eyebrow">Section A</p>
-  <h2>The shape of a workflow</h2>
-  <p>A workflow is a fixed spine of steps; templates supply values, never structure. Each step that touches an engine hands off to that engine's <em>official library</em> — we write the thin agnostic call, the library does the domain work. That is the whole idea; it does not need a pattern name.</p>
+<h2>2. Workflow shape</h2>
+<p>A workflow is a fixed spine of steps; templates supply values, never structure. Each step that touches an engine delegates to that engine's official library &mdash; we write the thin agnostic call, the library does the domain work. SELECT and COLLECT are fully agnostic. SOLVE and EMIT are today's machinery, untouched. The only new construction is MESH.</p>
 
-  <figure>
-    <div class="scroll">
-    <svg viewBox="0 0 940 620" role="img" aria-label="The spine runs top to bottom: select, collect, mesh, author, solve, emit. Mesh, author, solve, and emit each delegate to official libraries on the right.">
-      <defs>
-        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
-        </marker>
-        <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="#0E7C86"/>
-        </marker>
-      </defs>
-      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="'IBM Plex Mono',monospace" font-size="12">
+<div class="scroll">
+<pre class="mermaid">
+flowchart TD
+    SELECT["SELECT — retrieval, template roster"]
+    COLLECT["COLLECT — doors + fetcher substrate → resolved sheet (as today)"]
+    MESH["MESH — MESH declaration → session + edits → MeshArtifact"]
+    AUTHOR["AUTHOR — sheet → engine deck (deck/manifest = sole authored record)"]
+    SOLVE["SOLVE — box dispatch, --network none (as today)"]
+    EMIT["EMIT — one seam, styles.yaml (frozen)"]
+    SELECT --> COLLECT --> MESH --> AUTHOR --> SOLVE --> EMIT
+    MESH -. delegates .-> M2["meshers: OceanMesh2D, telapy mesh.py, HEC-RAS mesher, regular grid"]
+    AUTHOR -. delegates .-> A2["official libs: TelemacCas + .slf, flopy, SWMM .inp, HEC-RAS project"]
+    SOLVE -. delegates .-> S2["existing workers, one per engine: staged run dir in, results out"]
+    EMIT -. delegates .-> E2["readers: TelemacFile (SELAFIN), heads, out.rpt, plan HDF"]
+</pre>
+</div>
 
-        <!-- spine column -->
-        <rect x="40" y="30" width="220" height="54" rx="4"/>
-        <text x="150" y="52" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">SELECT</text>
-        <text x="150" y="70" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">retrieval → template roster</text>
+<h2>3. Input vocabulary (descriptive, not a change)</h2>
+<p>Nothing about how inputs are formatted, resolved, or stored changes: the resolved sheet, the doors, the journal, and rerun stay exactly as they are. The five categories are words for talking about inputs &mdash; what any simulation's input set looks like &mdash; useful in forms, docs, and gate conversation. Not a schema; nothing gets re-categorized.</p>
+<table>
+<tr><th>category</th><th>meaning</th></tr>
+<tr><td>geometry</td><td>mesh or domain &mdash; where the simulation lives</td></tr>
+<tr><td>boundary conditions</td><td>the world pushing on the run: inflow, tide, rain, wind</td></tr>
+<tr><td>initial conditions</td><td>the state at t=0: initial water level, thermocline</td></tr>
+<tr><td>physical parameters</td><td>material truth: friction, dispersion, decay rates</td></tr>
+<tr><td>numerical parameters</td><td>discretization: spatial resolution, time step, duration</td></tr>
+</table>
 
-        <rect x="40" y="124" width="220" height="70" rx="4"/>
-        <text x="150" y="146" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">COLLECT</text>
-        <text x="150" y="164" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">doors + fetcher substrate</text>
-        <text x="150" y="180" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">→ resolved sheet (as today)</text>
+<h2>4. The mesh tool (the new construction)</h2>
+<p>Fetch = declarative specs + one router; styles = declarative presets + one seam; <b>mesh = a parametric spec + a registry of named edit actions wrapping official mesher libraries</b>. The policy classes (MeshPolicy, CorridorPolicy, CatchmentPolicy) die into spec fields; <code>MeshArtifact</code> stays as the convergence point. One OceanMesh2D build feeds TELEMAC, SWAN and SCHISM alike &mdash; which is why the mesh tool stands alone.</p>
 
-        <rect x="40" y="234" width="220" height="70" rx="4"/>
-        <text x="150" y="256" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">MESH</text>
-        <text x="150" y="274" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">MESH decl → session + edits</text>
-        <text x="150" y="290" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">→ MeshArtifact</text>
-
-        <rect x="40" y="344" width="220" height="54" rx="4"/>
-        <text x="150" y="366" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">AUTHOR</text>
-        <text x="150" y="384" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">sheet → engine deck</text>
-
-        <rect x="40" y="438" width="220" height="54" rx="4"/>
-        <text x="150" y="460" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">SOLVE</text>
-        <text x="150" y="478" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">box, --network none (as today)</text>
-
-        <rect x="40" y="532" width="220" height="54" rx="4"/>
-        <text x="150" y="554" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">EMIT</text>
-        <text x="150" y="572" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">one seam, styles.yaml (frozen)</text>
-
-        <!-- spine arrows -->
-        <line x1="150" y1="84" x2="150" y2="122" marker-end="url(#arr)"/>
-        <line x1="150" y1="194" x2="150" y2="232" marker-end="url(#arr)"/>
-        <line x1="150" y1="304" x2="150" y2="342" marker-end="url(#arr)"/>
-        <line x1="150" y1="398" x2="150" y2="436" marker-end="url(#arr)"/>
-        <line x1="150" y1="492" x2="150" y2="530" marker-end="url(#arr)"/>
-
-        <!-- delegation arrows (accent) -->
-        <g stroke="#0E7C86">
-          <line x1="260" y1="269" x2="392" y2="269" marker-end="url(#arrA)" stroke-dasharray="6 4"/>
-          <line x1="260" y1="371" x2="392" y2="371" marker-end="url(#arrA)" stroke-dasharray="6 4"/>
-          <line x1="260" y1="465" x2="392" y2="465" marker-end="url(#arrA)" stroke-dasharray="6 4"/>
-          <line x1="260" y1="559" x2="392" y2="559" marker-end="url(#arrA)" stroke-dasharray="6 4"/>
-        </g>
-        <text x="326" y="258" text-anchor="middle" fill="#0E7C86" stroke="none" font-size="10">delegates</text>
-        <text x="326" y="360" text-anchor="middle" fill="#0E7C86" stroke="none" font-size="10">delegates</text>
-        <text x="326" y="454" text-anchor="middle" fill="#0E7C86" stroke="none" font-size="10">delegates</text>
-        <text x="326" y="548" text-anchor="middle" fill="#0E7C86" stroke="none" font-size="10">delegates</text>
-
-        <!-- agnostic calls -->
-        <g>
-          <rect x="394" y="242" width="250" height="54" rx="4" stroke="#0E7C86"/>
-          <text x="519" y="264" text-anchor="middle" fill="currentColor" stroke="none" font-size="11" font-weight="600">tool.build_mesh / session.edit</text>
-          <text x="519" y="282" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">+ mesh_compatible_with_engine</text>
-
-          <rect x="394" y="344" width="250" height="54" rx="4" stroke="#0E7C86"/>
-          <text x="519" y="366" text-anchor="middle" fill="currentColor" stroke="none" font-size="11" font-weight="600">author(sheet) → run dir</text>
-          <text x="519" y="384" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">deck/manifest = sole authored record</text>
-
-          <rect x="394" y="438" width="250" height="54" rx="4" stroke="#0E7C86"/>
-          <text x="519" y="460" text-anchor="middle" fill="currentColor" stroke="none" font-size="11" font-weight="600">run(run_dir) → results</text>
-          <text x="519" y="478" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">the existing box dispatch, unchanged</text>
-
-          <rect x="394" y="532" width="250" height="54" rx="4" stroke="#0E7C86"/>
-          <text x="519" y="554" text-anchor="middle" fill="currentColor" stroke="none" font-size="11" font-weight="600">read(results) → products</text>
-          <text x="519" y="572" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">neutral quantities, engine-blind</text>
-        </g>
-
-        <!-- official libraries -->
-        <line x1="644" y1="269" x2="700" y2="269" marker-end="url(#arr)"/>
-        <line x1="644" y1="371" x2="700" y2="371" marker-end="url(#arr)"/>
-        <line x1="644" y1="465" x2="700" y2="465" marker-end="url(#arr)"/>
-        <line x1="644" y1="559" x2="700" y2="559" marker-end="url(#arr)"/>
-
-        <g stroke-dasharray="3 3">
-          <rect x="702" y="234" width="212" height="70" rx="4"/>
-          <rect x="702" y="336" width="212" height="70" rx="4"/>
-          <rect x="702" y="430" width="212" height="70" rx="4"/>
-          <rect x="702" y="524" width="212" height="70" rx="4"/>
-        </g>
-        <text x="808" y="256" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">meshers: OceanMesh2D ·</text>
-        <text x="808" y="272" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">telapy mesh.py · HEC-RAS</text>
-        <text x="808" y="288" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">mesher · regular grid</text>
-
-        <text x="808" y="358" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">TELEMAC .cas+.slf · MODFLOW sim ·</text>
-        <text x="808" y="374" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">SWMM .inp · HEC-RAS project</text>
-        <text x="808" y="390" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">(official libs: TelemacCas, flopy…)</text>
-
-        <text x="808" y="452" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">the existing workers, one per</text>
-        <text x="808" y="468" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">engine — staged run dir in,</text>
-        <text x="808" y="484" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">results out</text>
-
-        <text x="808" y="546" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">TelemacFile (SELAFIN) · heads ·</text>
-        <text x="808" y="562" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">out.rpt · plan HDF readers</text>
-
-        <!-- banner -->
-        <text x="654" y="215" text-anchor="middle" fill="#0E7C86" stroke="none" font-size="10" letter-spacing="2">AGNOSTIC CALL | OFFICIAL LIBRARY</text>
-        <line x1="394" y1="222" x2="914" y2="222" stroke="#0E7C86" stroke-width="1" opacity=".5"/>
-      </g>
-    </svg>
-    </div>
-    <figcaption>The spine never changes per engine; only the right column does. SELECT and COLLECT are fully agnostic. SOLVE and EMIT are today's machinery untouched — the run paradigm and the emission seam stay exactly as they are. The only new construction on this page is the MESH row.</figcaption>
-  </figure>
-</section>
-
-<section>
-  <p class="eyebrow">Section B</p>
-  <h2>Input vocabulary — descriptive, not a change</h2>
-  <p>Nothing about how inputs are formatted, resolved, or stored changes: the resolved sheet, the doors, the journal, and rerun all stay exactly as they are. The five categories below are <em>words for talking about inputs</em> — what any simulation's input set looks like — useful in forms, docs, and gate conversation. They are not a schema and nothing gets re-categorized.</p>
-  <table>
-    <tr><th>Category</th><th>Meaning</th></tr>
-    <tr><td class="mono">geometry</td><td>mesh or domain — where the simulation lives</td></tr>
-    <tr><td class="mono">boundary conditions</td><td>the world pushing on the run: inflow, tide, rain, wind</td></tr>
-    <tr><td class="mono">initial conditions</td><td>the state at t=0: initial water level, thermocline</td></tr>
-    <tr><td class="mono">physical parameters</td><td>material truth: friction, dispersion, decay rates</td></tr>
-    <tr><td class="mono">numerical parameters</td><td>discretization: spatial resolution, time step, duration</td></tr>
-  </table>
-</section>
-
-<section>
-  <p class="eyebrow">Section C — the new construction</p>
-  <h2>The mesh tool — a tool family like fetch</h2>
-  <p>The winning pattern a third time: fetch = declarative specs + one router; styles = declarative presets + one seam; <strong>mesh = a parametric spec + a registry of named edit actions wrapping official mesher libraries</strong>. The policy zoo (MeshPolicy, CorridorPolicy, CatchmentPolicy) dies into spec fields; <code>MeshArtifact</code> stays as the convergence point. Meshers are libraries, not engines — one OceanMesh2D build feeds TELEMAC, SWAN and SCHISM alike, which is exactly why the mesh tool stands alone.</p>
-
-  <h3>The signature — a declaration block, like DATA and PARAMS</h3>
-  <pre class="code"><code># module level in the template, beside DATA and PARAMS — frozen, NOTHING builds at import
+<h3>4.1 Signature &mdash; a declaration block, like DATA and PARAMS</h3>
+<pre><code># module level in the template, beside DATA and PARAMS — frozen, NOTHING builds at import
 MESH = tool.build_mesh(
-    mesher = "om2d",              # mesher: om2d | telapy_mesh | hecras | reg_grid
+    mesher = "om2d",              # om2d | telapy_mesh | hecras | reg_grid
     kind   = "unstructured_tri",  # structured_grid | unstructured_tri |
                                   #   unstructured_quad_flex | curvilinear | node_link
     aoi    = P.aoi,               # or the workflow's domain
@@ -274,142 +86,83 @@ tool.build_mesh(mesher="om2d", kind="unstructured_tri", aoi=aoi, ...)
 session.edit("set_boundary",  side="seaward", type="open")
 session.edit("refine_region", geometry=harbor_poly, edge_length=10)
 session.edit("restart")       # truncates back to the declared prefix
-session.accept()              # -&gt; MeshArtifact (.slf / .gr3 / fort.14 + MDAL display)</code></pre>
+session.accept()              # -> MeshArtifact (.slf / .gr3 / fort.14 + MDAL display)</code></pre>
 
-  <h3>The edit-action registry — where all three surfaces converge</h3>
-  <p>Each mesher registers named actions with typed inputs: thin hooks wrapping the library's own functions, never reimplementations. The router validates a spec and an edit against the registering mesher's declared fields, loudly — the bag is typed at the router, not by Python classes. And <strong>an action never cares who authored its inputs</strong>:</p>
-  <ul>
-    <li><span class="pill">direct</span> code and drivers call actions with params;</li>
-    <li><span class="pill">agent</span> gets <em>generated</em> tools — one per registered action, mounted only while a MeshSession is open, unmounted on accept;</li>
-    <li><span class="pill">user-drawn</span> (later) QGIS drawings deliver geometry <em>into the same actions</em> — the substrate under the future drawing surface already exists.</li>
-  </ul>
+<h3>4.2 Edit-action registry &mdash; where all three surfaces converge</h3>
+<p>Each mesher registers named actions with typed inputs: thin hooks wrapping the library's own functions, never reimplementations. The router validates a spec and an edit against the registering mesher's declared fields, loudly &mdash; the bag is typed at the router, not by Python classes. An action never cares who authored its inputs:</p>
+<ul>
+<li><b>direct</b> &mdash; code and drivers call actions with params;</li>
+<li><b>agent</b> &mdash; generated tools, one per registered action, mounted only while a MeshSession is open, unmounted on accept;</li>
+<li><b>user-drawn</b> (later) &mdash; QGIS drawings deliver geometry into the same actions.</li>
+</ul>
 
-  <h3>The gate loop</h3>
-  <figure>
-    <div class="scroll">
-    <svg viewBox="0 0 940 240" role="img" aria-label="The gate loop: the default mesh is built and presented; the user speaks; the agent calls edit actions; the mesh rebuilds and is presented again with probes and a snapshot; the loop ends at accept, producing a MeshArtifact, or restart, clearing the edit chain.">
-      <defs>
-        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
-        </marker>
-      </defs>
-      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="'IBM Plex Mono',monospace" font-size="11">
-        <rect x="20" y="80" width="140" height="60" rx="4"/>
-        <text x="90" y="105" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">default build</text>
-        <text x="90" y="123" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">demand-pulled</text>
+<h3>4.3 Gate loop</h3>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    B["default build (demand-pulled)"] --> G["GATE presents: MDAL layer + probes"]
+    G -- "user speaks" --> E["agent calls edit(...) — scoped tools only"]
+    E --> R["rebuild: probes + snapshot"]
+    R --> G
+    G -- "QGIS hand-edit" --> Q["edit('apply_layer_edits', layer)"] --> R
+    G -- accept --> A["MeshArtifact"]
+    G -- restart --> T["chain truncated to declared prefix"] --> G
+</pre>
+</div>
+<p>USER-GATED mode runs this loop; AUTO mode builds inline and skips it. Boundary definition lives in the same loop. After a hand-edit the compat gate re-checks and solver-format translation runs as normal.</p>
 
-        <line x1="160" y1="110" x2="218" y2="110" marker-end="url(#arr2)"/>
-
-        <rect x="220" y="80" width="170" height="60" rx="4" stroke="#0E7C86" stroke-width="2"/>
-        <text x="305" y="105" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">GATE presents</text>
-        <text x="305" y="123" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">MDAL layer + probes</text>
-
-        <line x1="390" y1="95" x2="458" y2="60" marker-end="url(#arr2)"/>
-        <text x="418" y="60" fill="currentColor" stroke="none" font-size="10">user speaks</text>
-        <rect x="460" y="30" width="180" height="54" rx="4"/>
-        <text x="550" y="52" text-anchor="middle" fill="currentColor" stroke="none">agent → edit(...)</text>
-        <text x="550" y="70" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">scoped tools only</text>
-
-        <line x1="640" y1="57" x2="708" y2="95" marker-end="url(#arr2)"/>
-        <rect x="710" y="80" width="150" height="60" rx="4"/>
-        <text x="785" y="105" text-anchor="middle" fill="currentColor" stroke="none">rebuild</text>
-        <text x="785" y="123" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">probes + snapshot</text>
-
-        <path d="M 710 125 C 560 185, 460 185, 392 130" marker-end="url(#arr2)"/>
-        <text x="550" y="178" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">present again · or QGIS hand-edit → apply_layer_edits</text>
-
-        <line x1="305" y1="140" x2="305" y2="192" marker-end="url(#arr2)"/>
-        <text x="305" y="212" text-anchor="middle" fill="currentColor" stroke="none" font-size="10">accept → MeshArtifact · restart → chain cleared</text>
-      </g>
-    </svg>
-    </div>
-    <figcaption>USER-GATED mode runs this loop; AUTO mode builds inline and skips it. The QGIS hand-edit round-trip is just another action — the user edits the MDAL layer with any QGIS tool, and the edited layer re-enters as <code>edit("apply_layer_edits", layer=…)</code>; the compat gate re-checks and solver-format translation runs as normal. Boundary definition lives in the same loop.</figcaption>
-  </figure>
-
-  <h3>The recipe is the record</h3>
-  <p>A mesh IS <code>(spec + ordered edit chain)</code>, journaled like the run journal — deterministic rebuild by replay, <code>restart</code> truncates the chain, rerun and provenance come free. A QGIS hand-edit enters as one recorded action carrying the edited layer's hash: honest about being non-replayable, while everything around it still is.</p>
-  <pre class="code"><code>mesh_recipe.jsonl
+<h3>4.4 The recipe is the record</h3>
+<p>A mesh IS <code>(spec + ordered edit chain)</code>, journaled &mdash; deterministic rebuild by replay; <code>restart</code> truncates; rerun and provenance come free. A QGIS hand-edit enters as one recorded action carrying the edited layer's hash: honestly non-replayable, while everything around it still is.</p>
+<pre><code>mesh_recipe.jsonl
   {"spec": {"mesher": "om2d", "kind": "unstructured_tri", "refine": {...}}}
-  {"edit": "add_obstacle",      "geometry": "sha256:…", "source": "fetch_osm_breakwaters"}
+  {"edit": "add_obstacle",      "geometry": "sha256:...", "source": "fetch_osm_breakwaters"}
   {"edit": "set_boundary",      "side": "seaward", "type": "open"}
-  {"edit": "apply_layer_edits", "layer": "sha256:…", "replayable": false}</code></pre>
+  {"edit": "apply_layer_edits", "layer": "sha256:...", "replayable": false}</code></pre>
 
-  <h3>Agent eyes</h3>
-  <p>Every action returns numeric probes — node/element count, edge-length histogram, min-angle quality, boundary segments, obstacle count — <em>and</em> the session renders a wireframe snapshot the agent reads with vision (the proof render lane). The agent gets competent eyes; the human at the gate stays the final eye.</p>
+<h3>4.5 Agent eyes</h3>
+<p>Every action returns numeric probes &mdash; node/element count, edge-length histogram, min-angle quality, boundary segments, obstacle count &mdash; and the session renders a wireframe snapshot the agent reads with vision. The human at the gate stays the final eye.</p>
 
-  <h3>Supplied mesh + laziness (as ruled)</h3>
-  <ul>
-    <li><strong>Explicit-first, discovery-second:</strong> an explicit mesh argument on the run always wins; otherwise the router discovers compatible MeshArtifacts already authored in the case and offers them at the gate; else the workflow's declared spec builds the default.</li>
-    <li><strong>Demand-pull:</strong> the build fires when a downstream step first demands the artifact — the form stays cheap, refused runs cost nothing.</li>
-  </ul>
+<h3>4.6 Supplied mesh + laziness</h3>
+<ul>
+<li><b>Explicit-first, discovery-second:</b> an explicit mesh argument on the run always wins; else the router discovers compatible MeshArtifacts already authored in the case and offers them at the gate; else the declared spec builds the default.</li>
+<li><b>Demand-pull:</b> the build fires when a downstream step first demands the artifact &mdash; the form stays cheap, refused runs cost nothing.</li>
+</ul>
 
-  <h3>Mesh types</h3>
-  <table class="scroll">
-    <tr><th>Axis</th><th>Types</th></tr>
-    <tr><td>Kind<br><span class="meta">the tool's vocabulary</span></td><td class="mono">structured_grid · unstructured_tri · unstructured_quad_flex · curvilinear · node_link</td></tr>
-    <tr><td>Mesher<br><span class="meta">who builds it</span></td><td class="mono">om2d (OceanMesh2D) · telapy_mesh (mesh.py) · hecras (graded-seed mesher) · reg_grid</td></tr>
-    <tr><td>Solver format<br><span class="meta">what the deck writer consumes</span></td><td class="mono">SELAFIN .slf +BOTTOM (TELEMAC) · hgrid.gr3 +open bdry (SCHISM) · fort.14 (SWAN unstructured) · authoring bundle (HEC-RAS) · regular grid (SFINCS/SWAN)</td></tr>
-    <tr><td>Display face<br><span class="meta">QGIS-compat, editable</span></td><td class="mono">MDAL .2dm mesh layer (never a picture)</td></tr>
-  </table>
-</section>
+<h3>4.7 Mesh types</h3>
+<table>
+<tr><th>axis</th><th>types</th></tr>
+<tr><td>kind (the tool's vocabulary)</td><td><code>structured_grid &middot; unstructured_tri &middot; unstructured_quad_flex &middot; curvilinear &middot; node_link</code></td></tr>
+<tr><td>mesher (who builds it)</td><td><code>om2d</code> (OceanMesh2D) &middot; <code>telapy_mesh</code> (mesh.py) &middot; <code>hecras</code> (graded-seed mesher) &middot; <code>reg_grid</code></td></tr>
+<tr><td>solver format (what the deck writer consumes)</td><td>SELAFIN .slf +BOTTOM (TELEMAC) &middot; hgrid.gr3 +open boundary (SCHISM) &middot; fort.14 (SWAN unstructured) &middot; authoring bundle (HEC-RAS) &middot; regular grid (SFINCS/SWAN)</td></tr>
+<tr><td>display face (QGIS-compat, editable)</td><td>MDAL .2dm mesh layer &mdash; never a picture</td></tr>
+</table>
 
-<section>
-  <p class="eyebrow">Section D</p>
-  <h2>Where the QGIS translation lives</h2>
-  <p><strong>Split by audience.</strong></p>
-  <ul>
-    <li><strong>mesh/ owns solver formats</strong> — .slf, .gr3, the HEC-RAS bundle: solver food.</li>
-    <li><strong>emission owns the display face</strong> — domain mesh → MDAL-loadable layer. A mesh is just another <em>data type</em> on the one emission seam, exactly like rasters, vectors, and series. The <code>.2dm</code> writer moves out of <code>generate_mesh</code> onto the seam when the mesh wave lands.</li>
-  </ul>
-  <div class="note">The razor: if it feeds a <em>solver</em>, it is mesh/'s business; if it feeds a <em>screen</em>, it is emission's. One seam per audience, no third place.</div>
+<h2>5. QGIS translation placement</h2>
+<p>Split by audience. <b>mesh/</b> owns solver formats (.slf, .gr3, the HEC-RAS bundle): solver food. <b>emission</b> owns the display face (domain mesh &rarr; MDAL-loadable layer): a mesh is just another data type on the one emission seam, like rasters, vectors, and series. The <code>.2dm</code> writer moves out of <code>generate_mesh</code> onto the seam when the mesh wave lands.</p>
+<p><b>Razor:</b> feeds a solver &rarr; mesh/'s business; feeds a screen &rarr; emission's. One seam per audience, no third place.</p>
 
-  <h3>Emission stays declarative (frozen subsystem)</h3>
-  <p>No specialization per workflow or engine: products declare a <em>quantity</em>; <code>styles.yaml</code> resolves the look; <code>.style()</code> overrides declaratively; <code>restyle_layer</code> changes the display face only. The seam generalizes by data type, never by engine:</p>
-  <figure>
-    <div class="scroll">
-    <svg viewBox="0 0 940 210" role="img" aria-label="Neutral products flow through one emission seam governed by styles.yaml, fanning out to five data types that all land in QGIS.">
-      <defs>
-        <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
-        </marker>
-      </defs>
-      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="'IBM Plex Mono',monospace" font-size="11">
-        <rect x="20" y="75" width="170" height="60" rx="4"/>
-        <text x="105" y="100" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">neutral products</text>
-        <text x="105" y="118" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">quantity-tagged</text>
+<h3>5.1 Emission stays declarative (frozen subsystem)</h3>
+<p>Products declare a quantity; <code>styles.yaml</code> resolves the look; <code>.style()</code> overrides declaratively; <code>restyle_layer</code> changes the display face only. The seam generalizes by data type, never by engine:</p>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    P["neutral products (quantity-tagged)"] --> S["ONE SEAM — styles.yaml, .style(), restyle"]
+    S --> R["raster / COG (+ GIF frames)"]
+    S --> M["mesh layer (MDAL, editable)"]
+    S --> V["vector (boundaries, breaklines)"]
+    S --> T["series (gauges, journal probes)"]
+    S --> C["chart (bottom-dock window)"]
+    R --> Q["QGIS"]
+    M --> Q
+    V --> Q
+    T --> Q
+    C --> Q
+</pre>
+</div>
 
-        <line x1="190" y1="105" x2="258" y2="105" marker-end="url(#arr3)"/>
-
-        <rect x="260" y="75" width="190" height="60" rx="4" stroke="#0E7C86" stroke-width="2"/>
-        <text x="355" y="100" text-anchor="middle" fill="currentColor" stroke="none" font-weight="600">ONE SEAM</text>
-        <text x="355" y="118" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" opacity=".7">styles.yaml · .style() · restyle</text>
-
-        <line x1="450" y1="85" x2="530" y2="35" marker-end="url(#arr3)"/>
-        <line x1="450" y1="95" x2="530" y2="72" marker-end="url(#arr3)"/>
-        <line x1="450" y1="105" x2="530" y2="105" marker-end="url(#arr3)"/>
-        <line x1="450" y1="115" x2="530" y2="140" marker-end="url(#arr3)"/>
-        <line x1="450" y1="125" x2="530" y2="177" marker-end="url(#arr3)"/>
-
-        <text x="540" y="39" fill="currentColor" stroke="none">raster / COG (+ GIF frames)</text>
-        <text x="540" y="76" fill="currentColor" stroke="none">mesh layer (MDAL, editable)</text>
-        <text x="540" y="109" fill="currentColor" stroke="none">vector (boundaries, breaklines)</text>
-        <text x="540" y="144" fill="currentColor" stroke="none">series (gauges, journal probes)</text>
-        <text x="540" y="181" fill="currentColor" stroke="none">chart (bottom-dock window)</text>
-
-        <line x1="860" y1="105" x2="898" y2="105" marker-end="url(#arr3)"/>
-        <text x="905" y="109" fill="currentColor" stroke="none" font-weight="600">QGIS</text>
-      </g>
-    </svg>
-    </div>
-    <figcaption>One declarative seam, five data types, zero per-engine emission code. Adding an engine adds readers, never emission code; adding a data type adds one lane here, never a parallel seam.</figcaption>
-  </figure>
-</section>
-
-<section>
-  <p class="eyebrow">Section E</p>
-  <h2>Class view — the mesh tool</h2>
-  <p>The classes the mesh wave builds. Downstream of <code>MeshArtifact</code>, everything is today's machinery: the deck writers, the box dispatch, the emission seam. (Stepping via telapy is deliberately absent — the run paradigm as-is carries the spec; stepping arrives later for free.)</p>
-  <div class="scroll">
+<h2>6. Class view</h2>
+<p>The classes the mesh wave builds. Downstream of <code>MeshArtifact</code>, everything is today's machinery: the deck writers, the box dispatch, the emission seam. Stepping via telapy is out of spec &mdash; the existing run paradigm carries everything; stepping arrives later for free.</p>
+<div class="scroll">
 <pre class="mermaid">
 classDiagram
     class Workflow {
@@ -472,7 +225,4 @@ classDiagram
     MeshArtifact --> CompatGate : checked per engine
     MeshArtifact --> Workflow : consumed by author + solve (today's path)
 </pre>
-  </div>
-</section>
-
-</main>
+</div>

@@ -17,6 +17,7 @@ under `docs/specs/` and published as an artifact for review. The format:
 - **UML** for structure: class diagrams (mermaid) for the static shape,
   simple flow/state diagrams (inline SVG or mermaid) for loops and
   pipelines. Diagrams depict the mechanism, with labeled arrows.
+- **Plain presentation.** Reference-style HTML: default typography, thin-bordered tables, bordered code blocks (visually distinct from prose and diagrams), mermaid for ALL diagrams - no decorative styling, fonts, or hand-drawn SVG.
 - **Plain language.** No design-pattern names, no jargon - describe what the
   code does ("a fixed spine of steps; engine-touching steps delegate to the
   official library"), not which pattern it resembles. Pattern vocabulary is
