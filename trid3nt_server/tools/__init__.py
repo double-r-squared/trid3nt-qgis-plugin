@@ -726,6 +726,11 @@ from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import tel
 # inferred from inputs); emits an MDAL .2dm display layer + a durable mesh artifact
 # (facts + solver geometries) a model template discovers via the precondition gate.
 from trid3nt_server.workflows.mesh.generate_mesh.generate_mesh import generate_mesh as _generate_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
+# build_mesh: the one mesh router. A parametric spec plus a per-mesher registry of
+# named edit actions wrapping the official mesh libraries; declared in a template it
+# is a frozen lazy ask, called standalone it builds now and stashes the artifact in
+# the case. Importing it registers the meshers behind it.
+from trid3nt_server.workflows.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
 # hecras_riverine_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
 # one folder under workflows/hecras/riverine_flood/. TEMPLATE-FIRST: reparameterizes
 # HEC's shipped Muncie White River (IN) demonstration deck (frozen geometry, scaled

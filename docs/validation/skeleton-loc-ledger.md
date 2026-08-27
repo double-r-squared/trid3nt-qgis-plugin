@@ -487,7 +487,26 @@ NOT COUNTED, by the rule at the head of this file: `tests/test_rerun_with_overri
 `tools/__init__.py` (one registration import out, one in, plus the comment
 saying which three setters are now the pre-migration lane).
 
+## Mesh wave - slice 1: the mesh router, the session, the mesher registry (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh slice 1 | mesh tool, NEW files (`workflows/mesh/session.py` 422 - the session, the recipe journal, replay, the display face and the probes; `workflows/mesh/tool.py` 351 - the router, the declaration value, the resolution order and the registered tool; `workflows/mesh/meshers/__init__.py` 285 - the registry, the field/action declarations and the shared hand-edit action; `workflows/mesh/meshers/reg_grid.py` 95 - the regular-grid mesher over the existing grid math) | 0 | 1153 | +1153 | +5324 |
+| 2026-08-27 | mesh slice 1 | mesh tool, EXISTING files (`workflows/mesh/artifact.py` +6 - `recipe_uri`, and `utm_epsg` widened to optional so a geographic lattice does not have to name a zone it is not in) | 362 | 368 | +6 | +5330 |
+
+**Verdict: +1159, and every line of it is the fixed cost the meshers are about
+to be paid out of.** Nothing is absorbed yet: the scattered meshing paths
+(`generate_mesh`, the deck-writer meshers, the policy classes, `MeshHandle`) are
+all still standing, and slices 2 and 5 are where they come off the board. What
+this row buys ahead of that is one router, one session, one recipe format and
+one registry, so a mesher is a file of declarations plus a build - `reg_grid` is
+95 lines and 58 of them are its declarations.
+
+NOT COUNTED, by the rule at the head of this file:
+`tests/test_build_mesh_tool.py` (351), `workflows/mesh/corpus.yaml` (not `.py`),
+and the 5-line registration import plus comment in `tools/__init__.py`.
+
 ## Corrected campaign net
 
-**The campaign net is +4171** - the true running sum of every delta in the tables
-above, from wave 2's first row to wave D's last.
+**The campaign net is +5330** - the true running sum of every delta in the tables
+above, from wave 2's first row to the mesh wave's slice 1.

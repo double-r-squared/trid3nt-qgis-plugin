@@ -62,19 +62,25 @@ class MeshArtifact:
     when node elevations were sampled (a solve-ready bed). ``open_boundary_info``
     records the segmented open/land boundary (``{}`` for a fully-closed inland
     catchment). ``engine_compat`` lists the engines whose REQUIRED geometry this
-    mesh actually carries (see :data:`ENGINE_MESH_REQUIREMENTS`)."""
+    mesh actually carries (see :data:`ENGINE_MESH_REQUIREMENTS`). ``recipe_uri``
+    points at the ``mesh_recipe.jsonl`` this mesh was built from - spec plus
+    ordered edits, the record a rebuild replays."""
 
     mesh_id: str
     name: str
-    mode: str  # "watershed" | "coastal_water_edge" | "hecras_rog"
+    mode: str  # "watershed" | "coastal_water_edge" | "hecras_rog" | a mesher name
     display_uri: str  # s3:// display face (a .2dm mesh, or a cell-polygon vector)
     slf_uri: str | None
-    utm_epsg: int
     crs_authid: str
     has_bathymetry: bool
     node_count: int
     element_count: int
     bbox: tuple[float, float, float, float]
+    #: The UTM zone the mesh's own coordinates are in; ``None`` when the mesh is not
+    #: in a projected UTM CRS (a geographic lattice has no zone).
+    utm_epsg: int | None = None
+    #: The ``mesh_recipe.jsonl`` (spec + ordered edit chain) this mesh replays from.
+    recipe_uri: str | None = None
     engine_compat: list[str] = field(default_factory=list)
     gr3_uri: str | None = None
     fort14_uri: str | None = None
