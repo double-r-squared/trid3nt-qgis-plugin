@@ -638,3 +638,33 @@ NOT COUNTED by the rule at the head of this file: `workers/schism/schism_gr3.py`
 gr3 writer, worker tree), `scripts/sandbox/oceanmesh/mesh_formats.py` 245 -> 285
 (+40, the same two changes in `write_fort14`), and
 `tests/test_mesh_om2d_telapy.py` 502 -> 738 (+236).
+
+## Mesh wave - slice 4: the gate loop (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh 4 | `workflows/mesh/gate.py` NEW - the mount/unmount lifecycle, the generated per-action tools, the presentation, and the parked loop for a demanded build | 0 | 437 | +437 | +8546 |
+| 2026-08-27 | mesh 4 | `tools/__init__.py` (+44 - `mount_tool` / `unmount_tool` / `MOUNTED_TOOLS`: the one seam a session-scoped tool enters and leaves the registry through) | 944 | 988 | +44 | +8590 |
+| 2026-08-27 | mesh 4 | `workflows/mesh/tool.py` (+19 - the `input_mode` lever and the user-gated branch that presents instead of accepting) | 443 | 462 | +19 | +8609 |
+| 2026-08-27 | mesh 4 | `tools/search/tool_retrieval.py` (+2 - mounted names join the visibility floor) | 345 | 347 | +2 | +8611 |
+| 2026-08-27 | mesh 4 | `gates/tool_gating.py` (+5 - the same floor on the openai gate) | 355 | 360 | +5 | +8616 |
+
+**Verdict: +507, and none of it is a second mechanism.** The gate reuses the
+pending-confirmation spine, `resolve_input_gate_mode`, and
+`publish_input_layer` verbatim; what is actually new is the mount lifecycle
+(44 lines in the registry, the rest of it generation and the loop). The tool
+schemas the model reads are GENERATED from the mesher's own action registry, so
+a new mesher adds edit tools without a line here.
+
+NOT COUNTED by the rule at the head of this file: `tests/test_mesh_gate_loop.py`
+346 (new).
+
+NOT DELETED, and why: the template-specific approve-mesh GateSpec plumbing
+(`river_dye._TELEMAC_RIVER_DYE_METADATA.gate_spec`,
+`solver_confirm:estimate_telemac_mesh` / `pin_telemac_mesh` /
+`_build_telemac_mesh_envelope`, `telemac/steps/mesh_preview.py`) still stands.
+`telemac_river_dye` meshes through `MeshPolicy` / `CorridorPolicy` /
+`MeshHandle`, not through a `MeshSession`, so the new gate does not yet fire on
+that template - deleting its card now would remove the user's only mesh review
+with nothing in its place. The chop belongs to the template migration that
+moves `river_dye.MESH` onto `tool.build_mesh`.
