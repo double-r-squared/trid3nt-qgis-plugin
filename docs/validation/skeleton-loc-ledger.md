@@ -668,3 +668,55 @@ NOT DELETED, and why: the template-specific approve-mesh GateSpec plumbing
 that template - deleting its card now would remove the user's only mesh review
 with nothing in its place. The chop belongs to the template migration that
 moves `river_dye.MESH` onto `tool.build_mesh`.
+
+## Mesh wave - slices 5 + 7: the template migration and dt from measured edges (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh 5 | `lib/slots.py` (-28 - `MeshPolicy` deleted; the universal sizing ask is spec fields on the mesher that reads them) | 148 | 120 | -28 | +8588 |
+| 2026-08-27 | mesh 5 | `lib/workflow.py` (-6 - `EngineOps.build_mesh` deleted; `solver_spec` -> `solve`, `read_results` -> `read`) | 648 | 642 | -6 | +8582 |
+| 2026-08-27 | mesh 5 | `telemac/workflow.py` (-33 net - `CorridorPolicy` + `MeshHandle` out, `_Process.domain_ref` + `mesh_deck_fields` in) | 429 | 396 | -33 | +8549 |
+| 2026-08-27 | mesh 5 | `telemac/steps/rain_on_grid.py` (-24 - `CatchmentPolicy` out; `Catchment.mesh` unpacks the declaration) | 941 | 917 | -24 | +8525 |
+| 2026-08-27 | mesh 5 | `mesh/meshers/watershed.py` (+38 - the two ex-policy knobs declared and carried, and an acquired window read as an extent plus its outlet) | 249 | 287 | +38 | +8563 |
+| 2026-08-27 | mesh 5 | the seven TELEMAC templates (+42 across `river_dye` +6, `do_sag` +6, `coastal_tidal_surge` +8, `agitation` +8, `wave_field` +8, `stratified_flow` +8, `rain_on_grid` -2) | 1699 | 1741 | +42 | +8605 |
+| 2026-08-27 | mesh 7 | `mesh/artifact.py` (+23 - `probes` on the artifact + `measured_min_edge_m`) | 372 | 395 | +23 | +8628 |
+| 2026-08-27 | mesh 7 | `mesh/session.py` (+1 - accept records what it measured) | 501 | 502 | +1 | +8629 |
+| 2026-08-27 | mesh 7 | `telemac/steps/reach.py` (+10 - `suggest_time_step_s` prefers the measured edge) | 865 | 875 | +10 | +8639 |
+
+**Verdict: +23 across fifteen files, and four classes gone.** The migration is
+close to LOC-neutral because it is a MOVE, not an addition: the sizing and shape
+fields the three policy classes carried are now declared on the meshers that read
+them, where the router already validates every field by name. What the +42 on the
+templates buys is a declaration that states which mesher builds the domain and
+what it is asked for, in place of two opaque policy objects assembled at a facade
+call; the +38 on the watershed mesher is the ex-`CatchmentPolicy` knobs becoming
+declared, documented, replay-carried fields rather than kwargs forwarded blind.
+
+DECK PARITY, measured rather than asserted: every one of the seven templates'
+FULL plans - each step's runner, stage, name and every kwarg - was dumped before
+the migration and after it and diffed. Byte-identical, `rain_on_grid` included,
+which is why nothing here needed the "legitimate diff" the kickoff allowed for.
+
+NOT COUNTED by the rule at the head of this file: `tests/test_workflow_skeleton.py`
+504 -> 580 (+76, the fleet's mesh declarations and the deck fields they reach) and
+`tests/test_build_mesh_tool.py` 396 -> 455 (+59, the artifact's probes and the
+measured-edge timestep).
+
+STILL NOT DELETED, and why: the template-specific approve-mesh GateSpec plumbing
+(`river_dye._TELEMAC_RIVER_DYE_METADATA.gate_spec`,
+`solver_confirm:estimate_telemac_mesh` / `pin_telemac_mesh` /
+`_build_telemac_mesh_envelope`, `telemac/steps/mesh_preview.py`) still stands.
+The migration moved the ASK onto `tool.build_mesh`; the corridor mesh a reach run
+solves on is still built inside the TELEMAC deck writer and the worker, so no
+`MeshSession` opens on that template and the standard mesh gate still does not
+fire there. Deleting the card now would remove the user's only mesh review with
+nothing in its place. CONDITION unchanged: `author` demand-pulls a `corridor_tin`
+build and the reach deck consumes the accepted `MeshArtifact`.
+
+Slice 7 lands the seam and its measurement, not new call sites: the accepted
+artifact carries its probes and `suggest_time_step_s` prefers the measured
+minimum edge. Every TELEMAC caller today is an ESTIMATE path - the reach deck and
+the mesh preview both derive dt before any mesh exists - so they pass no artifact
+and read the requested edge, which is the honest answer at that moment. The
+tightening becomes live for the reach family under the same condition as the gate
+chop above.

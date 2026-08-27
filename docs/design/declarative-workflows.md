@@ -66,10 +66,13 @@ DATA = (
 )
 
 # -- the binding blocks --------------------------------------------------- #
-PHYSICS  = Physics("tracer", substance=P.substance, release=P.release_coords)
-FORCING  = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain)
-MESH     = MeshPolicy(resolution=P.mesh_resolution, target_edge_m=P.mesh_size_m)
-CORRIDOR = CorridorPolicy(extent_km=P.reach_length_km, width_m=P.channel_width_m)
+PHYSICS = Physics("tracer", substance=P.substance, release=P.release_coords)
+FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain)
+MESH    = tool.build_mesh(mesher="corridor_tin", kind="unstructured_tri",
+                          domain=Ref("reach"), extent_km=P.reach_length_km,
+                          width_m=P.channel_width_m, banks=P.bank_source,
+                          refine={"edge_length": P.mesh_size_m,
+                                  "mode": P.mesh_resolution})
 
 
 def plan(ops):
@@ -80,16 +83,15 @@ def plan(ops):
         Geocode.river(P.location).named("reach"),
         When(P.delineate,
              Delineate.watershed(dem=D.terrain).overrides_domain()),
-        ops.author(mesh=ops.build_mesh(Ref("reach"), MESH, corridor=CORRIDOR),
-                   physics=PHYSICS, forcing=FORCING),
-        ops.solver_spec(compute_class=P.compute_class, physics=PHYSICS),
-        ops.read_results(Ref("solve"), physics=PHYSICS, forcing=FORCING)
+        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
+        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
+        ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
            .chart("concentration_timeseries", builder=dye_chart),
     ]
 ```
 
 The plan returns the STEP SEQUENCE. The skeleton names and engines it (from the
-registration metadata and the facade), and `ops` is the engine facade whose five
+registration metadata and the facade), and `ops` is the engine facade whose four
 operations the mechanism steps are reached through. A chart's `builder` is the
 FUNCTION, colocated in the template file.
 
@@ -485,15 +487,19 @@ the contract and the code do not drift:
   sequence; it does not label it. The ORDER is not enforced yet, because the mesh
   gate that sits mid-sequence does not exist and both cohort templates gate at
   the front;
-* `EngineOps.build_mesh` returns a `MeshHandle` for TELEMAC (the corridor mesher
-  still runs inside the deck writer and the worker). The interface is the frozen
-  part, exactly as intended - the shared front is a later iteration;
-* the placement rule was applied AGAIN in wave 2b and moved three fields: a
-  corridor's `extent_km` / `width_m` / `boundary_source` are not universal, so
-  they left `MeshPolicy` for the facade's own `CorridorPolicy`, and
-  `shared/aoi.location_or_bbox` lost its `code_prefix="TELEMAC"` default. A
-  shared file that defaults to one engine is a placement leak wearing a
-  convenience's clothes.
+* the mesh is no longer a facade operation at all. A template declares
+  `MESH = tool.build_mesh(...)` beside DATA and PARAMS, the router checks every
+  field against the chosen mesher's own declarations, and `author` reads the deck
+  keywords off it. One mesher's build feeds several engines, so the ask stands
+  outside any one engine's facade; the corridor mesher still runs inside the
+  TELEMAC deck writer and the worker, and the deck ask is unchanged by the move;
+* the placement rule settled where the corridor fields live twice. Wave 2b moved
+  `extent_km` / `width_m` / `boundary_source` off the universal `MeshPolicy` onto
+  a facade-owned `CorridorPolicy`; the mesh wave moved them once more, onto the
+  `corridor_tin` mesher that actually reads them, and both policy classes went
+  with the move. `shared/aoi.location_or_bbox` lost its `code_prefix="TELEMAC"`
+  default in the same spirit: a shared file that defaults to one engine is a
+  placement leak wearing a convenience's clothes.
 
 ### The placement rule
 
@@ -536,31 +542,28 @@ Two slot kinds, distinguished per slot:
   to catch. It belongs to the emission-unification wave, where the seam is
   the single home; a test pins that the skeleton emits no input layer of
   its own.
-- **abstract slots** - must-fill: physics and the EngineOps five. The
+- **abstract slots** - must-fill: physics and the EngineOps four. The
   library refuses to register a template that leaves one empty.
 
 ### EngineOps - the engine facade
 
-Each engine subtype realizes exactly five abstract operations, and
-nothing else. The LANDED shapes (ADR 0312 + wave 2b):
+Each engine subtype realizes exactly four abstract operations, and
+nothing else:
 
     acquire_domain(**slots) -> tuple[Step, ...]
-    build_mesh(domain, policy, **slots) -> mesh handle
     author(*, mesh, physics, forcing) -> Step
-    solver_spec(**slots) -> Step
-    read_results(run, **slots) -> Step
+    solve(**slots) -> Step
+    read(run, **slots) -> Step
 
 Every operation takes its shaping values as SLOTS, so a template names
 what it means (`ops.acquire_domain(location=p.location, bbox=p.bbox,
 rivers=d.rivers, ...)`) rather than matching a positional `(p, d)`
-convention - and an engine's own extra slot (TELEMAC's
-`corridor=CorridorPolicy(...)`) arrives without widening the universal
-signature. `policy` is the engine-neutral `MeshPolicy`: SIZING only
-(`resolution`, `target_edge_m`). Domain SHAPE is not universal, so a
-corridor's extent, width and bank source live on the facade's own
-`CorridorPolicy` and ride in as a slot.
+convention. `mesh` is the template's frozen `tool.build_mesh(...)`
+declaration; the facade translates its declared fields into the deck
+keywords its writers know them by, and a field the chosen mesher declares
+but no deck reads shapes the mesh and reaches no writer.
 
-The five are MUST-FILL: `register_workflow` refuses a facade that leaves
+The four are MUST-FILL: `register_workflow` refuses a facade that leaves
 one unrealized, with a typed authoring error at import. A hole that
 reached run time would surface as a bare `NotImplementedError` flattened
 into `<ENGINE>_INTERNAL_ERROR` - a declaration defect wearing a runtime
