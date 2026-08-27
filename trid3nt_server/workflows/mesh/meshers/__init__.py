@@ -329,11 +329,21 @@ def apply_layer_edits_action() -> EditAction:
         doc="Adopt a hand-edited mesh layer as the current mesh.")
 
 
+#: Meta a mesher writes ABOUT one topology: the per-solver geometry files it wrote,
+#: the authoring bundle an engine re-realizes cells from, and the quantities it
+#: measured on those cells. An adopted layer is a different topology, so carrying
+#: any of them forward would hand a solver the pre-edit geometry under the edited
+#: mesh's name.
+_TOPOLOGY_BOUND_META = ("files", "bundle", "probes")
+
+
 def _apply_layer_edits(mesh: Mesh, *, layer: str) -> Mesh:
     from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
 
     points, cells, z = read_2dm_mesh(str(layer))
+    carried = {k: v for k, v in mesh.meta.items()
+               if k not in _TOPOLOGY_BOUND_META}
     # A .2dm always carries a node z column, so the edited layer cannot say whether
     # a bed was ever sampled; the mesh it replaces is what knows.
     return Mesh(points=points, cells=cells, crs_authid=mesh.crs_authid,
-                bed=(z if mesh.has_bed else None), meta=dict(mesh.meta))
+                bed=(z if mesh.has_bed else None), meta=carried)

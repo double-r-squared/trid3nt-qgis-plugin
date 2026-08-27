@@ -156,6 +156,43 @@ def test_2dm_round_trip():
     assert rc.tolist() == cells.tolist()
 
 
+def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
+    """A hand-edited layer is a different topology, so the per-solver geometry the
+    mesher wrote, the bundle an engine re-realizes from, and the probes measured on
+    the old cells must not ride into the accepted artifact - the solver would get
+    the pre-edit mesh under the edited mesh's name."""
+    import tempfile
+    from pathlib import Path
+
+    from trid3nt_server.workflows.mesh.meshers import Mesh, get_mesher
+
+    pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
+                    [500000.0, 3880100.0], [500100.0, 3880100.0]])
+    cells = np.array([[0, 1, 2], [1, 3, 2]])
+    z = np.array([10.0, 11.0, 12.0, 13.0])
+    p = Path(tempfile.mkdtemp()) / "edited.2dm"
+    p.write_text(write_2dm_arrays(pts, cells, z))
+
+    before = Mesh(
+        points=pts[:3], cells=np.array([[0, 1, 2]]), crs_authid="EPSG:32616",
+        bed=z[:3],
+        meta={"utm_epsg": 32616,
+              "files": {"gr3_uri": "/stale/hgrid.gr3", "slf_uri": "/stale/mesh.slf"},
+              "bundle": {"seeds": "/stale/seeds.geojson"},
+              "probes": {"open_node_count": 93},
+              "artifact": {"provenance": {"mesher": "coastal_edge"}}})
+
+    after = get_mesher("coastal_edge").action("apply_layer_edits").apply(
+        before, layer=str(p))
+
+    assert after.node_count == 4 and after.element_count == 2
+    for key in ("files", "bundle", "probes"):
+        assert key not in after.meta, f"{key} survived the adopted layer"
+    # What is ABOUT the domain rather than about its cells still rides.
+    assert after.meta["utm_epsg"] == 32616
+    assert after.meta["artifact"]["provenance"]["mesher"] == "coastal_edge"
+
+
 def test_read_2dm_rejects_empty():
     import tempfile
     from pathlib import Path

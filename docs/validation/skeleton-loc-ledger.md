@@ -559,7 +559,25 @@ NOT COUNTED, by the rule at the head of this file: `tests/test_mesh_meshers.py`
 (the renamed `test_generate_mesh.py`, 455 -> 515), the corpus YAML, and the
 registration comment in `tools/__init__.py`.
 
+## Mesh wave - slices 2 + 3 review: the adopted layer is a different topology (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | mesh slices 2+3 review | `meshers/__init__.py` (+10 - the adopted-layer action drops the meta bound to the topology it replaced: the per-solver geometry files, the engine authoring bundle, and the probes measured on the old cells) | 339 | 349 | +10 | +5763 |
+
+**Verdict: +10, and it closes a silent substitution.** The lift gave `watershed`
+and `coastal_edge` a `files` map naming the `.slf` / `.gr3` their build wrote;
+the hand-edit action copied the whole meta forward, so an edited mesh would have
+been accepted carrying the PRE-EDIT geometry under the edited mesh's name - a
+solver reading the artifact would have run the mesh the user had just changed.
+With the topology-bound keys dropped, TELEMAC's SELAFIN is rewritten from the
+edited arrays and SCHISM declines the mesh loudly (no `gr3_uri`) instead of being
+handed a stale one.
+
+NOT COUNTED: the 37 lines added to `tests/test_mesh_meshers.py` (515 -> 552).
+
 ## Corrected campaign net
 
-**The campaign net is +5753** - the true running sum of every delta in the
-tables above, from wave 2's first row to the mesh wave's slices 2 and 3.
+**The campaign net is +5763** - the true running sum of every delta in the
+tables above, from wave 2's first row to the mesh wave's slices 2 and 3 and their
+review.
