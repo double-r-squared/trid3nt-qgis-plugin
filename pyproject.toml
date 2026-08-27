@@ -213,10 +213,6 @@ dependencies = [
     # adaptive thinking, the prompt-cache usage fields, and AsyncAnthropic
     # messages.stream() with get_final_message().
     "anthropic>=1,<2",
-    # The MCP stdio entrypoint (trid3nt_server/mcp_server.py) exposes the tool
-    # registry to MCP clients. >= 2 is the line where FastMCP became MCPServer
-    # and tools accept a pre-built definition list.
-    "mcp>=2,<3",
     # DuckDB spatial-query fold (Phase B): the spatial_query tool runs
     # read-only SQL over the Case's vector layers via DuckDB + its spatial
     # extension (ST_Read). The spatial/httpfs extensions download on first
@@ -255,7 +251,6 @@ local-engines = [
 
 [project.scripts]
 trid3nt-server = "trid3nt_server.main:run"
-trid3nt-mcp = "trid3nt_server.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
