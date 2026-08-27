@@ -1182,3 +1182,32 @@ declarations, the corridor's typed domain refusals and the adopted-layer
 topology check.
 
 **Status:** DELETED (superseded).
+
+## The approve-mesh gate's CLIENT half - DELETED 2026-08-27
+
+**What:** `plugin/ui/gate.py` `release_point_required` + `release_point_bbox` and
+the `release_point` argument of `resolve_gate_decision`; `plugin/ui/cards.py`
+`GateCard`'s release-point picker row, its map-tool toggle, its click handler and
+its teardown (plus the now-dead `iface` / `to_lonlat` constructor arguments and
+the "Continue" button relabel); `plugin/tests/headless_bk3b_approve_mesh_drive.py`
+and `plugin/tests/validate_bk3b_driver_offline.py`.
+
+**Why it died:** the server-side approve-mesh GateSpec that set
+`tool_args.release_point_required` and `tool_args.mesh_bbox` was deleted with the
+template-specific gate metadata; nothing has produced either key since. The card
+rendered a picker no envelope asked for and the two drivers asserted a contract no
+server emits.
+
+**Superseded by:** the standard mesh gate loop
+(`trid3nt_server/workflows/mesh/gate.py`), whose card is the param sheet the
+shipped client already renders, and
+`plugin/tests/headless_mesh_gate_drive.py` +
+`plugin/tests/validate_mesh_gate_driver_offline.py`, which assert THAT sheet - the
+`<action>.<input>` knob rows and the `restart` row - and keep the river-dye
+peak-layer and bank-metrics witnesses verbatim.
+
+**Status:** DELETED (superseded).
+- trid3nt_server/mcp_server.py: MCP server, zero product consumers - NATE purge ruling, separate piece for its own future attention (mcp-purge 2026-08-27)
+- tests/test_mcp_server.py: tested only the deleted mcp_server module (mcp-purge 2026-08-27)
+- docs/design/mcp-server.md: design doc for the deleted server; decision 0302 stays as history (mcp-purge 2026-08-27)
+- .mcp.json.example: client config example for the deleted server (mcp-purge 2026-08-27)
