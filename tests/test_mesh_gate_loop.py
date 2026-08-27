@@ -344,3 +344,134 @@ async def test_gate_stops_asking_after_its_rounds(tmp_path, monkeypatch):
 
     await driver
     assert excinfo.value.error_code == "MESH_GATE_NOT_APPROVED"
+
+
+# --------------------------------------------------------------------------- #
+# The revision channel the SHIPPED card can actually reach.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_the_card_carries_one_row_per_numeric_knob_plus_the_truncation(
+        tmp_path, monkeypatch):
+    """The gate's edit surface has to be a channel the client renders.
+
+    A card the user can only proceed or cancel on makes the loop's third answer
+    unreachable, and the model cannot stand in for it - it is blocked on the
+    gate's own future while the card is open, so its mounted edit tools are no
+    fallback. The param sheet is that channel: one editable row per numeric edit
+    knob, named for the action it turns, plus the truncation row.
+    """
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    driver = asyncio.create_task(_drive([("proceed", None)]))
+
+    await mesh_gate.gate_mesh_build(
+        _session(tmp_path), tool_name="telemac_river_dye",
+        input_mode="user_gated")
+
+    await driver
+    _mtype, envelope = fake.sent[0]
+    names = [row.name for row in envelope.param_sheet.rows]
+    assert "set_resolution.resolution_m" in names
+    assert "restart" in names
+    # An action taking a geometry or a layer is not a knob a grid can carry, so
+    # it stays on the mounted tools and off the card.
+    assert not [n for n in names if n.startswith(("set_extent", "apply_layer"))]
+    assert all(row.editable for row in envelope.param_sheet.rows)
+
+
+@pytest.mark.asyncio
+async def test_a_knob_edited_on_the_card_rebuilds_the_mesh(tmp_path, monkeypatch):
+    """The client sends row name -> text; the loop turns that into the edit."""
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _session(tmp_path)
+    coarse = session.probes()["node_count"]
+    driver = asyncio.create_task(_drive([
+        ("narrow_scope", {"set_resolution.resolution_m": "900"}),
+        ("proceed", None),
+    ]))
+
+    art = await mesh_gate.gate_mesh_build(
+        session, tool_name="telemac_river_dye", input_mode="user_gated")
+
+    await driver
+    assert [e.action for e in session.chain] == ["set_resolution"]
+    assert session.chain[0].inputs["resolution_m"] == 900.0
+    assert art.node_count != coarse
+
+
+@pytest.mark.asyncio
+async def test_the_truncation_row_answers_yes_the_way_the_card_sends_it(
+        tmp_path, monkeypatch):
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _session(tmp_path, declared_resolution_m=250.0)
+    driver = asyncio.create_task(_drive([
+        ("narrow_scope", {"set_resolution.resolution_m": "900"}),
+        ("narrow_scope", {"restart": "yes"}),
+        ("proceed", None),
+    ]))
+
+    await mesh_gate.gate_mesh_build(
+        session, tool_name="telemac_river_dye", input_mode="user_gated")
+
+    await driver
+    assert [e.action for e in session.chain] == ["set_resolution"]
+    assert session.chain[0].inputs["resolution_m"] == 250.0
+
+
+@pytest.mark.asyncio
+async def test_a_knob_the_action_never_declared_refuses_by_name(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
+    driver = asyncio.create_task(
+        _drive([("narrow_scope", {"set_resolution.edge_length_m": "900"})]))
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate.gate_mesh_build(
+            _session(tmp_path), tool_name="telemac_river_dye",
+            input_mode="user_gated")
+
+    await driver
+    assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
+    assert "edge_length_m" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
+        tmp_path, monkeypatch):
+    """The reachability check, end to end through the CLIENT's own parser.
+
+    The plugin's gate helpers are pure python, so the card the server emits is
+    parsed here by the exact code the dock runs, its editors are typed into, and
+    what it would send back is fed to the loop - which is the only proof that the
+    channel is reachable rather than merely present on the envelope.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from plugin.ui import gate as client_gate
+
+    fake = _FakeEmitter()
+    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
+    session = _session(tmp_path)
+    driver = asyncio.create_task(_drive([("proceed", None)]))
+    await mesh_gate.gate_mesh_build(
+        session, tool_name="telemac_river_dye", input_mode="user_gated")
+    await driver
+
+    _mtype, envelope = fake.sent[0]
+    payload = envelope.model_dump(mode="json")
+    sheet = client_gate.parse_param_sheet(payload)
+    assert sheet is not None, "the shipped client renders no card for this envelope"
+
+    typed = {row.name: row.display() for row in sheet.rows}
+    typed["set_resolution.resolution_m"] = "900"
+    revised = client_gate.resolve_param_sheet_edits(sheet.rows, typed)
+    assert revised == {"set_resolution.resolution_m": "900"}
+
+    replayed = _session(tmp_path / "replay")
+    await mesh_gate._apply_gate_revision(replayed, revised)
+    assert [e.action for e in replayed.chain] == ["set_resolution"]
+    assert replayed.chain[0].inputs["resolution_m"] == 900.0

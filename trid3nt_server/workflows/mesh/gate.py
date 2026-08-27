@@ -378,19 +378,139 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
 
 async def _apply_gate_revision(session: MeshSession,
                                revised: Mapping[str, Any]) -> None:
-    """One gate reply as a chain change: a truncation or one named edit."""
-    if revised.get("restart"):
+    """One gate reply as a chain change: a truncation or the named edits it asks for.
+
+    Two spellings reach here and both are the same ask. A caller that already
+    knows the registry names one action outright; the card the user answers on
+    renders one editor per knob and sends back the knobs that MOVED, keyed
+    ``<action>.<input>``, so the reply is unpacked into the actions those knobs
+    belong to.
+    """
+    if _truthy(revised.get("restart")):
         await asyncio.to_thread(session.restart)
         return
     action = revised.get("edit")
-    if not action:
+    if action:
+        inputs = {k: v for k, v in revised.items() if k not in ("edit", "restart")}
+        await asyncio.to_thread(session.edit, str(action), **inputs)
+        return
+    edits = _sheet_edits(session, revised)
+    if not edits:
         raise MeshToolError(
             "MESH_GATE_REVISION_UNREADABLE",
-            f"a mesh gate revision names either {{'restart': true}} or "
-            f"{{'edit': '<action>', ...inputs}}; got {sorted(revised)}. The "
-            f"registered actions are {sorted(session.mesher.actions)}.")
-    inputs = {k: v for k, v in revised.items() if k not in ("edit", "restart")}
-    await asyncio.to_thread(session.edit, str(action), **inputs)
+            f"a mesh gate revision names either {{'restart': true}}, "
+            f"{{'edit': '<action>', ...inputs}} or the card's own "
+            f"'<action>.<input>' knobs; got {sorted(revised)}. The registered "
+            f"actions are {sorted(session.mesher.actions)}.")
+    for name, inputs in edits.items():
+        await asyncio.to_thread(session.edit, name, **inputs)
+
+
+def _truthy(value: Any) -> bool:
+    """A card's answer to a yes/no row, whichever shape the client sent it in."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("yes", "y", "true", "1", "on")
+    return bool(value)
+
+
+def _sheet_edits(session: MeshSession,
+                 revised: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """The card's moved knobs, regrouped into ``{action: {input: value}}``."""
+    edits: dict[str, dict[str, Any]] = {}
+    for key, value in revised.items():
+        action, _, field_name = str(key).partition(_KNOB_SEPARATOR)
+        if not field_name or action not in session.mesher.actions:
+            continue
+        declared = session.mesher.actions[action].inputs.get(field_name)
+        if declared is None:
+            raise MeshToolError(
+                "MESH_GATE_REVISION_UNREADABLE",
+                f"the gate reply names {key!r}, and the {action!r} action declares "
+                f"no input {field_name!r} "
+                f"({sorted(session.mesher.actions[action].inputs)}).")
+        edits.setdefault(action, {})[field_name] = _as_declared(key, declared, value)
+    return edits
+
+
+def _as_declared(key: str, declared: MeshField, value: Any) -> Any:
+    """A card row's text as the type its action declared.
+
+    A row rendered with no current value has nothing for the client to infer a
+    type from, so it sends what the editor holds; the declaration is what says
+    the knob is a number.
+    """
+    if not _is_numeric(declared) or not isinstance(value, str):
+        return value
+    try:
+        return float(value)
+    except ValueError:
+        raise MeshToolError(
+            "MESH_GATE_REVISION_UNREADABLE",
+            f"the gate reply set {key!r} to {value!r}, and "
+            f"{declared.name!r} takes a number.") from None
+
+
+#: What joins an action to one of its inputs in a card row's name. A row name is
+#: the key the edit rides back under, so it has to say which action the knob turns.
+_KNOB_SEPARATOR = "."
+
+#: The row every open gate offers beside the knobs: the truncation back to the
+#: declared chain, which is a loop action rather than any mesher's edit.
+_RESTART_ROW = "restart"
+
+
+def _numeric_knob_rows(session: MeshSession) -> list[Any]:
+    """One editable row per NUMERIC edit input the open mesher registers.
+
+    An action whose inputs include a geometry or a layer is not a knob a property
+    grid can carry - the value is a file the user draws or edits, not a number -
+    so it stays on the mounted tools and off the card.
+    """
+    from trid3nt_contracts.payload_warning import ParamSheetRow
+
+    rows: list[Any] = []
+    for action in session.mesher.actions.values():
+        declared = list(action.inputs.values())
+        if not declared or any(f.hashed or not _is_numeric(f) for f in declared):
+            continue
+        for field_declared in declared:
+            rows.append(ParamSheetRow(
+                name=f"{action.name}{_KNOB_SEPARATOR}{field_declared.name}",
+                value=None, door="gate", basis="user",
+                desc=(field_declared.doc or action.doc or action.name)[:512],
+                source_badge=f"{action.name} - leave blank to keep this mesh",
+                user_lever=True,
+                note=(action.doc or "")[:512] or None))
+    return rows
+
+
+def _is_numeric(declared: MeshField) -> bool:
+    return bool(declared.types) and all(
+        kind in (int, float) for kind in declared.types)
+
+
+def _mesh_param_sheet(session: MeshSession, *, tool_name: str,
+                      round_idx: int, max_rounds: int) -> Any:
+    """The gate card's edit surface: the numeric knobs, plus the truncation.
+
+    The card the shipped client renders for a sheet is the one gate surface that
+    carries values back, so every revision the loop can act on is offered as a row
+    here; a mesher registering no numeric knob still gets the truncation row, and
+    the mounted edit tools remain the surface for everything a number cannot say.
+    """
+    from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
+
+    rows = _numeric_knob_rows(session)
+    rows.append(ParamSheetRow(
+        name=_RESTART_ROW, value="no", door="gate", basis="user",
+        desc="type yes to throw away the gate-time edits and rebuild the mesh "
+             "as it was declared",
+        source_badge="loop action", user_lever=True))
+    return ParamSheet(
+        workflow=tool_name,
+        title=(f"Review the {session.mesher.name} mesh "
+               f"(round {round_idx}/{max_rounds})")[:200],
+        rows=rows)
 
 
 async def _ask_mesh_gate(emitter: Any, *, tool_name: str, gate: MeshGate,
@@ -407,10 +527,9 @@ async def _ask_mesh_gate(emitter: Any, *, tool_name: str, gate: MeshGate,
     actions = ", ".join(sorted(session.mesher.actions))
     recommendation = (
         f"The {session.mesher.name} mesh is on the map as an editable mesh "
-        f"layer (round {round_idx}/{max_rounds}): {body}. Reply 'proceed' to "
-        f"solve on it, 'cancel' to stop, or 'provide values' with "
-        f"{{'edit': '<action>', ...}} to refine it / {{'restart': true}} to "
-        f"drop the gate-time edits. Registered actions: {actions}."
+        f"layer (round {round_idx}/{max_rounds}): {body}. Submit unchanged to "
+        f"solve on it, cancel to stop, or edit a row to refine it. Registered "
+        f"actions: {actions}."
     )[:512]
     envelope = PayloadWarningEnvelopePayload(
         warning_id=warning_id, tool_name=tool_name,
@@ -418,7 +537,10 @@ async def _ask_mesh_gate(emitter: Any, *, tool_name: str, gate: MeshGate,
                    "mesh_layer_id": presentation.get("layer_id"),
                    "mesh_display_uri": presentation.get("display_uri")},
         estimated_mb=0.0, threshold_mb=0.0, recommendation=recommendation,
-        options=["proceed", "cancel", "narrow_scope"], ttl_seconds=_TTL_SECONDS)
+        options=["proceed", "cancel", "narrow_scope"], ttl_seconds=_TTL_SECONDS,
+        param_sheet=_mesh_param_sheet(session, tool_name=tool_name,
+                                      round_idx=round_idx,
+                                      max_rounds=max_rounds))
 
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
