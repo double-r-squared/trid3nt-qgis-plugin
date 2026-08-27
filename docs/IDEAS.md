@@ -2213,3 +2213,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
 - RENAME ops.read_results -> ops.read (NATE 2026-08-27): full symmetry
   with the verb spine (mesh/author/solve/read). Pure rename, rides the
   mesh wave with ops.solve.
+
+- ROADMAP REORDERED, CALIBRATION LAST (NATE 2026-08-27): settle the
+  SHAPE first, calibrate the settled system once. ORDER: (1) stale
+  sweep (running); (2) MESH WAVE - build the tool + migrate ALL of
+  workflows/telemac/ (kickoff docs/design/mesh-wave-kickoff.md, now
+  UN-DRAFTED: calibration no longer gates it; open boundaries land as
+  slice 6 regardless); (3) SECOND ENGINE = SCHISM as a THIN
+  GENERALIZATION PROBE - it ingests OceanMesh2D output (hgrid.gr3) and
+  REQUIRES open-boundary segmentation, so set_boundary is tested
+  load-bearing; attack its smallest examples, migrate its existing
+  templates onto the architecture, prove ONE om2d mesh feeds TWO
+  engines. Scoped thin - focus-four depth (TELEMAC/SWMM/MODFLOW/
+  HEC-RAS) is unchanged, SCHISM validates the tool, it does not join
+  the four; (4) FLEET ROLL onto the settled architecture (MODFLOW ->
+  SWMM -> HEC-RAS); (5) CALIBRATION LAST, on the settled system.
+  (SWAN rejected as the probe: its worker is regular-grid-only;
+  consuming om2d meshes would be NEW capability, not a migration.)

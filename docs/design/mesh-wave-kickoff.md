@@ -1,8 +1,8 @@
 # Mesh wave - kickoff
 
-STATUS: DRAFT until the calibration methodology is signed. Q4 there (open
-boundaries for the coastal domain) may pull slice 6 forward or reshape it;
-nothing else here depends on calibration. Frozen on launch, per convention.
+STATUS: READY - launches when the stale sweep verifies clean. Calibration
+was reordered to LAST (after the fleet migration settles the shape), so
+nothing gates this wave. Frozen on launch, per convention.
 
 The spec is `docs/specs/workflow-blueprint.html` (rev 7, ratified
 2026-08-27). This kickoff is its execution plan; where they disagree, the
@@ -51,9 +51,9 @@ MeshHandle). Fetch and styling are frozen; the run paradigm is unchanged.
    charter, now expressed as edit actions): breaklines constrained into
    the mesh with zero offset, MEASURED acceptance (max node-to-polyline
    distance reported, not asserted); open-boundary segmentation
-   (`set_boundary` action -> LIHBOR classes) on coastal builds.
-   CALIBRATION Q4 DEPENDENCY: if signed methodology needs open
-   boundaries first, this slice leads.
+   (`set_boundary` action -> LIHBOR classes) on coastal builds. Also the
+   SCHISM probe's prerequisite: the next wave proves one om2d mesh feeds
+   two engines, and SCHISM requires this segmentation to accept a mesh.
 7. **dt from measured edges.** `suggest_time_step_s` reads the
    MeshArtifact's measured minimum edge (probes) instead of the requested
    resolution, so gate-time refinement tightens dt automatically. The
