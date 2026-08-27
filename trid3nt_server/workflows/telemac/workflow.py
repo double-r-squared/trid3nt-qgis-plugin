@@ -358,11 +358,10 @@ class TelemacWorkflow(Workflow):
     def solver_spec(self, *, compute_class: Any, physics: Physics) -> Step:
         """Dispatch the staged deck to the worker the declared process runs on.
 
-        ``physics`` is the process SELECTOR and is required. It was once defaulted
-        to the tracer (reach) process for the templates that predate the open-water
-        front, which meant a template that forgot to name its physics dispatched a
-        coastal or wave deck to the reach solver - a wrong worker, silently, rather
-        than a plan that refuses to build.
+        ``physics`` is the process SELECTOR and is required: it must never default,
+        because a template that forgot to name its physics would otherwise
+        dispatch a coastal or wave deck to the wrong solver silently. A missing
+        selector must raise, not fall back.
         """
         if physics is None:
             raise PlanValidationError(

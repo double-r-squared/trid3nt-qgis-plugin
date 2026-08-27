@@ -330,8 +330,8 @@ def _download_tile_features(url: str) -> list[dict]:
     """Download a single ``.csv.gz`` GeoJSONL tile and return its features.
 
     The file is gzipped; each line of the decompressed body is a complete
-    GeoJSON Feature (despite the ``.csv.gz`` extension Microsoft uses -- historically the file was once delivered with CSV columns; the current
-    format is line-delimited GeoJSON).
+    GeoJSON Feature -- the ``.csv.gz`` extension Microsoft uses does not reflect
+    the format: the decompressed content is line-delimited GeoJSON, not CSV.
 
     Raises ``BuildingDensityUpstreamError`` on network or parse failure.
     """

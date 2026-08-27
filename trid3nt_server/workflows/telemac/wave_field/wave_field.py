@@ -59,12 +59,12 @@ _LAKE_HALF_DEG = (0.7, 0.4)
 _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 
 
-#: The BED, as declared reference data. It used to be sampled INSIDE the solver
-#: container, which put the one raster the physics rests on outside the emit,
-#: cache, provenance and retry the router gives every other fetch. Declaring it
-#: here is what puts the bathymetry on the canvas as a continuous surface and
-#: lets the worker run with no network at all: the producer fetches, the manifest
-#: stages the raster into the run directory, and the builder reads a file.
+#: The BED, as declared reference data. Sampling it inside the solver
+#: container would bypass the emit, cache, provenance and retry the router
+#: gives every other fetch. Declaring it here puts the bathymetry on the
+#: canvas as a continuous surface and lets the worker run with no network:
+#: the producer fetches, the manifest stages the raster into the run
+#: directory, and the builder reads a file.
 #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
 #: against - so it travels from the template rather than being a router default.
 DATA = (

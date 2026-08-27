@@ -209,7 +209,7 @@ def emit_layer_uri(
             "layer_uri_emit: DROPPING renderable raster LayerURI with an "
             "un-renderable uri (never reaches the map). layer_id=%s uri=%r. "
             "The renderable forms are an http(s) tile/WMS URL or a raw s3:// "
-            "COG (plugin /vsicurl/). (job-0254 guardrail; see Decision 11.)",
+            "COG (plugin /vsicurl/).",
             layer.layer_id,
             uri,
         )

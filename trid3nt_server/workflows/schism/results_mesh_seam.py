@@ -19,13 +19,13 @@ the seam skips the peak entries under ``frames_only`` so the same COGs are never
 registered twice. Best-effort by contract: a write/read/emit miss degrades to
 peak-only, never sinks the run ("failure retracts nothing").
 
-Byte-equivalence vs the superseded hand-wired ``publish_input_layer`` mesh emit:
-the seam mesh layer matches name/style/role/crs/uri/bbox field-for-field; only the
-``layer_id`` STEM diverges (the seam mints ``model-results-mesh-{run_id}``, the
-bespoke sites used ``schism-mesh-{run_id}`` / ``schism-wave-mesh-{run_id}`` /
-``schism-baroclinic-mesh-{run_id}``). Per the ADR-0281/0283 precedent the layer_id is
-an idempotence/dedup key; web temporal grouping rides the ``name`` token
-(``detectSequentialGroups``), NOT the layer_id, so the stem swap renders identically.
+The seam mesh layer matches name/style/role/crs/uri/bbox field-for-field with a
+hand-wired ``publish_input_layer`` mesh emit; only the ``layer_id`` STEM may
+diverge (the seam mints ``model-results-mesh-{run_id}``; a hand-wired site could
+mint ``schism-mesh-{run_id}`` / ``schism-wave-mesh-{run_id}`` /
+``schism-baroclinic-mesh-{run_id}``). The layer_id is an idempotence/dedup key;
+web temporal grouping rides the ``name`` token (``detectSequentialGroups``), NOT
+the layer_id, so a stem swap must render identically.
 """
 
 from __future__ import annotations
