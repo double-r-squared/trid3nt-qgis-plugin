@@ -91,6 +91,15 @@ def _hand_edit(session, workdir: Path) -> Path:
     return path
 
 
+def _completion(run_id: str) -> dict:
+    """The run's terminal manifest, or an empty one while it is not there."""
+    from trid3nt_server.workflows.solver.solver import (
+        _get_runs_bucket, _try_get_completion_s3,
+    )
+
+    return _try_get_completion_s3(_get_runs_bucket(), run_id) or {}
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--edge-m", type=float, default=45.0)
@@ -143,10 +152,13 @@ async def main() -> int:
 
     solved = await solve_reach(deck=deck, compute_class="small")
     metrics = await asyncio.to_thread(read_run_metrics, solved["run_id"])
+    # The solve step returns the run handle and its metrics, not a status; the
+    # run's own completion manifest is where the terminal status is written.
+    completion = await asyncio.to_thread(_completion, solved["run_id"])
 
     record = {
         "run_id": solved["run_id"],
-        "status": solved.get("status"),
+        "status": completion.get("status"),
         "mesh_id": art.mesh_id,
         "built_nodes": built["node_count"],
         "built_elements": built["element_count"],
@@ -158,7 +170,6 @@ async def main() -> int:
         "built_topology_uri": built_files.get("topology_uri"),
         "metrics_npoin": metrics.get("npoin"),
         "metrics_nelem": metrics.get("nelem"),
-        "metrics_mesh_origin": metrics.get("mesh_origin"),
         "metrics_wall_s": metrics.get("wall_s"),
         "metrics_correct_end": metrics.get("correct_end"),
         # The edit added a node and two elements, so a rebuild of the same

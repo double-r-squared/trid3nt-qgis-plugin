@@ -814,3 +814,34 @@ NOT COUNTED by the rule at the head of this file:
 `plugin/tests/headless_mesh_gate_drive.py` +
 `plugin/tests/validate_mesh_gate_driver_offline.py` (rewritten from the two
 deleted bk3b drivers).
+
+## Mesh wave - re-verify round 4: the walk that could not end, and the card that could not ask (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | r4 F1 | `mesh/meshers/corridor_tin.py` (+33 - the boundary walk's preconditions: an edge more than two triangles meet along, an edge from a node to itself, a node entered twice, and the walk bounded by the boundary edge count) | 590 | 623 | +33 | +8789 |
+| 2026-08-27 | r4 F2 | `mesh/gate.py` (+48 - knob rows per INPUT rather than per action, the vocabulary roster spelled onto the row, and a reply checked against the declaration it names) | 559 | 607 | +48 | +8837 |
+
+**Verdict: +81 across two files, both buying refusals where there were none.**
+The corridor's guard checked out-degree only, which is one of the four things a
+closed walk needs, so two shapes QGIS hands back walked past it: a triangle with
+a repeated vertex left the walk a cycle that never returned to its start and
+parked the turn indefinitely, and a triangle listed twice took a boundary edge
+away and left the walk reading a node that was not there. Both now refuse as
+`MESH_CORRIDOR_NON_MANIFOLD`, the vocabulary their siblings already used, and
+the walk is bounded besides so no shape that reaches it can hang.
+
+The gate's rows were assembled per ACTION and skipped the whole action if any
+one input was not a number, which left every mesher whose edits mix a drawn
+shape with a knob - `om2d`, `telapy_mesh` - a gate card carrying nothing but the
+restart row. Rows are per INPUT now: a number or a word off a declared roster
+gets one, a geometry or a layer does not, and only that input is skipped. A row
+whose action also needs a drawn input says so and names the tool that carries
+it, and a word off the roster is refused by the row name the user typed into
+rather than deeper down where the reply names only the field.
+
+NOT COUNTED by the rule at the head of this file:
+`tests/test_corridor_mesh_readopt.py` +90 (the two layer-shape repros, driven
+through the session under a timeout), `tests/test_mesh_gate_loop.py` +63,
+`scripts/proof_corridor_hand_edit_solve.py` (the record reads its status from
+the run's completion manifest; the field that could only be null is gone).
