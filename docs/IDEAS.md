@@ -2201,3 +2201,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   marked out-of-spec in place), revision line in the header. Full
   ruling: docs/decisions/0320-spec-format.md. First instance:
   docs/specs/workflow-blueprint.html (the mesh-tool spec, rev 4).
+
+- RENAME ops.solver_spec -> ops.solve (NATE 2026-08-27): the plan
+  surface names WHAT the step is (the solve), not how it is
+  implemented (building a dispatch spec). Pure rename - the physics
+  process-selector refusal, compute_class lever, .named("solve") and
+  Ref("solve") wiring all unchanged. Lands with the mesh wave's
+  template rewrites (every plan line is touched then anyway), not as
+  a standalone churn wave.
