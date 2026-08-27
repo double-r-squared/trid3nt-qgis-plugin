@@ -28,7 +28,7 @@
 </style>
 
 <h1>Coastal Mesher Kernel</h1>
-<p class="rev">rev 3 &middot; 2026-08-27 &middot; NATE's wiring adopted as primary: om2d builds the base, gmsh PATCH-EDITS in place; gmsh-generates demoted to alternative. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 4 &middot; 2026-08-27 &middot; landscape report landed: patch concept validated (MATLAB om2d remesh_patch); spike tests TWO vehicles, gmsh patch vs OCSMesh remesh_by_shape. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
 
 <h2>1. Where things stand (measured, from the mesh wave)</h2>
 <table>
@@ -41,7 +41,10 @@
 <tr><td>telapy is the format/boundary authority, already load-bearing</td><td>every mesh exits through <code>write_telemac_pair</code> (set_mesh/set_bnd), <code>Conlim.set_numliq</code>, <code>get_ipobo</code> (R1 fix)</td></tr>
 <tr><td>per-edit rebuild ruled uneconomical</td><td>session-economics ruling: lazy batched realization, staged-once inputs, prefix-keyed snapshot cache (sibling landing, benefits every wiring)</td></tr>
 <tr><td>gmsh .msh is an official TELEMAC import</td><td><code>telapy parser_gmsh.py</code>: <code>MSH(Selafin)</code>, in the worker image</td></tr>
-<tr><td>gmsh coastal precedent is REGIONAL, unverified</td><td>seamsh (SLIM) / qmesh (Thetis) exist in the European/TELEMAC corner; absent from the US surge world (SMS, OM2D, JIGSAW/OCSMesh). Landscape research in flight: <code>docs/research/coastal-mesh-edit-landscape.md</code></td></tr>
+<tr><td>PATCH EDITING IS OM2D'S OWN TRODDEN CONCEPT, unported</td><td>MATLAB OceanMesh2D ships <code>remesh_patch</code> + <code>extract_subdomain</code>; neither made the python port. Wiring C = porting a known capability, not inventing one (landscape report)</td></tr>
+<tr><td>gmsh: TELEMAC-mainstream, surge-world outlier</td><td>first-class MSH parser + STBTEL route + real forum usage for TELEMAC; no coastal wrapper exists in the ADCIRC/SCHISM world (landscape report)</td></tr>
+<tr><td>OCSMesh remesh_by_shape edits EXISTING meshes</td><td>NOAA, active v1.7.0 2026-07; raster sizing; risks: jigsawpy binary failed to resolve in this repo's sandbox (measured), v2 refactor mid-flight, determinism undocumented</td></tr>
+<tr><td>seamsh narrow + stale; qmesh dead</td><td>seamsh last release 2025-01, home-group adoption only; qmesh README calls itself a stopgap. Full ranking: <code>docs/research/coastal-mesh-edit-landscape.md</code></td></tr>
 </table>
 
 <h2>2. Ruled (stands regardless of wiring)</h2>
@@ -71,7 +74,7 @@
 <li><b>Replay identity restored</b>: base nondeterministic ONCE then cached; edits replay deterministically on the cached base (pinned gmsh version + seed, fixed patch boundary). Recipe replay = cached base + deterministic patches = the same mesh.</li>
 <li><b>Caveats, both testable in a prototype</b>: patch-seam quality (min-angle at the stitch boundary goes in the probes, measured); the carve-and-stitch machinery is custom plumbing - scoped and well-defined, but ours.</li>
 </ul>
-<p>Prototype gate before commitment: one afternoon-scale spike - punch a breakwater outline into an existing om2d Duck NC mesh via a gmsh patch; measure seam min-angle, outline offset (must be 0.0), and rebuild determinism (3-run hash on the patch).</p>
+<p>Prototype gate before commitment - TWO vehicles, same measurements, same Duck NC base mesh, MATLAB <code>remesh_patch</code> semantics as the reference: (1) gmsh planar patch with embedded outline; (2) OCSMesh <code>remesh_by_shape</code> (if its jigsawpy backend resolves in the mesh image at all - an environment failure is itself a disqualifying measurement). Gates per vehicle: seam min-angle, outline offset 0.0 m, 3-run determinism hash, and install/runtime friction recorded honestly. Measurements pick the vehicle.</p>
 <h3>3.0.1 The A/B frame this supersedes</h3>
 <table>
 <tr><th></th><th>A - om2d generates; mmg discrete edits (now a FOOTNOTE)</th><th>B - om2d sizes; gmsh generates + edits the model (ALTERNATIVE if the patch prototype disappoints)</th></tr>

@@ -2267,3 +2267,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   om2d generator stays registered through the comparison period;
   telapy adoption path unchanged. Decision spec:
   docs/specs/gmsh-mesher.html (artifact published).
+
+- LANDSCAPE VERDICT + WIRING C VALIDATED (2026-08-27): NATE's
+  patch-edit wiring (om2d builds the base, edits are patch-local and
+  in-place) is OM2D'S OWN TRODDEN CONCEPT - MATLAB ships remesh_patch
+  + extract_subdomain, never ported to python. Community default =
+  regenerate (fails our determinism bar, measured). Vehicle contest:
+  gmsh planar patch (TELEMAC-mainstream, clean wheel) vs OCSMesh
+  remesh_by_shape (NOAA, active, right community; binary fragile in
+  our sandbox - measured, determinism undocumented). seamsh
+  narrow+stale, qmesh dead, mmg wrong community. Spike measures both
+  on Duck NC: seam min-angle, outline offset 0.0, 3-run determinism,
+  friction. Report: docs/research/coastal-mesh-edit-landscape.md;
+  spec: docs/specs/gmsh-mesher.html rev 4.
