@@ -2324,3 +2324,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   wave with for_, session polish, rename. Spec rev 7. Two small
   opens: axis name domain-vs-type (lean domain), mesher visibility
   (lean visible-but-optional).
+
+- MESH SIGNATURE CONVERGED FINAL, REV 8 (NATE 2026-08-27): DOMAIN
+  VOCABULARY DROPPED entirely (label AND named constructors - both
+  still implied; and no domain param ever existed in the product: the
+  AOI is THREADED, acquire_domain binds template shapes). The domain
+  IS aoi + declared CONSTITUENTS (bed, shoreline, flowline, pour
+  point - ordinary data refs). CAPABILITIES DERIVE FROM PRESENCE via
+  one constituent rule table (bare aoi = grid verbs; +shoreline =
+  add_obstacle/set_boundary; +flowline = corridor verbs; +pour point
+  = closed catchment): unoffered verbs never mounted, direct calls
+  refuse by naming the missing constituent, capabilities disclose
+  progressively. Builders register per constituent PATTERN, refused
+  at import unless the pattern's verbs are implemented. SOURCING:
+  DATA-first is canonical in templates (declared ladders, gate
+  visibility, journal); in-tool "fetch:" specs = standalone sugar
+  through the SAME router. kind/mesher=auto/for_ survive. Supersedes
+  the capability-param and three-axis rulings. Spec rev 8.
