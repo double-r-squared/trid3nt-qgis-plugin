@@ -2387,3 +2387,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   final verify -> artemis flagship) THEN the model wave (aoi
   declaration, om2d full wrapper, 7-template migration per spec rev
   18).
+
+- SPEC-CONFORMANCE GATE (NATE 2026-08-27): every wave close-out, after
+  tests and before done/push: a FRESH-EYES agent walks the governing
+  spec clause by clause producing a conformance table (clause ->
+  implementation -> CONFORMS/DEVIATES) plus a LIVE behavior
+  walkthrough transcript (real declaration beside the spec's worked
+  example, real gate session, real !run). Deviations are design
+  questions - reported to NATE, never auto-fixed. Applies to the
+  running wave at its completion (against workflow-blueprint + the
+  D2-D5 rulings) and is baked into every future wave script as the
+  mandatory final stage.
