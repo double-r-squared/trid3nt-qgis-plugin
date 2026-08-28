@@ -45,12 +45,6 @@ from trid3nt_server.mesh.mesh_preview import (
     regular_grid_outline_feature_collection,
     swmm_mesh_to_geojson,
 )
-from trid3nt_server.mesh.preview_gate import (
-    MeshGateStats,
-    build_mesh_gate_envelope,
-    default_gate_mode,
-    mesh_gate_should_fire,
-)
 from trid3nt_server.mesh.refine_regions import (
     MeshSizingSpec,
     mesh_sizing_from_refine_regions,
@@ -84,8 +78,4 @@ __all__ = [
     "MeshSizingSpec",
     "mesh_sizing_from_refine_regions",
     "refine_level_for",
-    "MeshGateStats",
-    "build_mesh_gate_envelope",
-    "default_gate_mode",
-    "mesh_gate_should_fire",
 ]

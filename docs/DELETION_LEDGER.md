@@ -1211,3 +1211,5 @@ peak-layer and bank-metrics witnesses verbatim.
 - tests/test_mcp_server.py: tested only the deleted mcp_server module (mcp-purge 2026-08-27)
 - docs/design/mcp-server.md: design doc for the deleted server; decision 0302 stays as history (mcp-purge 2026-08-27)
 - .mcp.json.example: client config example for the deleted server (mcp-purge 2026-08-27)
+- trid3nt_server/mesh/preview_gate.py: superseded shared approve-mesh preview gate, zero production consumers - D-8 ruling at mesh wave close (2026-08-28)
+- tests/test_mesh_preview_gate.py: tested only the deleted module (2026-08-28)
