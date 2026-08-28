@@ -616,6 +616,32 @@ def test_an_extent_that_is_not_a_box_refuses_before_containment(tmp_path, extent
     assert excinfo.value.error_code == code
 
 
+def test_a_crop_keeps_the_coverage_its_inputs_were_staged_over(tmp_path):
+    """A crop stages nothing, so it narrows the mesh and not the coverage.
+
+    Judging the second extent change against the first crop would refuse a box the
+    staged inputs already cover, and would make undoing a crop a restage.
+    """
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    staged = _coverage(session)
+    session.edit("set_extent", extent=(-83.48, 35.02, -83.44, 35.06))
+    assert _coverage(session) == staged
+
+    wider = (-83.49, 35.01, -83.42, 35.07)
+    session.edit("set_extent", extent=wider)
+    assert tuple(round(v, 6) for v in session.mesh.meta["extent"]) == wider
+    assert _coverage(session) == staged
+
+
+def test_a_resolution_change_keeps_the_coverage_too(tmp_path):
+    """Every re-derivation carries it: a finer lattice restages nothing either."""
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    staged = _coverage(session)
+    session.edit("set_extent", extent=(-83.48, 35.02, -83.44, 35.06))
+    session.edit("set_resolution", resolution_m=400.0)
+    assert _coverage(session) == staged
+
+
 def test_a_mesh_that_states_no_coverage_refuses_the_crop_rather_than_guessing():
     """Containment is judged against staged coverage; no coverage, no judgement."""
     from trid3nt_server.workflows.mesh.meshers import Mesh, contained_extent

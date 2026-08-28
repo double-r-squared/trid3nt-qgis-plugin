@@ -11,6 +11,7 @@ zero-filled bed would read to a solver as ground at sea level.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, Mapping
 
 import numpy as np
@@ -23,6 +24,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     apply_layer_edits_action,
     contained_extent,
     register_mesher,
+    staged_coverage,
 )
 
 __all__ = ["REG_GRID", "build"]
@@ -65,14 +67,31 @@ def _lattice(grid: RegularGrid) -> Mesh:
               "m_per_deg_lat": grid.m_per_deg_lat})
 
 
+def _over_the_same_coverage(before: Mesh, after: Mesh) -> Mesh:
+    """``after``, stating the coverage ``before`` was staged over.
+
+    A re-derivation stages nothing, so the ground the inputs were fetched for is
+    still the ground they were fetched for. Without this the coverage would
+    collapse onto whatever box the last edit left, and the next extent change
+    would be judged against a crop rather than against what is actually staged.
+    """
+    coverage = staged_coverage(before)
+    if coverage is None:
+        return after
+    return dataclasses.replace(
+        after, meta={**dict(after.meta), "staged_coverage": coverage})
+
+
 def _set_resolution(mesh: Mesh, *, resolution_m: float) -> Mesh:
-    return build({"extent": mesh.meta["extent"], "resolution_m": float(resolution_m)})
+    return _over_the_same_coverage(mesh, build(
+        {"extent": mesh.meta["extent"], "resolution_m": float(resolution_m)}))
 
 
 def _set_extent(mesh: Mesh, *, extent: Any) -> Mesh:
     """Re-derive the lattice over a CROP of the staged coverage."""
-    return build({"extent": contained_extent(mesh, extent, edit="set_extent"),
-                  "resolution_m": mesh.meta["resolution_m"]})
+    return _over_the_same_coverage(mesh, build(
+        {"extent": contained_extent(mesh, extent, edit="set_extent"),
+         "resolution_m": mesh.meta["resolution_m"]}))
 
 
 REG_GRID = register_mesher(

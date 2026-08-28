@@ -911,3 +911,14 @@ truncates TO it, and the catchment path refuses what it cannot honour),
 `tests/test_build_mesh_tool.py` +114 (11 tests: the crop, the four
 out-of-coverage refusals, the malformed boxes, the unknown coverage, and the
 escalated bbox landing verbatim at the acquisition step).
+
+## Model wave - slices 1+2 adversarial review (2026-08-28)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-28 | m1 review | `mesh/meshers/reg_grid.py` (+18 - `_over_the_same_coverage`: a re-derivation stages nothing, so the crop and the resolution change carry the coverage the inputs were fetched for; without it the coverage collapsed onto the last crop and the next extent change was judged against a box that was never staged) | 99 | 117 | +18 | +9672 |
+| 2026-08-28 | m1 review | `telemac/steps/rain_on_grid.py` (-1 - blank-line run) | 945 | 944 | -1 | +9671 |
+
+NOT COUNTED by the rule at the head of this file:
+`tests/test_build_mesh_tool.py` +26 (2 tests: a second crop inside the ORIGINAL
+staged coverage is an edit, and a resolution change keeps the coverage too).

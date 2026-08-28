@@ -165,7 +165,6 @@ def _refuse_declared_edits(declaration: Any) -> None:
             "and hand it to this run instead.")
 
 
-
 async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
                            slug: str) -> tuple[Any, str | None]:
     """Offer a mesh this CASE already holds; ``(mesh | None, note | None)``.
