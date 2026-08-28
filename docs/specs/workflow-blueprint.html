@@ -66,8 +66,7 @@ flowchart TD
 <pre><code class="py"># module level in the template, beside DATA and PARAMS — frozen, NOTHING builds at import
 MESH = tool.build_mesh(
     mesher = "om2d",              # om2d | telapy_mesh | hecras | reg_grid
-    kind   = "unstructured_tri",  # structured_grid | unstructured_tri |
-                                  #   unstructured_quad_flex | curvilinear | node_link
+    kind   = "unstructured_tri",  # structured_grid | unstructured_tri | graded_cells
     aoi    = P.aoi,               # or the workflow's domain
     refine = {"edge_length": P.edge_length, "min_spacing": 25, "gradation": 0.15},
     bed    = D.dem,               # bathymetry via the frozen fetch subsystem
@@ -224,6 +223,7 @@ trid3nt_server/emission/mesh_display.py   # the .2dm/MDAL display face
                                           #   (_write_2dm moves here from generate_mesh)</code></pre>
 <p>Each mesher file registers its own edit actions beside its build &mdash; adding a mesher is one file, exactly as adding a fetcher is one spec. What empties out: <code>workflows/mesh/generate_mesh/</code> dissolves (its builders become registered meshers; its standalone-tool role IS <code>tool.build_mesh</code> called standalone); <code>lib/slots.py</code> sheds MeshPolicy; <code>telemac/workflow.py</code> sheds CorridorPolicy and MeshHandle. The existing templates are the migration targets &mdash; each one's mesh declaration is rewritten as in section 5.</p>
 
+<p><i>Layout note (D-7): the landed package also carries <code>gate.py</code> (the gate loop), <code>precondition_gate.py</code>, <code>meshers/coastal_edge.py</code>, <code>meshers/watershed.py</code> and <code>meshers/drivers/</code> - all coherent additions this block predates.</i></p>
 <h2>5. Worked example: <code>telemac_river_dye</code></h2>
 <p>The delta on the real template (<code>workflows/telemac/river_dye/river_dye.py</code>, 261 lines): only the two mesh policy blocks, one line of <code>plan</code>, and the custom approve-mesh gate metadata change. DATA, PHYSICS, FORCING, ANSWER, the chart, coercions, sensitivity and provenance are untouched.</p>
 
@@ -254,7 +254,6 @@ def plan(ops):
     extent_km = P.reach_length_km,   # ex-CorridorPolicy fields, validated
     width_m   = P.channel_width_m,   #   by the corridor_tin mesher at the router
     banks     = P.bank_source,
-    bed    = "fetch:usgs_3dep",
 )
 
 def plan(ops):
@@ -262,7 +261,7 @@ def plan(ops):
         FormGate(title="Review the river-tracer scenario"),
         DrawGate(param="release_coords", geometry="point", ...),
         *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers, ...),
-        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),   # demand-pulls the build
+        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),   # + an explicit named build step in the plan (ruled: explicit hops)
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read_results(Ref("solve"), ...).chart("dye_concentration", ...),
     ]</code></pre>

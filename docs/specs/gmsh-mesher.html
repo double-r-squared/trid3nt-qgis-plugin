@@ -25,114 +25,100 @@
   th { background: var(--code-bg); }
   .scroll { overflow-x: auto; }
   .rev { font-size: .85em; }
-  .open { border: 2px solid var(--line); background: var(--code-bg); padding: .6em .9em; }
 </style>
 
 <h1>Domain and Mesh</h1>
-<p class="rev">rev 18 &middot; 2026-08-27 &middot; NATE'S GO: the threaded-AOI framing is DEAD (aoi = a required, defaulted, user-editable DECLARATION); mesher is EXPLICIT, never auto; scope = wrap ALL of OceanMesh2D's exposed functions first (telapy maybe after, gmsh later); migrate the 7 templates. D2-D5 remain the open rulings. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code>.</p>
+<p class="rev">rev 19 &middot; 2026-08-28 &middot; <b>FROZEN for the model wave's duration</b> - the consolidated spec folding the mesh-wave close-out rulings (D-1..D-9) into the converged design. Amendments reopen only at the model wave's conformance gate. Format per <code>docs/decisions/0320-spec-format.md</code>. Parent: <code>docs/specs/workflow-blueprint.html</code> (corrected per D-5/6/7 at the same close).</p>
 
 <h2>1. Status</h2>
 <table>
 <tr><th>what</th><th>state</th></tr>
-<tr><td>mesh wave</td><td><b>STOPPED</b> mid round-3 remediation. Landed-and-verified: the tool, sessions, gate machinery, 7-template migration, renames, determinism honesty, dt-tightening, reach family through the session, approve-mesh server chop. Suite zero-failure at last verification. Commits local. Four verifier findings await NATE's fix-direction rulings (D2-D5).</td></tr>
-<tr><td>this spec</td><td>DESIGN ONLY - nothing here is implemented. Frozen subsystems: fetch, styles/emission, the run paradigm, the static plan.</td></tr>
+<tr><td>mesh wave</td><td><b>CLOSED</b> (2026-08-28): tool + sessions + gate + 7-template migration + renames + D2-D5 remediations landed, artemis om2d flagship delivered, conformance gate filed, nine deviations ruled by NATE, D-8 chopped. All pushed.</td></tr>
+<tr><td>this spec</td><td>the MODEL WAVE's charter source. Acceptance lane: DIRECT INVOCATION + SCRIPTED tests only - no UI work, no user testing until subsystems are fleshed out. UI rework is its own NATE-led pass after the 7 workflows ship.</td></tr>
+<tr><td>frozen subsystems</td><td>fetch, styles/emission, the run paradigm, the static plan.</td></tr>
 </table>
 
 <h2>2. How meshing works (primer)</h2>
 <ul>
-<li><b>Quality</b> = triangle shape (minimum angle) + sizing h(x), the target-edge-length field. Sizing functions (distance-to-shore, wavelength, bathymetric gradient, gradation) are oceanmesh's specialty and permanent seat.</li>
-<li><b>Generation</b>: DistMesh relaxation (oceanmesh - iterative, measured nondeterministic), Delaunay/frontal insertion (gmsh/jigsaw - deterministic orders possible), structured grids (trivially deterministic).</li>
-<li><b>Conformality</b>: an outline is conformal when its vertices ARE mesh nodes; constraints must feed INTO generation (retrofit measured 80.1 m offset here) - why "edit" means "regenerate" across the field.</li>
-<li><b>Cost</b>: nodes ~ area/h&sup2;; screening meshes regenerate in seconds (measured) - regeneration is the economical common path; patch-local editing is a deferred design for measured large-mesh pain.</li>
+<li><b>Quality</b> = triangle shape (minimum angle) + sizing h(x), the target-edge-length field. Coastal sizing functions (distance-to-shore, wavelength, bathymetric gradient, gradation) are oceanmesh's specialty and permanent seat.</li>
+<li><b>Generation</b>: DistMesh relaxation (oceanmesh - iterative, measured nondeterministic), Delaunay/frontal insertion (deterministic orders possible), structured grids (trivially deterministic).</li>
+<li><b>Conformality</b>: an outline is conformal when its vertices ARE mesh nodes; constraints feed INTO generation (retrofit measured 80.1 m offset) - why "edit" means "regenerate" across the field.</li>
+<li><b>Cost</b>: nodes ~ area/h&sup2;; screening meshes regenerate in seconds - regeneration is the economical common path; patch-local editing stays a deferred design for measured large-mesh pain.</li>
 <li><b>Boundaries</b>: contiguous OPEN vs LAND stretches; IPOBO permutations, .cli rows, gr3 blocks - telapy's bookkeeping seat, the last mile for every mesh.</li>
 </ul>
 
-<h2>3. How data is used in a workflow - the model</h2>
-<p>One substrate, three facts:</p>
+<h2>3. The data model (ruled)</h2>
 <ol>
-<li><b>The AOI is a DECLARATION - required and defaulted.</b> An explicit declared param (geocode or canvas fills the default), visible in every template, and USER-EDITABLE: moving or redrawing the box is legitimate, and the containment rule (4.1) prices it - crop within coverage, restage-via-rerun outside. The old "threaded, never mutated" framing is dead.</li>
-<li><b>Tools all the way down.</b> Fetchers, processing operations, the mesh builder, and workflows share ONE invocation substrate: each is declarable inside a template AND directly invocable (<code>!run</code>) in chat. A processing operation like delineation is just a tool whose output is a value.</li>
-<li><b>Derived values are named and passed explicitly.</b> A tool's output becomes a named value (a plan ref in templates, a variable in chat) that downstream tools take as ordinary parameters. Explicit parameters ARE the dataflow - visible at the call site, journaled, nothing hidden, nothing aggregated.</li>
+<li><b>The AOI is a DECLARATION - required and defaulted.</b> An explicit declared param (geocode or canvas fills the default), visible in every template, USER-EDITABLE: moving or redrawing the box is legitimate and the containment rule prices it.</li>
+<li><b>Tools all the way down.</b> Fetchers, processing operations, the mesh builder and workflows share ONE invocation substrate - declarable in templates AND directly invocable in chat. The real <code>!run</code> shape (unchanged): <code>!run tool(kwarg=literal, ...)</code> or <code>!run tool {"k": v}</code> - literals only, positional rejected, dispatched as <code>TOOL_REGISTRY[name].fn(**args)</code>.</li>
+<li><b>Derived values are named and passed explicitly.</b> Explicit parameters ARE the dataflow - visible at the call site, journaled, nothing hidden, nothing aggregated (the grounding-record draft stays REJECTED). The reach dissolves into named values (<code>flowline</code>, <code>seed</code>, <code>discharge</code>) with coupling by dataflow; a gate-drawn value and a fetched value are the same argument.</li>
 </ol>
-<pre><code class="py"># in a template - declared dataflow, every hop visible:
-SUBDOMAIN = tool.process(P.aoi, "delineate", pour_point=P.pour_point)
-MESH      = tool.build_mesh(extent=SUBDOMAIN, bed=D.dem, ...)   # derived extent
-MESH      = tool.build_mesh(extent=P.aoi, bed=D.dem, ...)       # common case - STILL written out
+<h3>3.1 The containment rule</h3>
+<p>An extent change is judged by GEOMETRIC CONTAINMENT against the STAGED COVERAGE. Within coverage: CROP - a cheap journaled <code>set_extent</code> edit; fetched inputs stand. Outside coverage (moved, or even slightly larger): RESTAGE - not an edit; the change escalates to the rerun primitive with the new bbox, which recomputes the invalidation cut and re-resolves from the beginning. Containment is BINARY (partial coverage produces silently wrong edges). Staging buffer: PENDING NATE - not chartered.</p>
 
-# in chat - the SAME tools, ad hoc. The REAL !run shape (client-parsed,
-# dispatched as TOOL_REGISTRY[name].fn(**args) - the same call the model makes;
-# literals-only kwargs or a JSON object; POSITIONAL ARGS REJECTED; the threaded
-# AOI needs no argument):
-#   !run process(op="delineate", pour_point=[-83.40, 35.05])
-#   !run build_mesh(extent="ref:subdomain", bed="fetch:ncei_dem_mosaic")
-# tweaks NEVER re-declare the build - the session mounts one tool per edit
-# action while open (the fold):
-#   !run mesh_edit_refine_region(edge_length=10, geometry="...")
-</code></pre>
-<p><b>Clear-safety, by construction</b>: the recipe is a SPEC LINE (extent, kind, for_, constituents - everything compat-bearing) plus an EDIT CHAIN; <code>restart</code> truncates the chain to the declared prefix and CANNOT touch the spec - so "clear" rebuilds the declared default with identical compatibility, never a generic mesh. Backstops regardless: <code>accept()</code> enforces the for_ contract, and the compat gate re-checks at consume. (Session REOPEN on an accepted mesh - load spec + chain, continue appending - is a natural later extension, not yet built.)</p>
-<p>The reach dissolves into this model as named values with coupling by dataflow: <code>flowline = fetch(aoi)</code>; <code>seed = snap_to(flowline)</code>; <code>discharge = read_at(seed)</code> - meshing takes <code>flowline</code>, forcing takes <code>discharge</code>, the release gate validates on <code>flowline</code>. A gate-drawn value and a fetched value are the same argument; no tool cares who authored its inputs. (An earlier "grounding record" bundling these was REJECTED: inputs live in ONE place.)</p>
-
-<h2>4. The mesh declaration</h2>
+<h2>4. The mesh declaration (ruled)</h2>
 <pre><code class="py">MESH = tool.build_mesh(
-    extent = P.aoi,                # WHERE to mesh - ALWAYS declared in templates:
-                                   # one free line that keeps the context visible.
-                                   # P.aoi = the threaded AOI (the common case);
-                                   # a derived value (SUBDOMAIN) narrows, in plain sight
-    kind   = "unstructured_tri",   # discretization - defaulted when obvious
-    mesher = "om2d",               # EXPLICIT, always - never auto; the builder is a
-                                   #   visible, deliberate choice
+    extent = P.aoi,                # ALWAYS declared in templates - one free line,
+                                   #   context visible; a derived value narrows in plain sight
+    kind   = "unstructured_tri",   # real vocabulary: structured_grid | unstructured_tri | graded_cells
+    mesher = "om2d",               # EXPLICIT, never auto - the builder is a deliberate choice.
+                                   #   roster: coastal_edge, corridor_tin, hecras_rog, om2d,
+                                   #           reg_grid, telapy_mesh, watershed
     for_   = "telemac",            # consumer contract - auto-injected in templates
-    bed    = D.dem,                # constituents: ordinary data refs
-    shoreline = D.shoreline,
+    shoreline = D.shoreline,       # constituents: ordinary data refs, DATA-first;
     refine = {"edge_length": P.edge_length, "min_spacing": 25},
-)</code></pre>
+)                                  # NOTE: no bed= on corridor_tin - a corridor is bed-less
+                                   #   by construction; the deck fits elevation at authoring</code></pre>
 <ul>
-<li><b>extent</b>: the one spatial parameter, and templates ALWAYS declare it - even when it is just <code>extent=P.aoi</code>, because the line is free and the context is valuable (the reader answers "where does this mesh live?" from the declaration, never from a default rule). The AOI default exists only for standalone/chat convenience. Narrowing is always an explicit act (over-meshing wastes recoverable compute; premature narrowing loses unrecoverable correctness). Runtime change: re-run the deriving tool in chat and feed the result, or the <code>set_extent</code> session edit at the gate (journaled, basis=user, narrow or widen).</li>
-<li><b>Capabilities from presence</b>: bare extent -&gt; <code>refine_region</code>, <code>apply_layer_edits</code>; + shoreline -&gt; <code>add_obstacle</code>, <code>set_boundary</code>; + flowline -&gt; corridor verbs, valid release areas; + pour_point -&gt; catchment behavior (closed boundary). The only capability mechanism: unoffered verbs never mounted; direct calls refuse by naming the missing constituent; builders register per constituent pattern, refused at import unless the pattern's verbs are implemented.</li>
-<li><b>Sourcing is DATA-first</b> in templates (declared ladders, gate visibility, journaling); in-tool <code>"fetch:"</code> specs are standalone sugar through the same router.</li>
-<li><b>No words that imply</b>: no domain labels anywhere - "coastal" is TRUE when bed + shoreline are present, never said.</li>
+<li><b>Capabilities from presence</b>: bare extent -&gt; <code>refine_region</code>/<code>apply_layer_edits</code>; + shoreline -&gt; <code>add_obstacle</code>/<code>set_boundary</code>; + flowline -&gt; corridor verbs; + pour_point -&gt; closed catchment. Unoffered verbs never mounted; direct calls refuse naming the missing constituent.</li>
+<li><b>Clear-safety by construction</b>: recipe = SPEC LINE (compat-bearing) + EDIT CHAIN; <code>restart</code> truncates the chain only. <code>accept()</code> enforces the <code>for_</code> contract; the compat gate re-checks at consume.</li>
+<li><b>D-2 (ruled - the code's shape is the spec)</b>: the mesh build is an EXPLICIT NAMED PLAN STEP, visible in the plan and journaled - not a hidden demand-pull off <code>ops.author</code>. Explicit hops are the model.</li>
+<li><b>D-3 (ruled - must fix)</b>: template mesh steps read the declaration WHOLE - mesher, kind, AND the declared <code>.edit()</code> chain as the recipe prefix - never reconstruct it. A declared edit silently dropped is the defect class this kills.</li>
+<li><b>D-4 (ruled - dropped)</b>: no wireframe-PNG vision channel; probes carry the numbers. Revisit only when agent-in-the-loop gate editing matters.</li>
 </ul>
 
-<h3>4.1 The containment rule - what an extent change costs</h3>
-<p>An extent change is judged by GEOMETRIC CONTAINMENT against the STAGED COVERAGE (the footprint the fetches actually staged over):</p>
+<h2>5. The session (ruled)</h2>
+<ol>
+<li><b>D-1 (ruled): ALL meshes are editable.</b> Every declared MESH routes through the tool and can open a session - a regular grid has <code>set_extent</code>/<code>set_resolution</code> at minimum. The four reg_grid templates join the session path; the declaration is never a mere deck-keyword carrier.</li>
+<li><b>Resolve</b>: explicit mesh wins; <b>D-9 (ruled)</b>: DISCOVERY is wired to the gate - compatible case meshes (compat-filtered, extent-checked, found via the stash and the durable sidecars) are OFFERED by name; declining builds the declared default. The offer's exact tell-vs-silent detail for incompatible finds stays an open discussion, deliberately un-specified.</li>
+<li><b>Build</b> (lazy in-session): inputs staged ONCE; probes out; regenerate-on-edit is the common path; snapshot cache returns the exact previously-inspected mesh per recipe prefix.</li>
+<li><b>Gate</b> (USER-GATED; AUTO inline, and AUTO never adopts a discovered mesh silently): offered verbs mounted as generated tools; the param-sheet revision channel carries numeric AND string-choice knobs per INPUT; geometry-valued inputs enter BY NAME (the server-side name -&gt; case layer -&gt; geometry seam; the polyline IS the selectable boundary structure); hand-edits re-enter via <code>apply_layer_edits</code>, and <code>accept()</code> implies STAGEABLE (D2: regenerate solver files or the edit refuses at the gate).</li>
+<li><b>Formats + artifact</b>: <code>for_</code>-narrowed writers; telapy last mile; display face through emission; recipe = the record with MEASURED determinism flags.</li>
+</ol>
+
+<h2>6. The om2d wrapper (the model wave's core slice)</h2>
+<p>Wrap ALL of OceanMesh2D's exposed functions as the om2d mesher's param/edit surface - the wrapping is the whole deal - with test coverage. telapy maybe after; gmsh and cross-tool edit extension LATER, once the feature exists.</p>
+<p><b>Acceptance bar = the flagship's four measured fragilities, each fixed and re-measured:</b></p>
 <table>
-<tr><th>new extent</th><th>path</th><th>what happens</th></tr>
-<tr><td>within coverage</td><td><b>CROP</b> - a cheap, journaled <code>set_extent</code> session edit</td><td>no refetch: rasters crop, vectors clip, the mesh rebuilds over the new extent; fetched inputs stand, only mesh-downstream recomputes</td></tr>
-<tr><td>outside coverage (moved, or even slightly larger)</td><td><b>RESTAGE</b> - not an edit: the change escalates to <code>rerun</code> with the new bbox</td><td>a box that leaves coverage is a NEW AOI, and everything anchored to the old one is suspect (the flowline may not be in the new box; seed and discharge hang off it). The existing rerun-with-overrides primitive computes the invalidation cut and re-resolves from the beginning. The gate says so honestly: "the drawn area leaves fetched coverage - this becomes a fresh run over the new area."</td></tr>
+<tr><th>fragility (measured at the flagship)</th><th>acceptance</th></tr>
+<tr><td>boundary-section walk traces ONE winded walk per component - contour choice is luck on holed domains</td><td>deterministic contour selection; the chosen walk covers the intended rim on a holed test domain</td></tr>
+<tr><td><code>set_boundary</code> designates exactly ONE open section - a fully-open seaward rim gets absorbing walls</td><td>multi-section open boundaries; a whole-rim-open domain forces on its whole rim</td></tr>
+<tr><td>sizing overshot the 25 m ask to 202 m at the domain rim</td><td>rim sizing honored within a declared tolerance, measured in probes</td></tr>
+<tr><td>GSHHG L1 is the land/OCEAN boundary - lakes read as land (Marquette failed)</td><td>a lake-capable domain source (bed-derived waterline or L2 with inversion); Marquette builds</td></tr>
 </table>
-<p>Containment is BINARY - no fuzzy tolerance: partial coverage produces silently wrong answers at the edge (mesh nodes outside the DEM footprint have no bed; boundary segments outside the shoreline clip misclassify). Crop is only safe when coverage is total. OPTIONAL refinement (NATE's call): stage fetches with a small declared buffer over the AOI so the common slight-outward nudge stays on the crop path; the test stays binary against the buffered coverage.</p>
-<h2>5. The session</h2>
-<p>Frozen and lazy in templates (a declaration beside DATA and PARAMS; demand-pulled); builds now standalone. On demand: inputs staged ONCE over the threaded AOI (extent changes never re-fetch), build, probes + wireframe snapshot. USER-GATED presents the editable MDAL layer with exactly the offered verbs mounted; AUTO builds inline. Edits journal into the recipe; REGENERATE-ON-EDIT is the common path; <code>restart</code> truncates to the declared prefix; the snapshot cache returns the exact previously-inspected mesh per prefix. <code>accept()</code> enforces the <code>for_</code> contract (consumer requirements read at build time: adaptive boundary handling, live solve-readiness, narrowed writers). Formats exit through telapy (the last mile); display face through emission; MeshArtifact + recipe + probes into author -&gt; solve, unchanged. The recipe is the record; deterministic flags are MEASURED claims.</p>
 
-<h2>6. OPEN - NATE's decisions, nothing moves before his ruling</h2>
-<div class="open">
-<p><b>D1 - RULED (NATE's go, 2026-08-27).</b> The data model is frozen as amended: aoi = required + defaulted + user-editable declaration; extent always declared; the containment rule; explicit mesher (never auto); reach dissolution; capabilities from presence. SCOPE ORDER RULED: (1) wrap ALL of OceanMesh2D's exposed functions as the om2d mesher's params/edit surface - the wrapping WAS the whole deal - with test coverage; (2) migrate the 7 TELEMAC templates to this model; (3) telapy wrapper maybe after; gmsh and cross-tool edit extension LATER, once the feature exists. Staging buffer: pending.</p>
-<p><b>D2 - hand-edit staging semantics</b> (verifier finding, reproduced: a hand-edited corridor session accepts, then deck staging refuses - a late failure). Recommendation: after adoption the session regenerates solver files via the telapy path; if impossible, the EDIT refuses at the gate; invariant: <code>accept()</code> implies stageable.</p>
-<p><b>D3 - the gate's revision channel</b> (verifier finding: the mesh gate emits none of the fields the shipped plugin can populate revisions from - USER-GATED reach cards are proceed/cancel only). Recommendation: emit numeric knobs as a param_sheet the shipped client already renders, routed server-side to the gate's edit path; plugin changes only if unavoidable, install-synced, flagged for NATE's live pass.</p>
-<p><b>D4 - finish the approve-mesh chop client-side?</b> (orphaned release_point_required handling, picker row, two BK3B drivers survive with no producer). Recommendation: chop per clean-as-you-go, ledger rows.</p>
-<p><b>D5 - prove the worker bundle?</b> (workers/telemac/_staged_mesh.py: zero test references; no live solve has adopted an accepted mesh). Recommendation: port the verifier's round-trip check into the suite + one live coarse adopted-mesh solve, hash-verified.</p>
-<p><b>D6 - resume the wave?</b> With D2-D5 ruled: remediation to the ruled directions, final verification, the artemis flagship. The rev-14 design work (D1: extent param, constituent rules, auto-routing, for_, session polish) is the SEPARATE follow-up wave, after.</p>
-</div>
-
-<h2>7. Deferred, recorded</h2>
-<p>Patch-local edits (gmsh planar patch vs OCSMesh <code>remesh_by_shape</code>; MATLAB <code>remesh_patch</code> precedent; three measurements defined) - activates only on measured large-mesh pain. Roadmap: wave close -&gt; follow-up wave -&gt; SCHISM probe -&gt; fleet roll -&gt; calibration last.</p>
+<h2>7. Parked, recorded</h2>
+<ul>
+<li>Plugin-UI rework pass (canvas picker, attention flash, card polish) - NATE-led, immediately after the 7 workflows ship.</li>
+<li>Patch-local edits (gmsh planar patch vs OCSMesh remesh_by_shape; MATLAB remesh_patch precedent) - on measured large-mesh pain only.</li>
+<li>Session reopen on an accepted mesh; the staging buffer; the discovery-offer detail; telapy wrapper; persistence-seam rename.</li>
+</ul>
 
 <h2>8. The current picture</h2>
 <div class="scroll">
 <pre class="mermaid">
 flowchart TD
-    AOI["threaded AOI - one value, never mutated"]
-    P["tool.process(aoi, delineate, ...) -> SUBDOMAIN"]
-    F["fetchers -> bed, shoreline, flowline..."]
-    M["tool.build_mesh(extent=SUBDOMAIN or default AOI, constituents...)"]
-    S["MeshSession - offered verbs from presence; regenerate-on-edit; recipe = record"]
-    A["MeshArtifact - probes + formats; telapy last mile; display via emission"]
+    AOI["aoi - required, defaulted, user-editable DECLARATION"]
+    P["tool.process(...) -> named derived values (subdomain, flowline, seed, discharge)"]
+    M["tool.build_mesh(extent=..., kind, mesher EXPLICIT, for_, constituents)"]
+    R["resolve: explicit > DISCOVERED (offered at the gate) > declared"]
+    S["MeshSession - all meshes editable; verbs from presence; regenerate-on-edit; accept implies stageable"]
+    A["MeshArtifact + recipe + probes; telapy last mile; display via emission"]
     RUN["author -> solve -> emit (unchanged)"]
     AOI --> P
-    AOI --> F
-    P -- "explicit extent (or !run ad hoc in chat)" --> M
-    F -- "named values, explicit params" --> M
-    M --> S --> A --> RUN
+    P -- "explicit named params" --> M
+    AOI -- "extent default" --> M
+    M --> R --> S --> A --> RUN
 </pre>
 </div>
 
