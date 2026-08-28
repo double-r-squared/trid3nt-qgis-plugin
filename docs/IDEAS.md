@@ -2458,3 +2458,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   lane and offline suites; plugin-visible changes stay recorded for
   NATE's eventual live pass but block nothing; the UI rework pass
   stays parked at its slot in the sequence.
+
+- MESH WAVE CLOSED + ALL NINE DEVIATIONS RULED (NATE 2026-08-28):
+  D-1 ALL MESHES EDITABLE (grids route through the tool - extent is
+  ad hoc editable, so every declared MESH sessions); D-2 explicit
+  named build step IS the spec shape; D-3 MUST-FIX (declaration read
+  whole incl the edit chain = recipe prefix); D-4 vision PNG dropped;
+  D-5/6/7 specs trimmed to reality (bed= line gone, real roster +
+  kinds incl graded_cells, unimplemented kind words DELETED, layout
+  refreshed); D-8 preview_gate CHOPPED (done, suite green); D-9
+  discovery offer wired in the model wave (offer detail deliberately
+  unspecified); om2d's four flagship fragilities = the wrapper
+  slice's ACCEPTANCE BAR. Domain-and-Mesh spec consolidated REV 19
+  and FROZEN for the model wave. MODEL WAVE LAUNCHED from
+  docs/design/model-wave-kickoff.md - 7 slices, scripted-lane
+  acceptance, conformance gate final, design-decision stop rule in
+  the charter.
