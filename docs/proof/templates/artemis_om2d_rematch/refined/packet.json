@@ -1,0 +1,252 @@
+{
+  "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "working_tree_dirty",
+    "code_sha": "be1e9d3dffa31010904822d706f09b983ecfe259",
+    "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
+  },
+  "template": "artemis_om2d_rematch",
+  "variant": "refined",
+  "tool": "artemis_harbor_agitation",
+  "run_id": "01M130X4GS6BTXPV0N0PPVDTHZ",
+  "stem": "artemis_om2d_rematch_refined",
+  "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined",
+  "panel_base": "artemis_om2d_rematch_refined",
+  "mode": "render",
+  "assembled_at": "2026-08-27T18:50:59",
+  "assembler": "scripts/assemble_proof_packet.py",
+  "time_stepped": {
+    "frames": 1,
+    "slf": "res_agitation.slf",
+    "source": "s3://trid3nt-runs/01M130X4GS6BTXPV0N0PPVDTHZ/res_agitation.slf",
+    "method": "SELAFIN header + file length",
+    "npoin": 13110,
+    "nelem": 25424,
+    "nbv1": 4,
+    "varnames": [
+      "WAVE HEIGHT     M",
+      "WAVE PHASE      RAD",
+      "FREE SURFACE    M",
+      "BOTTOM          M"
+    ],
+    "bytes": 672580,
+    "header_bytes": 462776,
+    "frame_bytes": 209804,
+    "recorded_ntimestep": null
+  },
+  "animation_declarations": [
+    {
+      "name": "default",
+      "variable": "WAVE HEIGHT",
+      "units": "m",
+      "quantity": null,
+      "mask_var": null,
+      "mask_threshold": 0.0,
+      "dry_land_only": false,
+      "derived": [],
+      "transform": null,
+      "vectors": null,
+      "still_vectors": null,
+      "vector_density": 1.4,
+      "vector_grid_n": 200,
+      "arrow_size": 0.7,
+      "vector_lw": [
+        0.35,
+        1.1
+      ],
+      "still": "peak",
+      "plane": "surface",
+      "suffix": "",
+      "reason": "the steady wave height field, rendered as the run's one still.",
+      "exempt_reason": "ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it solves a boundary-value problem for a single monochromatic sea state and returns ONE field, the steady agitation coefficient Kd. The deck has no simulation clock at all, which is why the run records no ntimestep - there is no time evolution to animate, and the single field IS the whole answer.",
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    }
+  ],
+  "notes": [],
+  "published_layers": [
+    "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+    "Wave agitation Kd (aoi)"
+  ],
+  "verdict": "PASS",
+  "missing": [],
+  "deliverables": [
+    {
+      "order": 1,
+      "kind": "panel",
+      "caption": "1. Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m) - context/raster, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+      "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+      "bytes": 436630,
+      "mtime": "2026-08-27T18:50:58",
+      "run_id_stamp": "01M130X4GS6BTXPV0N0PPVDTHZ",
+      "verdict": "present"
+    },
+    {
+      "order": 2,
+      "kind": "panel",
+      "caption": "2. Wave agitation Kd (aoi) - primary/raster, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_02_wave-agitation-kd-aoi.png",
+      "layer": "Wave agitation Kd (aoi)",
+      "bytes": 495892,
+      "mtime": "2026-08-27T18:50:58",
+      "run_id_stamp": "01M130X4GS6BTXPV0N0PPVDTHZ",
+      "verdict": "present"
+    },
+    {
+      "order": 3,
+      "kind": "canvas_view",
+      "caption": "3. CANVAS VIEW - all 2 layers stacked in emission order, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_03_canvas-view.png",
+      "bytes": 529752,
+      "mtime": "2026-08-27T18:50:58",
+      "run_id_stamp": "01M130X4GS6BTXPV0N0PPVDTHZ",
+      "verdict": "present"
+    },
+    {
+      "order": 4,
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 3 panels in emission order, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined.png",
+      "bytes": 715994,
+      "mtime": "2026-08-27T18:50:59",
+      "run_id_stamp": "01M130X4GS6BTXPV0N0PPVDTHZ",
+      "verdict": "present"
+    },
+    {
+      "order": 5,
+      "kind": "chart",
+      "caption": "Chart harbor_agitation - the run's persisted spec through the plugin chart dock's own renderer, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_chart_harbor_agitation.png",
+      "chart": "harbor_agitation",
+      "bytes": 81242,
+      "mtime": "2026-08-27T18:50:59",
+      "run_id_stamp": "01M130X4GS6BTXPV0N0PPVDTHZ",
+      "verdict": "present"
+    },
+    {
+      "order": 6,
+      "kind": "animation",
+      "path": null,
+      "animation": "default",
+      "verdict": "exempt",
+      "reason": "ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it solves a boundary-value problem for a single monochromatic sea state and returns ONE field, the steady agitation coefficient Kd. The deck has no simulation clock at all, which is why the run records no ntimestep - there is no time evolution to animate, and the single field IS the whole answer.",
+      "caption": "Animation [default] - EXEMPT. ARTEMIS is the phase-resolving elliptic mild-slope (Berkhoff) solver: it solves a boundary-value problem for a single monochromatic sea state and returns ONE field, the steady agitation coefficient Kd. The deck has no simulation clock at all, which is why the run records no ntimestep - there is no time evolution to animate, and the single field IS the whole answer."
+    },
+    {
+      "order": 7,
+      "kind": "still",
+      "caption": "PEAK frame [default] - WAVE HEIGHT (m), which IS the whole answer rather than one sample of it, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_peak_frame.png",
+      "animation": "default",
+      "bytes": 2117299,
+      "mtime": "2026-08-27T18:50:59",
+      "run_id_stamp": "01M130X4GS6BTXPV0N0PPVDTHZ",
+      "verdict": "present"
+    },
+    {
+      "order": 8,
+      "kind": "evidence",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M130X4GS6BTXPV0N0PPVDTHZ",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_canary_evidence.json",
+      "bytes": 20571,
+      "mtime": "2026-08-27T18:49:58",
+      "verdict": "present"
+    }
+  ],
+  "render": {
+    "sheet": {
+      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined.png",
+      "bytes": 715755,
+      "panels": 3,
+      "layers": [
+        "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+        "Wave agitation Kd (aoi)"
+      ],
+      "not_rendered": [],
+      "off_canvas": [],
+      "panel_pngs": [
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+          "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_02_wave-agitation-kd-aoi.png",
+          "layer": "Wave agitation Kd (aoi)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_03_canvas-view.png",
+          "layer": "CANVAS VIEW"
+        }
+      ]
+    },
+    "charts": [
+      {
+        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_chart_harbor_agitation.png",
+        "name": "harbor_agitation",
+        "title": "Wave agitation Kd (aoi)",
+        "render_summary": {
+          "views": 1,
+          "lines": 1,
+          "series": 1,
+          "rules": 0,
+          "bars": 0,
+          "points": 60,
+          "skipped": 0,
+          "x_log": false,
+          "y_log": false,
+          "legend_labels": []
+        },
+        "bytes": 80972
+      }
+    ],
+    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animations": {
+      "default": {
+        "frames": 1,
+        "animated": false,
+        "variable": "WAVE HEIGHT     M",
+        "plane": "2d",
+        "peak_frame": 0,
+        "peak_time_s": 12.0,
+        "peak_value": 6.968656063079834,
+        "dry_frames": [],
+        "vmin": 0.11872881531715393,
+        "vmax": 4.045363445281981,
+        "style_preset": "neutral_ramp",
+        "legend_note": "scaled to this run (p2-p98): 0.118729 to 4.04536",
+        "transform": "percentile",
+        "colormap": "viridis",
+        "vectors": null,
+        "still_vectors": null,
+        "vector_density": null,
+        "arrow_size": null,
+        "vector_lw": null,
+        "vector_grid": null,
+        "still_vector_grid": null,
+        "bbox_ll": [
+          -71.52500026543782,
+          41.33799796836452,
+          -71.49199978620038,
+          41.36800225014983
+        ],
+        "local_origin_m": [
+          288723.3164521885,
+          4579355.353434443
+        ],
+        "run_id": "01M130X4GS6BTXPV0N0PPVDTHZ",
+        "origin_bbox": [
+          -71.525,
+          41.338,
+          -71.492,
+          41.368
+        ],
+        "animation": null,
+        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_peak_frame.png",
+        "animation_bytes": 0,
+        "peak_bytes": 2117029
+      }
+    }
+  }
+}

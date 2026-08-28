@@ -1,0 +1,907 @@
+{
+  "tool": "artemis_harbor_agitation",
+  "args": {
+    "bbox": [
+      -71.525,
+      41.338,
+      -71.492,
+      41.368
+    ],
+    "structure": "s3://trid3nt-cache/cache/static-30d/osm_breakwaters/25f1cb637aad6c88c2c8749a8084c103.fgb",
+    "input_mode": "user_gated",
+    "wave_mode": "diffraction",
+    "wave_period_s": 12.0,
+    "wave_height_m": 2.0,
+    "wave_direction_deg": 90.0,
+    "reflection_coef": 0.5,
+    "bathy_source": "noaa_greatlakes",
+    "compute_class": "medium",
+    "mesh": "s3://trid3nt-cache/mesh/01M12YC08NNH4TDZPXEVDDF3AV/mesh.2dm",
+    "restart_clean": true
+  },
+  "session_id": "01M130X3AXPWK2R2QP5NYFR5PN",
+  "case_id": "01M130X3KM7RZEZ36QS6S17RV5",
+  "tool_status": null,
+  "dispatched": true,
+  "is_error": false,
+  "detail": "",
+  "step_state": "complete",
+  "step_error": "",
+  "turn_complete": true,
+  "charts": 1,
+  "chart_payloads": [
+    {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M130YD0M496YBHY5R69N8CWZ",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": false
+        },
+        "data": {
+          "values": [
+            {
+              "x": -2508.2,
+              "kd": 1.358
+            },
+            {
+              "x": -2438.7,
+              "kd": 0.885
+            },
+            {
+              "x": -2367.7,
+              "kd": 0.94
+            },
+            {
+              "x": -2303.2,
+              "kd": 0.894
+            },
+            {
+              "x": -2231.7,
+              "kd": 1.153
+            },
+            {
+              "x": -2162.7,
+              "kd": 0.908
+            },
+            {
+              "x": -2096.2,
+              "kd": 0.985
+            },
+            {
+              "x": -2026.7,
+              "kd": 1.028
+            },
+            {
+              "x": -1945.7,
+              "kd": 1.296
+            },
+            {
+              "x": -1878.7,
+              "kd": 0.582
+            },
+            {
+              "x": -1791.7,
+              "kd": 1.19
+            },
+            {
+              "x": -1725.2,
+              "kd": 0.971
+            },
+            {
+              "x": -1649.2,
+              "kd": 1.079
+            },
+            {
+              "x": -1581.7,
+              "kd": 1.184
+            },
+            {
+              "x": -1506.2,
+              "kd": 0.738
+            },
+            {
+              "x": -1451.2,
+              "kd": 1.162
+            },
+            {
+              "x": -1382.7,
+              "kd": 1.725
+            },
+            {
+              "x": -1316.7,
+              "kd": 1.264
+            },
+            {
+              "x": -1242.7,
+              "kd": 1.035
+            },
+            {
+              "x": -1176.7,
+              "kd": 1.235
+            },
+            {
+              "x": -1105.7,
+              "kd": 1.333
+            },
+            {
+              "x": -1034.7,
+              "kd": 1.133
+            },
+            {
+              "x": -967.7,
+              "kd": 0.666
+            },
+            {
+              "x": -897.7,
+              "kd": 0.962
+            },
+            {
+              "x": -831.2,
+              "kd": 0.886
+            },
+            {
+              "x": -769.7,
+              "kd": 1.322
+            },
+            {
+              "x": -708.7,
+              "kd": 1.232
+            },
+            {
+              "x": -647.2,
+              "kd": 1.552
+            },
+            {
+              "x": -587.2,
+              "kd": 1.609
+            },
+            {
+              "x": -530.7,
+              "kd": 1.175
+            },
+            {
+              "x": -461.7,
+              "kd": 1.519
+            },
+            {
+              "x": -401.7,
+              "kd": 1.449
+            },
+            {
+              "x": -348.2,
+              "kd": 0.979
+            },
+            {
+              "x": -315.7,
+              "kd": 1.701
+            },
+            {
+              "x": -293.2,
+              "kd": 1.588
+            },
+            {
+              "x": -269.7,
+              "kd": 1.682
+            },
+            {
+              "x": -248.2,
+              "kd": 1.879
+            },
+            {
+              "x": -226.7,
+              "kd": 0.164
+            },
+            {
+              "x": -211.2,
+              "kd": 0.32
+            },
+            {
+              "x": -196.7,
+              "kd": 1.47
+            },
+            {
+              "x": -184.7,
+              "kd": 0.334
+            },
+            {
+              "x": -168.2,
+              "kd": 0.325
+            },
+            {
+              "x": -153.7,
+              "kd": 0.23
+            },
+            {
+              "x": -136.2,
+              "kd": 0.24
+            },
+            {
+              "x": -113.2,
+              "kd": 0.327
+            },
+            {
+              "x": -92.7,
+              "kd": 0.323
+            },
+            {
+              "x": -73.2,
+              "kd": 0.307
+            },
+            {
+              "x": -49.2,
+              "kd": 0.321
+            },
+            {
+              "x": 2.3,
+              "kd": 0.436
+            },
+            {
+              "x": 69.8,
+              "kd": 0.62
+            },
+            {
+              "x": 164.3,
+              "kd": 0.358
+            },
+            {
+              "x": 237.8,
+              "kd": 0.453
+            },
+            {
+              "x": 308.3,
+              "kd": 0.453
+            },
+            {
+              "x": 376.8,
+              "kd": 0.526
+            },
+            {
+              "x": 450.8,
+              "kd": 0.433
+            },
+            {
+              "x": 530.8,
+              "kd": 0.46
+            },
+            {
+              "x": 596.8,
+              "kd": 0.436
+            },
+            {
+              "x": 678.8,
+              "kd": 0.336
+            },
+            {
+              "x": 741.3,
+              "kd": 0.565
+            },
+            {
+              "x": 828.8,
+              "kd": 0.54
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "x",
+            "type": "quantitative",
+            "title": "Distance along the transect (m)"
+          },
+          "y": {
+            "field": "kd",
+            "type": "quantitative",
+            "title": "Agitation coefficient Kd = Hs/H0"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Wave agitation Kd (aoi)",
+      "caption": "Forced by a prescribed 12 s incident wave: Kd 0.966 on the exposed approach against 0.585 in the lee - the structure sheltered the berths by a factor of 1.65. Phase-resolving screening, not a calibrated hindcast.",
+      "source_layer_uri": null,
+      "created_turn_id": "01M130X49AKW3S6PVF8KDYA1R5"
+    }
+  ],
+  "layers": [
+    {
+      "layer_id": "input-ncei_dem_mosaic-a9244acb2047",
+      "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M130X4DTYBRA5P2C8PCXVXW1.tif",
+      "style_preset": "continuous_dem",
+      "visible": true,
+      "role": "context",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 0,
+      "crs_authid": null,
+      "legend": null
+    },
+    {
+      "layer_id": "01M130YDFPBJFGTP1MZK7M5FH6",
+      "name": "Wave agitation Kd (aoi)",
+      "layer_type": "raster",
+      "uri": "s3://trid3nt-runs/01M130X4GS6BTXPV0N0PPVDTHZ/overviews/01M130YCYPB61GZEP4WWZJEVYF.tif",
+      "style_preset": "continuous_wave_agitation",
+      "visible": true,
+      "role": "primary",
+      "temporal": false,
+      "wms_url": null,
+      "opacity": null,
+      "z_index": 1,
+      "crs_authid": null,
+      "legend": {
+        "kind": "continuous",
+        "colormap": "viridis",
+        "vmin": 0.0,
+        "vmax": 2.356,
+        "classes": null,
+        "value_field": null,
+        "units": "Kd",
+        "label": "Agitation coefficient Kd = Hs / H0"
+      }
+    }
+  ],
+  "draw_card": null,
+  "form_card": {
+    "workflow": "artemis_harbor_agitation",
+    "title": "Review the incident wave and the structure",
+    "rows": [
+      {
+        "name": "bbox",
+        "value": [
+          -71.525,
+          41.338,
+          -71.492,
+          41.368
+        ],
+        "units": null,
+        "door": "user",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "location",
+        "value": null,
+        "units": null,
+        "door": "question",
+        "basis": "prompt_interpreted",
+        "source_badge": "not supplied",
+        "bounds": null,
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "target_resolution_m",
+        "value": null,
+        "units": "m",
+        "door": "user",
+        "basis": "user",
+        "source_badge": "not supplied",
+        "bounds": [
+          20.0,
+          2000.0
+        ],
+        "advanced": false,
+        "note": "not supplied (declared optional)"
+      },
+      {
+        "name": "wave_mode",
+        "value": "diffraction",
+        "units": null,
+        "door": "question",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "bathy_source",
+        "value": "noaa_greatlakes",
+        "units": null,
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "reflection_coef",
+        "value": 0.5,
+        "units": null,
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.0,
+          1.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wave_direction_deg",
+        "value": 90.0,
+        "units": "deg",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.0,
+          360.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wave_height_m",
+        "value": 2.0,
+        "units": "m",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          0.01,
+          10.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "wave_period_s",
+        "value": 12.0,
+        "units": "s",
+        "door": "scenario",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": [
+          1.0,
+          300.0
+        ],
+        "advanced": false,
+        "note": "supplied on this invocation"
+      },
+      {
+        "name": "compute_class",
+        "value": "medium",
+        "units": null,
+        "door": "constant",
+        "basis": "user",
+        "source_badge": "you supplied this",
+        "bounds": null,
+        "advanced": true,
+        "note": "supplied on this invocation"
+      }
+    ],
+    "edited": {}
+  },
+  "plain_warnings": [],
+  "run_id": "01M130X4GS6BTXPV0N0PPVDTHZ",
+  "chart_spec": {
+    "harbor_agitation": {
+      "envelope_type": "chart-emission",
+      "chart_id": "01M130YD0M496YBHY5R69N8CWZ",
+      "vega_lite_spec": {
+        "mark": {
+          "type": "line",
+          "point": false
+        },
+        "data": {
+          "values": [
+            {
+              "x": -2508.2,
+              "kd": 1.358
+            },
+            {
+              "x": -2438.7,
+              "kd": 0.885
+            },
+            {
+              "x": -2367.7,
+              "kd": 0.94
+            },
+            {
+              "x": -2303.2,
+              "kd": 0.894
+            },
+            {
+              "x": -2231.7,
+              "kd": 1.153
+            },
+            {
+              "x": -2162.7,
+              "kd": 0.908
+            },
+            {
+              "x": -2096.2,
+              "kd": 0.985
+            },
+            {
+              "x": -2026.7,
+              "kd": 1.028
+            },
+            {
+              "x": -1945.7,
+              "kd": 1.296
+            },
+            {
+              "x": -1878.7,
+              "kd": 0.582
+            },
+            {
+              "x": -1791.7,
+              "kd": 1.19
+            },
+            {
+              "x": -1725.2,
+              "kd": 0.971
+            },
+            {
+              "x": -1649.2,
+              "kd": 1.079
+            },
+            {
+              "x": -1581.7,
+              "kd": 1.184
+            },
+            {
+              "x": -1506.2,
+              "kd": 0.738
+            },
+            {
+              "x": -1451.2,
+              "kd": 1.162
+            },
+            {
+              "x": -1382.7,
+              "kd": 1.725
+            },
+            {
+              "x": -1316.7,
+              "kd": 1.264
+            },
+            {
+              "x": -1242.7,
+              "kd": 1.035
+            },
+            {
+              "x": -1176.7,
+              "kd": 1.235
+            },
+            {
+              "x": -1105.7,
+              "kd": 1.333
+            },
+            {
+              "x": -1034.7,
+              "kd": 1.133
+            },
+            {
+              "x": -967.7,
+              "kd": 0.666
+            },
+            {
+              "x": -897.7,
+              "kd": 0.962
+            },
+            {
+              "x": -831.2,
+              "kd": 0.886
+            },
+            {
+              "x": -769.7,
+              "kd": 1.322
+            },
+            {
+              "x": -708.7,
+              "kd": 1.232
+            },
+            {
+              "x": -647.2,
+              "kd": 1.552
+            },
+            {
+              "x": -587.2,
+              "kd": 1.609
+            },
+            {
+              "x": -530.7,
+              "kd": 1.175
+            },
+            {
+              "x": -461.7,
+              "kd": 1.519
+            },
+            {
+              "x": -401.7,
+              "kd": 1.449
+            },
+            {
+              "x": -348.2,
+              "kd": 0.979
+            },
+            {
+              "x": -315.7,
+              "kd": 1.701
+            },
+            {
+              "x": -293.2,
+              "kd": 1.588
+            },
+            {
+              "x": -269.7,
+              "kd": 1.682
+            },
+            {
+              "x": -248.2,
+              "kd": 1.879
+            },
+            {
+              "x": -226.7,
+              "kd": 0.164
+            },
+            {
+              "x": -211.2,
+              "kd": 0.32
+            },
+            {
+              "x": -196.7,
+              "kd": 1.47
+            },
+            {
+              "x": -184.7,
+              "kd": 0.334
+            },
+            {
+              "x": -168.2,
+              "kd": 0.325
+            },
+            {
+              "x": -153.7,
+              "kd": 0.23
+            },
+            {
+              "x": -136.2,
+              "kd": 0.24
+            },
+            {
+              "x": -113.2,
+              "kd": 0.327
+            },
+            {
+              "x": -92.7,
+              "kd": 0.323
+            },
+            {
+              "x": -73.2,
+              "kd": 0.307
+            },
+            {
+              "x": -49.2,
+              "kd": 0.321
+            },
+            {
+              "x": 2.3,
+              "kd": 0.436
+            },
+            {
+              "x": 69.8,
+              "kd": 0.62
+            },
+            {
+              "x": 164.3,
+              "kd": 0.358
+            },
+            {
+              "x": 237.8,
+              "kd": 0.453
+            },
+            {
+              "x": 308.3,
+              "kd": 0.453
+            },
+            {
+              "x": 376.8,
+              "kd": 0.526
+            },
+            {
+              "x": 450.8,
+              "kd": 0.433
+            },
+            {
+              "x": 530.8,
+              "kd": 0.46
+            },
+            {
+              "x": 596.8,
+              "kd": 0.436
+            },
+            {
+              "x": 678.8,
+              "kd": 0.336
+            },
+            {
+              "x": 741.3,
+              "kd": 0.565
+            },
+            {
+              "x": 828.8,
+              "kd": 0.54
+            }
+          ]
+        },
+        "encoding": {
+          "x": {
+            "field": "x",
+            "type": "quantitative",
+            "title": "Distance along the transect (m)"
+          },
+          "y": {
+            "field": "kd",
+            "type": "quantitative",
+            "title": "Agitation coefficient Kd = Hs/H0"
+          }
+        },
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
+      },
+      "title": "Wave agitation Kd (aoi)",
+      "caption": "Forced by a prescribed 12 s incident wave: Kd 0.966 on the exposed approach against 0.585 in the lee - the structure sheltered the berths by a factor of 1.65. Phase-resolving screening, not a calibrated hindcast.",
+      "source_layer_uri": null,
+      "created_turn_id": null
+    }
+  },
+  "metrics": {
+    "kd_max": 3.484,
+    "hs_max_m": 6.9687,
+    "kd_sheltered": 0.585,
+    "kd_exposed": 0.966,
+    "resonant_period_s": null,
+    "response_at_resonance": null,
+    "response_off_resonance": null,
+    "wave_mode": "diffraction",
+    "wave_period_s": 12.0,
+    "mesh_size_m": 29.5,
+    "agitation_curve_m": [
+      -2508.2,
+      -2438.7,
+      -2367.7,
+      -2303.2,
+      -2231.7,
+      -2162.7,
+      -2096.2,
+      -2026.7,
+      -1945.7,
+      -1878.7,
+      -1791.7,
+      -1725.2,
+      -1649.2,
+      -1581.7,
+      -1506.2,
+      -1451.2,
+      -1382.7,
+      -1316.7,
+      -1242.7,
+      -1176.7,
+      -1105.7,
+      -1034.7,
+      -967.7,
+      -897.7,
+      -831.2,
+      -769.7,
+      -708.7,
+      -647.2,
+      -587.2,
+      -530.7,
+      -461.7,
+      -401.7,
+      -348.2,
+      -315.7,
+      -293.2,
+      -269.7,
+      -248.2,
+      -226.7,
+      -211.2,
+      -196.7,
+      -184.7,
+      -168.2,
+      -153.7,
+      -136.2,
+      -113.2,
+      -92.7,
+      -73.2,
+      -49.2,
+      2.3,
+      69.8,
+      164.3,
+      237.8,
+      308.3,
+      376.8,
+      450.8,
+      530.8,
+      596.8,
+      678.8,
+      741.3,
+      828.8
+    ],
+    "agitation_curve_kd": [
+      1.358,
+      0.885,
+      0.94,
+      0.894,
+      1.153,
+      0.908,
+      0.985,
+      1.028,
+      1.296,
+      0.582,
+      1.19,
+      0.971,
+      1.079,
+      1.184,
+      0.738,
+      1.162,
+      1.725,
+      1.264,
+      1.035,
+      1.235,
+      1.333,
+      1.133,
+      0.666,
+      0.962,
+      0.886,
+      1.322,
+      1.232,
+      1.552,
+      1.609,
+      1.175,
+      1.519,
+      1.449,
+      0.979,
+      1.701,
+      1.588,
+      1.682,
+      1.879,
+      0.164,
+      0.32,
+      1.47,
+      0.334,
+      0.325,
+      0.23,
+      0.24,
+      0.327,
+      0.323,
+      0.307,
+      0.321,
+      0.436,
+      0.62,
+      0.358,
+      0.453,
+      0.453,
+      0.526,
+      0.433,
+      0.46,
+      0.436,
+      0.336,
+      0.565,
+      0.54
+    ],
+    "agitation_curve_kind": "diffraction_transect",
+    "layer_uri": "s3://trid3nt-runs/01M130X4GS6BTXPV0N0PPVDTHZ/overviews/01M130YCYPB61GZEP4WWZJEVYF.tif",
+    "wave_period_note": "prescribed monochromatic incident wave period",
+    "structure": "supplied_3_lines",
+    "structure_note": "the structure supplied for this run (3 lines), meshed as a thin solid barrier; the solve reports: REAL surveyed breakwater (as mapped in OpenStreetMap man_made=breakwater/pier, 73 segments), a CONSTRAINED CUT in the supplied mesh whose faces are solid and reflecting",
+    "target_resolution_m": "derived",
+    "target_resolution_note": "not supplied; the grid is laid at the labeled default spacing - 40 m over a real harbour, 8 m in the analytic domain"
+  },
+  "product_uris": {
+    "chart_spec": "s3://trid3nt-runs/01M130X4GS6BTXPV0N0PPVDTHZ/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M130X4GS6BTXPV0N0PPVDTHZ/metrics.json"
+  },
+  "product_errors": {}
+}
