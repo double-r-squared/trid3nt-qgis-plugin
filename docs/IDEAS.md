@@ -2491,3 +2491,23 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   amends at the conformance gate. Surface review also fixed
   mechanically: staged coverage no longer collapses onto the last
   crop (second crops + undo work).
+
+- FRESH-START PURGE + TELAPY INTERIOR RULED (NATE 2026-08-28, "let's
+  go"): (1) TELAPY IN THE WORKER: YES - the box interior goes
+  telapy-driven (down one abstraction level INSIDE the box; box
+  contract unchanged). SEQUENCE: telemac worker cleanup -> library
+  integration -> mesh work. (2) workflows/mesh is THE ONLY mesh dir;
+  the old root trid3nt_server/mesh/ moves OUTSIDE THE REPO to the
+  attic (reference only) - live consumers absorbed first. (3) MESHER
+  PURGE: telapy_mesh, watershed, hecras, corridor_tin removed (NATE
+  deleted several himself); coastal_edge to attic (driver deleted;
+  water-edge prep folds into om2d). Roster: om2d + reg_grid. (4)
+  WORKFLOWS ONE AT A TIME: all non-telemac engine workflow dirs move
+  to the attic (calibration/elmfire/geoclaw/hecras/landlab/modflow/
+  openquake/pelicun/schism/sfincs/swan/swmm); telemac + mesh + lib +
+  shared + solver stay; refactor from scratch from the settled arch.
+  (5) TESTS + SCRIPTS: non-telemac workflow tests and scripts move
+  out with their engines; the suite RE-BASELINES (new zero). ATTIC =
+  ~/Documents/trid3nt-attic (outside the repo, reference only; git
+  history remains the archive). Anti-bloat doctrine: old iterations
+  LEAVE the repo, always.
