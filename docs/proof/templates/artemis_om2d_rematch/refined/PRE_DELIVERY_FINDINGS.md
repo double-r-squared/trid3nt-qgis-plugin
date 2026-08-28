@@ -77,7 +77,9 @@ The run answers its own question with a signal, not a flat field.
   is measured rather than assumed.
 * The still is the declared `WAVE HEIGHT` field at the declared `peak` step.
 * Every deliverable carries the run id, both burned into its caption and stamped
-  into its PNG text chunk.
+  into its PNG text chunk. The two mesh figures are not packet deliverables -
+  they depict the ARTIFACT, not the run - and carry the run id in their titles
+  anyway, so a reader cannot pair them with the wrong solve.
 
 **Finding 3 (CARRY).** Panel 01 is titled "Input: TELEMAC open-water bed
 elevation at mesh nodes". On this run the solve did NOT read that raster: the

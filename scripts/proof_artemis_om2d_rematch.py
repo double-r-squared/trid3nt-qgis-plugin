@@ -160,8 +160,8 @@ def author_mesh(work_dir: Path) -> tuple[Any, str, str]:
     return artifact, structure_uri, footprint
 
 
-def render_mesh_figures(artifact: Any, footprint: str,
-                        directory: Path) -> list[str]:
+def render_mesh_figures(artifact: Any, footprint: str, directory: Path, *,
+                        run_id: str) -> list[str]:
     """The MESH, as the two pictures a reader has to be able to check it against.
 
     The engine render carries the wireframe over the solved field, which shows
@@ -204,7 +204,8 @@ def render_mesh_figures(artifact: Any, footprint: str,
         axes.set_aspect("equal")
         axes.set_title(
             f"{artifact.name} - {artifact.node_count} nodes / "
-            f"{artifact.element_count} elements, {artifact.crs_authid}\n"
+            f"{artifact.element_count} elements, {artifact.crs_authid} - "
+            f"run {run_id}\n"
             f"cyan = the surveyed breakwater footprint the cut was constrained to; "
             f"measured max node offset "
             f"{artifact.probes['breakline_offset_m']['max']:.1f} m, median "
@@ -350,7 +351,8 @@ def main(argv: list[str] | None = None) -> int:
     from trid3nt_server.testing.canaries import assemble_packet
 
     packet = assemble_packet(f"{PROOF_NAME}_{PROOF_VARIANT}")
-    figures = render_mesh_figures(artifact, footprint, directory)
+    figures = render_mesh_figures(artifact, footprint, directory,
+                                  run_id=str(evidence.run_id))
     print(json.dumps({"packet": packet["verdict"], "missing": packet["missing"],
                       "directory": packet["directory"],
                       "mesh_figures": figures}, indent=2, default=str))
