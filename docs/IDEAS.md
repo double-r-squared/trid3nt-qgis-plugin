@@ -2474,3 +2474,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   docs/design/model-wave-kickoff.md - 7 slices, scripted-lane
   acceptance, conformance gate final, design-decision stop rule in
   the charter.
+
+- MODEL WAVE SURFACE DESIGN-STOPS RULED (NATE 2026-08-28): DS-1
+  catchment ROUTES THROUGH A SESSION (D-1 consistency; the loud
+  refusal was interim); DS-2 corridor extent RENAMES to
+  set_reach_length, its own action, CONTAINMENT-JUDGED against the
+  staged flowline/DEM coverage (within = edit; beyond = typed
+  escalation to rerun with a reach_length_km override) - and the
+  fetching meshers must WRITE staged_coverage so containment is
+  testable, not vacuous; DS-3 deck + ANSWER read the ACCEPTED
+  ARTIFACT (mesh_size_m, mesh_node_estimate from probes where an
+  artifact exists - measured truth over estimate, same principle as
+  dt); AOI SHAPE: aoi stays the ACQUIRED STEP RESULT (declared
+  editable inputs = location/bbox; extent=Ref("aoi") written in every
+  MESH declaration is the visibility) - the spec's P.aoi wording
+  amends at the conformance gate. Surface review also fixed
+  mechanically: staged coverage no longer collapses onto the last
+  crop (second crops + undo work).
