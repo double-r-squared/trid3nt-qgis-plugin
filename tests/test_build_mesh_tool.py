@@ -40,7 +40,7 @@ _AOI = (-83.50, 35.00, -83.40, 35.09)
 
 def _declaration(**over):
     fields = {"mesher": "reg_grid", "kind": "structured_grid",
-              "aoi": _AOI, "resolution_m": 400.0}
+              "extent": _AOI, "resolution_m": 400.0}
     fields.update(over)
     return tool.build_mesh(**fields)
 
@@ -69,7 +69,7 @@ def test_build_mesh_registered():
 
 def test_reg_grid_registered_with_its_declarations():
     mesher = get_mesher("reg_grid")
-    assert set(mesher.fields) == {"kind", "aoi", "resolution_m"}
+    assert set(mesher.fields) == {"kind", "extent", "resolution_m"}
     assert set(mesher.actions) == {"set_resolution", "set_extent",
                                    "apply_layer_edits"}
     assert mesher.actions["apply_layer_edits"].replayable is False
@@ -101,12 +101,12 @@ def test_build_mesh_surfaces_in_top8():
     "fields, code",
     [
         ({"mesher": "no_such_mesher"}, "MESH_UNKNOWN_MESHER"),
-        ({"mesher": "reg_grid", "aoi": _AOI}, "MESH_SPEC_MISSING_FIELD"),
-        ({"mesher": "reg_grid", "aoi": _AOI, "resolution_m": "coarse"},
+        ({"mesher": "reg_grid", "extent": _AOI}, "MESH_SPEC_MISSING_FIELD"),
+        ({"mesher": "reg_grid", "extent": _AOI, "resolution_m": "coarse"},
          "MESH_SPEC_BAD_TYPE"),
-        ({"mesher": "reg_grid", "kind": "unstructured_tri", "aoi": _AOI,
+        ({"mesher": "reg_grid", "kind": "unstructured_tri", "extent": _AOI,
           "resolution_m": 400.0}, "MESH_SPEC_BAD_VALUE"),
-        ({"mesher": "reg_grid", "aoi": _AOI, "resolution_m": 400.0,
+        ({"mesher": "reg_grid", "extent": _AOI, "resolution_m": 400.0,
           "refine": {"edge_length": 10}}, "MESH_SPEC_UNKNOWN_FIELD"),
     ],
 )
@@ -118,7 +118,7 @@ def test_router_refuses_a_spec_the_mesher_never_declared(fields, code):
 
 def test_router_refusal_names_the_declared_fields():
     with pytest.raises(MeshToolError) as excinfo:
-        tool.build_mesh(mesher="reg_grid", aoi=_AOI, resolution_m=400.0,
+        tool.build_mesh(mesher="reg_grid", extent=_AOI, resolution_m=400.0,
                         resolution_meters=400.0)
     message = str(excinfo.value)
     assert "resolution_meters" in message and "resolution_m" in message
@@ -137,14 +137,14 @@ def test_router_refuses_an_input_the_action_never_declared():
 
 
 def test_declared_defaults_fill_in():
-    spec = validate_spec("reg_grid", {"aoi": _AOI, "resolution_m": 400.0})
+    spec = validate_spec("reg_grid", {"extent": _AOI, "resolution_m": 400.0})
     assert spec.kind == "structured_grid"
 
 
 def test_late_bound_reads_pass_declaration_and_refuse_serialization():
     from trid3nt_server.workflows.lib.plan import ParamRef
 
-    declaration = tool.build_mesh(mesher="reg_grid", aoi=_AOI,
+    declaration = tool.build_mesh(mesher="reg_grid", extent=_AOI,
                                   resolution_m=ParamRef("mesh_resolution_m"))
     with pytest.raises(MeshToolError) as excinfo:
         declaration.spec.to_json()
@@ -228,7 +228,7 @@ def test_nothing_supplied_declared_or_discovered_refuses():
 # --------------------------------------------------------------------------- #
 def test_a_declaration_builds_nothing(tmp_path):
     """A degenerate extent declares fine and only fails when a build is demanded."""
-    declaration = tool.build_mesh(mesher="reg_grid", aoi=(0.0, 0.0, 0.0, 0.0),
+    declaration = tool.build_mesh(mesher="reg_grid", extent=(0.0, 0.0, 0.0, 0.0),
                                   resolution_m=100.0).edit("set_resolution", 50.0)
     assert isinstance(declaration, MeshDeclaration)
     assert len(declaration.edits) == 1
@@ -240,7 +240,7 @@ def test_building_an_unbound_declaration_refuses_by_name(tmp_path):
     """A placeholder must not reach the mesh library as a value it cannot read."""
     from trid3nt_server.workflows.lib.plan import ParamRef
 
-    declaration = tool.build_mesh(mesher="reg_grid", aoi=_AOI,
+    declaration = tool.build_mesh(mesher="reg_grid", extent=_AOI,
                                   resolution_m=ParamRef("mesh_resolution_m"))
     with pytest.raises(MeshToolError) as excinfo:
         MeshSession(declaration, workdir=tmp_path).probes()
@@ -271,7 +271,7 @@ def test_an_unbound_session_edit_input_refuses(tmp_path):
 def test_edit_chaining_returns_a_new_frozen_declaration():
     first = _declaration()
     second = first.edit("set_resolution", 200.0)
-    third = second.edit("set_extent", aoi=_AOI)
+    third = second.edit("set_extent", extent=_AOI)
     assert first.edits == ()
     assert [e.action for e in third.edits] == ["set_resolution", "set_extent"]
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -289,7 +289,7 @@ def test_positional_edit_values_bind_to_the_declared_input():
 def test_recipe_journals_the_spec_then_one_line_per_edit(tmp_path):
     session = MeshSession(_declaration().edit("set_resolution", 250.0),
                           workdir=tmp_path)
-    session.edit("set_extent", aoi=(-83.50, 35.00, -83.45, 35.05))
+    session.edit("set_extent", extent=(-83.50, 35.00, -83.45, 35.05))
     lines = [json.loads(ln) for ln in
              session.recipe_path.read_text().splitlines() if ln.strip()]
     assert lines[0]["spec"]["mesher"] == "reg_grid"
@@ -300,7 +300,7 @@ def test_recipe_journals_the_spec_then_one_line_per_edit(tmp_path):
 def test_recipe_replays_to_an_identical_mesh(tmp_path):
     session = MeshSession(_declaration().edit("set_resolution", 250.0),
                           workdir=tmp_path)
-    session.edit("set_extent", aoi=(-83.50, 35.00, -83.45, 35.05))
+    session.edit("set_extent", extent=(-83.50, 35.00, -83.45, 35.05))
     replayed = replay_recipe(session.recipe_path)
     assert mesh_digest(replayed) == mesh_digest(session.mesh)
 
@@ -314,7 +314,7 @@ def test_the_same_spec_builds_the_same_mesh_twice(tmp_path):
 def test_restart_truncates_to_the_declared_prefix(tmp_path):
     session = MeshSession(_declaration().edit("set_resolution", 250.0),
                           workdir=tmp_path)
-    session.edit("set_extent", aoi=(-83.50, 35.00, -83.45, 35.05))
+    session.edit("set_extent", extent=(-83.50, 35.00, -83.45, 35.05))
     narrowed = session.probes()["node_count"]
 
     probes = session.restart()
@@ -479,7 +479,7 @@ async def test_a_mesher_that_takes_no_extent_refuses_one_by_name(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_mesher_that_declares_an_aoi_still_takes_one(monkeypatch):
+async def test_a_mesher_that_declares_an_extent_still_takes_one(monkeypatch):
     """The refusal is about what THIS mesher declares, not about extents."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.mesh.meshers import MeshToolError
@@ -496,7 +496,7 @@ async def test_a_mesher_that_declares_an_aoi_still_takes_one(monkeypatch):
     with pytest.raises(MeshToolError):
         await TOOL_REGISTRY["build_mesh"].fn(
             mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0)
-    assert seen["aoi"] == (-75.8, 36.1, -75.7, 36.2)
+    assert seen["extent"] == (-75.8, 36.1, -75.7, 36.2)
 
 
 # --------------------------------------------------------------------------- #
@@ -535,3 +535,117 @@ def test_every_registered_action_compiles_into_a_real_signature():
         for action in get_mesher(name).actions.values():
             _metadata, fn = _edit_tool("MESH01", action)
             assert list(inspect.signature(fn).parameters) == list(action.inputs)
+
+
+# --------------------------------------------------------------------------- #
+# The containment rule: a crop is an edit, a move is a rerun.
+# --------------------------------------------------------------------------- #
+def _coverage(session) -> tuple:
+    from trid3nt_server.workflows.mesh.meshers import staged_coverage
+
+    return staged_coverage(session.mesh)
+
+
+def test_an_extent_inside_the_staged_coverage_crops_as_a_journaled_edit(tmp_path):
+    """Within coverage the box narrows and the recipe carries the crop."""
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    before = session.probes()["node_count"]
+    crop = (-83.48, 35.02, -83.44, 35.06)
+
+    session.edit("set_extent", extent=crop)
+
+    assert session.probes()["node_count"] < before
+    lines = [json.loads(ln) for ln in
+             session.recipe_path.read_text().splitlines() if ln.strip()]
+    assert [ln["edit"] for ln in lines[1:]] == ["set_extent"]
+    assert lines[1]["extent"] == list(crop)
+    assert mesh_digest(replay_recipe(session.recipe_path)) == mesh_digest(session.mesh)
+
+
+def test_the_staged_coverage_is_what_the_mesh_states_it_was_built_over(tmp_path):
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    coverage = _coverage(session)
+    assert coverage[0] <= _AOI[0] and coverage[1] <= _AOI[1]
+    assert coverage[2] >= _AOI[2] and coverage[3] >= _AOI[3]
+
+
+@pytest.mark.parametrize("extent, why", [
+    ((-84.00, 35.00, -83.90, 35.09), "moved clear of the coverage"),
+    ((-83.55, 35.00, -83.40, 35.09), "wider on one side"),
+    ((-83.50, 35.00, -83.40, 35.20), "taller on one side"),
+    ((-83.52, 34.98, -83.38, 35.11), "larger on every side"),
+])
+def test_an_extent_outside_the_staged_coverage_refuses_as_an_edit(tmp_path, extent,
+                                                                  why):
+    """Containment is BINARY: partial coverage would mesh unfetched ground."""
+    session = MeshSession(_declaration(), workdir=tmp_path / why.replace(" ", "_"))
+    with pytest.raises(MeshToolError) as excinfo:
+        session.edit("set_extent", extent=extent)
+    assert excinfo.value.error_code == "MESH_EXTENT_OUTSIDE_COVERAGE"
+    assert session.chain == ()
+
+
+def test_the_refusal_names_the_one_rerun_path_and_the_new_box(tmp_path):
+    """The answer to a moved extent is the rerun primitive, never a second one."""
+    from trid3nt_server.workflows.mesh.meshers import RESTAGE_TOOL
+
+    session = MeshSession(_declaration(), workdir=tmp_path)
+    moved = (-84.00, 35.00, -83.90, 35.09)
+    with pytest.raises(MeshToolError) as excinfo:
+        session.edit("set_extent", extent=moved)
+
+    assert RESTAGE_TOOL == "rerun_workflow"
+    assert TOOL_REGISTRY[RESTAGE_TOOL] is not None
+    message = str(excinfo.value)
+    assert f"{RESTAGE_TOOL}(run_id=" in message
+    assert str(list(moved)) in message
+    assert excinfo.value.escalation == {"tool": RESTAGE_TOOL,
+                                        "overrides": {"bbox": list(moved)}}
+
+
+@pytest.mark.parametrize("extent, code", [
+    ((-83.50, 35.00, -83.40), "MESH_EXTENT_MALFORMED"),
+    ((-83.40, 35.00, -83.50, 35.09), "MESH_EXTENT_MALFORMED"),
+    ((-83.50, 35.09, -83.40, 35.00), "MESH_EXTENT_MALFORMED"),
+])
+def test_an_extent_that_is_not_a_box_refuses_before_containment(tmp_path, extent,
+                                                                code):
+    session = MeshSession(_declaration(), workdir=tmp_path / str(len(extent)))
+    with pytest.raises(MeshToolError) as excinfo:
+        session.edit("set_extent", extent=extent)
+    assert excinfo.value.error_code == code
+
+
+def test_a_mesh_that_states_no_coverage_refuses_the_crop_rather_than_guessing():
+    """Containment is judged against staged coverage; no coverage, no judgement."""
+    from trid3nt_server.workflows.mesh.meshers import Mesh, contained_extent
+
+    bare = Mesh(points=None, cells=None, crs_authid="EPSG:4326", bed=None, meta={})
+    with pytest.raises(MeshToolError) as excinfo:
+        contained_extent(bare, (-83.49, 35.01, -83.45, 35.05), edit="set_extent")
+    assert excinfo.value.error_code == "MESH_COVERAGE_UNKNOWN"
+
+
+@pytest.mark.asyncio
+async def test_the_escalated_bbox_is_the_box_the_rerun_actually_models(monkeypatch):
+    """The named override reaches the domain verbatim, place name notwithstanding.
+
+    The refusal above sends the caller to ``rerun_workflow`` with the new box under
+    ``bbox``. A rerun seats overrides on the parent's own sheet, so the box arrives
+    at the acquisition step beside the place name the parent ran with - and an
+    escalation that named a value the step then dropped would be a dead end
+    dressed as a corrective.
+    """
+    from trid3nt_server.workflows.shared.aoi import acquire_aoi
+
+    def _never(*_a, **_kw):  # a geocode here would mean the box was dropped
+        raise AssertionError("the supplied extent is the domain; nothing to geocode")
+
+    monkeypatch.setitem(
+        TOOL_REGISTRY, "geocode_location",
+        dataclasses.replace(TOOL_REGISTRY["geocode_location"], fn=_never))
+    moved = (-84.00, 35.00, -83.90, 35.09)
+
+    resolved = await acquire_aoi(location="Cataloochee, North Carolina", bbox=moved)
+
+    assert tuple(resolved["bbox"]) == moved

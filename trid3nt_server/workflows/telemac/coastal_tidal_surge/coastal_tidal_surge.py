@@ -111,7 +111,7 @@ FORCING = Forcing(water_level=D.tides)
 MESH = tool.build_mesh(
     mesher="reg_grid",
     kind="structured_grid",
-    aoi=Ref("aoi"),
+    extent=Ref("aoi"),
     resolution_m=P.target_resolution_m,
 )
 

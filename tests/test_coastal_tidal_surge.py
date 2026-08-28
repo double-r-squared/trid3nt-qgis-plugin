@@ -157,7 +157,7 @@ def _lattice(**fields):
     from trid3nt_server.workflows.mesh.tool import tool
 
     return tool.build_mesh(mesher="reg_grid", kind="structured_grid",
-                           aoi=Ref("aoi"), **fields)
+                           extent=Ref("aoi"), **fields)
 
 
 def test_an_unknown_physics_process_refuses_before_anything_runs():

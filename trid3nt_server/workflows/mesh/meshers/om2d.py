@@ -106,7 +106,7 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("unstructured_tri",),
               default="unstructured_tri",
               doc="unstructured_tri - the water side of the shoreline is triangulated"),
-    MeshField("aoi", types=(tuple, list), required=True,
+    MeshField("extent", types=(tuple, list), required=True,
               doc="(min_lon, min_lat, max_lon, max_lat) the domain is cut from"),
     MeshField("refine", types=(dict,),
               doc="{'edge_length': the coarsest background edge in metres, "
@@ -123,7 +123,7 @@ _FIELDS = (
 def build(spec: Mapping[str, Any]) -> Mesh:
     """Mesh the water side of the shoreline across the AOI."""
     return _realize({
-        "aoi": tuple(float(v) for v in spec["aoi"]),
+        "extent": tuple(float(v) for v in spec["extent"]),
         "refine": checked_refine("mesher 'om2d'", spec.get("refine"),
                                  _REFINE_KNOBS),
         "bed": spec.get("bed") or "fetch_topobathy",
@@ -144,7 +144,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
         sample_raster_at_nodes,
     )
 
-    aoi = tuple(float(v) for v in state["aoi"])
+    aoi = tuple(float(v) for v in state["extent"])
     refine = dict(state["refine"])
     if refine["min_spacing"] > refine["edge_length"]:
         raise MeshToolError(
@@ -254,7 +254,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
 def _carry(state: Mapping[str, Any]) -> dict[str, Any]:
     """The rebuild state, as plain values an edit can extend."""
     return {
-        "aoi": tuple(float(v) for v in state["aoi"]),
+        "extent": tuple(float(v) for v in state["extent"]),
         "refine": dict(state["refine"]),
         "bed": state["bed"],
         "obstacles": list(state["obstacles"]),

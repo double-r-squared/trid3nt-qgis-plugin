@@ -573,11 +573,17 @@ def test_the_catchment_mesh_step_reads_the_declared_band():
 
     The band, the gradation and the outlet-snap window shape the catchment; a knob
     the declaration carries and the step drops would read as a lever that did
-    nothing."""
+    nothing. The declaration travels WHOLE, so the step carries the mesher, the
+    fields the router checked and the declared edit chain rather than a restated
+    subset."""
     module = _template("trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)
                  if getattr(n, "stage", "") == "mesh"][0]
-    assert set(mesh_step.kwargs) == {
-        "aoi", "supplied", "bed_dem", "rivers", "min_edge_m", "max_edge_m",
-        "grade", "max_iter", "snap_search_cells"}
+    assert set(mesh_step.kwargs) == {"mesh", "supplied", "bed_dem", "rivers"}
+    ask = mesh_step.kwargs["mesh"]
+    assert ask["mesher"] == "watershed"
+    assert set(ask) == {"mesher", "fields", "edits"}
+    assert set(ask["fields"]) == {
+        "kind", "extent", "min_edge_length_m", "max_edge_length_m", "grade",
+        "max_iter", "snap_search_cells"}

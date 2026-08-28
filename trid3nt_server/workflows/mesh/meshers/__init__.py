@@ -27,8 +27,10 @@ __all__ = [
     "MeshField",
     "MeshToolError",
     "Mesher",
+    "RESTAGE_TOOL",
     "apply_layer_edits_action",
     "checked_refine",
+    "contained_extent",
     "fetch_activation_rows",
     "fetch_fallback_note",
     "get_mesher",
@@ -37,15 +39,23 @@ __all__ = [
     "nearest_names",
     "register_mesher",
     "registered_meshers",
+    "staged_coverage",
 ]
 
 
 class MeshToolError(RuntimeError):
-    """A typed mesh refusal: an error code plus the reason, never a silent skip."""
+    """A typed mesh refusal: an error code plus the reason, never a silent skip.
 
-    def __init__(self, error_code: str, message: str) -> None:
+    ``escalation`` carries the call that DOES what the refused edit could not, as
+    ``{"tool": name, "overrides": {...}}``, for the refusals whose answer is
+    another primitive rather than a different argument.
+    """
+
+    def __init__(self, error_code: str, message: str,
+                 escalation: Mapping[str, Any] | None = None) -> None:
         super().__init__(message)
         self.error_code = error_code
+        self.escalation = dict(escalation) if escalation else None
 
 
 def _edge_resolution_specs() -> tuple[Any, ...]:
@@ -233,6 +243,74 @@ def checked_refine(where: str, refine: Any,
                 f"{type(value).__name__} ({value!r}).")
         resolved[name] = float(value)
     return resolved
+
+
+#: Containment slack, in degrees. A caller retyping the staged box to six decimals
+#: is restating it to ~0.1 m, and a box that reads as the staged one must not
+#: refuse on the last bit of a float.
+_CONTAINMENT_EPS_DEG = 1e-9
+
+#: The primitive an out-of-coverage extent change escalates to. There is ONE
+#: re-run path, and a moved extent takes it rather than growing a second one.
+RESTAGE_TOOL = "rerun_workflow"
+
+
+def staged_coverage(mesh: "Mesh") -> tuple[float, float, float, float] | None:
+    """The lon/lat box this mesh's inputs were STAGED over, when it states one.
+
+    A mesher whose staged inputs cover more ground than the mesh occupies declares
+    ``staged_coverage``; otherwise the built extent is the coverage, because that
+    is the box its inputs were fetched for.
+    """
+    declared = mesh.meta.get("staged_coverage") or mesh.meta.get("extent")
+    if declared is None:
+        return None
+    return tuple(float(v) for v in declared)  # type: ignore[return-value]
+
+
+def contained_extent(mesh: "Mesh", extent: Any, *,
+                     edit: str) -> tuple[float, float, float, float]:
+    """The new extent as a CROP, or a refusal naming the restage.
+
+    Containment is BINARY. Inside the staged coverage an extent change is a crop -
+    the mesh is re-derived over the smaller box and the inputs already staged for
+    the larger one stand. Moved, or larger by any amount, and the inputs the mesh
+    would need were never staged: partial coverage produces silently wrong edges,
+    so the change is not an edit at all and escalates to the rerun primitive with
+    the new box.
+    """
+    new = tuple(float(v) for v in extent)
+    if len(new) != 4:
+        raise MeshToolError(
+            "MESH_EXTENT_MALFORMED",
+            f"edit {edit!r} takes (min_lon, min_lat, max_lon, max_lat); got "
+            f"{list(new)}.")
+    if new[0] >= new[2] or new[1] >= new[3]:
+        raise MeshToolError(
+            "MESH_EXTENT_MALFORMED",
+            f"edit {edit!r}: the extent {list(new)} has no area (min must be "
+            "below max on both axes).")
+    coverage = staged_coverage(mesh)
+    if coverage is None:
+        raise MeshToolError(
+            "MESH_COVERAGE_UNKNOWN",
+            f"edit {edit!r} is judged against the coverage this mesh's inputs were "
+            "staged over, and this mesh states none; a mesher offering an extent "
+            "edit carries an 'extent' or 'staged_coverage' in its mesh meta.")
+    eps = _CONTAINMENT_EPS_DEG
+    if (new[0] >= coverage[0] - eps and new[1] >= coverage[1] - eps
+            and new[2] <= coverage[2] + eps and new[3] <= coverage[3] + eps):
+        return new
+    escalation = {"tool": RESTAGE_TOOL, "overrides": {"bbox": list(new)}}
+    raise MeshToolError(
+        "MESH_EXTENT_OUTSIDE_COVERAGE",
+        f"the extent {list(new)} is not contained in the coverage this mesh's "
+        f"inputs were staged over ({list(coverage)}), so cropping to it would mesh "
+        "ground nothing was fetched for. A moved or grown extent is a RESTAGE, not "
+        f"an edit: ask the question again over the new box with "
+        f"{escalation['tool']}(run_id=<the run that built this mesh>, "
+        f"overrides={escalation['overrides']!r}).",
+        escalation=escalation)
 
 
 @dataclass(frozen=True)

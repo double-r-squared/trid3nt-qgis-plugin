@@ -56,6 +56,8 @@ __all__ = [
     "MeshTool",
     "MeshToolError",
     "build_mesh",
+    "declaration_from_plan_value",
+    "declaration_plan_value",
     "resolve_mesh",
     "supplied_mesh_artifact",
     "tool",
@@ -222,6 +224,58 @@ class MeshTool:
 
 
 tool = MeshTool()
+
+
+def declaration_plan_value(declaration: MeshDeclaration) -> dict[str, Any]:
+    """A declaration as the plain mapping a plan step carries in its kwargs.
+
+    Mappings and sequences are what the interpreter walks to substitute late-bound
+    reads, so the declaration travels as one: the mesher, every field the router
+    checked, and the DECLARED edit chain in its order. What the step's runner
+    receives is therefore the whole ask with its values bound, and it rebuilds that
+    ask rather than restating parts of it - a knob or an edit the template declared
+    cannot go missing between the declaration and the mesh.
+    """
+    if not isinstance(declaration, MeshDeclaration):
+        raise MeshToolError(
+            "MESH_DECLARATION_EXPECTED",
+            f"a mesh step carries the template's MESH declaration "
+            f"(tool.build_mesh(...)), got {type(declaration).__name__}.")
+    return {"mesher": declaration.spec.mesher,
+            "fields": _thaw(declaration.spec.fields),
+            "edits": [{"action": edit.action, "inputs": _thaw(edit.inputs)}
+                      for edit in declaration.edits]}
+
+
+def _thaw(value: Any) -> Any:
+    """A frozen declaration value as the plain containers a step's kwargs carry.
+
+    A declaration is deep-frozen, and a read-only proxy is not the ``dict`` a
+    mesher's own field check accepts, so the mapping a step hands back to the
+    router is a plain one. Late-bound reads pass through untouched - binding them
+    is the interpreter's job, not this one's.
+    """
+    if isinstance(value, Mapping):
+        return {str(k): _thaw(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_thaw(v) for v in value)
+    return value
+
+
+def declaration_from_plan_value(value: Mapping[str, Any],
+                                **overrides: Any) -> MeshDeclaration:
+    """Rebuild the declaration a step was handed, with named fields replaced.
+
+    ``overrides`` are for the fields a step RESOLVES rather than the template -
+    a domain the plan navigated, an input a producer fetched. Everything else,
+    including the edit chain that prefixes the recipe, comes back exactly as it
+    was declared.
+    """
+    fields = {**dict(value["fields"]), **overrides}
+    declaration = tool.build_mesh(mesher=str(value["mesher"]), **fields)
+    for edit in value.get("edits") or ():
+        declaration = declaration.edit(str(edit["action"]), **dict(edit["inputs"]))
+    return declaration
 
 
 @dataclass(frozen=True)
@@ -423,8 +477,8 @@ async def build_mesh(
             fields = {name: float(value), **fields}
 
     declared = get_mesher(mesher).fields
-    if "aoi" not in declared and "domain" not in declared:
-        # A mesher that takes neither an AOI nor a domain is handed an existing
+    if "extent" not in declared and "domain" not in declared:
+        # A mesher that takes neither an extent nor a domain is handed an existing
         # geometry, so an extent would reach nothing. Refused BY NAME, the same as
         # any other field this mesher never declared - a dropped extent reads as a
         # lever that shaped a mesh it never touched.
@@ -437,14 +491,14 @@ async def build_mesh(
                 f"geometry it is given rather than cutting one from an extent "
                 f"({nearest_names(spatial[0], declared)}). Named extents: "
                 f"{sorted(spatial)}.")
-    if "aoi" in declared and "aoi" not in fields:
-        aoi = coerce_bbox_value(bbox) if bbox is not None else None
-        if aoi is None and location:
+    if "extent" in declared and "extent" not in fields:
+        extent = coerce_bbox_value(bbox) if bbox is not None else None
+        if extent is None and location:
             geo = await asyncio.to_thread(
                 TOOL_REGISTRY["geocode_location"].fn, query=location)
-            aoi = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
-        if aoi is not None:
-            fields = {"aoi": tuple(float(v) for v in aoi), **fields}
+            extent = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
+        if extent is not None:
+            fields = {"extent": tuple(float(v) for v in extent), **fields}
     elif "domain" in declared and "domain" not in fields:
         # A mesher whose domain is a DOMAIN rather than a box gets one acquired for
         # it: an extent alone does not say which river a corridor follows.

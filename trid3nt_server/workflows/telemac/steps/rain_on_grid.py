@@ -35,6 +35,7 @@ from trid3nt_contracts.telemac_contracts import (
 from trid3nt_server.workflows.lib import DeclarativeError, Step
 from trid3nt_server.workflows.mesh import watershed as W
 from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
+from trid3nt_server.workflows.mesh.tool import declaration_plan_value
 from trid3nt_server.workflows.shared.aoi import aoi_slug
 from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
 
@@ -144,6 +145,27 @@ def AcquireCatchment(*, location: Any, bbox: Any, pour_point: Any,  # noqa: N802
 # --------------------------------------------------------------------------- #
 # 2. mesh: the catchment, triangulated, with a BOTTOM SELAFIN beside it.
 # --------------------------------------------------------------------------- #
+def _refuse_declared_edits(declaration: Any) -> None:
+    """Refuse an ask this path cannot honour whole.
+
+    A declared edit is part of the ask, and this generation runs the catchment
+    strategy directly rather than through a mesh session, so there is no chain to
+    prefix. Refused BY NAME rather than dropped: an edit that silently did nothing
+    reads as a lever that shaped the mesh.
+    """
+    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+
+    if declaration.edits:
+        raise MeshToolError(
+            "MESH_DECLARED_EDIT_UNSUPPORTED",
+            f"the catchment mesh ask declares the edits "
+            f"{[e.action for e in declaration.edits]}, and this template builds its "
+            "catchment through the delineation strategy rather than a mesh session, "
+            "so no chain exists to apply them to. Build the mesh with build_mesh "
+            "and hand it to this run instead.")
+
+
+
 async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
                            slug: str) -> tuple[Any, str | None]:
     """Offer a mesh this CASE already holds; ``(mesh | None, note | None)``.
@@ -197,18 +219,31 @@ async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
         return None, None
 
 
-async def build_catchment_mesh(*, aoi: dict[str, Any], supplied: Any,
+async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
                                bed_dem: dict[str, Any],
-                               rivers: dict[str, Any] | None,
-                               min_edge_m: float, max_edge_m: float, grade: float,
-                               max_iter: int, snap_search_cells: int) -> dict[str, Any]:
+                               rivers: dict[str, Any] | None) -> dict[str, Any]:
     """The catchment mesh, however it was acquired, plus the solver geometry file.
 
     THE SLATE: a mesh SUPPLIED on this invocation is taken as-is and nothing here
     has an opinion about it. Only when the slot is unfilled does the template ask
     whether to adopt a mesh this case already holds, and only when that is
     declined or absent does it generate one - a labeled fallback, never a stance.
+
+    Every knob the generation reads comes off the REBUILT declaration, so the
+    mesher's own declared defaults are what stand when the template named nothing.
     """
+    from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
+
+    declaration = declaration_from_plan_value(mesh)
+    _refuse_declared_edits(declaration)
+    fields = declaration.spec.fields
+    aoi = dict(fields["extent"])
+    min_edge_m = float(fields["min_edge_length_m"])
+    max_edge_m = float(fields["max_edge_length_m"])
+    grade = float(fields["grade"])
+    max_iter = int(fields["max_iter"])
+    snap_search_cells = int(fields["snap_search_cells"])
+
     rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"rog-{new_ulid()}"
     rundir.mkdir(parents=True, exist_ok=True)
     point = (float(aoi["pour_point"][0]), float(aoi["pour_point"][1]))
@@ -865,21 +900,15 @@ class Catchment:
     def mesh(*, mesh: Any, supplied: Any, bed_dem: Any, rivers: Any) -> Step:
         """Delineate and triangulate the catchment - or adopt the mesh handed in.
 
-        The sizing comes off the template's MESH declaration, which the router has
-        already checked against the ``watershed`` mesher's own declared fields, so
-        the knobs this step forwards are the knobs that mesher accepts. Unpacked at
-        PLAN-CONSTRUCTION time so ``Step.kwargs`` stays the plain mapping the
-        interpreter binds late-bound reads inside.
+        The DECLARATION travels WHOLE - its mesher, its kind, every field the
+        router checked against the ``watershed`` mesher and the edits the template
+        declared on it - as the plain mapping the interpreter binds late-bound
+        reads inside. Nothing about the ask is restated here.
         """
-        fields = mesh.spec.fields
         return Step(runner=f"{_STEPS}.rain_on_grid.build_catchment_mesh", stage="mesh",
-                    kwargs={"aoi": fields["aoi"], "supplied": supplied,
-                            "bed_dem": bed_dem, "rivers": rivers,
-                            "min_edge_m": fields["min_edge_length_m"],
-                            "max_edge_m": fields["max_edge_length_m"],
-                            "grade": fields["grade"],
-                            "max_iter": fields["max_iter"],
-                            "snap_search_cells": fields["snap_search_cells"]})
+                    kwargs={"mesh": declaration_plan_value(mesh),
+                            "supplied": supplied,
+                            "bed_dem": bed_dem, "rivers": rivers})
 
     @staticmethod
     def infiltration(*, mesh: Any, landcover: Any, curve_number: Any,

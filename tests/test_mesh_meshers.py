@@ -78,14 +78,14 @@ def test_the_edge_band_declaration_survived_the_dissolution():
 
 
 @pytest.mark.parametrize("mesher,expected", [
-    ("watershed", {"kind", "aoi", "pour_point", "min_edge_length_m",
+    ("watershed", {"kind", "extent", "pour_point", "min_edge_length_m",
                    "max_edge_length_m", "grade", "max_iter",
                    "snap_search_cells"}),
-    ("coastal_edge", {"kind", "aoi", "min_edge_length_m", "max_edge_length_m",
+    ("coastal_edge", {"kind", "extent", "min_edge_length_m", "max_edge_length_m",
                       "grade", "open_boundary_side"}),
     ("corridor_tin", {"kind", "domain", "extent_km", "width_m", "banks",
                       "refine"}),
-    ("hecras_rog", {"kind", "aoi", "pour_point", "min_edge_length_m",
+    ("hecras_rog", {"kind", "extent", "pour_point", "min_edge_length_m",
                     "max_edge_length_m"}),
 ])
 def test_each_mesher_declares_its_own_fields(mesher, expected):
@@ -96,7 +96,7 @@ def test_a_field_a_mesher_never_declared_is_refused_by_name():
     from trid3nt_server.workflows.mesh.tool import validate_spec
 
     with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("watershed", {"aoi": (0.0, 0.0, 1.0, 1.0),
+        validate_spec("watershed", {"extent": (0.0, 0.0, 1.0, 1.0),
                                     "open_boundary_side": "south"})
     assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
     assert "open_boundary_side" in str(excinfo.value)
@@ -106,7 +106,7 @@ def test_the_coastal_open_side_is_a_closed_vocabulary():
     from trid3nt_server.workflows.mesh.tool import validate_spec
 
     with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("coastal_edge", {"aoi": (0.0, 0.0, 1.0, 1.0),
+        validate_spec("coastal_edge", {"extent": (0.0, 0.0, 1.0, 1.0),
                                        "open_boundary_side": "seaward"})
     assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
 
@@ -488,7 +488,7 @@ def _stub_catchment_build(monkeypatch, *, bed_dem, rivers=None, notes=None):
 def _run_build(monkeypatch, **kw):
     _stub_catchment_build(monkeypatch, **kw)
     built = _watershed_mesher.build({
-        "aoi": (-83.5, 35.0, -83.4, 35.09), "pour_point": (-83.43, 35.06),
+        "extent": (-83.5, 35.0, -83.4, 35.09), "pour_point": (-83.43, 35.06),
         "min_edge_length_m": 40.0, "max_edge_length_m": 300.0, "grade": 0.2})
     return dict(built.meta["artifact"]["provenance"])
 

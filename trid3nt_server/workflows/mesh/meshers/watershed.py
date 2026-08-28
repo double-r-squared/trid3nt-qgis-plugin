@@ -43,7 +43,7 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("unstructured_tri",),
               default="unstructured_tri",
               doc="unstructured_tri - a catchment interior is triangulated"),
-    MeshField("aoi", types=(tuple, list, dict), required=True,
+    MeshField("extent", types=(tuple, list, dict), required=True,
               doc="(min_lon, min_lat, max_lon, max_lat) the delineation runs "
                   "inside, or the acquired catchment window that carries one "
                   "along with its outlet"),
@@ -69,7 +69,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
     """Delineate the catchment at the pour point and triangulate its interior."""
     from trid3nt_server.workflows.mesh import watershed as strategy
 
-    aoi, window_outlet = _window(spec["aoi"])
+    aoi, window_outlet = _window(spec["extent"])
     pour = spec.get("pour_point") or window_outlet
     pour_point = (tuple(float(v) for v in pour) if pour is not None
                   else ((aoi[0] + aoi[2]) / 2.0, (aoi[1] + aoi[3]) / 2.0))
@@ -105,7 +105,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
         points=points, cells=cells, crs_authid=f"EPSG:{int(catchment.utm_epsg)}",
         bed=bed,
         meta={
-            "aoi": aoi,
+            "extent": aoi,
             "utm_epsg": int(catchment.utm_epsg),
             "lonlat_bbox": (float(lonlat[:, 0].min()), float(lonlat[:, 1].min()),
                             float(lonlat[:, 0].max()), float(lonlat[:, 1].max())),
@@ -256,7 +256,7 @@ def _set_edge_band(mesh: Mesh, *, min_edge_length_m: float,
     """
     built = dict(mesh.meta["artifact"]["provenance"])
     return build({
-        "aoi": mesh.meta["aoi"],
+        "extent": mesh.meta["extent"],
         "pour_point": mesh.meta["artifact"]["pour_point_lonlat"],
         "min_edge_length_m": float(min_edge_length_m),
         "max_edge_length_m": (float(max_edge_length_m)

@@ -52,7 +52,7 @@ class _FakeEmitter:
 
 def _declaration(*, declared_resolution_m: float | None = None):
     declaration = tool.build_mesh(mesher="reg_grid", kind="structured_grid",
-                                  aoi=_AOI, resolution_m=400.0)
+                                  extent=_AOI, resolution_m=400.0)
     if declared_resolution_m is not None:
         declaration = declaration.edit("set_resolution", declared_resolution_m)
     return declaration
@@ -456,7 +456,7 @@ def test_a_vocabulary_knob_gets_a_row_and_names_its_roster(tmp_path):
     action over the drawn input left their gate with nothing to answer on.
     """
     declaration = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
-                                  aoi=_AOI, refine={"edge_length": 400.0})
+                                  extent=_AOI, refine={"edge_length": 400.0})
     session = MeshSession(declaration, workdir=tmp_path)
 
     names = _card_rows(session)
@@ -489,7 +489,7 @@ def test_a_mesher_with_no_vocabulary_knob_keeps_the_card_it_had(tmp_path):
 async def test_a_word_off_the_declared_roster_refuses_by_name(tmp_path):
     """The roster is the declaration's; typing past it is refused, not passed on."""
     declaration = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
-                                  aoi=_AOI)
+                                  extent=_AOI)
     session = MeshSession(declaration, workdir=tmp_path)
 
     with pytest.raises(MeshToolError) as excinfo:

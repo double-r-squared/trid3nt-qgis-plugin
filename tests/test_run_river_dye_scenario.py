@@ -357,15 +357,13 @@ def _install_step_mocks(captured: dict):
             "seed_lon": seed["lon"], "seed_lat": seed["lat"],
         }
 
-    async def _fake_corridor_mesh(*, reach, seed, extent_km, width_m, banks,
-                                  refine):
+    async def _fake_corridor_mesh(*, mesh, seed):
         """The mesh session stands in: this chain test is about the chain.
 
         No artifact rides back, so the deck's timestep falls to the REQUESTED
         edge - which is what keeps this chain's deck the historical one.
         """
-        captured["mesh_ask"] = {"extent_km": extent_km, "width_m": width_m,
-                                "banks": banks, "refine": dict(refine or {})}
+        captured["mesh_ask"] = dict(mesh)
         return {"artifact": None, "mesh_id": "MESH01",
                 "slf_uri": "s3://cache/mesh/MESH01/river.slf",
                 "cli_uri": "s3://cache/mesh/MESH01/river.cli",

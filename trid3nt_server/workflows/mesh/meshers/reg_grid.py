@@ -21,6 +21,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     Mesh,
     MeshField,
     apply_layer_edits_action,
+    contained_extent,
     register_mesher,
 )
 
@@ -30,7 +31,7 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("structured_grid",),
               default="structured_grid",
               doc="structured_grid - the one kind a uniform lattice is"),
-    MeshField("aoi", types=(tuple, list), required=True,
+    MeshField("extent", types=(tuple, list), required=True,
               doc="(min_lon, min_lat, max_lon, max_lat) in EPSG:4326"),
     MeshField("resolution_m", types=(int, float), required=True,
               doc="target uniform cell size, in metres"),
@@ -38,9 +39,9 @@ _FIELDS = (
 
 
 def build(spec: Mapping[str, Any]) -> Mesh:
-    """Build the lattice a ``(aoi, resolution_m)`` ask describes."""
+    """Build the lattice an ``(extent, resolution_m)`` ask describes."""
     return _lattice(regular_grid_from_bbox(
-        tuple(float(v) for v in spec["aoi"]), float(spec["resolution_m"])))
+        tuple(float(v) for v in spec["extent"]), float(spec["resolution_m"])))
 
 
 def _lattice(grid: RegularGrid) -> Mesh:
@@ -56,7 +57,7 @@ def _lattice(grid: RegularGrid) -> Mesh:
     cells = np.column_stack([sw, sw + 1, sw + stride + 1, sw + stride])
     return Mesh(
         points=points, cells=cells, crs_authid="EPSG:4326", bed=None,
-        meta={"aoi": (grid.min_lon, grid.min_lat, grid.max_lon, grid.max_lat),
+        meta={"extent": (grid.min_lon, grid.min_lat, grid.max_lon, grid.max_lat),
               "resolution_m": grid.resolution_m,
               "ncol": grid.ncol, "nrow": grid.nrow,
               "dlon": grid.dlon, "dlat": grid.dlat,
@@ -65,11 +66,12 @@ def _lattice(grid: RegularGrid) -> Mesh:
 
 
 def _set_resolution(mesh: Mesh, *, resolution_m: float) -> Mesh:
-    return build({"aoi": mesh.meta["aoi"], "resolution_m": float(resolution_m)})
+    return build({"extent": mesh.meta["extent"], "resolution_m": float(resolution_m)})
 
 
-def _set_extent(mesh: Mesh, *, aoi: Any) -> Mesh:
-    return build({"aoi": tuple(float(v) for v in aoi),
+def _set_extent(mesh: Mesh, *, extent: Any) -> Mesh:
+    """Re-derive the lattice over a CROP of the staged coverage."""
+    return build({"extent": contained_extent(mesh, extent, edit="set_extent"),
                   "resolution_m": mesh.meta["resolution_m"]})
 
 
@@ -85,10 +87,11 @@ REG_GRID = register_mesher(
             doc="Re-derive the lattice at a different cell size."),
         EditAction(
             name="set_extent", apply=_set_extent,
-            inputs={"aoi": MeshField(
-                "aoi", types=(tuple, list), required=True,
-                doc="the new (min_lon, min_lat, max_lon, max_lat)")},
-            doc="Re-derive the lattice over a different extent."),
+            inputs={"extent": MeshField(
+                "extent", types=(tuple, list), required=True,
+                doc="the new (min_lon, min_lat, max_lon, max_lat); it must sit "
+                    "INSIDE the coverage the mesh was staged over")},
+            doc="Crop the lattice to a smaller extent inside the staged coverage."),
         apply_layer_edits_action(),
     ),
     fields=_FIELDS,

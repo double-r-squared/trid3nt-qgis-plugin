@@ -30,6 +30,7 @@ import tempfile
 from typing import Any, NamedTuple
 
 from trid3nt_server.workflows.lib import Step, user_input
+from trid3nt_server.workflows.mesh.tool import declaration_plan_value
 
 from .errors import TelemacDyeScenarioError
 
@@ -884,36 +885,33 @@ class ReachMesh:
     def corridor(*, mesh: Any, seed: Any) -> Step:
         """Build the declared corridor mesh under the mesh gate.
 
-        The sizing, extent, width and bank source come off the template's MESH
-        declaration, which the router has already checked against the
-        ``corridor_tin`` mesher's own declared fields. They are unpacked at
-        PLAN-CONSTRUCTION time so ``Step.kwargs`` stays the plain mapping the
-        interpreter binds late-bound reads inside.
+        The DECLARATION travels WHOLE - its mesher, its kind, every field the
+        router checked and the edits the template declared on it - as the plain
+        mapping the interpreter binds late-bound reads inside. Nothing about the
+        ask is restated here, so a knob or a declared edit cannot go missing
+        between the template and the mesh.
 
         The SEED rides separately: a corridor is navigated from a point on the
         flowline, and that point is a step result rather than anything the
         declaration can name.
         """
-        fields = mesh.spec.fields
         return Step(runner=f"{_STEPS}.reach.build_corridor_mesh", stage="mesh",
-                    kwargs={"reach": fields["domain"], "seed": seed,
-                            "extent_km": fields.get("extent_km"),
-                            "width_m": fields.get("width_m"),
-                            "banks": fields.get("banks"),
-                            "refine": fields.get("refine")})
+                    kwargs={"mesh": declaration_plan_value(mesh), "seed": seed})
 
 
-async def build_corridor_mesh(*, reach: dict[str, Any], seed: dict[str, Any],
-                              extent_km: Any, width_m: Any, banks: Any,
-                              refine: Any) -> dict[str, Any]:
+async def build_corridor_mesh(*, mesh: dict[str, Any],
+                              seed: dict[str, Any]) -> dict[str, Any]:
     """The corridor mesh a reach solve runs on -> the accepted mesh's record.
 
-    The declaration is rebuilt here against the resolved sheet and a session opens
-    over it: the mesh is built, presented at the mesh gate with its probes and its
-    editable layer, edited or restarted if the user says so, and accepted. What
-    comes back is the ACCEPTED topology, which the deck then hands the solve -
-    otherwise the mesh a human approved and the mesh a solver ran on would be two
-    different objects that happen to agree.
+    The declaration is rebuilt from what the template declared, with the navigated
+    reach and its seed filled into the one field the plan resolves, and a session
+    opens over it: the mesh is built, its declared edits prefixing the recipe, then
+    presented at the mesh gate with its probes and its editable layer, edited or
+    restarted if the user says so, and accepted. A ``restart`` therefore truncates
+    to the declared chain rather than past it. What comes back is the ACCEPTED
+    topology, which the deck then hands the solve - otherwise the mesh a human
+    approved and the mesh a solver ran on would be two different objects that
+    happen to agree.
     """
     import asyncio
 
@@ -921,14 +919,11 @@ async def build_corridor_mesh(*, reach: dict[str, Any], seed: dict[str, Any],
     from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
     from trid3nt_server.workflows.mesh.gate import gate_mesh_build
     from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import tool
+    from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
 
-    declared = {k: v for k, v in (("extent_km", extent_km), ("width_m", width_m),
-                                  ("banks", banks), ("refine", refine))
-                if v is not None}
-    declaration = tool.build_mesh(
-        mesher="corridor_tin", kind="unstructured_tri",
-        domain={"reach": dict(reach), "seed": dict(seed)}, **declared)
+    reach = dict(mesh["fields"]["domain"])
+    declaration = declaration_from_plan_value(
+        mesh, domain={"reach": reach, "seed": dict(seed)})
     session = await asyncio.to_thread(
         MeshSession, declaration, case_id=current_turn_case(),
         name=f"{reach.get('name') or reach.get('slug')} corridor")

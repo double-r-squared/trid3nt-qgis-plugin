@@ -60,7 +60,7 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("unstructured_tri",),
               default="unstructured_tri",
               doc="unstructured_tri - a water body's interior is triangulated"),
-    MeshField("aoi", types=(tuple, list), required=True,
+    MeshField("extent", types=(tuple, list), required=True,
               doc="(min_lon, min_lat, max_lon, max_lat) the water domain is cut from"),
     MeshField("min_edge_length_m", types=(int, float), default=40.0,
               doc="finest triangle edge, at the shoreline"),
@@ -83,7 +83,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
         sample_raster_at_nodes,
     )
 
-    aoi = tuple(float(v) for v in spec["aoi"])
+    aoi = tuple(float(v) for v in spec["extent"])
     min_edge = float(spec.get("min_edge_length_m", 40.0))
     max_edge = float(spec.get("max_edge_length_m", 400.0))
     grade = float(spec.get("grade", 0.20))
@@ -123,7 +123,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
     return Mesh(
         points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}", bed=bed,
         meta={
-            "aoi": aoi,
+            "extent": aoi,
             "utm_epsg": int(utm_epsg),
             "lonlat_bbox": (float(lonlat[:, 0].min()), float(lonlat[:, 1].min()),
                             float(lonlat[:, 0].max()), float(lonlat[:, 1].max())),
@@ -341,7 +341,7 @@ def _set_edge_band(mesh: Mesh, *, min_edge_length_m: float,
     built = dict(mesh.meta["artifact"]["provenance"])
     info = dict(mesh.meta["artifact"]["open_boundary_info"])
     return build({
-        "aoi": mesh.meta["aoi"],
+        "extent": mesh.meta["extent"],
         "min_edge_length_m": float(min_edge_length_m),
         "max_edge_length_m": (float(max_edge_length_m)
                               if max_edge_length_m is not None
@@ -354,7 +354,7 @@ def _set_boundary(mesh: Mesh, *, side: str) -> Mesh:
     """Designate (or re-designate) the seaward open boundary -> the SCHISM geometry."""
     built = dict(mesh.meta["artifact"]["provenance"])
     return build({
-        "aoi": mesh.meta["aoi"],
+        "extent": mesh.meta["extent"],
         "min_edge_length_m": built["min_edge_length_m"],
         "max_edge_length_m": built["max_edge_length_m"],
         "grade": built["grade"],

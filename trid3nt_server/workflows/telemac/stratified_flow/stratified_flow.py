@@ -103,7 +103,7 @@ PHYSICS = Physics("stratified_3d",
 MESH = tool.build_mesh(
     mesher="reg_grid",
     kind="structured_grid",
-    aoi=Ref("aoi"),
+    extent=Ref("aoi"),
     resolution_m=P.target_resolution_m,
 )
 

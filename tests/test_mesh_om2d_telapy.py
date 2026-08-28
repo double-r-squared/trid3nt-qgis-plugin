@@ -45,7 +45,7 @@ def test_the_two_wrappers_joined_the_roster():
 
 
 @pytest.mark.parametrize("mesher,expected", [
-    ("om2d", {"kind", "aoi", "refine", "bed"}),
+    ("om2d", {"kind", "extent", "refine", "bed"}),
     ("telapy_mesh", {"kind", "geometry", "crs_authid"}),
 ])
 def test_each_wrapper_declares_the_spec_signature(mesher, expected):
@@ -62,7 +62,7 @@ def test_om2d_declines_the_edge_band_the_other_meshers_take():
     """om2d sizes inside its refine block, so the shared band is refused BY NAME
     rather than accepted and ignored."""
     with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("om2d", {"aoi": _AOI, "min_edge_length_m": 40.0})
+        validate_spec("om2d", {"extent": _AOI, "min_edge_length_m": 40.0})
     assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
     assert "refine" in str(excinfo.value)
 
@@ -138,12 +138,12 @@ def test_the_recipe_carries_the_determinism_a_replay_should_not_assume(tmp_path)
     from trid3nt_server.workflows.mesh.session import MeshSession
     from trid3nt_server.workflows.mesh.tool import tool
 
-    declaration = tool.build_mesh(mesher="om2d", aoi=_AOI)
+    declaration = tool.build_mesh(mesher="om2d", extent=_AOI)
     session = MeshSession(declaration, workdir=tmp_path)
     spec_line = session.recipe_lines()[0]
     assert spec_line["determinism"] is False
 
-    lattice = tool.build_mesh(mesher="reg_grid", aoi=_AOI, resolution_m=100.0)
+    lattice = tool.build_mesh(mesher="reg_grid", extent=_AOI, resolution_m=100.0)
     assert "determinism" not in MeshSession(
         lattice, workdir=tmp_path).recipe_lines()[0]
 
@@ -192,7 +192,7 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None):
 def test_the_box_is_handed_the_declared_refine_band_and_the_mounted_shoreline(
         monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"aoi": _AOI,
+    mesh = OM2D.build({"extent": _AOI,
                        "refine": {"min_spacing": 60.0, "edge_length": 800.0,
                                   "gradation": 0.22}})
     config = sent["config"]
@@ -210,7 +210,7 @@ def test_the_box_is_handed_the_declared_refine_band_and_the_mounted_shoreline(
 def test_a_min_spacing_coarser_than_the_edge_length_refuses(monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
     with pytest.raises(MeshToolError) as excinfo:
-        OM2D.build({"aoi": _AOI,
+        OM2D.build({"extent": _AOI,
                     "refine": {"min_spacing": 900.0, "edge_length": 100.0}})
     assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
 
@@ -219,7 +219,7 @@ def test_no_shoreline_dataset_refuses_by_naming_the_variable(monkeypatch, tmp_pa
     monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(tmp_path / "missing.shp"))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     with pytest.raises(MeshToolError) as excinfo:
-        OM2D.build({"aoi": _AOI})
+        OM2D.build({"extent": _AOI})
     assert excinfo.value.error_code == "MESH_SHORELINE_UNAVAILABLE"
     assert "TRID3NT_GSHHG_SHP" in str(excinfo.value)
 
@@ -227,7 +227,7 @@ def test_no_shoreline_dataset_refuses_by_naming_the_variable(monkeypatch, tmp_pa
 def test_an_obstacle_edit_rebuilds_with_the_geometry_staged_for_the_box(
         monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     obstacle = tmp_path / "breakwater.geojson"
     obstacle.write_text(json.dumps({
         "type": "Polygon",
@@ -246,7 +246,7 @@ def test_an_obstacle_edit_rebuilds_with_the_geometry_staged_for_the_box(
 
 def test_a_region_edit_carries_its_own_target_edge(monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     region = tmp_path / "harbor.geojson"
     region.write_text(json.dumps({
         "type": "Polygon",
@@ -266,7 +266,7 @@ def test_the_conformal_offset_is_measured_from_the_points_the_box_locked(
     # One locked vertex sits exactly on a node; one sits a whole cell away.
     _stub_om2d(monkeypatch, tmp_path,
                pfix=np.array([[-75.78, 36.12], [-75.74, 36.16]]))
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     offset = mesh.meta["probes"]["breakline_offset_m"]
     assert mesh.meta["probes"]["constrained_points"] == 2
     assert offset["max"] < 1.0
@@ -276,7 +276,7 @@ def test_the_conformal_offset_is_measured_from_the_points_the_box_locked(
 def test_a_build_that_constrains_nothing_claims_no_conformality(
         monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     assert "breakline_offset_m" not in mesh.meta["probes"]
 
 
@@ -286,7 +286,7 @@ def test_the_cleanup_note_the_box_reported_reaches_the_probes(
     _stub_om2d(monkeypatch, tmp_path, pfix=np.array([[-75.78, 36.12]]),
                stats={"engine": "oceanmesh(test)", "sizing_functions": [],
                       "clean_notes": [note]})
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     assert mesh.meta["probes"]["clean_notes"] == [note]
 
 
@@ -294,7 +294,7 @@ def test_the_sizing_claim_is_copied_from_the_box_never_composed_here(
         monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path,
                stats={"engine": "oceanmesh(test)", "sizing_functions": []})
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     claim = mesh.meta["artifact"]["provenance"]["sizing_source"]
     assert "unreported by the mesher" in claim
     assert "wavelength" not in claim
@@ -799,7 +799,7 @@ def test_a_mesh_carrying_a_collapsed_element_reports_the_repair(
     cells = np.array([[0, 1, 2], [0, 3, 1]], dtype=np.int64)
     sent = _stub_om2d(monkeypatch, tmp_path)
     monkeypatch.setattr(OM2D, "_run_container", _npz_writer(pinched, cells, sent))
-    mesh = OM2D.build({"aoi": _AOI})
+    mesh = OM2D.build({"extent": _AOI})
     assert mesh.meta["probes"]["degenerate_elements_repaired"] >= 1
 
 

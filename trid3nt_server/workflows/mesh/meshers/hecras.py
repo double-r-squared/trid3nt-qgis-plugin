@@ -43,7 +43,7 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("graded_cells",),
               default="graded_cells",
               doc="graded_cells - a cell mesh the engine realizes from seeds"),
-    MeshField("aoi", types=(tuple, list), required=True,
+    MeshField("extent", types=(tuple, list), required=True,
               doc="(min_lon, min_lat, max_lon, max_lat) the terrain frame is cut from"),
     MeshField("pour_point", types=(tuple, list),
               doc="(lon, lat) catchment outlet; the lowest cell when unstated"),
@@ -61,7 +61,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
         acquire_channel_inputs,
     )
 
-    aoi = tuple(float(v) for v in spec["aoi"])
+    aoi = tuple(float(v) for v in spec["extent"])
     pour = spec.get("pour_point")
     pour_point = tuple(float(v) for v in pour) if pour is not None else None
     channel_m = float(spec.get("min_edge_length_m", 22.0))
@@ -97,7 +97,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
     return Mesh(
         points=None, cells=None, crs_authid=f"EPSG:{int(built.utm_epsg)}", bed=None,
         meta={
-            "aoi": aoi,
+            "extent": aoi,
             "utm_epsg": int(built.utm_epsg),
             "lonlat_bbox": tuple(built.lonlat_bbox),
             "files": {"display_uri": built.display_fgb_path},
@@ -208,7 +208,7 @@ def _set_cell_sizes(mesh: Mesh, *, min_edge_length_m: float,
     """
     built = dict(mesh.meta["artifact"]["provenance"])
     return build({
-        "aoi": mesh.meta["aoi"],
+        "extent": mesh.meta["extent"],
         "pour_point": mesh.meta["artifact"]["pour_point_lonlat"],
         "min_edge_length_m": float(min_edge_length_m),
         "max_edge_length_m": (float(max_edge_length_m)

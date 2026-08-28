@@ -122,7 +122,7 @@ FORCING = Forcing(rain=D.rain)
 MESH = tool.build_mesh(
     mesher="watershed",
     kind="unstructured_tri",
-    aoi=Ref("aoi"),
+    extent=Ref("aoi"),
     min_edge_length_m=P.mesh_min_edge_m,
     max_edge_length_m=P.mesh_max_edge_m,
     grade=P.mesh_grade,

@@ -881,3 +881,33 @@ manifest), `tests/test_mesh_om2d_telapy.py` +84 (5 tests: the fusion, the
 collapse, the repair probe, the bed margin, the rim),
 `scripts/proof_artemis_om2d_rematch.py` +361 (the flagship driver: author, feed,
 solve, prove, compare).
+
+## Model wave - slices 1+2: the extent declaration, the containment rule, D-3 (2026-08-28)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-28 | m1 A | `mesh/meshers/__init__.py` (+78 - `staged_coverage` / `contained_extent`, the BINARY containment judgement, and the `escalation` a refusal carries when its answer is the rerun primitive rather than a different argument), `mesh/meshers/reg_grid.py` (+3 - the crop edit reads the coverage) | 596 | 677 | +81 | +9576 |
+| 2026-08-28 | m1 B | `mesh/tool.py` (+54 - `declaration_plan_value` / `_thaw` / `declaration_from_plan_value`: the whole ask as the mapping a plan step carries, and back), the `aoi` -> `extent` field rename across `om2d.py` / `coastal_edge.py` / `hecras.py` / `watershed.py` / `reg_grid.py` and the five templates that declare one | 3456 | 3510 | +54 | +9630 |
+| 2026-08-28 | m1 C | `telemac/steps/rain_on_grid.py` (+29 - the catchment ask read off the rebuilt declaration, and the refusal for a declared edit this path has no chain to prefix), `telemac/steps/reach.py` (-5 - four restated corridor knobs collapse into the one ask) | 1868 | 1892 | +24 | +9654 |
+
+**Verdict: +159 across fourteen files. The two step constructors got SHORTER at
+the call site (nine restated kwargs down to two) and the router grew the one
+serializer that made that possible; the containment rule is genuinely new
+surface, +81 for a judgement that used to not exist.**
+
+D-3's defect class was an ask that arrived in pieces. `ReachMesh.corridor` named
+four of `corridor_tin`'s fields and `Catchment.mesh` named five of `watershed`'s,
+so a knob added to a mesher, or an edit declared on a template's MESH, reached
+the mesh only if somebody remembered to add a line here too - and a DECLARED
+edit reached it never. Both now carry `declaration_plan_value(mesh)`: one value,
+the mesher and every router-checked field and the edit chain in its order, which
+the runner rebuilds with `declaration_from_plan_value` and the fields the PLAN
+resolves (the navigated reach, the acquired window) overridden by name.
+
+NOT COUNTED by the rule at the head of this file:
+`tests/test_mesh_declaration_travel.py` +234 (11 tests: the ask travels whole for
+three templates, a declared edit reaches the recipe and the box, restart
+truncates TO it, and the catchment path refuses what it cannot honour),
+`tests/test_build_mesh_tool.py` +114 (11 tests: the crop, the four
+out-of-coverage refusals, the malformed boxes, the unknown coverage, and the
+escalated bbox landing verbatim at the acquisition step).
