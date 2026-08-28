@@ -69,8 +69,14 @@ _SOLVER_ENGINE_OVERRIDES: dict[str, str] = {
 _MAX_LISTED_COMMITS = 12
 
 
-def _git(*args: str) -> str | None:
-    """Run git in the repo root; ``None`` on any failure (git missing, no repo)."""
+def _git(*args: str, empty_ok: bool = False) -> str | None:
+    """Run git in the repo root; ``None`` on any failure (git missing, no repo).
+
+    ``empty_ok`` separates "the command succeeded and said nothing" from "the
+    command failed", which for a log query are opposite answers: an empty log is
+    the CLEAN case - no commit touched these paths - and reading it as a failure
+    reports a run whose engine never moved as one whose drift is unknown.
+    """
     try:
         out = subprocess.run(  # noqa: S603 -- argv list, no shell
             ["git", "-C", str(_REPO_ROOT), *args],
@@ -80,7 +86,7 @@ def _git(*args: str) -> str | None:
         return None
     if out.returncode != 0:
         return None
-    return out.stdout.strip() or None
+    return out.stdout.strip() or ("" if empty_ok else None)
 
 
 def resolve_engine(engine_or_solver: str) -> str | None:
@@ -146,7 +152,8 @@ def staleness(*, code_sha: str | None, engine: str | None,
                 "message": (f"no code paths are declared for engine {engine!r}, so "
                             "whether it has changed since this run cannot be "
                             "answered")}
-    log = _git("log", "--oneline", f"{code_sha}..HEAD", "--", *paths)
+    log = _git("log", "--oneline", f"{code_sha}..HEAD", "--", *paths,
+               empty_ok=True)
     if log is None:
         head = _git("rev-parse", "HEAD")
         if head == code_sha:

@@ -12,8 +12,8 @@
   "stem": "artemis_om2d_rematch_refined",
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined",
   "panel_base": "artemis_om2d_rematch_refined",
-  "mode": "render",
-  "assembled_at": "2026-08-27T18:50:59",
+  "mode": "check",
+  "assembled_at": "2026-08-27T18:54:10",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
     "frames": 1,
@@ -152,101 +152,5 @@
       "mtime": "2026-08-27T18:49:58",
       "verdict": "present"
     }
-  ],
-  "render": {
-    "sheet": {
-      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined.png",
-      "bytes": 715755,
-      "panels": 3,
-      "layers": [
-        "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
-        "Wave agitation Kd (aoi)"
-      ],
-      "not_rendered": [],
-      "off_canvas": [],
-      "panel_pngs": [
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
-          "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
-          "framed_on_layer": false
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_02_wave-agitation-kd-aoi.png",
-          "layer": "Wave agitation Kd (aoi)",
-          "framed_on_layer": false
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_panel_03_canvas-view.png",
-          "layer": "CANVAS VIEW"
-        }
-      ]
-    },
-    "charts": [
-      {
-        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_chart_harbor_agitation.png",
-        "name": "harbor_agitation",
-        "title": "Wave agitation Kd (aoi)",
-        "render_summary": {
-          "views": 1,
-          "lines": 1,
-          "series": 1,
-          "rules": 0,
-          "bars": 0,
-          "points": 60,
-          "skipped": 0,
-          "x_log": false,
-          "y_log": false,
-          "legend_labels": []
-        },
-        "bytes": 80972
-      }
-    ],
-    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
-    "animations": {
-      "default": {
-        "frames": 1,
-        "animated": false,
-        "variable": "WAVE HEIGHT     M",
-        "plane": "2d",
-        "peak_frame": 0,
-        "peak_time_s": 12.0,
-        "peak_value": 6.968656063079834,
-        "dry_frames": [],
-        "vmin": 0.11872881531715393,
-        "vmax": 4.045363445281981,
-        "style_preset": "neutral_ramp",
-        "legend_note": "scaled to this run (p2-p98): 0.118729 to 4.04536",
-        "transform": "percentile",
-        "colormap": "viridis",
-        "vectors": null,
-        "still_vectors": null,
-        "vector_density": null,
-        "arrow_size": null,
-        "vector_lw": null,
-        "vector_grid": null,
-        "still_vector_grid": null,
-        "bbox_ll": [
-          -71.52500026543782,
-          41.33799796836452,
-          -71.49199978620038,
-          41.36800225014983
-        ],
-        "local_origin_m": [
-          288723.3164521885,
-          4579355.353434443
-        ],
-        "run_id": "01M130X4GS6BTXPV0N0PPVDTHZ",
-        "origin_bbox": [
-          -71.525,
-          41.338,
-          -71.492,
-          41.368
-        ],
-        "animation": null,
-        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/artemis_om2d_rematch/refined/artemis_om2d_rematch_refined_peak_frame.png",
-        "animation_bytes": 0,
-        "peak_bytes": 2117029
-      }
-    }
-  }
+  ]
 }

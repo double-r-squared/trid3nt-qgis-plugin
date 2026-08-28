@@ -235,6 +235,27 @@ def test_a_moved_engine_names_the_commits_that_moved_it():
     assert "STALE vs CODE" in warning["message"]
 
 
+def test_an_engine_that_never_moved_is_not_reported_as_drift_unknown():
+    """An EMPTY log is the clean answer, not a git failure.
+
+    The two are opposite verdicts and the reader only ever sees one line, so a
+    run whose engine has not been touched since it ran must read as unchanged
+    however many unrelated commits have landed on top of it.
+    """
+    import subprocess
+
+    from trid3nt_server.workflows.solver.code_provenance import _REPO_ROOT, staleness
+
+    out = subprocess.run(
+        ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+        capture_output=True, text=True)
+    head = out.stdout.strip()
+    if not head:
+        pytest.skip("not a git checkout")
+    # SWMM has no worker directory at all, so nothing after HEAD can touch it.
+    assert staleness(code_sha=head, engine="swmm", code_dirty=False) is None
+
+
 # --------------------------------------------------------------------------- #
 # The bed spec's sample lattice
 # --------------------------------------------------------------------------- #
