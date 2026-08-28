@@ -106,6 +106,14 @@ DOC = dict(
          "a drawn/typed line as [[lon, lat], ...]. Producer-less BY DESIGN - this "
          "tool will never go and find a structure you did not name. Absent = an "
          "open-water solve, and the run says so."),
+        ("mesh",
+         "The DOMAIN to solve on: a mesh `build_mesh` built (its uri or handle) - "
+         "adaptive sizing, the structure cut in conformally, a seaward boundary "
+         "designated. Supplied, it IS the domain and the grid lever stops "
+         "describing anything the solve did; absent, the worker lays its uniform "
+         "grid over the AOI and the run says which it ran on. An ANALYTIC "
+         "wave_mode (resonance, shoal) refuses a mesh - its geometry is the "
+         "physics."),
         ("input_mode",
          '"user_gated" presents the resolved incident wave and the structure for '
          'review/edit before the solve and WAITS; "auto" (session default) proceeds '

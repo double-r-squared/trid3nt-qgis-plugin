@@ -761,3 +761,87 @@ def test_an_om2d_edit_on_a_mesh_with_no_build_state_refuses():
     with pytest.raises(MeshToolError) as excinfo:
         get_mesher("om2d").action("set_boundary").apply(adopted, side="east")
     assert excinfo.value.error_code == "MESH_EDIT_UNSUPPORTED"
+
+
+# --------------------------------------------------------------------------- #
+# What a mesh must survive to be SOLVABLE, and what its bed must not read.
+# --------------------------------------------------------------------------- #
+def test_two_nodes_a_fraction_of_a_metre_apart_are_fused_into_one():
+    """A pair the geometry file would write as one point IS one point.
+
+    A SELAFIN stores single-precision coordinates and a UTM northing eats the
+    mantissa, so the element between such a pair reaches the solver with a zero
+    determinant and takes the whole run down.
+    """
+    points = np.array([[-75.780000, 36.120000], [-75.740000, 36.120000],
+                       [-75.780000, 36.160000], [-75.780001, 36.120001]])
+    cells = np.array([[0, 1, 2], [0, 3, 1]], dtype=np.int64)
+    fused, remapped, depths, merged = OM2D._merge_coincident(
+        points, cells, np.zeros(4))
+    assert merged == 1
+    assert (remapped == 0).sum() >= 2      # node 3 became node 0
+    assert fused.shape[0] == 4             # re-indexing is the clean pass's job
+    assert depths.shape[0] == 4
+
+
+def test_an_element_with_no_area_is_not_kept():
+    points = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [2.0, 0.0]])
+    cells = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)   # second is collinear
+    keep = OM2D._has_area(points, cells)
+    assert keep.tolist() == [True, False]
+
+
+def test_a_mesh_carrying_a_collapsed_element_reports_the_repair(
+        monkeypatch, tmp_path):
+    """The count is a PROBE, not a silence: a repaired mesh says it was repaired."""
+    pinched = np.array([[-75.78, 36.12], [-75.74, 36.12], [-75.78, 36.16],
+                        [-75.780000005, 36.120000005]])
+    cells = np.array([[0, 1, 2], [0, 3, 1]], dtype=np.int64)
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    monkeypatch.setattr(OM2D, "_run_container", _npz_writer(pinched, cells, sent))
+    mesh = OM2D.build({"aoi": _AOI})
+    assert mesh.meta["probes"]["degenerate_elements_repaired"] >= 1
+
+
+def _npz_writer(points, cells, sent):
+    def fake_run(rundir, shoreline_dir):
+        sent["config"] = json.loads(Path(rundir, "om2d_config.json").read_text())
+        np.savez(Path(rundir, "om2d_mesh.npz"), points=points, cells=cells,
+                 pfix=np.empty((0, 2)))
+        Path(rundir, "om2d_stats.json").write_text(json.dumps(
+            {"engine": "oceanmesh(test)", "sizing_functions": []}))
+    return fake_run
+
+
+def test_the_bed_is_fetched_past_the_aoi_the_mesh_has_nodes_on():
+    grown = OM2D._bed_bbox((-75.80, 36.10, -75.70, 36.20))
+    assert grown[0] < -75.80 and grown[1] < 36.10
+    assert grown[2] > -75.70 and grown[3] > 36.20
+
+
+def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
+    """A node ON the AOI corner reads the first WHOLE cell, never off the grid.
+
+    The corner coordinate indexes one row and one column past the grid fetched for
+    that AOI, and a sample past the grid comes back as the untagged zero: an
+    18 m deep boundary reading as sea level, which every consumer - the
+    ocean-boundary identification most of all - takes at face value. A rim deeper
+    than the one partial cell is the bed FETCH's margin to cover, not this clamp's.
+    """
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from trid3nt_server.workflows.mesh.watershed import sample_raster_at_nodes
+
+    band = np.full((10, 10), -18.0, dtype="float32")
+    band[-1, :] = 0.0           # the partial cell the warp filled
+    band[:, -1] = 0.0
+    path = tmp_path / "bed.tif"
+    with rasterio.open(path, "w", driver="GTiff", height=10, width=10, count=1,
+                       dtype="float32", crs="EPSG:4326",
+                       transform=from_origin(-75.80, 36.20, 0.01, 0.01)) as dst:
+        dst.write(band, 1)
+
+    corners = np.array([[-75.80, 36.10], [-75.70, 36.10],
+                        [-75.70, 36.20], [-75.80, 36.20]])
+    assert sample_raster_at_nodes(str(path), corners).tolist() == [-18.0] * 4

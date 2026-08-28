@@ -1134,8 +1134,11 @@ class ArtemisManifestUnknownFieldsError(ValueError):
 #: -3 marks the worker-output-contract change: the real-bathy run writes the
 #: sampled lake-datum bed as bed_bathymetry.tif (a 4326 COG) + records the bed_cog
 #: / bed_cog_min_m / bed_cog_max_m keys in telemac_metrics.json so the composer
-#: surfaces the lake bed bathymetry as a role=context input.
-_ARTEMIS_PARSER_VERSION = "artemis-agitation-3"
+#: surfaces the lake bed bathymetry as a role=context input. -4 adds the SUPPLIED
+#: MESH path: supplied_mesh_slf / supplied_mesh_cli name a staged TELEMAC geometry
+#: pair the diffraction domain IS, its designated liquid stretch becoming the
+#: incident boundary and its bed clamped rather than masked.
+_ARTEMIS_PARSER_VERSION = "artemis-agitation-4"
 
 
 def _artemis_config(data_dir: Path, overrides: dict[str, Any]) -> Any:

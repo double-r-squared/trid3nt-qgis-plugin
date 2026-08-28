@@ -85,6 +85,20 @@ _COMPASS = {"south": (1, False), "north": (1, True),
 _DEPTH_THRESHOLD_M = -50.0
 _MIN_SECTION_NODES = 10
 
+#: The fraction of the MEDIAN element area below which an element has collapsed:
+#: no area to invert, and a solver refuses the whole mesh over it.
+_COLLAPSED_AREA_FRAC = 1e-9
+
+#: How close two nodes may sit before a single-precision geometry file writes them
+#: as one point, in metres. A UTM northing spends its mantissa on seven digits,
+#: which leaves a fraction of a metre.
+_COINCIDENT_TOLERANCE_M = 1.0
+
+#: How far past the AOI the bed is fetched, as a fraction of each span. The mesh
+#: has nodes ON the AOI corners and a raster's rim rows carry the warp's fill, so
+#: the grid has to reach past where the domain ends.
+_BED_MARGIN_FRAC = 0.02
+
 #: The refine knobs, and what each one means to the sizing function.
 _REFINE_KNOBS = {"edge_length": 400.0, "min_spacing": 40.0, "gradation": 0.15}
 
@@ -173,7 +187,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
     bed_up = (sample_raster_at_nodes(dem_path, lonlat) if dem_path is not None
               else None)
 
-    lonlat, cells, bed_up = _clean_once(lonlat, cells, bed_up)
+    lonlat, cells, bed_up, repaired = _clean_once(lonlat, cells, bed_up)
     points, utm_epsg = reproject_nodes_to_utm(lonlat)
 
     files, boundary_info, boundary_probes = _emit_formats(
@@ -197,6 +211,8 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                 "obstacles": len(state["obstacles"]),
                 "refine_regions": len(state["regions"]),
                 **_conformal_probe(points, pfix, int(utm_epsg)),
+                **({"degenerate_elements_repaired": repaired}
+                   if repaired else {}),
                 **({"clean_notes": list(stats["clean_notes"])}
                    if stats.get("clean_notes") else {}),
                 **boundary_probes,
@@ -283,6 +299,12 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     EPSG:4326 on purpose: the in-container wavelength sizer queries the raster's
     own grid with lon/lat, so a projected bed would put every query out of bounds
     and read its fill value as depth.
+
+    The bed is fetched over a MARGIN around the AOI, because the mesh puts nodes
+    exactly on the AOI's own corners and a raster's outermost rows are where a
+    warp writes its fill: sampled there, an 18 m deep boundary reads as sea level
+    and the ocean-boundary identification then finds its open water somewhere
+    else entirely.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -296,7 +318,7 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     layer: Any = None
     if name in TOOL_REGISTRY:
         layer = TOOL_REGISTRY[name].fn(
-            bbox=tuple(aoi), target_crs="EPSG:4326", fallback=_BED_FALLBACK)
+            bbox=_bed_bbox(aoi), target_crs="EPSG:4326", fallback=_BED_FALLBACK)
         uri = layer.uri if hasattr(layer, "uri") else layer["uri"]
     elif name.startswith("s3://") or Path(name).exists():
         uri = name
@@ -309,6 +331,14 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     dst.write_bytes(read_object_bytes_s3(uri) if str(uri).startswith("s3://")
                     else Path(uri).read_bytes())
     return dst, _bed_provenance(name, layer), fetch_fallback_note(layer)
+
+
+def _bed_bbox(aoi: tuple[float, ...]) -> tuple[float, float, float, float]:
+    """The AOI grown by :data:`_BED_MARGIN_FRAC` of its own span, in degrees."""
+    dx = (float(aoi[2]) - float(aoi[0])) * _BED_MARGIN_FRAC
+    dy = (float(aoi[3]) - float(aoi[1])) * _BED_MARGIN_FRAC
+    return (float(aoi[0]) - dx, float(aoi[1]) - dy,
+            float(aoi[2]) + dx, float(aoi[3]) + dy)
 
 
 def _bed_provenance(name: str, layer: Any) -> str:
@@ -419,12 +449,19 @@ def _sandbox_formats() -> Any:
     return mesh_formats
 
 
-def _clean_once(lonlat: Any, cells: Any, bed_up: Any) -> tuple[Any, Any, Any]:
+def _clean_once(lonlat: Any, cells: Any,
+                bed_up: Any) -> tuple[Any, Any, Any, int]:
     """ONE topology pass, before any writer sees the mesh.
 
     Pinch cleaning, orphan re-indexing and CCW normalization run here so every
     format is written from the SAME node numbering and the boundary is segmented
     once; each writer's own cleaning pass then finds nothing left to do.
+
+    A COLLAPSED element goes with them. Constraining an outline whose vertices sit
+    closer together than the finest edge can leave a triangle with no area at all,
+    and a solver reads that as a negative determinant and stops: one cell out of
+    twenty-five thousand takes the whole run down. How many were dropped is
+    reported rather than absorbed.
     """
     import numpy as np
 
@@ -432,7 +469,52 @@ def _clean_once(lonlat: Any, cells: Any, bed_up: Any) -> tuple[Any, Any, Any]:
               else np.asarray(bed_up, dtype=float))
     points, cells, depths = _sandbox_formats()._clean_and_orient(
         lonlat, cells, depths)
-    return points, cells, (None if bed_up is None else depths)
+    points, cells, depths, merged = _merge_coincident(points, cells, depths)
+    keep = _has_area(points, cells)
+    collapsed = int((~keep).sum())
+    if collapsed or merged:
+        points, cells, depths = _sandbox_formats()._clean_and_orient(
+            points, cells[keep], depths)
+    return points, cells, (None if bed_up is None else depths), collapsed + merged
+
+
+def _merge_coincident(points: Any, cells: Any,
+                      depths: Any) -> tuple[Any, Any, Any, int]:
+    """Fuse nodes closer together than the geometry file can tell apart.
+
+    A SELAFIN carries its coordinates in SINGLE precision, and a UTM northing runs
+    to seven digits: two nodes a fraction of a metre apart are written as the same
+    point, and the element between them arrives at the solver with no area. The
+    mesh in memory is fine and the file is not, so the fusion happens here, before
+    any writer sees it, and the count travels in the probes.
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    xy = np.asarray(points, dtype=float)
+    tol = _COINCIDENT_TOLERANCE_M / (111_320.0 * max(
+        0.15, float(np.cos(np.radians(xy[:, 1].mean())))))
+    pairs = cKDTree(xy).query_pairs(tol, output_type="ndarray")
+    if pairs.size == 0:
+        return points, cells, depths, 0
+    keep_id = np.arange(xy.shape[0], dtype=np.int64)
+    for high, low in np.sort(pairs, axis=1)[:, ::-1]:
+        keep_id[high] = keep_id[low]
+    merged = int((keep_id != np.arange(xy.shape[0])).sum())
+    return points, keep_id[np.asarray(cells, dtype=np.int64)], depths, merged
+
+
+def _has_area(points: Any, cells: Any) -> Any:
+    """Which elements have area a solver can invert, relative to the median one."""
+    import numpy as np
+
+    xy = np.asarray(points, dtype=float)
+    tri = np.asarray(cells, dtype=np.int64)
+    a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
+    twice = np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
+                   - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1]))
+    median = float(np.median(twice))
+    return twice > _COLLAPSED_AREA_FRAC * median if median > 0.0 else twice > 0.0
 
 
 def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,

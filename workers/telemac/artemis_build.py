@@ -104,8 +104,16 @@ class ArtemisConfig:
     #: breakwater_polylines set.
     remove_structure: bool = False
     #: real-bathy: nodes shallower than this (or land / NaN) are masked out of the
-    #: wet domain (m, positive depth below the datum).
+    #: wet domain (m, positive depth below the datum). On a SUPPLIED mesh the
+    #: topology is not this worker's to change, so the same number CLAMPS the bed
+    #: instead of dropping nodes, and the count clamped is reported.
     min_depth_m: float = 1.0
+    #: A mesh authored OUTSIDE this worker: the staged SELAFIN geometry and the
+    #: boundary file numbered from its own IPOBO, by basename in the run
+    #: directory. Set -> the diffraction domain IS that mesh; unset -> the domain
+    #: is the grid this worker builds over the AOI.
+    supplied_mesh_slf: str = None       # type: ignore[assignment]
+    supplied_mesh_cli: str = None       # type: ignore[assignment]
     # --- idealized-domain geometry knobs (metres) ---
     #: resonance: harbour length / width / narrow mouth / constant depth.
     harbour_length_m: float = 500.0
@@ -301,14 +309,21 @@ def _refuse_isolated_liquid_point(ring_lihbor, ring, X, Y, dx):
 
 
 def write_cli(mesh, path, classify, dx=0.0):
-    """classify(x, y) -> (lihbor, HB, TETAP, ALFAP, RP)."""
+    """classify(x, y, node) -> (lihbor, HB, TETAP, ALFAP, RP).
+
+    The node index rides with the coordinates because a classification can be a
+    property of the NODE rather than of where it sits: a mesh authored elsewhere
+    arrives with its liquid boundary already designated per node, and rediscovering
+    that from a coordinate test would classify a different boundary than the one
+    the mesh was accepted with.
+    """
     ring = mesh["ring"]
     X, Y = mesh["X"], mesh["Y"]
     lines = []
     ring_lihbor = []
     for k in range(mesh["nptfr"]):
         n0 = int(ring[k])
-        lih, hb, tetap, alfap, rp = classify(float(X[n0]), float(Y[n0]))
+        lih, hb, tetap, alfap, rp = classify(float(X[n0]), float(Y[n0]), n0)
         ring_lihbor.append(int(lih))
         liu = liv = 5 if lih in (1, 2) else 2
         lit = 2
@@ -520,7 +535,7 @@ def _solve_diffraction_idealized(cfg: ArtemisConfig, data_dir: str, run_id):
     H0 = float(cfg.wave_height_m)
     rp = float(cfg.reflection_coef)
 
-    def classify(x, y):
+    def classify(x, y, node):
         # gotcha 4: entire outer ring = incident (imposes the plane wave AND
         # radiates the scattered field); only the breakwater faces are solid.
         on_bw = (abs(y - y_bw) <= dy * 1.5) and (x <= x_tip + dx * 0.5)
@@ -533,6 +548,132 @@ def _solve_diffraction_idealized(cfg: ArtemisConfig, data_dir: str, run_id):
                             x_tip=x_tip, y_bw=y_bw, dx=dx,
                             bathy_label="idealized flat bed (analytic Sommerfeld "
                             "semi-infinite breakwater)", utm_epsg=None, bbox=None)
+
+
+def _solve_diffraction_supplied(cfg: ArtemisConfig, data_dir: str, run_id):
+    """A harbour AOI whose DOMAIN is a mesh authored outside this worker.
+
+    Nothing here meshes: the triangulation, the bed at every node and the boundary
+    walk all arrive staged, and what this worker adds is the ARTEMIS boundary
+    classification and the solve. The structure is already a CUT in the supplied
+    mesh - its outline is the mesh's own boundary rather than a masked lattice row -
+    so the barrier faces are found by distance to the declared polylines and made
+    solid, the designated liquid stretch becomes the incident boundary, and every
+    other boundary node is the absorbing shore the complex-coastline caveat asks
+    for.
+
+    The bed is CLAMPED, never masked: dropping a node would change a topology this
+    worker did not author. A structure crest above the waterline and the shoreline
+    fringe the domain's own outline left in are pinned to ``min_depth_m`` and
+    counted, so the clamp is a reported number rather than a silent bathymetry.
+    """
+    from pyproj import Transformer
+
+    import _supplied_mesh as SM  # noqa: WPS433 -- worker payload
+
+    bbox = cfg.bbox
+    if not (bbox and len(bbox) == 4):
+        raise ArtemisInputError(
+            "ARTEMIS_PARAMS_INVALID",
+            "a supplied mesh is placed against the AOI it was built over, so a "
+            f"4-value bbox is needed; got {bbox!r}.")
+    epsg = _bbox_utm_epsg(bbox)
+    tr = Transformer.from_crs(4326, epsg, always_xy=True)
+    x0, y0 = tr.transform(bbox[0], bbox[1])
+    x1, y1 = tr.transform(bbox[2], bbox[3])
+    x0m, y0m = min(x0, x1), min(y0, y1)
+    back = Transformer.from_crs(epsg, 4326, always_xy=True)
+
+    try:
+        mesh = SM.read_supplied_mesh(data_dir, cfg.supplied_mesh_slf,
+                                     cfg.supplied_mesh_cli, x0m=x0m, y0m=y0m)
+    except SM.SuppliedMeshUnusableError as exc:
+        raise ArtemisInputError("ARTEMIS_SUPPLIED_MESH_UNUSABLE", str(exc)) from exc
+
+    min_depth = max(float(cfg.min_depth_m), 0.1)
+    bed = np.asarray(mesh["Z"], dtype=float)
+    dry = ~np.isfinite(bed) | (bed > -min_depth)
+    n_clamped = int(dry.sum())
+    bed = np.where(dry, -min_depth, bed)
+    mesh["Z"] = bed
+
+    dx = float(mesh["dx"])
+    H0 = float(cfg.wave_height_m)
+    rp = float(cfg.reflection_coef)
+    wdir = float(cfg.wave_dir_deg)
+    open_mask = np.asarray(mesh["open_mask"], dtype=bool)
+    if not open_mask.any():
+        raise ArtemisInputError(
+            "ARTEMIS_SUPPLIED_MESH_CLOSED",
+            "the supplied mesh designates no liquid boundary, so a prescribed "
+            "incident wave has no edge to enter the domain through; open a "
+            "seaward boundary on the mesh before solving on it.")
+
+    real_struct = bool(cfg.breakwater_polylines)
+    if real_struct:
+        segs = _polylines_to_segments(cfg.breakwater_polylines, tr, x0m, y0m)
+        bw_label = (f"REAL surveyed breakwater (as mapped in OpenStreetMap "
+                    f"man_made=breakwater/pier, {len(segs)} segments), a "
+                    "CONSTRAINED CUT in the supplied mesh whose faces are solid "
+                    "and reflecting")
+    else:
+        segs = np.zeros((0, 4), dtype=float)
+        bw_label = "no structure declared -- the supplied mesh solves as it stands"
+    structure_solid = segs.size > 0 and not (
+        real_struct and bool(cfg.remove_structure))
+
+    # A boundary node is a structure face when it lies within one element edge of a
+    # declared polyline: the cut is conformal, so its faces sit ON the line rather
+    # than a lattice step away from it.
+    struct_tol = dx * 1.5
+    on_structure = np.zeros(mesh["npoin"], dtype=bool)
+    if structure_solid:
+        ring = np.asarray(mesh["ring"], dtype=np.int64)
+        near = _dist_to_segments(mesh["X"][ring], mesh["Y"][ring], segs) <= struct_tol
+        on_structure[ring[near]] = True
+    contested = int((on_structure & open_mask).sum())
+
+    def classify(x, y, node):
+        # The structure wins a contested node: a barrier face that imposed the
+        # incident wave would radiate the sheltering away from inside the lee.
+        if on_structure[node]:
+            return (2, 0.0, 0.0, 0.0, rp)          # structure face: solid reflecting
+        if open_mask[node]:
+            return (1, H0, 0.0, 0.0, 0.0)          # designated liquid: incident
+        return (2, 0.0, 0.0, 0.0, 0.0)             # shore: solid absorbing
+
+    h_mean = float(-np.mean(bed))
+    meta = dict(
+        utm_epsg=epsg, dx_m=round(dx, 1), coarsened=False,
+        n_wet_nodes=int(mesh["npoin"]), depth_mean_m=round(h_mean, 1),
+        depth_max_m=round(float(-bed.min()), 1),
+        bathy_label="the bed the SUPPLIED mesh carries at its own nodes",
+        structure_present=bool(structure_solid), bw_label=bw_label,
+        mesh_source="supplied",
+        mesh_edge_min_m=round(float(mesh["edge_min_m"]), 1),
+        mesh_edge_median_m=round(float(mesh["edge_median_m"]), 1),
+        mesh_edge_max_m=round(float(mesh["edge_max_m"]), 1),
+        mesh_boundary_nodes=int(mesh["nptfr"]),
+        mesh_open_boundary_nodes=int(open_mask.sum()),
+        mesh_structure_face_nodes=int(on_structure.sum()),
+        mesh_contested_boundary_nodes=contested,
+        bed_clamped_nodes=n_clamped, bed_clamp_depth_m=min_depth,
+        n_structure_segments=int(len(segs)))
+
+    wrad = np.radians(wdir)
+    ux, uy = np.cos(wrad), np.sin(wrad)
+    if segs.size:
+        allx = np.concatenate([segs[:, 0], segs[:, 2]])
+        ally = np.concatenate([segs[:, 1], segs[:, 3]])
+        bw_mid = (float(allx.mean()), float(ally.mean()))
+    else:
+        bw_mid = (float(mesh["X"].mean()), float(mesh["Y"].mean()))
+    return _run_diffraction(cfg, mesh, data_dir, run_id, classify,
+                            H0=H0, T=float(cfg.wave_period_s), h=max(h_mean, 1.0),
+                            wdir=wdir, x_tip=None, y_bw=None, dx=dx,
+                            bathy_label=meta["bathy_label"], utm_epsg=epsg,
+                            bbox=bbox, x0m=x0m, y0m=y0m, back=back,
+                            bw_mid=bw_mid, wave_uv=(ux, uy), extra=meta)
 
 
 def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
@@ -644,7 +785,7 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
     #     complex coast (the documented ARTEMIS weakness).
     edge_tol = dx * 0.5
 
-    def classify(x, y):
+    def classify(x, y, node):
         if structure_solid and _dist_fn(np.array([x]), np.array([y]))[0] <= dx * 1.6:
             return (2, 0.0, 0.0, 0.0, rp)          # structure face: solid reflecting
         on_edge = (x <= edge_tol or x >= Lx - edge_tol
@@ -798,7 +939,7 @@ def _solve_resonance(cfg: ArtemisConfig, data_dir: str, run_id):
                       keep_fn=keep_fn)
     rp = float(cfg.reflection_coef)
 
-    def classify(x, y):
+    def classify(x, y, node):
         vertical = (x <= dx * 0.5) or (x >= Wx - dx * 0.5)
         tang = 90.0 if vertical else 0.0
         if y <= dy * 0.5:
@@ -884,7 +1025,7 @@ def _solve_shoal(cfg: ArtemisConfig, data_dir: str, run_id):
     mesh = build_mesh(Lx, Ly, dx, berkhoff_bottom, dy=dx)
     wdir = -90.0
 
-    def classify(x, y):
+    def classify(x, y, node):
         if y >= Ly - dx * 0.5:
             return (1, H0, 0.0, 0.0, 0.0)          # incident (top)
         if y <= dx * 0.5:
@@ -973,6 +1114,19 @@ def solve(cfg: ArtemisConfig, workdir: str, run_id: str = None) -> dict[str, Any
     mode = str(cfg.wave_mode or "diffraction").lower()
     real = str(cfg.bathy_source or "idealized").lower() in (
         "noaa_greatlakes", "greatlakes", "noaa")
+    if cfg.supplied_mesh_slf:
+        # The analytic classes ARE their geometry - a seiche ladder and the
+        # Berkhoff shoal are authored bathymetry, not a domain somebody meshes -
+        # so a supplied mesh there would be silently ignored.
+        if mode != "diffraction":
+            raise ArtemisInputError(
+                "ARTEMIS_SUPPLIED_MESH_UNSUPPORTED_MODE",
+                f"wave_mode {mode!r} solves an ANALYTIC domain whose geometry is "
+                "the physics, so a supplied mesh has nothing to be; supply a mesh "
+                "for the diffraction class or drop it.")
+        metrics = _solve_diffraction_supplied(cfg, workdir, run_id)
+        metrics["wall_s"] = round(time.time() - t0, 1)
+        return metrics
     if mode == "resonance":
         metrics = _solve_resonance(cfg, workdir, run_id)
     elif mode == "shoal":

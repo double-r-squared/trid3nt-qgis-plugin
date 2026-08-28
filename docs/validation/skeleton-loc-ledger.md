@@ -845,3 +845,39 @@ NOT COUNTED by the rule at the head of this file:
 through the session under a timeout), `tests/test_mesh_gate_loop.py` +63,
 `scripts/proof_corridor_hand_edit_solve.py` (the record reads its status from
 the run's completion manifest; the field that could only be null is gone).
+
+## Mesh wave - slice 8: the flagship, and the three things that stood between it and a solve (2026-08-27)
+
+| date | wave | surface | before | after | delta | running |
+|---|---|---|---|---|---|---|
+| 2026-08-27 | s8 A | `workers/telemac/_supplied_mesh.py` (NEW - the staged geometry pair read back into the worker's mesh dict: the boundary walk off the `.cli`'s own rank column, the connectivity base measured rather than assumed, and the refusals for a pair whose halves disagree or whose elements have no area) | 0 | 197 | +197 | +9034 |
+| 2026-08-27 | s8 B | `workers/telemac/artemis_build.py` (+154 - the supplied-mesh diffraction solve: the mesh IS the domain, its designated liquid stretch is the incident boundary, the structure faces are found by distance to the declared polylines, and the bed is clamped rather than masked because the topology is not the worker's to change; `write_cli`'s classifier takes the node it is classifying) | 984 | 1138 | +154 | +9188 |
+| 2026-08-27 | s8 C | `telemac/steps/agitation.py` (+166 - the mesh slot resolved, its pair staged, the grid ask dropped from the deck, and three narrations rewritten to say what the SOLVE read instead of what the run asked for) | 360 | 526 | +166 | +9354 |
+| 2026-08-27 | s8 D | `mesh/meshers/om2d.py` (+82 - nodes fused below the geometry file's single-precision granularity, collapsed elements dropped, and the bed fetched past the AOI the mesh has nodes on) | 702 | 784 | +82 | +9436 |
+| 2026-08-27 | s8 E | `mesh/watershed.py` (+20), `mesh/tool.py` (+17 - `supplied_mesh_artifact`, so a template reads a supplied mesh without opening the object store itself), `telemac/workflow.py` (+7), `agitation/agitation.py` (+7), `agitation/declarations.py` (+8) | 2021 | 2080 | +59 | +9495 |
+
+**Verdict: +658 across nine files, of which +197 is a new worker module and
++466 is the supplied-mesh path the flagship needed to exist at all.**
+
+The ARTEMIS deck had no way to be handed a domain: the worker laid its own
+uniform grid over the AOI and there was no seam for a mesh anybody authored. The
+template now declares `mesh` as a slot of the same shape as `structure`, the deck
+stages the geometry pair its boundary numbering only makes sense together with,
+and the worker reads it as the dict its own writers already consume - so a
+supplied mesh and a built grid are the same thing to everything downstream.
+
+The three om2d repairs are all one class: a mesh that was fine in memory and
+wrong in the file. Two nodes a fraction of a metre apart are one point in a
+single-precision SELAFIN, and the element between them reached ARTEMIS with a
+zero determinant and stopped the run on element 6202 with nothing pointing back
+at the mesh. A node on the AOI corner sampled one row past the fetched bed and
+read the untagged zero, which put sea level along two entire sides of every
+domain cut from an AOI - and the ocean-boundary identification, reading the bed
+to find its open water, then found it on the wrong side.
+
+NOT COUNTED by the rule at the head of this file:
+`tests/test_artemis_supplied_mesh.py` +222 (14 tests, both sides of the
+manifest), `tests/test_mesh_om2d_telapy.py` +84 (5 tests: the fusion, the
+collapse, the repair probe, the bed margin, the rim),
+`scripts/proof_artemis_om2d_rematch.py` +361 (the flagship driver: author, feed,
+solve, prove, compare).

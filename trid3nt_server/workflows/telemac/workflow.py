@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from trid3nt_server.workflows.lib import (
+    D,
     Forcing,
     Physics,
     PlanValidationError,
@@ -139,6 +140,11 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
 #: Both are step results rather than sheet values, so neither can be declared.
 _REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("corridor_mesh")}
 
+#: The agitation deck always reads the run's MESH slot: the domain a phase-
+#: resolving solve runs on is the caller's to author, and a deck that read the
+#: slot only sometimes would answer the grid question on the runs that filled it.
+_AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": D.mesh}
+
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
 _RAIN_FORCING: Mapping[str, str] = {"rain": "rain"}
@@ -172,7 +178,8 @@ _PROCESSES: dict[str, _Process] = {
     "harbor_agitation": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
         deck=Agitation.deck, writer=write_agitation_deck,
-        solve=_open_water_solve, read=_read_agitation, forcing_fields={}),
+        solve=_open_water_solve, read=_read_agitation, forcing_fields={},
+        extra_fields=_AGITATION_EXTRA),
     "stratified_3d": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
         deck=Stratified.deck, writer=write_stratified_deck,

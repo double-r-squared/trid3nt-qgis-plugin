@@ -316,12 +316,26 @@ def validate_catchment_not_degenerate(cell_count: int, area_km2: float,
             "stream, or supply a bbox that covers the whole catchment.")
 
 
+#: How far inside a raster's edge a node is sampled, in pixels: past the rim
+#: there is no cell at all, and the rim cell itself is resampled from partial
+#: source coverage. One and a half puts every sample on a whole cell.
+_RIM_PIXELS = 1.5
+
+
 def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
     """Sample a raster at (N,2) lon/lat nodes -> (N,) values, holes filled.
 
     Nodata becomes the finite mean rather than NaN: a bed with holes in it is not
     a bed a solver can start from, and a hole at one node would propagate a NaN
     through the whole free surface.
+
+    A node on the raster's own RIM reads the nearest whole pixel instead. A mesh
+    cut from an AOI puts nodes exactly on that AOI's corner coordinates, and the
+    grid fetched for that AOI has nothing whole there: one row and one column past
+    it the sample is the untagged zero, and the rim row and column themselves are
+    resampled from partial source coverage, so both report sea level along two
+    entire sides of a domain that is 18 m deep two pixels in. Neither reads as
+    missing anywhere downstream - they read as real water, or real land.
     """
     import numpy as np
     import rasterio
@@ -331,6 +345,12 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
     with rasterio.open(raster_path) as src:
         xs, ys = warp_transform(
             "EPSG:4326", src.crs, pts[:, 0].tolist(), pts[:, 1].tolist())
+        left, bottom, right, top = src.bounds
+        dx, dy = (abs(v) for v in src.res)
+        xs = np.clip(np.asarray(xs, dtype=float),
+                     left + _RIM_PIXELS * dx, right - _RIM_PIXELS * dx)
+        ys = np.clip(np.asarray(ys, dtype=float),
+                     bottom + _RIM_PIXELS * dy, top - _RIM_PIXELS * dy)
         vals = np.array(list(src.sample(list(zip(xs, ys)))), dtype=float)[:, 0]
         nodata = src.nodata
     if nodata is not None:

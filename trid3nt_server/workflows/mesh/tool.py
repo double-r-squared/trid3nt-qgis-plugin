@@ -57,6 +57,7 @@ __all__ = [
     "MeshToolError",
     "build_mesh",
     "resolve_mesh",
+    "supplied_mesh_artifact",
     "tool",
     "validate_edit",
     "validate_spec",
@@ -285,6 +286,22 @@ def resolve_mesh(
     return MeshResolution(
         "declared", f"the declared {declaration.spec.mesher!r} build",
         declaration=declaration)
+
+
+def supplied_mesh_artifact(explicit: Any, *, engine: str) -> MeshArtifact | None:
+    """The mesh a run was HANDED, resolved and checked against its engine.
+
+    The reader lives here rather than in each consuming template: a mesh artifact
+    is the mesh front's record, and a step that opened the object store for itself
+    would be doing world-reads a step must never do. ``None`` for an unfilled slot;
+    a refusal, never a fall-through, for one the engine cannot solve on.
+    """
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
+
+    if explicit is None or not str(explicit).strip():
+        return None
+    return resolve_mesh(explicit=explicit, engine=engine,
+                        s3_client=_get_s3_client()).artifact
 
 
 def _refuse_incompatible(art: MeshArtifact, engine: str | None) -> None:

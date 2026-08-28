@@ -73,6 +73,13 @@ _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 #: the in-worker-fetch migration queue.
 DATA = (
     Data("structure").supplied(geometry="polyline").optional(),
+    #: The DOMAIN, as a slot of the same shape. A phase-resolving solve is the
+    #: most mesh-dependent question this fleet asks, so the mesh it runs on is the
+    #: caller's to author: hand this slot a mesh ``build_mesh`` built - adaptive
+    #: sizing, the breakwater cut in conformally, a seaward boundary designated -
+    #: and it IS the domain. Unfilled, the deck asks for the uniform grid the
+    #: worker lays over the AOI, which is a labeled fallback and not a stance.
+    Data("mesh").supplied(geometry="mesh").optional(),
     #: The BED, as declared reference data. Sampling it inside the solver
     #: container would bypass the emit, cache, provenance and retry the router
     #: gives every other fetch. Declaring it here puts the bathymetry on the
