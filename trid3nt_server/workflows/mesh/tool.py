@@ -38,13 +38,8 @@ from trid3nt_server.workflows.mesh.meshers import (
     nearest_names,
 )
 # Importing a mesher REGISTERS it; the roster is this block and nothing else.
-from trid3nt_server.workflows.mesh.meshers import coastal_edge as _coastal_edge  # noqa: F401,E402
-from trid3nt_server.workflows.mesh.meshers import corridor_tin as _corridor_tin  # noqa: F401,E402
-from trid3nt_server.workflows.mesh.meshers import hecras as _hecras  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import om2d as _om2d  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
-from trid3nt_server.workflows.mesh.meshers import telapy_mesh as _telapy_mesh  # noqa: F401,E402
-from trid3nt_server.workflows.mesh.meshers import watershed as _watershed  # noqa: F401,E402
 
 __all__ = [
     "DeclaredEdit",
@@ -409,18 +404,6 @@ async def build_mesh(
       distance to shore and by wavelength over the fetched bed. Obstacles punch
       out of it with their outlines constrained in, regions refine, and a named
       side becomes the open boundary.
-    * ``telapy_mesh`` - adopt an EXISTING TELEMAC geometry (a ``.slf`` someone
-      else authored) through TELEMAC's own reader, then edit it.
-    * ``watershed`` - the basin upstream of a ``pour_point`` IS the domain,
-      triangulated and refined toward its channel network, with a sampled bed.
-    * ``coastal_edge`` - the OSM coastline + NHD water polygon is the domain,
-      refined by distance to shore and by wavelength over depth. Naming an
-      ``open_boundary_side`` also emits the SCHISM geometry; without one the mesh
-      is closed and SCHISM honestly declines it.
-    * ``corridor_tin`` - a river reach: the water it actually occupies, cut at the
-      two end transects that become inflow and outflow. Bed-less by construction.
-    * ``hecras_rog`` - a coarse hillslope cell mesh grading down to the channel,
-      realized and validated by the HEC-RAS engine's own mesh factory.
     * ``reg_grid`` - the uniform lattice a structured deck runs on.
 
     ``input_mode="user_gated"`` stops at the MESH GATE instead of finishing: the
@@ -431,27 +414,24 @@ async def build_mesh(
     (the default) builds and accepts inline.
 
     Edge levers: ``min_edge_length_m`` / ``max_edge_length_m`` bound the cell or
-    triangle size (for ``hecras_rog`` they ARE the channel and hillslope target
-    cell sizes), ``grade`` limits how fast the two may transition. Both edges are
-    declared >= 5 m; a finer ask is quoted the floor and the AOI-dependent
+    triangle size, ``grade`` limits how fast the two may transition. Both edges
+    are declared >= 5 m; a finer ask is quoted the floor and the AOI-dependent
     <= 8-sides-per-cell acceptance rather than silently snapped. ``om2d`` takes
     the same band inside its ``refine`` block instead. US-only.
 
     Params:
-        mesher: which mesh library builds it (om2d | telapy_mesh | watershed |
-            coastal_edge | corridor_tin | hecras_rog | reg_grid).
-        kind: the mesh shape that mesher makes (unstructured_tri | graded_cells |
+        mesher: which mesh library builds it (om2d | reg_grid).
+        kind: the mesh shape that mesher makes (unstructured_tri |
             structured_grid).
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
         bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-        min_edge_length_m: finest cell/triangle edge (m); the CHANNEL cell for
-            ``hecras_rog``. Declined by name by a mesher that sizes another way.
-        max_edge_length_m: coarsest edge (m); the HILLSLOPE cell for ``hecras_rog``.
+        min_edge_length_m: finest cell/triangle edge (m). Declined by name by a
+            mesher that sizes another way.
+        max_edge_length_m: coarsest edge (m).
         input_mode: ``user_gated`` to review + edit the mesh at the gate before
             it is accepted; ``auto`` (default) builds and accepts inline.
-        fields: the chosen mesher's own remaining declared fields (pour_point,
-            grade, open_boundary_side, resolution_m, extent_km, width_m, banks,
-            refine, bed, geometry, crs_authid).
+        fields: the chosen mesher's own remaining declared fields (grade,
+            open_boundary_side, resolution_m, refine, bed, crs_authid).
     """
     import asyncio
 

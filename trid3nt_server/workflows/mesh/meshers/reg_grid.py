@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from trid3nt_server.mesh.grid_geometry import RegularGrid, regular_grid_from_bbox
+from trid3nt_server.workflows.mesh.grid_geometry import RegularGrid, regular_grid_from_bbox
 from trid3nt_server.workflows.mesh.meshers import (
     EditAction,
     Mesh,
