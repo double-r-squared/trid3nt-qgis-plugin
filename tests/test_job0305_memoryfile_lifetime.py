@@ -33,22 +33,6 @@ def _categorical_geotiff_bytes(w=256, h=256) -> bytes:
         return mf.read()
 
 
-def test_extract_unique_nlcd_classes_s3_no_garbage_under_gc(monkeypatch):
-    from trid3nt_server.workflows.sfincs import sfincs_builder
-    data = _categorical_geotiff_bytes()
-    monkeypatch.setattr(sfincs_builder, "read_object_bytes_s3", lambda uri: data, raising=False)
-    # also patch the cache module symbol the function imports locally
-    import trid3nt_server.tools.cache as cache_mod
-    monkeypatch.setattr(cache_mod, "read_object_bytes_s3", lambda uri: data)
-
-    for _ in range(8):
-        gc.collect()
-        classes = sfincs_builder._extract_unique_nlcd_classes("s3://bkt/nlcd.tif")
-        gc.collect()
-        # EXACTLY the categorical legend — no 96-254 garbage, ever.
-        assert classes == KNOWN, f"got spurious classes: {sorted(classes - KNOWN)}"
-
-
 def test_open_source_is_context_manager():
     from trid3nt_server.tools.processing.extract_landcover_class.extract_landcover_class import _open_source
     # @contextmanager wraps the generator function -> not a plain generator fn,

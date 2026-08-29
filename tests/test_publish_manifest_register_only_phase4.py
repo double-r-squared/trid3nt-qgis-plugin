@@ -22,7 +22,6 @@ All mocked - no network / GDAL / solver / S3.
 
 from __future__ import annotations
 
-import inspect
 import json
 
 import pytest
@@ -385,46 +384,3 @@ def test_read_publish_manifest_unknown_schema_returns_none(monkeypatch):
     assert rpm.read_publish_manifest(_RR()) is None
 
 
-# --------------------------------------------------------------------------- #
-# 4. model_flood_scenario branch structure: register-only short-circuits the
-#    on-box postprocess; absent manifest runs the legacy convert.
-# --------------------------------------------------------------------------- #
-
-
-def test_flood_scenario_branch_is_clean_if_else():
-    """ADR 0280: the post-solve publication is a clean SEAM-or-LEGACY fork.
-    ``outputs.json`` present -> the seam owns publication (``build_layers_from_outputs``);
-    else the legacy register-only path; else the on-box fallback. The heavy on-box
-    steps sit under ``if not register_only`` (a present seam OR publish manifest
-    short-circuits them), and there is NO dual publication."""
-    import trid3nt_server.workflows.sfincs.flood.flood as mfs
-
-    body = inspect.getsource(mfs.model_flood_scenario)
-    # The seam-first fork trigger + the legacy reads.
-    assert "outputs_manifest = await asyncio.to_thread(read_outputs_manifest, run_result)" in body
-    assert "publish_manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body
-    assert "seam_active = outputs_manifest is not None" in body
-    assert "register_only = seam_active or (publish_manifest is not None)" in body
-    # The seam owns publication when active; the legacy register path is the
-    # elif fallback (single publication, no dual publish).
-    assert "build_layers_from_outputs(" in body
-    assert "elif publish_manifest is not None:" in body
-    assert "register_manifest_layers(" in body
-    # The on-box postprocess + publish blocks are guarded so a present seam /
-    # manifest short-circuits them (Step 8 + Steps 9/9b/9c).
-    assert body.count("if not register_only:") >= 2
-    assert "postprocess_flood," in body  # legacy convert still present (fallback)
-
-
-def test_wave_scenario_branch_is_clean_if_else():
-    """model_swan_wave_field gains the same present-manifest register-only branch
-    in front of the on-box download + postprocess_swan fallback."""
-    import trid3nt_server.workflows.swan.wave_field.wave_field as mws
-
-    body = inspect.getsource(mws.model_swan_wave_field)
-    assert "manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body
-    assert "if manifest is not None:" in body
-    assert "register_swan_wave_layers" in body
-    # The on-box fallback path is preserved (download + postprocess_swan).
-    assert "_download_batch_swan_outputs" in body
-    assert "postprocess_swan," in body

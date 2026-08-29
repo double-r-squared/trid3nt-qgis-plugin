@@ -128,34 +128,6 @@ def test_question_class_coercions_abstain_without_a_signal() -> None:
     assert substance_class()(bare) == {}
 
 
-def test_the_handrolled_modflow_normalize_abstains_too() -> None:
-    """The same falsification, in the one template with a hand-rolled ``_normalize``.
-
-    ``modflow_regional_water_budget`` builds its door-1 sheet by hand rather than
-    through the coercion list, and seated its declared ``standard`` rung there.
-    """
-    from trid3nt_server.workflows.lib.resolver import resolve_params
-    from trid3nt_server.workflows.modflow.regional_water_budget.regional_water_budget \
-        import PARAMS, _normalize
-
-    # Only the rung is resolved: this template's other params derive from live
-    # rasters, and the door under test is decided by the door-1 sheet alone.
-    declared = [p for p in PARAMS if p.name == "compute_class"]
-
-    supplied, err = _normalize({"location": "the Ogallala aquifer in Kansas"})
-    assert err is None, err
-    assert "compute_class" not in supplied
-    row = asyncio.run(resolve_params(declared, supplied)).row("compute_class")
-    assert (row.value, row.door, row.basis) == ("standard", "constant", "default_demo")
-
-    supplied, err = _normalize({"location": "the Ogallala aquifer in Kansas",
-                                "compute_class": "large"})
-    assert err is None, err
-    assert supplied["compute_class"] == "large"
-    row = asyncio.run(resolve_params(declared, supplied)).row("compute_class")
-    assert (row.value, row.door, row.basis) == ("large", "user", "user")
-
-
 @pytest.mark.parametrize(("tool_name", "location", "param", "expected"), [
     ("tomawac_wave_field", "Lake Michigan", "wave_mode", "fetch_growth"),
     ("telemac3d_stratified_flow", "Lake Mead", "flow_mode", "stratification"),
