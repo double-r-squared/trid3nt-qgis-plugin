@@ -2598,3 +2598,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   generic section_polygon preset ACCEPTED. Also riding the wave's
   next stages: the buffer-band snap removal per the approximate-reach
   ruling (release validity = real-domain containment).
+
+- REMEDY-STAGE STOPS RULED (NATE 2026-08-29): release containment is
+  SERVER-SIDE PRE-FLIGHT against the section polygon (ground truth,
+  earliest moment; snap = nearest point on the real flowline; the
+  worker stays an opinion-free engine room - its band-metric
+  passthroughs cleaned); the DEAD ARTIFACT RESIDUE goes (gr3_uri +
+  fort14_uri fields, schism + swan requirement rows) - "no
+  mesh-compatibility rule registered" is an honest refusal, and the
+  richer decline returns WITH schism at rung 5 authored from its
+  actual needs; the purge-broken test module fixed in the same pass.
