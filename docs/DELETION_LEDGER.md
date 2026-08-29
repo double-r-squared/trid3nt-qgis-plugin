@@ -1254,3 +1254,21 @@ RIBBON RULING settles what a reach domain may be. What that supersedes:
 
 Tests whose subject left the tree:
 - tests/test_mesh_om2d_telapy.py -> tests/test_mesh_om2d.py: RENAMED and trimmed. The `telapy_mesh` adoption section (its stub, its refusals, its coordinate honesty) and the roster/parametrize/driver-inventory rows naming purged meshers went with their subject; the two `hgrid.gr3` cross-checks went with `workflows/schism/deck_authoring`. The om2d half is unchanged and green.
+
+## Tools-stage stops (2026-08-29)
+
+- trid3nt_server/workflows/mesh/meshers/om2d.py `_gr3` + its `hgrid.gr3` emission
+  + the `engine_compat.append("schism")` it fed: the bridge imported
+  `trid3nt_server.workflows.schism.deck_authoring`, which the fresh-start purge
+  moved to the attic, so every build took the `except` arm and warned-and-dropped.
+  DELETED, no attic copy (git history is the archive). CONDITION: none - a SCHISM
+  rung brings its own geometry needs and would author its writer against the mesh
+  that exists then, not restore this bridge. om2d now emits the TELEMAC pair plus
+  the display face only, and `engine_compat` never names schism.
+- scripts/sandbox/oceanmesh/water_edge.py `river_corridor_water` + its call site in
+  build_watershed_mesh.py: buffered the flowlines into a corridor clipped to the
+  catchment. The RIBBON RULING (2026-08-29) forbids a buffered flowline as a mesh
+  domain and the APPROXIMATE-REACH RULING extends that past domains, and this
+  corridor had already stopped being the domain - the driver meshes the catchment
+  polygon and the corridor survived only as a reported area. DELETED with its
+  `corridor_km2` summary key and caption clause; no attic copy. CONDITION: none.

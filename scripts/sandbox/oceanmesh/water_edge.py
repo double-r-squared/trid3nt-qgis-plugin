@@ -32,9 +32,8 @@ Water-domain sources:
     ArcGIS vector layer (download-only via the Shoreline Data Explorer -- see
     docs/research/oceanmesh-front-proposal.md), so OSM coastline is the landed
     high-res source.
-  * river valley : the watershed catchment (pysheds delineate_watershed) with
-    NHDPlus HR / OSM flowlines (fetch_river_geometry) buffered into a river
-    corridor clipped to the catchment.
+  * river valley : the watershed catchment polygon itself (pysheds
+    delineate_watershed), meshed as one connected body.
 
 Coastline -> water-polygon method (osmcoastline-style, self-contained):
   polygonize(domain-box boundary + coastline ways) splits the box into faces;
@@ -501,23 +500,6 @@ def build_coastal_water(bbox, use_nhd: bool = True,
     prov["valid"] = bool(water.is_valid)
     prov["water_bounds"] = [round(v, 5) for v in water.bounds]
     return water, prov
-
-
-def river_corridor_water(flowlines_gdf, catchment_geom, buffer_m: float = 70.0):
-    """Buffer flowlines into a corridor and clip to the catchment -> the water
-    polygon to mesh (the river corridor / valley network of the watershed)."""
-    lat_c = catchment_geom.centroid.y
-    deg = buffer_m / (111_320.0 * max(0.15, math.cos(math.radians(lat_c))))
-    lines = [g for g in flowlines_gdf.geometry if g is not None and not g.is_empty]
-    if not lines:
-        raise ValueError("no flowlines to build a corridor from")
-    corridor = unary_union([ln.buffer(deg) for ln in lines])
-    catch = _clean(catchment_geom)
-    water = corridor.intersection(catch)
-    water = _clean(water)
-    if water is None:
-        raise ValueError("river corridor does not intersect the catchment")
-    return water
 
 
 # --------------------------------------------------------------------------- #

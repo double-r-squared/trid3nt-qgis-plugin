@@ -2,8 +2,8 @@
 
 NATE's watershed-then-mesh method, end to end: delineate the watershed with
 pysheds (registered ``delineate_watershed``), pull the NHDPlus HR / OSM river
-flowlines inside it, buffer them into a river corridor clipped to the catchment,
-and mesh THAT domain with the authentic OceanMesh2D engine (in the GPL-isolated
+flowlines inside it, and mesh the CATCHMENT POLYGON with the authentic
+OceanMesh2D engine (in the GPL-isolated
 ``trid3nt-local/mesh:latest`` image). The catchment -- not a bbox -- is the
 domain, so the mesh is never cookie-cut mid-water; the AOI box is only a residual
 render overlay.
@@ -46,11 +46,10 @@ MESH_IMAGE = "trid3nt-local/mesh:latest"
 # EPSG:4326 (staged by the pysheds proof or fetched here).
 CASES = {
     "coweeta_river": {
-        "label": "Coweeta Creek river corridor (Nantahala Mtns, NC) -- watershed-first",
+        "label": "Coweeta Creek catchment (Nantahala Mtns, NC) -- watershed-first",
         "aoi_bbox": (-83.50, 35.00, -83.40, 35.09),
         "pour_point": (-83.40402, 35.05746),  # interior main-stem outlet (Part A)
         "snap_threshold": 200,
-        "buffer_m": 70.0,
         "min_edge_length_m": 40.0,
         "max_edge_length_m": 400.0,
         "grade": 0.20,
@@ -135,8 +134,6 @@ def build_watershed_mesh(case: str) -> dict:
     from mesh_formats import mesh_quality_report, write_2dm, write_fort14
     from schism_gr3 import tin_to_hgrid
     from selafin_io import write_selafin
-    from water_edge import river_corridor_water
-
     cfg = CASES[case]
     rundir = OUT_ROOT / case
     rundir.mkdir(parents=True, exist_ok=True)
@@ -148,13 +145,9 @@ def build_watershed_mesh(case: str) -> dict:
     flow = fetch_flowlines(cfg["aoi_bbox"], rundir)
     # The WATERSHED-FIRST domain is the whole (connected) catchment polygon --
     # meshed as one body so the AOI box never truncates it, and thin river
-    # ribbons are not destroyed by oceanmesh's disconnected-area cleanup. The
-    # river corridor is computed only to report its extent.
-    corridor = river_corridor_water(flow, catch, buffer_m=cfg["buffer_m"])
-    corridor_km2 = float(gpd.GeoSeries([corridor], crs=4326).to_crs(3857).area.iloc[0] / 1e6)
+    # ribbons are not destroyed by oceanmesh's disconnected-area cleanup.
     water = catch
-    log.info("meshing full catchment %.2f km^2 (river corridor %.2f km^2)",
-             ws.area_km2, corridor_km2)
+    log.info("meshing full catchment %.2f km^2", ws.area_km2)
 
     dom = catch.bounds  # domain = catchment bounds (NOT the AOI box)
 
@@ -226,8 +219,7 @@ def build_watershed_mesh(case: str) -> dict:
 
     caption = (
         f"WATERSHED-FIRST: {cfg['label']}\n"
-        f"domain = pysheds catchment {ws.area_km2:.1f} km^2 (NOT the AOI box); "
-        f"river corridor within it {corridor_km2:.2f} km^2\n"
+        f"domain = pysheds catchment {ws.area_km2:.1f} km^2 (NOT the AOI box)\n"
         f"domain/sizing: {cfg['shoreline_source']}\n"
         f"engine: {stats['engine']}   catchment-interior SDF + distance-to-river "
         f"sizing; grade g={cfg['grade']}\n"
@@ -244,7 +236,6 @@ def build_watershed_mesh(case: str) -> dict:
     summary = {
         "case": case, "label": cfg["label"], "method": "watershed-first",
         "aoi_bbox": list(cfg["aoi_bbox"]), "catchment_km2": ws.area_km2,
-        "corridor_km2": round(corridor_km2, 3),
         "shoreline_source": cfg["shoreline_source"],
         "mesh_stats": stats, "qa": qa,
         "mdal_2dm": mdal_2dm, "mdal_slf": mdal_slf, "serafin": serafin,
@@ -334,7 +325,7 @@ def rerender(case: str) -> None:
     caption = (
         f"WATERSHED-FIRST: {cfg['label']}\n"
         f"domain = pysheds catchment {summ['catchment_km2']:.1f} km^2 (NOT the AOI "
-        f"box); river corridor within it {summ['corridor_km2']:.2f} km^2\n"
+        f"box)\n"
         f"domain/sizing: {cfg['shoreline_source']}\n"
         f"engine: {stats['engine']}   catchment-interior SDF + distance-to-river "
         f"sizing; grade g={cfg['grade']}\n"
