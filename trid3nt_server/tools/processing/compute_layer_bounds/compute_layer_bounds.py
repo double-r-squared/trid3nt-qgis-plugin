@@ -260,11 +260,46 @@ def _bounds_from_vector(path: str) -> tuple[float, float, float, float]:
             "EMPTY_LAYER", f"vector layer {path!r} has no features with geometry."
         )
 
-    # Reuse the postprocess_pelicun reproject-to-4326 convention.
-    from trid3nt_server.workflows.pelicun.postprocess_pelicun.postprocess_pelicun import _bbox_from_gdf
-
     minx, miny, maxx, maxy = _bbox_from_gdf(gdf)
     return (float(minx), float(miny), float(maxx), float(maxy))
+
+
+def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
+    """Return (minLon, minLat, maxLon, maxLat) from the gdf's total_bounds.
+
+    Best-effort reprojects to EPSG:4326 when the CRS is set and differs. A CRS of
+    None falls back to the raw total_bounds: the caller bears the cost of that
+    assumption, and a world bbox is the honest answer when the bounds are not
+    finite at all.
+    """
+    try:
+        crs = getattr(gdf, "crs", None)
+        if crs is not None and str(crs).upper() not in (
+            "EPSG:4326",
+            "EPSG: 4326",
+            "WGS 84",
+            "WGS84",
+        ):
+            try:
+                gdf_4326 = gdf.to_crs("EPSG:4326")
+            except Exception:  # noqa: BLE001 -- fall back to raw bounds
+                gdf_4326 = gdf
+        else:
+            gdf_4326 = gdf
+        bounds = gdf_4326.total_bounds  # [minx, miny, maxx, maxy]
+        minx, miny, maxx, maxy = (
+            float(bounds[0]),
+            float(bounds[1]),
+            float(bounds[2]),
+            float(bounds[3]),
+        )
+        # A single-point / degenerate layer can report NaN bounds.
+        if not all(math.isfinite(v) for v in (minx, miny, maxx, maxy)):
+            return (-180.0, -90.0, 180.0, 90.0)
+        return (minx, miny, maxx, maxy)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("bbox extraction failed: %s; defaulting to world bbox", exc)
+        return (-180.0, -90.0, 180.0, 90.0)
 
 
 def _apply_pad(
