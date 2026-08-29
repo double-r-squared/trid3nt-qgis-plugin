@@ -1213,3 +1213,32 @@ peak-layer and bank-metrics witnesses verbatim.
 - .mcp.json.example: client config example for the deleted server (mcp-purge 2026-08-27)
 - trid3nt_server/mesh/preview_gate.py: superseded shared approve-mesh preview gate, zero production consumers - D-8 ruling at mesh wave close (2026-08-28)
 - tests/test_mesh_preview_gate.py: tested only the deleted module (2026-08-28)
+
+## Fresh-start purge (2026-08-28)
+
+The product narrows to TELEMAC plus the shared mesh/lib/solver spine. Everything
+below left the repo for `/home/nate/Documents/trid3nt-attic`, mirroring its
+repo-relative path. Git history remains the archive; the attic is a reading copy
+and is on no import path.
+
+Meshers (roster after: `om2d` + `reg_grid`):
+- trid3nt_server/workflows/mesh/meshers/telapy_mesh.py: TELEMAC-geometry adoption mesher; its in-container driver was already deleted - moved to attic (fresh-start purge 2026-08-28)
+- trid3nt_server/workflows/mesh/meshers/watershed.py: catchment mesher wrapper; the catchment STRATEGY (workflows/mesh/watershed.py) stays - moved to attic (fresh-start purge 2026-08-28)
+- trid3nt_server/workflows/mesh/meshers/coastal_edge.py: coastline/water-polygon mesher; its water-edge prep folds into om2d in a later wave - moved to attic (fresh-start purge 2026-08-28)
+- trid3nt_server/workflows/mesh/meshers/corridor_tin.py, hecras.py, drivers/coastal_edge_driver.py, drivers/telapy_mesh_driver.py: deleted in the working tree ahead of this pass; recovered from HEAD - moved to attic (fresh-start purge 2026-08-28)
+
+Engine workflow packages:
+- trid3nt_server/workflows/{calibration,elmfire,geoclaw,hecras,landlab,modflow,openquake,pelicun,schism,sfincs,swan,swmm}/: every non-TELEMAC engine package - moved to attic (fresh-start purge 2026-08-28)
+
+Old root mesh package (its two live consumers were absorbed first):
+- trid3nt_server/mesh/{coastal_tin,hecras_geometry,mesh_preview,modflow_package_validation,raster_cell_mesh,refine_regions,swmm_deck_runner,swmm_mechanism_compare,swmm_network,_swmm_solve_subprocess,__init__}.py: consumed only by the moved engine packages - moved to attic (fresh-start purge 2026-08-28)
+- trid3nt_server/mesh/spatial_roles.py -> trid3nt_server/gates/spatial_roles.py: ABSORBED, not moved; its only live consumer is gates/spatial_input.py (fresh-start purge 2026-08-28)
+- trid3nt_server/mesh/grid_geometry.py -> trid3nt_server/workflows/mesh/grid_geometry.py: ABSORBED, not moved; its live consumers are workflows/mesh/session.py and meshers/reg_grid.py (fresh-start purge 2026-08-28)
+
+Tests (131 files) whose subject is a moved engine or a moved module:
+- tests/test_{elmfire,geoclaw,hecras,landlab,modflow,openquake,pelicun,schism,sfincs,swan,swmm}_*.py and the composer/gate/postprocess tests that drive them (model_flood_scenario, granularity gate, archetype emission, capture-zone / saltwater / subsidence / seepage / stream-depletion, mesh_layer, refine_regions, corridor readopt, worker offload, zoom-to smokes) - moved to attic (fresh-start purge 2026-08-28)
+- moved-subject sections stripped from kept tests: test_gemini_kwargs_fuzz.py, test_search_tools.py, test_search_tools_mongo_backend.py, test_job0305_memoryfile_lifetime.py, test_telemac_input_provenance.py, test_publish_manifest_register_only_phase4.py, test_spatial_input_barriers.py (fresh-start purge 2026-08-28)
+
+Scripts (74 files + 4 sandbox trees) whose subject is a moved engine:
+- scripts/{drive,proof,run,smoke,plot,harvest,demo}_*.py for elmfire/geoclaw/hecras/landlab/modflow/openquake/pelicun/schism/sfincs/swan/swmm, the three law-9 A/B proofs, the corridor hand-edit proof, run_l2_validation_harness.py, _slab2_fixture.py - moved to attic (fresh-start purge 2026-08-28)
+- scripts/sandbox/{hecras,modflow,schism,fire_render}/: engine sandboxes; oceanmesh, telemac, replication and pysheds_watershed stay - moved to attic (fresh-start purge 2026-08-28)
