@@ -2570,3 +2570,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   recorded distance) - NEVER "what shape is the river?". Supersedes
   every bank_source fallback-ladder shape; bank provenance still
   travels (real vs user-supplied).
+
+- APPROXIMATE-REACH RULING (NATE 2026-08-29, extends the ribbon
+  ruling): corridor_of was dishonestly named - IF such a thing
+  existed it would be "approximate_reach", and its only imaginable
+  use (release-point snapping) is SUPERSEDED by the real geometry:
+  release validity = CONTAINMENT IN THE ACTUAL DOMAIN POLYGON, snap =
+  nearest point on the real flowline within it. So it is atticked
+  BEFORE BIRTH - never built; the existing buffer-band snap logic
+  goes to the attic (reference only; may return via a shared space
+  only if a concrete case earns it). Pattern recorded: every
+  synthetic construct was an apology for not using real geometry -
+  mandatory real geometry dissolves them.
