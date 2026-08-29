@@ -504,3 +504,29 @@ The nine deviations are all SHAPE questions, not correctness failures: where the
 build fires in a plan (D-1, D-2, D-9), what a declaration carries forward (D-3,
 D-5), what the gate hands the agent (D-4), and vocabulary/layout drift between
 the spec text and the landed roster (D-6, D-7, D-8).
+
+---
+
+## 5. Amendment - 2026-08-29: the gr3 / fort.14 rows
+
+The table above is the record of the walk as it was made on 2026-08-27 and is
+left standing. Six of its rows have since been overtaken by landings that
+removed their subject, and are corrected here rather than rewritten there.
+
+The landings: `e19d72f1` chopped om2d's gr3 seam (TELEMAC formats + display
+only), `6368bb69` narrowed the mesher roster to `om2d` + `reg_grid`, and
+`67ff7745` deleted `MeshArtifact.gr3_uri`, `MeshArtifact.fort14_uri` and the
+`schism` / `swan` rows of `ENGINE_MESH_REQUIREMENTS`.
+
+| row | as walked | as of 2026-08-29 |
+|---|---|---|
+| Section 2.4, `accept()` -> MeshArtifact (.slf / .gr3 / fort.14 + MDAL display) | CONFORMS | the `.gr3` half no longer exists. `accept()` writes `slf_uri`, stages the per-solver files the mesher wrote (`.cli`) and the MDAL display face. No `.gr3` and no `fort.14` are written on a build, and no artifact field names either |
+| Section 2.4, thin hooks wrapping the library's own functions | CONFORMS | the cited evidence is stale in two places: `telapy_mesh.py` and `coastal_edge.py` left the tree with the roster narrowing, and `om2d.py` no longer calls `tin_to_hgrid`. The CLAUSE still conforms - `om2d.py` shells the mesh box and calls `om.generate_mesh` / `om.identify_ocean_boundary_sections` - on the surviving evidence alone |
+| Section 2.6, hgrid.gr3 + open boundary (SCHISM) | CONFORMS | SUPERSEDED. `ENGINE_MESH_REQUIREMENTS` carries no `schism` row; a SCHISM ask now gets the honest "no mesh-compatibility rule registered for engine 'schism'". SCHISM authors its row from its own needs when it returns |
+| Section 2.6, SWAN is regular-grid ONLY - no `fort.14` written on a build | CONFORMS | SUPERSEDED by the same deletion. There is no `swan` row and no `fort14_uri` field; the ADCIRC writer still lives in `scripts/sandbox/oceanmesh/mesh_formats.py` |
+| Section 2.7, `MeshArtifact`: ... slf_uri / gr3_uri / bundle ... | CONFORMS | `gr3_uri` is gone. The artifact carries `slf_uri`, `cli_uri`, `topology_uri`, `hecras_inputs`, `display_uri`, `open_boundary_info`, `engine_compat`, `recipe_uri`, `probes`, `provenance` |
+| Section D2-D5, slice 6 - open-boundary segmentation -> LIHBOR / gr3 sections | CONFORMS | the LIHBOR half stands: `set_boundary` numbers the `.cli` through `identify_ocean_boundary_sections`. The gr3 half is gone with the seam |
+
+The two live-transcript lines at 2.3 that print the `schism` and `swan` compat
+verdicts are a transcript of a run that happened; they are left as they were
+recorded. The same run today prints the "no rule registered" refusal for both.

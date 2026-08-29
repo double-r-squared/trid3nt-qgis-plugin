@@ -1326,3 +1326,32 @@ Tests whose subject left the tree:
   inspection and the whole watershed-provenance block went with their meshers; the
   three SCHISM compat rows and the SWAN one became one row asserting the honest
   "no rule registered" refusal.
+
+## Declared-input contracts (2026-08-29)
+
+The kind a template declares IS its accept-set, so the softer paths that stood in
+for one go, per the DECLARED-INPUT CONTRACTS ruling.
+
+- The TRUST+TELL branch in `steps/deck.py::_settle_release`: a mesh whose spec
+  extent was a bbox returned `None` from `domain_polygon_of`, and the supplied
+  release point rode into the deck untested with a note saying the containment
+  test could not be made. DELETED, no attic copy. `domain_polygon_of` now RAISES
+  the typed refusal on a mesh that states no domain polygon, so release
+  containment has exactly one path and it always has a polygon to be inside of.
+  CONDITION: none - a release admitted by a shape nobody mapped is the thing the
+  pre-flight exists to prevent, and a run whose mesh has no polygon is a run the
+  reach templates were never meant to author.
+- `tests/test_release_containment.py::test_a_mesh_cut_from_a_box_states_it_has_no_domain_polygon`:
+  the test OF the deleted branch. Replaced in place by
+  `test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_through`,
+  which pins the refusal over the same three inputs.
+
+Tests whose subject left the tree with the mesher roster narrowing (`6368bb69`):
+- `tests/test_build_mesh_tool.py::test_a_mesher_that_takes_no_extent_refuses_one_by_name`
+  named the purged `telapy_mesh`. Every mesher the tree carries cuts its domain
+  from an extent, so the test now stands a geometry-adopting mesher up in the
+  registry for its own duration; the clause it pins - a mesher declines a field it
+  never declared, BY NAME - is unchanged.
+- `tests/test_mesh_gate_loop.py::test_a_mesher_with_no_vocabulary_knob_keeps_the_card_it_had`
+  named the purged `corridor_tin`. Repointed to `reg_grid`, which is now the
+  mesher whose every knob is a number.

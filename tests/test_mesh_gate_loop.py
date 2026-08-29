@@ -474,15 +474,12 @@ def test_a_vocabulary_knob_gets_a_row_and_names_its_roster(tmp_path):
 
 
 def test_a_mesher_with_no_vocabulary_knob_keeps_the_card_it_had(tmp_path):
-    """The corridor's knobs are numbers; per-input rows change nothing for it."""
-    declaration = tool.build_mesh(
-        mesher="corridor_tin", kind="unstructured_tri",
-        domain={"reach": {"slug": "eel"}, "seed": {"lon": -117.0, "lat": 37.0}},
-        extent_km=0.12, width_m=60.0, banks="nhd_area")
+    """A lattice's knobs are numbers; per-input rows change nothing for it."""
+    declaration = tool.build_mesh(mesher="reg_grid", kind="structured_grid",
+                                  extent=_AOI, resolution_m=400.0)
     session = MeshSession(declaration, workdir=tmp_path)
 
-    assert _card_rows(session) == ["set_resolution.edge_length_m",
-                                  "set_extent.extent_km", "restart"]
+    assert _card_rows(session) == ["set_resolution.resolution_m", "restart"]
 
 
 @pytest.mark.asyncio
