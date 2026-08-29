@@ -2558,3 +2558,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   one generic telapy box -> reader -> frozen emission. Ladder +
   standing acceptance (library-first grep, LEGO law, re-baselined
   zero, honest records, conformance gate).
+
+- RIBBON RULING, ABSOLUTE (NATE 2026-08-29): the buffered-flowline
+  ribbon is COMPLETELY UNACCEPTABLE as a mesh domain - no fallback
+  rung, ever. A reach domain is the REAL mapped water polygon
+  (section of fetch_nhd_area_water between the reach endpoints) or a
+  TYPED TERMINAL REFUSAL (REACH_BANKS_UNMAPPED) naming the supply
+  paths (draw a polygon / name a case layer / pick a covered reach).
+  buffer(flowline, d) survives ONLY for release-point automation - a
+  validity band answering "is this point near the river?" (snap +
+  recorded distance) - NEVER "what shape is the river?". Supersedes
+  every bank_source fallback-ladder shape; bank provenance still
+  travels (real vs user-supplied).
