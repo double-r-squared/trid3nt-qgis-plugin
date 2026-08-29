@@ -2,7 +2,7 @@
 
 This is the AGENT-side consumer of the drawn output. The canonical
 role vocabulary + structural parser now live in the mesh authoring layer at
-:mod:`trid3nt_server.mesh.spatial_roles` so a
+:mod:`trid3nt_server.gates.spatial_roles` so a
 wall / breach / refine-region / aoi-clip means the same thing to every engine.
 This module is the backward-compatible ADAPTER over that shared parser: it keeps
 the ``ParsedSpatialInput`` shape + the ``parse_spatial_input_features`` entry
@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from trid3nt_server.mesh.spatial_roles import (
+from trid3nt_server.gates.spatial_roles import (
     DrawnRoles,
     SpatialInputParseError,
     SpatialRoleError,
@@ -77,10 +77,10 @@ class ParsedSpatialInput:
 def parse_spatial_input_features(fc: dict[str, Any]) -> ParsedSpatialInput:
     """Parse a drawn ``FeatureCollection`` into role-split engine inputs.
 
-    Delegates to :func:`trid3nt_server.mesh.spatial_roles.parse_drawn_roles`
+    Delegates to :func:`trid3nt_server.gates.spatial_roles.parse_drawn_roles`
     and adapts the canonical :class:`DrawnRoles` to the legacy-compatible
     :class:`ParsedSpatialInput`. Raises
-    :class:`~trid3nt_server.mesh.spatial_roles.SpatialRoleError`
+    :class:`~trid3nt_server.gates.spatial_roles.SpatialRoleError`
     (aliased ``SpatialInputParseError``, typed ``error_code``) on any
     structurally invalid input -- an honest typed error, never a silent success.
     """
