@@ -61,14 +61,8 @@ def _import_tools_registry() -> int:
     imports ``solver`` so the 2 solver-dispatch atomic tools
     (``run_solver`` + ``wait_for_completion``) register at startup. These
     are uncacheable (``cacheable=False``, ``ttl_class="live-no-cache"``,
-    ``source_class="solver_dispatch"``) -- they drive solver
-    executions of the SFINCS substrate.
-
-    imports ``workflows.sfincs.flood.flood`` so the capstone
-    workflow's thin atomic-tool wrapper (the ``sfincs_flood`` engine template) is
-    registered alongside the atomic tools it composes. The workflow itself
-    is deterministic Python; the wrapper exists so the
-    LLM sees a single invocable tool that triggers the whole chain.
+    ``source_class="solver_dispatch"``) -- they drive the engine's solver
+    executions.
     """
     from . import tools  # noqa: F401 -- side-effect: registers atomic tools
     # register the 4 data-fetch atomic tools (FROZEN __init__.py).
@@ -82,8 +76,6 @@ def _import_tools_registry() -> int:
     from .tools.search.qgis_discovery import qgis_discovery  # noqa: F401
     # register run_solver + wait_for_completion (solver-dispatch substrate).
     from .workflows.solver import solver  # noqa: F401
-    # register sfincs_flood (capstone workflow wrapper; engine template).
-    from .workflows.sfincs.flood.flood import sfincs_flood  # noqa: F401
     # register search_data_catalog + fetch_from_catalog (catalog search substrate).
     from .tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401
     from .tools.search.search_data_catalog import search_data_catalog  # noqa: F401
@@ -121,9 +113,6 @@ def _import_tools_registry() -> int:
     # fetch_roads_osm + fetch_overpass_pois: spec-driven (source.yaml +
     # overpass hooks), auto-registered by the router spec tree walk; no eager
     # twin import here.
-    # the pelicun_damage_assessment TEMPLATE lives under
-    # workflows/pelicun/damage_assessment/; import it so it registers at daemon startup.
-    from .workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
     # register show_nexrad_radar (display tool: composes an Iowa Mesonet NEXRAD WMS URL).
     from .tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
     # fetch_goes_satellite: spec-driven, auto-registered by

@@ -560,58 +560,19 @@ from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
 from .processing.spatial_query import spatial_query  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
-# V&V wave (lane A): per-engine run-diagnostics dispatcher (folds
-# the 5 per-engine readers into one registered tool; the internal per-engine
-# parser modules under .simulation.diagnostics are NOT registered).
+# Run-diagnostics dispatcher: one registered tool over the per-engine parser
+# modules under workflows/solver/diagnostics/, which are NOT themselves registered.
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
 from trid3nt_server.tools.processing.model_debris_flow import model_debris_flow  # noqa: E402,F401
-# engine-door refactor (ELMFIRE slice): the model_fire_spread engine tool is
-# DELETED from tools/simulation/. The ELMFIRE engine tool is now the
-# elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template") registered in
-# workflows/elmfire/fire_spread/fire_spread.py (imported below); the run_elmfire
-# door lists + gate-expands it.
-from trid3nt_server.workflows.pelicun.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
-# LANDLAB: landlab_susceptibility is the TEMPLATE (engine="landlab",
-# tier="template") registered in workflows/landlab/susceptibility/susceptibility.py
-# (imported below); the run_landlab door lists + gate-expands it.
-# MODFLOW: run_modflow_job (single spill) + run_river_seepage_job are
-# unregistered internal engine surfaces -- the single-species spill is folded
-# into the modflow_contaminant_plume template; run_river_seepage_job backs the
-# modflow_river_seepage template.
-# OPENQUAKE: openquake_psha is the TEMPLATE (engine="openquake",
-# tier="template") registered in workflows/openquake/psha/psha.py (imported
-# below); the run_openquake door lists + gate-expands it.
-# PELICUN: run_pelicun_damage_assessment + run_pelicun_with_buildings are ONE
-# pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template") under
-# workflows/pelicun/damage_assessment/ (imported below), with a bbox AUTO-FETCH
-# input mode (assets_uri absent + bbox -> auto-fetch a building-density
-# inventory). The run_pelicun door lists + gate-expands it. postprocess_pelicun
-# (above) STAYS general.
-# SWAN: swan_wave_field is the TEMPLATE (engine="swan", tier="template")
-# registered in workflows/swan/wave_field/wave_field.py (imported below); the
-# run_swan door lists + gate-expands it.
-# SWMM + TELEMAC: swmm_urban_flood and telemac_river_dye
-# (engine="telemac", tier="template", workflows/telemac/river_dye/river_dye.py,
-# imported below) are the TEMPLATEs; the run_swmm / run_telemac doors list +
-# gate-expand them. run_telemac names the door, not a direct-solve wrapper.
 # RERUN-WITH-OVERRIDES: derive a run from a run, with named values moved. The
 # skeleton's recalibration interface - what-if, failure recovery, calibration
-# loops - and the successor to the per-engine parameter setters below.
+# loops.
 from trid3nt_server.workflows.lib.rerun import rerun_workflow  # noqa: E402,F401
-# derive-not-mutate parameter setters (write a child deck/setup,
-# leave the parent immutable). PRE-MIGRATION: these three predate the skeleton
-# and die at their engines' migrations, when rerun_workflow covers them.
-from trid3nt_server.workflows.modflow.set_parameters import set_modflow_parameters  # noqa: E402,F401
-from trid3nt_server.workflows.sfincs.set_parameters import set_sfincs_parameters  # noqa: E402,F401
-from trid3nt_server.workflows.swmm.set_parameters import set_swmm_parameters  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
-# -- engine templates (door dissolution): the 10 engine "door"
-# concierge tools were DELETED. Each engine's tier=template members are ordinary
-# retrieval-pool tools now, registered by their own @register_tool below (the
-# workflow-composer block). Templates are callable DIRECTLY -- no concierge, no
-# gate expansion. The solver-seam modules under workflows/<engine>/run_<engine>.py
-# (WorkflowError classes, solver specs) are UNRELATED to the deleted doors and
-# stay; the templates import them.
+# -- engine templates: tier=template members are ordinary retrieval-pool tools,
+# registered by their own @register_tool in the workflow-composer block below and
+# callable DIRECTLY. The solver-seam module workflows/telemac/run_telemac.py
+# (WorkflowError classes, solver specs) is separate; the templates import it.
 
 # -- discovery (dataset/tool retrieval) --
 # NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
@@ -646,94 +607,20 @@ from .search.web_fetch import web_fetch  # noqa: E402,F401
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-# MODFLOW templates (engine="modflow", tier="template"), one folder per
-# template under workflows/modflow/<template>/<template>.py; EXCLUDED from the
-# default retrieval pool, surfaced only by the run_modflow door's gate
-# expansion. run_modflow_archetype_job / run_modflow_multi_species_job /
-# run_river_seepage_job are the unregistered internal engine surfaces the
-# templates call directly (not imported here).
-from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import modflow_contaminant_plume as _modflow_contaminant_plume  # noqa: E402,F401 - FOLD of run_modflow_job + run_model_multi_species_scenario (single OR multi species -> plumes[])
-from trid3nt_server.workflows.modflow.river_seepage.river_seepage import modflow_river_seepage as _modflow_river_seepage  # noqa: E402,F401 - FOLD of run_model_river_seepage_scenario + run_river_seepage_job
-from trid3nt_server.workflows.modflow.sustainable_yield.sustainable_yield import modflow_sustainable_yield as _modflow_sustainable_yield  # noqa: E402,F401
-from trid3nt_server.workflows.modflow.mine_dewatering.mine_dewatering import modflow_mine_dewatering as _modflow_mine_dewatering  # noqa: E402,F401
-from trid3nt_server.workflows.modflow.regional_water_budget.regional_water_budget import modflow_regional_water_budget as _modflow_regional_water_budget  # noqa: E402,F401
-from trid3nt_server.workflows.modflow.managed_recharge.managed_recharge import modflow_managed_recharge as _modflow_managed_recharge  # noqa: E402,F401
-from trid3nt_server.workflows.modflow.asr.asr import modflow_asr as _modflow_asr  # noqa: E402,F401
-from trid3nt_server.workflows.modflow.wetland_hydroperiod.wetland_hydroperiod import modflow_wetland_hydroperiod as _modflow_wetland_hydroperiod  # noqa: E402,F401
-from trid3nt_server.workflows.modflow.capture_zone.capture_zone import modflow_capture_zone as _modflow_capture_zone  # noqa: E402,F401 - PRT capture zone
-from trid3nt_server.workflows.modflow.wellhead_protection.wellhead_protection import modflow_wellhead_protection as _modflow_wellhead_protection  # noqa: E402,F401 - EPA WHPA (split from capture_zone; shared composer)
-from trid3nt_server.workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_saltwater_intrusion as _modflow_saltwater_intrusion  # noqa: E402,F401 - BUY variable-density Henry-style wedge
-from trid3nt_server.workflows.modflow.vadose_transport.vadose_transport import modflow_vadose_transport as _modflow_vadose_transport  # noqa: E402,F401 - UZF+UZT unsaturated-zone breakthrough
-from trid3nt_server.workflows.modflow.thermal_plume.thermal_plume import modflow_thermal_plume as _modflow_thermal_plume  # noqa: E402,F401 - GWE heat-transport thermal plume (injection_plume mode)
-from trid3nt_server.workflows.modflow.thermal_plume.thermal_plume import modflow_thermal_storage as _modflow_thermal_storage  # noqa: E402,F401 - GWE heat-transport aquifer thermal energy storage (ates mode)
-from trid3nt_server.workflows.modflow.package_validation.package_validation import modflow_package_validation as _modflow_package_validation  # noqa: E402,F401 - NEW capability (GWF-NPF Newton / GWF-MAW / GWF-HFB package V&V benchmarks) (engine=modflow, tier=template)
-# swmm_urban_flood TEMPLATE (engine="swmm", tier="template"), one folder under
-# workflows/swmm/urban_flood/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_swmm door's gate expansion. The composer chain
-# (model_swmm_urban_flood) is inlined in the template module.
-from trid3nt_server.workflows.swmm.urban_flood.urban_flood import swmm_urban_flood as _swmm_urban_flood  # noqa: E402,F401 - RENAME of run_swmm_urban_flood (engine=swmm, tier=template)
-# swmm_network_import TEMPLATE (engine="swmm", tier="template"), one folder under
-# workflows/swmm/network_import/. A DISTINCT capability: imports a REAL municipal
-# storm-drain GIS network (nodes + conduits) into a runnable SWMM model - the
-# dual-drainage MINOR system, the practice-verification's #1-ranked gap over the
-# DEM-synthesized overland mesh. The composer (model_swmm_network_import) is inlined.
-from trid3nt_server.workflows.swmm.network_import.network_import import swmm_network_import as _swmm_network_import  # noqa: E402,F401 - NEW capability (SWMM network family #1) (engine=swmm, tier=template)
-# swmm_dual_drainage_coupling TEMPLATE (engine="swmm", tier="template"), one
-# folder under workflows/swmm/dual_drainage/. The DEFINING dual-drainage feature:
-# the overland MAJOR-system mesh EXCHANGES flow with the imported piped MINOR
-# system (row #1's machinery) at inlets. The composer (model_swmm_dual_drainage)
-# is inlined.
-from trid3nt_server.workflows.swmm.dual_drainage.dual_drainage import swmm_dual_drainage_coupling as _swmm_dual_drainage_coupling  # noqa: E402,F401 - NEW capability (SWMM network family #2) (engine=swmm, tier=template)
-# Published-deck runner family: three THIN templates over the shared
-# deck-runner core (agent/mesh/swmm_deck_runner.py + workflows/swmm/deck_runner/).
-# Each ingests a CITED, PUBLISHED openswmm.org example .inp deck (fetched at
-# runtime from the pinned public source; NOT baked - author-posted, redistribution
-# unclear), runs it VERBATIM through the headless swmm5_run solver, and charts the
-# deck-relevant outputs. The decks are the cited examples' SCHEMATIC networks (no
-# georeferenced map); each carries a capability the mesh-builder/GIS-parser cannot
-# produce: LID controls, storage routing, and PID/RTC control rules.
-from trid3nt_server.workflows.swmm.deck_lid_wq.deck_lid_wq import swmm_lid_raingarden_wq as _swmm_lid_raingarden_wq  # noqa: E402,F401 - NEW capability (published-deck runner: LID rain-garden WQ) (engine=swmm, tier=template)
-from trid3nt_server.workflows.swmm.deck_detention_ponds.deck_detention_ponds import swmm_wwtp_detention_ponds as _swmm_wwtp_detention_ponds  # noqa: E402,F401 - NEW capability (published-deck runner: storage-routing detention ponds) (engine=swmm, tier=template)
-from trid3nt_server.workflows.swmm.deck_pid_pump.deck_pid_pump import swmm_pump_pid_rtc as _swmm_pump_pid_rtc  # noqa: E402,F401 - NEW capability (published-deck runner: PID pump RTC) (engine=swmm, tier=template)
-# SWMM mechanism-COMPARISON templates: small synthetic decks that vary
-# ONE knob across variants and overlay the compared series (CHARTS + typed scalars,
-# no georeferenced map). Cover the 12 SWMM CAND-S board rows as knobs.
-from trid3nt_server.workflows.swmm.subcatchment_runoff_comparison.subcatchment_runoff_comparison import swmm_subcatchment_runoff_comparison as _swmm_subcatchment_runoff_comparison  # noqa: E402,F401 - NEW capability (infiltration-method + pre/post-development runoff) (engine=swmm, tier=template)
-from trid3nt_server.workflows.swmm.node_hydraulics_comparison.node_hydraulics_comparison import swmm_node_hydraulics_comparison as _swmm_node_hydraulics_comparison  # noqa: E402,F401 - NEW capability (outlet-structure family / flow diversion / surcharge-ponding) (engine=swmm, tier=template)
-from trid3nt_server.workflows.swmm.wetwell_pump_control_comparison.wetwell_pump_control_comparison import swmm_wetwell_pump_control_comparison as _swmm_wetwell_pump_control_comparison  # noqa: E402,F401 - NEW capability (wet-well pump curve + duty/standby + multi-condition RTC) (engine=swmm, tier=template)
-from trid3nt_server.workflows.swmm.lid_performance_comparison.lid_performance_comparison import swmm_lid_performance_comparison as _swmm_lid_performance_comparison  # noqa: E402,F401 - NEW capability (green roof / rain barrel vs rooftop disconnect / vegetative swale) (engine=swmm, tier=template)
-from trid3nt_server.workflows.swmm.wq_buildup_washoff_comparison.wq_buildup_washoff_comparison import swmm_wq_buildup_washoff_comparison as _swmm_wq_buildup_washoff_comparison  # noqa: E402,F401 - NEW capability (curb-length vs area buildup + EMC vs exp washoff) (engine=swmm, tier=template)
-# swmm_rdii_rtk_unit_hydrograph (row 4): RTK triangular unit-hydrograph
-# RDII (rainfall-derived inflow+infiltration) at a node vs direct runoff; closed
-# form validated against the native SWMM 5 [HYDROGRAPHS]/[RDII] engine. tier=template.
-from trid3nt_server.workflows.swmm.rdii_rtk.rdii_rtk import swmm_rdii_rtk_unit_hydrograph as _swmm_rdii_rtk_unit_hydrograph  # noqa: E402,F401 - RTK unit-hydrograph RDII
-# swmm_snowmelt_degree_day (board rows swmm_snowmelt_degree_day +
-# swmm_snow_removal_plowing): Snow Pack [SNOWPACKS] + degree-day melt on a
-# subcatchment; rain-on-snow winter flood driver charted snowmelt-vs-rain-only,
-# with the snow-removal/plowing REMOVAL block as a knob. Chart-first validation
-# class (RDII precedent), host-side pyswmm, no worker image. tier=template.
-from trid3nt_server.workflows.swmm.snowmelt_degree_day.snowmelt_degree_day import swmm_snowmelt_degree_day as _swmm_snowmelt_degree_day  # noqa: E402,F401 - Snow Pack degree-day melt (engine=swmm, tier=template)
-# swmm_aquifer_baseflow_to_node (board row swmm_aquifer_baseflow_to_node):
-# the [GROUNDWATER] two-zone aquifer under a pervious subcatchment contributing
-# baseflow to a drainage node BETWEEN storms; charted with-GW vs no-GW. The SWMM
-# analogue of the Landlab groundwater / RoG return-flow theme. tier=template.
-from trid3nt_server.workflows.swmm.aquifer_baseflow.aquifer_baseflow import swmm_aquifer_baseflow_to_node as _swmm_aquifer_baseflow_to_node  # noqa: E402,F401 - two-zone aquifer baseflow (engine=swmm, tier=template)
-# telemac_river_dye TEMPLATE (engine="telemac", tier="template"),
-# workflows/telemac/river_dye/: declared PARAMS + DATA + plan(p, d) over the
-# shared reach step family in workflows/telemac/steps/.
-# workflows/telemac/run_telemac.py is the local solve seam.
-from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
-# telemac_do_sag TEMPLATE (engine="telemac", tier="template"), workflows/telemac/
-# do_sag/: the WAQTEL O2 dissolved-oxygen sag (US TMDL/permit). Composes the same
-# shared reach steps with a do_sag deck; WATER QUALITY PROCESS = 2, V&V to
-# Streeter-Phelps 0.011 mg/L.
-from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - WAQTEL O2 front (engine=telemac, tier=template)
-# telemac_rain_on_grid TEMPLATE (engine="telemac", tier="template"), workflows/
-# telemac/rain_on_grid/: SCS-CN rainfall-runoff on a delineated watershed.
-# Composes acquire_watershed_mesh + NLCD-distributed CN/Manning + the
-# native constant-storm SCS-CN worker deck (mode=rain_on_grid) -> outlet
-# hydrograph + peak-depth COG. Live V&V: Coweeta Creek NC (docs/proof/templates).
-from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - RoG front (engine=telemac, tier=template)
+# DESIGN-STOP (fresh-start purge 2026-08-28): three TELEMAC templates declare a
+# mesher the purge removed - telemac_river_dye and telemac_do_sag ask for
+# ``corridor_tin``, telemac_rain_on_grid asks for ``watershed``. The surviving
+# roster is om2d + reg_grid, and om2d is a GSHHG-shoreline mesher whose declared
+# fields (extent/refine/bed) do not cover the river-corridor fields
+# (domain/extent_km/width_m/banks) or the catchment fields
+# (min_edge_length_m/grade/snap_search_cells) these three ask for, so repointing
+# them is a domain decision, not a rename. Their declarations build at import, so
+# leaving the imports live makes the whole tool surface unimportable. They are
+# parked here, unregistered, until the mesher question is ruled; restoring each is
+# this one line.
+# from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye
+# from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag
+# from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid
 # tomawac_wave_field TEMPLATE (engine="telemac", tier="template"), workflows/
 # telemac/wave_field/: the TOMAWAC third-generation spectral-wave engine.
 # ONE question-class tool, four modes (fetch_growth / shoaling /
@@ -773,211 +660,6 @@ from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import tel
 # regular grid - and emits an MDAL display layer plus the durable mesh artifact a
 # model template discovers through the precondition gate.
 from trid3nt_server.workflows.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
-# hecras_riverine_flood TEMPLATE (engine="hecras", tier="template"), engine #11,
-# one folder under workflows/hecras/riverine_flood/. TEMPLATE-FIRST: reparameterizes
-# HEC's shipped Muncie White River (IN) demonstration deck (frozen geometry, scaled
-# unsteady flow forcing). The composer chain (model_hecras_riverine_flood) is inlined
-# in the template module; workflows/hecras/run_hecras.py is the local solve seam.
-from trid3nt_server.workflows.hecras.riverine_flood.riverine_flood import hecras_riverine_flood as _hecras_riverine_flood  # noqa: E402,F401 - engine #11 (engine=hecras, tier=template)
-# hecras_levee_breach TEMPLATE (engine="hecras", tier="template"), engine #11 second
-# archetype: the SAME frozen Muncie White River geometry, whose 2D
-# Interior Area is a LEVEED protected floodplain -- toggles the deck's lateral-
-# structure breach (levee fails -> floods; holds -> valid dry success). Composer
-# inlined in the module; the local solve seam is shared (workflows/hecras/run_hecras.py).
-from trid3nt_server.workflows.hecras.levee_breach.levee_breach import hecras_levee_breach as _hecras_levee_breach  # noqa: E402,F401 - engine #11 second archetype (engine=hecras, tier=template)
-# hecras_flood_2d TEMPLATE (engine="hecras", tier="template"), engine #11 third
-# archetype (promotion): unlike the two Muncie templates, this AUTHORS the
-# 2D mesh + terrain subgrid tables for a GENUINELY-NEW user AOI (fetch_dem -> the
-# hecras2025-authoring worker image: AuthorMesh topology + ComputeFrom tables) then
-# solves the composed deck through run_solver (the M3-gate no-archetype path).
-from trid3nt_server.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d as _hecras_flood_2d  # noqa: E402,F401 - engine #11 third archetype (engine=hecras, tier=template)
-# culvert_embankment_flow TEMPLATE (engine="hecras", tier="template"), engine #11 fourth
-# archetype (Stage 2): authors a culvert barrel + BarrelProperties +
-# OpeningProperties on a real-reach 2D deck (fetched 3DEP terrain) and runs the
-# present-vs-absent A/B on the HEC-RAS 2025 managed CPU engine -- the ONE 2D structure
-# the beta wires into the solve (InitializeDriver_Culverts). The barrel conveys reach
-# flow the road embankment otherwise blocks (live-proven, North Fork Salt Creek IN).
-from trid3nt_server.workflows.hecras.culvert_embankment_flow.culvert_embankment_flow import culvert_embankment_flow as _culvert_embankment_flow  # noqa: E402,F401 - engine #11 fourth archetype (engine=hecras, tier=template)
-# schism_tidal_hydro TEMPLATE (engine="schism", tier="template"), engine #12,
-# one folder under workflows/schism/tidal_hydro/. Barotropic tidal hydrodynamics
-# on an unstructured coastal mesh: the QuarterAnnulus verification case
-# OR an oceanmesh coastal_tin. The composer chain (model_schism_tidal_hydro) is
-# inlined in the template module; workflows/schism/run_schism.py is the local solve seam.
-from trid3nt_server.workflows.schism.tidal_hydro.tidal_hydro import schism_tidal_hydro as _schism_tidal_hydro  # noqa: E402,F401 - engine #12 (engine=schism, tier=template)
-# schism_coupled_waves TEMPLATE (engine="schism", tier="template"), engine #12
-# second archetype: SCHISM+WWM two-way wave-current coupling on the
-# bundled Duck NC FRF validation case, with the GOTM k-epsilon closure (the
-# pschism_WWM_GOTM_TVD-VL variant). The composer chain (model_schism_coupled_waves)
-# is inlined in the template module.
-from trid3nt_server.workflows.schism.coupled_waves.coupled_waves import schism_coupled_waves as _schism_coupled_waves  # noqa: E402,F401 - engine #12 second archetype (engine=schism, tier=template)
-# schism_transport_validation TEMPLATE (engine="schism", tier="template")
-# SCHISM CAND-S: transport-scheme numerical-mixing V&V (Test_HeatConsv upwind-vs-TVD
-# + Test_GEN_MassConsv conservative-tracer mass conservation) on the hydro-core
-# binary; the composer chain (model_schism_transport_validation) is inlined.
-from trid3nt_server.workflows.schism.transport_validation.transport_validation import schism_transport_validation as _schism_transport_validation  # noqa: E402,F401 - SCHISM CAND-S transport V&V (engine=schism, tier=template)
-# schism_baroclinic_circulation TEMPLATE (engine="schism", tier="template")
-# - density-driven 3D baroclinic estuary circulation + stratification (ibc=0, SZ
-# vgrid, river source, salinity gradient) on the hydro-core binary; the composer
-# chain (model_schism_baroclinic_circulation) is inlined.
-from trid3nt_server.workflows.schism.baroclinic_circulation.baroclinic_circulation import schism_baroclinic_circulation as _schism_baroclinic_circulation  # noqa: E402,F401 - SCHISM 3D baroclinic template (engine=schism, tier=template)
-# schism_pahm_surge TEMPLATE (engine="schism", tier="template"):
-# parametric hurricane storm surge -- a best track -> a standalone Holland-1980
-# sflux wind/pressure field (nws=2) -> barotropic surge on a coastal TIN (peak
-# surge COG + track overlay + gauge hydrograph). The composer chain
-# (model_schism_pahm_surge) is inlined.
-from trid3nt_server.workflows.schism.pahm_surge.pahm_surge import schism_pahm_surge as _schism_pahm_surge  # noqa: E402,F401 - SCHISM PaHM storm-surge template (engine=schism, tier=template)
-# geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template"), one folder
-# under workflows/geoclaw/inundation/; EXCLUDED from the default retrieval
-# pool, surfaced only by the run_geoclaw door's gate expansion. The composer
-# chain (model_geoclaw_inundation) is inlined in the template module.
-from trid3nt_server.workflows.geoclaw.inundation.inundation import geoclaw_inundation as _geoclaw_inundation  # noqa: E402,F401 - RENAME of run_geoclaw_inundation (engine=geoclaw, tier=template)
-# geoclaw_tsunami_gauge_timeseries TEMPLATE (engine="geoclaw", tier="template"), a
-# DISTINCT capability (coastal gauge water-level time series), one folder under
-# workflows/geoclaw/gauge_timeseries/; surfaced by the run_geoclaw door's gate
-# expansion. Rides the inundation composer (model_geoclaw_inundation, emit_gauge_series).
-from trid3nt_server.workflows.geoclaw.gauge_timeseries.gauge_timeseries import geoclaw_tsunami_gauge_timeseries as _geoclaw_tsunami_gauge_timeseries  # noqa: E402,F401 - NEW capability (hazard-easy-four continuation #3) (engine=geoclaw, tier=template)
-# geoclaw_amr_refinement_regions TEMPLATE (engine="geoclaw", tier="template"), one
-# folder under workflows/geoclaw/amr_regions/: explicit lat/lon/time AMR region
-# control (region-based flagging). Rides the inundation composer.
-from trid3nt_server.workflows.geoclaw.amr_regions.amr_regions import geoclaw_amr_refinement_regions as _geoclaw_amr_refinement_regions  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
-# geoclaw_regional_manning_friction TEMPLATE (engine="geoclaw", tier="template"), one
-# folder under workflows/geoclaw/regional_manning/: spatially-varying (banded)
-# Manning bottom-friction. Rides the inundation composer.
-from trid3nt_server.workflows.geoclaw.regional_manning.regional_manning import geoclaw_regional_manning_friction as _geoclaw_regional_manning_friction  # noqa: E402,F401 - GeoClaw CAND-S SWE+AMR knob (engine=geoclaw, tier=template)
-# geoclaw_storm_surge TEMPLATE (engine="geoclaw", tier="template"), one folder
-# under workflows/geoclaw/storm_surge/: parametric-Holland tropical-cyclone storm
-# surge (wind + pressure forcing from a storm track, selectable wind drag law).
-# Rides the inundation composer.
-from trid3nt_server.workflows.geoclaw.storm_surge.storm_surge import geoclaw_storm_surge as _geoclaw_storm_surge  # noqa: E402,F401 - GeoClaw storm-surge front (engine=geoclaw, tier=template)
-# geoclaw_thacker_validation TEMPLATE (engine="geoclaw", tier="template"), one
-# folder under workflows/geoclaw/thacker_validation/: a synthetic, non-geographic
-# V&V of the wet-dry SWE+AMR solver vs Thacker's 1981 exact paraboloid-basin
-# solution (DEM-free composer branch; chart+scalars only).
-from trid3nt_server.workflows.geoclaw.thacker_validation.thacker_validation import geoclaw_thacker_validation as _geoclaw_thacker_validation  # noqa: E402,F401 - GeoClaw SWE+AMR analytic V&V (engine=geoclaw, tier=template)
-# swan_wave_field TEMPLATE (engine="swan", tier="template"), one folder under
-# workflows/swan/wave_field/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_swan door's gate expansion. The composer chain
-# (model_swan_wave_field) is inlined in the template module.
-from trid3nt_server.workflows.swan.wave_field.wave_field import swan_wave_field as _swan_wave_field  # noqa: E402,F401 - RENAME of run_swan_waves (engine=swan, tier=template)
-from trid3nt_server.workflows.swan.physics_sensitivity_sweep.physics_sensitivity_sweep import swan_physics_sensitivity_sweep as _swan_physics_sensitivity_sweep  # noqa: E402,F401 - SWAN CAND-S: physics-scheme A-vs-B sensitivity sweep (GEN/WCAPPING/QUADRUPL/BREAKING/FRICTION/TRIAD knobs)
-from trid3nt_server.workflows.swan.stationary_snapshot_batch.stationary_snapshot_batch import swan_stationary_snapshot_batch as _swan_stationary_snapshot_batch  # noqa: E402,F401 - SWAN CAND-S: batch of stationary snapshots sampling a storm event (MODE)
-# landlab_susceptibility TEMPLATE (engine="landlab", tier="template"), one
-# folder under workflows/landlab/susceptibility/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_landlab door's gate expansion. The
-# composer chain (model_landlab_susceptibility) is inlined in the template
-# module; workflows/landlab/run_landlab.py is the distinct solver build/stage
-# seam.
-from trid3nt_server.workflows.landlab.susceptibility.susceptibility import landlab_susceptibility as _landlab_susceptibility  # noqa: E402,F401 - RENAME of run_landlab_susceptibility (engine=landlab, tier=template)
-# landlab_flow_accumulation TEMPLATE (engine="landlab", tier="template"), a
-# DISTINCT capability (drainage area + channel network + routing comparison), one
-# folder under workflows/landlab/flow_accumulation/; surfaced by the run_landlab
-# door's gate expansion. The composer (model_landlab_flow_accumulation) is inlined.
-from trid3nt_server.workflows.landlab.flow_accumulation.flow_accumulation import landlab_flow_accumulation as _landlab_flow_accumulation  # noqa: E402,F401 - NEW capability (hazard-easy-four #1) (engine=landlab, tier=template)
-# landlab_green_ampt_overland_flow TEMPLATE (engine="landlab", tier="template"), a
-# DISTINCT capability (infiltration-vs-runoff storm partition), one folder under
-# workflows/landlab/green_ampt/; surfaced by the run_landlab door's gate
-# expansion. The composer (model_landlab_green_ampt_overland_flow) is inlined.
-from trid3nt_server.workflows.landlab.green_ampt.green_ampt import landlab_green_ampt_overland_flow as _landlab_green_ampt_overland_flow  # noqa: E402,F401 - NEW capability (hazard-easy-four continuation #1) (engine=landlab, tier=template)
-# Landlab diagnostic TEMPLATES (engine="landlab", tier="template"), each a DISTINCT
-# capability, one folder under workflows/landlab/; walked into the main retrieval
-# index. Composers (model_landlab_*) are inlined in each template module.
-from trid3nt_server.workflows.landlab.landslide_storm_ensemble.storm_ensemble import landlab_landslide_storm_ensemble as _landlab_landslide_storm_ensemble  # noqa: E402,F401 - storm/recharge-ensemble landslide susceptibility sweep
-from trid3nt_server.workflows.landlab.overland_flow_timeseries.overland_timeseries import landlab_overland_flow_timeseries as _landlab_overland_flow_timeseries  # noqa: E402,F401 - time-stepped overland-flow depth animation
-from trid3nt_server.workflows.landlab.dem_conditioning.dem_conditioning import landlab_dem_conditioning as _landlab_dem_conditioning  # noqa: E402,F401 - DEM pit-fill conditioning depth
-from trid3nt_server.workflows.landlab.lake_mapping.lake_mapping import landlab_lake_mapping as _landlab_lake_mapping  # noqa: E402,F401 - lake extent + depth mapping
-from trid3nt_server.workflows.landlab.hacks_law.hacks_law import landlab_hacks_law_scaling as _landlab_hacks_law_scaling  # noqa: E402,F401 - Hack's-law basin length-area scaling diagnostic
-from trid3nt_server.workflows.landlab.hand_wetness.hand_wetness import landlab_hand_wetness as _landlab_hand_wetness  # noqa: E402,F401 - Height Above Nearest Drainage wetness proxy
-from trid3nt_server.workflows.landlab.channel_incision.channel_incision import landlab_channel_incision_steady_state as _landlab_channel_incision_steady_state  # noqa: E402,F401 - detachment-limited stream-power incision to steady state + slope-area V&V
-from trid3nt_server.workflows.landlab.normal_fault.normal_fault import landlab_normal_fault_scarp_evolution as _landlab_normal_fault_scarp_evolution  # noqa: E402,F401 - NormalFault tectonic-forcing landscape evolution (scarp + footwall drainage)
-from trid3nt_server.workflows.landlab.chi_map.chi_map import landlab_channel_steepness_chi_map as _landlab_channel_steepness_chi_map  # noqa: E402,F401 - chi index + channel steepness (ksn) knickpoint diagnostic
-from trid3nt_server.workflows.landlab.storm_sequence.storm_sequence import landlab_storm_sequence_generator as _landlab_storm_sequence_generator  # noqa: E402,F401 - stochastic storm-sequence forcing generator (PrecipitationDistribution)
-from trid3nt_server.workflows.landlab.groundwater_water_table.groundwater_water_table import landlab_groundwater_water_table as _landlab_groundwater_water_table  # noqa: E402,F401 - GroundwaterDupuitPercolator steady-state water table + seepage + baseflow (mass-conservation V&V)
-from trid3nt_server.workflows.landlab.groundwater_storm_recession.groundwater_storm_recession import landlab_groundwater_storm_recession as _landlab_groundwater_storm_recession  # noqa: E402,F401 - GroundwaterDupuitPercolator storm-driven seepage/baseflow hydrograph + recession
-# openquake_psha TEMPLATE (engine="openquake", tier="template"), one folder
-# under workflows/openquake/psha/; EXCLUDED from the default retrieval pool,
-# surfaced only by the run_openquake door's gate expansion. The composer chain
-# (model_openquake_psha) is inlined in the template module.
-from trid3nt_server.workflows.openquake.psha.psha import openquake_psha as _openquake_psha  # noqa: E402,F401 - RENAME of run_seismic_hazard_psha (engine=openquake, tier=template)
-# OpenQuake scenario ground-motion-field + earthquake secondary-perils TEMPLATES
-# (engine="openquake", tier="template"). scenario_gmf runs the
-# in-process oq scenario calculator (single rupture + JB2009-correlated GMFs) and
-# maps the mean + across-realization spread; secondary_perils rides that GMF and
-# applies the openquake.sep liquefaction (Zhu 2015) + Newmark landslide (Jibson)
-# screens over fetched terrain covariates.
-from trid3nt_server.workflows.openquake.scenario_gmf.scenario_gmf import openquake_scenario_gmf as _openquake_scenario_gmf  # noqa: E402,F401
-from trid3nt_server.workflows.openquake.secondary_perils.secondary_perils import openquake_secondary_perils as _openquake_secondary_perils  # noqa: E402,F401
-# OpenQuake disaggregation + event-based-PSHA TEMPLATES (engine="openquake",
-# tier="template"). Both run the installed oq engine locally as a
-# composer subprocess (the offline lane): disaggregation decomposes a site's
-# hazard into the dominant magnitude-distance-epsilon scenario; event_based
-# samples a synthetic earthquake catalogue, maps the event-based hazard, and
-# cross-checks the back-derived curve against classical PSHA.
-from trid3nt_server.workflows.openquake.disaggregation.disaggregation import openquake_disaggregation as _openquake_disaggregation  # noqa: E402,F401
-from trid3nt_server.workflows.openquake.event_based.event_based import openquake_event_based as _openquake_event_based  # noqa: E402,F401
-# elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template"), one
-# folder under workflows/elmfire/fire_spread/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_elmfire door's gate expansion. The
-# composer chain (model_elmfire_fire_spread) is inlined in the template
-# module; workflows/elmfire/run_elmfire.py is the distinct solver build/stage
-# seam.
-from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _elmfire_fire_spread  # noqa: E402,F401 - RENAME of model_fire_spread (engine=elmfire, tier=template)
-# elmfire_verification_elliptical_replication TEMPLATE (engine="elmfire",
-# tier="template"), a DISTINCT capability (the constant-wind flat-terrain
-# elliptical-spread verification / calibration anchor), one folder under
-# workflows/elmfire/verification/; surfaced by the run_elmfire door's gate expansion.
-from trid3nt_server.workflows.elmfire.verification.verification import elmfire_verification_elliptical_replication as _elmfire_verification_elliptical_replication  # noqa: E402,F401 - NEW capability (hazard-easy-four continuation #2) (engine=elmfire, tier=template)
-# elmfire_crown_fire_active_ros_verification TEMPLATE (engine="elmfire",
-# tier="template"): the twin of the elliptical verification for the crown-fire
-# regime -- an uncapped active-crown deck's numerical head spread rate vs the Cruz
-# (2005) closed-form active crown-fire ROS (the exact-solution regression gate).
-from trid3nt_server.workflows.elmfire.verification.crown_ros import elmfire_crown_fire_active_ros_verification as _elmfire_crown_fire_active_ros_verification  # noqa: E402,F401 - Cruz (2005) crown-fire ROS V&V (engine=elmfire, tier=template)
-# ELMFIRE CAND-S sensitivity sweep templates (constant flat deck, one knob each):
-# each sweeps a &SIMULATOR / &INPUTS knob across a small ladder and returns an
-# ElmfireSensitivityLayerURI. tier=template, engine=elmfire.
-from trid3nt_server.workflows.elmfire.sensitivity.ltw_ceiling.ltw_ceiling import elmfire_length_to_width_ceiling_sensitivity as _elmfire_length_to_width_ceiling_sensitivity  # noqa: E402,F401 - MAX_LOW length:width ceiling sweep
-from trid3nt_server.workflows.elmfire.sensitivity.wind_fluctuation.wind_fluctuation import elmfire_wind_fluctuation_randomization as _elmfire_wind_fluctuation_randomization  # noqa: E402,F401 - WIND_FLUCTUATIONS deterministic-vs-randomized sweep
-from trid3nt_server.workflows.elmfire.sensitivity.live_moisture.live_moisture import elmfire_live_fuel_moisture_sensitivity as _elmfire_live_fuel_moisture_sensitivity  # noqa: E402,F401 - live herbaceous/woody moisture override sweep
-# ELMFIRE transient/multi-band weather-deck templates (front A): a
-# synthetic time-varying weather schedule (NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY
-# interpolation) drives a mid-run wind shift and a dead-fuel moisture-recovery
-# interpolation-cadence sweep. tier=template, engine=elmfire.
-from trid3nt_server.workflows.elmfire.transient.wind_schedule.wind_schedule import elmfire_transient_wind_schedule_spread as _elmfire_transient_wind_schedule_spread  # noqa: E402,F401 - mid-run wind-shift redirection vs constant wind
-from trid3nt_server.workflows.elmfire.transient.dead_fuel_interp.dead_fuel_interp import elmfire_dead_fuel_moisture_interpolation_frequency_control as _elmfire_dead_fuel_moisture_interpolation_frequency_control  # noqa: E402,F401 - DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep
-# ELMFIRE crown-fire family (front B): a folded crown template sweeping
-# the surface-to-crown initiation boundary (CRITICAL_CANOPY_COVER) or the Cruz
-# active-crown spread-rate ceiling (CROWN_FIRE_SPREAD_RATE_LIMIT) on a canopied
-# deck. tier=template, engine=elmfire.
-from trid3nt_server.workflows.elmfire.crown.crown_fire import elmfire_crown_fire_initiation_threshold_sweep as _elmfire_crown_fire_initiation_threshold_sweep  # noqa: E402,F401 - crown-fire initiation + Cruz-rate-ceiling folded sweep
-# ELMFIRE spotting family: does wind-driven ember spotting carry the fire
-# ACROSS a non-burnable fuel break the contiguous front cannot cross (spotting OFF vs
-# ON on a grass deck with a barrier strip). Distinct question class - the barrier-jump
-# discriminant; folds the lognormal-distance / generation-gate / ember-count knobs.
-from trid3nt_server.workflows.elmfire.spotting.spotting import elmfire_spot_fire_barrier_crossing as _elmfire_spot_fire_barrier_crossing  # noqa: E402,F401 - ember-spotting barrier-jump (engine=elmfire, tier=template)
-# ELMFIRE initial-attack POC (row 2): the Hirsch 1998 closed-form
-# probability of containment (fire size + head-fire intensity + attack delay).
-# CLOSED-FORM validation class (no engine run, chart/scalars). tier=template.
-from trid3nt_server.workflows.elmfire.initial_attack.initial_attack import elmfire_initial_attack_containment_probability as _elmfire_initial_attack_containment_probability  # noqa: E402,F401 - Hirsch POC closed form
-# pelicun_damage_assessment TEMPLATE (engine="pelicun", tier="template")
-# under workflows/pelicun/damage_assessment/; EXCLUDED from the default
-# retrieval pool, surfaced only by the run_pelicun door's gate expansion. Its
-# bbox AUTO-FETCH input mode covers the buildings-composer path (one tool,
-# two input modes). postprocess_pelicun STAYS general, NOT a template.
-from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - FOLD of run_pelicun_damage_assessment + run_pelicun_with_buildings (engine=pelicun, tier=template; explicit assets_uri OR bbox auto-fetch)
-# pelicun Assessment-API validation / sensitivity TEMPLATES (engine="pelicun",
-# tier="template"): idealized domain-free checks that drive pelicun's real
-# assessment.Assessment pipeline on synthetic inputs and emit distribution /
-# curve charts (no hazard raster, no map). Each is a distinct question class.
-from trid3nt_server.workflows.pelicun.closed_form_validation.closed_form_validation import pelicun_closed_form_validation as _pelicun_closed_form_validation  # noqa: E402,F401 - Monte-Carlo vs analytic closed form (damage-state probability + loss-function identity)
-from trid3nt_server.workflows.pelicun.mixed_fragility_loss.mixed_fragility_loss import pelicun_mixed_fragility_loss_assessment as _pelicun_mixed_fragility_loss_assessment  # noqa: E402,F401 - mixed fragility+loss-function assessment + EDP correlation spread
-from trid3nt_server.workflows.pelicun.replacement_threshold_sweep.replacement_threshold_sweep import pelicun_replacement_threshold_override_sweep as _pelicun_replacement_threshold_override_sweep  # noqa: E402,F401 - RID-triggered irreparable/replacement threshold sweep (RID inferred from PID)
-from trid3nt_server.workflows.pelicun.flood_foundation_depth_damage.flood_foundation_depth_damage import pelicun_flood_foundation_depth_damage_sweep as _pelicun_flood_foundation_depth_damage_sweep  # noqa: E402,F401 - HAZUS flood depth-damage curve sensitivity to foundation type
-# pelicun DL_calculation-driven TEMPLATES (engine="pelicun", tier="template") on
-# the _dl_calculation CLI harness (tempdir + serialized cwd + to_thread): a full
-# HAZUS earthquake building DL run (auto-populated building type) and the HAZUS EQ
-# v5.1-vs-v6.1 dataset comparison.
-from trid3nt_server.workflows.pelicun.hazus_seismic_dl_run.hazus_seismic_dl_run import pelicun_hazus_seismic_dl_run as _pelicun_hazus_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake building DL_calculation run with auto-populated building type
-from trid3nt_server.workflows.pelicun.hazus_eq_version_comparison.hazus_eq_version_comparison import pelicun_hazus_eq_version_comparison as _pelicun_hazus_eq_version_comparison  # noqa: E402,F401 - HAZUS earthquake v5.1-vs-v6.1 damage/loss dataset comparison
-from trid3nt_server.workflows.pelicun.hazus_lifeline_seismic_dl_run.hazus_lifeline_seismic_dl_run import pelicun_hazus_lifeline_seismic_dl_run as _pelicun_hazus_lifeline_seismic_dl_run  # noqa: E402,F401 - HAZUS earthquake lifeline-network (bridge/pipe/substation) DL_calculation run with auto-populated component
 
 
 # COPY-ME authoring template (docs/authoring/writing-a-tool.md). Importing the

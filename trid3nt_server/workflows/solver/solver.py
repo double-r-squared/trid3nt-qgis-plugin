@@ -247,29 +247,11 @@ PROGRESS_TERMINAL: int = 100
 #: ``SolverNotRegisteredError``) -- the live backend routing + the handle's pinned
 #: ``workflow_name`` come from the backend sentinel
 #: (``LOCAL_DOCKER_WORKFLOW_NAME`` / ``LOCAL_EXEC_WORKFLOW_NAME``), not from this
-#: value. SWMM + MODFLOW self-register at import (``setdefault`` to a backend
-#: sentinel); GeoClaw also self-registers (``register_geoclaw_solver()``), but
-#: because the static literal below is evaluated FIRST its ``setdefault`` is a
-#: no-op, so the composer-name value here wins.
-SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
-    "sfincs": "model_flood_scenario",
-    # QUADTREE build+solve dispatch (variable-resolution coastal deck authored
-    # by cht_sfincs inside the worker image). Distinct from ``"sfincs"`` (the
-    # regular-grid pre-built-deck volume-mount path); the LocalSolverSpec is
-    # registered by workflows.sfincs.flood.quadtree_dispatch at import.
-    "sfincs-quadtree": "model_flood_scenario",
-    # NEW engines (parallel lanes) - orchestrator-wired per the lane
-    # handoff. GeoClaw's value supersedes its own import-time ``setdefault``
-    # (static literal wins).
-    "geoclaw": "model_geoclaw_inundation",
-    "openquake": "model_openquake_psha",
-    "landlab": "model_landlab_susceptibility",
-    # SWAN Phase 1: standalone spectral nearshore wave-field engine. Composer name
-    # (supersedes run_swan.register_swan_solver's import-time setdefault; the
-    # static literal here is evaluated first, so the setdefault is a no-op and
-    # this consistent composer name wins).
-    "swan": "model_swan_wave_field",
-}
+#: value. Every entry is now contributed at import by the engine that owns it
+#: (``workflows/telemac/run_telemac.py`` registers the TELEMAC solvers beside
+#: their ``LocalSolverSpec``), so a solver named here without a spec behind it
+#: cannot happen: the two land together or not at all.
+SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {}
 
 
 # --- Solver backend seam --- #
