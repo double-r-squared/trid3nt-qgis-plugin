@@ -1272,3 +1272,57 @@ Tests whose subject left the tree:
   corridor had already stopped being the domain - the driver meshes the catchment
   polygon and the corridor survived only as a reported area. DELETED with its
   `corridor_km2` summary key and caption clause; no attic copy. CONDITION: none.
+
+## Remedy-stage stops (2026-08-29)
+
+Release containment moved SERVER-SIDE and the dead artifact residue went, per the
+REMEDY-STAGE STOPS ruling.
+
+- The release-point BAND SNAP, both halves: the worker's accept-radius test in
+  `workers/telemac/telemac_river_dye_build.py::spill_point` (two stated channel
+  widths, or 1.5x the widest real bank span, else walk `spill_fraction` and record
+  the miss), and the server plumbing that read its verdict back out of the run -
+  `telemac_metrics.json`'s `release_point_used` / `release_point_rejected_dist_m`,
+  their two `run_telemac.py` METRIC_KEYS rows, `steps/solve.py`'s
+  `raise_if_release_point_rejected` and its post-solve call site, and
+  `steps/errors.py::TelemacReleasePointRejectedError`. ATTICKED to
+  `workers/telemac/release_band_snap.py` (both halves in one reference file; the
+  worker module itself left the tree with the worker-unification pre-delete).
+  CONDITION: none - the APPROXIMATE-REACH RULING (2026-08-29) settles that release
+  validity is CONTAINMENT in the domain polygon and the snap is the nearest point
+  on the real flowline inside it, decided before anything is staged. The
+  replacement is `workflows/telemac/release_point.py`, wired into `steps/deck.py`;
+  the typed refusal keeps the `TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN` code and
+  drops the band vocabulary from its message.
+- `MeshArtifact.gr3_uri` + `MeshArtifact.fort14_uri`: declared-but-unwritten
+  geometry fields. om2d's gr3 seam was chopped at the tools stage and nothing under
+  `workflows/mesh/` ever wrote a fort.14, so both were `None` on every artifact the
+  tree can build. DELETED, no attic copy (git history is the archive). CONDITION:
+  none - a returning engine authors the field it actually reads from the geometry
+  it actually needs.
+- `ENGINE_MESH_REQUIREMENTS["schism"]` + `["swan"]` rows, and the
+  `unstructured_unsupported` / `needs_open_boundary` branches plus
+  `open_boundary_node_count` that only those rows reached. Both engines are in the
+  attic; a requirement row written for an absent solver is a claim nothing backs,
+  and `"no mesh-compatibility rule registered for engine 'schism'"` is the honest
+  refusal until SCHISM returns at rung 5. DELETED, no attic copy. CONDITION:
+  SCHISM/SWAN return through the new architecture and author their rows from their
+  needs then; `MeshArtifact.open_boundary_info` STAYS (om2d writes it, the
+  agitation step and the artemis rematch read it).
+- `scripts/drive_mesh_spotcheck.py`: the two dead uri keys in its artifact dump and
+  the `--mesher` help string naming five purged meshers. DELETED.
+
+Tests whose subject left the tree:
+- `tests/test_run_river_dye_scenario.py` section (7) "the RELEASE POINT: the
+  worker's verdict is reconciled": every row tested the band verdict, its metrics
+  fixtures and its post-solve reconciliation. DELETED with the subject; the
+  replacement behaviour is covered offline by `tests/test_release_containment.py`
+  (honored unmoved, snapped onto the flowline, refused outside the polygon, the
+  snap never following the river out of the domain).
+- `tests/test_mesh_meshers.py`: repointed to the meshers the tree carries. The
+  roster, the per-mesher field table, the unknown-field refusal and the
+  adopted-layer test now name `om2d` / `reg_grid`; the coastal open-side
+  vocabulary, the two `corridor_tin` refusals, the `hecras` mesher source
+  inspection and the whole watershed-provenance block went with their meshers; the
+  three SCHISM compat rows and the SWAN one became one row asserting the honest
+  "no rule registered" refusal.
