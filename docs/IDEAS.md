@@ -2582,3 +2582,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   only if a concrete case earns it). Pattern recorded: every
   synthetic construct was an apology for not using real geometry -
   mandatory real geometry dissolves them.
+
+- MRE MINIMALISM (NATE 2026-08-29, standing): intentional and minimal
+  - every landing is the MINIMUM essential expression needed to work;
+  flexibility comes from MODULAR SEAMS, never breadth; LOC = refactor
+  cost and the system is designed to be refactored; predated-arch
+  code is an active tax and goes to the attic, never gets extended.
+  Reviewers ask "what can be removed?" beside "does it work?". Baked
+  into every wave prompt's norms from here on.
