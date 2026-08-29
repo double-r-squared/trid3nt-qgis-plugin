@@ -20,9 +20,9 @@ change. Its semantics differ in ONE way: a decline here means "build a fresh mes
 headless direct-call with no live emitter it applies the labeled default (USE the
 compatible mesh) WITHOUT pausing, so headless seeding keeps working.
 
-Engine-generic: ``telemac_rain_on_grid`` is the first consumer; SCHISM/SWAN
-templates adopt it by passing their own ``engine`` -- the compatibility facts live
-in :data:`artifact.ENGINE_MESH_REQUIREMENTS`, not here.
+Engine-generic: a template adopts it by passing its own ``engine`` -- the
+compatibility facts live in :data:`artifact.ENGINE_MESH_REQUIREMENTS`, not here,
+and an engine with no row there is declined by name rather than gated.
 """
 
 from __future__ import annotations
@@ -208,7 +208,11 @@ def materialize_supplied_mesh(
     local file path."""
     from trid3nt_server.workflows.mesh.artifact import ENGINE_MESH_REQUIREMENTS
 
-    req = ENGINE_MESH_REQUIREMENTS[str(engine).lower()]
+    req = ENGINE_MESH_REQUIREMENTS.get(str(engine).lower())
+    if req is None or not req.get("uri_field"):
+        raise ValueError(
+            f"no mesh-compatibility rule registered for engine {engine!r}, so "
+            "there is no geometry field to stage its mesh from.")
     uri = getattr(art, str(req["uri_field"]))
     rest = str(uri)[len("s3://"):]
     bucket, key = rest.split("/", 1)

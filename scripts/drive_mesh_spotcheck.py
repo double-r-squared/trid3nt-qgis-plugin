@@ -126,7 +126,6 @@ async def _drive(ns: argparse.Namespace) -> dict:
         "node_count": art.node_count, "element_count": art.element_count,
         "has_bathymetry": art.has_bathymetry,
         "display_uri": art.display_uri, "slf_uri": art.slf_uri,
-        "gr3_uri": art.gr3_uri, "fort14_uri": art.fort14_uri,
         "cli_uri": art.cli_uri, "hecras_inputs": art.hecras_inputs,
         "open_boundary_info": art.open_boundary_info,
     }
@@ -138,9 +137,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mesher", default="reg_grid",
-                    help="reg_grid (default: fastest, no container) | om2d | "
-                         "watershed | coastal_edge | corridor_tin | hecras_rog | "
-                         "telapy_mesh")
+                    help="reg_grid (default: fastest, no container) | om2d")
     ap.add_argument("--kind", default=None,
                     help="the mesh shape; unset takes the chosen mesher's own "
                          "declared default")

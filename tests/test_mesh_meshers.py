@@ -4,15 +4,12 @@ Every build here is container-driven or network-driven and is proven live; what
 this file exercises are the PURE surfaces: which meshers the router registers and
 what each one declares, the display-face round trip, the mesh-artifact record and
 its engine-compat gatekeeper, the case-scoped stash and sidecar-key derivation,
-the precondition gate's decision logic with no live session, and the provenance
-each mesher publishes - which must be COPIED from the resolvers that read the
-world, never composed from a literal.
+and the precondition gate's decision logic with no live session.
 """
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import tempfile
 from pathlib import Path
 
@@ -38,9 +35,10 @@ from trid3nt_server.workflows.mesh.precondition_gate import gate_supplied_mesh
 from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
 
 
+
 def _artifact(**over) -> MeshArtifact:
     base = dict(
-        mesh_id="01ABC", name="Coweeta watershed", mode="watershed",
+        mesh_id="01ABC", name="Coweeta catchment", mode="om2d",
         display_uri="s3://cache/mesh/01ABC/mesh.2dm",
         slf_uri="s3://cache/mesh/01ABC/mesh.slf", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
@@ -61,10 +59,8 @@ def test_build_mesh_registered_and_the_standalone_builder_is_gone():
     assert TOOL_REGISTRY.get("generate_mesh") is None
 
 
-def test_the_roster_is_every_mesher_the_wave_lifted():
-    assert registered_meshers() == (
-        "coastal_edge", "corridor_tin", "hecras_rog", "om2d", "reg_grid",
-        "telapy_mesh", "watershed")
+def test_the_roster_is_the_meshers_the_tree_carries():
+    assert registered_meshers() == ("om2d", "reg_grid")
 
 
 def test_the_edge_band_declaration_survived_the_dissolution():
@@ -78,15 +74,8 @@ def test_the_edge_band_declaration_survived_the_dissolution():
 
 
 @pytest.mark.parametrize("mesher,expected", [
-    ("watershed", {"kind", "extent", "pour_point", "min_edge_length_m",
-                   "max_edge_length_m", "grade", "max_iter",
-                   "snap_search_cells"}),
-    ("coastal_edge", {"kind", "extent", "min_edge_length_m", "max_edge_length_m",
-                      "grade", "open_boundary_side"}),
-    ("corridor_tin", {"kind", "domain", "extent_km", "width_m", "banks",
-                      "refine"}),
-    ("hecras_rog", {"kind", "extent", "pour_point", "min_edge_length_m",
-                    "max_edge_length_m"}),
+    ("om2d", {"kind", "extent", "bed", "refine"}),
+    ("reg_grid", {"kind", "extent", "resolution_m"}),
 ])
 def test_each_mesher_declares_its_own_fields(mesher, expected):
     assert set(get_mesher(mesher).fields) == expected
@@ -96,39 +85,10 @@ def test_a_field_a_mesher_never_declared_is_refused_by_name():
     from trid3nt_server.workflows.mesh.tool import validate_spec
 
     with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("watershed", {"extent": (0.0, 0.0, 1.0, 1.0),
-                                    "open_boundary_side": "south"})
+        validate_spec("om2d", {"extent": (0.0, 0.0, 1.0, 1.0),
+                               "open_boundary_side": "south"})
     assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
     assert "open_boundary_side" in str(excinfo.value)
-
-
-def test_the_coastal_open_side_is_a_closed_vocabulary():
-    from trid3nt_server.workflows.mesh.tool import validate_spec
-
-    with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("coastal_edge", {"extent": (0.0, 0.0, 1.0, 1.0),
-                                       "open_boundary_side": "seaward"})
-    assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
-
-
-def test_a_corridor_without_its_reach_seed_refuses_rather_than_guessing():
-    from trid3nt_server.workflows.mesh.meshers import corridor_tin
-
-    with pytest.raises(MeshToolError) as excinfo:
-        corridor_tin.build({"domain": {"reach": {"slug": "snake_river"}},
-                            "extent_km": 6.0, "width_m": 60.0,
-                            "banks": "nhd_area"})
-    assert excinfo.value.error_code == "MESH_CORRIDOR_NO_SEED"
-
-
-def test_a_corridor_domain_naming_no_reach_refuses():
-    from trid3nt_server.workflows.mesh.meshers import corridor_tin
-
-    with pytest.raises(MeshToolError) as excinfo:
-        corridor_tin.build({"domain": {"reach": {"name": "somewhere"},
-                                       "seed": {"lon": -114.3, "lat": 42.5}},
-                            "extent_km": 6.0})
-    assert excinfo.value.error_code == "MESH_CORRIDOR_NO_REACH"
 
 
 # --------------------------------------------------------------------------- #
@@ -166,7 +126,7 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.workflows.mesh.meshers import Mesh, get_mesher
+    from trid3nt_server.workflows.mesh.meshers import Mesh
 
     pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
                     [500000.0, 3880100.0], [500100.0, 3880100.0]])
@@ -179,13 +139,13 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
         points=pts[:3], cells=np.array([[0, 1, 2]]), crs_authid="EPSG:32616",
         bed=z[:3],
         meta={"utm_epsg": 32616,
-              "files": {"gr3_uri": "/stale/hgrid.gr3", "slf_uri": "/stale/mesh.slf"},
+              "files": {"slf_uri": "/stale/mesh.slf", "cli_uri": "/stale/mesh.cli"},
               "probes": {"open_node_count": 93},
-              "artifact": {"engine_compat": ["telemac", "schism"],
+              "artifact": {"engine_compat": ["telemac"],
                            "open_boundary_info": {"open_node_count": 93},
-                           "provenance": {"mesher": "coastal_edge"}}})
+                           "provenance": {"mesher": "om2d"}}})
 
-    after = get_mesher("coastal_edge").action("apply_layer_edits").apply(
+    after = get_mesher("om2d").action("apply_layer_edits").apply(
         before, layer=str(p))
 
     assert after.node_count == 4 and after.element_count == 2
@@ -197,7 +157,7 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
         assert key not in after.meta["artifact"], f"{key} survived the adopted layer"
     # What is ABOUT the domain rather than about its cells still rides.
     assert after.meta["utm_epsg"] == 32616
-    assert after.meta["artifact"]["provenance"]["mesher"] == "coastal_edge"
+    assert after.meta["artifact"]["provenance"]["mesher"] == "om2d"
 
 
 def test_read_2dm_rejects_empty():
@@ -226,36 +186,14 @@ def test_compat_telemac_needs_bathymetry():
     assert ok is False and "bathymetry" in reason.lower()
 
 
-def test_compat_schism_missing_gr3():
-    # a watershed mesh carries no .gr3, so SCHISM cannot consume it.
-    ok, reason = mesh_compatible_with_engine(_artifact(gr3_uri=None), "schism")
-    assert ok is False and "gr3" in reason.lower()
-
-
-def test_compat_schism_needs_open_boundary():
-    # a mesh WITH a .gr3 + bathymetry but NO designated open boundary is still
-    # incompatible with SCHISM (no seaward boundary to force tides/T-S at).
-    ok, reason = mesh_compatible_with_engine(
-        _artifact(gr3_uri="s3://cache/mesh/01ABC/hgrid.gr3"), "schism")
-    assert ok is False and "open" in reason.lower()
-
-
-def test_compat_schism_ok_with_open_boundary():
-    ok, reason = mesh_compatible_with_engine(
-        _artifact(mode="coastal_water_edge",
-                  gr3_uri="s3://cache/mesh/01ABC/hgrid.gr3",
-                  open_boundary_info={"open_boundary_side": "south",
-                                      "open_node_count": 42}),
-        "schism")
-    assert ok is True and reason == "compatible"
-
-
-def test_compat_swan_regular_grid_always_false():
-    # the SWAN worker is regular-grid only: it can NEVER consume a user mesh, even
-    # one carrying a fort.14 -- the honest answer names the regular-grid reason.
-    ok, reason = mesh_compatible_with_engine(
-        _artifact(fort14_uri="s3://cache/mesh/01ABC/fort.14"), "swan")
-    assert ok is False and "regular-grid" in reason.lower()
+@pytest.mark.parametrize("engine", ["schism", "swan"])
+def test_an_engine_the_tree_no_longer_carries_has_no_rule_to_quote(engine):
+    """A requirement row written for an absent solver is a claim nothing backs.
+    Until each engine returns and authors its row from the needs it has THEN, the
+    honest answer is that no rule is registered - not a richer decline standing on
+    fields no mesher writes."""
+    ok, reason = mesh_compatible_with_engine(_artifact(), engine)
+    assert ok is False and "no mesh-compatibility rule" in reason
 
 
 def test_compat_unknown_engine_is_incompatible():
@@ -318,10 +256,11 @@ def test_gate_auto_default_uses_compatible_mesh():
 
 
 def test_gate_incompatible_mesh_skipped_loud_no_use():
-    # a watershed mesh (no .gr3) offered to SCHISM: skipped, run proceeds fresh.
-    stash_mesh_artifact("gateCaseB", _artifact(mesh_id="gm2", gr3_uri=None))
+    # a TELEMAC mesh (no authoring bundle) offered to HEC-RAS: skipped, run
+    # proceeds fresh.
+    stash_mesh_artifact("gateCaseB", _artifact(mesh_id="gm2"))
     d = asyncio.run(gate_supplied_mesh(
-        tool_name="schism_tidal_hydro", engine="schism", input_mode="auto",
+        tool_name="hecras_flood_2d", engine="hecras", input_mode="auto",
         case_id="gateCaseB"))
     assert d.use is False and d.artifact is None
     assert d.note and "not compatible" in d.note
@@ -362,17 +301,6 @@ def _hecras_artifact(**over) -> MeshArtifact:
     return MeshArtifact(**base)
 
 
-def test_the_hecras_mesh_declares_the_bundle_the_engine_re_realizes_it_from():
-    """Its cells are the engine's to build from the seeds, so the mesher stages
-    the authoring inputs and carries no connectivity of its own."""
-    from trid3nt_server.workflows.mesh.meshers import hecras
-
-    src = inspect.getsource(hecras.build)
-    assert "points=None, cells=None" in src
-    for key in ("seeds", "breaklines", "local_dem", "prep_json"):
-        assert f'"{key}":' in src
-
-
 def test_hecras_artifact_json_roundtrip():
     a = _hecras_artifact()
     b = MeshArtifact.from_json(a.to_json())
@@ -402,11 +330,9 @@ def test_hecras_compat_unvalidated_declined():
     assert ok is False and "valid cell mesh" in reason
 
 
-def test_hecras_mesh_declines_telemac_and_schism():
-    a = _hecras_artifact()
-    assert mesh_compatible_with_engine(a, "telemac")[0] is False
-    assert mesh_compatible_with_engine(a, "schism")[0] is False
-    # ... and a TELEMAC watershed mesh declines HEC-RAS (no bundle):
+def test_hecras_mesh_declines_telemac():
+    assert mesh_compatible_with_engine(_hecras_artifact(), "telemac")[0] is False
+    # ... and a TELEMAC mesh declines HEC-RAS (no bundle):
     assert mesh_compatible_with_engine(_artifact(), "hecras")[0] is False
 
 
@@ -445,115 +371,3 @@ def test_materialize_hecras_bundle_missing_required_raises():
         with pytest.raises(ValueError, match="seeds"):
             materialize_hecras_mesh_inputs(
                 _hecras_artifact(hecras_inputs=inputs), td, _FakeS3())
-
-
-# --------------------------------------------------------------------------- #
-# Watershed provenance: the claim is the resolver's own note, never a literal.
-#
-# The build is stubbed at the two seams that read the world (the bed and river
-# resolvers) plus the container-driven mesher, so these run with no network and
-# no docker while still exercising the real composition.
-# --------------------------------------------------------------------------- #
-from trid3nt_server.workflows.mesh.meshers import watershed as _watershed_mesher  # noqa: E402
-
-_3DEP_NOTE = "mesh bed DEM: USGS 3DEP bare-earth (10 m); ladder usgs_3dep -> copernicus_glo30"
-_COPERNICUS_NOTE = (
-    "mesh bed DEM CROSS-DATASET FALLBACK: USGS 3DEP bare-earth was unavailable for "
-    "this AOI, so Copernicus GLO-30 was used instead.")
-_UNIFORM_NOTE = (
-    "no nhdplus_hr flowlines were available for this AOI, so the mesh was sized "
-    "UNIFORMLY rather than refined toward the channel network")
-_LITERAL_CLAIM = "USGS 3DEP bare-earth (bed) + Copernicus GLO-30 (delineation)"
-
-
-def _stub_catchment_build(monkeypatch, *, bed_dem, rivers=None, notes=None):
-    """Point the watershed mesher at a real CatchmentMesh and stubbed resolvers."""
-    from trid3nt_server.workflows.mesh import watershed as W
-
-    mesh = W.CatchmentMesh(
-        slug="watershed", points_utm=np.zeros((3, 2), dtype=float),
-        cells=np.zeros((1, 3), dtype=np.int64), bed_elev=np.zeros(3, dtype=float),
-        points_lonlat=np.zeros((3, 2), dtype=float), utm_epsg=32617, area_km2=1.5,
-        pour_point_lonlat=(-83.43, 35.06), outlet_lonlat=(-83.43, 35.06),
-        provenance="generated", notes=list(notes or []))
-    rivers = rivers if rivers is not None else {
-        "uri": "s3://cache/flowlines.fgb", "source": "nhdplus_hr",
-        "note": "mesh refined by distance to the nhdplus_hr channel network"}
-    monkeypatch.setattr(W, "resolve_bed_dem", lambda **kw: dict(bed_dem))
-    monkeypatch.setattr(W, "resolve_river_network", lambda **kw: dict(rivers))
-    monkeypatch.setattr(W, "generate_catchment_mesh", lambda **kw: mesh)
-    return mesh
-
-
-def _run_build(monkeypatch, **kw):
-    _stub_catchment_build(monkeypatch, **kw)
-    built = _watershed_mesher.build({
-        "extent": (-83.5, 35.0, -83.4, 35.09), "pour_point": (-83.43, 35.06),
-        "min_edge_length_m": 40.0, "max_edge_length_m": 300.0, "grade": 0.2})
-    return dict(built.meta["artifact"]["provenance"])
-
-
-def test_watershed_dem_source_quotes_the_bed_resolver_note():
-    with pytest.MonkeyPatch.context() as mp:
-        built = _run_build(mp, bed_dem={
-            "uri": "s3://cache/dem.tif", "source": "usgs_3dep_bare_earth",
-            "cross_dataset": False, "note": _3DEP_NOTE})
-    assert _3DEP_NOTE in built["dem_source"]
-    assert "usgs_3dep_bare_earth" in built["dem_source"]
-    assert built["bed_fallback_note"] is None
-
-
-def test_watershed_dem_source_reports_the_cross_dataset_bed_actually_used():
-    with pytest.MonkeyPatch.context() as mp:
-        built = _run_build(mp, bed_dem={
-            "uri": "s3://cache/dem.tif", "source": "copernicus_glo30",
-            "cross_dataset": True, "note": _COPERNICUS_NOTE})
-    # The fabricated literal asserted 3DEP for the bed no matter what landed.
-    assert _LITERAL_CLAIM not in built["dem_source"]
-    assert "CROSS-DATASET FALLBACK" in built["dem_source"]
-    assert "copernicus_glo30" in built["dem_source"]
-    assert built["bed_fallback_note"] == _COPERNICUS_NOTE
-
-
-def test_watershed_dem_source_reads_the_mesh_notes_sink():
-    with pytest.MonkeyPatch.context() as mp:
-        built = _run_build(
-            mp,
-            bed_dem={"uri": "s3://cache/dem.tif", "source": "copernicus_glo30",
-                     "cross_dataset": True, "note": ""},
-            notes=[_COPERNICUS_NOTE])
-    assert _COPERNICUS_NOTE in built["dem_source"]
-    assert _LITERAL_CLAIM not in built["dem_source"]
-
-
-def test_watershed_refuses_unsourced_cross_dataset_bed():
-    with pytest.MonkeyPatch.context() as mp:
-        with pytest.raises(MeshToolError) as excinfo:
-            _run_build(mp, bed_dem={
-                "uri": "s3://cache/dem.tif", "source": "", "cross_dataset": True,
-                "note": ""})
-    assert excinfo.value.error_code == "MESH_UNSOURCED_DEM"
-    message = str(excinfo.value)
-    assert "CROSS-DATASET" in message
-    assert "refuses to claim one" in message
-
-
-def test_watershed_sizing_source_says_uniform_when_no_flowlines():
-    with pytest.MonkeyPatch.context() as mp:
-        built = _run_build(
-            mp,
-            bed_dem={"uri": "s3://cache/dem.tif", "source": "usgs_3dep_bare_earth",
-                     "cross_dataset": False, "note": _3DEP_NOTE},
-            rivers={"uri": None, "source": "nhdplus_hr", "note": _UNIFORM_NOTE})
-    assert _UNIFORM_NOTE in built["sizing_source"]
-    assert "refined by distance" not in built["sizing_source"]
-
-
-def test_watershed_sizing_source_quotes_the_river_resolver_note():
-    with pytest.MonkeyPatch.context() as mp:
-        built = _run_build(mp, bed_dem={
-            "uri": "s3://cache/dem.tif", "source": "usgs_3dep_bare_earth",
-            "cross_dataset": False, "note": _3DEP_NOTE})
-    assert "refined by distance to the nhdplus_hr channel network" in (
-        built["sizing_source"])
-    assert built["sizing_source"].startswith("pysheds catchment domain")

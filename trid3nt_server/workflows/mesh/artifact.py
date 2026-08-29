@@ -21,9 +21,10 @@ ride TWO existing seams so both a same-session run and a cold reopen can find th
 
 ``mesh_compatible_with_engine`` is the honest gatekeeper: it answers whether a
 given engine can actually consume this mesh (TELEMAC a bathymetric SELAFIN or an
-accepted corridor topology; SCHISM an hgrid with open boundaries; SWAN nothing,
-its worker being regular-grid only) and, on a mismatch, WHY -- so the consuming
-template can decline loudly instead of force-fitting.
+accepted corridor topology; HEC-RAS its authoring bundle) and, on a mismatch,
+WHY -- so the consuming template can decline loudly instead of force-fitting. An
+engine with no row here gets the honest refusal that none is registered: a rule
+written for a solver the tree does not carry would be a claim nothing backs.
 """
 
 from __future__ import annotations
@@ -46,7 +47,6 @@ __all__ = [
     "find_case_mesh_artifacts",
     "measured_min_edge_m",
     "mesh_compatible_with_engine",
-    "open_boundary_node_count",
     "materialize_hecras_mesh_inputs",
     "ENGINE_MESH_REQUIREMENTS",
     "HECRAS_INPUT_KEYS",
@@ -58,9 +58,9 @@ class MeshArtifact:
     """A computational mesh built into a case, plus its engine-compat facts.
 
     ``display_uri`` is the MDAL ``.2dm`` (``s3://``) the ``layer_type="mesh"`` row
-    carries; ``slf_uri`` / ``gr3_uri`` / ``fort14_uri`` are the per-solver geometry
-    files (``None`` when a format was not emitted). ``crs_authid`` is the mesh CRS
-    (a projected UTM authid, e.g. ``"EPSG:32617"``); ``has_bathymetry`` is True
+    carries; ``slf_uri`` is the per-solver geometry file (``None`` when the format
+    was not emitted). ``crs_authid`` is the mesh CRS (a projected UTM authid, e.g.
+    ``"EPSG:32617"``); ``has_bathymetry`` is True
     when node elevations were sampled (a solve-ready bed). ``open_boundary_info``
     records the segmented open/land boundary (``{}`` for a fully-closed inland
     catchment). ``engine_compat`` lists the engines whose REQUIRED geometry this
@@ -90,8 +90,6 @@ class MeshArtifact:
     #: rather than re-deriving it from the ask, which is only what was requested.
     probes: dict[str, Any] = field(default_factory=dict)
     engine_compat: list[str] = field(default_factory=list)
-    gr3_uri: str | None = None
-    fort14_uri: str | None = None
     #: The TELEMAC boundary-conditions file written from THIS geometry's own
     #: boundary numbering; only valid against the ``slf_uri`` beside it.
     cli_uri: str | None = None
@@ -132,18 +130,6 @@ class MeshArtifact:
         return cls(**clean)
 
 
-#: A mesh carries SCHISM open-boundary segmentation iff its ``open_boundary_info``
-#: names a designated seaward side AND a positive open-node count -- the forcing
-#: boundary a barotropic/baroclinic SCHISM solve applies tides/T-S at. An inland
-#: catchment (``open_boundary_info == {}``) is fully closed and has none.
-def open_boundary_node_count(art: MeshArtifact) -> int:
-    """Number of designated open-boundary nodes on the mesh (0 = fully closed)."""
-    try:
-        return int((art.open_boundary_info or {}).get("open_node_count", 0) or 0)
-    except Exception:  # noqa: BLE001
-        return 0
-
-
 def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
     """The SHORTEST edge measured on this mesh, in metres; ``None`` when unmeasured.
 
@@ -163,10 +149,10 @@ def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
 
 #: Engine -> the mesh format + facts that engine's solver REQUIRES. A mesh is
 #: compatible with an engine iff it carries the named format URI and (when
-#: ``needs_bathymetry``) a sampled bed and (when ``needs_open_boundary``) a
-#: designated seaward open boundary. ``unstructured_unsupported`` marks an engine
-#: whose worker cannot consume ANY user mesh (a regular-grid-only solver). Open-set:
-#: templates adopt the same gate by reading their rows here, no new gate code.
+#: ``needs_bathymetry``) a sampled bed. Open-set, and only ENGINES THE TREE
+#: CARRIES have a row: templates adopt the same gate by reading their rows here,
+#: no new gate code, and an engine that returns writes its row from the needs it
+#: has then rather than from the ones it once had.
 ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
     # TELEMAC-2D geometry is SELAFIN with a BOTTOM node field (the bed the
     # shallow-water solve needs); rain-on-grid + river-dye consume it.
@@ -177,20 +163,6 @@ ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "telemac": {"uri_field": "slf_uri", "needs_bathymetry": True,
                 "bed_fitted_at_authoring_field": "topology_uri",
                 "format": "SELAFIN (.slf, BOTTOM)"},
-    # SCHISM reads an hgrid.gr3 with depths AND open/land boundary segmentation:
-    # bare bathymetry is not enough, the solve needs a designated seaward open
-    # boundary to force tides / T-S at. A WATERSHED mesh is an
-    # inland closed catchment (no open boundary) -> honestly declined; a COASTAL
-    # mesh built with an open_boundary_side carries one.
-    "schism": {"uri_field": "gr3_uri", "needs_bathymetry": True,
-               "needs_open_boundary": True, "format": "SCHISM hgrid (.gr3)"},
-    # The SWAN worker is REGULAR-GRID ONLY (CGRID REGULAR + INPGRID BOTTOM +
-    # bottom.bot sampled from a DEM). It has no unstructured (fort.14) path, so it
-    # cannot consume a user mesh at all -- the honest answer is always False.
-    "swan": {"unstructured_unsupported": True,
-             "reason": ("the SWAN worker is REGULAR-GRID (CGRID REGULAR + "
-                        "bottom.bot); it has no unstructured-mesh (fort.14) path, "
-                        "so it cannot consume a user-supplied mesh")},
     # The HEC-RAS 2025 managed engine realizes its graded cell mesh INSIDE the project
     # from a graded seed cloud + channel breaklines over a local-SI terrain (it has no
     # single geometry file); so its "geometry" is a BUNDLE of authoring inputs the
@@ -221,8 +193,6 @@ def mesh_compatible_with_engine(
     req = ENGINE_MESH_REQUIREMENTS.get(str(engine).lower())
     if req is None:
         return False, f"no mesh-compatibility rule registered for engine {engine!r}"
-    if req.get("unstructured_unsupported"):
-        return False, str(req.get("reason") or f"{engine} cannot consume a user mesh")
     if req.get("bundle"):
         # HEC-RAS RoG bundle: check the authoring inputs are all present + the cells
         # realized, rather than a single geometry-file field.
@@ -247,11 +217,6 @@ def mesh_compatible_with_engine(
         return False, (
             f"mesh {art.name!r} has no sampled bathymetry; {engine} needs a "
             "bed-carrying geometry")
-    if req.get("needs_open_boundary") and open_boundary_node_count(art) <= 0:
-        return False, (
-            f"mesh {art.name!r} has no designated open (seaward) boundary; "
-            f"{engine} needs an open-boundary segmentation to force at (build a "
-            "coastal mesh with an open_boundary_side to use it here)")
     return True, "compatible"
 
 
