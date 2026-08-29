@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_capture_zone:
-- capture zone of this supply well
-- where does the well draw its water from
-- backward particle tracking to the wellhead
-- delineate the capture area for the pumping well
-- time of travel capture zone polygon

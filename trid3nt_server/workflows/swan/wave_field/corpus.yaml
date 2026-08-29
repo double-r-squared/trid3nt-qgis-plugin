@@ -1,9 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-swan_wave_field:
-- run the SWAN 3rd-gen spectral wave solve for this coastal AOI
-- significant wave height Hs, peak period Tp and mean direction Dir over this coastline
-- an engineering-grade nearshore wave field to validate against buoy data
-- run SWAN standalone to compare against the SFINCS+SnapWave wave field on this case
-- the offshore boundary sea state propagated onshore with wind-sea growth and swell
-- overtopping-input wave field at the structure toe from a design storm

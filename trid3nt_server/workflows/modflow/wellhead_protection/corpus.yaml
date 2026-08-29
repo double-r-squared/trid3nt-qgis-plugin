@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_wellhead_protection:
-- wellhead protection area for this well
-- WHPA delineation around the drinking water well
-- source water protection zone map
-- five year time of travel wellhead zone
-- protection area around the municipal supply well

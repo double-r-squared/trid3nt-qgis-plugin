@@ -1,9 +1,0 @@
-swmm_node_hydraulics_comparison:
-- compare a transverse weir V-notch weir orifice and rating curve outlet
-- how does discharge differ across weir orifice and outlet structures at a node
-- flow diversion structure splitting flow between a main and relief pipe
-- how much flow goes to the relief bypass pipe as inflow rises
-- where does water surcharge and pond in an undersized SWMM network
-- node surcharge and ponding with allow ponding on versus off
-- outlet structure family comparison for a pond or regulator
-- SWMM junction split main channel versus diversion pipe

@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_saltwater_intrusion:
-- saltwater intrusion under coastal pumping
-- how far inland does the salt wedge move
-- sea level rise saltwater wedge simulation
-- coastal aquifer salinity intrusion scenario
-- will the supply well turn salty if we keep pumping

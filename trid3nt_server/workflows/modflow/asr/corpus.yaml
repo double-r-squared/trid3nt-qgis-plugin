@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_asr:
-- aquifer storage and recovery cycle simulation
-- how much injected water can we recover from the ASR well
-- ASR injection storage recovery scenario
-- store treated water in the aquifer and recover it later
-- recovery efficiency of an ASR scheme at this site

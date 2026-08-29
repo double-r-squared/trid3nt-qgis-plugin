@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_mine_dewatering:
-- how much inflow to dewater the open pit
-- mine dewatering drawdown cone extent
-- pit dewatering pumping requirement estimate
-- how far does the dewatering cone of depression reach
-- groundwater inflow to a proposed quarry pit

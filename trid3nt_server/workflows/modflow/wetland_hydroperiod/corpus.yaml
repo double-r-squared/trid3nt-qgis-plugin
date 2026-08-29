@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_wetland_hydroperiod:
-- wetland hydroperiod under groundwater pumping
-- how long does the wetland stay wet each year
-- water table at the marsh through the seasons
-- will pumping dry out this wetland
-- wetland inundation duration simulation

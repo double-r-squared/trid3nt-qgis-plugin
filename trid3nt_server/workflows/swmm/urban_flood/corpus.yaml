@@ -1,9 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-swmm_urban_flood:
-- run the PySWMM quasi-2D urban flood solve for a design-storm return period
-- street-level pluvial flooding around building obstructions over a city block
-- overland depth with a sound-barrier wall and green flap-gate controls
-- animate rising street depth timestep by timestep from an Atlas-14 hyetograph
-- storm-sewer / pipe-network pluvial flooding in this developed neighborhood
-- outfall pollutograph + cumulative TSS / E.coli / nutrient washoff load

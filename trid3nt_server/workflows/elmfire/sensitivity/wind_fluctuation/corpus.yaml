@@ -1,9 +1,0 @@
-# Template routing phrasings: engine templates are ordinary retrieval-pool tools.
-elmfire_wind_fluctuation_randomization:
-- how much do wildfire outcomes spread when wind is randomly perturbed per member
-- deterministic versus randomized wind fluctuation fire spread variability
-- per member stochastic wind ensemble burned area spread
-- how sensitive is the burned area to sub hourly wind randomization
-- Monte Carlo wind fluctuation ensemble around a deterministic fire run
-- randomize the wind speed and direction fluctuation across ensemble members
-- fire ensemble spread from randomized wind gust fluctuation

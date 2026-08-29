@@ -1,9 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-landlab_susceptibility:
-- run the Landlab infinite-slope landslide susceptibility solve over this AOI
-- factor-of-safety / probability-of-failure raster across this hillslope
-- run the infinite-slope landslide model with soil cohesion and friction over this terrain
-- route a rainfall pulse over the DEM for the peak overland-flow depth
-- compute overland flow from a storm across this catchment (de Almeida shallow water)
-- slope-stability hazard map with Monte-Carlo soil-parameter uncertainty

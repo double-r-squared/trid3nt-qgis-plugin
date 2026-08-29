@@ -1,8 +1,0 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
-modflow_managed_recharge:
-- managed aquifer recharge mounding under the spreading basin
-- how high does the water table mound below the infiltration basin
-- MAR recharge basin scenario
-- artificial recharge groundwater mound extent
-- simulate a managed recharge project here

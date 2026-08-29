@@ -1,9 +1,0 @@
-set_modflow_parameters:
-- double the hydraulic conductivity in layer 2 of this groundwater model
-- set specific yield to 0.15 site-wide in the MODFLOW model
-- reduce recharge by 30% before rerunning MODFLOW
-- calibrate the K field on this staged groundwater model
-- increase the specific storage in the aquifer model
-- adjust vertical hydraulic conductivity for this MODFLOW deck
-- lower the recharge rate applied to the groundwater simulation
-- make the second layer more permeable in this MODFLOW run
