@@ -1242,3 +1242,15 @@ Tests (131 files) whose subject is a moved engine or a moved module:
 Scripts (74 files + 4 sandbox trees) whose subject is a moved engine:
 - scripts/{drive,proof,run,smoke,plot,harvest,demo}_*.py for elmfire/geoclaw/hecras/landlab/modflow/openquake/pelicun/schism/sfincs/swan/swmm, the three law-9 A/B proofs, the corridor hand-edit proof, run_l2_validation_harness.py, _slab2_fixture.py - moved to attic (fresh-start purge 2026-08-28)
 - scripts/sandbox/{hecras,modflow,schism,fire_render}/: engine sandboxes; oceanmesh, telemac, replication and pysheds_watershed stay - moved to attic (fresh-start purge 2026-08-28)
+
+## Polygon producers + mesh/shared (2026-08-29)
+
+The LEGO ruling makes domain narrowing a chain of processing tools, and the
+RIBBON RULING settles what a reach domain may be. What that supersedes:
+
+- trid3nt_server/tools/processing/corridor_of/: the buffered-flowline ribbon producer, written against the pre-ruling design and never committed - DELETED outright, no attic copy. CONDITION: none; the RIBBON RULING (2026-08-29) makes a buffered flowline unacceptable as a mesh domain with no fallback rung, so there is nothing here to restore. The reach producer is `section(fetch_nhd_area_water banks, between=<endpoints>)`; `buffer(flowline, d)` survives only in the release-point snap/validity plumbing, which never touches meshed geometry.
+- trid3nt_server/workflows/mesh/tool.py `_acquire_domain` + the `"domain" in declared` branch: acquired a reach + seed INSIDE build_mesh for a mesher whose extent was a domain rather than a box. No mesher has declared a `domain` field since the mesher purge, and the LEGO ruling puts that acquisition in the plan chain rather than in the router - DELETED (superseded by the polygon-domain extent path).
+- trid3nt_server/workflows/mesh/meshers/telapy_mesh.py::write_telemac_pair + its container run helpers -> trid3nt_server/workflows/mesh/shared/selafin_cli.py (module) and .../meshers/drivers/selafin_cli_driver.py (in-container writer): MOVED, not deleted. The writer is named for what it writes - the SELAFIN geometry and the `.cli` numbered from its IPOBO - and lives beside no mesher because any mesher that can hand over nodes, cells and a bed writes through it. om2d's lazy import repoints; the host module its name came from is already in the attic.
+
+Tests whose subject left the tree:
+- tests/test_mesh_om2d_telapy.py -> tests/test_mesh_om2d.py: RENAMED and trimmed. The `telapy_mesh` adoption section (its stub, its refusals, its coordinate honesty) and the roster/parametrize/driver-inventory rows naming purged meshers went with their subject; the two `hgrid.gr3` cross-checks went with `workflows/schism/deck_authoring`. The om2d half is unchanged and green.

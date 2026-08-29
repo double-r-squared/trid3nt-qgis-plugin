@@ -7,7 +7,8 @@ file and a rundir and shells it; nothing here imports trid3nt code.
 Contract (host <-> container over the mounted /data dir):
   argv[1] = <op>   argv[2] = /data/om2d_config.json   argv[3] = /data
 
-  build            config keys: bbox [xmin,ymin,xmax,ymax], shoreline_shp,
+  build            config keys: bbox [xmin,ymin,xmax,ymax], EITHER shoreline_shp
+                   OR domain_geojson (with sizing_coords [[lon,lat],...]),
                    dem_path (optional - enables wavelength sizing),
                    min_edge_length_m, max_edge_length_m, gradation,
                    obstacles [{geojson, constrain}],
@@ -19,6 +20,17 @@ Contract (host <-> container over the mounted /data dir):
                    /data/om2d_sections.json: the CONTIGUOUS ocean-boundary
                    sections oceanmesh itself identifies, plus the winded boundary
                    walk they index into.
+
+The domain is EITHER the water side of a GSHHG shoreline or the interior of a
+supplied polygon. The shoreline path is oceanmesh's own ``Shoreline`` ->
+``signed_distance_function`` -> ``feature_sizing_function`` chain on its sizing
+GRID. The polygon path cannot use that chain - ``Shoreline`` meshes only water
+touching the region boundary and cannot mesh a fully enclosed interior - so the
+signed distance is measured against the polygon's own densified boundary and the
+edge length is a CALLABLE: uniform at the finest edge, or growing linearly with
+distance from the polylines supplied alongside the polygon, clamped to the band.
+Both paths triangulate through the authentic ``om.generate_mesh`` and run the
+same clean passes, so a polygon domain is not a second mesher.
 
 An obstacle is subtracted from the signed distance function through
 ``om.Difference``, so the mesh has a HOLE where it sits, and its outline vertices
@@ -130,6 +142,67 @@ class _Holes(om.Domain):
         return np.where(inside, -d, d)
 
 
+class _PolygonDomain(om.Domain):
+    """A supplied polygon as an oceanmesh domain: signed distance, negative inside.
+
+    Being a ``Domain`` is what lets the polygon interior reach the same
+    ``om.generate_mesh`` and the same ``om.Difference`` the shoreline path uses.
+    The boundary is densified before the KD-tree is built so the distance field
+    is smooth between vertices rather than stepping from one corner to the next.
+    """
+
+    def __init__(self, geoms, step: float, bbox) -> None:
+        self.union = unary_union(geoms)
+        pts: list[tuple[float, float]] = []
+        for geom in geoms:
+            for ring in _outline_coords(geom):
+                pts.extend(_resample(ring, 0.5 * step))
+        self.outline = np.asarray(pts, dtype=float)
+        self.tree = cKDTree(self.outline)
+        super().__init__(bbox, self.signed)
+
+    def signed(self, x: np.ndarray) -> np.ndarray:
+        xq = np.nan_to_num(np.asarray(x, dtype=float), nan=1.0e9)
+        d, _ = self.tree.query(xq, k=1)
+        inside = contains_xy(self.union, xq[:, 0], xq[:, 1])
+        return np.where(inside, -d, d)
+
+
+def _polygon_sizing(sizing_coords, min_deg: float, max_deg: float,
+                    gradation: float, holes, active: list[str]):
+    """The edge length over a polygon interior, as the callable DistMesh takes.
+
+    A polygon interior has no shoreline to take a feature size from, so the size
+    grows LINEARLY with distance from the polylines supplied with the domain -
+    fine along the channel network, coarse away from it - and is uniform at the
+    finest edge when nothing was supplied to size toward. An obstacle band is
+    seeded here rather than on a lattice for the same reason: there is no
+    lattice on this path.
+    """
+    coords = np.asarray(sizing_coords or [], dtype=float)
+    tree = cKDTree(coords) if coords.size else None
+    active.append("polygon_sdf(interior)")
+    if tree is None:
+        active.append("uniform(min_edge)")
+    else:
+        active.append("distance_to_sizing_polylines(%d pts,grade=%g)"
+                      % (int(coords.shape[0]), gradation))
+
+    def edge_length(x: np.ndarray) -> np.ndarray:
+        xq = np.nan_to_num(np.asarray(x, dtype=float), nan=1.0e9)
+        if tree is None:
+            h = np.full(xq.shape[0], min_deg)
+        else:
+            distance, _ = tree.query(xq, k=1)
+            h = min_deg + gradation * distance
+        if holes is not None:
+            near = np.abs(holes.signed(xq))
+            h = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg, min_deg, h)
+        return np.clip(h, min_deg, max_deg)
+
+    return edge_length
+
+
 def op_build(cfg: dict, out: str) -> int:
     xmin, ymin, xmax, ymax = (float(v) for v in cfg["bbox"])
     om_bbox = (xmin, xmax, ymin, ymax)
@@ -139,76 +212,92 @@ def op_build(cfg: dict, out: str) -> int:
     gradation = float(cfg.get("gradation", 0.15))
     seed = int(cfg.get("seed", 0))
 
-    region = om.Region(extent=om_bbox, crs="EPSG:4326")
-    smoothed = True
-    try:
-        shore = om.Shoreline(cfg["shoreline_shp"], region.bbox, min_deg)
-    except Exception:  # noqa: BLE001
-        # The shoreline smoothing moving-average throws a GEOS side-location
-        # conflict on some GSHHG geometries; the unsmoothed shoreline still meshes.
-        smoothed = False
-        shore = om.Shoreline(cfg["shoreline_shp"], region.bbox, min_deg,
-                             smooth_shoreline=False)
-    sdf = om.signed_distance_function(shore)
-
-    active = []
-    sizing = [om.feature_sizing_function(
-        shore, sdf, r=int(cfg.get("feature_r", 3)),
-        min_edge_length=min_deg, max_edge_length=max_deg)]
-    active.append("feature_sizing(distance_to_shore,medial_axis)")
-
-    dem = None
-    if cfg.get("dem_path"):
-        dem = om.DEM(cfg["dem_path"], bbox=region)
-        sizing.append(om.wavelength_sizing_function(
-            dem, wl=int(cfg.get("wl", 10)),
-            min_edgelength=min_deg, max_edge_length=max_deg))
-        active.append("wavelength_sizing(shallow_water,wl=%d)" % int(cfg.get("wl", 10)))
-
-    edge_length = om.compute_minimum(sizing) if len(sizing) > 1 else sizing[0]
-
     obstacles = list(cfg.get("obstacles") or [])
     holes = None
     if obstacles:
         holes = _Holes([g for spec in obstacles for g in _load_geoms(spec["geojson"])],
                        min_deg, om_bbox)
 
-    regions = list(cfg.get("refine_regions") or [])
-    if regions or holes is not None:
-        xg, yg = edge_length.create_grid()
-        flat = np.column_stack([xg.ravel(), yg.ravel()])
-        values = np.asarray(edge_length.values, dtype=float)
-        for spec in regions:
-            target = float(spec["edge_length_m"]) / mpd
-            geom = unary_union(_load_geoms(spec["geojson"]))
-            inside = contains_xy(geom, flat[:, 0], flat[:, 1]).reshape(xg.shape)
-            values = np.where(inside, np.minimum(values, target), values)
-            active.append("refine_region(edge_length=%.0fm)"
-                          % float(spec["edge_length_m"]))
-        if holes is not None:
-            # The cut can only follow the outline if the mesh is fine enough there
-            # to hold it, so the band around the outline is SEEDED at the finest
-            # edge; the growth away from it is enforce_mesh_gradation's, below.
-            near = np.abs(holes.signed(flat)).reshape(xg.shape)
-            values = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg, min_deg, values)
-            active.append("obstacle_band(%g*min_edge,graded)" % _OBSTACLE_BAND_EDGES)
-        values = np.clip(values, min_deg, max_deg)
-        edge_length.values = values
-        edge_length.hmin = float(np.nanmin(values[np.isfinite(values) & (values > 0)]))
-        edge_length.build_interpolant()
+    active: list[str] = []
+    smoothed = None
+    dem = None
+    if cfg.get("domain_geojson"):
+        if cfg.get("refine_regions"):
+            raise ValueError(
+                "a polygon domain is sized from a distance callable, not the "
+                "sizing lattice a region refine is written onto")
+        sdf = _PolygonDomain(_load_geoms(cfg["domain_geojson"]), min_deg, om_bbox)
+        edge_length = _polygon_sizing(cfg.get("sizing_coords"), min_deg, max_deg,
+                                      gradation, holes, active)
+    else:
+        region = om.Region(extent=om_bbox, crs="EPSG:4326")
+        smoothed = True
+        try:
+            shore = om.Shoreline(cfg["shoreline_shp"], region.bbox, min_deg)
+        except Exception:  # noqa: BLE001
+            # The shoreline smoothing moving-average throws a GEOS side-location
+            # conflict on some GSHHG geometries; the unsmoothed shoreline still
+            # meshes.
+            smoothed = False
+            shore = om.Shoreline(cfg["shoreline_shp"], region.bbox, min_deg,
+                                 smooth_shoreline=False)
+        sdf = om.signed_distance_function(shore)
 
-    edge_length = om.enforce_mesh_gradation(edge_length, gradation=gradation)
-    if dem is not None:
-        edge_length = om.enforce_mesh_size_bounds_elevation(
-            edge_length, dem, [[min_deg, max_deg, -1e9, 1e9]])
+        sizing = [om.feature_sizing_function(
+            shore, sdf, r=int(cfg.get("feature_r", 3)),
+            min_edge_length=min_deg, max_edge_length=max_deg)]
+        active.append("feature_sizing(distance_to_shore,medial_axis)")
+
+        if cfg.get("dem_path"):
+            dem = om.DEM(cfg["dem_path"], bbox=region)
+            sizing.append(om.wavelength_sizing_function(
+                dem, wl=int(cfg.get("wl", 10)),
+                min_edgelength=min_deg, max_edge_length=max_deg))
+            active.append("wavelength_sizing(shallow_water,wl=%d)"
+                          % int(cfg.get("wl", 10)))
+
+        edge_length = om.compute_minimum(sizing) if len(sizing) > 1 else sizing[0]
+
+        regions = list(cfg.get("refine_regions") or [])
+        if regions or holes is not None:
+            xg, yg = edge_length.create_grid()
+            flat = np.column_stack([xg.ravel(), yg.ravel()])
+            values = np.asarray(edge_length.values, dtype=float)
+            for spec in regions:
+                target = float(spec["edge_length_m"]) / mpd
+                geom = unary_union(_load_geoms(spec["geojson"]))
+                inside = contains_xy(geom, flat[:, 0], flat[:, 1]).reshape(xg.shape)
+                values = np.where(inside, np.minimum(values, target), values)
+                active.append("refine_region(edge_length=%.0fm)"
+                              % float(spec["edge_length_m"]))
+            if holes is not None:
+                # The cut can only follow the outline if the mesh is fine enough
+                # there to hold it, so the band around the outline is SEEDED at the
+                # finest edge; the growth away from it is enforce_mesh_gradation's,
+                # below.
+                near = np.abs(holes.signed(flat)).reshape(xg.shape)
+                values = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg,
+                                  min_deg, values)
+                active.append("obstacle_band(%g*min_edge,graded)"
+                              % _OBSTACLE_BAND_EDGES)
+            values = np.clip(values, min_deg, max_deg)
+            edge_length.values = values
+            edge_length.hmin = float(
+                np.nanmin(values[np.isfinite(values) & (values > 0)]))
+            edge_length.build_interpolant()
+
+        edge_length = om.enforce_mesh_gradation(edge_length, gradation=gradation)
+        if dem is not None:
+            edge_length = om.enforce_mesh_size_bounds_elevation(
+                edge_length, dem, [[min_deg, max_deg, -1e9, 1e9]])
 
     domain = sdf
     pfix = np.empty((0, 2), dtype=float)
     if holes is not None:
         domain = om.Difference([sdf, holes])
         if any(spec.get("constrain", True) for spec in obstacles):
-            # A constrained vertex on land would pin a node the shoreline excludes,
-            # so only the outline inside the water domain is locked.
+            # A constrained vertex outside the domain would pin a node the domain
+            # excludes, so only the outline inside it is locked.
             pfix = holes.outline[sdf.eval(holes.outline) < 0.0]
         active.append("obstacles(%d,pfix=%d)" % (len(obstacles), int(pfix.shape[0])))
 
@@ -283,6 +372,7 @@ def op_build(cfg: dict, out: str) -> int:
         "engine": "oceanmesh(CHLNDDEV OceanMesh2D port) v%s"
                   % getattr(om, "__version__", "?"),
         "sizing_functions": active,
+        # None on the polygon path: there is no shoreline to have smoothed.
         "shoreline_smoothed": smoothed,
         "mesh_clean": cleaned,
         "gradation": gradation,

@@ -1,12 +1,15 @@
 """The ``om2d`` mesher: OceanMesh2D, wrapped where it lives.
 
-The domain is a real shoreline: the GSHHG land polygons cut to the AOI, turned
-into a signed distance function, sized by distance to the shore and - when a bed
-is fetched - by shallow-water wavelength over depth, gradation-limited, and
-triangulated by DistMesh. All of that is the CHLNDDEV ``oceanmesh`` port's own
-code, running in ``trid3nt-local/mesh:latest`` where it is installed; this file
-composes the ask, shells the box, and turns what comes back into the one neutral
-mesh every writer reads.
+The domain arrives one of two ways. From a BBOX it is a real shoreline: the
+GSHHG land polygons cut to the AOI, turned into a signed distance function,
+sized by distance to the shore and - when a bed is fetched - by shallow-water
+wavelength over depth, gradation-limited, and triangulated by DistMesh. From a
+POLYGON it is that polygon's own interior, and the signed distance is measured
+against its boundary; a basin, a sectioned river reach or any other narrowed
+domain another tool produced is meshed as it stands rather than re-derived here. All of it is
+the CHLNDDEV ``oceanmesh`` port's own code, running in ``trid3nt-local/mesh:
+latest`` where it is installed; this file composes the ask, shells the box, and
+turns what comes back into the one neutral mesh every writer reads.
 
 Its edit actions are the shape a coastal domain is authored in: punch an obstacle
 out of the water and lock its outline into the mesh, refine inside a drawn
@@ -33,6 +36,7 @@ import logging
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -106,8 +110,11 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("unstructured_tri",),
               default="unstructured_tri",
               doc="unstructured_tri - the water side of the shoreline is triangulated"),
-    MeshField("extent", types=(tuple, list), required=True,
-              doc="(min_lon, min_lat, max_lon, max_lat) the domain is cut from"),
+    MeshField("extent", types=(tuple, list, dict, str), required=True,
+              doc="what the domain is cut from: (min_lon, min_lat, max_lon, "
+                  "max_lat) for the shoreline path, or a POLYGON - inline "
+                  "GeoJSON, a geometry mapping, or the uri of a polygon layer - "
+                  "whose interior is meshed as it stands"),
     MeshField("refine", types=(dict,),
               doc="{'edge_length': the coarsest background edge in metres, "
                   "'min_spacing': the finest edge at the shore in metres, "
@@ -121,9 +128,11 @@ _FIELDS = (
 
 
 def build(spec: Mapping[str, Any]) -> Mesh:
-    """Mesh the water side of the shoreline across the AOI."""
+    """Mesh the water side of the shoreline, or the interior of a supplied polygon."""
+    extent = spec["extent"]
     return _realize({
-        "extent": tuple(float(v) for v in spec["extent"]),
+        "extent": (tuple(float(v) for v in extent)
+                   if isinstance(extent, (tuple, list)) else extent),
         "refine": checked_refine("mesher 'om2d'", spec.get("refine"),
                                  _REFINE_KNOBS),
         "bed": spec.get("bed") or "fetch_topobathy",
@@ -144,7 +153,6 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
         sample_raster_at_nodes,
     )
 
-    aoi = tuple(float(v) for v in state["extent"])
     refine = dict(state["refine"])
     if refine["min_spacing"] > refine["edge_length"]:
         raise MeshToolError(
@@ -153,13 +161,25 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
             f"coarser than edge_length {refine['edge_length']} m; min_spacing is "
             "the finest edge at the shore and edge_length the coarsest offshore.")
     rundir = _rundir()
-    shoreline = _shoreline_shp()
+    domain = _domain(state["extent"], rundir)
+    aoi = domain.bbox
+    if domain.polygon_name is not None and state["regions"]:
+        raise MeshToolError(
+            "MESH_REGION_ON_POLYGON_DOMAIN",
+            "a polygon domain is sized from a distance callable rather than the "
+            "sizing lattice a region refine is written onto, so this mesh has no "
+            "grid for the region to land on. Refine the whole domain with the "
+            "edge band, or mesh the region's own polygon as the domain.")
     dem_path, bed_provenance, fallback_note = _bed_raster(
         state["bed"], aoi, rundir)
 
     config: dict[str, Any] = {
         "bbox": list(aoi),
-        "shoreline_shp": f"/shoreline/{shoreline.name}",
+        "shoreline_shp": (f"/shoreline/{domain.shoreline.name}"
+                          if domain.shoreline is not None else None),
+        "domain_geojson": (f"/data/{domain.polygon_name}"
+                           if domain.polygon_name is not None else None),
+        "sizing_coords": domain.sizing_coords,
         "dem_path": "/data/bed.tif" if dem_path is not None else None,
         "min_edge_length_m": refine["min_spacing"],
         "max_edge_length_m": refine["edge_length"],
@@ -178,7 +198,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
         "max_iter": 40,
     }
     (rundir / "om2d_config.json").write_text(json.dumps(config))
-    _run_container(rundir, shoreline.parent)
+    _run_container(rundir, domain.shoreline)
 
     npz = np.load(rundir / "om2d_mesh.npz")
     lonlat = np.asarray(npz["points"], dtype=float)
@@ -192,7 +212,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
 
     files, boundary_info, boundary_probes = _emit_formats(
         rundir, lonlat=lonlat, cells=cells, points_m=points, bed_up=bed_up,
-        boundary=state["boundary"])
+        boundary=state["boundary"], domain_source=domain.source)
     stats = _stats(rundir)
     engine_compat = ["telemac"] if bed_up is not None else []
     if "gr3_uri" in files:
@@ -226,10 +246,10 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                     "edge_length_m": refine["edge_length"],
                     "gradation": refine["gradation"],
                     "seed": _SEED,
-                    "sizing_source": _sizing_source(stats, shoreline),
+                    "sizing_source": _sizing_source(stats, domain),
                     "dem_source": bed_provenance,
                     "bed_fallback_note": fallback_note,
-                    "shoreline_source": f"GSHHG land polygons ({shoreline.name})",
+                    "domain_source": domain.source,
                 },
             },
             "synthetic_inputs": [
@@ -242,7 +262,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                 {"param": "mesh_domain",
                  "value": f"{points.shape[0]} nodes / {cells.shape[0]} elements",
                  "basis": "derived",
-                 "real_source_if_any": _sizing_source(stats, shoreline)},
+                 "real_source_if_any": _sizing_source(stats, domain)},
                 {"param": "mesh_bed", "value": bed_provenance, "basis": "fetched",
                  "consequence": "physics", "real_source_if_any": bed_provenance,
                  "note": "the elevation every node carries; a solver reads it as "
@@ -252,9 +272,16 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
 
 
 def _carry(state: Mapping[str, Any]) -> dict[str, Any]:
-    """The rebuild state, as plain values an edit can extend."""
+    """The rebuild state, as plain values an edit can extend.
+
+    A supplied polygon is carried VERBATIM - a rebuild has to cut from the same
+    domain the first build did, and reducing it to its bounding box here would
+    quietly widen every edited mesh back out to a rectangle.
+    """
+    extent = state["extent"]
     return {
-        "extent": tuple(float(v) for v in state["extent"]),
+        "extent": (tuple(float(v) for v in extent)
+                   if isinstance(extent, (tuple, list)) else extent),
         "refine": dict(state["refine"]),
         "bed": state["bed"],
         "obstacles": list(state["obstacles"]),
@@ -273,6 +300,93 @@ def _rundir() -> Path:
 def _repo_root() -> Path:
     # .../trid3nt_server/workflows/mesh/meshers/om2d.py
     return Path(__file__).resolve().parents[4]
+
+
+@dataclass(frozen=True)
+class _Domain:
+    """What the mesh is cut from, resolved: the shoreline, or a supplied polygon.
+
+    Exactly one of ``shoreline`` and ``polygon_name`` is set. ``bbox`` is the
+    lon/lat box the bed is fetched over and the triangulator seeds inside - the
+    AOI itself on the shoreline path, the polygon's own bounds on the other.
+    ``sizing_coords`` are the polylines supplied ALONGSIDE a domain polygon,
+    which the interior is refined toward; empty means the interior is meshed at
+    a uniform edge.
+    """
+
+    bbox: tuple[float, float, float, float]
+    source: str
+    shoreline: Path | None = None
+    polygon_name: str | None = None
+    sizing_coords: Any = ()
+
+
+def _domain(extent: Any, rundir: Path) -> _Domain:
+    """Resolve the ask's extent into the domain the box cuts the mesh from."""
+    if isinstance(extent, (tuple, list)):
+        shoreline = _shoreline_shp()
+        return _Domain(bbox=tuple(float(v) for v in extent),
+                       source=f"GSHHG land polygons ({shoreline.name})",
+                       shoreline=shoreline)
+    polygons, lines = _split_geometry(read_geometry(extent))
+    if not polygons:
+        raise MeshToolError(
+            "MESH_DOMAIN_NOT_A_POLYGON",
+            f"the extent {extent!r} carries no polygon, so there is no interior "
+            "to mesh; supply a bbox, or a polygon another tool produced.")
+    name = "domain.geojson"
+    (rundir / name).write_text(json.dumps(
+        {"type": "GeometryCollection", "geometries": polygons}))
+    return _Domain(bbox=_geometry_bounds(polygons),
+                   source=f"supplied polygon domain ({len(polygons)} part(s))",
+                   polygon_name=name, sizing_coords=lines)
+
+
+def _split_geometry(doc: Mapping[str, Any]) -> tuple[list[dict[str, Any]],
+                                                     list[list[float]]]:
+    """A GeoJSON document -> its polygon geometries and its polyline vertices.
+
+    Both halves come out of ONE supplied geometry on purpose: a domain polygon
+    and the channel network inside it are the same acquisition, and separating
+    them into two fields would let a chain hand over a sizing source for a
+    domain it did not describe.
+    """
+    polygons: list[dict[str, Any]] = []
+    lines: list[list[float]] = []
+
+    def walk(geometry: Any) -> None:
+        if not isinstance(geometry, Mapping):
+            return
+        kind = str(geometry.get("type") or "")
+        if kind in ("Polygon", "MultiPolygon"):
+            polygons.append(dict(geometry))
+        elif kind == "LineString":
+            lines.extend([float(c[0]), float(c[1])]
+                         for c in geometry.get("coordinates") or ())
+        elif kind == "MultiLineString":
+            for part in geometry.get("coordinates") or ():
+                lines.extend([float(c[0]), float(c[1])] for c in part)
+        elif kind == "GeometryCollection":
+            for part in geometry.get("geometries") or ():
+                walk(part)
+
+    features = doc.get("features") if isinstance(doc, Mapping) else None
+    if features is not None:
+        for feature in features:
+            walk((feature or {}).get("geometry"))
+    else:
+        walk(doc.get("geometry") if "geometry" in doc else doc)
+    return polygons, lines
+
+
+def _geometry_bounds(geometries: list[dict[str, Any]]
+                     ) -> tuple[float, float, float, float]:
+    """The lon/lat box the supplied domain occupies."""
+    from shapely.geometry import shape as _shape
+    from shapely.ops import unary_union
+
+    minx, miny, maxx, maxy = unary_union([_shape(g) for g in geometries]).bounds
+    return (float(minx), float(miny), float(maxx), float(maxy))
 
 
 def _shoreline_shp() -> Path:
@@ -397,9 +511,9 @@ def read_geometry(source: Any) -> dict[str, Any]:
     return json.loads(gpd.read_file(path).to_crs(4326).to_json())
 
 
-def _run_container(rundir: Path, shoreline_dir: Path) -> None:
+def _run_container(rundir: Path, shoreline: Path | None) -> None:
     _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz",
-            shoreline_dir=shoreline_dir)
+            shoreline_dir=None if shoreline is None else shoreline.parent)
 
 
 def _run_op(rundir: Path, op: str, config_name: str, produces: str, *,
@@ -430,13 +544,12 @@ def _stats(rundir: Path) -> dict[str, Any]:
         return {}
 
 
-def _sizing_source(stats: Mapping[str, Any], shoreline: Path) -> str:
+def _sizing_source(stats: Mapping[str, Any], domain: _Domain) -> str:
     """What ACTUALLY sized the mesh, copied from the mesher's own report."""
-    domain = f"GSHHG shoreline domain ({shoreline.name})"
     active = [str(s) for s in (stats.get("sizing_functions") or [])]
     if not active:
-        return f"{domain}; sizing functions unreported by the mesher"
-    return f"{domain}; " + "; ".join(active)
+        return f"{domain.source}; sizing functions unreported by the mesher"
+    return f"{domain.source}; " + "; ".join(active)
 
 
 def _sandbox_formats() -> Any:
@@ -518,8 +631,9 @@ def _has_area(points: Any, cells: Any) -> Any:
 
 
 def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
-                  bed_up: Any, boundary: Any) -> tuple[dict[str, str],
-                                                       dict[str, Any], dict[str, Any]]:
+                  bed_up: Any, boundary: Any,
+                  domain_source: str) -> tuple[dict[str, str],
+                                               dict[str, Any], dict[str, Any]]:
     """Write the per-solver geometry from one boundary segmentation.
 
     TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
@@ -533,12 +647,12 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
     """
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.meshers.telapy_mesh import write_telemac_pair
+    from trid3nt_server.workflows.mesh.shared.selafin_cli import write_telemac_pair
 
     formats = _sandbox_formats()
     loops = formats.extract_boundary_loops(np.asarray(cells, dtype=np.int64))
 
-    info: dict[str, Any] = {"source": "GSHHG shoreline domain"}
+    info: dict[str, Any] = {"source": domain_source}
     probes: dict[str, Any] = {"boundary_loops_measured": len(loops)}
     sections: list[dict[str, Any]] = []
     if boundary is not None and str(boundary.get("type", "open")) == "open":

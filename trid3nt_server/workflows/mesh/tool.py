@@ -403,7 +403,9 @@ async def build_mesh(
     * ``om2d`` - OceanMesh2D: the GSHHG shoreline cuts the water domain, sized by
       distance to shore and by wavelength over the fetched bed. Obstacles punch
       out of it with their outlines constrained in, regions refine, and a named
-      side becomes the open boundary.
+      side becomes the open boundary. It also meshes the interior of a POLYGON
+      handed to ``extent`` - a basin from ``delineate_watershed``, a river reach
+      from ``section``, any narrowed domain another tool produced.
     * ``reg_grid`` - the uniform lattice a structured deck runs on.
 
     ``input_mode="user_gated"`` stops at the MESH GATE instead of finishing: the
@@ -424,7 +426,9 @@ async def build_mesh(
         kind: the mesh shape that mesher makes (unstructured_tri |
             structured_grid).
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
-        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. To mesh
+            a POLYGON instead of a box, pass it as ``extent`` (a layer uri or
+            GeoJSON) rather than as ``bbox``.
         min_edge_length_m: finest cell/triangle edge (m). Declined by name by a
             mesher that sizes another way.
         max_edge_length_m: coarsest edge (m).
@@ -479,10 +483,6 @@ async def build_mesh(
             extent = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
         if extent is not None:
             fields = {"extent": tuple(float(v) for v in extent), **fields}
-    elif "domain" in declared and "domain" not in fields:
-        # A mesher whose domain is a DOMAIN rather than a box gets one acquired for
-        # it: an extent alone does not say which river a corridor follows.
-        fields = {"domain": await _acquire_domain(location, bbox), **fields}
 
     declaration = tool.build_mesh(mesher=mesher, kind=kind, **fields)
     name = location or f"{mesher} mesh"
@@ -496,32 +496,3 @@ async def build_mesh(
     return session.snapshot()
 
 
-async def _acquire_domain(location: str | None, bbox: Any) -> dict[str, Any]:
-    """The reach a corridor follows, plus the mid-reach seed it is navigated from.
-
-    The SAME acquisition a template's plan runs, reached from a standalone call so
-    the mesh a user builds by hand is the mesh a template would have built.
-    """
-    from trid3nt_server.workflows.lib import Domain
-    from trid3nt_server.workflows.lib.domain import bind_domain, reset_domain
-    from trid3nt_server.workflows.telemac.steps.reach import (
-        fetch_reach_flowline,
-        geocode_reach,
-        reach_seed,
-    )
-
-    coerced = coerce_bbox_value(bbox) if bbox is not None else None
-    if not location and coerced is None:
-        raise MeshToolError(
-            "MESH_DOMAIN_UNRESOLVED",
-            "a corridor follows a named river reach, so name the place (or draw "
-            "the extent it runs through); there is nothing here to navigate from.")
-    reach = await geocode_reach(location=location,
-                                bbox=None if location else tuple(coerced))
-    token = bind_domain(Domain(bbox=reach["bbox"], label=reach["name"]))
-    try:
-        rivers = await fetch_reach_flowline(prefetched=None)
-        seed = await reach_seed(reach=reach, rivers=rivers)
-    finally:
-        reset_domain(token)
-    return {"reach": reach, "seed": seed}

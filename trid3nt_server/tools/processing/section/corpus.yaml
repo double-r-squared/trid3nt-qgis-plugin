@@ -1,0 +1,8 @@
+section:
+- just the reach of the river between these two points
+- cut this water polygon down to the stretch from here to here
+- section this polygon between the upstream and downstream ends
+- clip this polygon layer to my extent
+- keep only the part of the polygon inside this box
+- the stretch of the channel banks between the two gauges
+- trim this domain polygon to the reach I care about

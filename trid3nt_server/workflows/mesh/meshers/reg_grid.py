@@ -21,6 +21,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     EditAction,
     Mesh,
     MeshField,
+    MeshToolError,
     apply_layer_edits_action,
     contained_extent,
     register_mesher,
@@ -33,8 +34,10 @@ _FIELDS = (
     MeshField("kind", types=(str,), choices=("structured_grid",),
               default="structured_grid",
               doc="structured_grid - the one kind a uniform lattice is"),
-    MeshField("extent", types=(tuple, list), required=True,
-              doc="(min_lon, min_lat, max_lon, max_lat) in EPSG:4326"),
+    MeshField("extent", types=(tuple, list, dict, str), required=True,
+              doc="(min_lon, min_lat, max_lon, max_lat) in EPSG:4326; a polygon "
+                  "domain is refused by name, because a lattice is an origin "
+                  "plus counts and a masked one is not"),
     MeshField("resolution_m", types=(int, float), required=True,
               doc="target uniform cell size, in metres"),
 )
@@ -42,8 +45,23 @@ _FIELDS = (
 
 def build(spec: Mapping[str, Any]) -> Mesh:
     """Build the lattice an ``(extent, resolution_m)`` ask describes."""
+    extent = spec["extent"]
+    if not isinstance(extent, (tuple, list)):
+        # A lattice IS its origin, cell size and row/column counts - that is what
+        # a structured deck writes and what every consumer of this mesh reads back
+        # out of the meta. Dropping the cells outside a polygon would leave
+        # something no longer describable that way, so the narrowing is refused
+        # here and escalates to the mesher that meshes an interior.
+        raise MeshToolError(
+            "MESH_POLYGON_DOMAIN_UNSUPPORTED",
+            "mesher 'reg_grid' takes a rectangular extent: a regular lattice is "
+            "an origin plus cell counts, and masking it to a polygon leaves a "
+            "geometry a structured deck cannot write. Mesh the polygon interior "
+            "with mesher='om2d', or pass the polygon's bounding box.",
+            escalation={"tool": "build_mesh",
+                        "overrides": {"mesher": "om2d", "extent": extent}})
     return _lattice(regular_grid_from_bbox(
-        tuple(float(v) for v in spec["extent"]), float(spec["resolution_m"])))
+        tuple(float(v) for v in extent), float(spec["resolution_m"])))
 
 
 def _lattice(grid: RegularGrid) -> Mesh:

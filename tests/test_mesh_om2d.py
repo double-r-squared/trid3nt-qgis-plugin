@@ -1,11 +1,12 @@
-"""Offline tests for the two library-wrapping meshers: ``om2d`` and ``telapy_mesh``.
+"""Offline tests for the library-wrapping mesher ``om2d``.
 
-Both build in a container, so what runs here is everything AROUND that boundary:
-the declarations each mesher exposes, the typed refusals, the config the box is
-handed, the neutral mesh assembled from what it returns, the measured conformal
-offset, and the determinism a recipe records. The container call and the two
-world-reads (the bed fetch, the object store) are the only things stubbed - the
-composition itself is the real code.
+It builds in a container, so what runs here is everything AROUND that boundary:
+the declaration it exposes, the typed refusals, the config the box is handed,
+the neutral mesh assembled from what it returns, the measured conformal offset,
+and the determinism a recipe records. The container call and the two world-reads
+(the bed fetch, the object store) are the only things stubbed - the composition
+itself is the real code. The POLYGON-domain half of the same mesher is covered
+in ``test_mesh_polygon_domain.py``.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from trid3nt_server.workflows.mesh.meshers import (
     registered_meshers,
 )
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
-from trid3nt_server.workflows.mesh.meshers import telapy_mesh as TELAPY
 from trid3nt_server.workflows.mesh.tool import validate_spec
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
@@ -38,23 +38,16 @@ _CELLS = np.array([[0, 1, 2], [1, 3, 2]], dtype=np.int64)
 # --------------------------------------------------------------------------- #
 # Declarations.
 # --------------------------------------------------------------------------- #
-def test_the_two_wrappers_joined_the_roster():
-    assert registered_meshers() == (
-        "coastal_edge", "corridor_tin", "hecras_rog", "om2d", "reg_grid",
-        "telapy_mesh", "watershed")
+def test_the_roster_is_the_two_meshers_and_nothing_else():
+    assert registered_meshers() == ("om2d", "reg_grid")
 
 
-@pytest.mark.parametrize("mesher,expected", [
-    ("om2d", {"kind", "extent", "refine", "bed"}),
-    ("telapy_mesh", {"kind", "geometry", "crs_authid"}),
-])
-def test_each_wrapper_declares_the_spec_signature(mesher, expected):
-    assert set(get_mesher(mesher).fields) == expected
+def test_the_wrapper_declares_its_spec_signature():
+    assert set(get_mesher("om2d").fields) == {"kind", "extent", "refine", "bed"}
 
 
-@pytest.mark.parametrize("mesher", ["om2d", "telapy_mesh"])
-def test_both_wrappers_register_the_same_edit_vocabulary(mesher):
-    assert set(get_mesher(mesher).actions) == {
+def test_the_wrapper_registers_its_edit_vocabulary():
+    assert set(get_mesher("om2d").actions) == {
         "add_obstacle", "refine_region", "set_boundary", "apply_layer_edits"}
 
 
@@ -108,29 +101,22 @@ def test_the_boundary_side_vocabulary_carries_seaward_and_the_compass():
 
 
 def test_the_geometry_input_is_hashed_so_the_recipe_records_its_source():
-    for mesher in ("om2d", "telapy_mesh"):
-        for action in ("add_obstacle", "refine_region"):
-            assert get_mesher(mesher).action(action).inputs["geometry"].hashed
+    for action in ("add_obstacle", "refine_region"):
+        assert get_mesher("om2d").action(action).inputs["geometry"].hashed
 
 
 # --------------------------------------------------------------------------- #
 # Determinism: a measured claim, journaled where a replay reads it.
 # --------------------------------------------------------------------------- #
-#: Every mesher that shells the OceanMesh2D image, with the flag it registers and
-#: the 3-run rebuild-and-diff that flag was MEASURED by (docs/research/
-#: om2d-telapy-mesh-recon.md carries the specs and the hashes). A flag no
-#: measurement stands behind is a replayability promise nobody checked, so the
-#: evidence is named here rather than the value simply asserted.
-_MEASURED_DETERMINISM = (
-    ("om2d", False, "3 rebuilds -> 2 distinct meshes"),
-    ("coastal_edge", True, "3 rebuilds -> sha256 e2025226, 424 nodes/693 elements"),
-    ("watershed", True, "3 rebuilds -> sha256 1236ce84, 363 nodes/657 elements"),
-)
+#: The mesher that shells the OceanMesh2D image, with the flag it registers and
+#: the 3-run rebuild-and-diff that flag was MEASURED by. A flag no measurement
+#: stands behind is a replayability promise nobody checked, so the evidence is
+#: named here rather than the value simply asserted.
+_MEASURED_DETERMINISM = ("om2d", False, "3 rebuilds -> 2 distinct meshes")
 
 
-@pytest.mark.parametrize("mesher,measured,evidence", _MEASURED_DETERMINISM)
-def test_each_mesher_registers_the_determinism_it_was_measured_at(
-        mesher, measured, evidence):
+def test_the_mesher_registers_the_determinism_it_was_measured_at():
+    mesher, measured, evidence = _MEASURED_DETERMINISM
     assert get_mesher(mesher).deterministic is measured, evidence
 
 
@@ -182,7 +168,9 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None):
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_bed_raster", fake_bed)
     monkeypatch.setattr(OM2D, "_run_container", fake_run)
-    monkeypatch.setattr(TELAPY, "write_telemac_pair", fake_pair)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
+        fake_pair)
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.watershed.sample_raster_at_nodes",
         lambda path, pts: np.full(np.asarray(pts).shape[0], -4.0))
@@ -348,23 +336,16 @@ def test_the_activation_rows_read_the_same_from_a_layer_and_from_a_dict():
 def test_a_dict_shaped_fetch_is_not_reported_as_unmeasured():
     """A fetcher may answer with the layer as a mapping; reading only attributes
     calls a MEASURED provenance unmeasured."""
-    from trid3nt_server.workflows.mesh.meshers import coastal_edge as COASTAL
-
     as_dict = {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
                "fallback_note": None}
     assert OM2D._bed_provenance("fetch_topobathy", as_dict) == (
         "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11%")
-    assert COASTAL._bed_provenance(as_dict) == (
-        "topobathy: cudem_nearshore 89%, etopo_bathy_base 11%")
     assert "UNMEASURED" not in OM2D._bed_provenance("fetch_topobathy", as_dict)
 
 
 def test_a_fetch_that_measured_nothing_still_says_so():
-    from trid3nt_server.workflows.mesh.meshers import coastal_edge as COASTAL
-
     empty = {"uri": "s3://b/x.tif", "fallbacks": [], "fallback_note": None}
     assert "UNMEASURED" in OM2D._bed_provenance("fetch_topobathy", empty)
-    assert "UNMEASURED" in COASTAL._bed_provenance(empty)
 
 
 # --------------------------------------------------------------------------- #
@@ -398,30 +379,6 @@ def test_fort14_writes_one_open_block_per_section():
     assert "4 = Total number of open boundary nodes" in text
     assert "2 = Number of nodes for open boundary 1" in text
     assert "2 = Number of nodes for open boundary 2" in text
-
-
-def test_the_gr3_open_block_matches_the_sections_it_was_given():
-    from trid3nt_server.workflows.schism.deck_authoring import load_gr3_bridge
-
-    points, cells = _square_mesh()
-    text = load_gr3_bridge().tin_to_hgrid(
-        points, cells, depth=5.0, open_sections=[[0, 1], [7, 8]],
-        clean_boundary=False)
-    assert "2 = Number of open boundaries" in text
-    assert "4 = Total number of open boundary nodes" in text
-    # The land boundary is what is left of the loop, split at the open stretches.
-    land = [ln for ln in text.splitlines() if "land boundaries" in ln]
-    assert land == ["2 = Number of land boundaries"]
-
-
-def test_a_gr3_with_no_sections_still_declares_a_closed_boundary():
-    from trid3nt_server.workflows.schism.deck_authoring import load_gr3_bridge
-
-    points, cells = _square_mesh()
-    text = load_gr3_bridge().tin_to_hgrid(points, cells, depth=5.0,
-                                          clean_boundary=False)
-    assert "0 = Number of open boundaries" in text
-    assert "1 = Number of land boundaries" in text
 
 
 # --------------------------------------------------------------------------- #
@@ -505,10 +462,13 @@ def _emit_with(monkeypatch, tmp_path, boundary):
         return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
                 "stats": {"nptfr": 4, "n_liquid_boundaries": 1}}
 
-    monkeypatch.setattr(TELAPY, "write_telemac_pair", fake_pair)
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
+        fake_pair)
     files, info, probes = OM2D._emit_formats(
         tmp_path, lonlat=_POINTS, cells=_CELLS, points_m=_POINTS,
-        bed_up=np.full(4, -5.0), boundary=boundary)
+        bed_up=np.full(4, -5.0), boundary=boundary,
+        domain_source="GSHHG land polygons (GSHHS_i_L1.shp)")
     info["_written_open_nodes"] = written.get("open_nodes")
     return files, info, probes
 
@@ -552,18 +512,15 @@ def test_the_drivers_live_in_the_product_tree_beside_their_meshers():
     from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
     names = {p.name for p in drivers_dir().glob("*_driver.py")}
-    assert names == {"om2d_driver.py", "telapy_mesh_driver.py",
-                     "coastal_edge_driver.py"}
+    assert names == {"om2d_driver.py", "selafin_cli_driver.py"}
     assert "sandbox" not in str(drivers_dir())
 
 
-@pytest.mark.parametrize("module,script", [
-    (OM2D, "om2d_driver.py"), (TELAPY, "telapy_mesh_driver.py")])
-def test_each_box_mounts_the_product_drivers_dir(module, script):
+def test_the_box_mounts_the_product_drivers_dir():
     from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
-    assert module._INCONTAINER_SCRIPT == script
-    assert (drivers_dir() / script).exists()
+    assert OM2D._INCONTAINER_SCRIPT == "om2d_driver.py"
+    assert (drivers_dir() / "om2d_driver.py").exists()
 
 
 def test_the_om2d_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
@@ -605,155 +562,6 @@ def test_an_unreadable_geometry_source_refuses(tmp_path):
         OM2D.read_geometry(str(tmp_path / "nope.geojson"))
     assert excinfo.value.error_code == "MESH_GEOMETRY_UNREADABLE"
 
-
-# --------------------------------------------------------------------------- #
-# telapy_mesh: the adoption, its refusals, and its coordinate honesty.
-# --------------------------------------------------------------------------- #
-def _stub_telapy(monkeypatch, tmp_path, *, bed=True, contours=((0, 1, 3, 2),)):
-    calls: list[tuple[str, dict]] = []
-
-    def fake_run(rundir, op, config):
-        calls.append((op, dict(config)))
-        flat = np.array([n for c in contours for n in c], dtype=np.int64)
-        lens = np.array([len(c) for c in contours], dtype=np.int64)
-        out = Path(rundir, Path(str(config.get("out_npz", "/data/mesh.npz"))).name)
-        np.savez(out, x=_POINTS[:, 0], y=_POINTS[:, 1], ikle=_CELLS,
-                 bottom=(np.array([-3.0, -9.0, -2.0, -8.0]) if bed
-                         else np.empty(0)),
-                 contour_nodes=flat, contour_lengths=lens)
-        return {"npoin": 4, "nelem": 2, "nptfr": 4, "n_liquid_boundaries": 1,
-                "title": "STUB", "variables": ["BOTTOM"], "elements_removed": 1,
-                "nodes_inserted": 7}
-
-    def fake_pair(rundir, **kw):
-        calls.append(("write", dict(kw)))
-        Path(rundir, "mesh.slf").write_bytes(b"slf")
-        Path(rundir, "mesh.cli").write_text("2 2 2\n")
-        return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
-                "stats": {"nptfr": 4, "n_liquid_boundaries": 1}}
-
-    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(TELAPY, "_run", fake_run)
-    monkeypatch.setattr(TELAPY, "write_telemac_pair", fake_pair)
-    return calls
-
-
-def test_an_adopted_geometry_becomes_the_neutral_mesh(monkeypatch, tmp_path):
-    calls = _stub_telapy(monkeypatch, tmp_path)
-    source = tmp_path / "study.slf"
-    source.write_bytes(b"slf")
-    mesh = TELAPY.build({"geometry": str(source), "crs_authid": "EPSG:4326"})
-    assert mesh.node_count == 4 and mesh.element_count == 2
-    assert mesh.has_bed and mesh.crs_authid == "EPSG:4326"
-    assert mesh.meta["artifact"]["engine_compat"] == ["telemac"]
-    assert mesh.meta["files"]["cli_uri"].endswith("mesh.cli")
-    assert calls[0][0] == "read"
-    provenance = mesh.meta["artifact"]["provenance"]
-    assert provenance["adopted_from"] == str(source)
-    assert "HermesFile" in provenance["reader"]
-    assert "set_bnd" in provenance["writer"]
-
-
-def test_a_geometry_that_is_not_there_refuses_before_the_box(monkeypatch, tmp_path):
-    _stub_telapy(monkeypatch, tmp_path)
-    with pytest.raises(MeshToolError) as excinfo:
-        TELAPY.build({"geometry": str(tmp_path / "absent.slf"),
-                      "crs_authid": "EPSG:4326"})
-    assert excinfo.value.error_code == "MESH_GEOMETRY_UNREADABLE"
-
-
-def test_a_projected_geometry_declared_as_lonlat_refuses(monkeypatch, tmp_path):
-    """A SELAFIN records no CRS, so the declaration is the only claim there is -
-    and coordinates in metres declared as degrees would put the layer off Africa."""
-    _stub_telapy(monkeypatch, tmp_path)
-    monkeypatch.setattr(TELAPY, "_load", lambda path: (
-        np.array([0.0, 11391.0, 0.0, 11391.0]),
-        np.array([0.0, 0.0, 12397.0, 12397.0]), _CELLS, None, [[0, 1, 3, 2]]))
-    source = tmp_path / "study.slf"
-    source.write_bytes(b"slf")
-    with pytest.raises(MeshToolError) as excinfo:
-        TELAPY.build({"geometry": str(source), "crs_authid": "EPSG:4326"})
-    assert excinfo.value.error_code == "MESH_CRS_MISMATCH"
-
-
-def test_the_punch_reports_what_it_removed_and_how_far_off_the_outline_it_landed(
-        monkeypatch, tmp_path):
-    calls = _stub_telapy(monkeypatch, tmp_path)
-    source = tmp_path / "study.slf"
-    source.write_bytes(b"slf")
-    mesh = TELAPY.build({"geometry": str(source), "crs_authid": "EPSG:4326"})
-    obstacle = tmp_path / "pier.geojson"
-    obstacle.write_text(json.dumps({
-        "type": "Polygon",
-        "coordinates": [[[-75.78, 36.12], [-75.74, 36.12], [-75.74, 36.16],
-                         [-75.78, 36.12]]]}))
-
-    edited = get_mesher("telapy_mesh").action("add_obstacle").apply(
-        mesh, geometry=str(obstacle))
-    assert edited.meta["probes"]["elements_removed"] == 1
-    offset = edited.meta["probes"]["outline_offset_m"]
-    assert offset["max"] >= 0.0
-    assert "nearest mesh node" in offset["measured"]
-    assert any(op == "punch" for op, _ in calls)
-
-
-def test_a_region_refine_states_its_spacing_in_the_mesh_own_units(
-        monkeypatch, tmp_path):
-    """The action takes metres; a geographic mesh is measured in degrees, so the
-    ask is converted before it reaches pretel."""
-    calls = _stub_telapy(monkeypatch, tmp_path)
-    source = tmp_path / "study.slf"
-    source.write_bytes(b"slf")
-    mesh = TELAPY.build({"geometry": str(source), "crs_authid": "EPSG:4326"})
-    region = tmp_path / "region.geojson"
-    region.write_text(json.dumps({
-        "type": "Polygon",
-        "coordinates": [[[-75.78, 36.12], [-75.74, 36.12], [-75.74, 36.16],
-                         [-75.78, 36.12]]]}))
-
-    get_mesher("telapy_mesh").action("refine_region").apply(
-        mesh, geometry=str(region), edge_length=100.0)
-    refine = [cfg for op, cfg in calls if op == "refine"][0]
-    assert 0.0009 < refine["edge_length"] < 0.0012
-
-
-def test_set_boundary_classifies_a_side_and_hands_the_open_nodes_to_the_writer(
-        monkeypatch, tmp_path):
-    calls = _stub_telapy(monkeypatch, tmp_path)
-    source = tmp_path / "study.slf"
-    source.write_bytes(b"slf")
-    mesh = TELAPY.build({"geometry": str(source), "crs_authid": "EPSG:4326"})
-
-    edited = get_mesher("telapy_mesh").action("set_boundary").apply(
-        mesh, side="south", type="open")
-    info = edited.meta["artifact"]["open_boundary_info"]
-    assert info["open_boundary_side"] == "south"
-    assert info["open_node_count"] >= 1
-    written = [cfg for op, cfg in calls if op == "write"][-1]
-    assert written["open_nodes"]
-
-
-def test_a_side_classified_as_land_opens_nothing(monkeypatch, tmp_path):
-    calls = _stub_telapy(monkeypatch, tmp_path)
-    source = tmp_path / "study.slf"
-    source.write_bytes(b"slf")
-    mesh = TELAPY.build({"geometry": str(source), "crs_authid": "EPSG:4326"})
-
-    edited = get_mesher("telapy_mesh").action("set_boundary").apply(
-        mesh, side="south", type="land")
-    info = edited.meta["artifact"]["open_boundary_info"]
-    assert info["designation"] == "land"
-    assert "open_boundary_side" not in info
-    assert [cfg for op, cfg in calls if op == "write"][-1]["open_nodes"] == []
-
-
-def test_an_edit_on_a_mesh_with_no_build_state_refuses(monkeypatch, tmp_path):
-    _stub_telapy(monkeypatch, tmp_path)
-    adopted = Mesh(points=_POINTS, cells=_CELLS, crs_authid="EPSG:4326")
-    with pytest.raises(MeshToolError) as excinfo:
-        get_mesher("telapy_mesh").action("set_boundary").apply(
-            adopted, side="south")
-    assert excinfo.value.error_code == "MESH_EDIT_UNSUPPORTED"
 
 
 def test_an_om2d_edit_on_a_mesh_with_no_build_state_refuses():

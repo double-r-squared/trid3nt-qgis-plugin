@@ -554,6 +554,7 @@ from .processing.extract_stream_network import extract_stream_network  # noqa: E
 from .processing.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
 from .processing.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
+from .processing.section import section  # noqa: E402,F401
 # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces the
 # three analytical Q&A tools (summarize_layer_statistics /
 # count_features_above_threshold / aggregate_property_within_zone).
