@@ -2590,3 +2590,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   code is an active tax and goes to the attic, never gets extended.
   Reviewers ask "what can be removed?" beside "does it work?". Baked
   into every wave prompt's norms from here on.
+
+- TOOLS-STAGE STOPS RULED (NATE 2026-08-29): om2d's dead gr3 seam
+  CHOPPED NOW (silently-failing dead seam worse than absence; SCHISM
+  brings its own needs at rung 5); delineate_watershed KEEPS its name
+  (capability naming - it says the question; no churn); section's
+  generic section_polygon preset ACCEPTED. Also riding the wave's
+  next stages: the buffer-band snap removal per the approximate-reach
+  ruling (release validity = real-domain containment).
