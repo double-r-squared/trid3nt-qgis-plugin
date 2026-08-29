@@ -2531,3 +2531,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (report first). SWMM gate chunk + moved engines' solver diagnostics
   -> attic. persistence/ KEPT (32 live call sites = session/chat
   restart durability); rename stays queued.
+
+- SQUARE TWO (NATE 2026-08-28, the campaign thesis matured): rebuild
+  upward FROM THE VISION with the settled principles - LEGO
+  composability, tools all the way down, explicit dataflow,
+  recipe-as-record, presence-capabilities, deck as sole record,
+  sealed box, frozen fetch/emission. The attic holds paradigms that
+  predate the principles; it is the REFERENCE ANSWER KEY, never a
+  restoration source. Build-back ladder: (1) chained tools +
+  polygon-domain meshing (in flight); (2) worker unification (one
+  generic telapy runner; NATE pre-deleted the five per-process build
+  scripts); (3) om2d wrapper depth vs the four-fragility bar; (4)
+  TELEMAC templates rebuilt one at a time as native expressions of
+  the principles; (5) other engines return from the attic THROUGH the
+  new architecture, one at a time, fresh expressions consulted
+  against the attic - never ports.
