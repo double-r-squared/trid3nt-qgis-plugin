@@ -2546,3 +2546,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the principles; (5) other engines return from the attic THROUGH the
   new architecture, one at a time, fresh expressions consulted
   against the attic - never ports.
+
+- SQUARE TWO SPEC PUBLISHED (2026-08-28): docs/specs/square-two.html
+  - the top-level build-back structure. THE PRINCIPLE: libraries run
+  the domain, we write glue (staging/provenance/refusals/plan); new
+  code answers "which library call replaces this" before existing.
+  The telemac-only tree (workflows: telemac/mesh/lib/shared/solver;
+  workers: telemac/mesh/qgis, ALL other workers -> attic in the
+  worker-unification wave per NATE). The reusable shape: fetch ->
+  chain tools -> build_mesh(bbox|polygon) -> deck (TelemacCas) ->
+  one generic telapy box -> reader -> frozen emission. Ladder +
+  standing acceptance (library-first grep, LEGO law, re-baselined
+  zero, honest records, conformance gate).

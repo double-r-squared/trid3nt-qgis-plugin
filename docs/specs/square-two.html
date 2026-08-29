@@ -1,0 +1,95 @@
+<title>Square Two</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .k { color: var(--kw); font-weight: bold; } .s { color: var(--str); } .c { color: var(--com); font-style: italic; } .n { color: var(--num); }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+</style>
+
+<h1>Square Two</h1>
+<p class="rev">rev 1 &middot; 2026-08-28 &middot; the build-back structure: WE WRITE GLUE, LIBRARIES RUN THE DOMAIN. Telemac-only focus; everything else in the attic until it returns THROUGH this shape. Format per <code>docs/decisions/0320-spec-format.md</code>. Children: <code>domain-and-mesh</code> (the mesh subsystem), <code>workflow-blueprint</code> (the plan substrate).</p>
+
+<h2>1. The principle</h2>
+<p>Every domain job is run by the library that owns that domain; we write the thin, honest glue between them - staging, provenance, refusals, the plan. New code must answer "which library call replaces this?" before it exists.</p>
+<table>
+<tr><th>domain job</th><th>the library that runs it</th><th>what WE write</th></tr>
+<tr><td>data acquisition</td><td>the fetcher substrate (FROZEN) - ~100 declarative specs, one router</td><td>specs, not code</td></tr>
+<tr><td>basin delineation</td><td>pysheds</td><td><code>delineate</code>: a registered tool wrapping it -&gt; basin polygon</td></tr>
+<tr><td>corridor construction</td><td>shapely/pyproj</td><td><code>corridor_of</code>: a registered tool -&gt; corridor polygon</td></tr>
+<tr><td>mesh generation</td><td>oceanmesh (Shoreline, sizing functions, generate_mesh, cleanup)</td><td>the om2d driver: stage inputs, compose declared edgefx entries, guard island pruning, call the library</td></tr>
+<tr><td>TELEMAC geometry + boundary files</td><td>telapy (HermesFile set_mesh/set_bnd, Conlim numliq, get_ipobo)</td><td><code>mesh/shared/</code>: one thin writer calling those</td></tr>
+<tr><td>deck authoring</td><td>telapy TelemacCas + the dico</td><td>the deck writer: sheet -&gt; keywords, library-validated</td></tr>
+<tr><td>the solve</td><td>telapy runners (T2D / T3D / TOMAWAC / ARTEMIS / WAQTEL coupling)</td><td>ONE generic box entrypoint: manifest -&gt; stage -&gt; telapy runs the case -&gt; results out</td></tr>
+<tr><td>results reading</td><td>telapy TelemacFile / data_manip</td><td>the reader: engine output -&gt; neutral quantity-tagged products</td></tr>
+<tr><td>display + styling</td><td>MDAL/QGIS + the emission seam (FROZEN)</td><td>nothing new; mesh is a data type on the seam</td></tr>
+</table>
+<p><b>What we OWN outright</b> (the product, not replaceable by a library): the plan substrate (static plans, doors, journal, rerun), the tool registry and <code>!run</code>, sessions + the gate, MeshArtifact + recipe-as-record, staging economics + the containment rule, typed refusals + provenance. Orchestration and honesty - that is the product.</p>
+
+<h2>2. The tree after focus (telemac-only)</h2>
+<pre><code>trid3nt_server/workflows/
+    telemac/        # the 7 templates + deck writer + reader (steps wrappers dissolving)
+    mesh/           # THE mesh subsystem: tool, session, gate, meshers/{om2d, reg_grid},
+                    #   shared/ (format writers), artifact, recipes
+    lib/            # the plan substrate (unchanged)
+    shared/         # cross-template helpers that earned themselves
+    solver/         # box dispatch (telemac diagnostics only)
+
+workers/
+    telemac/        # ONE generic telapy runner (five per-process build scripts: deleted)
+    mesh/           # the oceanmesh image
+    qgis/           # processing substrate (not an engine)
+    [everything else -> ATTIC]</code></pre>
+<p><b>Attic doctrine</b>: <code>~/Documents/trid3nt-attic</code>, reference-only, mirrored paths, ledger line per move; git history is the archive. Non-telemac engines (workflows, workers, tests, scripts) live there until each returns THROUGH this shape - fresh expressions consulted against the attic, never ports.</p>
+
+<h2>3. The shape (what everything reuses)</h2>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    F["fetch tools (frozen)"] --> C["chain tools: delineate, corridor_of, ... (LEGO - plan-level, composable)"]
+    C --> M["build_mesh: bbox OR polygon domain -> om2d/reg_grid -> session/gate -> MeshArtifact + recipe"]
+    M --> D["deck writer (TelemacCas + dico)"]
+    D --> B["THE BOX: one generic telapy runner, --network none"]
+    B --> R["reader (TelemacFile) -> neutral products"]
+    R --> E["emission seam (frozen) -> QGIS"]
+</pre>
+</div>
+<p>The LEGO law governs the chain: domain narrowing is plan-level tool chaining; meshers never grow domain preps; a capability gap is answered by a composable tool, never by growing a stage.</p>
+
+<h2>4. The worker unification (next wave)</h2>
+<p>The worker stops knowing processes. The deck/manifest declares the telapy module, the staged inputs, and the result files; the entrypoint is <i>read manifest -&gt; stage -&gt; telapy runs the case -&gt; collect -&gt; out</i>. NATE pre-deleted the five per-process build scripts; residual build logic moves server-side into deck authoring (the sole-authored-record law) or dies. Ends with an image rebuild + one coarse smoke per process family THROUGH the image. Box contract unchanged; <code>--network none</code> unchanged.</p>
+
+<h2>5. The build-back ladder</h2>
+<ol>
+<li>Chained tools + polygon-domain meshing (IN FLIGHT).</li>
+<li>Worker unification (spec section 4) + attic of all non-telemac workers.</li>
+<li>om2d wrapper depth vs the four-fragility acceptance bar (deterministic contours, multi-section boundaries, rim sizing honored, lake-capable domains).</li>
+<li>TELEMAC templates rebuilt one at a time as native expressions of the principles - steps wrappers dissolve into plan-level dataflow as each template is rebuilt.</li>
+<li>Other engines return from the attic through this shape, one at a time.</li>
+</ol>
+
+<h2>6. Acceptance (standing, every rung)</h2>
+<table>
+<tr><th>gate</th><th>test</th></tr>
+<tr><td>library-first</td><td>reviewers grep new code for reimplemented library math/IO - reject any; every kept LOC answers "why not a library call"</td></tr>
+<tr><td>LEGO law</td><td>no mesher/stage carries domain-prep logic (grep-enforced)</td></tr>
+<tr><td>suite</td><td>the re-baselined slices at ZERO; scripted lane only (drivers + !run) - no UI work</td></tr>
+<tr><td>records</td><td>recipe/journal honest (measured determinism, non-replayable hand-edits flagged); ledgers per landing and per move</td></tr>
+<tr><td>close-out</td><td>spec-conformance gate: fresh-eyes clause walk + live scripted walkthroughs; deviations reported, never fixed</td></tr>
+</table>
