@@ -47,11 +47,14 @@ def _declaration(**over):
 
 def _artifact(**over) -> MeshArtifact:
     base = dict(
-        mesh_id="01MESH", name="Coweeta watershed", mode="corridor_tin",
+        mesh_id="01MESH", name="Coweeta watershed", mode="reg_grid",
         display_uri="s3://cache/mesh/01MESH/mesh.2dm",
         slf_uri="s3://cache/mesh/01MESH/mesh.slf", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
-        element_count=9727, bbox=_AOI, engine_compat=["telemac"])
+        element_count=9727, bbox=_AOI, engine_compat=["telemac"],
+        # A built mesh records the ask it came from, and the KIND on that record
+        # is what the resolution door checks a run's declaration against.
+        provenance={"spec": {"mesher": "reg_grid", "kind": "structured_grid"}})
     base.update(over)
     return MeshArtifact(**base)
 
@@ -221,6 +224,65 @@ def test_nothing_supplied_declared_or_discovered_refuses():
     with pytest.raises(MeshToolError) as excinfo:
         resolve_mesh(None, case_id="case-empty-2")
     assert excinfo.value.error_code == "MESH_UNRESOLVED"
+
+
+# --------------------------------------------------------------------------- #
+# The DECLARED KIND is the contract: membership, checked at the door.
+# --------------------------------------------------------------------------- #
+#: What a river-tracer template declares - TELEMAC-2D solves on triangles, so an
+#: unstructured_tri mesh is the whole of the set it accepts.
+def _tri_declaration():
+    return tool.build_mesh(mesher="om2d", kind="unstructured_tri",
+                           extent="s3://cache/section/reach.geojson")
+
+
+def _tri_artifact(**over) -> MeshArtifact:
+    return _artifact(
+        mode="om2d", name="Snake River reach",
+        provenance={"spec": {"mesher": "om2d", "kind": "unstructured_tri"}},
+        **over)
+
+
+def test_a_supplied_mesh_of_another_kind_refuses_by_name():
+    """A lattice was never a valid river-tracer input, so it is refused at the
+    door rather than trusted and narrated several steps later."""
+    with pytest.raises(MeshToolError) as excinfo:
+        resolve_mesh(_tri_declaration(), explicit=_artifact(), engine="telemac")
+    assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
+    message = str(excinfo.value)
+    assert "'unstructured_tri'" in message and "'structured_grid'" in message
+
+
+def test_a_supplied_mesh_of_the_declared_kind_is_accepted():
+    supplied = _tri_artifact()
+    resolution = resolve_mesh(_tri_declaration(), explicit=supplied,
+                              engine="telemac")
+    assert resolution.source == "explicit"
+    assert resolution.artifact is supplied
+
+
+def test_a_supplied_mesh_that_states_no_kind_refuses():
+    """Membership in a declared set is not answerable about an unstated shape."""
+    with pytest.raises(MeshToolError) as excinfo:
+        resolve_mesh(_tri_declaration(), explicit=_artifact(provenance={}),
+                     engine="telemac")
+    assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
+    assert "no recorded kind" in str(excinfo.value)
+
+
+def test_case_discovery_skips_a_mesh_of_the_wrong_kind():
+    """The same membership test, in the arm where a non-member is simply not a
+    candidate: the run builds its own declared mesh instead."""
+    stash_mesh_artifact("case-wrong-kind", _artifact())
+    resolution = resolve_mesh(_tri_declaration(), engine="telemac",
+                              case_id="case-wrong-kind")
+    assert resolution.source == "declared"
+
+
+def test_a_run_that_declared_no_mesh_states_no_set_to_be_a_member_of():
+    supplied = _artifact()
+    resolution = resolve_mesh(explicit=supplied, engine="telemac")
+    assert resolution.artifact is supplied
 
 
 # --------------------------------------------------------------------------- #
@@ -460,20 +522,34 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_a_mesher_that_takes_no_extent_refuses_one_by_name(monkeypatch):
-    """``telapy_mesh`` adopts a geometry, so an AOI reaches nothing inside it.
+    """A mesher that ADOPTS a geometry is reached by no AOI, so it declines one.
 
     Dropping it silently read as a lever that shaped the mesh - the user names an
     extent, gets a mesh of whatever file was handed over, and nothing says the
-    two never met.
+    two never met. Stood up for the test rather than borrowed from the roster:
+    every mesher the tree carries cuts its domain from an extent, and the refusal
+    is about what a mesher DECLARES, not about which ones are registered.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.mesh.meshers import MeshToolError
+    from trid3nt_server.workflows.mesh import meshers as mesher_registry
+    from trid3nt_server.workflows.mesh.meshers import (
+        MeshField,
+        Mesher,
+        MeshToolError,
+    )
 
+    monkeypatch.setitem(
+        mesher_registry._MESHERS, "adopts_a_geometry",
+        Mesher(name="adopts_a_geometry", build=lambda spec: None,
+               fields={"geometry": MeshField(
+                   "geometry", types=(str,), required=True,
+                   doc="the mesh file this mesher adopts")}))
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     fn = TOOL_REGISTRY["build_mesh"].fn
     for spatial in ({"bbox": (-75.8, 36.1, -75.7, 36.2)}, {"location": "Norfolk"}):
         with pytest.raises(MeshToolError) as excinfo:
-            await fn(mesher="telapy_mesh", geometry="/tmp/nowhere.slf", **spatial)
+            await fn(mesher="adopts_a_geometry", geometry="/tmp/nowhere.slf",
+                     **spatial)
         assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
         assert next(iter(spatial)) in str(excinfo.value)
 

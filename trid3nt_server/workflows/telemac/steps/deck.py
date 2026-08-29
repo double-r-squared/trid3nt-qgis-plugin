@@ -297,9 +297,8 @@ async def _settle_release(
     the only alternatives are releasing somewhere the user did not choose or
     solving a source outside the water.
 
-    A mesh cut from a BOX has no polygon to be inside of; the point rides
-    unchanged and the note says the containment test could not be made, which is
-    what the map layer and the provenance row then carry.
+    ONE path, and it always has a polygon: a mesh that states no domain polygon
+    refuses at the read rather than letting a point through untested.
 
     A run that placed no point asks nothing of the geometry and reads none of it.
     """
@@ -310,10 +309,6 @@ async def _settle_release(
     )
 
     domain = domain_polygon_of(mesh.get("artifact"))
-    if domain is None:
-        return release_pair, ("supplied point; the accepted mesh was cut from a "
-                              "box, so there is no domain polygon to test it "
-                              "against")
     contained = await asyncio.to_thread(
         contain_release_point, point=release_pair, domain=domain,
         flowline=river["provenance"]["centerline_uri"])

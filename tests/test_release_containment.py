@@ -119,10 +119,18 @@ def test_the_domain_read_is_the_mesh_own_record_of_what_it_was_cut_from():
         "s3://cache/section/reach.geojson")
 
 
-def test_a_mesh_cut_from_a_box_states_it_has_no_domain_polygon():
-    """Four numbers are not a shape a point can be inside of, and answering None
-    is how that is said - a bbox coerced into a rectangle would be a domain the
-    run never meshed."""
-    assert domain_polygon_of(_Artifact([-114.33, 42.57, -114.29, 42.59])) is None
-    assert domain_polygon_of(_Artifact(None)) is None
-    assert domain_polygon_of(None) is None
+@pytest.mark.parametrize("art", [
+    _Artifact([-114.33, 42.57, -114.29, 42.59]),  # a box, not a shape
+    _Artifact(None),                              # a mesh that states no extent
+    None,                                         # no accepted mesh at all
+])
+def test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_through(art):
+    """There is ONE containment path and it always has a polygon.
+
+    Four numbers are not a shape a point can be inside of. Answering "no domain"
+    let a supplied point ride into the deck untested with a note about it, which
+    is a release inside a shape nobody mapped - so the read refuses instead.
+    """
+    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+        domain_polygon_of(art)
+    assert "no mapped shape" in str(excinfo.value)

@@ -50,19 +50,27 @@ class ContainedRelease:
                 f"{self.snap_distance_m:.0f} m onto the flowline")
 
 
-def domain_polygon_of(artifact: Any) -> Any | None:
-    """The polygon the accepted mesh was cut from, or ``None`` for a box domain.
+def domain_polygon_of(artifact: Any) -> Any:
+    """The polygon the accepted mesh was cut from, or a typed refusal.
 
     The mesh records the spec it was built from, so the domain a containment test
     has to be against is the mesh's own statement of it rather than a second
-    resolution of the same question. A bbox extent is four numbers and no
-    polygon: there is nothing here to be inside of, and this says so by
-    answering None.
+    resolution of the same question.
+
+    There is ONE path. A mesh cut from a bbox is four numbers and no polygon, and
+    a release point tested against nothing is a release point nobody tested: the
+    reach templates declare a polygon domain, so a mesh without one is a mesh this
+    run was never meant to solve on and says so here.
     """
     spec = ((getattr(artifact, "provenance", None) or {}).get("spec") or {})
     extent = spec.get("extent")
     if isinstance(extent, (tuple, list)) or extent is None:
-        return None
+        raise TelemacDyeScenarioError(
+            "TELEMAC_DYE_SCENARIO_ERROR",
+            f"the accepted mesh for this run was cut from {extent!r} rather than "
+            "from a domain polygon, so there is no mapped shape a release point "
+            "could be inside of. A reach is meshed from the sectioned water "
+            "polygon; solve on a mesh built that way.")
     return extent
 
 

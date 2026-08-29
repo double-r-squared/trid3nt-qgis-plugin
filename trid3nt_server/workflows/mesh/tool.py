@@ -45,6 +45,8 @@ __all__ = [
     "DeclaredEdit",
     "bind_edit_inputs",
     "jsonable",
+    "kind_accepted",
+    "mesh_kind",
     "MeshDeclaration",
     "MeshResolution",
     "MeshSpec",
@@ -293,8 +295,12 @@ def resolve_mesh(
 ) -> MeshResolution:
     """Pick the mesh a run should use: explicit first, then the case, then the spec.
 
-    An explicit mesh NEVER falls through: if it cannot be read, or the engine
-    cannot solve on it, that is a refusal rather than a quiet substitution.
+    An explicit mesh NEVER falls through: if it cannot be read, if the engine
+    cannot solve on it, or if it is not the KIND of mesh the run declared, that is
+    a refusal rather than a quiet substitution. The declared kind is the run's
+    statement of what it accepts, so a mesh of another kind is checked out here -
+    at the door, beside engine-compat - rather than discovered several steps later
+    by a deck that assumed a shape the mesh does not have.
     """
     if explicit is not None:
         if isinstance(explicit, MeshArtifact):
@@ -316,12 +322,15 @@ def resolve_mesh(
                 "mesh artifact record, so what it is cannot be checked against the "
                 "engine; supply a mesh this case built.")
         _refuse_incompatible(art, engine)
+        _refuse_wrong_kind(art, declaration)
         return MeshResolution("explicit", "supplied on the run", artifact=art)
 
     for art in reversed(find_case_mesh_artifacts(
             case_id=case_id, loaded_mesh_uris=loaded_mesh_uris,
             s3_client=s3_client)):
         if engine is not None and not mesh_compatible_with_engine(art, engine)[0]:
+            continue
+        if not kind_accepted(art, declaration):
             continue
         return MeshResolution(
             "discovered", f"mesh {art.name!r} already authored in this case",
@@ -351,6 +360,46 @@ def supplied_mesh_artifact(explicit: Any, *, engine: str) -> MeshArtifact | None
         return None
     return resolve_mesh(explicit=explicit, engine=engine,
                         s3_client=_get_s3_client()).artifact
+
+
+def mesh_kind(art: MeshArtifact) -> Any:
+    """The KIND of mesh this is, as the build that made it recorded its own ask.
+
+    ``None`` for a mesh whose record does not state one, which is not the same as
+    a kind that fails to match: nothing here can decide what an unstated shape is.
+    """
+    return ((getattr(art, "provenance", None) or {}).get("spec") or {}).get("kind")
+
+
+def kind_accepted(art: MeshArtifact,
+                  declaration: MeshDeclaration | None) -> bool:
+    """Is ``art`` the kind of mesh ``declaration`` declared? -> membership, nothing more.
+
+    A run that declared no mesh of its own has stated no set to be a member of, so
+    there is nothing to check and every mesh passes. A mesh that states no kind
+    FAILS: the question is membership in a declared set, and a shape nobody wrote
+    down cannot be in one.
+    """
+    if declaration is None:
+        return True
+    return mesh_kind(art) == declaration.spec.kind
+
+
+def _refuse_wrong_kind(art: MeshArtifact,
+                       declaration: MeshDeclaration | None) -> None:
+    """Refuse a supplied mesh of a kind this run does not accept, by name."""
+    if kind_accepted(art, declaration):
+        return
+    declared = declaration.spec.kind  # type: ignore[union-attr]
+    got = mesh_kind(art)
+    is_a = repr(got) if got is not None else "of no recorded kind"
+    raise MeshToolError(
+        "MESH_KIND_MISMATCH",
+        f"this run accepts {declared!r} meshes; the mesh supplied for it "
+        f"({art.name!r}, built by {art.mode!r}) is {is_a}. The kind a template "
+        "declares is what its pipeline was built and tested against, so a mesh "
+        "of another kind is not a domain it can solve on - build or supply a "
+        f"{declared!r} mesh instead.")
 
 
 def _refuse_incompatible(art: MeshArtifact, engine: str | None) -> None:
