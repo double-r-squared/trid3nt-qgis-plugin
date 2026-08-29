@@ -69,6 +69,7 @@ def writer(monkeypatch):
                         "dest": "river_centerline.geojson"}],
             "provenance": {"seed_lon": -124.1, "seed_lat": 40.5,
                            "seed_rung": "position-named-flowline",
+                           "centerline_uri": "s3://c/centerline.geojson",
                            "centerline_sha256": "0" * 64,
                            "centerline_comids": [1],
                            "bed_source": "cop-dem-glo-30"},

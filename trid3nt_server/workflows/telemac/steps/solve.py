@@ -27,7 +27,6 @@ from .errors import (
     TelemacBanksUnavailableError,
     TelemacDyeScenarioError,
     TelemacReachDegenerateError,
-    TelemacReleasePointRejectedError,
 )
 from .reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
@@ -39,7 +38,6 @@ __all__ = [
     "download_result_selafin",
     "raise_if_banks_unavailable",
     "raise_if_reach_degenerate",
-    "raise_if_release_point_rejected",
     "read_run_metrics",
     "solve_reach",
 ]
@@ -86,25 +84,6 @@ def raise_if_reach_degenerate(metrics: dict[str, Any]) -> None:
     if str(metrics.get("error_code") or "") == "TELEMAC_REACH_DEGENERATE":
         raise TelemacReachDegenerateError(
             metrics.get("reach_length_m"), metrics.get("degenerate_channel_width_m"))
-
-
-def raise_if_release_point_rejected(metrics: dict[str, Any], *,
-                                    requested: bool) -> None:
-    """Refuse when the worker could not put the source at the supplied point.
-
-    The worker accept-radius-tests a supplied release point against the built mesh
-    and, on a miss, walks ``spill_fraction`` instead - it records the miss rather
-    than failing, because only the caller knows whether that point was asked for.
-    A point that WAS asked for and was not honored is a relocated release: the run
-    refuses instead of solving a source the user never placed.
-    """
-    if not requested:
-        return
-    rejected = metrics.get("release_point_rejected_dist_m")
-    if metrics.get("release_point_used") or rejected is None:
-        return
-    raise TelemacReleasePointRejectedError(
-        rejected, metrics.get("centerline_length_m"), metrics.get("bank_width_mean_m"))
 
 
 def download_result_selafin(run_id: str) -> tuple[str, int]:
@@ -233,12 +212,6 @@ async def solve_reach(*, deck: dict[str, Any],
             f"{getattr(run_result, 'error_message', '') or getattr(run_result, 'cancellation_reason', '') or ''}")
 
     metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
-    # The release point is reconciled HERE, against the solved mesh: the accept
-    # test lives in the worker (it is the mesh that decides), so the server can
-    # only learn the verdict once the run has written its metrics. Before the
-    # postprocess, so a relocated release never becomes a published product.
-    raise_if_release_point_rejected(
-        metrics, requested=reach.get("release_lon") is not None)
     if metrics.get("utm_epsg") is None:
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_OUTPUT_MISSING",

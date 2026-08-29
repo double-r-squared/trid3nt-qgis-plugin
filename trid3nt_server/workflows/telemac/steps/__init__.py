@@ -36,7 +36,7 @@ from .errors import (
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
     TelemacReachDegenerateError,
-    TelemacReleasePointRejectedError,
+    TelemacReleaseOutsideDomainError,
 )
 from .forcing import (
     CarrierDischarge,
@@ -122,7 +122,7 @@ __all__ = [
     "Wave", "write_coastal_deck",
     "TelemacBanksUnavailableError", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
-    "TelemacReleasePointRejectedError", "WaqtelO2", "WriteDeck",
+    "TelemacReleaseOutsideDomainError", "WaqtelO2", "WriteDeck",
     "arm_sediment_modules", "classify_substance", "compute_class",
     "coerce_event_time", "coerce_lonlat_point", "do_saturation_mgl",
     "event_time",

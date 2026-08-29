@@ -14,7 +14,7 @@ __all__ = [
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
     "TelemacReachDegenerateError",
-    "TelemacReleasePointRejectedError",
+    "TelemacReleaseOutsideDomainError",
 ]
 
 
@@ -75,49 +75,38 @@ class TelemacBanksUnavailableError(TelemacDyeScenarioError):
         ]
 
 
-class TelemacReleasePointRejectedError(TelemacDyeScenarioError):
-    """The supplied release point is too far from the meshed reach to be the source.
+class TelemacReleaseOutsideDomainError(TelemacDyeScenarioError):
+    """The supplied release point lies outside the domain polygon the run solves.
 
-    The worker accepts a release point within a couple of channel widths of a mesh
-    node and otherwise walks ``spill_fraction`` instead. Solving that fallback
-    would model a DIFFERENT release location than the one asked for, so the run
-    refuses. Retryable: the corrective args ride the tool-retry loop.
+    Decided before anything is staged, against the mapped polygon itself: a point
+    the domain does not contain is a release the run cannot put anywhere without
+    moving it somewhere else, which would answer a different question. Retryable:
+    the corrective args ride the tool-retry loop.
     """
 
     retryable = True
 
-    def __init__(self, rejected_dist_m: float | None,
-                 reach_length_m: float | None = None,
-                 mean_width_m: float | None = None) -> None:
-        self.rejected_dist_m = (
-            float(rejected_dist_m) if rejected_dist_m is not None else None)
-        self.reach_length_m = (
-            float(reach_length_m) if reach_length_m is not None else None)
-        self.mean_width_m = (
-            float(mean_width_m) if mean_width_m is not None else None)
-        dist_txt = (f"{self.rejected_dist_m:.0f} m from the nearest meshed node"
-                    if self.rejected_dist_m is not None
-                    else "outside the meshed water body")
-        domain_txt = ""
-        if self.reach_length_m is not None:
-            domain_txt = f" The meshed reach is {self.reach_length_m:.0f} m long"
-            if self.mean_width_m is not None:
-                domain_txt += f" and {self.mean_width_m:.0f} m wide on average"
-            domain_txt += "."
+    def __init__(self, lon: float, lat: float,
+                 distance_m: float | None = None) -> None:
+        self.lon = float(lon)
+        self.lat = float(lat)
+        self.distance_m = float(distance_m) if distance_m is not None else None
+        dist_txt = (f", {self.distance_m:.0f} m outside its nearest edge"
+                    if self.distance_m is not None else "")
         super().__init__(
             "TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN",
-            f"The release point you gave sits {dist_txt}, so the solver could not "
-            "put the source there." + domain_txt + " Nothing was relocated for you: "
-            "releasing the substance somewhere else would answer a different "
-            "question. Retry with a point ON the modeled reach, with a longer "
-            "reach_length_km so the point falls inside it, or without "
+            f"The release point ({self.lon:.5f}, {self.lat:.5f}) is not inside "
+            f"the domain polygon this run solves over{dist_txt}. Nothing was "
+            "relocated for you: releasing the substance somewhere else would "
+            "answer a different question. Retry with a point INSIDE the modeled "
+            "water body, widen the domain so the point falls in it, or omit "
             "release_coords to release at spill_fraction along the reach.",
         )
         self.suggestions = [  # type: ignore[attr-defined]
-            "Retry with release_coords ON the modeled river reach (the meshed "
-            "water body, not the bank or a nearby gage).",
-            "Or retry with a longer reach_length_km so the point falls inside the "
-            "modeled reach.",
+            "Retry with release_coords INSIDE the modeled water polygon (not on "
+            "the bank, and not at a nearby gage).",
+            "Or widen the domain - a longer reach, or a section cut that covers "
+            "the point - so the release falls inside it.",
             "Or omit release_coords to release at spill_fraction along the reach.",
         ]
 

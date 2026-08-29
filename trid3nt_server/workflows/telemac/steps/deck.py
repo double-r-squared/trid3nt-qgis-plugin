@@ -10,6 +10,7 @@ not use a module leaves the deck byte-identical to the historical one.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -284,6 +285,41 @@ def _do_sag_block(cfg: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+async def _settle_release(
+    release_pair: tuple[float, float] | None, *, mesh: dict[str, Any],
+    river: dict[str, Any],
+) -> tuple[tuple[float, float] | None, str | None]:
+    """A supplied release point, settled against the domain -> ``(point, note)``.
+
+    PRE-FLIGHT: the domain polygon the accepted mesh was cut from decides whether
+    the point can be a source at all, and the fetched flowline decides where on
+    the river it sits. A point the domain does not hold raises through, because
+    the only alternatives are releasing somewhere the user did not choose or
+    solving a source outside the water.
+
+    A mesh cut from a BOX has no polygon to be inside of; the point rides
+    unchanged and the note says the containment test could not be made, which is
+    what the map layer and the provenance row then carry.
+
+    A run that placed no point asks nothing of the geometry and reads none of it.
+    """
+    if release_pair is None:
+        return None, None
+    from trid3nt_server.workflows.telemac.release_point import (
+        contain_release_point, domain_polygon_of,
+    )
+
+    domain = domain_polygon_of(mesh.get("artifact"))
+    if domain is None:
+        return release_pair, ("supplied point; the accepted mesh was cut from a "
+                              "box, so there is no domain polygon to test it "
+                              "against")
+    contained = await asyncio.to_thread(
+        contain_release_point, point=release_pair, domain=domain,
+        flowline=river["provenance"]["centerline_uri"])
+    return (contained.lon, contained.lat), contained.note
+
+
 async def write_reach_deck(
     *,
     reach: dict[str, Any],
@@ -335,9 +371,13 @@ async def write_reach_deck(
     rather than on an equivalent rebuild, and the timestep follows the edge that
     mesh was BUILT at rather than the edge that was asked for.
 
-    Also puts the RELEASE POINT on the canvas: where the substance enters is what
-    the downstream distance is measured from, so it is a physical input, and the
-    layer says out loud whether the user placed it or the pipeline derived it.
+    The RELEASE POINT is settled here, BEFORE anything is staged: the river is
+    resolved first because containment is a question about real geometry, a
+    supplied point outside the domain polygon refuses while the user can still
+    move it, and one inside it is put on the flowline. Only then does the marker
+    go on the canvas - at the point the deck actually carries, so the map and the
+    solve cannot disagree - saying out loud whether the user placed it or the
+    pipeline derived it.
     """
     substance = sanitize_substance(substance)
     release_pair = coerce_lonlat_point(release_coords)
@@ -369,24 +409,9 @@ async def write_reach_deck(
     from trid3nt_server.workflows.telemac.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
-    # The marker rides BEFORE the solve, so the user sees the input against the
-    # mesh rather than only in the results. What keeps it honest is the
-    # reconciliation on the other side: solve_reach REFUSES when the worker could
-    # not put the source at a supplied point, so no COMPLETED run carries a
-    # user-placed marker the plume disagrees with.
-    release_point = release_pair or seed_pair
-    await publish_release_point(
-        current_emitter(),
-        lon=(release_point or (seed_lon, seed_lat))[0],
-        lat=(release_point or (seed_lon, seed_lat))[1],
-        user_supplied=release_point is not None,
-        reach_name=reach["slug"],
-        label="Outfall" if do_sag_config else "Release point")
-
     # The river this reach is MESHED on, fetched here and staged into the run
-    # directory. It runs after the release marker so the canvas shows the point
-    # first and the river it sits on second, and BEFORE the deck is assembled
-    # because the seed the worker is handed is the one this ladder resolved.
+    # directory. It runs BEFORE everything the release depends on, because the
+    # flowline a supplied point is snapped to is the one this ladder resolved.
     run_tag = new_ulid()
     river = await resolve_reach_river(
         reach=reach, seed=seed, run_tag=run_tag,
@@ -400,6 +425,22 @@ async def write_reach_deck(
                 river["provenance"]["centerline_comids"],
                 river["provenance"]["centerline_sha256"][:12],
                 river["provenance"]["bed_source"])
+
+    release_lonlat, release_note = await _settle_release(
+        release_pair, mesh=mesh, river=river)
+
+    # The marker rides BEFORE the solve, so the user sees the input against the
+    # mesh rather than only in the results, and it carries the SETTLED point: the
+    # containment test above refuses anything the domain does not hold, so no run
+    # carries a user-placed marker the plume disagrees with.
+    release_point = release_lonlat or seed_pair
+    await publish_release_point(
+        current_emitter(),
+        lon=(release_point or (seed_lon, seed_lat))[0],
+        lat=(release_point or (seed_lon, seed_lat))[1],
+        user_supplied=release_point is not None,
+        reach_name=reach["slug"],
+        label="Outfall" if do_sag_config else "Release point")
 
     rain_mm_day = (rain or {}).get("mm_per_day")
     deck: dict[str, Any] = {
@@ -435,11 +476,12 @@ async def write_reach_deck(
         **({"output_interval_min": float(output_interval_min)}
            if output_interval_min is not None else {}),
         "dye_conc_mgl": float(dye_concentration_mgl),
-        # A picked release point overrides spill_frac (the worker snaps it to the
-        # nearest interior mesh node, validated within 2 channel widths).
-        **({"release_lon": round(release_pair[0], 6),
-            "release_lat": round(release_pair[1], 6)}
-           if release_pair is not None else {}),
+        # A picked release point overrides spill_frac. It is the SETTLED point -
+        # already inside the domain and already on the flowline - so the worker
+        # places the source where it is told and tests nothing.
+        **({"release_lon": round(release_lonlat[0], 6),
+            "release_lat": round(release_lonlat[1], 6)}
+           if release_lonlat is not None else {}),
         "spill_frac": float(min(max(spill_fraction, 0.0), 1.0)),
         "pulse_window_s": float(spill_duration_s),
         "source_q_m3s": float(source_q_m3s),
@@ -467,6 +509,10 @@ async def write_reach_deck(
         "mesh_resolution_asked_m": mesh_resolution_m,
         "time_step_s": time_step_s,
         "seed_source": seed.get("source"),
+        # The pre-flight's record of what it did to a supplied release point.
+        # It rides the run META rather than the deck: the worker is handed the
+        # settled coordinates and no account of how they were settled.
+        "release_note": release_note,
         "discharge_note": carrier_discharge.get("note"),
         "rain_note": (rain or {}).get("note"),
         "rain_mm_per_day": rain_mm_day,

@@ -1,0 +1,128 @@
+"""Offline tests for the SERVER-SIDE release-point pre-flight.
+
+The question this settles is whether a release point can be a source at all, and
+it is settled here rather than in the worker: the domain polygon and the flowline
+are geometry the run already holds, so the answer is available before anything is
+staged and a point that cannot be honored is refused while the user can still
+move it.
+
+What the old plumbing did instead - and what these tests exist to keep out - was
+accept a point within a couple of channel widths of a mesh node, walk
+``spill_fraction`` when it missed, and let the server discover the relocation
+from the run's own metrics afterwards.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from trid3nt_server.workflows.telemac.release_point import (
+    contain_release_point,
+    domain_polygon_of,
+)
+from trid3nt_server.workflows.telemac.steps.errors import (
+    TelemacDyeScenarioError,
+    TelemacReleaseOutsideDomainError,
+)
+
+# A ~0.02 deg square of "water" near Twin Falls, Idaho, with a flowline running
+# west-east through its middle. Inline GeoJSON so nothing is read or fetched.
+_DOMAIN = json.dumps({
+    "type": "FeatureCollection",
+    "features": [{"type": "Feature", "properties": {}, "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-114.33, 42.57], [-114.29, 42.57],
+                         [-114.29, 42.59], [-114.33, 42.59],
+                         [-114.33, 42.57]]]}}]})
+
+_FLOWLINE = json.dumps({
+    "type": "FeatureCollection",
+    "features": [{"type": "Feature", "properties": {}, "geometry": {
+        "type": "LineString",
+        "coordinates": [[-114.34, 42.58], [-114.31, 42.58], [-114.28, 42.58]]}}]})
+
+
+class _Artifact:
+    """The one thing the pre-flight reads off an accepted mesh."""
+
+    def __init__(self, extent):
+        self.provenance = {"spec": {"mesher": "om2d", "extent": extent}}
+
+
+def test_a_point_on_the_flowline_inside_the_domain_is_honored_unmoved():
+    got = contain_release_point(point=(-114.31, 42.58), domain=_DOMAIN,
+                                flowline=_FLOWLINE)
+    assert got.lon == pytest.approx(-114.31, abs=1e-5)
+    assert got.lat == pytest.approx(42.58, abs=1e-5)
+    assert got.snap_distance_m < 1.0
+    assert "on the flowline" in got.note
+
+
+def test_a_point_inside_the_domain_but_off_the_river_is_snapped_onto_it():
+    """The snap is to the REAL flowline, and the distance it moved is recorded -
+    a moved point must never read on the map as a placed one."""
+    got = contain_release_point(point=(-114.31, 42.585), domain=_DOMAIN,
+                                flowline=_FLOWLINE)
+    assert got.lon == pytest.approx(-114.31, abs=1e-4)
+    assert got.lat == pytest.approx(42.58, abs=1e-4)
+    assert 400.0 < got.snap_distance_m < 700.0  # ~0.005 deg of latitude
+    assert "moved" in got.note and "onto the flowline" in got.note
+
+
+def test_a_point_outside_the_domain_refuses_and_names_the_fix():
+    """No band, no nearest-anything: outside the polygon there is nothing to
+    place the source on that the user chose."""
+    with pytest.raises(TelemacReleaseOutsideDomainError) as excinfo:
+        contain_release_point(point=(-114.26, 42.58), domain=_DOMAIN,
+                              flowline=_FLOWLINE)
+    err = excinfo.value
+    assert err.error_code == "TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN"
+    assert err.retryable is True and len(err.suggestions) == 3
+    assert err.distance_m > 1000.0
+    message = str(err)
+    assert "not inside the domain polygon" in message
+    assert "spill_fraction" in message
+
+
+def test_the_snap_never_leaves_the_domain_by_following_the_river_out_of_it():
+    """The flowline runs on past the modeled stretch. A point near the domain's
+    east edge must land on the stretch INSIDE it, not on the nearer length of
+    river the run does not solve."""
+    got = contain_release_point(point=(-114.2905, 42.5895), domain=_DOMAIN,
+                                flowline=_FLOWLINE)
+    assert -114.33 <= got.lon <= -114.29
+    assert got.lat == pytest.approx(42.58, abs=1e-4)
+
+
+def test_a_flowline_that_misses_the_domain_refuses_rather_than_reaching_for_it():
+    away = json.dumps({"type": "LineString",
+                       "coordinates": [[-114.20, 42.58], [-114.18, 42.58]]})
+    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+        contain_release_point(point=(-114.31, 42.58), domain=_DOMAIN,
+                              flowline=away)
+    assert "different reaches" in str(excinfo.value)
+
+
+def test_a_domain_source_carrying_no_polygon_refuses():
+    line_only = json.dumps({"type": "LineString",
+                            "coordinates": [[-114.33, 42.58], [-114.29, 42.58]]})
+    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+        contain_release_point(point=(-114.31, 42.58), domain=line_only,
+                              flowline=_FLOWLINE)
+    assert "no polygon" in str(excinfo.value)
+
+
+def test_the_domain_read_is_the_mesh_own_record_of_what_it_was_cut_from():
+    assert domain_polygon_of(_Artifact("s3://cache/section/reach.geojson")) == (
+        "s3://cache/section/reach.geojson")
+
+
+def test_a_mesh_cut_from_a_box_states_it_has_no_domain_polygon():
+    """Four numbers are not a shape a point can be inside of, and answering None
+    is how that is said - a bbox coerced into a rectangle would be a domain the
+    run never meshed."""
+    assert domain_polygon_of(_Artifact([-114.33, 42.57, -114.29, 42.59])) is None
+    assert domain_polygon_of(_Artifact(None)) is None
+    assert domain_polygon_of(None) is None

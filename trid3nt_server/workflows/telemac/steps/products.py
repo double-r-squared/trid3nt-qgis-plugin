@@ -52,15 +52,15 @@ def _s3_object_exists(s3: Any, bucket: str, key: str) -> bool:
         return False
 
 
-def _release_provenance(deck: dict[str, Any],
-                        metrics: dict[str, Any]) -> SyntheticInput:
-    """Where the source actually entered the water, as the layer's own record.
+def _release_provenance(deck: dict[str, Any]) -> SyntheticInput:
+    """Where the source entered the water, as the layer's own record.
 
-    The downstream distance is measured from here, so the row states which point
-    the SOLVER used: the supplied one (honored, snapped to the nearest interior
-    mesh node) or the ``spill_fraction`` walk along the modeled centerline. A
-    supplied point that was not honored never reaches this step - the solve
-    refuses it - so the row can never read "user" over a relocated release.
+    The downstream distance is measured from here, so the row states the point
+    the deck was authored with: the supplied one, which the pre-flight
+    containment test already accepted into the domain and put on the flowline,
+    or the ``spill_fraction`` walk along the modeled centerline. A point outside
+    the domain never reaches this step - the pre-flight refuses it - so the row
+    can never read "user" over a relocated release.
     """
     reach = deck["deck"]
     lon, lat = reach.get("release_lon"), reach.get("release_lat")
@@ -71,13 +71,9 @@ def _release_provenance(deck: dict[str, Any],
             real_source_if_any="NHDPlus flowline centerline",
             note="no release point was supplied; the source sits at spill_fraction "
                  "along the modeled reach")
-    honored = bool(metrics.get("release_point_used"))
     return SyntheticInput(
         param="release_point", value=f"({lon}, {lat})", basis="user",
-        consequence="scenario",
-        note=("supplied point, honored by the solver (snapped to the nearest "
-              "interior mesh node)" if honored else
-              "supplied point; the solver reported no verdict on it"))
+        consequence="scenario", note=deck.get("release_note"))
 
 
 def _rain_provenance(deck: dict[str, Any]) -> list[SyntheticInput]:
@@ -108,12 +104,12 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
     The carrier discharge that governs dilution (real NWM streamflow or
     user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
     the bank geometry the worker actually sampled (real NHDArea polygons vs an
-    assumed constant-width ribbon), the release point the solver used, and the
-    user's explicit mesh edge length WHEN a sizing rule moved it.
+    assumed constant-width ribbon), the release point the deck was authored with,
+    and the user's explicit mesh edge length WHEN a sizing rule moved it.
     """
     banks = solve.get("bank_provenance") or "constant_ribbon"
     return [
-        _release_provenance(deck, solve.get("metrics") or {}),
+        _release_provenance(deck),
         *_rain_provenance(deck),
         *_mesh_override_provenance(deck),
         SyntheticInput(
