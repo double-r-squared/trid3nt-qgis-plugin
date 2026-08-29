@@ -2511,3 +2511,23 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ~/Documents/trid3nt-attic (outside the repo, reference only; git
   history remains the archive). Anti-bloat doctrine: old iterations
   LEAVE the repo, always.
+
+- THE LEGO RULING (NATE 2026-08-28, verbatim intent): "composability
+  pureness modularity not bloat and shims" - MESHERS NEVER GROW
+  DOMAIN PREPS. Domain narrowing is PLAN-LEVEL CHAINING of processing
+  tools: subdomain = delineate(aoi, pour_point) / corridor =
+  corridor_of(flowline, width_m) -> build_mesh(bbox=subdomain, ...).
+  delineate + corridor_of become REGISTERED PROCESSING TOOLS
+  (harvested from the attic'd watershed/corridor code AS TOOLS);
+  build_mesh's extent accepts bbox OR polygon; om2d gains ONLY the
+  polygon-domain path (SDF from the supplied polygon - the mechanism
+  the attic'd watershed driver already used with authentic
+  om.generate_mesh). The reach/catchment templates repoint to the
+  chain. LESSON RECORDED: when a capability gap appears, the answer
+  is a composable tool in the chain, never a mesher/step growth.
+- DS RULINGS (NATE 2026-08-28): write_telemac_pair moves to a NEW
+  mesh/shared/ subdir with a better name (shared format writers);
+  SCOUT MDAL for format-IO boilerplate reduction where applicable
+  (report first). SWMM gate chunk + moved engines' solver diagnostics
+  -> attic. persistence/ KEPT (32 live call sites = session/chat
+  restart durability); rename stays queued.
