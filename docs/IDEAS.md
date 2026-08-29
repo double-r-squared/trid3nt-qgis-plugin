@@ -2608,3 +2608,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   mesh-compatibility rule registered" is an honest refusal, and the
   richer decline returns WITH schism at rung 5 authored from its
   actual needs; the purge-broken test module fixed in the same pass.
+
+- DECLARED-INPUT CONTRACTS (NATE 2026-08-29, dissolves the box-edge
+  question): workflows declare their valid inputs READABLY, BEFORE
+  running; verification = SANITATION BY MEMBERSHIP (is the supplied
+  thing's type in the declared set) - trivial, unambiguous, scoped to
+  the TESTED HAPPY PATH; the set grows ONLY in lockstep with built +
+  tested pipeline support. MRE implementation: the template's own
+  MESH declaration (kind=...) IS the contract - a supplied/discovered
+  mesh must MATCH the declared kind or refuse by name ("river_dye
+  accepts unstructured_tri; got structured_grid"). A reg_grid mesh
+  was never a valid river_dye input (T2D = triangles), so the
+  trust+tell branch DIES - the box edge never reaches release
+  containment. Coercion's place confirmed: coercion canonicalizes
+  spelling, validity checks membership on the canonical form, NEITHER
+  ever guesses (re-spell, never decide); classification coercions get
+  the strictest refuse-on-unknown audit at template rebuild.
