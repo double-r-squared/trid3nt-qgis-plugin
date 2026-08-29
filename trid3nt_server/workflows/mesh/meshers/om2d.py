@@ -21,8 +21,8 @@ patched one.
 An open boundary is a CONTIGUOUS stretch of the boundary walk, identified by
 oceanmesh's own ``identify_ocean_boundary_sections`` from the bed: a solver reads
 one liquid boundary as one continuous forcing edge, so a set of scattered nodes
-that happens to sit on the same side of the domain is not a boundary. The same
-sections number the ``.cli`` and the ``hgrid.gr3``.
+that happens to sit on the same side of the domain is not a boundary. Those
+sections number the ``.cli``.
 
 Conformality is MEASURED, never asserted: the obstacle outline goes in as
 DistMesh's constrained ``pfix`` points and the offset that survives is reported
@@ -215,8 +215,6 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
         boundary=state["boundary"], domain_source=domain.source)
     stats = _stats(rundir)
     engine_compat = ["telemac"] if bed_up is not None else []
-    if "gr3_uri" in files:
-        engine_compat.append("schism")
 
     return Mesh(
         points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}", bed=bed_up,
@@ -638,8 +636,7 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
 
     TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
     boundary-conditions file is only valid against the geometry whose boundary
-    numbering it was written from. SCHISM's ``hgrid.gr3`` carries its own boundary
-    block and is written from the same node list.
+    numbering it was written from.
 
     Only formats an engine READS are written: no worker here consumes an ADCIRC
     ``fort.14`` (the SWAN worker is regular-grid only), so the shared writer stays
@@ -681,7 +678,6 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
                      "designated_by": "om2d"})
 
     open_nodes = [n for s in sections for n in s["nodes"]]
-    node_lists = [list(s["nodes"]) for s in sections]
     files: dict[str, str] = {}
     pair = write_telemac_pair(
         rundir, x=points_m[:, 0], y=points_m[:, 1], cells=cells, bed=bed_up,
@@ -690,37 +686,7 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
     files["cli_uri"] = str(pair["cli"])
     probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
     probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
-
-    if node_lists and bed_up is not None:
-        depth_down = -np.asarray(bed_up, dtype=float)
-        gr3 = _gr3(lonlat, cells, depth_down, node_lists)
-        if gr3 is not None:
-            local = rundir / "hgrid.gr3"
-            local.write_text(gr3, encoding="utf-8")
-            files["gr3_uri"] = str(local)
     return files, info, probes
-
-
-def _gr3(lonlat: Any, cells: Any, depth_down: Any,
-         open_sections: list[list[int]]) -> str | None:
-    """The SCHISM geometry, through the repo's one gr3 writer.
-
-    Best-effort: the mesh is complete without it, so a bridge failure leaves the
-    mesh TELEMAC-only rather than failing a build that already succeeded.
-    """
-    import numpy as np
-
-    try:
-        from trid3nt_server.workflows.schism.deck_authoring import load_gr3_bridge
-
-        return load_gr3_bridge().tin_to_hgrid(
-            np.asarray(lonlat, dtype=float), np.asarray(cells, dtype=np.int64),
-            depth=np.asarray(depth_down, dtype=float), grid_name="trid3nt_om2d",
-            open_sections=open_sections, clean_boundary=False)
-    except Exception as exc:  # noqa: BLE001 -- the gr3 is an addition, never fatal
-        logger.warning("om2d: hgrid.gr3 emission failed (%s); the mesh stays "
-                       "TELEMAC-only", exc)
-        return None
 
 
 def _open_sections(rundir: Path, lonlat: Any, cells: Any, bed_up: Any,
