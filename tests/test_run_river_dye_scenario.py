@@ -288,24 +288,33 @@ def test_the_plan_validates_and_gates_before_the_solve():
     assert steps[-1].charts[0].name == "dye_concentration"
 
 
-def test_the_declared_data_is_reference_data_the_chain_authors_from():
-    from trid3nt_server.workflows.lib import AuthoredProducer, ReferenceProducer
+def test_the_declared_data_is_the_chain_in_class_body_order():
+    from trid3nt_server.workflows.lib import DataRef, data_rows
     from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
 
-    by_name = {d.name: d for d in DATA}
-    assert set(by_name) == {"rivers", "centerline", "ends", "banks",
-                            "reach_polygon", "rain"}
-    # The world is FETCHED fresh for the domain - no .supplied(); the domain the
-    # run models is AUTHORED from it by the two geometry links.
-    fetched = ("rivers", "centerline", "banks", "rain")
-    assert all(isinstance(by_name[n].producer, ReferenceProducer) for n in fetched)
-    assert all(isinstance(by_name[n].producer, AuthoredProducer)
-               for n in ("ends", "reach_polygon"))
-    assert not hasattr(by_name["rivers"].producer, "byo")
+    rows = data_rows(DATA)
+    # CLASS-BODY ORDER is the declaration's own, and the chain reads down it.
+    assert [d.name for d in rows] == ["rivers", "centerline", "ends", "banks",
+                                      "reach_polygon", "rain"]
+    by_name = {d.name: d for d in rows}
+    # Row-to-row dataflow written as a plain identifier binds as the same
+    # late-bound ref an out-of-body DATA.<row> yields.
+    assert by_name["ends"].producer.kwargs["line"] == DataRef("centerline")
+    assert by_name["reach_polygon"].producer.kwargs["polygon"] == DataRef("banks")
+    assert DATA.rivers == DataRef("rivers")
+    # None of these is superseded by a supplied artifact.
+    assert all(d.producer.supplied_uri is None for d in rows)
     # No producer here declares a ladder: gridMET-vs-user-rate is a branch on the
     # ask inside one producer, not a fallback chain, and a declared ladder that
     # never fired would be indistinguishable from one that did.
-    assert all(d.producer.ladder_rungs == () for d in DATA)
+    assert all(d.producer.ladder_rungs == () for d in rows)
+
+
+def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
+
+    with pytest.raises(AttributeError):
+        DATA.centreline
 
 
 # ===========================================================================

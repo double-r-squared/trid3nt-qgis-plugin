@@ -30,9 +30,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
-    D,
     Data,
-    Fetch,
     Forcing,
     FormGate,
     P,
@@ -73,15 +71,15 @@ _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 #:
 #: The harbour bed is still sampled INSIDE the solver container - that one is on
 #: the in-worker-fetch migration queue.
-DATA = (
-    Data("structure").supplied(geometry="polyline").optional(),
+class DATA:
+    structure = Data.supplied(geometry="polyline").optional()
     #: The DOMAIN, as a slot of the same shape. A phase-resolving solve is the
     #: most mesh-dependent question this fleet asks, so the mesh it runs on is the
     #: caller's to author: hand this slot a mesh ``build_mesh`` built - adaptive
     #: sizing, the breakwater cut in conformally, a seaward boundary designated -
     #: and it IS the domain. Unfilled, the deck asks for the uniform grid the
     #: worker lays over the AOI, which is a labeled fallback and not a stance.
-    Data("mesh").supplied(geometry="mesh").optional(),
+    mesh = Data.supplied(geometry="mesh").optional()
     #: The BED, as declared reference data. Sampling it inside the solver
     #: container would bypass the emit, cache, provenance and retry the router
     #: gives every other fetch. Declaring it here puts the bathymetry on the
@@ -90,17 +88,16 @@ DATA = (
     #: directory, and the builder reads a file.
     #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
     #: against - so it travels from the template rather than being a router default.
-    Data("bed", Fetch.tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
-                           bathy_source=P.bathy_source,
-                           domain_kind="lake", mode=P.wave_mode,
-                           real_bed_modes=("diffraction",),
-                           px_per_deg=3000.0, max_px_per_side=2500)),
-)
+    bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+               bathy_source=P.bathy_source,
+               domain_kind="lake", mode=P.wave_mode,
+               real_bed_modes=("diffraction",),
+               px_per_deg=3000.0, max_px_per_side=2500)
 
 
 # -- the binding blocks --------------------------------------------------- #
 # What the run IS, declared as frozen values above the recipe that assembles
-# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# them. Every member is a late-bound read (P.<param> / DATA.<row> / Ref) that the
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
@@ -113,9 +110,9 @@ PHYSICS = Physics("harbor_agitation",
                   # The slot, read late. Because producers are demand-pulled, an
                   # unfilled slot costs no fetch and binds to None - so the
                   # barrier is meshed WHEN the slot is filled and never otherwise.
-                  structure=D.structure,
+                  structure=DATA.structure,
                   bathy_source=P.bathy_source,
-                  bed=D.bed)
+                  bed=DATA.bed)
 
 #: The MESH ASK, frozen at declaration and building nothing at import. An
 #: open-water deck runs on a uniform lattice over the acquired AOI, and the router

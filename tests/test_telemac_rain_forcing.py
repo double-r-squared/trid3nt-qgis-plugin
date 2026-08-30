@@ -68,11 +68,13 @@ def test_window_parser_rejects_malformed():
         F._parse_gridmet_window("not-a-date:also-bad")
 
 
-# --- the declared temporal transform on Data("rain") ----------------------- #
+# --- the declared temporal transform on the ``rain`` DATA row --------------- #
 
 
 def _rain_decl():
-    return next(d for d in M.DATA if d.name == "rain")
+    from trid3nt_server.workflows.lib import data_rows
+
+    return next(d for d in data_rows(M.DATA) if d.name == "rain")
 
 
 def test_the_rain_declaration_states_its_cadence_and_units():

@@ -21,16 +21,16 @@ frozen until that wave.
 narrowing is plan-level chaining of processing tools, which is what the LEGO
 ruling asks for:
 
-- `telemac_rain_on_grid`: `Data("basin", Build.tool("delineate_watershed", ...))`
-  -> `Data("sized", Build.tool("combine", polygon=Ref("basin"), lines=D.rivers))`
+- `telemac_rain_on_grid`: `basin = tool("delineate_watershed", ...)`
+  -> `sized = tool("combine", polygon=basin, lines=rivers)`
   -> `MESH = tool.build_mesh(mesher="om2d", extent=Ref("sized"), ...)`. The
   template registers again once the worker side lands (below).
 - `telemac_river_dye` / `telemac_do_sag`:
-  `Data("centerline", Fetch.tool("fetch_nhdplus_nldi_navigate", ...))` ->
-  `Data("ends", Build.tool("endpoints", line=D.centerline))` ->
-  `Data("banks", Fetch.tool("fetch_nhd_area_water", ...))` ->
-  `Data("reach_polygon", Build.tool("section", polygon=D.banks,
-  between=Ref("ends.between")))` -> `MESH = tool.build_mesh(mesher="om2d",
+  `centerline = tool("fetch_nhdplus_nldi_navigate", ...)` ->
+  `ends = tool("endpoints", line=centerline)` ->
+  `banks = tool("fetch_nhd_area_water", ...)` ->
+  `reach_polygon = tool("section", polygon=banks,
+  between=Ref("ends.between"))` -> `MESH = tool.build_mesh(mesher="om2d",
   extent=Ref("reach_polygon"), refine={"edge_length": P.mesh_resolution_m})`.
   The `between` cut keeps the two transect faces the inflow and the outflow
   are prescribed on. Both templates are REGISTERED
@@ -38,7 +38,7 @@ ruling asks for:
 
 **Two generic geometry tools** back those chains: `combine` (a polygon plus
 the lines riding inside it -> one geometry document) and `endpoints` (a line
--> its two end points). Both are registered tools, so `Build.tool("combine",
+-> its two end points). Both are registered tools, so `tool("combine",
 ...)` in a declaration and `combine(...)` from a chat are the same call.
 
 **`om2d.read_geometry` unwraps a layer value**, so `extent=Ref("basin")` /
@@ -117,15 +117,11 @@ pre-repoint note flagged as UNCOLLECTABLE (`test_mesh_declaration_travel.py`,
 `test_telemac_event_time.py`, `test_telemac_rain_forcing.py`) all collect
 clean now that neither reach template names the purged `corridor_tin`.
 
-| module | count | why |
-|---|---|---|
-| `test_door_dissolution.py` | 2 | `test_all_templates_registered_and_callable` (the roster) and `test_every_template_surfaces_in_top8` (retrieval surfacing) both still list `telemac_rain_on_grid` in `EXPECTED_TEMPLATES` |
-| `test_telemac_rain_on_grid_template.py` | 1 | `test_registered_as_telemac_template` asserts the name is in `TOOL_REGISTRY` |
-| `test_tool_retrieval.py` | 1 | `test_no_dead_corpus_keys` - `tool_query_corpus.yaml` still carries `telemac_rain_on_grid`'s corpus queries for a name not currently registered |
-| `test_template_hygiene.py` | 1 | `test_hygiene_gate_covers_all_templates` - the hygiene gate's live template roster is one short of `EXPECTED_TEMPLATES` |
-
-Restoring the one commented-out import line in `trid3nt_server/tools/__init__.py`
-clears all 5 - each test's assertion is that the honest-absence state matches
-the registry, corpus and hygiene gate consistently, which it does; they fail
-only because `telemac_rain_on_grid` is deliberately parked rather than
-deleted.
+RESOLVED. `telemac_rain_on_grid` is now DECLARED PARKED -
+`register_workflow(parked="awaiting the worker-unification port of its mesh
+step")` - so the module imports with the rest of the tree, its plan validates,
+the tool never registers and invoking it refuses `TEMPLATE_PARKED` naming the
+reason. The roster, hygiene and corpus checks read that state (see
+`PARKED_TEMPLATES` in `tests/test_door_dissolution.py`) instead of import order,
+and all five formerly-order-dependent tests are green. Unparking is deleting the
+one `parked=` keyword on the template's `register_workflow` call.

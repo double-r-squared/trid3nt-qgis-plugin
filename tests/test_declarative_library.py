@@ -15,14 +15,13 @@ import pytest
 from pydantic import BaseModel
 
 from trid3nt_server.workflows.lib import (
-    Build,
     CoversAOI,
     D,
     Data,
+    DataDecl,
     DataRef,
     Domain,
     DrawGate,
-    Fetch,
     FormGate,
     LeakScanTruncated,
     ModifierIllegalError,
@@ -44,6 +43,7 @@ from trid3nt_server.workflows.lib import (
     Plan,
     Workflow,
     deep_freeze,
+    tool,
     doors,
     interpret,
     invocation_key,
@@ -122,6 +122,13 @@ async def stub_producer(**kwargs):
     if "stub_producer" in _FAIL_AT:
         raise RuntimeError("producer down")
     return "s3://b/produced.tif"
+
+
+async def stub_no_bbox(**kwargs):
+    """A layer result whose ``bbox`` field is THERE and empty - the None-missing
+    tail the binder must refuse rather than carry forward."""
+    _CALLS.append("stub_no_bbox")
+    return {"uri": "s3://b/line.fgb", "bbox": None}
 
 
 async def stub_rung(**kwargs):
@@ -353,9 +360,15 @@ def test_the_composites_own_provenance_row_wins():
 
 
 # --- modifier legality ------------------------------------------------------- #
-def test_reference_producer_cannot_be_supplied():
-    assert not hasattr(Fetch.tool("fetch_dem"), "supplied")
-    assert hasattr(Build.tool("build_mesh"), "supplied")
+def test_one_author_word_declares_every_producer():
+    """There is no fetch/build role on the declaration: what a runner does to the
+    world is the REGISTRY's knowledge, so both runners are declared the same way
+    and both carry the same modifiers."""
+    from trid3nt_server.workflows.lib import Producer
+
+    fetcher, builder = tool("fetch_dem"), tool("build_mesh")
+    assert type(fetcher) is type(builder) is Producer
+    assert fetcher.supplied("s3://mine/dem.tif").supplied_uri == "s3://mine/dem.tif"
 
 
 # --------------------------------------------------------------------------- #
@@ -364,7 +377,7 @@ def test_reference_producer_cannot_be_supplied():
 
 
 def test_a_runner_can_name_a_registered_tool():
-    """``Build.tool("section", ...)`` in a plan and ``section(...)`` from a chat
+    """``tool("section", ...)`` in a plan and ``section(...)`` from a chat
     resolve to the SAME function - the declaration and the direct call are one
     namespace, which is what makes a chained tool declarable."""
     import trid3nt_server.tools as _tools  # noqa: F401 -- registration side-effect
@@ -483,7 +496,7 @@ def test_validator_refuses_a_second_form_gate():
 def test_validator_checks_data_producer_refs():
     with pytest.raises(PlanValidationError, match="neither"):
         validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(),
-                      [Data("m", Build.tool("b", size=Ref("ghost")))])
+                      [DataDecl("m", tool("b", size=Ref("ghost")))])
 
 
 def test_validator_refuses_a_ref_into_a_guarded_branch():
@@ -583,6 +596,64 @@ async def _run(plan, params_decl, wire, data=(), **kw):
     return await interpret(plan, p, params_decl, data, **kw)
 
 
+# --- a ref tail is refused at BINDING, never bound to a silent None ----------- #
+@pytest.mark.asyncio
+async def test_a_tail_to_a_field_the_result_does_not_define_refuses_at_binding():
+    """The ParamRef-leak law reaches attribute tails: a ref naming a field nobody
+    produced is a DECLARATION that does not describe the value it reads, and the
+    refusal names the ref and the missing field."""
+    plan = Plan("w", None, (
+        Step(runner=f"{_HERE}.stub_step").named("first"),
+        Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("first.bbox")}),
+    ))
+    with pytest.raises(StepFailedError) as ei:
+        await _run(plan, _params(), {}, resume=False)
+    assert ei.value.error_code == "REF_FIELD_MISSING"
+    assert "first.bbox" in str(ei.value) and "'bbox'" in str(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_a_tail_to_a_field_that_is_present_and_empty_refuses_too():
+    """``centerline.bbox`` on a layer that carries no bbox: the field exists and
+    holds nothing, which is exactly the silent None the run must never receive."""
+    plan = Plan("w", None, (
+        Step(runner=f"{_HERE}.stub_no_bbox").named("centerline"),
+        Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("centerline.bbox")}),
+    ))
+    with pytest.raises(StepFailedError) as ei:
+        await _run(plan, _params(), {}, resume=False)
+    assert ei.value.error_code == "REF_FIELD_MISSING"
+    assert "carries no value" in str(ei.value)
+
+
+# --- the DATA class body ------------------------------------------------------ #
+def test_the_class_body_names_its_rows_and_keeps_their_order():
+    """The attribute name IS the row name, the body's order IS the row order, and
+    a row-to-row read written as a plain identifier binds as the same late-bound
+    ref an out-of-body ``DATA.<row>`` yields."""
+    from trid3nt_server.workflows.lib import data_rows
+
+    class DATA:
+        dem = tool("fetch_dem", source="3dep")
+        basin = tool("delineate_watershed", dem_uri=dem)
+        walls = Data.supplied(geometry="polyline").optional()
+
+    rows = data_rows(DATA)
+    assert [r.name for r in rows] == ["dem", "basin", "walls"]
+    assert rows[1].producer.kwargs["dem_uri"] == DataRef("dem")
+    assert DATA.dem == DataRef("dem")
+    assert rows[2].producer is None and rows[2].geometry == "polyline"
+    assert rows[2].is_optional is True
+
+
+def test_an_unknown_row_on_the_body_is_an_attribute_error():
+    class DATA:
+        dem = tool("fetch_dem")
+
+    with pytest.raises(AttributeError):
+        DATA.demm
+
+
 @pytest.mark.asyncio
 async def test_interpreter_runs_steps_and_binds_refs():
     plan = Plan("w", None, (
@@ -651,7 +722,7 @@ async def test_required_param_with_no_gate_refuses_at_the_consequential_step():
 @pytest.mark.asyncio
 async def test_data_producer_runs_lazily_on_first_ref():
     decl = _params()
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer"))]
+    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
     plan = Plan("w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),
     ))
@@ -665,8 +736,8 @@ async def test_a_declared_ladder_walks_its_rungs_and_records_which_answered():
     """The declaration IS the mechanism: the primary fails, the rung answers, and
     the record names the rung - so a producer that degraded is distinguishable
     from one that never had a ladder."""
-    data = [Data("bed", Fetch.tool(f"{_HERE}.stub_producer")
-                 .ladder(Fetch.tool(f"{_HERE}.stub_rung")))]
+    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer")
+                 .ladder(tool(f"{_HERE}.stub_rung")))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
                                  kwargs={"m": Ref("bed")}),))
     _FAIL_AT.add("stub_producer")
@@ -679,8 +750,8 @@ async def test_a_declared_ladder_walks_its_rungs_and_records_which_answered():
 
 @pytest.mark.asyncio
 async def test_a_producer_that_answers_never_reaches_its_rungs():
-    data = [Data("bed", Fetch.tool(f"{_HERE}.stub_producer")
-                 .ladder(Fetch.tool(f"{_HERE}.stub_rung")))]
+    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer")
+                 .ladder(tool(f"{_HERE}.stub_rung")))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
                                  kwargs={"m": Ref("bed")}),))
     out = await _run(plan, _params(), {}, data, resume=False)
@@ -692,8 +763,8 @@ async def test_a_producer_that_answers_never_reaches_its_rungs():
 async def test_the_last_rungs_failure_is_what_the_run_reports():
     """Primary -> fallback -> TYPED ERROR: an exhausted ladder never degrades to
     a silent None."""
-    data = [Data("bed", Fetch.tool(f"{_HERE}.stub_producer")
-                 .ladder(Fetch.tool(f"{_HERE}.stub_rung")))]
+    data = [DataDecl("bed", tool(f"{_HERE}.stub_producer")
+                 .ladder(tool(f"{_HERE}.stub_rung")))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
                                  kwargs={"m": Ref("bed")}),))
     _FAIL_AT.update({"stub_producer", "stub_rung"})
@@ -703,7 +774,7 @@ async def test_the_last_rungs_failure_is_what_the_run_reports():
 
 @pytest.mark.asyncio
 async def test_byo_artifact_short_circuits_the_producer():
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
+    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
                                                                   validate=None))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
     out = await _run(plan, _params(), {}, data, resume=False)
@@ -713,7 +784,7 @@ async def test_byo_artifact_short_circuits_the_producer():
 
 @pytest.mark.asyncio
 async def test_byo_coverage_validation_refuses_without_a_domain():
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
+    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf",
                                                                   validate=CoversAOI))]
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}),))
     with pytest.raises(Exception, match="cannot be checked against the modelled domain"):
@@ -782,7 +853,7 @@ async def test_an_unfired_branch_never_pulls_the_data_behind_it():
     fetch, because the only thing that would have pulled the artifact is the step
     the branch skipped."""
     decl = _flagged()
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer"))]
+    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
     plan = Plan("lazy_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("always"),
         When(P.flag, Step(runner=f"{_HERE}.stub_second",
@@ -831,7 +902,7 @@ async def test_a_data_producer_runs_when_its_consumer_does_hence_after_the_gate(
     producer that fetched earlier fetched against params the gate exists to change."""
     _recording_review({}, monkeypatch)
     decl = _params()
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer"))]
+    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
     plan = Plan("gated_data", None, (
         Step(runner=f"{_HERE}.stub_step").named("pre"),
         FormGate(),
@@ -846,7 +917,7 @@ async def test_a_data_producer_runs_when_its_consumer_does_hence_after_the_gate(
 # --- a producer-less Data slot: context handed in, or labelled absence -------- #
 @pytest.mark.asyncio
 async def test_a_context_slot_is_satisfied_by_the_artifact_handed_in():
-    data = [Data("clip_zone")]
+    data = [DataDecl("clip_zone")]
     plan = Plan("slot_supplied", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"z": Ref("clip_zone")}).named("a"),
@@ -861,7 +932,7 @@ async def test_a_context_slot_is_satisfied_by_the_artifact_handed_in():
 async def test_an_unsatisfied_required_context_slot_refuses_typed():
     """Naming a default fetcher for a slot the template deliberately left open
     would be the library inventing the source."""
-    data = [Data("clip_zone")]
+    data = [DataDecl("clip_zone")]
     plan = Plan("slot_req", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"z": Ref("clip_zone")}).named("a"),
@@ -877,7 +948,7 @@ async def test_an_unsatisfied_required_context_slot_refuses_typed():
 async def test_an_unsatisfied_optional_context_slot_binds_none_and_says_so():
     """Absence is legal AND LABELLED: the run answered a slightly different
     question than one that had the layer, and only the reader can weigh that."""
-    data = [Data("clip_zone").optional()]
+    data = [DataDecl("clip_zone").optional()]
     plan = Plan("slot_opt", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"z": Ref("clip_zone")}).named("a"),
@@ -890,33 +961,33 @@ async def test_an_unsatisfied_optional_context_slot_binds_none_and_says_so():
 def test_a_producer_backed_data_may_not_be_optional():
     """A producer either produces or fails typed, so there is no absence to describe."""
     with pytest.raises(PlanValidationError, match="optional"):
-        Data("mesh", Build.tool(f"{_HERE}.stub_producer")).optional()
+        DataDecl("mesh", tool(f"{_HERE}.stub_producer")).optional()
 
 
 def test_a_context_slot_declares_the_shape_it_accepts():
     """A slot names no source - the SHAPE is the only thing it can honestly say."""
-    slot = Data("structure").supplied(geometry="polyline").optional()
+    slot = DataDecl("structure").supplied(geometry="polyline").optional()
     assert slot.producer is None
     assert slot.geometry == "polyline" and slot.is_optional is True
 
 
 def test_a_context_slot_refuses_a_shape_nobody_declares():
     with pytest.raises(PlanValidationError, match="not a declared shape"):
-        Data("structure").supplied(geometry="squiggle")
+        DataDecl("structure").supplied(geometry="squiggle")
 
 
 def test_supplied_on_a_slot_and_supplied_on_a_producer_are_different_asks():
     """A producer that can be SUPERSEDED says so on the producer, not on the slot."""
     with pytest.raises(PlanValidationError, match="declares a producer AND"):
-        Data("mesh", Build.tool(f"{_HERE}.stub_producer")).supplied(geometry="mesh")
-    producer = Build.tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf")
-    assert Data("mesh", producer).is_supplied is True
+        DataDecl("mesh", tool(f"{_HERE}.stub_producer")).supplied(geometry="mesh")
+    producer = tool(f"{_HERE}.stub_producer").supplied("s3://mine/m.slf")
+    assert DataDecl("mesh", producer).is_supplied is True
 
 
 @pytest.mark.asyncio
 async def test_a_resumed_run_does_not_refetch_produced_data():
     decl = _params()
-    data = [Data("mesh", Build.tool(f"{_HERE}.stub_producer"))]
+    data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
     plan = Plan("data_led", None, (
         Step(runner=f"{_HERE}.stub_step", kwargs={"m": Ref("mesh")}).named("a"),
         Step(runner=f"{_HERE}.stub_second").named("b"),
@@ -1458,7 +1529,7 @@ async def test_an_eager_data_producer_failure_is_typed_with_its_own_error_code()
         raise _DataDown()
 
     globals()["bad_producer"] = _bad_producer
-    data = [Data("mesh", Build.tool(f"{_HERE}.bad_producer"))]
+    data = [DataDecl("mesh", tool(f"{_HERE}.bad_producer"))]
     plan = Plan("eager_w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"m": Ref("mesh")}).named("a"),
     ))
@@ -1579,7 +1650,7 @@ async def test_a_user_supplied_physics_value_is_not_refused():
 
 def test_validator_refuses_a_param_ref_in_a_data_producer():
     """A producer consumes params too - the dataflow crosses the Param/Data line."""
-    data = [Data("mesh", Build.tool("b", size=ParamRef("ghost")))]
+    data = [DataDecl("mesh", tool("b", size=ParamRef("ghost")))]
     with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
         validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(), data)
 
@@ -1774,7 +1845,7 @@ async def test_a_revision_evicts_the_data_produced_from_the_old_values(monkeypat
     decl = [Param("res_m", desc="target resolution", door=doors.SCENARIO,
                   default=30.0, bounds=(1.0, 100.0), units="m")]
     p = await resolve_params(decl, {})
-    data = [Data("terrain", Fetch.tool(f"{_HERE}.stub_dem", res=p.res_m))]
+    data = [DataDecl("terrain", tool(f"{_HERE}.stub_dem", res=p.res_m))]
     plan = Plan("evict", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"dem": Ref("terrain.dem")}).named("pre"),
@@ -1796,7 +1867,7 @@ async def test_data_that_reads_no_revised_param_is_not_evicted(monkeypatch):
     decl = [Param("res_m", desc="resolution", door=doors.CONSTANT, default=30.0, type=float),
             Param("other", desc="unrelated", door=doors.SCENARIO, default=1.0, type=float)]
     p = await resolve_params(decl, {})
-    data = [Data("terrain", Fetch.tool(f"{_HERE}.stub_dem", res=p.res_m))]
+    data = [DataDecl("terrain", tool(f"{_HERE}.stub_dem", res=p.res_m))]
     plan = Plan("evict_none", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"dem": Ref("terrain.dem")}).named("pre"),
@@ -2204,7 +2275,7 @@ def test_a_mistyped_data_read_is_refused_and_says_it_is_a_data_name():
         return (Step(runner=f"{_HERE}.stub_second",
                      kwargs={"m": D.terain}).named("s"),)
 
-    data = [Data("terrain", Build.tool(f"{_HERE}.stub_producer"))]
+    data = [DataDecl("terrain", tool(f"{_HERE}.stub_producer"))]
     with pytest.raises(PlanValidationError) as exc:
         _declare(_params(), _plan, data)
     message = str(exc.value)
@@ -2305,7 +2376,7 @@ def test_a_data_ref_inside_a_frozen_mapping_is_not_invisible_to_the_validator():
     plan = Plan("frozen_data_w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}),))
     with pytest.raises(PlanValidationError, match="D.ghost_zone names no declared Data"):
-        validate_plan(plan, _params(), [Data("clip_zone")])
+        validate_plan(plan, _params(), [DataDecl("clip_zone")])
 
 
 @pytest.mark.asyncio
@@ -2315,7 +2386,7 @@ async def test_a_ref_inside_a_frozen_mapping_reaches_the_runner_bound():
     block = deep_freeze({"cfg": {"decay": ParamRef("base"), "zone": DataRef("clip_zone")}})
     plan = Plan("frozen_bind_w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}).named("a"),))
-    out = await _run(plan, _params(), {"base": 4.0}, [Data("clip_zone")], resume=False,
+    out = await _run(plan, _params(), {"base": 4.0}, [DataDecl("clip_zone")], resume=False,
                      supplied={"clip_zone": "s3://mine/zone.gpkg"},
                      domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
     bound = out.value["seen"]["physics"]
@@ -2341,7 +2412,7 @@ def test_a_data_ref_refuses_every_read_that_would_turn_it_into_data():
 # --- a context slot's declared SHAPE is checked at the front door ------------- #
 @pytest.mark.asyncio
 async def test_a_supplied_artifact_of_the_wrong_shape_is_refused_typed():
-    data = [Data("structure").supplied(geometry="polyline").optional()]
+    data = [DataDecl("structure").supplied(geometry="polyline").optional()]
     plan = Plan("shape_w", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"s": Ref("structure")}).named("a"),))
@@ -2357,7 +2428,7 @@ async def test_a_supplied_artifact_of_the_wrong_shape_is_refused_typed():
 async def test_a_supplied_artifact_of_the_declared_shape_is_adopted():
     """Suffix-deep and no deeper: a vector satisfies a polyline slot here, and
     whether its features are lines is the consumer's species reader's answer."""
-    data = [Data("structure").supplied(geometry="polyline").optional()]
+    data = [DataDecl("structure").supplied(geometry="polyline").optional()]
     plan = Plan("shape_ok_w", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"s": Ref("structure")}).named("a"),))
@@ -2370,7 +2441,7 @@ async def test_a_supplied_artifact_of_the_declared_shape_is_adopted():
 @pytest.mark.asyncio
 async def test_an_unclassifiable_supplied_artifact_is_adopted_not_guessed_at():
     """A layer name carries no suffix, and a refusal must never rest on a guess."""
-    data = [Data("structure").supplied(geometry="polyline").optional()]
+    data = [DataDecl("structure").supplied(geometry="polyline").optional()]
     plan = Plan("shape_unknown_w", None, (
         Step(runner=f"{_HERE}.stub_second",
              kwargs={"s": Ref("structure")}).named("a"),))

@@ -34,8 +34,8 @@ import pytest
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.lib import (
     CoupledValidityError,
-    Data,
-    Fetch,
+    DataDecl,
+    tool,
     Param,
     PlanValidationError,
     Ref,
@@ -403,7 +403,7 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
                                     cacheable=False, engine="probe",
                                     tier="template"),
         params=params,
-        data=(Data("world", Fetch.tool(f"{_PROBE}.world", where=_where_ref())),),
+        data=(DataDecl("world", tool(f"{_PROBE}.world", where=_where_ref())),),
         plan=plan, answer=("value",), validity=validity)
 
 

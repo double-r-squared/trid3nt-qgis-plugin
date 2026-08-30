@@ -29,8 +29,8 @@ from trid3nt_contracts import new_ulid
 
 from . import journal, snapshot
 from .accepts import Accepts
-from .data import DataDecl
-from .errors import DeclarativeError, PlanValidationError
+from .data import DataDecl, data_rows
+from .errors import DeclarativeError, PlanValidationError, WorkflowParkedError
 from .params import Param, ResolvedParams, doors
 from .plan import Plan, Ref, Step
 from .resolution import SensitivityDecl, sensitivity_notes
@@ -147,7 +147,7 @@ class Workflow(EngineOps):
     """
 
     def __init__(self, *, metadata: Any, params: Sequence[Param],
-                 plan: Callable[..., Any], data: Sequence[DataDecl] = (),
+                 plan: Callable[..., Any], data: Any = (),
                  answer: Sequence[str] = (),
                  provenance: Sequence[str | tuple[str, str]] = (),
                  sensitivity: Sequence[tuple[str, str]] = (),
@@ -157,7 +157,9 @@ class Workflow(EngineOps):
         self.metadata = metadata
         self.name = metadata.name
         self.params = tuple(params)
-        self.data = tuple(data)
+        #: The declared DATA rows, in class-body order - the template hands over
+        #: the body itself and the row names are the attribute names on it.
+        self.data = data_rows(data)
         #: What this template accepts when something is SUPPLIED to it, role by
         #: role. Declared beside PARAMS because it is part of the same readable
         #: input contract, and read back off the registry by every supply door;
@@ -473,7 +475,8 @@ def register_workflow(
     params: Sequence[Param],
     plan: Callable[..., Any],
     *,
-    data: Sequence[DataDecl] = (),
+    data: Any = (),
+    parked: str | None = None,
     answer: Sequence[str] = (),
     provenance: Sequence[str | tuple[str, str]] = (),
     sensitivity: Sequence[tuple[str, str]] = (),
@@ -508,6 +511,13 @@ def register_workflow(
     the ``!run`` / Tier-A all-params invocation, and the harness that drives the
     resolved sheet. The exclusion is about who the SCHEMA invites, and the schema
     invites the user, never the model.
+
+    PARKED IS A STATE, not an absent import. ``parked="<reason>"`` builds and
+    validates the declaration exactly as always - so it stays readable, and a
+    defect in it still refuses at import - and then leaves the MODEL SURFACE: the
+    tool is never registered, and invoking the generated function refuses typed
+    with the reason. Registry membership stops depending on which module a session
+    happened to import first, which is what a commented-out import could not give.
     """
     from trid3nt_server.tools import register_tool
 
@@ -518,12 +528,18 @@ def register_workflow(
                       accepts=accepts)
 
     async def _run(**wire: Any) -> Any:
+        if parked:
+            raise WorkflowParkedError(
+                f"{workflow.name} is parked and cannot be run: {parked}")
         return await workflow.run(wire)
 
     _run.__name__ = workflow.name
     _run.__qualname__ = workflow.name
     _run.__module__ = getattr(plan, "__module__", __name__)
-    sig, annotations = _wire_signature(params, extra_args, data)
+    #: The reason this template is off the model surface, or ``None``. Read by the
+    #: roster checks, which ask the declaration rather than the import order.
+    _run.parked = parked  # type: ignore[attr-defined]
+    sig, annotations = _wire_signature(params, extra_args, workflow.data)
     _run.__signature__ = sig  # type: ignore[attr-defined]
     _run.__annotations__ = dict(annotations)
     _run.workflow = workflow  # type: ignore[attr-defined]
@@ -535,13 +551,15 @@ def register_workflow(
         # the factory narrows it; documenting a constant the schema does not offer
         # would be the docstring inviting a call the tool cannot take.
         doc = {**doc, "params": _wire_params(params),
-               **_context_doc(data, doc.get("controls", ()))}
+               **_context_doc(workflow.data, doc.get("controls", ()))}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]
 
     register_kwargs.setdefault("read_only_hint", False)
     register_kwargs.setdefault("open_world_hint", False)
     register_kwargs.setdefault("destructive_hint", False)
+    if parked:
+        return _run
     register_kwargs.setdefault("idempotent_hint", False)
     return register_tool(metadata, **register_kwargs)(_run)
 

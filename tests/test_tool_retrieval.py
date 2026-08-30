@@ -249,8 +249,14 @@ def test_every_registered_tool_has_corpus_queries():
 
 
 def test_no_dead_corpus_keys():
+    """A corpus key for a tool nothing registers is dead weight in the index --
+    EXCEPT a DECLARED PARKED template, whose corpus is part of the declaration and
+    comes back with it in one keyword. The retrieval visible set is derived from
+    the registry, so a parked template's phrasings never reach the model."""
+    from tests.test_door_dissolution import PARKED_TEMPLATES
+
     corpus = _load_corpus()
-    dead = sorted(set(corpus) - _full_registry_names())
+    dead = sorted(set(corpus) - _full_registry_names() - set(PARKED_TEMPLATES))
     assert not dead, (
         f"tool_query_corpus.yaml has keys for non-registered tools (prune them): {dead}"
     )

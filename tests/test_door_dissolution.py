@@ -28,9 +28,10 @@ from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 #: The engine templates the tree registers. Pinned as a SET, not derived: a
 #: template that stops registering is a capability that silently left, and the
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
-#: ``telemac_rain_on_grid`` is absent because it is parked unregistered - its
-#: mesh step still reads a retired mesher's fields - so the roster this walks is
-#: what the tree actually offers rather than what it means to offer.
+#: ``telemac_rain_on_grid`` is absent because it is DECLARED PARKED (see
+#: ``PARKED_TEMPLATES``) - its mesh step still reads a retired mesher's fields -
+#: so the roster this walks is what the tree actually offers rather than what it
+#: means to offer.
 EXPECTED_TEMPLATES = {
     "telemac_river_dye",
     "telemac_do_sag",
@@ -38,6 +39,15 @@ EXPECTED_TEMPLATES = {
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
     "coastal_tidal_surge",
+}
+
+#: Templates that are DECLARED but off the model surface, name -> the module
+#: attribute that carries the declaration. Pinned for the same reason the
+#: registered set is: parking is a stated condition with a reason, and a template
+#: that drifts INTO or OUT OF it silently is the drift this file exists to catch.
+PARKED_TEMPLATES = {
+    "telemac_rain_on_grid":
+        "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
 }
 
 # The 10 deleted engine-door concierge tools.
@@ -90,6 +100,20 @@ def test_all_templates_registered_and_callable():
         entry = reg[name]
         assert callable(entry.fn), f"{name} is not callable"
         assert getattr(entry.metadata, "engine", None), f"{name} missing engine tag"
+
+
+def test_parked_templates_are_declared_off_the_surface_with_a_reason():
+    """A parked template is READ from its declaration, never inferred from what a
+    session happened to import: the module is in the tree's import list, the
+    declaration validates, ``parked`` names the reason, and the tool is absent."""
+    import importlib
+
+    reg = _full_registry()
+    for name, module_path in PARKED_TEMPLATES.items():
+        fn = getattr(importlib.import_module(module_path), name)
+        assert fn.parked, f"{name} is pinned parked but declares no reason"
+        assert fn.workflow.plan.name == name
+        assert name not in reg, f"{name} is pinned parked but registers a tool"
 
 
 # ---------------------------------------------------------------------------

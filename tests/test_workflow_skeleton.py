@@ -292,14 +292,14 @@ def test_an_undeclared_data_name_refuses_at_registration_naming_its_write_site()
     """``D`` cannot refuse at the attribute - it has no workflow to check against -
     so the refusal moves to the VALIDATOR, which has the declared Data and can say
     which namespace the bad name came from and where it was written."""
-    from trid3nt_server.workflows.lib import D, Data, Fetch
+    from trid3nt_server.workflows.lib import D, DataDecl, tool
 
     def _plan(ops):
         return (Step(runner="pkg.mod.fn", kwargs={"r": D.terain}).named("s"),)
 
     with pytest.raises(PlanValidationError) as ei:
         Workflow(metadata=_metadata("data_probe"), params=(), plan=_plan,
-                 data=(Data("terrain", Fetch.tool("pkg.mod.fetch")),))
+                 data=(DataDecl("terrain", tool("pkg.mod.fetch")),))
     message = str(ei.value)
     assert "D.terain names no declared Data" in message
     assert "written at test_workflow_skeleton.py:" in message
@@ -474,10 +474,10 @@ def test_a_context_slot_puts_its_declared_shape_on_the_wire_and_in_the_prose():
 
 
 def test_a_slot_that_declares_no_shape_still_reaches_the_wire_as_a_string():
-    from trid3nt_server.workflows.lib import Data
+    from trid3nt_server.workflows.lib import DataDecl
     from trid3nt_server.workflows.lib.workflow import _wire_signature
 
-    sig, annotations = _wire_signature((), (), (Data("clip_zone"),))
+    sig, annotations = _wire_signature((), (), (DataDecl("clip_zone"),))
     assert annotations["clip_zone"] == (str | None)
     assert sig.parameters["clip_zone"].default is None
 

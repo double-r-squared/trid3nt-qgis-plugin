@@ -22,11 +22,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
-    Build,
-    D,
-    Data,
     DrawGate,
-    Fetch,
     Forcing,
     FormGate,
     P,
@@ -54,45 +50,42 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "build_dye_chart", "plan", "telemac_river
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
 
-#: The reach pipeline's REFERENCE data - fetched fresh for the domain the geocode
-#: step binds, never supplied. The carrier discharge is a STEP rather than Data: it
-#: reads the resolved mid-reach seed, which is a step result and not something a
-#: producer declaration can name.
-DATA = (
-    Data("rivers", Fetch.tool(f"{_STEPS}.reach.fetch_reach_flowline",
-                              prefetched=P.river_geometry_uri)),
+#: The reach pipeline's data, one row per artifact, in the order the chain reads
+#: them. The carrier discharge is a STEP rather than a row: it reads the resolved
+#: mid-reach seed, which is a step result and not something a producer declaration
+#: can name.
+class DATA:
+    rivers = tool(f"{_STEPS}.reach.fetch_reach_flowline",
+                  prefetched=P.river_geometry_uri)
     # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
     # corridor of its own. The navigated mainstem names the stretch, its two ends
     # name where the stretch stops, and the cut through the MAPPED banks is the
     # domain - so the two end faces are the transects the inflow and the outflow
     # are prescribed on, measured off real geometry rather than a ribbon.
-    Data("centerline", Fetch.tool("fetch_nhdplus_nldi_navigate",
-                                  seed_point=[Ref("seed.lon"), Ref("seed.lat")],
-                                  direction="DM",
-                                  distance_km=P.reach_length_km)),
-    Data("ends", Build.tool("endpoints", line=D.centerline)),
+    centerline = tool("fetch_nhdplus_nldi_navigate",
+                      seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                      direction="DM",
+                      distance_km=P.reach_length_km)
+    ends = tool("endpoints", line=centerline)
     # The banks are fetched over the CENTERLINE's own extent: the reach the run
     # models is what decides which mapped water polygons matter, and a box drawn
     # anywhere else would answer for a different stretch.
-    Data("banks", Fetch.tool("fetch_nhd_area_water", bbox=Ref("centerline.bbox"))),
-    Data("reach_polygon", Build.tool("section", polygon=D.banks,
-                                     between=Ref("ends.between"))),
-    Data("rain", Fetch.tool(f"{_STEPS}.forcing.resolve_rain_forcing",
-                            rainfall_mm_per_day=P.rainfall_mm_per_day,
-                            evaporation_mm_per_day=P.evaporation_mm_per_day,
-                            gridmet_window=P.rainfall_gridmet_window)
-         # The cadence and units the deck receives, stated rather than assumed:
-         # the producer answers in daily rates, so this asks for no interpolation
-         # - and a sub-daily target would refuse here instead of manufacturing a
-         # storm shape gridMET never reported.
-         .resample(to="1D", max_gap="native*3")
-         .normalize(units="mm/day")),
-)
+    banks = tool("fetch_nhd_area_water", bbox=Ref("centerline.bbox"))
+    reach_polygon = tool("section", polygon=banks, between=Ref("ends.between"))
+    # The cadence and units the deck receives, stated rather than assumed: the
+    # producer answers in daily rates, so this asks for no interpolation - and a
+    # sub-daily target would refuse here instead of manufacturing a storm shape
+    # gridMET never reported.
+    rain = tool(f"{_STEPS}.forcing.resolve_rain_forcing",
+                rainfall_mm_per_day=P.rainfall_mm_per_day,
+                evaporation_mm_per_day=P.evaporation_mm_per_day,
+                gridmet_window=P.rainfall_gridmet_window
+                ).resample(to="1D", max_gap="native*3").normalize(units="mm/day")
 
 
 # -- the binding blocks --------------------------------------------------- #
 # What the run IS, declared as frozen values above the recipe that assembles
-# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# them. Every member is a late-bound read (P.<param> / DATA.<row> / Ref) that the
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
@@ -120,7 +113,7 @@ PHYSICS = Physics(
     dredge_dig_depth_m=P.dredge_dig_depth_m,
 )
 
-FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain,
+FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=DATA.rain,
                   wind_speed_mps=P.wind_speed_mps,
                   wind_direction_deg=P.wind_direction_deg)
 
@@ -148,7 +141,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         FormGate(title="Review the river-tracer scenario"),
         DrawGate(param="release_coords", geometry="point",
                  prompt="Click where the substance enters the river"),
-        *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers,
+        *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=DATA.rivers,
                             discharge=P.discharge_m3s, event_time=P.event_time),
         MeshStep.build(mesh=MESH, name=Ref("reach")).named("mesh"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),

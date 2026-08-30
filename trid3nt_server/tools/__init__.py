@@ -623,14 +623,15 @@ from .search.web_fetch import web_fetch  # noqa: E402,F401
 # explicit sheet value on both.
 from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach tracer/morphodynamics front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
-# telemac_rain_on_grid stays parked, unregistered, until the worker-unification
-# wave finishes it; restoring it is this one line. It declares its chain
-# (delineate_watershed -> combine -> om2d over the basin) and imports clean, but
-# its mesh STEP still reads the retired catchment mesher's fields off the
-# declaration. Registering a template whose mesh step cannot run puts a broken tool
-# in front of the model, which is worse than an honest absence. What landed, what
-# did not, and the failures it leaves: docs/design/worker-unification-port.md.
-# from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid
+# telemac_rain_on_grid is DECLARED PARKED (register_workflow(parked=...)): the
+# module imports here like every other template, its plan validates, and the tool
+# is simply never registered - so the model never sees it and the roster does not
+# depend on import order. It declares its chain (delineate_watershed -> combine ->
+# om2d over the basin), but its mesh STEP still reads the retired catchment
+# mesher's fields off the declaration. Unparking is the one keyword on its
+# register_workflow call. What landed, what did not, and the failures it leaves:
+# docs/design/worker-unification-port.md.
+from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - parked: declared, off the model surface
 # tomawac_wave_field TEMPLATE (engine="telemac", tier="template"), workflows/
 # telemac/wave_field/: the TOMAWAC third-generation spectral-wave engine.
 # ONE question-class tool, four modes (fetch_growth / shoaling /

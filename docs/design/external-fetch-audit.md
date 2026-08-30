@@ -114,7 +114,7 @@ for the identical failure (mirror, backoff, `upstream_provider` error class,
 honest typed error) is thirty metres away and unreachable from inside the image.
 
 **Row 1's false surface.** `telemac_river_dye`'s plan declares
-`Data("rivers", Fetch.tool(".../reach.fetch_reach_flowline"))`
+`rivers = tool(".../reach.fetch_reach_flowline")`
 (`river_dye/river_dye.py:268`). That producer routes `fetch_river_geometry`,
 whose spec is **OSM Overpass** (`data/fetchers/hydrology/fetch_river_geometry/
 source.yaml:7-13`), and it is emitted to the canvas as

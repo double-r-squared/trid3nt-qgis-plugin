@@ -33,7 +33,7 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
-from .data import AuthoredProducer, CoversAOI, DataDecl, Producer
+from .data import CoversAOI, DataDecl, Producer
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -404,7 +404,7 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             "supply a layer, a file uri, or declare it .optional().",
             error_code="DATA_SLOT_UNSATISFIED", step=_data_step_label(decl.name),
         )
-    if isinstance(producer, AuthoredProducer) and producer.supplied_uri:
+    if producer.supplied_uri:
         _validate_supplied(decl, producer.supplied_uri, producer.supplied_validate)
         return producer.supplied_uri
     cached = env.ledger.replay_data(decl.name) if (env.ledger and env.resume) else None
@@ -840,7 +840,19 @@ def _rebuild(original: Any, items: list[Any]) -> Any:
     return type(original)(items)
 
 
+#: What a missing field reads as, distinct from a field that is present and None.
+_NO_FIELD = object()
+
+
 async def _deref(ref: Ref, env: _Env) -> Any:
+    """Bind one declared read, REFUSING rather than yielding a missing field.
+
+    The ParamRef leak law reaches attribute tails too: a tail naming a field the
+    referenced thing does not define, or one that is there and empty, is a
+    DECLARATION that does not describe the value it reads. Letting it bind to
+    ``None`` hands the step a hole to fail on several frames later, blaming a
+    runner for a ref nobody checked.
+    """
     if ref.root in env.results:
         base = env.results[ref.root]
     elif ref.root in env.artifacts:
@@ -852,8 +864,20 @@ async def _deref(ref: Ref, env: _Env) -> Any:
     else:
         raise StepFailedError(f"Ref({ref.path!r}) resolves to nothing at run time.",
                               error_code="REF_UNRESOLVED")
+    read = ref.root
     for part in ref.tail:
-        base = base.get(part) if isinstance(base, Mapping) else getattr(base, part, None)
+        found = (base.get(part, _NO_FIELD) if isinstance(base, Mapping)
+                 else getattr(base, part, _NO_FIELD))
+        if found is _NO_FIELD or found is None:
+            missing = ("defines no field" if found is _NO_FIELD
+                       else "carries no value for")
+            raise StepFailedError(
+                f"Ref({ref.path!r}) reads {part!r} off {read}, which {missing} "
+                f"{part!r}. A ref to a field that is not there is refused at "
+                "binding; nothing downstream receives it as an absence.",
+                error_code="REF_FIELD_MISSING")
+        base = found
+        read = f"{read}.{part}"
     return base
 
 
@@ -1002,7 +1026,7 @@ def _declared_attribute_names(cls: type) -> tuple[str, ...]:
 def _load(runner: str) -> Any:
     """The runner a node named: a REGISTERED TOOL first, then a dotted import path.
 
-    One namespace for declarations and for a direct call, so ``Build.tool("section",
+    One namespace for declarations and for a direct call, so ``tool("section",
     ...)`` in a plan and ``section(...)`` from a chat are the same function. A name
     that reads as BOTH refuses: choosing one would make which namespace answered a
     matter of lookup order rather than of what the author wrote.

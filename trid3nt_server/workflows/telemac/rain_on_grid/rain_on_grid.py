@@ -33,11 +33,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
-    Build,
-    D,
-    Data,
     DrawGate,
-    Fetch,
     Forcing,
     FormGate,
     P,
@@ -70,26 +66,25 @@ _CODE = "TELEMAC_ROG_PARAMS_INVALID"
 #: typed refusals live once, and a producer is where that middleware is reached
 #: from. A mesh the caller SUPPLIES is not among them - that is the mesh router's
 #: question, asked once at the build door and never again inside a template.
-DATA = (
+class DATA:
     # 3DEP is PINNED, not preferred: a DSM (Copernicus GLO-30 includes forest
     # canopy) puts the bed on the tree tops and routes the water down the wrong
     # slopes. A pinned source never switches, so a 3DEP outage surfaces the
     # fetcher's own typed error naming copernicus and the substitution is the
     # user's to make - which is what a cross-dataset swap has to be.
-    Data("bed_dem", Fetch.tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep",
-                               resolution_m=P.bed_dem_resolution_m,
-                               purpose="mesh bed")),
-    Data("rivers", Fetch.tool("fetch_river_geometry", bbox=Ref("aoi.bbox"),
-                              source=P.river_source, purpose="river geometry")),
-    Data("landcover", Fetch.tool("fetch_landcover", bbox=Ref("aoi.bbox"),
-                                 dataset=P.landcover_dataset,
-                                 resolution_m=NLCD_NATIVE_RESOLUTION_M,
-                                 purpose="land cover")),
-    Data("rain", Fetch.tool(f"{_STEPS}.rain_on_grid.resolve_rain_event",
-                            window=P.rain_window,
-                            intensity_mm_per_hr=P.design_storm_mm_per_hr,
-                            storm_duration_hr=P.storm_duration_hr,
-                            sim_duration_hr=P.sim_duration_hr)),
+    bed_dem = tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep",
+                   resolution_m=P.bed_dem_resolution_m, purpose="mesh bed")
+    rivers = tool("fetch_river_geometry", bbox=Ref("aoi.bbox"),
+                  source=P.river_source, purpose="river geometry")
+    landcover = tool("fetch_landcover", bbox=Ref("aoi.bbox"),
+                     dataset=P.landcover_dataset,
+                     resolution_m=NLCD_NATIVE_RESOLUTION_M,
+                     purpose="land cover")
+    rain = tool(f"{_STEPS}.rain_on_grid.resolve_rain_event",
+                window=P.rain_window,
+                intensity_mm_per_hr=P.design_storm_mm_per_hr,
+                storm_duration_hr=P.storm_duration_hr,
+                sim_duration_hr=P.sim_duration_hr)
     # THE DOMAIN, narrowed by CHAINING tools rather than by a mesher that grew a
     # delineation of its own. The basin is the terrain's answer at the outlet,
     # off the same bare-earth bed the nodes are sampled from - one acquisition,
@@ -97,19 +92,18 @@ DATA = (
     # The snap window is the delineation tool's own declared default: how far a
     # clicked outlet may move to reach the channel is a fact about the D8 grid,
     # which is where it is declared.
-    Data("basin", Build.tool("delineate_watershed", pour_point=P.pour_point,
-                             bbox=Ref("aoi.bbox"), dem_uri=Ref("bed_dem.uri"))),
+    basin = tool("delineate_watershed", pour_point=P.pour_point,
+                 bbox=Ref("aoi.bbox"), dem_uri=Ref("bed_dem.uri"))
     # The basin and the channel network inside it, joined into ONE document. The
     # mesher receives a domain and its sizing source as a single acquisition,
     # which is what keeps a chain from handing over a river network for a basin
     # it does not describe.
-    Data("sized", Build.tool("combine", polygon=Ref("basin"), lines=D.rivers)),
-)
+    sized = tool("combine", polygon=basin, lines=rivers)
 
 
 # -- the binding blocks --------------------------------------------------- #
 # What the run IS, declared as frozen values above the recipe that assembles
-# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# them. Every member is a late-bound read (P.<param> / DATA.<row> / Ref) that the
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
@@ -122,7 +116,7 @@ PHYSICS = Physics("rainfall_runoff",
                   soil_recovery_hr=P.soil_recovery_hr,
                   soil_spinup_days=P.soil_spinup_days)
 
-FORCING = Forcing(rain=D.rain)
+FORCING = Forcing(rain=DATA.rain)
 
 #: The MESH ASK, frozen at declaration and building nothing at import. The extent
 #: is the CHAIN's product - the delineated basin carrying the channel network
@@ -158,7 +152,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                             aoi_half_deg=POUR_POINT_BUFFER_DEG,
                             aoi_name="watershed", code_prefix="TELEMAC_ROG"),
         MeshStep.build(mesh=MESH, name=Ref("aoi")).named("mesh"),
-        Infiltration.fields(mesh=Ref("mesh"), landcover=D.landcover,
+        Infiltration.fields(mesh=Ref("mesh"), landcover=DATA.landcover,
                             curve_number=P.curve_number,
                             steep_slope_correction=P.steep_slope_correction,
                             antecedent_moisture=P.antecedent_moisture
@@ -264,6 +258,10 @@ _ROG_METADATA = AtomicToolMetadata(
 telemac_rain_on_grid = register_workflow(
     TelemacWorkflow, _ROG_METADATA, PARAMS, plan,
     data=DATA,
+    # The declaration is complete and validates at import; the MESH STEP still
+    # reads the retired catchment mesher's fields, so the run cannot finish.
+    # Offering a tool whose mesh step cannot run is worse than an honest absence.
+    parked="awaiting the worker-unification port of its mesh step",
     answer=ANSWER,
     provenance=(("rain_event", "rain_event_note"),
                 ("sim_duration_hr", "sim_duration_note"),

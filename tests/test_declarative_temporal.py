@@ -11,8 +11,8 @@ import pytest
 
 from trid3nt_server.workflows.lib import (
     CATEGORICAL,
-    Data,
-    Fetch,
+    DataDecl,
+    tool,
     Param,
     PlanValidationError,
     RATE,
@@ -223,7 +223,7 @@ def test_pairs_are_accepted_as_well_as_a_pandas_series():
 
 
 def test_the_modifiers_ride_the_data_declaration_and_compose():
-    decl = Data("rain", Fetch.tool("pkg.mod.fn")
+    decl = DataDecl("rain", tool("pkg.mod.fn")
                 .resample(to="1D", max_gap="native*3")
                 .normalize(units="mm/day"))
     spec = decl.producer.temporal
@@ -232,8 +232,8 @@ def test_the_modifiers_ride_the_data_declaration_and_compose():
 
 
 def test_the_modifiers_leave_the_ladder_alone():
-    rung = Fetch.tool("pkg.mod.other")
-    producer = Fetch.tool("pkg.mod.fn").ladder(rung).resample(to="1h")
+    rung = tool("pkg.mod.other")
+    producer = tool("pkg.mod.fn").ladder(rung).resample(to="1h")
     assert producer.ladder_rungs == (rung,)
 
 
@@ -243,12 +243,12 @@ def test_a_rung_that_is_not_a_producer_refuses_at_declaration():
     from trid3nt_server.workflows.lib import PlanValidationError
 
     with pytest.raises(PlanValidationError) as excinfo:
-        Fetch.tool("pkg.mod.fn").ladder("copernicus_glo30")
+        tool("pkg.mod.fn").ladder("copernicus_glo30")
     assert "PRODUCERS" in str(excinfo.value)
 
 
 def test_a_declaration_with_no_modifier_carries_no_spec():
-    assert Data("rain", Fetch.tool("pkg.mod.fn")).producer.temporal is None
+    assert DataDecl("rain", tool("pkg.mod.fn")).producer.temporal is None
 
 
 @pytest.mark.parametrize("kwargs", [
@@ -259,12 +259,12 @@ def test_a_declaration_with_no_modifier_carries_no_spec():
 ])
 def test_a_malformed_resample_declaration_refuses_at_declaration_time(kwargs):
     with pytest.raises(PlanValidationError):
-        Fetch.tool("pkg.mod.fn").resample(**kwargs)
+        tool("pkg.mod.fn").resample(**kwargs)
 
 
 def test_a_normalize_to_an_unlisted_unit_refuses_at_declaration_time():
     with pytest.raises(TemporalUnitsError):
-        Fetch.tool("pkg.mod.fn").normalize(units="smoots")
+        tool("pkg.mod.fn").normalize(units="smoots")
 
 
 # --- the interpreter hands the declaration to the producer ------------------ #
@@ -282,7 +282,7 @@ async def _run(data):
 
 @pytest.mark.asyncio
 async def test_the_declared_transform_reaches_the_producer_that_owns_the_payload():
-    seen = await _run([Data("rain", Fetch.tool(f"{_HERE}.stub_producer")
+    seen = await _run([DataDecl("rain", tool(f"{_HERE}.stub_producer")
                             .resample(to="1D").normalize(units="mm/day"))])
     assert seen["temporal"].resample.to == "1D"
     assert seen["temporal"].units.units == "mm/day"
@@ -290,5 +290,5 @@ async def test_the_declared_transform_reaches_the_producer_that_owns_the_payload
 
 @pytest.mark.asyncio
 async def test_a_producer_with_no_declared_transform_is_called_without_the_kwarg():
-    seen = await _run([Data("rain", Fetch.tool(f"{_HERE}.stub_producer"))])
+    seen = await _run([DataDecl("rain", tool(f"{_HERE}.stub_producer"))])
     assert "temporal" not in seen

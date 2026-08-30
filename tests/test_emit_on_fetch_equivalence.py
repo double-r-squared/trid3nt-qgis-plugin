@@ -39,9 +39,9 @@ _FAMILY_INPUTS: dict[str, dict[str, object]] = {
         # over the registered fetchers, so the purpose rides the declaration.
         "file": "telemac/rain_on_grid/rain_on_grid.py",
         "fetches": [
-            ('Fetch.tool("fetch_dem"', "mesh bed"),
-            ('Fetch.tool("fetch_river_geometry"', "river geometry"),
-            ('Fetch.tool("fetch_landcover"', "land cover"),
+            ('tool("fetch_dem"', "mesh bed"),
+            ('tool("fetch_river_geometry"', "river geometry"),
+            ('tool("fetch_landcover"', "land cover"),
         ],
     },
 }

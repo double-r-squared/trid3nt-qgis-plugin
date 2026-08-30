@@ -31,10 +31,11 @@ A workflow file has three parts, none of which execute anything:
 1. PARAMS - frozen `Param` declarations (values: numbers, strings,
    flags, drawn coordinates). Resolve through the doors; render as the
    form; clamp by declared bounds.
-2. DATA - frozen `Data` declarations (artifacts: rasters, layers,
-   meshes, decks). Each carries its PRODUCER description
-   (`Fetch.dem()`, `BuildMesh.channel(...)`) which the runner executes
-   - or the artifact the caller SUPPLIED satisfies it instead.
+2. DATA - a CLASS BODY, one row per artifact (rasters, layers, meshes,
+   decks). The attribute NAME is the row name; the value is the row's
+   PRODUCER description, written with the one author word `tool(...)`,
+   which the runner executes - or the artifact the caller SUPPLIED
+   satisfies it instead. Class-body ORDER is the row order.
 3. `plan(ops)` - a PURE function returning the step tree. No awaits, no side
    effects, and NO SHEET: it reads no concrete value, so it is built ONCE at
    registration and the interpreter walks the same value on every run.
@@ -58,16 +59,18 @@ PARAMS = (
 )
 
 # the template file
-DATA = (
-    Data("terrain", Fetch.dem()),                       # reference: fetch-fresh, never byo
-    Data("rivers",  Fetch.river_geometry()),
-    Data("rain",    Fetch.rain().ladder("era5_domain_mean")),
-    Data("breakwaters").supplied(geometry="polyline").optional(),   # a context SLOT
-)
+class DATA:
+    terrain = tool("fetch_dem", source="3dep")
+    rivers = tool("fetch_river_geometry")
+    rain = tool("fetch_rain").ladder(tool("fetch_era5_domain_mean"))
+    # row-to-row dataflow inside the body is the plain identifier
+    basin = tool("delineate_watershed", dem_uri=terrain)
+    breakwaters = Data.supplied(geometry="polyline").optional()   # a context SLOT
+
 
 # -- the binding blocks --------------------------------------------------- #
 PHYSICS = Physics("tracer", substance=P.substance, release=P.release_coords)
-FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain)
+FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=DATA.rain)
 MESH    = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
                           extent=Ref("reach_polygon"),
                           refine={"edge_length": P.mesh_resolution_m})
@@ -80,7 +83,7 @@ def plan(ops):
                  prompt="Click where the substance enters the river"),
         Geocode.river(P.location).named("reach"),
         When(P.delineate,
-             Delineate.watershed(dem=D.terrain).overrides_domain()),
+             Delineate.watershed(dem=DATA.terrain).overrides_domain()),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
@@ -95,14 +98,21 @@ FUNCTION, colocated in the template file.
 
 ### The static-plan rule
 
-`P.<name>` yields a LATE-BOUND `ParamRef` and `D.<name>` a `DataRef`, never the
-value. They are MODULE-LEVEL namespaces carrying no sheet and no workflow, which
-is the whole point: a binding block can sit above `plan()` as a plain frozen
-value, and the plan becomes a pure assembly of blocks rather than a function that
-has to be called with a sheet before it means anything. Every name is checked
-against the template's own PARAMS/DATA AT REGISTRATION, and the refusal carries
-the `file.py:line` where the ref was written plus the nearest declared spellings -
+`P.<name>` yields a LATE-BOUND `ParamRef` and `DATA.<row>` a `DataRef`, never the
+value. `P` is a MODULE-LEVEL namespace carrying no sheet and no workflow, and
+`DATA` is the template's own body, which is the whole point: a binding block can
+sit above `plan()` as a plain frozen value, and the plan becomes a pure assembly
+of blocks rather than a function that has to be called with a sheet before it
+means anything. A misspelled ROW is an `AttributeError` at the line that wrote it,
+because the body is a real class. A misspelled PARAM is checked against the
+template's own PARAMS AT REGISTRATION, and that refusal carries the
+`file.py:line` where the ref was written plus the nearest declared spellings -
 because the error fires an import away from the line that caused it.
+
+A REF TAIL BINDS OR REFUSES. `Ref("centerline.bbox")` naming a field the result
+does not define - or one that is there and empty - is a typed `REF_FIELD_MISSING`
+at BINDING, naming the ref and the field. No silent `None` reaches a step: the
+ParamRef-leak law reaches attribute tails for the same reason it reaches refs.
 
 The blocks are DEEP-frozen. They live at module scope for the life of the process
 and every run reads the same object, so a nested mapping or list inside one would
@@ -187,8 +197,8 @@ ladders + coverage validation; emitted to the canvas as it arrives).
 Producers are DEMAND-PULLED: one runs when a step that `Ref`s it executes, which
 is what makes a `When`-guarded consumer whose branch does not fire cost no fetch.
 
-A `Data` may declare NO producer at all - a CONTEXT SLOT, written
-`Data("structure").supplied(geometry="polyline")`. The template names the SHAPE it
+A row may declare NO producer at all - a CONTEXT SLOT, written
+`structure = Data.supplied(geometry="polyline")`. The template names the SHAPE it
 accepts and says nothing about where the thing comes from, because naming a
 default fetcher for a breakwater or a clip zone is an opinion the question does
 not carry. What satisfies one arrives from outside (a layer the user already has,
@@ -230,16 +240,16 @@ but the SWMM and MODFLOW engine campaigns are the place to decide
 whether a derivation's world-reads become first-class `Data` or stay a
 documented exception.
 
-## Temporal transforms (the `Data` modifiers)
+## Temporal transforms (the row modifiers)
 
-A `Data` declaration states the cadence and the units its artifact ARRIVES
-in, because both are part of what the artifact IS:
+A row states the cadence and the units its artifact ARRIVES in, because
+both are part of what the artifact IS:
 
 ```python
-Data("rain", Fetch.tool("...resolve_rain_forcing", ...)
-        .ladder("gridmet_domain_mean", "user_rate")
+rain = (tool("...resolve_rain_forcing", ...)
+        .ladder(tool("fetch_gridmet_domain_mean"), tool("user_rate"))
         .resample(to="1D", max_gap="native*3")
-        .normalize(units="mm/day")),
+        .normalize(units="mm/day"))
 ```
 
 pandas does the arithmetic (`workflows/lib/temporal.py`); the library is

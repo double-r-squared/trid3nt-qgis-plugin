@@ -24,6 +24,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.lib.accepts import Accepts
+from trid3nt_server.workflows.lib.data import tool
 from trid3nt_server.workflows.lib.slots import deep_freeze
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
@@ -212,7 +213,7 @@ def validate_edit(mesher: str, action: str,
 
 
 class MeshTool:
-    """The declaration face: ``tool.build_mesh(...)`` in a template's MESH block."""
+    """The mesh ask's validation face, reached as ``tool.build_mesh(...)``."""
 
     @staticmethod
     def build_mesh(*, mesher: str, kind: MeshKind | None = None,
@@ -222,8 +223,6 @@ class MeshTool:
             fields = {"kind": kind, **fields}
         return MeshDeclaration(validate_spec(mesher, fields))
 
-
-tool = MeshTool()
 
 
 def declaration_plan_value(declaration: MeshDeclaration) -> dict[str, Any]:
@@ -272,7 +271,7 @@ def declaration_from_plan_value(value: Mapping[str, Any],
     was declared.
     """
     fields = {**dict(value["fields"]), **overrides}
-    declaration = tool.build_mesh(mesher=str(value["mesher"]), **fields)
+    declaration = MeshTool.build_mesh(mesher=str(value["mesher"]), **fields)
     for edit in value.get("edits") or ():
         declaration = declaration.edit(str(edit["action"]), **dict(edit["inputs"]))
     return declaration
@@ -568,7 +567,7 @@ async def build_mesh(
         if extent is not None:
             fields = {"extent": tuple(float(v) for v in extent), **fields}
 
-    declaration = tool.build_mesh(mesher=mesher, kind=kind, **fields)
+    declaration = MeshTool.build_mesh(mesher=mesher, kind=kind, **fields)
     name = location or f"{mesher} mesh"
     session = MeshSession(declaration, case_id=current_turn_case(), name=name)
     if (resolve_input_gate_mode(input_mode) == "user_gated"

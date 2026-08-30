@@ -25,9 +25,6 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
-    D,
-    Data,
-    Fetch,
     Forcing,
     FormGate,
     P,
@@ -65,12 +62,12 @@ _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 #: step binds. Reference data: a water-level record is the world's, never supplied.
 #: It reads the DOMAIN for where to look and the params for which series, which
 #: station and which window.
-DATA = (
-    Data("tides", Fetch.tool(f"{_SHARED}.tide_series.resolve_tide_series",
-                             series_type=P.series_type,
-                             station=P.station,
-                             start_date=P.start_date,
-                             end_date=P.end_date)),
+class DATA:
+    tides = tool(f"{_SHARED}.tide_series.resolve_tide_series",
+                 series_type=P.series_type,
+                 station=P.station,
+                 start_date=P.start_date,
+                 end_date=P.end_date)
     #: The BED, as declared reference data. Sampling it inside the solver
     #: container would bypass the emit, cache, provenance and retry the router
     #: gives every other fetch. Declaring it here puts the bathymetry on the
@@ -79,16 +76,15 @@ DATA = (
     #: directory, and the builder reads a file.
     #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
     #: against - so it travels from the template rather than being a router default.
-    Data("bed", Fetch.tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
-                           bathy_source=P.bathy_source,
-                           domain_kind="coast", px_per_deg=1800.0,
-                           max_px_per_side=3000)),
-)
+    bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+               bathy_source=P.bathy_source,
+               domain_kind="coast", px_per_deg=1800.0,
+               max_px_per_side=3000)
 
 
 # -- the binding blocks --------------------------------------------------- #
 # What the run IS, declared as frozen values above the recipe that assembles
-# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# them. Every member is a late-bound read (P.<param> / DATA.<row> / Ref) that the
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
@@ -101,9 +97,9 @@ PHYSICS = Physics("coastal_surge",
                   wind_speed_mps=P.wind_speed_mps,
                   wind_direction_from_deg=P.wind_direction_from_deg,
                   output_interval_min=P.output_interval_min,
-                  bed=D.bed)
+                  bed=DATA.bed)
 
-FORCING = Forcing(water_level=D.tides)
+FORCING = Forcing(water_level=DATA.tides)
 
 #: The MESH ASK, frozen at declaration and building nothing at import. An
 #: open-water deck runs on a uniform lattice over the acquired AOI, and the router

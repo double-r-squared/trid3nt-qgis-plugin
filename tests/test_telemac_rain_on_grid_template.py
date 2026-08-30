@@ -17,11 +17,24 @@ import asyncio
 import pytest
 
 
-def test_registered_as_telemac_template():
+def test_declared_parked_and_off_the_model_surface():
+    """PARKED is a state the declaration carries, not an absent import: the module
+    imports with the rest of the tree, the declaration reads back whole, and the
+    tool is simply never registered - so registry membership does not depend on
+    which test file imported first."""
+    import trid3nt_server.main as _main
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+        telemac_rain_on_grid,
+    )
+
+    _main._import_tools_registry()
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    assert "telemac_rain_on_grid" in TOOL_REGISTRY
-    md = TOOL_REGISTRY["telemac_rain_on_grid"].metadata
+    assert "telemac_rain_on_grid" not in TOOL_REGISTRY
+    assert telemac_rain_on_grid.parked == (
+        "awaiting the worker-unification port of its mesh step")
+
+    md = telemac_rain_on_grid.workflow.metadata
     assert md.engine == "telemac"
     assert md.tier == "template"
     assert md.cacheable is False
@@ -29,6 +42,19 @@ def test_registered_as_telemac_template():
     assert md.source_class == "workflow_dispatch"
     specs = {r.param for r in (md.resolution_specs or ())}
     assert "mesh_min_edge_m" in specs
+
+
+@pytest.mark.asyncio
+async def test_invoking_a_parked_template_refuses_typed_naming_the_reason():
+    from trid3nt_server.workflows.lib import WorkflowParkedError
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+        telemac_rain_on_grid,
+    )
+
+    with pytest.raises(WorkflowParkedError) as ei:
+        await telemac_rain_on_grid(location="Otto, North Carolina")
+    assert ei.value.error_code == "TEMPLATE_PARKED"
+    assert "worker-unification port" in str(ei.value)
 
 
 def test_docstring_carries_the_godara_envelope():
@@ -69,10 +95,12 @@ def test_corpus_yaml_present_and_routes():
 def test_the_declared_plan_is_the_rain_on_grid_sequence():
     """form -> draw -> aoi -> mesh -> infiltration -> deck -> solve ->
     flood_depth, and the plan VALIDATES against its own declared params/data."""
-    from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib.validate import validate_plan
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+        telemac_rain_on_grid,
+    )
 
-    workflow = TOOL_REGISTRY["telemac_rain_on_grid"].fn.workflow
+    workflow = telemac_rain_on_grid.workflow
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
         "form", "draw", "aoi", "mesh", "infiltration", "deck", "solve",
@@ -87,10 +115,11 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     storm, the granularity lever, the mesh slot) do."""
     import inspect
 
-    from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib import doors
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+        telemac_rain_on_grid as fn,
+    )
 
-    fn = TOOL_REGISTRY["telemac_rain_on_grid"].fn
     constants = {p.name for p in fn.workflow.params if p.door == doors.CONSTANT}
     assert constants, "telemac_rain_on_grid declares no constants; the check is vacuous"
     wire = set(inspect.signature(fn).parameters)

@@ -33,9 +33,6 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
-    D,
-    Data,
-    Fetch,
     Forcing,
     FormGate,
     P,
@@ -71,18 +68,17 @@ _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 #: directory, and the builder reads a file.
 #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
 #: against - so it travels from the template rather than being a router default.
-DATA = (
-    Data("bed", Fetch.tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
-                           bathy_source=P.bathy_source,
-                           domain_kind="lake", mode=P.flow_mode,
-                           real_bed_modes=("stratification", "wind_circulation"),
-                           px_per_deg=1200.0, max_px_per_side=2000)),
-)
+class DATA:
+    bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+               bathy_source=P.bathy_source,
+               domain_kind="lake", mode=P.flow_mode,
+               real_bed_modes=("stratification", "wind_circulation"),
+               px_per_deg=1200.0, max_px_per_side=2000)
 
 
 # -- the binding blocks --------------------------------------------------- #
 # What the run IS, declared as frozen values above the recipe that assembles
-# them. Every member is a late-bound read (P.<param> / D.<data> / Ref) that the
+# them. Every member is a late-bound read (P.<param> / DATA.<row> / Ref) that the
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
@@ -95,7 +91,7 @@ PHYSICS = Physics("stratified_3d",
                   non_hydrostatic=P.non_hydrostatic, nplan=P.nplan,
                   sim_duration_hours=P.sim_duration_hours,
                   bathy_source=P.bathy_source,
-                  bed=D.bed)
+                  bed=DATA.bed)
 
 #: The MESH ASK, frozen at declaration and building nothing at import. An
 #: open-water deck runs on a uniform lattice over the acquired AOI, and the router

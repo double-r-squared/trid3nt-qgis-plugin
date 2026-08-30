@@ -1,5 +1,9 @@
 # 0321 - The suite re-baseline after the purge and the chained domain
 
+SUPERSEDED IN PART by ADR 0322: the two failures this note records are
+fixed and the standing baseline is now zero failures in every slice.
+The denominator analysis below still stands.
+
 The offline suite's denominator moved twice in one campaign, so the old "zero
 failures at these counts" line no longer describes anything. This note fixes the
 new counts, says which tests left and why, and records the two that are still red

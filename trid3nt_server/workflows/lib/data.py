@@ -1,6 +1,14 @@
-"""``Data`` - a declared ARTIFACT and its PRODUCER. Modifier legality is the rule
-surface: a REFERENCE producer (fetch-fresh world data) simply has no
-``.supplied()``.
+"""The DATA class body - a declared ARTIFACT per row, and what produces it.
+
+A template writes its data as a class body, so the attribute name IS the row
+name and a reference to the row is attribute access on the body
+(``DATA.dem``) - a typo is an ``AttributeError`` at import rather than a string
+nobody checked. Row-to-row dataflow inside the body is the plain identifier.
+
+``tool(...)`` is the one author word for a producer. There is no fetch/build
+prefix: what a runner does to the world is the REGISTRY's knowledge, not a
+second place for an author to state it, and the review gate labels world-reads
+from the tool's own registration.
 
 ``.resample()`` / ``.normalize()`` ride the declaration too: the cadence and the
 units an artifact ARRIVES in are part of what it is, and declaring them is what
@@ -13,19 +21,19 @@ from types import MappingProxyType
 from typing import Annotated, Any, Mapping
 
 from .errors import PlanValidationError, SuppliedGeometryError
+from .plan import DataRef
 from .temporal import TemporalSpec, spec_from
 
 __all__ = [
-    "AuthoredProducer",
-    "Build",
     "CoversAOI",
     "Data",
     "DataDecl",
-    "Fetch",
     "Producer",
-    "ReferenceProducer",
     "SuppliedGeometry",
+    "ToolWord",
     "artifact_class",
+    "data_rows",
+    "tool",
 ]
 
 
@@ -103,19 +111,71 @@ def artifact_class(value: Any) -> str | None:
     return _CLASS_BY_SUFFIX.get(stem[dot:].lower()) if dot >= 0 else None
 
 
+class _Row:
+    """A row in a ``DATA`` class body: the ATTRIBUTE NAME is the row's name.
+
+    ``__set_name__`` is how the name arrives, so a template never writes it twice,
+    and ``__get__`` makes ``DATA.<row>`` the late-bound :class:`DataRef` every
+    binding block and plan step already speaks. Reading the body's own attribute
+    is therefore checked by Python at import: a misspelled row is an
+    ``AttributeError`` at the line that wrote it.
+    """
+
+    __slots__ = ()
+
+    #: Which field on the concrete row type holds the declared name.
+    _row_attr = "row"
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        declared = getattr(self, self._row_attr, "")
+        if declared and declared != name:
+            raise PlanValidationError(
+                f"row {declared!r} is bound to a second name {name!r}: a row is one "
+                "declaration in one body. Write a fresh tool(...) / Data modifier "
+                "for the second row.")
+        object.__setattr__(self, self._row_attr, name)
+
+    def __get__(self, obj: Any, owner: type | None = None) -> DataRef:
+        name = getattr(self, self._row_attr, "")
+        if not name:
+            raise PlanValidationError(
+                f"{self!r} was read as a row reference but carries no row name; a "
+                "reference is attribute access on the DATA body that declares it.")
+        return DataRef(name)
+
+
 @dataclass(frozen=True, slots=True)
-class Producer:
-    """How an artifact comes into being: a runner name plus its declared args."""
+class Producer(_Row):
+    """How an artifact comes into being: a runner name plus its declared args.
+
+    ``.supplied()`` supersedes the build with an artifact the caller already has;
+    whether that makes sense for a given runner is the registry's knowledge, so
+    the declaration surface carries no fetch/build role of its own.
+    """
 
     runner: str
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     ladder_rungs: tuple["Producer", ...] = ()
     temporal: TemporalSpec | None = None
+    supplied_uri: str | None = None
+    supplied_validate: Any = None
+    #: The DATA-body attribute name this producer was declared under.
+    row: str = ""
 
     def __post_init__(self) -> None:
         if not self.runner:
             raise PlanValidationError("Producer declares no runner path.")
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
+
+    def supplied(self, uri: str | None = None, *,
+                 validate: Any = CoversAOI) -> "Producer":
+        """Take the artifact the caller supplied instead of building one.
+
+        ``CoversAOI`` checks that a domain is bound before the artifact is
+        adopted; it does not compare the artifact's extent to it (see
+        :class:`_CoversAOI`).
+        """
+        return replace(self, supplied_uri=uri, supplied_validate=validate)
 
     def ladder(self, *rungs: "Producer") -> "Producer":
         """Declare the fallback rungs this producer degrades through, in order.
@@ -130,8 +190,8 @@ class Producer:
         wrong = [r for r in rungs if not isinstance(r, Producer)]
         if wrong:
             raise PlanValidationError(
-                f"{self.runner}: .ladder() takes PRODUCERS - Fetch.tool(...) / "
-                f"Build.tool(...) the machinery can call - and was given "
+                f"{self.runner}: .ladder() takes PRODUCERS - tool(...) the "
+                f"machinery can call - and was given "
                 f"{type(wrong[0]).__name__} ({wrong[0]!r}). A rung the interpreter "
                 "cannot call is a fallback that never fires.")
         return replace(self, ladder_rungs=self.ladder_rungs + tuple(rungs))
@@ -153,47 +213,37 @@ class Producer:
                                                 self.temporal))
 
 
-@dataclass(frozen=True, slots=True)
-class ReferenceProducer(Producer):
-    """Canonical world data - fetched fresh for the domain. NO ``.supplied()``."""
+class ToolWord:
+    """The ONE author word a template declares with: ``tool(...)``.
 
+    ``tool(name, **kwargs)`` declares a DATA row's producer. No role prefix: what
+    a runner does to the world - reads it, derives from what is already staged -
+    is the tool REGISTRY's knowledge, and a second statement of it on the
+    declaration is a place for the two to disagree.
 
-@dataclass(frozen=True, slots=True)
-class AuthoredProducer(Producer):
-    """An artifact a user could have authored (mesh, network, deck, edited layer)."""
+    ``tool.build_mesh(...)`` declares the MESH ask, so a template imports one name
+    and every ask it makes reads the same way. The mesh router owns the validation
+    and is reached lazily, because the router is built on this library.
+    """
 
-    supplied_uri: str | None = None
-    supplied_validate: Any = None
-
-    def supplied(self, uri: str | None = None, *,
-                 validate: Any = CoversAOI) -> "AuthoredProducer":
-        """Take the artifact the caller supplied instead of building one.
-
-        ``CoversAOI`` checks that a domain is bound before the artifact is
-        adopted; it does not compare the artifact's extent to it (see
-        :class:`_CoversAOI`).
-        """
-        return replace(self, supplied_uri=uri, supplied_validate=validate)
-
-
-class Fetch:
-    """Reference-data producers: fetch-fresh for the domain, never supplied."""
+    def __call__(self, name: str, **kwargs: Any) -> Producer:
+        return Producer(runner=name, kwargs=kwargs)
 
     @staticmethod
-    def tool(name: str, **kwargs: Any) -> ReferenceProducer:
-        return ReferenceProducer(runner=name, kwargs=kwargs)
+    def build_mesh(**ask: Any) -> Any:
+        """Declare a mesh ask -> a frozen declaration, checked at the mesh router."""
+        from trid3nt_server.workflows.mesh.tool import MeshTool
+
+        return MeshTool.build_mesh(**ask)
 
 
-class Build:
-    """Authored-artifact producers: supplied-able, checked against the bound domain."""
-
-    @staticmethod
-    def tool(name: str, **kwargs: Any) -> AuthoredProducer:
-        return AuthoredProducer(runner=name, kwargs=kwargs)
+#: The author word itself. One object, so ``from ...lib import tool`` and
+#: ``from ...mesh.tool import tool`` are the same name for the same thing.
+tool = ToolWord()
 
 
 @dataclass(frozen=True, slots=True)
-class DataDecl:
+class DataDecl(_Row):
     """A declared artifact: a name the plan Refs, and what satisfies it.
 
     A PRODUCER-LESS declaration (``producer=None``) is a CONTEXT SLOT: the
@@ -204,8 +254,9 @@ class DataDecl:
     and ``.optional()`` says that absence is legal.
     """
 
-    name: str
-    producer: Producer | None
+    #: The DATA-body attribute name this row was declared under.
+    name: str = ""
+    producer: Producer | None = None
     #: Absence is legal. Only meaningful on a producer-less slot; a declared
     #: producer either produces or fails.
     is_optional: bool = False
@@ -218,8 +269,10 @@ class DataDecl:
     #: under ``CoversAOI`` (see :class:`_CoversAOI`), which is not a coverage test.
     supplied_validate: Any = CoversAOI
 
+    _row_attr = "name"
+
     def __post_init__(self) -> None:
-        if not self.name or not self.name.isidentifier():
+        if self.name and not self.name.isidentifier():
             raise PlanValidationError(f"Data name {self.name!r} is not an identifier.")
         if self.is_optional and self.producer is not None:
             raise PlanValidationError(
@@ -305,7 +358,7 @@ class DataDecl:
             raise PlanValidationError(
                 f"Data {self.name!r} declares a producer AND .supplied(): a producer "
                 "that can be superseded says so on the producer "
-                "(Build.tool(...).supplied(...)), not on the slot."
+                "(tool(...).supplied(...)), not on the slot."
             )
         if geometry is not None and geometry not in _GEOMETRIES:
             raise PlanValidationError(
@@ -319,13 +372,50 @@ class DataDecl:
         return replace(self, is_optional=True)
 
 
-def Data(name: str, producer: Producer | None = None) -> DataDecl:  # noqa: N802
-    """Declare an artifact. The producer's kind decides which modifiers are legal.
+#: The unfilled CONTEXT SLOT a ``DATA`` body writes its modifiers onto:
+#: ``walls = Data.supplied(geometry="polyline").optional()``. Every modifier
+#: returns a fresh row, so the prototype itself is never a template's row - it
+#: refuses being named, which is what keeps two bodies from sharing one object.
+Data = DataDecl()
 
-    No producer declares a CONTEXT SLOT - see :class:`DataDecl`.
+
+def data_rows(body: Any) -> tuple[DataDecl, ...]:
+    """The declared rows of a ``DATA`` class body, in CLASS-BODY ORDER.
+
+    Order is the declaration's own, because a ladder and a chain both read down
+    the body. A row-to-row reference written as a plain identifier inside the body
+    is the producer OBJECT, which by now knows its own name, so it is rewritten
+    here into the same late-bound :class:`DataRef` an out-of-body ``DATA.<row>``
+    yields - one shape reaches the validator and the binder.
     """
-    if producer is not None and not isinstance(producer, Producer):
-        raise PlanValidationError(
-            f"Data {name!r}: producer must be a Producer, got {type(producer).__name__}."
-        )
-    return DataDecl(name=name, producer=producer)
+    if isinstance(body, (list, tuple)):
+        return tuple(body)
+    rows: list[DataDecl] = []
+    for name, value in vars(body).items():
+        if isinstance(value, Producer):
+            rows.append(DataDecl(name=name, producer=_bound_producer(value)))
+        elif isinstance(value, DataDecl):
+            rows.append(replace(value, name=name))
+    return tuple(rows)
+
+
+def _bound_producer(producer: Producer) -> Producer:
+    """``producer`` with its own reads - and every rung's - resolved to row refs."""
+    return replace(producer, kwargs=_row_refs(producer.kwargs),
+                   ladder_rungs=tuple(_bound_producer(r)
+                                      for r in producer.ladder_rungs))
+
+
+def _row_refs(value: Any) -> Any:
+    """A declared value with every in-body row identifier turned into its ref."""
+    if isinstance(value, Producer):
+        if not value.row:
+            raise PlanValidationError(
+                f"a producer for {value.runner!r} is read by another row but is not "
+                "declared as one: give it a name in the DATA body.")
+        return DataRef(value.row)
+    if isinstance(value, Mapping):
+        return {k: _row_refs(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return type(value)(_row_refs(v) for v in value)
+    return value
