@@ -542,8 +542,8 @@ def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
     assert exc.error_code == "REACH_BANKS_UNMAPPED"
     assert getattr(exc, "retryable", False) is False
     assert not hasattr(exc, "suggestions")
-    for path in ("Draw the reach polygon", "name a case layer",
-                 "pick a reach with NHDArea coverage"):
+    for path in ("Draw or supply the reach polygon", "name a case layer",
+                 "pick a reach with mapped water coverage"):
         assert path in str(exc)
 
 

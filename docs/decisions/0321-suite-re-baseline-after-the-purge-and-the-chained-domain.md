@@ -119,3 +119,61 @@ a regression.
 Zero failures in `[a-e]`, `[f-o]`, `[p-r]` and `contracts`. Exactly the two named
 failures in `[s-z]`. Any other failure, in any slice, is a regression and gets
 investigated rather than absorbed into the baseline.
+
+---
+
+## AMENDMENT 2026-08-30 - adversarial re-measure of the lego tail
+
+Re-measured from the working tree at the head of the lego tail (096c7704 plus
+that tail's uncommitted edits), commands verbatim from this note, globs reaching
+the shell. AS FOUND, one slice was red:
+
+| slice | passed | skipped | failed | wall |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1730 | 5 | 0 | 210.10s |
+| `test_[f-o]*` | 4150 | 0 (1 xfailed) | 0 | 42.81s |
+| `test_[p-r]*` | 1917 | 1 | **1** | 94.20s |
+| `test_[s-z]*` | 1337 | 6 | 0 | 290.66s |
+| `contracts/tests` | 789 | 0 | 0 | 5.30s |
+
+The one failure:
+
+    FAILED tests/test_run_river_dye_scenario.py::test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths
+
+It is a STALE PIN, not a defect in the subject. The tail rewrote
+`ReachBanksUnmapped`'s message to the wording the banks-coverage ruling asks for
+- "Draw or supply the reach polygon ... pick a reach with mapped water coverage",
+plus the honesty sentence about 2D's useful range - and left the test pinning the
+two phrases the rewrite replaced. The pin was updated to the shipped wording; the
+subject was not touched. AFTER that one-line test fix:
+
+| slice | passed | skipped | failed | wall |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1730 | 5 | 0 | 210.10s |
+| `test_[f-o]*` | 4150 | 0 (1 xfailed) | 0 | 42.81s |
+| `test_[p-r]*` | 1918 | 1 | 0 | 96.64s |
+| `test_[s-z]*` | 1337 | 6 | 0 | 290.66s |
+| `contracts/tests` | 789 | 0 | 0 | 5.30s |
+
+9924 passed, **0 failed** - the counts ADR 0322 records, reproduced.
+
+### What the green does NOT cover
+
+Recorded here because a zero-failure line invites the reading that the tail
+landed. The suite is green and the two reach templates do not run: driven live,
+`telemac_do_sag --coarse` and `telemac_river_dye --coarse` both refuse at
+`REF_FIELD_MISSING: Ref('centerline.bbox')`. The navigate fetcher's result
+carries no `bbox`, so that ref was always empty; ADR 0322's bind-time refusal did
+not cause the break, it EXPOSED one that previously surfaced a step later as
+`NHD_AREA_WATER_BBOX_INVALID`.
+
+The parts that were supposed to close it are all built and all work in isolation
+- `compute_layer_bounds(pad_m=)` returns a padded window from a chained
+`LayerURI`, `measure_bank_coverage` journals "100.0% ... covered" on the Eel and
+raises `REACH_BANKS_UNMAPPED` on a Ball Creek headwater - and none of them is
+wired into a `DATA` body. `measure_bank_coverage`, `pad_m` and the `journal_note`
+channel have zero consumers and zero tests between them, which is exactly why a
+full-suite pass says nothing about them.
+
+The suite is therefore a REGRESSION guard here, not evidence of the tail's
+landing. Its denominator does not reach unwired code.
