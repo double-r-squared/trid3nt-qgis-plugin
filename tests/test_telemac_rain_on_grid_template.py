@@ -101,9 +101,10 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     assert scenario_or_user <= wire
     assert {"pour_point", "mesh_min_edge_m", "antecedent_moisture",
            "design_storm_mm_per_hr"} <= wire
-    # the producer-less "mesh" context slot is on the wire too - the only way a
-    # caller-authored mesh ever gets filled.
-    assert "mesh" in wire
+    # No "mesh" slot: a supplied mesh reaches a run through the mesh ROUTER at
+    # the build door, not through a template's own context slot - a second
+    # resolver inside a model template is the silent-adoption defect D-9 forbids.
+    assert "mesh" not in wire
 
 
 @pytest.mark.asyncio

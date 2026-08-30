@@ -65,18 +65,12 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
 
 
-#: What the run consumes from the world, and the ONE mesh it will take instead of
-#: building its own. Every world-read is declared here rather than performed in a
-#: step: the fetcher router's cache, ladders, provenance and typed refusals live
-#: once, and a producer is where that middleware is reached from.
+#: What the run consumes from the world. Every world-read is declared here rather
+#: than performed in a step: the fetcher router's cache, ladders, provenance and
+#: typed refusals live once, and a producer is where that middleware is reached
+#: from. A mesh the caller SUPPLIES is not among them - that is the mesh router's
+#: question, asked once at the build door and never again inside a template.
 DATA = (
-    # THE SLATE. Producer-less on purpose: a catchment mesh is an AUTHORED
-    # artifact, and naming a default source for somebody's mesh would be an
-    # opinion the question does not carry. Filled by a mesh the caller supplies;
-    # unfilled, the declared build stands. Whether a mesh this case already holds
-    # can be adopted instead is the mesh ROUTER's question, asked once at the
-    # build door - never a second time inside a model template.
-    Data("mesh").supplied(geometry="mesh").optional(),
     # 3DEP is PINNED, not preferred: a DSM (Copernicus GLO-30 includes forest
     # canopy) puts the bed on the tree tops and routes the water down the wrong
     # slopes. A pinned source never switches, so a 3DEP outage surfaces the

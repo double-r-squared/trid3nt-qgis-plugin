@@ -1721,3 +1721,11 @@ producer declares the first real ladder.
 DELETED (P7). Nothing declares `domain` any more - its only declarers were the
 corridor templates - so `extent` is the one spatial word, and it already takes a
 bbox, a polygon layer uri or inline GeoJSON (`om2d._domain`). CONDITION: none.
+
+`telemac_rain_on_grid`'s producer-less `Data("mesh")` supply slot DELETED with
+`Catchment.mesh`, its only consumer. It also collided with the one mesh step's
+own label: `_deref` resolves step results BEFORE Data, so `Ref("mesh")` would
+have meant different things before and after the step ran. A supplied mesh
+reaches a run through the mesh ROUTER at the build door - one resolver, which is
+what D-9 asks for. CONDITION: the supplied-mesh path returns with the
+worker-unification port, wired through that door rather than as a template slot.
