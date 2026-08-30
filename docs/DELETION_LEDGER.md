@@ -1729,3 +1729,24 @@ have meant different things before and after the step ran. A supplied mesh
 reaches a run through the mesh ROUTER at the build door - one resolver, which is
 what D-9 asks for. CONDITION: the supplied-mesh path returns with the
 worker-unification port, wired through that door rather than as a template slot.
+
+`min_spacing` DELETED root-and-branch as a sizing word. The `om2d` refine block
+declared the resolution twice - `min_spacing` (the finest edge, and the base a
+polygon interior is meshed uniformly at) beside `edge_length` (the coarsest) -
+and the reach templates bound the DECLARED `mesh_resolution_m` to the coarse one,
+so a stated resolution reached the box only as a ceiling and every reach meshed
+at the 40 m default nobody asked for. The knobs are now `resolution_m` (the
+finest, threading to `min_edge_length_m`) and `max_el` (the coarsest, defaulting
+to ten times the finest - the shipped 40/400 pair when neither is declared, and a
+band that moves with a declared resolution instead of refusing against a number
+the caller never wrote). Renamed with it: the artifact provenance keys
+`min_spacing_m`/`edge_length_m` -> `resolution_m`/`max_el_m`, and the same two
+`synthetic_inputs` rows. CONDITION: none - the full verbatim-keyed `edgefx` /
+`clean` surface is the om2d wrapper-depth rung and lands there.
+
+`Ref("centerline.bbox")` DELETED from both reach templates' banks row. The NLDI
+navigate result carries no `bbox`, so the ref was empty from the day it was
+written and the templates refused at binding. The banks query window is now its
+own chained row - `compute_layer_bounds(layer_uri=centerline, pad_m=3000.0)` -
+where the pad is a visible tool argument on the row that needs it. CONDITION:
+none.

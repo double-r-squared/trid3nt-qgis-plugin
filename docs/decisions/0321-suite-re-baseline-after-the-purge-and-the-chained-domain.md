@@ -177,3 +177,52 @@ full-suite pass says nothing about them.
 
 The suite is therefore a REGRESSION guard here, not evidence of the tail's
 landing. Its denominator does not reach unwired code.
+
+---
+
+## AMENDMENT 2026-08-30b - the banks chain landed and wired
+
+Re-measured after the banks window, the measured coverage and the sizing fix
+landed. Commands verbatim from this note, globs reaching the shell.
+
+| slice | passed | skipped | failed | wall |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1735 | 5 | 0 | 208.19s |
+| `test_[f-o]*` | 4156 | 0 (1 xfailed) | 0 | 44.55s |
+| `test_[p-r]*` | 1924 | 1 | 0 | 97.12s |
+| `test_[s-z]*` | 1337 | 6 | 0 | 291.46s |
+| `contracts/tests` | 789 | 0 | 0 | 5.42s |
+
+9941 passed, **0 failed**. +17 against the previous amendment, all of them tests
+for code that had none: the metre pad and the chained layer handle on
+`compute_layer_bounds`, the note channel at both the journal and the interpreter,
+the banks window and the two coverage verdicts driven through the whole reach
+chain, and the declared resolution reaching the sizing function at 120 / 400 /
+1000 m.
+
+### What the green now DOES cover, and what still fails live
+
+The three names the previous amendment recorded as zero-coverage - `pad_m`,
+`measure_bank_coverage`, `journal_note` - are wired into both reach templates'
+`DATA` bodies and measured by tests that walk the real chain. Driven live
+(`drive_do_sag_cards.py --coarse`, Eel River near Scotia):
+
+    data centerline -> data window -> fetch_nhd_area_water(bbox=window.bbox)
+    run note: reach banks: 100.0% of the modelled centreline is covered ...
+    endpoints: 1 part(s) -> ... over 965.6 m
+    section: 0.1535 km^2 of 16.2196 km^2, 1 part(s) kept, 8 dropped
+    build_mesh: om2d mesh ... -> 7 nodes 6 elements EPSG:32610 (bed=True)
+    mesh accepted: ... min edge 40.49829510320719 m
+
+and an unmapped reach (Ball Creek, Macon County NC) refuses on its own cause:
+
+    REACH_BANKS_UNMAPPED: step 'data:mapped_banks' failed: No mapped water
+    polygon covers this reach ...
+
+The run still does not reach `status=ok`. It now fails two steps further on, at
+`TELEMAC_MESH_NOT_ACCEPTED: the corridor mesh for this run carries no
+topology_uri`. Nothing in the tree assigns `MeshArtifact.topology_uri` - the
+corridor mesher that produced the topology bundle was deleted with
+`telemac_build.py` - so the reach deck writer demands a bundle no mesher builds.
+That is the worker-unification port's seam, not this tail's, and it is recorded
+as a DESIGN-STOP rather than patched.

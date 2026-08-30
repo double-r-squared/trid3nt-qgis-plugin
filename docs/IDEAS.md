@@ -2757,3 +2757,88 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   CatchmentMesh-shaped record and is the worker-unification port's last
   mile per DS-4; and .ladder() now has zero declared consumers in-tree -
   which producer declares the first real one is a DESIGN-STOP.
+
+- BASELINE DESIGN-STOPS RULED (NATE 2026-08-30): (1) _deref REFUSES
+  AT BINDING - a Ref to a field no declaration defines is a typed
+  bind-time error, never a silent None downstream. (2) PARKED IS
+  FIRST-CLASS - register_workflow(parked="reason"): the declaration
+  stays readable and deterministic, the template leaves the model
+  surface, invocation refuses typed; a commented-out import is not a
+  state (import order made registry membership flaky - the last 2
+  suite failures). (3) The REACH_BANKS_UNMAPPED check is
+  TEMPLATE-OWNED, after the banks fetch, before section - so it fires
+  on the real cause instead of SECTION_CUT_EMPTY masking it.
+
+- SIZING SURFACE RULED (NATE 2026-08-30): build_mesh(om2d) takes TWO
+  verbatim-keyed dicts - edgefx={} composes sizing functions BEFORE
+  generation (compute_minimum, gradation last), clean={} runs an
+  ordered sequence AFTER generation. Keys are the library's own
+  function names; values are that function's kwargs VERBATIM -
+  including data arguments passed EXPLICITLY (e.g.
+  "wavelength_sizing_function": {"dem": DATA.dem, "wl": 10}) exactly
+  as the library signature reads. NO presence-gating / auto-population
+  from staged data - an entry referencing an undeclared row fails at
+  declaration validation (statically checkable), earlier and less
+  ambiguous than a runtime presence check. ONE documented default
+  rule survives: resolution_m threads as default min_edge_length
+  (and max_el as max_edge_length) in every entry, overridable per
+  entry - a changed default said out loud, not rewiring. min_spacing
+  DIES (was resolution stated twice). Defaults are hard-baked and
+  VISIBLE; declaring either dict replaces wholesale. SDF +
+  generate_mesh stay internal. INLINE tool.fetch() IN ENTRIES
+  REJECTED (three flaws: hides a world-read from the review gate;
+  breaks staged-once economics; anonymous = no journal/rerun/override
+  address). The named DATA row sits lines above in the same file.
+
+- DATA IS A CLASS BODY, THE ROLE PREFIX DIES (NATE 2026-08-30): the
+  Data("name", Fetch.tool(...)) ceremony is replaced by the ORM
+  pattern - class DATA: dem = tool("fetch_dem", source="3dep") - the
+  name IS the identifier (__set_name__ hands each producer its row
+  name, ~5 LOC); refs are attribute access (DATA.dem - import-time
+  typo catch, IDE completion); row-to-row dataflow is a plain
+  identifier; class-body order preserved for ladders. Fetch.tool /
+  Build.tool collapse to ONE word tool(...) - the fetch/build split
+  was a P1 loader artifact and is REDUNDANT with the registry, which
+  knows each tool's nature; the review gate labels world-reads from
+  the tool's own registration. Loader resolution unchanged (registry
+  first, dotted path second, both refuses).
+
+- BANKS COVERAGE IS MEASURED, GRADED, AND LADDERED (NATE 2026-08-30):
+  after the banks fetch the template-owned check measures the
+  fraction of the reach centerline covered by fetched water polygons.
+  ZERO coverage -> REACH_BANKS_UNMAPPED terminal refusal (none of the
+  reach is polygon-mapped; names the supply paths - draw/supply a
+  polygon, name a case layer, pick a covered reach - plus the honesty
+  sentence on 2D's useful range). PARTIAL coverage -> PROCEED WITH A
+  WARNING stating the measured fraction and that smaller pieces
+  mapped only as flowlines may be missing; the warning travels in the
+  journal. NO invented threshold - zero refuses, above zero warns.
+  LADDER TOP RUNG: fetch_nhd_hr_area (NHDPlus HR polygons) lands as
+  ONE declarative fetcher spec; the banks row declares HR first,
+  medium-res NHDArea fall-through, journaled per rung (same dataset
+  family = declared ladder step, not a loud substitution). Ladder
+  below: derive_banks(dem, flowline) chartered when a case demands;
+  supply; refuse; 1D floor. NOTED NOT CHARTERED: terrain-domain
+  meshing with distance_sizing_from_linestring_function refining
+  along flowlines (real corridor/watershed extent + lidar DEM
+  carrying the channel) - honest (not the ribbon: the domain is real,
+  the line is only a sizing target), one edgefx entry under the ruled
+  surface, but a different run class (flow across a cut line,
+  wet/dry, rain_on_grid family) - held until a case demands.
+
+- BANKS WINDOW RULED (NATE 2026-08-30, the last baseline stop): the
+  reach templates get the banks fetch bbox from a CHAINED row -
+  compute_layer_bounds(layer=centerline, pad_m=3000) - the pad is an
+  EXPLICIT, visible, journaled tool argument (~the retired 0.03 deg),
+  justified in place: the query window must reach far channels behind
+  mid-river islands. This widens a FETCH QUERY WINDOW, never meshed
+  geometry - the polygons that return are real NHDArea water. An
+  undersized window now self-reports through the measured-coverage
+  warning. The banks ladder row is the FIRST REAL .ladder() consumer
+  (resolves the elegance residue design-stop). Sequencing: the
+  minimal sizing fix (min_spacing dies; the declared resolution is
+  the uniform base on the polygon path) lands in the lego wave; the
+  full edgefx/clean dict surface is rung 3 (om2d wrapper depth) -
+  ruled now, built there. The DATA class-body reshape lands in the
+  lego wave so the worker wave's template completion is authored in
+  the final shape.
