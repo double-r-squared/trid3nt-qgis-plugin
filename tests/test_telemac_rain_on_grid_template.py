@@ -82,10 +82,9 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
 
 def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     """CONSTANT-door params (landcover_dataset, soil_spinup_days, mesh_grade,
-    mesh_max_iter, outlet_snap_cells, bed_dem_resolution_m, river_source,
-    time_step_s, outlet_node_count, compute_class) never reach the model-facing
-    schema; SCENARIO/USER ones (the storm, the granularity lever, the mesh
-    slot) do."""
+    bed_dem_resolution_m, river_source, time_step_s, outlet_node_count,
+    compute_class) never reach the model-facing schema; SCENARIO/USER ones (the
+    storm, the granularity lever, the mesh slot) do."""
     import inspect
 
     from trid3nt_server.tools import TOOL_REGISTRY

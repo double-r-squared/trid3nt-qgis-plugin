@@ -33,6 +33,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
+    Build,
     D,
     Data,
     DrawGate,
@@ -71,8 +72,9 @@ DATA = (
     # THE SLATE. Producer-less on purpose: a catchment mesh is an AUTHORED
     # artifact, and naming a default source for somebody's mesh would be an
     # opinion the question does not carry. Filled by a mesh the caller supplies;
-    # unfilled, the run asks whether to adopt a mesh this case already holds and
-    # otherwise generates one - a labeled fallback, never a stance.
+    # unfilled, the declared build stands. Whether a mesh this case already holds
+    # can be adopted instead is the mesh ROUTER's question, asked once at the
+    # build door - never a second time inside a model template.
     Data("mesh").supplied(geometry="mesh").optional(),
     # 3DEP is PINNED, not preferred: a DSM (Copernicus GLO-30 includes forest
     # canopy) puts the bed on the tree tops and routes the water down the wrong
@@ -96,6 +98,20 @@ DATA = (
          # A real window fetches the hourly record; without one the constant
          # design storm is the labeled rung, and the run reports which answered.
          .ladder("aorc_hourly", "design_storm")),
+    # THE DOMAIN, narrowed by CHAINING tools rather than by a mesher that grew a
+    # delineation of its own. The basin is the terrain's answer at the outlet,
+    # off the same bare-earth bed the nodes are sampled from - one acquisition,
+    # so the delineation and the elevations cannot describe two different grounds.
+    # The snap window is the delineation tool's own declared default: how far a
+    # clicked outlet may move to reach the channel is a fact about the D8 grid,
+    # which is where it is declared.
+    Data("basin", Build.tool("delineate_watershed", pour_point=P.pour_point,
+                             bbox=Ref("aoi.bbox"), dem_uri=Ref("bed_dem.uri"))),
+    # The basin and the channel network inside it, joined into ONE document. The
+    # mesher receives a domain and its sizing source as a single acquisition,
+    # which is what keeps a chain from handing over a river network for a basin
+    # it does not describe.
+    Data("sized", Build.tool("combine", polygon=Ref("basin"), lines=D.rivers)),
 )
 
 
@@ -116,21 +132,20 @@ PHYSICS = Physics("rainfall_runoff",
 
 FORCING = Forcing(rain=D.rain)
 
-#: The MESH ASK, frozen at declaration and building nothing at import. The
-#: acquired window carries the extent the delineation runs inside and the outlet
-#: the basin drains to; the band, the gradation and the outlet-snap window are the
-#: ``watershed`` mesher's own declared fields, checked at the router. The deck
-#: reads the finest edge only to record what was ASKED for; what the mesh was
-#: BUILT at comes back on the mesh step.
+#: The MESH ASK, frozen at declaration and building nothing at import. The extent
+#: is the CHAIN's product - the delineated basin carrying the channel network
+#: inside it - so the mesher triangulates a domain another tool measured rather
+#: than delineating one itself. Every field is checked at the router against what
+#: the ``om2d`` mesher declares. The deck reads the finest edge only to record
+#: what was ASKED for; what the mesh was BUILT at comes back on the mesh step.
 MESH = tool.build_mesh(
-    mesher="watershed",
+    mesher="om2d",
     kind="unstructured_tri",
-    extent=Ref("aoi"),
-    min_edge_length_m=P.mesh_min_edge_m,
-    max_edge_length_m=P.mesh_max_edge_m,
-    grade=P.mesh_grade,
-    max_iter=P.mesh_max_iter,
-    snap_search_cells=P.outlet_snap_cells,
+    extent=Ref("sized"),
+    refine={"edge_length": P.mesh_max_edge_m,
+            "min_spacing": P.mesh_min_edge_m,
+            "gradation": P.mesh_grade},
+    bed=Ref("bed_dem.uri"),
 )
 
 

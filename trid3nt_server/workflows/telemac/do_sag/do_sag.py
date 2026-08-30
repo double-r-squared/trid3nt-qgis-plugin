@@ -21,6 +21,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.lib import (
+    Build,
     D,
     Data,
     DrawGate,
@@ -57,6 +58,22 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 #: producer declaration can name.
 DATA = (
     Data("rivers", Fetch.tool(f"{_STEPS}.reach.fetch_reach_flowline", prefetched=None)),
+    # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
+    # corridor of its own. The navigated mainstem names the stretch, its two ends
+    # name where the stretch stops, and the cut through the MAPPED banks is the
+    # domain - so the two end faces are the transects the inflow and the outflow
+    # are prescribed on, measured off real geometry rather than a ribbon.
+    Data("centerline", Fetch.tool("fetch_nhdplus_nldi_navigate",
+                                  seed_point=[Ref("seed.lon"), Ref("seed.lat")],
+                                  direction="DM",
+                                  distance_km=P.reach_length_km)),
+    Data("ends", Build.tool("endpoints", line=D.centerline)),
+    # The banks are fetched over the CENTERLINE's own extent: the reach the run
+    # models is what decides which mapped water polygons matter, and a box drawn
+    # anywhere else would answer for a different stretch.
+    Data("banks", Fetch.tool("fetch_nhd_area_water", bbox=Ref("centerline.bbox"))),
+    Data("reach_polygon", Build.tool("section", polygon=D.banks,
+                                     between=Ref("ends.between"))),
 )
 
 

@@ -30,7 +30,7 @@ def validate_plan(plan: Plan, params: Sequence[Param],
     _check_when_conditions(plan, param_names, data_names)
     _check_refs(plan, param_names, data_names)
     _check_param_refs(plan, param_names)
-    _check_data_refs(data, param_names, data_names)
+    _check_data_refs(data, param_names, data_names, plan)
 
 
 def _check_duplicate_names(plan: Plan) -> None:
@@ -184,13 +184,23 @@ def param_name_refusal(ref: ParamRef, param_names: set[str], where: str) -> str:
 
 
 def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
-                     data_names: set[str]) -> None:
+                     data_names: set[str], plan: Plan) -> None:
+    """What a Data producer may read: a param, another Data, or a named step.
+
+    The step case is what the interpreter has always resolved - ``_deref`` looks in
+    the step results FIRST - and it is what a chained domain needs: the acquired
+    AOI is a step result, so a producer that narrows the domain has to be able to
+    name it. Demand-pull is what makes it sound: a Data is produced when a step
+    that reads it runs, which is after the step it names.
+    """
+    named = {step.name for step in plan.declared() if step.name is not None}
     for decl in data:
         for ref in _walk_refs(dict(decl.producer_kwargs)):
-            if ref.root not in param_names and ref.root not in data_names:
+            if (ref.root not in param_names and ref.root not in data_names
+                    and ref.root not in named):
                 raise PlanValidationError(
                     f"Data {decl.name!r} producer Refs {ref.path!r}, which is neither "
-                    "a declared param nor a declared Data."
+                    "a declared param, a declared Data, nor a step the plan names."
                 )
         for pref in _walk_param_refs(dict(decl.producer_kwargs)):
             if pref.name not in param_names:

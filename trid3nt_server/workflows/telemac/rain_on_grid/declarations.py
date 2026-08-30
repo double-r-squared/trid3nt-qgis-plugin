@@ -18,9 +18,7 @@ from trid3nt_server.workflows.mesh.watershed import (
     DEFAULT_BED_RESOLUTION_M,
     DEFAULT_GRADE,
     DEFAULT_MAX_EDGE_M,
-    DEFAULT_MAX_ITER,
     DEFAULT_MIN_EDGE_M,
-    DEFAULT_OUTLET_SNAP_CELLS,
     DEFAULT_RIVER_SOURCE,
 )
 
@@ -169,16 +167,6 @@ PARAMS: tuple[Param, ...] = (
           consequence="numerical",
           desc="Mesh gradation: how fast the edge length may grow between the "
                "channel band and the hillslopes"),
-    Param("mesh_max_iter", door=doors.CONSTANT, default=DEFAULT_MAX_ITER,
-          type=int,
-          bounds=(5.0, 500.0), consequence="numerical",
-          desc="Mesh-improvement iteration cap in the triangulator"),
-    Param("outlet_snap_cells", door=doors.CONSTANT,
-          default=DEFAULT_OUTLET_SNAP_CELLS, type=int,
-          bounds=(1.0, 64.0), consequence="numerical",
-          desc="Search window (D8 cells) the pour point is snapped to the "
-               "maximum-accumulation cell within, so a coarse-DEM outlet lands on "
-               "the main channel regardless of grid alignment"),
     # A SAMPLING spacing, so numerical: which bed the nodes are sampled from is
     # the physics (bare earth against a canopy-inclusive surface model, declared
     # on the bed_dem ladder), and how finely that bed is read is a solver-side

@@ -520,7 +520,7 @@ _TEMPLATES = (
     ("telemac3d_stratified_flow",
      "trid3nt_server.workflows.telemac.stratified_flow.stratified_flow", "reg_grid"),
     ("telemac_rain_on_grid",
-     "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid", "watershed"),
+     "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid", "om2d"),
 )
 
 
@@ -569,21 +569,23 @@ def test_the_reach_templates_carry_the_corridor_shape_into_the_deck():
 
 
 def test_the_catchment_mesh_step_reads_the_declared_band():
-    """Every knob the watershed mesher declares reaches the step that builds one.
+    """Every knob the mesher declares reaches the step that builds one.
 
-    The band, the gradation and the outlet-snap window shape the catchment; a knob
-    the declaration carries and the step drops would read as a lever that did
-    nothing. The declaration travels WHOLE, so the step carries the mesher, the
-    fields the router checked and the declared edit chain rather than a restated
-    subset."""
+    The band and the gradation shape the catchment; a knob the declaration carries
+    and the step drops would read as a lever that did nothing. The declaration
+    travels WHOLE, so the step carries the mesher, the fields the router checked
+    and the declared edit chain rather than a restated subset. The extent is the
+    CHAIN's product - the delineated basin carrying its channel network - so the
+    mesher triangulates a domain another tool measured."""
     module = _template("trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)
                  if getattr(n, "stage", "") == "mesh"][0]
     assert set(mesh_step.kwargs) == {"mesh", "supplied", "bed_dem", "rivers"}
     ask = mesh_step.kwargs["mesh"]
-    assert ask["mesher"] == "watershed"
+    assert ask["mesher"] == "om2d"
     assert set(ask) == {"mesher", "fields", "edits"}
-    assert set(ask["fields"]) == {
-        "kind", "extent", "min_edge_length_m", "max_edge_length_m", "grade",
-        "max_iter", "snap_search_cells"}
+    assert set(ask["fields"]) == {"kind", "extent", "refine", "bed"}
+    assert ask["fields"]["extent"] == Ref("sized")
+    assert set(ask["fields"]["refine"]) == {"edge_length", "min_spacing",
+                                            "gradation"}

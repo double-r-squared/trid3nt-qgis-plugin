@@ -80,9 +80,6 @@ _SOLVE_TIMEOUT_S = 86400.0
 #: Seconds in an hour, spelled once so no expression in this module spells it again.
 _HOUR_S = 3600.0
 
-#: The engine key the mesh precondition gate checks a case mesh's geometry against.
-_ENGINE = "telemac"
-
 
 class RainOnGridError(DeclarativeError):
     """A rain-on-grid catchment could not be acquired, staged, solved or read."""
@@ -166,70 +163,23 @@ def _refuse_declared_edits(declaration: Any) -> None:
             "and hand it to this run instead.")
 
 
-async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
-                           slug: str) -> tuple[Any, str | None]:
-    """Offer a mesh this CASE already holds; ``(mesh | None, note | None)``.
-
-    Mesh creation is an explicit user act (a standalone ``build_mesh`` call),
-    never auto-guessed inside a model template - so when the declared slot is
-    unfilled the template ASKS rather than assuming. Accepted, the case mesh is
-    adopted end to end; declined, absent or incompatible, the catchment is
-    delineated fresh. NEVER raises into the solve path: a discovery fault degrades
-    to fresh authoring with a logged warning, because a mesh offer is a
-    convenience and losing it must not lose the run.
-    """
-    from trid3nt_server.workflows.mesh.precondition_gate import (
-        gate_supplied_mesh, materialize_supplied_mesh,
-    )
-
-    try:
-        from trid3nt_server.emission.pipeline_emitter import current_emitter
-        from trid3nt_server.workflows.solver.solver import _get_s3_client
-
-        emitter = current_emitter()
-        loaded = ([ly.uri for ly in emitter.loaded_layers
-                   if getattr(ly, "layer_type", None) == "mesh"]
-                  if emitter is not None else [])
-        s3 = _get_s3_client()
-        decision = await gate_supplied_mesh(
-            tool_name="telemac_rain_on_grid", engine=_ENGINE, input_mode=None,
-            loaded_mesh_uris=loaded, s3_client=s3)
-        if not decision.use or decision.artifact is None:
-            return None, decision.note
-        art = decision.artifact
-
-        def _materialize():
-            slf_local = materialize_supplied_mesh(art, str(rundir), s3, engine=_ENGINE)
-            twodm_local = str(rundir / "supplied_mesh.2dm")
-            bucket, key = art.display_uri[len("s3://"):].split("/", 1)
-            s3.download_file(bucket, key, twodm_local)
-            return W.adopt_supplied_mesh_2dm(
-                twodm_path=twodm_local, slug=slug, utm_epsg=int(art.utm_epsg),
-                pour_point=pour_point, outlet_lonlat=art.outlet_lonlat,
-                area_km2=float((art.provenance or {}).get("area_km2") or 0.0),
-                source_path=slf_local, note=decision.note)
-
-        mesh = await asyncio.to_thread(_materialize)
-        logger.info("rog: solving on the case mesh %r (%d elements)",
-                    art.name, art.element_count)
-        return mesh, decision.note
-    except Exception as exc:  # noqa: BLE001 - a mesh OFFER never breaks the solve
-        logger.warning("rog: the case-mesh offer failed (%s); delineating fresh",
-                       exc, exc_info=True)
-        return None, None
-
-
 async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
                                bed_dem: Any, rivers: Any) -> dict[str, Any]:
     """The catchment mesh, however it was acquired, plus the solver geometry file.
 
     THE SLATE: a mesh SUPPLIED on this invocation is taken as-is and nothing here
-    has an opinion about it. Only when the slot is unfilled does the template ask
-    whether to adopt a mesh this case already holds, and only when that is
-    declined or absent does it generate one - a labeled fallback, never a stance.
+    has an opinion about it; unfilled, the catchment is generated. There is ONE
+    resolver for a mesh a case already holds and it is the mesh router's, reached
+    at the build door - a second discovery here would silently adopt somebody's
+    mesh inside a model template.
 
     Every knob the generation reads comes off the REBUILT declaration, so the
     mesher's own declared defaults are what stand when the template named nothing.
+
+    AWAITING THE WORKER-UNIFICATION PORT: the template now declares an ``om2d``
+    build over the chained basin, and the fields read below are the retired
+    catchment mesher's. This half turns into a mesh artifact when the worker's
+    staged contract takes one - see docs/design/worker-unification-port.md.
     """
     from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
 
@@ -254,8 +204,6 @@ async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
             (supplied or {}).get("uri") or "")
         mesh = await asyncio.to_thread(
             _stage_supplied_mesh, uri, rundir, slug, point)
-    if mesh is None:
-        mesh, _note = await _adopt_case_mesh(rundir, point, slug)
     if mesh is None:
         # Warm the geo stack on the MAIN thread first: shapely and geopandas have a
         # thread-first-import circular-import race, and the generation below runs in
