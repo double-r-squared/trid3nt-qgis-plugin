@@ -2715,3 +2715,21 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   granularity judgment. rain_on_grid stays UNREGISTERED (honest
   absence beats a registered template whose mesh step fails) until
   the worker-unification port; re-enabling is one line.
+
+- WORKER-UNIFICATION WAVE PLANNED + APPROVED (NATE 2026-08-30, plan
+  at ~/.claude/plans/mossy-rolling-fairy.md): telapy child-process
+  runner (ruled; crash isolation kept); .cas AUTHORING MIGRATES
+  SERVER-SIDE - the two-pass probe-solve is OBSOLETE (the pair driver
+  already measures numliq; author once against the measured order);
+  ONE manifest writer w/ "case" section + echo block; ONE strict
+  gate; ONE dispatch table; mesh_only dies (zero callers); worker
+  reach modules die (_staged_mesh/_staged_reach/_staged_bed;
+  _supplied_mesh stays for artemis BYO); PHYSICS parity shim +
+  channel_width_m + bank_source die per P3/DS-3. FORK RULINGS:
+  wave_field + coastal_tidal_surge go DARK until rung-4 rebuilds
+  (rain_on_grid precedent; attic never restores); artemis_build +
+  telemac3d_build STAY LIVE in-worker behind the unified dispatch,
+  never extended, awaiting rung 4. 18 non-telemac worker dirs ->
+  attic. Expect ~-7,500 net LOC beyond the attic moves. Conditional
+  fork recorded: telapy failing a user-fortran/coupled class reports
+  to NATE, never silently falls back.
