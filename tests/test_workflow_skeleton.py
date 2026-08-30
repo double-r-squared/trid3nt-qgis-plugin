@@ -261,7 +261,7 @@ def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
 def test_the_mesh_declaration_reaches_the_deck_under_the_engine_s_own_names():
     """The mesher's vocabulary is its library's; the deck's is TELEMAC's."""
     ops = _telemac()
-    mesh = _reach_mesh(refine={"edge_length": 100.0})
+    mesh = _reach_mesh(refine={"resolution_m": 100.0})
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge"), rain=None))
     assert deck.name == "deck" and deck.stage == "author"
@@ -587,5 +587,5 @@ def test_the_catchment_mesh_step_reads_the_declared_band():
     assert set(ask) == {"mesher", "fields", "edits"}
     assert set(ask["fields"]) == {"kind", "extent", "refine", "bed"}
     assert ask["fields"]["extent"] == Ref("sized")
-    assert set(ask["fields"]["refine"]) == {"edge_length", "min_spacing",
+    assert set(ask["fields"]["refine"]) == {"max_el", "resolution_m",
                                             "gradation"}

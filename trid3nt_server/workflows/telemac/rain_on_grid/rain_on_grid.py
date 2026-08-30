@@ -128,8 +128,8 @@ MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
     extent=Ref("sized"),
-    refine={"edge_length": P.mesh_max_edge_m,
-            "min_spacing": P.mesh_min_edge_m,
+    refine={"max_el": P.mesh_max_edge_m,
+            "resolution_m": P.mesh_min_edge_m,
             "gradation": P.mesh_grade},
     bed=Ref("bed_dem.uri"),
 )

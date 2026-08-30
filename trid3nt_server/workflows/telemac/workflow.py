@@ -207,7 +207,7 @@ _MESH_DECK_FIELDS: Mapping[str, str] = {
 
 #: The ``refine`` knobs a deck reads, by the same rule.
 _MESH_DECK_REFINE: Mapping[str, str] = {
-    "edge_length": "mesh_resolution_m",
+    "resolution_m": "mesh_resolution_m",
 }
 
 #: Which domain SHAPES ``acquire_domain`` knows, and what each one is for. A

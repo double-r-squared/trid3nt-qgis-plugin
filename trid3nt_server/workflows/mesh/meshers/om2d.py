@@ -104,7 +104,16 @@ _COINCIDENT_TOLERANCE_M = 1.0
 _BED_MARGIN_FRAC = 0.02
 
 #: The refine knobs, and what each one means to the sizing function.
-_REFINE_KNOBS = {"edge_length": 400.0, "min_spacing": 40.0, "gradation": 0.15}
+#: ``resolution_m`` is THE granularity word: the finest edge the sizing function
+#: is allowed, and - where nothing sizes the interior toward anything - the
+#: uniform edge the whole domain is meshed at.
+_REFINE_KNOBS = {"resolution_m": 40.0, "max_el": 400.0, "gradation": 0.15}
+
+#: What the coarsest edge defaults to, as a MULTIPLE of the finest. A fixed metre
+#: ceiling turns a coarse resolution into a refusal about a number the caller
+#: never wrote; the multiple reproduces the shipped 40 m / 400 m pair when
+#: neither knob is declared and moves with the resolution when one is.
+_MAX_EL_FACTOR = 10.0
 
 _FIELDS = (
     MeshField("kind", types=(str,), choices=("unstructured_tri",),
@@ -113,12 +122,15 @@ _FIELDS = (
     MeshField("extent", types=(tuple, list, dict, str), required=True,
               doc="what the domain is cut from: (min_lon, min_lat, max_lon, "
                   "max_lat) for the shoreline path, or a POLYGON - inline "
-                  "GeoJSON, a geometry mapping, or the uri of a polygon layer - "
-                  "whose interior is meshed as it stands"),
+                  "GeoJSON, a geometry mapping, the uri of a polygon layer, or "
+                  "the layer a chained row produced - whose interior is meshed "
+                  "as it stands"),
     MeshField("refine", types=(dict,),
-              doc="{'edge_length': the coarsest background edge in metres, "
-                  "'min_spacing': the finest edge at the shore in metres, "
-                  "'gradation': how fast the two may transition (0.15-0.35)}"),
+              doc="{'resolution_m': the finest edge in metres - at the shore on "
+                  "the shoreline path, and the uniform edge a polygon interior "
+                  "is meshed at, 'max_el': the coarsest background edge in "
+                  "metres (defaults to 10x the resolution), 'gradation': how "
+                  "fast the two may transition (0.15-0.35)}"),
     MeshField("bed", types=(str, dict),
               default="fetch_topobathy",
               doc="what paints the node elevations: a raster fetcher's name, or a "
@@ -134,12 +146,28 @@ def build(spec: Mapping[str, Any]) -> Mesh:
         "extent": (tuple(float(v) for v in extent)
                    if isinstance(extent, (tuple, list)) else extent),
         "refine": checked_refine("mesher 'om2d'", spec.get("refine"),
-                                 _REFINE_KNOBS),
+                                 _refine_defaults(spec.get("refine"))),
         "bed": spec.get("bed") or "fetch_topobathy",
         "obstacles": [],
         "regions": [],
         "boundary": None,
     })
+
+
+def _refine_defaults(refine: Any) -> dict[str, float]:
+    """The knob defaults this ask is checked against, with the ceiling on the floor.
+
+    A declared ``resolution_m`` with no ``max_el`` beside it moves the ceiling
+    with it, so the one number a template states is never contradicted by a
+    default it did not write.
+    """
+    given = dict(refine or {})
+    declared = dict(_REFINE_KNOBS)
+    finest = given.get("resolution_m")
+    if "max_el" not in given and isinstance(finest, (int, float)) \
+            and not isinstance(finest, bool):
+        declared["max_el"] = _MAX_EL_FACTOR * float(finest)
+    return declared
 
 
 # --------------------------------------------------------------------------- #
@@ -154,12 +182,12 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
     )
 
     refine = dict(state["refine"])
-    if refine["min_spacing"] > refine["edge_length"]:
+    if refine["resolution_m"] > refine["max_el"]:
         raise MeshToolError(
             "MESH_SPEC_BAD_VALUE",
-            f"mesher 'om2d': refine min_spacing {refine['min_spacing']} m is "
-            f"coarser than edge_length {refine['edge_length']} m; min_spacing is "
-            "the finest edge at the shore and edge_length the coarsest offshore.")
+            f"mesher 'om2d': refine resolution_m {refine['resolution_m']} m is "
+            f"coarser than max_el {refine['max_el']} m; resolution_m is the "
+            "finest edge and max_el the coarsest background one.")
     rundir = _rundir()
     domain = _domain(state["extent"], rundir)
     aoi = domain.bbox
@@ -181,8 +209,8 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                            if domain.polygon_name is not None else None),
         "sizing_coords": domain.sizing_coords,
         "dem_path": "/data/bed.tif" if dem_path is not None else None,
-        "min_edge_length_m": refine["min_spacing"],
-        "max_edge_length_m": refine["edge_length"],
+        "min_edge_length_m": refine["resolution_m"],
+        "max_edge_length_m": refine["max_el"],
         "gradation": refine["gradation"],
         "seed": _SEED,
         "obstacles": [{"geojson": f"/data/{name}", "constrain": True}
@@ -238,8 +266,8 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                 "open_boundary_info": boundary_info,
                 "provenance": {
                     "mesher_library": stats.get("engine", "oceanmesh (unreported)"),
-                    "min_spacing_m": refine["min_spacing"],
-                    "edge_length_m": refine["edge_length"],
+                    "resolution_m": refine["resolution_m"],
+                    "max_el_m": refine["max_el"],
                     "gradation": refine["gradation"],
                     "seed": _SEED,
                     "sizing_source": _sizing_source(stats, domain),
@@ -249,9 +277,9 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                 },
             },
             "synthetic_inputs": [
-                {"param": "min_spacing_m", "value": refine["min_spacing"],
+                {"param": "resolution_m", "value": refine["resolution_m"],
                  "units": "m", "basis": "user"},
-                {"param": "edge_length_m", "value": refine["edge_length"],
+                {"param": "max_el_m", "value": refine["max_el"],
                  "units": "m", "basis": "user"},
                 {"param": "gradation", "value": refine["gradation"],
                  "basis": "user"},

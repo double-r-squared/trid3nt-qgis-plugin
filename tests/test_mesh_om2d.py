@@ -75,15 +75,15 @@ def test_a_refine_knob_holding_a_late_bound_read_refuses_at_the_build_seam():
     from trid3nt_server.workflows.lib.plan import ParamRef
 
     with pytest.raises(MeshToolError) as excinfo:
-        checked_refine("mesher 'om2d'", {"edge_length": ParamRef("edge")},
+        checked_refine("mesher 'om2d'", {"max_el": ParamRef("edge")},
                        OM2D._REFINE_KNOBS)
     assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
 
 
 def test_refine_defaults_fill_in_and_coerce():
-    got = checked_refine("mesher 'om2d'", {"edge_length": 300},
+    got = checked_refine("mesher 'om2d'", {"max_el": 300},
                          OM2D._REFINE_KNOBS)
-    assert got == {"edge_length": 300.0, "min_spacing": 40.0, "gradation": 0.15}
+    assert got == {"max_el": 300.0, "resolution_m": 40.0, "gradation": 0.15}
 
 
 def test_a_refine_knob_that_is_not_a_number_refuses():
@@ -181,7 +181,7 @@ def test_the_box_is_handed_the_declared_refine_band_and_the_mounted_shoreline(
         monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
     mesh = OM2D.build({"extent": _AOI,
-                       "refine": {"min_spacing": 60.0, "edge_length": 800.0,
+                       "refine": {"resolution_m": 60.0, "max_el": 800.0,
                                   "gradation": 0.22}})
     config = sent["config"]
     assert config["min_edge_length_m"] == 60.0
@@ -195,11 +195,11 @@ def test_the_box_is_handed_the_declared_refine_band_and_the_mounted_shoreline(
     assert mesh.has_bed
 
 
-def test_a_min_spacing_coarser_than_the_edge_length_refuses(monkeypatch, tmp_path):
+def test_a_resolution_coarser_than_the_max_el_refuses(monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
     with pytest.raises(MeshToolError) as excinfo:
         OM2D.build({"extent": _AOI,
-                    "refine": {"min_spacing": 900.0, "edge_length": 100.0}})
+                    "refine": {"resolution_m": 900.0, "max_el": 100.0}})
     assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
 
 

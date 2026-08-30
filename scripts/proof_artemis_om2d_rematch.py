@@ -61,7 +61,7 @@ AOI = (-71.525, 41.338, -71.492, 41.368)
 
 #: The mesh ask. The finest edge sits at the shore and around the structure, the
 #: coarsest offshore; the gradation limits how fast one becomes the other.
-REFINE = {"edge_length": 25.0, "min_spacing": 8.0, "gradation": 0.2}
+REFINE = {"max_el": 25.0, "resolution_m": 8.0, "gradation": 0.2}
 
 #: What the bed is sampled from. CUDEM's 1/9 arc-second nearshore collection
 #: covers this harbour, which is the resolution a 130 m wave needs.

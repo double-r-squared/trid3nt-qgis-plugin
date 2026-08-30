@@ -61,8 +61,8 @@ def _edge_lever(mesher: str, edge_length_m: float) -> dict:
     if "min_edge_length_m" in declared:
         return {"min_edge_length_m": edge_length_m}
     if "refine" in declared:
-        return {"refine": {"min_spacing": edge_length_m,
-                           "edge_length": edge_length_m * 4.0}}
+        return {"refine": {"resolution_m": edge_length_m,
+                           "max_el": edge_length_m * 4.0}}
     return {}
 
 
