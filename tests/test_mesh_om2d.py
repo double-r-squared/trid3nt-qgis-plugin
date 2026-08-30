@@ -172,7 +172,7 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None):
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
         fake_pair)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.watershed.sample_raster_at_nodes",
+        "trid3nt_server.workflows.mesh.shared.nodes.sample_raster_at_nodes",
         lambda path, pts: np.full(np.asarray(pts).shape[0], -4.0))
     return sent
 
@@ -639,7 +639,7 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
     import rasterio
     from rasterio.transform import from_origin
 
-    from trid3nt_server.workflows.mesh.watershed import sample_raster_at_nodes
+    from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
 
     band = np.full((10, 10), -18.0, dtype="float32")
     band[-1, :] = 0.0           # the partial cell the warp filled

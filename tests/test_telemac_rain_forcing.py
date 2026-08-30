@@ -17,7 +17,7 @@ from trid3nt_server.workflows.telemac.steps import forcing as F
 
 def _net(rain=None, evap=None, window=None):
     """The signed net rate + its note, off the declared rain producer."""
-    out = F._rain_forcing(rain, evap, window, ("gridmet_domain_mean", "user_rate"))
+    out = F._rain_forcing(rain, evap, window)
     return out["mm_per_day"], out["note"]
 
 
@@ -84,7 +84,7 @@ def test_the_rain_declaration_states_its_cadence_and_units():
 def test_the_declared_transform_stamps_the_note_without_moving_the_value():
     spec = _rain_decl().producer.temporal
     plain, _ = _net(150.0)
-    out = F._rain_forcing(150.0, None, None, ("user_rate",), spec)
+    out = F._rain_forcing(150.0, None, None, spec)
     assert out["mm_per_day"] == pytest.approx(plain)
     assert out["temporal_note"] == ("native 1D matches the declared 1D rate, "
                                     "no resample; units mm/day (declared, unchanged)")
@@ -92,7 +92,7 @@ def test_the_declared_transform_stamps_the_note_without_moving_the_value():
 
 
 def test_an_undeclared_transform_leaves_the_note_byte_identical():
-    with_spec = F._rain_forcing(150.0, None, None, ("user_rate",), None)
+    with_spec = F._rain_forcing(150.0, None, None, None)
     assert with_spec["note"] == _net(150.0)[1]
     assert with_spec["temporal_note"] == ("native 1D rate, no resample declared")
 
@@ -101,7 +101,7 @@ def test_a_sub_daily_target_refuses_rather_than_manufacturing_a_storm_shape():
     from trid3nt_server.workflows.lib import ResampleSpec, TemporalShapeError, TemporalSpec
 
     with pytest.raises(TemporalShapeError):
-        F._rain_forcing(150.0, None, None, (),
+        F._rain_forcing(150.0, None, None,
                         TemporalSpec(resample=ResampleSpec(to="1h")))
 
 
@@ -109,14 +109,14 @@ def test_a_unit_target_the_deck_cannot_carry_refuses():
     from trid3nt_server.workflows.lib import TemporalSpec, UnitsSpec
 
     with pytest.raises(F.TelemacDyeScenarioInputError):
-        F._rain_forcing(150.0, None, None, (),
+        F._rain_forcing(150.0, None, None,
                         TemporalSpec(units=UnitsSpec("in/day")))
 
 
 def test_the_transform_stamp_reaches_the_layers_provenance_row():
     from trid3nt_server.workflows.telemac.steps import products as P
 
-    out = F._rain_forcing(150.0, None, None, ("user_rate",),
+    out = F._rain_forcing(150.0, None, None,
                           _rain_decl().producer.temporal)
     row, = P._rain_provenance({"rain_mm_per_day": out["mm_per_day"],
                                "rain_rung": out["rung"],
