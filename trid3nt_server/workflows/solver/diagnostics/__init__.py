@@ -5,8 +5,7 @@ normalized health envelope, regardless of engine. The LLM never picks an
 engine-specific reader: this tool resolves the run handle, recovers the engine
 identity from ``completion.json`` (the ``solver`` field the run supervisor now
 records; a stdout-field-name fallback for legacy runs), dispatches to the
-internal per-engine parser (``sfincs`` / ``swmm`` / ``modflow`` / ``geoclaw`` /
-``telemac``), and folds the result into the build-contract diagnostics envelope.
+internal per-engine parser, and folds the result into the build-contract diagnostics envelope.
 
 Honesty floor: a value the engine does not report is ``null`` (never invented);
 a derived value carries ``mass_balance_source="derived"``; a missing/unparseable
@@ -38,10 +37,6 @@ from ._common import (
     RunArtifacts,
     RunHandleUnresolved,
 )
-from .geoclaw import parse_geoclaw
-from .modflow import parse_modflow
-from .sfincs import parse_sfincs
-from .swmm import parse_swmm
 from .telemac import parse_telemac
 
 __all__ = [
@@ -63,10 +58,6 @@ _ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 #: engine -> internal parser. Keys are the canonical normalized engine names.
 _PARSERS: dict[str, Callable[[RunArtifacts, str], EngineDiagnostics]] = {
-    "sfincs": parse_sfincs,
-    "swmm": parse_swmm,
-    "modflow": parse_modflow,
-    "geoclaw": parse_geoclaw,
     "telemac": parse_telemac,
 }
 

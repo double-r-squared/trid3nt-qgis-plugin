@@ -24,9 +24,7 @@ from .solver_confirm import (
     _build_geoclaw_confirm_envelope,
     _build_psha_confirm_envelope,
     _build_scenario_confirm_envelope,
-    _build_swmm_granularity_envelope,
     _clamp_fetch_resolution,
-    _clamp_swmm_resolution_to_cap,
     _gate_memory_key,
 )
 from .spatial_input import (
@@ -48,9 +46,7 @@ __all__ = [
     "_build_region_candidates",
     "_build_region_choice_request_payload",
     "_build_spatial_input_request_payload",
-    "_build_swmm_granularity_envelope",
     "_clamp_fetch_resolution",
-    "_clamp_swmm_resolution_to_cap",
     "_gate_memory_key",
     "_get_hard_cap_mb",
     "_get_warning_threshold_mb",

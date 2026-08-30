@@ -79,9 +79,8 @@ async def _build_fetch_resolution_envelope(
 
     the granularity gate widened to the two heavy raster
     fetchers so the user controls the download/merge resolution before the big
-    fetch (memory: feedback_user_controlled_granularity). Modeled on
-    :func:`_build_swmm_granularity_envelope` but PURE arithmetic (no DEM read /
-    network): coerce the bbox, compute the bbox extent in metres, build the
+    fetch (memory: feedback_user_controlled_granularity). PURE arithmetic (no DEM
+    read / network): coerce the bbox, compute the bbox extent in metres, build the
     per-fetcher ladder, and floor the finest selectable rung so a fine rung on a
     huge AOI stays bounded to ``MAX_FETCH_PX`` px on the long axis.
 
@@ -328,7 +327,7 @@ async def _build_flood_run_settings_envelope(
     coerced = coerce_bbox_value(params.get("bbox"))
     if coerced is not None:
         # suggest is PURE arithmetic (no DEM read) -> safe on the loop, but keep
-        # it off-thread for symmetry with the SWMM path / no-blocking norm.
+        # it off-thread per the no-sync-blocking-on-the-loop norm.
         auto = await asyncio.to_thread(
             suggest_sfincs_resolution_from_bbox,
             tuple(coerced),  # type: ignore[arg-type]
@@ -409,35 +408,6 @@ async def _build_flood_run_settings_envelope(
     )
     return envelope, auto, resolved_interval_min, flood_duration_hr
 
-
-def _clamp_swmm_resolution_to_cap(
-    chosen_res_m: float, auto: Any, requested_res_m: float
-) -> tuple[float, bool]:
-    """HARD-CLAMP a user-chosen SWMM resolution so the cell count cannot exceed
-    ``auto.cell_cap`` (narrow_scope path).
-
-    A finer (smaller) resolution multiplies the active-cell count by
-    ``(base/chosen)**2``; the cell count must stay <= ``cell_cap``. We invert the
-    estimate to find the FINEST resolution whose cell count fits the cap and clamp
-    the chosen value UP to it when the user picked finer. A coarser-than-suggested
-    choice is always honoured (fewer cells). Returns ``(clamped_res_m, clamped)``.
-    """
-    chosen = float(chosen_res_m)
-    if chosen <= 0:
-        chosen = float(requested_res_m) if requested_res_m > 0 else float(auto.resolution_m)
-    base_cells = int(auto.estimated_active_cells_at_base)
-    base_res = float(auto.base_resolution_m)
-    cap = int(auto.cell_cap)
-    if base_cells <= 0 or base_res <= 0 or cap <= 0:
-        return chosen, False
-    # cells(res) = base_cells * (base_res/res)**2 <= cap
-    #   => res >= base_res * sqrt(base_cells / cap)
-    import math
-
-    min_res = base_res * math.sqrt(base_cells / float(cap))
-    if chosen < min_res:
-        return float(min_res), True
-    return chosen, False
 
 
 def _build_psha_confirm_envelope(params: dict) -> Any:
@@ -701,7 +671,7 @@ def _build_geoclaw_confirm_envelope(params: dict) -> Any:
     approximate AOI area (cosine-latitude correction) + the scenario
     (dam_break / tsunami / surge) + the simulated window + AMR levels. No
     fetch, no rasterio, so it is safe to build inline. GeoClaw's adaptive mesh
-    means there is no single fixed cell count to advertise (unlike the SWMM /
+    means there is no single fixed cell count to advertise (unlike the
     TELEMAC granularity gates), so this is a plain proceed/cancel: ``amr_levels``
     / ``sim_duration_s`` are explicit tool args the LLM can restate. A missing
     bbox is NOT enforced here -- it falls through to the tool's own typed
@@ -799,137 +769,6 @@ def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
     except TypeError:
         normalized = repr(sorted(params.items(), key=lambda kv: kv[0]))
     return (tool_name, normalized)
-
-
-async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]:
-    """Build the granularity confirm card for ``swmm_urban_flood``.
-
-    Mirrors the SWMM tool / composer DEM-resolution path EXACTLY so the suggested
-    resolution + active-cell count the user SEES is what the build would compute:
-    coerce + floor the bbox (``_enforce_min_urban_aoi``), fetch the DEM
-    (``_fetch_dem_for_urban``: 3DEP 1m -> fetch_dem 10m), then call
-    ``suggest_swmm_resolution`` (DEM read + active-cell count + autoscale only).
-    The synchronous DEM read + suggest is OFFLOADED via ``asyncio.to_thread`` so
-    the WS heartbeat is never starved (memory: no-sync-blocking-on-asyncio-loop).
-
-    Returns ``(envelope, autoscale_result, local_dem_path)`` -- the
-    ``PayloadWarningEnvelopePayload`` carrying the ``GranularitySuggestion``
-    block, the raw ``SWMMAutoscaleResult``, and the localized DEM path the
-    decision tail needs for the REAL-grid cap-clamp on a ``narrow_scope``
-    override (``clamp_swmm_resolution_to_real_cap`` re-probes this same DEM so the
-    clamp matches the count :func:`build_swmm_mesh` will produce).
-
-    Raises on ANY failure (DEM fetch, read, suggest) -- the caller's try/except
-    fails OPEN (proceeds with the original params) so a gate problem never blocks
-    or orphans a solve.
-    """
-    from trid3nt_contracts.payload_warning import (
-        GranularitySuggestion,
-        PayloadWarningEnvelopePayload,
-    )
-    from trid3nt_contracts.swmm_contracts import SWMMRunArgs
-    from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
-    from trid3nt_server.workflows.swmm.urban_flood.urban_flood import (
-        _enforce_min_urban_aoi,
-        _fetch_dem_for_urban,
-    )
-    from trid3nt_server.mesh.raster_cell_mesh import (
-        SWMM_RES_LADDER,
-        estimate_swmm_solve_seconds,
-        suggest_swmm_resolution,
-    )
-
-    # The user's requested resolution rung (the base the ladder snaps UP from).
-    # Defaults to the SWMMRunArgs / tool default so an absent value matches build.
-    try:
-        requested_res = float(
-            params.get("target_resolution_m")
-            if params.get("target_resolution_m") is not None
-            else SWMMRunArgs.model_fields["target_resolution_m"].default
-        )
-    except (TypeError, ValueError):
-        requested_res = 10.0
-
-    coerced = coerce_bbox_value(params.get("bbox"))
-    if coerced is None:
-        # No usable bbox: let the tool raise its own typed SWMM_PARAMS error.
-        raise ValueError("swmm_urban_flood gate: bbox missing/invalid")
-    bbox = _enforce_min_urban_aoi(tuple(coerced))  # type: ignore[arg-type]
-
-    # DEM fetch + read + suggest are SYNCHRONOUS compute (network + rasterio +
-    # numpy); offload the whole thing off the event loop. The resolved local DEM
-    # path is surfaced so a narrow_scope override can re-probe the SAME DEM for
-    # the REAL-grid cap-clamp (the build re-reads this DEM at the chosen rung).
-    def _resolve_and_suggest() -> tuple[Any, str]:
-        local_dem_path, _src = _fetch_dem_for_urban(bbox)
-        return suggest_swmm_resolution(local_dem_path, requested_res), local_dem_path
-
-    auto, dem_path = await asyncio.to_thread(_resolve_and_suggest)
-
-    # The selectable ladder = the SWMM rungs at/above the floor of the ladder,
-    # plus the user's requested rung, ascending. Keep every rung > 0.
-    rungs = sorted({r for r in SWMM_RES_LADDER if r > 0} | {requested_res})
-    resolution_choices = [float(r) for r in rungs if r > 0]
-
-    # The in-process LOCAL lane is the only compute environment: the solve runs
-    # on the host CPUs. No instance-class sizing / Spot label.
-    compute_class = "local"
-    spot_label = None
-    vcpus = os.cpu_count() or 1
-
-    granularity = GranularitySuggestion(
-        engine="swmm",
-        resolution_param="target_resolution_m",
-        suggested_resolution_m=float(auto.resolution_m),
-        resolution_choices=resolution_choices,
-        estimated_active_cells=int(auto.estimated_active_cells),
-        estimated_solve_seconds=float(auto.estimated_solve_seconds),
-        vcpus=vcpus,
-        compute_class=compute_class,
-        cell_cap=int(auto.cell_cap),
-        coarsened=bool(auto.coarsened),
-        reason=auto.reason[:512],
-        spot_label=spot_label,
-    )
-
-    where = params.get("location_query") or params.get("bbox") or "?"
-    envelope = PayloadWarningEnvelopePayload(
-        warning_id=new_ulid(),
-        tool_name="swmm_urban_flood",
-        tool_args={
-            "location": str(where),
-            "return_period_yr": params.get("return_period_yr"),
-            "storm_duration_hr": params.get("storm_duration_hr"),
-            "building_representation": params.get("building_representation"),
-            "target_resolution_m": float(auto.resolution_m),
-            "compute_class": compute_class,
-        },
-        estimated_mb=0.0,
-        threshold_mb=0.0,
-        recommendation=(
-            f"Run a SWMM urban-flood simulation for {where} at "
-            f"~{auto.resolution_m:.0f} m (~{auto.estimated_active_cells} active "
-            f"cells, est ~{auto.estimated_solve_seconds:.0f} s). Pick a finer or "
-            "coarser resolution, or confirm to start."
-        )[:512],
-        options=["proceed", "cancel", "narrow_scope"],
-        granularity=granularity,
-    )
-    return envelope, auto, dem_path
-
-
-# --------------------------------------------------------------------------- #
-# Declared gate providers (ADR 0273, the gate-collapse metadata surface)
-# --------------------------------------------------------------------------- #
-#
-# Each gated tool's GateSpec names ONE estimate provider (builds the card +
-# tail state) and, when it offers levers, ONE pin provider (computes the
-# approved-params delta on a decision). These wrap the pure builders above so
-# the card payload is byte-identical to the pre-collapse per-engine path; the
-# pin providers hold the SAME decision-tail arithmetic the server's per-engine
-# branches used to, relocated intact so a proceed / narrow_scope pins exactly
-# what it did before. The generic server engine (``_gate_on_confirm``) imports
-# these by the dotted paths the GateSpec declares -- no name set, no if/elif.
 
 
 async def estimate_fetch_resolution(
@@ -1050,83 +889,6 @@ def pin_flood_run_settings(
     if interval is not None:
         delta["output_interval_min"] = float(interval)
     return delta
-
-
-async def estimate_swmm_granularity(params: dict, **_: Any) -> CardEstimate:
-    """Estimate provider for the SWMM urban-flood granularity gate.
-
-    Wraps :func:`_build_swmm_granularity_envelope` and records the autoscale result + the
-    localized DEM path the pin provider re-probes for the REAL-grid cap-clamp on a
-    narrow_scope override.
-    """
-    envelope, auto, dem_path = await _build_swmm_granularity_envelope(params)
-    return CardEstimate(
-        envelope=envelope,
-        tail_state={"swmm_autoscale": auto, "swmm_dem_path": dem_path},
-    )
-
-
-async def pin_swmm_granularity(
-    decision: str, revised_args: dict | None, params: dict, tail_state: dict
-) -> dict | None:
-    """Pin provider for the SWMM granularity gate (async: REAL-grid cap re-probe).
-
-    proceed -> pin ``confirmed`` + the SUGGESTED resolution + ``enable_autoscale=False``.
-    narrow_scope -> honour the chosen resolution CAP-CLAMPED against the REAL build cell
-    count (re-probing the same DEM off the loop), falling back to the area-model clamp if
-    the probe is unavailable.
-    """
-    auto = tail_state["swmm_autoscale"]
-    dem_path = tail_state.get("swmm_dem_path")
-    if decision == "narrow_scope":
-        revised = revised_args or {}
-        requested_res = float(auto.base_resolution_m)
-        try:
-            chosen_res = float(revised.get("target_resolution_m", auto.resolution_m))
-        except (TypeError, ValueError):
-            chosen_res = float(auto.resolution_m)
-        clamped_res = chosen_res
-        clamped = False
-        used_real_clamp = False
-        if dem_path:
-            try:
-                from trid3nt_server.mesh.raster_cell_mesh import (
-                    clamp_swmm_resolution_to_real_cap,
-                )
-
-                cap = int(auto.cell_cap)
-                real_clamp = await asyncio.to_thread(
-                    clamp_swmm_resolution_to_real_cap,
-                    dem_path,
-                    chosen_res,
-                    cell_cap=cap,
-                )
-                clamped_res = float(real_clamp.resolution_m)
-                clamped = bool(real_clamp.clamped)
-                used_real_clamp = True
-            except Exception:  # noqa: BLE001 -- never orphan the override on a probe fail
-                logger.warning(
-                    "swmm granularity narrow_scope: REAL-cap clamp probe failed; "
-                    "falling back to the area-model clamp",
-                    exc_info=True,
-                )
-        if not used_real_clamp:
-            clamped_res, clamped = _clamp_swmm_resolution_to_cap(
-                chosen_res, auto, requested_res
-            )
-        delta: dict[str, Any] = {
-            "confirmed": True,
-            "target_resolution_m": clamped_res,
-            "enable_autoscale": False,
-        }
-        if clamped:
-            delta["_granularity_clamped"] = True
-        return delta
-    return {
-        "confirmed": True,
-        "target_resolution_m": float(auto.resolution_m),
-        "enable_autoscale": False,
-    }
 
 
 def estimate_psha(params: dict, **_: Any) -> CardEstimate:
