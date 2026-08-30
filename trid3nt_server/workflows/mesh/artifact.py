@@ -5,16 +5,16 @@ A mesh ``build_mesh`` built is TWO things in one case:
   * a DISPLAY layer -- an MDAL-loadable ``.2dm`` (``layer_type="mesh"``) that
     lands in ``loaded_layers`` via the normal ``LayerURI`` auto-emit path, so a
     human sees the wireframe in QGIS; and
-  * an ARTIFACT record -- the engine-compat facts (format URIs, CRS, bathymetry,
-    node/element counts, open-boundary info) a model template needs to decide
-    "can I solve on this?" and, if the user accepts, to point its solver at it.
+  * an ARTIFACT record -- the facts (format URIs, CRS, bathymetry, node/element
+    counts, measured probes, open-boundary info) a run needs to decide "can I
+    solve on this?" and, if the user accepts, to point its solver at it.
 
 This module is the ARTIFACT half. It does NOT invent a parallel store: the facts
 ride TWO existing seams so both a same-session run and a cold reopen can find them:
 
   * a module side-table keyed by ``case_id`` (mirrors ``publish_layer``'s
     ``_LAST_LEGEND_BY_URI`` stash) -- the fast, same-daemon-process path the
-    precondition gate uses when the mesh was built earlier in the SAME case; and
+    build door reads when the mesh was built earlier in the SAME case; and
   * a durable ``mesh_artifact.json`` SIDECAR written next to the mesh objects in
     the cache bucket -- discoverable from any ``layer_type="mesh"`` row's ``uri``
     in a later session (its key is the mesh key with the basename swapped).
@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
