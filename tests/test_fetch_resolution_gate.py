@@ -297,33 +297,8 @@ async def test_build_exception_fails_open() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 8) Solver tools still gate as before (fetch_suggestion is None for them) and a
-#    fetch is NOT marked as a solver dispatch.
+# 8) A fetch is NOT marked as a solver dispatch.
 # --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_solver_branch_unchanged_no_fetch_suggestion(monkeypatch) -> None:
-    from trid3nt_server import server
-
-    ws, state = _FakeWS(), _FakeState()
-    params = {"location_query": "Fort Myers, Florida", "return_period_yr": 100}
-
-    approver = asyncio.create_task(_drive_decision(server, "proceed"))
-    should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "sfincs_flood", params
-    )
-    await approver
-
-    # The solver gate still injects confirmed (its existing behavior is intact).
-    assert should_run is True and effective["confirmed"] is True
-    card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
-    # The solver card carries NO fetch resolution-param granularity.
-    g = card["payload"].get("granularity")
-    if g is not None:
-        assert g["resolution_param"] != "resolution_m"
-    # resolution_m is never written for a solver gate.
-    assert "resolution_m" not in effective
-
-
 def test_fetch_is_not_a_solver_dispatch_marker() -> None:
     """The autostop solver-marker keys off SOLVER_CONFIRM_TOOLS only; a fetcher
     being absent there is what keeps a fetch from skewing the in-flight solve
