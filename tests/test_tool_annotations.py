@@ -201,19 +201,6 @@ def test_wait_for_completion_annotations():
     assert meta.idempotent_hint is False, "wait_for_completion emits events on each call"
 
 
-def test_run_pelicun_annotations():
-    """pelicun_damage_assessment: write + not idempotent (MC sampling)."""
-    snapshot = _registry_snapshot()
-    assert "pelicun_damage_assessment" in snapshot, (
-        "pelicun_damage_assessment not registered"
-    )
-    meta = snapshot["pelicun_damage_assessment"]
-    assert meta.read_only_hint is False, "pelicun writes output FlatGeobuf → not read-only"
-    assert meta.open_world_hint is False, "pelicun is local compute"
-    assert meta.destructive_hint is False, "pelicun writes to new path → not destructive"
-    assert meta.idempotent_hint is False, "pelicun uses MC sampling → not idempotent"
-
-
 def test_qgis_process_annotations():
     """qgis_process: write + not idempotent (each call creates new execution)."""
     snapshot = _registry_snapshot()

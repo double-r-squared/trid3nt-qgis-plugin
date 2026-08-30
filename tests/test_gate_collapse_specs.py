@@ -1,16 +1,17 @@
 """Gate-collapse (ADR 0273) spec + provider regression guards.
 
-Verifies NATE's design call landed: the per-engine confirm gates are built from
-tool METADATA (a declared ``GateSpec``), not the hand-wired ``SOLVER_CONFIRM_TOOLS``
+Verifies NATE's design call landed: the confirm gates are built from tool
+METADATA (a declared ``GateSpec``), not the hand-wired ``SOLVER_CONFIRM_TOOLS``
 / ``FETCH_CONFIRM_TOOLS`` name-set literals + a per-engine ``if/elif`` chain.
 
-- Every previously-gated tool carries a ``gate_spec`` of the right kind, and the
-  registry-DERIVED membership views match the historical sets exactly.
+- The registry-DERIVED membership views match what the tree declares.
 - The hand-wired name-set LITERALS are gone from ``_core`` (absence guard).
 - Each spec's declared estimate / pin providers IMPORT and are the right shape.
-- BYTE-EQUIVALENCE: for the pure-arithmetic proceed/cancel engines the estimate
-  provider's envelope is byte-identical to the pre-collapse builder's envelope
-  (modulo the per-call ``warning_id`` ULID).
+
+Every engine template in the tree now stops at the STANDARD MESH GATE, so the
+solver lane is EMPTY and the fetch lane carries the whole surface. That emptiness
+is asserted rather than assumed: a template that re-introduces a per-engine
+approve card has to say so here.
 """
 from __future__ import annotations
 
@@ -19,51 +20,34 @@ import inspect
 import pytest
 
 import trid3nt_server  # noqa: F401 -- triggers tool registration
-from trid3nt_server.gates.cards import solver_confirm as sc
-from trid3nt_server.gates.cards.estimate import CardEstimate, resolve_provider
+from trid3nt_server.gates.cards.estimate import resolve_provider
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.gates import confirm as _core
 
 
-_EXPECTED_SOLVER = {
-    "sfincs_flood",
-    "swmm_urban_flood",
-    "openquake_psha",
-    "openquake_scenario_gmf",
-    "openquake_secondary_perils",
-    "elmfire_fire_spread",
-    "geoclaw_inundation",
-    "geoclaw_tsunami_gauge_timeseries",
-}
+#: No engine declares a per-engine solver card: the mesh session presents the
+#: mesh it built and mounts the mesher's own edit actions, which is a superset of
+#: what an approve-mesh card could offer.
+_EXPECTED_SOLVER: set[str] = set()
 _EXPECTED_FETCH = {"fetch_dem", "fetch_topobathy", "fetch_landcover"}
-
-#: A template that stops at the STANDARD mesh gate declares no solver GateSpec of
-#: its own: the mesh session presents the mesh it built and mounts the mesher's
-#: own edit actions, which is a superset of what a per-template approve-mesh card
-#: could offer. Listed so its absence reads as the design rather than as a loss.
-_MESH_GATED = {"telemac_river_dye"}
 
 
 # --- membership is derived from metadata --- #
-
-def test_every_solver_tool_declares_a_solver_gate_spec() -> None:
-    for name in _EXPECTED_SOLVER:
-        gs = TOOL_REGISTRY[name].metadata.gate_spec
-        assert gs is not None, f"{name} lost its gate_spec"
-        assert gs.kind == "solver", name
-
-
-def test_a_mesh_gated_template_declares_no_solver_gate_spec() -> None:
-    for name in _MESH_GATED:
-        assert TOOL_REGISTRY[name].metadata.gate_spec is None, name
-        assert name not in _core.SOLVER_CONFIRM_TOOLS, name
-
 
 def test_every_fetch_tool_declares_a_fetch_gate_spec() -> None:
     for name in _EXPECTED_FETCH:
         gs = TOOL_REGISTRY[name].metadata.gate_spec
         assert gs is not None, f"{name} lost its gate_spec"
         assert gs.kind == "fetch", name
+
+
+def test_every_engine_template_is_mesh_gated() -> None:
+    """An engine template declares NO solver gate spec - it stops at the mesh gate."""
+    for name, tool in TOOL_REGISTRY.items():
+        if getattr(tool.metadata, "tier", None) != "template":
+            continue
+        assert tool.metadata.gate_spec is None, name
+        assert name not in _core.SOLVER_CONFIRM_TOOLS, name
 
 
 def test_derived_views_match_historical_sets() -> None:
@@ -100,80 +84,3 @@ def test_declared_providers_import(name: str) -> None:
     # here so a registration that drops the pin fails loudly).
     if gs.levers:
         assert gs.pin_provider is not None, name
-
-
-# --- byte-equivalence: pure-arithmetic proceed/cancel engines --- #
-
-def _dump_no_wid(env) -> dict:
-    d = env.model_dump()
-    d.pop("warning_id", None)
-    return d
-
-
-def test_psha_estimate_provider_byte_equivalent() -> None:
-    params = {
-        "bbox": [-122.5, 37.7, -122.3, 37.9],
-        "imt": "PGA",
-        "poe": 0.10,
-        "investigation_time_years": 50.0,
-    }
-    est = sc.estimate_psha(params)
-    assert isinstance(est, CardEstimate)
-    assert _dump_no_wid(est.envelope) == _dump_no_wid(
-        sc._build_psha_confirm_envelope(params)
-    )
-
-
-@pytest.mark.parametrize(
-    "tool", ["openquake_scenario_gmf", "openquake_secondary_perils"]
-)
-def test_scenario_estimate_provider_byte_equivalent(tool: str) -> None:
-    params = {"bbox": [-118.5, 33.9, -118.2, 34.1], "magnitude": 6.7}
-    est = sc.estimate_scenario(params, tool_name=tool)
-    assert _dump_no_wid(est.envelope) == _dump_no_wid(
-        sc._build_scenario_confirm_envelope(params, tool)
-    )
-
-
-def test_fire_estimate_provider_byte_equivalent() -> None:
-    params = {
-        "bbox": [-120.5, 38.9, -120.3, 39.1],
-        "ignition_lonlat": [-120.4, 39.0],
-        "cellsize_m": 30.0,
-        "duration_hours": 6.0,
-    }
-    est = sc.estimate_fire(params)
-    assert _dump_no_wid(est.envelope) == _dump_no_wid(
-        sc._build_fire_confirm_envelope(params)
-    )
-
-
-@pytest.mark.parametrize("scenario", ["dam_break", "tsunami"])
-def test_geoclaw_estimate_provider_byte_equivalent(scenario: str) -> None:
-    params = {
-        "bbox": [-124.5, 41.9, -124.2, 42.1],
-        "scenario": scenario,
-        "sim_duration_s": 3600.0,
-        "amr_levels": 2,
-    }
-    est = sc.estimate_geoclaw(params)
-    assert _dump_no_wid(est.envelope) == _dump_no_wid(
-        sc._build_geoclaw_confirm_envelope(params)
-    )
-
-
-# --- pin providers: the plain proceed/cancel tail (no lever) --- #
-
-def test_simple_solver_gate_has_no_pin_provider() -> None:
-    # psha / scenario / fire / geoclaw are plain proceed/cancel: no lever, no pin.
-    for name in (
-        "openquake_psha",
-        "openquake_scenario_gmf",
-        "openquake_secondary_perils",
-        "elmfire_fire_spread",
-        "geoclaw_inundation",
-        "geoclaw_tsunami_gauge_timeseries",
-    ):
-        gs = TOOL_REGISTRY[name].metadata.gate_spec
-        assert gs.levers == ()
-        assert gs.pin_provider is None, name

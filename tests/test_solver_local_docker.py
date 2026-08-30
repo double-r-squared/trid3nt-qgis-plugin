@@ -1,9 +1,11 @@
-"""job-0291 (sprint-14-aws) — local-docker solver backend tests.
+"""The local-docker solver backend: staging, launch, supervisor, completion.
 
-The SFINCS GCS-IN → sfincs → GCS-OUT envelope from
-``workers/sfincs/entrypoint.py`` ported into the agent, with the
-container being the plain upstream ``deltares/sfincs-cpu`` image run via
-``docker run`` on the same instance.
+The envelope is engine-AGNOSTIC - what varies per engine is the ``LocalSolverSpec``
+its own workflow module registers. These tests drive it through the TELEMAC
+river-dye spec, the one registered local-docker solver whose behaviour the rest of
+the suite also depends on, so a spec-driven field (``telemac_args``,
+``telemac_stdout_uri``, the ``--network none`` engine-room posture) is exercised
+as a real registration rather than a fixture invention.
 
 Hard constraint honored here: **NO real docker invocation on this machine**
 (the daemon is blocked). Every ``docker`` call resolves to a PATH-shim bash
@@ -20,13 +22,11 @@ Coverage maps to the kickoff §4 test list:
 2.  local-docker ``run_solver``: manifest staged from S3 (legacy ``gs_uri``
     field name carrying ``s3://`` VALUES — resolved by scheme), docker
     launched detached with ``--rm --name <run_id> -v <rundir>:/data -w
-    /data $TRID3NT_SFINCS_IMAGE``, ExecutionHandle returned immediately.
+    /data $TRID3NT_TELEMAC_IMAGE``, ExecutionHandle returned immediately.
 3.  Supervisor writes the EXACT entrypoint.py completion.json schema —
     ok, error, and cancel paths — and uploads outputs + stdout/stderr.
 4.  ``wait_for_completion``: happy / timeout / error; cancel chain =
     ``docker kill <run_id>`` + status="cancelled" completion (Invariant-8).
-5.  Scheme-aware deck assembly (``_default_setup_uri`` + boto3 deck upload)
-    and scheme-aware run-output reads/COG upload in ``postprocess_flood``.
 """
 
 from __future__ import annotations
@@ -55,6 +55,10 @@ from trid3nt_server.workflows.solver.solver import (
     wait_for_completion,
 )
 from trid3nt_contracts.execution import ExecutionHandle, RunResult
+
+#: The one registered local-docker solver; the envelope under test is its spec's
+#: host, not its engine.
+_SOLVER = "telemac_river_dye"
 
 # --------------------------------------------------------------------------- #
 # Fakes — boto3-shaped S3 client + legacy GCS client + docker PATH shim
@@ -139,12 +143,13 @@ if [ "$mode" = "kill" ]; then
   fi
   exit 0
 fi
-# mode == run: parse --name <name> and -v <src>:/data; ignore --rm/-w.
+# mode == run: parse --name <name> and -v <src>:/data; ignore --rm/-w/--network.
 name=""; vol=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) name="$2"; shift 2;;
     -v) vol="${2%%:*}"; shift 2;;
+    --network) shift 2;;
     --rm) shift;;
     -w) shift 2;;
     *) break;;
@@ -155,13 +160,14 @@ behavior="ok"
 [ -f "$state_dir/behavior" ] && behavior="$(cat "$state_dir/behavior")"
 case "$behavior" in
   ok)
-    echo "fake sfincs stdout evidence"
-    printf 'NC_MAP_BYTES' > "$vol/sfincs_map.nc"
-    printf 'NC_HIS_BYTES' > "$vol/sfincs_his.nc"
+    echo "fake telemac stdout evidence"
+    printf 'SLF_RESULT_BYTES' > "$vol/r2d_river.slf"
+    printf 'SLF_GEOMETRY_BYTES' > "$vol/river.slf"
+    printf '{"correct_end": true}' > "$vol/telemac_metrics.json"
     exit 0
     ;;
   fail)
-    echo "fake sfincs stderr boom" >&2
+    echo "fake telemac stderr boom" >&2
     exit 2
     ;;
   hang)
@@ -217,7 +223,7 @@ def local_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(runs_dir))
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
-    monkeypatch.setenv("TRID3NT_SFINCS_IMAGE", "fake/sfincs-cpu:test")
+    monkeypatch.setenv("TRID3NT_TELEMAC_IMAGE", "fake/telemac:test")
     return runs_dir
 
 
@@ -225,7 +231,7 @@ def _seed_manifest(
     s3: FakeS3Client,
     *,
     bucket: str = "deck-bucket",
-    base_key: str = "cache/static-30d/sfincs_setup/TESTDECK/",
+    base_key: str = "cache/static-30d/telemac_setup/TESTDECK/",
     scheme: str = "s3",
     outputs: list[str] | None = None,
 ) -> str:
@@ -235,8 +241,8 @@ def _seed_manifest(
     ``{scheme}://`` URIs and must be resolved by scheme (kickoff §1).
     """
     deck = {
-        "sfincs.inp": b"[fake sfincs deck]",
-        "gis/dep.tif": b"FAKE_DEM_TIF",
+        "t2d_river.cas": b"[fake telemac deck]",
+        "gis/bed.tif": b"FAKE_DEM_TIF",
     }
     inputs = []
     for rel, payload in deck.items():
@@ -245,8 +251,8 @@ def _seed_manifest(
         inputs.append({"gs_uri": f"{scheme}://{bucket}/{key}", "dest": rel})
     manifest = {
         "inputs": inputs,
-        "sfincs_args": [],
-        "outputs": outputs if outputs is not None else ["sfincs_map.nc", "*.nc"],
+        "telemac_args": [],
+        "outputs": outputs if outputs is not None else ["r2d_river.slf", "*.slf"],
     }
     manifest_key = f"{base_key}manifest.json"
     s3.objects[(bucket, manifest_key)] = json.dumps(manifest).encode()
@@ -283,14 +289,14 @@ def test_local_run_solver_requires_runs_bucket(
     set_s3_client(s3)
     uri = _seed_manifest(s3)
     with pytest.raises(SolverDispatchError) as exc_info:
-        run_solver(solver="sfincs", model_setup_uri=uri)
+        run_solver(solver=_SOLVER, model_setup_uri=uri)
     assert "TRID3NT_RUNS_BUCKET" in str(exc_info.value)
 
 
 def test_local_run_solver_rejects_plain_path(reset_seams, local_env, docker_shim) -> None:
     set_s3_client(FakeS3Client())
     with pytest.raises(SolverDispatchError):
-        run_solver(solver="sfincs", model_setup_uri="/tmp/manifest.json")
+        run_solver(solver=_SOLVER, model_setup_uri="/tmp/manifest.json")
 
 
 def test_local_run_solver_stages_manifest_and_launches_docker(
@@ -304,11 +310,11 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
     set_s3_client(s3)
     uri = _seed_manifest(s3)
 
-    handle = run_solver(solver="sfincs", model_setup_uri=uri, compute_class="medium")
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri, compute_class="medium")
 
     # Typed handle, local-backend pinned, container name == run_id (cancel seam).
     assert isinstance(handle, ExecutionHandle)
-    assert handle.solver == "sfincs"
+    assert handle.solver == _SOLVER
     assert handle.compute_class == "standard"  # medium → standard alias
     assert handle.workflow_name == LOCAL_DOCKER_WORKFLOW_NAME
     assert handle.workflow_location == "local"
@@ -316,21 +322,22 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
 
     # Inputs staged into the rundir — including the gis/ subdirectory entry.
     rundir = local_env / handle.run_id
-    assert (rundir / "sfincs.inp").read_bytes() == b"[fake sfincs deck]"
-    assert (rundir / "gis" / "dep.tif").read_bytes() == b"FAKE_DEM_TIF"
+    assert (rundir / "t2d_river.cas").read_bytes() == b"[fake telemac deck]"
+    assert (rundir / "gis" / "bed.tif").read_bytes() == b"FAKE_DEM_TIF"
 
     # Let the detached shim + supervisor finish (also guards thread leak),
     # THEN assert the recorded docker argv — the Popen is asynchronous, so
     # calls.log only exists once the shim has actually executed.
     _wait_for_completion_object(s3, handle.run_id)
 
-    # Docker argv: docker run --rm --name <run_id> -v <rundir>:/data -w /data <image>
+    # Docker argv: the spec's declared network, then
+    # --rm --name <run_id> -v <rundir>:/data -w /data <image>
     calls = (docker_shim / "calls.log").read_text().strip().splitlines()
     run_calls = [c for c in calls if c.startswith("run ")]
     assert len(run_calls) == 1, calls
     assert run_calls[0] == (
-        f"run --rm --name {handle.run_id} -v {rundir}:/data -w /data "
-        "fake/sfincs-cpu:test"
+        f"run --network none --rm --name {handle.run_id} -v {rundir}:/data "
+        "-w /data fake/telemac:test"
     ), run_calls[0]
 
 
@@ -344,16 +351,16 @@ def test_local_manifest_gs_uri_field_with_gs_scheme_rejected(
     set_s3_client(s3)
     manifest = {
         "inputs": [
-            {"gs_uri": "gs://legacy-gcs-bucket/deck/sfincs.inp", "dest": "sfincs.inp"}
+            {"gs_uri": "gs://legacy-gcs-bucket/deck/t2d.cas", "dest": "t2d.cas"}
         ],
-        "sfincs_args": [],
-        "outputs": ["*.nc"],
+        "telemac_args": [],
+        "outputs": ["*.slf"],
     }
     s3.objects[("deck-bucket", "mixed/manifest.json")] = json.dumps(manifest).encode()
 
     with pytest.raises(SolverDispatchError):
         run_solver(
-            solver="sfincs", model_setup_uri="s3://deck-bucket/mixed/manifest.json"
+            solver=_SOLVER, model_setup_uri="s3://deck-bucket/mixed/manifest.json"
         )
 
 
@@ -365,12 +372,12 @@ def test_local_manifest_dest_traversal_rejected(
     s3.objects[("deck-bucket", "evil/x")] = b"x"
     manifest = {
         "inputs": [{"gs_uri": "s3://deck-bucket/evil/x", "dest": "../../escape.txt"}],
-        "sfincs_args": [],
+        "telemac_args": [],
         "outputs": [],
     }
     s3.objects[("deck-bucket", "evil/manifest.json")] = json.dumps(manifest).encode()
     with pytest.raises(SolverDispatchError) as exc_info:
-        run_solver(solver="sfincs", model_setup_uri="s3://deck-bucket/evil/manifest.json")
+        run_solver(solver=_SOLVER, model_setup_uri="s3://deck-bucket/evil/manifest.json")
     assert "escape" in str(exc_info.value)
 
 
@@ -378,8 +385,8 @@ def test_local_manifest_dest_traversal_rejected(
 # 3+4. Supervisor completion.json (entrypoint schema) + wait_for_completion
 # --------------------------------------------------------------------------- #
 
-#: The EXACT key set the local supervisor writes. Mirrors
-#: workers/sfincs/entrypoint.py PLUS two agent-side additions: the ``solver``
+#: The EXACT key set the local supervisor writes. The worker-entrypoint schema
+#: PLUS two agent-side additions: the ``solver``
 #: engine-identity field (ADR 0021) so read_run_diagnostics can recover the
 #: engine directly instead of inferring it from the stdout field name, and the
 #: ``code_sha`` / ``code_dirty`` stamp (ADR 0317) so a reader of this artifact
@@ -393,13 +400,18 @@ _ENTRYPOINT_COMPLETION_KEYS = {
     "solver",
     "code_sha",
     "code_dirty",
-    "sfincs_stdout_uri",
-    "sfincs_stderr_uri",
+    "telemac_stdout_uri",
+    "telemac_stderr_uri",
     "output_uris",
     "started_at",
     "finished_at",
     "error",
 }
+
+#: What the TELEMAC spec's own ``classify_exit`` folds in on top. Named here
+#: rather than absorbed into the set above: the schema a supervisor writes and
+#: the extras a SPEC contributes are two different facts.
+_SPEC_COMPLETION_EXTRAS = {"correct_end"}
 
 
 @pytest.mark.asyncio
@@ -410,7 +422,7 @@ async def test_local_ok_path_completion_schema_outputs_and_wait(
     set_s3_client(s3)
     uri = _seed_manifest(s3)
 
-    handle = run_solver(solver="sfincs", model_setup_uri=uri)
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
     result = await wait_for_completion(handle, poll_interval_s=0)
 
     # RunResult: complete; output_uri is the runs PREFIX (kickoff-pinned).
@@ -424,7 +436,8 @@ async def test_local_ok_path_completion_schema_outputs_and_wait(
     completion = json.loads(
         s3.objects[("test-runs-bucket", f"{handle.run_id}/completion.json")]
     )
-    assert set(completion.keys()) == _ENTRYPOINT_COMPLETION_KEYS
+    assert set(completion.keys()) == (
+        _ENTRYPOINT_COMPLETION_KEYS | _SPEC_COMPLETION_EXTRAS)
     assert completion["run_id"] == handle.run_id
     assert completion["status"] == "ok"
     assert completion["exit_code"] == 0
@@ -435,22 +448,22 @@ async def test_local_ok_path_completion_schema_outputs_and_wait(
     # outputs[] glob expansion uploaded (de-duplicated across the 2 patterns)
     # + stdout/stderr evidence uploaded alongside.
     expected_outputs = {
-        f"s3://test-runs-bucket/{handle.run_id}/sfincs_map.nc",
-        f"s3://test-runs-bucket/{handle.run_id}/sfincs_his.nc",
+        f"s3://test-runs-bucket/{handle.run_id}/r2d_river.slf",
+        f"s3://test-runs-bucket/{handle.run_id}/river.slf",
     }
     assert set(completion["output_uris"]) == expected_outputs
-    assert completion["sfincs_stdout_uri"] == (
-        f"s3://test-runs-bucket/{handle.run_id}/sfincs.stdout"
+    assert completion["telemac_stdout_uri"] == (
+        f"s3://test-runs-bucket/{handle.run_id}/telemac.stdout"
     )
-    assert completion["sfincs_stderr_uri"] == (
-        f"s3://test-runs-bucket/{handle.run_id}/sfincs.stderr"
+    assert completion["telemac_stderr_uri"] == (
+        f"s3://test-runs-bucket/{handle.run_id}/telemac.stderr"
     )
     assert (
-        s3.objects[("test-runs-bucket", f"{handle.run_id}/sfincs_map.nc")]
-        == b"NC_MAP_BYTES"
+        s3.objects[("test-runs-bucket", f"{handle.run_id}/r2d_river.slf")]
+        == b"SLF_RESULT_BYTES"
     )
     assert b"stdout evidence" in s3.objects[
-        ("test-runs-bucket", f"{handle.run_id}/sfincs.stdout")
+        ("test-runs-bucket", f"{handle.run_id}/telemac.stdout")
     ]
 
 
@@ -465,7 +478,7 @@ async def test_local_error_path_always_writes_completion(
     set_s3_client(s3)
     uri = _seed_manifest(s3)
 
-    handle = run_solver(solver="sfincs", model_setup_uri=uri)
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
     result = await wait_for_completion(handle, poll_interval_s=0)
 
     assert result.status == "failed"
@@ -481,7 +494,7 @@ async def test_local_error_path_always_writes_completion(
     assert completion["exit_code"] == 2
     # stderr evidence still uploaded on the error path.
     assert b"stderr boom" in s3.objects[
-        ("test-runs-bucket", f"{handle.run_id}/sfincs.stderr")
+        ("test-runs-bucket", f"{handle.run_id}/telemac.stderr")
     ]
 
 
@@ -497,7 +510,7 @@ async def test_local_cancel_chain_docker_kill_plus_cancelled_completion(
     set_s3_client(s3)
     uri = _seed_manifest(s3)
 
-    handle = run_solver(solver="sfincs", model_setup_uri=uri)
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
     run = solver_mod._LOCAL_RUNS[handle.run_id]  # grab before the pop
 
     cancel_started = time.monotonic()
@@ -536,7 +549,7 @@ async def test_local_wait_timeout_returns_solver_timeout_and_kills(
     set_s3_client(s3)
     uri = _seed_manifest(s3)
 
-    handle = run_solver(solver="sfincs", model_setup_uri=uri)
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
     run = solver_mod._LOCAL_RUNS[handle.run_id]
     result = await wait_for_completion(handle, poll_interval_s=0, timeout_s=1)
 
@@ -571,7 +584,7 @@ async def test_local_wait_emits_progress_via_emitter_binding(
     emitter = _CapturingEmitter()
     set_emitter_binding(solver_mod.EmitterBinding(emitter=emitter, step_id="s1"))
 
-    handle = run_solver(solver="sfincs", model_setup_uri=uri)
+    handle = run_solver(solver=_SOLVER, model_setup_uri=uri)
     result = await wait_for_completion(handle, poll_interval_s=0)
 
     assert result.status == "complete"
@@ -580,232 +593,6 @@ async def test_local_wait_emits_progress_via_emitter_binding(
     for _sid, pct in emitter.calls[:-1]:
         assert 0 <= pct <= solver_mod.PROGRESS_CLAMP_MAX
 
-
-# --------------------------------------------------------------------------- #
-# 5a. Deck assembly — scheme-aware setup URI + boto3 deck upload (job-0291 §2)
-# --------------------------------------------------------------------------- #
-
-
-def test_default_setup_uri_is_scheme_aware(monkeypatch: pytest.MonkeyPatch) -> None:
-    from trid3nt_server.workflows.sfincs.sfincs_builder import _default_setup_uri
-
-    # GCP is decommissioned: the setup URI is always s3:// regardless of any
-    # TRID3NT_STORAGE_BACKEND override (the gs legacy seam is gone).
-    monkeypatch.delenv("TRID3NT_STORAGE_BACKEND", raising=False)
-    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "cache-bkt")
-    assert _default_setup_uri((0, 0, 1, 1)).startswith(
-        "s3://cache-bkt/cache/static-30d/sfincs_setup/"
-    )
-    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
-    uri = _default_setup_uri((0, 0, 1, 1))
-    assert uri.startswith("s3://cache-bkt/cache/static-30d/sfincs_setup/")
-    assert uri.endswith("/manifest.json")
-    # A stray legacy override no longer resurrects gs:// — S3-only.
-    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "gcs")
-    assert _default_setup_uri((0, 0, 1, 1)).startswith(
-        "s3://cache-bkt/cache/static-30d/sfincs_setup/"
-    )
-
-
-def test_build_sfincs_model_uploads_deck_via_boto3_under_s3(
-    reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Under TRID3NT_STORAGE_BACKEND=s3 the deck + manifest upload goes via
-    boto3 (NOT fsspec/s3fs) and the manifest's legacy-named ``gs_uri``
-    fields carry ``s3://.../deck/...`` values the local-docker staging can
-    resolve by scheme."""
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
-        BuildOptions,
-        ForcingSpec,
-        build_sfincs_model,
-    )
-
-    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
-    s3 = FakeS3Client()
-    set_s3_client(s3)
-
-    mapping_path = tmp_path / "manning.csv"
-    mapping_path.write_text(
-        "nlcd_class,manning_n,description\n11,0.025,Open Water\n", encoding="utf-8"
-    )
-
-    class _FakeSfincsModel:
-        def __init__(self, root: str, mode: str) -> None:
-            self._root = root
-
-        def build(self, opt: Any) -> None:
-            deck_dir = Path(self._root)
-            deck_dir.mkdir(parents=True, exist_ok=True)
-            (deck_dir / "sfincs.inp").write_text("[fake]", encoding="utf-8")
-            (deck_dir / "gis").mkdir(exist_ok=True)
-            (deck_dir / "gis" / "dep.tif").write_bytes(b"TIF")
-
-        def write(self) -> None:
-            pass
-
-    fake_module = MagicMock()
-    fake_module.SfincsModel = _FakeSfincsModel
-    # fsspec must NOT be touched on the s3 branch — make it explode if it is.
-    angry_fsspec = MagicMock()
-    angry_fsspec.filesystem.side_effect = AssertionError(
-        "fsspec used for an s3:// deck upload — job-0291 requires boto3"
-    )
-
-    fixed_manifest_uri = (
-        "s3://deck-bucket/cache/static-30d/sfincs_setup/S3DECK01/manifest.json"
-    )
-    forcing = ForcingSpec(
-        forcing_type="pluvial_synthetic",
-        precip_inches=10.0,
-        duration_hours=24.0,
-        return_period_years=100,
-        provenance={},
-    )
-    with (
-        patch.dict(
-            "sys.modules",
-            {"hydromt_sfincs": fake_module, "fsspec": angry_fsspec},
-            clear=False,
-        ),
-        patch(
-            "trid3nt_server.workflows.sfincs.sfincs_builder._extract_unique_nlcd_classes",
-            return_value={11},
-        ),
-        patch(
-            "trid3nt_server.workflows.sfincs.sfincs_builder._stage_gcs_local",
-            side_effect=lambda uri: uri,
-        ),
-        patch(
-            "trid3nt_server.workflows.sfincs.sfincs_builder._default_setup_uri",
-            return_value=fixed_manifest_uri,
-        ),
-    ):
-        setup = build_sfincs_model(
-            dem_uri="s3://test/dem.tif",
-            landcover_uri="s3://test/landcover.tif",
-            river_geometry_uri=None,
-            forcing=forcing,
-            bbox=(-81.92, 26.55, -81.80, 26.68),
-            options=BuildOptions(grid_resolution_m=30.0, simulation_hours=24.0),
-            nlcd_vintage_year=2021,
-            manning_mapping_csv=mapping_path,
-        )
-
-    assert setup.setup_uri == fixed_manifest_uri
-
-    base_key = "cache/static-30d/sfincs_setup/S3DECK01/"
-    manifest = json.loads(s3.objects[("deck-bucket", f"{base_key}manifest.json")])
-    assert manifest["outputs"], manifest
-    assert manifest["inputs"], manifest
-    dests = {e["dest"] for e in manifest["inputs"]}
-    assert "sfincs.inp" in dests
-    assert "gis/dep.tif" in dests
-    for entry in manifest["inputs"]:
-        # Legacy field NAME, s3:// VALUE under the deck/ sub-prefix — and the
-        # object the URI names actually exists in the store (staging-ready).
-        assert entry["gs_uri"].startswith(f"s3://deck-bucket/{base_key}deck/"), entry
-        _, _, key = entry["gs_uri"][len("s3://"):].partition("/")
-        assert ("deck-bucket", key) in s3.objects, f"manifest cites missing {key}"
-
-
-def test_stage_gcs_local_handles_s3_uri(reset_seams) -> None:
-    """HydroMT catalog staging resolves s3:// via the boto3 seam (job-0291)."""
-    import uuid
-
-    from trid3nt_server.workflows.sfincs.sfincs_builder import _stage_gcs_local
-
-    s3 = FakeS3Client()
-    set_s3_client(s3)
-    key = f"stage-test/{uuid.uuid4().hex}/dem.tif"
-    s3.objects[("stage-bkt", key)] = b"DEM_BYTES"
-    local = _stage_gcs_local(f"s3://stage-bkt/{key}")
-    assert Path(local).read_bytes() == b"DEM_BYTES"
-    # Second call hits the content-keyed cache (no second get_object).
-    gets_before = len(s3.get_calls)
-    assert _stage_gcs_local(f"s3://stage-bkt/{key}") == local
-    assert len(s3.get_calls) == gets_before
-
-
-def test_to_vsigs_maps_s3_to_vsis3() -> None:
-    from trid3nt_server.workflows.sfincs.sfincs_builder import _to_vsigs
-
-    assert _to_vsigs("s3://bkt/key.tif") == "/vsis3/bkt/key.tif"
-    assert _to_vsigs("/vsis3/bkt/key.tif") == "/vsis3/bkt/key.tif"
-    # GCP decommissioned: gs:// is no longer special-cased — passed through as a
-    # local path (the resolver layer is the gate).
-    assert _to_vsigs("gs://bkt/key.tif") == "gs://bkt/key.tif"
-
-
-# --------------------------------------------------------------------------- #
-# 5b. postprocess_flood — scheme-aware run-output read + COG upload (§3)
-# --------------------------------------------------------------------------- #
-
-
-def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
-    from trid3nt_server.workflows.sfincs.postprocess_sfincs import _resolve_run_output_to_local
-
-    s3 = FakeS3Client()
-    set_s3_client(s3)
-    s3.objects[("test-runs-bucket", "RUNX/sfincs_map.nc")] = b"NETCDF_BYTES"
-    local = _resolve_run_output_to_local("s3://test-runs-bucket/RUNX/")
-    assert local.name == "sfincs_map.nc"
-    assert local.read_bytes() == b"NETCDF_BYTES"
-    # Direct-file form too.
-    local2 = _resolve_run_output_to_local("s3://test-runs-bucket/RUNX/sfincs_map.nc")
-    assert local2.read_bytes() == b"NETCDF_BYTES"
-
-
-def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
-    from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
-        PostprocessError,
-        _resolve_run_output_to_local,
-    )
-
-    set_s3_client(FakeS3Client())
-    with pytest.raises(PostprocessError) as exc_info:
-        _resolve_run_output_to_local("s3://test-runs-bucket/MISSING/")
-    assert exc_info.value.error_code == "RUN_OUTPUT_READ_FAILED"
-
-
-def test_postprocess_cog_upload_scheme_aware(
-    reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from trid3nt_server.workflows.sfincs.postprocess_sfincs import (
-        PostprocessError,
-        _upload_cog_to_runs_bucket,
-    )
-
-    cog = tmp_path / "flood.tif"
-    cog.write_bytes(b"COG_BYTES")
-    s3 = FakeS3Client()
-    set_s3_client(s3)
-
-    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
-    dest = _upload_cog_to_runs_bucket(cog, "RUNX")
-    assert dest == "s3://test-runs-bucket/RUNX/flood_depth_peak.tif"
-    assert s3.objects[("test-runs-bucket", "RUNX/flood_depth_peak.tif")] == b"COG_BYTES"
-
-    # No GCP-named default on AWS: missing bucket env is a typed failure.
-    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
-    with pytest.raises(PostprocessError) as exc_info:
-        _upload_cog_to_runs_bucket(cog, "RUNX")
-    assert exc_info.value.error_code == "COG_UPLOAD_FAILED"
-    assert "TRID3NT_RUNS_BUCKET" in str(exc_info.value)
-
-
-def test_composer_default_runs_prefix_scheme_aware(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from trid3nt_server.workflows.sfincs.flood.flood import _default_runs_prefix
-
-    # Local-only slim: the fallback always mints the honest s3:// shape the
-    # local-docker solver writes under -- never a fabricated gs:// URI.
-    monkeypatch.delenv("TRID3NT_STORAGE_BACKEND", raising=False)
-    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
-    assert _default_runs_prefix("R1") == "s3://trid3nt-runs/R1/"
-    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
-    assert _default_runs_prefix("R1") == "s3://test-runs-bucket/R1/"
 
 
 # --------------------------------------------------------------------------- #
@@ -825,7 +612,7 @@ def _write_completion(s3: FakeS3Client, run_id: str) -> dict:
         stderr_uri=None,
         started_at="2026-08-20T00:00:00Z",
         error=None,
-        solver="sfincs-quadtree",
+        solver="telemac_river_dye",
     )
     return json.loads(s3.objects[("test-runs-bucket", f"{run_id}/completion.json")])
 
@@ -838,7 +625,7 @@ def test_completion_carries_publish_manifest_uri_when_worker_wrote_one() -> None
     s3 = FakeS3Client()
     run_id = "RID-WITH-MANIFEST"
     s3.objects[("test-runs-bucket", f"{run_id}/publish_manifest.json")] = (
-        b'{"schema_version": 1, "engine": "sfincs", "layers": []}'
+        b'{"schema_version": 1, "engine": "telemac", "layers": []}'
     )
 
     completion = _write_completion(s3, run_id)
@@ -875,7 +662,7 @@ def test_spec_supplied_publish_manifest_uri_is_not_clobbered() -> None:
         started_at="2026-08-20T00:00:00Z",
         error=None,
         extra={"publish_manifest_uri": "s3://elsewhere/manifest.json"},
-        solver="sfincs",
+        solver="telemac_river_dye",
     )
     completion = json.loads(
         s3.objects[("test-runs-bucket", f"{run_id}/completion.json")]

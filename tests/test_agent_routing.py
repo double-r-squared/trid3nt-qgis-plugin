@@ -1,16 +1,13 @@
-"""Agent routing tests (job-0154): Gemini tool-dispatch wiring.
+"""Agent routing tests: model tool-dispatch wiring.
 
-Tests that confirm (engine-door refactor, SFINCS slice: the flood entry is now
-the ``run_sfincs`` DOOR + the ``sfincs_flood`` template):
-1. ``run_sfincs`` (door) + ``sfincs_flood`` (template) are present in
-   ``TOOL_REGISTRY`` (the catalog includes the flood engine so Gemini can see it).
-2. ``build_tool_declarations`` includes the ``run_sfincs`` door in the
-   list it builds from the registry.
-3. The ``stream_events`` adapter correctly yields a ``FunctionCallEvent``
-   when a mocked Gemini stream emits a function_call part.
+1. An engine TEMPLATE is present in ``TOOL_REGISTRY`` and the dissolved door
+   names are gone (door dissolution, ADR 0094 -- no alias, no concierge).
+2. ``build_tool_declarations`` includes it in the list it builds from the
+   registry.
+3. The ``stream_events`` adapter yields a ``FunctionCallEvent`` when a mocked
+   stream emits a function_call part.
 4. ``_stream_model_reply`` dispatches the function call through
-   ``_invoke_tool_via_emitter`` when Gemini emits a function_call event
-   (mocked Gemini + mocked tool).
+   ``_invoke_tool_via_emitter``.
 """
 
 from __future__ import annotations
@@ -31,43 +28,40 @@ from trid3nt_server.adapters.adapter import (
 )
 
 
+#: The engine template these three tests route through - a registered template
+#: whose docstring is the model's only routing signal for its question class.
+_TEMPLATE = "coastal_tidal_surge"
+
+
 # ---------------------------------------------------------------------------
-# Test 1: the run_sfincs door + sfincs_flood template are in TOOL_REGISTRY
+# Test 1: the template is in TOOL_REGISTRY and no door name survives
 # ---------------------------------------------------------------------------
 
 
-def test_sfincs_flood_template_in_registry():
-    """sfincs_flood (template) must be registered; the old run_sfincs door and
-    the older run_model_flood_scenario name are GONE (door dissolution, ADR 0094,
-    no alias)."""
-    # The workflow module is imported eagerly by main._import_tools_registry();
-    # in tests we trigger the same import chain via the inflight job-0042 path.
-    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+def test_engine_template_in_registry():
+    """The template must be registered and every dissolved DOOR name gone."""
     import trid3nt_server.tools  # noqa: F401 -- template registration side-effect
-    assert "sfincs_flood" in agent_tools.TOOL_REGISTRY, "the sfincs_flood template must be registered"
-    assert "run_sfincs" not in agent_tools.TOOL_REGISTRY, (
-        "the run_sfincs door was dissolved (ADR 0094); the template stands alone"
-    )
-    assert "run_model_flood_scenario" not in agent_tools.TOOL_REGISTRY, (
-        "the old name is GONE (no alias)"
-    )
+
+    assert _TEMPLATE in agent_tools.TOOL_REGISTRY, f"{_TEMPLATE} must be registered"
+    for door in ("run_sfincs", "run_model_flood_scenario", "run_telemac"):
+        assert door not in agent_tools.TOOL_REGISTRY, (
+            f"{door} was dissolved (ADR 0094); the template stands alone"
+        )
 
 
 # ---------------------------------------------------------------------------
-# Test 2: build_tool_declarations includes the sfincs_flood template
+# Test 2: build_tool_declarations includes the template
 # ---------------------------------------------------------------------------
 
 
-def test_build_tool_declarations_includes_flood_template():
-    """Tool declaration list must include the sfincs_flood template (the
-    retrievable flood entry; door dissolution, ADR 0094 -- no concierge)."""
-    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+def test_build_tool_declarations_includes_the_template():
+    """The declaration list must carry the template (no concierge in front)."""
     import trid3nt_server.tools  # noqa: F401 -- template registration side-effect
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
-    assert "sfincs_flood" in names, (
-        f"sfincs_flood template missing from declarations; got: {sorted(names)}"
+    assert _TEMPLATE in names, (
+        f"{_TEMPLATE} missing from declarations; got: {sorted(names)}"
     )
 
 
@@ -150,15 +144,14 @@ def test_system_prompt_mentions_flood_routing():
 # ---------------------------------------------------------------------------
 
 
-def test_sfincs_flood_docstring_covers_user_intent():
-    """Docstring must mention '100-year' to match the failing demo prompt."""
+def test_template_docstring_covers_user_intent():
+    """The docstring must carry the question's own words - it is the routing signal."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
 
-    entry = TOOL_REGISTRY.get("sfincs_flood")
+    entry = TOOL_REGISTRY.get(_TEMPLATE)
     assert entry is not None
     doc = entry.fn.__doc__ or ""
-    assert "100-year" in doc, (
-        "sfincs_flood docstring must mention '100-year' so Gemini "
-        "matches the 'Model peak flood depth from a 100-year design storm' prompt"
+    assert "storm surge" in doc, (
+        f"{_TEMPLATE} docstring must carry the phrasing a user asks in, or the "
+        "model has nothing to match against"
     )

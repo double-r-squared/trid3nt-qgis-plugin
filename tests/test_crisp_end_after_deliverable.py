@@ -1,7 +1,7 @@
 """Crisp turn-end after a terminal composer delivers (NATE 2026-06-29).
 
 Symptom this guards against: a SFINCS flood publishes its depth layer
-(``sfincs_flood`` -> ``layers=1``) and the model, having nothing
+(``coastal_tidal_surge`` -> ``layers=1``) and the model, having nothing
 left to do, keeps emitting unproductive function calls until it trips the
 ``MAX_TURN_ITERATIONS`` cap and emits a (harmless but sloppy) ``loop_exhausted``
 frame. The fix:
@@ -65,9 +65,9 @@ def _settings() -> ModelSettings:
 # ---------------------------------------------------------------------------
 
 
-def test_sfincs_flood_is_terminal_composer():
+def test_a_template_is_a_terminal_composer():
     """The top-level SFINCS composer is recognized as a terminal deliverable."""
-    assert _is_terminal_composer("sfincs_flood") is True
+    assert _is_terminal_composer("coastal_tidal_surge") is True
 
 
 def test_helper_compute_tool_is_not_terminal_composer():
@@ -90,7 +90,7 @@ def test_unknown_tool_is_not_terminal_composer():
 async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
     """A composer that delivers + a model that then spins ends CLEANLY.
 
-    Round 1 the model calls ``sfincs_flood`` and it returns a
+    Round 1 the model calls ``coastal_tidal_surge`` and it returns a
     layer-bearing deliverable. Rounds 2+ the model keeps calling an unproductive
     tool (no new progress). The post-deliverable safety must conclude the turn
     within a couple of idle rounds -- WITHOUT emitting ``loop_exhausted`` and
@@ -102,7 +102,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
         if i == 0:
             # Deliver the SFINCS flood depth layer.
             return _make_fake_chunk_with_function_call(
-                "sfincs_flood",
+                "coastal_tidal_surge",
                 {"location": "Mexico Beach"},
                 "call-composer",
             )
@@ -118,7 +118,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted(fake_llm):
 
     async def _dispatch(_ws, _state, name, _args):
         dispatches["n"] += 1
-        if name == "sfincs_flood":
+        if name == "coastal_tidal_surge":
             # Layer-bearing deliverable -> _dispatch_made_progress is True.
             return {"status": "ok", "layers": ["flood-depth"], "layer_id": "flood-depth-cog"}
         # A bare ack -> NO progress (the post-deliverable idle shape).
@@ -173,7 +173,7 @@ async def test_composer_function_response_carries_completion_directive(fake_llm)
     def _next_turn(i, _c):
         if i == 0:
             return _make_fake_chunk_with_function_call(
-                "sfincs_flood", {"location": "X"}, "call-composer"
+                "coastal_tidal_surge", {"location": "X"}, "call-composer"
             )
         return _make_fake_chunk_with_function_call(
             "fetch_dem", {"bbox": [0, 0, i + 1, i + 1]}, f"c-{i + 1}"
@@ -182,7 +182,7 @@ async def test_composer_function_response_carries_completion_directive(fake_llm)
     fake_llm.on_call(_next_turn)
 
     async def _dispatch(_ws, _state, name, _args):
-        if name == "sfincs_flood":
+        if name == "coastal_tidal_surge":
             return {"status": "ok", "layers": ["d"], "layer_id": "d-cog"}
         return {"ok": True}
 

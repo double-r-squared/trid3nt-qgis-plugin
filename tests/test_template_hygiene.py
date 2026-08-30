@@ -99,6 +99,8 @@ def test_template_docstrings_and_comments_are_functional() -> None:
 
 
 def test_hygiene_gate_covers_all_templates() -> None:
-    """The gate must see a non-trivial template population (guards a silent
-    registry/scope regression that would make the lint vacuous)."""
-    assert len(_template_tools()) >= 20
+    """The gate must see EVERY registered template - a scope regression that
+    narrowed it to a handful would make the lint vacuous without failing."""
+    from tests.test_door_dissolution import EXPECTED_TEMPLATES
+
+    assert {name for name, _ in _template_tools()} == EXPECTED_TEMPLATES

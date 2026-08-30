@@ -118,6 +118,11 @@ def _os_environ() -> dict:
     return dict(os.environ)
 
 
+#: How many tools the registry holds. Pinned so a tool that leaves is noticed
+#: rather than absorbed; the arms never shrink it, only the declarable POOL.
+_REGISTRY_SIZE = 166
+
+
 # --------------------------------------------------------------------------- #
 # Identity gate: DEFAULT config unchanged.
 # --------------------------------------------------------------------------- #
@@ -126,7 +131,9 @@ def _os_environ() -> dict:
 def test_default_config_identity():
     r = _run_arm(None)
     assert r["arm"] is None
-    assert r["registry_size"] == 260  # mesh wave: +build_mesh (the one mesh router, every mesher registered behind it) -1 generate_mesh (dissolved into it - its watershed, coastal water-edge and HEC-RAS graded-cell builders are registered meshers now); ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water (the NHDPlus HR flowline and NHDArea water-surface queries the TELEMAC reach mesher used to run from inside the container); ADR 0317 +fetch_ncei_dem_mosaic (the NOAA NCEI DEM_all bed the four open-water TELEMAC domains used to fetch from inside the container); +fetch_osm_breakwaters (the surveyed-barrier way-geometry spec that replaced the buried Overpass call in the ARTEMIS deck writer, TELEMAC wave B); +restyle_layer (display-state re-emission of a published layer); cleanup wave phase 2 2026-08-25 (-1 publish_layer, the tool - emission is automatic, ADR 0313; -1 compute_urban_heat_island demoted to the playground); canopy species deletion 2026-08-24 (-1 compute_canopy_height); ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge (TELEMAC-2D coastal tidal/surge inundation); ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
+    # The roster PIN: a tool that leaves the registry has to be noticed, so the
+    # arms assert the same number and a silent drop fails four tests at once.
+    assert r["registry_size"] == _REGISTRY_SIZE
     assert r["n_specs"] == 105  # ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water; ADR 0317 +fetch_ncei_dem_mosaic; TELEMAC wave B +fetch_osm_breakwaters; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged-dataset specs); ADR 0297 +fetch_groundwater_recharge (staged-dataset spec); ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
@@ -144,7 +151,7 @@ def test_default_config_identity():
 def test_arm2_specs_leave_pool_but_stay_indexed():
     r = _run_arm("2")
     assert r["arm"] == "2"
-    assert r["registry_size"] == 260  # mesh wave: +build_mesh (the one mesh router, every mesher registered behind it) -1 generate_mesh (dissolved into it - its watershed, coastal water-edge and HEC-RAS graded-cell builders are registered meshers now); ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water (the NHDPlus HR flowline and NHDArea water-surface queries the TELEMAC reach mesher used to run from inside the container); ADR 0317 +fetch_ncei_dem_mosaic (the NOAA NCEI DEM_all bed the four open-water TELEMAC domains used to fetch from inside the container); +fetch_osm_breakwaters (the surveyed-barrier way-geometry spec that replaced the buried Overpass call in the ARTEMIS deck writer, TELEMAC wave B); +restyle_layer (display-state re-emission of a published layer); cleanup wave phase 2 2026-08-25 (-1 publish_layer, the tool - emission is automatic, ADR 0313; -1 compute_urban_heat_island demoted to the playground); canopy species deletion 2026-08-24 (-1 compute_canopy_height); ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge; ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
+    assert r["registry_size"] == _REGISTRY_SIZE
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
@@ -174,7 +181,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
 def test_arm1_signature_and_pool():
     r = _run_arm("1")
     assert r["arm"] == "1"
-    assert r["registry_size"] == 260  # mesh wave: +build_mesh (the one mesh router, every mesher registered behind it) -1 generate_mesh (dissolved into it - its watershed, coastal water-edge and HEC-RAS graded-cell builders are registered meshers now); ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water (the NHDPlus HR flowline and NHDArea water-surface queries the TELEMAC reach mesher used to run from inside the container); ADR 0317 +fetch_ncei_dem_mosaic (the NOAA NCEI DEM_all bed the four open-water TELEMAC domains used to fetch from inside the container); +fetch_osm_breakwaters (the surveyed-barrier way-geometry spec that replaced the buried Overpass call in the ARTEMIS deck writer, TELEMAC wave B); +restyle_layer (display-state re-emission of a published layer); cleanup wave phase 2 2026-08-25 (-1 publish_layer, the tool - emission is automatic, ADR 0313; -1 compute_urban_heat_island demoted to the playground); canopy species deletion 2026-08-24 (-1 compute_canopy_height); ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge (TELEMAC-2D coastal tidal/surge inundation); ADR 0251 +culvert_embankment_flow (HEC-RAS 2D culvert-through-embankment); ADR 0247 +pelicun_hazus_lifeline_seismic_dl_run
+    assert r["registry_size"] == _REGISTRY_SIZE
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False
     assert r["gridmet_in_index"] is True
@@ -260,7 +267,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     composed fetcher's real dispatch path)."""
     r = _run_arm("3")
     assert r["arm"] == "3"
-    assert r["registry_size"] == 260  # mesh wave: +build_mesh (the one mesh router, every mesher registered behind it) -1 generate_mesh (dissolved into it - its watershed, coastal water-edge and HEC-RAS graded-cell builders are registered meshers now); ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water (the NHDPlus HR flowline and NHDArea water-surface queries the TELEMAC reach mesher used to run from inside the container); ADR 0317 +fetch_ncei_dem_mosaic (the NOAA NCEI DEM_all bed the four open-water TELEMAC domains used to fetch from inside the container); +fetch_osm_breakwaters (the surveyed-barrier way-geometry spec that replaced the buried Overpass call in the ARTEMIS deck writer, TELEMAC wave B); +restyle_layer (display-state re-emission of a published layer); cleanup wave phase 2 2026-08-25 (-1 publish_layer, the tool - emission is automatic, ADR 0313; -1 compute_urban_heat_island demoted to the playground); canopy species deletion 2026-08-24 (-1 compute_canopy_height); ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged Zell-Sanford surficial-groundwater specs); ADR 0297 +fetch_groundwater_recharge (staged CONUS recharge spec); ADR 0276 -2 list_categories+list_tools_in_category chop; ADR 0259 +coastal_tidal_surge; ADR 0251 +culvert_embankment_flow; ADR 0247 +lifeline template; registry does NOT shrink, only the pool does
+    assert r["registry_size"] == _REGISTRY_SIZE
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).

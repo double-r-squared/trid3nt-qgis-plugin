@@ -145,17 +145,15 @@ class TestRegistration:
             assert name not in TOOL_REGISTRY, f"{name} should be folded away"
 
     def test_registry_core_membership_is_order_robust(self):
-        """Order-robust replacement for the brittle count pin: other test files
-        import workflow modules that grow the module-global registry (post door
-        dissolution (ADR 0094, -10 engine doors) the plain-import surface is ~176,
-        growing to ~180 once the full startup path runs in full-suite order), so
-        assert MEMBERSHIP not cardinality with a loose sanity floor."""
+        """MEMBERSHIP, not cardinality: other test files import workflow modules
+        that grow the module-global registry, so the count is order-dependent and
+        a count pin here fails on suite order rather than on a real change. The
+        exact roster is pinned once, in test_catalog_surfacing."""
         from trid3nt_server.tools import TOOL_REGISTRY
         assert "spatial_query" in TOOL_REGISTRY
         for retired in ("summarize_layer_statistics", "count_features_above_threshold",
                         "aggregate_property_within_zone"):
             assert retired not in TOOL_REGISTRY
-        assert len(TOOL_REGISTRY) >= 175
 
 
     def test_core_floor_slot(self):

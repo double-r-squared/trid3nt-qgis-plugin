@@ -34,31 +34,14 @@ _WORKFLOWS = (
 # family -> list of (fetch-call token that must carry a purpose, purpose word).
 # The purpose word == the "<what>" the deleted helper put in "Input: <what>".
 _FAMILY_INPUTS: dict[str, dict[str, object]] = {
-    "landlab": {
-        "file": "landlab/susceptibility/susceptibility.py",
-        "fetches": [
-            ("fetch_3dep_extra(", "terrain"),
-            ("fetch_dem(", "terrain"),
-        ],
-    },
     "rain_on_grid": {
-        # the DEM bed, river and land cover all live in the shared mesh front's
-        # CATCHMENT strategy - domain-SHAPE fetches, not a TELEMAC fact.
-        "file": "mesh/watershed.py",
+        # The bed, the channel network and the land cover are DECLARED artifacts
+        # over the registered fetchers, so the purpose rides the declaration.
+        "file": "telemac/rain_on_grid/rain_on_grid.py",
         "fetches": [
-            ('fetch_river_geometry"].fn(', "river geometry"),
-            ('fetch_dem"].fn(', "mesh bed"),
-            ('fetch_copernicus_dem"].fn(', "mesh bed"),
-            ('fetch_landcover"].fn(', "land cover"),
-        ],
-    },
-    "sfincs": {
-        "file": "sfincs/flood/flood.py",
-        "fetches": [
-            ("topobathy_layer = fetch_topobathy(", "topo-bathymetry"),
-            ("dem_layer = fetch_dem(", "terrain"),
-            ("landcover_result = fetch_landcover(", "land cover"),
-            ("river_layer = _river_fn(", "river geometry"),
+            ('Fetch.tool("fetch_dem"', "mesh bed"),
+            ('Fetch.tool("fetch_river_geometry"', "river geometry"),
+            ('Fetch.tool("fetch_landcover"', "land cover"),
         ],
     },
 }
@@ -77,22 +60,10 @@ def _assert_fetch_carries_purpose(src: str, token: str, word: str) -> None:
     )
 
 
-def test_landlab_input_fetches_declare_purpose():
-    src = (_WORKFLOWS / _FAMILY_INPUTS["landlab"]["file"]).read_text("utf-8")
-    for token, word in _FAMILY_INPUTS["landlab"]["fetches"]:
-        _assert_fetch_carries_purpose(src, token, word)
-
-
 def test_rain_on_grid_input_fetches_declare_purpose():
     fam = _FAMILY_INPUTS["rain_on_grid"]
     src = (_WORKFLOWS / fam["file"]).read_text("utf-8")
     for token, word in fam["fetches"]:
-        _assert_fetch_carries_purpose(src, token, word)
-
-
-def test_sfincs_input_fetches_declare_purpose():
-    src = (_WORKFLOWS / _FAMILY_INPUTS["sfincs"]["file"]).read_text("utf-8")
-    for token, word in _FAMILY_INPUTS["sfincs"]["fetches"]:
         _assert_fetch_carries_purpose(src, token, word)
 
 

@@ -1,16 +1,12 @@
 """Tests for the local subprocess runner (TRID3NT offline build).
 
-Covers:
-  1. Backend selection per solver: each pip-only engine dispatches to its own
-     LocalSolverSpec factory via LOCAL_SOLVER_SPEC_REGISTRY.
-  2. Command construction: build_argv returns the expected subprocess command
-     for Landlab (run_chain.py) and OpenQuake (run_oq.py).
-  3. PYTHONPATH injection: env_overrides prepends the repo root so worker
-     imports resolve when the agent package is installed in an isolated venv.
-  4. Manifest written to rundir: launch_local_solver writes manifest.json
+Covers the ENGINE-AGNOSTIC half - what is left once the pip-only engines that
+registered exec-kind specs (Landlab, OpenQuake) left the tree:
+  1. Manifest written to rundir: launch_local_solver writes manifest.json
      to the run directory before launching the subprocess.
-  5. Mocked subprocess end-to-end: the supervisor thread picks up exit 0 and
+  2. Mocked subprocess end-to-end: the supervisor thread picks up exit 0 and
      writes a correct completion.json (no real process spawned).
+  3. env_overrides reach the subprocess environment.
 
 No AWS calls, no real subprocess (mocked via monkeypatch), no docker.
 """
@@ -129,85 +125,6 @@ def _wait_completion(
         f"supervisor never wrote completion.json within {timeout_s}s "
         f"(keys: {sorted(s3.objects.keys())})"
     )
-
-
-# --------------------------------------------------------------------------- #
-# 1. Registry presence: each solver maps to a factory in LOCAL_SOLVER_SPEC_REGISTRY
-# --------------------------------------------------------------------------- #
-
-
-def test_landlab_registered_in_local_spec_registry() -> None:
-    import trid3nt_server.workflows.landlab.run_landlab as _ll_mod
-    del _ll_mod
-
-    assert "landlab" in LOCAL_SOLVER_SPEC_REGISTRY, (
-        "landlab missing from LOCAL_SOLVER_SPEC_REGISTRY"
-    )
-
-
-def test_openquake_registered_in_local_spec_registry() -> None:
-    import trid3nt_server.workflows.openquake.psha.psha as _oq_mod
-    del _oq_mod
-
-    assert "openquake" in LOCAL_SOLVER_SPEC_REGISTRY, (
-        "openquake missing from LOCAL_SOLVER_SPEC_REGISTRY"
-    )
-
-
-# --------------------------------------------------------------------------- #
-# 2. Command construction: build_argv returns the correct subprocess command
-# --------------------------------------------------------------------------- #
-
-
-def test_landlab_build_argv_calls_run_chain_py() -> None:
-    from trid3nt_server.workflows.landlab.run_landlab import landlab_local_spec
-
-    spec = landlab_local_spec()
-    run_id = "TEST-002"
-    rundir = Path("/tmp/runs/TEST-002")
-    argv = spec.build_argv(run_id, rundir, [])
-
-    assert argv[0] == sys.executable
-    assert argv[1].endswith("run_chain.py"), f"unexpected script: {argv[1]}"
-    assert "--manifest" in argv
-
-
-def test_openquake_build_argv_calls_run_oq_py() -> None:
-    from trid3nt_server.workflows.openquake.psha.psha import openquake_local_spec
-
-    spec = openquake_local_spec()
-    run_id = "TEST-003"
-    rundir = Path("/tmp/runs/TEST-003")
-    argv = spec.build_argv(run_id, rundir, [])
-
-    assert argv[0] == sys.executable
-    assert argv[1].endswith("run_oq.py"), f"unexpected script: {argv[1]}"
-    assert "--manifest" in argv
-
-
-# --------------------------------------------------------------------------- #
-# 3. PYTHONPATH injection: env_overrides prepends the repo root
-# --------------------------------------------------------------------------- #
-
-
-def test_landlab_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.workflows.landlab.run_landlab import landlab_local_spec
-
-    spec = landlab_local_spec()
-    assert spec.env_overrides is not None
-    assert "PYTHONPATH" in spec.env_overrides
-    first_path = spec.env_overrides["PYTHONPATH"].split(":")[0]
-    assert Path(first_path).is_dir()
-
-
-def test_openquake_spec_has_pythonpath_override() -> None:
-    from trid3nt_server.workflows.openquake.psha.psha import openquake_local_spec
-
-    spec = openquake_local_spec()
-    assert spec.env_overrides is not None
-    assert "PYTHONPATH" in spec.env_overrides
-    first_path = spec.env_overrides["PYTHONPATH"].split(":")[0]
-    assert Path(first_path).is_dir()
 
 
 # --------------------------------------------------------------------------- #

@@ -9,11 +9,7 @@ remains here pins the pieces the seam does NOT own:
       PRIMITIVES the seam itself rides: force role + bbox=None, best-effort
       (NEVER raise), honour the emit_layer_uri guardrail (raw-object raster
       DROPPED, vector passes).
-  (2) OpenQuake ``make_fault_sources_layer_uri`` + ``fault_records_to_feature_collection``
-      -- the fault-trace serialization util (kept, exported; the composer no
-      longer hand-surfaces -- ``fetch_fault_sources`` returns a renderable
-      FaultSourcesResult the seam publishes).
-  (3) river_dye's IN-WORKER bed-bathymetry surfacing -- a worker-COG the router
+  (2) river_dye's IN-WORKER bed-bathymetry surfacing -- a worker-COG the router
       seam cannot cover (sampled inside the solver container).
   (SWEEP) the ADR 0244 single-path guard: no ``_surface_*input*`` helper and no
       hand-written input-emission call for router-fetched data may reappear.
@@ -299,114 +295,6 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
     assert called["n"] == 0
 
 
-# ===========================================================================
-# (2) OpenQuake fault serialization + composer wiring.
-# ===========================================================================
-import trid3nt_server.workflows.openquake.psha.psha as seismic  # noqa: E402
-from trid3nt_server.workflows.openquake.psha.psha import (  # noqa: E402
-    FAULT_LINE_STYLE_PRESET,
-    fault_records_to_feature_collection,
-    make_fault_sources_layer_uri,
-)
-
-_FAULT_REC = {
-    "name": "San Andreas (Peninsula)",
-    "geometry": [[-122.45, 37.50], [-122.30, 37.70], [-122.20, 37.88]],
-    "net_slip_rate_mm_yr": 17.0,
-    "slip_type": "Dextral",
-    "catalog_name": "GEM",
-}
-
-
-def test_fault_records_to_feature_collection_shape_and_props():
-    """A record -> a LineString feature carrying name / net_slip_rate_mm_yr /
-    slip_type (+ catalog_name); a <2-vertex (degenerate) trace is SKIPPED."""
-    degenerate = {"name": "pt", "geometry": [[-1.0, 1.0]], "net_slip_rate_mm_yr": 3.0}
-    fc = fault_records_to_feature_collection([_FAULT_REC, degenerate])
-
-    assert fc["type"] == "FeatureCollection"
-    assert len(fc["features"]) == 1  # the degenerate trace was dropped
-    ft = fc["features"][0]
-    assert ft["type"] == "Feature"
-    assert ft["geometry"]["type"] == "LineString"
-    assert ft["geometry"]["coordinates"] == [
-        [-122.45, 37.50], [-122.30, 37.70], [-122.20, 37.88]
-    ]
-    props = ft["properties"]
-    assert props["name"] == "San Andreas (Peninsula)"
-    assert props["net_slip_rate_mm_yr"] == 17.0
-    assert props["slip_type"] == "Dextral"
-    assert props["catalog_name"] == "GEM"
-
-
-def test_fault_records_to_feature_collection_empty():
-    assert fault_records_to_feature_collection([]) == {
-        "type": "FeatureCollection",
-        "features": [],
-    }
-
-
-def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
-    """make_fault_sources_layer_uri serializes + uploads to the runs bucket and
-    returns a role="input" vector LayerURI (bbox=None, fault_line preset, with a
-    LegendKey). S3 is mocked."""
-    puts: list[dict] = []
-
-    class _FakeS3:
-        def put_object(self, **kw):
-            puts.append(kw)
-
-    import trid3nt_server.workflows.solver.solver as solver_mod
-
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-
-    layer = make_fault_sources_layer_uri([_FAULT_REC], run_id="RID")
-    assert layer is not None
-    assert layer.layer_type == "vector"
-    assert layer.role == "input"
-    assert layer.bbox is None
-    assert layer.style_preset == FAULT_LINE_STYLE_PRESET
-    assert layer.uri == "s3://test-runs/RID/fault_sources.geojson"
-    assert layer.legend is not None and layer.legend.kind == "categorical"
-    # The FC was actually uploaded.
-    assert len(puts) == 1
-    assert puts[0]["Key"] == "RID/fault_sources.geojson"
-
-
-def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
-    """No drawable traces => None (best-effort, no upload)."""
-    import trid3nt_server.workflows.solver.solver as solver_mod
-
-    called = {"put": False}
-
-    class _FakeS3:
-        def put_object(self, **kw):  # pragma: no cover - must not run
-            called["put"] = True
-
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-    # A single degenerate record yields zero features.
-    assert make_fault_sources_layer_uri(
-        [{"name": "pt", "geometry": [[-1.0, 1.0]], "net_slip_rate_mm_yr": 3.0}],
-        run_id="RID",
-    ) is None
-    assert called["put"] is False
-
-
-def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
-    """An S3 put failure returns None (the fault input is simply absent), NEVER
-    raises."""
-    import trid3nt_server.workflows.solver.solver as solver_mod
-
-    class _BoomS3:
-        def put_object(self, **kw):
-            raise RuntimeError("s3 down")
-
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _BoomS3())
-    monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
-    assert make_fault_sources_layer_uri([_FAULT_REC], run_id="RID") is None
-
 
 # ===========================================================================
 # (SWEEP) ADR 0244 single-path guard.
@@ -422,14 +310,12 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
 #   * MESH previews          - the generated mesh is not a router fetch.
 #   * RESULT / derived COGs   - a solver's own secondary output layer.
 #   * IN-WORKER COGs          - bathymetry sampled inside the solver container,
-#                               which never touches route() (telemac3d bottom,
-#                               swan bathy). No TELEMAC domain is in this class
-#                               any more: every bed the family solves on is a
-#                               declared router fetch and the seam surfaces it.
+#                               which never touches route() (telemac3d bottom).
+#                               No TELEMAC domain is in this class any more:
+#                               every bed the family solves on is a declared
+#                               router fetch and the seam surfaces it.
 #   * BARE-OSM fetches        - agitation's breakwaters bypass the router (an
 #                               S3 loose end, ADR 0244 S3).
-#   * USER-DATA overlays      - a point/vector built from a user-supplied
-#                               location (MODFLOW well / observed heads).
 #
 # A NEW input-emission site fails this test: route the fetch through the seam
 # (its render declaration surfaces it for free) or, if it is genuinely one of
@@ -446,20 +332,7 @@ _WORKFLOWS_DIR = (
 # relpath (from workflows/) -> (n_input_emission_calls, reason). Sum is the only
 # input-emission the tree is allowed to keep post-collapse.
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
-    "geoclaw/inundation/inundation.py": (2, "mesh preview + particle result"),
-    "hecras/flood_2d/flood_2d.py": (1, "mesh preview"),
-    "hecras/levee_breach/levee_breach.py": (1, "mesh preview"),
-    "hecras/riverine_flood/riverine_flood.py": (1, "mesh preview"),
     "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
-    "modflow/capture_zone/capture_zone.py": (2, "observed-wells user-data overlay + backward-PRT pathlines (result-derived context, not a router fetch)"),
-    "modflow/thermal_plume/thermal_plume.py": (1, "injection-well user-data point"),
-    "openquake/scenario_gmf/scenario_gmf.py": (1, "computed GMF-spread result COG"),
-    "openquake/secondary_perils/secondary_perils.py": (1, "computed landslide result COG"),
-    "schism/baroclinic_circulation/baroclinic_circulation.py": (1, "bottom-salinity result (mesh now rides the seam, ADR 0286)"),
-    "schism/pahm_surge/pahm_surge.py": (1, "storm best-track result (mesh now rides the seam, ADR 0286)"),
-    "schism/results_mesh_seam.py": (1, "the seam-side out2d/salinity mesh publisher - framework emission, one home for all schism legs (ADR 0286)"),
-    "sfincs/flood/flood.py": (1, "mesh preview"),
-    "swan/wave_field/wave_field.py": (1, "in-worker bathymetry COG"),
     "telemac/steps/coastal.py": (1, "the CONTEXT half of the coastal inundation split - the total water-depth field beside the answer layer. A SOLVED product, not a fetch, so no emit-on-fetch seam can cover it; surfaced through this seam so it lands as role=context and never fights the answer for the camera (TELEMAC wave B)"),
     "telemac/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),

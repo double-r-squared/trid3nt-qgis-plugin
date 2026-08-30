@@ -38,9 +38,10 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent.parent
 _WORKFLOWS = _SRC / "workflows"
-_FLOOD = _WORKFLOWS / "sfincs" / "flood" / "flood.py"  # engine-door rollout renamed/moved
-# model_flood_scenario -> sfincs_flood (tier=template) under workflows/sfincs/flood/.
-_GEOCLAW = _WORKFLOWS / "geoclaw" / "inundation" / "inundation.py"
+#: The heavy sync fetch this file's sweep guards. It is named by the mesher's
+#: ``bed`` field rather than called from a coroutine anywhere in the tree, so the
+#: sweep asserts ABSENCE of an on-loop call rather than a particular offload.
+_HEAVY_FETCH = "fetch_topobathy("
 
 
 def test_fetch_topobathy_in_always_set() -> None:
@@ -147,27 +148,29 @@ def _calls_to_thread_with(src: str, fn_name: str) -> bool:
     return False
 
 
-def test_flood_topobathy_runs_off_loop() -> None:
-    """The flood workflow's fetch_topobathy call lives inside the sync
-    ``_fetcher_chain`` closure, which is dispatched via
-    ``asyncio.to_thread(_fetcher_chain)`` -- so the loop is never blocked."""
-    src = _FLOOD.read_text()
-    # fetch_topobathy is invoked in the file...
-    assert "fetch_topobathy(" in src
-    # ...and the fetcher chain that runs it is off-loaded.
-    assert _calls_to_thread_with(src, "_fetcher_chain"), (
-        "model_flood_scenario must run its fetcher chain (which calls "
-        "fetch_topobathy) via asyncio.to_thread"
-    )
+def test_no_workflow_calls_the_heavy_fetch_on_the_loop() -> None:
+    """A synchronous heavy fetch inside a coroutine BLOCKS the loop.
 
-
-def test_geoclaw_topobathy_runs_off_loop() -> None:
-    """The geoclaw workflow's fetch_topobathy call lives inside the sync
-    ``_fetch_topo_for_geoclaw`` helper, dispatched via
-    ``asyncio.to_thread(_fetch_topo_for_geoclaw, bbox)``."""
-    src = _GEOCLAW.read_text()
-    assert "fetch_topobathy(" in src
-    assert _calls_to_thread_with(src, "_fetch_topo_for_geoclaw"), (
-        "model_geoclaw_inundation must run its topo helper (which calls "
-        "fetch_topobathy) via asyncio.to_thread"
+    The sweep is the guard rather than a per-composer offload assertion: a new
+    caller has to either stay synchronous (a producer the interpreter runs) or
+    wrap itself in ``asyncio.to_thread``, and this fails the moment one does
+    neither.
+    """
+    offenders: list[str] = []
+    for path in _WORKFLOWS.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        src = path.read_text(encoding="utf-8")
+        if _HEAVY_FETCH not in src:
+            continue
+        if "asyncio.to_thread" in src:
+            continue
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.AsyncFunctionDef) and _HEAVY_FETCH[:-1] in ast.dump(
+                node
+            ):
+                offenders.append(f"{path.relative_to(_WORKFLOWS)}::{node.name}")
+    assert not offenders, (
+        "these coroutines call the heavy sync fetch directly, which blocks the "
+        "event loop; wrap it in asyncio.to_thread:\n  " + "\n  ".join(offenders)
     )

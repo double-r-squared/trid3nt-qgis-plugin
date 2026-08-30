@@ -15,7 +15,6 @@ silently snapped. This suite verifies:
 """
 from __future__ import annotations
 
-import asyncio
 import inspect
 import pathlib
 import re
@@ -149,65 +148,8 @@ def test_review_note_labels_within_range_derivation_only():
 
 
 # --------------------------------------------------------------------------- #
-# 3. Adopted surfaces: in-range unchanged, out-of-range quote-back.
+# 3. Adopted surfaces: the fetchers' own DATA-native declarations.
 # --------------------------------------------------------------------------- #
-
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
-
-
-def test_hecras_out_of_range_resolution_quotes_back():
-    from trid3nt_server.workflows.hecras.flood_2d.flood_2d import hecras_flood_2d
-    r = _run(hecras_flood_2d(bbox=[-86.2, 40.15, -86.1, 40.25], resolution_m=5))
-    assert r["status"] == "error"
-    assert r["error_code"] == "HECRAS_INPUT_INVALID"
-    msg = r["error_message"]
-    assert "5 m requested" in msg and "20-200 m" in msg
-    assert "pick a resolution_m in range" in msg
-
-
-def test_hecras_resolution_resolve_in_range_unchanged():
-    # ADR 0232: flood_2d resolves through the shared resolve_resolution seam. A small
-    # AOI + in-range 60 m -> basis user, no autoscale note.
-    from trid3nt_server.workflows.hecras.flood_2d import flood_2d
-    bbox = [-86.2, 40.20, -86.18, 40.22]
-    r = resolve_resolution(
-        60.0, spec=flood_2d._RES_SPEC,
-        autoscale=lambda x: flood_2d._autoscale_resolution(bbox, x),
-    )
-    assert r.value == 60.0 and r.basis == "user" and r.note is None
-
-
-def test_hecras_resolution_resolve_out_of_range_raises():
-    from trid3nt_server.workflows.hecras.flood_2d import flood_2d
-    bbox = [-86.2, 40.15, -86.1, 40.25]
-    for bad in (5.0, 500.0):
-        with pytest.raises(ResolutionOutOfRangeError):
-            resolve_resolution(
-                bad, spec=flood_2d._RES_SPEC,
-                autoscale=lambda x: flood_2d._autoscale_resolution(bbox, x),
-            )
-
-
-def test_surge_out_of_range_resolution_quotes_back():
-    from trid3nt_server.workflows.schism.pahm_surge.pahm_surge import schism_pahm_surge
-    r = _run(schism_pahm_surge(bbox=[-95.05, 29.2, -94.6, 29.65], resolution_m=5, sim_days=1.0))
-    assert isinstance(r, dict) and r.get("status") == "error"
-    assert r["error_code"] == "SCHISM_INPUT_INVALID"
-    assert "25-1000 m" in r["error_message"] and "5 m requested" in r["error_message"]
-
-
-def test_surge_spec_bounds():
-    from trid3nt_server.workflows.schism.pahm_surge.pahm_surge import _SURGE_RES_SPEC
-    assert _SURGE_RES_SPEC.contains(25) and _SURGE_RES_SPEC.contains(1000)
-    assert not _SURGE_RES_SPEC.contains(24) and not _SURGE_RES_SPEC.contains(1001)
-
-
-def test_sfincs_quadtree_floor_enforced():
-    from trid3nt_server.workflows.sfincs.flood.flood import _SFINCS_QUADTREE_RES_SPEC
-    enforce_resolution(_SFINCS_QUADTREE_RES_SPEC, 400)  # in range
-    with pytest.raises(ResolutionOutOfRangeError):
-        enforce_resolution(_SFINCS_QUADTREE_RES_SPEC, 5)  # sub-floor
 
 
 def test_fetcher_data_native_declarations_present():
@@ -216,18 +158,6 @@ def test_fetcher_data_native_declarations_present():
         assert spec is not None and spec.constraint_source == "data"
         assert spec.native_hint  # the gate card quotes it
 
-
-def test_schism_render_cap_is_overridable_output_artifact():
-    from trid3nt_server.workflows.schism.postprocess_schism import (
-        OUTPUT_RASTER_CAP_SPEC,
-        _adaptive_grid,
-    )
-    assert OUTPUT_RASTER_CAP_SPEC.unit == "px"
-    bbox = [-95.05, 29.2, -94.0, 30.0]
-    w_default, _ = _adaptive_grid(bbox, True)
-    w_override, _ = _adaptive_grid(bbox, True, max_px_per_side=6000)
-    # the override raises the cap -> a finer (>= default) display raster.
-    assert w_override >= w_default
 
 
 # --------------------------------------------------------------------------- #
@@ -246,9 +176,6 @@ _PENDING_DECLARATION: set[tuple[str, str]] = {
     ("compute_home_range_kde", "grid_size"),
     ("fetch_landcover", "resolution_m"),
     ("fetch_population", "target_resolution_m"),
-    ("pelicun_damage_assessment", "cell_size_m"),
-    ("swmm_dual_drainage_coupling", "target_resolution_m"),
-    ("swmm_urban_flood", "target_resolution_m"),
 }
 
 
