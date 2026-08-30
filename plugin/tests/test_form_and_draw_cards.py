@@ -124,8 +124,8 @@ class ParamSheetEditTests(unittest.TestCase):
             {"name": "bank_source", "value": "nhd_area", "door": "constant",
              "basis": "default_demo"}])).rows
         self.assertEqual(
-            gate.resolve_param_sheet_edits(rows, {"bank_source": "constant_ribbon"}),
-            {"bank_source": "constant_ribbon"})
+            gate.resolve_param_sheet_edits(rows, {"bank_source": "drawn_polygon"}),
+            {"bank_source": "drawn_polygon"})
 
     def test_an_unknown_row_is_never_invented(self) -> None:
         self.assertEqual(

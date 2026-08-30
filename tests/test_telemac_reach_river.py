@@ -232,15 +232,6 @@ def test_the_three_inputs_land_under_the_names_the_worker_reads():
         R.CENTERLINE_DEST, R.BANKS_DEST, R.BED_DEST]
 
 
-def test_a_constant_ribbon_reach_fetches_no_banks():
-    """The ribbon is authored geometry; a bank polygon it never reads is a
-    fetch nobody asked for."""
-    w = _World()
-    out = w.run(bank_source="constant_ribbon")
-    assert [row["dest"] for row in out["inputs"]] == [R.CENTERLINE_DEST, R.BED_DEST]
-    assert not [c for c in w.calls if c[0] == "banks"]
-
-
 def test_an_empty_bank_answer_is_STAGED_not_omitted():
     """"No NHDArea polygon covers this reach" is the answer the worker's
     banks-unavailable gate is built to raise. A missing FILE is a staging

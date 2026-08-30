@@ -520,14 +520,14 @@ def test_a_retryable_gate_propagates_so_its_suggestions_survive(tmp_path, monkey
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
     from trid3nt_server.workflows.telemac.steps import deck as deck_steps
     from trid3nt_server.workflows.telemac.steps.errors import (
-        TelemacBanksUnavailableError,
+        TelemacReachBanksUnmappedError,
     )
 
     async def _gate(**_kw):
-        raise TelemacBanksUnavailableError(60.0)
+        raise TelemacReachBanksUnmappedError()
 
     captured: dict = {}
-    with pytest.raises(TelemacBanksUnavailableError) as ei:
+    with pytest.raises(TelemacReachBanksUnmappedError) as ei:
         _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
                   overrides=[patch.object(solve_steps, "solve_reach", _gate)])
     assert ei.value.retryable is True and ei.value.suggestions
