@@ -2638,3 +2638,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   membership. river_dye declares (unstructured_tri) - the box mesh
   refuses; agitation declares (structured_grid, unstructured_tri) -
   the artemis BYO rematch stands proven.
+
+- ACCEPTS RULED + THREE IMPLEMENTATION STOPS (NATE 2026-08-29):
+  Compatible GENERALIZES to ACCEPTS - the role-keyed supply contract
+  in declarations.py (Accepts(mesh=("unstructured_tri",),
+  release=("point",), ...)); per-role absence REFUSES supply for that
+  role; rows only for TESTED paths (banks lands WITH the
+  geometry-by-name seam's tests); reads as prose. graded_cells DROPS
+  from MeshKind + the hecras requirement row + hecras_rog mode (same
+  dead-residue class as schism/swan; HEC-RAS brings its vocabulary
+  back at rung 5). EMPTY Accepts() REFUSES AT IMPORT (authored
+  nonsense; absence is the one no-supply spelling). ONE HOME: the
+  REGISTRY - the door looks the contract up from the registered
+  workflow by tool name (no new seam); the direct declarations-module
+  import goes.
