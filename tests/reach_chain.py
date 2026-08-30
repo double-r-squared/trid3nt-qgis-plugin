@@ -25,6 +25,17 @@ BANKS = {"type": "Polygon", "coordinates": [
     [[-124.20, 40.4970], [-124.00, 40.4970], [-124.00, 40.5030],
      [-124.20, 40.5030], [-124.20, 40.4970]]]}
 
+#: Mapped water that covers only the WEST half of the stretch, and mapped water
+#: that covers none of it. NHDArea maps a surface only where the channel is wide
+#: enough to have two banks, so both are real answers about a real river rather
+#: than fetch failures - and the coverage measurement is what tells them apart.
+BANKS_HALF = {"type": "Polygon", "coordinates": [
+    [[-124.20, 40.4970], [-124.10, 40.4970], [-124.10, 40.5030],
+     [-124.20, 40.5030], [-124.20, 40.4970]]]}
+BANKS_ELSEWHERE = {"type": "Polygon", "coordinates": [
+    [[-123.50, 40.4970], [-123.40, 40.4970], [-123.40, 40.5030],
+     [-123.50, 40.5030], [-123.50, 40.4970]]]}
+
 CENTERLINE_BBOX = [-124.16, 40.50, -124.04, 40.50]
 
 
@@ -40,17 +51,20 @@ def _layer(uri: str, name: str, bbox: list[float] | None) -> LayerURI:
                     style_preset="nhd_waterbodies", role="context", bbox=bbox)
 
 
-def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None) -> None:
+def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
+                        banks: dict[str, Any] | None = None) -> None:
     """Answer the chain's two fetches from local files, recording what was asked.
 
     The section tool writes its own artifact, so the output directory is pinned to
-    ``tmp_path`` for the whole chain.
+    ``tmp_path`` for the whole chain. ``banks`` names WHAT the water fetch returns,
+    so a caller can ask the chain a reach the mapped polygons only partly cover -
+    or do not cover at all.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
 
     seen = captured if captured is not None else {}
     centerline_uri = _write(tmp_path, "centerline.geojson", CENTERLINE)
-    banks_uri = _write(tmp_path, "banks.geojson", BANKS)
+    banks_uri = _write(tmp_path, "banks.geojson", banks or BANKS)
 
     def _navigate(*, seed_point=None, comid=None, direction="DM",
                   distance_km=50.0, **_kw):

@@ -63,11 +63,22 @@ class DATA:
                       direction="DM",
                       distance_km=P.reach_length_km)
     ends = tool("endpoints", line=centerline)
-    # The banks are fetched over the CENTERLINE's own extent: the reach the run
-    # models is what decides which mapped water polygons matter, and a box drawn
-    # anywhere else would answer for a different stretch.
-    banks = tool("fetch_nhd_area_water", bbox=Ref("centerline.bbox"))
-    reach_polygon = tool("section", polygon=banks, between=Ref("ends.between"))
+    # The QUERY WINDOW the banks are asked for: the centerline's own extent grown
+    # by a stated distance, because the water that belongs to this reach reaches
+    # past the line - a far channel behind a mid-river island is three km off it
+    # and is still the same river. The pad widens the QUESTION, never the meshed
+    # domain: what returns is real mapped water, and the section cut below keeps
+    # only the stretch between the reach's two ends.
+    window = tool("compute_layer_bounds", layer_uri=centerline, pad_m=3000.0,
+                  fit_map=False)
+    banks = tool("fetch_nhd_area_water", bbox=Ref("window.bbox"))
+    # HOW MUCH of the reach the returned polygons actually map, measured before
+    # the cut so an unmapped reach refuses on its own cause instead of arriving
+    # at the section as an empty geometry.
+    mapped_banks = tool(f"{_STEPS}.reach.measure_bank_coverage",
+                        banks=banks, centerline=centerline)
+    reach_polygon = tool("section", polygon=mapped_banks,
+                         between=Ref("ends.between"))
 
 
 # -- the binding blocks --------------------------------------------------- #
@@ -96,7 +107,7 @@ MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
     extent=Ref("reach_polygon"),
-    refine={"edge_length": P.mesh_resolution_m},
+    refine={"resolution_m": P.mesh_resolution_m},
 )
 
 

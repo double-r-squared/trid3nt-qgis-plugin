@@ -77,7 +77,12 @@ COARSE = LiveRun(
         "outfall_coords": OUTFALL_LONLAT,
         "reach_length_km": 0.5,
         "sim_duration_s": 600.0,
-        "mesh_resolution_m": 100.0,
+        # The edge this canary has always MESHED at. It used to be reached by
+        # naming 100 m and letting the mesher's own 40 m floor win; the declared
+        # resolution is now the uniform edge itself, so the number that was doing
+        # the work is the number the declaration states. A reach channel is ~150 m
+        # wide here, and 100 m edges triangulate it into nothing.
+        "mesh_resolution_m": 40.0,
         "discharge_m3s": 60.0,
         "input_mode": "auto",
     },

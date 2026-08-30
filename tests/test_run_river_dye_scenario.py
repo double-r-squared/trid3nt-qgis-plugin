@@ -294,13 +294,15 @@ def test_the_declared_data_is_the_chain_in_class_body_order():
 
     rows = data_rows(DATA)
     # CLASS-BODY ORDER is the declaration's own, and the chain reads down it.
-    assert [d.name for d in rows] == ["rivers", "centerline", "ends", "banks",
-                                      "reach_polygon", "rain"]
+    assert [d.name for d in rows] == ["rivers", "centerline", "ends", "window",
+                                      "banks", "mapped_banks", "reach_polygon",
+                                      "rain"]
     by_name = {d.name: d for d in rows}
     # Row-to-row dataflow written as a plain identifier binds as the same
     # late-bound ref an out-of-body DATA.<row> yields.
     assert by_name["ends"].producer.kwargs["line"] == DataRef("centerline")
-    assert by_name["reach_polygon"].producer.kwargs["polygon"] == DataRef("banks")
+    assert by_name["reach_polygon"].producer.kwargs["polygon"] == DataRef(
+        "mapped_banks")
     assert DATA.rivers == DataRef("rivers")
     # None of these is superseded by a supplied artifact.
     assert all(d.producer.supplied_uri is None for d in rows)
@@ -438,11 +440,12 @@ def _install_step_mocks(captured: dict):
     ]
 
 
-def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), **kwargs):
+def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), banks=None,
+              **kwargs):
     from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    install_reach_chain(monkeypatch, tmp_path, captured)
+    install_reach_chain(monkeypatch, tmp_path, captured, banks=banks)
     mocks = [*_install_step_mocks(captured), *overrides]
     for m in mocks:
         m.start()
@@ -531,6 +534,60 @@ def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
                     overrides=[patch.object(solve_steps, "solve_reach", _boom)])
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
+
+
+# --- the banks WINDOW, and the coverage it is judged by ---------------------- #
+def test_the_banks_are_queried_over_the_centerline_padded_by_a_stated_distance(
+        tmp_path, monkeypatch):
+    """The query window has to reach a far channel behind a mid-river island, so
+    it is the centerline's extent grown by a DISTANCE - three kilometres, written
+    on the row - and not the line's own tight bounds."""
+    from tests.reach_chain import CENTERLINE_BBOX
+
+    captured: dict = {}
+    _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho")
+
+    asked = captured["banks_bbox"]
+    # 3 km of latitude in degrees. The straight test stretch has zero height, so
+    # the tool's own degenerate-layer floor (0.001 deg) rides under the pad; the
+    # window still reaches the full stated distance on every side.
+    dy = 3000.0 / 111_320.0
+    floor = 0.001
+    assert dy <= (CENTERLINE_BBOX[1] - asked[1]) <= dy + floor
+    assert dy <= (asked[3] - CENTERLINE_BBOX[3]) <= dy + floor
+    # The pad is a DISTANCE: the same 3 km costs more degrees of longitude at
+    # 40.5 N than it does of latitude.
+    assert (CENTERLINE_BBOX[0] - asked[0]) > (asked[3] - CENTERLINE_BBOX[3])
+    assert (asked[2] - CENTERLINE_BBOX[2]) > (asked[3] - CENTERLINE_BBOX[3])
+
+
+def test_a_reach_no_polygon_maps_refuses_as_unmapped_not_as_an_empty_section(
+        tmp_path, monkeypatch):
+    """The measurement sits between the fetch and the cut, so a reach nothing maps
+    fails on its own cause instead of arriving at the section as empty geometry."""
+    from tests.reach_chain import BANKS_ELSEWHERE
+
+    captured: dict = {}
+    out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+                    banks=BANKS_ELSEWHERE)
+    assert out["status"] == "error"
+    assert out["error_code"] == "REACH_BANKS_UNMAPPED"
+
+
+def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
+        tmp_path, monkeypatch):
+    """NO invented threshold: above zero the run proceeds, carrying the MEASURED
+    fraction so a reader is never left assuming the flowline-only stretches were
+    modelled."""
+    from tests.reach_chain import BANKS_HALF
+
+    captured: dict = {}
+    peak = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+                     banks=BANKS_HALF)
+    assert isinstance(peak, TelemacDyeLayerURI)
+    note = peak.fallback_note or ""
+    assert "50.0%" in note
+    assert "flowline" in note
 
 
 def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():

@@ -28,10 +28,10 @@ import re
 import tempfile
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step, user_input
+from trid3nt_server.workflows.lib import Step, journal_note, user_input
 from trid3nt_server.workflows.shared.layer_fields import layer_field
 
-from .errors import TelemacDyeScenarioError
+from .errors import ReachBanksUnmapped, TelemacDyeScenarioError
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.reach")
 
@@ -48,6 +48,7 @@ __all__ = [
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
     "geocode_reach",
+    "measure_bank_coverage",
     "named_watercourse",
     "reach_seed",
     "resolve_reach_river",
@@ -484,6 +485,69 @@ def _stage_geojson(features: list[dict[str, Any]], *, run_tag: str,
     _get_s3_client().put_object(Bucket=cache_bucket, Key=key, Body=body,
                                 ContentType="application/geo+json")
     return f"s3://{cache_bucket}/{key}", hashlib.sha256(body).hexdigest()
+
+
+async def measure_bank_coverage(*, banks: Any, centerline: Any) -> Any:
+    """MEASURE how much of the reach the fetched water polygons map -> the banks.
+
+    The gate between the banks fetch and the section cut, so an unmapped reach
+    fails on its own cause instead of arriving at the cut as an empty section. A
+    pass-through: it hands back the banks it measured, which is what puts it in
+    the chain rather than beside it.
+
+    NO threshold. Zero coverage is the terminal refusal - none of this reach is
+    polygon-mapped and no rung below can invent a shape for it. Anything above
+    zero PROCEEDS with the measured fraction journalled, because the pieces NHD
+    maps only as flowlines are exactly the ones a reader would otherwise assume
+    were modelled.
+    """
+    fraction = await asyncio.to_thread(_covered_fraction, banks, centerline)
+    if fraction <= 0.0:
+        raise ReachBanksUnmapped()
+    journal_note(
+        f"reach banks: {fraction:.1%} of the modelled centreline is covered by "
+        "mapped water polygons; any stretch NHD maps only as a flowline carries "
+        "no surveyed width and is not in the domain this run solved over.")
+    return banks
+
+
+def _covered_fraction(banks: Any, centerline: Any) -> float:
+    """Fraction of the centreline's LENGTH that lies inside the water polygons.
+
+    Measured in metres on the reach's own UTM zone: a fraction of a degree-space
+    length would weight the two axes differently and read as coverage that
+    depends on latitude.
+    """
+    from pyproj import Transformer
+    from shapely.geometry import shape
+    from shapely.ops import transform as _transform, unary_union
+
+    from trid3nt_server.tools.processing._geometry_common import (
+        source_uri, utm_epsg_for,
+    )
+
+    lines = [shape(f["geometry"]) for f in
+             _read_vector_features(str(source_uri(centerline)))
+             if (f.get("geometry") or {}).get("type") in
+             ("LineString", "MultiLineString")]
+    if not lines:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_DYE_SCENARIO_ERROR",
+            "the reach centreline carries no line geometry, so how much of it is "
+            "polygon-mapped cannot be measured.")
+    line = unary_union(lines)
+    polys = [shape(f["geometry"]).buffer(0) for f in
+             _read_vector_features(str(source_uri(banks)))
+             if (f.get("geometry") or {}).get("type") in ("Polygon", "MultiPolygon")]
+    if not polys:
+        return 0.0
+    epsg = utm_epsg_for(float(line.centroid.x), float(line.centroid.y))
+    to_utm = Transformer.from_crs(4326, epsg, always_xy=True).transform
+    line_m = _transform(to_utm, line)
+    water_m = _transform(to_utm, unary_union(polys))
+    if line_m.length <= 0.0:
+        return 0.0
+    return float(line_m.intersection(water_m).length / line_m.length)
 
 
 def _feature_vertices(feature: dict[str, Any]) -> list[list[float]]:

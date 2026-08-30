@@ -196,6 +196,15 @@ class MeshField:
             return self.default
         if is_late_bound(value):
             return value
+        # A chained row hands over the LAYER its producer returned, so a field
+        # that takes a uri takes that layer too - reduced HERE, once, to the uri
+        # it carries. Refusing the object while accepting its ``.uri`` would make
+        # a chain depend on the author remembering to write it, and letting the
+        # object through would put a model in the recipe the mesh is recorded as.
+        if str in self.types and not isinstance(value, str):
+            uri = getattr(value, "uri", None)
+            if isinstance(uri, str):
+                value = uri
         if self.types and not isinstance(value, self.types):
             names = "/".join(t.__name__ for t in self.types)
             raise MeshToolError(

@@ -51,8 +51,10 @@ class ReachBanksUnmapped(TelemacDyeScenarioError):
             "No mapped water polygon covers this reach, so there is no domain to "
             "mesh. NHDArea maps water surfaces wide enough to have two banks; a "
             "narrow creek is a flowline only, and a flowline is a centreline "
-            "rather than a shape. Draw the reach polygon, name a case layer that "
-            "holds it, or pick a reach with NHDArea coverage.",
+            "rather than a shape. Draw or supply the reach polygon, name a case "
+            "layer that holds it, or pick a reach with mapped water coverage. A "
+            "stream this narrow may also be below the range where a 2D depth-"
+            "averaged solve is the useful answer at all.",
         )
 
 

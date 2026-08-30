@@ -138,6 +138,38 @@ def test_a_polygon_with_no_polyline_sizes_toward_nothing(monkeypatch, tmp_path):
     assert sent["config"]["sizing_coords"] == []
 
 
+@pytest.mark.parametrize("resolution_m", [120.0, 400.0, 1000.0])
+def test_the_declared_resolution_is_the_uniform_base_a_basin_is_meshed_at(
+        monkeypatch, tmp_path, resolution_m):
+    """A polygon interior sizes toward nothing, so the finest edge IS the edge the
+    whole domain gets: the number a template declares reaches the sizing function
+    as the base, and a coarser ask is a coarser mesh rather than a refusal about a
+    ceiling the caller never wrote."""
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build({"extent": json.dumps(_BASIN),
+                "refine": {"resolution_m": resolution_m}})
+    config = sent["config"]
+    assert config["min_edge_length_m"] == pytest.approx(resolution_m)
+    assert config["max_edge_length_m"] == pytest.approx(resolution_m * 10.0)
+    assert config["sizing_coords"] == []
+
+
+def test_neither_knob_declared_keeps_the_shipped_forty_by_four_hundred_band(
+        monkeypatch, tmp_path):
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build({"extent": json.dumps(_BASIN)})
+    assert sent["config"]["min_edge_length_m"] == pytest.approx(40.0)
+    assert sent["config"]["max_edge_length_m"] == pytest.approx(400.0)
+
+
+def test_a_declared_ceiling_is_never_overridden_by_the_multiple(
+        monkeypatch, tmp_path):
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build({"extent": json.dumps(_BASIN),
+                "refine": {"resolution_m": 100.0, "max_el": 250.0}})
+    assert sent["config"]["max_edge_length_m"] == pytest.approx(250.0)
+
+
 def test_the_shoreline_path_is_untouched_by_the_polygon_path(monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build({"extent": _AOI})
@@ -146,6 +178,27 @@ def test_the_shoreline_path_is_untouched_by_the_polygon_path(monkeypatch, tmp_pa
     assert config["domain_geojson"] is None and config["sizing_coords"] == []
     assert tuple(config["bbox"]) == _AOI
     assert sent["shoreline"].endswith("GSHHS_i_L1.shp")
+
+
+def test_the_layer_a_chained_row_produced_enters_as_the_uri_it_carries(
+        monkeypatch, tmp_path):
+    """The section tool returns a LAYER, and the extent field takes it: reduced to
+    its uri at the door, so the recipe records a string a rebuild can re-read
+    rather than a model, and the author never writes ``.uri``."""
+    from trid3nt_contracts.execution import LayerURI
+
+    path = tmp_path / "section.geojson"
+    path.write_text(json.dumps(_BASIN))
+    layer = LayerURI(layer_id="section-1", name="Section of a polygon",
+                     layer_type="vector", uri=str(path),
+                     style_preset="section_polygon", role="primary")
+    spec = validate_spec("om2d", {"extent": layer})
+    assert spec.fields["extent"] == str(path)
+    assert spec.to_json()["extent"] == str(path)
+
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(dict(spec.fields))
+    assert sent["config"]["domain_geojson"] == "/data/domain.geojson"
 
 
 def test_a_polygon_domain_can_come_from_a_file_a_tool_wrote(monkeypatch, tmp_path):

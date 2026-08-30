@@ -72,8 +72,8 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     assert labels[:cut] == ["draw", "reach", "seed", "carrier_discharge"]
     # the whole domain CHAIN is upstream of the physics too - the navigated
     # mainstem, its ends, the mapped banks and the reach cut between them
-    assert keep == frozenset({"rivers", "centerline", "ends", "banks",
-                              "reach_polygon"})
+    assert keep == frozenset({"rivers", "centerline", "ends", "window", "banks",
+                              "mapped_banks", "reach_polygon"})
 
 
 def test_a_mesh_override_cuts_later_than_a_physics_one():
