@@ -45,7 +45,7 @@ def _record(**overrides):
         provenance=[SimpleNamespace(param="discharge_cms", value=12.5,
                                     basis="fetched", note="NWM cycle 2026-08-19T00Z",
                                     real_source="national_water_model")],
-        result=SimpleNamespace(mesh_size_m=30.0, mesh_node_estimate=41000),
+        result=SimpleNamespace(mesh_size_m=30.0),
         wall_seconds=91.4, origin="session",
         executed=["aoi", "deck", "solve"], replayed=[], notes=[],
     )
@@ -80,7 +80,7 @@ def test_the_record_carries_the_answer_the_provenance_the_mesh_and_the_wall_time
                                   "basis": "fetched",
                                   "note": "NWM cycle 2026-08-19T00Z",
                                   "real_source": "national_water_model"}]
-    assert rec["mesh"] == {"mesh_size_m": 30.0, "mesh_node_estimate": 41000}
+    assert rec["mesh"] == {"mesh_size_m": 30.0}
     assert rec["wall_seconds"] == 91.4
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 __all__ = [
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
-    "TelemacReachBanksUnmappedError",
+    "ReachBanksUnmapped",
     "TelemacReachDegenerateError",
     "TelemacReleaseOutsideDomainError",
 ]
@@ -35,34 +35,25 @@ class TelemacDyeScenarioInputError(TelemacDyeScenarioError):
         super().__init__("TELEMAC_DYE_SCENARIO_INPUT_INVALID", message)
 
 
-class TelemacReachBanksUnmappedError(TelemacDyeScenarioError):
-    """No mapped water polygon covers this reach, so it has NO DOMAIN.
+class ReachBanksUnmapped(TelemacDyeScenarioError):
+    """No mapped water polygon covers this reach, so it has NO DOMAIN. TERMINAL.
 
     A reach domain is the real mapped water polygon or nothing: a line has no
     banks, so widening the flowline into a ribbon would answer a question about a
-    shape nobody surveyed. There is no fallback rung to name - what the refusal
-    names instead are the ways a domain can be SUPPLIED, and those ride the
-    tool-retry loop as suggestions.
+    shape nobody surveyed. There is no rung to retry with - the three ways a
+    domain can be SUPPLIED are named in the message, and every one of them is an
+    act outside this call.
     """
-
-    retryable = True
 
     def __init__(self) -> None:
         super().__init__(
             "REACH_BANKS_UNMAPPED",
-            "No mapped water polygon covers this river reach, so there is no "
-            "domain to mesh. NHDArea maps water surfaces wide enough to have two "
-            "banks; a narrow creek is a flowline only, and a flowline is a "
-            "centreline rather than a shape. Nothing here will widen it into an "
-            "assumed ribbon. Draw the water polygon, name a layer this case "
-            "already holds, or pick a reach with mapped coverage.",
+            "No mapped water polygon covers this reach, so there is no domain to "
+            "mesh. NHDArea maps water surfaces wide enough to have two banks; a "
+            "narrow creek is a flowline only, and a flowline is a centreline "
+            "rather than a shape. Draw the reach polygon, name a case layer that "
+            "holds it, or pick a reach with NHDArea coverage.",
         )
-        self.suggestions = [  # type: ignore[attr-defined]
-            "Draw the water polygon on the canvas and supply it as the domain.",
-            "Or name a polygon layer this case already holds (a digitized water "
-            "body, a section cut) as the domain.",
-            "Or name a larger/mapped river reach that has USGS NHDArea coverage.",
-        ]
 
 
 class TelemacReleaseOutsideDomainError(TelemacDyeScenarioError):

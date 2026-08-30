@@ -114,10 +114,7 @@ def build_record(*, run_id: str | None, template: str, engine: str | None,
         "sheet": [_row(row) for row in sheet],
         "answer": {k: _small(v) for k, v in answer.items()},
         "provenance": [_provenance(row) for row in provenance],
-        "mesh": {
-            "mesh_size_m": getattr(result, "mesh_size_m", None),
-            "mesh_node_estimate": getattr(result, "mesh_node_estimate", None),
-        },
+        "mesh": {"mesh_size_m": getattr(result, "mesh_size_m", None)},
         "compute_class": next((r.value for r in sheet
                                if getattr(r, "name", "") == "compute_class"), None),
         "wall_seconds": wall_seconds,

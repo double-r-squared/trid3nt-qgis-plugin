@@ -331,15 +331,15 @@ async def test_a_bug_inside_a_derivation_is_not_swallowed_as_a_dependency_wait()
 def test_the_composites_own_provenance_row_wins():
     from trid3nt_contracts.common import SyntheticInput
 
-    own = SyntheticInput(param="bank_source", value="nhd_area", basis="fetched",
+    own = SyntheticInput(param="bed_source", value="nhd_area", basis="fetched",
                          consequence="physics", note="real NHDArea banks")
-    declared = SyntheticInput(param="bank_source", value="nhd_area",
+    declared = SyntheticInput(param="bed_source", value="nhd_area",
                               basis="default_demo", consequence="scenario",
                               note="declared constant default")
     other = SyntheticInput(param="k1", value=0.3, basis="default_demo",
                            consequence="numerical")
     merged = merge_provenance([own], [declared, other])
-    assert [r.param for r in merged] == ["bank_source", "k1"]
+    assert [r.param for r in merged] == ["bed_source", "k1"]
     assert merged[0].basis == "fetched"
 
 

@@ -340,13 +340,12 @@ def _install_step_mocks(captured: dict):
         captured["seed_uri"] = uri
         return (-114.31, 42.58)  # a mid-reach point on the Snake
 
-    async def _fake_river(*, reach, seed, run_tag, reach_length_km, bank_source,
+    async def _fake_river(*, reach, seed, run_tag, reach_length_km,
                           release=None, nav_direction="DM", with_bed=True):
         # The river fetch itself is exercised against its own fakes in
         # test_telemac_reach_river.py; here it stands in, so this chain test
         # stays about the chain.
         captured["river_reach_km"] = reach_length_km
-        captured["river_bank_source"] = bank_source
         captured["river_release"] = release
         return {
             "inputs": [{"gs_uri": "s3://cache/c.geojson", "dest": "river_centerline.geojson"},
@@ -393,7 +392,7 @@ def _install_step_mocks(captured: dict):
         return [_fake_peak(run_id, reach_name)], {"dye_cmax_mgl": 97.3}
 
     def _fake_publish(raw_peak, run_id, location_name, mesh_meta, substance,
-                      bank_source, synthetic_inputs):
+                      synthetic_inputs):
         captured["published"] = True
         captured["publish_substance"] = substance
         captured["synthetic_inputs"] = synthetic_inputs
@@ -412,7 +411,7 @@ def _install_step_mocks(captured: dict):
                          "product": "analysis_assim", "layer": None}),
         patch.object(solve_steps, "stage_manifest", _fake_stage),
         patch.object(solve_steps, "read_run_metrics",
-                     lambda rid: {"utm_epsg": 32611, "bank_source": "nhd_area"}),
+                     lambda rid: {"utm_epsg": 32611}),
         patch.object(prod_steps, "download_result_selafin",
                      lambda rid: ("/tmp/telemac/does-not-matter.slf", 32611)),
         patch.object(prod_steps, "_publish_peak_layer", _fake_publish),
@@ -521,23 +520,18 @@ def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
 
 
-def test_a_retryable_gate_propagates_so_its_suggestions_survive(tmp_path, monkeypatch):
-    """The banks gate carries .suggestions the adapter harvests off the RAISED
-    exception; flattening it into an envelope destroys that retry channel."""
-    from trid3nt_server.workflows.telemac.steps import solve as solve_steps
-    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
-    from trid3nt_server.workflows.telemac.steps.errors import (
-        TelemacReachBanksUnmappedError,
-    )
+def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
+    """A reach nothing maps has no domain, and no rung to retry with: the refusal
+    names the three ways a domain is SUPPLIED and offers no retry args."""
+    from trid3nt_server.workflows.telemac.steps.errors import ReachBanksUnmapped
 
-    async def _gate(**_kw):
-        raise TelemacReachBanksUnmappedError()
-
-    captured: dict = {}
-    with pytest.raises(TelemacReachBanksUnmappedError) as ei:
-        _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                  overrides=[patch.object(solve_steps, "solve_reach", _gate)])
-    assert ei.value.retryable is True and ei.value.suggestions
+    exc = ReachBanksUnmapped()
+    assert exc.error_code == "REACH_BANKS_UNMAPPED"
+    assert getattr(exc, "retryable", False) is False
+    assert not hasattr(exc, "suggestions")
+    for path in ("Draw the reach polygon", "name a case layer",
+                 "pick a reach with NHDArea coverage"):
+        assert path in str(exc)
 
 
 # ===========================================================================

@@ -36,8 +36,7 @@ _DO_SAG = {"bod_mgl": 20.0, "upstream_do_mgl": 8.0, "saturation_mgl": 9.0,
 #: The sheet both parity cases are written from. Held apart from the expected
 #: deck so the dumper below restates the deck from the ASK rather than from
 #: anything the writer produced.
-_SHEET = {"reach_length_km": 6.0, "channel_width_m": 60.0,
-          "sim_duration_s": 3600.0}
+_SHEET = {"reach_length_km": 6.0, "sim_duration_s": 3600.0}
 
 
 def _mesh_record(*, min_edge_m: float | None = None,
@@ -100,8 +99,6 @@ def _expected_deck(*, mesh_size_m: float, time_step_s: float,
         "seed_lat": 40.5,
         "nav_direction": "DM",
         "distance_km": _SHEET["reach_length_km"],
-        "channel_width_m": _SHEET["channel_width_m"],
-        "bank_source": "nhd_area",
         "bed_source": "cop-dem-glo-30",
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
@@ -174,9 +171,10 @@ async def test_a_refined_mesh_tightens_the_deck_timestep(writer):
                            carrier_discharge=_CARRIER, substance="dye", **_SHEET)
     assert asked["deck"]["time_step_s"] == 0.7
     assert refined["deck"]["time_step_s"] == 0.35
-    # the EDGE the deck records is still the ask - what the mesh was built at is
-    # the mesher's to answer for, and the two are different facts.
-    assert refined["deck"]["mesh_size_m"] == asked["deck"]["mesh_size_m"] == 14.0
+    # DS-3: the EDGE the deck records is the one the mesh was MEASURED at, so the
+    # granularity the run is judged on and the step it is solved at are one fact.
+    assert asked["deck"]["mesh_size_m"] == 14.0
+    assert refined["deck"]["mesh_size_m"] == 7.0
 
 
 # --------------------------------------------------------------------------- #

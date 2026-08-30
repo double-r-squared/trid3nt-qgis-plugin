@@ -177,9 +177,6 @@ PARAMS: tuple[Param, ...] = (
           desc="Tracer diffusivity, which sets lateral plume spread"),
 
     # -- numerics + geometry (the advanced fold) ---------------------------- #
-    Param("channel_width_m", door=doors.CONSTANT, default=60.0, bounds=(10.0, 1500.0),
-          units="m", consequence="numerical",
-          desc="Modeled channel width, used for the mesh node estimate"),
     # THE granularity lever, and always an explicit sheet value: no sizing rung
     # derives an edge from the channel, so the number the run meshes at is either
     # the user's or the labeled default a review can see and change.
@@ -188,10 +185,6 @@ PARAMS: tuple[Param, ...] = (
           desc="Target element edge length the reach is triangulated at; peak "
                "concentration is a resolution-bound class and a coarse mesh reads "
                "it low"),
-    Param("bank_source", door=doors.CONSTANT, default="nhd_area",
-          consequence="scenario",
-          desc="Bank geometry source: nhd_area - the real mapped NHDArea polygon. An "
-               "unmapped reach refuses; there is no assumed-width rung"),
     Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
           units="min", consequence="numerical",
           desc="Result-writing cadence; unset keeps the deck's own graphic period"),

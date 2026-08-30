@@ -17,7 +17,7 @@ from .agitation import (
     write_agitation_deck,
 )
 from .coastal import Coastal, publish_coastal_products, write_coastal_deck
-from .deck import WriteDeck, normalize_bank_source, stage_manifest, write_reach_deck
+from .deck import WriteDeck, stage_manifest, write_reach_deck
 from .open_water import (
     OpenWaterError,
     SolveOpenWater,
@@ -32,7 +32,7 @@ from .open_water import (
     staged_bed_inputs,
 )
 from .errors import (
-    TelemacReachBanksUnmappedError,
+    ReachBanksUnmapped,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
     TelemacReachDegenerateError,
@@ -78,7 +78,6 @@ from .reach import (
     named_watercourse,
     reach_seed,
     slug,
-    suggest_mesh_size_m,
     suggest_time_step_s,
 )
 from .solve import Solve, compute_class, read_run_metrics, solve_reach
@@ -120,7 +119,7 @@ __all__ = [
     "staged_bed_inputs", "solves_on_real_bed", "fetch_domain_bed",
     "great_lake_for", "real_lake_bathy_label",
     "Wave", "write_coastal_deck",
-    "TelemacReachBanksUnmappedError", "TelemacDyeScenarioError",
+    "ReachBanksUnmapped", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
     "TelemacReleaseOutsideDomainError", "WaqtelO2", "WriteDeck",
     "arm_sediment_modules", "classify_substance", "compute_class",
@@ -128,13 +127,13 @@ __all__ = [
     "event_time",
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline", "geocode_reach", "named_watercourse",
-    "normalize_bank_source", "publish_do_products",
+    "publish_do_products",
     "publish_dye_products", "reach_seed", "read_run_metrics",
     "resolve_carrier_discharge", "resolve_gradation", "resolve_rain_forcing",
     "review_resolved_inputs",
     "sanitize_substance", "slug", "solve_reach", "stage_manifest",
     "substance_class",
-    "suggest_mesh_size_m", "suggest_time_step_s", "upstream_do_mgl",
+    "suggest_time_step_s", "upstream_do_mgl",
     "ReachMesh", "build_corridor_mesh",
     "publish_agitation_products",
     "publish_stratified_products",

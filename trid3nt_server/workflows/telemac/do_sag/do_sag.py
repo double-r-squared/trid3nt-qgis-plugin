@@ -83,13 +83,10 @@ DATA = (
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
-#: The reach's own extent and width ride HERE rather than on the mesh ask: the
-#: mesher is handed a measured polygon and has no width to be told, while the deck
-#: still states the stretch it wrote for and the node budget it sized against.
+#: The reach's own extent rides HERE rather than on the mesh ask: the mesher is
+#: handed a measured polygon, while the deck still states the stretch it wrote for.
 PHYSICS = Physics("waqtel_o2",
                   reach_length_km=P.reach_length_km,
-                  channel_width_m=P.channel_width_m,
-                  bank_source=P.bank_source,
                   do_sag_config=Ref("waqtel"),
                   reach_seed_coords=P.outfall_coords,
                   sim_duration_s=P.sim_duration_s,
@@ -124,7 +121,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                  k2_per_day=P.k2_per_day,
                  do_standard_mgl=P.do_standard_mgl).named("waqtel"),
         ReviewResolvedInputs(carrier_discharge=Ref("carrier_discharge"),
-                             bank_source=P.bank_source, workflow=ops.name,
+                             workflow=ops.name,
                              input_mode=RunMode).named("reviewed_discharge"),
         ReachMesh.corridor(mesh=MESH, reach=Ref("reach")).named("corridor_mesh"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
@@ -230,10 +227,7 @@ telemac_do_sag = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=ANSWER,
-    # The mesh row is present only when a sizing rule MOVED the user's explicit
-    # edge length; on an honoured (or absent) override both fields read null.
-    provenance=(("discharge_m3s", "discharge_note"),
-                ("mesh_resolution_m", "mesh_resolution_note")),
+    provenance=(("discharge_m3s", "discharge_note"),),
     # WHERE the sag sits is a local-feature LOCATION and moves with the element
     # that resolves it. The DO minimum itself is a saturated maximum - a
     # converged class - so it carries no label.

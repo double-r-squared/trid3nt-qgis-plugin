@@ -103,27 +103,25 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
 
     The carrier discharge that governs dilution (real NWM streamflow or
     user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
-    the bank geometry the worker sampled, the release point the deck was authored
-    with, and the user's explicit mesh edge length WHEN a sizing rule moved it.
+    the bank geometry the reach was cut from, and the release point the deck was
+    authored with.
     """
-    banks = solve.get("bank_provenance") or "nhd_area"
     return [
         _release_provenance(deck),
         *_rain_provenance(deck),
-        *_mesh_override_provenance(deck),
         SyntheticInput(
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",
             real_source_if_any=discharge.get("real_source"),
             note=discharge.get("note") or "carrier discharge governs dilution/transport"),
         SyntheticInput(
-            param="bank_geometry", value=banks, basis="fetched",
+            param="bank_geometry", value="nhd_area", basis="fetched",
             consequence="physics",
             real_source_if_any="USGS NHDArea water polygons"),
     ]
 
 
-def _honesty_note(location_name: str, substance: str, bank_source: str) -> str:
+def _honesty_note(location_name: str, substance: str) -> str:
     surrogate = ""
     if substance and substance != "dye":
         surrogate = (
@@ -143,7 +141,7 @@ def _honesty_note(location_name: str, substance: str, bank_source: str) -> str:
 
 def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
                         location_name: str, mesh_meta: dict[str, Any],
-                        substance: str, bank_source: str,
+                        substance: str,
                         synthetic_inputs: list[SyntheticInput]) -> TelemacDyeLayerURI:
     """Publish the peak COG through the one styling chokepoint and enrich narration.
 
@@ -151,7 +149,7 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
     the case discover the SELAFIN sibling, and the dispatch-level guardrail owns
     the map honesty.
     """
-    honesty = _honesty_note(location_name, substance, bank_source)
+    honesty = _honesty_note(location_name, substance)
     update = {**mesh_meta, "synthetic_inputs": list(synthetic_inputs)}
     if raw_peak.layer_type != "raster" or not raw_peak.uri.startswith(("gs://", "s3://")):
         return raw_peak.model_copy(update={"fallback_note": honesty, **update})
@@ -323,13 +321,11 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
 
     mesh_meta = {
         "mesh_size_m": deck["mesh_size_m"],
-        "mesh_node_estimate": deck["mesh_node_estimate"],
         "mesh_resolution_label": deck["mesh_resolution_label"],
     }
     peak = await asyncio.to_thread(
         _publish_peak_layer, raw_peak, run_id, deck["location_name"], mesh_meta,
-        substance, solve.get("bank_provenance") or "nhd_area",
-        _provenance(solve, carrier_discharge, deck))
+        substance, _provenance(solve, carrier_discharge, deck))
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry (the whole-run record)
     # plus the SELAFIN mesh entry, and the seam owns publication of the temporal
@@ -366,34 +362,15 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     return peak
 
 
-def _mesh_override_provenance(deck: dict[str, Any]) -> list[SyntheticInput]:
-    """The user's mesh_resolution_m ask, as a row, WHEN a sizing rule moved it.
-
-    A user lever the run quietly overrode is the silent-override class: the mesh
-    was right and the label was a lie. The row appears only when the ask and the
-    built edge differ, so an honoured override adds no noise. ``basis="user"`` -
-    the value came from the caller, the note says what happened to it.
-    """
-    note = deck.get("mesh_resolution_note")
-    if not note:
-        return []
-    return [SyntheticInput(
-        param="mesh_resolution_m", value=deck.get("mesh_resolution_asked_m"),
-        units="m", basis="user", consequence="numerical", note=note)]
-
-
-def _do_sag_provenance(carrier_discharge: dict[str, Any] | None,
-                       deck: dict[str, Any] | None = None) -> list[SyntheticInput]:
+def _do_sag_provenance(carrier_discharge: dict[str, Any] | None) -> list[SyntheticInput]:
     """The carrier discharge governing dilution, as the DO-sag layer's own record.
 
     Mirrors ``_provenance``'s dye row: the layer must carry which cycle it read,
-    never leave the reader to trust an unrecorded "latest". Plus the mesh-override
-    row when a sizing rule moved the user's explicit edge length.
+    never leave the reader to trust an unrecorded "latest".
     """
-    rows = _mesh_override_provenance(deck or {})
     if not carrier_discharge:
-        return rows
-    return rows + [SyntheticInput(
+        return []
+    return [SyntheticInput(
         param="discharge_m3s", value=round(float(carrier_discharge["m3s"]), 1),
         units="m3/s", basis=carrier_discharge.get("basis") or "fetched",
         real_source_if_any=carrier_discharge.get("real_source"),
@@ -434,12 +411,11 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
     raw = layers[0]
     mesh_meta = {
         "mesh_size_m": deck["mesh_size_m"],
-        "mesh_node_estimate": deck["mesh_node_estimate"],
         "mesh_resolution_label": deck["mesh_resolution_label"],
         # The run prefix travels WITH the layer: the caller writes this run's own
         # chart spec + metrics there once the chart has been built.
         "run_id": run_id,
-        "synthetic_inputs": _do_sag_provenance(carrier_discharge, deck),
+        "synthetic_inputs": _do_sag_provenance(carrier_discharge),
     }
     published = raw.model_copy(update=mesh_meta)
     if raw.uri.startswith(("s3://", "gs://")):

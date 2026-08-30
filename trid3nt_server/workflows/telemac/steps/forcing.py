@@ -315,7 +315,7 @@ def CarrierDischarge(*, seed: Any, explicit: Any, event_time: Any = None) -> Ste
                 kwargs={"seed": seed, "explicit": explicit, "event_time": event_time})
 
 
-def ReviewResolvedInputs(*, carrier_discharge: Any, bank_source: Any,  # noqa: N802
+def ReviewResolvedInputs(*, carrier_discharge: Any,  # noqa: N802
                          workflow: str, input_mode: Any) -> Step:
     """Review the values the pipeline RESOLVED, before the expensive solve.
 
@@ -327,14 +327,14 @@ def ReviewResolvedInputs(*, carrier_discharge: Any, bank_source: Any,  # noqa: N
     """
     return Step(runner=f"{_STEPS}.forcing.review_resolved_inputs", stage="gates",
                 self_gating=True,
-                kwargs={"discharge": carrier_discharge, "bank_source": bank_source,
+                kwargs={"discharge": carrier_discharge,
                         "workflow": workflow, "input_mode": input_mode})
 
 
-async def review_resolved_inputs(*, discharge: dict[str, Any], bank_source: Any,
+async def review_resolved_inputs(*, discharge: dict[str, Any],
                                  workflow: str,
                                  input_mode: str | None) -> dict[str, Any]:
-    """Present the RESOLVED carrier discharge + bank source before the solve.
+    """Present the RESOLVED carrier discharge before the expensive solve.
 
     The carrier discharge governs dilution and is the physically dominant
     reviewable input, so ``user_gated`` pauses on it here - after the fetch that
@@ -344,9 +344,6 @@ async def review_resolved_inputs(*, discharge: dict[str, Any], bank_source: Any,
 
     from trid3nt_server.gates.input_review import gate_input_review
 
-    from .deck import normalize_bank_source
-
-    banks = normalize_bank_source(bank_source)
     outcome = await gate_input_review(
         tool_name=workflow, mode=input_mode,
         entries=[
@@ -355,11 +352,6 @@ async def review_resolved_inputs(*, discharge: dict[str, Any], bank_source: Any,
                   real_source_if_any=(None if discharge.get("basis") == "user"
                                       else "NOAA National Water Model streamflow"),
                   note=discharge.get("note") or "carrier discharge governing dilution"),
-            entry(param="bank_source", value=banks, basis="fetched",
-                  consequence="physics",
-                  real_source_if_any="USGS NHDArea mapped water polygons",
-                  note="the real mapped banks; an unmapped reach refuses rather "
-                       "than meshing an assumed width"),
         ],
         params={"discharge_m3s": float(discharge["m3s"])})
     if outcome.cancelled:

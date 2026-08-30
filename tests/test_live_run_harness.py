@@ -97,9 +97,9 @@ _SHEET = {"workflow": "w", "title": "Review", "rows": [
     {"name": "dye_concentration_mgl", "value": 100.0, "units": "mg/L",
      "door": "scenario", "basis": "default_demo", "source_badge": "labeled default",
      "bounds": [0.0, 1000000.0], "advanced": False, "note": ""},
-    {"name": "channel_width_m", "value": 60.0, "units": "m", "door": "constant",
+    {"name": "sim_duration_s", "value": 3600.0, "units": "s", "door": "constant",
      "basis": "default_demo", "source_badge": "labeled default",
-     "bounds": [10.0, 1500.0], "advanced": True, "note": ""},
+     "bounds": [60.0, 864000.0], "advanced": True, "note": ""},
 ]}
 
 
@@ -114,7 +114,7 @@ def test_an_edited_sheet_submits_as_a_revision_and_proceeds():
     assert reply["decision"] == "narrow_scope"
     assert reply["revised_args"] == {"dye_concentration_mgl": 250.0}
     assert [r["name"] for r in ev.form_card["rows"]] == [
-        "dye_concentration_mgl", "channel_width_m"]
+        "dye_concentration_mgl", "sim_duration_s"]
     assert ev.form_card["rows"][1]["advanced"] is True   # the constants fold
 
 

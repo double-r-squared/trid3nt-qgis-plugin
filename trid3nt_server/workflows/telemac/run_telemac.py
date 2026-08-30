@@ -83,7 +83,6 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "edge_max_m",
     "bbox4326",
     "preview_geojson",
-    "bank_source",
     "bank_width_mean_m",
     # The worker's typed banks signal, folded into the completion so run_result
     # carries it: the server turns it into the unmapped-reach refusal.

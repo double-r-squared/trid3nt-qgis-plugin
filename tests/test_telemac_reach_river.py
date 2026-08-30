@@ -108,7 +108,7 @@ class _World:
 
     def run(self, **kw):
         args = {"reach": _REACH, "seed": _SEED, "run_tag": "TAG",
-                "reach_length_km": 1.0, "bank_source": "nhd_area"}
+                "reach_length_km": 1.0}
         args.update(kw)
         with patch.object(R, "registry_fn", self.registry_fn), \
              patch.object(R, "_read_vector_features", self.read_vector), \
@@ -196,7 +196,7 @@ def test_a_FAILED_seed_query_refuses_it_does_not_keep_the_raw_seed():
          pytest.raises(RuntimeError, match="503"):
         asyncio.run(R.resolve_reach_river(
             reach=_REACH, seed=_SEED, run_tag="TAG", reach_length_km=1.0,
-            bank_source="nhd_area"))
+            ))
 
 
 # --------------------------------------------------------------------------- #

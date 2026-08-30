@@ -24,7 +24,7 @@ from trid3nt_server.workflows.lib import Step
 
 from .deck import stage_manifest
 from .errors import (
-    TelemacReachBanksUnmappedError,
+    ReachBanksUnmapped,
     TelemacDyeScenarioError,
     TelemacReachDegenerateError,
 )
@@ -81,7 +81,7 @@ def raise_if_banks_unavailable(metrics: dict[str, Any]) -> None:
     paths rather than an assumed width.
     """
     if str(metrics.get("error_code") or "") == "TELEMAC_BANKS_UNAVAILABLE":
-        raise TelemacReachBanksUnmappedError()
+        raise ReachBanksUnmapped()
 
 
 def raise_if_reach_degenerate(metrics: dict[str, Any]) -> None:
@@ -233,7 +233,6 @@ async def solve_reach(*, deck: dict[str, Any],
         "uri": f"s3://{_get_runs_bucket()}/{batch_run_id}/r2d_river.slf",
         "utm_epsg": int(metrics["utm_epsg"]),
         "metrics": metrics,
-        "bank_provenance": str(metrics.get("bank_source") or "nhd_area"),
     }
 
 

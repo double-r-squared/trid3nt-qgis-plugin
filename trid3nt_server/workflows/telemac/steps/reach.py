@@ -16,9 +16,8 @@ deck writer calls:
   THE VISIBLE RIVER: the centerline this fetches is the layer the canvas shows,
   because it is the geometry the solve is built on.
 
-The mesh autoscaler lives here too: resolution is a USER lever, never a
-hardcoded constant, so ``h`` is always derived from the reach geometry and the
-chosen preset under a node budget.
+The CFL timestep law lives here too: it is coupled to the edge the accepted mesh
+was measured at, so a refined mesh tightens dt without anybody restating it.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ import asyncio
 import logging
 import re
 import tempfile
-from typing import Any, NamedTuple
+from typing import Any
 
 from trid3nt_server.workflows.lib import Step, user_input
 from trid3nt_server.workflows.shared.layer_fields import layer_field
@@ -45,7 +44,6 @@ __all__ = [
     "Geocode",
     "MESH_H_FLOOR_M",
     "MESH_NODE_CAP",
-    "MeshSizing",
     "ReachMesh",
     "ReachSeed",
     "build_corridor_mesh",
@@ -57,7 +55,6 @@ __all__ = [
     "reach_seed",
     "resolve_reach_river",
     "slug",
-    "suggest_mesh_size_m",
     "suggest_time_step_s",
 ]
 
@@ -69,22 +66,16 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 DEFAULT_RIVER_AOI_HALF_DEG: float = 0.06
 
 # --------------------------------------------------------------------------- #
-# Mesh granularity BOUNDS. The edge length ``h`` is an explicit sheet value; over a
-# reach of length L and width W two constraints bound what it may become:
-#   (1) ACROSS-CHANNEL RESOLUTION: the plume must be resolved across the channel,
-#       so h <= W / 2. The dominant constraint for a narrow reach.
-#   (2) NODE BUDGET: a triangulated ribbon of area A has ~A/(k*h^2) nodes; cap it
-#       so a long reach cannot explode the solve -> h >= sqrt(A/(k*NODE_CAP)).
-# Either move contradicts the ask and is narrated on the provenance row.
+# Mesh granularity BOUNDS. The edge length ``h`` is an explicit sheet value; what
+# a run is judged on is the edge the ACCEPTED mesh was measured at, so nothing
+# here derives one from a channel width nobody surveyed.
 # --------------------------------------------------------------------------- #
-#: Node ceiling for a single local-docker TELEMAC reach (keeps a solve to minutes).
-MESH_NODE_CAP: int = 60000
-#: Triangulated-ribbon node density (nodes ~= area / (k * h^2)). Calibrated on two
-#: live meshes of the 8 km x 60 m Snake reach (h=20 -> 3011 nodes; h=10 -> 10230),
-#: so the node estimate tracks a built mesh within ~15%.
-_MESH_NODE_K: float = 0.43
 #: Absolute gmsh edge-length floor (below it quality + solve cost degrade).
 MESH_H_FLOOR_M: float = 3.0
+#: Node ceiling for a single local-docker TELEMAC reach. It bounds how long the
+#: dispatcher WAITS - the worst case it sizes the wait against - and sizes no mesh:
+#: the edge a run meshes at is the explicit sheet value the mesher was handed.
+MESH_NODE_CAP: int = 60000
 #: The timestep MUST be coupled to the edge length or the solve diverges (CFL).
 #: dt = TIMESTEP_REF_S * min(1, h / MESH_TIMESTEP_REF_M), anchored at h=20 -> 1 s
 #: so the law passes through both live-proven-stable points (20, 1.0) and
@@ -124,65 +115,6 @@ def estimate_telemac_solve_seconds(
     steps = max(float(sim_duration_s), 0.0) / max(float(time_step_s), 1e-6)
     est = max(int(npoin), 0) * steps / _TELEMAC_NODE_STEPS_PER_S
     return round(est + _TELEMAC_SOLVE_OVERHEAD_S, 1)
-
-
-def _estimate_mesh_nodes(reach_length_km: float, channel_width_m: float, h: float) -> int:
-    area = max(reach_length_km, 0.0) * 1000.0 * max(channel_width_m, 0.0)
-    if h <= 0.0 or area <= 0.0:
-        return 0
-    return int(round(area / (_MESH_NODE_K * h * h)))
-
-
-class MeshSizing(NamedTuple):
-    """The chosen edge length, its node estimate, its label, and any OVERRIDE note.
-
-    ``cap_note`` is populated only when the user's own explicit ``mesh_resolution_m``
-    was moved: a lever the run silently ignored is the dishonest case, so the note
-    is what the provenance row carries. ``None`` means the ask stood as asked.
-    """
-
-    mesh_size_m: float
-    node_estimate: int
-    label: str
-    cap_note: str | None = None
-
-
-def suggest_mesh_size_m(
-    reach_length_km: float,
-    channel_width_m: float,
-    edge_length_m: float,
-) -> MeshSizing:
-    """Bound the ASKED edge length ``h``, and say so when the ask was moved.
-
-    The edge is always an explicit sheet value - nothing here derives one from the
-    channel - so this only BOUNDS it: raised by the node budget, lowered by the
-    >= 2-cells-across-the-channel rule. Either move contradicts what the user asked
-    for, so both are narrated: the label carries it for the layer, ``cap_note`` for
-    the provenance row.
-    """
-    L = max(float(reach_length_km), 0.0)
-    W = max(float(channel_width_m), 1.0)
-
-    area = L * 1000.0 * W
-    budget_floor = ((area / (_MESH_NODE_K * MESH_NODE_CAP)) ** 0.5
-                    if area > 0 else MESH_H_FLOOR_M)
-
-    asked = float(edge_length_m)
-    h = max(asked, MESH_H_FLOOR_M, budget_floor)
-    h = min(h, W / 2.0)
-    label = f"{asked:.3g} m"
-
-    cap_note = None
-    if h > asked:
-        label += f" -> {h:.3g} m (budget-clamped)"
-        cap_note = (f"mesh_resolution_m {asked:g} RAISED to {round(h, 3):g} m by the "
-                    f"node budget ({MESH_NODE_CAP} nodes over {L:g} km x {W:g} m)")
-    elif h < asked:
-        label += f" -> {h:.3g} m (width-capped)"
-        cap_note = (f"mesh_resolution_m {asked:g} CAPPED to {round(h, 3):g} m by the "
-                    f"channel-width rule (width {W:g} m / 2)")
-
-    return MeshSizing(round(h, 3), _estimate_mesh_nodes(L, W, h), label, cap_note)
 
 
 # --------------------------------------------------------------------------- #
@@ -692,7 +624,6 @@ def _lonlat_extent(features: list[dict[str, Any]]) -> tuple[float, float, float,
 
 async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
                               run_tag: str, reach_length_km: float,
-                              bank_source: str,
                               release: tuple[float, float] | None = None,
                               nav_direction: str = "DM",
                               with_bed: bool = True) -> dict[str, Any]:
@@ -743,24 +674,22 @@ async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
         "bed_source": None,
     }
 
-    if str(bank_source) == "nhd_area":
-        banks_layer = await call_registry_tool(
-            _tool("fetch_nhd_area_water"),
-            bbox=[round(min_lon - _BANKS_PAD_DEG, 6), round(min_lat - _BANKS_PAD_DEG, 6),
-                  round(max_lon + _BANKS_PAD_DEG, 6), round(max_lat + _BANKS_PAD_DEG, 6)],
-            max_records=200,
-            purpose="the river banks")
-        bank_features = await asyncio.to_thread(
-            _read_vector_features, str(layer_field(banks_layer, "uri")))
-        # An EMPTY bank layer is staged as an empty collection rather than left
-        # out: "no NHDArea polygon covers this reach" is the answer the worker's
-        # banks-unavailable gate is built to raise, and a MISSING file would read
-        # as a staging failure instead.
-        banks_stage, _sha = await asyncio.to_thread(
-            _stage_geojson, bank_features, run_tag=run_tag, dest=BANKS_DEST)
-        inputs.append({"gs_uri": banks_stage, "dest": BANKS_DEST})
-        provenance["banks_uri"] = str(layer_field(banks_layer, "uri"))
-        provenance["banks_features"] = len(bank_features)
+    banks_layer = await call_registry_tool(
+        _tool("fetch_nhd_area_water"),
+        bbox=[round(min_lon - _BANKS_PAD_DEG, 6), round(min_lat - _BANKS_PAD_DEG, 6),
+              round(max_lon + _BANKS_PAD_DEG, 6), round(max_lat + _BANKS_PAD_DEG, 6)],
+        max_records=200,
+        purpose="the river banks")
+    bank_features = await asyncio.to_thread(
+        _read_vector_features, str(layer_field(banks_layer, "uri")))
+    # An EMPTY bank layer is staged as an empty collection rather than left out:
+    # "no NHDArea polygon covers this reach" is the answer the unmapped-reach
+    # refusal is built to raise, and a MISSING file would read as a staging failure.
+    banks_stage, _sha = await asyncio.to_thread(
+        _stage_geojson, bank_features, run_tag=run_tag, dest=BANKS_DEST)
+    inputs.append({"gs_uri": banks_stage, "dest": BANKS_DEST})
+    provenance["banks_uri"] = str(layer_field(banks_layer, "uri"))
+    provenance["banks_features"] = len(bank_features)
 
     if with_bed:
         bed = await resolve_reach_bed(

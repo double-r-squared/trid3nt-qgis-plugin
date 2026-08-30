@@ -121,11 +121,11 @@ class ParamSheetEditTests(unittest.TestCase):
 
     def test_a_text_edit_travels_verbatim(self) -> None:
         rows = gate.parse_param_sheet(_sheet_payload(rows=[
-            {"name": "bank_source", "value": "nhd_area", "door": "constant",
+            {"name": "runoff_path", "value": "nhd_area", "door": "constant",
              "basis": "default_demo"}])).rows
         self.assertEqual(
-            gate.resolve_param_sheet_edits(rows, {"bank_source": "drawn_polygon"}),
-            {"bank_source": "drawn_polygon"})
+            gate.resolve_param_sheet_edits(rows, {"runoff_path": "drawn_polygon"}),
+            {"runoff_path": "drawn_polygon"})
 
     def test_an_unknown_row_is_never_invented(self) -> None:
         self.assertEqual(

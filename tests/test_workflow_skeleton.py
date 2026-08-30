@@ -552,17 +552,16 @@ def test_the_deck_the_template_authors_reads_the_declared_mesh_fields(
 
 
 def test_the_reach_templates_carry_the_reach_shape_into_the_deck():
-    """The stretch, its width and its bank source still reach the reach writer.
+    """The stretch still reaches the reach writer, off the physics block.
 
-    They ride the physics block rather than the mesh ask: the mesher is handed a
-    polygon the chain measured and has no width to be told, while the deck still
-    states the stretch it wrote for."""
+    It rides the physics block rather than the mesh ask: the mesher is handed a
+    polygon the chain measured, while the deck still states the stretch it wrote
+    for."""
     module = _template("trid3nt_server.workflows.telemac.river_dye.river_dye")
     workflow = module.telemac_river_dye.workflow
     deck = [n for n in workflow.plan_decl(workflow)
             if getattr(n, "stage", "") == "author"][0]
-    for field in ("reach_length_km", "channel_width_m", "bank_source",
-                  "mesh_resolution_m"):
+    for field in ("reach_length_km", "mesh_resolution_m"):
         assert field in deck.kwargs
     assert deck.kwargs["reach"] == Ref("reach")
 

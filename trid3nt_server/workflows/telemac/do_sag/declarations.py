@@ -67,9 +67,6 @@ PARAMS: tuple[Param, ...] = (
           user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
           desc="DO carried in at the top of the reach; derived as saturation unless supplied"),
 
-    Param("channel_width_m", door=doors.CONSTANT, default=60.0, bounds=(1.0, 5000.0),
-          units="m", consequence="numerical",
-          desc="Modeled channel width, used for the mesh node estimate"),
     Param("sim_duration_s", door=doors.CONSTANT, default=10800.0,
           bounds=(60.0, 864000.0), units="s", consequence="numerical",
           desc="Simulated time to reach the steady-state sag"),
@@ -81,10 +78,6 @@ PARAMS: tuple[Param, ...] = (
           desc="Target element edge length the reach is triangulated at; where the "
                "sag bottoms out is a local feature and moves with the element that "
                "resolves it"),
-    Param("bank_source", door=doors.CONSTANT, default="nhd_area",
-          consequence="scenario",
-          desc="Bank geometry source: nhd_area - the real mapped water polygon. An "
-               "unmapped reach refuses; there is no assumed-width rung"),
     Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
           units="min", consequence="numerical",
           desc="Result-writing cadence; unset keeps the deck's own graphic period"),

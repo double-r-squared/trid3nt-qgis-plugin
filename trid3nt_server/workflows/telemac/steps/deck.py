@@ -22,9 +22,9 @@ from trid3nt_server.workflows.lib import Step
 
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 from .reach import (
+    MESH_H_FLOOR_M,
     coerce_lonlat_point,
     resolve_reach_river,
-    suggest_mesh_size_m,
     suggest_time_step_s,
 )
 from .substance import (
@@ -37,7 +37,7 @@ from .substance import (
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.deck")
 
-__all__ = ["WriteDeck", "normalize_bank_source", "stage_manifest", "write_reach_deck"]
+__all__ = ["WriteDeck", "stage_manifest", "write_reach_deck"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
@@ -49,33 +49,6 @@ _BEDLOAD_FORMULAE = (1, 2, 7)
 #: 2 = Chezy, 3 = Strickler, 4 = Manning.
 _FRICTION_LAWS = (2, 3, 4)
 _DREDGE_MODES = ("scheduled", "criterion")
-
-
-#: The ONE bank source, plus the spellings it answers to. A reach domain is the
-#: REAL mapped water polygon or it is a typed refusal; there is no assumed-width
-#: rung to name, so anything else REFUSES rather than canonicalizing.
-_BANK_SOURCES: dict[str, tuple[str, ...]] = {
-    "nhd_area": ("nhd_area", "nhdarea", "nhd", "auto"),
-}
-
-
-def normalize_bank_source(value: Any) -> str:
-    """Coerce a bank_source to the closed set {nhd_area}.
-
-    Absent takes the declared default; a known synonym canonicalizes; anything
-    else is a typed refusal. A width is not a bank: a reach whose banks nothing
-    maps has no domain, and the refusal names the supply paths instead.
-    """
-    if value is None or not str(value).strip():
-        return "nhd_area"
-    v = str(value).strip().lower().replace("-", "_")
-    for canonical, spellings in _BANK_SOURCES.items():
-        if v in spellings:
-            return canonical
-    raise TelemacDyeScenarioInputError(
-        f"bank_source {value!r} is not the one source a reach domain is cut from: "
-        "'nhd_area' (the real mapped NHDArea water polygon). A reach whose banks "
-        "nothing maps has no domain - supply one, or name a covered reach.")
 
 
 def stage_manifest(reach: dict[str, Any], run_tag: str, *,
@@ -325,14 +298,12 @@ async def write_reach_deck(
     reach_seed_coords: Any = None,
     substance: str = "dye",
     reach_length_km: float = 6.0,
-    channel_width_m: float = 60.0,
     sim_duration_s: float = 3600.0,
     spill_fraction: float = 0.25,
     spill_duration_s: float = 300.0,
     dye_concentration_mgl: float = 100.0,
     source_q_m3s: float = 8.0,
     mesh_resolution_m: float = 14.0,
-    bank_source: str = "nhd_area",
     output_interval_min: float | None = None,
     wind_speed_mps: float = 0.0,
     wind_direction_deg: float = 0.0,
@@ -377,17 +348,19 @@ async def write_reach_deck(
     seed_pair = coerce_lonlat_point(reach_seed_coords)
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
 
-    sizing = suggest_mesh_size_m(
-        reach_length_km=reach_length_km, channel_width_m=channel_width_m,
-        edge_length_m=mesh_resolution_m)
-    mesh_size_m = sizing.mesh_size_m
-    mesh_node_estimate = sizing.node_estimate
-    mesh_resolution_label = sizing.label
+    # The granularity the deck records is the one the ACCEPTED mesh was built at,
+    # measured on its own cells; the asked edge stands only until a mesh exists to
+    # measure. Nothing here re-derives an edge from a channel width nobody surveyed.
+    measured = mesh.get("min_edge_m")
+    mesh_size_m = round(max(float(measured if measured is not None
+                                  else mesh_resolution_m), MESH_H_FLOOR_M), 3)
+    mesh_resolution_label = (
+        f"{mesh_size_m:.3g} m measured minimum edge over "
+        f"{mesh.get('element_count') or 0} elements" if measured is not None
+        else f"{mesh_size_m:.3g} m asked edge (mesh unmeasured)")
     time_step_s = suggest_time_step_s(mesh_size_m, mesh=mesh.get("artifact"))
-    logger.info("telemac mesh granularity: %s -> h=%.3g m (~%d nodes, dt=%.3g s, "
-                "reach=%.3g km x %.3g m)%s", mesh_resolution_label, mesh_size_m,
-                mesh_node_estimate, time_step_s, reach_length_km, channel_width_m,
-                f" [{sizing.cap_note}]" if sizing.cap_note else "")
+    logger.info("telemac mesh granularity: %s -> h=%.3g m (dt=%.3g s, reach=%.3g km)",
+                mesh_resolution_label, mesh_size_m, time_step_s, reach_length_km)
 
     substance_class, _payload, erodible, class_block = _substance_block(
         substance, erodible_bed=erodible_bed, sediment_gradation=sediment_gradation,
@@ -409,7 +382,6 @@ async def write_reach_deck(
     river = await resolve_reach_river(
         reach=reach, seed=seed, run_tag=run_tag,
         reach_length_km=float(reach_length_km),
-        bank_source=normalize_bank_source(bank_source),
         release=seed_pair)
     logger.info("telemac reach river: seed=(%.5f,%.5f) rung=%s comids=%s "
                 "centerline=%s bed=%s",
@@ -456,8 +428,6 @@ async def write_reach_deck(
            if rain_mm_day is not None else {}),
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
-        "channel_width_m": float(channel_width_m),
-        "bank_source": normalize_bank_source(bank_source),
         # WHICH dataset the staged bed came from. The worker opens a file and
         # cannot know, so the label travels with the file - otherwise the run's
         # own metrics could not tell a GLO-30 bed from the 3DEP one the ladder
@@ -493,12 +463,7 @@ async def write_reach_deck(
         "reach_name": reach["slug"],
         "location_name": reach["name"],
         "mesh_size_m": mesh_size_m,
-        "mesh_node_estimate": mesh_node_estimate,
         "mesh_resolution_label": mesh_resolution_label,
-        # Present ONLY when the user's own explicit mesh_resolution_m was moved by
-        # a sizing rule; the products turn it into a provenance row so an
-        # overridden lever is never silently overridden.
-        "mesh_resolution_note": sizing.cap_note,
         "mesh_resolution_asked_m": mesh_resolution_m,
         "time_step_s": time_step_s,
         "seed_source": seed.get("source"),

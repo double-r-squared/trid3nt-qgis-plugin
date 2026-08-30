@@ -97,13 +97,11 @@ DATA = (
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
-#: The reach's own extent and width ride HERE rather than on the mesh ask: the
-#: mesher is handed a measured polygon and has no width to be told, while the deck
-#: still states the stretch it wrote for and the node budget it sized against.
+#: The reach's own extent rides HERE rather than on the mesh ask: the mesher is
+#: handed a measured polygon, while the deck still states the stretch it wrote for.
 PHYSICS = Physics(
     "tracer",
-    reach_length_km=P.reach_length_km, channel_width_m=P.channel_width_m,
-    bank_source=P.bank_source,
+    reach_length_km=P.reach_length_km,
     substance=P.substance, release_coords=P.release_coords,
     reach_seed_coords=P.reach_seed_coords, sim_duration_s=P.sim_duration_s,
     spill_fraction=P.spill_fraction, spill_duration_s=P.spill_duration_s,
@@ -166,8 +164,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
 #: recomputing them from the raster.
 ANSWER = ("dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
           "max_deposition_mm", "max_scour_mm", "deposited_mass_kg",
-          "deposit_fraction", "sediment_surface_d50_range_um", "mesh_size_m",
-          "mesh_node_estimate")
+          "deposit_fraction", "sediment_surface_d50_range_um", "mesh_size_m")
 
 
 def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
@@ -253,10 +250,7 @@ telemac_river_dye = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=ANSWER,
-    # The mesh row is present only when a sizing rule MOVED the user's explicit
-    # edge length; on an honoured (or absent) override both fields read null.
-    provenance=(("discharge_m3s", "discharge_note"),
-                ("mesh_resolution_m", "mesh_resolution_note")),
+    provenance=(("discharge_m3s", "discharge_note"),),
     # The dye maximum is the canonical peak class: measured 6x LOW on the coarse
     # mesh, because a concentration peak lives inside one element. How far the
     # plume REACHED is a front location and moves with it.
