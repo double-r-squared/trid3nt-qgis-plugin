@@ -67,7 +67,7 @@ def test_corpus_yaml_present_and_routes():
 # The DECLARATION: the plan value and the wire-signature door contract.
 # ===========================================================================
 def test_the_declared_plan_is_the_rain_on_grid_sequence():
-    """form -> draw -> aoi -> watershed_mesh -> infiltration -> deck -> solve ->
+    """form -> draw -> aoi -> mesh -> infiltration -> deck -> solve ->
     flood_depth, and the plan VALIDATES against its own declared params/data."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib.validate import validate_plan
@@ -75,7 +75,7 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
     workflow = TOOL_REGISTRY["telemac_rain_on_grid"].fn.workflow
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
-        "form", "draw", "aoi", "watershed_mesh", "infiltration", "deck", "solve",
+        "form", "draw", "aoi", "mesh", "infiltration", "deck", "solve",
         "flood_depth"]
     validate_plan(plan, workflow.params, workflow.data)
 
@@ -319,7 +319,7 @@ def test_soil_store_needs_a_real_window_and_a_capacity():
 # ``_aoi_from_pour_point`` / ``model_telemac_rain_on_grid`` dispatch tests.
 # ===========================================================================
 def test_aoi_from_pour_point_buffers_the_outlet():
-    from trid3nt_server.workflows.mesh.watershed import catchment_aoi
+    from trid3nt_server.workflows.telemac.steps import catchment_aoi
     from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
         POUR_POINT_BUFFER_DEG,
     )
@@ -341,7 +341,7 @@ async def test_a_supplied_pour_point_derives_the_aoi_from_it_not_a_geocoded_bbox
     ``acquire_catchment`` (the catchment shape's own acquire step) never even
     reaches for a geocoder - the catchment shape's docstring names this: the
     basin's shape is the terrain's answer, never the geocoder's bbox."""
-    from trid3nt_server.workflows.mesh.watershed import catchment_aoi
+    from trid3nt_server.workflows.telemac.steps import catchment_aoi
     from trid3nt_server.workflows.telemac.steps.rain_on_grid import acquire_catchment
 
     pp = (-83.40402, 35.05746)

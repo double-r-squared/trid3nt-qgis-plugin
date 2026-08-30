@@ -87,22 +87,3 @@ def test_a_declared_edit_survives_the_trip_the_template_sends_it_on():
     assert rebuilt.spec.mesher == "om2d"
 
 
-# --------------------------------------------------------------------------- #
-# 3. A path with no chain to prefix refuses the edit rather than dropping it.
-# --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_the_catchment_path_refuses_a_declared_edit_by_name():
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
-        build_catchment_mesh,
-    )
-
-    declaration = tool.build_mesh(
-        mesher="om2d", kind="unstructured_tri",
-        extent=(-83.5, 35.0, -83.4, 35.09),
-    ).edit("set_boundary", side="east")
-
-    with pytest.raises(MeshToolError) as excinfo:
-        await build_catchment_mesh(mesh=declaration_plan_value(declaration),
-                                   supplied=None, bed_dem={}, rivers=None)
-    assert excinfo.value.error_code == "MESH_DECLARED_EDIT_UNSUPPORTED"
-    assert "set_boundary" in str(excinfo.value)

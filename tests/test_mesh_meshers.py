@@ -9,7 +9,6 @@ and the precondition gate's decision logic with no live session.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +18,6 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,
-    mesh_compatible_with_engine,
     sidecar_key_for_mesh_uri,
     stash_mesh_artifact,
     stashed_mesh_artifacts,
@@ -30,8 +28,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     get_mesher,
     registered_meshers,
 )
-from trid3nt_server.workflows.mesh.precondition_gate import gate_supplied_mesh
-from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
+from trid3nt_server.workflows.mesh.shared.nodes import MeshNodeError, read_2dm_mesh
 
 
 
@@ -42,7 +39,7 @@ def _artifact(**over) -> MeshArtifact:
         slf_uri="s3://cache/mesh/01ABC/mesh.slf", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
         element_count=9727, bbox=(-83.5, 35.0, -83.4, 35.09),
-        engine_compat=["telemac"])
+        )
     base.update(over)
     return MeshArtifact(**base)
 
@@ -140,7 +137,7 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
         meta={"utm_epsg": 32616,
               "files": {"slf_uri": "/stale/mesh.slf", "cli_uri": "/stale/mesh.cli"},
               "probes": {"open_node_count": 93},
-              "artifact": {"engine_compat": ["telemac"],
+              "artifact": {
                            "open_boundary_info": {"open_node_count": 93},
                            "provenance": {"mesher": "om2d"}}})
 
@@ -152,7 +149,7 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
         assert key not in after.meta, f"{key} survived the adopted layer"
     # The CLAIMS made about those cells go with them: the edited mesh states its
     # engine compatibility afresh from what it can actually back.
-    for key in ("engine_compat", "open_boundary_info"):
+    for key in ("open_boundary_info",):
         assert key not in after.meta["artifact"], f"{key} survived the adopted layer"
     # What is ABOUT the domain rather than about its cells still rides.
     assert after.meta["utm_epsg"] == 32616
@@ -163,41 +160,34 @@ def test_read_2dm_rejects_empty():
     import tempfile
     from pathlib import Path
 
-    from trid3nt_server.workflows.mesh.watershed import MeshGenerationError
-
     p = Path(tempfile.mkdtemp()) / "empty.2dm"
     p.write_text("MESH2D\n")
-    with pytest.raises(MeshGenerationError):
+    with pytest.raises(MeshNodeError):
         read_2dm_mesh(str(p))
 
 
 # --------------------------------------------------------------------------- #
-# Engine compatibility gatekeeper.
+# The artifact answers for its own readiness.
 # --------------------------------------------------------------------------- #
-def test_compat_telemac_ok():
-    ok, reason = mesh_compatible_with_engine(_artifact(), "telemac")
-    assert ok is True and reason == "compatible"
+def test_a_solve_ready_mesh_names_no_reason():
+    assert _artifact().unsolvable_reason() is None
 
 
-def test_compat_telemac_needs_bathymetry():
-    ok, reason = mesh_compatible_with_engine(
-        _artifact(has_bathymetry=False), "telemac")
-    assert ok is False and "bathymetry" in reason.lower()
+def test_a_mesh_with_no_geometry_file_says_so():
+    reason = _artifact(slf_uri=None).unsolvable_reason()
+    assert reason is not None and "no SELAFIN geometry" in reason
 
 
-@pytest.mark.parametrize("engine", ["schism", "swan"])
-def test_an_engine_the_tree_no_longer_carries_has_no_rule_to_quote(engine):
-    """A requirement row written for an absent solver is a claim nothing backs.
-    Until each engine returns and authors its row from the needs it has THEN, the
-    honest answer is that no rule is registered - not a richer decline standing on
-    fields no mesher writes."""
-    ok, reason = mesh_compatible_with_engine(_artifact(), engine)
-    assert ok is False and "no mesh-compatibility rule" in reason
+def test_a_bedless_mesh_with_no_staged_topology_says_so():
+    reason = _artifact(has_bathymetry=False).unsolvable_reason()
+    assert reason is not None and "no sampled bed" in reason
 
 
-def test_compat_unknown_engine_is_incompatible():
-    ok, reason = mesh_compatible_with_engine(_artifact(), "made_up_engine")
-    assert ok is False and "no mesh-compatibility rule" in reason
+def test_a_bedless_mesh_whose_bed_is_fitted_onto_a_staged_topology_is_ready():
+    """A bundle-realized mesh carries its ground in the topology it stages, so it
+    is solve-ready even though no bed was sampled at authoring."""
+    art = _artifact(has_bathymetry=False, topology_uri="s3://cache/m/mesh.npz")
+    assert art.unsolvable_reason() is None
 
 
 # --------------------------------------------------------------------------- #
@@ -231,43 +221,5 @@ def test_mesh_artifact_json_roundtrip():
     back = MeshArtifact.from_json(art.to_json())
     assert back.mesh_id == art.mesh_id
     assert back.bbox == art.bbox  # tuple restored from JSON list
-    assert back.engine_compat == ["telemac"]
 
 
-# --------------------------------------------------------------------------- #
-# Precondition-gate decision logic (no live session -> auto default).
-# --------------------------------------------------------------------------- #
-def test_gate_no_mesh_returns_no_use():
-    d = asyncio.run(gate_supplied_mesh(
-        tool_name="telemac_rain_on_grid", engine="telemac", input_mode="auto",
-        case_id="emptyCase"))
-    assert d.use is False and d.artifact is None
-
-
-def test_gate_auto_default_uses_compatible_mesh():
-    stash_mesh_artifact("gateCaseA", _artifact(mesh_id="gm1"))
-    d = asyncio.run(gate_supplied_mesh(
-        tool_name="telemac_rain_on_grid", engine="telemac", input_mode="auto",
-        case_id="gateCaseA"))
-    assert d.use is True
-    assert d.artifact is not None and d.artifact.mesh_id == "gm1"
-    assert d.note and "labeled default" in d.note
-
-
-def test_gate_incompatible_mesh_skipped_loud_no_use():
-    # a TELEMAC mesh offered to an engine the tree registers no mesh rule for:
-    # skipped, run proceeds fresh.
-    stash_mesh_artifact("gateCaseB", _artifact(mesh_id="gm2"))
-    d = asyncio.run(gate_supplied_mesh(
-        tool_name="hecras_flood_2d", engine="hecras", input_mode="auto",
-        case_id="gateCaseB"))
-    assert d.use is False and d.artifact is None
-    assert d.note and "not compatible" in d.note
-
-
-def test_gate_auto_default_off_declines():
-    stash_mesh_artifact("gateCaseC", _artifact(mesh_id="gm3"))
-    d = asyncio.run(gate_supplied_mesh(
-        tool_name="telemac_rain_on_grid", engine="telemac", input_mode="auto",
-        case_id="gateCaseC", default_use=False))
-    assert d.use is False

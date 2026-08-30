@@ -122,7 +122,7 @@ async def _drive(ns: argparse.Namespace) -> dict:
     out["probes"] = art.probes
     out["mesh_artifact"] = {
         "mesh_id": art.mesh_id, "mode": art.mode,
-        "crs_authid": art.crs_authid, "engine_compat": art.engine_compat,
+        "crs_authid": art.crs_authid, "unsolvable_reason": art.unsolvable_reason(),
         "node_count": art.node_count, "element_count": art.element_count,
         "has_bathymetry": art.has_bathymetry,
         "display_uri": art.display_uri, "slf_uri": art.slf_uri,

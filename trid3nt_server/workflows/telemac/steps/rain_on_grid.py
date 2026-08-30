@@ -1,12 +1,8 @@
 """The RAIN-ON-GRID front of TELEMAC: a catchment in, an outlet hydrograph out.
 
-The reach family meshes a corridor along a flowline and the open-water family
-lays a grid over an extent. A rain-on-grid domain is neither: it is a DELINEATED
-CATCHMENT, bounded by the terrain that drains to one point, meshed in its
-interior and refined toward the channel network. The generation itself is not a
-TELEMAC fact and lives in the shared mesh front
-(``workflows/mesh/watershed.py``); what lives HERE is only what is TELEMAC about
-a rain-on-grid run - the BOTTOM SELAFIN the solver reads its geometry from, the
+A rain-on-grid domain is a DELINEATED CATCHMENT - the terrain that drains to one
+point - and the delineation is a chained tool while the triangulation is the one
+mesh step. What lives HERE is only what is TELEMAC about a rain-on-grid run: the
 per-node fields the SCS-CN model reads (``FORMATTED DATA FILE 2``), the manifest
 the worker's ``rain_on_grid`` mode dispatches on, and the depth-plus-hydrograph
 deliverable the question is answered with.
@@ -33,9 +29,10 @@ from trid3nt_contracts.telemac_contracts import (
 )
 
 from trid3nt_server.workflows.lib import DeclarativeError, Step
-from trid3nt_server.workflows.mesh import watershed as W
-from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
-from trid3nt_server.workflows.mesh.tool import declaration_plan_value
+from trid3nt_server.workflows.mesh.shared.nodes import (
+    node_slopes_from_mesh,
+    sample_raster_at_nodes,
+)
 from trid3nt_server.workflows.shared.aoi import aoi_slug
 from trid3nt_server.workflows.shared.layer_fields import layer_field
 from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
@@ -44,17 +41,16 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.rain_on_grid"
 
 __all__ = [
     "AcquireCatchment",
-    "Catchment",
+    "Infiltration",
     "RainOnGrid",
     "RainOnGridError",
     "SolveRainOnGrid",
     "acquire_catchment",
-    "build_catchment_mesh",
+    "catchment_aoi",
     "node_infiltration_fields",
     "publish_rain_on_grid_products",
     "resolve_rain_event",
     "solve_rain_on_grid",
-    "write_bottom_selafin",
     "write_rain_on_grid_deck",
 ]
 
@@ -85,6 +81,32 @@ class RainOnGridError(DeclarativeError):
     """A rain-on-grid catchment could not be acquired, staged, solved or read."""
 
     error_code = "TELEMAC_ROG_FAILED"
+
+
+def catchment_aoi(pour_point: tuple[float, float],
+                  half_deg: float) -> tuple[float, float, float, float]:
+    """The analysis AOI a catchment is delineated inside, centred on its OUTLET.
+
+    Centred on the outlet rather than on a geocoded place, because a place bbox
+    names a TOWN and need not contain the UPSTREAM catchment. The delineation
+    truncates at the box edge, so this must OVER-cover.
+    """
+    lon, lat = float(pour_point[0]), float(pour_point[1])
+    b = float(half_deg)
+    return (max(lon - b, -180.0), max(lat - b, -90.0),
+            min(lon + b, 180.0), min(lat + b, 90.0))
+
+
+def _domain_bbox(what: str) -> tuple[float, float, float, float]:
+    """The extent a domain-implicit producer reads the world over."""
+    from trid3nt_server.workflows.lib import current_domain
+
+    domain = current_domain()
+    if domain is None or domain.bbox is None:
+        raise RainOnGridError(
+            f"{what} cannot be fetched: no domain is bound. Resolve the AOI first.",
+            error_code="TELEMAC_ROG_DOMAIN_UNBOUND")
+    return tuple(float(v) for v in domain.bbox)  # type: ignore[return-value]
 
 
 # --------------------------------------------------------------------------- #
@@ -120,7 +142,7 @@ async def acquire_catchment(*, location: str | None, bbox: Any,
             error_code=f"{code_prefix}_PARAMS_INCOMPLETE")
 
     extent = (tuple(float(v) for v in bbox) if bbox is not None
-              else W.catchment_aoi(point, half_deg))
+              else catchment_aoi(point, half_deg))
     name = str(location).strip() if (location and str(location).strip()) \
         else default_name
     return {"bbox": extent, "name": name,
@@ -141,143 +163,7 @@ def AcquireCatchment(*, location: Any, bbox: Any, pour_point: Any,  # noqa: N802
 
 
 # --------------------------------------------------------------------------- #
-# 2. mesh: the catchment, triangulated, with a BOTTOM SELAFIN beside it.
-# --------------------------------------------------------------------------- #
-def _refuse_declared_edits(declaration: Any) -> None:
-    """Refuse an ask this path cannot honour whole.
-
-    A declared edit is part of the ask, and this generation runs the catchment
-    strategy directly rather than through a mesh session, so there is no chain to
-    prefix. Refused BY NAME rather than dropped: an edit that silently did nothing
-    reads as a lever that shaped the mesh.
-    """
-    from trid3nt_server.workflows.mesh.meshers import MeshToolError
-
-    if declaration.edits:
-        raise MeshToolError(
-            "MESH_DECLARED_EDIT_UNSUPPORTED",
-            f"the catchment mesh ask declares the edits "
-            f"{[e.action for e in declaration.edits]}, and this template builds its "
-            "catchment through the delineation strategy rather than a mesh session, "
-            "so no chain exists to apply them to. Build the mesh with build_mesh "
-            "and hand it to this run instead.")
-
-
-async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
-                               bed_dem: Any, rivers: Any) -> dict[str, Any]:
-    """The catchment mesh, however it was acquired, plus the solver geometry file.
-
-    THE SLATE: a mesh SUPPLIED on this invocation is taken as-is and nothing here
-    has an opinion about it; unfilled, the catchment is generated. There is ONE
-    resolver for a mesh a case already holds and it is the mesh router's, reached
-    at the build door - a second discovery here would silently adopt somebody's
-    mesh inside a model template.
-
-    Every knob the generation reads comes off the REBUILT declaration, so the
-    mesher's own declared defaults are what stand when the template named nothing.
-
-    AWAITING THE WORKER-UNIFICATION PORT: the template now declares an ``om2d``
-    build over the chained basin, and the fields read below are the retired
-    catchment mesher's. This half turns into a mesh artifact when the worker's
-    staged contract takes one - see docs/design/worker-unification-port.md.
-    """
-    from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
-
-    declaration = declaration_from_plan_value(mesh)
-    _refuse_declared_edits(declaration)
-    fields = declaration.spec.fields
-    aoi = dict(fields["extent"])
-    min_edge_m = float(fields["min_edge_length_m"])
-    max_edge_m = float(fields["max_edge_length_m"])
-    grade = float(fields["grade"])
-    max_iter = int(fields["max_iter"])
-    snap_search_cells = int(fields["snap_search_cells"])
-
-    rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"rog-{new_ulid()}"
-    rundir.mkdir(parents=True, exist_ok=True)
-    point = (float(aoi["pour_point"][0]), float(aoi["pour_point"][1]))
-    slug = str(aoi["slug"])
-
-    mesh = None
-    if supplied:
-        uri = supplied if isinstance(supplied, str) else str(
-            (supplied or {}).get("uri") or "")
-        mesh = await asyncio.to_thread(
-            _stage_supplied_mesh, uri, rundir, slug, point)
-    if mesh is None:
-        # Warm the geo stack on the MAIN thread first: shapely and geopandas have a
-        # thread-first-import circular-import race, and the generation below runs in
-        # a worker thread - on a fresh daemon it would be the first geopandas import
-        # in the process.
-        import geopandas as _gpd  # noqa: F401
-
-        mesh = await asyncio.to_thread(
-            W.generate_catchment_mesh,
-            pour_point=point, bbox=tuple(aoi["bbox"]), slug=slug,
-            output_dir=str(rundir), bed_dem=bed_dem, rivers=rivers,
-            min_edge_length_m=float(min_edge_m), max_edge_length_m=float(max_edge_m),
-            grade=float(grade), max_iter=int(max_iter),
-            snap_search_cells=int(snap_search_cells))
-
-    # The MODELLED extent in 4326 - the mesh's own node bounds, not the analysis
-    # window it was cut from. The delineated basin is a fraction of the buffer the
-    # search ran in, so the AOI would point the camera at mostly-unmodelled ground
-    # and would give an animation check an extent the frames never covered.
-    lonlat = mesh.points_lonlat
-    if lonlat is not None:
-        import numpy as _np
-
-        pts = _np.asarray(lonlat, dtype=float)
-        bounds = [float(pts[:, 0].min()), float(pts[:, 1].min()),
-                  float(pts[:, 0].max()), float(pts[:, 1].max())]
-    else:
-        bounds = list(aoi["bbox"])
-
-    slf_path = mesh.source_path
-    if not slf_path:
-        slf_path = str(rundir / "watershed.slf")
-        await asyncio.to_thread(write_bottom_selafin, slf_path, mesh.points_utm,
-                                mesh.cells, mesh.bed_elev)
-    return {"mesh": mesh, "slf_path": slf_path, "rundir": str(rundir),
-            "name": str(aoi["name"]), "slug": slug, "bbox": list(aoi["bbox"]),
-            # The two declared artifacts narrate themselves SEPARATELY: which bed
-            # the nodes were sampled from is a different fact from what the mesh
-            # was refined toward, and one row cannot carry both.
-            "bed_note": str(layer_field(bed_dem, "fallback_note") or ""),
-            "bed_source": str(layer_field(bed_dem, "name") or ""),
-            "rivers_note": str(layer_field(rivers, "fallback_note") or ""),
-            "rivers_source": str(layer_field(rivers, "name") or ""),
-            "utm_epsg": int(mesh.utm_epsg), "area_km2": float(mesh.area_km2),
-            "node_count": mesh.node_count, "element_count": mesh.element_count,
-            "outlet_lonlat": list(mesh.outlet_lonlat),
-            "lonlat_bounds": bounds,
-            "provenance": mesh.provenance, "notes": list(mesh.notes),
-            "min_edge_m": float(min_edge_m), "max_edge_m": float(max_edge_m)}
-
-
-def _stage_supplied_mesh(uri: str, rundir: Path, slug: str,
-                         point: tuple[float, float]) -> Any:
-    """Bring a supplied mesh local and adopt it. Refuses typed on an unusable one."""
-    from trid3nt_server.tools.cache import read_object_bytes_s3
-
-    if not uri:
-        return None
-    local = rundir / Path(uri).name
-    local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
-                      else Path(uri).read_bytes())
-    if local.suffix.lower() == ".2dm":
-        return W.adopt_supplied_mesh_2dm(
-            twodm_path=str(local), slug=slug,
-            utm_epsg=W.utm_epsg_for(point[0], point[1]), pour_point=point,
-            note=f"solved on the mesh supplied for this invocation ({local.name})")
-    return W.adopt_supplied_mesh(
-        mesh_path=str(local), slug=slug,
-        utm_epsg=W.utm_epsg_for(point[0], point[1]), pour_point=point,
-        note=f"solved on the mesh supplied for this invocation ({local.name})")
-
-
-# --------------------------------------------------------------------------- #
-# 3. prep: what each node infiltrates and how rough it is.
+# 2. prep: what each node infiltrates and how rough it is.
 # --------------------------------------------------------------------------- #
 async def node_infiltration_fields(*, mesh: dict[str, Any],
                                    landcover: Any,
@@ -296,6 +182,12 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
     done it inside the engine is compiled off in the installed 9.0.0 build. The
     slopes come from the mesh's own piecewise-linear bed - the discretization the
     solver sees - never from a finer raster the run does not resolve.
+
+    AWAITING THE WORKER-UNIFICATION PORT: the node arrays are read off a handle
+    the retired catchment front used to hand over, and the mesh step now returns a
+    ``MeshArtifact`` record instead. Re-authoring this read against the artifact
+    is the port's last mile and belongs to the wave that settles the worker's
+    staged contract - see docs/design/worker-unification-port.md.
     """
     from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
         amc_condition_for, landcover_cn_manning, node_curve_numbers,
@@ -317,9 +209,9 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
         local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
                           else Path(uri).read_bytes())
         codes = [int(round(v)) for v in
-                 W.sample_raster_at_nodes(local, handle.points_lonlat)]
-        slopes = (list(W.node_slopes_from_mesh(handle.points_utm, handle.cells,
-                                               handle.bed_elev))
+                 sample_raster_at_nodes(local, handle.points_lonlat)]
+        slopes = (list(node_slopes_from_mesh(handle.points_utm, handle.cells,
+                                             handle.bed_elev))
                   if steep_slope_correction else None)
         manning = [landcover_cn_manning(c)[1] for c in codes]
         cn2 = node_curve_numbers(codes, uniform_cn=curve_number,
@@ -340,18 +232,18 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
 
 
 # --------------------------------------------------------------------------- #
-# 4. forcing: the rain that falls on it.
+# 3. forcing: the rain that falls on it.
 # --------------------------------------------------------------------------- #
 def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
-                       storm_duration_hr: float, sim_duration_hr: float | None,
-                       fallback: tuple[str, ...] = ()) -> dict[str, Any]:
+                       storm_duration_hr: float,
+                       sim_duration_hr: float | None) -> dict[str, Any]:
     """The storm, as either a real hourly hyetograph or a constant design rate.
 
-    TWO RUNGS, and the ladder is the run's own record of which one answered. A
-    dated ``window`` fetches the hourly AORC accumulation over the catchment and
-    the run is driven by the REAL intensity structure, which is what resolves the
-    hydrograph SHAPE. With no window the storm is a constant design rate over a
-    declared duration - a hypothetical, and labeled as one.
+    A BRANCH ON THE ASK, not a fallback ladder: a dated ``window`` fetches the
+    hourly AORC accumulation over the catchment and the run is driven by the REAL
+    intensity structure, which is what resolves the hydrograph SHAPE. With no
+    window the storm is a constant design rate over a declared duration - a
+    hypothetical, and the returned ``note`` labels it as one.
 
     AORC rather than MRMS despite the argument's history: MRMS only covers
     ~2020-10 onward, and a replication window that predates it would silently
@@ -359,7 +251,6 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
     """
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    rungs = " -> ".join(fallback) if fallback else "aorc_hourly -> design_storm"
     if not window:
         return {
             "kind": "design_storm", "blocks": None, "series": None,
@@ -368,10 +259,10 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
                                 else storm_duration_hr) * _HOUR_S,
             "duration_basis": "user" if sim_duration_hr else "storm",
             "note": (f"a CONSTANT design storm of {float(intensity_mm_per_hr):g} mm/h "
-                     f"over {float(storm_duration_hr):g} h - a hypothetical event, "
-                     f"not a record. Ladder {rungs}."),
+                     f"over {float(storm_duration_hr):g} h - a hypothetical "
+                     "event, not a record."),
         }
-    bbox = W._domain_bbox("the rain hyetograph")
+    bbox = _domain_bbox("the rain hyetograph")
     sep = "/" if "/" in window else (".." if ".." in window else None)
     if not sep:
         raise RainOnGridError(
@@ -397,7 +288,7 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
         "duration_basis": "user" if asked_s > span_s else "hyetograph",
         "window": window, "total_mm": round(sum(mm), 3),
         "note": (f"the REAL hourly AORC hyetograph over {window} - {len(mm)} steps, "
-                 f"{sum(mm):.3g} mm total. Ladder {rungs}."),
+                 f"{sum(mm):.3g} mm total."),
     }
 
 
@@ -415,7 +306,7 @@ def _soil_store_spin_up(*, window: str, capacity_mm: float, recovery_hr: float,
 
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    bbox = W._domain_bbox("the antecedent rainfall")
+    bbox = _domain_bbox("the antecedent rainfall")
     sep = "/" if "/" in window else (".." if ".." in window else None)
     if not sep:
         raise RainOnGridError(
@@ -437,7 +328,7 @@ def _soil_store_spin_up(*, window: str, capacity_mm: float, recovery_hr: float,
 
 
 # --------------------------------------------------------------------------- #
-# 5. author: the worker manifest.
+# 4. author: the worker manifest.
 # --------------------------------------------------------------------------- #
 async def write_rain_on_grid_deck(
     *,
@@ -544,7 +435,7 @@ async def write_rain_on_grid_deck(
 
 
 # --------------------------------------------------------------------------- #
-# 6. solve.
+# 5. solve.
 # --------------------------------------------------------------------------- #
 def _stage_inputs(deck: dict[str, Any]) -> str:
     """Upload the mesh + node fields + manifest; return the manifest ``s3://`` URI."""
@@ -625,7 +516,7 @@ def _solver_name() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# 7. publish.
+# 6. publish.
 # --------------------------------------------------------------------------- #
 def _read_hydrograph(run_id: str) -> dict[str, Any]:
     """The outlet hydrograph the worker wrote; ``{}`` on any miss (best-effort)."""
@@ -840,25 +731,11 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
 # --------------------------------------------------------------------------- #
 # The step constructors, as the facade and the template bind them.
 # --------------------------------------------------------------------------- #
-class Catchment:
-    """The catchment mesh and its node fields, as declared steps."""
+class Infiltration:
+    """The catchment's node fields, as a declared step."""
 
     @staticmethod
-    def mesh(*, mesh: Any, supplied: Any, bed_dem: Any, rivers: Any) -> Step:
-        """Delineate and triangulate the catchment - or adopt the mesh handed in.
-
-        The DECLARATION travels WHOLE - its mesher, its kind, every field the
-        router checked against the ``watershed`` mesher and the edits the template
-        declared on it - as the plain mapping the interpreter binds late-bound
-        reads inside. Nothing about the ask is restated here.
-        """
-        return Step(runner=f"{_STEPS}.rain_on_grid.build_catchment_mesh", stage="mesh",
-                    kwargs={"mesh": declaration_plan_value(mesh),
-                            "supplied": supplied,
-                            "bed_dem": bed_dem, "rivers": rivers})
-
-    @staticmethod
-    def infiltration(*, mesh: Any, landcover: Any, curve_number: Any,
+    def fields(*, mesh: Any, landcover: Any, curve_number: Any,
                      steep_slope_correction: Any, antecedent_moisture: Any) -> Step:
         """Per-node curve numbers and Manning n - the infiltration surface."""
         return Step(runner=f"{_STEPS}.rain_on_grid.node_infiltration_fields",

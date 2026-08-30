@@ -71,7 +71,7 @@ def _artifact(**over) -> MeshArtifact:
         display_uri="s3://cache/mesh/01MESH/mesh.2dm",
         slf_uri="s3://cache/mesh/01MESH/mesh.slf", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
-        element_count=9727, bbox=_AOI, engine_compat=["telemac"],
+        element_count=9727, bbox=_AOI,
         # A built mesh records the ask it came from, and the KIND on that record
         # is what the resolution door checks a run's declaration against.
         provenance={"spec": {"mesher": "reg_grid", "kind": "structured_grid"}})
@@ -181,17 +181,18 @@ def test_explicit_mesh_wins_over_a_discovered_one():
     stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
     supplied = _artifact(mesh_id="01OTHER", name="supplied")
     resolution = resolve_mesh(_declaration(), explicit=supplied,
-                              engine="telemac", accepts=_GRID,
+                              accepts=_GRID,
                               case_id="case-explicit")
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
 
 
-def test_explicit_mesh_an_engine_cannot_read_refuses():
+def test_explicit_mesh_no_solve_could_be_staged_on_refuses():
     with pytest.raises(MeshToolError) as excinfo:
         resolve_mesh(_declaration(), explicit=_artifact(slf_uri=None),
-                     engine="telemac")
-    assert excinfo.value.error_code == "MESH_ENGINE_INCOMPATIBLE"
+                     accepts=_GRID)
+    assert excinfo.value.error_code == "MESH_NOT_SOLVABLE"
+    assert "no SELAFIN geometry" in str(excinfo.value)
 
 
 def test_explicit_mesh_with_no_readable_record_refuses():
@@ -221,15 +222,15 @@ class _FailingReader:
 def test_case_discovery_beats_the_declared_default():
     art = _artifact()
     stash_mesh_artifact("case-discovery", art)
-    resolution = resolve_mesh(_declaration(), engine="telemac", accepts=_GRID,
+    resolution = resolve_mesh(_declaration(), accepts=_GRID,
                               case_id="case-discovery")
     assert resolution.source == "discovered"
     assert resolution.artifact is art
 
 
-def test_case_discovery_skips_a_mesh_the_engine_cannot_read():
-    stash_mesh_artifact("case-skip", _artifact(slf_uri=None, engine_compat=[]))
-    resolution = resolve_mesh(_declaration(), engine="telemac", accepts=_GRID,
+def test_case_discovery_skips_a_mesh_no_solve_could_be_staged_on():
+    stash_mesh_artifact("case-skip", _artifact(slf_uri=None))
+    resolution = resolve_mesh(_declaration(), accepts=_GRID,
                               case_id="case-skip")
     assert resolution.source == "declared"
     assert resolution.declaration is not None
@@ -304,8 +305,7 @@ def test_a_supplied_mesh_outside_the_mesh_row_refuses_by_name():
     """A lattice is not in the river-tracer's mesh row, so it is refused at the door
     rather than trusted and narrated several steps later."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(explicit=_artifact(), engine="telemac",
-                     accepts=_RIVER_DYE)
+        resolve_mesh(explicit=_artifact(), accepts=_RIVER_DYE)
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     message = str(excinfo.value)
     assert "'unstructured_tri'" in message and "'structured_grid'" in message
@@ -315,8 +315,7 @@ def test_a_supplied_mesh_in_the_mesh_row_is_accepted():
     """The BYO rematch: an om2d triangulation is a member of what ARTEMIS reads,
     even though the template's own default build is a lattice."""
     supplied = _tri_artifact()
-    resolution = resolve_mesh(explicit=supplied, engine="telemac",
-                              accepts=accepts_for(_AGITATION))
+    resolution = resolve_mesh(explicit=supplied, accepts=accepts_for(_AGITATION))
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
 
@@ -324,7 +323,7 @@ def test_a_supplied_mesh_in_the_mesh_row_is_accepted():
 def test_a_template_that_declares_no_mesh_row_refuses_the_supply():
     """ABSENCE IS A REFUSAL: no mesh row means no tested supplied-mesh path."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(explicit=_tri_artifact(), engine="telemac")
+        resolve_mesh(explicit=_tri_artifact())
     assert excinfo.value.error_code == "MESH_SUPPLY_UNDECLARED"
     assert "no supplied-mesh compatibility" in str(excinfo.value)
 
@@ -332,7 +331,7 @@ def test_a_template_that_declares_no_mesh_row_refuses_the_supply():
 def test_a_supplied_mesh_that_states_no_kind_refuses():
     """Membership in a declared row is not answerable about an unstated shape."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(explicit=_artifact(provenance={}), engine="telemac",
+        resolve_mesh(explicit=_artifact(provenance={}),
                      accepts=accepts_for(_AGITATION))
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     assert "no recorded kind" in str(excinfo.value)
@@ -342,15 +341,14 @@ def test_case_discovery_offers_only_members_of_the_mesh_row():
     """The same membership test, in the arm where a non-member is simply not a
     candidate: the run builds its declared mesh instead."""
     stash_mesh_artifact("case-wrong-kind", _artifact())
-    resolution = resolve_mesh(_declaration(), engine="telemac",
-                              accepts=_RIVER_DYE, case_id="case-wrong-kind")
+    resolution = resolve_mesh(_declaration(), accepts=_RIVER_DYE,
+                              case_id="case-wrong-kind")
     assert resolution.source == "declared"
 
 
 def test_case_discovery_offers_nothing_without_a_mesh_row():
     stash_mesh_artifact("case-no-set", _artifact())
-    resolution = resolve_mesh(_declaration(), engine="telemac",
-                              case_id="case-no-set")
+    resolution = resolve_mesh(_declaration(), case_id="case-no-set")
     assert resolution.source == "declared"
 
 
@@ -494,7 +492,7 @@ def test_accept_records_the_artifact_with_its_recipe(tmp_path):
     assert art.element_count == session.mesh.element_count
     assert art.crs_authid == "EPSG:4326"
     assert art.has_bathymetry is False
-    assert art.engine_compat == []
+    assert art.unsolvable_reason() is not None
     assert art.utm_epsg is None
     assert art.recipe_uri == str(session.recipe_path)
     assert art.provenance["spec"]["mesher"] == "reg_grid"
@@ -504,13 +502,11 @@ def test_accept_records_the_artifact_with_its_recipe(tmp_path):
     assert stashed_mesh_artifacts("case-accept")[-1] is art
 
 
-def test_a_bed_less_mesh_is_declined_by_a_bed_needing_engine(tmp_path):
-    from trid3nt_server.workflows.mesh.artifact import mesh_compatible_with_engine
-
+def test_a_geometry_less_mesh_says_why_no_solve_can_be_staged_on_it(tmp_path):
+    """The readiness question is the ARTIFACT's, answered off the facts it carries."""
     art = MeshSession(_declaration(), workdir=tmp_path).accept()
-    ok, reason = mesh_compatible_with_engine(art, "telemac")
-    assert ok is False
-    assert "SELAFIN" in reason
+    reason = art.unsolvable_reason()
+    assert reason is not None and "SELAFIN" in reason
 
 
 def test_snapshot_is_the_display_face(tmp_path):

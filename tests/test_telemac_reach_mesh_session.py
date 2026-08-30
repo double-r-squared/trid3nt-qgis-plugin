@@ -1,9 +1,9 @@
 """The reach family authors its deck on an ACCEPTED mesh, and says so.
 
-Offline. The corridor mesh is no longer a side effect of solving: a mesh step
-opens a session over the template's declaration, the accepted topology is staged
-into the solve's run directory, and the deck's timestep follows the edge the mesh
-was BUILT at rather than the edge that was asked for.
+Offline. The mesh is no longer a side effect of solving: a mesh step opens a
+session over the template's declaration, the accepted topology is staged into the
+solve's run directory, and the deck's timestep AND recorded edge follow the edge
+the mesh was BUILT at rather than the edge that was asked for.
 
 What is pinned here:
 
@@ -45,7 +45,7 @@ def _mesh_record(*, min_edge_m: float | None = None,
     artifact = None
     if min_edge_m is not None:
         artifact = MeshArtifact(
-            mesh_id="M01", name="Eel River corridor", mode="corridor_tin",
+            mesh_id="M01", name="Eel River reach", mode="om2d",
             display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/river.slf",
             crs_authid="EPSG:32610", has_bathymetry=False,
             node_count=539, element_count=902,

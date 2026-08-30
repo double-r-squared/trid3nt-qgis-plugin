@@ -217,6 +217,7 @@ def test_do_layer_contract_fields():
 def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=None):
     """Patch the shared step family at the modules the plan's runners resolve to."""
     from trid3nt_server.gates import input_review as gate_mod
+    from trid3nt_server.workflows.mesh import step as mesh_step_mod
     from trid3nt_server.workflows.telemac.steps import (
         deck as deck_mod,
         forcing as forcing_mod,
@@ -243,7 +244,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     monkeypatch.setattr(forcing_mod, "resolve_carrier_discharge",
                         _step("discharge", {"m3s": 2.0, "basis": "fetched",
                                             "note": "NWM 2.0 m3/s"}))
-    monkeypatch.setattr(reach_mod, "build_corridor_mesh",
+    monkeypatch.setattr(mesh_step_mod, "build_declared_mesh",
                         _step("mesh", {"mesh_id": "M", "slf_uri": "s3://m/river.slf",
                                        "topology_uri": "s3://m/river_mesh.npz",
                                        "min_edge_m": 9.0}))

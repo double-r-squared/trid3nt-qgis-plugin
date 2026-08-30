@@ -1639,3 +1639,85 @@ declared prefix survives a restart, a gate-time edit does not" is the mesh
 session's own law, already pinned mesher-agnostically on `reg_grid` in
 `tests/test_build_mesh_tool.py::test_restart_truncates_to_the_declared_prefix`
 and `tests/test_mesh_gate_loop.py::test_gate_restart_truncates_to_the_declared_prefix`.
+
+## THE SECOND MESH FRONT DIES (elegance review P2/P6, 2026-08-30)
+
+`trid3nt_server/workflows/mesh/watershed.py` (685) DELETED. It carried its own
+delineation, its own DEM/landcover/river resolvers, its own generate/adopt pair
+and its own `CatchmentMesh` type beside the one mesh front - a second place a
+mesh got built. The chain (`delineate_watershed` -> `combine` -> `om2d`) is what
+replaces it. Its four surviving primitives are not the front and moved to
+`workflows/mesh/shared/nodes.py`: `reproject_nodes_to_utm`,
+`sample_raster_at_nodes`, `node_slopes_from_mesh`, `read_2dm_mesh`.
+`utm_epsg_for` moved to `tools/processing/_geometry_common.py` - the one place a
+UTM zone is computed, beside the geometry primitives that measure in metres.
+CONDITION: none.
+
+`trid3nt_server/workflows/mesh/precondition_gate.py` (222) DELETED - a second
+discovery gate whose documented AUTO behaviour ADOPTED a discovered mesh
+silently, which D-9 forbids. There is ONE resolver for a mesh a case already
+holds and it is the mesh router's, at the build door. CONDITION: none.
+
+`ReachMesh` + `build_corridor_mesh` (steps/reach.py) and `Catchment.mesh` +
+`build_catchment_mesh` + `_stage_supplied_mesh` + `_refuse_declared_edits`
+(steps/rain_on_grid.py) DELETED, replaced by ONE generic step,
+`workflows/mesh/step.py::MeshStep.build` -> `build_declared_mesh`. A per-domain
+wrapper around a mesh session is a second place a mesh gets built. The reach
+plan's step is now labeled `mesh` rather than `corridor_mesh`, and the deck reads
+`Ref("mesh")`. `steps/reach.py` also loses `MeshSizing`, `suggest_mesh_size_m`
+and `_estimate_mesh_nodes` (P3, above): the granularity a run is judged on is the
+edge the ACCEPTED mesh was MEASURED at. CONDITION: none.
+
+`trid3nt_server/workflows/mesh/telemac_build.py` (88) DELETED - 88 lines of
+hand-packed SELAFIN bytes beside `mesh/shared/selafin_cli.write_telemac_pair`,
+which writes the geometry AND its `.cli` through telapy/pretel inside the image.
+Square Two's standing gate rejects reimplemented library IO. `MeshSession`'s
+`_selafin` becomes `_telemac_pair`, so every accepted mesh now carries a `.cli`
+numbered from its own measured IPOBO. Honest cost: the host-side write gains a
+container hop. CONDITION: none.
+
+`tests/test_mesh_watershed.py` DELETED; the half of it whose subject survives
+(the CN runoff-path selector, the per-node CN/Manning builders and the UTM
+projection) is `tests/test_rain_on_grid_cn_and_nodes.py`. The precondition-gate
+decision tests in `tests/test_mesh_meshers.py` and the catchment declared-edit
+refusal in `tests/test_mesh_declaration_travel.py` go with their subjects.
+
+`scripts/sandbox/replication/rog_ballcreek_finemesh.py`,
+`scripts/sandbox/replication/rog_ballcreek_live.py` and
+`scripts/sandbox/telemac/rog_coweeta_live.py` ATTICKED - all three drive
+`generate_catchment_mesh` directly. CONDITION: the catchment replication case
+rebuilds against the chain when the worker-unification port lands.
+
+## ONE MEMBERSHIP VOCABULARY, ONE EXECUTING LADDER, ONE SPATIAL WORD (P4/P5/P7, 2026-08-30)
+
+`ENGINE_MESH_REQUIREMENTS`, `mesh_compatible_with_engine`,
+`MeshArtifact.engine_compat` and the `engine=` thread through `resolve_mesh` /
+`supplied_mesh_artifact` DELETED. After the ACCEPTS ruling two vocabularies
+answered "can this mesh be used here"; the table had shrunk to one `telemac` row
+whose body was "the artifact carries `slf_uri` and a bed" - a READINESS PROPERTY
+of the artifact, not a contract. It is now `MeshArtifact.unsolvable_reason()`
+(~15 lines, reading the facts the record already carries), and WHICH KINDS a
+pipeline accepts stays the template's `Accepts` row read at the supply door.
+Refusal code `MESH_ENGINE_INCOMPATIBLE` -> `MESH_NOT_SOLVABLE`. `om2d` and
+`MeshSession` no longer write `engine_compat`; the gate card reports
+`unsolvable_reason` instead. CONDITION: none.
+
+`.ladder()` EXECUTES. `Producer.ladder(*rungs)` now takes PRODUCERS and refuses
+anything else at declaration (`PlanValidationError`, naming what a rung must be);
+`interpreter._walk_ladder` calls the primary, then each rung in order, records
+the ANSWERING rung on the ledger record's `runner`, and emits the LABELED
+SUBSTITUTION line once, in the one place that knows a rung fired. DELETED with
+it: `kwargs.setdefault("fallback", rungs)` and the `fallback=` kwarg convention
+every shim had to honour (`resolve_rain_forcing` / `_rain_forcing`,
+`resolve_rain_event`, `fetch_reach_flowline`), plus the `"ladder"` echo those
+producers returned. The two DECLARED string ladders go too
+(`.ladder("gridmet_domain_mean", "user_rate")`,
+`.ladder("aorc_hourly", "design_storm")`): both named a BRANCH ON THE ASK inside
+one producer rather than a fallback chain, and an inert declaration is worse than
+none. CONDITION: none - see the DESIGN-STOP in this wave's report about which
+producer declares the first real ladder.
+
+`build_mesh`'s `"extent" not in declared and "domain" not in declared` branch
+DELETED (P7). Nothing declares `domain` any more - its only declarers were the
+corridor templates - so `extent` is the one spatial word, and it already takes a
+bbox, a polygon layer uri or inline GeoJSON (`om2d._domain`). CONDITION: none.

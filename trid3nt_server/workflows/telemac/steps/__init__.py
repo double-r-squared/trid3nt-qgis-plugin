@@ -50,17 +50,16 @@ from .forcing import (
 from .products import Products, publish_do_products, publish_dye_products
 from .rain_on_grid import (
     AcquireCatchment,
-    Catchment,
+    Infiltration,
     RainOnGrid,
     RainOnGridError,
     SolveRainOnGrid,
     acquire_catchment,
-    build_catchment_mesh,
+    catchment_aoi,
     node_infiltration_fields,
     publish_rain_on_grid_products,
     resolve_rain_event,
     solve_rain_on_grid,
-    write_bottom_selafin,
     write_rain_on_grid_deck,
 )
 from .reach import (
@@ -68,9 +67,7 @@ from .reach import (
     Geocode,
     MESH_H_FLOOR_M,
     MESH_NODE_CAP,
-    ReachMesh,
     ReachSeed,
-    build_corridor_mesh,
     coerce_lonlat_point,
     estimate_telemac_solve_seconds,
     fetch_reach_flowline,
@@ -104,11 +101,11 @@ from .water_quality import (
 from .wave import Wave, publish_wave_products, write_wave_deck
 
 __all__ = [
-    "AcquireCatchment", "Catchment", "RainOnGrid",
+    "AcquireCatchment", "Infiltration", "RainOnGrid",
     "RainOnGridError", "SolveRainOnGrid", "acquire_catchment",
-    "build_catchment_mesh", "node_infiltration_fields",
+    "catchment_aoi", "node_infiltration_fields",
     "publish_rain_on_grid_products", "resolve_rain_event", "solve_rain_on_grid",
-    "write_bottom_selafin", "write_rain_on_grid_deck",
+    "write_rain_on_grid_deck",
     "Agitation", "CarrierDischarge", "Coastal",
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
     "MESH_NODE_CAP", "OpenWaterError", "Products", "ReachSeed",
@@ -134,7 +131,6 @@ __all__ = [
     "sanitize_substance", "slug", "solve_reach", "stage_manifest",
     "substance_class",
     "suggest_time_step_s", "upstream_do_mgl",
-    "ReachMesh", "build_corridor_mesh",
     "publish_agitation_products",
     "publish_stratified_products",
     "publish_wave_products", "waqtel_o2_process", "write_agitation_deck",

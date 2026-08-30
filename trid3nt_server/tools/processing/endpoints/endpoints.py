@@ -129,7 +129,7 @@ def _length_m(line: Any) -> tuple[float, int]:
     from pyproj import Transformer
     from shapely.ops import transform as _transform
 
-    from trid3nt_server.workflows.mesh.watershed import utm_epsg_for
+    from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
 
     epsg = utm_epsg_for(float(line.centroid.x), float(line.centroid.y))
     forward = Transformer.from_crs(4326, epsg, always_xy=True)

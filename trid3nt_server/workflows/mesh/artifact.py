@@ -19,12 +19,11 @@ ride TWO existing seams so both a same-session run and a cold reopen can find th
     the cache bucket -- discoverable from any ``layer_type="mesh"`` row's ``uri``
     in a later session (its key is the mesh key with the basename swapped).
 
-``mesh_compatible_with_engine`` is the honest gatekeeper: it answers whether a
-given engine can actually consume this mesh (TELEMAC a bathymetric SELAFIN or an
-accepted corridor topology) and, on a mismatch,
-WHY -- so the consuming template can decline loudly instead of force-fitting. An
-engine with no row here gets the honest refusal that none is registered: a rule
-written for a solver the tree does not carry would be a claim nothing backs.
+Whether a mesh is USABLE is the artifact's own question and it answers it:
+:meth:`MeshArtifact.unsolvable_reason` reads the facts this record already
+carries. WHICH KINDS a pipeline accepts is a different question with a different
+owner - the template's ``Accepts`` row, read at the supply door - so the two are
+never conflated into one engine table.
 """
 
 from __future__ import annotations
@@ -46,14 +45,12 @@ __all__ = [
     "read_mesh_artifact_sidecar",
     "find_case_mesh_artifacts",
     "measured_min_edge_m",
-    "mesh_compatible_with_engine",
-    "ENGINE_MESH_REQUIREMENTS",
 ]
 
 
 @dataclass
 class MeshArtifact:
-    """A computational mesh built into a case, plus its engine-compat facts.
+    """A computational mesh built into a case, and what it can be solved on.
 
     ``display_uri`` is the MDAL ``.2dm`` (``s3://``) the ``layer_type="mesh"`` row
     carries; ``slf_uri`` is the per-solver geometry file (``None`` when the format
@@ -61,15 +58,12 @@ class MeshArtifact:
     ``"EPSG:32617"``); ``has_bathymetry`` is True
     when node elevations were sampled (a solve-ready bed). ``open_boundary_info``
     records the segmented open/land boundary (``{}`` for a fully-closed inland
-    catchment). ``engine_compat`` lists the engines whose REQUIRED geometry this
-    mesh actually carries (see :data:`ENGINE_MESH_REQUIREMENTS`). ``recipe_uri``
-    points at the ``mesh_recipe.jsonl`` this mesh was built from - spec plus
-    ordered edits, the record a rebuild replays."""
+    catchment). ``recipe_uri`` points at the ``mesh_recipe.jsonl`` this mesh was
+    built from - spec plus ordered edits, the record a rebuild replays."""
 
     mesh_id: str
     name: str
-    mode: str  # the MESHER that built it: watershed | coastal_edge | corridor_tin
-    #            | om2d | reg_grid
+    mode: str  # the MESHER that built it: om2d | reg_grid
     display_uri: str  # s3:// display face (a .2dm mesh, or a cell-polygon vector)
     slf_uri: str | None
     crs_authid: str
@@ -87,7 +81,6 @@ class MeshArtifact:
     #: about its own build. A consumer that needs the finest edge reads it here
     #: rather than re-deriving it from the ask, which is only what was requested.
     probes: dict[str, Any] = field(default_factory=dict)
-    engine_compat: list[str] = field(default_factory=list)
     #: The TELEMAC boundary-conditions file written from THIS geometry's own
     #: boundary numbering; only valid against the ``slf_uri`` beside it.
     cli_uri: str | None = None
@@ -101,6 +94,28 @@ class MeshArtifact:
     open_boundary_info: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     case_id: str | None = None
+
+    def unsolvable_reason(self) -> str | None:
+        """WHY no solve can be staged on this mesh, or ``None`` when one can.
+
+        A readiness property of the artifact, read off the facts it already
+        carries: a shallow-water solve needs a geometry file and a bed under it.
+        A mesh whose bed is fitted onto a staged topology at authoring time
+        carries that bundle instead, and says so by carrying ``topology_uri``.
+
+        This is not a compatibility CONTRACT - which kinds a pipeline accepts is
+        the template's ``Accepts`` row and is checked at the supply door. This is
+        the artifact answering for itself.
+        """
+        if not self.slf_uri:
+            return (f"mesh {self.name!r} carries no SELAFIN geometry (it was "
+                    f"built as mode={self.mode!r}), so there is no file a solve "
+                    "could be staged from")
+        if not self.has_bathymetry and not self.topology_uri:
+            return (f"mesh {self.name!r} has no sampled bed and no staged "
+                    "topology to fit one onto, so a shallow-water solve has no "
+                    "ground to start from")
+        return None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -130,50 +145,6 @@ def measured_min_edge_m(art: MeshArtifact | None) -> float | None:
     except (TypeError, ValueError):
         return None
     return value if value > 0.0 else None
-
-
-#: Engine -> the mesh format + facts that engine's solver REQUIRES. A mesh is
-#: compatible with an engine iff it carries the named format URI and (when
-#: ``needs_bathymetry``) a sampled bed. Open-set, and only ENGINES THE TREE
-#: CARRIES have a row: templates adopt the same gate by reading their rows here,
-#: no new gate code, and an engine that returns writes its row from the needs it
-#: has then rather than from the ones it once had.
-ENGINE_MESH_REQUIREMENTS: dict[str, dict[str, Any]] = {
-    # TELEMAC-2D geometry is SELAFIN with a BOTTOM node field (the bed the
-    # shallow-water solve needs); rain-on-grid + river-dye consume it.
-    # A CORRIDOR mesh is the declared exception: it is bed-less by construction
-    # because the reach deck stages its topology bundle and fits elevation onto
-    # those nodes from the terrain that run acquires, so its bed exists by the time
-    # the solve reads a geometry.
-    "telemac": {"uri_field": "slf_uri", "needs_bathymetry": True,
-                "bed_fitted_at_authoring_field": "topology_uri",
-                "format": "SELAFIN (.slf, BOTTOM)"},
-}
-
-
-def mesh_compatible_with_engine(
-    art: MeshArtifact, engine: str
-) -> tuple[bool, str]:
-    """Can ``engine`` solve on ``art``? -> ``(ok, reason)``.
-
-    ``reason`` names the missing requirement on a mismatch so the consuming
-    template can DECLINE LOUDLY (never force-fit a mesh an engine cannot read).
-    An unknown engine is treated as incompatible (honest, not permissive)."""
-    req = ENGINE_MESH_REQUIREMENTS.get(str(engine).lower())
-    if req is None:
-        return False, f"no mesh-compatibility rule registered for engine {engine!r}"
-    uri = getattr(art, str(req["uri_field"]), None)
-    if not uri:
-        return False, (
-            f"mesh {art.name!r} carries no {req['format']} geometry that "
-            f"{engine} requires (this mesh was built as mode={art.mode!r})")
-    fitted_field = req.get("bed_fitted_at_authoring_field")
-    bed_fitted = bool(fitted_field and getattr(art, str(fitted_field), None))
-    if req.get("needs_bathymetry") and not art.has_bathymetry and not bed_fitted:
-        return False, (
-            f"mesh {art.name!r} has no sampled bathymetry; {engine} needs a "
-            "bed-carrying geometry")
-    return True, "compatible"
 
 
 # --------------------------------------------------------------------------- #

@@ -148,7 +148,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
 def _realize(state: Mapping[str, Any]) -> Mesh:
     import numpy as np
 
-    from trid3nt_server.workflows.mesh.watershed import (
+    from trid3nt_server.workflows.mesh.shared.nodes import (
         reproject_nodes_to_utm,
         sample_raster_at_nodes,
     )
@@ -214,7 +214,6 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
         rundir, lonlat=lonlat, cells=cells, points_m=points, bed_up=bed_up,
         boundary=state["boundary"], domain_source=domain.source)
     stats = _stats(rundir)
-    engine_compat = ["telemac"] if bed_up is not None else []
 
     return Mesh(
         points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}", bed=bed_up,
@@ -236,7 +235,6 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                 **boundary_probes,
             },
             "artifact": {
-                "engine_compat": engine_compat,
                 "open_boundary_info": boundary_info,
                 "provenance": {
                     "mesher_library": stats.get("engine", "oceanmesh (unreported)"),

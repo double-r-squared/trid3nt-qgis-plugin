@@ -196,7 +196,7 @@ def _cut_between(polys: list[Any], start: tuple[float, float],
     from shapely.geometry import LineString
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.workflows.mesh.watershed import utm_epsg_for
+    from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
 
     union_ll = unary_union(polys)
     lon_c, lat_c = union_ll.centroid.x, union_ll.centroid.y
@@ -268,7 +268,7 @@ def _area_km2(geom: Any) -> float:
     from pyproj import Transformer
     from shapely.ops import transform as _transform
 
-    from trid3nt_server.workflows.mesh.watershed import utm_epsg_for
+    from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
 
     epsg = utm_epsg_for(float(geom.centroid.x), float(geom.centroid.y))
     forward = Transformer.from_crs(4326, epsg, always_xy=True)

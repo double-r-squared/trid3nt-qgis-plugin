@@ -59,26 +59,22 @@ closes the DESIGN-STOP the pre-repoint version of this note left open. See
 `docs/DELETION_LEDGER.md` ("AUTO EDGE DIES - the reach templates' sizing
 rung") for what that deleted.
 
-**`ReachMesh.corridor` takes a measured reach, not a navigated seed.** The
-mesh step's `reach` kwarg is the step result the chain produced
-(`Ref("reach")`), not a domain the corridor mesher grew from a flowline seed;
-`build_corridor_mesh` no longer folds a seed into the declaration's `domain`
-field because `om2d`'s domain is the chain's `reach_polygon`, already fixed
-in `MESH` at declaration time.
+**ONE mesh step, for every template.** `ReachMesh.corridor` and
+`Catchment.mesh` are gone; `workflows/mesh/step.py::MeshStep.build` is the one
+declared mesh step (elegance review P2). Its `name` kwarg is presentation only -
+the DOMAIN is the chain's `reach_polygon` / `sized`, already fixed in `MESH` at
+declaration time. The reach plan's step is labeled `mesh`, and the deck reads
+`Ref("mesh")`.
 
-**The reach's width and bank source ride on PHYSICS now, not on MESH.**
-`extent_km` / `width_m` / `banks` are gone from the mesh ask (`om2d` has no
-such fields - it triangulates a measured polygon and has no width to be told)
-and gone from `_MESH_DECK_FIELDS`. The deck still needs to STATE the stretch
-it wrote for and the node budget it sized against, so `reach_length_km`,
-`channel_width_m` and `bank_source` now ride on the `PHYSICS` block instead
-(`Physics(..., reach_length_km=P.reach_length_km,
-channel_width_m=P.channel_width_m, bank_source=P.bank_source)`) and the deck
-reads them from there. **This placement is a PARITY SHIM, not a landing
-point** - it exists because the worker still re-derives a ribbon from these
-fields today. It is DIE-DATED to the worker-unification wave (P3/DS-3,
-docs/IDEAS.md 2026-08-30): once the worker takes a `MeshArtifact` instead,
-`channel_width_m` and `bank_source` leave `PHYSICS` for good.
+**`channel_width_m` and `bank_source` are GONE (elegance review P3).** The
+parity shim that carried them on `PHYSICS` is deleted: both Params,
+`normalize_bank_source` and its vocabulary, the review entry and the two
+manifest fields. Only `reach_length_km` still rides `PHYSICS`, because the deck
+states the stretch it wrote for. The worker keeps its own `bank_source` default
+until the wave lands; the server names it nowhere. The granularity the deck
+records is now the edge the ACCEPTED mesh was MEASURED at
+(`mesh["min_edge_m"]`), so `suggest_mesh_size_m` and its node estimate are gone
+too.
 
 **Dead resolution removed.** `steps/rain_on_grid.py::_adopt_case_mesh` is
 gone - one resolver for a mesh a case already holds, and it is the mesh

@@ -136,9 +136,9 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
 
 
 #: Plan-value deck fields every reach writer takes: the mid-reach seed the
-#: corridor is navigated from, and the ACCEPTED corridor mesh the solve runs on.
+#: centerline is navigated from, and the ACCEPTED mesh the solve runs on.
 #: Both are step results rather than sheet values, so neither can be declared.
-_REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("corridor_mesh")}
+_REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh")}
 
 #: The agitation deck always reads the run's MESH slot: the domain a phase-
 #: resolving solve runs on is the caller's to author, and a deck that read the
@@ -185,7 +185,7 @@ _PROCESSES: dict[str, _Process] = {
         deck=Stratified.deck, writer=write_stratified_deck,
         solve=_open_water_solve, read=_read_stratified, forcing_fields={}),
     "rainfall_runoff": _Process(
-        domain_kw="catchment", domain_ref=Ref("watershed_mesh"),
+        domain_kw="catchment", domain_ref=Ref("mesh"),
         deck=RainOnGrid.deck, writer=write_rain_on_grid_deck,
         solve=_rain_on_grid_solve, read=_read_rain_on_grid,
         forcing_fields=_RAIN_FORCING,

@@ -1,5 +1,9 @@
 """Reading a GEOMETRY SOURCE, shared by the generic geometry primitives.
 
+The local UTM zone lives here too, because measuring a shape in metres is what
+every one of them does first and a second copy of the arithmetic is a second
+chance for a zone to disagree with itself on a run that straddles a boundary.
+
 One reader, because a chain hands the same thing to every link: a layer object a
 producer returned, the uri that layer carries, a path on disk, or inline GeoJSON.
 A tool that unwrapped only some of those would refuse a value the tool beside it
@@ -18,7 +22,7 @@ import tempfile
 from typing import Any, Mapping
 
 __all__ = ["GeometryReadError", "flatten_geometries", "read_geometry_doc",
-           "source_uri"]
+           "source_uri", "utm_epsg_for"]
 
 
 class GeometryReadError(RuntimeError):
@@ -30,6 +34,16 @@ class GeometryReadError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
+
+
+def utm_epsg_for(lon: float, lat: float) -> int:
+    """The WGS84 UTM zone EPSG a lon/lat falls in - THE one implementation.
+
+    Clamped to the 60 real zones, so a longitude at or past the antimeridian
+    reads the edge zone rather than a code no CRS registry carries.
+    """
+    zone = min(60, max(1, int((float(lon) + 180.0) // 6.0) + 1))
+    return (32600 if float(lat) >= 0.0 else 32700) + zone
 
 
 def source_uri(source: Any) -> Any:

@@ -154,7 +154,7 @@ def author_mesh(work_dir: Path) -> tuple[Any, str, str]:
         "nodes": artifact.node_count, "elements": artifact.element_count,
         "crs": artifact.crs_authid, "probes": artifact.probes,
         "open_boundary_info": artifact.open_boundary_info,
-        "engine_compat": artifact.engine_compat,
+        "unsolvable_reason": artifact.unsolvable_reason(),
         "barrier_width_m": BARRIER_WIDTH_M,
     }, indent=2, default=str))
     return artifact, structure_uri, footprint
@@ -178,7 +178,7 @@ def render_mesh_figures(artifact: Any, footprint: str, directory: Path, *,
     import numpy as np
 
     from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
+    from trid3nt_server.workflows.mesh.shared.nodes import read_2dm_mesh
 
     local = directory / "authored_mesh.2dm"
     local.write_bytes(read_object_bytes_s3(artifact.display_uri))

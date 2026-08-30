@@ -30,7 +30,6 @@ from typing import Any
 
 from trid3nt_server.workflows.lib import Step, user_input
 from trid3nt_server.workflows.shared.layer_fields import layer_field
-from trid3nt_server.workflows.mesh.tool import declaration_plan_value
 
 from .errors import TelemacDyeScenarioError
 
@@ -44,9 +43,7 @@ __all__ = [
     "Geocode",
     "MESH_H_FLOOR_M",
     "MESH_NODE_CAP",
-    "ReachMesh",
     "ReachSeed",
-    "build_corridor_mesh",
     "coerce_lonlat_point",
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
@@ -343,8 +340,7 @@ async def geocode_reach(*, location: str | None,
     }
 
 
-async def fetch_reach_flowline(*, prefetched: str | None = None,
-                               fallback: tuple[str, ...] = ()) -> str | None:
+async def fetch_reach_flowline(*, prefetched: str | None = None) -> str | None:
     """The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data.
 
     ``prefetched`` reuses a flowline the caller already fetched for this reach -
@@ -769,76 +765,3 @@ def ReachSeed(*, reach: Any, rivers: Any) -> Step:  # noqa: N802 - a value const
     """The mid-reach seed on the fetched flowline."""
     return Step(runner=f"{_STEPS}.reach.reach_seed", stage="acquire",
                 kwargs={"reach": reach, "rivers": rivers})
-
-
-class ReachMesh:
-    """The corridor mesh, as the declared step that opens a mesh session over it."""
-
-    #: The label the mesh gate's card carries. It names the ask - a reach corridor
-    #: mesh - rather than whichever template demanded it, because the same gate
-    #: presents the same mesh to every one of them.
-    GATE_LABEL: str = "telemac_reach_mesh"
-
-    @staticmethod
-    def corridor(*, mesh: Any, reach: Any) -> Step:
-        """Build the declared reach mesh under the mesh gate.
-
-        The DECLARATION travels WHOLE - its mesher, its kind, every field the
-        router checked and the edits the template declared on it - as the plain
-        mapping the interpreter binds late-bound reads inside. Nothing about the
-        ask is restated here, so a knob or a declared edit cannot go missing
-        between the template and the mesh. The DOMAIN is one of those fields: it
-        is the reach polygon the plan's chain cut, so the mesher receives a
-        measured extent rather than growing one.
-
-        The REACH rides separately, and only names the session: which place the
-        mesh presented at the gate belongs to is a step result rather than
-        anything the declaration can name.
-        """
-        return Step(runner=f"{_STEPS}.reach.build_corridor_mesh", stage="mesh",
-                    kwargs={"mesh": declaration_plan_value(mesh), "reach": reach})
-
-
-async def build_corridor_mesh(*, mesh: dict[str, Any],
-                              reach: dict[str, Any]) -> dict[str, Any]:
-    """The reach mesh a solve runs on -> the accepted mesh's record.
-
-    The declaration is rebuilt exactly as the template declared it and a session
-    opens over it: the mesh is built, its declared edits prefixing the recipe, then
-    presented at the mesh gate with its probes and its editable layer, edited or
-    restarted if the user says so, and accepted. A ``restart`` therefore truncates
-    to the declared chain rather than past it. What comes back is the ACCEPTED
-    topology, which the deck then hands the solve - otherwise the mesh a human
-    approved and the mesh a solver ran on would be two different objects that
-    happen to agree.
-    """
-    import asyncio
-
-    from trid3nt_server.emission.pipeline_emitter import current_turn_case
-    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
-    from trid3nt_server.workflows.mesh.gate import gate_mesh_build
-    from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
-
-    reach = dict(reach)
-    declaration = declaration_from_plan_value(mesh)
-    session = await asyncio.to_thread(
-        MeshSession, declaration, case_id=current_turn_case(),
-        name=f"{reach.get('name') or reach.get('slug')} corridor")
-    art = await gate_mesh_build(session, tool_name=ReachMesh.GATE_LABEL)
-    logger.info("reach mesh accepted: %s -> %d nodes / %d elements, "
-                "min edge %s m", art.mesh_id, art.node_count, art.element_count,
-                measured_min_edge_m(art))
-    return {
-        "artifact": art,
-        "mesh_id": art.mesh_id,
-        "slf_uri": art.slf_uri,
-        "cli_uri": art.cli_uri,
-        "topology_uri": art.topology_uri,
-        "display_uri": art.display_uri,
-        "recipe_uri": art.recipe_uri,
-        "node_count": art.node_count,
-        "element_count": art.element_count,
-        "min_edge_m": measured_min_edge_m(art),
-        "provenance": dict(art.provenance or {}),
-    }

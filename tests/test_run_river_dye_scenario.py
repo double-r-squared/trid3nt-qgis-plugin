@@ -277,7 +277,7 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
     steps = list(pl.declared())
     assert [s.label for s in steps][2:] == [
-        "reach", "seed", "carrier_discharge", "corridor_mesh", "deck",
+        "reach", "seed", "carrier_discharge", "mesh", "deck",
         "solve", "plume"]
     # Both gates precede every step, so nothing consumes a value the review can
     # still revise.
@@ -288,7 +288,7 @@ def test_the_plan_validates_and_gates_before_the_solve():
     assert steps[-1].charts[0].name == "dye_concentration"
 
 
-def test_the_declared_data_is_reference_data_with_the_rain_ladder():
+def test_the_declared_data_is_reference_data_the_chain_authors_from():
     from trid3nt_server.workflows.lib import AuthoredProducer, ReferenceProducer
     from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
 
@@ -302,7 +302,10 @@ def test_the_declared_data_is_reference_data_with_the_rain_ladder():
     assert all(isinstance(by_name[n].producer, AuthoredProducer)
                for n in ("ends", "reach_polygon"))
     assert not hasattr(by_name["rivers"].producer, "byo")
-    assert by_name["rain"].producer.ladder_rungs == ("gridmet_domain_mean", "user_rate")
+    # No producer here declares a ladder: gridMET-vs-user-rate is a branch on the
+    # ask inside one producer, not a fallback chain, and a declared ladder that
+    # never fired would be indistinguishable from one that did.
+    assert all(d.producer.ladder_rungs == () for d in DATA)
 
 
 # ===========================================================================
@@ -315,6 +318,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac import results_mesh_seam as seam_mod
     from trid3nt_server.workflows.shared import run_products as products_mod
     from trid3nt_server.workflows.telemac.steps import products as prod_steps
+    from trid3nt_server.workflows.mesh import step as mesh_step
     from trid3nt_server.workflows.telemac.steps import reach as reach_steps
     from trid3nt_server.workflows.telemac.steps import forcing as forcing_steps
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
@@ -362,7 +366,7 @@ def _install_step_mocks(captured: dict):
             "seed_lon": seed["lon"], "seed_lat": seed["lat"],
         }
 
-    async def _fake_corridor_mesh(*, mesh, reach):
+    async def _fake_mesh(*, mesh, name=None):
         """The mesh session stands in: this chain test is about the chain.
 
         No artifact rides back, so the deck's timestep falls to the REQUESTED
@@ -404,7 +408,7 @@ def _install_step_mocks(captured: dict):
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
         patch.object(deck_steps, "resolve_reach_river", _fake_river),
-        patch.object(reach_steps, "build_corridor_mesh", _fake_corridor_mesh),
+        patch.object(mesh_step, "build_declared_mesh", _fake_mesh),
         patch.object(forcing_steps, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",

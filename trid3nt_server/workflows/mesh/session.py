@@ -160,11 +160,10 @@ class MeshSession:
         declared.pop("node_count", None)
         declared.pop("element_count", None)
         _, display_uri = self._display_face()
-        slf_uri = self._selafin()
+        slf_uri, cli_uri = self._telemac_pair()
         recipe_uri = self._stage(self.recipe_path)
         has_bed = mesh.has_bed
-        engine_compat = list(declared.pop("engine_compat", None)
-                             or (["telemac"] if slf_uri and has_bed else []))
+        declared.pop("engine_compat", None)
         provenance = {"mesher": self.mesher.name,
                       "spec": self.spec.to_json(),
                       "edits": [e.action for e in self._chain],
@@ -174,10 +173,11 @@ class MeshSession:
             display_uri=display_uri, slf_uri=slf_uri,
             crs_authid=mesh.crs_authid, has_bathymetry=has_bed,
             node_count=mesh.node_count, element_count=mesh.element_count,
-            bbox=_lonlat_bbox(mesh), engine_compat=engine_compat,
+            bbox=_lonlat_bbox(mesh),
             utm_epsg=mesh.meta.get("utm_epsg"), provenance=provenance,
             probes=self.probes(),
             recipe_uri=recipe_uri, case_id=self.case_id,
+            **({"cli_uri": cli_uri} if cli_uri else {}),
             **self._staged_files(mesh), **declared)
         stash_mesh_artifact(self.case_id, art)
         if str(display_uri).startswith("s3://"):
@@ -197,19 +197,29 @@ class MeshSession:
             self._display = (local, self._stage(local))
         return self._display
 
-    def _selafin(self) -> str | None:
-        """The TELEMAC geometry, when this mesh IS one: triangles with a real bed."""
-        mesh = self.mesh
-        declared = dict(mesh.meta.get("files") or {}).get("slf_uri")
-        if declared:
-            return self._stage(Path(declared))
-        if mesh.nodes_per_cell != 3 or not mesh.has_bed:
-            return None
-        from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
+    def _telemac_pair(self) -> tuple[str | None, str | None]:
+        """The TELEMAC geometry AND its ``.cli``, when this mesh IS one.
 
-        local = self.workdir / "mesh.slf"
-        write_bottom_selafin(str(local), mesh.points, mesh.cells, mesh.bed)
-        return self._stage(local)
+        The two are ONE artifact - the ``.cli`` rows are ordered by the geometry's
+        own IPOBO - so they are written together by the shared telapy driver
+        rather than by a byte layout this file would have to maintain. A mesher
+        that already wrote its own pair keeps it; nothing is re-derived.
+        """
+        mesh = self.mesh
+        files = dict(mesh.meta.get("files") or {})
+        declared = files.get("slf_uri")
+        if declared:
+            return self._stage(Path(declared)), None
+        if mesh.nodes_per_cell != 3 or not mesh.has_bed:
+            return None, None
+        from trid3nt_server.workflows.mesh.shared.selafin_cli import write_telemac_pair
+
+        written = write_telemac_pair(
+            self.workdir, x=mesh.points[:, 0], y=mesh.points[:, 1],
+            cells=mesh.cells, bed=mesh.bed, title=f"TRID3NT {self.mesher.name}")
+        cli = written["cli"]
+        return self._stage(written["geo_slf"]), (
+            self._stage(cli) if not files.get("cli_uri") else None)
 
     def _staged_files(self, mesh: Mesh) -> dict[str, Any]:
         """Stage the per-solver files the mesher wrote.

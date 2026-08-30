@@ -136,14 +136,13 @@ def _gridmet_domain_mean_pr(bbox: tuple[float, float, float, float],
 async def resolve_rain_forcing(*, rainfall_mm_per_day: float | None,
                                evaporation_mm_per_day: float | None,
                                gridmet_window: str | None,
-                               fallback: tuple[str, ...] = (),
                                temporal: TemporalSpec | None = None) -> dict[str, Any]:
     """The SIGNED net rain-or-evaporation rate (mm/day) the deck carries.
 
-    ``fallback`` is the declared ladder, walked in order: a real gridMET storm
-    total for the window supersedes an explicit user rate. Evaporation is then
-    subtracted (TELEMAC's single signed RAIN OR EVAPORATION keyword). A ``None``
-    rate means no forcing was asked for, and the deck stays byte-identical.
+    A dated gridMET window is the storm total for that window; without one, an
+    explicit user rate. Evaporation is then subtracted (TELEMAC's single signed
+    RAIN OR EVAPORATION keyword). A ``None`` rate means no forcing was asked for,
+    and the deck stays byte-identical.
 
     ``temporal`` is the declaration's own ``.resample()`` / ``.normalize()``,
     checked against the cadence and units this producer actually delivers; the
@@ -151,13 +150,12 @@ async def resolve_rain_forcing(*, rainfall_mm_per_day: float | None,
     """
     return await asyncio.to_thread(
         _rain_forcing, rainfall_mm_per_day, evaporation_mm_per_day,
-        gridmet_window, tuple(fallback), temporal)
+        gridmet_window, temporal)
 
 
 def _rain_forcing(rainfall_mm_per_day: float | None,
                   evaporation_mm_per_day: float | None,
                   gridmet_window: str | None,
-                  fallback: tuple[str, ...],
                   temporal: TemporalSpec | None = None) -> dict[str, Any]:
     rung: str | None = None
     rain: float | None = None
@@ -181,7 +179,7 @@ def _rain_forcing(rainfall_mm_per_day: float | None,
 
     if rain is None and evap is None:
         return {"mm_per_day": None, "note": None, "rung": None,
-                "ladder": list(fallback), "temporal_note": None}
+                "temporal_note": None}
     net = float(min(max((rain or 0.0) - (evap or 0.0),
                         _NET_RAIN_MIN_MM_DAY), _NET_RAIN_MAX_MM_DAY))
     if temporal is not None and temporal.units is not None \
@@ -200,7 +198,7 @@ def _rain_forcing(rainfall_mm_per_day: float | None,
         note = f"{note} [{moved.note}]"
     logger.info("telemac rainfall forcing: %s", note)
     return {"mm_per_day": net, "note": note, "rung": rung,
-            "ladder": list(fallback), "temporal_note": moved.note}
+            "temporal_note": moved.note}
 
 
 def coerce_event_time(value: Any) -> str | None:

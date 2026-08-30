@@ -1,4 +1,4 @@
-"""Standalone mesh builder + the engine-agnostic mesh precondition gate.
+"""The one mesh front: the standalone builder, its session, its gate, its step.
 
 Nothing is re-exported here: the router that would come with the rest of the
 package imports the tool registry, which imports the templates, so a template

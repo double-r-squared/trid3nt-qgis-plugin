@@ -52,7 +52,6 @@ def _artifact(**overrides):
         "crs_authid": "EPSG:32619", "has_bathymetry": True,
         "node_count": 13110, "element_count": 25424,
         "bbox": (-71.525, 41.338, -71.492, 41.368),
-        "engine_compat": ["telemac"],
         "probes": {"edge_length_m": {"min": 4.2, "max": 202.1, "mean": 28.1}},
         "provenance": {"mesher": "om2d",
                        "dem_source": "fetch_topobathy: cudem_nearshore 100%"},
@@ -62,9 +61,9 @@ def _artifact(**overrides):
 
 
 def _resolves_to(monkeypatch, artifact, seen=None):
-    def _supplied(explicit, *, engine, tool_name):
+    def _supplied(explicit, *, tool_name):
         if seen is not None:
-            seen.update(engine=engine, tool_name=tool_name)
+            seen.update(tool_name=tool_name)
         return artifact
 
     monkeypatch.setattr(
@@ -102,7 +101,7 @@ def test_the_door_asks_the_registry_by_tool_name(monkeypatch):
     seen: dict = {}
     _resolves_to(monkeypatch, _artifact(), seen=seen)
     AG.resolve_supplied_mesh("s3://cache/mesh/01TESTMESH/mesh.2dm", real=True)
-    assert seen == {"engine": "telemac", "tool_name": "artemis_harbor_agitation"}
+    assert seen == {"tool_name": "artemis_harbor_agitation"}
     # ... and that name resolves to the contract that admits this om2d mesh.
     assert accepts_for(seen["tool_name"]).accepts("mesh", "unstructured_tri")
 

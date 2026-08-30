@@ -244,7 +244,7 @@ def resolve_supplied_mesh(supplied: Any, *, real: bool) -> Any:
             "so a supplied mesh has nothing to be. Ask for the real-bathymetry "
             "class, or drop the mesh.",
             error_code="ARTEMIS_SUPPLIED_MESH_UNSUPPORTED_MODE")
-    art = supplied_mesh_artifact(supplied, engine="telemac", tool_name=_TOOL)
+    art = supplied_mesh_artifact(supplied, tool_name=_TOOL)
     if not art.cli_uri:
         raise OpenWaterError(
             f"the mesh supplied for this run ({art.name!r}) carries no boundary "

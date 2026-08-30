@@ -79,7 +79,7 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
         fake_pair)
     monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.watershed.sample_raster_at_nodes",
+        "trid3nt_server.workflows.mesh.shared.nodes.sample_raster_at_nodes",
         lambda path, pts: np.full(np.asarray(pts).shape[0], -4.0))
     return sent
 

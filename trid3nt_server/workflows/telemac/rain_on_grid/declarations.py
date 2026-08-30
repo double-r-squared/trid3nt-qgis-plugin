@@ -14,13 +14,6 @@ declared has nowhere to hide.
 from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
-from trid3nt_server.workflows.mesh.watershed import (
-    DEFAULT_BED_RESOLUTION_M,
-    DEFAULT_GRADE,
-    DEFAULT_MAX_EDGE_M,
-    DEFAULT_MIN_EDGE_M,
-    DEFAULT_RIVER_SOURCE,
-)
 
 __all__ = [
     "DEFAULT_MAX_EDGE_M",
@@ -43,11 +36,19 @@ __all__ = [
 #: new rows across five templates belong to that wave rather than to this one.
 POUR_POINT_BUFFER_DEG: float = 0.14
 
-# The catchment mesher's defaults are IMPORTED, not restated: they live beside the
-# mesher in the shared mesh front, which is the other caller's only home for them
-# (a standalone mesh build has no param sheet). The composer this
-# replaces held 40 m at its CALL site and 400 m in the signature default it
-# overrode - two numbers for one dial, only one of which ever ran.
+#: The edge-length BAND a catchment interior is triangulated between: fine in the
+#: channel band, coarse on the hillslopes, and how fast the edge may grow between
+#: the two. Labeled defaults on this sheet and nowhere else - the ask reaches the
+#: mesher through the MESH declaration, so there is one number per dial.
+DEFAULT_MIN_EDGE_M: float = 40.0
+DEFAULT_MAX_EDGE_M: float = 300.0
+DEFAULT_GRADE: float = 0.20
+
+#: Ground resolution the BARE-EARTH bed is sampled at the mesh nodes from.
+DEFAULT_BED_RESOLUTION_M: int = 10
+
+#: The channel network mesh refinement is sized by distance to.
+DEFAULT_RIVER_SOURCE: str = "nhdplus_hr"
 
 #: NLCD's own grid. Land cover is a CATEGORICAL raster, so asking for any other
 #: spacing resamples class labels - which is the one resampling the temporal and

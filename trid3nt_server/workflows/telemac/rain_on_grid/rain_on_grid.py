@@ -7,7 +7,7 @@ prose are one file over in ``declarations.py``. Everything else - normalizing th
 wire args, resolving the doors, walking the plan, persisting the products - is the
 skeleton (``workflows/lib/workflow.py``); the catchment mechanism is the TELEMAC
 facade's rain-on-grid front (``workflows/telemac/steps/rain_on_grid.py``) over the
-shared mesh front's catchment strategy (``workflows/mesh/watershed.py``). See
+chained delineation and the one mesh step. See
 ``docs/design/declarative-workflows.md``.
 
 THE QUESTION: how much RUNOFF a storm produces from a WATERSHED, and where the
@@ -46,6 +46,7 @@ from trid3nt_server.workflows.lib import (
     register_workflow,
     user_input,
 )
+from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
     DOC,
@@ -53,7 +54,7 @@ from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
     PARAMS,
     POUR_POINT_BUFFER_DEG,
 )
-from trid3nt_server.workflows.telemac.steps import Catchment, compute_class
+from trid3nt_server.workflows.telemac.steps import Infiltration, compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_hydrograph_chart", "plan",
@@ -94,10 +95,7 @@ DATA = (
                             window=P.rain_window,
                             intensity_mm_per_hr=P.design_storm_mm_per_hr,
                             storm_duration_hr=P.storm_duration_hr,
-                            sim_duration_hr=P.sim_duration_hr)
-         # A real window fetches the hourly record; without one the constant
-         # design storm is the labeled rung, and the run reports which answered.
-         .ladder("aorc_hourly", "design_storm")),
+                            sim_duration_hr=P.sim_duration_hr)),
     # THE DOMAIN, narrowed by CHAINING tools rather than by a mesher that grew a
     # delineation of its own. The basin is the terrain's answer at the outlet,
     # off the same bare-earth bed the nodes are sampled from - one acquisition,
@@ -165,13 +163,12 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                             pour_point=P.pour_point,
                             aoi_half_deg=POUR_POINT_BUFFER_DEG,
                             aoi_name="watershed", code_prefix="TELEMAC_ROG"),
-        Catchment.mesh(mesh=MESH, supplied=D.mesh, bed_dem=D.bed_dem,
-                       rivers=D.rivers).named("watershed_mesh"),
-        Catchment.infiltration(mesh=Ref("watershed_mesh"), landcover=D.landcover,
-                               curve_number=P.curve_number,
-                               steep_slope_correction=P.steep_slope_correction,
-                               antecedent_moisture=P.antecedent_moisture
-                               ).named("infiltration"),
+        MeshStep.build(mesh=MESH, name=Ref("aoi")).named("mesh"),
+        Infiltration.fields(mesh=Ref("mesh"), landcover=D.landcover,
+                            curve_number=P.curve_number,
+                            steep_slope_correction=P.steep_slope_correction,
+                            antecedent_moisture=P.antecedent_moisture
+                            ).named("infiltration"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)

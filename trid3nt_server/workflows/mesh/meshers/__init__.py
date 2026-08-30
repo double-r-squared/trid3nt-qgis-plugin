@@ -531,12 +531,12 @@ _TOPOLOGY_BOUND_META = ("files", "probes")
 #: Claims about the topology that a mesher DECLARED for the artifact. They describe
 #: the cells the edit replaced, so an adopted mesh states them afresh from what it
 #: can actually back rather than inheriting the pre-edit mesh's word.
-_TOPOLOGY_BOUND_CLAIMS = ("engine_compat", "open_boundary_info")
+_TOPOLOGY_BOUND_CLAIMS = ("open_boundary_info",)
 
 
 def _apply_layer_edits(mesh: Mesh, *, layer: str,
                        regenerate: Callable[[Mesh, Mesh], Mesh] | None) -> Mesh:
-    from trid3nt_server.workflows.mesh.watershed import read_2dm_mesh
+    from trid3nt_server.workflows.mesh.shared.nodes import read_2dm_mesh
 
     _refuse_unadoptable(mesh, regenerate)
     points, cells, z = read_2dm_mesh(str(layer))

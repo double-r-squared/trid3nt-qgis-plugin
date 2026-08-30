@@ -84,9 +84,9 @@ def test_a_mesh_override_cuts_later_than_a_physics_one():
     mesh, _ = reuse_plan(wf.plan, wf.data, ("mesh_resolution_m",))
     assert mesh > physics
     # the edge length is the MESH's ask, so the cut lands on the mesh step: the
-    # corridor is rebuilt and the deck follows it, rather than the deck alone
-    # being re-authored around a mesh nobody re-cut.
-    assert [n.label for n in _nodes(wf)][mesh] == "corridor_mesh"
+    # mesh is rebuilt and the deck follows it, rather than the deck alone being
+    # re-authored around a mesh nobody re-cut.
+    assert [n.label for n in _nodes(wf)][mesh] == "mesh"
 
 
 def test_an_override_the_plan_never_reads_has_no_cut():

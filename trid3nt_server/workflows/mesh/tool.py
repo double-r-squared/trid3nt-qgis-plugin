@@ -28,7 +28,6 @@ from trid3nt_server.workflows.lib.slots import deep_freeze
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,
-    mesh_compatible_with_engine,
     read_mesh_artifact_sidecar,
 )
 from trid3nt_server.workflows.mesh.kinds import MeshKind
@@ -292,7 +291,6 @@ class MeshResolution:
 def resolve_mesh(
     declaration: MeshDeclaration | None = None, *,
     explicit: Any = None,
-    engine: str | None = None,
     accepts: Accepts | None = None,
     case_id: str | None = None,
     loaded_mesh_uris: list[str] | None = None,
@@ -300,14 +298,15 @@ def resolve_mesh(
 ) -> MeshResolution:
     """Pick the mesh a run should use: explicit first, then the case, then the spec.
 
-    An explicit mesh NEVER falls through: if it cannot be read, if the engine
-    cannot solve on it, or if its kind is not a member of the ``mesh`` row of the
-    template's declared ``accepts``, that is a refusal rather than a quiet
-    substitution. That row is the template's statement of which supplied meshes its
-    pipeline was built and tested against, so a mesh outside it is checked out here
-    - at the door, beside engine-compat - rather than discovered several steps later
-    by a deck that assumed a shape the mesh does not have. A template with no mesh
-    row accepts no supplied mesh at all.
+    An explicit mesh NEVER falls through: if it cannot be read, if its kind is not
+    a member of the ``mesh`` row of the template's declared ``accepts``, or if the
+    artifact itself says no solve can be staged on it, that is a refusal rather
+    than a quiet substitution. Two questions and two owners: the ``mesh`` row is
+    the TEMPLATE's statement of which supplied meshes its pipeline was built and
+    tested against, and readiness is the ARTIFACT's own
+    (:meth:`MeshArtifact.unsolvable_reason`). Both are asked here, at the door,
+    rather than several steps later by a deck that assumed a shape the mesh does
+    not have. A template with no mesh row accepts no supplied mesh at all.
 
     ``declaration`` is the DEFAULT BUILD, and the build path is untouched by
     ``accepts``: a run with nothing supplied and nothing to adopt builds the kind
@@ -332,14 +331,14 @@ def resolve_mesh(
                 f"the mesh supplied for this run ({explicit!r}) carries no readable "
                 "mesh artifact record, so what it is cannot be checked against the "
                 "engine; supply a mesh this case built.")
-        _refuse_incompatible(art, engine)
         _refuse_unaccepted_kind(art, accepts)
+        _refuse_unsolvable(art)
         return MeshResolution("explicit", "supplied on the run", artifact=art)
 
     for art in reversed(find_case_mesh_artifacts(
             case_id=case_id, loaded_mesh_uris=loaded_mesh_uris,
             s3_client=s3_client)):
-        if engine is not None and not mesh_compatible_with_engine(art, engine)[0]:
+        if art.unsolvable_reason() is not None:
             continue
         if not kind_accepted(art, accepts):
             continue
@@ -374,21 +373,21 @@ def accepts_for(tool_name: str) -> Accepts | None:
     return getattr(workflow, "accepts", None)
 
 
-def supplied_mesh_artifact(explicit: Any, *, engine: str,
+def supplied_mesh_artifact(explicit: Any, *,
                            tool_name: str) -> MeshArtifact | None:
-    """The mesh a run was HANDED, resolved and checked against its engine and row.
+    """The mesh a run was HANDED, resolved and checked against the calling row.
 
     The reader lives here rather than in each consuming template: a mesh artifact
     is the mesh front's record, and a step that opened the object store for itself
     would be doing world-reads a step must never do. ``None`` for an unfilled slot;
-    a refusal, never a fall-through, for one the engine cannot solve on or one the
-    calling template's ``mesh`` row does not name.
+    a refusal, never a fall-through, for one the calling template's ``mesh`` row
+    does not name or one no solve can be staged on.
     """
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     if explicit is None or not str(explicit).strip():
         return None
-    return resolve_mesh(explicit=explicit, engine=engine,
+    return resolve_mesh(explicit=explicit,
                         accepts=accepts_for(tool_name),
                         s3_client=_get_s3_client()).artifact
 
@@ -439,12 +438,11 @@ def _refuse_unaccepted_kind(art: MeshArtifact, accepts: Accepts | None) -> None:
         f"supply one of {list(kinds)!r} instead.")
 
 
-def _refuse_incompatible(art: MeshArtifact, engine: str | None) -> None:
-    if engine is None:
-        return
-    ok, reason = mesh_compatible_with_engine(art, engine)
-    if not ok:
-        raise MeshToolError("MESH_ENGINE_INCOMPATIBLE", reason)
+def _refuse_unsolvable(art: MeshArtifact) -> None:
+    """Refuse a supplied mesh no solve could be staged on, in its own words."""
+    reason = art.unsolvable_reason()
+    if reason is not None:
+        raise MeshToolError("MESH_NOT_SOLVABLE", reason)
 
 
 _METADATA = AtomicToolMetadata(
@@ -547,11 +545,11 @@ async def build_mesh(
             fields = {name: float(value), **fields}
 
     declared = get_mesher(mesher).fields
-    if "extent" not in declared and "domain" not in declared:
-        # A mesher that takes neither an extent nor a domain is handed an existing
-        # geometry, so an extent would reach nothing. Refused BY NAME, the same as
-        # any other field this mesher never declared - a dropped extent reads as a
-        # lever that shaped a mesh it never touched.
+    if "extent" not in declared:
+        # A mesher that takes no extent is handed an existing geometry, so an
+        # extent would reach nothing. Refused BY NAME, the same as any other field
+        # this mesher never declared - a dropped extent reads as a lever that
+        # shaped a mesh it never touched.
         spatial = [name for name, value in
                    (("location", location), ("bbox", bbox)) if value is not None]
         if spatial:

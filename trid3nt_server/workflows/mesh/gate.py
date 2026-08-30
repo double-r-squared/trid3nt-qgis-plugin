@@ -299,7 +299,7 @@ def _artifact_summary(art: MeshArtifact) -> dict[str, Any]:
         "element_count": art.element_count,
         "crs_authid": art.crs_authid,
         "has_bathymetry": art.has_bathymetry,
-        "engine_compat": list(art.engine_compat or []),
+        "unsolvable_reason": art.unsolvable_reason(),
         "display_uri": art.display_uri,
         "recipe_uri": art.recipe_uri,
     }
