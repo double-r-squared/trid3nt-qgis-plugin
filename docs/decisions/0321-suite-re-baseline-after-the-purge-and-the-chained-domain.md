@@ -226,3 +226,51 @@ corridor mesher that produced the topology bundle was deleted with
 `telemac_build.py` - so the reach deck writer demands a bundle no mesher builds.
 That is the worker-unification port's seam, not this tail's, and it is recorded
 as a DESIGN-STOP rather than patched.
+
+---
+
+## AMENDMENT 2026-08-30c - adversarial re-baseline, second pass
+
+Re-measured from scratch at `9e474353` by a reviewer who ran every command
+itself rather than reading the previous amendment. Commands verbatim from this
+note, globs reaching the shell, `env -u TRID3NT_CACHE_BUCKET
+venvs/agent/bin/python -m pytest ... -p no:cacheprovider --timeout=300 -q`.
+
+| slice | passed | skipped | failed | wall |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1735 | 5 | 0 | 209.78s |
+| `test_[f-o]*` | 4156 | 0 (1 xfailed) | 0 | 42.75s |
+| `test_[p-r]*` | 1924 | 1 | 0 | 95.86s |
+| `test_[s-z]*` | 1337 | 6 | 0 | 287.42s |
+| `contracts/tests` | 789 | 0 | 0 | 5.29s |
+
+9941 passed, **0 failed**. Amendment 30b's counts reproduce exactly, slice for
+slice. The standing baseline is unchanged.
+
+### What the suite still does not reach
+
+Two defects live entirely outside this denominator, both found by driving rather
+than by testing.
+
+**The ledger replay of a mesh-bearing plan is broken.** `build_declared_mesh`
+returns `{"artifact": <MeshArtifact>, ...}`. `_serialize` classifies that dict as
+`json`, so the dataclass is flattened into the ledger document and `_rehydrate`
+hands the next attempt a plain dict. Both of the deck step's consumers read it by
+attribute: `measured_min_edge_m` does `art.probes` and fails
+`STEP_FAILED: 'dict' object has no attribute 'probes'`, and `domain_polygon_of`
+does `getattr(artifact, "provenance", None) or {}`, which degrades silently to a
+typed refusal blaming an extent the run never declared. Any second attempt at a
+reach template after an incomplete first one dies here; only `restart_clean=True`
+gets past it. `_serialize` has no dataclass arm even though `MeshArtifact`
+carries both `to_json` and `from_json`.
+
+**`workers/` carries five uncommitted deletions of modules it still imports.**
+`rog_build.py`, `telemac_coastal_build.py`, `telemac_river_dye_build.py`,
+`tomawac_build.py` and `rainfall_forcing_compare.py` are gone from the working
+tree while `workers/telemac/entrypoint.py` imports four of them at eight call
+sites, `Dockerfile` copies them, and `trid3nt_server/workflows/telemac/
+run_telemac.py` names one. The offline suite does not walk `workers/`, so five
+green slices say nothing about it. Four have DELETION_LEDGER lines from earlier
+waves; `rainfall_forcing_compare` has none.
+
+Neither is this tail's subject and neither is patched here.
