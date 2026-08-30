@@ -83,7 +83,13 @@ DATA = (
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
+#: The reach's own extent and width ride HERE rather than on the mesh ask: the
+#: mesher is handed a measured polygon and has no width to be told, while the deck
+#: still states the stretch it wrote for and the node budget it sized against.
 PHYSICS = Physics("waqtel_o2",
+                  reach_length_km=P.reach_length_km,
+                  channel_width_m=P.channel_width_m,
+                  bank_source=P.bank_source,
                   do_sag_config=Ref("waqtel"),
                   reach_seed_coords=P.outfall_coords,
                   sim_duration_s=P.sim_duration_s,
@@ -91,17 +97,16 @@ PHYSICS = Physics("waqtel_o2",
 
 FORCING = Forcing(carrier=Ref("reviewed_discharge"))
 
-#: The MESH ASK, frozen at declaration and building nothing at import. Every field
-#: is checked at the router against what the ``corridor_tin`` mesher declares, so a
-#: knob it does not read is refused by name rather than ignored.
+#: The MESH ASK, frozen at declaration and building nothing at import. The extent
+#: is the CHAIN's product - the stretch of mapped banks the section cut between the
+#: centerline's two ends - so the mesher triangulates a domain other tools measured
+#: rather than growing a corridor of its own. Every field is checked at the router
+#: against what the ``om2d`` mesher declares.
 MESH = tool.build_mesh(
-    mesher="corridor_tin",
+    mesher="om2d",
     kind="unstructured_tri",
-    domain=Ref("reach"),
-    extent_km=P.reach_length_km,
-    width_m=P.channel_width_m,
-    banks=P.bank_source,
-    refine={"edge_length": P.mesh_resolution_m, "mode": P.mesh_resolution},
+    extent=Ref("reach_polygon"),
+    refine={"edge_length": P.mesh_resolution_m},
 )
 
 
@@ -121,7 +126,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         ReviewResolvedInputs(carrier_discharge=Ref("carrier_discharge"),
                              bank_source=P.bank_source, workflow=ops.name,
                              input_mode=RunMode).named("reviewed_discharge"),
-        ReachMesh.corridor(mesh=MESH, seed=Ref("seed")).named("corridor_mesh"),
+        ReachMesh.corridor(mesh=MESH, reach=Ref("reach")).named("corridor_mesh"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)

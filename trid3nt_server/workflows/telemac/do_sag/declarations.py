@@ -73,12 +73,14 @@ PARAMS: tuple[Param, ...] = (
     Param("sim_duration_s", door=doors.CONSTANT, default=10800.0,
           bounds=(60.0, 864000.0), units="s", consequence="numerical",
           desc="Simulated time to reach the steady-state sag"),
-    Param("mesh_resolution", door=doors.CONSTANT, default="auto",
-          consequence="numerical",
-          desc="Mesh sizing mode: auto | fine | coarse"),
-    Param("mesh_resolution_m", door=doors.USER, optional=True, user_lever=True,
+    # THE granularity lever, and always an explicit sheet value: no sizing rung
+    # derives an edge from the channel, so the number the run meshes at is either
+    # the user's or the labeled default a review can see and change.
+    Param("mesh_resolution_m", door=doors.SCENARIO, default=14.0, user_lever=True,
           bounds=(3.0, 5000.0), units="m", consequence="numerical",
-          desc="Explicit target element edge length, overriding the sizing mode"),
+          desc="Target element edge length the reach is triangulated at; where the "
+               "sag bottoms out is a local feature and moves with the element that "
+               "resolves it"),
     Param("bank_source", door=doors.CONSTANT, default="nhd_area",
           consequence="scenario",
           desc="Bank geometry source: nhd_area - the real mapped water polygon. An "

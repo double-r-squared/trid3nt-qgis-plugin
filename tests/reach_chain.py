@@ -1,0 +1,81 @@
+"""The reach chain's two FETCHES, stood in for with geometry this module writes.
+
+Offline. ``fetch_nhdplus_nldi_navigate`` (the navigated mainstem) and
+``fetch_nhd_area_water`` (the mapped banks) are the only network reads in the
+reach templates' domain chain; ``endpoints`` and ``section`` between them run for
+real over the files written here, so a chain test measures the chain rather than
+a stand-in for it.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import json
+from typing import Any
+
+from trid3nt_contracts.execution import LayerURI
+
+#: A straight west-to-east stretch and the mapped banks around it. The banks are
+#: wider than the stretch on both ends, so the ``between`` cut has polygon to
+#: remove and the section is a measurement rather than a pass-through.
+CENTERLINE = {"type": "LineString",
+              "coordinates": [[-124.16, 40.50], [-124.12, 40.50],
+                              [-124.08, 40.50], [-124.04, 40.50]]}
+BANKS = {"type": "Polygon", "coordinates": [
+    [[-124.20, 40.4970], [-124.00, 40.4970], [-124.00, 40.5030],
+     [-124.20, 40.5030], [-124.20, 40.4970]]]}
+
+CENTERLINE_BBOX = [-124.16, 40.50, -124.04, 40.50]
+
+
+def _write(tmp_path, name: str, geometry: dict[str, Any]) -> str:
+    path = tmp_path / name
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {}, "geometry": geometry}]}))
+    return str(path)
+
+
+def _layer(uri: str, name: str, bbox: list[float] | None) -> LayerURI:
+    return LayerURI(layer_id=name, name=name, layer_type="vector", uri=uri,
+                    style_preset="nhd_waterbodies", role="context", bbox=bbox)
+
+
+def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None) -> None:
+    """Answer the chain's two fetches from local files, recording what was asked.
+
+    The section tool writes its own artifact, so the output directory is pinned to
+    ``tmp_path`` for the whole chain.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    seen = captured if captured is not None else {}
+    centerline_uri = _write(tmp_path, "centerline.geojson", CENTERLINE)
+    banks_uri = _write(tmp_path, "banks.geojson", BANKS)
+
+    def _navigate(*, seed_point=None, comid=None, direction="DM",
+                  distance_km=50.0, **_kw):
+        seen["navigate"] = {"seed_point": seed_point, "direction": direction,
+                            "distance_km": distance_km}
+        return _layer(centerline_uri, "centerline", list(CENTERLINE_BBOX))
+
+    def _water(*, bbox, max_records=200, **_kw):
+        seen["banks_bbox"] = list(bbox)
+        return _layer(banks_uri, "banks", list(bbox))
+
+    for name, fn in (("fetch_nhdplus_nldi_navigate", _navigate),
+                     ("fetch_nhd_area_water", _water)):
+        monkeypatch.setitem(TOOL_REGISTRY, name,
+                            dataclasses.replace(TOOL_REGISTRY[name], fn=fn))
+
+    # endpoints and section persist their own artifacts to the runs bucket when a
+    # chain names no output directory; offline there is no bucket, so the write
+    # lands in the test's own directory and the uris stay readable.
+    def _local_write(fc, prefix, seed, output_dir):
+        path = tmp_path / f"{prefix}_{seed}.geojson"
+        path.write_text(json.dumps(fc))
+        return str(path)
+
+    for module in ("endpoints.endpoints", "section.section"):
+        monkeypatch.setattr(
+            f"trid3nt_server.tools.processing.{module}._write_geojson",
+            _local_write)

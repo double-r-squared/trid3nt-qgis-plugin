@@ -1,95 +1,135 @@
 # Awaiting the worker-unification port
 
 Three TELEMAC templates - `telemac_rain_on_grid`, `telemac_river_dye`,
-`telemac_do_sag` - are half repointed. This note says which half landed, which
-half did not, and what the remaining test failures are, so the baseline stage
-cites a list rather than re-deriving one.
+`telemac_do_sag` - were half repointed onto the LEGO chaining model (docs/
+IDEAS.md 2026-08-30). The REACH half - `telemac_river_dye` and
+`telemac_do_sag` - is now DONE and both are registered. Only
+`telemac_rain_on_grid`'s worker-facing half remains, blocked on the
+worker-unification wave. This note says which half landed, which half did
+not, and what the remaining test failures are, so the baseline stage cites a
+list rather than re-deriving one.
 
-The rule that draws the line is the 2026-08-30 REPOINT ruling, DS-4: the reach
-and catchment templates' worker-facing halves complete IN THE WORKER-UNIFICATION
-WAVE, because the worker still meshes the ribbon and the catchment from the
-manifest and the last mile of the LEGO ruling is the worker's staged contract.
-`workers/` is frozen until that wave.
+The rule that draws the line is the 2026-08-30 REPOINT ruling, DS-4: the
+catchment template's worker-facing half completes IN THE WORKER-UNIFICATION
+WAVE, because the worker still meshes the catchment from the manifest and the
+last mile of the LEGO ruling is the worker's staged contract. `workers/` is
+frozen until that wave.
 
-## What landed (server side)
+## What landed - both reach templates, server AND mesh side
 
-**The chains are declared.** Domain narrowing is plan-level chaining of
-processing tools, which is what the LEGO ruling asks for:
+**The chains are declared and the mesh ask reads their product.** Domain
+narrowing is plan-level chaining of processing tools, which is what the LEGO
+ruling asks for:
 
 - `telemac_rain_on_grid`: `Data("basin", Build.tool("delineate_watershed", ...))`
   -> `Data("sized", Build.tool("combine", polygon=Ref("basin"), lines=D.rivers))`
   -> `MESH = tool.build_mesh(mesher="om2d", extent=Ref("sized"), ...)`. The
-  template registers again.
+  template registers again once the worker side lands (below).
 - `telemac_river_dye` / `telemac_do_sag`:
   `Data("centerline", Fetch.tool("fetch_nhdplus_nldi_navigate", ...))` ->
   `Data("ends", Build.tool("endpoints", line=D.centerline))` ->
   `Data("banks", Fetch.tool("fetch_nhd_area_water", ...))` ->
   `Data("reach_polygon", Build.tool("section", polygon=D.banks,
-  between=Ref("ends.between")))`. The `between` cut keeps the two transect faces
-  the inflow and the outflow are prescribed on.
+  between=Ref("ends.between")))` -> `MESH = tool.build_mesh(mesher="om2d",
+  extent=Ref("reach_polygon"), refine={"edge_length": P.mesh_resolution_m})`.
+  The `between` cut keeps the two transect faces the inflow and the outflow
+  are prescribed on. Both templates are REGISTERED
+  (`trid3nt_server/tools/__init__.py`) and import clean.
 
-**Two generic geometry tools** back those chains: `combine` (a polygon plus the
-lines riding inside it -> one geometry document) and `endpoints` (a line -> its
-two end points). Both are registered tools, so `Build.tool("combine", ...)` in a
-declaration and `combine(...)` from a chat are the same call.
+**Two generic geometry tools** back those chains: `combine` (a polygon plus
+the lines riding inside it -> one geometry document) and `endpoints` (a line
+-> its two end points). Both are registered tools, so `Build.tool("combine",
+...)` in a declaration and `combine(...)` from a chat are the same call.
 
-**`om2d.read_geometry` unwraps a layer value**, so `extent=Ref("basin")` works as
-written: a chain binds the producing tool's `LayerURI`, not the uri string it
-carries.
+**`om2d.read_geometry` unwraps a layer value**, so `extent=Ref("basin")` /
+`extent=Ref("reach_polygon")` work as written: a chain binds the producing
+tool's `LayerURI`, not the uri string it carries.
 
-**Dead resolution removed.** `steps/rain_on_grid.py::_adopt_case_mesh` is gone -
-one resolver for a mesh a case already holds, and it is the mesh router's at the
-build door. `mesh_max_iter` and `outlet_snap_cells` are gone with the retired
-catchment mesher.
+**AUTO EDGE DIES - the edge is always explicit (2026-08-30 ruling).** The
+reach templates' `mesh_resolution` mode (`"auto" | "fine" | "coarse"`) was the
+retired `corridor_tin` mesher's own sizing rung; `om2d` has no equivalent
+rung, so nothing replaces it. `mesh_resolution_m` is now the ONLY granularity
+lever: `door=SCENARIO`, `default=14.0` (a LABELED default under the
+two-modes law, not a derived one), `user_lever=True`. The user states the
+edge or the model fills the default in the open; either way the number that
+reaches the mesh is one explicit sheet value, bounded on both sides by
+`suggest_mesh_size_m` (raised by the node budget, lowered by the
+>= 2-cells-across-the-channel rule) and narrated when a bound moved it. This
+closes the DESIGN-STOP the pre-repoint version of this note left open. See
+`docs/DELETION_LEDGER.md` ("AUTO EDGE DIES - the reach templates' sizing
+rung") for what that deleted.
 
-## What did NOT land (worker-facing)
+**`ReachMesh.corridor` takes a measured reach, not a navigated seed.** The
+mesh step's `reach` kwarg is the step result the chain produced
+(`Ref("reach")`), not a domain the corridor mesher grew from a flowline seed;
+`build_corridor_mesh` no longer folds a seed into the declaration's `domain`
+field because `om2d`'s domain is the chain's `reach_polygon`, already fixed
+in `MESH` at declaration time.
 
-- `steps/rain_on_grid.py::build_catchment_mesh` still reads the retired catchment
-  mesher's fields (`min_edge_length_m`, `max_edge_length_m`, `grade`,
-  `max_iter`, `snap_search_cells`) off the declaration and still calls
-  `mesh/watershed.py::generate_catchment_mesh`. It becomes a `MeshArtifact`
-  consumer when the worker's staged contract takes one.
-- `steps/reach.py::build_corridor_mesh` and `ReachMesh` still mesh the corridor,
-  and the two reach `MESH` blocks still name `corridor_tin`. Repointing them is
-  blocked on a separate DESIGN-STOP (below), not only on the worker.
+**The reach's width and bank source ride on PHYSICS now, not on MESH.**
+`extent_km` / `width_m` / `banks` are gone from the mesh ask (`om2d` has no
+such fields - it triangulates a measured polygon and has no width to be told)
+and gone from `_MESH_DECK_FIELDS`. The deck still needs to STATE the stretch
+it wrote for and the node budget it sized against, so `reach_length_km`,
+`channel_width_m` and `bank_source` now ride on the `PHYSICS` block instead
+(`Physics(..., reach_length_km=P.reach_length_km,
+channel_width_m=P.channel_width_m, bank_source=P.bank_source)`) and the deck
+reads them from there. **This placement is a PARITY SHIM, not a landing
+point** - it exists because the worker still re-derives a ribbon from these
+fields today. It is DIE-DATED to the worker-unification wave (P3/DS-3,
+docs/IDEAS.md 2026-08-30): once the worker takes a `MeshArtifact` instead,
+`channel_width_m` and `bank_source` leave `PHYSICS` for good.
+
+**Dead resolution removed.** `steps/rain_on_grid.py::_adopt_case_mesh` is
+gone - one resolver for a mesh a case already holds, and it is the mesh
+router's at the build door. `mesh_max_iter` and `outlet_snap_cells` are gone
+with the retired catchment mesher.
+
+## What did NOT land (worker-facing) - `telemac_rain_on_grid` only
+
+- `steps/rain_on_grid.py::build_catchment_mesh` still reads the retired
+  catchment mesher's fields (`min_edge_length_m`, `max_edge_length_m`,
+  `grade`, `max_iter`, `snap_search_cells`) off the declaration and still
+  calls `mesh/watershed.py::generate_catchment_mesh`. It becomes a
+  `MeshArtifact` consumer when the worker's staged contract takes one. This
+  is the ONLY thing left unported - the chain, the `om2d` mesh ask and the
+  registration line are all ready and waiting on this one step
+  (`trid3nt_server/tools/__init__.py` names the exact line to uncomment).
 - `mesh/watershed.py` and `mesh/precondition_gate.py` are still in the tree;
   their retirement is elegance-review P2.
 
-## The open DESIGN-STOP
+## The reach templates' open DESIGN-STOP is CLOSED
 
-The reach templates declare `mesh_resolution="auto"` alongside an optional
-`mesh_resolution_m`. `auto` was the retired `corridor_tin` mesher's own sizing
-rung; `om2d` has no equivalent, and `refine.edge_length` refuses a value that is
-absent. Deciding what edge an `auto` reach mesh is built at - and whether
-`mesh_resolution_m` stops being optional - is a judgment nobody has ruled, so the
-two reach `MESH` blocks are untouched and the two templates stay unregistered.
+The prior version of this note recorded a DESIGN-STOP about what edge an
+`auto` reach mesh is built at. The 2026-08-30 AUTO EDGE DIES ruling settled
+it (above): there is no `auto` mode any more, `mesh_resolution_m` is required
+with a labeled default, and both reach `MESH` blocks now declare `om2d`. No
+DESIGN-STOP is open on either reach template.
 
 ## The failures this leaves
 
-The offline suite, measured. `88 failed, 8969 passed` before the repoint ->
-`80 failed, 9031 passed` after, plus the same 3 collection errors either side.
-Nothing new failed; everything below is one of the three templates' worker-facing
-halves or the two unregistered reach templates.
-
-Three modules cannot be COLLECTED (run the suite with `--ignore` on them):
-
-- `tests/test_mesh_declaration_travel.py` - imports the purged `corridor_tin`
-  mesher module.
-- `tests/test_telemac_event_time.py`, `tests/test_telemac_rain_forcing.py` -
-  import `do_sag` / `river_dye`, which still declare `corridor_tin`.
-
-The 80 failures, by module:
+Measured directly, post-repoint: 5 failures, in 4 modules, ALL the same root
+cause - `telemac_rain_on_grid` is not in `TOOL_REGISTRY` (by design, per
+"What did NOT land" above) while a handful of pre-existing, untouched tests
+still expect it there. Nothing else in the offline suite failed; the two
+reach templates' own test modules (`test_run_river_dye_scenario.py`,
+`test_telemac_do_sag.py`, `test_workflow_skeleton.py`,
+`test_resolution_sensitivity.py`, `test_rerun_with_overrides.py`,
+`test_catalog_surfacing.py`, `test_mesh_declaration_travel.py`,
+`tests/reach_chain.py` - 183 tests) are green, and the three modules the
+pre-repoint note flagged as UNCOLLECTABLE (`test_mesh_declaration_travel.py`,
+`test_telemac_event_time.py`, `test_telemac_rain_forcing.py`) all collect
+clean now that neither reach template names the purged `corridor_tin`.
 
 | module | count | why |
 |---|---|---|
-| `test_run_river_dye_scenario.py` | 31 | `river_dye` declares `corridor_tin` |
-| `test_telemac_do_sag.py` | 16 | `do_sag` declares `corridor_tin` |
-| `test_workflow_skeleton.py` | 14 | the reach rows of the mesh parametrizations, and the corridor-shape assertions |
-| `test_telemac_input_provenance.py` | 6 | the same two reach templates |
-| `test_resolution_sensitivity.py` | 4 | the same two reach templates |
-| `test_rerun_with_overrides.py` | 2 | the same two reach templates |
-| `test_door_dissolution.py` | 2 | every template registered + surfacing |
-| `test_declarative_library.py` | 2 | `do_sag`'s gate + docstring views |
-| `test_tool_retrieval.py` | 1 | corpus keys for the three unregistered templates |
-| `test_template_hygiene.py` | 1 | the hygiene gate's template roster |
-| `test_telemac_rain_on_grid_template.py` | 1 | asserts the template is registered |
+| `test_door_dissolution.py` | 2 | `test_all_templates_registered_and_callable` (the roster) and `test_every_template_surfaces_in_top8` (retrieval surfacing) both still list `telemac_rain_on_grid` in `EXPECTED_TEMPLATES` |
+| `test_telemac_rain_on_grid_template.py` | 1 | `test_registered_as_telemac_template` asserts the name is in `TOOL_REGISTRY` |
+| `test_tool_retrieval.py` | 1 | `test_no_dead_corpus_keys` - `tool_query_corpus.yaml` still carries `telemac_rain_on_grid`'s corpus queries for a name not currently registered |
+| `test_template_hygiene.py` | 1 | `test_hygiene_gate_covers_all_templates` - the hygiene gate's live template roster is one short of `EXPECTED_TEMPLATES` |
+
+Restoring the one commented-out import line in `trid3nt_server/tools/__init__.py`
+clears all 5 - each test's assertion is that the honest-absence state matches
+the registry, corpus and hygiene gate consistently, which it does; they fail
+only because `telemac_rain_on_grid` is deliberately parked rather than
+deleted.

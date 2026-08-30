@@ -68,11 +68,9 @@ DATA = (
 # -- the binding blocks --------------------------------------------------- #
 PHYSICS = Physics("tracer", substance=P.substance, release=P.release_coords)
 FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain)
-MESH    = tool.build_mesh(mesher="corridor_tin", kind="unstructured_tri",
-                          domain=Ref("reach"), extent_km=P.reach_length_km,
-                          width_m=P.channel_width_m, banks=P.bank_source,
-                          refine={"edge_length": P.mesh_size_m,
-                                  "mode": P.mesh_resolution})
+MESH    = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
+                          extent=Ref("reach_polygon"),
+                          refine={"edge_length": P.mesh_resolution_m})
 
 
 def plan(ops):

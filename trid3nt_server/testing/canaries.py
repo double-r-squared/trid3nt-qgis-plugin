@@ -299,7 +299,7 @@ CANARIES.update({
             "discharge_bod_mgl": 20.0, "water_temp_c": 20.0,
             "do_standard_mgl": 5.0, "k1_per_day": 0.3, "k2_per_day": 0.9,
             "reach_length_km": 0.5, "sim_duration_s": 600.0,
-            "mesh_resolution": "coarse", "mesh_resolution_m": 10.0,
+            "mesh_resolution_m": 10.0,
             "discharge_m3s": 60.0,
             # 30 frames over the 600 s window instead of the worker default's 6,
             # for the same reason the dye run asks for them: a sag that develops
@@ -319,7 +319,7 @@ CANARIES.update({
             "spill_fraction": 0.25, "spill_duration_s": 120.0,
             "dye_concentration_mgl": 100.0, "reach_length_km": 1.0,
             "sim_duration_s": 600.0, "source_q_m3s": 8.0,
-            "channel_width_m": 60.0, "mesh_resolution": "coarse",
+            "channel_width_m": 60.0,
             "mesh_resolution_m": 10.0, "discharge_m3s": 2.2,
             # 30 frames over the 600 s window instead of the worker default's 6.
             # Six frames is too coarse to spot-check a plume against: the dye

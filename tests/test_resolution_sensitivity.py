@@ -73,10 +73,10 @@ def test_a_default_spacing_run_is_labeled_a_bound() -> None:
     workflow, sheet = _resolved_sheet(location="Eel River near Scotia, California")
 
     row = next(r for r in sheet if r.name == _LEVER)
-    assert row.basis == "user" and row.value is None, (
-        "an optional USER-door lever nobody supplied is seated with a USER basis "
-        "and a null value; the seated value is the only thing separating a run "
-        "the user refined from one left at the labeled default")
+    assert row.basis == "default_demo" and row.value is not None, (
+        "the edge is always an explicit sheet value; nobody supplied one, so the "
+        "labeled default fills it and its BASIS is what separates a run the user "
+        "refined from one left where the template put it")
 
     notes = sensitivity_notes(
         workflow.sensitivity, workflow.metadata,

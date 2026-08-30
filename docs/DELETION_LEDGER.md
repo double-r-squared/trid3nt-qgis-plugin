@@ -1595,3 +1595,47 @@ DESIGN-STOP in `docs/design/worker-unification-port.md`.
 test_mesh_meshers.py` still imports `gate_supplied_mesh`. The module itself goes
 with elegance-review P2 (the second mesh front), which owns it - recorded here so
 P2 does not have to re-derive that nothing calls it.
+
+### AUTO EDGE DIES - the reach templates' sizing rung (2026-08-30)
+
+DELETED: the `mesh_resolution` `Param` on both `telemac_river_dye` and
+`telemac_do_sag`, and the `refine.mode` field the two templates' `MESH` blocks
+mapped it into. This was the retired `corridor_tin` mesher's own sizing rung -
+`"auto" | "fine" | "coarse"` picked a cells-across-channel count that
+`suggest_mesh_size_m` turned into an edge length. `om2d` has no such rung, and
+the AUTO EDGE DIES ruling (docs/IDEAS.md 2026-08-30) settled the DESIGN-STOP
+this left open: the edge is now always an explicit sheet value on
+`mesh_resolution_m` (`door=SCENARIO`, `default=14.0`, `user_lever=True`) - the
+user states it or the model fills the labeled default, never a derived rung.
+CONDITION: none - the edge is an explicit sheet value, so there is nothing left
+for a sizing mode to pick between. Both templates now declare `mesher="om2d"`
+over `extent=Ref("reach_polygon")`.
+
+Also DELETED with it, in `trid3nt_server/workflows/telemac/steps/reach.py`:
+`MESH_CELLS_ACROSS_BY_PRESET` (the preset -> cells-across table) and
+`_DEFAULT_MESH_SIZE_M` (the legacy-parity constant it was anchored on), and the
+preset branch inside `suggest_mesh_size_m` - the function's signature dropped
+`resolution=` / `override_m=` for one required `edge_length_m=`, since there is
+no longer a mode to fall back to when no override is asked. What remains is
+pure bounding: the asked edge, raised by the node budget, lowered by the
+>= 2-cells-across-the-channel rule, both moves narrated.
+
+`trid3nt_server/workflows/telemac/workflow.py::_MESH_DECK_FIELDS` also drops
+its `extent_km` / `width_m` / `banks` rows: the reach deck now reads
+`reach_length_km` / `channel_width_m` / `bank_source` off the `PHYSICS` block
+(the chain's `reach_polygon` measures the extent the mesher triangulates, so the
+mesh ask itself no longer carries a width or a bank source to map). CONDITION:
+none - this PHYSICS placement is itself a parity shim, DIE-DATED to the
+worker-unification wave (P3/DS-3, docs/IDEAS.md 2026-08-30): once the worker
+takes a `MeshArtifact` instead of re-deriving a ribbon from these fields,
+`channel_width_m` and `bank_source` leave `PHYSICS` too.
+
+`tests/test_mesh_declaration_travel.py` sections 2 and 3 (the `corridor_box`
+fixture: a stood-in `corridor_tin` triangulator box, its declared-edit-in-the-
+recipe assertion, and its restart-truncates-to-the-declared-edit assertion) are
+DELETED with the mesher they exercised. CONDITION: none - `om2d` is a real
+build with no box to stand in for. The semantics they pinned are not lost: "a
+declared prefix survives a restart, a gate-time edit does not" is the mesh
+session's own law, already pinned mesher-agnostically on `reg_grid` in
+`tests/test_build_mesh_tool.py::test_restart_truncates_to_the_declared_prefix`
+and `tests/test_mesh_gate_loop.py::test_gate_restart_truncates_to_the_declared_prefix`.

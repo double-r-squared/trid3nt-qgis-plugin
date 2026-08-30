@@ -48,7 +48,6 @@ ARGS: dict = {
     "sim_duration_s": 3600.0,
     "source_q_m3s": 8.0,
     "channel_width_m": 60.0,
-    "mesh_resolution": "auto",
 }
 
 

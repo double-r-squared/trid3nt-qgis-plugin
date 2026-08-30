@@ -20,10 +20,8 @@ domain no measurement backs.
 
 from __future__ import annotations
 
-import json
 import logging
 import math
-import tempfile
 import uuid
 from typing import Any
 
@@ -31,10 +29,12 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.processing._hydrology_common import (
-    _stage_uri_local,
-    _write_geojson,
+from trid3nt_server.tools.processing._geometry_common import (
+    GeometryReadError,
+    flatten_geometries,
+    read_geometry_doc,
 )
+from trid3nt_server.tools.processing._hydrology_common import _write_geojson
 
 __all__ = ["SectionLayerURI", "SectionError", "section"]
 
@@ -99,28 +99,23 @@ _SECTION_METADATA = AtomicToolMetadata(
 )
 
 
-def _polygons(source: Any, tmpdir: str) -> list[Any]:
-    """The polygon geometries the section is cut from, in EPSG:4326."""
+def _polygons(source: Any) -> list[Any]:
+    """The polygon geometries the section is cut from, in EPSG:4326.
+
+    Read through the SHARED geometry reader, so a chain that binds the producing
+    tool's layer value and a person who types its uri reach the same file.
+    """
     from shapely.geometry import shape as _shape
 
-    text = str(source).strip()
-    if text.startswith("{"):
-        doc = json.loads(text)
-        features = doc.get("features")
-        geoms = ([_shape(f["geometry"]) for f in (features or ())
-                  if f.get("geometry")]
-                 if features is not None else [_shape(doc)])
-    else:
-        try:
-            import geopandas as gpd
-
-            path = _stage_uri_local(text, tmpdir, "section_source")
-            geoms = list(gpd.read_file(path).to_crs(4326).geometry)
-        except Exception as exc:  # noqa: BLE001
-            raise SectionError(
-                "SECTION_SOURCE_UNREADABLE",
-                f"the polygon source {source!r} could not be read: it is neither "
-                f"inline GeoJSON nor a readable vector layer ({exc}).") from exc
+    try:
+        geoms = [_shape(g) for g in flatten_geometries(read_geometry_doc(source))]
+    except GeometryReadError as exc:
+        raise SectionError("SECTION_SOURCE_UNREADABLE", str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - every reader fault, named by source
+        raise SectionError(
+            "SECTION_SOURCE_UNREADABLE",
+            f"the polygon source {source!r} could not be read: it is neither "
+            f"inline GeoJSON nor a readable vector layer ({exc}).") from exc
     out: list[Any] = []
     for geom in geoms:
         if geom is None or geom.is_empty:
@@ -340,8 +335,7 @@ def section(
             f"an extent; got between={between!r} within={within!r}.")
 
     notes: list[str] = []
-    with tempfile.TemporaryDirectory(prefix="trid3nt_section_") as tmpdir:
-        polys = _polygons(polygon, tmpdir)
+    polys = _polygons(polygon)
     if not polys:
         raise SectionError(
             "SECTION_NO_POLYGON",

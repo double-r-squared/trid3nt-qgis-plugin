@@ -201,9 +201,6 @@ _PROCESSES: dict[str, _Process] = {
 #: ABSENT from this table shapes the mesh and no deck: the deck records what the
 #: mesh ask asked FOR, and the mesher answers for what it built.
 _MESH_DECK_FIELDS: Mapping[str, str] = {
-    "extent_km": "reach_length_km",
-    "width_m": "channel_width_m",
-    "banks": "bank_source",
     "resolution_m": "mesh_resolution_m",
     "min_edge_length_m": "mesh_resolution_m",
 }
@@ -211,7 +208,6 @@ _MESH_DECK_FIELDS: Mapping[str, str] = {
 #: The ``refine`` knobs a deck reads, by the same rule.
 _MESH_DECK_REFINE: Mapping[str, str] = {
     "edge_length": "mesh_resolution_m",
-    "mode": "mesh_resolution",
 }
 
 #: Which domain SHAPES ``acquire_domain`` knows, and what each one is for. A

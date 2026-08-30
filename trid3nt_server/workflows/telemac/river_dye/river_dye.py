@@ -97,8 +97,13 @@ DATA = (
 # interpreter substitutes against the approved sheet, so the blocks are
 # process-lifetime constants and the plan is a pure assembly of them.
 
+#: The reach's own extent and width ride HERE rather than on the mesh ask: the
+#: mesher is handed a measured polygon and has no width to be told, while the deck
+#: still states the stretch it wrote for and the node budget it sized against.
 PHYSICS = Physics(
     "tracer",
+    reach_length_km=P.reach_length_km, channel_width_m=P.channel_width_m,
+    bank_source=P.bank_source,
     substance=P.substance, release_coords=P.release_coords,
     reach_seed_coords=P.reach_seed_coords, sim_duration_s=P.sim_duration_s,
     spill_fraction=P.spill_fraction, spill_duration_s=P.spill_duration_s,
@@ -122,17 +127,16 @@ FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=D.rain,
                   wind_speed_mps=P.wind_speed_mps,
                   wind_direction_deg=P.wind_direction_deg)
 
-#: The MESH ASK, frozen at declaration and building nothing at import. Every field
-#: is checked at the router against what the ``corridor_tin`` mesher declares, so a
-#: knob it does not read is refused by name rather than ignored.
+#: The MESH ASK, frozen at declaration and building nothing at import. The extent
+#: is the CHAIN's product - the stretch of mapped banks the section cut between the
+#: centerline's two ends - so the mesher triangulates a domain other tools measured
+#: rather than growing a corridor of its own. Every field is checked at the router
+#: against what the ``om2d`` mesher declares.
 MESH = tool.build_mesh(
-    mesher="corridor_tin",
+    mesher="om2d",
     kind="unstructured_tri",
-    domain=Ref("reach"),
-    extent_km=P.reach_length_km,
-    width_m=P.channel_width_m,
-    banks=P.bank_source,
-    refine={"edge_length": P.mesh_resolution_m, "mode": P.mesh_resolution},
+    extent=Ref("reach_polygon"),
+    refine={"edge_length": P.mesh_resolution_m},
 )
 
 
@@ -149,7 +153,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                  prompt="Click where the substance enters the river"),
         *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=D.rivers,
                             discharge=P.discharge_m3s, event_time=P.event_time),
-        ReachMesh.corridor(mesh=MESH, seed=Ref("seed")).named("corridor_mesh"),
+        ReachMesh.corridor(mesh=MESH, reach=Ref("reach")).named("corridor_mesh"),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
@@ -220,9 +224,9 @@ _TELEMAC_RIVER_DYE_RES_SPEC = ResolutionSpec(
 )
 
 #: The mesh gate this template stops at is the STANDARD one - the mesh step opens
-#: a session, presents the built corridor as an editable layer with its probes,
-#: and takes every edit action the ``corridor_tin`` mesher registers - so this
-#: template declares no solver gate of its own.
+#: a session, presents the built reach as an editable layer with its probes, and
+#: takes every edit action the ``om2d`` mesher registers - so this template
+#: declares no solver gate of its own.
 _TELEMAC_RIVER_DYE_METADATA = AtomicToolMetadata(
     name="telemac_river_dye",
     ttl_class="live-no-cache",

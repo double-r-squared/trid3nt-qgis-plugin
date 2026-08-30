@@ -614,18 +614,22 @@ from .search.web_fetch import web_fetch  # noqa: E402,F401
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-# Three TELEMAC templates are HALF repointed and stay parked, unregistered, until
-# the worker-unification wave finishes them; restoring each is this one line.
-# telemac_rain_on_grid now declares its chain (delineate_watershed -> combine ->
-# om2d over the basin) and imports clean, but its mesh STEP still reads the
-# retired catchment mesher's fields off the declaration. The two reach templates
-# still name the purged ``corridor_tin``, blocked on an open DESIGN-STOP about
-# what edge an ``auto`` reach mesh is built at. Registering a template whose mesh
-# step cannot run puts a broken tool in front of the model, which is worse than an
-# honest absence. What landed, what did not, and the failures it leaves:
-# docs/design/worker-unification-port.md.
-# from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye
-# from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag
+# telemac_river_dye + telemac_do_sag TEMPLATES (engine="telemac", tier="template"),
+# workflows/telemac/river_dye/ + do_sag/: the two REACH fronts. Each narrows its
+# domain by CHAINING processing tools - the NLDI mainstem names the stretch, its
+# endpoints name where the stretch stops, and the section cut through the mapped
+# NHDArea banks is the polygon om2d triangulates - so the two end faces are the
+# transects the inflow and the outflow are prescribed on. The edge length is an
+# explicit sheet value on both.
+from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach tracer/morphodynamics front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
+# telemac_rain_on_grid stays parked, unregistered, until the worker-unification
+# wave finishes it; restoring it is this one line. It declares its chain
+# (delineate_watershed -> combine -> om2d over the basin) and imports clean, but
+# its mesh STEP still reads the retired catchment mesher's fields off the
+# declaration. Registering a template whose mesh step cannot run puts a broken tool
+# in front of the model, which is worse than an honest absence. What landed, what
+# did not, and the failures it leaves: docs/design/worker-unification-port.md.
 # from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid
 # tomawac_wave_field TEMPLATE (engine="telemac", tier="template"), workflows/
 # telemac/wave_field/: the TOMAWAC third-generation spectral-wave engine.

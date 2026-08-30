@@ -68,28 +68,15 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 #: even when the geocoded city centroid sits a few km off the channel.
 DEFAULT_RIVER_AOI_HALF_DEG: float = 0.06
 
-#: Legacy demo default the mesh preset parity is anchored on (60 m channel at
-#: ~4.3 cells across).
-_DEFAULT_MESH_SIZE_M: float = 14.0
-
 # --------------------------------------------------------------------------- #
-# Mesh granularity autoscaler. The worker meshes a channel ribbon of length L x
-# width W with a single uniform gmsh target edge length ``h``. Two constraints
-# bound it:
+# Mesh granularity BOUNDS. The edge length ``h`` is an explicit sheet value; over a
+# reach of length L and width W two constraints bound what it may become:
 #   (1) ACROSS-CHANNEL RESOLUTION: the plume must be resolved across the channel,
-#       so h <= W / N cells. The dominant constraint for a narrow reach.
+#       so h <= W / 2. The dominant constraint for a narrow reach.
 #   (2) NODE BUDGET: a triangulated ribbon of area A has ~A/(k*h^2) nodes; cap it
 #       so a long reach cannot explode the solve -> h >= sqrt(A/(k*NODE_CAP)).
-# Final h = max(across-channel target, budget floor), clamped to
-# [MESH_H_FLOOR_M, W/2] so there are always >= 2 cells across the channel. An
-# explicit override wins outright but is still budget-clamped.
+# Either move contradicts the ask and is narrated on the provenance row.
 # --------------------------------------------------------------------------- #
-MESH_CELLS_ACROSS_BY_PRESET: dict[str, float] = {
-    "fine": 6.0,
-    "medium": 60.0 / _DEFAULT_MESH_SIZE_M,
-    "auto": 60.0 / _DEFAULT_MESH_SIZE_M,
-    "coarse": 3.0,
-}
 #: Node ceiling for a single local-docker TELEMAC reach (keeps a solve to minutes).
 MESH_NODE_CAP: int = 60000
 #: Triangulated-ribbon node density (nodes ~= area / (k * h^2)). Calibrated on two
@@ -163,43 +150,34 @@ class MeshSizing(NamedTuple):
 def suggest_mesh_size_m(
     reach_length_km: float,
     channel_width_m: float,
-    resolution: str = "auto",
-    override_m: float | None = None,
+    edge_length_m: float,
 ) -> MeshSizing:
-    """Pick the mesh target edge length ``h``, and say so when a lever was moved.
+    """Bound the ASKED edge length ``h``, and say so when the ask was moved.
 
-    An EXPLICIT ``override_m`` is still bounded on both sides - raised by the node
-    budget, lowered by the >= 2-cells-across-the-channel rule - and either move
-    contradicts what the user asked for. Both are narrated: the label carries it for
-    the layer, ``cap_note`` for the provenance row.
+    The edge is always an explicit sheet value - nothing here derives one from the
+    channel - so this only BOUNDS it: raised by the node budget, lowered by the
+    >= 2-cells-across-the-channel rule. Either move contradicts what the user asked
+    for, so both are narrated: the label carries it for the layer, ``cap_note`` for
+    the provenance row.
     """
     L = max(float(reach_length_km), 0.0)
     W = max(float(channel_width_m), 1.0)
-    preset = str(resolution or "auto").strip().lower()
 
     area = L * 1000.0 * W
     budget_floor = ((area / (_MESH_NODE_K * MESH_NODE_CAP)) ** 0.5
                     if area > 0 else MESH_H_FLOOR_M)
 
-    asked = float(override_m) if override_m is not None else None
-    if asked is not None and asked > 0.0:
-        h = asked
-        label = f"custom {h:.3g} m"
-    else:
-        cells = MESH_CELLS_ACROSS_BY_PRESET.get(
-            preset, MESH_CELLS_ACROSS_BY_PRESET["auto"])
-        h = W / cells
-        label = f"auto ({preset})" if preset in ("auto",) else preset
-
-    h = max(h, MESH_H_FLOOR_M, budget_floor)
+    asked = float(edge_length_m)
+    h = max(asked, MESH_H_FLOOR_M, budget_floor)
     h = min(h, W / 2.0)
+    label = f"{asked:.3g} m"
 
     cap_note = None
-    if asked is not None and h > asked:
+    if h > asked:
         label += f" -> {h:.3g} m (budget-clamped)"
         cap_note = (f"mesh_resolution_m {asked:g} RAISED to {round(h, 3):g} m by the "
                     f"node budget ({MESH_NODE_CAP} nodes over {L:g} km x {W:g} m)")
-    elif asked is not None and h < asked:
+    elif h < asked:
         label += f" -> {h:.3g} m (width-capped)"
         cap_note = (f"mesh_resolution_m {asked:g} CAPPED to {round(h, 3):g} m by the "
                     f"channel-width rule (width {W:g} m / 2)")
@@ -873,29 +851,30 @@ class ReachMesh:
     GATE_LABEL: str = "telemac_reach_mesh"
 
     @staticmethod
-    def corridor(*, mesh: Any, seed: Any) -> Step:
-        """Build the declared corridor mesh under the mesh gate.
+    def corridor(*, mesh: Any, reach: Any) -> Step:
+        """Build the declared reach mesh under the mesh gate.
 
         The DECLARATION travels WHOLE - its mesher, its kind, every field the
         router checked and the edits the template declared on it - as the plain
         mapping the interpreter binds late-bound reads inside. Nothing about the
         ask is restated here, so a knob or a declared edit cannot go missing
-        between the template and the mesh.
+        between the template and the mesh. The DOMAIN is one of those fields: it
+        is the reach polygon the plan's chain cut, so the mesher receives a
+        measured extent rather than growing one.
 
-        The SEED rides separately: a corridor is navigated from a point on the
-        flowline, and that point is a step result rather than anything the
-        declaration can name.
+        The REACH rides separately, and only names the session: which place the
+        mesh presented at the gate belongs to is a step result rather than
+        anything the declaration can name.
         """
         return Step(runner=f"{_STEPS}.reach.build_corridor_mesh", stage="mesh",
-                    kwargs={"mesh": declaration_plan_value(mesh), "seed": seed})
+                    kwargs={"mesh": declaration_plan_value(mesh), "reach": reach})
 
 
 async def build_corridor_mesh(*, mesh: dict[str, Any],
-                              seed: dict[str, Any]) -> dict[str, Any]:
-    """The corridor mesh a reach solve runs on -> the accepted mesh's record.
+                              reach: dict[str, Any]) -> dict[str, Any]:
+    """The reach mesh a solve runs on -> the accepted mesh's record.
 
-    The declaration is rebuilt from what the template declared, with the navigated
-    reach and its seed filled into the one field the plan resolves, and a session
+    The declaration is rebuilt exactly as the template declared it and a session
     opens over it: the mesh is built, its declared edits prefixing the recipe, then
     presented at the mesh gate with its probes and its editable layer, edited or
     restarted if the user says so, and accepted. A ``restart`` therefore truncates
@@ -912,14 +891,13 @@ async def build_corridor_mesh(*, mesh: dict[str, Any],
     from trid3nt_server.workflows.mesh.session import MeshSession
     from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
 
-    reach = dict(mesh["fields"]["domain"])
-    declaration = declaration_from_plan_value(
-        mesh, domain={"reach": reach, "seed": dict(seed)})
+    reach = dict(reach)
+    declaration = declaration_from_plan_value(mesh)
     session = await asyncio.to_thread(
         MeshSession, declaration, case_id=current_turn_case(),
         name=f"{reach.get('name') or reach.get('slug')} corridor")
     art = await gate_mesh_build(session, tool_name=ReachMesh.GATE_LABEL)
-    logger.info("corridor mesh accepted: %s -> %d nodes / %d elements, "
+    logger.info("reach mesh accepted: %s -> %d nodes / %d elements, "
                 "min edge %s m", art.mesh_id, art.node_count, art.element_count,
                 measured_min_edge_m(art))
     return {

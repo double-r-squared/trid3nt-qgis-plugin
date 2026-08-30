@@ -57,7 +57,6 @@ ARGS = {
     "sim_duration_s": 3600.0,
     "source_q_m3s": 8.0,
     "channel_width_m": 60.0,
-    "mesh_resolution": "auto",
     "discharge_m3s": 2.2,
     "input_mode": "user_gated",
 }
@@ -75,7 +74,6 @@ COARSE_ARGS = {
     "reach_length_km": 1.0,
     "sim_duration_s": 600.0,
     "spill_duration_s": 120.0,
-    "mesh_resolution": "coarse",
     "mesh_resolution_m": 50.0,
     "input_mode": "auto",
 }

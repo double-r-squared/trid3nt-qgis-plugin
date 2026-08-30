@@ -40,7 +40,6 @@ ARGS: dict = {
     "k1_per_day": 0.3,
     "k2_per_day": 0.9,
     "reach_length_km": 12.0,
-    "mesh_resolution": "auto",
 }
 
 

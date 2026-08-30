@@ -331,8 +331,7 @@ async def write_reach_deck(
     spill_duration_s: float = 300.0,
     dye_concentration_mgl: float = 100.0,
     source_q_m3s: float = 8.0,
-    mesh_resolution: str = "auto",
-    mesh_resolution_m: float | None = None,
+    mesh_resolution_m: float = 14.0,
     bank_source: str = "nhd_area",
     output_interval_min: float | None = None,
     wind_speed_mps: float = 0.0,
@@ -380,7 +379,7 @@ async def write_reach_deck(
 
     sizing = suggest_mesh_size_m(
         reach_length_km=reach_length_km, channel_width_m=channel_width_m,
-        resolution=mesh_resolution, override_m=mesh_resolution_m)
+        edge_length_m=mesh_resolution_m)
     mesh_size_m = sizing.mesh_size_m
     mesh_node_estimate = sizing.node_estimate
     mesh_resolution_label = sizing.label

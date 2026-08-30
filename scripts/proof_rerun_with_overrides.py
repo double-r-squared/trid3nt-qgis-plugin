@@ -53,7 +53,6 @@ PARENT_ARGS: dict[str, Any] = {
     "k2_per_day": 0.9,
     "reach_length_km": 0.5,
     "sim_duration_s": 600.0,
-    "mesh_resolution": "coarse",
     "mesh_resolution_m": 10.0,
     "discharge_m3s": 60.0,
     "output_interval_min": 0.333,

@@ -14,6 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from tests.reach_chain import install_reach_chain
+
 from trid3nt_server.workflows.telemac.streeter_phelps import (
     sp_critical_point,
     sp_do_profile,
@@ -212,7 +214,7 @@ def test_do_layer_contract_fields():
 
 
 # --- the REAL composition, driven through the declared plan ------------------ #
-def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review):
+def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=None):
     """Patch the shared step family at the modules the plan's runners resolve to."""
     from trid3nt_server.gates import input_review as gate_mod
     from trid3nt_server.workflows.telemac.steps import (
@@ -245,6 +247,8 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review):
                         _step("mesh", {"mesh_id": "M", "slf_uri": "s3://m/river.slf",
                                        "topology_uri": "s3://m/river_mesh.npz",
                                        "min_edge_m": 9.0}))
+    if tmp_path is not None:
+        install_reach_chain(monkeypatch, tmp_path, seen)
     monkeypatch.setattr(deck_mod, "write_reach_deck",
                         _step("deck", {"deck": {"name": "eel"}, "run_tag": "T"}))
     monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
@@ -283,7 +287,8 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
         return ReviewOutcome(proceed=True, entries=list(kwargs["entries"]),
                              params=dict(kwargs["params"]))
 
-    _stub_reach_pipeline(monkeypatch, order, seen, layer=layer, review=_review)
+    _stub_reach_pipeline(monkeypatch, order, seen, layer=layer, review=_review,
+                         tmp_path=tmp_path)
 
     out = await telemac_do_sag(
         location="Eel River near Scotia, California", upstream_do_mgl=99.0,
@@ -319,7 +324,8 @@ async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path
         return ReviewOutcome(proceed=False, entries=[], params={},
                              cancelled=True, cancel_reason="user declined")
 
-    _stub_reach_pipeline(monkeypatch, order, seen, layer=None, review=_cancelled)
+    _stub_reach_pipeline(monkeypatch, order, seen, layer=None, review=_cancelled,
+                         tmp_path=tmp_path)
 
     async def _solve_must_not_run(**_kw):
         raise AssertionError("the solve ran past a cancelled review")
@@ -343,7 +349,7 @@ def test_a_width_capped_override_is_narrated_rather_than_silently_applied():
     from trid3nt_server.workflows.telemac.steps.reach import suggest_mesh_size_m
 
     sizing = suggest_mesh_size_m(reach_length_km=0.5, channel_width_m=60.0,
-                                 resolution="coarse", override_m=100.0)
+                                 edge_length_m=100.0)
     assert sizing.mesh_size_m == 30.0                      # behaviour: unchanged
     assert sizing.cap_note == ("mesh_resolution_m 100 CAPPED to 30 m by the "
                                "channel-width rule (width 60 m / 2)")
@@ -355,7 +361,7 @@ def test_an_override_the_node_budget_RAISES_is_narrated_too():
     from trid3nt_server.workflows.telemac.steps.reach import suggest_mesh_size_m
 
     sizing = suggest_mesh_size_m(reach_length_km=15.0, channel_width_m=1000.0,
-                                 resolution="auto", override_m=3.0)
+                                 edge_length_m=3.0)
     assert sizing.mesh_size_m > 3.0
     assert sizing.cap_note is not None and "RAISED" in sizing.cap_note
     assert "budget-clamped" in sizing.label
@@ -366,7 +372,7 @@ def test_an_HONOURED_override_adds_no_note_at_all():
     from trid3nt_server.workflows.telemac.steps.reach import suggest_mesh_size_m
 
     sizing = suggest_mesh_size_m(reach_length_km=0.5, channel_width_m=60.0,
-                                 resolution="coarse", override_m=20.0)
+                                 edge_length_m=20.0)
     assert sizing.mesh_size_m == 20.0
     assert sizing.cap_note is None
 

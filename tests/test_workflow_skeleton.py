@@ -196,10 +196,10 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     supplied, err = wf._normalize({"location": "x", "sim_duration_s": 600.0,
-                                   "mesh_resolution": "coarse"})
+                                   "mesh_resolution_m": 30.0})
     assert err is None
     assert supplied["sim_duration_s"] == 600.0
-    assert supplied["mesh_resolution"] == "coarse"
+    assert supplied["mesh_resolution_m"] == 30.0
     sheet = asyncio.run(resolve_params(wf.params, supplied))
     assert sheet.value_of("sim_duration_s") == 600.0
     assert sheet.row("sim_duration_s").basis == "user"
@@ -232,17 +232,17 @@ def _telemac():
                            plan=lambda o: ())
 
 
-def _corridor(**fields):
+def _reach_mesh(**fields):
     """The MESH declaration a reach template writes, with test values for its ask."""
     from trid3nt_server.workflows.mesh.tool import tool
 
-    return tool.build_mesh(mesher="corridor_tin", kind="unstructured_tri",
-                           domain=Ref("reach"), **fields)
+    fields.setdefault("extent", Ref("reach_polygon"))
+    return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **fields)
 
 
 def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
     ops = _telemac()
-    mesh = _corridor()
+    mesh = _reach_mesh()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("tracer", not_a_deck_field=1.0),
                    forcing=Forcing(carrier=Ref("carrier_discharge")))
@@ -251,7 +251,7 @@ def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
 
 def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
     ops = _telemac()
-    mesh = _corridor()
+    mesh = _reach_mesh()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("magnetohydrodynamics"),
                    forcing=Forcing(carrier=Ref("carrier_discharge")))
@@ -259,17 +259,13 @@ def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
 
 
 def test_the_mesh_declaration_reaches_the_deck_under_the_engine_s_own_names():
+    """The mesher's vocabulary is its library's; the deck's is TELEMAC's."""
     ops = _telemac()
-    mesh = _corridor(extent_km=0.5, width_m=60.0, banks="nhd_area",
-                     refine={"edge_length": 100.0, "mode": "coarse"})
+    mesh = _reach_mesh(refine={"edge_length": 100.0})
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge"), rain=None))
     assert deck.name == "deck" and deck.stage == "author"
-    assert deck.kwargs["mesh_resolution"] == "coarse"
     assert deck.kwargs["mesh_resolution_m"] == 100.0
-    assert deck.kwargs["reach_length_km"] == 0.5
-    assert deck.kwargs["channel_width_m"] == 60.0
-    assert deck.kwargs["bank_source"] == "nhd_area"
     assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
 
 
@@ -320,7 +316,7 @@ def test_a_required_deck_field_no_slot_covers_refuses_at_plan_construction():
     round-trips after the declaration that was already wrong.
     """
     ops = _telemac()
-    mesh = _corridor()
+    mesh = _reach_mesh()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                    forcing=Forcing())
@@ -332,7 +328,7 @@ def test_a_required_deck_field_no_slot_covers_refuses_at_plan_construction():
 def test_the_covered_declaration_still_authors():
     """The guard refuses a HOLE, not every plan: the cohort shape still passes."""
     ops = _telemac()
-    mesh = _corridor()
+    mesh = _reach_mesh()
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge")))
     assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
@@ -491,15 +487,15 @@ def test_a_mesh_declaration_is_frozen_all_the_way_down():
     """A template writes MESH at module level and every run reads that same object,
     so a mutable container inside one is a channel from one run to the next: a step
     that edits the declared mapping changes what the NEXT run declares."""
-    refine = {"edge_length": 100.0, "mode": "coarse"}
-    mesh = _corridor(extent_km=0.5, refine=refine)
+    refine = {"edge_length": 100.0}
+    mesh = _reach_mesh(refine=refine)
 
     assert isinstance(mesh.spec.fields, MappingProxyType)
     assert isinstance(mesh.spec.fields["refine"], MappingProxyType)
     with pytest.raises(TypeError):
         mesh.spec.fields["refine"]["edge_length"] = 99.0
     with pytest.raises(TypeError):
-        mesh.spec.fields["extent_km"] = 99.0
+        mesh.spec.fields["kind"] = "structured_grid"
     refine["edge_length"] = 99.0                 # the caller's dict is not the ask's
     assert mesh.spec.fields["refine"]["edge_length"] == 100.0
 
@@ -507,9 +503,9 @@ def test_a_mesh_declaration_is_frozen_all_the_way_down():
 # --- every TELEMAC template declares its mesh through the one tool ----------- #
 _TEMPLATES = (
     ("telemac_river_dye", "trid3nt_server.workflows.telemac.river_dye.river_dye",
-     "corridor_tin"),
+     "om2d"),
     ("telemac_do_sag", "trid3nt_server.workflows.telemac.do_sag.do_sag",
-     "corridor_tin"),
+     "om2d"),
     ("coastal_tidal_surge",
      "trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge",
      "reg_grid"),
@@ -555,15 +551,18 @@ def test_the_deck_the_template_authors_reads_the_declared_mesh_fields(
     assert "mesh_resolution_m" in author[0].kwargs
 
 
-def test_the_reach_templates_carry_the_corridor_shape_into_the_deck():
-    """The corridor fields did not die with the policy class: they are the
-    corridor mesher's declared fields and they still reach the reach writer."""
+def test_the_reach_templates_carry_the_reach_shape_into_the_deck():
+    """The stretch, its width and its bank source still reach the reach writer.
+
+    They ride the physics block rather than the mesh ask: the mesher is handed a
+    polygon the chain measured and has no width to be told, while the deck still
+    states the stretch it wrote for."""
     module = _template("trid3nt_server.workflows.telemac.river_dye.river_dye")
     workflow = module.telemac_river_dye.workflow
     deck = [n for n in workflow.plan_decl(workflow)
             if getattr(n, "stage", "") == "author"][0]
     for field in ("reach_length_km", "channel_width_m", "bank_source",
-                  "mesh_resolution", "mesh_resolution_m"):
+                  "mesh_resolution_m"):
         assert field in deck.kwargs
     assert deck.kwargs["reach"] == Ref("reach")
 

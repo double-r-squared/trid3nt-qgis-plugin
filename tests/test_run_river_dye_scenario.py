@@ -24,6 +24,7 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.reach_chain import install_reach_chain
 from trid3nt_contracts.telemac_contracts import (
     TELEMAC_DYE_STYLE_PRESET,
     TelemacDyeLayerURI,
@@ -288,13 +289,18 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
 
 def test_the_declared_data_is_reference_data_with_the_rain_ladder():
-    from trid3nt_server.workflows.lib import ReferenceProducer
+    from trid3nt_server.workflows.lib import AuthoredProducer, ReferenceProducer
     from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
 
     by_name = {d.name: d for d in DATA}
-    assert set(by_name) == {"rivers", "rain"}
-    # Canonical world data is fetched fresh for the domain - no .supplied().
-    assert all(isinstance(d.producer, ReferenceProducer) for d in DATA)
+    assert set(by_name) == {"rivers", "centerline", "ends", "banks",
+                            "reach_polygon", "rain"}
+    # The world is FETCHED fresh for the domain - no .supplied(); the domain the
+    # run models is AUTHORED from it by the two geometry links.
+    fetched = ("rivers", "centerline", "banks", "rain")
+    assert all(isinstance(by_name[n].producer, ReferenceProducer) for n in fetched)
+    assert all(isinstance(by_name[n].producer, AuthoredProducer)
+               for n in ("ends", "reach_polygon"))
     assert not hasattr(by_name["rivers"].producer, "byo")
     assert by_name["rain"].producer.ladder_rungs == ("gridmet_domain_mean", "user_rate")
 
@@ -357,7 +363,7 @@ def _install_step_mocks(captured: dict):
             "seed_lon": seed["lon"], "seed_lat": seed["lat"],
         }
 
-    async def _fake_corridor_mesh(*, mesh, seed):
+    async def _fake_corridor_mesh(*, mesh, reach):
         """The mesh session stands in: this chain test is about the chain.
 
         No artifact rides back, so the deck's timestep falls to the REQUESTED
@@ -424,6 +430,7 @@ def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), **kwargs):
     from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
+    install_reach_chain(monkeypatch, tmp_path, captured)
     mocks = [*_install_step_mocks(captured), *overrides]
     for m in mocks:
         m.start()

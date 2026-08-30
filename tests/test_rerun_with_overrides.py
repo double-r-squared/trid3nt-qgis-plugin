@@ -70,7 +70,10 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     # the meshed river, the mid-reach seed and the National Water Model discharge
     # are all upstream of the physics block, so a rate override inherits them
     assert labels[:cut] == ["draw", "reach", "seed", "carrier_discharge"]
-    assert keep == frozenset({"rivers"})
+    # the whole domain CHAIN is upstream of the physics too - the navigated
+    # mainstem, its ends, the mapped banks and the reach cut between them
+    assert keep == frozenset({"rivers", "centerline", "ends", "banks",
+                              "reach_polygon"})
 
 
 def test_a_mesh_override_cuts_later_than_a_physics_one():
