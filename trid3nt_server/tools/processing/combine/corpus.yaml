@@ -1,0 +1,8 @@
+combine:
+- combine the basin polygon and the river lines into one layer
+- join this extent polygon with the channel network for meshing
+- put the domain polygon and the polylines in one geometry document
+- merge these vector layers into a single geometry layer
+- one layer holding the catchment outline plus its streams
+- give the mesher the polygon and the lines together
+- bundle the boundary polygon with the lines inside it

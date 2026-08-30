@@ -519,6 +519,11 @@ from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # no
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
 from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
+# The two generic geometry composition links: one document out of several layers
+# (``combine``), and the two ends of a line (``endpoints``). Both exist so a
+# domain narrows by CHAINING tools rather than by a mesher growing a domain-prep
+# of its own.
+from .processing.combine import combine  # noqa: E402,F401
 from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
 from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
 from .processing.compute_building_density import compute_building_density  # noqa: E402,F401
@@ -547,6 +552,7 @@ from .processing.compute_slope import compute_slope  # noqa: E402,F401
 from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
 from .processing.digitize_water_body import digitize_water_body  # noqa: E402,F401
 from .processing.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
+from .processing.endpoints import endpoints  # noqa: E402,F401
 from .processing.extract_landcover_class import extract_landcover_class  # noqa: E402,F401
 # V&V wave (lane C): model-vs-observation pairing primitive.
 from .processing.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
@@ -608,17 +614,16 @@ from .search.web_fetch import web_fetch  # noqa: E402,F401
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-# DESIGN-STOP (fresh-start purge 2026-08-28): three TELEMAC templates declare a
-# mesher the purge removed - telemac_river_dye and telemac_do_sag ask for
-# ``corridor_tin``, telemac_rain_on_grid asks for ``watershed``. The surviving
-# roster is om2d + reg_grid, and om2d is a GSHHG-shoreline mesher whose declared
-# fields (extent/refine/bed) do not cover the river-corridor fields
-# (domain/extent_km/width_m/banks) or the catchment fields
-# (min_edge_length_m/grade/snap_search_cells) these three ask for, so repointing
-# them is a domain decision, not a rename. Their declarations build at import, so
-# leaving the imports live makes the whole tool surface unimportable. They are
-# parked here, unregistered, until the mesher question is ruled; restoring each is
-# this one line.
+# Three TELEMAC templates are HALF repointed and stay parked, unregistered, until
+# the worker-unification wave finishes them; restoring each is this one line.
+# telemac_rain_on_grid now declares its chain (delineate_watershed -> combine ->
+# om2d over the basin) and imports clean, but its mesh STEP still reads the
+# retired catchment mesher's fields off the declaration. The two reach templates
+# still name the purged ``corridor_tin``, blocked on an open DESIGN-STOP about
+# what edge an ``auto`` reach mesh is built at. Registering a template whose mesh
+# step cannot run puts a broken tool in front of the model, which is worse than an
+# honest absence. What landed, what did not, and the failures it leaves:
+# docs/design/worker-unification-port.md.
 # from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye
 # from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag
 # from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid

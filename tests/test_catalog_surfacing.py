@@ -120,7 +120,7 @@ def _os_environ() -> dict:
 
 #: How many tools the registry holds. Pinned so a tool that leaves is noticed
 #: rather than absorbed; the arms never shrink it, only the declarable POOL.
-_REGISTRY_SIZE = 166
+_REGISTRY_SIZE = 168
 
 
 # --------------------------------------------------------------------------- #

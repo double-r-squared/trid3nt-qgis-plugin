@@ -482,9 +482,17 @@ def read_geometry(source: Any) -> dict[str, Any]:
 
     A source is a path or uri the recipe records and can re-read, so a drawn
     polygon, a fetched breakwater layer and a file on disk all enter the same way.
+    A LAYER a chain produced enters the same way too: a declared ``extent`` is
+    bound to whatever the producing tool returned, and refusing the layer while
+    accepting the uri it carries would make a chain depend on the author
+    remembering to write ``.uri``.
     """
     from trid3nt_server.tools.cache import read_object_bytes_s3
+    from trid3nt_server.tools.processing._geometry_common import source_uri
 
+    source = source_uri(source)
+    if isinstance(source, Mapping):
+        return dict(source)
     text = str(source).strip()
     if text.startswith("{"):
         return json.loads(text)
