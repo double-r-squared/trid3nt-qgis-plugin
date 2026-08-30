@@ -179,8 +179,7 @@ PARAMS: tuple[Param, ...] = (
     # -- numerics + geometry (the advanced fold) ---------------------------- #
     Param("channel_width_m", door=doors.CONSTANT, default=60.0, bounds=(10.0, 1500.0),
           units="m", consequence="numerical",
-          desc="Modeled channel width, used for the mesh node estimate and for the "
-               "assumed ribbon when bank_source is not nhd_area"),
+          desc="Modeled channel width, used for the mesh node estimate"),
     Param("mesh_resolution", door=doors.CONSTANT, default="auto",
           consequence="numerical",
           desc="Mesh sizing mode: auto | fine | coarse"),
@@ -189,8 +188,8 @@ PARAMS: tuple[Param, ...] = (
           desc="Explicit target element edge length, overriding the sizing mode"),
     Param("bank_source", door=doors.CONSTANT, default="nhd_area",
           consequence="scenario",
-          desc="Bank geometry source: nhd_area (real NHDArea polygons, else a typed "
-               "refusal) | constant_ribbon (an assumed channel width)"),
+          desc="Bank geometry source: nhd_area - the real mapped NHDArea polygon. An "
+               "unmapped reach refuses; there is no assumed-width rung"),
     Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
           units="min", consequence="numerical",
           desc="Result-writing cadence; unset keeps the deck's own graphic period"),

@@ -103,11 +103,10 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
 
     The carrier discharge that governs dilution (real NWM streamflow or
     user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
-    the bank geometry the worker actually sampled (real NHDArea polygons vs an
-    assumed constant-width ribbon), the release point the deck was authored with,
-    and the user's explicit mesh edge length WHEN a sizing rule moved it.
+    the bank geometry the worker sampled, the release point the deck was authored
+    with, and the user's explicit mesh edge length WHEN a sizing rule moved it.
     """
-    banks = solve.get("bank_provenance") or "constant_ribbon"
+    banks = solve.get("bank_provenance") or "nhd_area"
     return [
         _release_provenance(deck),
         *_rain_provenance(deck),
@@ -118,13 +117,9 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
             real_source_if_any=discharge.get("real_source"),
             note=discharge.get("note") or "carrier discharge governs dilution/transport"),
         SyntheticInput(
-            param="bank_geometry", value=banks,
-            basis="fetched" if banks == "nhd_area" else "default_demo",
+            param="bank_geometry", value=banks, basis="fetched",
             consequence="physics",
-            real_source_if_any=("USGS NHDArea water polygons"
-                                if banks == "nhd_area" else None),
-            note=(None if banks == "nhd_area"
-                  else "assumed constant-width ribbon, not surveyed banks")),
+            real_source_if_any="USGS NHDArea water polygons"),
     ]
 
 
@@ -135,11 +130,8 @@ def _honesty_note(location_name: str, substance: str, bank_source: str) -> str:
             f" NOTE: {substance} is modeled as a passively advected dissolved "
             "tracer (transport + dilution only) - NOT slick physics "
             "(no spreading/evaporation/weathering/beaching).")
-    banks_note = (
-        " Banks: real USGS NHDArea water-polygon geometry (per-station sampled "
-        "widths)." if bank_source == "nhd_area"
-        else " Banks: an ASSUMED constant channel-width ribbon (bank_source="
-             "constant_ribbon), not real surveyed banks.")
+    banks_note = (" Banks: real USGS NHDArea water-polygon geometry "
+                  "(per-station sampled widths).")
     return (
         f"Idealized demo: a FINITE mid-reach point-source {substance or 'dye'} "
         f"pulse released on the real {location_name} river reach (NLDI/NHDPlus "
@@ -336,7 +328,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     }
     peak = await asyncio.to_thread(
         _publish_peak_layer, raw_peak, run_id, deck["location_name"], mesh_meta,
-        substance, solve.get("bank_provenance") or "constant_ribbon",
+        substance, solve.get("bank_provenance") or "nhd_area",
         _provenance(solve, carrier_discharge, deck))
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry (the whole-run record)

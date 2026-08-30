@@ -10,9 +10,9 @@ envelope.
 from __future__ import annotations
 
 __all__ = [
-    "TelemacBanksUnavailableError",
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
+    "TelemacReachBanksUnmappedError",
     "TelemacReachDegenerateError",
     "TelemacReleaseOutsideDomainError",
 ]
@@ -35,42 +35,32 @@ class TelemacDyeScenarioInputError(TelemacDyeScenarioError):
         super().__init__("TELEMAC_DYE_SCENARIO_INPUT_INVALID", message)
 
 
-class TelemacBanksUnavailableError(TelemacDyeScenarioError):
-    """``bank_source="nhd_area"`` found no NHDArea coverage for the reach.
+class TelemacReachBanksUnmappedError(TelemacDyeScenarioError):
+    """No mapped water polygon covers this reach, so it has NO DOMAIN.
 
-    No inexplicit mesh-source fallback: the constant-width ribbon is never
-    substituted for missing real banks. Retryable so the named retry
-    (``bank_source="constant_ribbon"``) rides the tool-retry loop and the user
-    approves the substitution conversationally.
+    A reach domain is the real mapped water polygon or nothing: a line has no
+    banks, so widening the flowline into a ribbon would answer a question about a
+    shape nobody surveyed. There is no fallback rung to name - what the refusal
+    names instead are the ways a domain can be SUPPLIED, and those ride the
+    tool-retry loop as suggestions.
     """
 
     retryable = True
 
-    def __init__(self, assumed_channel_width_m: float | None) -> None:
-        self.assumed_channel_width_m = (
-            float(assumed_channel_width_m)
-            if assumed_channel_width_m is not None
-            else None
-        )
-        width_txt = (
-            f"an assumed constant {self.assumed_channel_width_m:g} m channel-width "
-            "ribbon"
-            if self.assumed_channel_width_m is not None
-            else "an assumed constant channel-width ribbon"
-        )
+    def __init__(self) -> None:
         super().__init__(
-            "TELEMAC_BANKS_UNAVAILABLE",
-            "No USGS NHDArea water polygon covers this river reach, so real "
-            'per-station banks could not be sampled for bank_source="nhd_area". '
-            "No bank geometry was substituted automatically -- switching to an "
-            "assumed channel width is a user decision. Retry with "
-            f'bank_source="constant_ribbon" to mesh {width_txt} instead, or name a '
-            "reach with mapped NHDArea coverage.",
+            "REACH_BANKS_UNMAPPED",
+            "No mapped water polygon covers this river reach, so there is no "
+            "domain to mesh. NHDArea maps water surfaces wide enough to have two "
+            "banks; a narrow creek is a flowline only, and a flowline is a "
+            "centreline rather than a shape. Nothing here will widen it into an "
+            "assumed ribbon. Draw the water polygon, name a layer this case "
+            "already holds, or pick a reach with mapped coverage.",
         )
         self.suggestions = [  # type: ignore[attr-defined]
-            'Retry with bank_source="constant_ribbon" to mesh '
-            + width_txt
-            + " (an assumed width, not real surveyed banks).",
+            "Draw the water polygon on the canvas and supply it as the domain.",
+            "Or name a polygon layer this case already holds (a digitized water "
+            "body, a section cut) as the domain.",
             "Or name a larger/mapped river reach that has USGS NHDArea coverage.",
         ]
 
@@ -142,16 +132,13 @@ class TelemacReachDegenerateError(TelemacDyeScenarioError):
             "TELEMAC_REACH_DEGENERATE",
             "The reach geometry is degenerate: the channel is wider than the "
             f"reach is long{geom_txt}, so the mesh could not be built. Retry "
-            "with a longer reach_length_km, a location that NAMES the river "
+            "with a longer reach_length_km, or a location that NAMES the river "
             "(the seed ladder re-seeds onto the named mainstem instead of a "
-            "short tributary stub), or bank_source=\"constant_ribbon\" with a "
-            "smaller channel_width_m.",
+            "short tributary stub).",
         )
         self.suggestions = [  # type: ignore[attr-defined]
             "Retry with a longer reach_length_km (mesh more of the river).",
             "Give a location that NAMES the river (\"Eel River near Scotia, "
             "California\") so the seed ladder lands on the named mainstem "
             "rather than a short tributary stub.",
-            'Retry with bank_source="constant_ribbon" and a smaller '
-            "channel_width_m.",
         ]

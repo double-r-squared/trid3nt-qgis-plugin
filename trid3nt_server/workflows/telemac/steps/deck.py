@@ -51,21 +51,20 @@ _FRICTION_LAWS = (2, 3, 4)
 _DREDGE_MODES = ("scheduled", "criterion")
 
 
-#: The two bank sources, plus the spellings each one answers to. Anything else
-#: REFUSES: collapsing an unrecognized value to nhd_area meant a typo silently
-#: chose the real-bank path, which is a different mesh and a different answer.
+#: The ONE bank source, plus the spellings it answers to. A reach domain is the
+#: REAL mapped water polygon or it is a typed refusal; there is no assumed-width
+#: rung to name, so anything else REFUSES rather than canonicalizing.
 _BANK_SOURCES: dict[str, tuple[str, ...]] = {
-    "constant_ribbon": ("constant_ribbon", "constant", "ribbon", "constant_width"),
     "nhd_area": ("nhd_area", "nhdarea", "nhd", "auto"),
 }
 
 
 def normalize_bank_source(value: Any) -> str:
-    """Coerce a bank_source to the closed set {nhd_area, constant_ribbon}.
+    """Coerce a bank_source to the closed set {nhd_area}.
 
-    Absent takes the declared default (the real-bank path with its typed
-    unavailable gate); a known synonym canonicalizes; anything else is a typed
-    refusal naming what it could have been.
+    Absent takes the declared default; a known synonym canonicalizes; anything
+    else is a typed refusal. A width is not a bank: a reach whose banks nothing
+    maps has no domain, and the refusal names the supply paths instead.
     """
     if value is None or not str(value).strip():
         return "nhd_area"
@@ -74,9 +73,9 @@ def normalize_bank_source(value: Any) -> str:
         if v in spellings:
             return canonical
     raise TelemacDyeScenarioInputError(
-        f"bank_source {value!r} is neither of the two the mesher builds: "
-        "'nhd_area' (sample real NHDArea water polygons for per-station banks) "
-        "or 'constant_ribbon' (mesh the assumed constant channel width).")
+        f"bank_source {value!r} is not the one source a reach domain is cut from: "
+        "'nhd_area' (the real mapped NHDArea water polygon). A reach whose banks "
+        "nothing maps has no domain - supply one, or name a covered reach.")
 
 
 def stage_manifest(reach: dict[str, Any], run_tag: str, *,

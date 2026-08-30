@@ -355,11 +355,11 @@ async def review_resolved_inputs(*, discharge: dict[str, Any], bank_source: Any,
                   real_source_if_any=(None if discharge.get("basis") == "user"
                                       else "NOAA National Water Model streamflow"),
                   note=discharge.get("note") or "carrier discharge governing dilution"),
-            entry(param="bank_source", value=banks,
-                  basis="fetched" if banks == "nhd_area" else "default_demo",
+            entry(param="bank_source", value=banks, basis="fetched",
                   consequence="physics",
-                  note=("real NHDArea banks" if banks == "nhd_area"
-                        else "assumed constant-width ribbon")),
+                  real_source_if_any="USGS NHDArea mapped water polygons",
+                  note="the real mapped banks; an unmapped reach refuses rather "
+                       "than meshing an assumed width"),
         ],
         params={"discharge_m3s": float(discharge["m3s"])})
     if outcome.cancelled:

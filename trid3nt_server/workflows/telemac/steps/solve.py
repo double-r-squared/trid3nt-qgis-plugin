@@ -24,7 +24,7 @@ from trid3nt_server.workflows.lib import Step
 
 from .deck import stage_manifest
 from .errors import (
-    TelemacBanksUnavailableError,
+    TelemacReachBanksUnmappedError,
     TelemacDyeScenarioError,
     TelemacReachDegenerateError,
 )
@@ -74,9 +74,14 @@ def read_run_metrics(run_id: str) -> dict[str, Any]:
 
 
 def raise_if_banks_unavailable(metrics: dict[str, Any]) -> None:
-    """Surface the worker's banks gate as the typed, retryable error. No-op otherwise."""
+    """Surface the worker's banks gate as the unmapped-reach refusal. No-op otherwise.
+
+    The worker's own code word for the signal is unchanged; what the server does
+    with it is: an unmapped reach has no domain, so the refusal names the supply
+    paths rather than an assumed width.
+    """
     if str(metrics.get("error_code") or "") == "TELEMAC_BANKS_UNAVAILABLE":
-        raise TelemacBanksUnavailableError(metrics.get("assumed_channel_width_m"))
+        raise TelemacReachBanksUnmappedError()
 
 
 def raise_if_reach_degenerate(metrics: dict[str, Any]) -> None:
@@ -228,7 +233,7 @@ async def solve_reach(*, deck: dict[str, Any],
         "uri": f"s3://{_get_runs_bucket()}/{batch_run_id}/r2d_river.slf",
         "utm_epsg": int(metrics["utm_epsg"]),
         "metrics": metrics,
-        "bank_provenance": str(metrics.get("bank_source") or "constant_ribbon"),
+        "bank_provenance": str(metrics.get("bank_source") or "nhd_area"),
     }
 
 
