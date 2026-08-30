@@ -149,14 +149,14 @@ class MeshSession:
         """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`.
 
         The facts only the MESHER knows - what painted its bed, which side it
-        opened, the authoring inputs an engine re-realizes it from - ride in on the
-        mesh's own ``meta`` and are recorded here, so the artifact states what was
-        built rather than what this file could infer about it.
+        opened - ride in on the mesh's own ``meta`` and are recorded here, so the
+        artifact states what was built rather than what this file could infer about
+        it.
         """
         mesh = self.mesh
         declared = dict(mesh.meta.get("artifact") or {})
-        # The counts a bundle-realized mesh declares are already read through the
-        # mesh's own properties; passing them again would name one field twice.
+        # The counts are already read through the mesh's own properties; passing
+        # them again would name one field twice.
         declared.pop("node_count", None)
         declared.pop("element_count", None)
         _, display_uri = self._display_face()
@@ -212,22 +212,17 @@ class MeshSession:
         return self._stage(local)
 
     def _staged_files(self, mesh: Mesh) -> dict[str, Any]:
-        """Stage the per-solver files and the authoring bundle the mesher wrote.
+        """Stage the per-solver files the mesher wrote.
 
-        ``meta["files"]`` maps an artifact URI field to a LOCAL path; ``meta[
-        "bundle"]`` maps an engine's authoring-input key to one. Both land beside
-        this mesh's other objects, so a bundle is not a second store.
+        ``meta["files"]`` maps an artifact URI field to a LOCAL path; each one lands
+        beside this mesh's other objects, so a mesher's own output is never a second
+        store.
         """
         out: dict[str, Any] = {}
         for name, local in dict(mesh.meta.get("files") or {}).items():
             if name in ("slf_uri", "display_uri") or not local:
                 continue
             out[name] = self._stage(Path(local))
-        bundle = {key: self._stage(Path(local))
-                  for key, local in dict(mesh.meta.get("bundle") or {}).items()
-                  if local}
-        if bundle:
-            out["hecras_inputs"] = bundle
         return out
 
     def _stage(self, local: Path) -> str:

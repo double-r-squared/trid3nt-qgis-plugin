@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from _env_guard import require_local_endpoint  # noqa: E402
 
 #: A small named place, not a reach descriptor: the AOI meshers (reg_grid,
-#: om2d, watershed, coastal_edge, hecras_rog) resolve ``location`` through the
+#: om2d, watershed, coastal_edge) resolve ``location`` through the
 #: raw ``geocode_location`` bbox, and a "<feature> near <place>" query answers
 #: with the feature's FULL extent (a river name geocodes to the whole state) --
 #: a real town geocodes tight, which is what a coarse spot check needs.
@@ -126,7 +126,7 @@ async def _drive(ns: argparse.Namespace) -> dict:
         "node_count": art.node_count, "element_count": art.element_count,
         "has_bathymetry": art.has_bathymetry,
         "display_uri": art.display_uri, "slf_uri": art.slf_uri,
-        "cli_uri": art.cli_uri, "hecras_inputs": art.hecras_inputs,
+        "cli_uri": art.cli_uri,
         "open_boundary_info": art.open_boundary_info,
     }
     out["recipe_uri"] = art.recipe_uri

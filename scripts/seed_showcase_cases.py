@@ -458,20 +458,6 @@ SHOWCASE: list[Showcase] = [
              "precondition gate. Emits the mesh wireframe as a layer_type=mesh "
              "row (crs_authid=EPSG:32617).",
              1800),
-    Showcase("build_mesh",
-             {"mesher": "hecras_rog",
-              "bbox": [-83.47, 35.02, -83.36, 35.10],
-              "pour_point": (-83.40402, 35.05746),
-              "min_edge_length_m": 22.0, "max_edge_length_m": 90.0},
-             "the HEC-RAS rain-on-grid mesher on the "
-             "Coweeta Creek NC catchment. Delineate -> graded Poisson-disk seeds "
-             "(22 m channel / 90 m hillslope) + main-stem breaklines -> realized + "
-             "validated through the in-container meshprobe (<= 8 sides/cell) -> the "
-             "realized Voronoi cell wireframe as a layer_type=vector layer + a PORTABLE "
-             "authoring bundle a later hecras_flood_2d rain-on-grid run consumes via "
-             "the precondition gate (TryCreateMesh deterministic on the seeds, so the "
-             "inspected mesh IS the solved mesh).",
-             1800, title_suffix="hecras rain-on-grid"),
     Showcase("telemac_rain_on_grid",
              {"location": "Otto, North Carolina",
               "pour_point": (-83.40402, 35.05746),

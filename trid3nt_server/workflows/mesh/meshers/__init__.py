@@ -522,12 +522,11 @@ def apply_layer_edits_action(
         doc="Adopt a hand-edited mesh layer as the current mesh.")
 
 
-#: Meta a mesher writes ABOUT one topology: the per-solver geometry files it wrote,
-#: the authoring bundle an engine re-realizes cells from, and the quantities it
-#: measured on those cells. An adopted layer is a different topology, so carrying
-#: any of them forward would hand a solver the pre-edit geometry under the edited
-#: mesh's name.
-_TOPOLOGY_BOUND_META = ("files", "bundle", "probes")
+#: Meta a mesher writes ABOUT one topology: the per-solver geometry files it wrote
+#: and the quantities it measured on those cells. An adopted layer is a different
+#: topology, so carrying either forward would hand a solver the pre-edit geometry
+#: under the edited mesh's name.
+_TOPOLOGY_BOUND_META = ("files", "probes")
 
 #: Claims about the topology that a mesher DECLARED for the artifact. They describe
 #: the cells the edit replaced, so an adopted mesh states them afresh from what it
@@ -563,14 +562,6 @@ def _refuse_unadoptable(mesh: Mesh, regenerate: Any) -> None:
     """
     if regenerate is not None:
         return
-    if mesh.meta.get("bundle"):
-        raise MeshToolError(
-            "MESH_EDIT_NOT_STAGEABLE",
-            "this mesh's cells are re-realized by the engine from the authoring "
-            "inputs its mesher staged, and an edited .2dm layer is not those "
-            f"inputs ({sorted(dict(mesh.meta['bundle']))}); the hand-edit would "
-            "leave a mesh no run could be staged on. Change the mesh through the "
-            "mesher's own edit actions instead.")
     if not mesh.has_cells:
         raise MeshToolError(
             "MESH_EDIT_NOT_STAGEABLE",

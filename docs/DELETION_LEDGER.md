@@ -1355,3 +1355,49 @@ Tests whose subject left the tree with the mesher roster narrowing (`6368bb69`):
 - `tests/test_mesh_gate_loop.py::test_a_mesher_with_no_vocabulary_knob_keeps_the_card_it_had`
   named the purged `corridor_tin`. Repointed to `reg_grid`, which is now the
   mesher whose every knob is a number.
+
+## graded_cells and the HEC-RAS mesh residue (2026-08-29)
+
+The kind word `graded_cells` named a shape no registered mesher builds: the
+`hecras_rog` mesher left with the fresh-start purge, so every surface written for
+it was describing an absent producer. Same dead-residue class as the chopped
+`schism` / `swan` requirement rows, and chopped the same way.
+
+- `MeshKind`'s `graded_cells` member. DELETED, no attic copy (git history is the
+  archive). CONDITION: HEC-RAS brings its own vocabulary back at rung 5, and the
+  word is re-declared then by the mesher that builds it.
+- `ENGINE_MESH_REQUIREMENTS["hecras"]` and the `bundle` / `needs_validated`
+  branches of `mesh_compatible_with_engine` that only that row reached. An ask for
+  HEC-RAS now gets the honest "no mesh-compatibility rule registered for engine
+  'hecras'". DELETED. CONDITION: HEC-RAS returns and authors its row from the needs
+  it has then.
+- `HECRAS_INPUT_KEYS`, `_HECRAS_REQUIRED_KEYS`, `materialize_hecras_mesh_inputs`,
+  and `MeshArtifact`'s `hecras_inputs` / `channel_target_size_m` /
+  `background_size_m` / `cells_validated` fields. Nothing wrote them and only the
+  deleted bundle branch read them. DELETED.
+- The `meta["bundle"]` mesher channel: its staging in
+  `MeshSession._staged_files`, its membership in `_TOPOLOGY_BOUND_META`, and the
+  `MESH_EDIT_NOT_STAGEABLE` branch of `_refuse_unadoptable` that quoted it. The
+  channel existed to carry an engine's authoring inputs from `hecras_rog` to
+  `hecras_inputs`; with both ends gone it had no producer and no consumer. DELETED.
+  The `has_cells` arm of that refusal STAYS - it is about a mesh that states no
+  cells, not about a bundle.
+- `scripts/seed_showcase_cases.py`: the `hecras_rog` showcase row, which named a
+  mesher `build_mesh` no longer registers. `scripts/drive_mesh_spotcheck.py`: the
+  `hecras_inputs` key in its artifact dump and the mesher name in its location
+  comment. DELETED.
+- `tests/test_mesh_meshers.py` section "HEC-RAS RoG channel-refined mesh": the
+  artifact round-trip, the four compat cases, the gate case and the two bundle
+  materialization cases. DELETED with their subject.
+
+## Compatible, superseded by Accepts (2026-08-29)
+
+- `trid3nt_server/workflows/mesh/kinds.py::Compatible` and its re-export from
+  `workflows/mesh/__init__.py`. The single-role accept-set generalized to the
+  role-keyed `Accepts` in `workflows/lib/accepts.py`, so the mesh-only spelling had
+  nothing left to say. DELETED, no attic copy. `MeshKind` stays where it is - it is
+  mesh vocabulary and the `mesh` row is typed to it.
+- The direct `from ...agitation.declarations import COMPATIBLE` at the ARTEMIS
+  supply door in `steps/agitation.py`. The door names its tool and
+  `mesh/tool.py::accepts_for` reads the contract off the registry, so a step is no
+  longer a second place a template's contract is read from. DELETED.
