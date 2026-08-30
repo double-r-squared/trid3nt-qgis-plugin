@@ -1401,3 +1401,140 @@ it was describing an absent producer. Same dead-residue class as the chopped
   supply door in `steps/agitation.py`. The door names its tool and
   `mesh/tool.py::accepts_for` reads the contract off the registry, so a step is no
   longer a second place a template's contract is read from. DELETED.
+
+## The three watershed resolver shims (2026-08-30)
+
+P1 gave the interpreter's loader a TOOL-REGISTRY lookup, so a `Data` producer can
+name a registered tool directly. The three `workflows/mesh/watershed.py` resolvers
+existed only to reach `TOOL_REGISTRY[...]` from a declaration and to restate a
+ladder the fetcher router already runs and already labels on `LayerURI.fallback_note`
+- a second home for middleware that has one.
+
+- `resolve_bed_dem`. DELETED, no attic copy. `telemac_rain_on_grid` declares
+  `Fetch.tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep", ...)`. The shim's
+  automatic 3DEP -> Copernicus swap goes with it: a PINNED source never switches, so
+  a 3DEP outage now surfaces the fetcher's own typed error naming copernicus and the
+  cross-dataset substitution is the user's to make, which is what the fallback norm
+  asks for.
+- `resolve_landcover`. DELETED, no attic copy. Replaced by
+  `Fetch.tool("fetch_landcover", bbox=Ref("aoi.bbox"), ...)`.
+- `resolve_river_network`. DELETED, no attic copy. Replaced by
+  `Fetch.tool("fetch_river_geometry", bbox=Ref("aoi.bbox"), ...)`. The shim swallowed
+  a flowline-fetch failure into a "uniform sizing" note; a failed fetch is now the
+  fetcher's typed error. CONDITION: if a headwater basin with no mapped channel must
+  still mesh, that is a declared `.optional()` slot or a chained tool, never a
+  swallow inside a producer.
+- `_domain_bbox` STAYS: the rain producers in `steps/rain_on_grid.py` call it, and
+  it is the domain read itself rather than a wrapper around a tool.
+- `tests/test_mesh_bed_dem_cross_dataset.py` tested the shim's own loud swap, which
+  no longer exists. MOVED to the attic.
+
+## Purge residue: the SWMM gate chunk and the moved engines' diagnostics (2026-08-30)
+
+Ruled with the DS rulings (2026-08-28). Both were surfaces whose SUBJECT left the
+tree with the non-TELEMAC workflow purge, so they described absent producers.
+
+- `trid3nt_server/gates/cards/solver_confirm.py`: `_clamp_swmm_resolution_to_cap`,
+  `_build_swmm_granularity_envelope`, `estimate_swmm_granularity`,
+  `pin_swmm_granularity` (237 lines). They reached
+  `workflows.swmm.urban_flood` and `mesh.raster_cell_mesh`, neither of which is in
+  the tree. MOVED to
+  `trid3nt-attic/trid3nt_server/gates/cards/solver_confirm_swmm_granularity.py`.
+  Their re-exports from `gates/cards/__init__.py` went with them. The SHARED
+  scaffolding stays: `_gate_memory_key`, the fetch-resolution gate, the flood
+  run-settings gate, `MAX_FETCH_PX` and the ladder tables.
+- `trid3nt_server/workflows/solver/diagnostics/{geoclaw,modflow,sfincs,swmm}.py`.
+  MOVED to `trid3nt-attic/trid3nt_server/workflows/solver/diagnostics/`.
+  `read_run_diagnostics` now dispatches `telemac` alone; an ask for any other
+  engine gets the honest `DiagnosticsEngineUnknown` it already raised for an
+  unregistered name. CONDITION: each parser returns WITH its engine at rung 5,
+  re-authored against the diagnostics the engine actually writes then.
+
+## Purge-fallout test residue (2026-08-30)
+
+The non-TELEMAC workflow purge left test modules importing absent engines, pinning
+rosters that shrank, and asserting on files that moved. Repointed where the SUBJECT
+is still in the tree; atticked where the subject moved with its engine.
+
+MOVED to the attic with their subject:
+- `tests/test_declarative_generalization.py` - the checkpoint's two declared
+  templates were SWMM and MODFLOW. The library seams it also covered (Derived
+  evidence, the honest real_source rule, RunResult.params) return with the
+  templates that exercise them. CONDITION: re-authored at rung 5 against whichever
+  engine lands first, never restored verbatim.
+- `tests/fixtures/validation/{sfincs,swmm,modflow,geoclaw}/` - diagnostics
+  fixtures whose parsers went to the attic in the same pass.
+
+REPOINTED (subject kept, engine vocabulary swapped):
+- `tests/test_solver_local_docker.py` drives the local-docker envelope through the
+  registered `telemac_river_dye` LocalSolverSpec instead of `sfincs`. Its two
+  SFINCS-BUILDER sections (`_default_setup_uri` / deck upload / `_to_vsigs` /
+  `postprocess_flood` reads) went with `workflows/sfincs`. DELETED.
+- `tests/test_read_run_diagnostics.py` keeps the registration, envelope-shape,
+  handle-resolution, TELEMAC and error-path coverage on the telemac fixtures. The
+  four per-engine parser sections DELETED. `test_artifact_missing_when_...` too:
+  the TELEMAC parser reads both of its artifacts OPTIONALLY, so with only telemac
+  registered nothing in the tree can raise `DiagnosticsArtifactMissing`. The
+  exception class STAYS - it is the contract for an engine with a required
+  artifact, and the next one to land re-earns the test.
+- `tests/test_gate_collapse_specs.py`: the solver lane is now EMPTY (every engine
+  template stops at the mesh gate), asserted as a derived property rather than a
+  name list. The per-engine byte-equivalence tests DELETED with their tools.
+- `tests/test_solver_confirm_gate.py`: the per-engine solver cards and the
+  deployment-aware recommendation prose DELETED; the generic gate machinery is
+  still covered through the FETCH lane.
+- `tests/test_local_subprocess_runner.py`: the landlab/openquake spec registration
+  + argv + PYTHONPATH sections DELETED; the engine-agnostic runner half stays.
+- `tests/test_fallback_ladder.py`: the geoclaw/schism/swan/sfincs CONSUMER
+  sections DELETED (~310 lines). The ladder machinery itself - walk, gaps,
+  declines, coverage, the loudness floor, the topobathy hook - is untouched.
+- `tests/test_fallback_sweep_guard.py`: SHAPE 2 (the `coastal_edge` mesher's bed)
+  and SHAPE 2b (geoclaw/schism transport faults) DELETED with their code. The
+  PARKED register loses rows 12b / 16 / 17 / 18 (SFINCS + SWMM files that left)
+  and row 25 (the river-dye ribbon fallback, whose worker script NATE pre-deleted
+  and whose server-side path the RIBBON RULING removes).
+- `tests/test_input_layer_surfacing.py`: the OpenQuake fault-serialization section
+  DELETED; the ADR 0244 allow-list pruned to the files that exist.
+- `tests/test_resolution_doctrine_0224.py`: R-A (schism `_topobathy_fetch_kwargs`)
+  and the surge estimator / mesh-density sections DELETED with the schism legs;
+  R-B (payload sampling) and R-C (topobathy warnings) stay.
+- `tests/test_live_drive_fixes_0104.py`: four of the six bug regressions named SWMM
+  or the pre-deleted per-process TELEMAC build scripts. DELETED; the two whose code
+  is still here stay.
+- `tests/test_emit_on_fetch_equivalence.py`: the landlab and sfincs purpose tables
+  DELETED. The rain-on-grid entry now reads the TEMPLATE's own `Fetch.tool(...)`
+  declarations, which is where those fetches live after the shim deletion.
+
+## The ribbon, in the kept tree (2026-08-30)
+
+Per the RIBBON RULING (NATE 2026-08-29): a reach domain is the real mapped water
+polygon or a typed refusal, and no fallback rung exists. The worker still carries
+its own ribbon code (workers/ is frozen); nothing in the server asks for it.
+
+- `steps/deck.py::_BANK_SOURCES` loses `constant_ribbon` and its four spellings;
+  `normalize_bank_source` now coerces to the one-member set {nhd_area}. DELETED.
+- `steps/errors.py::TelemacBanksUnavailableError` -> `TelemacReachBanksUnmappedError`,
+  error code `TELEMAC_BANKS_UNAVAILABLE` -> `REACH_BANKS_UNMAPPED`. Its
+  `assumed_channel_width_m` argument and the ribbon retry in `.suggestions` are
+  DELETED; the suggestions now name the SUPPLY paths (draw the polygon, name a case
+  layer, pick a covered reach). The worker's own code word is unchanged - the
+  translation is `steps/solve.py::raise_if_banks_unavailable`.
+- `TelemacReachDegenerateError`'s `bank_source="constant_ribbon"` retry. DELETED.
+- `steps/forcing.py::review_resolved_inputs`' bank row: the `default_demo` /
+  "assumed constant-width ribbon" arm. DELETED - the row is always the real banks.
+- `steps/products.py`: the `bank_geometry` row's `default_demo` arm and the
+  honesty-note's ribbon sentence. DELETED. `bank_provenance` defaults to
+  `nhd_area` rather than `constant_ribbon`.
+- `run_telemac.py`'s `assumed_channel_width_m` completion key. DELETED - nothing
+  reads it now that the refusal names no width.
+- The `bank_source` param prose in both reach templates' declarations.
+
+### Same-class residue this slice did NOT touch (queued)
+
+`gates/cards/solver_confirm.py` still holds `_build_psha_confirm_envelope`,
+`_build_scenario_confirm_envelope`, `_build_fire_confirm_envelope`,
+`_build_geoclaw_confirm_envelope` and their four `estimate_*` providers. Their
+TOOLS (openquake / elmfire / geoclaw) left with the purge, no `gate_spec` names
+them, and their byte-equivalence tests went with the tools - so they are the same
+dead-residue class as the SWMM chunk above. The residue ruling named only the SWMM
+functions, so they stay pending a ruling of their own.
