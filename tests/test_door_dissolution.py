@@ -28,10 +28,12 @@ from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 #: The engine templates the tree registers. Pinned as a SET, not derived: a
 #: template that stops registering is a capability that silently left, and the
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
+#: ``telemac_rain_on_grid`` is absent because it is parked unregistered - its
+#: mesh step still reads a retired mesher's fields - so the roster this walks is
+#: what the tree actually offers rather than what it means to offer.
 EXPECTED_TEMPLATES = {
     "telemac_river_dye",
     "telemac_do_sag",
-    "telemac_rain_on_grid",
     "tomawac_wave_field",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
