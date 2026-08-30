@@ -349,6 +349,50 @@ def test_reference_producer_cannot_be_supplied():
     assert hasattr(Build.tool("build_mesh"), "supplied")
 
 
+# --------------------------------------------------------------------------- #
+# ONE runner namespace: a registered tool name, else a dotted import path.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_runner_can_name_a_registered_tool():
+    """``Build.tool("section", ...)`` in a plan and ``section(...)`` from a chat
+    resolve to the SAME function - the declaration and the direct call are one
+    namespace, which is what makes a chained tool declarable."""
+    import trid3nt_server.tools as _tools  # noqa: F401 -- registration side-effect
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.lib.interpreter import _load
+
+    assert _load("section") is TOOL_REGISTRY["section"].fn
+
+
+def test_a_runner_still_resolves_a_dotted_import_path():
+    from trid3nt_server.workflows.lib.interpreter import _load
+
+    assert _load(f"{_HERE}.stub_step").__name__ == "stub_step"
+
+
+def test_a_name_in_both_namespaces_refuses_rather_than_picking(monkeypatch):
+    """Which namespace answered must never be a matter of lookup order."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.lib.errors import StepFailedError
+    from trid3nt_server.workflows.lib.interpreter import _load
+
+    both = f"{_HERE}.stub_step"
+    monkeypatch.setitem(TOOL_REGISTRY, both, TOOL_REGISTRY["section"])
+    with pytest.raises(StepFailedError) as ei:
+        _load(both)
+    assert ei.value.error_code == "RUNNER_AMBIGUOUS"
+
+
+def test_a_runner_that_is_neither_refuses_by_name():
+    from trid3nt_server.workflows.lib.errors import StepFailedError
+    from trid3nt_server.workflows.lib.interpreter import _load
+
+    with pytest.raises(StepFailedError) as ei:
+        _load("no_such_runner")
+    assert ei.value.error_code == "RUNNER_UNRESOLVED"
+
+
 def test_named_applies_once():
     step = Step(runner=f"{_HERE}.stub_step").named("a")
     with pytest.raises(ModifierIllegalError):
