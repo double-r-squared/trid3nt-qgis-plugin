@@ -1,0 +1,167 @@
+<title>The Shape</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 62em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code { background: var(--code-bg); padding: 0 .25em; font-family: monospace; font-size: .95em; }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>The Shape</h1>
+<p class="rev">rev 1 &middot; 2026-08-30 &middot; UML of the revised system: landed tree + the approved worker-unification plan (marked). Templates awaiting rung-4 rebuild are marked dark. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
+
+<h2>1. The declaration surface (a template's anatomy)</h2>
+<p>Everything a template is, in one class view. Contracts are static and unreachable at runtime; params are doored and journaled; producers name registered tools (P1 - one runner namespace).</p>
+<div class="scroll">
+<pre class="mermaid">
+classDiagram
+    class Template {
+        river_dye.py + declarations.py
+        +PARAMS  : doored inputs (mesh_resolution_m REQUIRED)
+        +DATA    : producers by TOOL NAME (Fetch.tool / Build.tool)
+        +ACCEPTS : role-keyed supply contract (absence refuses)
+        +PHYSICS / FORCING : frozen binding blocks
+        +MESH    : build_mesh declaration (extent ALWAYS declared)
+        +plan(ops) : static; FormGate, DrawGate, chain, author, solve, read
+        +ANSWER / coercions / sensitivity
+    }
+    class Param {
+        name, door, basis, bounds/choices
+        coercion canonicalizes spelling BEFORE the door
+        (re-spell, never decide)
+    }
+    class Accepts {
+        lib/accepts.py
+        mesh=(MeshKind...), release=("point",)
+        one home: THE REGISTRY (read by tool name)
+        empty refuses at import
+    }
+    class Producer {
+        Fetch.tool(name) / Build.tool(name)
+        loader: registry FIRST, dotted path second,
+        name in both -> refuse
+        .ladder(rungs are producers) EXECUTES (P5)
+    }
+    Template --> Param : declares
+    Template --> Accepts : declares (registry-homed)
+    Template --> Producer : DATA rows
+</pre>
+</div>
+
+<h2>2. The chain + mesh subsystem</h2>
+<p>Domain narrowing is plan-level tool chaining (the LEGO law); one generic router; capabilities from presence; the recipe is the record.</p>
+<div class="scroll">
+<pre class="mermaid">
+classDiagram
+    class ChainTools {
+        delineate_watershed (pysheds - the ONE domain computation)
+        section / combine / endpoints / clip (generic geometry)
+        all registered: declarable AND !run-able (same call)
+    }
+    class BuildMesh {
+        tool.py - one router
+        mesher EXPLICIT (om2d | reg_grid), kind declared
+        extent: bbox | polygon uri | GeoJSON (one word - P7)
+        resolve: explicit > discovered(Accepts-filtered) > declared
+        containment rule: crop within staged coverage,
+        outside -> escalate to rerun (binary)
+    }
+    class MeshSession {
+        edit(action) per-input card knobs; regenerate-on-edit
+        staged-once inputs; snapshot cache; restart -> declared prefix
+        accept() implies STAGEABLE
+        recipe = spec line + chain (clear-safe)
+    }
+    class MeshArtifact {
+        probes + recipe + formats
+        readiness: unsolvable_reason() (P4 - no engine table)
+        display face via emission (frozen seam)
+    }
+    class SharedWriters {
+        mesh/shared/selafin_cli.py (telapy pair writer - P6, one writer)
+        role-keyed boundaries -> LIHBOR codes
+        numliq order MEASURED (get_ipobo + Conlim)
+    }
+    ChainTools --> BuildMesh : polygon extent (explicit plan value)
+    BuildMesh --> MeshSession : demand-pulled
+    MeshSession --> MeshArtifact : accept()
+    MeshArtifact --> SharedWriters : .slf/.cli last mile
+</pre>
+</div>
+
+<h2>3. The solve seam (approved worker plan - in flight)</h2>
+<p>The deck is authored server-side once, against the measured boundary order (the two-pass probe is dead). The worker is one gate, one dispatch, one telapy child.</p>
+<div class="scroll">
+<pre class="mermaid">
+classDiagram
+    class ServerAuthoring {
+        steps/author.py - .cas writers (t2d/waqtel/gaia/nestor/oil/rog)
+        authored ONCE vs measured numliq order
+        sole-authored-record law
+    }
+    class Manifest {
+        ONE writer (open_water.stage_open_water_manifest)
+        case: module, steering, user_fortran?, results, family
+        echo: utm_epsg, bbox, npoin, mesh_size_m, bed_source
+        (worker copies echo verbatim - asserts nothing it cannot know)
+    }
+    class Worker {
+        entrypoint ~220 LOC, --network none
+        ONE strict gate (unknown field -> typed refusal)
+        dispatch: case -> telapy child | agitation/stratified -> legacy solve (awaiting rung 4)
+        success = clean child exit AND all results exist
+        metrics written ALWAYS (child crash isolated)
+    }
+    class TelapyChild {
+        set_case (dico-validated) -> init -> run_all_time_steps -> finalize
+        stdout tee -> full_listing.log
+        _MODULES: telemac2d/3d/tomawac/artemis (new module = ONE row)
+    }
+    class Supervisor {
+        solver.py - uploads outputs, writes completion.json LAST
+        one classify + one spec factory (5 names kept)
+    }
+    ServerAuthoring --> Manifest : deck + aux staged
+    Manifest --> Worker : docker run
+    Worker --> TelapyChild : spawns
+    Worker --> Supervisor : metrics
+</pre>
+</div>
+
+<h2>4. One river_dye run, end to end (sequence)</h2>
+<div class="scroll">
+<pre class="mermaid">
+sequenceDiagram
+    participant U as user / model
+    participant P as plan interpreter
+    participant T as chain tools
+    participant M as mesh session
+    participant A as author (server)
+    participant B as box (telapy child)
+    participant R as ops.read / emission
+
+    U->>P: !run telemac_river_dye(...) - sheet resolves (doors + coercions)
+    P->>P: FormGate review; DrawGate release point
+    P->>T: rivers -> centerline -> ends -> banks
+    T->>T: reach_polygon = section(banks, between=ends)
+    Note over T: no polygon -> REACH_BANKS_UNMAPPED (terminal, names 3 supply paths)
+    P->>M: build_mesh(om2d, extent=reach_polygon, edge=P.mesh_resolution_m)
+    M->>M: gate (USER-GATED): knobs, edits, hand-edits; accept => stageable
+    M->>A: MeshArtifact (probes, recipe, roles)
+    A->>A: pair write (measured numliq) + .cas authored once + manifest
+    A->>B: staged rundir, --network none
+    B->>B: gate -> dispatch -> telapy child -> collect -> metrics
+    B->>R: results + full_listing.log + completion
+    R->>U: neutral products via the frozen seam; ANSWER from measured artifact
+</pre>
+</div>
+
+<h2>5. Status legend</h2>
+<p><b>Landed:</b> sections 1-2 and the sequence through the mesh session (suite: 3 awaiting-port failures, contracts 789/0). <b>Approved plan, in flight:</b> section 3 (worker unification) and the deck-authoring flip. <b>Dark, awaiting rung 4:</b> wave_field, coastal_tidal_surge (unregistered by ruling); artemis/telemac3d live behind the unified dispatch, never extended. <b>Frozen throughout:</b> fetch substrate, styles/emission, the box contract, the static plan.</p>
