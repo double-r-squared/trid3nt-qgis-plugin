@@ -17,6 +17,7 @@ Written by the skeleton's publish stage, which is one seam for every engine.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import os
@@ -26,7 +27,40 @@ from typing import Any, Mapping, Sequence
 
 logger = logging.getLogger("trid3nt_server.workflows.lib.journal")
 
-__all__ = ["append_record", "journal_path", "read_records", "run_origin"]
+__all__ = ["append_record", "bind_notes", "drain_notes", "journal_note",
+           "journal_path", "read_records", "run_origin"]
+
+#: The notes the step now running has written for THIS run's record. Bound by the
+#: interpreter for the length of a plan, the way the domain is: a producer deep in
+#: a chain measures something the reader has to know about and has no result field
+#: to say it in, and a note that only reached a log line dies with the process.
+_NOTES: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "trid3nt_run_notes", default=None)
+
+
+def journal_note(text: str) -> None:
+    """Record ``text`` on the run in progress. Outside a plan it only logs.
+
+    For what a run has to SAY rather than return: a measured coverage the answer
+    is qualified by, a window that had to widen. The note travels to the journal
+    and onto the published layer beside the run's own fallback notes.
+    """
+    logger.info("run note: %s", text)
+    notes = _NOTES.get()
+    if notes is not None:
+        notes.append(str(text))
+
+
+def bind_notes() -> contextvars.Token:
+    """Open a note channel for one plan run -> the token that closes it."""
+    return _NOTES.set([])
+
+
+def drain_notes(token: contextvars.Token) -> list[str]:
+    """Close the channel and return what was written into it."""
+    notes = _NOTES.get() or []
+    _NOTES.reset(token)
+    return list(notes)
 
 #: The env var a DRIVER sets to label its runs. A canary and a person asking a
 #: question produce the same shaped record, and telemetry that learns a default

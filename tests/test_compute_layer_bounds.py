@@ -18,6 +18,8 @@ Tests:
 4. ``test_returns_correct_bbox_for_known_raster`` — a small synthetic GeoTIFF
    yields its corner extent.
 5. ``test_pad_fraction_expands_bbox`` — padding widens the box symmetrically.
+5b. ``test_pad_m_*`` / ``test_a_chained_layer_handle_*`` — the METRE pad a fetch
+   query window is reasoned in, and the layer handle a chained row hands over.
 6. ``test_unknown_uri_raises_typed_error`` — FR-AS-11 typed error on a bad URI.
 7. ``test_no_emitter_does_not_crash`` — direct call (no emitter) skips the emit.
 8. ``test_registered_and_in_hot_set`` — registry + category + hot-set wiring.
@@ -245,6 +247,49 @@ async def test_pad_fraction_expands_bbox() -> None:
     assert result["min_lat"] == pytest.approx(39.5)
     assert result["max_lat"] == pytest.approx(45.5)
     assert result["pad_fraction"] == pytest.approx(0.10)
+
+
+# --------------------------------------------------------------------------- #
+# Test 5b — pad_m: the METRE pad a fetch query window is reasoned in
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_pad_m_expands_the_bbox_by_a_distance_not_a_fraction() -> None:
+    """The pad is a DISTANCE: the same 3 km whatever the layer's own span is."""
+    pts = [_point_feature(-124.16, 40.49), _point_feature(-124.04, 40.51)]
+    path = _write_geojson(pts)
+    try:
+        result = await compute_layer_bounds(path, pad_m=3000.0, fit_map=False)
+    finally:
+        os.unlink(path)
+
+    # 3 km of latitude is 3000/111320 deg; the longitude pad is that over
+    # cos(40.5 deg), so the window grows MORE in longitude degrees than in
+    # latitude ones - which is what keeps the pad the same distance on both axes.
+    dy = 3000.0 / 111_320.0
+    assert result["min_lat"] == pytest.approx(40.49 - dy, abs=1e-9)
+    assert result["max_lat"] == pytest.approx(40.51 + dy, abs=1e-9)
+    assert (-124.16 - result["min_lon"]) > dy
+    assert (result["max_lon"] - (-124.04)) > dy
+    assert result["pad_m"] == pytest.approx(3000.0)
+
+
+@pytest.mark.asyncio
+async def test_a_chained_layer_handle_is_read_as_the_uri_it_carries() -> None:
+    """A DATA row hands over what the producing tool RETURNED, uri and all."""
+    from trid3nt_contracts.execution import LayerURI
+
+    path = _write_geojson([_point_feature(-124.16, 40.49),
+                           _point_feature(-124.04, 40.51)])
+    layer = LayerURI(layer_id="centerline", name="centerline",
+                     layer_type="vector", uri=path, style_preset="nhd_flowlines",
+                     role="context")
+    try:
+        result = await compute_layer_bounds(layer, fit_map=False)
+    finally:
+        os.unlink(path)
+    assert result["bbox"] == pytest.approx([-124.16, 40.49, -124.04, 40.51])
 
 
 # --------------------------------------------------------------------------- #

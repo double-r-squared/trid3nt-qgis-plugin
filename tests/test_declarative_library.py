@@ -124,6 +124,18 @@ async def stub_producer(**kwargs):
     return "s3://b/produced.tif"
 
 
+async def stub_noting(**kwargs):
+    """A step that MEASURES something the reader has to know and has no result
+    field to say it in - the note channel's whole reason to exist."""
+    from trid3nt_server.workflows.lib import journal_note
+
+    _CALLS.append("stub_noting")
+    journal_note("measured 42.0% coverage")
+    if "stub_noting" in _FAIL_AT:
+        raise RuntimeError("noted, then failed")
+    return {"uri": "s3://b/noted.tif"}
+
+
 async def stub_no_bbox(**kwargs):
     """A layer result whose ``bbox`` field is THERE and empty - the None-missing
     tail the binder must refuse rather than carry forward."""
@@ -2449,3 +2461,34 @@ async def test_an_unclassifiable_supplied_artifact_is_adopted_not_guessed_at():
                      supplied={"structure": "harbor-breakwater-layer"},
                      domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
     assert out.value["seen"]["s"] == "harbor-breakwater-layer"
+
+
+# --- the run's own NOTES ------------------------------------------------------ #
+@pytest.mark.asyncio
+async def test_a_note_a_step_wrote_travels_out_on_the_run():
+    """A measurement a step has no result field for still reaches the reader."""
+    plan = Plan("noted", None, (Step(runner=f"{_HERE}.stub_noting").named("a"),))
+    out = await _run(plan, _params(), {}, resume=False)
+    assert "measured 42.0% coverage" in out.notes
+
+
+@pytest.mark.asyncio
+async def test_a_note_survives_the_failure_it_was_written_on_the_way_to():
+    """The note a step wrote before it failed is often the reason for the failure,
+    so it is drained in the FINALLY rather than on the success path."""
+    _FAIL_AT.add("stub_noting")
+    try:
+        plan = Plan("noted_fail", None,
+                    (Step(runner=f"{_HERE}.stub_noting").named("a"),))
+        with pytest.raises(StepFailedError):
+            await _run(plan, _params(), {}, resume=False)
+    finally:
+        _FAIL_AT.discard("stub_noting")
+
+
+@pytest.mark.asyncio
+async def test_one_runs_notes_do_not_leak_into_the_next():
+    plan = Plan("noted", None, (Step(runner=f"{_HERE}.stub_noting").named("a"),))
+    first = await _run(plan, _params(), {}, resume=False)
+    second = await _run(plan, _params(), {}, resume=False)
+    assert first.notes == second.notes == ["measured 42.0% coverage"]

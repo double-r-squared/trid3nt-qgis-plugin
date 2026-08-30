@@ -4,7 +4,7 @@ ONE atomic tool that answers "what is this layer's geographic extent?" and
 "fit/zoom/resize the map so all of <these features> are in view" WITHOUT the
 Python sandbox.
 
-    ``compute_layer_bounds(layer_uri, pad_fraction=0.0) → dict``
+    ``compute_layer_bounds(layer_uri, pad_fraction=0.0, pad_m=0.0) → dict``
 
 **Why this tool exists (the bug it fixes):**
 
@@ -59,6 +59,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.processing._geometry_common import source_uri
 
 __all__ = [
     "compute_layer_bounds",
@@ -139,6 +140,11 @@ def _resolve_layer_to_local_path(
     ``ComputeLayerBoundsError`` on failure.
     """
     del storage_client  # GCP decommissioned -- S3/local only.
+    # A chained row hands over whatever the producing tool RETURNED, so a
+    # LayerURI enters here exactly as a typed path does; refusing the object
+    # while accepting the uri it carries would make a chain depend on the author
+    # remembering to write ``.uri``.
+    uri = str(source_uri(uri))
     suffix = _infer_suffix(uri)
 
     if uri.startswith("s3://"):
@@ -332,6 +338,31 @@ def _apply_pad(
     return (minx, miny, maxx, maxy)
 
 
+#: Metres per degree of latitude, and the floor the longitude scaling takes at
+#: high latitude so a pad near the pole stays a finite number of degrees.
+_M_PER_DEG_LAT = 111_320.0
+_COS_FLOOR = 0.15
+
+
+def _apply_pad_m(
+    bbox: tuple[float, float, float, float], pad_m: float
+) -> tuple[float, float, float, float]:
+    """Pad a 4326 bbox by ``pad_m`` METRES on each side.
+
+    A DISTANCE rather than a fraction, because what a query window has to reach
+    past its subject is a distance: a channel a kilometre off the centreline is
+    the same kilometre whether the reach is one km long or fifty.
+    """
+    minx, miny, maxx, maxy = bbox
+    if pad_m <= 0.0:
+        return bbox
+    dy = pad_m / _M_PER_DEG_LAT
+    mid_lat = 0.5 * (miny + maxy)
+    dx = pad_m / (_M_PER_DEG_LAT * max(_COS_FLOOR, math.cos(math.radians(mid_lat))))
+    return (max(-180.0, minx - dx), max(-90.0, miny - dy),
+            min(180.0, maxx + dx), min(90.0, maxy + dy))
+
+
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -350,6 +381,7 @@ def _apply_pad(
 async def compute_layer_bounds(
     layer_uri: str,
     pad_fraction: float = 0.0,
+    pad_m: float = 0.0,
     *,
     fit_map: bool = True,
     _storage_client: object | None = None,
@@ -372,13 +404,16 @@ async def compute_layer_bounds(
             reprojected to EPSG:4326.
         pad_fraction: fractional padding per side (0.0=exact, 0.05=5%
             breathing room). Default 0.0.
+        pad_m: padding per side in METRES, for a QUERY WINDOW that has to
+            reach a stated distance past the layer - the pad a fetch is
+            reasoned in. Applied after ``pad_fraction``. Default 0.0.
         fit_map: ``True`` (default) emits the zoom-to command; ``False``
             computes the extent only, no camera move.
 
     Returns:
         ``{"min_lon", "min_lat", "max_lon", "max_lat", "bbox": [...],
         "layer_type": "vector"|"raster", "crs": "EPSG:4326",
-        "pad_fraction", "map_fitted", "layer_uri", "computed_at"}``.
+        "pad_fraction", "pad_m", "map_fitted", "layer_uri", "computed_at"}``.
 
     Raises:
         ComputeLayerBoundsError: unreadable URI, open failure, empty
@@ -414,7 +449,8 @@ async def compute_layer_bounds(
             f"layer {layer_uri!r} produced non-finite bounds {raw_bbox!r}.",
         )
 
-    bbox = _apply_pad(raw_bbox, max(0.0, float(pad_fraction)))
+    bbox = _apply_pad_m(_apply_pad(raw_bbox, max(0.0, float(pad_fraction))),
+                        max(0.0, float(pad_m)))
     min_lon, min_lat, max_lon, max_lat = bbox
 
     # --- Fit the map: emit a zoom-to map-command via the existing seam.
@@ -452,6 +488,7 @@ async def compute_layer_bounds(
         "layer_type": layer_type,
         "crs": "EPSG:4326",
         "pad_fraction": max(0.0, float(pad_fraction)),
+        "pad_m": max(0.0, float(pad_m)),
         "map_fitted": map_fitted,
         "layer_uri": layer_uri,
         "computed_at": computed_at,

@@ -45,6 +45,7 @@ from .errors import (
     StepFailedError,
 )
 from .form import build_param_sheet
+from .journal import bind_notes, drain_notes
 from .ledger import LedgerRecord, StepLedger, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
@@ -147,6 +148,7 @@ async def interpret(
                input_mode=input_mode, ledger=ledger, resume=resume, supplied=dict(supplied or {}))
     out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
+    notes_token = bind_notes()
     final_index = _final_recordable_index(nodes)
     first_step = next((n.index for n in nodes if n.kind == "step"), None)
     reviewed = any(n.kind == "gate" and n.step.kind == "form" for n in nodes)
@@ -226,6 +228,9 @@ async def interpret(
         raise
     finally:
         reset_domain(token)
+        # In the FINALLY so a run that failed still carries what it measured: the
+        # note a step wrote on its way to the failure is often the reason for it.
+        out.notes.extend(drain_notes(notes_token))
     # The terminal leak guard: a ParamRef in what the caller receives is a
     # declaration that escaped binding, never data. Three surfaces, three budgets,
     # one shared cycle guard - so the value that is also a step result is walked

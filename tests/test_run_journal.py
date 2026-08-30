@@ -172,3 +172,26 @@ def test_without_a_label_the_origin_is_the_session_or_headless():
 def test_a_blank_origin_label_falls_back_rather_than_recording_nothing(monkeypatch):
     monkeypatch.setenv(journal.ORIGIN_ENV, "   ")
     assert journal.run_origin(live_session=False) == "headless"
+
+
+# --- the note channel a producer says something on ----------------------------- #
+def test_a_note_written_inside_the_channel_drains_out_of_it():
+    """What a step MEASURED and has no result field to say in still reaches the
+    reader: the channel is opened per run and drained at the end of it."""
+    token = journal.bind_notes()
+    journal.journal_note("42.0% of the centreline is covered")
+    assert journal.drain_notes(token) == ["42.0% of the centreline is covered"]
+
+
+def test_a_note_outside_a_run_only_logs_rather_than_failing():
+    """A direct call has no run to record against, and a diagnostic that raised
+    would make saying something more dangerous than staying quiet."""
+    journal.journal_note("no channel is bound here")
+
+
+def test_draining_closes_the_channel_so_the_next_run_starts_empty():
+    token = journal.bind_notes()
+    journal.journal_note("first run")
+    journal.drain_notes(token)
+    token = journal.bind_notes()
+    assert journal.drain_notes(token) == []
