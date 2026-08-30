@@ -119,7 +119,16 @@ async def stub_second(**kwargs):
 
 async def stub_producer(**kwargs):
     _CALLS.append("stub_producer")
+    if "stub_producer" in _FAIL_AT:
+        raise RuntimeError("producer down")
     return "s3://b/produced.tif"
+
+
+async def stub_rung(**kwargs):
+    _CALLS.append("stub_rung")
+    if "stub_rung" in _FAIL_AT:
+        raise RuntimeError("rung down")
+    return "s3://b/rung.tif"
 
 
 class _StubLayer:
@@ -649,6 +658,47 @@ async def test_data_producer_runs_lazily_on_first_ref():
     out = await _run(plan, decl, {}, data, resume=False)
     assert _CALLS == ["stub_producer", "stub_second"]
     assert out.value["seen"]["m"] == "s3://b/produced.tif"
+
+
+@pytest.mark.asyncio
+async def test_a_declared_ladder_walks_its_rungs_and_records_which_answered():
+    """The declaration IS the mechanism: the primary fails, the rung answers, and
+    the record names the rung - so a producer that degraded is distinguishable
+    from one that never had a ladder."""
+    data = [Data("bed", Fetch.tool(f"{_HERE}.stub_producer")
+                 .ladder(Fetch.tool(f"{_HERE}.stub_rung")))]
+    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
+                                 kwargs={"m": Ref("bed")}),))
+    _FAIL_AT.add("stub_producer")
+    out = await _run(plan, _params(), {}, data, resume=False)
+    assert _CALLS == ["stub_producer", "stub_rung", "stub_second"]
+    assert out.value["seen"]["m"] == "s3://b/rung.tif"
+    answered = [r for r in out.data_records if r.node == "data:bed"]
+    assert answered and answered[0].runner.endswith("stub_rung")
+
+
+@pytest.mark.asyncio
+async def test_a_producer_that_answers_never_reaches_its_rungs():
+    data = [Data("bed", Fetch.tool(f"{_HERE}.stub_producer")
+                 .ladder(Fetch.tool(f"{_HERE}.stub_rung")))]
+    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
+                                 kwargs={"m": Ref("bed")}),))
+    out = await _run(plan, _params(), {}, data, resume=False)
+    assert _CALLS == ["stub_producer", "stub_second"]
+    assert out.value["seen"]["m"] == "s3://b/produced.tif"
+
+
+@pytest.mark.asyncio
+async def test_the_last_rungs_failure_is_what_the_run_reports():
+    """Primary -> fallback -> TYPED ERROR: an exhausted ladder never degrades to
+    a silent None."""
+    data = [Data("bed", Fetch.tool(f"{_HERE}.stub_producer")
+                 .ladder(Fetch.tool(f"{_HERE}.stub_rung")))]
+    plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_second",
+                                 kwargs={"m": Ref("bed")}),))
+    _FAIL_AT.update({"stub_producer", "stub_rung"})
+    with pytest.raises(StepFailedError, match="rung down"):
+        await _run(plan, _params(), {}, data, resume=False)
 
 
 @pytest.mark.asyncio

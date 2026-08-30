@@ -33,7 +33,7 @@ from trid3nt_server.gates.input_review import (
     resolve_input_gate_mode,
 )
 
-from .data import AuthoredProducer, CoversAOI, DataDecl
+from .data import AuthoredProducer, CoversAOI, DataDecl, Producer
 from .domain import Domain, bind_domain, current_domain, domain_from_result, reset_domain
 from .errors import (
     SuppliedCoverageError,
@@ -415,23 +415,62 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             logger.info("data %s REPLAYED from ledger", decl.name)
             return value
     label = _data_step_label(decl.name)
-    kwargs = await _bind(dict(producer.kwargs), env, label)
-    if producer.ladder_rungs:
-        kwargs.setdefault("fallback", tuple(producer.ladder_rungs))
-    if producer.temporal is not None:
-        # The declared transform travels TO the producer, which is the only party
-        # that knows the payload's quantity class and native cadence. The library
-        # owns the mechanism; the interpreter never reshapes a payload it cannot
-        # read.
-        kwargs.setdefault("temporal", producer.temporal)
-    async with substep(current_emitter(), producer.runner.rsplit(".", 1)[-1]):
-        value = await _call_runner(producer.runner, kwargs, label)
-    record = _record_for(decl.name, producer.runner, value)
+    answered, value = await _walk_ladder(env, producer, label)
+    record = _record_for(decl.name, answered.runner, value)
     env.data_records.append(dataclasses.replace(
         record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
         await env.ledger.record_data(decl.name, record)
     return value
+
+
+async def _walk_ladder(env: _Env, producer: Producer,
+                       label: str) -> tuple[Producer, Any]:
+    """Call the producer, then its declared rungs in order -> the one that ANSWERED.
+
+    The declared ladder IS the mechanism: primary first, each rung after it, and
+    the last rung's failure is what the run reports. Which rung answered is
+    recorded on the ledger record's ``runner``, so a producer that degraded and
+    one that never had a ladder are distinguishable afterwards - the defect an
+    inert ``.ladder()`` left behind.
+
+    A rung that names a DIFFERENT runner than the primary is a cross-dataset
+    substitution, and the loud line is emitted here rather than left to each
+    producer's own discipline: this is the one place that knows a rung fired.
+    """
+    rungs = (producer, *producer.ladder_rungs)
+    failures: list[str] = []
+    for index, rung in enumerate(rungs):
+        kwargs = await _bind(dict(rung.kwargs), env, label)
+        if rung.temporal is None and producer.temporal is not None:
+            # The declared transform is the ARTIFACT's, not the rung's: whichever
+            # rung answers delivers the cadence and units the consumer was
+            # promised, or refuses.
+            kwargs.setdefault("temporal", producer.temporal)
+        elif rung.temporal is not None:
+            kwargs.setdefault("temporal", rung.temporal)
+        try:
+            async with substep(current_emitter(), rung.runner.rsplit(".", 1)[-1]):
+                value = await _call_runner(rung.runner, kwargs, label)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - the next rung is the response
+            if index == len(rungs) - 1:
+                raise
+            failures.append(f"{rung.runner}: {exc}")
+            logger.warning("%s rung %s failed (%s); falling to %s",
+                           label, rung.runner, exc, rungs[index + 1].runner)
+            continue
+        if index:
+            logger.warning(
+                "LABELED SUBSTITUTION: %s was produced by the fallback rung %s "
+                "rather than %s - a DIFFERENT dataset answered this artifact. "
+                "Rungs that failed: %s", label, rung.runner, producer.runner,
+                "; ".join(failures))
+        return rung, value
+    raise StepFailedError(  # unreachable: the last rung re-raises above
+        f"{label}: no rung answered.", error_code="DATA_LADDER_EXHAUSTED",
+        step=label)
 
 
 def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:

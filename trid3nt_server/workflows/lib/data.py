@@ -105,11 +105,11 @@ def artifact_class(value: Any) -> str | None:
 
 @dataclass(frozen=True, slots=True)
 class Producer:
-    """How an artifact comes into being: a dotted runner path plus its declared args."""
+    """How an artifact comes into being: a runner name plus its declared args."""
 
     runner: str
     kwargs: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-    ladder_rungs: tuple[str, ...] = ()
+    ladder_rungs: tuple["Producer", ...] = ()
     temporal: TemporalSpec | None = None
 
     def __post_init__(self) -> None:
@@ -117,10 +117,23 @@ class Producer:
             raise PlanValidationError("Producer declares no runner path.")
         object.__setattr__(self, "kwargs", MappingProxyType(dict(self.kwargs)))
 
-    def ladder(self, *rungs: str) -> "Producer":
-        """Declare the fallback rungs this producer may degrade through, in order."""
+    def ladder(self, *rungs: "Producer") -> "Producer":
+        """Declare the fallback rungs this producer degrades through, in order.
+
+        A RUNG IS A PRODUCER, not a label: the machinery walks them, records which
+        one answered, and says so out loud when the answering rung changed dataset.
+        A declaration that named rungs it could not call would be a claim about a
+        mechanism it does not have, which is worse than declaring nothing.
+        """
         if not rungs:
             raise PlanValidationError(f"{self.runner}: .ladder() declares no rungs.")
+        wrong = [r for r in rungs if not isinstance(r, Producer)]
+        if wrong:
+            raise PlanValidationError(
+                f"{self.runner}: .ladder() takes PRODUCERS - Fetch.tool(...) / "
+                f"Build.tool(...) the machinery can call - and was given "
+                f"{type(wrong[0]).__name__} ({wrong[0]!r}). A rung the interpreter "
+                "cannot call is a fallback that never fires.")
         return replace(self, ladder_rungs=self.ladder_rungs + tuple(rungs))
 
     def resample(self, *, to: str, method: str | None = None,
@@ -222,8 +235,19 @@ class DataDecl:
 
     @property
     def producer_kwargs(self) -> Mapping[str, Any]:
-        """The reads the producer declares - empty for a producer-less slot."""
-        return {} if self.producer is None else self.producer.kwargs
+        """Every read this slot's producer declares, RUNGS INCLUDED.
+
+        A rung is a producer with its own reads, and whether a revised param
+        reaches this artifact is a question about all of them - a ladder whose
+        fallback consumed the value the review changed is exactly as stale as one
+        whose primary did. Empty for a producer-less slot.
+        """
+        if self.producer is None:
+            return {}
+        reads = dict(self.producer.kwargs)
+        for rung in self.producer.ladder_rungs:
+            reads.update(rung.kwargs)
+        return reads
 
     @property
     def wire_annotation(self) -> Any:

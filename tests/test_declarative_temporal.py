@@ -232,8 +232,19 @@ def test_the_modifiers_ride_the_data_declaration_and_compose():
 
 
 def test_the_modifiers_leave_the_ladder_alone():
-    producer = Fetch.tool("pkg.mod.fn").ladder("a", "b").resample(to="1h")
-    assert producer.ladder_rungs == ("a", "b")
+    rung = Fetch.tool("pkg.mod.other")
+    producer = Fetch.tool("pkg.mod.fn").ladder(rung).resample(to="1h")
+    assert producer.ladder_rungs == (rung,)
+
+
+def test_a_rung_that_is_not_a_producer_refuses_at_declaration():
+    """A rung the interpreter cannot CALL is a fallback that never fires - which
+    is the inert declaration the executing ladder exists to end."""
+    from trid3nt_server.workflows.lib import PlanValidationError
+
+    with pytest.raises(PlanValidationError) as excinfo:
+        Fetch.tool("pkg.mod.fn").ladder("copernicus_glo30")
+    assert "PRODUCERS" in str(excinfo.value)
 
 
 def test_a_declaration_with_no_modifier_carries_no_spec():
