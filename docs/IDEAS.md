@@ -2652,3 +2652,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   REGISTRY - the door looks the contract up from the registered
   workflow by tool name (no new seam); the direct declarations-module
   import goes.
+
+- P1 ADOPTED + ACCEPTS HOME RATIFIED (NATE 2026-08-30): the DATA
+  door's loader gains a TOOL-REGISTRY lookup before the dotted-path
+  fallback (~6 LOC; a name in BOTH namespaces REFUSES, never picks) -
+  Fetch.tool/Build.tool name registered tools, the LEGO chain becomes
+  declarable (Data("basin", Build.tool("delineate_watershed", ...))),
+  !run and declarations become the same call; the three watershed
+  resolver shims (~110 LOC) die now, remaining shims die per template
+  rebuild, genuinely-composing shims stay as steps. Accepts lives in
+  workflows/lib/accepts.py with the declaration vocabulary (MeshKind
+  stays in mesh/kinds.py) - ratified. Elegance review P2-P7 pending
+  individual walkthrough.
