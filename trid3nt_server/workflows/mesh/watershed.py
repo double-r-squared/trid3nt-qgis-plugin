@@ -19,11 +19,11 @@ Two routes converge on one value, exactly as the mesh charter rules:
 Both yield a :class:`CatchmentMesh`, so a consumer cannot tell which route ran
 except by reading ``provenance`` - which is the whole point of the slate.
 
-The world-READS this module performs sit behind :func:`resolve_bed_dem`,
-:func:`resolve_landcover` and :func:`resolve_river_network`, which are declared as
-``Data`` producers by the templates that want them. A step never fetches: the
-fetcher router's cache, ladders and provenance live once, and a producer is where
-that middleware is reached from.
+Nothing here fetches. The bed, the land cover and the channel network arrive as
+already-produced artifacts, because a template declares them as ``Data`` over the
+REGISTERED fetchers directly - the router's cache, ladder rows and
+``fallback_note`` are the one place that middleware lives, and a wrapper in front
+of it is a second one.
 """
 
 from __future__ import annotations
@@ -60,9 +60,6 @@ __all__ = [
     "polygon_area_km2",
     "read_2dm_mesh",
     "reproject_nodes_to_utm",
-    "resolve_bed_dem",
-    "resolve_landcover",
-    "resolve_river_network",
     "sample_raster_at_nodes",
     "utm_epsg_for",
     "validate_catchment_not_degenerate",
@@ -437,7 +434,7 @@ def read_2dm_mesh(twodm_path: str) -> tuple[Any, Any, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# The world-reads, as DATA producers.
+# The extent a domain-implicit producer reads the world over.
 # --------------------------------------------------------------------------- #
 def _domain_bbox(what: str, override: Any = None) -> tuple[float, float, float, float]:
     """The extent a producer reads the world over.
@@ -457,105 +454,6 @@ def _domain_bbox(what: str, override: Any = None) -> tuple[float, float, float, 
             "MESH_DOMAIN_UNBOUND",
             f"{what} cannot be fetched: no domain is bound. Resolve the AOI first.")
     return tuple(float(v) for v in domain.bbox)  # type: ignore[return-value]
-
-
-def resolve_bed_dem(*, resolution_m: int = DEFAULT_BED_RESOLUTION_M,
-                    bbox: Any = None,
-                    fallback: tuple[str, ...] = ()) -> dict[str, Any]:
-    """The BARE-EARTH bed raster for the mesh nodes, with its ladder declared.
-
-    Pins the bed to USGS 3DEP bare earth: a DSM (Copernicus GLO-30 includes
-    forest CANOPY) inflates node elevations under tree cover, and a catchment
-    meshed on canopy tops routes water down the wrong slopes. Where 3DEP has no
-    coverage the fall back to Copernicus is a CROSS-DATASET substitution, so it is
-    LOUD by construction: the note rides the returned artifact, which every
-    consumer reads, rather than an out-parameter a caller could decline to pass.
-    That is what makes the label unbypassable.
-
-    ``fallback`` is the declared ladder the producer was given; it is echoed into
-    the note so the run's own record names the rungs that were available to it.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    bbox = _domain_bbox("the mesh bed DEM", bbox)
-    rungs = " -> ".join(fallback) if fallback else "usgs_3dep -> copernicus_glo30"
-    try:
-        layer = TOOL_REGISTRY["fetch_dem"].fn(
-            bbox=bbox, source="3dep", resolution_m=int(resolution_m),
-            purpose="mesh bed")
-        return {
-            "uri": layer.uri if hasattr(layer, "uri") else layer["uri"],
-            "source": "usgs_3dep_bare_earth",
-            "resolution_m": int(resolution_m),
-            "cross_dataset": False,
-            "note": (f"mesh bed DEM: USGS 3DEP bare-earth ({int(resolution_m)} m); "
-                     f"ladder {rungs}"),
-        }
-    except Exception as exc:  # noqa: BLE001 - a LOUD cross-dataset fallback
-        # WHY the rung fired is the fact a reader needs and the one that used to
-        # be thrown away: the note said only that 3DEP "was unavailable", so a
-        # transient timeout and a genuine coverage hole read identically, and the
-        # only record of the difference was a log line nobody keeps.
-        reason = f"{type(exc).__name__}: {exc}"
-        code = getattr(exc, "error_code", None)
-        if code:
-            reason = f"{code} ({reason})"
-        logger.warning(
-            "mesh bed: USGS 3DEP bare-earth unavailable for bbox=%s (%s); falling "
-            "back to Copernicus GLO-30, a DSM that INCLUDES forest canopy",
-            bbox, reason)
-        layer = TOOL_REGISTRY["fetch_copernicus_dem"].fn(bbox=bbox, purpose="mesh bed")
-        return {
-            "uri": layer.uri if hasattr(layer, "uri") else layer["uri"],
-            "source": "copernicus_glo30",
-            "resolution_m": 30,
-            "cross_dataset": True,
-            "fallback_reason": reason,
-            "note": (f"mesh bed DEM CROSS-DATASET FALLBACK. 3DEP FAILED: {reason} "
-                     "-> Copernicus GLO-30. That is a SURFACE model "
-                     "(canopy-inclusive), so bed elevations under forest may be "
-                     f"biased high. Ladder {rungs}."),
-        }
-
-
-def resolve_landcover(*, dataset: str, resolution_m: int,
-                      bbox: Any = None) -> dict[str, Any]:
-    """The land-cover raster the per-node roughness and curve numbers come from."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    bbox = _domain_bbox("the land-cover raster", bbox)
-    layer = TOOL_REGISTRY["fetch_landcover"].fn(
-        bbox=list(bbox), dataset=str(dataset), resolution_m=int(resolution_m),
-        purpose="land cover")
-    uri = layer["uri"] if isinstance(layer, dict) else getattr(layer, "uri")
-    return {"uri": str(uri), "dataset": str(dataset),
-            "resolution_m": int(resolution_m),
-            "note": f"per-node curve numbers and Manning n from {dataset} "
-                    f"land cover at {int(resolution_m)} m"}
-
-
-def resolve_river_network(*, source: str = DEFAULT_RIVER_SOURCE,
-                          bbox: Any = None) -> dict[str, Any]:
-    """The river network inside the AOI - the mesh's distance-to-river sizing source.
-
-    BEST-EFFORT by contract: a catchment with no mapped flowline is meshed at
-    uniform sizing and says so, because refusing there would refuse a headwater
-    basin for having no NHD reach in it.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    bbox = _domain_bbox("the river network", bbox)
-    try:
-        layer = TOOL_REGISTRY["fetch_river_geometry"].fn(
-            bbox=bbox, source=str(source), purpose="river geometry")
-    except Exception as exc:  # noqa: BLE001 - river refinement is best-effort
-        logger.warning("catchment mesh: flowline fetch failed (%s); uniform sizing", exc)
-        return {"uri": None, "source": str(source),
-                "note": (f"no {source} flowlines were available for this AOI, so the "
-                         "mesh was sized UNIFORMLY rather than refined toward the "
-                         "channel network")}
-    return {"uri": str(layer.uri), "source": str(source),
-            "note": f"mesh refined by distance to the {source} channel network"}
 
 
 # --------------------------------------------------------------------------- #
@@ -694,8 +592,8 @@ def generate_catchment_mesh(
     if rivers and rivers.get("uri"):
         fl_path = _stage_local(str(rivers["uri"]), rundir / "flowlines.fgb")
         flow = gpd.read_file(fl_path)
-    if rivers and rivers.get("note"):
-        notes.append(str(rivers["note"]))
+    if rivers and rivers.get("fallback_note"):
+        notes.append(str(rivers["fallback_note"]))
 
     boubox, river = catchment_exterior_and_river_coords(
         catch, flow, min_edge_length_m=min_edge_length_m)
@@ -709,7 +607,7 @@ def generate_catchment_mesh(
 
     bed_path = _stage_local(str(bed_dem["uri"]), rundir / "dem_bed.tif")
     bed = sample_raster_at_nodes(bed_path, points_ll)
-    notes.append(str(bed_dem.get("note") or ""))
+    notes.append(str(bed_dem.get("fallback_note") or ""))
 
     points_m, epsg = reproject_nodes_to_utm(points_ll)
     area_km2 = float(area_km2) or polygon_area_km2(catch)

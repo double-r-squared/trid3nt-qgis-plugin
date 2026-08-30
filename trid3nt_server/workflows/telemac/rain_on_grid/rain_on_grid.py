@@ -58,7 +58,6 @@ from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_hydrograph_chart", "plan",
            "telemac_rain_on_grid"]
 
-_MESH = "trid3nt_server.workflows.mesh.watershed"
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
@@ -75,16 +74,20 @@ DATA = (
     # unfilled, the run asks whether to adopt a mesh this case already holds and
     # otherwise generates one - a labeled fallback, never a stance.
     Data("mesh").supplied(geometry="mesh").optional(),
-    Data("bed_dem", Fetch.tool(f"{_MESH}.resolve_bed_dem",
-                               resolution_m=P.bed_dem_resolution_m)
-         # Bare earth first, because a surface model puts the bed on the forest
-         # canopy and routes the water down the wrong slopes. The Copernicus rung
-         # is a CROSS-DATASET substitution and the run says so on the layer.
-         .ladder("usgs_3dep_bare_earth", "copernicus_glo30")),
-    Data("rivers", Fetch.tool(f"{_MESH}.resolve_river_network", source=P.river_source)),
-    Data("landcover", Fetch.tool(f"{_MESH}.resolve_landcover",
+    # 3DEP is PINNED, not preferred: a DSM (Copernicus GLO-30 includes forest
+    # canopy) puts the bed on the tree tops and routes the water down the wrong
+    # slopes. A pinned source never switches, so a 3DEP outage surfaces the
+    # fetcher's own typed error naming copernicus and the substitution is the
+    # user's to make - which is what a cross-dataset swap has to be.
+    Data("bed_dem", Fetch.tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep",
+                               resolution_m=P.bed_dem_resolution_m,
+                               purpose="mesh bed")),
+    Data("rivers", Fetch.tool("fetch_river_geometry", bbox=Ref("aoi.bbox"),
+                              source=P.river_source, purpose="river geometry")),
+    Data("landcover", Fetch.tool("fetch_landcover", bbox=Ref("aoi.bbox"),
                                  dataset=P.landcover_dataset,
-                                 resolution_m=NLCD_NATIVE_RESOLUTION_M)),
+                                 resolution_m=NLCD_NATIVE_RESOLUTION_M,
+                                 purpose="land cover")),
     Data("rain", Fetch.tool(f"{_STEPS}.rain_on_grid.resolve_rain_event",
                             window=P.rain_window,
                             intensity_mm_per_hr=P.design_storm_mm_per_hr,

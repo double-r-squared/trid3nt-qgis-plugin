@@ -67,7 +67,10 @@ def phase_mesh() -> None:
     print(f"[mesh] acquiring Coweeta watershed mesh at {POUR_POINT} ...", flush=True)
     mesh = W.generate_catchment_mesh(
         pour_point=POUR_POINT, bbox=BBOX, slug="watershed", output_dir=str(RUNDIR),
-        bed_dem=W.resolve_bed_dem(bbox=BBOX), rivers=W.resolve_river_network(bbox=BBOX),
+        bed_dem=TOOL_REGISTRY["fetch_dem"].fn(bbox=list(BBOX), source="3dep",
+                                              resolution_m=10),
+        rivers=TOOL_REGISTRY["fetch_river_geometry"].fn(bbox=list(BBOX),
+                                                        source="nhdplus_hr"),
         min_edge_length_m=MIN_EDGE_M, max_edge_length_m=MAX_EDGE_M, grade=GRADE)
     print(f"[mesh] nodes={mesh.points_utm.shape[0]} cells={mesh.cells.shape[0]} "
           f"epsg={mesh.utm_epsg} area_km2={mesh.area_km2:.2f} "

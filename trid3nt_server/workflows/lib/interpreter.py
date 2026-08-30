@@ -960,11 +960,28 @@ def _declared_attribute_names(cls: type) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _load(dotted: str) -> Any:
-    module_path, _, attr = dotted.rpartition(".")
+def _load(runner: str) -> Any:
+    """The runner a node named: a REGISTERED TOOL first, then a dotted import path.
+
+    One namespace for declarations and for a direct call, so ``Build.tool("section",
+    ...)`` in a plan and ``section(...)`` from a chat are the same function. A name
+    that reads as BOTH refuses: choosing one would make which namespace answered a
+    matter of lookup order rather than of what the author wrote.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    registered = TOOL_REGISTRY.get(runner)
+    module_path, _, attr = runner.rpartition(".")
+    if registered is not None and module_path:
+        raise StepFailedError(
+            f"runner {runner!r} is a registered tool AND reads as an import path; "
+            "rename one of them.", error_code="RUNNER_AMBIGUOUS")
+    if registered is not None:
+        return registered.fn
     if not module_path:
-        raise StepFailedError(f"runner {dotted!r} is not a dotted import path.",
-                              error_code="RUNNER_UNRESOLVED")
+        raise StepFailedError(
+            f"runner {runner!r} is neither a registered tool nor a dotted import "
+            "path.", error_code="RUNNER_UNRESOLVED")
     return getattr(importlib.import_module(module_path), attr)
 
 

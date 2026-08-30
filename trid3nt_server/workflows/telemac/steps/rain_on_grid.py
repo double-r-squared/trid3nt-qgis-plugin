@@ -295,10 +295,10 @@ async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
             # The two declared artifacts narrate themselves SEPARATELY: which bed
             # the nodes were sampled from is a different fact from what the mesh
             # was refined toward, and one row cannot carry both.
-            "bed_note": str((bed_dem or {}).get("note") or ""),
-            "bed_source": str((bed_dem or {}).get("source") or ""),
-            "rivers_note": str((rivers or {}).get("note") or ""),
-            "rivers_source": str((rivers or {}).get("source") or ""),
+            "bed_note": str((bed_dem or {}).get("fallback_note") or ""),
+            "bed_source": str((bed_dem or {}).get("name") or ""),
+            "rivers_note": str((rivers or {}).get("fallback_note") or ""),
+            "rivers_source": str((rivers or {}).get("name") or ""),
             "utm_epsg": int(mesh.utm_epsg), "area_km2": float(mesh.area_km2),
             "node_count": mesh.node_count, "element_count": mesh.element_count,
             "outlet_lonlat": list(mesh.outlet_lonlat),
@@ -388,7 +388,7 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
             "amc_condition": int(amc), "curve_number": curve_number,
             "steep_slope_correction": bool(steep_slope_correction),
             "landcover_classes": sorted(set(codes)),
-            "note": str(landcover.get("note") or "")}
+            "note": str(landcover.get("fallback_note") or "")}
 
 
 # --------------------------------------------------------------------------- #
