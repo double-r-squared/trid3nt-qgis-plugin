@@ -66,15 +66,30 @@ two reach `MESH` blocks are untouched and the two templates stay unregistered.
 
 ## The failures this leaves
 
-Collected against the offline suite. Everything here is one of the three
-templates' worker-facing halves or the two unregistered reach templates; nothing
-here is a regression from the repoint.
+The offline suite, measured. `88 failed, 8969 passed` before the repoint ->
+`80 failed, 9031 passed` after, plus the same 3 collection errors either side.
+Nothing new failed; everything below is one of the three templates' worker-facing
+halves or the two unregistered reach templates.
+
+Three modules cannot be COLLECTED (run the suite with `--ignore` on them):
 
 - `tests/test_mesh_declaration_travel.py` - imports the purged `corridor_tin`
   mesher module.
 - `tests/test_telemac_event_time.py`, `tests/test_telemac_rain_forcing.py` -
   import `do_sag` / `river_dye`, which still declare `corridor_tin`.
-- `tests/test_telemac_do_sag.py`, `tests/test_run_river_dye_scenario.py`,
-  `tests/test_telemac_input_provenance.py` - the same two templates.
-- `tests/test_workflow_skeleton.py` - the reach rows of the mesh-declaration
-  parametrizations, and the corridor-shape assertions.
+
+The 80 failures, by module:
+
+| module | count | why |
+|---|---|---|
+| `test_run_river_dye_scenario.py` | 31 | `river_dye` declares `corridor_tin` |
+| `test_telemac_do_sag.py` | 16 | `do_sag` declares `corridor_tin` |
+| `test_workflow_skeleton.py` | 14 | the reach rows of the mesh parametrizations, and the corridor-shape assertions |
+| `test_telemac_input_provenance.py` | 6 | the same two reach templates |
+| `test_resolution_sensitivity.py` | 4 | the same two reach templates |
+| `test_rerun_with_overrides.py` | 2 | the same two reach templates |
+| `test_door_dissolution.py` | 2 | every template registered + surfacing |
+| `test_declarative_library.py` | 2 | `do_sag`'s gate + docstring views |
+| `test_tool_retrieval.py` | 1 | corpus keys for the three unregistered templates |
+| `test_template_hygiene.py` | 1 | the hygiene gate's template roster |
+| `test_telemac_rain_on_grid_template.py` | 1 | asserts the template is registered |
