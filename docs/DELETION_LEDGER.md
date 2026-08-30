@@ -1547,3 +1547,51 @@ fetched layer arrived in (a `LayerURI`, a replayed model, a stub mapping). The
 shim deletion gave it a second consumer - `mesh/watershed.py` and
 `steps/rain_on_grid.py` now read the artifacts the registered fetchers return
 directly - and a second consumer is what earns the split.
+
+### The repoint stops execute their deletions (2026-08-30)
+
+REPOINT STOPS RULED (docs/IDEAS.md 2026-08-30). Four removals, each with the
+ruling that authorized it.
+
+**DS-2 - the retired catchment mesher's two knobs.** DELETED:
+`telemac_rain_on_grid`'s `Param("mesh_max_iter")` and
+`Param("outlet_snap_cells")`, with the `DEFAULT_MAX_ITER` /
+`DEFAULT_OUTLET_SNAP_CELLS` imports that fed them. CONDITION: none - the
+`watershed` mesher they were declared against is gone, `om2d` owns its own
+iteration, and how far a clicked outlet may move to reach the channel is a fact
+about the D8 grid that `delineate_watershed` declares for itself
+(`snap_threshold`, default 100 upslope cells). The bounds these two carried never
+reached a mesher after the purge.
+
+**DS-6 - the duplicate mesh resolution.** DELETED:
+`steps/rain_on_grid.py::_adopt_case_mesh` (~50 LOC) and the `_ENGINE` constant
+that only it read. CONDITION: none - the mesh router's `resolve_mesh` is the ONE
+resolver for a mesh a case already holds (explicit, then discovered, then the
+declared build), reached at the build door. The deleted copy went through
+`precondition_gate.gate_supplied_mesh`, a second discovery gate whose documented
+AUTO behavior adopts a discovered mesh silently, which D-9 forbids. Nothing
+outside the deleted function called it.
+
+**The four dead confirm-envelope builders.** MOVED to
+`trid3nt-attic/gates/dead_confirm_builders.py`, deleted from
+`gates/cards/solver_confirm.py` and from the `gates/cards/__init__.py` re-export
+list: `_build_psha_confirm_envelope`, `_build_scenario_confirm_envelope`,
+`_build_fire_confirm_envelope`, `_build_geoclaw_confirm_envelope` and their
+`estimate_psha` / `estimate_scenario` / `estimate_fire` / `estimate_geoclaw`
+providers. CONDITION: none - this is the residue the previous slice queued above,
+now ruled as its own class. Their TOOLS left with the fresh-start purge, no
+`gate_spec` names them, nothing in `tests/`, `plugin/` or `scripts/` references
+them, and their byte-equivalence tests went with the tools. A rung-5
+re-registration authors its envelope from the engine's own needs; the attic copy
+is the shape it would restate, not code anything imports.
+
+**The `watershed` and `corridor_tin` mesh asks.** `telemac_rain_on_grid`'s MESH
+block no longer names the purged `watershed` mesher: it declares `om2d` over the
+chained basin. The two reach templates still name `corridor_tin` - see the open
+DESIGN-STOP in `docs/design/worker-unification-port.md`.
+
+**`mesh/precondition_gate.py` (222 LOC) - its chop CONDITION is now met.**
+`_adopt_case_mesh` was its last production consumer; only `tests/
+test_mesh_meshers.py` still imports `gate_supplied_mesh`. The module itself goes
+with elegance-review P2 (the second mesh front), which owns it - recorded here so
+P2 does not have to re-derive that nothing calls it.
