@@ -91,18 +91,17 @@ def test_registry_registers_solver_tools_uncacheable() -> None:
 
 
 def test_run_solver_rejects_unregistered_solver(reset_solver_di_seams) -> None:
-    """An engine that has NOT landed its milestone (e.g. ``telemac``) raises
-    ``SolverNotRegisteredError`` (lazy per-milestone deploy strategy). This is
-    backend-agnostic — the registry check fires before any dispatch. NOTE:
-    ``modflow`` is now registered (wired to the generic AWS Batch seam), so an
-    as-yet-unbuilt engine name is used for the rejection probe."""
+    """A solver nobody registered raises ``SolverNotRegisteredError`` before any
+    dispatch, and the refusal NAMES what is registered - borrowing another
+    engine's spec is worse than a loud failure. Backend-agnostic: the registry
+    check fires ahead of the backend branch."""
     with pytest.raises(SolverNotRegisteredError) as exc_info:
-        run_solver(solver="telemac", model_setup_uri="s3://x/y.json")
-    assert "telemac" in str(exc_info.value)
-    assert "sfincs" in str(exc_info.value)
-    # sfincs is always registered; modflow/swmm register lazily when their
-    # workflow modules import.
-    assert set(SOLVER_WORKFLOW_REGISTRY) >= {"sfincs"}
+        run_solver(solver="not_an_engine", model_setup_uri="s3://x/y.json")
+    message = str(exc_info.value)
+    assert "not_an_engine" in message
+    # The refusal quotes the roster, so a caller can see what it could have asked.
+    assert "telemac_river_dye" in message
+    assert set(SOLVER_WORKFLOW_REGISTRY) >= {"telemac_river_dye"}
 
 
 # --------------------------------------------------------------------------- #
