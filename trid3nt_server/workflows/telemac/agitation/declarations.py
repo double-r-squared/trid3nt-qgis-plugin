@@ -8,8 +8,16 @@ every value it can take live here instead of in front of them.
 from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
+from trid3nt_server.workflows.mesh import Compatible
 
-__all__ = ["DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC", "PARAMS"]
+__all__ = ["COMPATIBLE", "DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC",
+           "PARAMS"]
+
+#: The supplied-mesh accept-set. ARTEMIS reads either shape: the default build is
+#: the uniform lattice the open-water deck lays over the AOI, and the BYO path -
+#: an adaptive triangulation with the breakwater cut in conformally and a seaward
+#: boundary designated - is the proven one.
+COMPATIBLE = Compatible("structured_grid", "unstructured_tri")
 
 #: The grid spacings a run is laid at when the caller names none. They live HERE,
 #: beside the param whose ``derived_when_absent`` sentence promises them, because

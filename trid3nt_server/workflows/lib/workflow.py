@@ -27,6 +27,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
 
+from trid3nt_server.workflows.mesh.kinds import Compatible
+
 from . import journal, snapshot
 from .data import DataDecl
 from .errors import DeclarativeError, PlanValidationError
@@ -151,11 +153,16 @@ class Workflow(EngineOps):
                  provenance: Sequence[str | tuple[str, str]] = (),
                  sensitivity: Sequence[tuple[str, str]] = (),
                  validity: Sequence[Validity] = (),
-                 coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = ()) -> None:
+                 coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
+                 compatible: Compatible | None = None) -> None:
         self.metadata = metadata
         self.name = metadata.name
         self.params = tuple(params)
         self.data = tuple(data)
+        #: Which KINDS of supplied mesh this template accepts. Declared beside
+        #: PARAMS because it is part of the same readable input contract, and
+        #: ``None`` is a refusal: no accept-set, no tested supplied-mesh path.
+        self.compatible = compatible
         self.plan_decl = plan
         self.answer_fields = tuple(answer)
         #: Each declared provenance name lifts its resolved VALUE and its NOTE onto
@@ -472,6 +479,7 @@ def register_workflow(
     sensitivity: Sequence[tuple[str, str]] = (),
     validity: Sequence[Validity] = (),
     coerce: Sequence[Callable[[dict], Mapping[str, Any]]] = (),
+    compatible: Compatible | None = None,
     doc: Mapping[str, Any] | None = None,
     extra_args: Sequence[tuple[str, Any]] = (),
     **register_kwargs: Any,
@@ -506,7 +514,8 @@ def register_workflow(
     _refuse_incomplete_facade(facade)
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
                       answer=answer, provenance=provenance,
-                      sensitivity=sensitivity, validity=validity, coerce=coerce)
+                      sensitivity=sensitivity, validity=validity, coerce=coerce,
+                      compatible=compatible)
 
     async def _run(**wire: Any) -> Any:
         return await workflow.run(wire)

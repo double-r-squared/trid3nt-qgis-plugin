@@ -64,7 +64,7 @@ def _artifact(**overrides):
 def _resolves_to(monkeypatch, artifact):
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.tool.supplied_mesh_artifact",
-        lambda explicit, *, engine: artifact)
+        lambda explicit, *, engine, compatible=None: artifact)
 
 
 def _deck(**kwargs):

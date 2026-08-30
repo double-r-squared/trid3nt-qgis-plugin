@@ -29,13 +29,26 @@ from trid3nt_server.workflows.mesh.session import (
     replay_recipe,
 )
 from trid3nt_server.workflows.mesh.tool import (
+    Compatible,
     MeshDeclaration,
     resolve_mesh,
     tool,
     validate_spec,
 )
+from trid3nt_server.workflows.telemac.agitation.declarations import (
+    COMPATIBLE as _AGITATION,
+)
+from trid3nt_server.workflows.telemac.river_dye.declarations import (
+    COMPATIBLE as _RIVER_DYE,
+)
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
+
+#: The accept-set the resolution-order cases declare. A template's set is its
+#: statement of what a SUPPLIED mesh may be, and a run that states none accepts
+#: none - so every case that expects a supplied or discovered mesh to be adopted
+#: names the set that admits it.
+_GRID = Compatible("structured_grid")
 
 
 def _declaration(**over):
@@ -161,7 +174,8 @@ def test_explicit_mesh_wins_over_a_discovered_one():
     stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
     supplied = _artifact(mesh_id="01OTHER", name="supplied")
     resolution = resolve_mesh(_declaration(), explicit=supplied,
-                              engine="telemac", case_id="case-explicit")
+                              engine="telemac", compatible=_GRID,
+                              case_id="case-explicit")
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
 
@@ -200,7 +214,7 @@ class _FailingReader:
 def test_case_discovery_beats_the_declared_default():
     art = _artifact()
     stash_mesh_artifact("case-discovery", art)
-    resolution = resolve_mesh(_declaration(), engine="telemac",
+    resolution = resolve_mesh(_declaration(), engine="telemac", compatible=_GRID,
                               case_id="case-discovery")
     assert resolution.source == "discovered"
     assert resolution.artifact is art
@@ -208,7 +222,8 @@ def test_case_discovery_beats_the_declared_default():
 
 def test_case_discovery_skips_a_mesh_the_engine_cannot_read():
     stash_mesh_artifact("case-skip", _artifact(slf_uri=None, engine_compat=[]))
-    resolution = resolve_mesh(_declaration(), engine="telemac", case_id="case-skip")
+    resolution = resolve_mesh(_declaration(), engine="telemac", compatible=_GRID,
+                              case_id="case-skip")
     assert resolution.source == "declared"
     assert resolution.declaration is not None
 
@@ -227,62 +242,76 @@ def test_nothing_supplied_declared_or_discovered_refuses():
 
 
 # --------------------------------------------------------------------------- #
-# The DECLARED KIND is the contract: membership, checked at the door.
+# The declared ACCEPT-SET is the contract: membership, checked at the door.
+#
+# The set is a standalone Compatible declaration in the template's own
+# declarations.py, so these cases read the real ones rather than restating them.
+# The MESH block states what the DEFAULT BUILD produces and is not consulted here.
 # --------------------------------------------------------------------------- #
-#: What a river-tracer template declares - TELEMAC-2D solves on triangles, so an
-#: unstructured_tri mesh is the whole of the set it accepts.
-def _tri_declaration():
-    return tool.build_mesh(mesher="om2d", kind="unstructured_tri",
-                           extent="s3://cache/section/reach.geojson")
-
-
 def _tri_artifact(**over) -> MeshArtifact:
     return _artifact(
-        mode="om2d", name="Snake River reach",
+        mode="om2d", name="Point Judith Harbor of Refuge",
         provenance={"spec": {"mesher": "om2d", "kind": "unstructured_tri"}},
         **over)
 
 
-def test_a_supplied_mesh_of_another_kind_refuses_by_name():
-    """A lattice was never a valid river-tracer input, so it is refused at the
-    door rather than trusted and narrated several steps later."""
+def test_the_two_proven_accept_sets_are_what_the_templates_declare():
+    assert _RIVER_DYE.kinds == ("unstructured_tri",)
+    assert _AGITATION.kinds == ("structured_grid", "unstructured_tri")
+
+
+def test_a_supplied_mesh_outside_the_accept_set_refuses_by_name():
+    """A lattice is not in the river-tracer's set, so it is refused at the door
+    rather than trusted and narrated several steps later."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_tri_declaration(), explicit=_artifact(), engine="telemac")
+        resolve_mesh(explicit=_artifact(), engine="telemac",
+                     compatible=_RIVER_DYE)
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     message = str(excinfo.value)
     assert "'unstructured_tri'" in message and "'structured_grid'" in message
 
 
-def test_a_supplied_mesh_of_the_declared_kind_is_accepted():
+def test_a_supplied_mesh_in_the_accept_set_is_accepted():
+    """The BYO rematch: an om2d triangulation is a member of what ARTEMIS reads,
+    even though the template's own default build is a lattice."""
     supplied = _tri_artifact()
-    resolution = resolve_mesh(_tri_declaration(), explicit=supplied,
-                              engine="telemac")
+    resolution = resolve_mesh(explicit=supplied, engine="telemac",
+                              compatible=_AGITATION)
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
+
+
+def test_a_template_that_declares_no_accept_set_refuses_the_supply():
+    """ABSENCE IS A REFUSAL: no declaration means no tested supplied path."""
+    with pytest.raises(MeshToolError) as excinfo:
+        resolve_mesh(explicit=_tri_artifact(), engine="telemac")
+    assert excinfo.value.error_code == "MESH_SUPPLY_UNDECLARED"
+    assert "no supplied-mesh compatibility" in str(excinfo.value)
 
 
 def test_a_supplied_mesh_that_states_no_kind_refuses():
     """Membership in a declared set is not answerable about an unstated shape."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_tri_declaration(), explicit=_artifact(provenance={}),
-                     engine="telemac")
+        resolve_mesh(explicit=_artifact(provenance={}), engine="telemac",
+                     compatible=_AGITATION)
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     assert "no recorded kind" in str(excinfo.value)
 
 
-def test_case_discovery_skips_a_mesh_of_the_wrong_kind():
+def test_case_discovery_offers_only_members_of_the_accept_set():
     """The same membership test, in the arm where a non-member is simply not a
-    candidate: the run builds its own declared mesh instead."""
+    candidate: the run builds its declared mesh instead."""
     stash_mesh_artifact("case-wrong-kind", _artifact())
-    resolution = resolve_mesh(_tri_declaration(), engine="telemac",
-                              case_id="case-wrong-kind")
+    resolution = resolve_mesh(_declaration(), engine="telemac",
+                              compatible=_RIVER_DYE, case_id="case-wrong-kind")
     assert resolution.source == "declared"
 
 
-def test_a_run_that_declared_no_mesh_states_no_set_to_be_a_member_of():
-    supplied = _artifact()
-    resolution = resolve_mesh(explicit=supplied, engine="telemac")
-    assert resolution.artifact is supplied
+def test_case_discovery_offers_nothing_without_an_accept_set():
+    stash_mesh_artifact("case-no-set", _artifact())
+    resolution = resolve_mesh(_declaration(), engine="telemac",
+                              case_id="case-no-set")
+    assert resolution.source == "declared"
 
 
 # --------------------------------------------------------------------------- #

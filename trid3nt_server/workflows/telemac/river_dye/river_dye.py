@@ -37,7 +37,9 @@ from trid3nt_server.workflows.lib import (
 from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.river_dye.coercions import release_points
-from trid3nt_server.workflows.telemac.river_dye.declarations import DOC, PARAMS
+from trid3nt_server.workflows.telemac.river_dye.declarations import (
+    COMPATIBLE, DOC, PARAMS,
+)
 from trid3nt_server.workflows.telemac.steps import (
     ReachMesh,
     compute_class,
@@ -228,6 +230,7 @@ _EXTRA_ARGS: tuple[tuple[str, Any], ...] = (
 telemac_river_dye = register_workflow(
     TelemacWorkflow, _TELEMAC_RIVER_DYE_METADATA, PARAMS, plan,
     data=DATA,
+    compatible=COMPATIBLE,
     answer=ANSWER,
     # The mesh row is present only when a sizing rule MOVED the user's explicit
     # edge length; on an honoured (or absent) override both fields read null.

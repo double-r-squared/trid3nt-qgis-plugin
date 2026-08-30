@@ -8,8 +8,14 @@ every value it can take live here instead of in front of them.
 from __future__ import annotations
 
 from trid3nt_server.workflows.lib import Param, doors
+from trid3nt_server.workflows.mesh import Compatible
 
-__all__ = ["DOC", "PARAMS"]
+__all__ = ["COMPATIBLE", "DOC", "PARAMS"]
+
+#: The supplied-mesh accept-set. TELEMAC-2D solves on triangles, so a
+#: triangulation is the whole of what a reach corridor can be handed; a lattice
+#: is refused at the door rather than trusted into a deck that assumes edges.
+COMPATIBLE = Compatible("unstructured_tri")
 
 
 PARAMS: tuple[Param, ...] = (
