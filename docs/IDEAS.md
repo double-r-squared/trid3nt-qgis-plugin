@@ -2686,3 +2686,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   DO-NOT list stands as recorded in docs/design/elegance-review.md.
   Net: ~1,540 LOC deleted, four parallel machines retired, ~16 LOC
   added.
+
+- REPOINT STOPS RULED (NATE 2026-08-30): DS-1 generic COMBINE tool
+  (combine(polygon, lines) -> one geometry document; chain: basin ->
+  combine(basin, D.rivers) -> extent) - channel sizing survives as
+  composition; DS-2 mesh_max_iter + outlet_snap_cells DELETED with
+  their mesher (om2d owns iteration; delineate declares its own snap
+  honestly); DS-3 the centerline joins the chain
+  (Fetch.tool("fetch_nhdplus_nldi_navigate")) + generic ENDPOINTS
+  tool - the between-cut's transect faces (= inflow/outflow) survive;
+  DS-4 SEQUENCING: the reach/catchment template ports COMPLETE IN THE
+  WORKER-UNIFICATION WAVE (the worker still meshes the ribbon from
+  the manifest - the ruling's last mile is the worker's staged
+  contract; this wave closes with chains + worker-independent
+  elegance + baseline, the 3 unported templates documented as
+  awaiting the port). Already-ruled applications: DS-5 consumers
+  re-author to artifact + D.basin (P2); DS-6 the router's resolution
+  survives, _adopt_case_mesh dies (P2/D-9); the four dead confirm
+  builders (psha/scenario/fire/geoclaw) attic as the ruled class;
+  Ref("basin") works as written via the read_geometry unwrap.
