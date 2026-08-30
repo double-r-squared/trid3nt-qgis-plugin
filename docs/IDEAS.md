@@ -2664,3 +2664,25 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   workflows/lib/accepts.py with the declaration vocabulary (MeshKind
   stays in mesh/kinds.py) - ratified. Elegance review P2-P7 pending
   individual walkthrough.
+
+- ELEGANCE REVIEW: ALL SEVEN ADOPTED (NATE 2026-08-30, individual
+  walkthrough): P1 one runner namespace (landed in the wave charter);
+  P2 chains through P1's door + the SECOND MESH FRONT fully retired
+  (watershed.py 783 + precondition_gate.py 222 + wrapper steps,
+  ~1200 LOC, incl the D-9-violating silent-adopt gate; utm_epsg_for
+  relocates); P3 bank_source deleted root-and-branch (~90 LOC incl
+  the refusal advertising constant_ribbon; channel_width_m goes with
+  the superseded estimate; ReachBanksUnmapped terminal); P4 one
+  membership vocabulary (ENGINE_MESH_REQUIREMENTS +
+  mesh_compatible_with_engine + engine_compat + the engine= thread
+  ~80 LOC fold into Accepts membership + a ~10-line artifact
+  readiness check - lands WITH the accepts_for door, never before);
+  P5 .ladder() EXECUTES (rungs are producers, machinery walks them,
+  provenance records the answering rung, cross-dataset LOUD is
+  structural; hand-rolled ladder + fallback= convention die); P6 one
+  SELAFIN writer (the 88-line struct packer dies; telapy pair writer
+  everywhere; .cli from measured IPOBO); P7 one spatial word (domain
+  dies from build_mesh; extent takes bbox|polygon uri|GeoJSON). The
+  DO-NOT list stands as recorded in docs/design/elegance-review.md.
+  Net: ~1,540 LOC deleted, four parallel machines retired, ~16 LOC
+  added.
