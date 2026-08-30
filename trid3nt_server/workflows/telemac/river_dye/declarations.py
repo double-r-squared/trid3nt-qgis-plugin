@@ -7,15 +7,16 @@ every value it can take live here instead of in front of them.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import Param, doors
-from trid3nt_server.workflows.mesh import Compatible
+from trid3nt_server.workflows.lib import Accepts, Param, doors
 
-__all__ = ["COMPATIBLE", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
-#: The supplied-mesh accept-set. TELEMAC-2D solves on triangles, so a
-#: triangulation is the whole of what a reach corridor can be handed; a lattice
-#: is refused at the door rather than trusted into a deck that assumes edges.
-COMPATIBLE = Compatible("unstructured_tri")
+#: What a reach run can be HANDED. TELEMAC-2D solves on triangles, so a
+#: triangulation is the whole of what a reach corridor can be handed as a mesh; a
+#: lattice is refused at the door rather than trusted into a deck that assumes
+#: edges. The release enters the water at a POINT - the one release geometry this
+#: plume pipeline has been run against.
+ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 
 PARAMS: tuple[Param, ...] = (

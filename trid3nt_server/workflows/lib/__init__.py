@@ -6,6 +6,7 @@ The plan is a value; the interpreter walks it. See
 
 from __future__ import annotations
 
+from .accepts import Accepts, AcceptsDeclarationError
 from .data import (
     AuthoredProducer,
     Build,
@@ -95,6 +96,7 @@ from .validate import validate_plan
 from .validity import CoupledValidityError, Validity, check_validity
 
 __all__ = [
+    "Accepts", "AcceptsDeclarationError",
     "AuthoredProducer", "Build", "CATEGORICAL", "ChartSpec",
     "CoupledValidityError", "CoversAOI",
     "D", "Data", "DataDecl", "DataRef", "DeclarativeError", "Derivation",

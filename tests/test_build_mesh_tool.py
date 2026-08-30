@@ -28,27 +28,34 @@ from trid3nt_server.workflows.mesh.session import (
     mesh_digest,
     replay_recipe,
 )
+from trid3nt_server.workflows.lib import Accepts, AcceptsDeclarationError
 from trid3nt_server.workflows.mesh.tool import (
-    Compatible,
     MeshDeclaration,
+    accepts_for,
     resolve_mesh,
     tool,
     validate_spec,
 )
-from trid3nt_server.workflows.telemac.agitation.declarations import (
-    COMPATIBLE as _AGITATION,
-)
+from trid3nt_server.workflows.telemac.do_sag.declarations import ACCEPTS as _DO_SAG
 from trid3nt_server.workflows.telemac.river_dye.declarations import (
-    COMPATIBLE as _RIVER_DYE,
+    ACCEPTS as _RIVER_DYE,
 )
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
 
-#: The accept-set the resolution-order cases declare. A template's set is its
+#: The contract the resolution-order cases declare. A template's mesh row is its
 #: statement of what a SUPPLIED mesh may be, and a run that states none accepts
 #: none - so every case that expects a supplied or discovered mesh to be adopted
-#: names the set that admits it.
-_GRID = Compatible("structured_grid")
+#: names the row that admits it.
+_GRID = Accepts(mesh=("structured_grid",))
+
+#: The registered template whose contract every ARTEMIS door reads off the
+#: registry, by this name. It is read at CALL time, not here: the registry fills
+#: as the templates import, which is still under way while this module imports.
+#: The reach family (``_DO_SAG`` / ``_RIVER_DYE`` above) is PARKED - unregistered
+#: pending the mesher ruling - so the registry has nothing to hand back for it and
+#: what it DECLARES is read from where it is authored.
+_AGITATION = "artemis_harbor_agitation"
 
 
 def _declaration(**over):
@@ -174,7 +181,7 @@ def test_explicit_mesh_wins_over_a_discovered_one():
     stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
     supplied = _artifact(mesh_id="01OTHER", name="supplied")
     resolution = resolve_mesh(_declaration(), explicit=supplied,
-                              engine="telemac", compatible=_GRID,
+                              engine="telemac", accepts=_GRID,
                               case_id="case-explicit")
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
@@ -214,7 +221,7 @@ class _FailingReader:
 def test_case_discovery_beats_the_declared_default():
     art = _artifact()
     stash_mesh_artifact("case-discovery", art)
-    resolution = resolve_mesh(_declaration(), engine="telemac", compatible=_GRID,
+    resolution = resolve_mesh(_declaration(), engine="telemac", accepts=_GRID,
                               case_id="case-discovery")
     assert resolution.source == "discovered"
     assert resolution.artifact is art
@@ -222,7 +229,7 @@ def test_case_discovery_beats_the_declared_default():
 
 def test_case_discovery_skips_a_mesh_the_engine_cannot_read():
     stash_mesh_artifact("case-skip", _artifact(slf_uri=None, engine_compat=[]))
-    resolution = resolve_mesh(_declaration(), engine="telemac", compatible=_GRID,
+    resolution = resolve_mesh(_declaration(), engine="telemac", accepts=_GRID,
                               case_id="case-skip")
     assert resolution.source == "declared"
     assert resolution.declaration is not None
@@ -242,11 +249,12 @@ def test_nothing_supplied_declared_or_discovered_refuses():
 
 
 # --------------------------------------------------------------------------- #
-# The declared ACCEPT-SET is the contract: membership, checked at the door.
+# The declared contract is ROLE-KEYED: membership per role, checked at the door.
 #
-# The set is a standalone Compatible declaration in the template's own
-# declarations.py, so these cases read the real ones rather than restating them.
-# The MESH block states what the DEFAULT BUILD produces and is not consulted here.
+# The contract is a standalone Accepts declaration in the template's own
+# declarations.py, reached here the way every door reaches it - off the registry
+# by tool name - rather than restated. The MESH block states what the DEFAULT
+# BUILD produces and is not consulted here.
 # --------------------------------------------------------------------------- #
 def _tri_artifact(**over) -> MeshArtifact:
     return _artifact(
@@ -255,34 +263,66 @@ def _tri_artifact(**over) -> MeshArtifact:
         **over)
 
 
-def test_the_two_proven_accept_sets_are_what_the_templates_declare():
-    assert _RIVER_DYE.kinds == ("unstructured_tri",)
-    assert _AGITATION.kinds == ("structured_grid", "unstructured_tri")
+def test_the_registry_is_where_a_door_reads_a_templates_contract():
+    """ONE HOME: the door names the tool, the registry hands back what that tool
+    registered - and a name this build knows no workflow under yields nothing."""
+    assert accepts_for(_AGITATION) is not None
+    assert accepts_for("no_such_tool") is None
 
 
-def test_a_supplied_mesh_outside_the_accept_set_refuses_by_name():
-    """A lattice is not in the river-tracer's set, so it is refused at the door
+def test_the_proven_mesh_rows_are_what_the_templates_declare():
+    assert _RIVER_DYE.kinds("mesh") == ("unstructured_tri",)
+    assert _DO_SAG.kinds("mesh") == ("unstructured_tri",)
+    assert (accepts_for(_AGITATION).kinds("mesh")
+            == ("structured_grid", "unstructured_tri"))
+
+
+def test_a_release_is_accepted_only_where_the_reach_family_wrote_the_row():
+    """PER-ROLE ABSENCE IS A REFUSAL. The reach family releases a substance at a
+    point and says so; nothing is released into a harbour agitation field, so that
+    template has no release row and refuses one by not naming it."""
+    assert _RIVER_DYE.accepts("release", "point") is True
+    assert _DO_SAG.accepts("release", "point") is True
+    assert accepts_for(_AGITATION).kinds("release") is None
+    assert accepts_for(_AGITATION).accepts("release", "point") is False
+    # A mesh row is no licence for a release, and a kind outside the row is not a
+    # member of it either.
+    assert _RIVER_DYE.accepts("release", "polygon") is False
+
+
+def test_an_accept_set_naming_nothing_refuses_where_it_is_written():
+    """An EMPTY declaration is authored nonsense, not a stricter absence: it
+    explodes at import rather than at a door nobody would reach."""
+    with pytest.raises(AcceptsDeclarationError):
+        Accepts()
+    with pytest.raises(AcceptsDeclarationError) as excinfo:
+        Accepts(mesh=())
+    assert "mesh=()" in str(excinfo.value)
+
+
+def test_a_supplied_mesh_outside_the_mesh_row_refuses_by_name():
+    """A lattice is not in the river-tracer's mesh row, so it is refused at the door
     rather than trusted and narrated several steps later."""
     with pytest.raises(MeshToolError) as excinfo:
         resolve_mesh(explicit=_artifact(), engine="telemac",
-                     compatible=_RIVER_DYE)
+                     accepts=_RIVER_DYE)
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     message = str(excinfo.value)
     assert "'unstructured_tri'" in message and "'structured_grid'" in message
 
 
-def test_a_supplied_mesh_in_the_accept_set_is_accepted():
+def test_a_supplied_mesh_in_the_mesh_row_is_accepted():
     """The BYO rematch: an om2d triangulation is a member of what ARTEMIS reads,
     even though the template's own default build is a lattice."""
     supplied = _tri_artifact()
     resolution = resolve_mesh(explicit=supplied, engine="telemac",
-                              compatible=_AGITATION)
+                              accepts=accepts_for(_AGITATION))
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
 
 
-def test_a_template_that_declares_no_accept_set_refuses_the_supply():
-    """ABSENCE IS A REFUSAL: no declaration means no tested supplied path."""
+def test_a_template_that_declares_no_mesh_row_refuses_the_supply():
+    """ABSENCE IS A REFUSAL: no mesh row means no tested supplied-mesh path."""
     with pytest.raises(MeshToolError) as excinfo:
         resolve_mesh(explicit=_tri_artifact(), engine="telemac")
     assert excinfo.value.error_code == "MESH_SUPPLY_UNDECLARED"
@@ -290,24 +330,24 @@ def test_a_template_that_declares_no_accept_set_refuses_the_supply():
 
 
 def test_a_supplied_mesh_that_states_no_kind_refuses():
-    """Membership in a declared set is not answerable about an unstated shape."""
+    """Membership in a declared row is not answerable about an unstated shape."""
     with pytest.raises(MeshToolError) as excinfo:
         resolve_mesh(explicit=_artifact(provenance={}), engine="telemac",
-                     compatible=_AGITATION)
+                     accepts=accepts_for(_AGITATION))
     assert excinfo.value.error_code == "MESH_KIND_MISMATCH"
     assert "no recorded kind" in str(excinfo.value)
 
 
-def test_case_discovery_offers_only_members_of_the_accept_set():
+def test_case_discovery_offers_only_members_of_the_mesh_row():
     """The same membership test, in the arm where a non-member is simply not a
     candidate: the run builds its declared mesh instead."""
     stash_mesh_artifact("case-wrong-kind", _artifact())
     resolution = resolve_mesh(_declaration(), engine="telemac",
-                              compatible=_RIVER_DYE, case_id="case-wrong-kind")
+                              accepts=_RIVER_DYE, case_id="case-wrong-kind")
     assert resolution.source == "declared"
 
 
-def test_case_discovery_offers_nothing_without_an_accept_set():
+def test_case_discovery_offers_nothing_without_a_mesh_row():
     stash_mesh_artifact("case-no-set", _artifact())
     resolution = resolve_mesh(_declaration(), engine="telemac",
                               case_id="case-no-set")

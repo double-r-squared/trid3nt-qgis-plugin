@@ -64,6 +64,11 @@ _SECTION = "agitation"
 _PREFIX = "artemis"
 _RESULT = "agit_field.slf"
 
+#: The registered tool whose supply contract this step's doors run under. A NAME,
+#: not an import: the registry is where a contract is read from, so a step names
+#: the tool it serves and never reaches into that template's package.
+_TOOL = "artemis_harbor_agitation"
+
 #: Where a supplied mesh's two halves land in the run directory. The worker READS
 #: these names; the pair travels together because a boundary file is only valid
 #: against the geometry whose numbering it was written from.
@@ -223,11 +228,12 @@ def resolve_supplied_mesh(supplied: Any, *, real: bool) -> Any:
     bed at its nodes and the boundary file numbered from that geometry's own walk -
     because the liquid stretch the incident wave enters through is the boundary
     file's to name.
+
+    WHICH kinds are readable is not restated here: the door names the tool and the
+    registry hands back the contract that tool registered, so the accept-set has
+    one home and this step is not a second place to read it from.
     """
     from trid3nt_server.workflows.mesh.tool import supplied_mesh_artifact
-    # Lazily, as with the labeled defaults: the template package imports this
-    # module, so its accept-set is read where the door uses it.
-    from trid3nt_server.workflows.telemac.agitation.declarations import COMPATIBLE
 
     if supplied is None or not str(supplied).strip():
         return None
@@ -238,8 +244,7 @@ def resolve_supplied_mesh(supplied: Any, *, real: bool) -> Any:
             "so a supplied mesh has nothing to be. Ask for the real-bathymetry "
             "class, or drop the mesh.",
             error_code="ARTEMIS_SUPPLIED_MESH_UNSUPPORTED_MODE")
-    art = supplied_mesh_artifact(supplied, engine="telemac",
-                                 compatible=COMPATIBLE)
+    art = supplied_mesh_artifact(supplied, engine="telemac", tool_name=_TOOL)
     if not art.cli_uri:
         raise OpenWaterError(
             f"the mesh supplied for this run ({art.name!r}) carries no boundary "

@@ -23,6 +23,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.workflows.lib.accepts import Accepts
 from trid3nt_server.workflows.lib.slots import deep_freeze
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
@@ -30,7 +31,7 @@ from trid3nt_server.workflows.mesh.artifact import (
     mesh_compatible_with_engine,
     read_mesh_artifact_sidecar,
 )
-from trid3nt_server.workflows.mesh.kinds import Compatible, MeshKind
+from trid3nt_server.workflows.mesh.kinds import MeshKind
 from trid3nt_server.workflows.mesh.meshers import (
     EDGE_RESOLUTION_SPECS,
     MeshToolError,
@@ -43,9 +44,9 @@ from trid3nt_server.workflows.mesh.meshers import om2d as _om2d  # noqa: F401,E4
 from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
 
 __all__ = [
-    "Compatible",
     "DeclaredEdit",
     "MeshKind",
+    "accepts_for",
     "bind_edit_inputs",
     "jsonable",
     "kind_accepted",
@@ -292,7 +293,7 @@ def resolve_mesh(
     declaration: MeshDeclaration | None = None, *,
     explicit: Any = None,
     engine: str | None = None,
-    compatible: Compatible | None = None,
+    accepts: Accepts | None = None,
     case_id: str | None = None,
     loaded_mesh_uris: list[str] | None = None,
     s3_client: Any = None,
@@ -300,17 +301,17 @@ def resolve_mesh(
     """Pick the mesh a run should use: explicit first, then the case, then the spec.
 
     An explicit mesh NEVER falls through: if it cannot be read, if the engine
-    cannot solve on it, or if its kind is not a member of the template's declared
-    ``compatible`` set, that is a refusal rather than a quiet substitution. The
-    accept-set is the template's statement of which supplied meshes its pipeline
-    was built and tested against, so a mesh outside it is checked out here - at the
-    door, beside engine-compat - rather than discovered several steps later by a
-    deck that assumed a shape the mesh does not have. A template that declares no
-    accept-set accepts no supplied mesh at all.
+    cannot solve on it, or if its kind is not a member of the ``mesh`` row of the
+    template's declared ``accepts``, that is a refusal rather than a quiet
+    substitution. That row is the template's statement of which supplied meshes its
+    pipeline was built and tested against, so a mesh outside it is checked out here
+    - at the door, beside engine-compat - rather than discovered several steps later
+    by a deck that assumed a shape the mesh does not have. A template with no mesh
+    row accepts no supplied mesh at all.
 
     ``declaration`` is the DEFAULT BUILD, and the build path is untouched by
-    ``compatible``: a run with nothing supplied and nothing to adopt builds the
-    kind it declared.
+    ``accepts``: a run with nothing supplied and nothing to adopt builds the kind
+    it declared.
     """
     if explicit is not None:
         if isinstance(explicit, MeshArtifact):
@@ -332,7 +333,7 @@ def resolve_mesh(
                 "mesh artifact record, so what it is cannot be checked against the "
                 "engine; supply a mesh this case built.")
         _refuse_incompatible(art, engine)
-        _refuse_unaccepted_kind(art, compatible)
+        _refuse_unaccepted_kind(art, accepts)
         return MeshResolution("explicit", "supplied on the run", artifact=art)
 
     for art in reversed(find_case_mesh_artifacts(
@@ -340,7 +341,7 @@ def resolve_mesh(
             s3_client=s3_client)):
         if engine is not None and not mesh_compatible_with_engine(art, engine)[0]:
             continue
-        if not kind_accepted(art, compatible):
+        if not kind_accepted(art, accepts):
             continue
         return MeshResolution(
             "discovered", f"mesh {art.name!r} already authored in this case",
@@ -356,21 +357,39 @@ def resolve_mesh(
         declaration=declaration)
 
 
+def accepts_for(tool_name: str) -> Accepts | None:
+    """The supply contract the REGISTERED workflow ``tool_name`` declares.
+
+    THE REGISTRY IS THE ONE HOME. A door asks it by the tool name it already
+    carries rather than importing some template's declarations module, so no door
+    has to know which package a contract was authored in and no contract has two
+    ways to be read. ``None`` for a name this build registers no declared workflow
+    under, which a door treats exactly as an undeclared contract - both are the
+    absence that refuses.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    entry = TOOL_REGISTRY.get(str(tool_name))
+    workflow = getattr(getattr(entry, "fn", None), "workflow", None)
+    return getattr(workflow, "accepts", None)
+
+
 def supplied_mesh_artifact(explicit: Any, *, engine: str,
-                           compatible: Compatible | None = None) -> MeshArtifact | None:
-    """The mesh a run was HANDED, resolved and checked against its engine and set.
+                           tool_name: str) -> MeshArtifact | None:
+    """The mesh a run was HANDED, resolved and checked against its engine and row.
 
     The reader lives here rather than in each consuming template: a mesh artifact
     is the mesh front's record, and a step that opened the object store for itself
     would be doing world-reads a step must never do. ``None`` for an unfilled slot;
     a refusal, never a fall-through, for one the engine cannot solve on or one the
-    template's ``compatible`` set does not name.
+    calling template's ``mesh`` row does not name.
     """
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     if explicit is None or not str(explicit).strip():
         return None
-    return resolve_mesh(explicit=explicit, engine=engine, compatible=compatible,
+    return resolve_mesh(explicit=explicit, engine=engine,
+                        accepts=accepts_for(tool_name),
                         s3_client=_get_s3_client()).artifact
 
 
@@ -383,41 +402,41 @@ def mesh_kind(art: MeshArtifact) -> Any:
     return ((getattr(art, "provenance", None) or {}).get("spec") or {}).get("kind")
 
 
-def kind_accepted(art: MeshArtifact, compatible: Compatible | None) -> bool:
-    """Is ``art``'s kind a member of the declared accept-set? -> nothing more.
+def kind_accepted(art: MeshArtifact, accepts: Accepts | None) -> bool:
+    """Is ``art``'s kind a member of the declared ``mesh`` row? -> nothing more.
 
-    Two ways to be outside it, and neither is a permission. A template that
-    declared no set has no tested supplied path, so nothing is a member. A mesh
-    that states no kind FAILS: the question is membership in a declared set, and a
-    shape nobody wrote down cannot be in one.
+    Two ways to be outside it, and neither is a permission. A template that wrote
+    no mesh row has no tested supplied path, so nothing is a member. A mesh that
+    states no kind FAILS: the question is membership in a declared row, and a shape
+    nobody wrote down cannot be in one.
     """
-    if compatible is None:
+    if accepts is None:
         return False
-    return mesh_kind(art) in compatible
+    return accepts.accepts("mesh", mesh_kind(art))
 
 
-def _refuse_unaccepted_kind(art: MeshArtifact,
-                            compatible: Compatible | None) -> None:
-    """Refuse a supplied mesh the template's accept-set does not name, by name."""
-    if compatible is None:
+def _refuse_unaccepted_kind(art: MeshArtifact, accepts: Accepts | None) -> None:
+    """Refuse a supplied mesh the template's ``mesh`` row does not name, by name."""
+    kinds = accepts.kinds("mesh") if accepts is not None else None
+    if kinds is None:
         raise MeshToolError(
             "MESH_SUPPLY_UNDECLARED",
             "this template declares no supplied-mesh compatibility, so the mesh "
             f"handed to it ({art.name!r}, built by {art.mode!r}) has nothing to be: "
-            "a Compatible(...) declaration is what states which kinds of mesh a "
-            "pipeline was built and tested against, and there is no tested "
-            "supplied-mesh path without one.")
-    if kind_accepted(art, compatible):
+            "the mesh row of an Accepts(...) declaration is what states which kinds "
+            "of mesh a pipeline was built and tested against, and there is no "
+            "tested supplied-mesh path without one.")
+    if kind_accepted(art, accepts):
         return
     got = mesh_kind(art)
     is_a = repr(got) if got is not None else "of no recorded kind"
     raise MeshToolError(
         "MESH_KIND_MISMATCH",
-        f"this template accepts {list(compatible.kinds)!r} meshes; the mesh "
+        f"this template accepts {list(kinds)!r} meshes; the mesh "
         f"supplied for it ({art.name!r}, built by {art.mode!r}) is {is_a}. The "
-        "accept-set a template declares is what its pipeline was built and tested "
+        "mesh row a template declares is what its pipeline was built and tested "
         "against, so a mesh outside it is not a domain it can solve on - build or "
-        f"supply one of {list(compatible.kinds)!r} instead.")
+        f"supply one of {list(kinds)!r} instead.")
 
 
 def _refuse_incompatible(art: MeshArtifact, engine: str | None) -> None:

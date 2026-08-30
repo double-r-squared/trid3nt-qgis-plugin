@@ -44,7 +44,7 @@ from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
 from trid3nt_server.workflows.telemac.agitation.declarations import (
-    COMPATIBLE, DOC, PARAMS,
+    ACCEPTS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.steps import compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
@@ -243,7 +243,7 @@ _ARTEMIS_METADATA = AtomicToolMetadata(
 artemis_harbor_agitation = register_workflow(
     TelemacWorkflow, _ARTEMIS_METADATA, PARAMS, plan,
     data=DATA,
-    compatible=COMPATIBLE,
+    accepts=ACCEPTS,
     answer=ANSWER,
     provenance=(("wave_period_s", "wave_period_note"),
                 ("structure", "structure_note"),

@@ -61,10 +61,14 @@ def _artifact(**overrides):
     return MeshArtifact(**facts)
 
 
-def _resolves_to(monkeypatch, artifact):
+def _resolves_to(monkeypatch, artifact, seen=None):
+    def _supplied(explicit, *, engine, tool_name):
+        if seen is not None:
+            seen.update(engine=engine, tool_name=tool_name)
+        return artifact
+
     monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.tool.supplied_mesh_artifact",
-        lambda explicit, *, engine, compatible=None: artifact)
+        "trid3nt_server.workflows.mesh.tool.supplied_mesh_artifact", _supplied)
 
 
 def _deck(**kwargs):
@@ -87,6 +91,20 @@ def test_an_analytic_domain_refuses_a_supplied_mesh():
     with pytest.raises(OpenWaterError) as excinfo:
         AG.resolve_supplied_mesh("s3://cache/mesh/01TESTMESH/mesh.2dm", real=False)
     assert excinfo.value.error_code == "ARTEMIS_SUPPLIED_MESH_UNSUPPORTED_MODE"
+
+
+def test_the_door_asks_the_registry_by_tool_name(monkeypatch):
+    """ONE HOME. The step names the tool it serves and the supply door looks the
+    accept-set up from the registered workflow, so no step is a second place a
+    template's contract is read from."""
+    from trid3nt_server.workflows.mesh.tool import accepts_for
+
+    seen: dict = {}
+    _resolves_to(monkeypatch, _artifact(), seen=seen)
+    AG.resolve_supplied_mesh("s3://cache/mesh/01TESTMESH/mesh.2dm", real=True)
+    assert seen == {"engine": "telemac", "tool_name": "artemis_harbor_agitation"}
+    # ... and that name resolves to the contract that admits this om2d mesh.
+    assert accepts_for(seen["tool_name"]).accepts("mesh", "unstructured_tri")
 
 
 def test_a_mesh_with_no_boundary_file_refuses_by_naming_what_is_missing(monkeypatch):

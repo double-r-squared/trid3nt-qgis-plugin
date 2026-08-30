@@ -36,7 +36,7 @@ from trid3nt_server.workflows.lib import (
 from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.do_sag.declarations import (
-    COMPATIBLE, DOC, PARAMS,
+    ACCEPTS, DOC, PARAMS,
 )
 from trid3nt_server.workflows.telemac.steps import (
     ReachMesh,
@@ -206,7 +206,7 @@ _TELEMAC_DO_SAG_METADATA = AtomicToolMetadata(
 telemac_do_sag = register_workflow(
     TelemacWorkflow, _TELEMAC_DO_SAG_METADATA, PARAMS, plan,
     data=DATA,
-    compatible=COMPATIBLE,
+    accepts=ACCEPTS,
     answer=ANSWER,
     # The mesh row is present only when a sizing rule MOVED the user's explicit
     # edge length; on an honoured (or absent) override both fields read null.

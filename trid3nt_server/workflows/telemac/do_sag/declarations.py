@@ -7,14 +7,15 @@ every value it can take live here instead of in front of them.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import Param, doors
-from trid3nt_server.workflows.mesh import Compatible
+from trid3nt_server.workflows.lib import Accepts, Param, doors
 
-__all__ = ["COMPATIBLE", "DOC", "PARAMS"]
+__all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
-#: The supplied-mesh accept-set. TELEMAC-2D solves on triangles, so a
-#: triangulation is the whole of what an outfall reach can be handed.
-COMPATIBLE = Compatible("unstructured_tri")
+#: What an outfall run can be HANDED. TELEMAC-2D solves on triangles, so a
+#: triangulation is the whole of what an outfall reach can be handed as a mesh;
+#: the discharge enters the water at a POINT, which is the one release geometry
+#: the sag pipeline has been run against.
+ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
