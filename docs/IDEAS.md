@@ -2733,3 +2733,27 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   attic. Expect ~-7,500 net LOC beyond the attic moves. Conditional
   fork recorded: telapy failing a user-fortran/coupled class reports
   to NATE, never silently falls back.
+
+- ELEGANCE REVIEW P2-P7 LANDED (2026-08-30): the SECOND MESH FRONT is
+  gone - watershed.py (685) + precondition_gate.py (222) + ReachMesh /
+  build_corridor_mesh + Catchment.mesh / build_catchment_mesh, replaced
+  by ONE step (workflows/mesh/step.py::MeshStep.build) every template
+  calls; utm_epsg_for moved to tools/processing/_geometry_common.py and
+  the four surviving node primitives to mesh/shared/nodes.py. P3
+  bank_source dead root-and-branch (+ channel_width_m and the node
+  estimate with it; the deck now records the edge the ACCEPTED mesh was
+  MEASURED at, and ReachBanksUnmapped is terminal). P4 one membership
+  vocabulary - ENGINE_MESH_REQUIREMENTS / mesh_compatible_with_engine /
+  engine_compat / the engine= thread fold into
+  MeshArtifact.unsolvable_reason() beside the Accepts row. P5 .ladder()
+  EXECUTES - rungs are producers, the machinery walks them, the ledger
+  record names the answering rung, the cross-dataset LOUD line is
+  structural; the fallback= convention and the two inert string ladders
+  die. P6 the 88-line struct SELAFIN packer dies; MeshSession writes the
+  geometry AND its .cli through the telapy pair driver. P7 domain dies
+  from build_mesh; extent is the one spatial word. Measured: -2,427 /
+  +409 lines. RESIDUE, reported not fixed: rain_on_grid's post-mesh half
+  (node_infiltration_fields, the deck, the publish) still reads a
+  CatchmentMesh-shaped record and is the worker-unification port's last
+  mile per DS-4; and .ladder() now has zero declared consumers in-tree -
+  which producer declares the first real one is a DESIGN-STOP.
