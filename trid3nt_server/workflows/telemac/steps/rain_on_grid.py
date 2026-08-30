@@ -37,6 +37,7 @@ from trid3nt_server.workflows.mesh import watershed as W
 from trid3nt_server.workflows.mesh.telemac_build import write_bottom_selafin
 from trid3nt_server.workflows.mesh.tool import declaration_plan_value
 from trid3nt_server.workflows.shared.aoi import aoi_slug
+from trid3nt_server.workflows.shared.layer_fields import layer_field
 from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.rain_on_grid")
@@ -219,8 +220,7 @@ async def _adopt_case_mesh(rundir: Path, pour_point: tuple[float, float],
 
 
 async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
-                               bed_dem: dict[str, Any],
-                               rivers: dict[str, Any] | None) -> dict[str, Any]:
+                               bed_dem: Any, rivers: Any) -> dict[str, Any]:
     """The catchment mesh, however it was acquired, plus the solver geometry file.
 
     THE SLATE: a mesh SUPPLIED on this invocation is taken as-is and nothing here
@@ -295,10 +295,10 @@ async def build_catchment_mesh(*, mesh: dict[str, Any], supplied: Any,
             # The two declared artifacts narrate themselves SEPARATELY: which bed
             # the nodes were sampled from is a different fact from what the mesh
             # was refined toward, and one row cannot carry both.
-            "bed_note": str((bed_dem or {}).get("fallback_note") or ""),
-            "bed_source": str((bed_dem or {}).get("name") or ""),
-            "rivers_note": str((rivers or {}).get("fallback_note") or ""),
-            "rivers_source": str((rivers or {}).get("name") or ""),
+            "bed_note": str(layer_field(bed_dem, "fallback_note") or ""),
+            "bed_source": str(layer_field(bed_dem, "name") or ""),
+            "rivers_note": str(layer_field(rivers, "fallback_note") or ""),
+            "rivers_source": str(layer_field(rivers, "name") or ""),
             "utm_epsg": int(mesh.utm_epsg), "area_km2": float(mesh.area_km2),
             "node_count": mesh.node_count, "element_count": mesh.element_count,
             "outlet_lonlat": list(mesh.outlet_lonlat),
@@ -332,7 +332,7 @@ def _stage_supplied_mesh(uri: str, rundir: Path, slug: str,
 # 3. prep: what each node infiltrates and how rough it is.
 # --------------------------------------------------------------------------- #
 async def node_infiltration_fields(*, mesh: dict[str, Any],
-                                   landcover: dict[str, Any],
+                                   landcover: Any,
                                    curve_number: float | None,
                                    steep_slope_correction: bool,
                                    antecedent_moisture: Any) -> dict[str, Any]:
@@ -364,7 +364,7 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
     def _sample() -> tuple[list[float], list[float], list[int]]:
         from trid3nt_server.tools.cache import read_object_bytes_s3
 
-        uri = str(landcover["uri"])
+        uri = str(layer_field(landcover, "uri"))
         local = Path(mesh["rundir"]) / "landcover.tif"
         local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
                           else Path(uri).read_bytes())
@@ -388,7 +388,7 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
             "amc_condition": int(amc), "curve_number": curve_number,
             "steep_slope_correction": bool(steep_slope_correction),
             "landcover_classes": sorted(set(codes)),
-            "note": str(landcover.get("fallback_note") or "")}
+            "note": str(layer_field(landcover, "fallback_note") or "")}
 
 
 # --------------------------------------------------------------------------- #

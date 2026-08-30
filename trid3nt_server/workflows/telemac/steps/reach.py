@@ -30,6 +30,7 @@ import tempfile
 from typing import Any, NamedTuple
 
 from trid3nt_server.workflows.lib import Step, user_input
+from trid3nt_server.workflows.shared.layer_fields import layer_field
 from trid3nt_server.workflows.mesh.tool import declaration_plan_value
 
 from .errors import TelemacDyeScenarioError
@@ -243,16 +244,6 @@ def bbox_around(lon: float, lat: float,
                 half_deg: float = DEFAULT_RIVER_AOI_HALF_DEG
                 ) -> tuple[float, float, float, float]:
     return (lon - half_deg, lat - half_deg, lon + half_deg, lat + half_deg)
-
-
-def layer_field(result: Any, field: str) -> Any:
-    if result is None:
-        return None
-    if hasattr(result, field):
-        return getattr(result, field)
-    if isinstance(result, dict):
-        return result.get(field)
-    return None
 
 
 def registry_fn(name: str) -> Any:

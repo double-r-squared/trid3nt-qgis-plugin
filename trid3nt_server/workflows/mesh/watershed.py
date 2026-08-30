@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from trid3nt_server.workflows.shared.layer_fields import layer_field
+
 logger = logging.getLogger("trid3nt_server.workflows.mesh.watershed")
 
 __all__ = [
@@ -551,8 +553,8 @@ def generate_catchment_mesh(
     bbox: tuple[float, float, float, float],
     slug: str,
     output_dir: str,
-    bed_dem: dict[str, Any],
-    rivers: dict[str, Any] | None,
+    bed_dem: Any,
+    rivers: Any,
     min_edge_length_m: float = DEFAULT_MIN_EDGE_M,
     max_edge_length_m: float = DEFAULT_MAX_EDGE_M,
     grade: float = DEFAULT_GRADE,
@@ -589,11 +591,13 @@ def generate_catchment_mesh(
         {"type": "Feature", "properties": {}, "geometry": mapping(catch)}]}))
 
     flow = None
-    if rivers and rivers.get("uri"):
-        fl_path = _stage_local(str(rivers["uri"]), rundir / "flowlines.fgb")
+    rivers_uri = layer_field(rivers, "uri")
+    if rivers_uri:
+        fl_path = _stage_local(str(rivers_uri), rundir / "flowlines.fgb")
         flow = gpd.read_file(fl_path)
-    if rivers and rivers.get("fallback_note"):
-        notes.append(str(rivers["fallback_note"]))
+    rivers_note = layer_field(rivers, "fallback_note")
+    if rivers_note:
+        notes.append(str(rivers_note))
 
     boubox, river = catchment_exterior_and_river_coords(
         catch, flow, min_edge_length_m=min_edge_length_m)
@@ -605,9 +609,9 @@ def generate_catchment_mesh(
     points_ll = np.asarray(points_ll, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
 
-    bed_path = _stage_local(str(bed_dem["uri"]), rundir / "dem_bed.tif")
+    bed_path = _stage_local(str(layer_field(bed_dem, "uri")), rundir / "dem_bed.tif")
     bed = sample_raster_at_nodes(bed_path, points_ll)
-    notes.append(str(bed_dem.get("fallback_note") or ""))
+    notes.append(str(layer_field(bed_dem, "fallback_note") or ""))
 
     points_m, epsg = reproject_nodes_to_utm(points_ll)
     area_km2 = float(area_km2) or polygon_area_km2(catch)

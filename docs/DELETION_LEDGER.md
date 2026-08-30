@@ -1538,3 +1538,12 @@ TOOLS (openquake / elmfire / geoclaw) left with the purge, no `gate_spec` names
 them, and their byte-equivalence tests went with the tools - so they are the same
 dead-residue class as the SWMM chunk above. The residue ruling named only the SWMM
 functions, so they stay pending a ruling of their own.
+
+### layer_field earns a shared home (2026-08-30)
+
+`steps/reach.py::layer_field` MOVED to
+`workflows/shared/layer_fields.py`. It reads one field off whatever shape a
+fetched layer arrived in (a `LayerURI`, a replayed model, a stub mapping). The
+shim deletion gave it a second consumer - `mesh/watershed.py` and
+`steps/rain_on_grid.py` now read the artifacts the registered fetchers return
+directly - and a second consumer is what earns the split.
