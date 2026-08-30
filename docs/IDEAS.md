@@ -2705,3 +2705,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   survives, _adopt_case_mesh dies (P2/D-9); the four dead confirm
   builders (psha/scenario/fire/geoclaw) attic as the ruled class;
   Ref("basin") works as written via the read_geometry unwrap.
+
+- AUTO EDGE DIES, EDGE IS EXPLICIT (NATE 2026-08-30): the reach
+  templates' mode="auto" edge computation died with its mesher and
+  nothing replaces it - mesh_resolution_m is REQUIRED (the h0 ruling
+  applied): the edge is always an explicit sheet value - the user
+  states it or the model fills it as a labeled default under the
+  two-modes law; the "mode" param dies. Zero derivation code owns a
+  granularity judgment. rain_on_grid stays UNREGISTERED (honest
+  absence beats a registered template whose mesh step fails) until
+  the worker-unification port; re-enabling is one line.
