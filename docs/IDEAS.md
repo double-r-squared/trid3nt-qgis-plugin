@@ -2624,3 +2624,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   spelling, validity checks membership on the canonical form, NEITHER
   ever guesses (re-spell, never decide); classification coercions get
   the strictest refuse-on-unknown audit at template rebuild.
+
+- COMPATIBLE CONTRACT RULED (NATE 2026-08-29): the supplied-mesh
+  accept-set is ITS OWN standalone declaration, living in
+  declarations.py BESIDE PARAMS (the template's whole readable input
+  contract in one file): COMPATIBLE = Compatible("unstructured_tri",
+  ...) - varargs typed as the MeshKind Literal so the IDE
+  autocompletes legal members and flags typos at AUTHORING time. The
+  MESH build declaration states only what the default build produces;
+  the two facts never share one declaration. ABSENCE = REFUSE SUPPLY
+  (no declaration = no tested supplied path - "template declares no
+  supplied-mesh compatibility"); discovery offers filter by
+  membership. river_dye declares (unstructured_tri) - the box mesh
+  refuses; agitation declares (structured_grid, unstructured_tri) -
+  the artemis BYO rematch stands proven.
