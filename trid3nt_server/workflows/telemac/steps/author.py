@@ -43,6 +43,7 @@ __all__ = [
     "WAQTEL_FILENAME",
     "author_reach_deck",
     "author_rog_deck",
+    "continuation_block",
     "normalize_gradation",
     "write_cn_map",
     "write_friction_files",
@@ -103,6 +104,9 @@ _DEFAULTS: dict[str, Any] = {
     "dye_conc_mgl": 100.0,
     "duration_s": 3600.0,
     "time_step_s": 1.0,
+    # A run that starts from a previous one's state names the file it starts
+    # from; absent, the deck states its own initial conditions and starts there.
+    "continue_from": None,
     "graphic_period": 200,
     "friction_law": None,
     "friction_coefficient": None,
@@ -197,6 +201,21 @@ def _write_lines(rundir: Path | str, basename: str,
     """Write ``lines`` into ``rundir`` -> the basename written."""
     Path(rundir, basename).write_text("\n".join(lines) + "\n", encoding="utf-8")
     return basename
+
+
+def continuation_block(previous: Any) -> str:
+    """The RESTART statement, or nothing at all.
+
+    Re-entry is the ENGINE'S: naming a previous computation file IS the
+    continuation from release 9.0 - the boolean that used to arm it left the
+    dictionary - and the engine then reads that file's last record as the initial
+    state, so the deck's own initial-condition statements go unread. A continued
+    run advances its own DURATION from where the previous one stopped.
+    """
+    if not previous:
+        return ""
+    return ("PREVIOUS COMPUTATION FILE       = "
+            f"{os.path.basename(str(previous))}\n")
 
 
 def _write_deck(rundir: Path | str, basename: str,
@@ -344,7 +363,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
 RESULTS FILE                    = {os.path.basename(results)}
-{sources_file_line}/
+{continuation_block(getattr(P, "continue_from", None))}{sources_file_line}/
 TITLE : '{P.name} REACH'
 VARIABLES FOR GRAPHIC PRINTOUTS = {graphic_variables}
 GRAPHIC PRINTOUT PERIOD         = {P.graphic_period}

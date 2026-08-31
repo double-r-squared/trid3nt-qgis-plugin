@@ -207,6 +207,16 @@ PARAMS: tuple[Param, ...] = (
               "largest fetched flowline, else the geocoded centroid"),
           desc="The point the reach centerline is navigated from, (lon, lat); "
                "set when the release must pin which water body is meshed"),
+    Param("continue_from", door=doors.USER, optional=True, type=str,
+          consequence="numerical",
+          derived_when_absent=(
+              "the run starts from its own initial conditions - a constant depth "
+              "at rest - rather than from another run's state"),
+          desc="Continue a previous run: the URI of its result SELAFIN, whose last "
+               "record becomes this run's initial state, so sim_duration_s is the "
+               "time added ON TOP of it. The mesh must be the same one, a class "
+               "that couples with WAQTEL or GAIA refuses, and the run stops where "
+               "the point source's own time series ends"),
 )
 
 

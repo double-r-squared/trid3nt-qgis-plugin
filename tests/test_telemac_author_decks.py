@@ -127,6 +127,32 @@ def test_rain_states_a_clean_concentration_for_every_tracer(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# Continuation: the engine's own restart, authored into the deck.
+# --------------------------------------------------------------------------- #
+def test_a_run_that_starts_fresh_names_no_previous_computation(tmp_path):
+    assert "PREVIOUS COMPUTATION FILE" not in _author(tmp_path)
+
+
+def test_a_continued_run_names_the_previous_computation_file(tmp_path):
+    """The file alone IS the continuation from release 9.0 - no arming boolean.
+
+    The removed keyword is not merely redundant: DAMOCLES refuses a word its
+    dictionary does not carry, so writing it would fail the deck it was meant to
+    continue.
+    """
+    cas = _author(tmp_path, continue_from="previous.slf")
+    assert "PREVIOUS COMPUTATION FILE       = previous.slf" in cas
+    assert "COMPUTATION CONTINUED" not in cas
+
+
+def test_the_deck_names_a_file_rather_than_wherever_it_came_from():
+    """The engine opens a name in its own run directory, never a URI."""
+    assert A.continuation_block("s3://runs/01J/r2d_river.slf") == (
+        "PREVIOUS COMPUTATION FILE       = r2d_river.slf\n")
+    assert A.continuation_block(None) == ""
+
+
+# --------------------------------------------------------------------------- #
 # WAQTEL: decay on the unchanged tracer, and the oxygen sag.
 # --------------------------------------------------------------------------- #
 def test_decay_rides_the_unchanged_tracer(tmp_path):

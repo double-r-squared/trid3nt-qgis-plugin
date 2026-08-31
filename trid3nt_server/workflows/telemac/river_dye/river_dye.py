@@ -112,7 +112,7 @@ PHYSICS = Physics(
     "tracer",
     reach_length_km=P.reach_length_km,
     substance=P.substance, release_coords=P.release_coords,
-    sim_duration_s=P.sim_duration_s,
+    sim_duration_s=P.sim_duration_s, continue_from=P.continue_from,
     spill_fraction=P.spill_fraction, spill_duration_s=P.spill_duration_s,
     dye_concentration_mgl=P.dye_concentration_mgl, source_q_m3s=P.source_q_m3s,
     output_interval_min=P.output_interval_min,

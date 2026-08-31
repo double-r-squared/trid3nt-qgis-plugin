@@ -100,8 +100,10 @@ WORKDIR /data
 
 # Build-time smoke: the entrypoint and both in-worker builders import under the
 # activated env, the four telapy classes a case may name resolve, each builder's
-# config maps through the one strict gate, and the baked user fortran is on disk.
-# A path/import/pin mistake surfaces at BUILD time instead of mid-solve.
+# config maps through the one strict gate, every one of those four carries the
+# per-step call the runner's loop drives, and the baked user fortran is on disk.
+# A path/import/pin mistake surfaces at BUILD time instead of mid-solve, and so
+# does a telapy that stopped exposing the step the loop is written against.
 RUN python -c "\
 import sys, pathlib;\
 sys.path.insert(0, '/opt/trid3nt/workers/telemac');\
@@ -116,8 +118,9 @@ stratified = E._strict_section('stratified', {'flow_mode': 'wind_circulation', '
 assert A.ArtemisConfig(**agitation).wave_period_s == 32.0;\
 assert T.Telemac3dConfig(**stratified).nplan == 11;\
 assert sorted(E._MODULES) == ['artemis', 'telemac2d', 'telemac3d', 'tomawac'];\
+assert all(callable(getattr(c, 'run_one_time_step', None)) for c in (Telemac2d, Telemac3d, Tomawac, Artemis));\
 assert pathlib.Path('/opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f').is_file();\
-print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules, config maps and baked raindef3 all present')"
+print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules step-capable, config maps and baked raindef3 all present')"
 
 # The negative half of the same gate, in a SEPARATE process: an unknown case
 # field must refuse loudly. A dropped key silently no-ops the knob the caller

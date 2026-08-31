@@ -55,6 +55,10 @@ _GEOMETRY_DEST = "river.slf"
 _BOUNDARY_DEST = "river.cli"
 _STEERING = "t2d_river.cas"
 _RESULT = "r2d_river.slf"
+#: What a continued run's PREVIOUS COMPUTATION FILE is called in the run
+#: directory. The engine reads a file, not a URI, so the previous run's results
+#: are staged under one name and the deck names that.
+_PREVIOUS_DEST = "previous.slf"
 
 #: Which telapy engine class runs a reach, and the identity its row carries in a
 #: run listing.
@@ -483,6 +487,7 @@ async def write_reach_deck(
     dredge_dig_depth_m: float | None = None,
     dredge_bank_offset_m: float = 5.0,
     do_sag_config: dict[str, Any] | None = None,
+    continue_from: str | None = None,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the run's deck + the run meta.
 
@@ -502,6 +507,11 @@ async def write_reach_deck(
     ``spill_fraction`` along the same line. Only then does the marker go on the
     canvas - at the point the deck actually carries - saying out loud whether the
     user placed it or the pipeline derived it.
+
+    ``continue_from`` is a previous run's result SELAFIN. It is staged like any
+    other input and the deck names it as the engine's PREVIOUS COMPUTATION FILE,
+    so a continued run is an ordinary run whose initial state came out of another
+    one - there is no resident solver anywhere for it to re-enter.
     """
     substance = sanitize_substance(substance)
     release_pair = coerce_lonlat_point(release_coords)
@@ -531,6 +541,20 @@ async def write_reach_deck(
         dredge_volume_m3=dredge_volume_m3, dredge_disposal=dredge_disposal,
         dredge_crit_depth_m=dredge_crit_depth_m, dredge_dig_depth_m=dredge_dig_depth_m,
         dredge_bank_offset_m=dredge_bank_offset_m)
+
+    # The class the DECK states - the one the author branches on, and the one a
+    # continuation is refused on. Reading it off the substance word would name a
+    # run "tracer" that the author wrote a WAQTEL coupling into.
+    deck_class = ("do_sag" if do_sag_config
+                  else str(class_block.get("substance_class") or "tracer"))
+    coupled_with = _CLASS_COUPLING.get(deck_class)
+    if continue_from and coupled_with:
+        raise TelemacDyeScenarioInputError(
+            f"a {deck_class} reach couples the solve with {coupled_with.upper()}, "
+            "which runs the module's own launcher rather than the stepped arm; "
+            "continuing one has never been run and this refuses rather than "
+            "report it as a run that was. Drop continue_from, or run the "
+            "uncoupled class.")
 
     from trid3nt_server.workflows.telemac.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
@@ -605,6 +629,10 @@ async def write_reach_deck(
         "source_q_m3s": float(source_q_m3s),
         "inflow_q_m3s": float(carrier_discharge["m3s"]),
         "duration_s": float(sim_duration_s),
+        # WHERE this run picks up from. The deck records the staged NAME because
+        # the engine reads a file: the URI it was staged from is the ask, and the
+        # ask is the run's inputs list.
+        **({"continue_from": _PREVIOUS_DEST} if continue_from else {}),
     }
 
     node_xy, node_bed = (await asyncio.to_thread(_mesh_nodes, mesh)
@@ -624,11 +652,6 @@ async def write_reach_deck(
         node_xy=node_xy, node_bed=node_bed)
     from .open_water import case_section
 
-    # The class the DECK states, which is the one the author branches on. The
-    # do_sag condition is threaded onto the deck rather than classified out of
-    # the substance word, so reading it off the substance would name a run
-    # "tracer" that the author wrote a WAQTEL coupling into.
-    deck_class = str(deck.get("substance_class") or "tracer")
     results, outputs = _class_files(deck_class,
                                     dredging=bool(class_block.get("dredging")))
     # Every file the author wrote, under its path INSIDE the run directory: the
@@ -644,7 +667,8 @@ async def write_reach_deck(
             # The engine compiles the DIRECTORY the steering file names, so the
             # manifest channel carries the same directory the author wrote into.
             user_fortran=_user_fortran_dir(written),
-            coupling=_CLASS_COUPLING.get(deck_class),
+            coupling=coupled_with,
+            continue_from=_PREVIOUS_DEST if continue_from else None,
             # What the SERVER measured and the container cannot learn from the
             # files it is handed. The worker copies it into its metrics verbatim.
             echo={"utm_epsg": utm_epsg,
@@ -658,6 +682,8 @@ async def write_reach_deck(
         "inputs": [
             {"gs_uri": _mesh_field(mesh, "slf_uri"), "dest": _GEOMETRY_DEST},
             {"gs_uri": _mesh_field(mesh, "cli_uri"), "dest": _BOUNDARY_DEST},
+            *([{"gs_uri": str(continue_from), "dest": _PREVIOUS_DEST}]
+              if continue_from else []),
             *await asyncio.to_thread(_stage_authored, rundir, run_tag, authored)],
         "mesh_id": mesh.get("mesh_id"),
         "substance": substance,

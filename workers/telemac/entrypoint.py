@@ -21,6 +21,11 @@ wrong, so the write has to outlive the solve. What the child runs is telapy,
 except for the couplings telapy cannot run, which run the module's own CLI
 launcher behind the same seam - see ``_LAUNCHER_COUPLINGS``.
 
+The telapy child drives the engine's OWN per-step call in a loop, so a run has a
+point between steps; a case that names ``continue_from`` picks up from a previous
+run's results through the engine's own restart, which the deck states and this
+worker only stages. Neither is available behind the launcher deviation.
+
 Success is a clean child exit AND every declared result file on disk: a solver
 that returns zero without writing its result has not solved anything.
 """
@@ -83,7 +88,7 @@ _MODULES: dict[str, tuple[str, str]] = {
 #: The keys a ``case`` section carries.
 _CASE_FIELDS = frozenset((
     "module", "steering", "user_fortran", "results", "family", "echo",
-    "coupling"))
+    "coupling", "continue_from"))
 
 #: The couplings telapy's API arm cannot drive, so their cases go through the
 #: engine's OWN CLI launcher instead - the same runner seam, the same manifest,
@@ -157,9 +162,43 @@ def _listing_tail(data_dir: Path) -> dict[str, str]:
     return {"listing_tail": text[-_LISTING_TAIL_CHARS:]} if text else {}
 
 
+def _on_step(study: Any, step: int, steps: int) -> None:
+    """The ONE point a run can be observed or steered from, once per step.
+
+    A no-op. It exists as STRUCTURE: emitting frames while the loop runs,
+    reporting live progress, steering a boundary mid-solve and coupling a second
+    model all attach here, as declared behaviour on a seam that already exists,
+    rather than as another rewrite of the runner.
+    """
+
+
+def _step_count(study: Any) -> int:
+    """How many steps the study's own deck says this run takes.
+
+    The count is the model's, read the way the engine reads it: a finite-volume
+    run advances its whole time loop inside one call, so it counts as one step
+    and a module whose deck has no equation keyword counts its steps plainly.
+    """
+    steps = int(study.get("MODEL.NTIMESTEPS"))
+    try:
+        equation = str(study.get("MODEL.EQUATION"))
+    except Exception:  # noqa: BLE001 -- no equation keyword => not finite volume
+        return steps
+    return 1 if ("VF" in equation or "FV" in equation) else steps
+
+
 def _solve_in_process(module: str, steering: str,
                       user_fortran: str | None) -> int:
     """Drive ONE telapy study to the end of its time loop, in THIS process.
+
+    The loop is the ENGINE'S OWN per-step call, driven one step at a time rather
+    than handed to the engine's own whole-run wrapper. The two are the same
+    computation - the wrapper is this loop - and stepping it here is what gives
+    the run a point between steps at all.
+
+    Every class in :data:`_MODULES` inherits the step call from telapy's own
+    ``ApiModule``. A class that did not would keep the whole-run wrapper, and
+    would run with no per-step point.
 
     The listing is Fortran unit 6, so it arrives on this process's stdout and the
     parent tees it to the listing file.
@@ -169,7 +208,13 @@ def _solve_in_process(module: str, steering: str,
         steering, user_fortran=user_fortran)
     study.set_case()
     study.init_state_default()
-    study.run_all_time_steps()
+    if hasattr(study, "run_one_time_step"):
+        steps = _step_count(study)
+        for step in range(1, steps + 1):
+            study.run_one_time_step()
+            _on_step(study, step, steps)
+    else:
+        study.run_all_time_steps()
     study.finalize()
     return 0
 
@@ -264,9 +309,27 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             "which is the convention this worker retired. Declare what the run "
             "must produce.")
     coupling = str(case.get("coupling") or "").lower()
+    previous = str(case.get("continue_from") or "")
+    if previous:
+        # A continuation is the ENGINE'S restart: the deck names this file and
+        # reads its last record as the initial state, so the only thing to check
+        # here is that the file the deck names arrived.
+        if coupling in _LAUNCHER_COUPLINGS:
+            raise CaseError(
+                "TELEMAC_CASE_NOT_CONTINUABLE",
+                f"case.continue_from is set on a case coupled with {coupling!r}, "
+                "which runs the module's own launcher rather than the stepped "
+                "arm; a continued run of it has never been run and would be "
+                "reported as one that had.")
+        if not (data_dir / previous).exists():
+            raise CaseError(
+                "TELEMAC_CASE_PREVIOUS_MISSING",
+                f"case.continue_from {previous!r} is not in the run directory; "
+                "the deck continues from a file that was never staged.")
     argv = _solve_argv(module, steering, case.get("user_fortran"), coupling)
-    LOG.info("telemac case module=%s steering=%s coupling=%s results=%s via %s",
-             module, steering, coupling or "none", results, argv[0])
+    LOG.info("telemac case module=%s steering=%s coupling=%s continue_from=%s "
+             "results=%s via %s", module, steering, coupling or "none",
+             previous or "none", results, argv[0])
 
     code = _run_child(data_dir, argv)
     missing = [r for r in results if not (data_dir / r).exists()]

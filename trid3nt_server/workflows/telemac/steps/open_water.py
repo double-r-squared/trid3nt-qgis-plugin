@@ -226,7 +226,8 @@ def staged_bed_inputs(bed: Mapping[str, Any] | None, *, real: bool,
 
 def case_section(*, module: str, steering: str, results: list[str], family: str,
                  echo: Mapping[str, Any], user_fortran: str | None = None,
-                 coupling: str | None = None) -> dict[str, Any]:
+                 coupling: str | None = None,
+                 continue_from: str | None = None) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which deck, what it must produce.
 
     ``module`` names the engine binary, ``steering`` the authored deck it reads,
@@ -234,6 +235,8 @@ def case_section(*, module: str, steering: str, results: list[str], family: str,
     ``family`` the run's identity in a listing. ``coupling`` names the module the
     deck couples the solve with, because which runner can drive a coupled case is
     not the same question for every module and the worker decides on this word.
+    ``continue_from`` is the staged name of the previous run's results the deck
+    restarts from, present only on a continued run.
 
     ``echo`` is what the SERVER already knows and the worker cannot learn from
     the files it is handed - the UTM zone, the bbox, the node and element counts,
@@ -244,6 +247,7 @@ def case_section(*, module: str, steering: str, results: list[str], family: str,
     return {"module": module, "steering": steering,
             **({"user_fortran": user_fortran} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
+            **({"continue_from": continue_from} if continue_from else {}),
             "results": list(results), "family": family, "echo": dict(echo)}
 
 

@@ -331,3 +331,65 @@ names `RAINDEF3_USER_FORTRAN` on BOTH channels: the steering file's own
 (`TELEMAC_ROG_SOIL_STORE_UNAUTHORED`): the continuous store was the retired
 in-worker runoff model and the authored deck drives the engine's own static
 SCS-CN. Re-homing it server-side is a physics choice and is NATE's to rule.
+
+## STEPPABLE + REENTRANT (2026-08-31 ruling)
+
+Two seams, and none of the features on top of them.
+
+**The telapy child loops the engine's own per-step call.** `_solve_in_process`
+runs `set_case -> init_state_default -> [run_one_time_step] * N -> finalize`
+instead of handing the whole time loop to `run_all_time_steps`. The two are the
+same computation: telapy's `ApiModule.run_all_time_steps` IS that loop, reading
+`MODEL.NTIMESTEPS` and collapsing a finite-volume run to one call, and
+`_step_count` reads the count the same way. All four classes a case may name -
+`Telemac2d`, `Telemac3d`, `Tomawac`, `Artemis` - inherit the step call from
+`ApiModule` (verified in-image; the build smoke now asserts it), so the
+whole-run branch is the fallback for a class that ever lacks it.
+
+`_on_step(study, step, steps)` is the ONE structural point between steps, and it
+does nothing. It is where emit-on-solve frames, live progress, mid-run steering
+and the BMI direction attach as declarations later; nothing is built on it here.
+
+Measured, on one deck through the image: the stepped run and the same deck under
+`run_all_time_steps` are BIT-IDENTICAL - max |delta| = 0 across all six
+variables and all twelve records.
+
+**Re-entry is the ENGINE'S restart, never a resident process.** From release 9.0
+naming `PREVIOUS COMPUTATION FILE` IS the continuation (`lecdon_telemac2d.f`
+sets `DEBU=.FALSE.` on the name alone); the arming boolean `COMPUTATION
+CONTINUED` left the t2d/t3d/tomawac dictionaries and survives only in mascaret's,
+so `author.continuation_block` writes the file line and nothing else. The
+manifest `case` section gains `continue_from`, the worker's one strict gate
+learns that field and checks the file arrived, and the launcher stages it like
+any other input under `previous.slf`. A continued run is an ordinary box run.
+
+`continue_from` is a declared param on the run ask, taking a previous run's
+result SELAFIN URI. It REFUSES, typed and server-side before anything is
+authored, on any class that couples the solve (`decay` / `do_sag` -> WAQTEL,
+`sediment` -> GAIA): those run the module's own CLI launcher behind the fork
+ruling's deviation, whole-process and unstepped. The worker refuses the same
+case again on the coupling word, and the two legacy builders never learned the
+field, so asking them is the gate's own refusal.
+
+**Measured split run** (Eel River coarse reach, 907 nodes, dt 0.521 s):
+1200 s straight through, against 600 s + continue + 600 s. The continued leg
+picks up at the previous run's last record (521.0 s), reaches CORRECT END, and
+its records land on the straight-through run's own grid. At the matched instant
+(1042.0 s) the two states close to max |dU| 3.3e-3 m/s, |dV| 3.0e-3 m/s,
+|dh| 1.4e-3 m, |ddye| 1.5e-4 mg/L - 0.02 to 0.16 % of each field's span. The
+first leg is bit-identical to the straight-through run up to the split.
+
+**What the split run exposed, and did NOT decide.** The reach deck's SOURCES
+FILE is authored over an absolute clock whose last row is the deck's own
+`DURATION + 100 s`. A continued run advances PAST that horizon and the engine
+stops on it (`T= 700.224 OUT OF RANGE OF THE SOURCES FILE`) - so the split run
+above was completed with that one forcing row extended by hand, in the run
+directory, to measure the closure. Extending it in the author needs the
+continuation's start time, which is a read of the previous run's own result, and
+it settles whether a continued run re-releases its pulse or carries the same
+absolute series forward. Related and measured in the same run: the engine
+restarts from the previous file's LAST RECORD (521.0 s of a 600 s leg, because
+the graphic period is 200 steps), and the residual above is what a single-
+precision `SERAFIN` results-file restart costs - the dictionary's own answer to
+both is `RESTART FILE` / `SERAFIND`, which changes what every run writes. Both
+are NATE's to rule; nothing here was changed on either.

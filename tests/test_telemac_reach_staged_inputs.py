@@ -151,12 +151,50 @@ def test_the_case_section_names_the_engine_the_deck_and_the_results():
                         coupling="waqtel")["coupling"] == "waqtel"
 
 
+def test_a_continued_case_names_the_staged_file_it_restarts_from():
+    """Absent on a fresh run, so a present key is always a real continuation."""
+    from trid3nt_server.workflows.telemac.steps import case_section
+
+    fresh = case_section(module="telemac2d", steering="t2d_river.cas",
+                         results=[], family="river_dye", echo={})
+    assert "continue_from" not in fresh
+    assert case_section(module="telemac2d", steering="t2d_river.cas", results=[],
+                        family="river_dye", echo={},
+                        continue_from="previous.slf")["continue_from"] == \
+        "previous.slf"
+
+
 def test_the_classes_that_couple_state_which_module_they_couple_with():
     from trid3nt_server.workflows.telemac.steps.deck import _CLASS_COUPLING
 
     assert _CLASS_COUPLING == {"decay": "waqtel", "do_sag": "waqtel",
                                "sediment": "gaia"}
     assert "tracer" not in _CLASS_COUPLING and "oil" not in _CLASS_COUPLING
+
+
+@pytest.mark.parametrize("substance,coupled", [("sewage", "WAQTEL"),
+                                               ("sand", "GAIA")])
+def test_a_coupled_reach_refuses_to_be_continued_and_says_why(substance, coupled):
+    """The couplings run the engine's own launcher, whole-process, unstepped.
+
+    The refusal is server-side, before anything is authored or staged: the run
+    that would come back is a fresh one wearing a continuation's name.
+    """
+    import asyncio
+
+    from trid3nt_server.workflows.telemac.steps.deck import write_reach_deck
+    from trid3nt_server.workflows.telemac.steps.errors import (
+        TelemacDyeScenarioInputError,
+    )
+
+    with pytest.raises(TelemacDyeScenarioInputError) as exc:
+        asyncio.run(write_reach_deck(
+            reach={"slug": "r", "name": "R"}, seed={"lon": -124.0, "lat": 40.0},
+            mesh={"min_edge_m": 14.0, "element_count": 10, "artifact": None},
+            centerline=None, carrier_discharge={"m3s": 50.0},
+            substance=substance,
+            continue_from="s3://runs/PREV/r2d_river.slf"))
+    assert coupled in str(exc.value)
 
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
