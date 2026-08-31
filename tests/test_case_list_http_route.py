@@ -122,18 +122,6 @@ def test_route_served_when_backend_env_unset(monkeypatch):
     assert fake.calls == [LOCAL_SINGLE_USER_ID]
 
 
-def test_route_served_even_when_env_claims_aws_batch(monkeypatch):
-    """A stale cloud value in the env changes nothing: still served."""
-    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "aws-batch")
-    case = _case(new_ulid(), "Stale-env case", "2026-07-09T00:00:00Z")
-    fake = _FakePersistence([case])
-    monkeypatch.setattr(server, "get_persistence", lambda: fake)
-
-    out = _dispatch()
-    assert _status(out) == 200
-    assert [c["case_id"] for c in _body(out)["cases"]] == [case.case_id]
-
-
 # ---------------------------------------------------------------------------
 # Happy path (local single-user seam armed)
 # ---------------------------------------------------------------------------

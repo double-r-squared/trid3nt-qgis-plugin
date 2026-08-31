@@ -62,9 +62,6 @@ __all__ = [
     "ToolCardRecord",
     "ToolCardState",
     "PersistedSubStepRecord",
-    # Data-island thin manifest (#165 — cold-serve cases+layers from S3)
-    "CaseManifestLayer",
-    "CaseManifest",
     # WebSocket envelopes (A.4 / A.3 amendments)
     "CaseListEnvelopePayload",
     "CaseOpenEnvelopePayload",
@@ -375,91 +372,6 @@ class CaseSessionState(GraceModel):
     # order); the client rehydrates ChartStack/ChartGallery from it (App.tsx
     # ``activeSession.charts``). Empty for Cases that emitted no charts.
     charts: list[dict] = Field(default_factory=list)  # ChartEmissionPayload[]
-
-
-# --------------------------------------------------------------------------- #
-# Data-island thin manifest (#165 — cold-serve cases+layers from S3)
-# --------------------------------------------------------------------------- #
-#
-# The materialized case-view SNAPSHOT (Lane A1) is the FULL ``case-open``
-# payload (chat history, tool cards, charts, inline GeoJSON, ...) — fat by
-# design so the cold-view path renders a Case byte-identically to the live
-# wire. The data-island North Star (project_scale_to_zero_island_architecture)
-# wants the DATA island to be self-serving: a future cold path that lists
-# cases + their layers (title / bbox / hazard / layer asset URLs) straight from
-# S3 with the agent box asleep, WITHOUT downloading the fat snapshot per Case.
-#
-# This ``CaseManifest`` is that THIN per-case index. Phase note: it is written
-# ALONGSIDE the snapshot (dual-write); the snapshot is NOT retired here — cold
-# serving + snapshot retirement are later phases. The layer list is sourced
-# from the SAME data ``case_list`` marshals — the Case doc's
-# ``loaded_layer_summaries`` (``ProjectLayerSummary`` dicts) — so the manifest
-# never diverges from what the live list shows.
-
-
-class CaseManifestLayer(GraceModel):
-    """One layer row in a Case's thin manifest (#165 data-island index).
-
-    A projection of ``ProjectLayerSummary`` (D.2 / ``collections.py``) carrying
-    only what a cold-serve path needs to register the layer on the map:
-
-    - ``asset_url`` is the DISPLAY face — the browser-readable artifact the cold
-      path serves (resolved to a served / pre-signed URL by the future
-      materializer): a raster tile-template, a vector ``.geojson`` asset
-      (frozen Wave A contract: ``case-data/<case_id>/<layer_id>.geojson``), or a
-      QGIS WMS GetMap URL. It mirrors ``ProjectLayerSummary.wms_url`` (the slot
-      ``observe_published_layer`` routes every display face into), falling back
-      to ``uri`` only when no display face was registered.
-    - ``wms_url`` is the OPTIONAL QGIS WMS GetMap face when one was minted
-      (present only for the WMS display branch); ``None`` for raster-tile /
-      vector-geojson layers.
-    - ``bbox`` is per-layer extent when known. Persisted ``ProjectLayerSummary``
-      dicts carry no per-layer bbox today (the live zoom-to bbox lives only on
-      the transient ``LayerURI``), so this is ``None`` in practice until a later
-      phase persists it; the Case-level ``CaseManifest.bbox`` is the AOI fallback.
-
-    No cost field (invariant 9). ``extra="forbid"`` (GraceModel) so a stray
-    storage key never silently leaks into the manifest.
-    """
-
-    schema_version: Literal["v1"] = "v1"
-
-    layer_id: str
-    name: str
-    layer_type: Literal["raster", "vector", "mesh"]  #: mesh = MDAL row
-    style_preset: str
-    asset_url: str  # display face the cold path serves (wms_url, else uri)
-    bbox: BBox | None = None  # per-layer extent when known; AOI fallback at Case
-    wms_url: str | None = None  # optional QGIS WMS GetMap face (display branch)
-    crs_authid: str | None = None  #: explicit CRS for an MDAL mesh row
-
-
-class CaseManifest(GraceModel):
-    """Thin per-case S3 manifest (#165 — cold-serve cases+layers, agent asleep).
-
-    Written ALONGSIDE the fat case-view snapshot (dual-write) at the SAME Case
-    mutation call-sites. A future cold path lists Cases + their layers from
-    these manifests WITHOUT the agent and WITHOUT downloading the fat snapshot.
-
-    The owner is NOT a body field — it travels in S3 OBJECT METADATA exactly as
-    the snapshot does (``_doc_to_case_summary`` drops owner-link fields, so the
-    body is owner-free; the signer owner-matches off ``head_object`` metadata).
-
-    Fields mirror the ``CaseSummary`` denormalization the left rail already
-    consumes (``title`` / ``bbox`` / ``primary_hazard``), plus the projected
-    ``layers`` list. ``updated_at`` stamps the manifest write so a reader can
-    tell staleness; ``schema_version`` versions the manifest shape independently
-    of the layer-row shape.
-    """
-
-    schema_version: Literal["v1"] = "v1"
-
-    case_id: ULIDStr
-    updated_at: UTCDatetime  # ISO-8601 UTC — when the manifest was materialized
-    title: str
-    bbox: BBox | None = None  # [minLon, minLat, maxLon, maxLat] EPSG:4326 (AOI)
-    primary_hazard: str | None = None
-    layers: list[CaseManifestLayer] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #

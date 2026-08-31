@@ -2296,3 +2296,48 @@ worker-side gate to the server dies with the gate.
   the period happened to land on (521.0 s of a 600 s leg) carrying a 3.3e-3 m/s
   velocity residual. From the restart record the handover closes to 4.4e-8 m/s
   and the split run's end is BIT-IDENTICAL to the straight-through run's.
+
+## The cloud-deployed era leaves the suite (test cull, scope 1, 2026-08-31)
+
+Tests pinning the browser/AWS deployment, and the one contract shape that
+deployment wrote. Evidence per row is a zero-reference grep over
+`trid3nt_server/ plugin/ workers/ scripts/ contracts/`.
+
+- `CaseManifest` + `CaseManifestLayer` (`contracts/trid3nt_contracts/case.py`,
+  ~70 LOC) and their six cases in `contracts/tests/test_case.py` DELETE. The
+  thin per-case S3 index existed for a cold-serve browser path with the agent
+  box asleep; that machinery went with the case-view snapshot. `CaseManifest`
+  had ZERO references outside its own class body, its `__all__` entry and those
+  six tests - a test-only wire type. No `contracts/schemas/` mirror existed, so
+  the export is unchanged.
+- The `TRID3NT_SOLVER_BACKEND="aws-batch"` arms DELETE from
+  `test_case_list_http_route.py`, `test_gate_timeout_local.py`,
+  `test_probe_point_http_route.py`, `test_ingest_layer_http_route.py`. The env
+  is read NOWHERE for dispatch (`solver_backend()` is hardwired local-docker),
+  so an arm setting it to a decommissioned backend and asserting the route is
+  served anyway exercises a no-op. The env-unset arm survives in each file as
+  the honest statement: no arming needed.
+- The `TRID3NT_TILE_SERVER_BASE` tombstone cases DELETE:
+  `test_tile_server_base_env_is_dead` + `test_unset_env_no_longer_fails`
+  (`test_publish_layer_titiler_base_sprint14aws.py`),
+  `test_register_manifest_layers_needs_no_tile_server` + the `_TILE_BASE`
+  constant (`test_publish_manifest_register_only_phase4.py`), and the fixture
+  setenv in `test_publish_layer_durable_vector_geojson_165p0.py`. The env has
+  zero reads in `trid3nt_server/` since the TiTiler exit. The tile-template
+  UNWRAP tests are NOT in this row and stay: 199 `/cog/tiles/` URIs live in the
+  persisted store and `_unwrap_tile_template` has four live callers.
+- `test_stray_case_adoption_removed` + `test_session_anon_registry_removed`
+  (`test_anon_identity_convergence.py`) DELETE - `assert not hasattr` guards
+  over `Persistence.adopt_cases_to_user`, `_local_case_adoption_done` and the
+  session anon-id mirror, all deleted with the multi-user plumbing. The rest of
+  the file pins LIVE `LOCAL_SINGLE_USER_ID` convergence and stays, including the
+  `extra="forbid"` wire proof (a live contract, not an absence guard).
+- `test_case_open_writes_no_case_view_snapshot`
+  (`test_case_history_rehydrate_f17.py`) DELETES - `assert not hasattr` over
+  `_persist_case_view_snapshot` / `_persist_case_manifest`. Its live half (a
+  real open rehydrating chat history) is already
+  `test_case_open_rehydrates_chat_history` in the same file.
+
+Standing norm applied: a surviving test of a deleted function is an ANCHOR, not
+coverage. Absence guards over already-deleted symbols are that anchor's weakest
+form - they cost a run and prove nothing the tree does not already say.

@@ -68,21 +68,6 @@ def test_raster_publish_returns_raw_s3_uri() -> None:
     assert "{z}/{x}/{y}" not in out
 
 
-def test_tile_server_base_env_is_dead(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Setting the legacy env var changes NOTHING (the env read is removed)."""
-    monkeypatch.setenv("TRID3NT_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
-    out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
-    assert out == S3_URI
-    assert "cloudfront" not in out
-
-
-def test_unset_env_no_longer_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The old RASTER_PUBLISH_UNAVAILABLE gate is gone - unset env publishes."""
-    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
-    out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
-    assert out == S3_URI
-
-
 def test_flood_legend_stashed_by_s3_uri() -> None:
     """The flood ramp rides the LEGEND (keyed by the envelope s3 uri), not a
     tile-URL query string: colormap NAME + vmin/vmax recoverable for the

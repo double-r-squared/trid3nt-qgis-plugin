@@ -132,24 +132,20 @@ def _local_mode(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_ingest_layer_route_served_regardless_of_backend_env(monkeypatch):
-    """Served with the env unset AND with a stale cloud value set.
+def test_ingest_layer_route_served_without_env_arming(monkeypatch):
+    """Served with no env arming at all.
 
     ``b"{}"`` reaching the handler's field validation (typed 400 naming
     ``case_id``) proves dispatch serves the route -- an absent route would
     have 404ed before any body parsing.
     """
-    for arm in ("unset", "aws-batch"):
-        if arm == "unset":
-            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
-        else:
-            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", arm)
-        out = _drive(_post("/api/ingest-layer", b"{}"))
-        assert _status(out) == 400
-        assert "case_id" in _body_json(out)["error"]
+    monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
+    out = _drive(_post("/api/ingest-layer", b"{}"))
+    assert _status(out) == 400
+    assert "case_id" in _body_json(out)["error"]
 
 
-def test_ingest_layer_file_route_served_regardless_of_backend_env(monkeypatch):
+def test_ingest_layer_file_route_served_without_env_arming(monkeypatch):
     """The upload route is served (200 + {"s3_uri": ...}) without env arming."""
 
     def _fake_upload(filename: str, data: bytes) -> str:
@@ -158,16 +154,10 @@ def test_ingest_layer_file_route_served_regardless_of_backend_env(monkeypatch):
     monkeypatch.setattr(
         tool_catalog_http, "_upload_layer_file_fn", lambda: _fake_upload
     )
-    for arm in ("unset", "aws-batch"):
-        if arm == "unset":
-            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
-        else:
-            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", arm)
-        out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b"data"))
-        assert _status(out) == 200
-        assert _body_json(out) == {
-            "s3_uri": "s3://cache/user-uploads/01ULID/x.tif"
-        }
+    monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
+    out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b"data"))
+    assert _status(out) == 200
+    assert _body_json(out) == {"s3_uri": "s3://cache/user-uploads/01ULID/x.tif"}
 
 
 # ---------------------------------------------------------------------------

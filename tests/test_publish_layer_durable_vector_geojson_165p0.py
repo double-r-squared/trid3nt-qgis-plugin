@@ -77,9 +77,8 @@ def _geojson_fc_bytes() -> bytes:
 
 @pytest.fixture()
 def _s3_titiler_no_wms(monkeypatch: pytest.MonkeyPatch) -> None:
-    """s3 backend + a tile base, but NO QGIS WMS base (the live stack today)."""
+    """s3 backend, no QGIS WMS base (the live stack today)."""
     monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("TRID3NT_TILE_SERVER_BASE", "https://cf.example.net")
     monkeypatch.delenv("TRID3NT_QGIS_WMS_BASE", raising=False)
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
 

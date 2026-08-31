@@ -28,11 +28,6 @@ def test_local_gate_timeout_even_when_env_unset(monkeypatch):
     assert server._gate_wait_timeout(60) == 24 * 3600.0
 
 
-def test_local_gate_timeout_even_when_env_claims_aws_batch(monkeypatch):
-    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "aws-batch")
-    assert server._gate_wait_timeout(300) == 24 * 3600.0
-
-
 def test_local_backend_gets_24h(monkeypatch):
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     assert server._gate_wait_timeout(300) == 24 * 3600.0

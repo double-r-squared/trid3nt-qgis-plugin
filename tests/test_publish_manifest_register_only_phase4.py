@@ -39,7 +39,6 @@ from trid3nt_contracts.publish_manifest import (
     parse_publish_manifest,
 )
 
-_TILE_BASE = "https://tiles.example.test"
 
 
 # --------------------------------------------------------------------------- #
@@ -205,11 +204,7 @@ def active_registry():
         deactivate_registry(token)
 
 
-def test_register_manifest_layers_emits_raw_cog_uri_and_registers(
-    monkeypatch, active_registry
-):
-    # No tile server anywhere: the TiTiler exit needs none.
-    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
+def test_register_manifest_layers_emits_raw_cog_uri_and_registers(active_registry):
     m = parse_publish_manifest(json.dumps(_depth_manifest_dict()))
     res = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
 
@@ -251,29 +246,6 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(
     assert legend.colormap == "ylgnbu"
     stats = _depth_manifest_dict()["layers"][0]["band_stats"]
     assert (legend.vmin, legend.vmax) == (stats["p2"], stats["p98"])
-
-
-def test_register_manifest_layers_needs_no_tile_server(
-    monkeypatch, active_registry
-):
-    """The old TRID3NT_TILE_SERVER_BASE publish-or-honest-drop gate is GONE:
-    with AND without the env var the registration is identical (raw cog_uri),
-    and nothing is ever dropped for lack of a tile server."""
-    m = parse_publish_manifest(json.dumps(_depth_manifest_dict()))
-
-    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
-    res_without = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
-    monkeypatch.setenv("TRID3NT_TILE_SERVER_BASE", _TILE_BASE)
-    res_with = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
-
-    for res in (res_without, res_with):
-        assert res.dropped_count == 0
-        assert res.tile_publish_available is True
-        assert [lyr.uri for lyr in res.layers] == [
-            "s3://runs/RUNRUNRUN/flood_depth_peak.tif",
-            "s3://runs/RUNRUNRUN/flood_depth_frame_01.tif",
-        ]
-        assert res.metrics["max_depth_m"] == 2.41
 
 
 def test_register_swan_wave_layers_carries_narration_scalars(

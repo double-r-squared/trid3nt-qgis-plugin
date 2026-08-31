@@ -232,25 +232,6 @@ async def test_local_mode_connections_resolve_to_same_user(
     assert [c.case_id for c in listed] == [case.case_id]
 
 
-def test_stray_case_adoption_removed() -> None:
-    """Absence guard: the stray-case adoption sweep is gone (chop 4)."""
-    assert not hasattr(Persistence, "adopt_cases_to_user")
-    assert not hasattr(auth_handshake, "_local_case_adoption_done")
-
-
-def test_session_anon_registry_removed() -> None:
-    """Absence guard: the session-scoped anon-id mirror is gone (wave 11)."""
-    from trid3nt_server import server
-
-    for name in (
-        "_SESSION_ANON_ID",
-        "_get_session_anon_id",
-        "_set_session_anon_id",
-        "_apply_session_anon_hint",
-    ):
-        assert not hasattr(server, name), name
-
-
 def test_auth_token_envelope_rejects_anonymous_user_id() -> None:
     """Wire proof: the sticky anon-id hint field is cut; ``extra="forbid"``
     rejects it."""
