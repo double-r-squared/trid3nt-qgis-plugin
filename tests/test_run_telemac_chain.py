@@ -1,8 +1,9 @@
-"""P2 tests for the TELEMAC river-dye local solve seam (run_telemac).
+"""Tests for the TELEMAC local solve seam (run_telemac).
 
-Covers the registration + the LocalSolverSpec shape + the classify_exit metrics
-fold, WITHOUT docker / TELEMAC (pure Python; the container build-time smoke and
-the through-the-seam dev proof cover the live path).
+Covers the registration of every leg + the LocalSolverSpec shape + the exit
+classification's metrics fold, WITHOUT docker / TELEMAC (pure Python; the
+container build-time smoke and the through-the-seam dev proof cover the live
+path).
 """
 
 from __future__ import annotations
@@ -26,6 +27,15 @@ def test_telemac_registered_in_solver_workflow_registry():
     assert SOLVER_WORKFLOW_REGISTRY.get("telemac_river_dye") == LOCAL_DOCKER_WORKFLOW_NAME
 
 
+def test_every_leg_registers_under_its_own_name():
+    for solver in (T.TELEMAC_SOLVER_NAME, T.TOMAWAC_SOLVER_NAME,
+                   T.ARTEMIS_SOLVER_NAME, T.TELEMAC3D_SOLVER_NAME,
+                   T.TELEMAC_COASTAL_SOLVER_NAME):
+        assert SOLVER_WORKFLOW_REGISTRY.get(solver) == LOCAL_DOCKER_WORKFLOW_NAME
+        spec = LOCAL_SOLVER_SPEC_REGISTRY[solver]()
+        assert spec.solver == solver and spec.network == "none"
+
+
 def test_telemac_local_spec_factory_registered():
     assert "telemac_river_dye" in LOCAL_SOLVER_SPEC_REGISTRY
     factory = LOCAL_SOLVER_SPEC_REGISTRY["telemac_river_dye"]
@@ -41,7 +51,7 @@ def test_telemac_local_spec_factory_registered():
 
 def test_build_argv_is_sfincs_style_volume_mount(tmp_path, monkeypatch):
     monkeypatch.setenv("TRID3NT_TELEMAC_IMAGE", "trid3nt-local/telemac:latest")
-    spec = T.telemac_local_spec()
+    spec = LOCAL_SOLVER_SPEC_REGISTRY["telemac_river_dye"]()
     rundir = tmp_path / "run-01"
     rundir.mkdir()
     argv = spec.build_argv("RUNID123", rundir, [])
@@ -56,7 +66,7 @@ def test_build_argv_is_sfincs_style_volume_mount(tmp_path, monkeypatch):
 
 def test_build_argv_honors_image_env_override(tmp_path, monkeypatch):
     monkeypatch.setenv("TRID3NT_TELEMAC_IMAGE", "custom/telemac:9.9")
-    spec = T.telemac_local_spec()
+    spec = LOCAL_SOLVER_SPEC_REGISTRY["telemac_river_dye"]()
     argv = spec.build_argv("R", tmp_path, ["--extra"])
     assert argv[-2] == "custom/telemac:9.9"
     assert argv[-1] == "--extra"  # appended after the image (SFINCS parity)
@@ -73,7 +83,7 @@ def test_classify_exit_ok_folds_metrics(tmp_path):
         result_slf="r2d_river.slf", npoin=812, nelem=1440, reach_name="snake",
         centerline_length_m=5900.0, lb_order=["inflow", "outflow"], wall_s=42.0,
     )
-    status, code, err, extra = T._classify_exit(tmp_path, 0)
+    status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)
     assert status == "ok" and code == 0 and err is None
     assert extra["correct_end"] is True
     assert extra["n_frames"] == 19
@@ -84,9 +94,9 @@ def test_classify_exit_ok_folds_metrics(tmp_path):
 
 def test_classify_exit_nonzero_process_is_error(tmp_path):
     _write_metrics(tmp_path, correct_end=True, n_frames=5)
-    status, code, err, extra = T._classify_exit(tmp_path, 137)
+    status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 137)
     assert status == "error" and code == 137
-    assert "non-zero code 137" in err
+    assert "telemac_river_dye exited with non-zero code 137" in err
     # metrics still folded so the failure carries context
     assert extra["n_frames"] == 5
 
@@ -95,13 +105,13 @@ def test_classify_exit_clean_exit_but_no_correct_end_is_error(tmp_path):
     _write_metrics(
         tmp_path, correct_end=False, error="TELEMAC did not reach CORRECT END OF RUN",
     )
-    status, code, err, extra = T._classify_exit(tmp_path, 0)
+    status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)
     assert status == "error" and code == 2
     assert "CORRECT END" in err
 
 
 def test_classify_exit_missing_metrics_falls_back_to_exit_code(tmp_path):
     # No metrics file at all -> trust the process exit code (clean -> ok).
-    status, code, err, extra = T._classify_exit(tmp_path, 0)
+    status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)
     assert status == "ok" and code == 0 and err is None
     assert extra == {}

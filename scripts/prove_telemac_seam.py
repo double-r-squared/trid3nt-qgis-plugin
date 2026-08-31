@@ -5,7 +5,7 @@ NOT the agent, NOT an LLM tool, NOT a direct P1 call. This writes a
 worker-contract manifest for the Snake River reach to MinIO, then invokes the
 solve through ``tools.simulation.solver.run_solver(solver='telemac_river_dye', ...)`` under
 TRID3NT_SOLVER_BACKEND=local-docker -- i.e. the SAME dispatch path the agent uses
-(LOCAL_SOLVER_SPEC_REGISTRY -> telemac_local_spec -> docker run
+(LOCAL_SOLVER_SPEC_REGISTRY -> the registered spec -> docker run
 trid3nt-local/telemac:latest -v <rundir>:/data). It then polls
 ``wait_for_completion`` and confirms:
   * docker run completed,

@@ -1847,3 +1847,58 @@ Pointer scrubs that went with it:
 - `workers/README.md` drops the HELD roster entry.
 
 Dated records that name the old path are left as written: `docs/validation/worker-loc-ledger.md`'s row-0 table measures a git ref, and the ADRs, metrics rows and conformance walks are records of what was true when they were taken.
+
+## The worker's deck tests follow their subject, and five solver seams become one (2026-08-30)
+
+Stage 1 of the worker-unification wave. Everything below is a deletion the
+server-side authoring substrate makes possible; nothing here changes what runs.
+
+- `workers/telemac/tests/` loses ten test modules (1,472 lines) plus
+  `fixtures_longview_water.json` (375 KB), moved to
+  `/home/nate/Documents/trid3nt-attic/workers/telemac/tests/`. Every one of them
+  imported a module Stage 0 deleted: `telemac_river_dye_build`
+  (test_constitutive_physics 166, test_gaia_erodible 155, test_nestor_dredging
+  125, test_rain_forcing 89, test_waqtel_decay 204, test_waqtel_o2 119,
+  test_water_polygon_domain 83), `telemac_coastal_build` (test_coastal_build
+  78), `rog_build` (test_rog_build 327), and the purged
+  `model_river_dye_release_scenario` server module (test_classify_substance
+  126). CONDITION MET for the seven deck tests: their assertions are repointed
+  at the authored text in `tests/test_telemac_author_decks.py` (37 tests, in the
+  offline suite, which `workers/` never was - no slice collects it). CONDITION
+  for the other three: their subjects are the deleted in-worker MESH builders
+  and the coastal pipeline, which the mesh router and the DARK fork ruling own
+  now; no assertion of theirs describes code in this tree. `fixtures_longview_
+  water.json` was the water-polygon test's only reader - it is also the 375 KB
+  fixture Stage 4's `.dockerignore` was going to have to exclude, and it now
+  leaves the tree instead. `test_artemis_real_structure.py` and
+  `test_telemac3d_vertical_grid.py` STAY: their builders stay live in-worker
+  behind the unified dispatch under the fork ruling.
+- `workflows/telemac/run_telemac.py` 569 -> 187 lines. Five near-identical
+  `_classify_*_exit` functions, five `*_local_spec` factories, five `register_*`
+  functions and five `_*_COMPLETION_METRIC_KEYS` tuples collapse to one
+  `_classify(label)` closure, one `make_spec(solver, prefix)` factory, one
+  registration loop over a `{solver: stream prefix}` table and one
+  `_COMPLETION_METRIC_KEYS` set. CONDITION MET: the per-leg key tuples were only
+  ever applied as `if k in metrics`, so a union filters identically for every
+  leg - a leg does not write another leg's keys. The five solver NAMES are kept
+  (run-listing identity). `tests/test_run_telemac_chain.py` reads the new surface
+  and gains a per-leg registration pin.
+- `open_water.py::stage_open_water_manifest` -> `stage_telemac_manifest`, and
+  the two hand-rolled manifest writers beside it die: `deck.py::stage_manifest`
+  loses its bucket check, its document assembly and its `put_object` (-20 lines,
+  and with them the module's `json` and `os` imports), and
+  `rain_on_grid.py::_stage_inputs` loses the same (-6). CONDITION MET: both now
+  decide only their own outputs list and delegate; the reach path's typed
+  `TELEMAC_DYE_STAGING_FAILED` / `TELEMAC_ROG_STAGING_FAILED` codes are preserved
+  by translating the one writer's error at the seam.
+- `selafin_cli_driver.py`'s `_OPEN`/`_LAND` code pair and the `open_nodes`
+  parameter die with them: one `_ROLE_CODES` table keyed by boundary role, and
+  `roles={...}` on `write_telemac_pair`. CONDITION MET: om2d's open-boundary
+  designation passes `{"open": nodes}` and writes the identical `(5,4,4,4)` quad;
+  `tests/test_mesh_om2d.py` reads the roles the writer was handed.
+
+Duplication this stage KNOWINGLY leaves, resolved in Stage 2:
+`oil_templates/oil_flot_template.f` now exists both under
+`workers/telemac/oil_templates/` (read by the live worker's oil branch) and
+under `trid3nt_server/workflows/telemac/steps/oil_templates/` (read by the
+server author). Stage 2 deletes the worker branch and its copy.

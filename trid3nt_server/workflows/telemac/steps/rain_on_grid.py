@@ -463,13 +463,15 @@ def _stage_inputs(deck: dict[str, Any]) -> str:
         s3.put_object(Bucket=bucket, Key=key, Body=Path(src).read_bytes())
         inputs.append({"gs_uri": f"s3://{bucket}/{key}", "dest": name})
 
-    manifest = {"reach": deck["config"], "run_id": run_tag, "inputs": inputs,
-                "telemac_args": [], "outputs": deck["outputs"]}
-    key = f"{_STAGE_PREFIX}/{run_tag}/manifest.json"
-    s3.put_object(Bucket=bucket, Key=key,
-                  Body=json.dumps(manifest, indent=2).encode("utf-8"),
-                  ContentType="application/json")
-    return f"s3://{bucket}/{key}"
+    from .open_water import OpenWaterError, stage_telemac_manifest
+
+    try:
+        return stage_telemac_manifest(
+            section="reach", config=deck["config"], run_tag=run_tag,
+            outputs=deck["outputs"], inputs=inputs, prefix=_STAGE_PREFIX)
+    except OpenWaterError as exc:
+        raise RainOnGridError(str(exc),
+                              error_code="TELEMAC_ROG_STAGING_FAILED") from exc
 
 
 async def solve_rain_on_grid(*, deck: dict[str, Any],

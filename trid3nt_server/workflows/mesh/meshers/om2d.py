@@ -715,10 +715,13 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
     files: dict[str, str] = {}
     pair = write_telemac_pair(
         rundir, x=points_m[:, 0], y=points_m[:, 1], cells=cells, bed=bed_up,
-        open_nodes=open_nodes, title="TRID3NT OM2D MESH")
+        roles={"open": open_nodes} if open_nodes else {},
+        title="TRID3NT OM2D MESH")
     files["slf_uri"] = str(pair["geo_slf"])
     files["cli_uri"] = str(pair["cli"])
     probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
+    probes["liquid_boundary_roles"] = list(
+        pair["stats"].get("liquid_boundary_roles") or [])
     probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
     return files, info, probes
 

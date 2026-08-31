@@ -28,7 +28,8 @@ from .open_water import (
     real_lake_bathy_label,
     solved_domain_bbox,
     solves_on_real_bed,
-    stage_open_water_manifest,
+    case_section,
+    stage_telemac_manifest,
     staged_bed_inputs,
 )
 from .errors import (
@@ -112,7 +113,8 @@ __all__ = [
     "ReviewResolvedInputs",
     "SCOUR_KEYWORDS", "Solve", "SolveOpenWater", "Stratified",
     "download_open_water_result", "publish_coastal_products",
-    "solve_open_water", "solved_domain_bbox", "stage_open_water_manifest",
+    "solve_open_water", "solved_domain_bbox", "stage_telemac_manifest",
+    "case_section",
     "staged_bed_inputs", "solves_on_real_bed", "fetch_domain_bed",
     "great_lake_for", "real_lake_bathy_label",
     "Wave", "write_coastal_deck",

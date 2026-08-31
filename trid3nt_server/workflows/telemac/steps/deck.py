@@ -11,9 +11,7 @@ not use a module leaves the deck byte-identical to the historical one.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
 from typing import Any, Mapping
 
 from trid3nt_contracts import new_ulid
@@ -63,14 +61,12 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
     container starts, ``{gs_uri, dest}`` per entry. It carries the centerline,
     the banks and the bed this pipeline used to fetch for itself, which is why
     the worker needs no network.
-    """
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
 
-    cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
-    if not cache_bucket:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_STAGING_FAILED",
-            "TRID3NT_CACHE_BUCKET must be set to stage the TELEMAC manifest.")
+    The document itself is written by the ONE manifest writer; what is decided
+    here is the reach family's own outputs list.
+    """
+    from .open_water import OpenWaterError, stage_telemac_manifest
+
     outputs = ["r2d_river.slf", "river.slf", "river.cli", "t2d_river.cas",
                "full_listing.log", "telemac_metrics.json"]
     # The GAIA deposition SELAFIN + its steering file ship for a sediment run so
@@ -83,21 +79,14 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
         # comes back with the geometry rather than dying with the run directory.
         outputs = ["river.slf", "river.cli", "river_mesh.npz",
                    "mesh_preview.geojson", "telemac_metrics.json"]
-    manifest: dict[str, Any] = {
-        "reach": reach,
-        "run_id": run_tag,
-        "inputs": list(inputs or []),
-        "telemac_args": [],  # the image CMD drives the entrypoint
-        "outputs": outputs,
-    }
-    if mesh_only:
-        manifest["mesh_only"] = True
-    key = f"telemac/{run_tag}/manifest.json"
-    _get_s3_client().put_object(
-        Bucket=cache_bucket, Key=key,
-        Body=json.dumps(manifest, indent=2).encode("utf-8"),
-        ContentType="application/json")
-    return f"s3://{cache_bucket}/{key}"
+    try:
+        return stage_telemac_manifest(
+            section="reach", config=reach, run_tag=run_tag, outputs=outputs,
+            inputs=inputs, prefix="telemac",
+            extra={"mesh_only": True} if mesh_only else None)
+    except OpenWaterError as exc:
+        raise TelemacDyeScenarioError("TELEMAC_DYE_STAGING_FAILED",
+                                      str(exc)) from exc
 
 
 def _resolved_physics(friction_coefficient: float | None, friction_law: Any,

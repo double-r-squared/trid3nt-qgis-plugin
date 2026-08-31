@@ -106,3 +106,55 @@ def test_stage_manifest_requires_cache_bucket(monkeypatch):
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
     with pytest.raises(TelemacDyeScenarioError):
         stage_manifest({"name": "test-reach"}, "RUNTAG")
+
+
+# --------------------------------------------------------------------------- #
+# ONE manifest writer, and the CASE section it gained.
+# --------------------------------------------------------------------------- #
+def test_the_case_section_names_the_engine_the_deck_and_the_results():
+    from trid3nt_server.workflows.telemac.steps import case_section
+
+    case = case_section(
+        module="telemac2d", steering="t2d_river.cas",
+        results=["r2d_river.slf", "full_listing.log"], family="river_dye",
+        echo={"utm_epsg": 32610, "npoin": 812, "bed_source": "3dep"})
+    assert case["module"] == "telemac2d"
+    assert case["steering"] == "t2d_river.cas"
+    assert case["results"] == ["r2d_river.slf", "full_listing.log"]
+    assert case["family"] == "river_dye"
+    assert case["echo"]["utm_epsg"] == 32610
+    # no user fortran was asked for, so the key is ABSENT rather than null: the
+    # worker's strict gate reads a present key as a file it must compile.
+    assert "user_fortran" not in case
+    assert "user_fortran" in case_section(
+        module="telemac2d", steering="t2d_river.cas", results=[],
+        family="river_dye", echo={}, user_fortran="user_fortran")
+
+
+def test_the_one_writer_carries_the_case_through(monkeypatch):
+    import trid3nt_server.workflows.solver.solver as solver_mod
+    from trid3nt_server.workflows.telemac.steps import (
+        case_section,
+        stage_telemac_manifest,
+    )
+
+    fake = _FakeS3()
+    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
+    uri = stage_telemac_manifest(
+        section="agitation", config={"name": "harbour"}, run_tag="RUNTAG",
+        outputs=["res.slf"], prefix="artemis",
+        case=case_section(module="artemis", steering="artemis.cas",
+                          results=["res.slf"], family="agitation",
+                          echo={"npoin": 400}))
+    assert uri == "s3://test-cache/artemis/RUNTAG/manifest.json"
+    doc = json.loads(fake.put["Body"])
+    assert doc["agitation"] == {"name": "harbour"}
+    assert doc["case"]["module"] == "artemis"
+    assert doc["case"]["echo"]["npoin"] == 400
+    assert doc["telemac_args"] == [] and doc["inputs"] == []
+
+
+def test_a_manifest_with_no_case_carries_no_case_key(monkeypatch):
+    doc = _stage(monkeypatch, {"name": "test-reach"})
+    assert "case" not in doc

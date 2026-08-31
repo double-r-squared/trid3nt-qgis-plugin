@@ -34,15 +34,17 @@ _CONTAINER_TIMEOUT_S = 1800
 
 
 def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
-                       bed: Any, open_nodes: Any = (),
+                       bed: Any, roles: Mapping[str, Any] | None = None,
                        title: str = "TRID3NT MESH") -> dict[str, Any]:
     """Write the SELAFIN geometry and its ``.cli`` -> the two paths and the stats.
 
-    ``open_nodes`` are the node indices a solve forces at; every other boundary
-    node is written as a solid wall. The stats carry what the driver MEASURED -
-    the boundary node count, the liquid-boundary numbering, whether the IPOBO it
-    wrote is the permutation TELEMAC requires - so a caller reports the numbering
-    rather than asserting it.
+    ``roles`` maps a boundary role (``inflow``, ``outflow``, ``open``) to the node
+    indices carrying it; every other boundary node is written as a solid wall.
+    The stats carry what the driver MEASURED - the boundary node count, the
+    liquid-boundary numbering AND the role of each numbered liquid boundary,
+    whether the IPOBO it wrote is the permutation TELEMAC requires - so a caller
+    reports the numbering rather than asserting it, and a deck is authored once
+    against the order the solver will use.
     """
     import numpy as np
 
@@ -55,7 +57,8 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     stats = _run_driver(rundir, {
         "mesh_npz": f"/data/{npz.name}", "geo_slf": "/data/mesh.slf",
         "cli": "/data/mesh.cli", "title": title,
-        "open_nodes": [int(n) for n in open_nodes]})
+        "roles": {str(role): [int(n) for n in nodes]
+                  for role, nodes in (roles or {}).items()}})
     return {"geo_slf": rundir / "mesh.slf", "cli": rundir / "mesh.cli",
             "stats": stats}
 

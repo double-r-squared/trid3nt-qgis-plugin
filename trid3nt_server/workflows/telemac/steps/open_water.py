@@ -48,7 +48,8 @@ __all__ = [
     "download_open_water_result",
     "solve_open_water",
     "solved_domain_bbox",
-    "stage_open_water_manifest",
+    "case_section",
+    "stage_telemac_manifest",
 ]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
@@ -223,24 +224,46 @@ def staged_bed_inputs(bed: Mapping[str, Any] | None, *, real: bool,
     return [{"gs_uri": str(uri), "dest": STAGED_BED_DEST}]
 
 
-def stage_open_water_manifest(*, section: str, config: dict[str, Any],
-                              run_tag: str, outputs: list[str],
-                              inputs: list[dict[str, str]] | None = None,
-                              prefix: str | None = None) -> str:
+def case_section(*, module: str, steering: str, results: list[str], family: str,
+                 echo: Mapping[str, Any],
+                 user_fortran: str | None = None) -> dict[str, Any]:
+    """The CASE a worker runs: which engine, which deck, what it must produce.
+
+    ``module`` names the engine binary, ``steering`` the authored deck it reads,
+    ``results`` every file that must exist for the run to have succeeded, and
+    ``family`` the run's identity in a listing.
+
+    ``echo`` is what the SERVER already knows and the worker cannot learn from
+    the files it is handed - the UTM zone, the bbox, the node and element counts,
+    the edge the mesh was measured at, which dataset the bed came from. The
+    worker copies it into its metrics VERBATIM: a fact re-derived in the
+    container is a second answer that can disagree with the first.
+    """
+    return {"module": module, "steering": steering,
+            **({"user_fortran": user_fortran} if user_fortran else {}),
+            "results": list(results), "family": family, "echo": dict(echo)}
+
+
+def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
+                           run_tag: str, outputs: list[str],
+                           inputs: list[dict[str, str]] | None = None,
+                           prefix: str | None = None,
+                           case: Mapping[str, Any] | None = None,
+                           extra: Mapping[str, Any] | None = None) -> str:
     """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
 
-    ``section`` is the key the worker's ENTRYPOINT dispatches on (``coastal``,
-    ``wave``, ``agitation``, ``stratified``). ``prefix`` is where the manifest is
-    STAGED, and it is not always the same word - the wave module answers to
-    ``wave`` inside the document while its manifests live under ``tomawac/``, and
-    the harbour module to ``agitation`` under ``artemis/``. Collapsing the two
-    into one name is how a manifest lands somewhere the worker looks and carries a
-    key it does not read, which is a silent fall-through to a different pipeline
-    rather than an error.
+    THE manifest writer for the whole family. ``section`` is the key the worker's
+    ENTRYPOINT dispatches on. ``prefix`` is where the manifest is STAGED, and it
+    is not always the same word - the wave module answers to ``wave`` inside the
+    document while its manifests live under ``tomawac/``, and the harbour module
+    to ``agitation`` under ``artemis/``. Collapsing the two into one name is how a
+    manifest lands somewhere the worker looks and carries a key it does not read,
+    which is a silent fall-through rather than an error.
 
     ``inputs`` is what the launcher stages into the run directory before the
-    container starts, ``{gs_uri, dest}`` per entry. It carries the bed these
-    domains used to fetch for themselves, which is why the worker needs no network.
+    container starts, ``{gs_uri, dest}`` per entry. It carries everything these
+    domains used to fetch for themselves, which is why the worker needs no
+    network. ``case`` is the authored run itself - see :func:`case_section`.
     """
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -249,8 +272,11 @@ def stage_open_water_manifest(*, section: str, config: dict[str, Any],
             error_code="TELEMAC_STAGING_FAILED")
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
-    manifest = {section: config, "run_id": run_tag, "inputs": list(inputs or []),
-                "telemac_args": [], "outputs": list(outputs)}
+    manifest = {section: dict(config), "run_id": run_tag,
+                "inputs": list(inputs or []), "telemac_args": [],
+                "outputs": list(outputs), **dict(extra or {})}
+    if case is not None:
+        manifest["case"] = dict(case)
     key = f"{prefix or section}/{run_tag}/manifest.json"
     _get_s3_client().put_object(
         Bucket=cache_bucket, Key=key,
@@ -339,7 +365,7 @@ async def solve_open_water(*, deck: dict[str, Any],
     solver, section = deck["solver"], deck["section"]
     run_tag = deck["run_tag"]
     manifest_uri = await asyncio.to_thread(
-        stage_open_water_manifest, section=section, config=deck["config"],
+        stage_telemac_manifest, section=section, config=deck["config"],
         run_tag=run_tag, outputs=deck["outputs"], inputs=deck.get("inputs"),
         prefix=deck.get("prefix"))
     logger.info("telemac %s staged manifest run_tag=%s name=%s -> %s",

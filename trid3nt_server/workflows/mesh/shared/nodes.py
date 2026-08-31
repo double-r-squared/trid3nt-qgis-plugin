@@ -16,6 +16,7 @@ from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
 
 __all__ = [
     "MeshNodeError",
+    "fit_downstream_bed",
     "node_slopes_from_mesh",
     "read_2dm_mesh",
     "reproject_nodes_to_utm",
@@ -91,6 +92,67 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
         finite = vals[np.isfinite(vals)]
         vals[np.isnan(vals)] = float(finite.mean()) if finite.size else 0.0
     return vals
+
+
+def fit_downstream_bed(points_utm: Any, centerline_utm: Any, sampled_z: Any, *,
+                       min_slope: float, max_slope: float
+                       ) -> tuple[Any, dict[str, Any]]:
+    """A monotone downstream bed fitted to a sampled DEM -> ``(bed, stats)``.
+
+    A real canyon DEM is the SURFACE - rim, vegetation and water together - and
+    along a thalweg it is noisy enough to run uphill between adjacent nodes. A
+    shallow-water solve on a bed that runs uphill ponds instead of flowing, so the
+    fit is what the solve gets: project every node onto the centerline for an
+    along-channel distance, fit ``z ~ z0 - slope * s`` over the nodes that sampled,
+    clamp the slope into the stated band, and lay a clean plane from a robust
+    upstream level.
+
+    The clamp is the enforcement, and both numbers travel: ``measured_slope`` is
+    what the terrain said and ``enforced_slope`` is what the solve got, so a bed
+    that was overruled says so rather than presenting the overrule as the DEM.
+    """
+    import numpy as np
+
+    z_raw = np.asarray(sampled_z, dtype=float)
+    s_node = _along_channel_distance(points_utm, centerline_utm)
+    valid = np.isfinite(z_raw)
+    if not valid.any():
+        raise MeshNodeError(
+            "MESH_BED_UNSAMPLED",
+            f"the bed raster covers none of the {z_raw.size} mesh nodes (every "
+            "sample is nodata), so no downstream bed can be fitted from it.")
+    design = np.column_stack([np.ones(int(valid.sum())), s_node[valid]])
+    coef, *_ = np.linalg.lstsq(design, z_raw[valid], rcond=None)
+    measured = float(-coef[1])  # positive = downhill
+    slope = float(np.clip(measured, min_slope, max_slope))
+    top = float(np.nanpercentile(z_raw[valid], 20))
+    bed = top - slope * s_node
+    return bed, {
+        "dem_min": float(np.nanmin(z_raw)), "dem_max": float(np.nanmax(z_raw)),
+        "n_dem_nan": int((~valid).sum()),
+        "measured_slope": measured, "enforced_slope": slope,
+        "bed_top_m": top, "bed_drop_m": float(slope * s_node.max()),
+        "reach_len_m": float(s_node.max()),
+    }
+
+
+def _along_channel_distance(points_utm: Any, centerline_utm: Any) -> Any:
+    """Distance along ``centerline_utm`` of each node's nearest point on it."""
+    import numpy as np
+
+    pts = np.asarray(points_utm, dtype=float)
+    line = np.asarray(centerline_utm, dtype=float)
+    a, b = line[:-1], line[1:]
+    seg = b - a
+    length2 = np.maximum((seg ** 2).sum(axis=1), 1e-12)
+    cum = np.concatenate([[0.0], np.cumsum(np.sqrt(length2))])
+    # (n_nodes, n_segments) projection parameter, clamped to the segment.
+    delta = pts[:, None, :] - a[None, :, :]
+    t = np.clip((delta * seg[None, :, :]).sum(axis=2) / length2[None, :], 0.0, 1.0)
+    foot = a[None, :, :] + t[:, :, None] * seg[None, :, :]
+    nearest = np.argmin(((pts[:, None, :] - foot) ** 2).sum(axis=2), axis=1)
+    rows = np.arange(pts.shape[0])
+    return cum[nearest] + t[rows, nearest] * np.sqrt(length2[nearest])
 
 
 def node_slopes_from_mesh(points_utm: Any, cells: Any, bed_elev: Any) -> Any:

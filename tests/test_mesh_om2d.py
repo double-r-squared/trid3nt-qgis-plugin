@@ -159,7 +159,8 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None):
         Path(rundir, "mesh.slf").write_bytes(b"slf")
         Path(rundir, "mesh.cli").write_text("2 2 2\n")
         return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
-                "stats": {"nptfr": 4, "n_liquid_boundaries": 1}}
+                "stats": {"nptfr": 4, "n_liquid_boundaries": 1,
+                          "liquid_boundary_roles": ["open"]}}
 
     shoreline = tmp_path / "shoreline" / "GSHHS_i_L1.shp"
     shoreline.parent.mkdir(parents=True, exist_ok=True)
@@ -456,11 +457,12 @@ def _emit_with(monkeypatch, tmp_path, boundary):
     written: dict[str, object] = {}
 
     def fake_pair(rundir, **kw):
-        written["open_nodes"] = list(kw["open_nodes"])
+        written["roles"] = {r: list(n) for r, n in kw["roles"].items()}
         Path(rundir, "mesh.slf").write_bytes(b"slf")
         Path(rundir, "mesh.cli").write_text("2 2 2\n")
         return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
-                "stats": {"nptfr": 4, "n_liquid_boundaries": 1}}
+                "stats": {"nptfr": 4, "n_liquid_boundaries": 1,
+                          "liquid_boundary_roles": ["open"]}}
 
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
@@ -469,14 +471,14 @@ def _emit_with(monkeypatch, tmp_path, boundary):
         tmp_path, lonlat=_POINTS, cells=_CELLS, points_m=_POINTS,
         bed_up=np.full(4, -5.0), boundary=boundary,
         domain_source="GSHHG land polygons (GSHHS_i_L1.shp)")
-    info["_written_open_nodes"] = written.get("open_nodes")
+    info["_written_roles"] = written.get("roles")
     return files, info, probes
 
 
 def test_the_cli_is_handed_exactly_the_section_nodes(monkeypatch, tmp_path):
     _stub_sections(monkeypatch, [_section([1, 3], -30.0, (-75.74, 36.14))])
     _, info, _ = _emit_with(monkeypatch, tmp_path, {"side": "east"})
-    assert info["_written_open_nodes"] == [1, 3]
+    assert info["_written_roles"] == {"open": [1, 3]}
     assert info["open_node_count"] == 2
     assert info["open_boundary_sections"] == 1
 
@@ -502,7 +504,7 @@ def test_a_land_designation_opens_nothing_and_identifies_nothing(
     _, info, _ = _emit_with(monkeypatch, tmp_path,
                             {"side": "east", "type": "land"})
     assert info["designation"] == "land"
-    assert info["_written_open_nodes"] == []
+    assert info["_written_roles"] == {}
 
 
 # --------------------------------------------------------------------------- #
