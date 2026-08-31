@@ -1,10 +1,12 @@
 """What a mesh's NODES carry: their projection, a sampled field, a slope, a read.
 
-Four array primitives every mesher and every consumer of an accepted mesh needs,
+Six array primitives every mesher and every consumer of an accepted mesh needs,
 and none of them belongs to one mesher: a solve works in METRES, a bed is a
 raster sampled AT the nodes, a terrain slope is read off the mesh's own
 piecewise-linear surface rather than off a finer grid the run does not resolve,
-and an authored ``.2dm`` is parsed back into the same three arrays.
+an authored ``.2dm`` is parsed back into the same three arrays - once from a path
+and once from an accepted mesh's own display face - and the channel a bed is laid
+down along is read ONCE into one head-to-tail order.
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ __all__ = [
     "fit_downstream_bed",
     "node_slopes_from_mesh",
     "read_2dm_mesh",
+    "read_accepted_mesh_nodes",
+    "read_centerline_utm",
     "reproject_nodes_to_utm",
     "sample_raster_at_nodes",
 ]
@@ -92,6 +96,88 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
         finite = vals[np.isfinite(vals)]
         vals[np.isnan(vals)] = float(finite.mean()) if finite.size else 0.0
     return vals
+
+
+def read_accepted_mesh_nodes(display_uri: str, *, utm_epsg: int | None = None
+                             ) -> tuple[Any, Any, Any, Any]:
+    """An accepted mesh's display face -> ``(points_utm, cells, bed, points_lonlat)``.
+
+    The ``.2dm`` is the ONE readable record of the node numbering the geometry
+    file carries, so a field written against these arrays lands on the nodes the
+    solver has. ``points_lonlat`` is those same nodes projected back and is
+    ``None`` unless a zone is named - a raster sampled at them is then sampled at
+    this mesh's own nodes rather than at a second triangulation of the domain.
+    """
+    import tempfile
+
+    import numpy as np
+
+    from trid3nt_server.tools.cache import read_object_bytes_s3
+
+    uri = str(display_uri)
+    local = Path(tempfile.mkdtemp(prefix="mesh-nodes-")) / "mesh.2dm"
+    local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
+                      else Path(uri).read_bytes())
+    points_utm, cells, bed = read_2dm_mesh(str(local))
+    if utm_epsg is None:
+        return points_utm, cells, bed, None
+    from pyproj import Transformer
+
+    lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
+        points_utm[:, 0], points_utm[:, 1])
+    return points_utm, cells, bed, np.column_stack([lon, lat])
+
+
+def read_centerline_utm(source: Any, utm_epsg: int, *,
+                        start_lonlat: Any = None) -> Any:
+    """A channel source -> ONE head-to-tail (N,2) polyline in the mesh's metres.
+
+    THE reading of a centerline. A navigated flowline arrives as many rows whose
+    order in the document says nothing, so the parts are joined into one
+    continuous line - the parts' own directions chain them, which is why a
+    shuffled collection normalizes to the same line - and a document whose parts
+    stay separate refuses rather than being read as a vertex heap.
+
+    ``start_lonlat`` is the end the CHAIN knows is the head: the navigate seed the
+    flowline was walked downstream from. With it the order is a fact rather than
+    whichever way the merge came out; without it the merged direction stands.
+    """
+    import numpy as np
+    from pyproj import Transformer
+    from shapely.geometry import shape as _shape
+    from shapely.ops import linemerge
+
+    from trid3nt_server.tools.processing._geometry_common import (
+        flatten_geometries, read_geometry_doc,
+    )
+
+    parts: list[Any] = []
+    for geometry in flatten_geometries(read_geometry_doc(source)):
+        if str(geometry.get("type") or "") not in ("LineString", "MultiLineString"):
+            continue
+        shape = _shape(geometry)
+        parts += [p for p in getattr(shape, "geoms", [shape]) if not p.is_empty]
+    if not parts:
+        raise MeshNodeError(
+            "MESH_CENTERLINE_NO_LINE",
+            f"the channel source {source!r} carries no polyline, so there is no "
+            "centerline to read.")
+    merged = linemerge(parts) if len(parts) > 1 else parts[0]
+    pieces = list(getattr(merged, "geoms", [merged]))
+    if len(pieces) != 1:
+        raise MeshNodeError(
+            "MESH_CENTERLINE_NOT_CONTINUOUS",
+            f"the {len(parts)} channel part(s) join into {len(pieces)} separate "
+            "lines, so they describe a network rather than one reach and no "
+            "head-to-tail order exists over them.")
+    coords = np.asarray(pieces[0].coords, dtype=float)
+    if start_lonlat is not None:
+        head = np.asarray([float(start_lonlat[0]), float(start_lonlat[1])])
+        if (np.hypot(*(coords[-1] - head)) < np.hypot(*(coords[0] - head))):
+            coords = coords[::-1]
+    tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    x, y = tr.transform(coords[:, 0], coords[:, 1])
+    return np.column_stack([x, y]).astype(float)
 
 
 def fit_downstream_bed(points_utm: Any, centerline_utm: Any, sampled_z: Any, *,

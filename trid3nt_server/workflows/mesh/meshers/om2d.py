@@ -145,9 +145,11 @@ _FIELDS = (
               default="fetch_topobathy",
               doc="what paints the node elevations: a raster fetcher's name, a "
                   "uri/path to a raster already fetched, or {'raster': <either>, "
-                  "'downstream_along': <channel line>} to lay the sampled surface "
-                  "down as a monotone downstream plane along that line. The bed "
-                  "also drives the wavelength sizing term"),
+                  "'downstream_along': <channel line>, 'downstream_from': "
+                  "<(lon, lat) of the line's upstream end>} to lay the sampled "
+                  "surface down as a monotone downstream plane along that line, "
+                  "read head-to-tail from that end. The bed also drives the "
+                  "wavelength sizing term"),
     MeshField("boundaries", types=(dict,),
               doc="{role: face} - which stretch of the boundary carries which "
                   "role (inflow | outflow | open), each face a geometry the chain "
@@ -218,7 +220,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
             "edge band, or mesh the region's own polygon as the domain.")
     dem_path, bed_provenance, fallback_note = _bed_raster(
         state["bed"], aoi, rundir)
-    downstream_along = _downstream_along(state["bed"])
+    downstream_along, downstream_from = _downstream_along(state["bed"])
 
     config: dict[str, Any] = {
         "bbox": list(aoi),
@@ -256,7 +258,8 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
 
     lonlat, cells, bed_up, repaired = _clean_once(lonlat, cells, bed_up)
     points, utm_epsg = reproject_nodes_to_utm(lonlat)
-    bed_up, bed_fit = _fit_bed(points, bed_up, downstream_along, int(utm_epsg))
+    bed_up, bed_fit = _fit_bed(points, bed_up, downstream_along, downstream_from,
+                               int(utm_epsg))
 
     files, boundary_info, boundary_probes = _emit_formats(
         rundir, lonlat=lonlat, cells=cells, points_m=points, bed_up=bed_up,
@@ -496,44 +499,38 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     return dst, _bed_provenance(name, layer), fetch_fallback_note(layer)
 
 
-def _downstream_along(bed: Any) -> Any:
-    """The channel line a fitted bed is laid down along, or ``None``.
+def _downstream_along(bed: Any) -> tuple[Any, Any]:
+    """The channel a fitted bed is laid down along and the end it starts from.
 
     Declared, never inferred: a catchment's bed is the terrain and a reach's is a
     downstream plane, and only the ask knows which this is. A bed named as a plain
     raster is painted as it sampled.
     """
-    return dict(bed).get("downstream_along") if isinstance(bed, Mapping) else None
+    if not isinstance(bed, Mapping):
+        return None, None
+    return dict(bed).get("downstream_along"), dict(bed).get("downstream_from")
 
 
 def _fit_bed(points_m: Any, bed_up: Any, downstream_along: Any,
-             utm_epsg: int) -> tuple[Any, dict[str, Any]]:
+             downstream_from: Any, utm_epsg: int) -> tuple[Any, dict[str, Any]]:
     """Lay the sampled surface down as a monotone downstream plane -> (bed, stats).
 
     A surface DEM along a thalweg runs uphill between adjacent nodes, and a
     shallow-water solve on that ponds instead of flowing. What is fitted, the
     slope band it is held inside and both the measured and the enforced slope are
-    the shared node primitive's; this resolves the declared line into the mesh's
-    own metres and hands it over.
+    the shared node primitive's - and so is the channel READING, so the line this
+    bed slopes along is the same one, in the same order, that every other reader
+    of it sees.
     """
     if downstream_along is None or bed_up is None:
         return bed_up, {}
-    import numpy as np
-    from pyproj import Transformer
+    from trid3nt_server.workflows.mesh.shared.nodes import (
+        fit_downstream_bed, read_centerline_utm,
+    )
 
-    from trid3nt_server.workflows.mesh.shared.nodes import fit_downstream_bed
-
-    _polygons, lines = _split_geometry(read_geometry(downstream_along))
-    if not lines:
-        raise MeshToolError(
-            "MESH_BED_NO_CHANNEL",
-            f"the bed's downstream_along {downstream_along!r} carries no line, so "
-            "there is no channel to fit the bed down; declare the reach's own "
-            "centerline.")
-    tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-    xy = np.asarray(lines, dtype=float)
-    x, y = tr.transform(xy[:, 0], xy[:, 1])
-    bed, stats = fit_downstream_bed(points_m, np.column_stack([x, y]), bed_up,
+    line_m = read_centerline_utm(downstream_along, int(utm_epsg),
+                                 start_lonlat=downstream_from)
+    bed, stats = fit_downstream_bed(points_m, line_m, bed_up,
                                     min_slope=_BED_SLOPE_BAND[0],
                                     max_slope=_BED_SLOPE_BAND[1])
     logger.info("om2d bed fitted downstream: measured slope %.3g -> enforced "

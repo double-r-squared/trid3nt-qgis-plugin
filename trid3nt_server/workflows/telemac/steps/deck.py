@@ -25,6 +25,10 @@ from typing import Any, Mapping
 from trid3nt_contracts import new_ulid
 
 from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.mesh.shared.nodes import (
+    read_accepted_mesh_nodes,
+    read_centerline_utm,
+)
 from trid3nt_server.workflows.mesh.topology import read_topology
 
 from . import author
@@ -126,6 +130,18 @@ def _class_files(substance_class: str, *,
     return results, outputs
 
 
+def _user_fortran_dir(written: Mapping[str, Any]) -> str | None:
+    """The user-Fortran DIRECTORY the author reported, or ``None`` when it wrote none.
+
+    A class whose deck compiles user Fortran states it twice by construction -
+    the steering file's own keyword and the manifest field the runner reads - so
+    both are taken from the ONE report the author hands back rather than from a
+    second opinion here.
+    """
+    fortran = (written or {}).get("fortran")
+    return str(Path(str(fortran)).parent) if fortran else None
+
+
 def _authoring_dir(run_tag: str) -> Path:
     rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
     rundir.mkdir(parents=True, exist_ok=True)
@@ -181,19 +197,6 @@ def _to_utm(source: Any, utm_epsg: int) -> Any:
     return _transform(tr.transform, geometry)
 
 
-def _centerline_utm(source: Any, utm_epsg: int) -> Any:
-    """The reach centerline as one (N,2) array of the mesh's own metres."""
-    import numpy as np
-    from shapely.ops import linemerge
-
-    geometry = _to_utm(source, utm_epsg)
-    parts = [p for p in getattr(geometry, "geoms", [geometry])
-             if p.geom_type == "LineString"]
-    merged = linemerge(parts) if len(parts) > 1 else parts[0]
-    line = min(getattr(merged, "geoms", [merged]), key=lambda p: -p.length)
-    return np.asarray(line.coords, dtype=float)
-
-
 def _source_point_utm(centerline: Any, release_lonlat: Any, utm_epsg: int,
                       spill_fraction: float) -> tuple[float, float]:
     """Where the release enters the water, in the mesh's metres.
@@ -222,16 +225,8 @@ def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     back TO is the channel that is there - so the parse happens on that path
     rather than on every reach run.
     """
-    import tempfile
-
-    from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.workflows.mesh.shared.nodes import read_2dm_mesh
-
-    uri = _mesh_field(mesh, "display_uri")
-    local = Path(tempfile.mkdtemp(prefix="telemac-mesh-")) / "mesh.2dm"
-    local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
-                      else Path(uri).read_bytes())
-    points, _cells, z = read_2dm_mesh(str(local))
+    points, _cells, z, _lonlat = read_accepted_mesh_nodes(
+        _mesh_field(mesh, "display_uri"))
     return points, z
 
 
@@ -621,11 +616,13 @@ async def write_reach_deck(
     artifact = mesh.get("artifact")
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     centerline_utm = await asyncio.to_thread(
-        _centerline_utm, river["provenance"]["centerline_uri"], utm_epsg)
+        read_centerline_utm, river["provenance"]["centerline_uri"], utm_epsg,
+        start_lonlat=(river["provenance"]["seed_lon"],
+                      river["provenance"]["seed_lat"]))
     node_xy, node_bed = (await asyncio.to_thread(_mesh_nodes, mesh)
                          if class_block.get("dredging") else (None, None))
     rundir = _authoring_dir(run_tag)
-    await asyncio.to_thread(
+    written = await asyncio.to_thread(
         author.author_reach_deck, rundir, deck=deck,
         geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST, results=_RESULT,
         cas_name=_STEERING,
@@ -638,6 +635,8 @@ async def write_reach_deck(
         reach_polygon_utm=(await asyncio.to_thread(_to_utm, reach_polygon, utm_epsg)
                            if class_block.get("dredging") else None),
         node_xy=node_xy, node_bed=node_bed)
+    from .open_water import case_section
+
     results, outputs = _class_files(substance_class,
                                     dredging=bool(class_block.get("dredging")))
     # Every file the author wrote, under its path INSIDE the run directory: the
@@ -648,19 +647,20 @@ async def write_reach_deck(
     return {
         "deck": deck,
         "run_tag": run_tag,
-        "case": {
-            "module": _MODULE, "steering": _STEERING, "results": results,
-            "family": _FAMILY,
+        "case": case_section(
+            module=_MODULE, steering=_STEERING, results=results, family=_FAMILY,
+            # The engine compiles the DIRECTORY the steering file names, so the
+            # manifest channel carries the same directory the author wrote into.
+            user_fortran=_user_fortran_dir(written),
             # What the SERVER measured and the container cannot learn from the
             # files it is handed. The worker copies it into its metrics verbatim.
-            "echo": {"utm_epsg": utm_epsg,
-                     "bbox": [round(float(v), 6)
-                              for v in (getattr(artifact, "bbox", None) or ())],
-                     "npoin": int(mesh.get("node_count") or 0),
-                     "nelem": int(mesh.get("element_count") or 0),
-                     "mesh_size_m": mesh_size_m,
-                     "bed_source": bed_source},
-        },
+            echo={"utm_epsg": utm_epsg,
+                  "bbox": [round(float(v), 6)
+                           for v in (getattr(artifact, "bbox", None) or ())],
+                  "npoin": int(mesh.get("node_count") or 0),
+                  "nelem": int(mesh.get("element_count") or 0),
+                  "mesh_size_m": mesh_size_m,
+                  "bed_source": bed_source}),
         "outputs": outputs,
         "inputs": [
             {"gs_uri": _mesh_field(mesh, "slf_uri"), "dest": _GEOMETRY_DEST},

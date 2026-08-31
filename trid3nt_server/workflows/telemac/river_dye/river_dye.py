@@ -147,7 +147,11 @@ MESH = tool.build_mesh(
     kind="unstructured_tri",
     extent=Ref("reach_polygon"),
     refine={"resolution_m": P.mesh_resolution_m},
-    bed={"raster": DATA.bed, "downstream_along": DATA.centerline},
+    # The centerline is read head-to-tail from the point the navigate was
+    # walked downstream FROM, so the bed slopes the way the river runs
+    # rather than the way the flowline rows happened to merge.
+    bed={"raster": DATA.bed, "downstream_along": DATA.centerline,
+         "downstream_from": [Ref("seed.lon"), Ref("seed.lat")]},
     boundaries={"inflow": Ref("reach_polygon.face_start"),
                 "outflow": Ref("reach_polygon.face_end")},
 )

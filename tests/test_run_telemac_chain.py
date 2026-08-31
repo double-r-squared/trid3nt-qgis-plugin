@@ -79,9 +79,9 @@ def _write_metrics(rundir: Path, **fields) -> None:
 def test_classify_exit_ok_folds_metrics(tmp_path):
     _write_metrics(
         tmp_path,
-        status="ok", correct_end=True, n_frames=19, dye_cmax_final=100.0,
+        status="ok", correct_end=True, n_frames=19, module="telemac2d",
         result_slf="r2d_river.slf", npoin=812, nelem=1440, reach_name="snake",
-        centerline_length_m=5900.0, lb_order=["inflow", "outflow"], wall_s=42.0,
+        family="reach", wall_s=42.0,
     )
     status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)
     assert status == "ok" and code == 0 and err is None

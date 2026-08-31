@@ -50,13 +50,11 @@ _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     # extent: the server measures it and echoes it, and a second name for it was
     # a second answer a reader had to pick between.
     "correct_end", "error_code", "module", "family", "result_slf",
-    "geometry_slf", "npoin", "nelem",
+    "npoin", "nelem",
     "nptfr", "utm_epsg", "dx_m", "coarsened", "n_wet_nodes", "depth_max_m",
     "depth_mean_m", "bathy_source", "bed_source", "bbox", "wall_s",
     # reach / river dye
-    "n_frames", "dye_var", "dye_cmax_final", "dye_cmax_overall",
-    "dye_peak_time_s", "dye_active_frames", "dye_front_x_final_m", "reach_name",
-    "seed_comid", "centerline_length_m", "lb_order", "mesh_size_m",
+    "n_frames", "dye_peak_time_s", "reach_name", "mesh_size_m",
     "time_step_s", "edge_min_m", "edge_mean_m", "edge_max_m",
     "preview_geojson",
     # wind stress, on whichever leg was asked for it

@@ -446,8 +446,8 @@ def _install_step_mocks(captured: dict):
         patch.object(deck_steps, "read_topology",
                      lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
                                    "liquid_boundary_order": ["outflow", "inflow"]}),
-        patch.object(deck_steps, "_centerline_utm",
-                     lambda _src, _epsg: __import__("numpy").array(
+        patch.object(deck_steps, "read_centerline_utm",
+                     lambda _src, _epsg, **_kw: __import__("numpy").array(
                          [[0.0, 0.0], [6000.0, 0.0]])),
         patch.object(deck_steps, "_stage_authored",
                      lambda _rundir, run_tag, names: [

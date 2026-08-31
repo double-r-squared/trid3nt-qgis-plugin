@@ -100,8 +100,9 @@ def writer(monkeypatch, tmp_path):
     monkeypatch.setattr(deck_mod, "read_topology",
                         lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
                                       "liquid_boundary_order": ["outflow", "inflow"]})
-    monkeypatch.setattr(deck_mod, "_centerline_utm",
-                        lambda _src, _epsg: np.array([[0.0, 0.0], [6000.0, 0.0]]))
+    monkeypatch.setattr(deck_mod, "read_centerline_utm",
+                        lambda _src, _epsg, **_kw:
+                            np.array([[0.0, 0.0], [6000.0, 0.0]]))
     monkeypatch.setattr(
         deck_mod, "_stage_authored",
         lambda _rundir, run_tag, names: [

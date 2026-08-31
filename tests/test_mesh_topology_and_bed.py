@@ -16,6 +16,7 @@ from trid3nt_server.workflows.mesh import topology as T
 from trid3nt_server.workflows.mesh.shared.nodes import (
     MeshNodeError,
     fit_downstream_bed,
+    read_centerline_utm,
 )
 
 
@@ -146,3 +147,59 @@ def test_a_node_off_the_line_takes_the_distance_of_its_nearest_point():
     _, stats = fit_downstream_bed(points, bend, np.array([10.0, 12.0]),
                                   min_slope=1.0e-4, max_slope=1.0)
     assert stats["reach_len_m"] == pytest.approx(750.0)
+
+
+# --------------------------------------------------------------------------- #
+# ONE centerline reading: the row order of a navigated flowline says nothing.
+# --------------------------------------------------------------------------- #
+def _flowline_collection(order):
+    """A three-row navigated flowline as a FeatureCollection, rows in ``order``."""
+    rows = [[[-83.40, 35.00], [-83.39, 35.00]],
+            [[-83.39, 35.00], [-83.38, 35.00]],
+            [[-83.38, 35.00], [-83.37, 35.00]]]
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "LineString", "coordinates": rows[i]}}
+        for i in order]}
+
+
+def test_a_shuffled_flowline_normalizes_to_the_same_chainage():
+    """The rows arrive in whatever order the navigate listed them; the reading is
+    one head-to-tail line either way, so the bed the fit lays down is the same."""
+    head = (-83.40, 35.00)
+    straight = read_centerline_utm(_flowline_collection([0, 1, 2]), 32617,
+                                   start_lonlat=head)
+    shuffled = read_centerline_utm(_flowline_collection([2, 0, 1]), 32617,
+                                   start_lonlat=head)
+    assert np.allclose(straight, shuffled)
+
+    points = straight[:, :]
+    sampled = 100.0 - 0.002 * np.arange(points.shape[0], dtype=float)
+    stats_a = fit_downstream_bed(points, straight, sampled,
+                                 min_slope=3.0e-4, max_slope=6.0e-3)[1]
+    stats_b = fit_downstream_bed(points, shuffled, sampled,
+                                 min_slope=3.0e-4, max_slope=6.0e-3)[1]
+    assert stats_a["reach_len_m"] == pytest.approx(stats_b["reach_len_m"])
+    assert stats_a["bed_drop_m"] == pytest.approx(stats_b["bed_drop_m"])
+
+
+def test_the_declared_head_decides_the_direction_not_the_merge():
+    """Orientation is the chain's fact - the end the navigate started from - so a
+    collection whose parts merged the other way still runs head-to-tail."""
+    downstream = (-83.37, 35.00)
+    line = read_centerline_utm(_flowline_collection([0, 1, 2]), 32617,
+                               start_lonlat=downstream)
+    assert line[0][0] > line[-1][0]
+
+
+def test_a_network_that_is_not_one_reach_refuses():
+    disjoint = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "LineString",
+                      "coordinates": [[-83.40, 35.0], [-83.39, 35.0]]}},
+        {"type": "Feature", "properties": {},
+         "geometry": {"type": "LineString",
+                      "coordinates": [[-83.30, 35.2], [-83.29, 35.2]]}}]}
+    with pytest.raises(MeshNodeError) as excinfo:
+        read_centerline_utm(disjoint, 32617)
+    assert excinfo.value.error_code == "MESH_CENTERLINE_NOT_CONTINUOUS"
