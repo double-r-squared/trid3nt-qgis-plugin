@@ -246,7 +246,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                                             "note": "NWM 2.0 m3/s"}))
     monkeypatch.setattr(mesh_step_mod, "build_declared_mesh",
                         _step("mesh", {"mesh_id": "M", "slf_uri": "s3://m/river.slf",
-                                       "topology_uri": "s3://m/river_mesh.npz",
+                                       "topology_uri": "s3://m/mesh_topology.json",
                                        "min_edge_m": 9.0}))
     if tmp_path is not None:
         install_reach_chain(monkeypatch, tmp_path, seen)

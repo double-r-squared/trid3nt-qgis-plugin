@@ -186,7 +186,8 @@ def test_a_bedless_mesh_with_no_staged_topology_says_so():
 def test_a_bedless_mesh_whose_bed_is_fitted_onto_a_staged_topology_is_ready():
     """A bundle-realized mesh carries its ground in the topology it stages, so it
     is solve-ready even though no bed was sampled at authoring."""
-    art = _artifact(has_bathymetry=False, topology_uri="s3://cache/m/mesh.npz")
+    art = _artifact(has_bathymetry=False,
+                    topology_uri="s3://cache/m/mesh_topology.json")
     assert art.unsolvable_reason() is None
 
 
