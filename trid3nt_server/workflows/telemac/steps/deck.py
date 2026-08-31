@@ -1,4 +1,4 @@
-"""The DECK step: params + forcing -> the worker ReachConfig manifest.
+"""The DECK step: params + forcing -> the run's own record of what it solves.
 
 One serialization hook for the TELEMAC reach family. Everything the deck writes
 is either a declared param, a produced artifact, or a class the substance module
@@ -50,12 +50,8 @@ _DREDGE_MODES = ("scheduled", "criterion")
 
 
 def stage_manifest(reach: dict[str, Any], run_tag: str, *,
-                   mesh_only: bool = False,
                    inputs: list[dict[str, str]] | None = None) -> str:
     """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
-
-    ``mesh_only`` flags the fast mesh-preview mode: build the mesh, write the
-    wireframe + gate stats, skip the solve.
 
     ``inputs`` is what the launcher stages into the run directory before the
     container starts, ``{gs_uri, dest}`` per entry. It carries the centerline,
@@ -88,16 +84,10 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
     elif substance_class in ("decay", "do_sag"):
         # the WAQTEL steering file: the forcing this run actually applied.
         outputs += ["t2d_river.waqtel"]
-    if mesh_only:
-        # river_mesh.npz is the accepted topology a later solve adopts, so it
-        # comes back with the geometry rather than dying with the run directory.
-        outputs = ["river.slf", "river.cli", "river_mesh.npz",
-                   "mesh_preview.geojson", "telemac_metrics.json"]
     try:
         return stage_telemac_manifest(
             section="reach", config=reach, run_tag=run_tag, outputs=outputs,
-            inputs=inputs, prefix="telemac",
-            extra={"mesh_only": True} if mesh_only else None)
+            inputs=inputs, prefix="telemac")
     except OpenWaterError as exc:
         raise TelemacDyeScenarioError("TELEMAC_DYE_STAGING_FAILED",
                                       str(exc)) from exc
@@ -108,8 +98,8 @@ def _resolved_physics(friction_coefficient: float | None, friction_law: Any,
                       tracer_diffusivity: float | None) -> dict[str, Any]:
     """Only the constitutive overrides the user actually set, range-checked.
 
-    Anything unset is ABSENT from the manifest, so the worker ReachConfig field
-    stays None and the deck author emits the historical literal.
+    Anything unset is ABSENT from the deck, so the author's own default table
+    stands and the deck emits the historical literal.
     """
     from trid3nt_server.workflows.shared.physics_registry import (
         PhysicsRegistryError,
@@ -145,7 +135,8 @@ def _sediment_block(substance: str, payload: Any, *, erodible: bool,
                     morphological_factor: float | None, dredge_mode: str,
                     dredge_volume_m3: float | None, dredge_disposal: bool,
                     dredge_crit_depth_m: float | None,
-                    dredge_dig_depth_m: float | None) -> dict[str, Any]:
+                    dredge_dig_depth_m: float | None,
+                    dredge_bank_offset_m: float) -> dict[str, Any]:
     sed_type, sed_grain_um = resolve_grain(payload, sediment_type, grain_size_um)
     logger.info("substance %r -> sediment class (GAIA, type=%s d50=%.4gum): %s",
                 substance, sed_type, sed_grain_um,
@@ -156,8 +147,8 @@ def _sediment_block(substance: str, payload: Any, *, erodible: bool,
         "grain_size_um": sed_grain_um, "sediment_density": 2650.0,
         "erodible_bed": bool(erodible),
     }
-    # The erodible-bed tuning rides ONLY when armed AND set; unset lets the worker
-    # ReachConfig defaults apply, which keeps a non-erodible run byte-identical.
+    # The erodible-bed tuning rides ONLY when armed AND set; unset lets the deck
+    # author's own defaults apply, which keeps a non-erodible run byte-identical.
     if erodible and bed_thickness_m is not None:
         block["bed_thickness_m"] = float(bed_thickness_m)
     if erodible and bedload_formula is not None and int(bedload_formula) in _BEDLOAD_FORMULAE:
@@ -172,6 +163,9 @@ def _sediment_block(substance: str, payload: Any, *, erodible: bool,
             "dredging": True,
             "dredge_mode": mode if mode in _DREDGE_MODES else "scheduled",
             "dredge_disposal": bool(dredge_disposal),
+            # The BANK SETBACK the dig field is cut back from the mapped water,
+            # and the same number that excludes a stretch too narrow to dredge.
+            "dredge_bank_offset_m": float(dredge_bank_offset_m),
         })
         if dredge_volume_m3 is not None:
             block["dredge_volume_m3"] = float(dredge_volume_m3)
@@ -192,6 +186,7 @@ def _substance_block(substance: str, *, erodible_bed: bool | None,
                      dredge_volume_m3: float | None, dredge_disposal: bool,
                      dredge_crit_depth_m: float | None,
                      dredge_dig_depth_m: float | None,
+                     dredge_bank_offset_m: float,
                      ) -> tuple[str, Any, bool, dict[str, Any]]:
     """The class, its payload, whether the bed is erodible, and the deck block."""
     substance_class, payload = classify_substance(substance)
@@ -230,7 +225,8 @@ def _substance_block(substance: str, *, erodible_bed: bool | None,
             morphological_factor=morphological_factor, dredge_mode=dredge_mode,
             dredge_volume_m3=dredge_volume_m3, dredge_disposal=dredge_disposal,
             dredge_crit_depth_m=dredge_crit_depth_m,
-            dredge_dig_depth_m=dredge_dig_depth_m)
+            dredge_dig_depth_m=dredge_dig_depth_m,
+            dredge_bank_offset_m=dredge_bank_offset_m)
     return substance_class, payload, False, {}
 
 
@@ -329,9 +325,10 @@ async def write_reach_deck(
     dredge_disposal: bool = False,
     dredge_crit_depth_m: float | None = None,
     dredge_dig_depth_m: float | None = None,
+    dredge_bank_offset_m: float = 5.0,
     do_sag_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Serialize the approved sheet into the worker ReachConfig + the run meta.
+    """Serialize the approved sheet into the run's deck + the run meta.
 
     The MESH is the accepted one: its geometry and its boundary roles are staged
     for the solve, so the run is solved on the triangulation that was presented
@@ -373,7 +370,8 @@ async def write_reach_deck(
         bed_thickness_m=bed_thickness_m, bedload_formula=bedload_formula,
         morphological_factor=morphological_factor, dredge_mode=dredge_mode,
         dredge_volume_m3=dredge_volume_m3, dredge_disposal=dredge_disposal,
-        dredge_crit_depth_m=dredge_crit_depth_m, dredge_dig_depth_m=dredge_dig_depth_m)
+        dredge_crit_depth_m=dredge_crit_depth_m, dredge_dig_depth_m=dredge_dig_depth_m,
+        dredge_bank_offset_m=dredge_bank_offset_m)
 
     from trid3nt_server.workflows.telemac.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter

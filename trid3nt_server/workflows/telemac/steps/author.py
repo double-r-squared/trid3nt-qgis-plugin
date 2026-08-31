@@ -38,10 +38,12 @@ __all__ = [
     "GAIA_RESULT_FILENAME",
     "GAIA_STEERING_FILENAME",
     "NESTOR_TIME_ORIGIN",
+    "RAINDEF3_USER_FORTRAN",
     "SOURCES_FILENAME",
     "WAQTEL_FILENAME",
     "author_reach_deck",
     "author_rog_deck",
+    "normalize_gradation",
     "write_cn_map",
     "write_friction_files",
     "write_gaia_deck",
@@ -54,6 +56,13 @@ __all__ = [
 ]
 
 SOURCES_FILENAME = "river_sources.txt"
+#: Where the image BAKES the RAINDEF=3 copy of the engine's own
+#: ``runoff_scs_cn.f``. The installed source hardcodes ``RAINDEF=1`` as a
+#: compile-time PARAMETER, which no steering keyword can reach, so a
+#: time-varying gross hyetograph needs the engine's own user-fortran door. The
+#: patch is made ONCE at build time and the run STAGES it; a constant-rain run
+#: names nothing here and stages nothing.
+RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
 #: The WAQTEL steering file - its own DAMOCLES-parsed deck, named in the t2d cas.
 WAQTEL_FILENAME = "t2d_river.waqtel"
 #: The GAIA steering file and the result SELAFIN carrying CUMUL BED EVOL.
@@ -136,7 +145,8 @@ _DEFAULTS: dict[str, Any] = {
     "dredge_design_grade_m": None,
     "dredge_zone_utm": (),
     "disposal_zone_utm": (),
-    "dredge_zone_len_m": None,
+    "dredge_zone_len_m": 200.0,
+    "dredge_bank_offset_m": 5.0,
     # Oil.
     "oil_preset": "light_crude",
     "oil_release_step": 600,
@@ -209,7 +219,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
                       cas_name: str, liquid_boundary_order: Sequence[str],
                       bed: Mapping[str, Any], source_utm: tuple[float, float],
                       centerline_utm: Any = None,
-                      dredge_zone_width_m: float | None = None,
+                      reach_polygon_utm: Any = None,
                       node_xy: Any = None, node_bed: Any = None
                       ) -> dict[str, Any]:
     """Write the reach ``.cas`` and every file it names -> what was written.
@@ -419,7 +429,7 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {tracer_diff}
         if bool(P.dredging):
             written["nestor"] = write_nestor_decks(
                 rundir, deck=deck, centerline_utm=centerline_utm,
-                zone_width_m=dredge_zone_width_m,
+                reach_polygon_utm=reach_polygon_utm,
                 node_xy=node_xy, node_bed=node_bed)
             year, month, day, hour, minute, second = NESTOR_TIME_ORIGIN
             cas += (f"ORIGINAL DATE OF TIME           = {year};{month};{day}\n"
@@ -517,7 +527,7 @@ def write_waqtel_o2(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
         "VEGETAL RESPIRATION R                         = 0."])
 
 
-def _normalize_gradation(raw: Any) -> list[tuple[float, float]]:
+def normalize_gradation(raw: Any) -> list[tuple[float, float]]:
     """A gradation spec -> a clean fine-to-coarse ``[(d50_um, fraction), ...]``.
 
     Each diameter is held inside the silt-to-coarse-sand band the single-class
@@ -573,7 +583,7 @@ def write_gaia_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     concentration = max(float(getattr(P, "dye_conc_mgl", 100.0)) / 1000.0, 0.0)
     d50_m = max(float(getattr(P, "grain_size_um", 200.0)), 1.0) * 1.0e-6
     density = float(getattr(P, "sediment_density", 2650.0))
-    gradation = _normalize_gradation(getattr(P, "sediment_gradation", ()))
+    gradation = normalize_gradation(getattr(P, "sediment_gradation", ()))
     dredging = bool(getattr(P, "dredging", False))
     head = [
         f"GEOMETRY FILE                   = {os.path.basename(geometry)}",
@@ -678,13 +688,17 @@ def _nestor_time(offset_s: float) -> str:
 
 
 def _channel_box(centerline: Any, station_frac: float, length_m: float,
-                 width_m: float) -> list[tuple[float, float]]:
-    """A channel-spanning rectangle around one centerline station.
+                 width_m: float) -> Any:
+    """A channel-crossing rectangle around one centerline station.
 
     The corners are laid on the local along-channel tangent, so the box brackets
-    the wetted section rather than sitting square to the grid.
+    the wetted section rather than sitting square to the grid. It is deliberately
+    wider than any channel: what decides the CROSS-channel extent of a dredge
+    field is the water the reach was cut from, and the box only brackets the
+    along-channel stretch.
     """
     import numpy as np
+    from shapely.geometry import Polygon
 
     line = np.asarray(centerline, dtype=float)
     arc = np.concatenate([[0.0], np.cumsum(
@@ -698,44 +712,136 @@ def _channel_box(centerline: Any, station_frac: float, length_m: float,
     unit = np.array([1.0, 0.0]) if norm < 1e-9 else tangent / norm
     perp = np.array([-unit[1], unit[0]])
     half_l, half_w = length_m / 2.0, width_m / 2.0
-    return [(float(p[0]), float(p[1])) for p in (
+    return Polygon([
         centre - half_l * unit - half_w * perp,
         centre + half_l * unit - half_w * perp,
         centre + half_l * unit + half_w * perp,
-        centre - half_l * unit + half_w * perp)]
+        centre - half_l * unit + half_w * perp])
 
 
-def _dredge_zones(P: _Sheet, centerline: Any, zone_width_m: float | None
-                  ) -> tuple[list, list | None]:
-    """The dig field and, when one was asked for, the dump field.
+def _reach_water(reach_polygon_utm: Any) -> Any:
+    """The reach's mapped water as one shapely polygon, in the mesh's metres."""
+    import numpy as np
+    from shapely.geometry import Polygon, shape
+    from shapely.ops import unary_union
 
-    An explicit polygon wins. Otherwise a channel-spanning box is laid at the
-    stated station - and that needs a WIDTH the caller measured, because nothing
-    here surveys a channel.
-    """
-    dig = list(getattr(P, "dredge_zone_utm", ()) or ())
-    explicit_dump = list(getattr(P, "disposal_zone_utm", ()) or ())
-    want_dump = bool(getattr(P, "dredge_disposal", False)) or len(explicit_dump) >= 3
-    if len(dig) >= 3 and (not want_dump or len(explicit_dump) >= 3):
-        return dig, (explicit_dump if want_dump else None)
-    if zone_width_m is None or centerline is None:
+    if reach_polygon_utm is None:
         raise DeckAuthorError(
-            "TELEMAC_DREDGE_ZONE_UNMEASURED",
-            "a dredge field with no explicit polygon is laid across the channel, "
-            "which needs the measured channel width and the centerline it is laid "
-            "on; supply dredge_zone_utm/disposal_zone_utm, or the width.")
-    width = float(zone_width_m) * 1.4
-    stated = getattr(P, "dredge_zone_len_m", None)
-    length = float(stated) if stated else 2.0 * float(zone_width_m)
-    if len(dig) < 3:
-        dig = _channel_box(centerline, getattr(P, "dredge_station_frac", 0.5),
-                           length, width)
+            "TELEMAC_DREDGE_ZONE_UNMAPPED",
+            "a dredge field is cut out of the reach's own mapped water and no "
+            "reach polygon was handed to the author, so there is nothing to cut "
+            "it from.")
+    if hasattr(reach_polygon_utm, "geom_type"):
+        geometry = reach_polygon_utm
+    elif isinstance(reach_polygon_utm, dict):
+        geometry = shape(reach_polygon_utm.get("geometry") or reach_polygon_utm)
+    else:
+        rings = np.asarray(reach_polygon_utm, dtype=float)
+        geometry = (unary_union([Polygon(r) for r in rings]) if rings.ndim == 3
+                    else Polygon(rings))
+    return geometry.buffer(0)
+
+
+def _dredge_field(water: Any, box: Any, offset_m: float, length_m: float, *,
+                  what: str) -> Any:
+    """One field: the station box, cut to the water held back from its banks.
+
+    ONE mechanism, two behaviours. The inward offset is the BANK SETBACK, so the
+    dig stops short of the toe it would otherwise undercut; and a stretch
+    narrower than twice that setback has no inside left, so it excludes ITSELF
+    rather than being excluded by a width rule nobody measured.
+    """
+    station = box.centroid
+    field = _at_station(box.intersection(water.buffer(-float(offset_m))), station)
+    if field is None:
+        wetted = _at_station(box.intersection(water), station)
+        measured = 0.0 if wetted is None else wetted.area / max(float(length_m), 1e-6)
+        raise DeckAuthorError(
+            "TELEMAC_DREDGE_ZONE_TOO_NARROW",
+            f"the {what} field is empty: at this station the reach's mapped water "
+            f"measures about {measured:.1f} m across, and a {float(offset_m):g} m "
+            "bank setback leaves nothing between the two banks to dig. Lower "
+            "dredge_bank_offset_m, move the station, or supply the polygon.")
+    return field
+
+
+def _at_station(cut: Any, station: Any) -> Any:
+    """The one piece of ``cut`` at ``station``; ``None`` when the cut is empty.
+
+    A box wide enough to cross any channel also crosses a MEANDER: on a bend it
+    reaches the same reach's next loop, so the field is the water at THIS station
+    rather than the largest piece the box happened to touch.
+    """
+    if cut.is_empty:
+        return None
+    if cut.geom_type == "Polygon":
+        return cut
+    pieces = [g for g in cut.geoms if g.geom_type == "Polygon" and not g.is_empty]
+    return min(pieces, key=station.distance) if pieces else None
+
+
+def _ring(geometry: Any) -> list[tuple[float, float]]:
+    """A field polygon as the corner list NESTOR's polygon file writes."""
+    return [(float(x), float(y)) for x, y in geometry.exterior.coords[:-1]]
+
+
+def _supplied_field(corners: Any, water: Any, *, what: str
+                    ) -> list[tuple[float, float]]:
+    """A user-supplied field, validated CONTAINED in the reach's water."""
+    from shapely.geometry import Polygon
+
+    polygon = Polygon([(float(x), float(y)) for x, y in corners]).buffer(0)
+    if not water.contains(polygon):
+        outside = polygon.difference(water).area / max(polygon.area, 1e-9)
+        raise DeckAuthorError(
+            "TELEMAC_DREDGE_ZONE_OUTSIDE_WATER",
+            f"the supplied {what} polygon lies {outside:.0%} outside the reach's "
+            "mapped water; a dig or a dump on dry land is not a run this deck "
+            "can author.")
+    return _ring(polygon)
+
+
+def _dredge_zones(P: _Sheet, centerline: Any, reach_polygon_utm: Any
+                  ) -> tuple[list, list | None, dict[str, Any]]:
+    """The dig field, the dump field when asked for, and what was measured.
+
+    A SUPPLIED polygon wins and is validated inside the water. Otherwise the
+    field AUTO-FILLS from geometry the run already measured: the cross-channel
+    box at the stated station, cut to the reach polygon held back from its banks
+    by the declared setback.
+    """
+    water = _reach_water(reach_polygon_utm)
+    offset = float(getattr(P, "dredge_bank_offset_m", 5.0))
+    length = float(getattr(P, "dredge_zone_len_m", 200.0))
+    span = float(max(water.bounds[2] - water.bounds[0],
+                     water.bounds[3] - water.bounds[1])) * 2.0
+    supplied_dig = list(getattr(P, "dredge_zone_utm", ()) or ())
+    supplied_dump = list(getattr(P, "disposal_zone_utm", ()) or ())
+    want_dump = bool(getattr(P, "dredge_disposal", False)) or len(supplied_dump) >= 3
+
+    if len(supplied_dig) >= 3:
+        dig = _supplied_field(supplied_dig, water, what="dredge")
+    else:
+        dig = _ring(_dredge_field(
+            water, _channel_box(centerline, getattr(P, "dredge_station_frac", 0.5),
+                                length, span), offset, length, what="dredge"))
     dump = None
     if want_dump:
-        dump = explicit_dump if len(explicit_dump) >= 3 else _channel_box(
-            centerline, getattr(P, "dredge_disposal_station_frac", 0.85),
-            length, width)
-    return dig, dump
+        if len(supplied_dump) >= 3:
+            dump = _supplied_field(supplied_dump, water, what="disposal")
+        else:
+            dump = _ring(_dredge_field(
+                water, _channel_box(
+                    centerline, getattr(P, "dredge_disposal_station_frac", 0.85),
+                    length, span), offset, length, what="disposal"))
+    note = {
+        "dredge_bank_offset_m": offset,
+        "dredge_zone_len_m": length,
+        "dredge_zone_source": "supplied" if len(supplied_dig) >= 3 else "auto",
+        "disposal_zone_source": (None if dump is None else
+                                 "supplied" if len(supplied_dump) >= 3 else "auto"),
+    }
+    return dig, dump, note
 
 
 def _write_nestor_polygons(rundir: Path | str, dig: Any, dump: Any) -> str:
@@ -835,7 +941,7 @@ def _write_nestor_surface_ref(rundir: Path | str, centerline: Any, *,
 
 
 def write_nestor_decks(rundir: Path | str, *, deck: Mapping[str, Any],
-                       centerline_utm: Any, zone_width_m: float | None,
+                       centerline_utm: Any, reach_polygon_utm: Any,
                        node_xy: Any = None, node_bed: Any = None
                        ) -> dict[str, Any]:
     """Every NESTOR input for a dredging run -> what was written.
@@ -844,19 +950,38 @@ def write_nestor_decks(rundir: Path | str, *, deck: Mapping[str, Any],
     none - the grade a maintenance dredge digs back TO is the channel that is
     there, not a number invented for the deck.
     """
+    from trid3nt_server.workflows.lib import journal_note
+
     P = _Sheet(deck)
-    dig, dump = _dredge_zones(P, centerline_utm, zone_width_m)
+    dig, dump, measured = _dredge_zones(P, centerline_utm, reach_polygon_utm)
     _write_nestor_polygons(rundir, dig, dump)
     _write_nestor_action(rundir, P, dump is not None)
     grade = getattr(P, "dredge_design_grade_m", None)
     if grade is None:
         grade = _mean_bed_over(dig, node_xy, node_bed)
-    half_width = max(float(zone_width_m or 0.0) * 2.0, 30.0)
+    # The profile fence has to enclose every field node, so it is sized off the
+    # field that was actually cut rather than off a width nobody surveyed.
+    half_width = _field_half_width_m(dig)
     _write_nestor_surface_ref(rundir, centerline_utm, grade_m=float(grade),
                               half_width_m=half_width)
+    journal_note(
+        f"dredging: the {measured['dredge_zone_source']} dig field spans "
+        f"{2.0 * half_width:.0f} m across the channel over a "
+        f"{measured['dredge_zone_len_m']:g} m station, held "
+        f"{measured['dredge_bank_offset_m']:g} m back from the mapped banks; the "
+        f"design grade is {float(grade):.2f} m.")
     return {"action": NESTOR_ACTION_FILENAME, "polygon": NESTOR_POLYGON_FILENAME,
             "surface_ref": NESTOR_SURFACE_REF_FILENAME,
-            "has_dump": dump is not None, "design_grade_m": float(grade)}
+            "has_dump": dump is not None, "design_grade_m": float(grade),
+            **measured}
+
+
+def _field_half_width_m(field: Any) -> float:
+    """Half the cut field's own largest extent - the fence's reach, measured."""
+    import numpy as np
+
+    corners = np.asarray(field, dtype=float)
+    return float(np.max(np.ptp(corners, axis=0))) / 2.0
 
 
 def _mean_bed_over(polygon: Any, node_xy: Any, node_bed: Any) -> float:
@@ -1027,8 +1152,7 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
                     geometry: str, boundary: str, results: str, cas_name: str,
                     cn_map: str, friction_laws: str, zones_file: str,
                     rain_mm_per_day: float, runoff_path: str,
-                    hyetograph_file: str | None = None,
-                    user_fortran_dir: str | None = None) -> str:
+                    hyetograph_file: str | None = None) -> str:
     """Write the rain-on-grid ``.cas`` -> the basename written.
 
     Three rain paths, and the deck says which one it is:
@@ -1037,9 +1161,9 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         infiltration, optionally stopping before the run ends so the catchment
         drains and the recession limb appears;
       * TIME-VARYING NATIVE - the same infiltration applied per timestep to a
-        real gross hyetograph read from a data file, which needs the per-run
-        fortran that turns that branch on. The recession comes from the
-        hyetograph's own dry tail, so no rain window is stated;
+        real gross hyetograph read from a data file, which needs the RAINDEF=3
+        user fortran the image bakes to turn that branch on. The recession comes
+        from the hyetograph's own dry tail, so no rain window is stated;
       * PRE-PROCESSED - the excess was computed before the run, so the engine's
         infiltration is off and the abstraction is not taken twice.
 
@@ -1075,7 +1199,7 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
             f"FORMATTED DATA FILE 2           = {os.path.basename(cn_map)}\n"
             "FORMATTED DATA FILE 1           = "
             f"{os.path.basename(hyetograph_file)}\n"
-            f"FORTRAN FILE                    = {user_fortran_dir or 'user_fortran'}\n")
+            f"FORTRAN FILE                    = {RAINDEF3_USER_FORTRAN}\n")
     elif str(runoff_path).lower() == "native":
         runoff_block = (
             f"{rain_line}{window_line}"

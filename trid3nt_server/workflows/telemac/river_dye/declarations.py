@@ -161,6 +161,12 @@ PARAMS: tuple[Param, ...] = (
           type=bool,
           derived_when_absent="the spoil is not placed (dredge-only)",
           desc="Also place the dug spoil in a downstream disposal zone"),
+    Param("dredge_bank_offset_m", door=doors.SCENARIO, default=5.0,
+          bounds=(0.0, 200.0), units="m", user_lever=True, consequence="scenario",
+          desc="Bank setback the dig field is held back from the mapped water's "
+               "edge, so the cut does not undercut the bank it is dug beside. It "
+               "is also what excludes a stretch too narrow to dredge: narrower "
+               "than twice the setback and no field survives there"),
 
     # -- advanced constitutive physics -------------------------------------- #
     Param("friction_coefficient", door=doors.USER, optional=True, bounds=(10.0, 90.0),

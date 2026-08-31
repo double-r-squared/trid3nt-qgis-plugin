@@ -19,6 +19,9 @@ _ORDER = ("outflow", "inflow")
 _SOURCE = (500.0, 0.0)
 #: A straight centerline in metres - enough for a channel box and a profile fence.
 _CENTERLINE = [(x, 0.0) for x in range(0, 1100, 100)]
+#: The reach's mapped water: a 60 m wide ribbon along that centerline. A dredge
+#: field is cut out of THIS, never out of a width nobody surveyed.
+_REACH_POLYGON = [(-50.0, -30.0), (1050.0, -30.0), (1050.0, 30.0), (-50.0, 30.0)]
 
 
 def _author(tmp_path, **deck) -> str:
@@ -28,7 +31,7 @@ def _author(tmp_path, **deck) -> str:
         tmp_path, deck={**base, **deck}, geometry="mesh.slf",
         boundary="mesh.cli", results="r2d.slf", cas_name="t2d_river.cas",
         liquid_boundary_order=_ORDER, bed=_BED, source_utm=_SOURCE,
-        centerline_utm=_CENTERLINE, dredge_zone_width_m=60.0)
+        centerline_utm=_CENTERLINE, reach_polygon_utm=_REACH_POLYGON)
     return (tmp_path / "t2d_river.cas").read_text()
 
 
@@ -214,14 +217,14 @@ def test_a_mixture_sorts_and_reports_its_mean_diameter(tmp_path):
 
 @pytest.mark.parametrize("raw", [[], [[200, 1.0]], None])
 def test_fewer_than_two_classes_is_not_a_mixture(raw):
-    assert A._normalize_gradation(raw) == []
+    assert A.normalize_gradation(raw) == []
 
 
 def test_a_gradation_is_sorted_clamped_and_renormalized():
-    graded = A._normalize_gradation([[1000, 2.0], [100, 1.0], [400, 1.0]])
+    graded = A.normalize_gradation([[1000, 2.0], [100, 1.0], [400, 1.0]])
     assert [um for um, _ in graded] == [100.0, 400.0, 1000.0]
     assert abs(sum(fr for _, fr in graded) - 1.0) < 1e-9
-    clamped = A._normalize_gradation([[1, 1.0], [9000, 1.0]])
+    clamped = A.normalize_gradation([[1, 1.0], [9000, 1.0]])
     assert [um for um, _ in clamped] == [5.0, 2000.0]
 
 
@@ -282,17 +285,58 @@ def test_every_surface_reference_profile_carries_seven_reals(tmp_path):
     assert any(ln.startswith("END") for ln in lines)
 
 
-def test_a_box_with_no_measured_width_refuses(tmp_path):
-    """Nothing here surveys a channel, so an unmeasured box is a refusal."""
+def _dredge(tmp_path, **deck):
+    return A.author_reach_deck(
+        tmp_path, deck={"name": "reach", "duration_s": 3600.0,
+                        "substance_class": "sediment", "erodible_bed": True,
+                        "dredging": True, **deck},
+        geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
+        cas_name="t2d_river.cas", liquid_boundary_order=_ORDER, bed=_BED,
+        source_utm=_SOURCE, centerline_utm=_CENTERLINE,
+        reach_polygon_utm=deck.pop("polygon", _REACH_POLYGON))
+
+
+def test_the_dig_field_auto_fills_from_the_water_held_back_from_its_banks(tmp_path):
+    """The setback is the one mechanism: the field is the water, minus the banks."""
+    written = _dredge(tmp_path, dredge_bank_offset_m=5.0,
+                      dredge_zone_len_m=200.0)["nestor"]
+    assert written["dredge_zone_source"] == "auto"
+    assert written["dredge_bank_offset_m"] == 5.0
+    ys = [float(ln.split()[1]) for ln in
+          (tmp_path / "nestor.pol").read_text().splitlines()
+          if re.fullmatch(r"-?[\d.]+ -?[\d.]+", ln)]
+    # 60 m of water, 5 m off each bank -> the cut spans the middle 50 m.
+    assert max(ys) == pytest.approx(25.0, abs=0.01)
+    assert min(ys) == pytest.approx(-25.0, abs=0.01)
+
+
+def test_a_setback_wider_than_the_channel_excludes_the_stretch_itself(tmp_path):
+    """Too narrow is not a rule: the shrunken polygon simply vanishes there."""
     with pytest.raises(A.DeckAuthorError) as excinfo:
-        A.author_reach_deck(
-            tmp_path, deck={"substance_class": "sediment", "erodible_bed": True,
-                            "dredging": True},
-            geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-            cas_name="t2d_river.cas", liquid_boundary_order=_ORDER, bed=_BED,
-            source_utm=_SOURCE, centerline_utm=_CENTERLINE,
-            dredge_zone_width_m=None)
-    assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_UNMEASURED"
+        _dredge(tmp_path, dredge_bank_offset_m=40.0)
+    assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_TOO_NARROW"
+    message = str(excinfo.value)
+    assert "40 m bank setback" in message and "60.0 m across" in message
+
+
+def test_a_supplied_polygon_wins_and_is_validated_inside_the_water(tmp_path):
+    inside = [(400.0, -10.0), (600.0, -10.0), (600.0, 10.0), (400.0, 10.0)]
+    written = _dredge(tmp_path, dredge_zone_utm=inside)["nestor"]
+    assert written["dredge_zone_source"] == "supplied"
+
+
+def test_a_supplied_polygon_on_dry_land_refuses(tmp_path):
+    outside = [(400.0, 200.0), (600.0, 200.0), (600.0, 260.0), (400.0, 260.0)]
+    with pytest.raises(A.DeckAuthorError) as excinfo:
+        _dredge(tmp_path, dredge_zone_utm=outside)
+    assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_OUTSIDE_WATER"
+
+
+def test_a_dredge_run_with_no_reach_polygon_refuses(tmp_path):
+    """The field is cut out of mapped water; with none there is nothing to cut."""
+    with pytest.raises(A.DeckAuthorError) as excinfo:
+        _dredge(tmp_path, polygon=None)
+    assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_UNMAPPED"
 
 
 # --------------------------------------------------------------------------- #
@@ -345,13 +389,19 @@ def test_the_preprocessed_path_takes_no_second_abstraction(tmp_path):
     assert "FORMATTED DATA FILE 2" not in cas
 
 
-def test_the_time_varying_path_names_the_block_file_and_its_fortran(tmp_path):
+def test_the_time_varying_path_names_the_image_baked_raindef3_fortran(tmp_path):
+    """RAINDEF is a compile-time PARAMETER; the baked patch is the only door."""
     cas = _rog(tmp_path, runoff_path="native", hyetograph_file="rog_hyeto.txt")
     assert "FORMATTED DATA FILE 1           = rog_hyeto.txt" in cas
-    assert "FORTRAN FILE                    = user_fortran" in cas
+    assert f"FORTRAN FILE                    = {A.RAINDEF3_USER_FORTRAN}" in cas
+    assert A.RAINDEF3_USER_FORTRAN.endswith("/raindef3")
     assert "RAINFALL-RUNOFF MODEL           = 1" in cas
     # the hyetograph carries its own dry tail, so no rain window is stated
     assert "DURATION OF RAIN OR EVAPORATION IN HOURS" not in cas
+
+
+def test_a_constant_rain_run_stages_no_fortran_at_all(tmp_path):
+    assert "FORTRAN FILE" not in _rog(tmp_path, runoff_path="native")
 
 
 def test_a_rain_window_shorter_than_the_run_lets_the_catchment_drain(tmp_path):

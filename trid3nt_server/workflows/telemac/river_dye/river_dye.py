@@ -122,6 +122,7 @@ PHYSICS = Physics(
     dredge_volume_m3=P.dredge_volume_m3, dredge_disposal=P.dredge_disposal,
     dredge_crit_depth_m=P.dredge_crit_depth_m,
     dredge_dig_depth_m=P.dredge_dig_depth_m,
+    dredge_bank_offset_m=P.dredge_bank_offset_m,
 )
 
 FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=DATA.rain,
