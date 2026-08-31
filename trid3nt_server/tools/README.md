@@ -13,7 +13,6 @@ registry and the cache shim are the two seams they all pass through.
 | `_example_tool_template.py` | A complete, working, trivial registered tool to copy when starting a new one. |
 | `duckdb_spatial_functions.json` | The DuckDB spatial-function reference `search_spatial_functions` answers from. |
 | `payload_sampling.py` | Sampled payload-size estimation, so the size a warning quotes is measured rather than modelled. |
-| `resolution_declared.py` | Declared-resolution enforcement: a request outside a tool's declared range is quoted back as a typed error. |
 | `tool_arg_normalizer.py` | Call-site kwargs cleanup, so an invented argument does not fail a call the tool could still take. |
 | `tool_query_corpus.yaml` | The routing phrasings tool retrieval scores an ask against. |
 | `_uri_util.py` | Layer-uri helpers shared by tools that resolve a case layer's uri to its underlying file. |

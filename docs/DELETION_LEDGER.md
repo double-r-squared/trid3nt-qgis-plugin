@@ -2401,3 +2401,29 @@ NOT touched, flagged: `contracts/ws.py`, `common.py`, `telemac_contracts.py`,
 contracts in docstrings and comments, and `output_quantities.py` still carries
 engine-family enum members for them. Live modules with dead ENTRIES inside is a
 different measurement from a dead module, and it gets its own pass.
+
+## The declared-resolution enforcer, superseded by the user's own lever (test cull, scope 3, 2026-08-31)
+
+- `trid3nt_server/tools/resolution_declared.py` (166) MOVES to the attic and
+  `tests/test_resolution_declared_0225.py` (282) DELETES. Every public name -
+  `ResolutionOutOfRangeError`, `enforce_resolution`, `resolution_review_note`,
+  `resolve_resolution` - has ZERO references outside the module's own body and
+  that one test, in the server, the plugin, the workers, the scripts and the
+  experiment harness alike. Its subject was the autoscale-then-quote-back
+  decision, superseded by the ruling that RESOLUTION IS THE USER'S LEVER: the
+  autoscaler is a suggestion, a declared value is what the user asked for, and a
+  run that is too coarse is re-run finer rather than refused. Its sweep test
+  (every workflow file must call `resolve_resolution` rather than hand-roll it)
+  was pinning a seam nothing routes through. `trid3nt_server/tools/README.md`
+  loses the row in the same commit.
+
+ROW NOT EXECUTED - the sweep's premise is false, reported instead:
+- `trid3nt_server/tools/fetchers/_router/stratified.py` (328) STAYS. The sweep
+  measured "0 prod importers" over `trid3nt_server/ workers/ plugin/ scripts/
+  contracts/` and never looked in `experiments/`, where the catalog-surfacing
+  harness imports it FIVE times (`run.py:123,376,530,583`,
+  `run_forensic.py:228`) as the Arm-3 mechanism under test, with a recorded
+  verdict (`experiments/catalog_surfacing/results/VERDICT.md`) and its spec
+  (`docs/specs/stratified-pools.md`) still in the tree. Deleting it breaks a
+  concluded experiment's reproducibility, which is a methodology call, not a
+  staleness call. Its two test consumers stay with it.
