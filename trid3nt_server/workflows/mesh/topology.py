@@ -19,10 +19,45 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-__all__ = ["TOPOLOGY_FILENAME", "write_topology", "read_topology"]
+__all__ = ["TOPOLOGY_FILENAME", "match_boundary_roles", "write_topology",
+           "read_topology"]
 
 #: Basename the bundle is written and staged under.
 TOPOLOGY_FILENAME: str = "mesh_topology.json"
+
+
+def match_boundary_roles(points_utm: Any, boundary_nodes: Sequence[int],
+                         faces_utm: Mapping[str, Any], *,
+                         tolerance_m: float) -> dict[str, list[int]]:
+    """Which declared role each boundary node lies on -> ``{role: [node, ...]}``.
+
+    A role is named by the FACE the chain measured - the transect a section cut
+    the domain square at - rather than by a node list somebody typed, because the
+    nodes do not exist until the mesher has run. A boundary node takes the role of
+    the face it is NEAREST to, and only while it is within ``tolerance_m`` of it:
+    the bank between two faces belongs to neither and is written as a solid wall.
+
+    ``tolerance_m`` is measured off the mesh rather than declared, so a coarse
+    mesh whose boundary nodes sit further apart still resolves its own faces.
+    """
+    import numpy as np
+    from shapely.geometry import Point
+
+    nodes = [int(n) for n in boundary_nodes]
+    if not nodes or not faces_utm:
+        return {}
+    pts = np.asarray(points_utm, dtype=float)
+    roles = list(faces_utm)
+    distance = np.array(
+        [[faces_utm[role].distance(Point(pts[n, 0], pts[n, 1])) for role in roles]
+         for n in nodes], dtype=float)
+    nearest = distance.argmin(axis=1)
+    out: dict[str, list[int]] = {}
+    for index, node in enumerate(nodes):
+        if distance[index, nearest[index]] > float(tolerance_m):
+            continue
+        out.setdefault(roles[int(nearest[index])], []).append(node)
+    return out
 
 
 def write_topology(rundir: Path | str, *, roles: Mapping[str, Sequence[int]],

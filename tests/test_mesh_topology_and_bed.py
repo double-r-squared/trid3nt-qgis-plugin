@@ -45,6 +45,47 @@ def test_an_empty_role_is_not_a_role(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# Matching the DECLARED roles onto the mesh the mesher actually built.
+# --------------------------------------------------------------------------- #
+#: A 200 m x 40 m strip of boundary nodes: the two 40 m end caps are the
+#: transects a section cut, and the two long sides are the banks between them.
+_STRIP = np.array(
+    [[0.0, 0.0], [0.0, 20.0], [0.0, 40.0],          # 0,1,2  west cap
+     [100.0, 0.0], [100.0, 40.0],                   # 3,4    banks
+     [200.0, 0.0], [200.0, 20.0], [200.0, 40.0]])   # 5,6,7  east cap
+_WEST_FACE = {"type": "LineString", "coordinates": [[0.0, 0.0], [0.0, 40.0]]}
+_EAST_FACE = {"type": "LineString", "coordinates": [[200.0, 0.0], [200.0, 40.0]]}
+
+
+def _shapes(**faces):
+    from shapely.geometry import shape as _shape
+
+    return {role: _shape(geometry) for role, geometry in faces.items()}
+
+
+def test_both_transect_faces_land_their_own_role():
+    """Each end cap is one role, whole; the banks between them are neither."""
+    roles = T.match_boundary_roles(
+        _STRIP, range(8), _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
+        tolerance_m=20.0)
+    assert roles == {"inflow": [0, 1, 2], "outflow": [5, 6, 7]}
+
+
+def test_a_node_off_every_face_carries_no_role_and_is_solid_wall():
+    """A bank node takes the role of neither cap, however near one it is."""
+    roles = T.match_boundary_roles(
+        _STRIP, [3, 4], _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
+        tolerance_m=20.0)
+    assert roles == {}
+
+
+def test_a_mesh_with_no_declared_boundaries_carries_no_roles():
+    """Nothing is inferred: an undeclared boundary is entirely solid wall, which
+    is what makes a deck against it refuse rather than solve on a guess."""
+    assert T.match_boundary_roles(_STRIP, range(8), {}, tolerance_m=20.0) == {}
+
+
+# --------------------------------------------------------------------------- #
 # The fitted bed.
 # --------------------------------------------------------------------------- #
 _CENTERLINE = np.array([[0.0, 0.0], [1000.0, 0.0]])

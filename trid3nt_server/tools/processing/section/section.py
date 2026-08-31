@@ -70,7 +70,10 @@ class SectionLayerURI(LayerURI):
     ``source_area_km2`` (what went in), ``length_m`` (the chord, 0 for an extent
     cut), ``utm_epsg`` (the zone the cut was measured in, 0 for an extent cut),
     ``parts_kept`` / ``parts_dropped`` (disconnected pieces the cut left),
-    ``notes`` (every choice the cut made).
+    ``face_start`` / ``face_end`` (the two transects the ``between`` cut left, as
+    ``[[lon, lat], [lon, lat]]`` - what a boundary role is prescribed across;
+    empty on an extent cut, which leaves no transect), ``notes`` (every choice the
+    cut made).
     """
 
     area_km2: float = 0.0
@@ -79,6 +82,8 @@ class SectionLayerURI(LayerURI):
     utm_epsg: int = 0
     parts_kept: int = 0
     parts_dropped: int = 0
+    face_start: list[list[float]] = []
+    face_end: list[list[float]] = []
     notes: list[str] = []
 
 
@@ -187,10 +192,39 @@ def _band(a: Any, b: Any, reach: float) -> Any:
                     tuple(b - wide), tuple(a - wide)])
 
 
+def _end_face(section_m: Any, point: Any, normal: Any, reach: float,
+              back: Any) -> list[list[float]]:
+    """The TRANSECT the cut left at one end -> its two lon/lat ends, or ``[]``.
+
+    The end cut is a real edge of the section, so the face is measured off the
+    geometry rather than restated: the perpendicular at the point meets the
+    polygon exactly along that edge, and the two extremes of what it meets are the
+    face's ends. A solver prescribes its inflow across this whole face, so the
+    face - not the single point the chain named it by - is what a boundary role
+    is matched against.
+    """
+    import numpy as np
+    from shapely.geometry import LineString
+
+    span = np.asarray(normal, dtype=float) * float(reach)
+    meet = section_m.intersection(LineString([tuple(np.asarray(point) + span),
+                                              tuple(np.asarray(point) - span)]))
+    coords = [c for part in getattr(meet, "geoms", [meet])
+              for c in getattr(part, "coords", ())]
+    if len(coords) < 2:
+        return []
+    along = [float(np.dot(np.asarray(c, dtype=float) - np.asarray(point),
+                          np.asarray(normal, dtype=float))) for c in coords]
+    ends = (coords[int(np.argmin(along))], coords[int(np.argmax(along))])
+    return [[float(v) for v in back.transform(*e)] for e in ends]
+
+
 def _cut_between(polys: list[Any], start: tuple[float, float],
                  end: tuple[float, float],
-                 notes: list[str]) -> tuple[Any, int, int, float, int]:
-    """Section the polygons between two points -> geometry, parts, chord, zone."""
+                 notes: list[str]) -> tuple[Any, int, int, float, int,
+                                            list[list[float]],
+                                            list[list[float]]]:
+    """Section the polygons between two points -> geometry, parts, chord, zone, faces."""
     import numpy as np
     from pyproj import Transformer
     from shapely.geometry import LineString
@@ -242,8 +276,11 @@ def _cut_between(polys: list[Any], start: tuple[float, float],
         f"Cut square to the {chord:.1f} m line between the two points, measured "
         f"in EPSG:{epsg}.")
     section_m = unary_union(kept)
+    unit = (b - a) / chord
+    normal = np.array([-unit[1], unit[0]])
     return (_transform(back.transform, section_m), len(kept), dropped, chord,
-            int(epsg))
+            int(epsg), _end_face(section_m, a, normal, reach, back),
+            _end_face(section_m, b, normal, reach, back))
 
 
 def _cut_within(polys: list[Any], box: tuple[float, float, float, float],
@@ -317,7 +354,9 @@ def section(
         ``SectionLayerURI`` -- the sectioned polygon (GeoJSON, EPSG:4326,
         ``style_preset="section_polygon"``) with ``area_km2``,
         ``source_area_km2``, ``length_m``, ``utm_epsg``, ``parts_kept``,
-        ``parts_dropped``, honest ``notes``.
+        ``parts_dropped``, ``face_start`` / ``face_end`` (the two end transects a
+        ``between`` cut left, which a mesh prescribes its boundary roles across),
+        honest ``notes``.
 
     Raises:
         SectionError: ``SECTION_INPUT_INVALID`` (no cut, or both, or a malformed
@@ -352,12 +391,14 @@ def section(
                 f"stretch to keep; got {between!r}.")
         start = _point(between[0], "between[0]")
         end = _point(between[1], "between[1]")
-        geom, kept, dropped, chord, epsg = _cut_between(polys, start, end, notes)
+        geom, kept, dropped, chord, epsg, face_start, face_end = _cut_between(
+            polys, start, end, notes)
         name = f"Section of a polygon along a {chord / 1000.0:.2f} km line"
     else:
         box = _extent(within)
         geom, kept, dropped = _cut_within(polys, box, notes)
         chord, epsg = 0.0, 0
+        face_start, face_end = [], []
         name = "Section of a polygon clipped to an extent"
 
     area = _area_km2(geom)
@@ -391,4 +432,6 @@ def section(
         utm_epsg=int(epsg),
         parts_kept=kept,
         parts_dropped=dropped,
+        face_start=face_start,
+        face_end=face_end,
         notes=notes)

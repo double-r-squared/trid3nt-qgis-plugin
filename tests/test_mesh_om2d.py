@@ -43,7 +43,8 @@ def test_the_roster_is_the_two_meshers_and_nothing_else():
 
 
 def test_the_wrapper_declares_its_spec_signature():
-    assert set(get_mesher("om2d").fields) == {"kind", "extent", "refine", "bed"}
+    assert set(get_mesher("om2d").fields) == {"kind", "extent", "refine", "bed",
+                                              "boundaries"}
 
 
 def test_the_wrapper_registers_its_edit_vocabulary():
@@ -452,7 +453,8 @@ def test_an_open_boundary_without_a_bed_refuses(tmp_path):
     assert excinfo.value.error_code == "MESH_OPEN_BOUNDARY_UNMEASURABLE"
 
 
-def _emit_with(monkeypatch, tmp_path, boundary):
+def _emit_with(monkeypatch, tmp_path, boundary, boundaries=None,
+               points_m=None):
     """Run the format fan-out with the container calls answered."""
     written: dict[str, object] = {}
 
@@ -468,11 +470,66 @@ def _emit_with(monkeypatch, tmp_path, boundary):
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
         fake_pair)
     files, info, probes = OM2D._emit_formats(
-        tmp_path, lonlat=_POINTS, cells=_CELLS, points_m=_POINTS,
+        tmp_path, lonlat=_POINTS, cells=_CELLS,
+        points_m=_POINTS if points_m is None else points_m,
         bed_up=np.full(4, -5.0), boundary=boundary,
+        boundaries=boundaries or {}, utm_epsg=32618,
         domain_source="GSHHG land polygons (GSHHS_i_L1.shp)")
     info["_written_roles"] = written.get("roles")
     return files, info, probes
+
+
+def _utm_points():
+    from pyproj import Transformer
+
+    tr = Transformer.from_crs(4326, 32618, always_xy=True)
+    x, y = tr.transform(_POINTS[:, 0], _POINTS[:, 1])
+    return np.column_stack([x, y])
+
+
+#: The two end transects a ``section`` cut, as it hands them over: the two ends
+#: of each cut, in lon/lat.
+_WEST_FACE = [[-75.78, 36.12], [-75.78, 36.16]]
+_EAST_FACE = [[-75.74, 36.12], [-75.74, 36.16]]
+
+
+def test_the_declared_roles_reach_the_cli_and_the_topology_bundle(
+        monkeypatch, tmp_path):
+    """Both transect faces land their own role, and the bundle records them
+    beside the order the pair writer MEASURED off the .cli it just wrote."""
+    monkeypatch.setattr(OM2D, "_stats", lambda _rundir: {})
+    _, info, probes = _emit_with(
+        monkeypatch, tmp_path, None,
+        boundaries={"inflow": _WEST_FACE, "outflow": _EAST_FACE},
+        points_m=_utm_points())
+    assert info["_written_roles"] == {"inflow": [0, 2], "outflow": [1, 3]}
+    assert info["roles"] == {"inflow": 2, "outflow": 2}
+    bundle = json.loads((tmp_path / "mesh_topology.json").read_text())
+    assert bundle["roles"] == {"inflow": [0, 2], "outflow": [1, 3]}
+    assert bundle["liquid_boundary_order"] == ["open"]  # what the writer reported
+    assert probes["liquid_boundary_roles"] == ["open"]
+
+
+def test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed(
+        monkeypatch, tmp_path):
+    far = [[-70.0, 36.12], [-70.0, 36.16]]
+    with pytest.raises(MeshToolError) as excinfo:
+        _emit_with(monkeypatch, tmp_path, None,
+                   boundaries={"inflow": _WEST_FACE, "outflow": far},
+                   points_m=_utm_points())
+    assert excinfo.value.error_code == "MESH_BOUNDARY_ROLE_UNMATCHED"
+
+
+def test_an_undeclared_boundary_authors_no_liquid_boundary_and_no_bundle(
+        monkeypatch, tmp_path):
+    """No declaration and no gate designation is a fully SOLID boundary: nothing
+    is inferred, so a deck against it refuses instead of solving on a guess."""
+    files, info, _ = _emit_with(monkeypatch, tmp_path, None,
+                                points_m=_utm_points())
+    assert info["_written_roles"] == {}
+    assert "roles" not in info
+    assert "topology_uri" not in files
+    assert not (tmp_path / "mesh_topology.json").exists()
 
 
 def test_the_cli_is_handed_exactly_the_section_nodes(monkeypatch, tmp_path):

@@ -70,7 +70,7 @@ def test_the_edge_band_declaration_survived_the_dissolution():
 
 
 @pytest.mark.parametrize("mesher,expected", [
-    ("om2d", {"kind", "extent", "bed", "refine"}),
+    ("om2d", {"kind", "extent", "bed", "refine", "boundaries"}),
     ("reg_grid", {"kind", "extent", "resolution_m"}),
 ])
 def test_each_mesher_declares_its_own_fields(mesher, expected):

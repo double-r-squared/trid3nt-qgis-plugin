@@ -54,6 +54,10 @@ from trid3nt_server.workflows.mesh.meshers import (
     register_mesher,
 )
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+from trid3nt_server.workflows.mesh.topology import (
+    match_boundary_roles,
+    write_topology,
+)
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
 
@@ -98,6 +102,12 @@ _COLLAPSED_AREA_FRAC = 1e-9
 #: which leaves a fraction of a metre.
 _COINCIDENT_TOLERANCE_M = 1.0
 
+#: The slope band a bed fitted downstream is held inside, in m/m. A 2D reach
+#: solve on a surface DEM ponds where the terrain runs uphill; below the floor the
+#: water does not move and above the ceiling the depth collapses. The band spans
+#: the gentle alluvial reaches this mesher is handed.
+_BED_SLOPE_BAND = (3.0e-4, 6.0e-3)
+
 #: How far past the AOI the bed is fetched, as a fraction of each span. The mesh
 #: has nodes ON the AOI corners and a raster's rim rows carry the warp's fill, so
 #: the grid has to reach past where the domain ends.
@@ -133,9 +143,16 @@ _FIELDS = (
                   "fast the two may transition (0.15-0.35)}"),
     MeshField("bed", types=(str, dict),
               default="fetch_topobathy",
-              doc="what paints the node elevations: a raster fetcher's name, or a "
-                  "uri/path to a raster already fetched. The bed also drives the "
-                  "wavelength sizing term"),
+              doc="what paints the node elevations: a raster fetcher's name, a "
+                  "uri/path to a raster already fetched, or {'raster': <either>, "
+                  "'downstream_along': <channel line>} to lay the sampled surface "
+                  "down as a monotone downstream plane along that line. The bed "
+                  "also drives the wavelength sizing term"),
+    MeshField("boundaries", types=(dict,),
+              doc="{role: face} - which stretch of the boundary carries which "
+                  "role (inflow | outflow | open), each face a geometry the chain "
+                  "measured (a section's end transect). Every boundary node takes "
+                  "the role of the face it lies on; the rest are solid wall"),
 )
 
 
@@ -148,6 +165,7 @@ def build(spec: Mapping[str, Any]) -> Mesh:
         "refine": checked_refine("mesher 'om2d'", spec.get("refine"),
                                  _refine_defaults(spec.get("refine"))),
         "bed": spec.get("bed") or "fetch_topobathy",
+        "boundaries": dict(spec.get("boundaries") or {}),
         "obstacles": [],
         "regions": [],
         "boundary": None,
@@ -200,6 +218,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
             "edge band, or mesh the region's own polygon as the domain.")
     dem_path, bed_provenance, fallback_note = _bed_raster(
         state["bed"], aoi, rundir)
+    downstream_along = _downstream_along(state["bed"])
 
     config: dict[str, Any] = {
         "bbox": list(aoi),
@@ -237,10 +256,12 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
 
     lonlat, cells, bed_up, repaired = _clean_once(lonlat, cells, bed_up)
     points, utm_epsg = reproject_nodes_to_utm(lonlat)
+    bed_up, bed_fit = _fit_bed(points, bed_up, downstream_along, int(utm_epsg))
 
     files, boundary_info, boundary_probes = _emit_formats(
         rundir, lonlat=lonlat, cells=cells, points_m=points, bed_up=bed_up,
-        boundary=state["boundary"], domain_source=domain.source)
+        boundary=state["boundary"], boundaries=state.get("boundaries") or {},
+        utm_epsg=int(utm_epsg), domain_source=domain.source)
     stats = _stats(rundir)
 
     return Mesh(
@@ -260,6 +281,7 @@ def _realize(state: Mapping[str, Any]) -> Mesh:
                    if repaired else {}),
                 **({"clean_notes": list(stats["clean_notes"])}
                    if stats.get("clean_notes") else {}),
+                **({"bed_fit": bed_fit} if bed_fit else {}),
                 **boundary_probes,
             },
             "artifact": {
@@ -308,6 +330,7 @@ def _carry(state: Mapping[str, Any]) -> dict[str, Any]:
                    if isinstance(extent, (tuple, list)) else extent),
         "refine": dict(state["refine"]),
         "bed": state["bed"],
+        "boundaries": dict(state.get("boundaries") or {}),
         "obstacles": list(state["obstacles"]),
         "regions": [dict(r) for r in state["regions"]],
         "boundary": (dict(state["boundary"]) if state["boundary"] else None),
@@ -448,8 +471,10 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
     if isinstance(bed, Mapping):
-        bed = bed.get("uri") or bed.get("path") or ""
-    name = str(bed).strip()
+        bed = bed.get("raster") or bed.get("uri") or bed.get("path") or ""
+    from trid3nt_server.tools.processing._geometry_common import source_uri
+
+    name = str(source_uri(bed) or "").strip()
     if not name:
         return None, "bed: NOT SAMPLED - no bed was declared", None
 
@@ -469,6 +494,52 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     dst.write_bytes(read_object_bytes_s3(uri) if str(uri).startswith("s3://")
                     else Path(uri).read_bytes())
     return dst, _bed_provenance(name, layer), fetch_fallback_note(layer)
+
+
+def _downstream_along(bed: Any) -> Any:
+    """The channel line a fitted bed is laid down along, or ``None``.
+
+    Declared, never inferred: a catchment's bed is the terrain and a reach's is a
+    downstream plane, and only the ask knows which this is. A bed named as a plain
+    raster is painted as it sampled.
+    """
+    return dict(bed).get("downstream_along") if isinstance(bed, Mapping) else None
+
+
+def _fit_bed(points_m: Any, bed_up: Any, downstream_along: Any,
+             utm_epsg: int) -> tuple[Any, dict[str, Any]]:
+    """Lay the sampled surface down as a monotone downstream plane -> (bed, stats).
+
+    A surface DEM along a thalweg runs uphill between adjacent nodes, and a
+    shallow-water solve on that ponds instead of flowing. What is fitted, the
+    slope band it is held inside and both the measured and the enforced slope are
+    the shared node primitive's; this resolves the declared line into the mesh's
+    own metres and hands it over.
+    """
+    if downstream_along is None or bed_up is None:
+        return bed_up, {}
+    import numpy as np
+    from pyproj import Transformer
+
+    from trid3nt_server.workflows.mesh.shared.nodes import fit_downstream_bed
+
+    _polygons, lines = _split_geometry(read_geometry(downstream_along))
+    if not lines:
+        raise MeshToolError(
+            "MESH_BED_NO_CHANNEL",
+            f"the bed's downstream_along {downstream_along!r} carries no line, so "
+            "there is no channel to fit the bed down; declare the reach's own "
+            "centerline.")
+    tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    xy = np.asarray(lines, dtype=float)
+    x, y = tr.transform(xy[:, 0], xy[:, 1])
+    bed, stats = fit_downstream_bed(points_m, np.column_stack([x, y]), bed_up,
+                                    min_slope=_BED_SLOPE_BAND[0],
+                                    max_slope=_BED_SLOPE_BAND[1])
+    logger.info("om2d bed fitted downstream: measured slope %.3g -> enforced "
+                "%.3g over %.0f m", stats["measured_slope"],
+                stats["enforced_slope"], stats["reach_len_m"])
+    return bed, stats
 
 
 def _bed_bbox(aoi: tuple[float, ...]) -> tuple[float, float, float, float]:
@@ -663,7 +734,8 @@ def _has_area(points: Any, cells: Any) -> Any:
 
 
 def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
-                  bed_up: Any, boundary: Any,
+                  bed_up: Any, boundary: Any, boundaries: Mapping[str, Any],
+                  utm_epsg: int,
                   domain_source: str) -> tuple[dict[str, str],
                                                dict[str, Any], dict[str, Any]]:
     """Write the per-solver geometry from one boundary segmentation.
@@ -712,18 +784,87 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
                      "designated_by": "om2d"})
 
     open_nodes = [n for s in sections for n in s["nodes"]]
+    roles = _declared_roles(points_m, loops, boundaries, utm_epsg)
+    if open_nodes:
+        roles["open"] = open_nodes
+    if roles:
+        info["roles"] = {role: len(nodes) for role, nodes in roles.items()}
     files: dict[str, str] = {}
     pair = write_telemac_pair(
         rundir, x=points_m[:, 0], y=points_m[:, 1], cells=cells, bed=bed_up,
-        roles={"open": open_nodes} if open_nodes else {},
-        title="TRID3NT OM2D MESH")
+        roles=roles, title="TRID3NT OM2D MESH")
     files["slf_uri"] = str(pair["geo_slf"])
     files["cli_uri"] = str(pair["cli"])
+    lb_order = list(pair["stats"].get("liquid_boundary_roles") or [])
     probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
-    probes["liquid_boundary_roles"] = list(
-        pair["stats"].get("liquid_boundary_roles") or [])
+    probes["liquid_boundary_roles"] = lb_order
     probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
+    if roles:
+        # The two facts a SELAFIN cannot state - which stretch carries which role,
+        # and the order the solver will number them in - ride beside it.
+        files["topology_uri"] = str(write_topology(
+            rundir, roles=roles, liquid_boundary_order=lb_order))
     return files, info, probes
+
+
+def _declared_roles(points_m: Any, loops: Any, boundaries: Mapping[str, Any],
+                    utm_epsg: int) -> dict[str, list[int]]:
+    """The declared boundary roles, resolved onto THIS mesh's boundary nodes.
+
+    The tolerance is the mesh's own mean boundary edge: a node further than one
+    edge from every declared face is the bank between them.
+    """
+    import numpy as np
+    from pyproj import Transformer
+    from shapely.geometry import shape as _shape
+    from shapely.ops import transform as _transform
+
+    if not boundaries:
+        return {}
+    nodes = sorted({int(n) for loop in loops for n in loop})
+    if not nodes:
+        raise MeshToolError(
+            "MESH_BOUNDARY_UNSEGMENTED",
+            f"boundary roles {sorted(boundaries)} were declared but this mesh's "
+            "boundary walk found no nodes to carry them.")
+    tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    faces = {str(role): _transform(tr.transform, _shape(_face_geometry(role, value)))
+             for role, value in boundaries.items()}
+    xy = np.asarray(points_m, dtype=float)
+    tolerance = _mean_boundary_edge_m(xy, loops)
+    matched = match_boundary_roles(xy, nodes, faces, tolerance_m=tolerance)
+    unmatched = [role for role in faces if not matched.get(role)]
+    if unmatched:
+        raise MeshToolError(
+            "MESH_BOUNDARY_ROLE_UNMATCHED",
+            f"no boundary node of this mesh lies within {tolerance:.1f} m of the "
+            f"face declared for role(s) {unmatched}; the mesh and the face the "
+            "chain measured describe different domains.")
+    return matched
+
+
+def _face_geometry(role: str, value: Any) -> dict[str, Any]:
+    """One declared role's face as GeoJSON, whichever way it was declared."""
+    if isinstance(value, (list, tuple)):
+        coords = [[float(c[0]), float(c[1])] for c in value]
+        if len(coords) < 2:
+            raise MeshToolError(
+                "MESH_BOUNDARY_ROLE_INVALID",
+                f"boundary role {role!r} names {coords}, which is not a face: a "
+                "role is prescribed across a transect, so declare the two ends of "
+                "one (a section's face_start / face_end).")
+        return {"type": "LineString", "coordinates": coords}
+    return read_geometry(value)
+
+
+def _mean_boundary_edge_m(points_m: Any, loops: Any) -> float:
+    """The mean length of this mesh's boundary edges, in metres."""
+    import numpy as np
+
+    xy = np.asarray(points_m, dtype=float)
+    lengths = [float(np.hypot(*(xy[int(loop[i + 1])] - xy[int(loop[i])])))
+               for loop in loops for i in range(len(loop) - 1)]
+    return float(np.mean(lengths)) if lengths else 0.0
 
 
 def _open_sections(rundir: Path, lonlat: Any, cells: Any, bed_up: Any,
