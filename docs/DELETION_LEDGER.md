@@ -2176,3 +2176,77 @@ worker-side gate to the server dies with the gate.
   `tests/test_mesh_om2d.py`; re-smoked on the preserved failing rundir
   `mesh-01M1AFSK2RNXAXR3TBF0DQQSXH`, which now refuses by naming the 100 m edge
   length its domain cannot hold.
+
+## The boundary run is constructed, and WAQTEL forks to the launcher (worker-unification proof stops, 2026-08-31)
+
+- `topology.py::match_boundary_roles`'s nearest-node scatter and its per-node
+  distance threshold DELETE. CONDITION MET: a TELEMAC liquid boundary IS a
+  contiguous run of one contour, and the per-node rule produced holes - the
+  do_sag mesh measured `.III...OO.OO...IIII` along its own contour, which
+  `set_numliq` counts as five liquid boundaries where two were declared. The
+  matcher now takes the CONTOURS in walk order and constructs the run between the
+  nodes nearest a face's two ends (a point-declared role takes the run standing
+  within the tolerance of it), so the holes are inside the stretch by
+  construction. Proven offline against the measured scatter and against the
+  isolating probe's hand-closed result, and through the image: the probe's
+  rewritten `.cli` numbered exactly two boundaries.
+- `section.py::_end_face`'s probe-line intersection DELETES with its `reach`
+  argument and its `[]` return. CONDITION MET: the end cut is exactly collinear
+  with the probe line, and over a domain-sized probe (132 km on the Eel) the
+  collinear intersection came back whole at one end and EMPTY at the other - the
+  river_dye 1.0 km reach reached the mesher with `face_end == []` and refused
+  there as "[] is not a face". The face is now projected off the section's own
+  boundary vertices, and an end the cut never reached refuses as
+  `SECTION_END_FACE_UNMEASURED`, naming how many vertices stand on the cut plane
+  and how far the nearest one is off it.
+- `workers/telemac/entrypoint.py`: WAQTEL- and GAIA-coupled cases run the
+  module's own CLI launcher instead of the telapy arm. A SCOPED, LEDGERED
+  DEVIATION, not a deletion. CONDITION TO DIE: telapy's API arm drives them. It
+  does not today, and both failures were measured in the image on the run
+  directories the server authored:
+  * WAQTEL (do_sag) - `set_case` + `run_all_time_steps` stops at iteration 0 with
+    `OS (BIEF): OBJECT TYPE NOT IMPLEMENTED: 0`, after a `Cannot open file
+    'WAQDICO'` fallback crash on the first attempt.
+  * GAIA (sediment) - the time loop runs to the END and the FINALIZE fails,
+    `ERROR 1003 DURING CALL OF BIEF_CLOSE_FILE:CLOSE_BND /
+    HERMES_FILE_NOT_OPENED_ERR`, so the results never land. GAIA was plumbed on
+    telapy first and FELL to the same deviation, which the proof ruling required
+    be said loudly.
+  `telemac2d.py <cas>` on both of those same run directories reaches CORRECT END
+  and writes every declared result (rc=0), and returns rc=1 on a bad deck, so the
+  success convention is unchanged. The deviation sits BEHIND the one runner seam
+  (`_run_child`), keeps the same manifest, the same tee, the same timeout and the
+  same convention (clean exit AND every declared result on disk), and is chosen on
+  one manifest word (`case.coupling`). Pure telemac2d, oil/user-Fortran, artemis
+  and telemac3d cases all stay on telapy - proven live in the same wave.
+- `steps/deck.py`: `_class_files`'s unreachable `do_sag` branch DELETES as dead -
+  it is now REACHED. CONDITION MET: the class was read off `classify_substance`,
+  which answers `tracer` for a DO-sag run (its substance IS dye); the `do_sag`
+  class is threaded onto the DECK, which is where the author reads it from. One
+  reading (`deck["substance_class"]`) now serves both the file lists and the
+  coupling word, so the manifest could not say `tracer` about a deck the author
+  wrote a WAQTEL coupling into.
+- `steps/author.py`: the BARE absolute path in the rain-on-grid `FORTRAN FILE`
+  line DELETES; the value is quoted. CONDITION MET: `/` opens a comment in a
+  steering file, so damocles read the keyword as empty AND swallowed the line
+  after it - measured in the image, `TelemacCas` returned `['EQUATIONS',
+  'SAINT-VENANT FE']` as the FORTRAN FILE value and `None` for EQUATIONS, and the
+  hyetograph run died as "missing file for FORTRAN FILE: EQUATIONS". Quoted, the
+  same probe returns the path and EQUATIONS survives.
+- `delineate_watershed`: the grid-CRS leak DELETES. CONDITION MET: the D8 trace
+  runs in the DEM's own grid and a supplied `dem_uri` is under no obligation to
+  be lon/lat - 3DEP arrives in EPSG:5070 - so the tool was returning Albers
+  metres on a layer that declares EPSG:4326. Downstream that is not a wrong
+  answer but a lattice millions of cells wide: the rain_on_grid catchment mesh
+  died on a 104 GiB allocation inside the triangulator. The pour point now goes
+  into the grid's CRS and the catchment comes back out of it, and `om2d` refuses
+  a non-lon/lat extent as `MESH_DOMAIN_NOT_LONLAT` rather than sizing a lattice
+  from it.
+- `tests/reach_chain.py::BANKS_HALF`'s use as the partly-mapped-reach PROCEEDS
+  fixture DELETES; `BANKS_GAPPED` replaces it. CONDITION MET: `BANKS_HALF` maps
+  the west half only, so the reach's downstream END stands on the polygon's own
+  bank and the cut leaves no transect there - the run never proceeded live, it
+  reached the mesher with an empty face. The ruled behaviour (above zero
+  coverage PROCEEDS with the measured fraction journalled) is now proven on banks
+  that map both ends with a gap between them, and `BANKS_HALF` proves the refusal
+  at the cut.
