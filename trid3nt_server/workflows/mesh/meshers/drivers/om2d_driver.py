@@ -64,6 +64,29 @@ from shapely.ops import unary_union
 _OBSTACLE_BAND_EDGES = 1.0
 
 
+def _typed(points, cells) -> tuple[np.ndarray, np.ndarray]:
+    """A mesh in the dtypes every pass and every reader below indexes with."""
+    return np.asarray(points, dtype=float), np.asarray(cells, dtype=np.int64)
+
+
+class _EmptyAfterClean(Exception):
+    """A clean pass took the last element; the empty-mesh refusal states why."""
+
+
+def _pass(fn, points, cells, **kwargs) -> tuple[np.ndarray, np.ndarray]:
+    """One oceanmesh clean pass, re-typed and checked for having emptied the mesh.
+
+    The passes hand connectivity back as floats and the next one indexes with it,
+    so the dtype is re-established after every pass rather than only at the end.
+    A pass that removes every element leaves the ones after it indexing empty
+    float arrays, which surfaces as a dtype error rather than as what happened.
+    """
+    points, cells = _typed(*fn(points, cells, **kwargs)[:2])
+    if cells.shape[0] == 0:
+        raise _EmptyAfterClean(fn.__name__)
+    return points, cells
+
+
 def _m_per_deg(mid_lat_deg: float) -> float:
     return 111_320.0 * max(0.15, math.cos(math.radians(mid_lat_deg)))
 
@@ -306,6 +329,8 @@ def op_build(cfg: dict, out: str) -> int:
         max_iter=int(cfg.get("max_iter", 40)), seed=seed,
         pfix=(pfix if pfix.shape[0] else None))
 
+    points, cells = _typed(points, cells)
+
     gaps: dict[str, float | None] = {}
     notes: list[str] = []
 
@@ -321,14 +346,14 @@ def op_build(cfg: dict, out: str) -> int:
     lock = pfix if pfix.shape[0] else None
     quality = float(cfg.get("min_element_qual", 0.01))
     cleaned = False
-    if np.asarray(cells).shape[0] > 0:
+    if cells.shape[0] > 0:
         try:
             # delete_boundary_faces cannot tell a constrained cut from a sliver -
             # the elements along a punched outline ARE boundary faces - so the pass
             # is kept only while the cut stays where it was locked.
             held = (points, cells)
-            points, cells = om.delete_boundary_faces(points, cells,
-                                                     min_qual=quality)
+            points, cells = _pass(om.delete_boundary_faces, points, cells,
+                                  min_qual=quality)
             _record("boundary_faces", points)
             if lock is not None and gaps["boundary_faces"] > gaps["generated"]:
                 notes.append(
@@ -338,23 +363,35 @@ def op_build(cfg: dict, out: str) -> int:
                     % (gaps["boundary_faces"] - gaps["generated"]))
                 points, cells = held
                 gaps["boundary_faces"] = gaps["generated"]
-            points, cells = om.delete_faces_connected_to_one_face(points, cells)
+            points, cells = _pass(om.delete_faces_connected_to_one_face,
+                                  points, cells)
             _record("one_face", points)
-            points, cells = om.laplacian2(points, cells, max_iter=20, tol=0.01,
-                                          pfix=lock)
+            points, cells = _pass(om.laplacian2, points, cells, max_iter=20,
+                                  tol=0.01, pfix=lock)
             _record("smoothed", points)
-            points, cells = om.make_mesh_boundaries_traversable(
-                points, cells, min_disconnected_area=0.05)
+            points, cells = _pass(om.make_mesh_boundaries_traversable,
+                                  points, cells, min_disconnected_area=0.05)
             _record("traversable", points)
-            points, cells, _ = om.fix_mesh(points, cells, delete_unused=True)
+            points, cells = _pass(om.fix_mesh, points, cells, delete_unused=True)
             _record("fixed", points)
             cleaned = True
-        except Exception as exc:  # noqa: BLE001 -- the pre-clean topology still stands
-            notes.append("mesh clean passes stopped: %s" % exc)
-            print("mesh clean passes stopped:", exc, flush=True)
+        except _EmptyAfterClean as exc:
+            # The emptying pass never assigned, so the mesh the chain ACTUALLY
+            # produced is stated here and refused by the backstop below.
+            notes.append("%s removed the last element" % exc)
+            points, cells = _typed(np.empty((0, 2)), np.empty((0, 3)))
+        except Exception as exc:  # noqa: BLE001 -- re-raised as a typed refusal below
+            # A pass that throws leaves the arrays wherever it stopped, so the run
+            # cannot continue over them: half a clean is not a mesh, and a note
+            # about it reads afterwards as a mesh that was merely cleaned less.
+            raise ValueError(
+                "the mesh clean chain stopped inside a pass and the mesh is left "
+                f"partially cleaned, so it is refused rather than solved: {exc!r}"
+                + ("; " + "; ".join(notes) if notes else "")
+                + f"; passes measured before the stop: {sorted(gaps)}"
+            ) from exc
+        points, cells = _typed(points, cells)
 
-    points = np.asarray(points, dtype=float)
-    cells = np.asarray(cells, dtype=np.int64)
     if cells.shape[0] == 0:
         # Every number below reduces over the elements, so a generation that
         # yielded none reaches the caller as a zero-size numpy reduction rather

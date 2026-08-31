@@ -712,3 +712,58 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
     corners = np.array([[-75.80, 36.10], [-75.70, 36.10],
                         [-75.70, 36.20], [-75.80, 36.20]])
     assert sample_raster_at_nodes(str(path), corners).tolist() == [-18.0] * 4
+
+
+# --------------------------------------------------------------------------- #
+# Inside the driver: the clean chain, exercised with oceanmesh stubbed out.
+# --------------------------------------------------------------------------- #
+def _driver():
+    """The in-container driver, imported here with its library stubbed.
+
+    ``oceanmesh`` lives only in the mesh image; everything the clean chain does
+    with what the library hands back is ours and belongs under the offline suite.
+    """
+    import importlib.util
+    import sys
+    import types
+
+    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+
+    stub = types.ModuleType("oceanmesh")
+    stub.Domain = type("Domain", (), {"__init__": lambda self, bbox, func: None})
+    saved = sys.modules.get("oceanmesh")
+    sys.modules["oceanmesh"] = stub
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "_om2d_driver_under_test", drivers_dir() / "om2d_driver.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        if saved is None:
+            del sys.modules["oceanmesh"]
+        else:
+            sys.modules["oceanmesh"] = saved
+    return module
+
+
+def test_a_clean_pass_handing_back_float_connectivity_is_retyped():
+    """The library returns float faces and the next pass indexes with them."""
+    driver = _driver()
+
+    def floaty(points, cells):
+        return np.asarray(points, dtype=float), np.asarray(cells, dtype=float)
+
+    _, cells = driver._pass(floaty, _POINTS, _CELLS)
+    assert cells.dtype == np.int64
+    assert cells.tolist() == _CELLS.tolist()
+
+
+def test_a_pass_that_removes_the_last_element_stops_the_chain_by_name():
+    driver = _driver()
+
+    def empties(points, cells):
+        return points[:0], cells[:0]
+
+    with pytest.raises(driver._EmptyAfterClean) as excinfo:
+        driver._pass(empties, _POINTS, _CELLS)
+    assert "empties" in str(excinfo.value)
