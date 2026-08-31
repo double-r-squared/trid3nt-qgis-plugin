@@ -199,7 +199,6 @@ def test_a_solver_identifier_resolves_to_its_engine():
     assert resolve_engine("artemis_agitation") == "telemac"
     assert resolve_engine("tomawac_wave") == "telemac"
     assert resolve_engine("telemac_coastal") == "telemac"
-    assert resolve_engine("sfincs-quadtree") == "sfincs"
     assert engine_paths("artemis_agitation") == engine_paths("telemac")
 
 

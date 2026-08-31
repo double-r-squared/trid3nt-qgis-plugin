@@ -1,18 +1,16 @@
 """Host-exec ``outputs.json`` writer -- the agent-side producer half.
 
-The docker-worker engines (SFINCS/GeoClaw/SWAN) write ``outputs.json`` from
-inside their container entrypoint via the worker mirror
-(``workers/_raster_postprocess/outputs_manifest.py``). The HOST-EXEC engines
-(SWMM in-process pyswmm; Landlab exec-from-source) have no separate worker
-process to own the write -- the AGENT itself, in the same postprocess that
-rasterizes the frames, is the writer (schema §5.1 "host-exec engines"). This
-module is that writer's object-store shim: it serializes the entries via the
-PURE-STDLIB contracts writer (``trid3nt_contracts.outputs_manifest``) and PUTs
-the whole array to ``<scheme>://<runs_bucket>/<run_id>/outputs.json`` -- the
-EXACT prefix ``outputs_seam.read_outputs_manifest`` reads back.
+A docker-worker engine can write ``outputs.json`` from inside its container
+entrypoint. A HOST-EXEC engine has no separate worker process to own the write
+-- the AGENT itself, in the same postprocess that rasterizes the frames, is the
+writer (schema §5.1 "host-exec engines"). This module is that writer's
+object-store shim: it serializes the entries via the PURE-STDLIB contracts
+writer (``trid3nt_contracts.outputs_manifest``) and PUTs the whole array to
+``<scheme>://<runs_bucket>/<run_id>/outputs.json`` -- the EXACT prefix
+``outputs_seam.read_outputs_manifest`` reads back.
 
-Scheme-aware (mirrors ``postprocess_landlab._upload_geojson_to_runs_bucket``):
-``s3`` via the solver boto3 client, ``gs``/``file`` via fsspec. The bucket
+Scheme-aware: ``s3`` via the solver boto3 client, ``gs``/``file`` via
+fsspec. The bucket
 resolves through the SAME ``_get_runs_bucket`` the seam reader uses, so the
 write target and the read target never drift. Best-effort by contract -- the
 caller wraps this in a try/except and degrades to peak-only (never sinks the

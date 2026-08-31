@@ -184,8 +184,8 @@ def test_every_topobathy_call_site_declares_a_rung():
 # --------------------------------------------------------------------------- #
 
 #
-# Keyed by AUDIT ROW, not by file: several rows live in one file and one row lives
-# in two files, so a file key silently loses entries.
+# Keyed by AUDIT ROW, not by file: a row can live in more than one file, so a
+# file key silently loses entries.
 #
 # A marker is the tightest STABLE anchor at the site -- a constant name, a counter
 # increment, a log format string. It is deliberately not the whole line: an
@@ -193,53 +193,13 @@ def test_every_topobathy_call_site_declares_a_rung():
 # not a semantic check: a site could in principle keep its constant and lose its
 # defect, so a failure here means LOOK, not "broken".
 _PARKED_SILENT_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {
-    "row 11a -- COG CRS guess (agent copy)": (
+    "row 11 -- COG CRS guess": (
         "trid3nt_server/workflows/shared/cog_io.py",
         'ds.attrs.get("crs", "EPSG:3857")',
         "audit row 11: a COG whose dataset carries no CRS is TAGGED EPSG:3857 and "
         "written, so pixel coordinates that were never Web Mercator get a Web "
         "Mercator georeference. Logged only. PARKED (ADR 0299 fork 4): raise vs "
         "keep guessing is NATE's call.",
-    ),
-    "row 11b -- COG CRS guess (worker copy)": (
-        "workers/_raster_postprocess/cog.py",
-        'ds.attrs.get("crs", "EPSG:3857")',
-        "audit row 11, the unaudited second site: the same guess inside the worker "
-        "postprocess package. PARKED (ADR 0299 fork 4) and, being worker code, its "
-        "fix needs an image rebuild + smoke of its own.",
-    ),
-    "row 12a -- SFINCS wide active mask (worker copy)": (
-        "workers/_sfincs_build/deck.py",
-        "_MASK_FALLBACK_ZMIN",
-        "audit row 12: an unreadable DEM range widens the active-cell mask so the "
-        "domain includes cells a real range would exclude. The note EXISTS at "
-        "workflows/sfincs/flood/flood.py and reaches only logger.warning. PARKED: "
-        "the envelope wiring is a composer change, not a ladder.",
-    ),
-    "row 14 -- quadtree center-band refinement": (
-        "workers/_sfincs_build/deck_quadtree.py",
-        'refine_source = "center_band_fallback"',
-        "audit row 14: with no z=0 land-sea interface resolved in the AOI, "
-        "refinement follows a fixed cross-shore center band instead of the "
-        "coastline, so resolution lands where the waves may not be. "
-        "``refine_source`` is stamped in the deck and NOTHING downstream reads it "
-        "back. PARKED (physics-loudness class).",
-    ),
-    "row 19 -- MODFLOW SFR streambed gradient": (
-        "workers/modflow/gwt_adapter.py",
-        "DEFAULT_SFR_STREAMBED_GRADIENT",
-        "audit row 19: the DEM-sampled rbot primary (river_dem_uri) IS on "
-        "MODFLOWRunArgs but run_modflow never threads it, so the demo gradient "
-        "drives SFR Manning flow on every stream_depletion run, unlabeled. PARKED "
-        "(ADR 0299 fork 3, a law-9 refuse-vs-label question).",
-    ),
-    "row 20 -- landlab assumed 4326": (
-        "workers/_landlab_postprocess/postprocess.py",
-        "src_crs = dst_crs",
-        "audit row 20: a landlab grid with no CRS tag is reprojected AS IF 4326; "
-        "a projected grid lands in the wrong place at the wrong scale, silently. "
-        "PARKED: the honest fix is to RAISE, which is a worker-behaviour change "
-        "and needs its own image smoke.",
     ),
 }
 
@@ -273,11 +233,12 @@ def test_the_register_carries_a_verdict_for_every_entry():
 
 
 def test_the_register_covers_every_parked_row_the_adr_names():
-    """ADR 0299 parked rows 11, 12, 14, 16, 17, 18, 19, 20 and 25; the SWMM and
-    SFINCS rows (12b, 16, 17, 18) and the river-dye ribbon row (25) left the tree
-    with the code that carried them. The register is the mechanism that keeps the
+    """ADR 0299 parked rows 11, 12, 14, 16, 17, 18, 19, 20 and 25. Every row but
+    11 left the tree with the code that carried it - the SWMM and SFINCS rows
+    (12b, 16, 17, 18), the river-dye ribbon row (25), and rows 11b/12a/14/19/20
+    with the non-telemac workers. The register is the mechanism that keeps the
     REMAINING set from shrinking quietly, so it must actually hold them."""
-    parked_rows = {"11", "12", "14", "19", "20"}
+    parked_rows = {"11"}
     registered = {
         key.split()[1].rstrip("ab") for key in _PARKED_SILENT_SUBSTITUTIONS
     }

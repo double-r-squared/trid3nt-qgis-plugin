@@ -36,24 +36,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 #: an engine's packet is actually asking, and widening it to the whole tree would
 #: make every packet stale on every commit and so tell them nothing.
 ENGINE_PATHS: dict[str, tuple[str, ...]] = {
-    "elmfire": ("workers/elmfire/", "trid3nt_server/workflows/elmfire/"),
-    "geoclaw": ("workers/geoclaw/", "workers/_geoclaw_postprocess/",
-                "trid3nt_server/workflows/geoclaw/"),
-    "hecras": ("workers/hecras/", "workers/hecras2025/",
-               "trid3nt_server/workflows/hecras/"),
-    "landlab": ("workers/landlab/", "workers/_landlab_postprocess/",
-                "trid3nt_server/workflows/landlab/"),
-    "modflow": ("workers/modflow/", "workers/_modflow_build/",
-                "workers/_modflow_postprocess/",
-                "trid3nt_server/workflows/modflow/"),
-    "openquake": ("workers/openquake/", "workers/_openquake_postprocess/",
-                  "trid3nt_server/workflows/openquake/"),
-    "schism": ("workers/schism/", "trid3nt_server/workflows/schism/"),
-    "sfincs": ("workers/sfincs/", "workers/_sfincs_build/",
-               "trid3nt_server/workflows/sfincs/"),
-    "swan": ("workers/swan/", "workers/_swan_postprocess/",
-             "trid3nt_server/workflows/swan/"),
-    "swmm": ("trid3nt_server/workflows/swmm/",),
     "telemac": ("workers/telemac/", "trid3nt_server/workflows/telemac/"),
 }
 

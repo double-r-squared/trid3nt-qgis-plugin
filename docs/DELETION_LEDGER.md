@@ -1750,3 +1750,55 @@ written and the templates refused at binding. The banks query window is now its
 own chained row - `compute_layer_bounds(layer_uri=centerline, pad_m=3000.0)` -
 where the pad is a visible tool argument on the row that needs it. CONDITION:
 none.
+
+## The non-telemac workers leave, and the five staged payload deletions land (2026-08-30)
+
+The worker-unification wave narrows `workers/` to the one engine it dispatches.
+Seventeen directories moved to `/home/nate/Documents/trid3nt-attic/workers/`,
+mirroring their repo-relative paths; git history is the archive and the attic is
+a reading copy on no import path. Every one of them had already lost its server
+half in the fresh-start purge - `trid3nt_server/workflows/<engine>/` went to the
+attic on 2026-08-28 - so what stayed behind was a container half with no
+dispatcher, no deck writer and no products reader.
+
+- workers/elmfire/ (4 py, 2,091 lines): AWS Batch fire worker; its workflow package is already attic'd - moved to attic. CONDITION: none.
+- workers/geoclaw/ (6 py, 4,796) + workers/_geoclaw_postprocess/ (3 py, 791): the Clawpack worker and its raster half - moved to attic. CONDITION: none.
+- workers/hecras/ (8 py, 1,317) + workers/hecras2025/ (43 py, 8,314): the 6.x Fortran worker and the 2025 managed-engine worker - moved to attic. CONDITION: none.
+- workers/landlab/ (5 py, 4,038) + workers/_landlab_postprocess/ (3 py, 422): the exec-mode landlab runner and its postprocess - moved to attic. CONDITION: none.
+- workers/modflow/ (16 py, 11,296) + workers/_modflow_build/ (2 py, 181) + workers/_modflow_postprocess/ (2 py, 1,844): the mf6 deck builder, adapters and head/concentration readers - moved to attic. CONDITION: none.
+- workers/openquake/ (5 py, 2,093) + workers/_openquake_postprocess/ (3 py, 467): the OQ runner and its curve reader - moved to attic. CONDITION: none.
+- workers/sfincs/ (3 py, 836) + workers/_sfincs_build/ (6 py, 3,552): the SFINCS entrypoint and the quadtree/deck builders - moved to attic. CONDITION: none.
+- workers/swan/ (5 py, 2,723) + workers/_swan_postprocess/ (3 py, 595): the SWAN worker and its spectral reader - moved to attic. CONDITION: none.
+- workers/_raster_postprocess/ (11 py, 2,623): the worker-side mirror of the COG / outputs-manifest / publish-manifest contracts writers, shipped into the docker-worker images. Its only remaining consumers were the four worker trees above - moved to attic. CONDITION: none; the agent-side originals under `trid3nt_server/workflows/shared/` and `contracts/` are untouched and are what the kept tree reads.
+
+48,748 lines across 642 files. `workers/schism/` is the eighteenth directory and
+is HELD, not moved - see the design-stop below.
+
+Pointer scrubs that followed them out:
+
+- `workflows/solver/code_provenance.py::ENGINE_PATHS` collapses from eleven engines to the one `telemac` row. Ten rows named a worker directory, a workflow package, or both, and every one of those paths is now in the attic; a staleness answer computed over paths that do not exist reports "your engine never moved" for an engine that is not there.
+- `workflows/shared/outputs_manifest_io.py`'s module docstring named SFINCS/GeoClaw/SWAN as the docker-worker half and SWMM/Landlab as the host-exec half, and pointed at `workers/_raster_postprocess/outputs_manifest.py` for the mirror. The engine names and the mirror pointer go; the host-exec-vs-worker distinction the module exists to serve stays.
+- `tests/test_fallback_sweep_guard.py::_PARKED_SILENT_SUBSTITUTIONS` loses rows 11b, 12a, 14, 19 and 20 - the five parked naked-substitution sites that lived in `_raster_postprocess/cog.py`, `_sfincs_build/deck.py`, `_sfincs_build/deck_quadtree.py`, `modflow/gwt_adapter.py` and `_landlab_postprocess/postprocess.py`. The register pins sites in THIS tree; a site that leaves the tree leaves the register, which is the same treatment the SWMM/SFINCS/ribbon rows already got. Row 11's agent copy in `workflows/shared/cog_io.py` is the whole register now, and `test_the_register_covers_every_parked_row_the_adr_names` pins that set at `{"11"}`.
+- `tests/test_engine_room_posture.py` drops the `resolve_engine("sfincs-quadtree") == "sfincs"` assertion, which pinned a row of the table that just left.
+- `workers/README.md` is rewritten to the surviving roster. Its two-dispatch-mechanism prose, its per-engine build lines and its cloud-lane Dockerfile section described directories that are no longer here.
+
+NATE's five staged `workers/telemac/` payload deletions land with this commit -
+they were held uncommitted since the lego wave under the standing "no telemac
+worker image rebuild" rule, and Stage 0 is where they were ruled to land:
+
+- workers/telemac/telemac_river_dye_build.py (2,595 lines): the reach pipeline's in-worker half - mesh build, bank acquisition, bed sampling and `.cas` authoring. DELETED. CONDITION MET: the wave moves `.cas` authoring server-side and the reach mesh comes from the mesh router as a staged artifact, so the module's every responsibility has a server home; the pieces of it already ledgered by earlier waves (the six in-container fetches, the bed COG, the SIGALRM watchdog, the constant-ribbon fallback) were its progressive dismantling.
+- workers/telemac/telemac_coastal_build.py (728): the coastal-surge pipeline. DELETED. CONDITION MET: `coastal_tidal_surge` goes DARK under the fork ruling, unregistered with an awaiting-port note, until rung-4 rebuilds it; the attic is never a restoration source.
+- workers/telemac/tomawac_build.py (602): the TOMAWAC wave pipeline. DELETED. CONDITION MET: `wave_field` goes DARK under the same ruling. Its entrypoint smoke was the module the image imports at build time, which is why the tree is currently unbuildable - Stage 4 rewrites the smoke blocks.
+- workers/telemac/rog_build.py (855): the rain-on-grid pipeline. DELETED. CONDITION MET: `telemac_rain_on_grid` is parked and re-registers in Stage 3 on the unified dispatch, with the catchment mesh arriving as a MeshArtifact rather than being built in the container.
+- workers/telemac/rainfall_forcing_compare.py (203): a non-registered reference driver that solved one reach twice through `run_solver` - with and without a distributed rain source term - to prove the `rain_or_evap_mm_per_day` knob moved the water surface through the rebuilt image. DELETED, no relocation. This is the missing line the re-baseline noted: the file is a SERVER-SIDE driver misfiled under `workers/`, it imports boto3 and drives the solver seam from outside the container, and it drove a rain deck that `rog_build.py` no longer writes. CONDITION: none - the deletion stands on its own; a rain-forcing A/B belongs in the driver lane against the re-registered template, not beside the worker it dispatches.
+
+DESIGN-STOP, held not resolved: `workers/schism/` (6 py, 769 lines, 40 files) is
+the eighteenth directory and did NOT move. `workflows/mesh/meshers/om2d.py::
+_sandbox_formats` puts `workers/schism` on `sys.path` so that
+`scripts/sandbox/oceanmesh/mesh_formats.py` can import `extract_boundary_loops`,
+`remove_boundary_pinch_points` and `signed_area_ccw` from `schism_gr3` - and
+`_clean_once`, the one topology pass every om2d build runs before any writer sees
+the mesh, calls it. Moving the directory breaks the live mesher and the mesh
+slice of the suite. Where those three pure-numpy helpers should live is a
+structural choice, so the directory is held whole and `workers/README.md` says
+why.

@@ -104,7 +104,7 @@ plugin/                the QGIS plugin (net/ ui/ render/ case/ + plugin.py; inst
 plugin/tests/          plugin test harnesses + headless E2E drivers
 server/                the server (WS + tool dispatch + turn loop + persistence)
 contracts/             shared pydantic contracts (trid3nt-contracts package)
-workers/      engine workers (mf6, telemac, sfincs, ... docker or exec)
+workers/               the telemac solver worker + the mesh/qgis legs
 scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
 bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
 ```

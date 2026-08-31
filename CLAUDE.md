@@ -20,8 +20,8 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   the ONLY place provider nouns appear), `server/` (session/ turn/
   dispatch/ protocol/), `emission/` (layer publication + the
   emit-on-solve seam), `persistence/`.
-- `workers/` - the solvers: one containerized worker per engine +
-  mesh/qgis/postprocess legs. Worker code is INERT until its image is
+- `workers/` - the telemac solver worker plus the mesh and qgis
+  legs. Worker code is INERT until its image is
   rebuilt: absolute -f/context paths, provenance-check the new code is
   IN the image, smoke through the image - never through mounted source.
 - `contracts/` - typed wire + registry contracts, with their own suite
