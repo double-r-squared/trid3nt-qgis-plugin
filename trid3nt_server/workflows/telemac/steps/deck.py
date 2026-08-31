@@ -97,6 +97,12 @@ def stage_manifest(case: Mapping[str, Any], run_tag: str, *,
                                       str(exc)) from exc
 
 
+#: Which TELEMAC module the class's deck COUPLES the solve with. The author
+#: writes the ``COUPLING WITH`` line off this same class, and the word rides in
+#: the manifest because the worker's runner choice turns on it.
+_CLASS_COUPLING = {"decay": "waqtel", "do_sag": "waqtel", "sediment": "gaia"}
+
+
 def _class_files(substance_class: str, *,
                  dredging: bool) -> tuple[list[str], list[str]]:
     """What a class MUST produce, and everything the supervisor brings back.
@@ -637,7 +643,12 @@ async def write_reach_deck(
         node_xy=node_xy, node_bed=node_bed)
     from .open_water import case_section
 
-    results, outputs = _class_files(substance_class,
+    # The class the DECK states, which is the one the author branches on. The
+    # do_sag condition is threaded onto the deck rather than classified out of
+    # the substance word, so reading it off the substance would name a run
+    # "tracer" that the author wrote a WAQTEL coupling into.
+    deck_class = str(deck.get("substance_class") or "tracer")
+    results, outputs = _class_files(deck_class,
                                     dredging=bool(class_block.get("dredging")))
     # Every file the author wrote, under its path INSIDE the run directory: the
     # oil module's user fortran is a directory the engine compiles, so the walk
@@ -652,6 +663,7 @@ async def write_reach_deck(
             # The engine compiles the DIRECTORY the steering file names, so the
             # manifest channel carries the same directory the author wrote into.
             user_fortran=_user_fortran_dir(written),
+            coupling=_CLASS_COUPLING.get(deck_class),
             # What the SERVER measured and the container cannot learn from the
             # files it is handed. The worker copies it into its metrics verbatim.
             echo={"utm_epsg": utm_epsg,

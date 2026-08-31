@@ -225,13 +225,15 @@ def staged_bed_inputs(bed: Mapping[str, Any] | None, *, real: bool,
 
 
 def case_section(*, module: str, steering: str, results: list[str], family: str,
-                 echo: Mapping[str, Any],
-                 user_fortran: str | None = None) -> dict[str, Any]:
+                 echo: Mapping[str, Any], user_fortran: str | None = None,
+                 coupling: str | None = None) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which deck, what it must produce.
 
     ``module`` names the engine binary, ``steering`` the authored deck it reads,
     ``results`` every file that must exist for the run to have succeeded, and
-    ``family`` the run's identity in a listing.
+    ``family`` the run's identity in a listing. ``coupling`` names the module the
+    deck couples the solve with, because which runner can drive a coupled case is
+    not the same question for every module and the worker decides on this word.
 
     ``echo`` is what the SERVER already knows and the worker cannot learn from
     the files it is handed - the UTM zone, the bbox, the node and element counts,
@@ -241,6 +243,7 @@ def case_section(*, module: str, steering: str, results: list[str], family: str,
     """
     return {"module": module, "steering": steering,
             **({"user_fortran": user_fortran} if user_fortran else {}),
+            **({"coupling": coupling} if coupling else {}),
             "results": list(results), "family": family, "echo": dict(echo)}
 
 

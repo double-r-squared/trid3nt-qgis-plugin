@@ -1199,7 +1199,11 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
             f"FORMATTED DATA FILE 2           = {os.path.basename(cn_map)}\n"
             "FORMATTED DATA FILE 1           = "
             f"{os.path.basename(hyetograph_file)}\n"
-            f"FORTRAN FILE                    = {RAINDEF3_USER_FORTRAN}\n")
+            # QUOTED: a steering-file value starting with '/' is a comment to
+            # damocles, so a bare absolute path erases the keyword AND swallows
+            # the line after it - the parser then reports the next keyword's name
+            # as this one's missing file.
+            f"FORTRAN FILE                    = '{RAINDEF3_USER_FORTRAN}'\n")
     elif str(runoff_path).lower() == "native":
         runoff_block = (
             f"{rain_line}{window_line}"

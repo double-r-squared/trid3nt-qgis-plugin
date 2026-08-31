@@ -55,6 +55,49 @@ def test_the_dispatch_is_one_table_of_three_sections():
 
 
 # --------------------------------------------------------------------------- #
+# Which runner a case gets - the telapy arm, or the module's own launcher
+# --------------------------------------------------------------------------- #
+
+
+def test_an_uncoupled_case_runs_on_the_telapy_arm():
+    argv = E._solve_argv("telemac2d", "t2d.cas", None, "")
+    assert argv[:1] == [__import__("sys").executable]
+    assert argv[-4:] == ["--solve", "telemac2d", "--steering", "t2d.cas"]
+
+
+def test_only_the_two_measured_couplings_leave_the_telapy_arm():
+    """The deviation is SCOPED: a coupling nobody measured stays on the API arm."""
+    assert E._LAUNCHER_COUPLINGS == frozenset({"waqtel", "gaia"})
+    assert E._solve_argv("telemac2d", "t2d.cas", None, "nestor")[0] != "telemac2d.py"
+
+
+@pytest.mark.parametrize("coupling", ["waqtel", "gaia"])
+def test_a_coupled_case_runs_the_modules_own_launcher(coupling):
+    assert E._solve_argv("telemac2d", "t2d.cas", None, coupling) == [
+        "telemac2d.py", "t2d.cas"]
+
+
+def test_the_launcher_reads_the_user_fortran_off_the_deck_not_the_argv():
+    """The steering file names it; a second channel could name a second thing."""
+    assert E._solve_argv("telemac2d", "t2d.cas", "user_fortran", "waqtel") == [
+        "telemac2d.py", "t2d.cas"]
+
+
+def test_a_waqtel_case_is_dispatched_through_the_launcher(tmp_path, monkeypatch):
+    seen = {}
+
+    def _child(data_dir, argv):
+        seen["argv"] = argv
+        (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
+        return 0
+
+    monkeypatch.setattr(E, "_run_child", _child)
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path, coupling="waqtel")))
+    assert rc == 0
+    assert seen["argv"] == ["telemac2d.py", "t2d.cas"]
+
+
+# --------------------------------------------------------------------------- #
 # The one strict gate
 # --------------------------------------------------------------------------- #
 
@@ -161,7 +204,7 @@ def test_a_child_that_outruns_the_bound_is_killed_and_still_reports(tmp_path,
 
 def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
                                                                     monkeypatch):
-    def _child(data_dir, module, steering, user_fortran):
+    def _child(data_dir, argv):
         (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
         return 0
 
@@ -179,8 +222,7 @@ def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
 
 def test_a_clean_exit_that_wrote_no_result_is_not_a_solve(tmp_path, monkeypatch):
     """Both old conventions retire: the exit code alone never decides this."""
-    monkeypatch.setattr(E, "_run_child",
-                        lambda data_dir, module, steering, user_fortran: 0)
+    monkeypatch.setattr(E, "_run_child", lambda data_dir, argv: 0)
     (tmp_path / E.LISTING_FILENAME).write_text("PLANTE\n", encoding="utf-8")
     rc = E.main(_write_manifest(tmp_path, _case(tmp_path)))
     assert rc == 1
@@ -193,15 +235,15 @@ def test_a_clean_exit_that_wrote_no_result_is_not_a_solve(tmp_path, monkeypatch)
 def test_a_user_fortran_case_hands_the_child_its_fortran(tmp_path, monkeypatch):
     seen = {}
 
-    def _child(data_dir, module, steering, user_fortran):
-        seen["fortran"] = user_fortran
+    def _child(data_dir, argv):
+        seen["argv"] = argv
         (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
         return 0
 
     monkeypatch.setattr(E, "_run_child", _child)
     E.main(_write_manifest(tmp_path,
                            _case(tmp_path, user_fortran="user_fortran")))
-    assert seen["fortran"] == "user_fortran"
+    assert seen["argv"][-2:] == ["--user-fortran", "user_fortran"]
 
 
 # --------------------------------------------------------------------------- #

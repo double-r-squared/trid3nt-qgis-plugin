@@ -393,7 +393,10 @@ def test_the_time_varying_path_names_the_image_baked_raindef3_fortran(tmp_path):
     """RAINDEF is a compile-time PARAMETER; the baked patch is the only door."""
     cas = _rog(tmp_path, runoff_path="native", hyetograph_file="rog_hyeto.txt")
     assert "FORMATTED DATA FILE 1           = rog_hyeto.txt" in cas
-    assert f"FORTRAN FILE                    = {A.RAINDEF3_USER_FORTRAN}" in cas
+    # QUOTED: an absolute path starting with '/' reads as a COMMENT to
+    # damocles, which erases the keyword and swallows the line after it.
+    assert f"FORTRAN FILE                    = '{A.RAINDEF3_USER_FORTRAN}'" in cas
+    assert A.RAINDEF3_USER_FORTRAN.startswith("/")
     assert A.RAINDEF3_USER_FORTRAN.endswith("/raindef3")
     assert "RAINFALL-RUNOFF MODEL           = 1" in cas
     # the hyetograph carries its own dry tail, so no rain window is stated

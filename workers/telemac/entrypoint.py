@@ -17,7 +17,9 @@ A manifest names exactly one runnable section:
 
 A ``case`` solves in a CHILD process. A Fortran STOP kills the process it runs
 in, and the metrics file is the only channel the server has for reading what went
-wrong, so the write has to outlive the solve.
+wrong, so the write has to outlive the solve. What the child runs is telapy,
+except for the couplings telapy cannot run, which run the module's own CLI
+launcher behind the same seam - see ``_LAUNCHER_COUPLINGS``.
 
 Success is a clean child exit AND every declared result file on disk: a solver
 that returns zero without writing its result has not solved anything.
@@ -80,7 +82,18 @@ _MODULES: dict[str, tuple[str, str]] = {
 
 #: The keys a ``case`` section carries.
 _CASE_FIELDS = frozenset((
-    "module", "steering", "user_fortran", "results", "family", "echo"))
+    "module", "steering", "user_fortran", "results", "family", "echo",
+    "coupling"))
+
+#: The couplings telapy's API arm cannot drive, so their cases go through the
+#: engine's OWN CLI launcher instead - the same runner seam, the same manifest,
+#: the same success convention, one process deeper. WAQTEL: telapy never
+#: allocates its arrays, so a coupled case reaches iteration 0 and stops inside
+#: BIEF with OS OBJECT TYPE NOT IMPLEMENTED. GAIA: the time loop runs to the end
+#: and the FINALIZE fails, closing a boundary file the API arm never opened
+#: (HERMES_FILE_NOT_OPENED_ERR), so the results never land. A SCOPED DEVIATION
+#: that dies the day telapy drives them; every other class stays on the API arm.
+_LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia"))
 
 
 class UnknownManifestFieldError(ValueError):
@@ -172,8 +185,22 @@ def _solve_timeout_s() -> float:
         return _SOLVE_TIMEOUT_DEFAULT_S
 
 
-def _run_child(data_dir: Path, module: str, steering: str,
-               user_fortran: str | None) -> int:
+def _solve_argv(module: str, steering: str, user_fortran: str | None,
+                coupling: str) -> list[str]:
+    """The command ONE case solves under: the telapy arm, or the CLI launcher.
+
+    The launcher is the module's own script, which the image puts on PATH under
+    the module's own name; it reads the steering file for everything else, the
+    user Fortran keyword included.
+    """
+    if coupling in _LAUNCHER_COUPLINGS:
+        return [f"{module}.py", steering]
+    argv = [sys.executable, os.path.abspath(__file__),
+            "--solve", module, "--steering", steering]
+    return argv + (["--user-fortran", str(user_fortran)] if user_fortran else [])
+
+
+def _run_child(data_dir: Path, argv: list[str]) -> int:
     """Solve in a child process, teeing its listing; return the child's code.
 
     The tee is two writes rather than a redirect because both readers are real:
@@ -183,10 +210,6 @@ def _run_child(data_dir: Path, module: str, steering: str,
     A child that outruns the bound is KILLED and the expiry is raised, because a
     wedged solver otherwise holds the container open with no report ever written.
     """
-    argv = [sys.executable, os.path.abspath(__file__),
-            "--solve", module, "--steering", steering]
-    if user_fortran:
-        argv += ["--user-fortran", str(user_fortran)]
     bound = _solve_timeout_s()
     with (data_dir / LISTING_FILENAME).open("w", encoding="utf-8") as listing:
         child = subprocess.Popen(argv, cwd=str(data_dir), text=True, bufsize=1,
@@ -208,7 +231,7 @@ def _run_child(data_dir: Path, module: str, steering: str,
     if expired:
         raise CaseError(
             "TELEMAC_SOLVE_TIMEOUT",
-            f"{module} was killed after {bound:g} s without finishing; the bound "
+            f"{argv[0]} was killed after {bound:g} s without finishing; the bound "
             f"is {_SOLVE_TIMEOUT_ENV} and the listing carries how far it got.")
     return code
 
@@ -240,10 +263,12 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             "every declared result on disk - reduces to the exit code alone, "
             "which is the convention this worker retired. Declare what the run "
             "must produce.")
-    LOG.info("telemac case module=%s steering=%s results=%s",
-             module, steering, results)
+    coupling = str(case.get("coupling") or "").lower()
+    argv = _solve_argv(module, steering, case.get("user_fortran"), coupling)
+    LOG.info("telemac case module=%s steering=%s coupling=%s results=%s via %s",
+             module, steering, coupling or "none", results, argv[0])
 
-    code = _run_child(data_dir, module, steering, case.get("user_fortran"))
+    code = _run_child(data_dir, argv)
     missing = [r for r in results if not (data_dir / r).exists()]
     metrics: dict[str, Any] = {
         **dict(case.get("echo") or {}),

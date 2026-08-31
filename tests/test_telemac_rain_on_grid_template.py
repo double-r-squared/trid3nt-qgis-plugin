@@ -490,7 +490,7 @@ def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(
         "blocks": [[3600.0, 3.0], [7200.0, 12.5], [10800.0, 0.0]]}))
     assert deck["case"]["user_fortran"] == RAINDEF3_USER_FORTRAN
     cas = (tmp_path / f"telemac-{deck['run_tag']}" / "t2d_rog.cas").read_text()
-    assert f"FORTRAN FILE                    = {RAINDEF3_USER_FORTRAN}" in cas
+    assert f"FORTRAN FILE                    = '{RAINDEF3_USER_FORTRAN}'" in cas
     assert "FORMATTED DATA FILE 1           = rog_hyeto.txt" in cas
     assert "rog_hyeto.txt" in deck["authored"]
     assert deck["hyetograph_total_mm"] == 15.5

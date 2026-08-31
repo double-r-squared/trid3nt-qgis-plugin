@@ -143,6 +143,20 @@ def test_the_case_section_names_the_engine_the_deck_and_the_results():
     assert "user_fortran" in case_section(
         module="telemac2d", steering="t2d_river.cas", results=[],
         family="river_dye", echo={}, user_fortran="user_fortran")
+    # the coupling reads the same way: an uncoupled case names none, and the
+    # worker's runner choice turns on the word being there.
+    assert "coupling" not in case
+    assert case_section(module="telemac2d", steering="t2d_river.cas",
+                        results=[], family="river_dye", echo={},
+                        coupling="waqtel")["coupling"] == "waqtel"
+
+
+def test_the_classes_that_couple_state_which_module_they_couple_with():
+    from trid3nt_server.workflows.telemac.steps.deck import _CLASS_COUPLING
+
+    assert _CLASS_COUPLING == {"decay": "waqtel", "do_sag": "waqtel",
+                               "sediment": "gaia"}
+    assert "tracer" not in _CLASS_COUPLING and "oil" not in _CLASS_COUPLING
 
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
