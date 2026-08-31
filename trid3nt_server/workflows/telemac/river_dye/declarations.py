@@ -212,11 +212,13 @@ PARAMS: tuple[Param, ...] = (
           derived_when_absent=(
               "the run starts from its own initial conditions - a constant depth "
               "at rest - rather than from another run's state"),
-          desc="Continue a previous run: the URI of its result SELAFIN, whose last "
-               "record becomes this run's initial state, so sim_duration_s is the "
-               "time added ON TOP of it. The mesh must be the same one, a class "
-               "that couples with WAQTEL or GAIA refuses, and the run stops where "
-               "the point source's own time series ends"),
+          desc="Continue a previous run: the URI of its restart_river.slf, the "
+               "state at its last instant, which becomes this run's initial "
+               "state - so sim_duration_s is the time added ON TOP of it and the "
+               "same declared scenario carries on over the longer horizon (a "
+               "release whose spill_duration_s has elapsed stays finished). The "
+               "mesh must be the same one, and a class that couples with WAQTEL "
+               "or GAIA refuses"),
 )
 
 

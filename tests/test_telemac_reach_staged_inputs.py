@@ -78,9 +78,10 @@ def test_stage_manifest_requires_cache_bucket(monkeypatch):
 # --------------------------------------------------------------------------- #
 # What a class must produce, and what comes back.
 # --------------------------------------------------------------------------- #
-def test_a_plain_tracer_run_must_produce_its_result_and_nothing_more():
+def test_a_plain_tracer_run_must_produce_its_result_and_its_restart():
     results, outputs = _class_files("tracer", dredging=False)
-    assert results == ["r2d_river.slf"]
+    assert results == ["r2d_river.slf", "restart_river.slf"]
+    assert "restart_river.slf" in outputs
     assert "full_listing.log" in outputs
     # the mesh the run was handed comes back with it, so a solved run stays
     # readable from its own prefix
@@ -88,8 +89,10 @@ def test_a_plain_tracer_run_must_produce_its_result_and_nothing_more():
 
 
 def test_sediment_must_produce_the_gaia_result_and_brings_its_steering_back():
+    """A coupled class runs the launcher whole, so it is asked for no restart."""
     results, outputs = _class_files("sediment", dredging=False)
     assert results == ["r2d_river.slf", "gaia_river.slf"]
+    assert "restart_river.slf" not in outputs
     assert "gaia_river.cas" in outputs
     assert "nestor.act" not in outputs
 
@@ -103,7 +106,7 @@ def test_oil_must_produce_the_track_the_slick_is_read_from():
     """The slick and the particle snapshots are built on the SERVER off this
     track, so neither is a file the worker is asked to write."""
     results, outputs = _class_files("oil", dredging=False)
-    assert results == ["r2d_river.slf", "drogues.txt"]
+    assert results == ["r2d_river.slf", "restart_river.slf", "drogues.txt"]
     assert "oil_spill.txt" in outputs
     assert "slick.geojson" not in outputs and "particles.json" not in outputs
 
@@ -162,6 +165,31 @@ def test_a_continued_case_names_the_staged_file_it_restarts_from():
                         family="river_dye", echo={},
                         continue_from="previous.slf")["continue_from"] == \
         "previous.slf"
+
+
+def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch,
+                                                                    tmp_path):
+    """The instant is READ, never computed from the ask.
+
+    The engine writes its restart at its own last time step, which is neither
+    the graphic period the results file lands on nor the duration that was
+    asked for, so a server that derived the instant would author the extended
+    scenario over the wrong stretch of clock.
+    """
+    import trid3nt_server.workflows.telemac.postprocess_telemac as post
+    from trid3nt_server.workflows.telemac.steps.deck import _continuation_start_s
+    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+
+    previous = tmp_path / "restart_river.slf"
+    previous.write_bytes(b"selafin")
+    monkeypatch.setattr(post, "read_selafin",
+                        lambda path: {"times": [0.0, 104.2, 600.192]})
+    assert _continuation_start_s(str(previous)) == 600.192
+
+    monkeypatch.setattr(post, "read_selafin", lambda path: {"times": []})
+    with pytest.raises(TelemacDyeScenarioError) as exc:
+        _continuation_start_s(str(previous))
+    assert exc.value.error_code == "TELEMAC_CONTINUATION_UNREADABLE"
 
 
 def test_the_classes_that_couple_state_which_module_they_couple_with():

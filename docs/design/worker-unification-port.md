@@ -358,38 +358,60 @@ variables and all twelve records.
 naming `PREVIOUS COMPUTATION FILE` IS the continuation (`lecdon_telemac2d.f`
 sets `DEBU=.FALSE.` on the name alone); the arming boolean `COMPUTATION
 CONTINUED` left the t2d/t3d/tomawac dictionaries and survives only in mascaret's,
-so `author.continuation_block` writes the file line and nothing else. The
+so `author.continuation_block` writes the file and its format and no boolean. The
 manifest `case` section gains `continue_from`, the worker's one strict gate
 learns that field and checks the file arrived, and the launcher stages it like
 any other input under `previous.slf`. A continued run is an ordinary box run.
 
 `continue_from` is a declared param on the run ask, taking a previous run's
-result SELAFIN URI. It REFUSES, typed and server-side before anything is
+RESTART file URI. It REFUSES, typed and server-side before anything is
 authored, on any class that couples the solve (`decay` / `do_sag` -> WAQTEL,
 `sediment` -> GAIA): those run the module's own CLI launcher behind the fork
 ruling's deviation, whole-process and unstepped. The worker refuses the same
 case again on the coupling word, and the two legacy builders never learned the
 field, so asking them is the gate's own refusal.
 
-**Measured split run** (Eel River coarse reach, 907 nodes, dt 0.521 s):
-1200 s straight through, against 600 s + continue + 600 s. The continued leg
-picks up at the previous run's last record (521.0 s), reaches CORRECT END, and
-its records land on the straight-through run's own grid. At the matched instant
-(1042.0 s) the two states close to max |dU| 3.3e-3 m/s, |dV| 3.0e-3 m/s,
-|dh| 1.4e-3 m, |ddye| 1.5e-4 mg/L - 0.02 to 0.16 % of each field's span. The
-first leg is bit-identical to the straight-through run up to the split.
+**Every stepped run writes the state a continuation reads.** The deck names a
+`RESTART FILE` beside its `RESULTS FILE`, and `restart_river.slf` is a DECLARED
+RESULT of every uncoupled reach class - so re-entry is a property of the family,
+not of having foreseen it when the first leg was asked for. The two files are
+not the same record: the results file is the graphic one, single precision on
+the graphic period, while the restart is the full state at the last time step in
+the double precision `RESTART FILE FORMAT` already defaults to. A continuation
+therefore also states `PREVIOUS COMPUTATION FILE FORMAT = SERAFIND`, because
+that keyword defaults to single and reading a double file as a single one is not
+a restart that means anything. Under telapy the write needs nothing extra:
+`RUN_TIMESTEP_T2D` is compute + results + restart, so the stepped arm writes it
+where the whole-run wrapper would.
 
-**What the split run exposed, and did NOT decide.** The reach deck's SOURCES
-FILE is authored over an absolute clock whose last row is the deck's own
-`DURATION + 100 s`. A continued run advances PAST that horizon and the engine
-stops on it (`T= 700.224 OUT OF RANGE OF THE SOURCES FILE`) - so the split run
-above was completed with that one forcing row extended by hand, in the run
-directory, to measure the closure. Extending it in the author needs the
-continuation's start time, which is a read of the previous run's own result, and
-it settles whether a continued run re-releases its pulse or carries the same
-absolute series forward. Related and measured in the same run: the engine
-restarts from the previous file's LAST RECORD (521.0 s of a 600 s leg, because
-the graphic period is 200 steps), and the residual above is what a single-
-precision `SERAFIN` results-file restart costs - the dictionary's own answer to
-both is `RESTART FILE` / `SERAFIND`, which changes what every run writes. Both
-are NATE's to rule; nothing here was changed on either.
+**A continued run is the SAME declared experiment.** Every forcing series the
+deck names is authored over the scenario's own absolute clock, and a continued
+run re-authors it over the EXTENDED horizon rather than over its own leg: the
+pulse still opens at zero because that is when the release was declared, and a
+release whose `spill_duration_s` has elapsed continues as zero. Re-releasing it
+would be a different experiment. The horizon's start is READ off the restart file
+being continued (`deck._continuation_start_s`), because the engine writes that
+record at its own last time step - not on the graphic period, not at the asked
+duration - so no server-side arithmetic can name the instant. This retires the
+`T= ... OUT OF RANGE OF THE SOURCES FILE` halt: the last source row is now
+`start + DURATION + 100 s`.
+
+**Measured split run** (Eel River coarse reach, 907 nodes, dt 0.521 s, runs
+`01M1CEJSGH781VKJHJDJWGBWCC` / `01M1CEJ9FZNXT11GX3X2HTT3C9` /
+`01M1CEK9FNEM9B9WB4BDN0EDDH`): 1200.384 s straight through, against 600 s +
+continue + 600 s, all three CORRECT END with no file touched by hand. Both legs
+take 1152 iterations off the same asked duration, so the two timelines end on
+the same instant.
+
+  * RE-ENTRY, the handover: the first leg's restart record at 600.192 s against
+    the continued run's first results record. Max |delta| 4.4e-8 m/s (U),
+    5.9e-8 m/s (V), 6.0e-8 m (h), 1.1e-7 mg/L (dye) - 1.5e-8 to 3.1e-8 of each
+    field's span, which is the single-precision write of the results record the
+    comparison reads, not a difference in state.
+  * CLOSURE, the whole point: at 1200.384 s the continued run's restart record
+    and the straight-through run's restart record are BIT-IDENTICAL - max
+    |delta| exactly 0.0 across U, V, h, bottom friction, dH and dye. Splitting
+    the run changed nothing.
+
+The predecessor measurement, from the results-file restart this replaces, was
+max |dU| 3.3e-3 m/s at a 521.0 s handover.

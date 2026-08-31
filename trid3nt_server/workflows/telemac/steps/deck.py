@@ -55,9 +55,13 @@ _GEOMETRY_DEST = "river.slf"
 _BOUNDARY_DEST = "river.cli"
 _STEERING = "t2d_river.cas"
 _RESULT = "r2d_river.slf"
+#: The engine's perfect-restart record - the full state at the last time step in
+#: double precision - which is what a continuation reads. The graphic results
+#: file is a picture of the run; this is the run's last instant.
+_RESTART = "restart_river.slf"
 #: What a continued run's PREVIOUS COMPUTATION FILE is called in the run
-#: directory. The engine reads a file, not a URI, so the previous run's results
-#: are staged under one name and the deck names that.
+#: directory. The engine reads a file, not a URI, so the previous run's restart
+#: record is staged under one name and the deck names that.
 _PREVIOUS_DEST = "previous.slf"
 
 #: Which telapy engine class runs a reach, and the identity its row carries in a
@@ -115,6 +119,13 @@ def _class_files(substance_class: str, *,
     results = [_RESULT]
     outputs = [_RESULT, _GEOMETRY_DEST, _BOUNDARY_DEST, _STEERING,
                "full_listing.log", "telemac_metrics.json"]
+    if substance_class not in _CLASS_COUPLING:
+        # Every run on the stepped arm leaves the state a continuation reads,
+        # so re-entry is a property of the family rather than of foresight. A
+        # coupled class runs the module's own launcher whole and cannot be
+        # continued, so it is not asked to write one.
+        results.append(_RESTART)
+        outputs.append(_RESTART)
     if substance_class == "sediment":
         # the GAIA deposition SELAFIN + its steering file, which the postprocess
         # reads to build the bed-evolution COG.
@@ -184,6 +195,33 @@ def _fitted_bed(mesh: Mapping[str, Any]) -> dict[str, Any]:
             "stage has no ground to be measured from; the reach mesh ask declares "
             "its bed with a downstream_along channel.")
     return dict(fit)
+
+
+def _continuation_start_s(uri: str) -> float:
+    """The clock time the restart record stands at - read off the file itself.
+
+    A continued run is the SAME declared scenario over an extended horizon, and
+    the horizon begins where the leg being continued stopped. Only that file can
+    say when: the engine writes the restart at its own last time step, which is
+    not the graphic period, not the asked duration, and not something the server
+    can compute from the ask.
+    """
+    import tempfile
+
+    from trid3nt_server.workflows.solver.solver import _download_object
+    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+
+    with tempfile.TemporaryDirectory(prefix="telemac-continue-") as tmp:
+        path = Path(tmp) / _PREVIOUS_DEST
+        _download_object(str(uri), path)
+        times = read_selafin(path)["times"]
+    if len(times) == 0:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_CONTINUATION_UNREADABLE",
+            f"{uri} holds no time record, so there is no state to continue from "
+            "and no instant to continue the scenario at. Point continue_from at "
+            f"a completed run's {_RESTART}.")
+    return float(times[-1])
 
 
 def _to_utm(source: Any, utm_epsg: int) -> Any:
@@ -508,10 +546,12 @@ async def write_reach_deck(
     canvas - at the point the deck actually carries - saying out loud whether the
     user placed it or the pipeline derived it.
 
-    ``continue_from`` is a previous run's result SELAFIN. It is staged like any
+    ``continue_from`` is a previous run's RESTART record. It is staged like any
     other input and the deck names it as the engine's PREVIOUS COMPUTATION FILE,
     so a continued run is an ordinary run whose initial state came out of another
-    one - there is no resident solver anywhere for it to re-enter.
+    one - there is no resident solver anywhere for it to re-enter. The scenario
+    it solves is the SAME one, re-authored over the extended horizon on the same
+    absolute clock, which is why the instant that file stands at is read here.
     """
     substance = sanitize_substance(substance)
     release_pair = coerce_lonlat_point(release_coords)
@@ -629,10 +669,15 @@ async def write_reach_deck(
         "source_q_m3s": float(source_q_m3s),
         "inflow_q_m3s": float(carrier_discharge["m3s"]),
         "duration_s": float(sim_duration_s),
-        # WHERE this run picks up from. The deck records the staged NAME because
-        # the engine reads a file: the URI it was staged from is the ask, and the
-        # ask is the run's inputs list.
-        **({"continue_from": _PREVIOUS_DEST} if continue_from else {}),
+        # WHERE this run picks up from, and WHEN. The deck records the staged
+        # NAME because the engine reads a file: the URI it was staged from is
+        # the ask, and the ask is the run's inputs list. The instant comes off
+        # that file, and every forcing series is written over the horizon it
+        # opens.
+        **({"continue_from": _PREVIOUS_DEST,
+            "start_time_s": await asyncio.to_thread(
+                _continuation_start_s, str(continue_from))}
+           if continue_from else {}),
     }
 
     node_xy, node_bed = (await asyncio.to_thread(_mesh_nodes, mesh)
@@ -641,7 +686,7 @@ async def write_reach_deck(
     written = await asyncio.to_thread(
         author.author_reach_deck, rundir, deck=deck,
         geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST, results=_RESULT,
-        cas_name=_STEERING,
+        restart=None if coupled_with else _RESTART, cas_name=_STEERING,
         liquid_boundary_order=read_topology(
             _mesh_field(mesh, "topology_uri"))["liquid_boundary_order"],
         bed=_fitted_bed(mesh),

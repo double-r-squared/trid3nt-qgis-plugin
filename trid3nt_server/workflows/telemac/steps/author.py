@@ -45,6 +45,7 @@ __all__ = [
     "author_rog_deck",
     "continuation_block",
     "normalize_gradation",
+    "restart_block",
     "write_cn_map",
     "write_friction_files",
     "write_gaia_deck",
@@ -107,6 +108,11 @@ _DEFAULTS: dict[str, Any] = {
     # A run that starts from a previous one's state names the file it starts
     # from; absent, the deck states its own initial conditions and starts there.
     "continue_from": None,
+    # WHERE ON THE SCENARIO'S OWN CLOCK this run begins. A fresh run starts at
+    # zero and a continued one starts where the leg it continues stopped, so
+    # every forcing series below is the same declared scenario evaluated over
+    # whichever stretch of that one clock this run covers.
+    "start_time_s": 0.0,
     "graphic_period": 200,
     "friction_law": None,
     "friction_coefficient": None,
@@ -211,11 +217,31 @@ def continuation_block(previous: Any) -> str:
     dictionary - and the engine then reads that file's last record as the initial
     state, so the deck's own initial-condition statements go unread. A continued
     run advances its own DURATION from where the previous one stopped.
+
+    The file named is a RESTART FILE, which the engine writes in double
+    precision; the previous-file format defaults to single, and reading a double
+    file as a single one is not a restart that means anything.
     """
     if not previous:
         return ""
     return ("PREVIOUS COMPUTATION FILE       = "
-            f"{os.path.basename(str(previous))}\n")
+            f"{os.path.basename(str(previous))}\n"
+            "PREVIOUS COMPUTATION FILE FORMAT = SERAFIND\n")
+
+
+def restart_block(restart: Any) -> str:
+    """The PERFECT-RESTART record this run writes, or nothing at all.
+
+    The results file is a graphic record: single precision, on the graphic
+    period, and a run continued from it starts at the last record the period
+    happened to land on with the precision that write cost. The RESTART FILE is
+    the engine's own answer - the full state at the last time step, in the double
+    precision its format keyword already defaults to - so a continuation from it
+    picks up exactly where the leg stopped.
+    """
+    if not restart:
+        return ""
+    return f"RESTART FILE                    = {os.path.basename(str(restart))}\n"
 
 
 def _write_deck(rundir: Path | str, basename: str,
@@ -237,6 +263,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
                       geometry: str, boundary: str, results: str,
                       cas_name: str, liquid_boundary_order: Sequence[str],
                       bed: Mapping[str, Any], source_utm: tuple[float, float],
+                      restart: str | None = None,
                       centerline_utm: Any = None,
                       reach_polygon_utm: Any = None,
                       node_xy: Any = None, node_bed: Any = None
@@ -251,7 +278,8 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
 
     ``liquid_boundary_order`` is the MEASURED order the pair writer reported, and
     the PRESCRIBED lists are written in it. ``bed`` is the fitted-bed record the
-    outflow stage is read from.
+    outflow stage is read from. ``restart`` is the perfect-restart record this
+    run writes for whatever run continues it.
     """
     P = _Sheet(deck)
     rundir = Path(rundir)
@@ -363,7 +391,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
 RESULTS FILE                    = {os.path.basename(results)}
-{continuation_block(getattr(P, "continue_from", None))}{sources_file_line}/
+{restart_block(restart)}{continuation_block(getattr(P, "continue_from", None))}{sources_file_line}/
 TITLE : '{P.name} REACH'
 VARIABLES FOR GRAPHIC PRINTOUTS = {graphic_variables}
 GRAPHIC PRINTOUT PERIOD         = {P.graphic_period}
@@ -478,14 +506,21 @@ def write_sources_pulse(rundir: Path | str, *,
     Columns are TELEMAC-2D's own source names - ``T`` (s), ``Q(1)`` (m3/s carrier
     discharge), ``TR(1,1)`` (concentration). The carrier and the substance are
     held over the pulse window then step to zero, so the slug travels downstream
-    and passes. The final time runs past DURATION so the time interpolation never
-    reads off the end of the series.
+    and passes.
+
+    The series is the DECLARED scenario on its own absolute clock, written over
+    whatever stretch of that clock this run covers: the pulse opens at zero
+    because that is when the release was declared, and the last row runs past
+    where this run stops so the time interpolation never reads off the end. A
+    continued run therefore carries the SAME scenario forward - a pulse whose
+    stated duration has already elapsed continues as zero, which is what a finite
+    release means, rather than being re-released into a second experiment.
     """
     P = _Sheet(deck)
     window = float(P.pulse_window_s)
     discharge = float(P.source_q_m3s)
     concentration = float(P.dye_conc_mgl)
-    end = max(float(P.duration_s) + 100.0, window + 100.0)
+    end = max(float(P.start_time_s) + float(P.duration_s) + 100.0, window + 100.0)
     return _write_deck(rundir, SOURCES_FILENAME, [
         "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
         f"0.0 {discharge:.3f} {concentration:.3f}",

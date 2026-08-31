@@ -2283,3 +2283,16 @@ worker-side gate to the server dies with the gate.
   ledger from its successful parent's snapshot. `canaries.run`'s per-canary
   `restart_clean` override deletes too - `live_run.drive` passes it for every
   driven run.
+- The `T= ... OUT OF RANGE OF THE SOURCES FILE` halt on continued reach runs
+  DELETES with the horizon it was measured against. CONDITION MET: the source
+  series ended at the deck's own `DURATION + 100 s`, which a continued run
+  passes on its first leg-second step, so the split run only ever completed
+  with that row extended by hand in the run directory. `write_sources_pulse`
+  now authors the same declared scenario over `start + DURATION + 100 s` on one
+  absolute clock, with `start` read off the restart file the run continues.
+- Continuation from the RESULTS file DELETES in favour of the engine's own
+  `RESTART FILE`. CONDITION MET: the results file is a single-precision record
+  on the graphic period, so a continued run started at whichever graphic instant
+  the period happened to land on (521.0 s of a 600 s leg) carrying a 3.3e-3 m/s
+  velocity residual. From the restart record the handover closes to 4.4e-8 m/s
+  and the split run's end is BIT-IDENTICAL to the straight-through run's.

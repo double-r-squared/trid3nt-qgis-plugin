@@ -24,12 +24,13 @@ _CENTERLINE = [(x, 0.0) for x in range(0, 1100, 100)]
 _REACH_POLYGON = [(-50.0, -30.0), (1050.0, -30.0), (1050.0, 30.0), (-50.0, 30.0)]
 
 
-def _author(tmp_path, **deck) -> str:
+def _author(tmp_path, *, restart=None, **deck) -> str:
     base = {"name": "reach", "inflow_q_m3s": 50.0, "init_depth_m": 2.0,
             "duration_s": 3600.0, "time_step_s": 1.0}
     A.author_reach_deck(
         tmp_path, deck={**base, **deck}, geometry="mesh.slf",
-        boundary="mesh.cli", results="r2d.slf", cas_name="t2d_river.cas",
+        boundary="mesh.cli", results="r2d.slf", restart=restart,
+        cas_name="t2d_river.cas",
         liquid_boundary_order=_ORDER, bed=_BED, source_utm=_SOURCE,
         centerline_utm=_CENTERLINE, reach_polygon_utm=_REACH_POLYGON)
     return (tmp_path / "t2d_river.cas").read_text()
@@ -147,9 +148,49 @@ def test_a_continued_run_names_the_previous_computation_file(tmp_path):
 
 def test_the_deck_names_a_file_rather_than_wherever_it_came_from():
     """The engine opens a name in its own run directory, never a URI."""
-    assert A.continuation_block("s3://runs/01J/r2d_river.slf") == (
-        "PREVIOUS COMPUTATION FILE       = r2d_river.slf\n")
+    assert A.continuation_block("s3://runs/01J/restart_river.slf") == (
+        "PREVIOUS COMPUTATION FILE       = restart_river.slf\n"
+        "PREVIOUS COMPUTATION FILE FORMAT = SERAFIND\n")
     assert A.continuation_block(None) == ""
+
+
+def test_a_continuation_reads_the_restart_in_the_precision_it_was_written():
+    """The previous-file format defaults to SINGLE, and the restart is double.
+
+    Left unsaid, the engine reads a double-precision file as a single-precision
+    one - which is not a restart that means anything, and nothing in the run
+    would say so.
+    """
+    assert "PREVIOUS COMPUTATION FILE FORMAT = SERAFIND" in \
+        A.continuation_block("previous.slf")
+
+
+def test_a_run_writes_the_restart_record_only_when_it_is_asked_to(tmp_path):
+    assert "RESTART FILE" not in _author(tmp_path)
+    assert A.restart_block(None) == ""
+    cas = _author(tmp_path, restart="restart_river.slf")
+    assert "RESTART FILE                    = restart_river.slf" in cas
+    # The format keyword already defaults to the double precision a perfect
+    # restart needs, so the deck states the file and nothing more.
+    assert "RESTART FILE FORMAT" not in cas
+
+
+def test_the_forcing_series_covers_the_horizon_a_continued_run_reaches(tmp_path):
+    """The declared scenario over the EXTENDED horizon, on one absolute clock.
+
+    A continued run advances past where the leg it continues stopped, and the
+    engine halts on a source series that ends before the run does. The pulse
+    still opens at zero because that is when the release was declared - a
+    finished release continues as zero rather than being released again.
+    """
+    _author(tmp_path, pulse_window_s=120.0, duration_s=600.0,
+            start_time_s=600.192, continue_from="previous.slf")
+    rows = [ln.split() for ln in
+            (tmp_path / A.SOURCES_FILENAME).read_text().splitlines()[3:]]
+    times = [float(r[0]) for r in rows]
+    assert times[0] == 0.0 and times[1] == 120.0
+    assert times[-1] >= 600.192 + 600.0
+    assert [float(r[1]) for r in rows][-1] == 0.0
 
 
 # --------------------------------------------------------------------------- #
