@@ -2155,3 +2155,24 @@ worker-side gate to the server dies with the gate.
   it rather than by an assertion beside it.
 - `workers/telemac/.dockerignore` gains `tests/`: the two builder tests under
   `workers/telemac/tests/` were riding into the image, where nothing runs them.
+
+## The image drops the geometry dep nothing reads (worker-unification stage 5, 2026-08-31)
+
+- `workers/telemac/Dockerfile`: the `shapely==2.1.2` pip pin DELETES with its
+  entry in the geo-deps import smoke. CONDITION MET: nothing under
+  `workers/telemac/` imports shapely, and neither does the installed engine -
+  `grep -rl "import shapely" $HOMETEL/scripts $HOMETEL/sources` and the same grep
+  over the image's site-packages (excluding shapely itself) both return nothing.
+  Verified through the rebuilt image: `importlib.util.find_spec("shapely") is
+  None`, every build smoke green, and the seven live proofs of this stage run on
+  that image.
+- `om2d_driver.py`: the swallowed `clean passes stopped` note DELETES. CONDITION
+  MET: it let a run continue over whatever half-cleaned points/cells the throwing
+  pass had left, and read afterwards as a mesh that was merely cleaned less. The
+  chain now re-types connectivity after every pass (the passes hand back floats
+  and the next one indexes with them), names the pass that removed the last
+  element, and refuses typed - through the existing empty-mesh refusal when a
+  pass emptied the mesh, through a new one otherwise. Covered offline in
+  `tests/test_mesh_om2d.py`; re-smoked on the preserved failing rundir
+  `mesh-01M1AFSK2RNXAXR3TBF0DQQSXH`, which now refuses by naming the 100 m edge
+  length its domain cannot hold.
