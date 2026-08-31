@@ -3,8 +3,8 @@
 A rain-on-grid domain is a DELINEATED CATCHMENT - the terrain that drains to one
 point - and the delineation is a chained tool while the triangulation is the one
 mesh step. What lives HERE is only what is TELEMAC about a rain-on-grid run: the
-per-node fields the SCS-CN model reads (``FORMATTED DATA FILE 2``), the manifest
-the worker's ``rain_on_grid`` mode dispatches on, and the depth-plus-hydrograph
+per-node fields the SCS-CN model reads (``FORMATTED DATA FILE 2``), the case the
+worker runs the authored steering file as, and the depth-plus-hydrograph
 deliverable the question is answered with.
 
 Everything past the primary layer is best-effort by contract, exactly as in the
@@ -15,9 +15,9 @@ voids a solve.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -47,6 +47,7 @@ __all__ = [
     "SolveRainOnGrid",
     "acquire_catchment",
     "catchment_aoi",
+    "mesh_nodes",
     "node_infiltration_fields",
     "publish_rain_on_grid_products",
     "resolve_rain_event",
@@ -56,14 +57,28 @@ __all__ = [
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
-#: The worker manifest key its entrypoint dispatches ``mode="rain_on_grid"`` on,
-#: the staging prefix, the result file and the artifacts the supervisor uploads.
-_MODE = "rain_on_grid"
+#: The names the run directory holds the catchment's files under. They are the
+#: ``.cas``'s own GEOMETRY / BOUNDARY CONDITIONS / RESULTS / data-file statements,
+#: so the steering file reads as the record of the run it is.
 _STAGE_PREFIX = "telemac_rog"
+_GEOMETRY_DEST = "rog.slf"
+_BOUNDARY_DEST = "rog.cli"
+_STEERING = "t2d_rog.cas"
 _RESULT = "r2d_rog.slf"
-_OUTPUTS = ["r2d_rog.slf", "rog_geometry.slf", "rog_max_fields.slf",
-            "rog_outlet_hydrograph.json", "full_listing.log", "telemac_metrics.json"]
-_HYDROGRAPH = "rog_outlet_hydrograph.json"
+_CN_MAP = "rog_cn_map.dat"
+_FRICTION_LAWS = "rog_friction.tbl"
+_ZONES_FILE = "rog_zones.dat"
+_HYETOGRAPH = "rog_hyeto.txt"
+
+#: Which telapy engine class runs a catchment, and the identity its row carries
+#: in a run listing.
+_MODULE = "telemac2d"
+_FAMILY = "rain_on_grid"
+
+#: The mesh boundary ROLE the outlet carries. TELEMAC prescribes a water level
+#: with a free velocity there, which is the free exit a rain-fed catchment drains
+#: through; the hydrograph is the flux across the nodes that took it.
+_OUTLET_ROLE = "outflow"
 
 #: Wall-clock ceiling on one rain-on-grid solve. A real catchment is tens of
 #: thousands of elements over hours of simulated time at a 3 s step, which is an
@@ -183,35 +198,26 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
     slopes come from the mesh's own piecewise-linear bed - the discretization the
     solver sees - never from a finer raster the run does not resolve.
 
-    AWAITING THE WORKER-UNIFICATION PORT: the node arrays are read off a handle
-    the retired catchment front used to hand over, and the mesh step now returns a
-    ``MeshArtifact`` record instead. Re-authoring this read against the artifact
-    is the port's last mile and belongs to the wave that settles the worker's
-    staged contract - see docs/design/worker-unification-port.md.
+    The nodes are the ACCEPTED mesh's own, read off the artifact's display face:
+    the field is written against the numbering the geometry file carries, so a
+    curve number lands on the node it was sampled for.
     """
     from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
         amc_condition_for, landcover_cn_manning, node_curve_numbers,
     )
 
-    handle = mesh["mesh"]
-    if handle.points_lonlat is None:
-        raise RainOnGridError(
-            "the supplied mesh carries no readable node coordinates, so the "
-            "per-node curve numbers cannot be sampled at them. Supply the mesh as "
-            "a .2dm (nodes and bed readable) rather than as a bare SELAFIN.",
-            error_code="TELEMAC_ROG_SUPPLIED_MESH_UNREADABLE")
-
     def _sample() -> tuple[list[float], list[float], list[int]]:
         from trid3nt_server.tools.cache import read_object_bytes_s3
 
+        points_utm, cells, bed, points_lonlat = mesh_nodes(mesh)
+        rundir = Path(tempfile.mkdtemp(prefix="telemac-rog-cn-"))
         uri = str(layer_field(landcover, "uri"))
-        local = Path(mesh["rundir"]) / "landcover.tif"
+        local = rundir / "landcover.tif"
         local.write_bytes(read_object_bytes_s3(uri) if uri.startswith("s3://")
                           else Path(uri).read_bytes())
         codes = [int(round(v)) for v in
-                 sample_raster_at_nodes(local, handle.points_lonlat)]
-        slopes = (list(node_slopes_from_mesh(handle.points_utm, handle.cells,
-                                             handle.bed_elev))
+                 sample_raster_at_nodes(local, points_lonlat)]
+        slopes = (list(node_slopes_from_mesh(points_utm, cells, bed))
                   if steep_slope_correction else None)
         manning = [landcover_cn_manning(c)[1] for c in codes]
         cn2 = node_curve_numbers(codes, uniform_cn=curve_number,
@@ -229,6 +235,20 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
             "steep_slope_correction": bool(steep_slope_correction),
             "landcover_classes": sorted(set(codes)),
             "note": str(layer_field(landcover, "fallback_note") or "")}
+
+
+def mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any, Any, Any]:
+    """The accepted catchment mesh's nodes, or the refusal that names what is missing."""
+    from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
+
+    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
+    uri = str(mesh.get("display_uri") or "")
+    if not uri or not utm_epsg:
+        raise RainOnGridError(
+            "the accepted mesh carries no display face or no projected zone, so "
+            "its nodes cannot be read; the catchment mesh ask builds both.",
+            error_code="TELEMAC_ROG_MESH_NOT_ACCEPTED")
+    return read_accepted_mesh_nodes(uri, utm_epsg=utm_epsg)
 
 
 # --------------------------------------------------------------------------- #
@@ -257,6 +277,9 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
             "intensity_mm_per_hr": float(intensity_mm_per_hr),
             "duration_s": float(sim_duration_hr if sim_duration_hr
                                 else storm_duration_hr) * _HOUR_S,
+            # How long it RAINS, as distinct from how long the run watches: a
+            # window shorter than the run is what lets the recession limb appear.
+            "rain_duration_s": float(storm_duration_hr) * _HOUR_S,
             "duration_basis": "user" if sim_duration_hr else "storm",
             "note": (f"a CONSTANT design storm of {float(intensity_mm_per_hr):g} mm/h "
                      f"over {float(storm_duration_hr):g} h - a hypothetical "
@@ -328,8 +351,46 @@ def _soil_store_spin_up(*, window: str, capacity_mm: float, recovery_hr: float,
 
 
 # --------------------------------------------------------------------------- #
-# 4. author: the worker manifest.
+# 4. author: the steering file, the fields it names, and the case that runs it.
 # --------------------------------------------------------------------------- #
+def _mesh_field(mesh: Mapping[str, Any], name: str) -> str:
+    """One field of the ACCEPTED mesh's record, or the refusal that names it."""
+    uri = (mesh or {}).get(name)
+    if not uri:
+        raise RainOnGridError(
+            f"the catchment mesh carries no {name}, so the accepted mesh cannot "
+            f"be staged (mesh record: {sorted((mesh or {}))}).",
+            error_code="TELEMAC_ROG_MESH_NOT_ACCEPTED")
+    return str(uri)
+
+
+def _outlet_nodes(mesh: Mapping[str, Any]) -> list[int]:
+    """The boundary nodes the declared OUTLET role landed on.
+
+    The declaration is the pour point and the mesher matched the boundary nodes
+    within its own mean boundary edge of it, so this reads what was MATCHED
+    rather than re-deriving a nearest-node set the geometry file never saw.
+    """
+    from trid3nt_server.workflows.mesh.topology import read_topology
+
+    roles = read_topology(_mesh_field(mesh, "topology_uri"))["roles"]
+    nodes = [int(n) for n in (roles.get(_OUTLET_ROLE) or ())]
+    if not nodes:
+        raise RainOnGridError(
+            f"no boundary node of the catchment mesh took the {_OUTLET_ROLE!r} "
+            "role, so the basin has no outlet to drain through and no hydrograph "
+            "to measure. Move the pour point onto the basin's own outlet, or mesh "
+            "it finer so a boundary node reaches it.",
+            error_code="TELEMAC_ROG_NO_OUTLET_NODES")
+    return nodes
+
+
+def _authoring_dir(run_tag: str) -> Path:
+    rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
+    rundir.mkdir(parents=True, exist_ok=True)
+    return rundir
+
+
 async def write_rain_on_grid_deck(
     *,
     catchment: dict[str, Any],
@@ -337,27 +398,29 @@ async def write_rain_on_grid_deck(
     rain: dict[str, Any],
     mesh_resolution_m: float | None = None,
     time_step_s: float,
-    outlet_node_count: int,
     output_interval_min: float | None = None,
     soil_store: bool = False,
     soil_store_capacity_mm: float | None = None,
     soil_recovery_hr: float,
     soil_spinup_days: int,
 ) -> dict[str, Any]:
-    """Serialize the approved sheet into the worker's rain-on-grid manifest.
+    """Serialize the approved sheet into the run's own steering file + case.
 
-    The returned value carries what SOLVES it - the mode the entrypoint dispatches
-    on, the inputs to stage, the artifacts to bring back - so the dispatch needs to
-    know nothing about rain.
+    ``catchment`` is the ACCEPTED mesh: its geometry, its boundary conditions and
+    the outlet role its pour point matched are what the solve runs on, so the deck
+    is authored against the triangulation that was presented rather than an
+    equivalent rebuild.
 
-    The output CADENCE is computed here rather than worker-side because the time
-    step is the template's own: ``graphic_period`` is a count of steps, and the
-    only party that knows how many steps make a minute is the one that declared the
-    step. Unasked, the worker's own default stands untouched.
+    The output CADENCE is computed here because the time step is the template's
+    own: ``graphic_period`` is a count of steps, and the only party that knows how
+    many steps make a minute is the one that declared the step.
     """
     from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
         select_runoff_path,
     )
+
+    from . import author
+    from .open_water import case_section
 
     if soil_store:
         # The store integrates a real antecedent history, so it cannot run on a
@@ -373,64 +436,112 @@ async def write_rain_on_grid_deck(
                 "soil_store needs soil_store_capacity_mm, the retention capacity S "
                 "(mm) the store is calibrated on.",
                 error_code="TELEMAC_ROG_SOIL_STORE_NO_CAPACITY")
+        # The continuous store was the RETIRED in-worker runoff model, and the
+        # authored deck runs the engine's own static SCS-CN. Refused rather than
+        # accepted and dropped: a knob that reads as applied and is not is the
+        # one failure a labeled default cannot be read past.
+        raise RainOnGridError(
+            "soil_store has no authored form: the continuous soil-moisture store "
+            "was the retired in-worker runoff model, and the engine's own SCS-CN "
+            "the deck drives carries a static curve number. Run without it, or "
+            "state the antecedent wetness with antecedent_moisture.",
+            error_code="TELEMAC_ROG_SOIL_STORE_UNAUTHORED")
 
     decision = (select_runoff_path(hyetograph_mm=rain["series"])
                 if rain["kind"] == "hyetograph"
                 else select_runoff_path(
                     constant_intensity_mm_per_hr=rain["intensity_mm_per_hr"]))
+    time_varying = bool(decision.time_varying)
 
-    run_tag = new_ulid()
-    config: dict[str, Any] = {
-        "name": str(catchment["name"]),
-        "mode": _MODE,
-        "watershed_slf": "watershed.slf",
-        "runoff_path": decision.path,
+    artifact = catchment.get("artifact")
+    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    probes = dict(getattr(artifact, "probes", None) or {})
+    provenance = dict(catchment.get("provenance") or {})
+    outlet_nodes = _outlet_nodes(catchment)
+    mesh_size_m = float(catchment.get("min_edge_m") or mesh_resolution_m or 0.0)
+    name = str(getattr(artifact, "name", None) or "watershed")
+
+    deck: dict[str, Any] = {
+        "name": name,
         "amc_condition": int(infiltration["amc_condition"]),
-        "rain_intensity_mm_per_hr": float(rain["intensity_mm_per_hr"]),
-        "node_cn2_file": "node_cn2.txt",
-        "node_manning_file": "node_manning.txt",
-        "outlet_lonlat": list(catchment["outlet_lonlat"]),
-        "n_outlet_nodes": int(outlet_node_count),
         "duration_s": float(rain["duration_s"]),
         "time_step_s": float(time_step_s),
-        # A count of solver steps between written frames. None keeps the worker's
-        # own byte-identical default rather than restating it as a number here.
+        # A count of solver steps between written frames.
         "graphic_period": (max(1, round(float(output_interval_min) * 60.0
                                         / float(time_step_s)))
                            if output_interval_min is not None else 200),
     }
-    if infiltration["curve_number"] is not None:
-        config["curve_number"] = float(infiltration["curve_number"])
-    if rain["kind"] == "hyetograph":
-        # The gross hourly hyetograph drives the engine's own SCS-CN per timestep
-        # through the RAINDEF=3 FORTRAN file the worker stages.
-        config["rain_hyetograph_blocks"] = rain["blocks"]
-    if soil_store:
-        level = await asyncio.to_thread(
-            _soil_store_spin_up, window=str(rain["window"]),
-            capacity_mm=float(soil_store_capacity_mm),
-            recovery_hr=float(soil_recovery_hr),
-            antecedent_days=int(soil_spinup_days))
-        config.update({
-            "soil_store": True,
-            "soil_store_capacity_mm": float(soil_store_capacity_mm),
-            "soil_store_recovery_h": float(soil_recovery_hr),
-            "soil_store_init_mm": float(level),
-        })
+    if rain.get("rain_duration_s") is not None:
+        deck["rain_duration_s"] = float(rain["rain_duration_s"])
+
+    run_tag = new_ulid()
+    rundir = _authoring_dir(run_tag)
+    points_utm, _cells, _bed, _lonlat = await asyncio.to_thread(mesh_nodes, catchment)
+
+    def _author() -> dict[str, Any]:
+        author.write_cn_map(rundir, _CN_MAP, x=points_utm[:, 0], y=points_utm[:, 1],
+                            cn2=infiltration["node_cn2"])
+        friction = author.write_friction_files(
+            rundir, laws_basename=_FRICTION_LAWS, zones_basename=_ZONES_FILE,
+            manning_per_node=infiltration["node_manning"])
+        hyeto = None
+        if time_varying:
+            friction.update(author.write_hyetograph_file(
+                rundir, _HYETOGRAPH, blocks=rain["blocks"],
+                duration_s=float(rain["duration_s"])))
+            hyeto = _HYETOGRAPH
+        author.author_rog_deck(
+            rundir, deck=deck, geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST,
+            results=_RESULT, cas_name=_STEERING, cn_map=_CN_MAP,
+            friction_laws=_FRICTION_LAWS, zones_file=_ZONES_FILE,
+            rain_mm_per_day=float(rain["intensity_mm_per_hr"]) * 24.0,
+            runoff_path="native", hyetograph_file=hyeto)
+        return friction
+
+    authored_stats = await asyncio.to_thread(_author)
+    authored = sorted(str(p.relative_to(rundir))
+                      for p in rundir.rglob("*") if p.is_file())
+    logger.info("rog deck authored: %s path=%s outlet_nodes=%d files=%s",
+                _STEERING, decision.path, len(outlet_nodes), authored)
+
     return {
-        "config": config,
+        "deck": deck,
         "run_tag": run_tag,
+        "rundir": str(rundir),
+        "case": case_section(
+            module=_MODULE, steering=_STEERING, results=[_RESULT], family=_FAMILY,
+            # The engine reaches RAINDEF=3 only through the user Fortran the
+            # image bakes, so the run that needs it names it on both channels.
+            user_fortran=author.RAINDEF3_USER_FORTRAN if time_varying else None,
+            echo={"utm_epsg": utm_epsg,
+                  "bbox": [round(float(v), 6)
+                           for v in (getattr(artifact, "bbox", None) or ())],
+                  "npoin": int(catchment.get("node_count") or 0),
+                  "nelem": int(catchment.get("element_count") or 0),
+                  "mesh_size_m": mesh_size_m,
+                  "bed_source": str(provenance.get("dem_source") or "staged")}),
+        "outputs": [_RESULT, _GEOMETRY_DEST, _BOUNDARY_DEST, "full_listing.log",
+                    "telemac_metrics.json", *authored],
+        "authored": authored,
         "result_basename": _RESULT,
-        "outputs": list(_OUTPUTS),
+        "outlet_nodes": outlet_nodes,
         "catchment": catchment,
         "infiltration": infiltration,
         "rain": rain,
         "runoff_path": decision.path,
         "runoff_reason": decision.reason,
-        "mesh_size_m": float(catchment["min_edge_m"]),
+        "hyetograph_total_mm": authored_stats.get("hyetograph_total_mm"),
+        "mesh_size_m": mesh_size_m,
+        "mesh_max_edge_m": float((probes.get("edge_length_m") or {}).get("max") or 0.0),
+        "area_km2": float(probes.get("area_km2") or 0.0),
+        "lonlat_bounds": [float(v) for v in (getattr(artifact, "bbox", None) or ())],
         "mesh_resolution_asked_m": mesh_resolution_m,
-        "domain_name": str(catchment["name"]),
-        "utm_epsg": int(catchment["utm_epsg"]),
+        "domain_name": name,
+        "utm_epsg": utm_epsg,
+        "bed_source": str(provenance.get("dem_source") or "staged"),
+        "bed_note": str(provenance.get("bed_fallback_note") or ""),
+        "sizing_source": str(provenance.get("sizing_source") or ""),
+        "domain_source": str(provenance.get("domain_source") or ""),
     }
 
 
@@ -438,7 +549,7 @@ async def write_rain_on_grid_deck(
 # 5. solve.
 # --------------------------------------------------------------------------- #
 def _stage_inputs(deck: dict[str, Any]) -> str:
-    """Upload the mesh + node fields + manifest; return the manifest ``s3://`` URI."""
+    """Upload the mesh pair + the authored deck; return the manifest ``s3://`` URI."""
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
@@ -446,28 +557,23 @@ def _stage_inputs(deck: dict[str, Any]) -> str:
         raise RainOnGridError(
             "TRID3NT_CACHE_BUCKET must be set to stage the rain-on-grid inputs.",
             error_code="TELEMAC_ROG_STAGING_FAILED")
-    catchment, infiltration = deck["catchment"], deck["infiltration"]
-    rundir = Path(catchment["rundir"])
-    (rundir / "node_cn2.txt").write_text(
-        "\n".join(f"{v:.3f}" for v in infiltration["node_cn2"]) + "\n")
-    (rundir / "node_manning.txt").write_text(
-        "\n".join(f"{v:.3f}" for v in infiltration["node_manning"]) + "\n")
-
-    run_tag = deck["run_tag"]
+    catchment, run_tag = deck["catchment"], deck["run_tag"]
+    rundir = Path(deck["rundir"])
     s3 = _get_s3_client()
-    inputs = []
-    for name, src in (("watershed.slf", catchment["slf_path"]),
-                      ("node_cn2.txt", str(rundir / "node_cn2.txt")),
-                      ("node_manning.txt", str(rundir / "node_manning.txt"))):
+    inputs = [
+        {"gs_uri": _mesh_field(catchment, "slf_uri"), "dest": _GEOMETRY_DEST},
+        {"gs_uri": _mesh_field(catchment, "cli_uri"), "dest": _BOUNDARY_DEST},
+    ]
+    for name in deck["authored"]:
         key = f"{_STAGE_PREFIX}/{run_tag}/{name}"
-        s3.put_object(Bucket=bucket, Key=key, Body=Path(src).read_bytes())
+        s3.put_object(Bucket=bucket, Key=key, Body=(rundir / name).read_bytes())
         inputs.append({"gs_uri": f"s3://{bucket}/{key}", "dest": name})
 
     from .open_water import OpenWaterError, stage_telemac_manifest
 
     try:
         return stage_telemac_manifest(
-            section="reach", config=deck["config"], run_tag=run_tag,
+            section="case", config=deck["case"], run_tag=run_tag,
             outputs=deck["outputs"], inputs=inputs, prefix=_STAGE_PREFIX)
     except OpenWaterError as exc:
         raise RainOnGridError(str(exc),
@@ -476,7 +582,7 @@ def _stage_inputs(deck: dict[str, Any]) -> str:
 
 async def solve_rain_on_grid(*, deck: dict[str, Any],
                              compute_class: str = "medium") -> dict[str, Any]:
-    """Stage the deck, dispatch it to the worker's rain-on-grid mode, and wait.
+    """Stage the deck, dispatch the authored case to the worker, and wait.
 
     The returned ``uri`` is the result SELAFIN under the run prefix - what a ledger
     replay probes, so a resumed rerun can only skip the solve while the solved
@@ -490,12 +596,13 @@ async def solve_rain_on_grid(*, deck: dict[str, Any],
     from .solve import read_run_metrics
 
     manifest_uri = await asyncio.to_thread(_stage_inputs, deck)
-    logger.info("rog staged manifest run_tag=%s name=%s -> %s", deck["run_tag"],
-                deck["config"]["name"], manifest_uri)
+    logger.info("rog staged case run_tag=%s name=%s steering=%s -> %s",
+                deck["run_tag"], deck["domain_name"], deck["case"]["steering"],
+                manifest_uri)
 
     run_result, batch_run_id = await dispatch_and_wait(
         solver=_solver_name(), manifest_uri=manifest_uri,
-        compute_class=compute_class, label=_MODE, timeout_s=_SOLVE_TIMEOUT_S,
+        compute_class=compute_class, label=_FAMILY, timeout_s=_SOLVE_TIMEOUT_S,
         grid_resolution_m=deck.get("mesh_size_m"),
         active_cell_count=deck["catchment"].get("element_count"))
     if run_result is None or run_result.status != "complete":
@@ -520,29 +627,46 @@ def _solver_name() -> str:
 # --------------------------------------------------------------------------- #
 # 6. publish.
 # --------------------------------------------------------------------------- #
-def _read_hydrograph(run_id: str) -> dict[str, Any]:
-    """The outlet hydrograph the worker wrote; ``{}`` on any miss (best-effort)."""
+def _read_listing(run_id: str) -> str:
+    """The solver listing the supervisor uploaded; ``""`` on any miss.
+
+    Best-effort by the products contract: the closure the engine printed is a
+    scalar the answer carries, never the reason a solved run has no layer.
+    """
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
 
     try:
         body = _get_s3_client().get_object(
-            Bucket=_get_runs_bucket(), Key=f"{run_id}/{_HYDROGRAPH}")["Body"].read()
-        loaded = json.loads(body.decode("utf-8"))
-        return loaded if isinstance(loaded, dict) else {}
-    except Exception as exc:  # noqa: BLE001 - the hydrograph is a bonus, not the run
-        logger.info("rog: outlet hydrograph unreadable for %s: %s", run_id, exc)
-        return {}
+            Bucket=_get_runs_bucket(), Key=f"{run_id}/full_listing.log")["Body"].read()
+        return body.decode("utf-8", errors="replace")
+    except Exception as exc:  # noqa: BLE001 - a missing listing costs one scalar
+        logger.info("rog: listing unreadable for %s: %s", run_id, exc)
+        return ""
 
 
-def _provenance(deck: Mapping[str, Any],
-                metrics: Mapping[str, Any]) -> list[SyntheticInput]:
+def _rainfall_volume_m3(deck: Mapping[str, Any]) -> float | None:
+    """What FELL on the catchment, in cubic metres, or ``None`` when unmeasured.
+
+    Gross depth times the meshed area - the same area the runoff left through -
+    so the coefficient is a ratio of two figures measured on one domain.
+    """
+    rain, area_km2 = deck["rain"], float(deck.get("area_km2") or 0.0)
+    total_mm = (deck.get("hyetograph_total_mm") if rain["kind"] == "hyetograph"
+                else float(rain["intensity_mm_per_hr"])
+                * float(rain.get("rain_duration_s") or rain["duration_s"]) / _HOUR_S)
+    if not area_km2 or total_mm is None:
+        return None
+    return round(float(total_mm) * 1.0e-3 * area_km2 * 1.0e6, 3)
+
+
+def _provenance(deck: Mapping[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
     Which STORM drove it, which infiltration path ran, where the bed came from and
     whether the mesh was generated or handed in - every one of them a fact the
     answer is meaningless without, so each is stated rather than assumed.
     """
-    catchment, infiltration, rain = deck["catchment"], deck["infiltration"], deck["rain"]
+    infiltration, rain = deck["infiltration"], deck["rain"]
     rows = [
         SyntheticInput(
             param="rain_event", value=str(rain["kind"]), basis=(
@@ -570,16 +694,12 @@ def _provenance(deck: Mapping[str, Any],
             consequence="physics", note=str(deck["runoff_reason"])),
         SyntheticInput(
             param="mesh_domain",
-            value=f"{catchment['element_count']} elements over "
-                  f"{float(catchment['area_km2']):.3g} km2",
-            basis="user" if catchment["provenance"] == "supplied" else "derived",
-            consequence="numerical",
-            real_source_if_any=("build_mesh"
-                                if catchment["provenance"] == "supplied" else None),
-            note=("solved on a mesh SUPPLIED for this invocation"
-                  if catchment["provenance"] == "supplied"
-                  else "the catchment was delineated at the pour point and meshed "
-                       "for this run")),
+            value=f"{deck['catchment'].get('element_count') or 0} elements over "
+                  f"{float(deck.get('area_km2') or 0.0):.3g} km2",
+            basis="derived", consequence="numerical",
+            real_source_if_any=str(deck.get("domain_source") or "") or None,
+            note=("the catchment was delineated at the pour point and meshed for "
+                  "this run")),
     ]
     if infiltration["curve_number"] is not None:
         rows.append(SyntheticInput(
@@ -587,17 +707,17 @@ def _provenance(deck: Mapping[str, Any],
             basis="user", consequence="physics",
             note=("a UNIFORM curve number overriding the land-cover-distributed "
                   "field; roughness is still per-node")))
-    if catchment.get("bed_note"):
+    rows.append(SyntheticInput(
+        param="mesh_bed", value=str(deck.get("bed_source") or "staged"),
+        basis="fetched", consequence="physics",
+        real_source_if_any="USGS 3DEP",
+        note=str(deck.get("bed_note") or
+                 "the bare-earth bed the mesher painted every node from")))
+    if deck.get("sizing_source"):
         rows.append(SyntheticInput(
-            param="mesh_bed", value=str(catchment["bed_source"]), basis="fetched",
-            consequence="physics",
-            real_source_if_any="USGS 3DEP / Copernicus GLO-30",
-            note=str(catchment["bed_note"])))
-    if catchment.get("rivers_note"):
-        rows.append(SyntheticInput(
-            param="mesh_sizing_source", value=str(catchment["rivers_source"]),
+            param="mesh_sizing_source", value=str(deck["sizing_source"]),
             basis="fetched", consequence="numerical",
-            note=str(catchment["rivers_note"])))
+            note="the channel network the mesh refinement was sized by distance to"))
     return rows
 
 
@@ -609,15 +729,16 @@ def _honesty_note(deck: Mapping[str, Any], metrics: Mapping[str, Any],
     grid reproduces single-storm flash floods in small steep catchments and does
     NOT carry baseflow, because infiltrated water is permanently lost.
     """
-    catchment, rain = deck["catchment"], deck["rain"]
-    spacing = metrics.get("dx_m") or deck["mesh_size_m"]
+    rain = deck["rain"]
+    spacing = metrics.get("mesh_size_m") or deck["mesh_size_m"]
     return (
         (f"{product_note} " if product_note else "")
         + "Planning-grade rainfall-runoff SCREENING: TELEMAC-2D shallow water over a "
-        f"{float(catchment['area_km2']):.3g} km2 catchment delineated at the pour "
-        f"point and triangulated at {float(spacing):g} m minimum edge "
-        f"({catchment['element_count']} elements), infiltrating by the SCS "
-        "curve-number method with per-node curve numbers from land cover. Driven by "
+        f"{float(deck.get('area_km2') or 0.0):.3g} km2 catchment delineated at the "
+        f"pour point and triangulated at {float(spacing):g} m minimum edge "
+        f"({deck['catchment'].get('element_count') or 0} elements), infiltrating by "
+        "the SCS curve-number method with per-node curve numbers from land cover. "
+        "Driven by "
         + str(rain["note"]).rstrip(".").split(" - ")[0]
         + ". The raster is the peak water DEPTH envelope over the run; the animation "
         "plays from the native rain-on-grid SELAFIN. Single-storm events only: "
@@ -637,7 +758,8 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         publish_results_mesh_via_seam,
     )
 
-    from .open_water import download_open_water_result, mesh_sizing_provenance
+    from .open_water import download_open_water_result
+    from .run_reads import continuity_rel_error, outlet_hydrograph
 
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
@@ -649,10 +771,14 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         download_open_water_result, run_id, deck["result_basename"],
         error_code="TELEMAC_ROG_OUTPUT_MISSING")
     try:
-        layers, _pmetrics = await asyncio.to_thread(
+        layers, pmetrics = await asyncio.to_thread(
             postprocess_telemac_wse, slf_path, run_id=run_id,
             mesh_epsg=utm_epsg, reach_name=name, quantity="depth",
             mesh_frame_note="rain-on-grid peak water depth (UTM mesh frame)")
+        # The ANSWER is the hydrograph, and the server measures it: the flux
+        # through the nodes the outlet role landed on, off the run's own result.
+        hydrograph = await asyncio.to_thread(
+            outlet_hydrograph, slf_path, outlet_nodes=deck["outlet_nodes"])
     finally:
         Path(slf_path).unlink(missing_ok=True)
     if not layers:
@@ -662,13 +788,13 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
             error_code="TELEMAC_ROG_NO_LAYER")
     raw = layers[0]
 
-    hydrograph = await asyncio.to_thread(_read_hydrograph, run_id)
-    rainfall = metrics.get("source_volume_m3")
-    runoff = metrics.get("outflow_volume_m3")
+    listing = await asyncio.to_thread(_read_listing, run_id)
+    rainfall = _rainfall_volume_m3(deck)
+    runoff = hydrograph.get("runoff_volume_m3")
     scalars: dict[str, Any] = {
-        "catchment_area_km2": round(float(catchment["area_km2"]), 4),
-        "peak_discharge_m3s": metrics.get("peak_discharge_m3s"),
-        "peak_discharge_time_s": metrics.get("peak_time_s"),
+        "catchment_area_km2": round(float(deck.get("area_km2") or 0.0), 4),
+        "peak_discharge_m3s": hydrograph.get("peak_discharge_m3s"),
+        "peak_discharge_time_s": hydrograph.get("peak_discharge_time_s"),
         "rainfall_volume_m3": rainfall,
         "runoff_volume_m3": runoff,
         # A ratio, not a percentage, and only when there was rain to divide by:
@@ -676,25 +802,23 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         "runoff_coefficient": (round(float(runoff) / float(rainfall), 6)
                                if rainfall and runoff is not None
                                and float(rainfall) > 0.0 else None),
-        "max_depth_peak_m": metrics.get("max_depth_peak_m"),
-        "max_velocity_peak_ms": metrics.get("max_velocity_peak_ms"),
-        "continuity_rel_error": metrics.get("continuity_rel_error"),
+        "max_depth_peak_m": pmetrics.get("wse_max_m"),
+        "continuity_rel_error": continuity_rel_error(listing),
         "runoff_path": deck["runoff_path"],
         "amc_condition": int(deck["infiltration"]["amc_condition"]),
         "rain_intensity_mm_per_hr": float(deck["rain"]["intensity_mm_per_hr"]),
-        "outlet_hydrograph_t_s": [float(v) for v in (hydrograph.get("t_s") or [])] or None,
-        "outlet_hydrograph_q_m3s": [float(v) for v in (hydrograph.get("q_m3s") or [])]
-                                   or None,
-        "mesh_node_count": int(catchment["node_count"]) or None,
-        "mesh_element_count": int(catchment["element_count"]) or None,
+        "outlet_hydrograph_t_s": list(hydrograph.get("t_s") or ()) or None,
+        "outlet_hydrograph_q_m3s": list(hydrograph.get("q_m3s") or ()) or None,
+        "mesh_node_count": int(catchment.get("node_count") or 0) or None,
+        "mesh_element_count": int(catchment.get("element_count") or 0) or None,
         "mesh_size_m": float(deck["mesh_size_m"]),
         "mesh_resolution_label": (
             f"catchment TIN, {float(deck['mesh_size_m']):g} m minimum edge to "
-            f"{float(catchment['max_edge_m']):g} m, refined toward the channel "
-            f"network ({catchment['element_count']} elements)"),
-        "catchment_provenance": str(catchment["provenance"]),
+            f"{float(deck['mesh_max_edge_m']):g} m, refined toward the channel "
+            f"network ({catchment.get('element_count') or 0} elements)"),
+        "catchment_provenance": str(deck.get("domain_source") or ""),
         "catchment_name": name,
-        "domain_bbox": [float(v) for v in catchment["lonlat_bounds"]],
+        "domain_bbox": [float(v) for v in deck["lonlat_bounds"]],
     }
     typed = TelemacRainOnGridLayerURI(**raw.model_dump(), **scalars)
     published = await publish_product_layer(
@@ -703,11 +827,9 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
             # The published raster is in the mesh's UTM metres, so the postprocess
             # leaves it without a zoom-to extent; the DOMAIN's own 4326 bounds are
             # known here and the camera follows the domain.
-            "bbox": tuple(catchment["lonlat_bounds"]),
+            "bbox": tuple(deck["lonlat_bounds"]),
             "fallback_note": _honesty_note(deck, metrics, raw.fallback_note),
-            "synthetic_inputs": (
-                _provenance(deck, metrics)
-                + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)),
+            "synthetic_inputs": _provenance(deck),
             # The run prefix travels WITH the layer so the skeleton writes this
             # run's own chart spec and answer metrics under it.
             "run_id": run_id,
@@ -722,11 +844,11 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         peak_quantity="flood_depth", mesh_basename=deck["result_basename"],
         mesh_epsg=utm_epsg, reach_name=name)
 
-    logger.info("rog complete run_id=%s catchment=%s area=%.4g km2 peak_q=%s "
-                "peak_depth=%s continuity=%s uri=%s", run_id, name,
-                float(catchment["area_km2"]), published.peak_discharge_m3s,
-                published.max_depth_peak_m, published.continuity_rel_error,
-                published.uri)
+    logger.info("rog complete run_id=%s catchment=%s area=%.4g km2 outlet_nodes=%d "
+                "peak_q=%s peak_depth=%s continuity=%s uri=%s", run_id, name,
+                float(deck.get("area_km2") or 0.0), len(deck["outlet_nodes"]),
+                published.peak_discharge_m3s, published.max_depth_peak_m,
+                published.continuity_rel_error, published.uri)
     return published
 
 

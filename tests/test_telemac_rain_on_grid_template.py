@@ -17,11 +17,10 @@ import asyncio
 import pytest
 
 
-def test_declared_parked_and_off_the_model_surface():
-    """PARKED is a state the declaration carries, not an absent import: the module
-    imports with the rest of the tree, the declaration reads back whole, and the
-    tool is simply never registered - so registry membership does not depend on
-    which test file imported first."""
+def test_registered_on_the_model_surface():
+    """The catchment front is LIVE: its outlet boundary is declared on the mesh
+    ask and the hydrograph is measured server-side off the run's own result, so
+    nothing is left for a park to state."""
     import trid3nt_server.main as _main
     from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
@@ -30,11 +29,8 @@ def test_declared_parked_and_off_the_model_surface():
     _main._import_tools_registry()
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    assert "telemac_rain_on_grid" not in TOOL_REGISTRY
-    # The reason names what is MISSING rather than which wave was meant to
-    # supply it, so a reader can tell whether it has been supplied yet.
-    assert "pour point" in telemac_rain_on_grid.parked.lower()
-    assert "outlet hydrograph" in telemac_rain_on_grid.parked.lower()
+    assert "telemac_rain_on_grid" in TOOL_REGISTRY
+    assert telemac_rain_on_grid.parked is None
 
     md = telemac_rain_on_grid.workflow.metadata
     assert md.engine == "telemac"
@@ -46,17 +42,16 @@ def test_declared_parked_and_off_the_model_surface():
     assert "mesh_min_edge_m" in specs
 
 
-@pytest.mark.asyncio
-async def test_invoking_a_parked_template_refuses_typed_naming_the_reason():
-    from trid3nt_server.workflows.lib import WorkflowParkedError
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
-        telemac_rain_on_grid,
-    )
+def test_the_outlet_boundary_is_declared_on_the_mesh_ask():
+    """The one liquid boundary a catchment has is DECLARED where every other
+    boundary role is - on the mesh ask, at the delineation's snapped outlet -
+    rather than resolved by a server step between the mesh and the deck."""
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import MESH
 
-    with pytest.raises(WorkflowParkedError) as ei:
-        await telemac_rain_on_grid(location="Otto, North Carolina")
-    assert ei.value.error_code == "TEMPLATE_PARKED"
-    assert "outlet hydrograph" in str(ei.value).lower()
+    roles = MESH.spec.fields["boundaries"]
+    assert set(roles) == {"outflow"}
+    assert roles["outflow"]["type"] == "Point"
+    assert roles["outflow"]["coordinates"].path == "basin.snapped_pour_point"
 
 
 def test_docstring_carries_the_godara_envelope():
@@ -112,9 +107,9 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
 
 def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     """CONSTANT-door params (landcover_dataset, soil_spinup_days, mesh_grade,
-    bed_dem_resolution_m, river_source, time_step_s, outlet_node_count,
-    compute_class) never reach the model-facing schema; SCENARIO/USER ones (the
-    storm, the granularity lever, the mesh slot) do."""
+    bed_dem_resolution_m, river_source, time_step_s, compute_class) never reach
+    the model-facing schema; SCENARIO/USER ones (the storm, the granularity
+    lever, the mesh slot) do."""
     import inspect
 
     from trid3nt_server.workflows.lib import doors
@@ -312,37 +307,32 @@ def test_soil_store_spin_up_fills_from_antecedent(monkeypatch):
     assert v_wet <= 300.0  # never over capacity
 
 
-def test_soil_store_needs_a_real_window_and_a_capacity():
-    """soil_store without a real hyetograph, or without a capacity, refuses
-    typed at deck-authoring time - the surviving equivalent of the deleted
-    ``model_telemac_rain_on_grid`` guard."""
+@pytest.mark.parametrize("rain,capacity,code", [
+    ({"kind": "design_storm", "intensity_mm_per_hr": 25.0, "duration_s": 21600.0,
+      "series": None}, 300.0, "TELEMAC_ROG_SOIL_STORE_NEEDS_WINDOW"),
+    ({"kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 21600.0,
+      "series": [1.0, 2.0]}, None, "TELEMAC_ROG_SOIL_STORE_NO_CAPACITY"),
+    # And with both of its own preconditions met, the store still has no authored
+    # form: it was the retired in-worker runoff model and the deck drives the
+    # engine's own static SCS-CN.
+    ({"kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 21600.0,
+      "series": [1.0, 2.0]}, 300.0, "TELEMAC_ROG_SOIL_STORE_UNAUTHORED"),
+])
+def test_the_soil_store_refuses_typed_rather_than_reading_as_applied(
+        rain, capacity, code):
+    """soil_store refuses at deck-authoring time - a knob that reads as applied
+    and is not is the one failure a labeled default cannot be read past."""
     from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
         RainOnGridError, write_rain_on_grid_deck,
     )
 
-    catchment = {"name": "x", "min_edge_m": 40.0, "max_edge_m": 300.0,
-                "utm_epsg": 32617, "outlet_lonlat": [-83.4, 35.05]}
-    infiltration = {"amc_condition": 2, "curve_number": None}
-
     with pytest.raises(RainOnGridError) as ei:
         asyncio.run(write_rain_on_grid_deck(
-            catchment=catchment, infiltration=infiltration,
-            rain={"kind": "design_storm", "intensity_mm_per_hr": 25.0,
-                 "duration_s": 21600.0, "series": None},
-            time_step_s=3.0, outlet_node_count=8, soil_store=True,
-            soil_store_capacity_mm=300.0, soil_recovery_hr=120.0,
+            catchment={}, infiltration={"amc_condition": 2, "curve_number": None},
+            rain=rain, time_step_s=3.0, soil_store=True,
+            soil_store_capacity_mm=capacity, soil_recovery_hr=120.0,
             soil_spinup_days=45))
-    assert ei.value.error_code == "TELEMAC_ROG_SOIL_STORE_NEEDS_WINDOW"
-
-    with pytest.raises(RainOnGridError) as ei:
-        asyncio.run(write_rain_on_grid_deck(
-            catchment=catchment, infiltration=infiltration,
-            rain={"kind": "hyetograph", "intensity_mm_per_hr": 25.0,
-                 "duration_s": 21600.0, "series": [1.0, 2.0]},
-            time_step_s=3.0, outlet_node_count=8, soil_store=True,
-            soil_store_capacity_mm=None, soil_recovery_hr=120.0,
-            soil_spinup_days=45))
-    assert ei.value.error_code == "TELEMAC_ROG_SOIL_STORE_NO_CAPACITY"
+    assert ei.value.error_code == code
 
 
 # ===========================================================================
@@ -395,3 +385,140 @@ async def test_acquire_catchment_never_invents_a_pour_point():
         await acquire_catchment(location="x", bbox=(-83.5, 35.0, -83.3, 35.1),
                                 pour_point=None, half_deg=0.14)
     assert ei.value.error_code == "TELEMAC_ROG_PARAMS_INCOMPLETE"
+
+
+# ===========================================================================
+# The authored case: the steering file, the fields it names, and what solves it.
+# ===========================================================================
+def _accepted_catchment_mesh():
+    """The mesh step's record for an accepted catchment, as the deck reads it."""
+    from types import SimpleNamespace
+
+    return {
+        "artifact": SimpleNamespace(
+            utm_epsg=32617, bbox=(-83.47, 35.02, -83.36, 35.10),
+            name="coweeta creek",
+            probes={"area_km2": 2.5, "edge_length_m": {"min": 40.0, "max": 300.0}}),
+        "mesh_id": "M1", "slf_uri": "s3://cache/mesh/M1/mesh.slf",
+        "cli_uri": "s3://cache/mesh/M1/mesh.cli",
+        "topology_uri": "s3://cache/mesh/M1/mesh_topology.json",
+        "display_uri": "s3://cache/mesh/M1/mesh.2dm",
+        "node_count": 4, "element_count": 2, "min_edge_m": 40.0,
+        "provenance": {"dem_source": "3dep 100%", "sizing_source": "nhdplus_hr",
+                       "domain_source": "supplied polygon domain (1 part(s))"},
+    }
+
+
+@pytest.fixture()
+def rog_deck(monkeypatch, tmp_path):
+    """``write_rain_on_grid_deck`` with the accepted mesh's reads stood in for.
+
+    The AUTHORING is real: the steering file and every field it names are written
+    into a temp run directory by the author this step calls.
+    """
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh import topology as topo_mod
+    from trid3nt_server.workflows.telemac.steps import rain_on_grid as rog_mod
+
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
+    monkeypatch.setattr(topo_mod, "read_topology", lambda _uri: {
+        "roles": {"outflow": [1, 3]}, "liquid_boundary_order": ["outflow"]})
+    monkeypatch.setattr(rog_mod, "mesh_nodes", lambda _mesh: (
+        np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0], [20.0, 10.0]]),
+        np.array([[0, 1, 2], [1, 3, 2]]), np.zeros(4),
+        np.array([[-83.4, 35.0]] * 4)))
+
+    async def _write(**kwargs):
+        return await rog_mod.write_rain_on_grid_deck(
+            catchment=_accepted_catchment_mesh(),
+            infiltration={"amc_condition": 2, "curve_number": None,
+                          "node_cn2": [70.0, 72.0, 74.0, 76.0],
+                          "node_manning": [0.035, 0.035, 0.1, 0.06]},
+            time_step_s=3.0, soil_recovery_hr=120.0, soil_spinup_days=45,
+            **kwargs)
+
+    return _write
+
+
+_DESIGN_STORM = {"kind": "design_storm", "intensity_mm_per_hr": 25.0,
+                 "duration_s": 21600.0, "rain_duration_s": 21600.0,
+                 "series": None, "blocks": None, "note": "a CONSTANT design storm",
+                 "duration_basis": "storm"}
+
+
+def test_a_constant_storm_authors_a_case_and_stages_no_fortran(rog_deck, tmp_path):
+    deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
+    case = deck["case"]
+    assert case["module"] == "telemac2d"
+    assert case["steering"] == "t2d_rog.cas"
+    assert case["results"] == ["r2d_rog.slf"]
+    assert case["family"] == "rain_on_grid"
+    # a constant-rain run compiles nothing, so the key is ABSENT: the worker's
+    # strict gate reads a present key as a directory it must compile.
+    assert "user_fortran" not in case
+    assert case["echo"]["utm_epsg"] == 32617
+    assert case["echo"]["npoin"] == 4 and case["echo"]["nelem"] == 2
+
+    cas = (tmp_path / f"telemac-{deck['run_tag']}" / "t2d_rog.cas").read_text()
+    assert "GEOMETRY FILE                   = rog.slf" in cas
+    assert "BOUNDARY CONDITIONS FILE        = rog.cli" in cas
+    assert "RESULTS FILE                    = r2d_rog.slf" in cas
+    assert "FORMATTED DATA FILE 2           = rog_cn_map.dat" in cas
+    assert "FORTRAN FILE" not in cas
+    # every file the deck names was authored beside it
+    assert set(deck["authored"]) == {"t2d_rog.cas", "rog_cn_map.dat",
+                                     "rog_friction.tbl", "rog_zones.dat"}
+
+
+def test_the_outputs_are_exactly_what_the_run_writes_and_was_handed(rog_deck):
+    deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
+    assert set(deck["outputs"]) == {
+        "r2d_rog.slf", "rog.slf", "rog.cli", "full_listing.log",
+        "telemac_metrics.json", "t2d_rog.cas", "rog_cn_map.dat",
+        "rog_friction.tbl", "rog_zones.dat"}
+
+
+def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(
+        rog_deck, tmp_path):
+    from trid3nt_server.workflows.telemac.steps.author import RAINDEF3_USER_FORTRAN
+
+    deck = asyncio.run(rog_deck(rain={
+        "kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 10800.0,
+        "series": [3.0, 12.5, 0.0], "note": "the REAL hourly AORC hyetograph",
+        "duration_basis": "hyetograph", "window": "2015-12-23/2015-12-24",
+        "blocks": [[3600.0, 3.0], [7200.0, 12.5], [10800.0, 0.0]]}))
+    assert deck["case"]["user_fortran"] == RAINDEF3_USER_FORTRAN
+    cas = (tmp_path / f"telemac-{deck['run_tag']}" / "t2d_rog.cas").read_text()
+    assert f"FORTRAN FILE                    = {RAINDEF3_USER_FORTRAN}" in cas
+    assert "FORMATTED DATA FILE 1           = rog_hyeto.txt" in cas
+    assert "rog_hyeto.txt" in deck["authored"]
+    assert deck["hyetograph_total_mm"] == 15.5
+
+
+def test_the_hydrograph_integrates_over_the_declared_outlet_nodes(rog_deck):
+    """The nodes are the ones the DECLARED role landed on, read off the accepted
+    topology rather than re-derived as a nearest-node set."""
+    deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
+    assert deck["outlet_nodes"] == [1, 3]
+
+
+def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_deck, monkeypatch):
+    from trid3nt_server.workflows.mesh import topology as topo_mod
+    from trid3nt_server.workflows.telemac.steps.rain_on_grid import RainOnGridError
+
+    monkeypatch.setattr(topo_mod, "read_topology", lambda _uri: {
+        "roles": {"inflow": [0]}, "liquid_boundary_order": ["inflow"]})
+    with pytest.raises(RainOnGridError) as ei:
+        asyncio.run(rog_deck(rain=_DESIGN_STORM))
+    assert ei.value.error_code == "TELEMAC_ROG_NO_OUTLET_NODES"
+
+
+def test_the_rainfall_volume_is_the_gross_depth_over_the_meshed_area(rog_deck):
+    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
+        _rainfall_volume_m3,
+    )
+
+    deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
+    # 25 mm/h over 6 h = 150 mm over 2.5 km2.
+    assert _rainfall_volume_m3(deck) == pytest.approx(0.15 * 2.5e6)

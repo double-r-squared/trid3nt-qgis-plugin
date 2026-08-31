@@ -122,7 +122,8 @@ def _os_environ() -> dict:
 #: rather than absorbed; the arms never shrink it, only the declarable POOL.
 #: -2 as tomawac_wave_field and coastal_tidal_surge went PARKED with the worker
 #: unification: a declared template off the model surface is not a registry row.
-_REGISTRY_SIZE = 168
+#: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism.
+_REGISTRY_SIZE = 169
 
 
 # --------------------------------------------------------------------------- #

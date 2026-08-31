@@ -28,13 +28,10 @@ from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 #: The engine templates the tree registers. Pinned as a SET, not derived: a
 #: template that stops registering is a capability that silently left, and the
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
-#: ``telemac_rain_on_grid`` is absent because it is DECLARED PARKED (see
-#: ``PARKED_TEMPLATES``) - its mesh step still reads a retired mesher's fields -
-#: so the roster this walks is what the tree actually offers rather than what it
-#: means to offer.
 EXPECTED_TEMPLATES = {
     "telemac_river_dye",
     "telemac_do_sag",
+    "telemac_rain_on_grid",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
 }
@@ -44,8 +41,6 @@ EXPECTED_TEMPLATES = {
 #: registered set is: parking is a stated condition with a reason, and a template
 #: that drifts INTO or OUT OF it silently is the drift this file exists to catch.
 PARKED_TEMPLATES = {
-    "telemac_rain_on_grid":
-        "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
     "tomawac_wave_field":
         "trid3nt_server.workflows.telemac.wave_field.wave_field",
     "coastal_tidal_surge":

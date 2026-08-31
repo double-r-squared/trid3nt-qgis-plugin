@@ -426,6 +426,24 @@ def _min_angle_deg(points: Any, cells: Any, scale: tuple[float, float]) -> float
     return smallest
 
 
+def _area_km2(points: Any, cells: Any, scale: tuple[float, float]) -> float:
+    """The MESHED domain's own area, summed over its cells, in km2.
+
+    Measured on the accepted topology rather than on the polygon the ask was cut
+    from: a catchment's runoff coefficient divides by the area the solve actually
+    covered, and the two differ by whatever the triangulation trimmed.
+    """
+    xy = points * np.asarray(scale, dtype=float)
+    k = int(cells.shape[1])
+    origin = xy[cells[:, 0]]
+    twice = np.zeros(cells.shape[0], dtype=float)
+    for i in range(1, k - 1):
+        a = xy[cells[:, i]] - origin
+        b = xy[cells[:, i + 1]] - origin
+        twice += a[:, 0] * b[:, 1] - b[:, 0] * a[:, 1]
+    return float(np.abs(twice).sum() / 2.0 / 1.0e6)
+
+
 def _boundary_loops(boundary: Any) -> int:
     adjacency: dict[int, list[int]] = {}
     for a, b in boundary:
@@ -496,6 +514,7 @@ def _probes(mesh: Mesh, chain: Sequence[str]) -> dict[str, Any]:
                           "bin_edges": [float(b) for b in bin_edges]},
         },
         "min_angle_deg": _min_angle_deg(pts, cells, scale),
+        "area_km2": _area_km2(pts, cells, scale),
         "boundary_edges": int(boundary.shape[0]),
         "boundary_nodes": int(np.unique(boundary).size),
         "boundary_loops": _boundary_loops(boundary),

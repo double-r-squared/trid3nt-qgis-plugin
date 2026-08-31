@@ -134,10 +134,11 @@ PARAMS: tuple[Param, ...] = (
     # -- the continuous soil-moisture store --------------------------------- #
     Param("soil_store", door=doors.SCENARIO, default=False, consequence="physics",
           desc="Replace the static curve number with a continuous soil-moisture "
-               "store that RECOVERS capacity between storms. Needs rain_window (the "
-               "store integrates a real antecedent history). Fixes the second-peak "
-               "overshoot a static CN exhausts on in a multi-storm window; it still "
-               "adds no subsurface return flow"),
+               "store that RECOVERS capacity between storms. NOT AVAILABLE: the "
+               "store was the retired in-worker runoff model and the authored deck "
+               "drives the engine's own static SCS-CN, so asking for it REFUSES "
+               "rather than reading as applied. State the antecedent wetness with "
+               "antecedent_moisture instead"),
     Param("soil_store_capacity_mm", door=doors.USER, optional=True,
           bounds=(1.0, 2000.0), units="mm", consequence="physics",
           derived_when_absent=(
@@ -186,10 +187,6 @@ PARAMS: tuple[Param, ...] = (
           units="s", consequence="numerical",
           desc="Solver time step. Overland sheet flow on a fine catchment mesh is "
                "CFL-tight, which is why it is seconds rather than tens of seconds"),
-    Param("outlet_node_count", door=doors.CONSTANT, default=8, type=int,
-          bounds=(1.0, 64.0), consequence="numerical",
-          desc="How many mesh nodes nearest the snapped outlet carry the open "
-               "boundary the hydrograph is measured through"),
     Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
           units="min", consequence="numerical",
           derived_when_absent="the worker's own graphic period stands",
@@ -242,7 +239,7 @@ DOC = dict(
         "`continuity_rel_error`; narrate those typed numbers. Applicability: "
         "SINGLE-STORM flash-flood events in small steep catchments. Infiltrated "
         "water is permanently lost, so there is no baseflow and no inter-peak "
-        "recovery unless `soil_store` is on. On failure a dict with `status=\"error\"` "
+        "recovery. On failure a dict with `status=\"error\"` "
         "+ `error_code`."
     ),
 )

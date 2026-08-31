@@ -21,7 +21,7 @@ Applicability envelope (Godara, Bruland and Alfredsen 2024, Front. Water
 6:1384205): rain-on-grid reproduces SINGLE-STORM flash-flood events (~10-20 h) in
 small steep catchments. Multi-peak and sustained rain-on-snow are NOT reproduced -
 infiltrated water is permanently lost, so there is no subsurface return flow and
-no inter-peak baseflow, which ``soil_store`` narrows but does not close.
+no inter-peak baseflow.
 TELEMAC-2D's triangular mesh is stable on steep terrain where a structured grid is
 not, which is the paper's own finding against HEC-RAS.
 """
@@ -109,7 +109,6 @@ class DATA:
 
 PHYSICS = Physics("rainfall_runoff",
                   time_step_s=P.time_step_s,
-                  outlet_node_count=P.outlet_node_count,
                   output_interval_min=P.output_interval_min,
                   soil_store=P.soil_store,
                   soil_store_capacity_mm=P.soil_store_capacity_mm,
@@ -132,6 +131,13 @@ MESH = tool.build_mesh(
             "resolution_m": P.mesh_min_edge_m,
             "gradation": P.mesh_grade},
     bed=Ref("bed_dem.uri"),
+    # THE OUTLET, declared where every other boundary role is: the delineation's
+    # own accumulation-SNAPPED pour point, which is the point on the basin's
+    # boundary the terrain drains through. Every boundary node within the mesh's
+    # own mean boundary edge of it carries the free-exit role, and the hydrograph
+    # is the flux across exactly those nodes.
+    boundaries={"outflow": {"type": "Point",
+                            "coordinates": Ref("basin.snapped_pour_point")}},
 )
 
 
@@ -169,7 +175,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
 #: recomputing them from the raster.
 ANSWER = ("catchment_area_km2", "peak_discharge_m3s", "peak_discharge_time_s",
           "rainfall_volume_m3", "runoff_volume_m3", "runoff_coefficient",
-          "max_depth_peak_m", "max_velocity_peak_ms", "continuity_rel_error",
+          "max_depth_peak_m", "continuity_rel_error",
           "amc_condition", "rain_intensity_mm_per_hr", "n_frames",
           "mesh_size_m", "mesh_node_count", "mesh_element_count",
           "catchment_provenance", "domain_bbox")
@@ -258,14 +264,6 @@ _ROG_METADATA = AtomicToolMetadata(
 telemac_rain_on_grid = register_workflow(
     TelemacWorkflow, _ROG_METADATA, PARAMS, plan,
     data=DATA,
-    # The declaration is complete and validates at import; the MESH STEP still
-    # reads the retired catchment mesher's fields, so the run cannot finish.
-    # Offering a tool whose mesh step cannot run is worse than an honest absence.
-    parked=("awaiting its own case authoring: the catchment's outlet is a POUR "
-            "POINT rather than a cut transect, so the declared-boundary face the "
-            "reach family matches its roles against has nothing to be here, and "
-            "the outlet hydrograph the answer IS has no server-side reader off "
-            "the result SELAFIN"),
     answer=ANSWER,
     provenance=(("rain_event", "rain_event_note"),
                 ("sim_duration_hr", "sim_duration_note"),

@@ -585,7 +585,10 @@ def test_the_catchment_mesh_step_reads_the_declared_band():
     ask = mesh_step.kwargs["mesh"]
     assert ask["mesher"] == "om2d"
     assert set(ask) == {"mesher", "fields", "edits"}
-    assert set(ask["fields"]) == {"kind", "extent", "refine", "bed"}
+    assert set(ask["fields"]) == {"kind", "extent", "refine", "bed", "boundaries"}
     assert ask["fields"]["extent"] == Ref("sized")
     assert set(ask["fields"]["refine"]) == {"max_el", "resolution_m",
                                             "gradation"}
+    # The catchment's one liquid boundary is DECLARED on the ask, at the
+    # delineation's snapped outlet, exactly as the reach family declares its two.
+    assert set(ask["fields"]["boundaries"]) == {"outflow"}

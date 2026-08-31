@@ -109,3 +109,63 @@ def test_a_track_with_no_floats_at_any_instant_draws_no_slick(tmp_path):
     path.write_text('ZONE T="floats" SOLUTIONTIME= 0.0\n')
     _particles, slick, stats = R.oil_slick_features(path, utm_epsg=32610)
     assert slick["features"] == [] and stats == {}
+
+
+# --------------------------------------------------------------------------- #
+# The outlet hydrograph: the flux through the nodes the outlet role landed on.
+# --------------------------------------------------------------------------- #
+def _one_strip_selafin(path, *, u_east):
+    """A 2x1 strip whose EAST edge is the outlet, at one metre depth.
+
+    Nodes 0,2 are the west cap and 1,3 the east one; the east edge is 10 m long,
+    so a 1 m depth moving east at ``u_east`` leaves at 10 * u_east m3/s.
+    """
+    import numpy as np
+
+    from tests.test_postprocess_telemac import _write_synthetic_selafin
+
+    varnames = ["VELOCITY U      M/S", "VELOCITY V      M/S", "WATER DEPTH     M"]
+    x = [0.0, 20.0, 0.0, 20.0]
+    y = [0.0, 0.0, 10.0, 10.0]
+    ikle = [[1, 2, 3], [2, 4, 3]]
+    times = [0.0, 60.0]
+    data = {
+        "VELOCITY U      M/S": [np.full(4, 0.0), np.full(4, float(u_east))],
+        "VELOCITY V      M/S": [np.zeros(4), np.zeros(4)],
+        "WATER DEPTH     M": [np.ones(4), np.ones(4)],
+    }
+    _write_synthetic_selafin(path, varnames, x, y, ikle, times, data)
+    return path
+
+
+def test_water_leaving_through_the_outlet_reads_positive(tmp_path):
+    slf = _one_strip_selafin(tmp_path / "r2d_rog.slf", u_east=2.0)
+    out = R.outlet_hydrograph(slf, outlet_nodes=[1, 3])
+    assert out["outlet_segments"] == 1
+    # 10 m of edge x 1 m depth x 2 m/s.
+    assert out["q_m3s"] == [0.0, 20.0]
+    assert out["peak_discharge_m3s"] == 20.0
+    assert out["peak_discharge_time_s"] == 60.0
+    assert out["runoff_volume_m3"] == 600.0
+
+
+def test_water_running_back_into_the_basin_reads_negative(tmp_path):
+    slf = _one_strip_selafin(tmp_path / "r2d_rog.slf", u_east=-2.0)
+    out = R.outlet_hydrograph(slf, outlet_nodes=[1, 3])
+    assert out["q_m3s"] == [0.0, -20.0]
+    # A basin that only took water in produced no runoff volume to report.
+    assert out["runoff_volume_m3"] == 0.0
+
+
+def test_an_interior_edge_is_never_an_outlet_segment(tmp_path):
+    """Only element edges no second element shares are the mesh's own rim, so a
+    role that lands on a diagonal measures nothing."""
+    slf = _one_strip_selafin(tmp_path / "r2d_rog.slf", u_east=2.0)
+    assert R.outlet_hydrograph(slf, outlet_nodes=[1, 2]) == {}
+
+
+def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
+    listing = ("RELATIVE ERROR IN VOLUME  : 0.4E-03\n"
+               "RELATIVE ERROR IN VOLUME  : 0.9E-03\n")
+    assert R.continuity_rel_error(listing) == 0.9e-3
+    assert R.continuity_rel_error("no closure here") is None
