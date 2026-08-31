@@ -2068,3 +2068,59 @@ worker-side gate to the server dies with the gate.
   CONDITION MET: `bbox4326` was the reach worker's own name for the extent the
   open-water legs already called `bbox`, and two names for one fact is a reader
   choosing between two answers.
+- `run_telemac.py::_COMPLETION_METRIC_KEYS`: `dye_var`, `dye_cmax_final`,
+  `dye_cmax_overall`, `dye_active_frames`, `dye_front_x_final_m`,
+  `centerline_length_m`, `seed_comid`, `geometry_slf` and `lb_order` DELETE, and
+  the dead-key arguments in `test_classify_exit_ok_folds_metrics` with them.
+  CONDITION MET: every one was written by the RETIRED reach worker; zero writers
+  remain (the unified worker writes `correct_end`, `module`, `family`, the echo
+  and the error fields, and nothing else), so the filter was carrying names no
+  run can produce. Rung 4 authors its own completion contract fresh.
+- `steps/deck.py::_centerline_utm` and `meshers/om2d.py::_fit_bed`'s private
+  `_split_geometry` vertex read DELETE, replaced by one
+  `mesh/shared/nodes.py::read_centerline_utm`. CONDITION MET: the two readings
+  of the same navigated flowline disagreed on both continuity (one merged and
+  took the longest piece, the other concatenated every vertex of every row) and
+  ORDER, and the order decides which way the fitted bed slopes. The one reading
+  joins the parts into a single continuous line - refusing a network that stays
+  in pieces - and orients it head-to-tail from the CHAIN's own fact, the navigate
+  seed, declared on the mesh ask as `bed={"downstream_from": ...}`.
+- `steps/deck.py`'s inline `case` dict DELETES; `write_reach_deck` calls
+  `open_water.case_section`. CONDITION MET: `case_section` is the declared writer
+  of that section and was called by nobody, so the reach's manifest and the
+  documented contract were two spellings that could drift - as they had, over
+  `user_fortran`, which the reach never populated.
+- `steps/rain_on_grid.py`: `_MODE` / `_HYDROGRAPH` / `_read_hydrograph`, the
+  `_OUTPUTS` rows `rog_geometry.slf` / `rog_max_fields.slf` /
+  `rog_outlet_hydrograph.json`, the `watershed.slf` + `node_cn2.txt` +
+  `node_manning.txt` staging, and the `section="reach"` manifest write all
+  DELETE. CONDITION MET: the worker's `rain_on_grid` branch is gone, no branch
+  dispatches on `reach`, and nothing writes any of those three artifacts. The
+  front now authors a `case` - `t2d_rog.cas` plus the curve-number scatter, the
+  friction pair and (on the time-varying path) the block hyetograph - and the
+  outlet hydrograph is MEASURED server-side by
+  `steps/run_reads.py::outlet_hydrograph` off the run's own result SELAFIN.
+- `rain_on_grid/declarations.py::outlet_node_count` (Param) DELETES. CONDITION
+  MET (IDEAS 2026-08-31 FLIP ruling 3): the outlet is DECLARED on the mesh ask at
+  the delineation's snapped pour point and the mesher matches the boundary nodes
+  within its own mean boundary edge of it, so which nodes carry the boundary is
+  the declaration's answer and a k-nearest count was a second one.
+- CHOP CANDIDATE (not chopped): `steps/rain_on_grid.py::_soil_store_spin_up` and
+  `test_soil_store_spin_up_fills_from_antecedent`. The Michel-2005 continuous
+  soil-moisture store was the RETIRED in-worker runoff model; the authored deck
+  drives the engine's own static SCS-CN, so `soil_store=True` now refuses typed
+  (`TELEMAC_ROG_SOIL_STORE_UNAUTHORED`) rather than reading as applied, and the
+  spin-up has no caller. CONDITION: NATE rules whether the store is re-homed
+  server-side (V0 folded into the CN field is a PHYSICS choice) or the four
+  `soil_*` params go with it.
+- `meshers/om2d.py::MESH_BED_NO_CHANNEL` DELETES with `_fit_bed`'s private read.
+  CONDITION MET: the ONE centerline reading refuses on its own codes -
+  `MESH_CENTERLINE_NO_LINE` (the source maps no polyline) and
+  `MESH_CENTERLINE_NOT_CONTINUOUS` (the parts stay a network) - and the second
+  of those is a refusal the vertex-heap read could not make at all.
+- CHOP CANDIDATE (not chopped): `TelemacRainOnGridLayerURI.max_velocity_peak_ms`
+  and its ANSWER row. The row LEAVES the template's `ANSWER` now, because the
+  retired worker was its only writer and an answer field nothing fills is a
+  reader checking a `None`. CONDITION to restore: a server-side field maximum
+  over the result SELAFIN's velocity - the arrays the outlet-hydrograph read
+  already loads, if NATE wants that reader to answer for more than the outlet.

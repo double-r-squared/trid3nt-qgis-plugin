@@ -263,35 +263,71 @@ bed-threshold section walk and simply joins the same role table.
 
 **The bed.** The reach `DATA` body declares `bed = tool("fetch_copernicus_dem",
 bbox=Ref("window.bbox"), px_per_deg=3600.0)` and the `MESH` ask consumes it as
-`bed={"raster": DATA.bed, "downstream_along": DATA.centerline}` - so om2d's
-implicit `fetch_topobathy` default never fires for a reach, and
-`fit_downstream_bed` applies at that one seam: the sampled surface is laid down
-as a monotone downstream plane along the declared centerline, held inside a
-stated slope band, and the measured-vs-enforced slope rides in the probes. The
-duplicate `resolve_reach_river` bed staging is gone (see DELETION_LEDGER).
+`bed={"raster": DATA.bed, "downstream_along": DATA.centerline,
+"downstream_from": [Ref("seed.lon"), Ref("seed.lat")]}` - so om2d's implicit
+`fetch_topobathy` default never fires for a reach, and `fit_downstream_bed`
+applies at that one seam: the sampled surface is laid down as a monotone
+downstream plane along the declared centerline, held inside a stated slope band,
+and the measured-vs-enforced slope rides in the probes. The duplicate
+`resolve_reach_river` bed staging is gone (see DELETION_LEDGER).
+
+`downstream_from` is the navigate SEED - the chain's own fact about which end of
+the flowline is upstream - and it is what makes the reading deterministic. The
+centerline is read ONCE, by `mesh/shared/nodes.py::read_centerline_utm`: the
+navigated rows are joined into one continuous line (a set that stays in pieces
+refuses), and the merged line is oriented head-to-tail from that seed. Both
+consumers - the bed fit here and `steps/deck.py`'s source point, dredge station
+and NESTOR surface reference - read through it, so a shuffled flowline
+collection normalizes to the same chainage and the bed cannot slope one way
+while the deck measures the other.
 
 **The flip itself.** `steps/deck.py` authors through `author.py` against the
-measured order, uploads the decks it wrote, and stages a `case` section -
-`{module, steering, results, family, echo}` - beside the mesh pair under the
-deck's own `river.slf` / `river.cli` names. The npz stops travelling,
-`steps/solve.py` no longer stages a `reach` section the worker has no branch
-for, and `_COMPLETION_METRIC_KEYS` carries `module` / `family` / `bed_source`
-and ONE `bbox` spelling.
+measured order, uploads the decks it wrote, and stages the `case` section
+`case_section` writes - `{module, steering, user_fortran?, results, family,
+echo}` - beside the mesh pair under the deck's own `river.slf` / `river.cli`
+names. There is ONE writer of that section and both fronts call it. The npz
+stops travelling, `steps/solve.py` no longer stages a `reach` section the worker
+has no branch for, and `_COMPLETION_METRIC_KEYS` carries `module` / `family` /
+`bed_source` and ONE `bbox` spelling.
 
-## `telemac_rain_on_grid` stays PARKED, and why
+`user_fortran` is populated from the AUTHOR's own report rather than restated:
+an oil run's `write_oil_inputs` says which file it wrote into `user_fortran/`,
+and the manifest field carries that directory - the same one the steering file's
+`FORTRAN FILE` keyword names. The two channels are now written from one fact;
+the live oil canary arbitrates if the engine reads them differently.
 
-The same mechanism does NOT reach it, so it is not half-wired to look as though
-it does. Two things are missing rather than one:
+## `telemac_rain_on_grid` UNPARKS (2026-08-31 FLIP ruling 3)
 
-- its outlet is a POUR POINT, not a cut transect. The role matcher is a
-  face-matcher by construction - a role is prescribed ACROSS a transect - and a
-  catchment boundary has no face at the outlet for it to match against.
-- the outlet HYDROGRAPH is the answer, and the worker wrote it. With the worker
-  reduced to the engine room there is no server-side reader that integrates the
-  discharge through the outlet nodes off the result SELAFIN, so unparking now
-  would register a template whose ANSWER field nothing fills.
+Both facts it was waiting on now have a producer, and both come off the SAME
+declared-boundary mechanism the reach family uses.
 
-`register_workflow(parked=...)` states both. `steps/rain_on_grid.py` still names
-a `reach` manifest section that no worker branch dispatches; it is left standing
-rather than repointed, because a `case` with no authored steering file would be
-the half-wiring this note exists to avoid.
+**The outlet is declared, not matched by a special case.** The role matcher was
+never a transect matcher - it takes the distance from each boundary node to a
+shapely geometry - so the catchment declares
+`boundaries={"outflow": {"type": "Point", "coordinates":
+Ref("basin.snapped_pour_point")}}` and every boundary node within the mesh's own
+mean boundary edge of the delineation's ACCUMULATION-SNAPPED outlet carries the
+free exit. Which nodes those are is the declaration's answer, so
+`outlet_node_count` dies (see DELETION_LEDGER).
+
+**The hydrograph is MEASURED on the server.**
+`steps/run_reads.py::outlet_hydrograph` integrates the flux through those nodes
+off the run's own result SELAFIN: over each element edge no second element shares
+whose two ends both took the outlet role, the depth-weighted normal velocity
+times the edge length, with the normal taken away from the element's third node
+so water leaving reads positive whichever way the boundary was walked. The
+volume is the trapezoid of that series, the rainfall volume is the gross depth
+over the MESHED area (`probes["area_km2"]`, measured on the accepted topology),
+and the closure is the engine's own last `RELATIVE ERROR IN VOLUME`.
+
+**The deck is authored.** `write_rain_on_grid_deck` writes `t2d_rog.cas` through
+`author.author_rog_deck` plus the curve-number scatter, the friction pair and -
+on the time-varying path - the block hyetograph, and stages a `case` beside the
+mesh pair under the deck's own `rog.slf` / `rog.cli` names. The time-varying path
+names `RAINDEF3_USER_FORTRAN` on BOTH channels: the steering file's own
+`FORTRAN FILE` keyword and the manifest's `user_fortran` field the runner reads.
+
+**What did NOT come with it.** `soil_store` refuses typed
+(`TELEMAC_ROG_SOIL_STORE_UNAUTHORED`): the continuous store was the retired
+in-worker runoff model and the authored deck drives the engine's own static
+SCS-CN. Re-homing it server-side is a physics choice and is NATE's to rule.
