@@ -254,6 +254,22 @@ def test_an_extent_carrying_no_polygon_refuses_rather_than_widen_a_line(
     assert "no polygon" in str(excinfo.value)
 
 
+def test_a_domain_in_projected_metres_refuses_before_it_becomes_a_lattice(
+        monkeypatch, tmp_path):
+    """Every sizing number here is degrees at the domain's own latitude, so an
+    extent in metres does not read as a wrong answer - it reads as an allocation
+    failure inside the triangulator, tens of GiB wide."""
+    _stub_om2d(monkeypatch, tmp_path)
+    albers = json.dumps({"type": "Polygon", "coordinates": [[
+        [-2_100_000.0, 1_900_000.0], [-2_090_000.0, 1_900_000.0],
+        [-2_090_000.0, 1_910_000.0], [-2_100_000.0, 1_910_000.0],
+        [-2_100_000.0, 1_900_000.0]]]})
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build({"extent": albers})
+    assert excinfo.value.error_code == "MESH_DOMAIN_NOT_LONLAT"
+    assert "EPSG:4326" in str(excinfo.value)
+
+
 def test_a_region_refine_on_a_polygon_domain_refuses_by_name(monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
     mesh = OM2D.build({"extent": json.dumps(_BASIN)})

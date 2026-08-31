@@ -375,9 +375,10 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
     """Resolve the ask's extent into the domain the box cuts the mesh from."""
     if isinstance(extent, (tuple, list)):
         shoreline = _shoreline_shp()
-        return _Domain(bbox=tuple(float(v) for v in extent),
-                       source=f"GSHHG land polygons ({shoreline.name})",
-                       shoreline=shoreline)
+        source = f"GSHHG land polygons ({shoreline.name})"
+        return _Domain(bbox=_lonlat_bounds(tuple(float(v) for v in extent),
+                                           source),
+                       source=source, shoreline=shoreline)
     polygons, lines = _split_geometry(read_geometry(extent))
     if not polygons:
         raise MeshToolError(
@@ -387,9 +388,30 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
     name = "domain.geojson"
     (rundir / name).write_text(json.dumps(
         {"type": "GeometryCollection", "geometries": polygons}))
-    return _Domain(bbox=_geometry_bounds(polygons),
-                   source=f"supplied polygon domain ({len(polygons)} part(s))",
-                   polygon_name=name, sizing_coords=lines)
+    source = f"supplied polygon domain ({len(polygons)} part(s))"
+    return _Domain(bbox=_lonlat_bounds(_geometry_bounds(polygons), source),
+                   source=source, polygon_name=name, sizing_coords=lines)
+
+
+def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
+    """``bbox`` if it is lon/lat, else the refusal that names what it is instead.
+
+    Every sizing number this mesher works in is degrees converted at the domain's
+    own latitude, so an extent handed over in projected metres does not read as a
+    wrong answer - it reads as a lattice millions of cells wide, which surfaces as
+    an allocation failure inside the triangulator rather than as the CRS mismatch
+    it is.
+    """
+    west, south, east, north = (float(v) for v in bbox)
+    if -180.0 <= west <= 180.0 and -180.0 <= east <= 180.0 \
+            and -90.0 <= south <= 90.0 and -90.0 <= north <= 90.0:
+        return (west, south, east, north)
+    raise MeshToolError(
+        "MESH_DOMAIN_NOT_LONLAT",
+        f"the extent from the {source} spans {(west, south, east, north)}, which "
+        "is outside the lon/lat range this mesher works in - it is projected "
+        "coordinates, most likely metres. Reproject the domain to EPSG:4326 "
+        "before handing it over.")
 
 
 def _split_geometry(doc: Mapping[str, Any]) -> tuple[list[dict[str, Any]],
@@ -806,10 +828,11 @@ def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
 
 def _declared_roles(points_m: Any, loops: Any, boundaries: Mapping[str, Any],
                     utm_epsg: int) -> dict[str, list[int]]:
-    """The declared boundary roles, resolved onto THIS mesh's boundary nodes.
+    """The declared boundary roles, resolved onto THIS mesh's boundary CONTOURS.
 
-    The tolerance is the mesh's own mean boundary edge: a node further than one
-    edge from every declared face is the bank between them.
+    The walk order is what travels, not a node set: a role is a contiguous run of
+    one contour. The tolerance is the mesh's own mean boundary edge - how far a
+    declared end may stand from the boundary it is supposed to lie on.
     """
     import numpy as np
     from pyproj import Transformer
@@ -818,8 +841,8 @@ def _declared_roles(points_m: Any, loops: Any, boundaries: Mapping[str, Any],
 
     if not boundaries:
         return {}
-    nodes = sorted({int(n) for loop in loops for n in loop})
-    if not nodes:
+    rings = [[int(n) for n in loop] for loop in loops if len(loop)]
+    if not rings:
         raise MeshToolError(
             "MESH_BOUNDARY_UNSEGMENTED",
             f"boundary roles {sorted(boundaries)} were declared but this mesh's "
@@ -829,7 +852,7 @@ def _declared_roles(points_m: Any, loops: Any, boundaries: Mapping[str, Any],
              for role, value in boundaries.items()}
     xy = np.asarray(points_m, dtype=float)
     tolerance = _mean_boundary_edge_m(xy, loops)
-    matched = match_boundary_roles(xy, nodes, faces, tolerance_m=tolerance)
+    matched = match_boundary_roles(xy, rings, faces, tolerance_m=tolerance)
     unmatched = [role for role in faces if not matched.get(role)]
     if unmatched:
         raise MeshToolError(
