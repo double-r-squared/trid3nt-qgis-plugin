@@ -60,11 +60,11 @@ def test_core_floor_always_subset(warm_index, query, accrued):
 # NEVER-HIDE-MID-TASK: the result always contains the Case's accrued set.
 # ---------------------------------------------------------------------------
 def test_never_hide_mid_task(warm_index):
-    accrued = {"coastal_tidal_surge", "compute_contours", "fetch_usgs_nwis_gauges"}
+    accrued = {"telemac_river_dye", "compute_contours", "fetch_usgs_nwis_gauges"}
     # a query about something UNRELATED to the accrued tools.
     res = retrieve_visible_tools("show me the lightning over the storm", accrued, DEFAULT_K)
     assert accrued <= res
-    assert "coastal_tidal_surge" in res  # dispatched stays
+    assert "telemac_river_dye" in res  # dispatched stays
     assert "compute_contours" in res  # explicit stays
 
 
@@ -199,11 +199,11 @@ _RECALL_FIXTURE = [
     ("get the elevation DEM for this area", "fetch_dem"),
     ("geocode this city to a bounding box", "geocode_location"),
     ("show NEXRAD radar reflectivity on the map", "show_nexrad_radar"),
-    ("how far does the storm surge flood inland along this coast", "coastal_tidal_surge"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("how much does incoming swell amplify inside this harbour basin",
      "artemis_harbor_agitation"),
-    ("how big do the waves get on this lake in a westerly gale", "tomawac_wave_field"),
+    ("how far downstream does a dye spill travel in this river",
+     "telemac_river_dye"),
     ("draw the topographic contour lines from the elevation", "compute_contours"),
 ]
 

@@ -637,8 +637,10 @@ from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_r
 # ONE question-class tool, four modes (fetch_growth / shoaling /
 # bottom_friction / wave_current); real Great Lakes lake-datum bathymetry or an
 # idealized basin. Physics proven through the baked tomawac binary; the
-# refinement-grade complement to SFINCS/SnapWave coastal screening.
-from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tomawac_wave_field  # noqa: E402,F401 - TOMAWAC wave front (engine=telemac, tier=template)
+# refinement-grade complement to SFINCS/SnapWave coastal screening. DECLARED
+# PARKED: the in-worker TOMAWAC builder it dispatched to was retired with the
+# worker unification and its case authoring is rung 4.
+from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tomawac_wave_field  # noqa: E402,F401 - parked: declared, off the model surface
 # artemis_harbor_agitation TEMPLATE (engine="telemac", tier="template"),
 # workflows/telemac/agitation/: the ARTEMIS phase-resolving elliptic mild-slope
 # (Berkhoff) harbour-agitation engine. ONE question-class tool, three
@@ -653,8 +655,10 @@ from trid3nt_server.workflows.telemac.agitation.agitation import artemis_harbor_
 # astronomical prediction); a real-topobathy open-water domain with ONE seaward
 # liquid boundary driven by a NOAA CO-OPS series through the LIQUID BOUNDARIES
 # FILE. Physics proven through the baked telemac2d binary (Apalachicola / Michael
-# 220x); the storm-tide complement to the SFINCS coastal screening.
-from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import coastal_tidal_surge as _coastal_tidal_surge  # noqa: E402,F401 - coastal tidal/surge front (engine=telemac, tier=template)
+# 220x); the storm-tide complement to the SFINCS coastal screening. DECLARED
+# PARKED: the in-worker coastal builder it dispatched to was retired with the
+# worker unification and its case authoring is rung 4.
+from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import coastal_tidal_surge as _coastal_tidal_surge  # noqa: E402,F401 - parked: declared, off the model surface
 # telemac3d_stratified_flow TEMPLATE (engine="telemac", tier="template"),
 # workflows/telemac/stratified_flow/: the TELEMAC-3D three-dimensional baroclinic
 # Navier-Stokes engine - the one genuinely NEW solver leg in the family.

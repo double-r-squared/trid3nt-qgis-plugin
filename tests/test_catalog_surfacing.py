@@ -120,7 +120,9 @@ def _os_environ() -> dict:
 
 #: How many tools the registry holds. Pinned so a tool that leaves is noticed
 #: rather than absorbed; the arms never shrink it, only the declarable POOL.
-_REGISTRY_SIZE = 170
+#: -2 as tomawac_wave_field and coastal_tidal_surge went PARKED with the worker
+#: unification: a declared template off the model surface is not a registry row.
+_REGISTRY_SIZE = 168
 
 
 # --------------------------------------------------------------------------- #

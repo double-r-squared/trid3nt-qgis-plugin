@@ -35,10 +35,8 @@ from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 EXPECTED_TEMPLATES = {
     "telemac_river_dye",
     "telemac_do_sag",
-    "tomawac_wave_field",
     "telemac3d_stratified_flow",
     "artemis_harbor_agitation",
-    "coastal_tidal_surge",
 }
 
 #: Templates that are DECLARED but off the model surface, name -> the module
@@ -48,6 +46,10 @@ EXPECTED_TEMPLATES = {
 PARKED_TEMPLATES = {
     "telemac_rain_on_grid":
         "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
+    "tomawac_wave_field":
+        "trid3nt_server.workflows.telemac.wave_field.wave_field",
+    "coastal_tidal_surge":
+        "trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge",
 }
 
 # The 10 deleted engine-door concierge tools.

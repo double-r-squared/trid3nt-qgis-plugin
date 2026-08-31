@@ -1,14 +1,20 @@
 """Offline unit tests for the coastal_tidal_surge engine template (ADR 0259).
 
-No solver / no network: registration shape + arg-guard rejection paths + the
+No solver / no network: declaration shape + arg-guard rejection paths + the
 series-type classifier only. The physics-through-the-image proof lives in the
 substrate build-time smoke + the live E2E; this is the offline-suite guard that
-the tool is registered as an engine template and rejects ill-posed args before any
-dispatch.
+the DECLARATION is well formed and rejects ill-posed args before any dispatch.
+
+The template is DECLARED PARKED - its in-worker coastal builder was retired with
+the worker unification - so every assertion here reads the declaration on the
+module rather than a registry membership the tool no longer has.
 """
 from __future__ import annotations
 
 import asyncio
+
+import pytest
+
 
 #: What the declared bed producer hands the deck writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
@@ -26,11 +32,18 @@ _PHYSICS = dict(time_step_s=20.0, bathy_source="noaa_demall", friction_law=3,
                 friction_coefficient=40.0, wind_speed_mps=0.0,
                 wind_direction_from_deg=0.0)
 
-def test_coastal_tidal_surge_registered_as_engine_template():
+def test_coastal_tidal_surge_is_a_parked_engine_template():
+    import sys
+
     from trid3nt_server.tools import TOOL_REGISTRY
-    entry = TOOL_REGISTRY.get("coastal_tidal_surge")
-    assert entry is not None, "coastal_tidal_surge must be registered"
-    m = entry.metadata
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
+        coastal_tidal_surge,
+    )
+
+    declaration = sys.modules[coastal_tidal_surge.__module__]
+    assert "coastal_tidal_surge" not in TOOL_REGISTRY
+    assert "rung-4" in coastal_tidal_surge.parked
+    m = declaration._COASTAL_METADATA
     assert m.engine == "telemac" and m.tier == "template"
     assert m.cacheable is False and m.ttl_class == "live-no-cache"
     assert m.source_class == "workflow_dispatch"
@@ -51,9 +64,10 @@ def test_tool_rejects_invalid_bbox():
     from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
         coastal_tidal_surge,
     )
-    out = asyncio.run(coastal_tidal_surge(bbox=[1.0, 2.0]))  # too few numbers
-    assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "COASTAL_PARAMS_INVALID"
+    from trid3nt_server.workflows.lib import WorkflowParkedError
+
+    with pytest.raises(WorkflowParkedError):
+        asyncio.run(coastal_tidal_surge(bbox=[1.0, 2.0]))
 
 
 def test_series_type_classification_from_prompt():
@@ -94,12 +108,20 @@ def test_coastal_layer_contract_carries_typed_scalars():
 # ===========================================================================
 # The DECLARATION: the plan value, the deck, and the facade routing.
 # ===========================================================================
+def _workflow():
+    """The declared workflow, read off the module: the tool is parked."""
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
+        coastal_tidal_surge,
+    )
+
+    return coastal_tidal_surge.workflow
+
+
 def _sheet(**overrides):
     """The resolved sheet for a canary-shaped invocation of the template."""
-    from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib.resolver import resolve_params
 
-    workflow = TOOL_REGISTRY["coastal_tidal_surge"].fn.workflow
+    workflow = _workflow()
     args = {"bbox": [-85.02, 29.69, -84.90, 29.80], "series_type": "observed",
             "station": "8728690", "start_date": "2018-10-09",
             "end_date": "2018-10-11", "target_resolution_m": 250.0,

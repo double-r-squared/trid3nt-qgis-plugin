@@ -254,9 +254,12 @@ async def test_a_failure_with_nothing_finished_records_no_attempt(monkeypatch):
 
 # --- (5) coupled validity, both lanes --------------------------------------- #
 def _coastal():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    """The coastal DECLARATION - the template is parked, the rules still hold."""
+    from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
+        coastal_tidal_surge,
+    )
 
-    return TOOL_REGISTRY["coastal_tidal_surge"].fn.workflow
+    return coastal_tidal_surge.workflow
 
 
 @pytest.mark.asyncio

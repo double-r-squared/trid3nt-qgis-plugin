@@ -197,6 +197,11 @@ _TOMAWAC_METADATA = AtomicToolMetadata(
 tomawac_wave_field = register_workflow(
     TelemacWorkflow, _TOMAWAC_METADATA, PARAMS, plan,
     data=DATA,
+    # The TOMAWAC pipeline this dispatched to was an in-worker builder, retired
+    # with the worker unification; the case authoring that replaces it is rung 4.
+    # The declaration stays readable and invoking refuses typed, which is what a
+    # template with no solve behind it honestly is.
+    parked="awaiting the rung-4 rebuild of the TOMAWAC case authoring",
     answer=ANSWER,
     provenance=(("wind_speed_mps", "wind_note"),
                 ("bathy_source", "bathy_note"),

@@ -1,13 +1,18 @@
 """Offline unit tests for the tomawac_wave_field engine template (ADR 0236).
 
-No solver / no network: registration shape + arg-guard rejection paths only.
+No solver / no network: declaration shape + arg-guard rejection paths only.
 The physics-through-the-image proof lives in the Dockerfile build-time smoke +
-the live E2E; this is the offline-suite guard that the tool is registered as an
-engine template and rejects ill-posed args before any dispatch.
+the live E2E; this is the offline-suite guard that the DECLARATION is well formed.
+
+The template is DECLARED PARKED - its in-worker TOMAWAC builder was retired with
+the worker unification - so every assertion here reads the declaration on the
+module rather than a registry membership the tool no longer has.
 """
 from __future__ import annotations
 
 import asyncio
+
+import pytest
 
 #: What the declared bed producer hands the deck writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
@@ -16,11 +21,15 @@ _STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.
                "source": "noaa_ncei_dem_all"}
 
 
-def test_tomawac_wave_field_registered_as_engine_template():
+def test_tomawac_wave_field_is_a_parked_engine_template():
+    import sys
+
     from trid3nt_server.tools import TOOL_REGISTRY
-    entry = TOOL_REGISTRY.get("tomawac_wave_field")
-    assert entry is not None, "tomawac_wave_field must be registered"
-    m = entry.metadata
+    from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field
+
+    assert "tomawac_wave_field" not in TOOL_REGISTRY
+    assert "rung-4" in tomawac_wave_field.parked
+    m = sys.modules[tomawac_wave_field.__module__]._TOMAWAC_METADATA
     assert m.engine == "telemac" and m.tier == "template"
     assert m.cacheable is False and m.ttl_class == "live-no-cache"
     specs = {r.param for r in (m.resolution_specs or ())}
@@ -36,18 +45,12 @@ def test_tomawac_solver_registered():
     assert "tomawac_wave" in LOCAL_SOLVER_SPEC_REGISTRY
 
 
-def test_tool_rejects_neither_location_nor_bbox():
+def test_invoking_a_parked_template_refuses_before_any_arg_guard():
+    from trid3nt_server.workflows.lib import WorkflowParkedError
     from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field
-    out = asyncio.run(tomawac_wave_field())
-    assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "TOMAWAC_PARAMS_INCOMPLETE"
 
-
-def test_tool_rejects_invalid_bbox():
-    from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field
-    out = asyncio.run(tomawac_wave_field(bbox=[1.0, 2.0]))  # too few numbers
-    assert isinstance(out, dict) and out["status"] == "error"
-    assert out["error_code"] == "TOMAWAC_PARAMS_INVALID"
+    with pytest.raises(WorkflowParkedError):
+        asyncio.run(tomawac_wave_field(bbox=[1.0, 2.0]))
 
 
 def test_mode_classification_from_prompt():
@@ -74,10 +77,10 @@ def test_mode_classification_from_prompt():
 # The DECLARATION: the plan value, the deck, and the georeference.
 # ===========================================================================
 def _sheet(**overrides):
-    from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field
 
-    workflow = TOOL_REGISTRY["tomawac_wave_field"].fn.workflow
+    workflow = tomawac_wave_field.workflow
     args = {"bbox": [-87.60, 46.70, -86.60, 47.20], "wave_mode": "fetch_growth",
             "target_resolution_m": 3000.0, "sim_duration_hours": 1.0,
             "bathy_source": "noaa_greatlakes", **overrides}

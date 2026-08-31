@@ -124,8 +124,6 @@ def test_no_declaration_is_no_note() -> None:
 @pytest.mark.parametrize("template,field,cls", [
     ("telemac_do_sag", "do_min_distance_m", "location"),
     ("telemac_river_dye", "dye_cmax_mgl", "peak"),
-    ("coastal_tidal_surge", "flooded_land_km2", "extent"),
-    ("tomawac_wave_field", "hs_upwind_m", "gradient"),
     ("artemis_harbor_agitation", "kd_max", "peak"),
     ("telemac3d_stratified_flow", "stratification_dt", "gradient"),
 ])

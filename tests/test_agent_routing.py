@@ -30,7 +30,7 @@ from trid3nt_server.adapters.adapter import (
 
 #: The engine template these three tests route through - a registered template
 #: whose docstring is the model's only routing signal for its question class.
-_TEMPLATE = "coastal_tidal_surge"
+_TEMPLATE = "telemac_river_dye"
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ def test_template_docstring_covers_user_intent():
     entry = TOOL_REGISTRY.get(_TEMPLATE)
     assert entry is not None
     doc = entry.fn.__doc__ or ""
-    assert "storm surge" in doc, (
+    assert "downstream" in doc, (
         f"{_TEMPLATE} docstring must carry the phrasing a user asks in, or the "
         "model has nothing to match against"
     )

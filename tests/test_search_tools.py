@@ -111,8 +111,8 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         # member. A bare "model flooding" is genuinely ambiguous across the
         # family, so the canonical routing query is the specific phrasing one
         # template owns.
-        ("map the coastal inundation from this tide-gauge record",
-         "coastal_tidal_surge"),
+        ("how far downstream does a dye spill travel in this river",
+         "telemac_river_dye"),
     ],
 )
 def test_search_tools_routes_canonical_queries(query: str, expected_tool: str):

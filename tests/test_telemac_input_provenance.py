@@ -17,13 +17,12 @@ import asyncio
 
 import pytest
 
-#: Every TELEMAC template that declares ``compute_class``, and the bare natural
-#: prompt each one is asked. Five of the six run the ``compute_class()`` coercion.
+#: Every REGISTERED TELEMAC template that declares ``compute_class``, and the bare
+#: natural prompt each one is asked. The parked declarations are absent: a tool
+#: off the model surface has no invocation for a provenance row to describe.
 TELEMAC_TEMPLATES: tuple[tuple[str, str], ...] = (
     ("telemac_river_dye", "the Wabash River near Lafayette, Indiana"),
     ("telemac_do_sag", "the Wabash River near Lafayette, Indiana"),
-    ("coastal_tidal_surge", "Mexico Beach, Florida"),
-    ("tomawac_wave_field", "Lake Michigan"),
     ("telemac3d_stratified_flow", "Lake Mead"),
     ("artemis_harbor_agitation", "Marquette Harbor, Michigan"),
 )
@@ -129,10 +128,8 @@ def test_question_class_coercions_abstain_without_a_signal() -> None:
 
 
 @pytest.mark.parametrize(("tool_name", "location", "param", "expected"), [
-    ("tomawac_wave_field", "Lake Michigan", "wave_mode", "fetch_growth"),
     ("telemac3d_stratified_flow", "Lake Mead", "flow_mode", "stratification"),
     ("artemis_harbor_agitation", "Marquette Harbor", "wave_mode", "diffraction"),
-    ("coastal_tidal_surge", "Mexico Beach, Florida", "series_type", "observed"),
     ("telemac_river_dye", "the Wabash River", "substance", "dye"),
 ])
 def test_abstention_keeps_the_value_and_corrects_the_basis(

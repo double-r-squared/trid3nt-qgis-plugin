@@ -229,6 +229,10 @@ _COASTAL_METADATA = AtomicToolMetadata(
 coastal_tidal_surge = register_workflow(
     TelemacWorkflow, _COASTAL_METADATA, PARAMS, plan,
     data=DATA,
+    # The coastal-surge pipeline this dispatched to was an in-worker builder,
+    # retired with the worker unification; the case authoring that replaces it is
+    # rung 4. The declaration stays readable and invoking refuses typed.
+    parked="awaiting the rung-4 rebuild of the coastal-surge case authoring",
     answer=ANSWER,
     # The mesh row is present only when the WORKER moved the user's explicit
     # spacing (a grid floor or the node budget); on an honoured ask it reads null.
