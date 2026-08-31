@@ -73,7 +73,11 @@ COARSE_ARGS = {
     "reach_length_km": 1.0,
     "sim_duration_s": 600.0,
     "spill_duration_s": 120.0,
-    "mesh_resolution_m": 50.0,
+    # A 2D reach wants ~10 elements across the channel to route flow at all, and
+    # the channel is ~150 m wide here. Coarser than this the clean chain takes the
+    # ribbon apart: the boundary-face pass sees a one-element-wide strip as
+    # slivers and removes every element.
+    "mesh_resolution_m": 12.0,
     "input_mode": "auto",
 }
 
