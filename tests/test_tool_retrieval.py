@@ -108,13 +108,11 @@ def test_k_clamps_low_and_bad(warm_index):
 # ---------------------------------------------------------------------------
 # FAIL-OPEN: error / cold index / empty ranking -> FULL registry.
 # ---------------------------------------------------------------------------
-# the 4 tools that register ONLY via the full startup path -- the fail-open
+# the tools that register ONLY via the full startup path -- the fail-open
 # full-registry snapshot must include them even in a cold process.
 _STARTUP_ONLY = {
     "search_data_catalog",
     "fetch_from_catalog",
-    "list_qgis_algorithms",
-    "describe_qgis_algorithm",
 }
 
 
@@ -224,7 +222,7 @@ def _load_corpus():
 
 
 def _full_registry_names() -> set[str]:
-    """The FULL registry -- includes the workflow/solver/catalog/qgis tools that
+    """The FULL registry -- includes the workflow/solver/catalog tools that
     register only via the startup import path (NOT the plain `from . import
     TOOL_REGISTRY` snapshot), so the coverage check is deterministic regardless
     of test order."""

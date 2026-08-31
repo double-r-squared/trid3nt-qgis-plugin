@@ -123,7 +123,7 @@ def _os_environ() -> dict:
 #: -2 as tomawac_wave_field and coastal_tidal_surge went PARKED with the worker
 #: unification: a declared template off the model surface is not a registry row.
 #: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism.
-_REGISTRY_SIZE = 169
+_REGISTRY_SIZE = 166
 
 
 # --------------------------------------------------------------------------- #

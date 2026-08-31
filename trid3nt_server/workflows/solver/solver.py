@@ -64,7 +64,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
   ``cacheable=False`` + ``ttl_class="live-no-cache"`` + a new source class
   ``"solver_dispatch"``. The kickoff explicitly enumerates them.
 
-Dependency-injection seams (mirrors ``passthroughs.py`` pattern):
+Dependency-injection seams:
 
 - ``_EMITTER_BINDING`` / ``set_emitter_binding(emitter, step_id)`` -- the
   active ``PipelineEmitter`` + the step_id this ``wait_for_completion``
@@ -329,7 +329,7 @@ class SolverDispatchError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# DI seams (mirrors passthroughs.set_mcp_client / set_worker_submitter)
+# DI seams
 # --------------------------------------------------------------------------- #
 
 

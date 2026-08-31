@@ -179,7 +179,7 @@ def test_registry_has_catalog_tools_after_explicit_import():
     """Acceptance criterion: the two new tools register.
 
     In-process the registry only carries the modules this test file explicitly
-    imports + the eager ``tools/__init__.py`` ``passthroughs`` import. The
+    imports + the eager ``tools/__init__.py`` imports. The
     ≥16-tools floor is asserted at ``--startup-only`` (see evidence/), where
     ``main._import_tools_registry`` triggers every job's eager import.
     """

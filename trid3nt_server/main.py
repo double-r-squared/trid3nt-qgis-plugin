@@ -6,7 +6,7 @@ Startup-time tool-registry wiring:
 
 Importing ``trid3nt_server.tools`` populates the module-level ``TOOL_REGISTRY``
 via the import-time ``@register_tool`` decorators in the package's
-submodules (``passthroughs``, ``fetchers``, etc.). The
+submodules (``fetchers``, ``search``, ``meta``, etc.). The
 ``--startup-only`` flag below verifies the registry is
 populated without binding the WebSocket port; ``make run-agent`` continues
 to start the server normally.
@@ -47,16 +47,9 @@ def _import_tools_registry() -> int:
     than silent.
 
     eagerly imports ``data_fetch`` (the 4 fetcher atomic tools) so
-    their ``@register_tool`` decorators fire alongside the eager
-    ``passthroughs`` import in ``tools/__init__.py``. ``tools/__init__.py``
-    is FROZEN per file ownership, so the fetcher import is
-    co-located here instead.
-
-    similarly imports ``qgis_discovery`` so the 2 QGIS-algorithm
-    discovery atomic tools (``list_qgis_algorithms`` +
-    ``describe_qgis_algorithm``) register at startup. Together with
-    ``passthroughs.qgis_process`` they complete the Level 1a
-    capability-discovery loop.
+    their ``@register_tool`` decorators fire at ``tools/__init__.py``
+    import. ``tools/__init__.py`` is FROZEN per file ownership, so the
+    fetcher import is co-located here instead.
 
     imports ``solver`` so the 2 solver-dispatch atomic tools
     (``run_solver`` + ``wait_for_completion``) register at startup. These
@@ -72,8 +65,6 @@ def _import_tools_registry() -> int:
     from .tools.fetchers.socioeconomic.geocode_location import geocode_location  # noqa: F401
     # fetch_dem, fetch_landcover: spec-driven, promoted by
     # register_specs_from_tree at agent.tools import; no eager twin import.
-    # register the 2 QGIS discovery atomic tools.
-    from .tools.search.qgis_discovery import qgis_discovery  # noqa: F401
     # register run_solver + wait_for_completion (solver-dispatch substrate).
     from .workflows.solver import solver  # noqa: F401
     # register search_data_catalog + fetch_from_catalog (catalog search substrate).
@@ -139,102 +130,6 @@ def _import_tools_registry() -> int:
     return len(tools.TOOL_REGISTRY)
 
 
-def _default_qgis_process_submitter():
-    """Return the default ``qgis_process`` submitter used by ``set_worker_submitter``.
-
-    DI seam for the ``passthroughs.set_worker_submitter`` hook. The
-    submitter is a callable
-    matching the signature ``(args: list[str], timeout_s: int) -> dict``
-    where the returned dict carries at least ``stdout`` (str), ``returncode``
-    (int), and ``duration_s`` (float). Both ``qgis_discovery`` discovery
-    tools and the ``qgis_process`` pass-through call this seam.
-
-    The default submitter runs ``qgis_process`` as a local subprocess --
-    suitable for the local environment and the QGIS-algorithm discovery loop.
-
-    Override via ``TRID3NT_QGIS_PROCESS_BIN`` env var; defaults to
-    ``qgis_process`` discovered on PATH.
-
-    Returns:
-        A zero-argument-less callable bound to the chosen ``qgis_process``
-        binary; the agent service calls ``set_worker_submitter(callable)``
-        during startup.
-    """
-    import os
-    import shutil
-    import subprocess
-    import time
-
-    # Prefer a docker-backed qgis_process submitter when an image is configured
-    # (TRID3NT_QGIS_DOCKER_IMAGE) OR when no local qgis_process binary exists but
-    # docker + the image are available (some hosts ship QGIS only inside the
-    # trid3nt-qgis container). Same (args, timeout_s) -> dict contract;
-    # list/describe pass file-free args so a plain `docker run` suffices.
-    # (qgis_process RUN with data I/O uses the separate stage-then-mount path.)
-    _image = os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE")
-    _local_bin = os.environ.get("TRID3NT_QGIS_PROCESS_BIN") or shutil.which("qgis_process")
-    if _image or (_local_bin is None and shutil.which("docker")):
-        _image = _image or "trid3nt-qgis:ltr"
-
-        def _submit_docker(args: list[str], timeout_s: int) -> dict[str, object]:
-            cmd = [
-                "docker", "run", "--rm", "-e", "QT_QPA_PLATFORM=offscreen",
-                _image, "qgis_process", *args,
-            ]
-            start = time.monotonic()
-            proc = subprocess.run(
-                cmd, capture_output=True, timeout=timeout_s, check=False
-            )
-            return {
-                "stdout": proc.stdout.decode("utf-8", errors="replace"),
-                "stderr": proc.stderr.decode("utf-8", errors="replace"),
-                "returncode": proc.returncode,
-                "duration_s": time.monotonic() - start,
-                "qgis_bin": f"docker:{_image}",
-            }
-
-        return _submit_docker
-
-    qgis_bin = _local_bin
-    if qgis_bin is None:
-        # Last-resort hint for the user's conda env on this box; the
-        # docker-backed submitter above is the other local path when no
-        # qgis_process binary is on PATH.
-        candidate = os.path.expanduser("~/miniforge3/envs/grace2/bin/qgis_process")
-        if os.path.exists(candidate):
-            qgis_bin = candidate
-    if qgis_bin is None:
-        raise RuntimeError(
-            "qgis_process binary not found on PATH; "
-            "set TRID3NT_QGIS_PROCESS_BIN or install the grace2 conda env."
-        )
-
-    def _submit(args: list[str], timeout_s: int) -> dict[str, object]:
-        # QT_QPA_PLATFORM=offscreen mirrors the worker container env (the
-        # worker Dockerfile) so QGIS' Qt machinery doesn't try to attach to a display.
-        env = dict(os.environ)
-        env.setdefault("QT_QPA_PLATFORM", "offscreen")
-        cmd = [qgis_bin, *args]
-        start = time.monotonic()
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=timeout_s,
-            check=False,
-            env=env,
-        )
-        duration_s = time.monotonic() - start
-        return {
-            "stdout": proc.stdout.decode("utf-8", errors="replace"),
-            "stderr": proc.stderr.decode("utf-8", errors="replace"),
-            "returncode": proc.returncode,
-            "duration_s": duration_s,
-            "qgis_bin": qgis_bin,
-        }
-
-    return _submit
-
-
 def _maybe_bind_dev_persistence() -> None:
     """Bind the file-backed Persistence singleton (the default backend).
 
@@ -276,103 +171,6 @@ def _maybe_bind_dev_persistence() -> None:
         )
     except Exception as exc:  # noqa: BLE001 -- startup must not abort on dev-fallback
         log.warning("dev Persistence bind failed: %s", exc)
-
-
-def _bind_worker_submitter() -> None:
-    """Bind the default ``qgis_process`` submitter into ``passthroughs``.
-
-    Called from ``run`` at agent service startup. After this binds, the
-    ``qgis_process`` pass-through body no longer raises ``RuntimeError`` and
-    the two QGIS-discovery tools can invoke the substrate.
-
-    Gated by env var ``TRID3NT_SKIP_WORKER_SUBMITTER`` for test contexts that
-    don't want the binary resolved (CI without QGIS installed). When the env
-    var is set, the binding stays None and tools raise the documented
-    "submitter not bound" RuntimeError on call.
-    """
-    import os
-
-    if os.environ.get("TRID3NT_SKIP_WORKER_SUBMITTER"):
-        return
-    try:
-        submitter = _default_qgis_process_submitter()
-    except RuntimeError as exc:
-        # A missing qgis_process is informational, not fatal -- we let the
-        # agent service start so the other tools (data_fetch, passthroughs)
-        # keep working, and any actual QGIS discovery call surfaces the
-        # RuntimeError.
-        logging.getLogger("trid3nt_server.main").warning(
-            "worker submitter not bound (qgis_process unavailable): %s", exc
-        )
-        return
-    from .tools.meta.passthroughs.passthroughs import set_worker_submitter
-
-    set_worker_submitter(submitter)
-
-    # Best-effort readiness probe. The submitter binding above is
-    # silent-on-success: a mis-set env flip (e.g. a TRID3NT_QGIS_DOCKER_IMAGE
-    # pointing at a tag that isn't pulled, or a qgis_process binary that's on
-    # PATH but broken) would only surface on the FIRST discovery call, deep
-    # in a user session. Probe ``qgis_process --version`` once at boot so a
-    # broken substrate is visible in the startup logs.
-    #
-    # Cold-start guarantee: the probe must never delay the WS port bind on
-    # the live box (no QGIS infra configured).
-    #   - QGIS infra configured (TRID3NT_QGIS_DOCKER_IMAGE set) -> run the
-    #     probe synchronously so the boot diagnostic is in the startup logs
-    #     the operator is watching.
-    #   - QGIS infra NOT configured (the live box default) -> run the probe
-    #     in a daemon thread so it NEVER delays the WS port bind. Zero added
-    #     cold-start latency; the diagnostic still lands in the logs shortly
-    #     after boot if anything is wrong.
-    # Either way the probe is best-effort + non-fatal: any failure (timeout,
-    # non-zero exit, exception) logs a warning and the agent keeps serving;
-    # the real call still raises its own typed error if the substrate is
-    # down.
-    if os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE"):
-        _run_readiness_probe(submitter)
-    else:
-        import threading
-
-        threading.Thread(
-            target=_run_readiness_probe,
-            args=(submitter,),
-            name="qgis-readiness-probe",
-            daemon=True,
-        ).start()
-
-
-def _run_readiness_probe(submitter) -> None:
-    """Probe ``qgis_process --version`` and log readiness. Never raises.
-
-    Factored out of ``_bind_worker_submitter`` so it can run either inline
-    (QGIS infra configured) or on a daemon thread (no QGIS infra) without
-    duplicating the logging. Best-effort: every failure path logs a warning
-    and returns; nothing here aborts agent startup.
-    """
-    log = logging.getLogger("trid3nt_server.main")
-    try:
-        probe = submitter(["--version"], 30)
-        rc = probe.get("returncode")
-        ver = (probe.get("stdout") or "").strip().splitlines()[:1]
-        ver_line = ver[0] if ver else "<no version output>"
-        if rc == 0:
-            log.info(
-                "qgis_process readiness probe OK (bin=%s): %s",
-                probe.get("qgis_bin", "?"),
-                ver_line,
-            )
-        else:
-            log.warning(
-                "qgis_process readiness probe NOT-READY (bin=%s returncode=%s): %s",
-                probe.get("qgis_bin", "?"),
-                rc,
-                (probe.get("stderr") or ver_line).strip()[:200],
-            )
-    except Exception as exc:  # noqa: BLE001 - probe must never abort startup
-        log.warning(
-            "qgis_process readiness probe NOT-READY (probe raised): %s", exc
-        )
 
 
 #: Size-capped rotation for the Python-owned agent log file (~10MB active +
@@ -488,11 +286,6 @@ def run(argv: list[str] | None = None) -> int:
             )
     except Exception:  # noqa: BLE001 -- retention must never block boot
         logger.warning("telemetry retention cleanup failed", exc_info=True)
-
-    # bind the qgis_process submitter so the discovery tools and the
-    # qgis_process pass-through can reach the substrate. Best-effort: failure
-    # to resolve a local qgis_process is informational, not fatal.
-    _bind_worker_submitter()
 
     # Bind the file-backed Persistence singleton (the default backend).
     # ``server.init_persistence_from_env`` (called inside ``run_server``)

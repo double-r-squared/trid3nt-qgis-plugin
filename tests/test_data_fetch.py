@@ -166,21 +166,18 @@ def test_geocode_location_is_registered_with_dynamic_1h():
 
 
 def test_registry_contains_job_0039_subset_after_eager_import():
-    """job-0039 acceptance: this job's 3 new fetchers are registered + M4 fetchers + passthroughs.
+    """job-0039 acceptance: this job's 3 new fetchers are registered + M4 fetchers.
 
     Inside the test process, the eager-import surface is whatever the test
-    module triggers — ``tools/__init__.py`` (passthroughs, FROZEN) + the
-    explicit fetcher-module imports at the top of this
-    test file (which fires this job's three new ``@register_tool``
-    decorators alongside the M4 four). Parallel sprint-07 imports
-    (``qgis_discovery`` from job-0034, ``solver`` from job-0041) are
-    triggered by ``main._import_tools_registry()`` — see the
-    ``--startup-only`` evidence below for the live ≥11-tool assertion the
-    kickoff calls out.
+    module triggers — ``tools/__init__.py`` (FROZEN) + the explicit
+    fetcher-module imports at the top of this test file (which fires this
+    job's three new ``@register_tool`` decorators alongside the M4 four).
+    The startup-only imports (``solver`` from job-0041) are triggered by
+    ``main._import_tools_registry()`` — see the ``--startup-only`` evidence
+    below for the live ≥11-tool assertion the kickoff calls out.
     """
     names = set(TOOL_REGISTRY.keys())
     expected_subset = {
-        "qgis_process",
         "fetch_dem",
         "fetch_buildings",
         "fetch_population",
@@ -191,10 +188,9 @@ def test_registry_contains_job_0039_subset_after_eager_import():
         "lookup_precip_return_period",
     }
     assert expected_subset.issubset(names), f"missing: {expected_subset - names}"
-    # 1 passthrough + 4 M4 fetchers + 3 new fetchers = 8 minimum in test
-    # context; ≥8 tolerates qgis_discovery / solver / pipeline-emitter
-    # imports landing in parallel.
-    assert len(names) >= 8
+    # 4 M4 fetchers + 3 new fetchers = 7 minimum in test context; >= 7
+    # tolerates solver / pipeline-emitter imports landing in parallel.
+    assert len(names) >= 7
 
 
 # ---------------------------------------------------------------------------

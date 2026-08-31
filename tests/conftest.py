@@ -208,7 +208,7 @@ def empty_registry():
     """Yield a context where ``TOOL_REGISTRY`` is empty; restore on teardown.
 
     Tests of the ``@register_tool`` decorator and duplicate-name fail-fast
-    behavior need a clean slate so the eager passthroughs imports don't
+    behavior need a clean slate so the eager package imports don't
     collide with a test's fixture-registered tool.
     """
     saved = dict(agent_tools.TOOL_REGISTRY)

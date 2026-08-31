@@ -224,10 +224,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "return_period_years": 100,
         "duration_hours": 24,
     },
-    "qgis_process": {
-        "algorithm": "native:buffer",
-        "params": {"DISTANCE": 1000},
-    },
     "sfincs_flood": {},
     "pelicun_damage_assessment": {
         "hazard_raster_uri": _SAMPLE_RASTER_URI,

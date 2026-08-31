@@ -5,7 +5,6 @@ router, emit-on-fetch, resolution specs, and the registry that collects the
 decorated functions at import time plus the cache shim that mediates
 external-API calls (see ``.cache``). ``AtomicToolMetadata`` lives in
 ``trid3nt_contracts.tool_registry``.
-The ``qgis_process`` pass-through tool lives in ``.passthroughs``.
 
 How registration works:
 
@@ -40,7 +39,7 @@ builds its tool declarations directly from this snapshot; there is no ADK
 wrapper (``google-adk`` was dropped in the GCP decommission).
 
 Importing the package triggers ``@register_tool`` decorators in submodules
-(``.passthroughs`` for M4; ``.fetchers`` etc. for M4).
+(``.fetchers``, ``.search``, ``.meta``, ``.processing``).
 We import them eagerly here so any registration-time ``ValidationError`` or
 ``ToolRegistrationError`` surfaces at startup (fail-fast).
 """
@@ -80,7 +79,7 @@ class RegisteredTool:
     - ``fn`` - the original (undecorated) callable. The registry deliberately
       does NOT wrap it; tests call the function directly via this attribute.
     - ``module`` - the ``__module__`` attribute at registration time, useful
-      for diagnostics (`"trid3nt_server.tools.meta.passthroughs"` etc.).
+      for diagnostics (`"trid3nt_server.tools.meta.code_exec_tool"` etc.).
     """
 
     metadata: AtomicToolMetadata
@@ -582,7 +581,7 @@ from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # (WorkflowError classes, solver specs) is separate; the templates import it.
 
 # -- discovery (dataset/tool retrieval) --
-# NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
+# NOTE: search_data_catalog / fetch_from_catalog register at
 # daemon startup via main.py's eager-import block, NOT here - importing this
 # package alone deliberately leaves them out of TOOL_REGISTRY (pre-reorg
 # behavior: the plain ``import trid3nt_server.tools`` surface is 190 tools,
@@ -596,7 +595,7 @@ from .search.search_spatial_functions import search_spatial_functions  # noqa: E
 from .search.search_living_atlas import search_living_atlas  # noqa: E402,F401
 from .search.fetch_living_atlas_layer import fetch_living_atlas_layer  # noqa: E402,F401
 
-# -- meta (web fetch, code exec, passthroughs, case utilities) --
+# -- meta (web fetch, code exec, case utilities) --
 from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
 from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
 # open_case_in_qgis + register_case_layer are DEREGISTERED (not LLM-visible):
@@ -605,7 +604,6 @@ from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
 # here (importing them no longer registers a tool -- the @register_tool
 # decorator was removed).
 from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
-from .meta.passthroughs import passthroughs  # noqa: E402,F401
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
 from .search.web_fetch import web_fetch  # noqa: E402,F401
 

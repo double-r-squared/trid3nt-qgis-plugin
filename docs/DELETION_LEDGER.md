@@ -2427,3 +2427,95 @@ ROW NOT EXECUTED - the sweep's premise is false, reported instead:
   (`docs/specs/stratified-pools.md`) still in the tree. Deleting it breaks a
   concluded experiment's reproducibility, which is a methodology call, not a
   staleness call. Its two test consumers stay with it.
+
+## The QGIS passthrough and discovery pair leave (test cull, scope 4, 2026-08-31)
+
+Telemetry, not opinion: `data/persistence/trid3nt_dev/tool_call_telemetry.json`
+(2,550 records, 190 distinct tools) shows `list_qgis_algorithms` invoked 14
+times with `result_usable=False` on 14/14, `describe_qgis_algorithm` 5 times (3
+TYPEERROR) and `qgis_process` 5 times - all 24 inside a single two-day window,
+2026-07-07/08, and NOTHING since. The agent logs across the whole
+`trid3nt_server`-namespace era (2026-07-23 -> 2026-08-31) carry ZERO invocation
+lines; every non-registry hit is the boot readiness probe's own log line. Every
+historical RUN was refused by the offload gate, whose user-facing message names
+a decommissioned lane ("will run on AWS Batch in an upcoming update"), and both
+`TRID3NT_QGIS_ONBOX_DOCKER` and `TRID3NT_QGIS_DOCKER_IMAGE` are unset.
+
+PREMISE CORRECTED, and it does not change the verdict: the pair is UNUSED, not
+BROKEN. Driven live against the host binary (QGIS 3.40.6, 651 algorithms),
+`list_qgis_algorithms(include_all=True)` returns 50 well-formed rows - the July
+`total=0` was substrate absence on the cloud box, not a parser defect. The cull
+rests on zero invocations plus a dead offload gate. This supersedes the ledger's
+2026-07-31 REJECT of the same candidate, whose verdict rested on the seam being
+live.
+
+MOVED to the attic:
+- `trid3nt_server/tools/meta/passthroughs/` (349 + corpus) - `qgis_process`,
+  `set_worker_submitter`, `_WORKER_SUBMITTER`, `_qgis_offloaded_result`,
+  `QGIS_OFFLOADED_ERROR_CODE`.
+- `trid3nt_server/tools/search/qgis_discovery/` (862 + corpus) -
+  `list_qgis_algorithms`, `describe_qgis_algorithm`, `CURATED_ALLOWLIST`,
+  `MAX_LIST_RESULTS`, `SOURCE_CLASS` - every one with zero references outside
+  its own file.
+- `workers/qgis/` (Dockerfile + .dockerignore) - headered "Built on the EC2
+  agent box", purpose "the QGIS install used for QGIS Server (WMS) render".
+  Both decommissioned; never built on this box; the live readiness probe
+  resolved the HOST binary, never the image.
+
+DELETED outright:
+- `tests/test_qgis_discovery.py` (614) + `tests/test_qgis_process_run_job0308.py`
+  (103) - they die with their subject.
+- `main.py`: `_default_qgis_process_submitter` (~95, carrying a stale
+  `~/miniforge3/envs/grace2/bin/qgis_process` Mac fallback),
+  `_bind_worker_submitter` (~63) with its boot call site, and
+  `_run_readiness_probe` (~39). `TRID3NT_SKIP_WORKER_SUBMITTER` dies with them.
+  The probe was the ONLY thing keeping any of this warm: a boot daemon thread
+  logging that a substrate nothing calls is ready.
+- The registration imports: `main.py`'s eager `qgis_discovery` import and
+  `tools/__init__.py`'s eager `passthroughs` import, plus the docstring
+  paragraphs describing the Level-1a discovery loop they completed.
+- `contracts/tool_registry.py`: the `read_only_hint` / `idempotent_hint` field
+  descriptions stop naming `qgis_process` and `pelicun_damage_assessment`, and
+  their cloud-era substrate nouns (GCS / MongoDB / Cloud Run) become the live
+  ones. These ride into the exported schema, so `atomic_tool_metadata.json` is
+  regenerated in the same commit.
+
+REPOINTED (eleven roster pins - each an edit, no file culled):
+- `test_tool_annotations.py`: registration import, two expected-name strings,
+  and the whole `test_qgis_process_annotations` (whose asserts still read
+  "dispatches a Cloud Run Job" / "is intra-GCP").
+- `test_main_startup.py`: the three readiness-probe tests monkeypatching
+  `_default_qgis_process_submitter` / `passthroughs._WORKER_SUBMITTER` DELETE;
+  the two surviving tests assert on `run_solver`, which is what the eager block
+  actually adds over a bare `import trid3nt_server.tools`.
+- `test_tools_registry.py`: `test_passthroughs_eager_import_registers_qgis`
+  becomes `test_eager_import_registers_meta_tools` on `code_exec_request` - same
+  claim (a module-level `@register_tool` fires at package import), live subject.
+- `test_tools_cache.py`: the live-no-cache metadata fixture is named
+  `code_exec_request` (the name was always arbitrary).
+- `plugin/tests/test_run_invocation.py`: the `!run` PARSER tests used the name
+  as a sample token; now `list_run_frames`.
+- `test_data_fetch.py`, `test_tool_retrieval.py`, `test_search_tools.py`,
+  `test_search_tools_mongo_backend.py`, `test_gemini_kwargs_fuzz.py`: roster
+  entries and registration-side-effect imports removed; the job-0039 floor drops
+  8 -> 7 with the passthrough gone.
+- `test_catalog_surfacing.py`: `_REGISTRY_SIZE` 169 -> 166. MEASURED through
+  `main._import_tools_registry()`: 166 exactly.
+
+Directory maps updated in the same commits: `trid3nt_server/tools/README.md`
+loses the `passthroughs` mention on the `meta/` row and the QGIS-discovery
+clause on the `search/` row; `workers/README.md` loses the `qgis/` roster entry.
+`tools/meta/__init__.py`, `workflows/solver/solver.py` (which cited
+`passthroughs.py` as the DI-seam pattern it mirrors) and
+`tools/search/tool_retrieval.py` stop naming modules that are gone, and
+`scripts/tool_sweep.py` drops the `describe_qgis_algorithm` argument row. Grep
+for `qgis_process` / `qgis_discovery` / `list_qgis_algorithms` /
+`describe_qgis_algorithm` across `trid3nt_server/ tests/ plugin/ contracts/
+workers/ scripts/` is ZERO.
+
+FLAGGED, not touched: `EXPENSIVE_SCENARIO_TOOLS` (`scenario_reuse.py`) still
+keys on `sfincs_flood` / `modflow_contaminant_plume` / `swmm_urban_flood`, and
+`test_gemini_kwargs_fuzz.py` still carries `sfincs_flood` /
+`pelicun_damage_assessment` argument rows. Live modules holding dead ENTRIES -
+the same measurement the engine-contract sweep flagged, and the same separate
+pass.

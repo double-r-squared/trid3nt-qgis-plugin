@@ -8,7 +8,7 @@ Coverage:
   subset of the fetch_* / web_fetch / catalog_* group; compute_* /
   clip_* / intra-GCP tools are not open-world.
 - Specific spot-checks for known high-stakes tools (
-  run_solver, wait_for_completion, pelicun_damage_assessment).
+  run_solver, wait_for_completion).
 - Verify the four new fields land on AtomicToolMetadata with correct
   default values.
 """
@@ -29,7 +29,6 @@ import trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog  # noqa
 import trid3nt_server.tools.search.search_data_catalog.search_data_catalog  # noqa: F401 — registers search_data_catalog
 import trid3nt_server.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
 import trid3nt_server.workflows.solver.solver  # noqa: F401 — registers run_solver + wait_for_completion
-import trid3nt_server.tools.search.qgis_discovery.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
 
 
 # ---------------------------------------------------------------------------
@@ -95,8 +94,7 @@ def test_write_tools_are_not_read_only():
     write_tools = {n for n, m in snapshot.items() if not m.read_only_hint}
     assert write_tools, (
         "No tools have read_only_hint=False — check that "
-        "run_solver, wait_for_completion, qgis_process, "
-        "pelicun_damage_assessment were all annotated."
+        "run_solver and wait_for_completion were both annotated."
     )
     # All tools with read_only_hint=False must not have destructive_hint implied
     # to be True when the tool is actually not destructive.
@@ -167,9 +165,8 @@ def test_non_idempotent_write_tools_exist():
     snapshot = _registry_snapshot()
     non_idempotent = {n for n, m in snapshot.items() if not m.idempotent_hint}
     assert non_idempotent, (
-        "No tools have idempotent_hint=False — check run_solver, "
-        "wait_for_completion, qgis_process, "
-        "pelicun_damage_assessment."
+        "No tools have idempotent_hint=False — check run_solver and "
+        "wait_for_completion."
     )
 
 
@@ -199,17 +196,6 @@ def test_wait_for_completion_annotations():
     assert meta.open_world_hint is False, "wait_for_completion polls intra-GCP"
     assert meta.destructive_hint is False, "wait_for_completion does not overwrite"
     assert meta.idempotent_hint is False, "wait_for_completion emits events on each call"
-
-
-def test_qgis_process_annotations():
-    """qgis_process: write + not idempotent (each call creates new execution)."""
-    snapshot = _registry_snapshot()
-    assert "qgis_process" in snapshot, "qgis_process not registered"
-    meta = snapshot["qgis_process"]
-    assert meta.read_only_hint is False, "qgis_process dispatches a Cloud Run Job → not read-only"
-    assert meta.open_world_hint is False, "qgis_process is intra-GCP"
-    assert meta.destructive_hint is False, "qgis_process writes to new run dir"
-    assert meta.idempotent_hint is False, "qgis_process creates new execution per call"
 
 
 def test_fetch_dem_annotations():

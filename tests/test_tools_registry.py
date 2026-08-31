@@ -5,7 +5,7 @@ Coverage:
   unchanged.
 - Duplicate-name registration raises ``ToolRegistrationError``.
 - ``get_registered_tools`` returns a sorted snapshot.
-- The eager passthroughs import populates ``qgis_process``.
+- The eager ``meta`` imports populate the registry at package import.
 - ``register_tool`` rejects non-``AtomicToolMetadata`` arguments.
 """
 
@@ -105,25 +105,21 @@ def test_get_registered_tools_returns_sorted_snapshot(empty_registry):
     assert [t.metadata.name for t in snapshot] == ["a_tool", "b_tool"]
 
 
-def test_passthroughs_eager_import_registers_qgis():
-    """Importing ``trid3nt_server.tools`` populates the ``qgis_process`` pass-through.
+def test_eager_import_registers_meta_tools():
+    """Importing ``trid3nt_server.tools`` populates the registry on its own.
 
-    This is the acceptance-criterion test: the running agent registers it
-    with ADK on startup because its module-level ``@register_tool`` call
-    fires when ``trid3nt_server.tools`` is imported. We exercise that by
-    reading the live ``TOOL_REGISTRY`` after the package import.
-
-    The dead ``mongo_query`` stub (MongoDB Atlas torn down) was removed; it
-    must NOT be in the registry.
+    The acceptance criterion: a module-level ``@register_tool`` fires at
+    package import, so the live ``TOOL_REGISTRY`` is populated with no
+    fixture. The dead ``mongo_query`` stub must NOT be in it.
     """
     # No fixture: we deliberately use the live registry populated by import.
-    assert "qgis_process" in agent_tools.TOOL_REGISTRY
+    assert "code_exec_request" in agent_tools.TOOL_REGISTRY
     assert "mongo_query" not in agent_tools.TOOL_REGISTRY
 
-    qp = agent_tools.TOOL_REGISTRY["qgis_process"]
-    assert qp.metadata.ttl_class == "live-no-cache"
-    assert qp.metadata.cacheable is False
-    assert qp.metadata.source_class is None
+    ce = agent_tools.TOOL_REGISTRY["code_exec_request"]
+    assert ce.metadata.ttl_class == "live-no-cache"
+    assert ce.metadata.cacheable is False
+    assert ce.metadata.source_class is None
 
 
 def test_misconfigured_metadata_fails_at_construction():

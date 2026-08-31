@@ -97,7 +97,6 @@ OVERRIDES: dict[str, dict] = {
     "compute_overtopping": {"hs_m": 2.0, "tp_s": 8.0, "crest_freeboard_m": 1.0, "slope": 0.25},
     "compute_wave_nomograph": {"wind_speed_ms": 20.0, "fetch_km": 50.0},
     "code_exec_request": {"python_code": "print(21*2)"},
-    "describe_qgis_algorithm": {"algorithm_id": "native:buffer"},
     "fetch_ebird_observations": {"species_code": "baleag"},
     "fetch_inaturalist_observations": {"taxon_id": 6930},
     "fetch_iucn_red_list_range": {"species_name": "Puma concolor"},

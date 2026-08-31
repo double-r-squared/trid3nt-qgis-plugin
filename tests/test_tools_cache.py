@@ -300,7 +300,7 @@ def test_read_through_miss_writes_to_s3(fake_s3):
 def test_read_through_live_no_cache_skips_s3(fake_s3):
     """FR-DC-6: live-no-cache tools never touch the bucket."""
     md = AtomicToolMetadata(
-        name="qgis_process",
+        name="code_exec_request",
         ttl_class="live-no-cache",
         source_class=None,
         cacheable=False,

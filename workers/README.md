@@ -18,7 +18,5 @@ local solver backend -- there is no live Cloud Run / AWS Batch deploy here.
 
 - `mesh/` -- the in-container mesh writers, dispatched by the mesh router rather
   than by `run_solver`.
-- `qgis/` -- the QGIS-Processing worker image, a separate concern from the
-  solver dispatch seam.
 
 Env gates + measured runtimes: `docs/site/engines.md`.

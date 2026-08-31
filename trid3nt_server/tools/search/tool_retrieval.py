@@ -262,11 +262,11 @@ def retrieve_ranked_tools(
 def _full_registry_floor(floor: set[str]) -> set[str]:
     """The FAIL-OPEN result: every registered tool UNION the core floor.
 
-    Ensures the FULL registry is populated first: the catalog + qgis_discovery
-    tools (search_data_catalog / fetch_from_catalog / list_qgis_algorithms /
-    describe_qgis_algorithm) register ONLY via the startup import path, NOT via
-    tools/__init__, so without this the fail-open snapshot is short by those 4
-    real tools in any process where the startup hook has not yet run
+    Ensures the FULL registry is populated first: the catalog tools
+    (search_data_catalog / fetch_from_catalog) register ONLY via the startup
+    import path, NOT via tools/__init__, so without this the fail-open
+    snapshot is short by those real tools in any process where the startup
+    hook has not yet run
     (tool-retrieval verify, 2026-06-23). Idempotent + guarded; only the rare
     fail-open path pays for it.
     """
