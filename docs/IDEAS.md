@@ -2842,3 +2842,226 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ruled now, built there. The DATA class-body reshape lands in the
   lego wave so the worker wave's template completion is authored in
   the final shape.
+
+- TEST CULL WAVE DIRECTED (NATE 2026-08-30): the suite still carries
+  tests pinning the cloud-deployed era and other predated
+  architecture - cull them back HARD (aggressive posture per the
+  bifurcated deletion ruling: staleness evidence suffices, ledger
+  line only). Follow-on refactor pass: predated processing-tool code
+  and emission simplification. Standing reaffirmation: ALWAYS reach
+  for the battle-tested library / the library being wrapped before
+  writing our own expression.
+
+- DECLARATIVE EMISSION .emit() - POSTPONED BY NATE (2026-08-30):
+  emission/styles should become declarative - a .emit() after the
+  fetch pushes the layer(s) to the screen with a default style,
+  instead of automatic emission (auto saved cognitive load but hides
+  the push). Explicitly POSTPONED: it garnishes what exists and
+  underpins no simulation work. Expected to fold a lot of emission
+  boilerplate (emission/ is ~7.5k LOC; pipeline_emitter.py alone
+  2,862) - likely by leaning on QGIS-native formats and .qml styling
+  rather than hand-built product styling. PyQGIS stance under
+  discussion: the old opposition was cloud-era (headless slim
+  containers, no Qt); mostly vestigial in the QGIS-only product.
+
+- CLOSE-OUT RULINGS, LEGO WAVE (NATE 2026-08-30): (1) SEQUENCING -
+  the worker-unification wave runs NEXT (unblocks coarse status=ok:
+  the topology-bundle producer died in the purge and its replacement
+  is that wave's Stage 1); the TEST CULL wave follows it; emission/
+  .emit() stays postponed behind both. (2) NO BANKS LADDER until a
+  case demands one - the HR premise was false (fetch_nhd_area_water
+  is ALREADY NHDPlus HR, verified live); Ball Creek showed the
+  primary ANSWERS even when coverage is wrong - only the measured
+  coverage check catches it, a ladder would not have fired; the
+  banks row takes .ladder() as a one-line addition when a real rung
+  exists. (3) REPLAY SEAM - _serialize/_rehydrate gain a DATACLASS
+  ARM using the existing to_json/from_json (one seam; kills the
+  replay-degradation class for every artifact-shaped step result),
+  never mapping-tolerant consumers. (4) The five staged workers/
+  telemac deletions stay UNCOMMITTED until worker-wave Stage 0
+  commits them with ledger lines; HARD RULE meanwhile: no telemac
+  worker image rebuild.
+
+- STAGE-0 STOPS RULED (NATE 2026-08-30): (1) schism_gr3.py RELOCATES
+  BESIDE THE SANDBOX (scripts/sandbox/oceanmesh/) - the sys.path hack
+  dies, workers/schism attics with the other seventeen. (2) NO
+  REBUILT byte-equivalence bar for outputs_seam vs
+  register_manifest_layers - the emission fold owns that seam; ledger
+  line notes the uncovered pair. (3) The Eel coarse-reach collapse:
+  NATE direction - a collapsed mesh MAY reach the solver if the user
+  wants it (granularity = user lever), but the template declares a
+  measured retention floor (cleaned mesh vs reach polygon, x%
+  declared per-template, visible); resolution auto-resolve via a
+  DECLARED .ladder() of finer rungs walked only when the floor fails
+  (auditable from the workflow, answering rung journaled); a
+  measured extent-miss WARNING never blocks user-supplied meshes.
+  Exact spelling awaiting NATE's confirm; interim: the coarse canary
+  declares 12 m with the physics stated (a 2D reach wants ~10
+  elements across the channel).
+
+- STAGE-1 STOPS RULED (NATE 2026-08-31): (1) RAINDEF PATCH BAKES AT
+  IMAGE BUILD - the Dockerfile produces the RAINDEF=3 copy of
+  runoff_scs_cn.f ONCE from the adjacent installed engine source; the
+  drift guard becomes a LOUD BUILD FAILURE; the worker stays
+  zero-logic; the manifest decides which runs stage the baked file as
+  user_fortran (per-run recompile is the engine's normal user-fortran
+  flow). Verified in-image first: zero dico keywords for RAINDEF/
+  hyetograph and RAINDEF is a compile-time PARAMETER - telapy cannot
+  reach it; user fortran IS the engine's official extension door.
+  (2) NESTOR DREDGE ZONE - AUTO-FILL FROM MEASURED GEOMETRY WITH AN
+  EDITABLE SETBACK: the auto zone = the cross-channel box at the dig
+  station INTERSECTED with the reach polygon offset INWARD by a
+  declared dredge_bank_offset_m (labeled default w/ stated basis,
+  user-editable). ONE mechanism, two behaviors: setback from the
+  banks AND self-exclusion of too-narrow stretches (narrower than 2x
+  the setback the shrunken polygon vanishes there); empty result =
+  typed refusal naming the offset + measured width. USER OVERRIDE:
+  supply a polygon (drawn / named case layer) or edit the auto
+  default - either validated CONTAINED in the river geometry, typed
+  refusal outside water. All journaled. channel_width_m stays dead.
+
+- RESOLUTION LADDER REJECTED, COVERAGE IS A HEURISTIC (NATE
+  2026-08-31, supersedes the retention-floor/.ladder() proposal): NO
+  auto-adjusting resolution machinery - a ladder is a FALLBACK (makes
+  sense on fetchers), never a substitute for USER INTENTION; auto-
+  refining takes on responsibility that belongs to the user, who can
+  trivially re-run finer, add an edge function, or author the mesh
+  themselves. What lands instead: (1) ZERO mesh coverage of the
+  flowline -> typed terminal error (the automated leg stops; even a
+  bad first run is fine - the user re-runs or supplies); (2) above
+  zero -> a JOURNALED HEURISTIC line stating the measured coverage so
+  the user knows what they got and can ask for better or continue -
+  honesty, not gatekeeping. NAMING: "mesh coverage" (of the reach/
+  flowline), NOT "retention" - distinct from the fetch-side "banks
+  coverage"; two measures, two names. The 12 m coarse canary stands
+  as a plain declared value. PRINCIPLE (internalized, see memory):
+  we abstract the mechanics; the user expresses the change and
+  resolves it - we do not solve everyone's problems at runtime.
+
+- PARAMS CLASS BODY RULED (NATE 2026-08-31): PARAMS takes the same
+  class-body shape as DATA - class PARAMS: spill_fraction =
+  Param(door=..., default=..., ...) - name = identifier via
+  __set_name__; the Param object is its own reference; P becomes an
+  import alias of the template's own PARAMS class (from .declarations
+  import PARAMS as P - zero call-site respelling); the global
+  _ParamNamespace/_DataNamespace proxies + declaration_site stamping
+  die (the traceback IS the origin). Typos fail at import as
+  AttributeError; cross-template param refs become unwritable.
+  Section comments survive as class-body comments; order preserved.
+  FOLDS AFTER the worker wave, in one mechanical stage alongside the
+  mesh-coverage heuristic item.
+
+- TEST CULL SCOPE SHARPENED (NATE 2026-08-31): beyond the cloud-era
+  tests, the cull removes tests whose SUBJECTS are dead - functions
+  imported nowhere, code preceded by the new architecture. STANDING
+  NORM going forward: when old functionality is removed its tests go
+  WITH it in the same landing, so the dead path cannot be
+  resurrected by a test pinning it. (A surviving test of a dead
+  function is not coverage - it is an anchor.) Bake into every wave
+  prompt beside clean-as-you-go.
+
+- FLIP STOPS RULED (NATE 2026-08-31): (1) BOUNDARY ROLES ARE
+  DECLARED ON THE MESH BLOCK - boundaries={"inflow": <upstream
+  face>, "outflow": <downstream face>}, geometry-valued roles
+  referencing the chain's own transect faces; nodes matched by
+  nearest-face; the declaration travels whole, gate-editable later;
+  a hidden server step between mesh and deck is the forbidden
+  narrowing shape. (2) ONE DECLARED BED ROW - the reach DATA body
+  declares its bed fetch explicitly and MESH consumes it; om2d's
+  implicit fetch_topobathy default never fires for reach templates
+  (declaring replaces); the stage-1 gentle-slope fit applies at that
+  one seam; the duplicate resolve_reach_river staging dies. (3)
+  rain_on_grid UNPARKS THIS WAVE on the same mechanism - the
+  catchment MESH declares its outlet boundary at the pour point; the
+  outlet-hydrograph reader integrates over those nodes; if it slips
+  technically it stays parked (honest absence). (4) E2E WITNESS =
+  JOURNAL + SOLVE - the headless gate drive asserts the journal's
+  measured banks-coverage line PLUS correct_end and echoed
+  npoin/nelem; bank_source/bank_width_mean_m keys and
+  E2E_MIN_MEAN_WIDTH_M die.
+
+- PROOF STOPS RULED (NATE 2026-08-31): (1) WAQTEL LAUNCHER DEVIATION
+  - telapy's API arm never allocates WAQTEL's arrays (measured:
+  dico fallback crash, then OS BIEF OBJECT TYPE NOT IMPLEMENTED at
+  iteration 0), so WAQTEL-COUPLED cases run via the engine's own CLI
+  launcher in a subprocess BEHIND THE SAME RUNNER SEAM and manifest -
+  a scoped, ledgered deviation with a die-date when telapy grows the
+  capability; pure-t2d classes stay on telapy; GAIA stays on telapy
+  (plumbed, proven at Proof or falls to the same deviation loudly).
+  (2) BOUNDARY ROLES ARE CONTIGUOUS BY CONSTRUCTION (definitional,
+  orchestrator-resolved, flagged): a TELEMAC liquid boundary IS a
+  contiguous contour run - the declared face maps to the CONNECTED
+  run of boundary nodes between the contour points nearest the
+  face's endpoints, never a nearest-node scatter; numliq then counts
+  what the declaration meant. _end_face returning [] refuses naming
+  the geometry that produced it. (3) delineate_watershed CONFORMS TO
+  ITS OWN DECLARED CRS (contract-resolved): output reprojected to
+  the 4326 its LayerURI declares (the 5070 leak caused the 104 GiB
+  lattice); om2d refuses a non-lon/lat extent typed as the guard.
+
+- STEPPABLE RUNS RULED IN (NATE 2026-08-31): the telapy child loops
+  the engine's OWN per-step call (run_one_time_step lifecycle)
+  instead of run_all_time_steps - behaviorally identical, one
+  structural per-step hook point, verified per module against the
+  in-image telapy source (a class lacking the step API keeps
+  run_all_time_steps, noted). The hook is the SEAM for emit-on-solve
+  frames (still DISCUSSION-GATED), live progress, mid-run steering,
+  and the BMI/digital-twin direction - those land later as
+  declarations, not runner rewrites. NOT steppable and said so:
+  WAQTEL launcher-deviation runs (whole-process by the fork ruling,
+  same die-date) and artemis/t3d legacy builders (until rung 4).
+  REENTRANT (NATE 2026-08-31, same ruling): re-entry across
+  invocations comes from the ENGINE'S OWN restart mechanism, never a
+  resident solver process (engine-room doctrine holds): the deck
+  author gains the continuation form (COMPUTATION CONTINUED +
+  previous-results file), the manifest gains continue_from, the
+  worker stages it like any input; a continued run is an ordinary
+  new box run. Acceptance: a split run (N steps, exit, continue)
+  reaches CORRECT END and closes to the straight-through result.
+
+- PROOF-REMEDY STOPS RESOLVED (orchestrator, under standing law,
+  2026-08-31 - NATE may override): (1) ONE CENTERLINE ACQUISITION -
+  DATA.centerline IS the reach (the declared row, what section cuts
+  and the mesh holds); resolve_reach_river's duplicate navigate
+  (different seed, 4 comids, 3472 m vs the declared 1290 m) DIES as
+  the second-front class; _settle_release derives spill_fraction
+  along the DECLARED centerline, which lies in the meshed domain by
+  construction (the 350 m-outside release dies with it). (2) THE
+  ENGINE'S OWN FLUX IS THE HYDROGRAPH - the outlet stays the
+  engine's free exit (no invented elevation); the reader stops
+  re-deriving flux from depth-weighted integrals (measured 0.0 on a
+  run whose solver reported FLUX BOUNDARY 1 = -20.25 m3/s) and reads
+  the LISTING'S OWN per-boundary flux series; the two contradictory
+  sign conventions collapse to ONE stated at the reader (outflow
+  positive). Library-runs-the-domain applied to measurement. (3)
+  FAILED ATTEMPTS TOMBSTONE - a failed terminal state is never
+  silently replayable by the content-keyed invocation ledger
+  (re-running a failed invocation re-executes; success replay
+  stays); canary drivers pass restart_clean by default. The
+  cache-provenance staleness class, closed at the ledger.
+
+- STEPPABLE STOPS RESOLVED (orchestrator, under standing law,
+  2026-08-31 - NATE may override): (1) PERFECT RE-ENTRY VIA THE
+  DICO'S OWN ANSWER - decks author RESTART FILE (+ SERAFIND double
+  precision) alongside results for the telapy families; continue_from
+  points at the RESTART file (exact last-instant state), retiring the
+  graphic-record/single-precision residual; reentrant-by-default is
+  what the ruling meant. (2) A CONTINUED RUN IS THE SAME DECLARED
+  EXPERIMENT - the forcing/sources series re-authors from the SAME
+  declared scenario evaluated over the extended horizon on the same
+  absolute clock (a finished pulse continues as zero BY DECLARATION -
+  spill_duration said so; never a re-release, which would be a
+  different experiment); the author reads the continuation start
+  time from the restart file it is continuing.
+
+- DIRECTORY MAPS RULED (NATE 2026-08-31): every major package dir
+  (trid3nt_server/workflows/mesh/, trid3nt_server/tools/,
+  trid3nt_server/workflows/, workers/, plugin/ as they are touched)
+  carries a README.md MAP at its root: one line per subfolder and
+  per file - what it IS and does, nothing else (no history, no ADR
+  refs - the comments-are-constraints spirit applied to maps).
+  MAINTENANCE LAW: the landing that changes a directory updates its
+  README in the same commit - a stale map is worse than none. First
+  authoring pass rides the post-wave fold (PARAMS + mesh-coverage)
+  once the worker wave stops moving the tree; bake the maintenance
+  line into every wave prompt's norms block.

@@ -85,3 +85,69 @@ six network fetches (NLDI snap + navigate, two NHDPlus_HR flowline re-seeds, the
 NHDArea bank query, and the private Copernicus-STAC -> 3DEP DEM ladder), so the
 reach family cannot run `--network none` yet. Why that half was left standing, and
 what it costs to finish, is in ADR 0317.
+
+
+## Wave D - the worker unification (2026-08-30 .. 2026-08-31)
+
+Span `cb2234b4..49542f14`. Two movements, measured separately because they are
+not the same kind of number: eighteen non-telemac worker directories LEFT for the
+attic, and `workers/telemac/` was rewritten in place.
+
+| wave | range | dirs touched | product delta | test delta | verdict |
+|---|---|---|---|---|---|
+| D - attic sweep | `cb2234b4..49542f14` | the 18 non-telemac dirs | **-37,324** | **-11,424** | not a dissolution, a MOVE. Mirrored to `~/Documents/trid3nt-attic/workers/` (19 dirs there, the pre-deleted telemac payloads included), one DELETION_LEDGER line each; git history is the archive. |
+| D - telemac rewrite | `cb2234b4..49542f14` | `workers/telemac/` | +364 / -6,663 = **-6,299** | +412 / -1,612 = **-1,200** | the dissolution FINISHES for TELEMAC: the worker is one dispatch over a staged run directory, no `.cas` authoring on the case path, no fetch, no mesh, `--network none`. |
+
+Per dir, measured on the tree rather than summed from deltas:
+`workers/telemac/` 9,172 -> **2,873** product and 1,998 -> **798** test;
+`workers/mesh/` untouched at 346; every other row is **gone**. The workers TOTAL
+is now **3,219** product (excluding the 34-line root `conftest.py`, per row 0's
+own counting note) and **798** test, against row 0's 46,947 / 13,782.
+
+Running net from row 0 is stated as that measured inventory, NOT as a sum of
+per-wave rows: waves between row 0 and this one (the fresh-start purge, the LEGO
+repoint, the elegance review) moved `workers/` without filing rows here, so the
+delta column and the row-0 total do not reconcile by addition and this note does
+not pretend they do. The 105-line gap between summing (3,324) and measuring
+(3,219) is exactly that unfiled movement.
+
+Counting commands, so the cells reproduce:
+
+    git diff --numstat cb2234b4 49542f14 -- workers/ | grep '\.py$'
+    find workers -name '*.py' | grep -v __pycache__ | xargs wc -l
+
+The telemac row in full: five build scripts (`rog_build` 855,
+`telemac_coastal_build` 728, `telemac_river_dye_build` 2,595, `tomawac_build`
+602, `rainfall_forcing_compare` 203), two staged-input readers (`_staged_mesh`
+119, `_staged_reach` 77 - `_staged_bed` 53 SURVIVES, read by the two legacy
+builders), the `oil_templates/` payload, ten worker test modules, and
+`entrypoint.py` 1,594 -> 477. What survives beside the entrypoint is the two
+legacy builders the fork ruling kept live in-worker (`artemis_build` 1,138,
+`telemac3d_build` 1,001) plus `_supplied_mesh` 197 and `_staged_bed` 53 - 2,389
+of the remaining 2,873 product lines are that awaiting-rung-4 residue.
+
+## Whole-tree net for the wave, which is the number the plan predicted
+
+`workers/` is only one column. Against the plan's "expect ~ -7,500 net beyond the
+attic moves", measured over `cb2234b4..49542f14`, `.py` only, with the eighteen
+attic'd directories excluded:
+
+| area | delta |
+|---|---|
+| `workers/telemac/` | **-7,499** |
+| `trid3nt_server/` | +2,047 |
+| `tests/` + `contracts/` | +1,286 |
+| `scripts/` | +329 |
+| `plugin/` | +14 |
+| **net beyond the attic moves** | **-3,823** |
+
+The prediction is met on the WORKER (-7,499, one line off -7,500) and missed on
+the TREE (-3,823). Both numbers are true of different things: the worker shrank
+by what the plan said, and roughly half of it re-appeared server-side as the
+authoring substrate the sole-authored-record law requires (+2,047, of which
+`steps/author.py` is 1,321) plus its offline tests (+1,286). The difference is the
+migration, not slippage. Anyone quoting -7,500 for this wave means the worker
+column.
+
+Docs are excluded from every figure above (+1,166 across `docs/`, of which the
+DELETION_LEDGER is +546).

@@ -1,7 +1,8 @@
 # workers/ -- solver worker code
 
 Worker code for the engines the agent dispatches through the shared
-`run_solver` / `wait_for_completion` seam (`tools/simulation/solver.py`). This
+`run_solver` / `wait_for_completion` seam
+(`trid3nt_server/workflows/solver/solver.py`). This
 is a LOCAL-FIRST repo: workers run on this machine, dispatched by the agent's
 local solver backend -- there is no live Cloud Run / AWS Batch deploy here.
 

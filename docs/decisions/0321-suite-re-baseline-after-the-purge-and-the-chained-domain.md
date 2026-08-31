@@ -338,3 +338,39 @@ seventeen moved directories are invisible to this denominator - the image is
 still unbuildable until Stage 4 rewrites its smoke blocks, exactly as before.
 And the coarse reach solve still does not reach `status=ok`: the topology bundle
 that `TELEMAC_MESH_NOT_ACCEPTED` demands is Stage 1's subject.
+
+---
+
+## AMENDMENT 2026-08-31 - re-baseline at the worker-unification close-out
+
+Re-measured at the wave's conformance gate (`49542f14`), commands verbatim from
+this note, globs reaching the shell.
+
+| slice | passed | skipped | failed | wall |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1737 | 5 | 0 | 205.68s |
+| `test_[f-o]*` | 4160 | 0 (1 xfailed) | 0 | 43.44s |
+| `test_[p-r]*` | 1927 | 1 | 0 | 336.30s |
+| `test_[s-z]*` | 1397 | 6 | 0 | 306.76s |
+| `contracts/tests` | 789 | 0 | 0 | 5.27s |
+
+**10,010 passed, 0 failed.** Against amendment 30d (9,941) the denominator grows
+by **+69**: the deck-author suite (`test_telemac_author_decks.py`), the topology
+and bed suite (`test_mesh_topology_and_bed.py`), the run-reader suite
+(`test_telemac_run_reads.py`) and the rain-on-grid template's unparked tests, less
+the reach-river seed ladder's module that went with its subject. `contracts` is
+again untouched at 789, which is the check that the growth is server surface and
+not contract drift.
+
+What the green covers that it did not before: the authored `.cas` text for every
+case family, the role-keyed boundary sets against a measured numliq order, the
+gentle-slope bed fit, and the listing-parsed outlet hydrograph - all offline.
+
+What it still does NOT cover: `workers/` is not walked by any slice. The worker's
+own assertions are the image's build-time smoke blocks (unified import, the
+strict-gate negative, the four telapy classes and their per-step call, both
+builder config maps, the baked raindef3 fortran) plus `workers/telemac/test_entrypoint.py`,
+which no slice glob reaches and which passes when pointed at directly
+(`36 passed in 0.60s`). The seven live families through the image are
+the rest of that evidence; see
+`docs/validation/worker-unification-conformance.md`.
