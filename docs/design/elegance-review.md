@@ -44,11 +44,11 @@ authoring an eleventh shim.
 
 ```python
 DATA = (
-    Data("bed_dem", Fetch.tool("fetch_dem", source="3dep",
-                               resolution_m=P.bed_dem_resolution_m)
+    Data("bed_dem", tool("fetch_dem", source="3dep",
+                         resolution_m=P.bed_dem_resolution_m)
          .ladder("usgs_3dep_bare_earth", "copernicus_glo30")),
-    Data("basin", Build.tool("delineate_watershed", dem=D.bed_dem,
-                             pour_point=P.pour_point)),
+    Data("basin", tool("delineate_watershed", dem=D.bed_dem,
+                       pour_point=P.pour_point)),
 )
 MESH = tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=Ref("basin"))
 ```
@@ -62,7 +62,7 @@ genuinely COMPOSE (multi-fetch plus a merge) stay - they are steps, not aliases.
 
 **Enhanced behavior.** The chained-tools rung becomes expressible in the
 declaration language that already exists; `!run delineate_watershed` and
-`Data("basin", Build.tool("delineate_watershed"))` become the same call, which is
+`Data("basin", tool("delineate_watershed"))` become the same call, which is
 what "tools all the way down" claims. Existing producer tests cover the door.
 
 **Cost.** ~6 LOC added, ~110 removed on the first pass. One real risk: a name that
@@ -89,12 +89,12 @@ adopts a discovered mesh silently, which D-9 forbids.
 
 ```python
 # catchment
-Data("basin", Build.tool("delineate_watershed", dem=D.bed_dem, pour_point=P.pour_point)),
+Data("basin", tool("delineate_watershed", dem=D.bed_dem, pour_point=P.pour_point)),
 MESH = tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=Ref("basin"), ...)
 
 # reach
-Data("water", Fetch.tool("fetch_nhd_area_water")),
-Data("reach", Build.tool("section", source=D.water, between=[P.upstream, P.downstream])),
+Data("water", tool("fetch_nhd_area_water")),
+Data("reach", tool("section", source=D.water, between=[P.upstream, P.downstream])),
 MESH = tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=Ref("reach"), ...)
 ```
 
@@ -195,8 +195,8 @@ from a producer whose ladder simply failed to fire.
 **Sketch.**
 
 ```python
-Data("bed_dem", Fetch.tool("fetch_dem", source="3dep")
-     .ladder(Fetch.tool("fetch_copernicus_dem")))     # rungs are producers
+Data("bed_dem", tool("fetch_dem", source="3dep")
+     .ladder(tool("fetch_copernicus_dem")))           # rungs are producers
 ```
 
 The producer machinery walks the rungs, records which one answered, and generates

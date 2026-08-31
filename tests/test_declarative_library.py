@@ -136,6 +136,29 @@ async def stub_noting(**kwargs):
     return {"uri": "s3://b/noted.tif"}
 
 
+async def stub_mesh_step(**kwargs):
+    """A mesh step's own result shape: the ARTIFACT beside the fields read off it.
+
+    Its consumers read the artifact by attribute, so what the replay hands back
+    has to be the artifact and not a mapping that merely holds its fields.
+    """
+    from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+
+    _CALLS.append("stub_mesh_step")
+    art = MeshArtifact(
+        mesh_id="m-1", name="reach mesh", mode="om2d",
+        display_uri="s3://b/mesh.2dm", slf_uri="s3://b/mesh.slf",
+        crs_authid="EPSG:32610", has_bathymetry=True,
+        node_count=7, element_count=6,
+        bbox=(-124.1, 40.4, -124.0, 40.5), utm_epsg=32610,
+        probes={"min_edge_m": 40.5, "edge_length_m": {"min": 40.5, "max": 400.0}},
+        provenance={"spec": {"extent": {"type": "Polygon", "coordinates": [
+            [[-124.1, 40.4], [-124.0, 40.4], [-124.0, 40.5], [-124.1, 40.4]]]}}},
+    )
+    return {"uri": "s3://b/mesh.slf", "artifact": art, "mesh_id": art.mesh_id,
+            "min_edge_m": 40.5, "element_count": art.element_count}
+
+
 async def stub_no_bbox(**kwargs):
     """A layer result whose ``bbox`` field is THERE and empty - the None-missing
     tail the binder must refuse rather than carry forward."""
@@ -1115,6 +1138,38 @@ async def test_replay_re_executes_when_the_cached_artifact_is_gone():
     out = await _run(plan, _params(), {"base": 7.0})
     assert _CALLS == ["stub_step", "stub_second"]
     assert out.replayed == [] and out.executed == ["expensive", "cheap"]
+
+
+@pytest.mark.asyncio
+async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping():
+    """The ledger must not flatten a step's artifact into the fields it printed.
+
+    A mesh step returns the MeshArtifact beside the values read off it. Serialized
+    as plain JSON the object becomes a dict, and the second attempt hands the deck
+    a mapping: the granularity read crashes on the missing ``probes`` and the
+    containment read finds no ``provenance``, so a run that never declared a bbox
+    is refused for having been cut from one.
+    """
+    from trid3nt_server.workflows.mesh.artifact import MeshArtifact, measured_min_edge_m
+    from trid3nt_server.workflows.telemac.release_point import domain_polygon_of
+
+    plan = Plan("mesh_replay_w", None, (
+        Step(runner=f"{_HERE}.stub_mesh_step").named("mesh"),
+        Step(runner=f"{_HERE}.stub_second").named("deck"),
+    ))
+    _FAIL_AT.add("stub_second")
+    with pytest.raises(StepFailedError):
+        await _run(plan, _params(), {"base": 11.0})
+
+    _CALLS.clear()
+    _FAIL_AT.clear()
+    out = await _run(plan, _params(), {"base": 11.0})
+    assert out.replayed == ["mesh"] and _CALLS == ["stub_second"]
+
+    replayed = out.results["mesh"]["artifact"]
+    assert isinstance(replayed, MeshArtifact)
+    assert measured_min_edge_m(replayed) == 40.5
+    assert domain_polygon_of(replayed)["type"] == "Polygon"
 
 
 @pytest.mark.asyncio

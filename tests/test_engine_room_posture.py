@@ -251,8 +251,8 @@ def test_an_engine_that_never_moved_is_not_reported_as_drift_unknown():
     head = out.stdout.strip()
     if not head:
         pytest.skip("not a git checkout")
-    # SWMM has no worker directory at all, so nothing after HEAD can touch it.
-    assert staleness(code_sha=head, engine="swmm", code_dirty=False) is None
+    # Nothing has landed after HEAD, so the engine's own log since it is empty.
+    assert staleness(code_sha=head, engine="telemac", code_dirty=False) is None
 
 
 # --------------------------------------------------------------------------- #

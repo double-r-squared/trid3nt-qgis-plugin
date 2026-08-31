@@ -1771,8 +1771,10 @@ dispatcher, no deck writer and no products reader.
 - workers/swan/ (5 py, 2,723) + workers/_swan_postprocess/ (3 py, 595): the SWAN worker and its spectral reader - moved to attic. CONDITION: none.
 - workers/_raster_postprocess/ (11 py, 2,623): the worker-side mirror of the COG / outputs-manifest / publish-manifest contracts writers, shipped into the docker-worker images. Its only remaining consumers were the four worker trees above - moved to attic. CONDITION: none; the agent-side originals under `trid3nt_server/workflows/shared/` and `contracts/` are untouched and are what the kept tree reads.
 
-48,748 lines across 642 files. `workers/schism/` is the eighteenth directory and
-is HELD, not moved - see the design-stop below.
+321 tracked files, 127,845 lines - of which 48,748 are Python and the rest are
+the shipped decks, fixtures and reference geometries those workers carried.
+`workers/schism/` is the eighteenth directory and is HELD, not moved - see the
+design-stop below.
 
 Pointer scrubs that followed them out:
 
@@ -1802,3 +1804,24 @@ the mesh, calls it. Moving the directory breaks the live mesher and the mesh
 slice of the suite. Where those three pure-numpy helpers should live is a
 structural choice, so the directory is held whole and `workers/README.md` says
 why.
+
+## The byte-equivalence bar's producer left with the SFINCS worker (2026-08-30)
+
+`tests/test_outputs_seam.py::test_byte_equivalence_seam_vs_register` plus its four
+helpers (`_write_synthetic_map`, `_resolved_style`, `_stashed_legend`, `_row`) and
+the module docstring's second concern - DELETED. The test built a synthetic
+`sfincs_map.nc`, ran `workers/_raster_postprocess/postprocess.run_postprocess`
+over it, and compared the layer-event stream the OLD `register_manifest_layers`
+path emitted against the NEW `outputs.json` seam's, field for field. Its producer
+is now in the attic, so the file raised `ModuleNotFoundError: No module named
+'workers._raster_postprocess'` at the import inside the test body - the moved
+subject taking its test with it, the treatment the fresh-start purge applied to
+131 other files. The five seam-unit tests in the same file are untouched and
+green. CONDITION: none.
+
+CONSEQUENCE, reported not fixed: both sides of that bar - `outputs_seam.
+build_layers_from_outputs` and `register_published_manifest.
+register_manifest_layers` - are LIVE server code, and this was the only test that
+held them byte-identical. What raster a rebuilt bar should compare them on, now
+that no engine in the tree writes a `publish_manifest.json` from a solved raster,
+is a design question.

@@ -1149,6 +1149,42 @@ def _is_not_found(exc: BaseException) -> bool:
         type(exc).__name__ in ("NoSuchKey", "NotFound")
 
 
+#: Marks a dataclass packed into an otherwise-JSON result, so the unpack knows
+#: which type to hand back. A step that returns an artifact - alone or under a key
+#: beside its own fields - must replay as that artifact: its consumers read it by
+#: attribute, and a plain dict in its place either crashes them or degrades them
+#: into reporting a fact the run never had.
+_DATACLASS_TAG = "__dataclass__"
+
+
+def _packable(value: Any) -> bool:
+    """Whether this object states its own JSON both ways."""
+    return callable(getattr(value, "to_json", None)) and \
+        callable(getattr(type(value), "from_json", None))
+
+
+def _pack(value: Any) -> Any:
+    if _packable(value):
+        return {_DATACLASS_TAG: f"{type(value).__module__}.{type(value).__name__}",
+                "doc": _pack(value.to_json())}
+    if isinstance(value, dict):
+        return {k: _pack(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_pack(v) for v in value]
+    return value
+
+
+def _unpack(value: Any) -> Any:
+    if isinstance(value, dict):
+        tag = value.get(_DATACLASS_TAG)
+        if isinstance(tag, str):
+            return _load(tag).from_json(_unpack(value.get("doc")))
+        return {k: _unpack(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_unpack(v) for v in value]
+    return value
+
+
 def _serialize(value: Any) -> tuple[str, Any, str | None]:
     if value is None:
         return "none", None, None
@@ -1159,8 +1195,8 @@ def _serialize(value: Any) -> tuple[str, Any, str | None]:
                     f"{type(value).__module__}.{type(value).__name__}")
         except Exception:  # noqa: BLE001 - an undumpable model just re-executes next run
             return "opaque", None, None
-    if isinstance(value, (str, int, float, bool, list, dict)):
-        return "json", value, None
+    if isinstance(value, (str, int, float, bool, list, dict)) or _packable(value):
+        return "json", _pack(value), None
     return "opaque", None, None
 
 
@@ -1168,7 +1204,12 @@ def _rehydrate(rec: LedgerRecord) -> Any:
     if rec.result_kind == "none":
         return None
     if rec.result_kind == "json":
-        return rec.result
+        try:
+            return _unpack(rec.result)
+        except Exception as exc:  # noqa: BLE001 - a stale shape re-executes, never crashes
+            logger.warning("ledger record %s not rehydratable (%s); re-executing",
+                           rec.node, exc)
+            return _UNREPLAYABLE
     if rec.result_kind == "pydantic" and rec.result_type:
         try:
             return _load(rec.result_type).model_validate(rec.result)

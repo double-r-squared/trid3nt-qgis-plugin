@@ -274,3 +274,67 @@ green slices say nothing about it. Four have DELETION_LEDGER lines from earlier
 waves; `rainfall_forcing_compare` has none.
 
 Neither is this tail's subject and neither is patched here.
+
+---
+
+## AMENDMENT 2026-08-30d - re-baseline after the attic sweep and the replay seam
+
+Re-measured at worker-unification Stage 0: seventeen non-telemac worker
+directories moved to the attic, NATE's five staged `workers/telemac` deletions
+committed, the interpreter's dataclass replay arm landed. Commands verbatim from
+this note, globs reaching the shell.
+
+| slice | passed | skipped | failed | wall |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1736 | 5 | 0 | 210.38s |
+| `test_[f-o]*` | 4155 | 0 (1 xfailed) | 0 | 43.13s |
+| `test_[p-r]*` | 1924 | 1 | 0 | 94.48s |
+| `test_[s-z]*` | 1337 | 6 | 0 | 290.83s |
+| `contracts/tests` | 789 | 0 | 0 | 5.34s |
+
+9941 passed, **0 failed** - the same total as amendment 30b/30c, from two moves
+that cancel: `[a-e]` gains the mesh-replay round-trip (+1) and `[f-o]` loses the
+byte-equivalence bar whose producer went to the attic (-1). `contracts` is
+untouched at 789, which is again the check that the loss is worker-tree and not
+contract erosion.
+
+### The three failures the sweep caused, and what each one was
+
+All three were found by running, and all three were STALE PINS on the moved
+tree - not defects in the subject:
+
+    FAILED tests/test_engine_room_posture.py::test_an_engine_that_never_moved_is_not_reported_as_drift_unknown
+    FAILED tests/test_outputs_seam.py::test_byte_equivalence_seam_vs_register
+
+plus `test_a_solver_identifier_resolves_to_its_engine`, whose
+`resolve_engine("sfincs-quadtree") == "sfincs"` line pinned a row of
+`ENGINE_PATHS` that left with the SFINCS worker; the line was dropped. The
+never-moved test used `engine="swmm"` as its "no worker directory at all" case,
+which after the collapse resolves to no engine at all and reports
+`engine_paths_unknown` rather than the clean answer - it now asks the same
+question of `telemac`, whose log since HEAD is empty, which is the case the test
+was always about. The byte-equivalence bar imported
+`workers._raster_postprocess.postprocess` inside its body and is deleted with a
+ledger line; the consequence - that both sides of that bar are live server code
+and nothing holds them byte-identical now - is recorded there rather than
+patched.
+
+### What the green covers that it did not before
+
+The ledger replay of a mesh-bearing plan. `_serialize`/`_rehydrate` gained the
+dataclass arm the close-out ruled, and
+`test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping` drives a
+two-step plan whose first step returns a `MeshArtifact` beside the fields read
+off it, fails the second, and re-runs: the replayed value is a `MeshArtifact`,
+`measured_min_edge_m` reads its probes, and `domain_polygon_of` reads its
+provenance. Reverting the arm turns that test red with the exact production
+symptom (`isinstance(replayed, MeshArtifact)` against a plain dict), which is
+what makes it a guard rather than a restatement.
+
+### What the green still does NOT cover
+
+`workers/` is not walked by any slice, so the five committed deletions and the
+seventeen moved directories are invisible to this denominator - the image is
+still unbuildable until Stage 4 rewrites its smoke blocks, exactly as before.
+And the coarse reach solve still does not reach `status=ok`: the topology bundle
+that `TELEMAC_MESH_NOT_ACCEPTED` demands is Stage 1's subject.
