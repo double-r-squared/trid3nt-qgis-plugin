@@ -79,6 +79,12 @@ class DATA:
                         banks=banks, centerline=centerline)
     reach_polygon = tool("section", polygon=mapped_banks,
                          between=Ref("ends.between"))
+    # THE BED, declared here rather than left to the mesher's coastal default:
+    # a river reach solves on land terrain, not on a topobathy tile. GLO-30 is
+    # asked for on its OWN 1-arcsecond lattice, so the raster the nodes are
+    # sampled from carries the source pixels rather than a resample of them.
+    bed = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
+               purpose="river bed elevation")
 
 
 # -- the binding blocks --------------------------------------------------- #
@@ -102,12 +108,17 @@ FORCING = Forcing(carrier=Ref("reviewed_discharge"))
 #: is the CHAIN's product - the stretch of mapped banks the section cut between the
 #: centerline's two ends - so the mesher triangulates a domain other tools measured
 #: rather than growing a corridor of its own. Every field is checked at the router
-#: against what the ``om2d`` mesher declares.
+#: against what the ``om2d`` mesher declares. The two end transects the section cut
+#: are the faces the inflow and the outflow are prescribed across, so the roles are
+#: declared HERE, on the ask, and travel whole into the accepted topology.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
     extent=Ref("reach_polygon"),
     refine={"resolution_m": P.mesh_resolution_m},
+    bed={"raster": DATA.bed, "downstream_along": DATA.centerline},
+    boundaries={"inflow": Ref("reach_polygon.face_start"),
+                "outflow": Ref("reach_polygon.face_end")},
 )
 
 

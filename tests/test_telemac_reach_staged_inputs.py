@@ -1,14 +1,13 @@
-"""stage_manifest carries the reach's STAGED INPUTS, and declares no bed COG.
+"""The reach's manifest is a CASE: an engine, a deck, and what must come back.
 
-The worker used to fetch its own bed and write a node-sampled COG beside the
-result so the composer had something to publish; the manifest had to name that
-file or the supervisor's glob-upload never uploaded it. Both halves of that are
-gone. The bed arrives as a staged input the launcher walks into the run
-directory, the emit-on-fetch seam surfaces the CONTINUOUS source raster, and a
-declared output nothing writes would be a name with no file behind it.
+The worker used to be handed the reach's raw geometry and asked to mesh it. Now
+the server authors the deck against the accepted mesh and stages both, so what
+the manifest carries is the ``case`` the worker dispatches on - which engine,
+which steering file, which results are the success convention - plus the
+``inputs`` the launcher walks into the run directory.
 
-What replaces the old pins is the staging contract itself: an ``inputs`` row per
-staged artifact, for the solve path and the mesh preview alike.
+What is pinned here is that contract: the section key the worker reads, the
+per-class results and outputs, and the staging refusals.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.steps.deck import stage_manifest
+from trid3nt_server.workflows.telemac.steps.deck import _class_files, stage_manifest
 
 
 class _FakeS3:
@@ -28,63 +27,41 @@ class _FakeS3:
         self.put = kw
 
 
-def _stage(monkeypatch, reach: dict, *,
+_CASE = {"module": "telemac2d", "steering": "t2d_river.cas",
+         "results": ["r2d_river.slf"], "family": "reach",
+         "echo": {"utm_epsg": 32610, "npoin": 812, "bed_source": "3dep"}}
+
+_SOLVE_INPUTS = [
+    {"gs_uri": "s3://cache/mesh/M1/mesh.slf", "dest": "river.slf"},
+    {"gs_uri": "s3://cache/mesh/M1/mesh.cli", "dest": "river.cli"},
+    {"gs_uri": "s3://cache/telemac/RUNTAG/t2d_river.cas", "dest": "t2d_river.cas"},
+]
+
+
+def _stage(monkeypatch, case: dict, *, outputs: list[str] | None = None,
            inputs: list[dict[str, str]] | None = None) -> dict:
     import trid3nt_server.workflows.solver.solver as solver_mod
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    stage_manifest(reach, "RUNTAG", inputs=inputs)
+    stage_manifest(case, "RUNTAG", outputs=outputs or ["r2d_river.slf"],
+                   inputs=inputs)
     assert fake.put is not None
     return json.loads(fake.put["Body"])
 
 
-_SOLVE_INPUTS = [
-    {"gs_uri": "s3://cache/telemac/RUNTAG/river_centerline.geojson",
-     "dest": "river_centerline.geojson"},
-    {"gs_uri": "s3://cache/telemac/RUNTAG/river_banks.geojson",
-     "dest": "river_banks.geojson"},
-    {"gs_uri": "s3://cache/copernicus/bed.tif", "dest": "bed_source.tif"},
-]
-
-
-@pytest.mark.parametrize("reach", [
-    {"name": "test-reach"},
-    {"name": "test-reach", "substance_class": "do_sag"},
-    {"name": "test-reach", "substance_class": "sediment"},
-])
-def test_every_reach_class_stages_the_same_three_inputs(monkeypatch, reach):
-    """The centerline, the banks and the bed ride whatever the substance is.
-
-    They are the GEOMETRY the reach is meshed on, so a dye run, a DO-sag run and
-    a GAIA sediment run all need the same three files - which is why they are
-    staged by the deck writer rather than by a per-class branch.
-    """
-    manifest = _stage(monkeypatch, reach, inputs=_SOLVE_INPUTS)
-    assert [row["dest"] for row in manifest["inputs"]] == [
-        "river_centerline.geojson", "river_banks.geojson", "bed_source.tif"]
-
-
-def test_no_reach_run_declares_a_bed_cog_output(monkeypatch):
-    """The node-lattice bed COG is dead; nothing may name it as an output."""
-    for reach in ({"name": "r"}, {"name": "r", "substance_class": "do_sag"},
-                  {"name": "r", "substance_class": "sediment"}):
-        manifest = _stage(monkeypatch, reach, inputs=_SOLVE_INPUTS)
-        assert "bed_bathymetry.tif" not in manifest["outputs"]
-
-
-def test_sediment_keeps_its_gaia_outputs(monkeypatch):
-    manifest = _stage(monkeypatch, {"name": "r", "substance_class": "sediment"},
-                      inputs=_SOLVE_INPUTS)
-    assert "gaia_river.slf" in manifest["outputs"]
-    assert "gaia_river.cas" in manifest["outputs"]
+def test_the_reach_manifest_names_the_case_the_worker_dispatches_on(monkeypatch):
+    doc = _stage(monkeypatch, _CASE, inputs=_SOLVE_INPUTS)
+    assert doc["case"] == _CASE
+    assert "reach" not in doc
+    assert [row["dest"] for row in doc["inputs"]] == [
+        "river.slf", "river.cli", "t2d_river.cas"]
 
 
 def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
     """The key is always present: the worker's contract reads it unconditionally."""
-    manifest = _stage(monkeypatch, {"name": "r"})
-    assert manifest["inputs"] == []
+    assert _stage(monkeypatch, _CASE)["inputs"] == []
 
 
 def test_stage_manifest_requires_cache_bucket(monkeypatch):
@@ -95,11 +72,58 @@ def test_stage_manifest_requires_cache_bucket(monkeypatch):
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
     with pytest.raises(TelemacDyeScenarioError):
-        stage_manifest({"name": "test-reach"}, "RUNTAG")
+        stage_manifest(_CASE, "RUNTAG", outputs=["r2d_river.slf"])
 
 
 # --------------------------------------------------------------------------- #
-# ONE manifest writer, and the CASE section it gained.
+# What a class must produce, and what comes back.
+# --------------------------------------------------------------------------- #
+def test_a_plain_tracer_run_must_produce_its_result_and_nothing_more():
+    results, outputs = _class_files("tracer", dredging=False)
+    assert results == ["r2d_river.slf"]
+    assert "full_listing.log" in outputs
+    # the mesh the run was handed comes back with it, so a solved run stays
+    # readable from its own prefix
+    assert {"river.slf", "river.cli", "t2d_river.cas"} <= set(outputs)
+
+
+def test_sediment_must_produce_the_gaia_result_and_brings_its_steering_back():
+    results, outputs = _class_files("sediment", dredging=False)
+    assert results == ["r2d_river.slf", "gaia_river.slf"]
+    assert "gaia_river.cas" in outputs
+    assert "nestor.act" not in outputs
+
+
+def test_a_dredging_run_brings_the_nestor_rule_back():
+    _results, outputs = _class_files("sediment", dredging=True)
+    assert {"nestor.act", "nestor.pol", "nestor.ref"} <= set(outputs)
+
+
+def test_oil_must_produce_the_track_the_slick_is_read_from():
+    """The slick and the particle snapshots are built on the SERVER off this
+    track, so neither is a file the worker is asked to write."""
+    results, outputs = _class_files("oil", dredging=False)
+    assert results == ["r2d_river.slf", "drogues.txt"]
+    assert "oil_spill.txt" in outputs
+    assert "slick.geojson" not in outputs and "particles.json" not in outputs
+
+
+@pytest.mark.parametrize("substance_class", ["decay", "do_sag"])
+def test_a_waqtel_run_brings_the_forcing_it_applied_back(substance_class):
+    results, outputs = _class_files(substance_class, dredging=False)
+    assert results == ["r2d_river.slf"]
+    assert "t2d_river.waqtel" in outputs
+
+
+def test_no_reach_run_declares_a_bed_cog_output():
+    """The node-lattice bed COG is dead; nothing may name it as an output."""
+    for substance_class in ("tracer", "do_sag", "sediment", "oil"):
+        _results, outputs = _class_files(substance_class, dredging=False)
+        assert "bed_bathymetry.tif" not in outputs
+
+
+# --------------------------------------------------------------------------- #
+# ONE manifest writer, and the CASE section it carries.
 # --------------------------------------------------------------------------- #
 def test_the_case_section_names_the_engine_the_deck_and_the_results():
     from trid3nt_server.workflows.telemac.steps import case_section
@@ -121,30 +145,17 @@ def test_the_case_section_names_the_engine_the_deck_and_the_results():
         family="river_dye", echo={}, user_fortran="user_fortran")
 
 
-def test_the_one_writer_carries_the_case_through(monkeypatch):
+def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     import trid3nt_server.workflows.solver.solver as solver_mod
-    from trid3nt_server.workflows.telemac.steps import (
-        case_section,
-        stage_telemac_manifest,
-    )
+    from trid3nt_server.workflows.telemac.steps import stage_telemac_manifest
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     uri = stage_telemac_manifest(
         section="agitation", config={"name": "harbour"}, run_tag="RUNTAG",
-        outputs=["res.slf"], prefix="artemis",
-        case=case_section(module="artemis", steering="artemis.cas",
-                          results=["res.slf"], family="agitation",
-                          echo={"npoin": 400}))
+        outputs=["res.slf"], prefix="artemis")
     assert uri == "s3://test-cache/artemis/RUNTAG/manifest.json"
     doc = json.loads(fake.put["Body"])
     assert doc["agitation"] == {"name": "harbour"}
-    assert doc["case"]["module"] == "artemis"
-    assert doc["case"]["echo"]["npoin"] == 400
     assert doc["telemac_args"] == [] and doc["inputs"] == []
-
-
-def test_a_manifest_with_no_case_carries_no_case_key(monkeypatch):
-    doc = _stage(monkeypatch, {"name": "test-reach"})
-    assert "case" not in doc

@@ -296,7 +296,7 @@ def test_the_declared_data_is_the_chain_in_class_body_order():
     # CLASS-BODY ORDER is the declaration's own, and the chain reads down it.
     assert [d.name for d in rows] == ["rivers", "centerline", "ends", "window",
                                       "banks", "mapped_banks", "reach_polygon",
-                                      "rain"]
+                                      "bed", "rain"]
     by_name = {d.name: d for d in rows}
     # Row-to-row dataflow written as a plain identifier binds as the same
     # late-bound ref an out-of-body DATA.<row> yields.
@@ -356,7 +356,7 @@ def _install_step_mocks(captured: dict):
         return (-114.31, 42.58)  # a mid-reach point on the Snake
 
     async def _fake_river(*, reach, seed, run_tag, reach_length_km,
-                          release=None, nav_direction="DM", with_bed=True):
+                          release=None, nav_direction="DM"):
         # The river fetch itself is exercised against its own fakes in
         # test_telemac_reach_river.py; here it stands in, so this chain test
         # stays about the chain.
@@ -364,36 +364,59 @@ def _install_step_mocks(captured: dict):
         captured["river_release"] = release
         return {
             "inputs": [{"gs_uri": "s3://cache/c.geojson", "dest": "river_centerline.geojson"},
-                       {"gs_uri": "s3://cache/b.geojson", "dest": "river_banks.geojson"},
-                       {"gs_uri": "s3://cache/bed.tif", "dest": "bed_source.tif"}],
+                       {"gs_uri": "s3://cache/b.geojson", "dest": "river_banks.geojson"}],
             "provenance": {"seed_lon": seed["lon"], "seed_lat": seed["lat"],
                            "seed_rung": "position-named-flowline",
                            "centerline_uri": "s3://cache/c.fgb",
                            "centerline_sha256": "0" * 64,
                            "centerline_comids": [123],
                            "centerline_extent": [-114.4, 42.5, -114.2, 42.7],
-                           "banks_uri": "s3://cache/b.fgb", "bed_uri": "s3://cache/bed.tif",
-                           "bed_source": "cop-dem-glo-30"},
+                           "banks_uri": "s3://cache/b.fgb"},
             "seed_lon": seed["lon"], "seed_lat": seed["lat"],
         }
 
     async def _fake_mesh(*, mesh, name=None):
         """The mesh session stands in: this chain test is about the chain.
 
-        No artifact rides back, so the deck's timestep falls to the REQUESTED
-        edge - which is what keeps this chain's deck the historical one.
+        The artifact reports the edge the ask named, so the mesh contributes
+        nothing to the timestep and this chain's deck is the historical one.
         """
+        from trid3nt_server.workflows.mesh.artifact import MeshArtifact
+
         captured["mesh_ask"] = dict(mesh)
-        return {"artifact": None, "mesh_id": "MESH01",
+        artifact = MeshArtifact(
+            mesh_id="MESH01", name="reach", mode="om2d",
+            display_uri="s3://cache/mesh/MESH01/mesh.2dm",
+            slf_uri="s3://cache/mesh/MESH01/river.slf",
+            crs_authid="EPSG:32611", has_bathymetry=True, utm_epsg=32611,
+            node_count=800, element_count=1400,
+            bbox=(-114.4, 42.5, -114.2, 42.7),
+            probes={"bed_fit": {"bed_top_m": 900.0, "bed_drop_m": 3.0}})
+        return {"artifact": artifact, "mesh_id": "MESH01",
                 "slf_uri": "s3://cache/mesh/MESH01/river.slf",
                 "cli_uri": "s3://cache/mesh/MESH01/river.cli",
-                "topology_uri": "s3://cache/mesh/MESH01/river_mesh.npz",
-                "min_edge_m": None}
+                "display_uri": "s3://cache/mesh/MESH01/mesh.2dm",
+                "topology_uri": "s3://cache/mesh/MESH01/mesh_topology.json",
+                "node_count": 800, "element_count": 1400, "min_edge_m": None,
+                "provenance": {"dem_source": "cop-dem-glo-30"}}
 
-    def _fake_stage(reach, run_tag, **_kw):
-        captured["reach"] = reach
+    def _fake_stage(case, run_tag, **_kw):
+        captured["case"] = case
         captured["run_tag"] = run_tag
         return f"s3://cache/telemac/{run_tag}/manifest.json"
+
+    _write_deck = deck_steps.write_reach_deck
+
+    async def _capture_deck(**kw):
+        """The real author, with the SHEET it serialized kept for inspection.
+
+        The sheet stopped travelling to the worker when the deck flipped, so the
+        assertions below read it where it is written rather than off a manifest
+        that no longer carries it.
+        """
+        out = await _write_deck(**kw)
+        captured["reach"] = out["deck"]
+        return out
 
     def _fake_run_solver(*, solver, model_setup_uri, compute_class):
         captured["solver"] = solver
@@ -418,7 +441,18 @@ def _install_step_mocks(captured: dict):
     return [
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
+        patch.object(deck_steps, "write_reach_deck", _capture_deck),
         patch.object(deck_steps, "resolve_reach_river", _fake_river),
+        patch.object(deck_steps, "read_topology",
+                     lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
+                                   "liquid_boundary_order": ["outflow", "inflow"]}),
+        patch.object(deck_steps, "_centerline_utm",
+                     lambda _src, _epsg: __import__("numpy").array(
+                         [[0.0, 0.0], [6000.0, 0.0]])),
+        patch.object(deck_steps, "_stage_authored",
+                     lambda _rundir, run_tag, names: [
+                         {"gs_uri": f"s3://cache/telemac/{run_tag}/{n}", "dest": n}
+                         for n in names]),
         patch.object(mesh_step, "build_declared_mesh", _fake_mesh),
         patch.object(forcing_steps, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {

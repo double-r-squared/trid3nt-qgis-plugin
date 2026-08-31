@@ -261,7 +261,11 @@ telemac_rain_on_grid = register_workflow(
     # The declaration is complete and validates at import; the MESH STEP still
     # reads the retired catchment mesher's fields, so the run cannot finish.
     # Offering a tool whose mesh step cannot run is worse than an honest absence.
-    parked="awaiting the worker-unification port of its mesh step",
+    parked=("awaiting its own case authoring: the catchment's outlet is a POUR "
+            "POINT rather than a cut transect, so the declared-boundary face the "
+            "reach family matches its roles against has nothing to be here, and "
+            "the outlet hydrograph the answer IS has no server-side reader off "
+            "the result SELAFIN"),
     answer=ANSWER,
     provenance=(("rain_event", "rain_event_note"),
                 ("sim_duration_hr", "sim_duration_note"),

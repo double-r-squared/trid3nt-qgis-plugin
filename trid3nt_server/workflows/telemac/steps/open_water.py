@@ -248,7 +248,6 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
                            run_tag: str, outputs: list[str],
                            inputs: list[dict[str, str]] | None = None,
                            prefix: str | None = None,
-                           case: Mapping[str, Any] | None = None,
                            extra: Mapping[str, Any] | None = None) -> str:
     """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
 
@@ -263,7 +262,7 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
     ``inputs`` is what the launcher stages into the run directory before the
     container starts, ``{gs_uri, dest}`` per entry. It carries everything these
     domains used to fetch for themselves, which is why the worker needs no
-    network. ``case`` is the authored run itself - see :func:`case_section`.
+    network. An authored run's section is ``case`` - see :func:`case_section`.
     """
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -275,8 +274,6 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
     manifest = {section: dict(config), "run_id": run_tag,
                 "inputs": list(inputs or []), "telemac_args": [],
                 "outputs": list(outputs), **dict(extra or {})}
-    if case is not None:
-        manifest["case"] = dict(case)
     key = f"{prefix or section}/{run_tag}/manifest.json"
     _get_s3_client().put_object(
         Bucket=cache_bucket, Key=key,

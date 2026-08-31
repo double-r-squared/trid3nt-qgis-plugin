@@ -9,15 +9,18 @@ Asserts, in order:
   2. BEFORE that gate, a session-state carries the mesh display layer;
   3. the sheet is submitted UNCHANGED, which is the approval, and the run solves on
      the mesh that was presented;
-  4. a dye-peak layer lands; when E2E_EXPECT_SUBSTANCE is set the layer NAME must
-     contain it (the substance lever);
-  5. post-run: the newest rundir's telemac_metrics.json sanity - bank_source plus
-     bank_width_mean_m >= E2E_MIN_MEAN_WIDTH_M (the real-bank meshing witness).
+  4. a dye-peak layer lands carrying the JOURNAL's measured banks-coverage line -
+     the witness that the domain was cut from real mapped water and that the run
+     said how much of the reach that water covered; when E2E_EXPECT_SUBSTANCE is
+     set the layer NAME must contain it (the substance lever);
+  5. post-run: the newest rundir's telemac_metrics.json - CORRECT END plus the
+     node and element counts the SERVER measured and the worker echoed back,
+     which is what makes "it solved on the accepted mesh" checkable.
 
 Config via env (E2E_STUB=1 runs the SAME driver against tests/stub_server.py for a
 zero-token contract validation):
   E2E_STUB E2E_URL E2E_PROMPT E2E_DEADLINE_S E2E_EXPECT_SUBSTANCE
-  E2E_MIN_MEAN_WIDTH_M E2E_RUNS_DIR E2E_REGION_HINT
+  E2E_RUNS_DIR E2E_REGION_HINT
 """
 import glob
 import json
@@ -37,7 +40,6 @@ PROMPT = os.environ.get("E2E_PROMPT") or (
     "over the next few hours.")
 DEADLINE_S = int(os.environ.get("E2E_DEADLINE_S", "1800"))
 EXPECT_SUBSTANCE = (os.environ.get("E2E_EXPECT_SUBSTANCE") or "").strip().lower()
-MIN_MEAN_WIDTH_M = float(os.environ.get("E2E_MIN_MEAN_WIDTH_M") or 0)
 RUNS_DIR = os.environ.get("E2E_RUNS_DIR",
                           "/home/nate/Documents/trid3nt-local/data/runs")
 REGION_HINT = (os.environ.get("E2E_REGION_HINT") or "twin falls").lower()
@@ -69,6 +71,7 @@ def main():
     mesh_before_gate = False
     saw_peak_layer = False
     peak_layer_name = ""
+    coverage_line = ""
     substance_ok = not EXPECT_SUBSTANCE  # vacuous when unset
 
     while time.time() < deadline:
@@ -101,10 +104,16 @@ def main():
                     if is_peak and not saw_peak_layer:
                         saw_peak_layer = True
                         peak_layer_name = lname
+                        note = str(getattr(L, "fallback_note", "") or "")
+                        coverage_line = next(
+                            (seg for seg in note.split("NOTE: ")
+                             if seg.startswith("reach banks:")), "")
                         if EXPECT_SUBSTANCE:
                             substance_ok = EXPECT_SUBSTANCE in peak_layer_name.lower()
                         print(f"PEAK LAYER PUBLISHED: {lid} name={peak_layer_name!r} "
                               f"substance_ok={substance_ok}", flush=True)
+                        print(f"BANKS COVERAGE: {coverage_line.strip() or None}",
+                              flush=True)
             except Exception as e:  # noqa: BLE001
                 print("layer-parse err:", e, flush=True)
 
@@ -166,9 +175,12 @@ def main():
 
     cli.close()
 
-    # Post-run metrics witness: the newest rundir written AFTER this drive started.
+    # Post-run metrics witness: the newest rundir written AFTER this drive
+    # started. The counts are the SERVER's own measurement, echoed back through
+    # the case rather than re-derived in the container - so a run that reports
+    # them is a run that solved on the mesh that was accepted at the gate.
     metrics = {}
-    metrics_ok = STUB or not MIN_MEAN_WIDTH_M
+    metrics_ok = STUB
     if not STUB and saw_peak_layer:
         try:
             cands = [p for p in glob.glob(os.path.join(RUNS_DIR, "*", "telemac_metrics.json"))
@@ -176,14 +188,14 @@ def main():
             if cands:
                 newest = max(cands, key=os.path.getmtime)
                 metrics = json.loads(open(newest).read())
-                print(f"METRICS {newest}: bank_source={metrics.get('bank_source')} "
-                      f"width_mean={metrics.get('bank_width_mean_m')} "
-                      f"npoin={metrics.get('npoin')} wall={metrics.get('wall_s')}s "
+                print(f"METRICS {newest}: module={metrics.get('module')} "
+                      f"npoin={metrics.get('npoin')} nelem={metrics.get('nelem')} "
+                      f"bed_source={metrics.get('bed_source')} "
+                      f"wall={metrics.get('wall_s')}s "
                       f"correct_end={metrics.get('correct_end')}", flush=True)
-                if MIN_MEAN_WIDTH_M:
-                    metrics_ok = (metrics.get("bank_source") == "nhdarea"
-                                  and float(metrics.get("bank_width_mean_m") or 0)
-                                  >= MIN_MEAN_WIDTH_M)
+                metrics_ok = (bool(metrics.get("correct_end"))
+                              and int(metrics.get("npoin") or 0) > 0
+                              and int(metrics.get("nelem") or 0) > 0)
             else:
                 print("METRICS: no fresh rundir found under", RUNS_DIR, flush=True)
         except Exception as e:  # noqa: BLE001
@@ -198,9 +210,11 @@ def main():
         "peak_layer_published": saw_peak_layer,
         "peak_layer_name": peak_layer_name,
         "substance_ok": substance_ok,
+        "banks_coverage_line": coverage_line.strip() or None,
         "metrics_ok": metrics_ok,
         "PASS": bool(saw_gate and gate_ok and saw_peak_layer and substance_ok
-                     and metrics_ok and (STUB or saw_mesh_layer)),
+                     and metrics_ok and (STUB or saw_mesh_layer)
+                     and (STUB or bool(coverage_line))),
     }, indent=1), flush=True)
 
 

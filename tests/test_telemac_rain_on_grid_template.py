@@ -31,8 +31,10 @@ def test_declared_parked_and_off_the_model_surface():
     from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "telemac_rain_on_grid" not in TOOL_REGISTRY
-    assert telemac_rain_on_grid.parked == (
-        "awaiting the worker-unification port of its mesh step")
+    # The reason names what is MISSING rather than which wave was meant to
+    # supply it, so a reader can tell whether it has been supplied yet.
+    assert "pour point" in telemac_rain_on_grid.parked.lower()
+    assert "outlet hydrograph" in telemac_rain_on_grid.parked.lower()
 
     md = telemac_rain_on_grid.workflow.metadata
     assert md.engine == "telemac"
@@ -54,7 +56,7 @@ async def test_invoking_a_parked_template_refuses_typed_naming_the_reason():
     with pytest.raises(WorkflowParkedError) as ei:
         await telemac_rain_on_grid(location="Otto, North Carolina")
     assert ei.value.error_code == "TEMPLATE_PARKED"
-    assert "worker-unification port" in str(ei.value)
+    assert "outlet hydrograph" in str(ei.value).lower()
 
 
 def test_docstring_carries_the_godara_envelope():

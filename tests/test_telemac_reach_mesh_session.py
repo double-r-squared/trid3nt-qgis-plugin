@@ -13,8 +13,10 @@ What is pinned here:
      both reach shapes (a dye tracer and a DO sag) are checked.
   2. The dt SEAM HAS A READER - a mesh artifact measured finer than the ask
      tightens the deck's timestep, and one measured at the ask leaves it alone.
-  3. The accepted topology is STAGED - and a mesh record that carries none
-     refuses rather than letting the worker mesh one of its own.
+  3. The CASE the worker is handed - which engine, which authored deck, which
+     results are the success convention, and the facts the server echoes - and
+     the refusals a mesh record missing its topology or its fitted bed raises
+     rather than letting the worker mesh one of its own.
 """
 
 from __future__ import annotations
@@ -39,27 +41,43 @@ _DO_SAG = {"bod_mgl": 20.0, "upstream_do_mgl": 8.0, "saturation_mgl": 9.0,
 _SHEET = {"reach_length_km": 6.0, "sim_duration_s": 3600.0}
 
 
+#: What the mesher measured when it laid the sampled DEM down as a downstream
+#: plane. The deck reads the outflow stage off it.
+_BED_FIT = {"bed_top_m": 12.0, "bed_drop_m": 1.8, "measured_slope": 2.0e-4,
+            "enforced_slope": 3.0e-4, "reach_len_m": 6000.0}
+
+
 def _mesh_record(*, min_edge_m: float | None = None,
-                 topology_uri: str | None = "s3://m/M01/river_mesh.npz") -> dict:
+                 topology_uri: str | None = "s3://m/M01/mesh_topology.json",
+                 bed_fit: dict | None = _BED_FIT) -> dict:
     """A mesh step's result, with the probes an artifact would carry."""
-    artifact = None
-    if min_edge_m is not None:
-        artifact = MeshArtifact(
-            mesh_id="M01", name="Eel River reach", mode="om2d",
-            display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/river.slf",
-            crs_authid="EPSG:32610", has_bathymetry=False,
-            node_count=539, element_count=902,
-            bbox=(-124.2, 40.4, -124.0, 40.6),
-            probes={"edge_length_m": {"min": float(min_edge_m), "max": 40.0,
-                                      "mean": 20.0}})
+    probes = {"edge_length_m": {"min": float(min_edge_m or 14.0), "max": 40.0,
+                                "mean": 20.0},
+              **({"bed_fit": dict(bed_fit)} if bed_fit else {})}
+    artifact = MeshArtifact(
+        mesh_id="M01", name="Eel River reach", mode="om2d",
+        display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/river.slf",
+        crs_authid="EPSG:32610", has_bathymetry=True, utm_epsg=32610,
+        node_count=539, element_count=902,
+        bbox=(-124.2, 40.4, -124.0, 40.6), probes=probes)
     return {"artifact": artifact, "mesh_id": "M01",
             "slf_uri": "s3://m/M01/river.slf", "cli_uri": "s3://m/M01/river.cli",
-            "topology_uri": topology_uri, "min_edge_m": min_edge_m}
+            "display_uri": "s3://m/M01/mesh.2dm",
+            "topology_uri": topology_uri, "min_edge_m": min_edge_m,
+            "node_count": 539, "element_count": 902,
+            "provenance": {"dem_source": "cop-dem-glo-30"}}
 
 
 @pytest.fixture()
-def writer(monkeypatch):
-    """``write_reach_deck`` with its two world-reads stood in for."""
+def writer(monkeypatch, tmp_path):
+    """``write_reach_deck`` with its world-reads stood in for.
+
+    The AUTHORING is real: the decks are written into a temp run directory by the
+    author this step calls, which is what makes the parity checks below statements
+    about the run rather than about a stub.
+    """
+    import numpy as np
+
     from trid3nt_server.workflows.telemac import release_layer as rel_mod
 
     async def _river(**_kw):
@@ -70,15 +88,25 @@ def writer(monkeypatch):
                            "seed_rung": "position-named-flowline",
                            "centerline_uri": "s3://c/centerline.geojson",
                            "centerline_sha256": "0" * 64,
-                           "centerline_comids": [1],
-                           "bed_source": "cop-dem-glo-30"},
+                           "centerline_comids": [1]},
         }
 
     async def _publish(*_a, **_kw):
         return False
 
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(deck_mod, "resolve_reach_river", _river)
     monkeypatch.setattr(rel_mod, "publish_release_point", _publish)
+    monkeypatch.setattr(deck_mod, "read_topology",
+                        lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
+                                      "liquid_boundary_order": ["outflow", "inflow"]})
+    monkeypatch.setattr(deck_mod, "_centerline_utm",
+                        lambda _src, _epsg: np.array([[0.0, 0.0], [6000.0, 0.0]]))
+    monkeypatch.setattr(
+        deck_mod, "_stage_authored",
+        lambda _rundir, run_tag, names: [
+            {"gs_uri": f"s3://cache/telemac/{run_tag}/{n}", "dest": n}
+            for n in names])
     return deck_mod.write_reach_deck
 
 
@@ -178,15 +206,54 @@ async def test_a_refined_mesh_tightens_the_deck_timestep(writer):
 
 
 # --------------------------------------------------------------------------- #
-# 3. The accepted topology is staged, or the run refuses.
+# 3. The CASE, and the refusals an unaccepted mesh raises.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_the_accepted_topology_is_staged_for_the_solve(writer):
+async def test_the_case_names_the_engine_the_authored_deck_and_the_results(writer):
     out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                        carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert {"gs_uri": "s3://m/M01/river_mesh.npz", "dest": "river_mesh.npz"} \
-        in out["inputs"]
+    assert out["case"]["module"] == "telemac2d"
+    assert out["case"]["steering"] == "t2d_river.cas"
+    assert out["case"]["results"] == ["r2d_river.slf"]
+    assert out["case"]["family"] == "reach"
     assert out["mesh_id"] == "M01"
+
+
+@pytest.mark.asyncio
+async def test_the_echo_carries_what_only_the_server_measured(writer):
+    """A fact re-derived in the container is a second answer that can disagree
+    with the first, so the worker copies these into its metrics verbatim."""
+    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+    assert out["case"]["echo"] == {
+        "utm_epsg": 32610, "bbox": [-124.2, 40.4, -124.0, 40.6],
+        "npoin": 539, "nelem": 902, "mesh_size_m": 8.0,
+        "bed_source": "cop-dem-glo-30"}
+
+
+@pytest.mark.asyncio
+async def test_the_mesh_travels_under_the_names_the_deck_states(writer):
+    """The npz stopped travelling: what the worker is handed is the geometry pair
+    the deck's own GEOMETRY / BOUNDARY CONDITIONS lines name."""
+    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+    staged = {row["dest"]: row["gs_uri"] for row in out["inputs"]}
+    assert staged["river.slf"] == "s3://m/M01/river.slf"
+    assert staged["river.cli"] == "s3://m/M01/river.cli"
+    assert "t2d_river.cas" in staged
+    assert not [d for d in staged if d.endswith(".npz")]
+
+
+@pytest.mark.asyncio
+async def test_the_deck_prescribes_in_the_order_the_mesh_MEASURED(writer, tmp_path):
+    """The contour walk does not start at the inflow. A deck authored inflow-first
+    would put the discharge on the downstream cap and drive the reach backwards."""
+    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+    cas = (tmp_path / f"telemac-{out['run_tag']}" / "t2d_river.cas").read_text()
+    flowrates = next(ln for ln in cas.splitlines()
+                     if ln.startswith("PRESCRIBED FLOWRATES"))
+    assert flowrates.split("=")[1].strip() == "0.0;12.0"
 
 
 @pytest.mark.asyncio
@@ -196,3 +263,13 @@ async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(writ
                      mesh=_mesh_record(min_edge_m=8.0, topology_uri=None),
                      carrier_discharge=_CARRIER, substance="dye", **_SHEET)
     assert excinfo.value.error_code == "TELEMAC_MESH_NOT_ACCEPTED"
+
+
+@pytest.mark.asyncio
+async def test_a_mesh_with_no_fitted_bed_refuses_rather_than_inventing_a_stage(
+        writer):
+    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+        await writer(reach=_REACH, seed=_SEED,
+                     mesh=_mesh_record(min_edge_m=8.0, bed_fit=None),
+                     carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+    assert excinfo.value.error_code == "TELEMAC_MESH_BED_UNFITTED"

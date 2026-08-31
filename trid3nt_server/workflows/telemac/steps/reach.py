@@ -11,8 +11,8 @@ deck writer calls:
   and the canvas says so.
 * ``ReachSeed`` - the mid-reach point on the largest fetched flowline, which is
   where the seed ladder starts and where the carrier-discharge lookup queries.
-* ``resolve_reach_river`` - the NLDI mainstem centerline, the NHDArea banks and
-  the bed, fetched here and staged into the run directory. THE MESHED RIVER IS
+* ``resolve_reach_river`` - the NLDI mainstem centerline and the NHDArea banks,
+  fetched here and staged into the run directory. THE MESHED RIVER IS
   THE VISIBLE RIVER: the centerline this fetches is the layer the canvas shows,
   because it is the geometry the solve is built on.
 
@@ -37,7 +37,6 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.reach")
 
 __all__ = [
     "BANKS_DEST",
-    "BED_DEST",
     "CENTERLINE_DEST",
     "DEFAULT_RIVER_AOI_HALF_DEG",
     "Geocode",
@@ -388,13 +387,6 @@ async def fetch_reach_flowline(*, prefetched: str | None = None) -> str | None:
 #: these names; nothing in the image knows where the bytes came from.
 CENTERLINE_DEST: str = "river_centerline.geojson"
 BANKS_DEST: str = "river_banks.geojson"
-BED_DEST: str = "bed_source.tif"
-
-#: Copernicus GLO-30 is a 1-arcsecond grid, so this is its OWN lattice. Asking
-#: for it is what makes the staged raster carry the source pixels rather than a
-#: resample of them, and therefore what makes the bed the worker fits identical
-#: to the one it used to fetch for itself.
-_GLO30_PX_PER_DEG: float = 3600.0
 
 #: Envelope half-widths (deg) the seed rungs search, and the record caps they ask
 #: for. Both are part of the QUESTION - a different tolerance finds a different
@@ -408,12 +400,10 @@ _MAINSTEM_MAX_RECORDS: int = 500
 #: onto a distant river.
 _MAINSTEM_MAX_RESEED_KM: float = 6.0
 
-#: Pad (deg) around the fetched centerline for the two rasters/polygons the mesh
-#: is built from. The bank pad must cover FAR channels behind mid-river islands;
-#: the bed pad must cover the whole corridor the mesher can lay, whose widest
-#: legal half-width is the bank sampler's 800 m ceiling (~0.008 deg).
+#: Pad (deg) around the fetched centerline for the banks the reach is cut from.
+#: It must cover FAR channels behind mid-river islands: a channel three km off
+#: the line is still the same river.
 _BANKS_PAD_DEG: float = 0.03
-_BED_PAD_DEG: float = 0.02
 
 
 def _tool(name: str) -> Any:
@@ -685,8 +675,7 @@ def _lonlat_extent(features: list[dict[str, Any]]) -> tuple[float, float, float,
 async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
                               run_tag: str, reach_length_km: float,
                               release: tuple[float, float] | None = None,
-                              nav_direction: str = "DM",
-                              with_bed: bool = True) -> dict[str, Any]:
+                              nav_direction: str = "DM") -> dict[str, Any]:
     """Fetch the river the reach is meshed on and stage it into the run directory.
 
     Returns the manifest ``inputs`` rows plus the provenance the run records: the
@@ -695,8 +684,10 @@ async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
     the same digest meshed the same river, and no reader has to take that on
     faith.
 
-    ``with_bed`` is False for the mesh PREVIEW, which builds geometry and stops:
-    a bed it never samples is a fetch nobody needs.
+    The BED is not among them. The mesh ask declares its own, the mesher paints
+    the node elevations from it, and the geometry file the solve is staged with
+    carries the result - so a second raster fetched here would be a bed no run
+    reads.
     """
     seed_point = await resolve_reach_seed_point(reach=reach, seed=seed,
                                                 release=release)
@@ -730,8 +721,6 @@ async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
         "centerline_extent": [round(min_lon, 6), round(min_lat, 6),
                               round(max_lon, 6), round(max_lat, 6)],
         "banks_uri": None,
-        "bed_uri": None,
-        "bed_source": None,
     }
 
     banks_layer = await call_registry_tool(
@@ -751,51 +740,8 @@ async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
     provenance["banks_uri"] = str(layer_field(banks_layer, "uri"))
     provenance["banks_features"] = len(bank_features)
 
-    if with_bed:
-        bed = await resolve_reach_bed(
-            bbox=[round(min_lon - _BED_PAD_DEG, 6), round(min_lat - _BED_PAD_DEG, 6),
-                  round(max_lon + _BED_PAD_DEG, 6), round(max_lat + _BED_PAD_DEG, 6)])
-        inputs.append({"gs_uri": bed["uri"], "dest": BED_DEST})
-        provenance["bed_uri"] = bed["uri"]
-        provenance["bed_source"] = bed["source"]
-        if bed.get("fallback_reason"):
-            provenance["bed_fallback_reason"] = bed["fallback_reason"]
     return {"inputs": inputs, "provenance": provenance,
             "seed_lon": seed_point["lon"], "seed_lat": seed_point["lat"]}
-
-
-async def resolve_reach_bed(*, bbox: list[float]) -> dict[str, Any]:
-    """The terrain the reach bed is fitted from, with its ladder declared.
-
-    Copernicus GLO-30 is the PRIMARY rung and 3DEP the fallback, which is the
-    order the worker's own ladder ran in: the reach bed is a robust along-channel
-    trend rather than a per-node elevation, so a globally uniform 30 m surface is
-    the better-behaved input and the finer US lidar is what covers for it.
-
-    The Copernicus rung asks for the source's OWN 1-arcsecond lattice, which is
-    what makes the staged raster carry the GLO-30 pixels rather than a resample
-    of them. A fall to 3DEP is a CROSS-DATASET substitution, so the reason rides
-    on the returned record where every consumer reads it.
-    """
-    try:
-        layer = await asyncio.to_thread(
-            lambda: _tool("fetch_copernicus_dem")(
-                bbox=list(bbox), px_per_deg=_GLO30_PX_PER_DEG,
-                purpose="river bed elevation"))
-        return {"uri": str(layer_field(layer, "uri")), "source": "cop-dem-glo-30"}
-    except Exception as exc:  # noqa: BLE001 -- a LOUD cross-dataset fallback
-        reason = f"{type(exc).__name__}: {exc}"
-        code = getattr(exc, "error_code", None)
-        if code:
-            reason = f"{code} ({reason})"
-        logger.warning("telemac reach bed: Copernicus GLO-30 unavailable for "
-                       "bbox=%s (%s); falling back to USGS 3DEP", bbox, reason)
-    layer = await asyncio.to_thread(
-        lambda: _tool("fetch_dem")(
-            bbox=list(bbox), source="3dep", resolution_m=30,
-            purpose="river bed elevation"))
-    return {"uri": str(layer_field(layer, "uri")), "source": "usgs-3dep",
-            "fallback_reason": reason}
 
 
 async def reach_seed(*, reach: dict[str, Any], rivers: str | None) -> dict[str, Any]:

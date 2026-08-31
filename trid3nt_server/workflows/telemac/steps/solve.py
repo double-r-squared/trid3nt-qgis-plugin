@@ -120,11 +120,12 @@ async def solve_reach(*, deck: dict[str, Any],
 
     reach = deck["deck"]
     run_tag = deck["run_tag"]
-    manifest_uri = await asyncio.to_thread(stage_manifest, reach, run_tag,
+    manifest_uri = await asyncio.to_thread(stage_manifest, deck["case"], run_tag,
+                                           outputs=deck["outputs"],
                                            inputs=deck.get("inputs"))
-    logger.info("telemac staged manifest run_tag=%s seed=(%.5f,%.5f) seed_source=%s "
-                "reach=%s inputs=%s -> %s", run_tag, reach["seed_lon"],
-                reach["seed_lat"], deck.get("seed_source"), reach["name"],
+    logger.info("telemac staged case run_tag=%s module=%s steering=%s results=%s "
+                "reach=%s inputs=%s -> %s", run_tag, deck["case"]["module"],
+                deck["case"]["steering"], deck["case"]["results"], reach["name"],
                 [row["dest"] for row in (deck.get("inputs") or [])], manifest_uri)
 
     emitter = current_emitter()

@@ -46,16 +46,19 @@ _METRICS_FILENAME: str = "telemac_metrics.json"
 #: leg never writes is simply absent from its metrics and never lands, so a
 #: per-leg list only duplicated that filtering in a second place.
 _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
-    # every leg
-    "correct_end", "error_code", "result_slf", "geometry_slf", "npoin", "nelem",
+    # every leg. ``bbox`` is the ONE spelling of the solved domain's lon/lat
+    # extent: the server measures it and echoes it, and a second name for it was
+    # a second answer a reader had to pick between.
+    "correct_end", "error_code", "module", "family", "result_slf",
+    "geometry_slf", "npoin", "nelem",
     "nptfr", "utm_epsg", "dx_m", "coarsened", "n_wet_nodes", "depth_max_m",
-    "depth_mean_m", "bathy_source", "wall_s",
+    "depth_mean_m", "bathy_source", "bed_source", "bbox", "wall_s",
     # reach / river dye
     "n_frames", "dye_var", "dye_cmax_final", "dye_cmax_overall",
     "dye_peak_time_s", "dye_active_frames", "dye_front_x_final_m", "reach_name",
     "seed_comid", "centerline_length_m", "lb_order", "mesh_size_m",
-    "time_step_s", "edge_min_m", "edge_mean_m", "edge_max_m", "bbox4326",
-    "preview_geojson", "bank_width_mean_m",
+    "time_step_s", "edge_min_m", "edge_mean_m", "edge_max_m",
+    "preview_geojson",
     # wind stress, on whichever leg was asked for it
     "wind_speed_mps", "wind_dir_from_deg",
     # tomawac

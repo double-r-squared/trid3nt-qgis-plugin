@@ -71,9 +71,10 @@ def test_the_cut_is_the_first_node_the_override_reaches():
     # are all upstream of the physics block, so a rate override inherits them
     assert labels[:cut] == ["draw", "reach", "seed", "carrier_discharge"]
     # the whole domain CHAIN is upstream of the physics too - the navigated
-    # mainstem, its ends, the mapped banks and the reach cut between them
+    # mainstem, its ends, the mapped banks, the reach cut between them and the
+    # terrain the mesh's bed is painted from
     assert keep == frozenset({"rivers", "centerline", "ends", "window", "banks",
-                              "mapped_banks", "reach_polygon"})
+                              "mapped_banks", "reach_polygon", "bed"})
 
 
 def test_a_mesh_override_cuts_later_than_a_physics_one():

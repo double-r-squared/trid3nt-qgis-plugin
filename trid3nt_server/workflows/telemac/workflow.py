@@ -136,9 +136,11 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
 
 
 #: Plan-value deck fields every reach writer takes: the mid-reach seed the
-#: centerline is navigated from, and the ACCEPTED mesh the solve runs on.
-#: Both are step results rather than sheet values, so neither can be declared.
-_REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh")}
+#: centerline is navigated from, the ACCEPTED mesh the solve runs on, and the
+#: mapped water the reach was cut from - which a dredge field is cut out of. All
+#: three are step results rather than sheet values, so none can be declared.
+_REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh"),
+                                   "reach_polygon": Ref("reach_polygon")}
 
 #: The agitation deck always reads the run's MESH slot: the domain a phase-
 #: resolving solve runs on is the caller's to author, and a deck that read the
