@@ -14,6 +14,9 @@ Three declared steps and one declared Data producer:
   river every downstream reader means.
 * ``measure_bank_coverage`` - how much of that centerline the fetched water
   polygons map, measured before the cut.
+* ``measure_mesh_coverage`` - how much of it the ACCEPTED mesh holds, measured
+  after the build. A distinct question with a distinct name: banks coverage is
+  about what is mapped, mesh coverage about what is triangulated.
 
 The CFL timestep law lives here too: it is coupled to the edge the accepted mesh
 was measured at, so a refined mesh tightens dt without anybody restating it.
@@ -30,13 +33,18 @@ from typing import Any
 from trid3nt_server.workflows.lib import Step, journal_note, user_input
 from trid3nt_server.workflows.shared.layer_fields import layer_field
 
-from .errors import ReachBanksUnmapped, TelemacDyeScenarioError
+from .errors import (
+    ReachBanksUnmapped,
+    ReachMeshUncovered,
+    TelemacDyeScenarioError,
+)
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.reach")
 
 __all__ = [
     "DEFAULT_RIVER_AOI_HALF_DEG",
     "Geocode",
+    "MeshCoverage",
     "MESH_H_FLOOR_M",
     "MESH_NODE_CAP",
     "ReachSeed",
@@ -45,6 +53,7 @@ __all__ = [
     "fetch_reach_flowline",
     "geocode_reach",
     "measure_bank_coverage",
+    "measure_mesh_coverage",
     "reach_seed",
     "slug",
     "suggest_time_step_s",
@@ -436,6 +445,69 @@ def _covered_fraction(banks: Any, centerline: Any) -> float:
     return float(line_m.intersection(water_m).length / line_m.length)
 
 
+async def measure_mesh_coverage(*, mesh: Any, centerline: Any) -> Any:
+    """MEASURE how much of the reach the ACCEPTED mesh actually holds.
+
+    Distinct from banks coverage: that one asks how much of the reach real water
+    polygons MAP, this one asks how much of it the triangulation the solve runs on
+    CONTAINS. A mesher handed a mapped polygon can still leave stretches out - a
+    channel narrower than the requested edge does not resolve - and the answer a
+    run publishes is about the stretch that was meshed, not the stretch that was
+    asked for.
+
+    A HEURISTIC, not a gate. Zero is terminal: none of the reach is in the domain,
+    so the solve would answer about a different river. Anything above zero
+    proceeds with the measured percent journalled, and what to do about it is the
+    user's call - re-run finer, declare a sizing function, author the mesh. No
+    automatic re-mesh: a resolution the run picked for itself is a decision the
+    ask never made.
+    """
+    fraction = await asyncio.to_thread(_meshed_fraction, mesh, centerline)
+    if fraction <= 0.0:
+        raise ReachMeshUncovered()
+    journal_note(
+        f"mesh coverage: {fraction:.1%} of the reach centreline lies inside the "
+        "accepted mesh; the run answers about that stretch. A finer "
+        "mesh_resolution_m, a declared sizing function or a supplied mesh is how "
+        "more of the reach gets resolved.")
+    return mesh
+
+
+def _meshed_fraction(mesh: Any, centerline: Any) -> float:
+    """Fraction of the centreline's LENGTH that lies inside the mesh's cells.
+
+    Summed over the cells the line touches rather than over their union: the
+    triangulation tiles its domain without overlap, so the per-cell intersected
+    lengths already add up to the length inside it, and no union of tens of
+    thousands of triangles has to be built to learn that.
+    """
+    import numpy as np
+    import shapely
+    from shapely.geometry import LineString
+
+    from trid3nt_server.workflows.mesh.shared.nodes import (
+        read_accepted_mesh_nodes, read_centerline_utm,
+    )
+
+    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
+    display_uri = str(mesh.get("display_uri") or "")
+    if not display_uri or not utm_epsg:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_DYE_SCENARIO_ERROR",
+            "the accepted mesh carries no display face or no projected zone, so "
+            "how much of the reach it holds cannot be measured.")
+    points_utm, cells, _bed, _lonlat = read_accepted_mesh_nodes(
+        display_uri, utm_epsg=utm_epsg)
+    line = LineString(read_centerline_utm(centerline, utm_epsg))
+    if line.length <= 0.0:
+        return 0.0
+    rings = np.asarray(points_utm, dtype=float)[np.asarray(cells, dtype=np.int64)]
+    cell_polygons = shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1))
+    touched = shapely.STRtree(cell_polygons).query(line, predicate="intersects")
+    inside = sum(float(line.intersection(cell_polygons[i]).length) for i in touched)
+    return min(1.0, inside / float(line.length))
+
+
 async def reach_seed(*, reach: dict[str, Any], rivers: str | None,
                      supplied: Any = None) -> dict[str, Any]:
     """THE point the run's one centerline is navigated downstream from.
@@ -477,3 +549,9 @@ def ReachSeed(*, reach: Any, rivers: Any,  # noqa: N802 - a value constructor
     """The point the reach's one centerline is navigated from."""
     return Step(runner=f"{_STEPS}.reach.reach_seed", stage="acquire",
                 kwargs={"reach": reach, "rivers": rivers, "supplied": supplied})
+
+
+def MeshCoverage(*, mesh: Any, centerline: Any) -> Step:  # noqa: N802 - a value constructor
+    """How much of the reach the accepted mesh holds, measured after the build."""
+    return Step(runner=f"{_STEPS}.reach.measure_mesh_coverage", stage="mesh",
+                kwargs={"mesh": mesh, "centerline": centerline})

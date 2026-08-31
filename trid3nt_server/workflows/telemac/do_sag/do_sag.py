@@ -36,6 +36,7 @@ from trid3nt_server.workflows.telemac.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.steps import (
+    MeshCoverage,
     ReviewResolvedInputs,
     WaqtelO2,
     event_time,
@@ -142,6 +143,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                              workflow=ops.name,
                              input_mode=RunMode).named("reviewed_discharge"),
         MeshStep.build(mesh=MESH, name=Ref("reach")).named("mesh"),
+        MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)

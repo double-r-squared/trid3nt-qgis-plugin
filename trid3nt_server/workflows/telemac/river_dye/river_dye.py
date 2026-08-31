@@ -38,6 +38,7 @@ from trid3nt_server.workflows.telemac.river_dye.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.steps import (
+    MeshCoverage,
     compute_class,
     event_time,
     substance_class,
@@ -171,6 +172,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
                             discharge=P.discharge_m3s, event_time=P.event_time,
                             seed_coords=P.reach_seed_coords),
         MeshStep.build(mesh=MESH, name=Ref("reach")).named("mesh"),
+        MeshCoverage(mesh=Ref("mesh"), centerline=DATA.centerline),
         ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
         ops.solve(compute_class=P.compute_class, physics=PHYSICS),
         ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)

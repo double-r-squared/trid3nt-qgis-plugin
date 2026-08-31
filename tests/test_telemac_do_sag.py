@@ -107,7 +107,7 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     plan = wf.plan
     stages = [s.stage for s in plan.declared() if s.stage]
     assert stages == ["acquire", "acquire", "acquire", "prep", "gates", "mesh",
-                      "author", "solve", "publish"]
+                      "mesh", "author", "solve", "publish"]
     assert [s.name for s in plan.declared()][-1] == "do_field"
 
 
@@ -247,6 +247,10 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                         _step("mesh", {"mesh_id": "M", "slf_uri": "s3://m/river.slf",
                                        "topology_uri": "s3://m/mesh_topology.json",
                                        "min_edge_m": 9.0}))
+    # The mesh session stands in, so its display face is a uri nothing wrote: what
+    # the mesh holds of the reach is measured in its own test module.
+    monkeypatch.setattr(reach_mod, "_meshed_fraction",
+                        lambda mesh, centerline: 1.0)
     if tmp_path is not None:
         install_reach_chain(monkeypatch, tmp_path, seen)
     monkeypatch.setattr(deck_mod, "write_reach_deck",

@@ -12,6 +12,7 @@ __all__ = [
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
     "ReachBanksUnmapped",
+    "ReachMeshUncovered",
     "TelemacReleaseOutsideDomainError",
 ]
 
@@ -53,6 +54,26 @@ class ReachBanksUnmapped(TelemacDyeScenarioError):
             "layer that holds it, or pick a reach with mapped water coverage. A "
             "stream this narrow may also be below the range where a 2D depth-"
             "averaged solve is the useful answer at all.",
+        )
+
+
+class ReachMeshUncovered(TelemacDyeScenarioError):
+    """The accepted mesh holds NO part of the reach, so the solve has no reach.
+
+    TERMINAL, and it is the only mesh-coverage outcome that stops the run: above
+    zero the measured percent is journalled and the user decides what to do with
+    it. Nothing here auto-adjusts the resolution - re-running finer, adding a
+    sizing function or authoring the mesh are the user's expressions of intent,
+    and picking one for them would take on a decision the ask never made.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "REACH_MESH_UNCOVERED",
+            "The accepted mesh covers none of the reach centreline, so there is "
+            "nothing of this river in the domain the solve would run over. Re-run "
+            "at a finer mesh_resolution_m, declare a sizing function that resolves "
+            "the channel, or supply your own mesh of the reach.",
         )
 
 

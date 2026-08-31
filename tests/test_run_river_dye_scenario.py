@@ -277,8 +277,8 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
     steps = list(pl.declared())
     assert [s.label for s in steps][2:] == [
-        "reach", "seed", "carrier_discharge", "mesh", "deck",
-        "solve", "plume"]
+        "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
+        "deck", "solve", "plume"]
     # Both gates precede every step, so nothing consumes a value the review can
     # still revise.
     assert all(isinstance(s, Gate) for s in steps[:2])
@@ -429,6 +429,9 @@ def _install_step_mocks(captured: dict):
     return [
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
+        # The mesh session stands in, so its display face is a uri nothing wrote:
+        # what the mesh holds of the reach is measured in its own test module.
+        patch.object(reach_steps, "_meshed_fraction", lambda mesh, centerline: 1.0),
         patch.object(deck_steps, "write_reach_deck", _capture_deck),
         patch.object(deck_steps, "read_topology",
                      lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},

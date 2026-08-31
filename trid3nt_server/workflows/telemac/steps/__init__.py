@@ -34,6 +34,7 @@ from .open_water import (
 )
 from .errors import (
     ReachBanksUnmapped,
+    ReachMeshUncovered,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
     TelemacReleaseOutsideDomainError,
@@ -67,6 +68,7 @@ from .reach import (
     Geocode,
     MESH_H_FLOOR_M,
     MESH_NODE_CAP,
+    MeshCoverage,
     ReachSeed,
     coerce_lonlat_point,
     estimate_telemac_solve_seconds,
@@ -107,7 +109,7 @@ __all__ = [
     "write_rain_on_grid_deck",
     "Agitation", "CarrierDischarge", "Coastal",
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
-    "MESH_NODE_CAP", "OpenWaterError", "Products", "ReachSeed",
+    "MESH_NODE_CAP", "MeshCoverage", "OpenWaterError", "Products", "ReachSeed",
     "ReviewResolvedInputs",
     "SCOUR_KEYWORDS", "Solve", "SolveOpenWater", "Stratified",
     "download_open_water_result", "publish_coastal_products",
@@ -116,7 +118,7 @@ __all__ = [
     "staged_bed_inputs", "solves_on_real_bed", "fetch_domain_bed",
     "great_lake_for", "real_lake_bathy_label",
     "Wave", "write_coastal_deck",
-    "ReachBanksUnmapped", "TelemacDyeScenarioError",
+    "ReachBanksUnmapped", "ReachMeshUncovered", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
     "TelemacReleaseOutsideDomainError", "WaqtelO2", "WriteDeck",
     "arm_sediment_modules", "classify_substance", "compute_class",
