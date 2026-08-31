@@ -35,8 +35,7 @@ log = logging.getLogger("run_river_dye_direct")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 #: The committed TELEMAC showcase reach - a real NHDPlus reach WITH NHDArea
-#: polygon coverage (the ``bank_source="nhd_area"`` precondition). Natural place
-#: name, no bbox.
+#: polygon coverage, so the section cut has a domain. Natural place name, no bbox.
 LOCATION = "Eel River near Scotia, California"
 ARGS: dict = {
     "location": LOCATION,
@@ -47,7 +46,6 @@ ARGS: dict = {
     "reach_length_km": 6.0,
     "sim_duration_s": 3600.0,
     "source_q_m3s": 8.0,
-    "channel_width_m": 60.0,
 }
 
 

@@ -467,7 +467,7 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
     # --- TELEMAC-2D river dye/tracer: the constitutive CONSTANTS the deck pins
     # (TELEMAC-PHYS-1). All four defaults EQUAL the historical author_deck
     # literals so validate_and_resolve_physics(None) -> {} leaves the deck
-    # byte-identical; a set value flows to the ReachConfig field -> deck line. ---
+    # byte-identical; a set value flows onto the deck sheet -> deck line. ---
     "telemac": {
         "friction_coefficient": {
             "type": float,

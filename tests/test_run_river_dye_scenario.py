@@ -12,7 +12,7 @@ These pin:
   3. Declared bounds + the non-numeric refusal replacing the old inline clamps.
   4. The plan: its shape, its gate placement, and that it validates.
   5. The chain geocode -> seed -> carrier discharge -> deck -> solve -> products,
-     with the manifest ReachConfig overrides carrying the resolved sheet.
+     with the manifest's deck overrides carrying the resolved sheet.
   6. The erodible-bed / GAIA single gate (an armed bed is always sediment).
 """
 
@@ -428,7 +428,7 @@ def _install_step_mocks(captured: dict):
         patch.object(solve_steps, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
         patch.object(prod_steps, "download_result_selafin",
-                     lambda rid: ("/tmp/telemac/does-not-matter.slf", 32611)),
+                     lambda rid: "/tmp/telemac/does-not-matter.slf"),
         patch.object(prod_steps, "_publish_peak_layer", _fake_publish),
         patch.object(pp_mod, "postprocess_telemac", _fake_postprocess),
         patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),

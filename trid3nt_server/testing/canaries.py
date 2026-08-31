@@ -319,7 +319,6 @@ CANARIES.update({
             "spill_fraction": 0.25, "spill_duration_s": 120.0,
             "dye_concentration_mgl": 100.0, "reach_length_km": 1.0,
             "sim_duration_s": 600.0, "source_q_m3s": 8.0,
-            "channel_width_m": 60.0,
             "mesh_resolution_m": 10.0, "discharge_m3s": 2.2,
             # 30 frames over the 600 s window instead of the worker default's 6.
             # Six frames is too coarse to spot-check a plume against: the dye

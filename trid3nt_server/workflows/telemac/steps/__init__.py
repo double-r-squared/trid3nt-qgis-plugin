@@ -36,7 +36,6 @@ from .errors import (
     ReachBanksUnmapped,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
-    TelemacReachDegenerateError,
     TelemacReleaseOutsideDomainError,
 )
 from .forcing import (
@@ -119,7 +118,7 @@ __all__ = [
     "great_lake_for", "real_lake_bathy_label",
     "Wave", "write_coastal_deck",
     "ReachBanksUnmapped", "TelemacDyeScenarioError",
-    "TelemacDyeScenarioInputError", "TelemacReachDegenerateError",
+    "TelemacDyeScenarioInputError",
     "TelemacReleaseOutsideDomainError", "WaqtelO2", "WriteDeck",
     "arm_sediment_modules", "classify_substance", "compute_class",
     "coerce_event_time", "coerce_lonlat_point", "do_saturation_mgl",

@@ -35,7 +35,7 @@ from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa:
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
 from trid3nt_server.testing.proof_paths import proof_dir  # noqa: E402
 
-#: A real NHDPlus reach WITH NHDArea polygon coverage (the bank_source precondition).
+#: A real NHDPlus reach WITH NHDArea polygon coverage - the domain is the cut.
 LOCATION = "Eel River near Scotia, California"
 #: A node ON the meshed Eel reach, read off an earlier run's ``river.slf`` and
 #: reprojected from UTM 10N: a point the solver CAN put the source at.
@@ -56,7 +56,6 @@ ARGS = {
     "reach_length_km": 6.0,
     "sim_duration_s": 3600.0,
     "source_q_m3s": 8.0,
-    "channel_width_m": 60.0,
     "discharge_m3s": 2.2,
     "input_mode": "user_gated",
 }

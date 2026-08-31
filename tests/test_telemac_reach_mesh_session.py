@@ -196,22 +196,3 @@ async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(writ
                      mesh=_mesh_record(min_edge_m=8.0, topology_uri=None),
                      carrier_discharge=_CARRIER, substance="dye", **_SHEET)
     assert excinfo.value.error_code == "TELEMAC_MESH_NOT_ACCEPTED"
-
-
-def test_the_mesh_only_run_brings_its_topology_back(monkeypatch):
-    """The bundle a later solve adopts has to survive its own run directory."""
-    import json
-
-    import trid3nt_server.workflows.solver.solver as solver_mod
-
-    captured: dict = {}
-
-    class _S3:
-        def put_object(self, **kw):
-            captured.update(kw)
-
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _S3())
-    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    deck_mod.stage_manifest({"name": "r"}, "RUNTAG", mesh_only=True)
-    manifest = json.loads(captured["Body"])
-    assert "river_mesh.npz" in manifest["outputs"]

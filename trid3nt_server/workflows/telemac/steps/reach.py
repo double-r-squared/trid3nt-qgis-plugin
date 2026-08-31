@@ -119,7 +119,7 @@ def estimate_telemac_solve_seconds(
 # Geometry + registry helpers
 # --------------------------------------------------------------------------- #
 def slug(name: str) -> str:
-    """A safe reach slug for the worker ReachConfig ``name`` (ASCII, underscores)."""
+    """A safe reach slug for the deck's ``name`` (ASCII, underscores)."""
     keep = [c.lower() if c.isalnum() else "_" for c in str(name)]
     out = "".join(keep).strip("_")
     while "__" in out:

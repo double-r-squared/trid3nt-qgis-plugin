@@ -58,7 +58,6 @@ def main() -> int:
             "seed_lat": 42.579,
             "nav_direction": "DM",
             "distance_km": 3.0,
-            "channel_width_m": 60.0,
             "mesh_size_m": 16.0,
             "inflow_q_m3s": 250.0,
             "init_depth_m": 2.5,

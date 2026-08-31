@@ -5,6 +5,10 @@ native result SELAFIN beside it is the TEMPORAL artifact the client animates. A
 sediment run adds the signed bed-evolution map, an oil run the floating-slick
 track, and every run surfaces the bed bathymetry the worker actually solved on.
 
+The class scalars are read HERE, off the run's own uploaded evidence - GAIA's
+closure out of the solver listing, the slick out of the drogues track - because
+the worker is the engine room and derives nothing.
+
 Everything past the primary layer is best-effort by contract: failure retracts
 nothing, so a missing deposition COG or slick never voids the concentration
 layer.
@@ -13,6 +17,7 @@ layer.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import tempfile
 from pathlib import Path
@@ -36,21 +41,6 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.products")
 __all__ = ["Products", "publish_do_products", "publish_dye_products"]
 
 _STEPS = "trid3nt_server.workflows.telemac.steps"
-
-#: DEM-source label for the bed-COG provenance name (the worker records which DEM
-#: rung actually sampled the bed).
-def _s3_object_exists(s3: Any, bucket: str, key: str) -> bool:
-    """True when the object physically exists.
-
-    The upload-before-register guard: a fabricated URI is only safe to register
-    once the object is confirmed present, so any error reads as absent.
-    """
-    try:
-        s3.head_object(Bucket=bucket, Key=key)
-        return True
-    except Exception:  # noqa: BLE001 -- absent / unreachable == do not register
-        return False
-
 
 def _release_provenance(deck: dict[str, Any]) -> SyntheticInput:
     """Where the source entered the water, as the layer's own record.
@@ -168,63 +158,82 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
         "fallback_note": honesty, **update})
 
 
-def _download_gaia(run_id: str) -> str | None:
-    """Download ``gaia_river.slf``; ``None`` when the run wrote none (fail-open)."""
+def _download_artifact(run_id: str, basename: str) -> str | None:
+    """Download one file the run uploaded; ``None`` when it wrote none (fail-open).
+
+    Every class extra past the primary layer is read off an artifact that may not
+    be there - a run that coupled no GAIA writes no GAIA result - so absence is
+    an answer rather than a failure.
+    """
     from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
     )
 
-    gaia_path = str(Path(tempfile.mkdtemp(prefix=f"telemac-gaia-{run_id}-"))
-                    / "gaia_river.slf")
+    local = str(Path(tempfile.mkdtemp(prefix=f"telemac-{run_id}-")) / basename)
     try:
         resp = _get_s3_client().get_object(Bucket=_get_runs_bucket(),
-                                           Key=f"{run_id}/gaia_river.slf")
-        with open(gaia_path, "wb") as fh:
+                                           Key=f"{run_id}/{basename}")
+        with open(local, "wb") as fh:
             fh.write(resp["Body"].read())
     except Exception as exc:  # noqa: BLE001
-        logger.warning("telemac sediment: gaia_river.slf missing for %s (%s) - "
-                       "deposition COG skipped", run_id, exc)
+        logger.warning("telemac: %s absent for run %s (%s)", basename, run_id, exc)
         return None
-    return gaia_path
+    return local
+
+
+def _listing_text(run_id: str) -> str:
+    """The solver listing this run wrote, or the empty string."""
+    local = _download_artifact(run_id, "full_listing.log")
+    if not local:
+        return ""
+    try:
+        return Path(local).read_text(errors="replace")
+    finally:
+        Path(local).unlink(missing_ok=True)
 
 
 async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
                                   utm_epsg: int, reach_name: str,
-                                  worker_metrics: dict[str, Any],
+                                  deck: dict[str, Any],
                                   erodible: bool, emitter: Any) -> TelemacDyeLayerURI:
     """Fold GAIA's own mass-balance scalars onto the peak + emit the deposition map.
 
-    ``deposited_mass_kg`` is the NET bed mass, clamped at zero - the SAME net
-    quantity the deposition map and the deposit fraction integrate. Never the
-    GROSS deposition: in a supply-limited run gross deposition can equal gross
-    erosion with net ~0, so the map is correctly empty and the narrated mass must
-    match it.
+    The scalars are READ HERE, off the listing GAIA printed its closure into and
+    the result it wrote its graded surface into. ``deposited_mass_kg`` is the NET
+    bed mass, clamped at zero - the SAME net quantity the deposition map and the
+    deposit fraction integrate. Never the GROSS deposition: in a supply-limited
+    run gross deposition can equal gross erosion with net ~0, so the map is
+    correctly empty and the narrated mass must match it.
     """
     from trid3nt_server.workflows.telemac.postprocess_telemac import (
         PostprocessTelemacError,
         postprocess_telemac_deposition,
     )
 
-    net = worker_metrics.get("sediment_net_bed_mass_kg")
+    from .run_reads import sediment_scalars
+
+    gaia_path = await asyncio.to_thread(_download_artifact, run_id, "gaia_river.slf")
+    listing = await asyncio.to_thread(_listing_text, run_id)
+    stats = await asyncio.to_thread(
+        sediment_scalars, listing_text=listing, deck=deck["deck"],
+        gaia_slf=gaia_path)
+    net = stats.get("sediment_net_bed_mass_kg")
     peak = peak.model_copy(update={
         "deposited_mass_kg": max(float(net), 0.0) if net is not None else None,
-        "deposit_fraction": worker_metrics.get("sediment_deposit_fraction"),
-        "max_deposition_mm": worker_metrics.get("sediment_max_deposition_mm"),
-        "sediment_n_classes": worker_metrics.get("sediment_n_classes"),
-        "sediment_surface_d50_min_um": worker_metrics.get("sediment_surface_d50_min_um"),
-        "sediment_surface_d50_max_um": worker_metrics.get("sediment_surface_d50_max_um"),
-        "sediment_surface_d50_range_um":
-            worker_metrics.get("sediment_surface_d50_range_um"),
+        "deposit_fraction": stats.get("sediment_deposit_fraction"),
+        "sediment_n_classes": stats.get("sediment_n_classes"),
+        "sediment_surface_d50_min_um": stats.get("sediment_surface_d50_min_um"),
+        "sediment_surface_d50_max_um": stats.get("sediment_surface_d50_max_um"),
+        "sediment_surface_d50_range_um": stats.get("sediment_surface_d50_range_um"),
     })
-    gaia_path = await asyncio.to_thread(_download_gaia, run_id)
     if not gaia_path:
         return peak
     try:
         dep_layers, dep_metrics = await asyncio.to_thread(
             postprocess_telemac_deposition, gaia_path, run_id=run_id,
             utm_epsg=utm_epsg, reach_name=reach_name,
-            worker_sed_metrics=worker_metrics, erodible=bool(erodible))
+            worker_sed_metrics=stats, erodible=bool(erodible))
     except (PostprocessTelemacError, TelemacDyeScenarioError) as exc:
         logger.warning("sediment deposition postprocess failed (%s) - the "
                        "concentration COG still stands", exc)
@@ -232,8 +241,10 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
     finally:
         Path(gaia_path).unlink(missing_ok=True)
 
-    if erodible and dep_metrics.get("max_scour_mm") is not None:
-        peak = peak.model_copy(update={"max_scour_mm": dep_metrics["max_scour_mm"]})
+    peak = peak.model_copy(update={
+        "max_deposition_mm": dep_metrics.get("max_deposition_mm"),
+        **({"max_scour_mm": dep_metrics["max_scour_mm"]}
+           if erodible and dep_metrics.get("max_scour_mm") is not None else {})})
     if not dep_layers or emitter is None:
         return peak
     dep_raw = dep_layers[0]
@@ -255,39 +266,56 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
     return peak
 
 
-async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str, reach_name: str,
-                          oil_preset: Any, emitter: Any) -> None:
-    """Emit the floating-slick track, but only once the object is confirmed present.
+async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
+                          reach_name: str, oil_preset: Any, utm_epsg: int,
+                          emitter: Any) -> None:
+    """Build the floating-slick track off the drogues the run wrote, and emit it.
 
-    The worker's fail-open drogues parse can leave the slick unwritten; registering
-    the URI regardless once produced a dangling layer handle, so a missing slick
-    reads as an honest skip instead.
+    The engine writes the raw TecPlot track and nothing else; the renderable
+    snapshots and the exit accounting are read HERE and uploaded beside it, so
+    the layer's bytes exist before its handle does - a URI registered ahead of
+    its object was the dangling-handle class.
+
+    A run that wrote no track is an honest skip: the concentration COG stands.
     """
+    from trid3nt_contracts.execution import LayerURI
+
+    from trid3nt_server.emission.layer_uri_emit import publish_input_layer
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
+
+    from .run_reads import oil_slick_features
+
     if emitter is None:
         return
     try:
-        from trid3nt_contracts.execution import LayerURI
-
-        from trid3nt_server.workflows.solver.solver import (
-            _get_runs_bucket,
-            _get_s3_client,
-        )
-        from trid3nt_server.emission.layer_uri_emit import publish_input_layer
-
-        bucket, key = _get_runs_bucket(), f"{run_id}/slick.geojson"
-        if not await asyncio.to_thread(_s3_object_exists, _get_s3_client(), bucket, key):
-            logger.warning("oil slick object absent (s3://%s/%s not written by the "
-                           "worker) - slick layer skipped, no dangling handle emitted",
-                           bucket, key)
+        drogues = await asyncio.to_thread(_download_artifact, run_id, "drogues.txt")
+        if not drogues:
+            logger.warning("oil: run %s wrote no drogues track - slick skipped", run_id)
             return
+        try:
+            particles, slick, stats = await asyncio.to_thread(
+                oil_slick_features, drogues, utm_epsg=utm_epsg)
+        finally:
+            Path(drogues).unlink(missing_ok=True)
+        if not slick["features"]:
+            logger.warning("oil: the drogues track for %s holds no floats at any "
+                           "written instant - slick skipped", run_id)
+            return
+        bucket, s3 = _get_runs_bucket(), _get_s3_client()
+        for basename, body in (("particles.json", particles), ("slick.geojson", slick)):
+            await asyncio.to_thread(
+                lambda k=basename, b=body: s3.put_object(
+                    Bucket=bucket, Key=f"{run_id}/{k}",
+                    Body=json.dumps(b).encode("utf-8"),
+                    ContentType="application/json"))
         layer = LayerURI(
             layer_id=f"telemac-oil-slick-{run_id}",
             name=f"Oil slick track ({oil_preset}, {reach_name})",
-            layer_type="vector", uri=f"s3://{bucket}/{key}",
+            layer_type="vector", uri=f"s3://{bucket}/{run_id}/slick.geojson",
             style_preset="nhdplus_flowlines", role="primary", bbox=peak.bbox)
-        logger.info("oil slick layer emitted=%s id=%s",
-                    await publish_input_layer(emitter, layer), layer.layer_id)
-    except Exception as exc:  # noqa: BLE001
+        logger.info("oil slick layer emitted=%s id=%s stats=%s",
+                    await publish_input_layer(emitter, layer), layer.layer_id, stats)
+    except Exception as exc:  # noqa: BLE001 -- a bonus layer never voids the run
         logger.warning("oil slick layer skipped: %s", exc)
 
 
@@ -303,7 +331,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     reach_name, substance = deck["reach_name"], deck["substance"]
-    slf_path, _ = await asyncio.to_thread(download_result_selafin, run_id)
+    slf_path = await asyncio.to_thread(download_result_selafin, run_id)
 
     try:
         layers, _metrics = await asyncio.to_thread(
@@ -343,8 +371,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
         try:
             peak = await _fold_sediment_products(
                 peak, run_id=run_id, utm_epsg=utm_epsg, reach_name=reach_name,
-                worker_metrics=solve.get("metrics") or {},
-                erodible=bool(deck.get("erodible_bed")), emitter=emitter)
+                deck=deck, erodible=bool(deck.get("erodible_bed")), emitter=emitter)
         except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
             logger.warning("sediment deposition unexpected failure (%s)", exc)
     elif deck["substance_class"] == "oil":
@@ -352,7 +379,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
 
         await _emit_oil_slick(peak, run_id=run_id, reach_name=reach_name,
                               oil_preset=classify_substance(substance)[1],
-                              emitter=emitter)
+                              utm_epsg=utm_epsg, emitter=emitter)
 
     if emitter is not None and peak.bbox:
         try:
@@ -394,7 +421,7 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     reach_name = deck["reach_name"]
-    slf_path, _ = await asyncio.to_thread(download_result_selafin, run_id)
+    slf_path = await asyncio.to_thread(download_result_selafin, run_id)
     try:
         layers, _metrics = await asyncio.to_thread(
             postprocess_telemac_do, slf_path, run_id=run_id, utm_epsg=utm_epsg,

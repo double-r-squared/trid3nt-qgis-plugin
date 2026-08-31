@@ -29,8 +29,8 @@ log = logging.getLogger("run_do_sag_direct")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# A real NHDPlus reach WITH NHDArea polygon coverage (the bank_source="nhd_area"
-# precondition) - the committed TELEMAC showcase reach. Natural place name, no bbox.
+# A real NHDPlus reach WITH NHDArea polygon coverage, so the section cut has a
+# domain - the committed TELEMAC showcase reach. Natural place name, no bbox.
 LOCATION = "Eel River near Scotia, California"
 ARGS: dict = {
     "location": LOCATION,

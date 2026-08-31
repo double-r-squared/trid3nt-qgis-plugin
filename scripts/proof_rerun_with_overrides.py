@@ -262,16 +262,16 @@ async def main() -> int:
     log.info("WHAT-IF fan off %s: %s", parent_id, evidence["whatif_fan"])
 
     # -- (a) failure recovery: refuse on a bad value, then fix it ------------ #
-    # A bank source the mesher does not build refuses TYPED at the deck - after
-    # the geocode, the reach navigation and the discharge have all succeeded.
-    bad = dict(PARENT_ARGS, bank_source="riverbank", restart_clean=True)
+    # A compute class the dispatcher does not serve refuses TYPED at the deck -
+    # after the geocode, the reach navigation and the discharge have succeeded.
+    bad = dict(PARENT_ARGS, compute_class="enormous", restart_clean=True)
     failed = await do_sag(**bad)
-    recovery: dict[str, Any] = {"bad_call": {"bank_source": "riverbank"},
+    recovery: dict[str, Any] = {"bad_call": {"compute_class": "enormous"},
                                 "outcome": _describe(failed)}
     log.info("FAILURE RECOVERY seed: %s", recovery["outcome"])
     attempt = failed.get("run_id") if isinstance(failed, dict) else None
     if attempt:
-        fixed = await _rerun(rerun_tool, attempt, {"bank_source": "nhd_area"})
+        fixed = await _rerun(rerun_tool, attempt, {"compute_class": "medium"})
         recovery["attempt_run_id"] = attempt
         recovery["recovered"] = _describe(fixed)
         fixed_snap = await _snapshot(_answer(fixed)["run_id"]) \

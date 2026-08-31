@@ -28,14 +28,14 @@ class _FakeS3:
         self.put = kw
 
 
-def _stage(monkeypatch, reach: dict, *, mesh_only: bool = False,
+def _stage(monkeypatch, reach: dict, *,
            inputs: list[dict[str, str]] | None = None) -> dict:
     import trid3nt_server.workflows.solver.solver as solver_mod
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    stage_manifest(reach, "RUNTAG", mesh_only=mesh_only, inputs=inputs)
+    stage_manifest(reach, "RUNTAG", inputs=inputs)
     assert fake.put is not None
     return json.loads(fake.put["Body"])
 
@@ -79,16 +79,6 @@ def test_sediment_keeps_its_gaia_outputs(monkeypatch):
                       inputs=_SOLVE_INPUTS)
     assert "gaia_river.slf" in manifest["outputs"]
     assert "gaia_river.cas" in manifest["outputs"]
-
-
-def test_mesh_only_stages_geometry_but_no_bed(monkeypatch):
-    """A preview meshes and stops, so it is staged with the two geometry files
-    and no bed - a raster it never samples is a fetch nobody asked for."""
-    manifest = _stage(monkeypatch, {"name": "r"}, mesh_only=True,
-                      inputs=_SOLVE_INPUTS[:2])
-    assert [row["dest"] for row in manifest["inputs"]] == [
-        "river_centerline.geojson", "river_banks.geojson"]
-    assert manifest["mesh_only"] is True
 
 
 def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):

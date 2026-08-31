@@ -44,7 +44,7 @@ from trid3nt_server.testing.proof_paths import proof_dir  # noqa: E402
 EVIDENCE = os.path.join(proof_dir("telemac_do_sag", "addendum"),
                         "telemac_do_sag_cards_evidence.json")
 
-#: A real NHDPlus reach WITH NHDArea polygon coverage (the bank_source precondition).
+#: A real NHDPlus reach WITH NHDArea polygon coverage - the domain is the cut.
 LOCATION = "Eel River near Scotia, California"
 #: The USGS Eel River at Scotia gage (11477000) - a real point on the reach.
 OUTFALL_LONLAT = [-124.0983, 40.4921]

@@ -440,8 +440,8 @@ SHOWCASE: list[Showcase] = [
     # -- TELEMAC water quality / transport -----------------------------------
     Showcase("telemac_do_sag", {"location": "Eel River near Scotia, California"},
              "TELEMAC-WAQTEL DO-sag on the Eel River nr Scotia, CA - a real "
-             "NHDPlus reach with NHDArea bank polygons (the bank_source="
-             "\"nhd_area\" precondition). The declarative-v1 reference run: the "
+             "NHDPlus reach with NHDArea bank polygons, so the section cut has "
+             "a domain. The declarative-v1 reference run: the "
              "sag minimum, its downstream location and the standard verdict come "
              "back as typed scalars, and the run's own chart spec + metrics land "
              "in its object-store prefix.", 600,

@@ -1,10 +1,10 @@
 """The SOLVE step: stage the manifest, dispatch the worker, wait, surface the gates.
 
 TELEMAC is LOCAL-DOCKER / worker-image only, so the dispatch always goes through
-the generic ``run_solver`` seam. Meshing and bank sampling happen INSIDE the
-container, which is why the worker's own typed refusals (no NHDArea coverage, a
-degenerate reach) reach the server through ``telemac_metrics.json`` and are
-re-raised here as the retryable gates that carry their retry suggestions.
+the generic ``run_solver`` seam. The container is the ENGINE ROOM: it meshes
+nothing and fetches nothing, so no refusal about the reach's geometry can arise
+in it. The server chain refuses those before a manifest is ever staged - which is
+why nothing here re-raises a worker gate.
 
 This is the plan's only CONSEQUENTIAL node, and its result carries the result
 SELAFIN's URI - so a ledger replay probes that the solved artifact still exists
@@ -23,11 +23,7 @@ from typing import Any
 from trid3nt_server.workflows.lib import Step
 
 from .deck import stage_manifest
-from .errors import (
-    ReachBanksUnmapped,
-    TelemacDyeScenarioError,
-    TelemacReachDegenerateError,
-)
+from .errors import TelemacDyeScenarioError
 from .reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.solve")
@@ -36,8 +32,6 @@ __all__ = [
     "Solve",
     "compute_class",
     "download_result_selafin",
-    "raise_if_banks_unavailable",
-    "raise_if_reach_degenerate",
     "read_run_metrics",
     "solve_reach",
 ]
@@ -73,30 +67,13 @@ def read_run_metrics(run_id: str) -> dict[str, Any]:
         return {}
 
 
-def raise_if_banks_unavailable(metrics: dict[str, Any]) -> None:
-    """Surface the worker's banks gate as the unmapped-reach refusal. No-op otherwise.
+def download_result_selafin(run_id: str) -> str:
+    """Download ``r2d_river.slf`` to a local path the postprocess can read.
 
-    The worker's own code word for the signal is unchanged; what the server does
-    with it is: an unmapped reach has no domain, so the refusal names the supply
-    paths rather than an assumed width.
-    """
-    if str(metrics.get("error_code") or "") == "TELEMAC_BANKS_UNAVAILABLE":
-        raise ReachBanksUnmapped()
-
-
-def raise_if_reach_degenerate(metrics: dict[str, Any]) -> None:
-    """Surface the worker's degenerate-reach gate as the typed, retryable error."""
-    if str(metrics.get("error_code") or "") == "TELEMAC_REACH_DEGENERATE":
-        raise TelemacReachDegenerateError(
-            metrics.get("reach_length_m"), metrics.get("degenerate_channel_width_m"))
-
-
-def download_result_selafin(run_id: str) -> tuple[str, int]:
-    """Download ``r2d_river.slf`` + read ``utm_epsg``. Returns ``(local_path, epsg)``.
-
-    A SELAFIN carries no CRS of its own, so the run is ungeoreferenceable without
-    the metrics' UTM zone - which makes a missing zone a typed failure, not a
-    guess.
+    The UTM zone is NOT re-read here: it is the server's own measurement, echoed
+    through the worker's metrics and already on the solve result. Reading it a
+    second time from the same file was a second answer that could disagree with
+    the first.
     """
     from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
@@ -104,22 +81,11 @@ def download_result_selafin(run_id: str) -> tuple[str, int]:
     )
 
     runs_bucket = _get_runs_bucket()
-    s3 = _get_s3_client()
-
-    utm_epsg: int | None = None
-    try:
-        obj = s3.get_object(Bucket=runs_bucket, Key=f"{run_id}/telemac_metrics.json")
-        metrics = json.loads(obj["Body"].read().decode("utf-8"))
-        if isinstance(metrics, dict) and metrics.get("utm_epsg") is not None:
-            utm_epsg = int(metrics["utm_epsg"])
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("telemac: metrics read failed for run %s: %s", run_id, exc)
-
     slf_key = f"{run_id}/r2d_river.slf"
     slf_path = str(Path(tempfile.mkdtemp(prefix=f"telemac-dye-{run_id}-"))
                    / "r2d_river.slf")
     try:
-        resp = s3.get_object(Bucket=runs_bucket, Key=slf_key)
+        resp = _get_s3_client().get_object(Bucket=runs_bucket, Key=slf_key)
         with open(slf_path, "wb") as fh:
             fh.write(resp["Body"].read())
     except Exception as exc:  # noqa: BLE001
@@ -127,13 +93,7 @@ def download_result_selafin(run_id: str) -> tuple[str, int]:
             "TELEMAC_DYE_OUTPUT_MISSING",
             f"TELEMAC run {run_id} completed but s3://{runs_bucket}/{slf_key} "
             f"was not downloadable: {exc}") from exc
-
-    if utm_epsg is None:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_OUTPUT_MISSING",
-            f"TELEMAC run {run_id} produced no utm_epsg in telemac_metrics.json; "
-            "cannot georeference the SELAFIN mesh.")
-    return slf_path, utm_epsg
+    return slf_path
 
 
 async def solve_reach(*, deck: dict[str, Any],
@@ -204,11 +164,6 @@ async def solve_reach(*, deck: dict[str, Any],
 
     batch_run_id = getattr(run_result, "run_id", None) or run_id
     if run_result is None or run_result.status != "complete":
-        # A worker that aborted on a typed gate surfaces THAT gate (with its retry
-        # suggestions) rather than a generic run-failed error.
-        degraded = await asyncio.to_thread(read_run_metrics, batch_run_id)
-        raise_if_banks_unavailable(degraded)
-        raise_if_reach_degenerate(degraded)
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_RUN_FAILED",
             "TELEMAC dye solve did not complete "
