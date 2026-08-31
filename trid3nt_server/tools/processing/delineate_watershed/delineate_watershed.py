@@ -137,6 +137,15 @@ def _snap_to_stream(
     x, y = affine * (cols[i] + 0.5, rows[i] + 0.5)
     return (float(x), float(y))
 
+def _grid_epsg(grid: Any) -> int | None:
+    """The EPSG the conditioned grid is in, or ``None`` when it does not state one."""
+    from pyproj import CRS
+
+    try:
+        return CRS.from_user_input(getattr(grid.crs, "crs", grid.crs)).to_epsg()
+    except Exception:  # noqa: BLE001 - a grid with no readable CRS is treated as lon/lat
+        return None
+
 def _cell_area_km2(grid: Any) -> float:
     """Approximate cell area (km^2), converting degrees at the center latitude
     for a geographic grid (adequate over a <=0.3-degree AOI)."""
@@ -239,6 +248,22 @@ def delineate_watershed(
     with tempfile.TemporaryDirectory(prefix="trid3nt_watershed_") as tmpdir:
         dem_path = _stage_dem(q_bbox, dem_uri, tmpdir, notes)
         grid, fdir, acc = _condition_dem(dem_path)
+        # The D8 trace runs in the DEM's own grid, and a supplied DEM is under no
+        # obligation to be lon/lat - 3DEP arrives in Albers metres. The pour point
+        # therefore goes INTO that grid and the catchment comes back OUT of it, so
+        # what this tool returns is the EPSG:4326 its LayerURI declares rather than
+        # whichever projection the raster happened to carry.
+        epsg = _grid_epsg(grid)
+        if epsg not in (None, 4326):
+            from pyproj import Transformer
+
+            into = Transformer.from_crs(4326, epsg, always_xy=True).transform
+            out_of = Transformer.from_crs(epsg, 4326, always_xy=True).transform
+            notes.append(f"DEM grid is EPSG:{epsg}; the pour point was traced in "
+                         "it and the catchment reprojected back to EPSG:4326.")
+        else:
+            into = out_of = lambda x, y: (x, y)  # noqa: E731 - the identity pair
+        grid_x, grid_y = into(lon, lat)
 
         # Coarse snap: move the pour point onto the nearest flow line
         # (>= snap_cells upslope). Handles a pour point clicked well off any
@@ -246,22 +271,23 @@ def delineate_watershed(
         # the delineation alignment-invariant (a coordinate-space catchment can
         # collapse to a 1-cell sliver on some grid alignments).
         acc_arr = np.asarray(acc)
-        snapped = _snap_to_stream(acc_arr, grid.affine, lon, lat, snap_cells)
+        snapped = _snap_to_stream(acc_arr, grid.affine, grid_x, grid_y, snap_cells)
         if snapped is not None:
-            seed_lon, seed_lat = snapped
+            seed_x, seed_y = snapped
             notes.append(
                 f"Pour point snapped to the nearest cell with >= "
-                f"{snap_cells} upslope cells: ({seed_lon:.6f}, {seed_lat:.6f})."
+                f"{snap_cells} upslope cells: "
+                "({:.6f}, {:.6f}).".format(*out_of(seed_x, seed_y))
             )
         else:
-            seed_lon, seed_lat = lon, lat
+            seed_x, seed_y = grid_x, grid_y
             notes.append(
                 f"No cell reaches the {snap_cells}-cell snap threshold; using "
                 "the raw pour point (the AOI may be too small or too flat)."
             )
 
         mask, polygon, (x_snap, y_snap), cell_count = snap_and_delineate_index_space(
-            grid, fdir, acc, seed_lon, seed_lat
+            grid, fdir, acc, seed_x, seed_y
         )
         if cell_count == 0:
             raise EmptyWatershedError(
@@ -270,7 +296,11 @@ def delineate_watershed(
                 "pour point onto the channel or enlarge the bbox."
             )
         from shapely.geometry import mapping
+        from shapely.ops import transform as _transform
 
+        if epsg not in (None, 4326):
+            polygon = _transform(out_of, polygon)
+        x_snap, y_snap = out_of(x_snap, y_snap)
         area_km2 = cell_count * _cell_area_km2(grid)
         # Honest truncation caveat when the basin touches the AOI edge.
         edge = (

@@ -205,6 +205,61 @@ def test_no_streams_raises(valley_dem, tmp_path) -> None:
         )
 
 
+@pytest.fixture()
+def valley_dem_5070(tmp_path) -> str:
+    """The same south-draining valley on a PROJECTED grid (Albers metres).
+
+    What 3DEP hands over. The tool declares EPSG:4326 on its layer, so the trace
+    has to go into this grid and the catchment has to come back out of it.
+    """
+    from pyproj import Transformer
+
+    into = Transformer.from_crs(4326, 5070, always_xy=True).transform
+    west_m, south_m = into(WEST, SOUTH)
+    east_m, north_m = into(EAST, NORTH)
+    rows = np.arange(N, dtype=np.float64)
+    cols = np.arange(N, dtype=np.float64)
+    z = 500.0 - rows[:, None] * 1.0 + np.abs(cols[None, :] - CENTER_COL) * 2.0
+    path = str(tmp_path / "valley_5070.tif")
+    with rasterio.open(
+        path, "w", driver="GTiff", height=N, width=N, count=1, dtype="float32",
+        crs="EPSG:5070",
+        transform=from_bounds(west_m, south_m, east_m, north_m, N, N),
+        nodata=-9999.0,
+    ) as dst:
+        dst.write(z.astype("float32"), 1)
+    return path
+
+
+def test_a_projected_dem_still_answers_in_the_4326_the_layer_declares(
+        valley_dem_5070, tmp_path) -> None:
+    """The 5070 leak: metres on a layer that says degrees is a domain nothing
+    downstream can mesh - it reads as a lattice millions of cells wide."""
+    out_dir = tmp_path / "out_5070"
+    out_dir.mkdir()
+    pour = _lonlat(CENTER_COL, 54)
+
+    result = delineate_watershed(pour_point=pour, bbox=BBOX,
+                                 dem_uri=valley_dem_5070,
+                                 _output_dir=str(out_dir))
+
+    assert result.cell_count > 0
+    assert any("EPSG:5070" in note for note in result.notes)
+    west, south, east, north = result.bbox
+    assert -180.0 <= west < east <= 180.0 and -90.0 <= south < north <= 90.0
+    # The catchment stands where the pour point does, not a continent away. The
+    # slack is the projected grid's own edge: a rectangle in Albers metres is not
+    # a rectangle in degrees, so it overhangs the lon/lat AOI slightly.
+    assert WEST - 0.02 <= west and east <= EAST + 0.02
+    assert SOUTH - 0.02 <= south and north <= NORTH + 0.02
+    lon_snap, lat_snap = result.snapped_pour_point
+    assert abs(lon_snap - pour[0]) < 0.01 and abs(lat_snap - pour[1]) < 0.01
+    with open(result.uri) as f:
+        polygon = unary_union([shape(feat["geometry"])
+                               for feat in json.load(f)["features"]])
+    assert polygon.buffer(RES).contains(Point(lon_snap, lat_snap))
+
+
 def test_auto_bbox_is_0p1_deg() -> None:
     lon, lat = -117.0, 34.0
     west, south, east, north = _auto_bbox(lon, lat)
