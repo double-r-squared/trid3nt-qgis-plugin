@@ -5,7 +5,7 @@ SANDBOX ONLY (nothing landed): given the oceanmesh worker's raw output
 cheapest-to-prove unstructured formats:
 
   * SCHISM ``hgrid.gr3`` -- delegated to the ALREADY-PROVEN in-repo bridge
-    ``workers/schism/schism_gr3.tin_to_hgrid`` (pure numpy). This is
+    ``schism_gr3.tin_to_hgrid`` (pure numpy). This is
     the format SCHISM's own grid check (AQUIRE_HGRID / ipre) validates.
   * ADCIRC ``fort.14`` -- the classic node/element/boundary ASCII that SWAN
     (unstructured) and ADCIRC read, and the format ADCIRC-family tooling round-
@@ -22,7 +22,6 @@ from typing import Sequence
 
 import numpy as np
 
-# schism_gr3 is added to sys.path by the driver (workers/schism on path).
 from schism_gr3 import (  # type: ignore
     extract_boundary_loops,
     remove_boundary_pinch_points,

@@ -586,9 +586,9 @@ def _sizing_source(stats: Mapping[str, Any], domain: _Domain) -> str:
 
 def _sandbox_formats() -> Any:
     """The repo's shared TIN format writers, importable from the agent venv."""
-    for path in (str(_repo_root() / _SANDBOX), str(_repo_root() / "workers/schism")):
-        if path not in sys.path:
-            sys.path.insert(0, path)
+    path = str(_repo_root() / _SANDBOX)
+    if path not in sys.path:
+        sys.path.insert(0, path)
     import mesh_formats  # type: ignore
 
     return mesh_formats

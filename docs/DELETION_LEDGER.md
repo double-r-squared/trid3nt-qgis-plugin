@@ -1825,3 +1825,25 @@ register_manifest_layers` - are LIVE server code, and this was the only test tha
 held them byte-identical. What raster a rebuilt bar should compare them on, now
 that no engine in the tree writes a `publish_manifest.json` from a solved raster,
 is a design question.
+
+## workers/schism follows the seventeen, and the gr3 helpers move beside their caller (2026-08-30)
+
+The Stage-0 stop is ruled and resolved. `schism_gr3.py` (335 lines) was never
+SCHISM-only code: `tin_to_hgrid` writes the gr3 nobody dispatches, but
+`extract_boundary_loops`, `remove_boundary_pinch_points` and `signed_area_ccw`
+are the pure-numpy boundary helpers `om2d.py::_clean_once` runs on every mesh
+build, reached through `scripts/sandbox/oceanmesh/mesh_formats.py`. The file
+RELOCATES to `scripts/sandbox/oceanmesh/`, beside the four sandbox modules that
+already import it flat, and the directory it came from goes to the attic.
+
+- `workers/schism/schism_gr3.py` -> `scripts/sandbox/oceanmesh/schism_gr3.py` (git mv, contents unchanged apart from the docstring sentence naming its old home). CONDITION: none - the module's live consumers all sit in the directory it moved into.
+- `workers/schism/` (entrypoint.py 169, `__init__.py` 1, test_entrypoint_manifest.py 46, test_schism_gr3.py 138, Dockerfile 254, README.md 40, the QuarterAnnulus + Duck fixture trees; 35 files after the relocation) moved to `/home/nate/Documents/trid3nt-attic/workers/schism/`, mirrored. CONDITION: none - the SCHISM spike has no server half, no registered tool and no dispatcher; the one piece of it the live tree reads has moved out ahead of it. Noted, not fixed: the attic copy of `test_schism_gr3.py` no longer sits beside the module it imports, so the relocated helpers carry no test - and they never carried one the suite ran, since `workers/` is collected by no slice.
+
+Pointer scrubs that went with it:
+
+- `workflows/mesh/meshers/om2d.py::_sandbox_formats` loses the two-path loop. It inserted `workers/schism` on `sys.path` purely so a sandbox module could import a worker module; one insert of `scripts/sandbox/oceanmesh` is now the whole hack.
+- `scripts/sandbox/oceanmesh/{build_coastal_mesh,build_watershed_mesh,build_coastal_water_edge_mesh}.py` drop four `sys.path.insert(0, REPO / "workers/schism")` calls and the `workers/schism` segment of the `PYTHONPATH` line in their run instructions.
+- `scripts/sandbox/oceanmesh/mesh_formats.py` loses the comment telling a reader the driver puts `workers/schism` on the path, and its docstring names the module rather than the old path.
+- `workers/README.md` drops the HELD roster entry.
+
+Dated records that name the old path are left as written: `docs/validation/worker-loc-ledger.md`'s row-0 table measures a git ref, and the ADRs, metrics rows and conformance walks are records of what was true when they were taken.

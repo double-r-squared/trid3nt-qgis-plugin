@@ -20,7 +20,7 @@ Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
   TMPDIR=/tmp \
-  PYTHONPATH=.:contracts:workers/schism:scripts/sandbox/oceanmesh \
+  PYTHONPATH=.:contracts:scripts/sandbox/oceanmesh \
     venvs/agent/bin/python scripts/sandbox/oceanmesh/build_coastal_water_edge_mesh.py --aoi all
 """
 
@@ -72,7 +72,6 @@ AOIS = {
 
 def rerender(aoi: str) -> dict:
     """Re-render the proof images from the cached mesh (no re-mesh / no Overpass)."""
-    sys.path.insert(0, str(REPO / "workers/schism"))
     sys.path.insert(0, str(SANDBOX))
     from mesh_formats import mesh_quality_report
 
@@ -110,7 +109,6 @@ def rerender(aoi: str) -> dict:
 
 
 def run(aoi: str) -> dict:
-    sys.path.insert(0, str(REPO / "workers/schism"))
     sys.path.insert(0, str(SANDBOX))
     from build_coastal_mesh import (
         decimate_dem,

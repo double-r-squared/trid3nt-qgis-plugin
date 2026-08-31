@@ -12,7 +12,7 @@ Depths here are a documented placeholder (a real run samples bathymetry via
 fetch_dem at the landing); boundary classification is geometric (exterior loops,
 one edge optionally flagged open) -- SCHISM's ipre grid check reads and validates
 the topology, which is the acceptance bar. Pure-Python + numpy; no SCHISM/server
-imports, so it flat-imports from the worker dir and stays offline-suite-neutral.
+imports, so it imports flat from this directory and stays offline-suite-neutral.
 """
 
 from __future__ import annotations

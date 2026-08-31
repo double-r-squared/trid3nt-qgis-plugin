@@ -17,10 +17,6 @@ local solver backend -- there is no live Cloud Run / AWS Batch deploy here.
 
 - `mesh/` -- the in-container mesh writers, dispatched by the mesh router rather
   than by `run_solver`.
-- `schism/` -- HELD, not dispatched. The om2d mesher's one topology pass reaches
-  `schism_gr3`'s pure-numpy boundary helpers through
-  `scripts/sandbox/oceanmesh/mesh_formats.py`, so the directory cannot leave with
-  the other engines until those helpers have a home.
 - `qgis/` -- the QGIS-Processing worker image, a separate concern from the
   solver dispatch seam.
 

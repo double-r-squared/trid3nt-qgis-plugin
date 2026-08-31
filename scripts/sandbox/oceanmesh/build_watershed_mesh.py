@@ -15,7 +15,7 @@ Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
   TMPDIR=/tmp \
-  PYTHONPATH=.:contracts:workers/schism:scripts/sandbox/oceanmesh \
+  PYTHONPATH=.:contracts:scripts/sandbox/oceanmesh \
     venvs/agent/bin/python scripts/sandbox/oceanmesh/build_watershed_mesh.py --case coweeta_river
 """
 
@@ -128,7 +128,6 @@ def fetch_flowlines(aoi_bbox, rundir: Path):
 
 
 def build_watershed_mesh(case: str) -> dict:
-    sys.path.insert(0, str(REPO / "workers/schism"))
     sys.path.insert(0, str(SANDBOX))
     from build_coastal_mesh import sample_elevation, sg_docker, verify_mdal, verify_serafin
     from mesh_formats import mesh_quality_report, write_2dm, write_fort14
