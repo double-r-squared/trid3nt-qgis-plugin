@@ -35,6 +35,14 @@ BANKS_HALF = {"type": "Polygon", "coordinates": [
 BANKS_ELSEWHERE = {"type": "Polygon", "coordinates": [
     [[-123.50, 40.4970], [-123.40, 40.4970], [-123.40, 40.5030],
      [-123.50, 40.5030], [-123.50, 40.4970]]]}
+#: Mapped water at BOTH ends of the stretch with an unmapped gap in the middle -
+#: half the centreline covered, and both end transects still cut off real
+#: polygon. The shape a partly-mapped reach takes when it can still be sectioned.
+BANKS_GAPPED = {"type": "MultiPolygon", "coordinates": [
+    [[[-124.20, 40.4970], [-124.13, 40.4970], [-124.13, 40.5030],
+      [-124.20, 40.5030], [-124.20, 40.4970]]],
+    [[[-124.07, 40.4970], [-124.00, 40.4970], [-124.00, 40.5030],
+      [-124.07, 40.5030], [-124.07, 40.4970]]]]}
 
 CENTERLINE_BBOX = [-124.16, 40.50, -124.04, 40.50]
 

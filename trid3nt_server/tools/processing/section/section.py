@@ -49,6 +49,8 @@ class SectionError(RuntimeError):
       both), or a point/extent that is not two/four finite numbers.
     - ``SECTION_NO_POLYGON`` -- the source layer carries no polygon geometry.
     - ``SECTION_CUT_EMPTY`` -- the cut and the polygon do not meet.
+    - ``SECTION_END_FACE_UNMEASURED`` -- one end cut left no transect on the
+      polygon, so the section ends along its own bank there.
     - ``SECTION_SOURCE_UNREADABLE`` -- the source is neither inline GeoJSON nor a
       readable vector layer.
     """
@@ -90,6 +92,12 @@ class SectionLayerURI(LayerURI):
 #: Below this the two points are one point and the chord has no direction to be
 #: perpendicular to.
 _MIN_CHORD_M: float = 1.0
+
+#: How far off the cut plane a vertex may stand and still BE on it, in metres. The
+#: cut puts its vertices there exactly; what separates them from the section's own
+#: bank vertices is the clip's double-precision residue (nanometres on a UTM
+#: coordinate) against metres of real geometry.
+_ON_CUT_M: float = 1.0e-6
 
 #: The label the section travels under: an outline the tool CUT, whose meaning is
 #: whatever the polygon it came from meant. A producer names its own preset, and
@@ -192,30 +200,41 @@ def _band(a: Any, b: Any, reach: float) -> Any:
                     tuple(b - wide), tuple(a - wide)])
 
 
-def _end_face(section_m: Any, point: Any, normal: Any, reach: float,
+def _end_face(section_m: Any, point: Any, unit: Any, normal: Any, label: str,
               back: Any) -> list[list[float]]:
-    """The TRANSECT the cut left at one end -> its two lon/lat ends, or ``[]``.
+    """The TRANSECT the cut left at one end -> its two lon/lat ends.
 
     The end cut is a real edge of the section, so the face is measured off the
-    geometry rather than restated: the perpendicular at the point meets the
-    polygon exactly along that edge, and the two extremes of what it meets are the
-    face's ends. A solver prescribes its inflow across this whole face, so the
-    face - not the single point the chain named it by - is what a boundary role
-    is matched against.
+    geometry rather than restated: the cut put VERTICES on the plane through the
+    point, and the two furthest apart across the reach are the face's ends. They
+    are found by projecting the section's own boundary vertices, never by
+    intersecting a probe line with the polygon - the cut edge is exactly collinear
+    with such a line, and a collinear intersection over a domain-sized probe
+    returns an edge at one end and nothing at the other for no reason a reader can
+    see. A solver prescribes its inflow across this whole face, so the face - not
+    the single point the chain named it by - is what a boundary role is matched
+    against.
     """
     import numpy as np
-    from shapely.geometry import LineString
 
-    span = np.asarray(normal, dtype=float) * float(reach)
-    meet = section_m.intersection(LineString([tuple(np.asarray(point) + span),
-                                              tuple(np.asarray(point) - span)]))
-    coords = [c for part in getattr(meet, "geoms", [meet])
-              for c in getattr(part, "coords", ())]
-    if len(coords) < 2:
-        return []
-    along = [float(np.dot(np.asarray(c, dtype=float) - np.asarray(point),
-                          np.asarray(normal, dtype=float))) for c in coords]
-    ends = (coords[int(np.argmin(along))], coords[int(np.argmax(along))])
+    origin = np.asarray(point, dtype=float)
+    rings = [np.asarray(ring.coords, dtype=float)
+             for part in getattr(section_m, "geoms", [section_m])
+             for ring in (part.exterior, *part.interiors)]
+    vertices = np.vstack(rings) - origin
+    on_plane = np.abs(vertices @ np.asarray(unit, dtype=float)) <= _ON_CUT_M
+    across = vertices[on_plane] @ np.asarray(normal, dtype=float)
+    if across.size < 2 or float(across.max() - across.min()) <= 0.0:
+        raise SectionError(
+            "SECTION_END_FACE_UNMEASURED",
+            f"the {label} cut left no transect on the polygon: {int(on_plane.sum())} "
+            f"of the section's {vertices.shape[0]} boundary vertices stand on the "
+            f"cut plane, and the nearest one is "
+            f"{float(np.abs(vertices @ np.asarray(unit, dtype=float)).min()):.3f} m "
+            "off it. The section reaches that end along its own bank rather than "
+            "along the cut, so there is no transect there to prescribe across - "
+            "move that point onto the stretch the polygon maps.")
+    ends = vertices[on_plane][[int(across.argmin()), int(across.argmax())]] + origin
     return [[float(v) for v in back.transform(*e)] for e in ends]
 
 
@@ -279,8 +298,8 @@ def _cut_between(polys: list[Any], start: tuple[float, float],
     unit = (b - a) / chord
     normal = np.array([-unit[1], unit[0]])
     return (_transform(back.transform, section_m), len(kept), dropped, chord,
-            int(epsg), _end_face(section_m, a, normal, reach, back),
-            _end_face(section_m, b, normal, reach, back))
+            int(epsg), _end_face(section_m, a, unit, normal, "upstream", back),
+            _end_face(section_m, b, unit, normal, "downstream", back))
 
 
 def _cut_within(polys: list[Any], box: tuple[float, float, float, float],

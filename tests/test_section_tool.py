@@ -58,6 +58,33 @@ def test_the_two_end_faces_stand_where_the_points_were_put(tmp_path):
     assert max_lon == pytest.approx(_DOWNSTREAM[0], abs=1e-4)
 
 
+def test_each_end_face_spans_the_polygon_across_the_reach(tmp_path):
+    """The face is the whole transect the cut left, not the part of it a probe
+    line happened to catch: the cut edge is exactly collinear with such a line,
+    and over a domain-sized probe the collinear intersection comes back whole at
+    one end and EMPTY at the other, which is what left a reach with no outflow."""
+    cut = section(_BANK, between=[_UPSTREAM, _DOWNSTREAM],
+                  _output_dir=str(tmp_path))
+    for face, lon in ((cut.face_start, _UPSTREAM[0]),
+                      (cut.face_end, _DOWNSTREAM[0])):
+        assert len(face) == 2
+        assert all(point[0] == pytest.approx(lon, abs=1e-4) for point in face)
+        # the band is 0.02 deg tall and the face crosses all of it
+        assert abs(face[0][1] - face[1][1]) == pytest.approx(0.02, abs=1e-6)
+
+
+def test_an_end_the_cut_never_reached_refuses_by_naming_the_geometry(tmp_path):
+    """A downstream point PAST the end of the mapped band: the cut there falls
+    off the polygon, so the section stops on its own edge and there is no
+    transect at that end to prescribe an outflow across."""
+    with pytest.raises(SectionError) as excinfo:
+        section(_BANK, between=[_UPSTREAM, (-83.25, 35.0)],
+                _output_dir=str(tmp_path))
+    assert excinfo.value.error_code == "SECTION_END_FACE_UNMEASURED"
+    assert "boundary vertices stand on the cut plane" in str(excinfo.value)
+    assert "downstream" in str(excinfo.value)
+
+
 def test_the_cut_is_square_to_the_line_not_to_the_meridian(tmp_path):
     # A section between two points at the SAME latitude is cut on meridians; one
     # between points on a diagonal is not, and its corners must move with the

@@ -613,15 +613,32 @@ def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
     """NO invented threshold: above zero the run proceeds, carrying the MEASURED
     fraction so a reader is never left assuming the flowline-only stretches were
     modelled."""
-    from tests.reach_chain import BANKS_HALF
+    from tests.reach_chain import BANKS_GAPPED
 
     captured: dict = {}
     peak = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                     banks=BANKS_HALF)
+                     banks=BANKS_GAPPED)
     assert isinstance(peak, TelemacDyeLayerURI)
     note = peak.fallback_note or ""
     assert "50.0%" in note
     assert "flowline" in note
+
+
+def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
+        tmp_path, monkeypatch):
+    """Coverage above zero is not the same fact as a domain with two transects.
+    Mapped water that stops halfway leaves the downstream end standing on the
+    polygon's own bank, and a boundary role cannot be prescribed across an edge
+    the cut never made - so the refusal names the geometry rather than arriving
+    at the mesher as an empty face."""
+    from tests.reach_chain import BANKS_HALF
+
+    captured: dict = {}
+    out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+                    banks=BANKS_HALF)
+    assert out["status"] == "error"
+    assert out["error_code"] == "SECTION_END_FACE_UNMEASURED"
+    assert "downstream cut left no transect" in out["error_message"]
 
 
 def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
