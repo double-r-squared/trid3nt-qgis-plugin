@@ -135,11 +135,14 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Stratified.products(deck=Ref("deck"), solve=solve).named("column")
 
 
-#: Plan-value deck fields every reach writer takes: the mid-reach seed the
-#: centerline is navigated from, the ACCEPTED mesh the solve runs on, and the
-#: mapped water the reach was cut from - which a dredge field is cut out of. All
-#: three are step results rather than sheet values, so none can be declared.
+#: Plan-value deck fields every reach writer takes: the seed the one centerline
+#: was navigated from, that CENTERLINE itself, the ACCEPTED mesh the solve runs
+#: on, and the mapped water the reach was cut from - which a dredge field is cut
+#: out of. All four are chain products rather than sheet values, so none can be
+#: declared. The centerline is named here so the deck reads the SAME line the
+#: section was cut between and the mesh was built over.
 _REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh"),
+                                   "centerline": Ref("centerline"),
                                    "reach_polygon": Ref("reach_polygon")}
 
 #: The agitation deck always reads the run's MESH slot: the domain a phase-
@@ -230,6 +233,7 @@ class TelemacWorkflow(Workflow):
     def acquire_domain(self, *, location: Any, bbox: Any, shape: str = "reach",
                        rivers: Any = None, discharge: Any = None,
                        event_time: Any = None, pour_point: Any = None,
+                       seed_coords: Any = None,
                        aoi_half_deg: float | tuple[float, float] = 0.06,
                        aoi_name: str = "aoi",
                        code_prefix: str = "TELEMAC") -> tuple[Step, ...]:
@@ -237,11 +241,13 @@ class TelemacWorkflow(Workflow):
 
         Three domain SHAPES, declared rather than inferred:
 
-        * ``reach`` - place -> reach centre -> mid-reach seed -> the carrier
-          discharge AT that seed. Three steps because the modeled world is not
-          established until the flow that carries everything through it is: the
-          seed is the point the discharge is read at, so it cannot be declared
-          independently of the reach.
+        * ``reach`` - place -> reach centre -> the seed -> the carrier discharge
+          AT that seed. Three steps because the modeled world is not established
+          until the flow that carries everything through it is: the seed is the
+          point the discharge is read at, so it cannot be declared independently
+          of the reach. ``seed_coords`` pins that seed - a template whose ask
+          names where the substance enters the water is naming which stretch to
+          model, and the one centerline is navigated from there.
         * ``open_water`` - place or extent -> the AOI, and nothing else. A coastal
           strip, a lake fetch and a harbour basin are all bounded by the ask
           itself; there is no flowline to find and no carrier to resolve.
@@ -273,7 +279,8 @@ class TelemacWorkflow(Workflow):
                                code_prefix=code_prefix).named("aoi"),)
         return (
             Geocode.reach(location, bbox).named("reach"),
-            ReachSeed(reach=Ref("reach"), rivers=rivers).named("seed"),
+            ReachSeed(reach=Ref("reach"), rivers=rivers,
+                      supplied=seed_coords).named("seed"),
             CarrierDischarge(seed=Ref("seed"), explicit=discharge,
                              event_time=event_time).named("carrier_discharge"),
         )

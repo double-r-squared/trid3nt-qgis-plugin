@@ -1,10 +1,15 @@
-"""The step ledger: the record of an INCOMPLETE attempt, per invocation.
+"""The step ledger: what one invocation may replay, and what it may not.
 
-Resume-from-failed-step: a rerun of the SAME invocation replays nodes the failed
-attempt completed. It is NOT a result cache - a plan that runs to the end leaves a
-completion TOMBSTONE in place of its records, so the next invocation of a
-live-no-cache tool refetches the world. Only an attempt that died mid-plan leaves
-anything replayable behind.
+Every terminal state TOMBSTONES. A plan that runs to the end leaves a completion
+marker in place of its records, so the next invocation of a live-no-cache tool
+refetches the world; a plan that FAILS leaves the same marker, so a re-run of the
+corrected question re-executes rather than replaying artifacts the code that
+produced them no longer describes.
+
+What replay is for is therefore the work a run INHERITS: a derived rerun seeds
+this ledger from its successful parent's snapshot and the ordinary resume path
+walks it. Records also survive a process that died without unwinding, which is
+what ``restart_clean`` discards.
 """
 
 from __future__ import annotations

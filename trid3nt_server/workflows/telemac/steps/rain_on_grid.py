@@ -364,25 +364,26 @@ def _mesh_field(mesh: Mapping[str, Any], name: str) -> str:
     return str(uri)
 
 
-def _outlet_nodes(mesh: Mapping[str, Any]) -> list[int]:
-    """The boundary nodes the declared OUTLET role landed on.
+def _outlet_boundary(mesh: Mapping[str, Any]) -> int:
+    """WHICH numbered liquid boundary the declared OUTLET role is, 1-based.
 
-    The declaration is the pour point and the mesher matched the boundary nodes
-    within its own mean boundary edge of it, so this reads what was MATCHED
-    rather than re-deriving a nearest-node set the geometry file never saw.
+    The solver numbers its liquid boundaries in the order the accepted topology
+    recorded when the ``.cli`` was written, and it prints one flux per number in
+    its own volume balance. So this is what turns "the outlet" into the series the
+    hydrograph reads - the role, resolved against the numbering the engine uses.
     """
     from trid3nt_server.workflows.mesh.topology import read_topology
 
-    roles = read_topology(_mesh_field(mesh, "topology_uri"))["roles"]
-    nodes = [int(n) for n in (roles.get(_OUTLET_ROLE) or ())]
-    if not nodes:
+    topology = read_topology(_mesh_field(mesh, "topology_uri"))
+    order = list(topology["liquid_boundary_order"])
+    if _OUTLET_ROLE not in topology["roles"] or _OUTLET_ROLE not in order:
         raise RainOnGridError(
             f"no boundary node of the catchment mesh took the {_OUTLET_ROLE!r} "
             "role, so the basin has no outlet to drain through and no hydrograph "
             "to measure. Move the pour point onto the basin's own outlet, or mesh "
             "it finer so a boundary node reaches it.",
             error_code="TELEMAC_ROG_NO_OUTLET_NODES")
-    return nodes
+    return order.index(_OUTLET_ROLE) + 1
 
 
 def _authoring_dir(run_tag: str) -> Path:
@@ -457,7 +458,7 @@ async def write_rain_on_grid_deck(
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     probes = dict(getattr(artifact, "probes", None) or {})
     provenance = dict(catchment.get("provenance") or {})
-    outlet_nodes = _outlet_nodes(catchment)
+    outlet_boundary = _outlet_boundary(catchment)
     mesh_size_m = float(catchment.get("min_edge_m") or mesh_resolution_m or 0.0)
     name = str(getattr(artifact, "name", None) or "watershed")
 
@@ -501,8 +502,8 @@ async def write_rain_on_grid_deck(
     authored_stats = await asyncio.to_thread(_author)
     authored = sorted(str(p.relative_to(rundir))
                       for p in rundir.rglob("*") if p.is_file())
-    logger.info("rog deck authored: %s path=%s outlet_nodes=%d files=%s",
-                _STEERING, decision.path, len(outlet_nodes), authored)
+    logger.info("rog deck authored: %s path=%s outlet_boundary=%d files=%s",
+                _STEERING, decision.path, outlet_boundary, authored)
 
     return {
         "deck": deck,
@@ -524,7 +525,7 @@ async def write_rain_on_grid_deck(
                     "telemac_metrics.json", *authored],
         "authored": authored,
         "result_basename": _RESULT,
-        "outlet_nodes": outlet_nodes,
+        "outlet_boundary": outlet_boundary,
         "catchment": catchment,
         "infiltration": infiltration,
         "rain": rain,
@@ -775,10 +776,6 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
             postprocess_telemac_wse, slf_path, run_id=run_id,
             mesh_epsg=utm_epsg, reach_name=name, quantity="depth",
             mesh_frame_note="rain-on-grid peak water depth (UTM mesh frame)")
-        # The ANSWER is the hydrograph, and the server measures it: the flux
-        # through the nodes the outlet role landed on, off the run's own result.
-        hydrograph = await asyncio.to_thread(
-            outlet_hydrograph, slf_path, outlet_nodes=deck["outlet_nodes"])
     finally:
         Path(slf_path).unlink(missing_ok=True)
     if not layers:
@@ -789,6 +786,12 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
     raw = layers[0]
 
     listing = await asyncio.to_thread(_read_listing, run_id)
+    # The ANSWER is the hydrograph, and the ENGINE measured it: the flux across
+    # the declared outlet is part of the solver's own water-volume balance, so the
+    # run is narrated from the number it printed rather than from a second
+    # integral computed over its output fields.
+    hydrograph = await asyncio.to_thread(
+        outlet_hydrograph, listing, boundary=deck["outlet_boundary"])
     rainfall = _rainfall_volume_m3(deck)
     runoff = hydrograph.get("runoff_volume_m3")
     scalars: dict[str, Any] = {
@@ -844,9 +847,9 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         peak_quantity="flood_depth", mesh_basename=deck["result_basename"],
         mesh_epsg=utm_epsg, reach_name=name)
 
-    logger.info("rog complete run_id=%s catchment=%s area=%.4g km2 outlet_nodes=%d "
+    logger.info("rog complete run_id=%s catchment=%s area=%.4g km2 outlet_boundary=%d "
                 "peak_q=%s peak_depth=%s continuity=%s uri=%s", run_id, name,
-                float(deck.get("area_km2") or 0.0), len(deck["outlet_nodes"]),
+                float(deck.get("area_km2") or 0.0), deck["outlet_boundary"],
                 published.peak_discharge_m3s, published.max_depth_peak_m,
                 published.continuity_rel_error, published.uri)
     return published

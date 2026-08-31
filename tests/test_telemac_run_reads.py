@@ -9,6 +9,8 @@ silently wrong.
 
 from __future__ import annotations
 
+import pytest
+
 from trid3nt_server.workflows.telemac.steps import run_reads as R
 
 #: The in-image listing shape - the block GAIA prints once its run closes.
@@ -112,60 +114,74 @@ def test_a_track_with_no_floats_at_any_instant_draws_no_slick(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# The outlet hydrograph: the flux through the nodes the outlet role landed on.
+# The outlet hydrograph: the flux the ENGINE printed across the declared boundary.
 # --------------------------------------------------------------------------- #
-def _one_strip_selafin(path, *, u_east):
-    """A 2x1 strip whose EAST edge is the outlet, at one metre depth.
-
-    Nodes 0,2 are the west cap and 1,3 the east one; the east edge is 10 m long,
-    so a 1 m depth moving east at ``u_east`` leaves at 10 * u_east m3/s.
-    """
-    import numpy as np
-
-    from tests.test_postprocess_telemac import _write_synthetic_selafin
-
-    varnames = ["VELOCITY U      M/S", "VELOCITY V      M/S", "WATER DEPTH     M"]
-    x = [0.0, 20.0, 0.0, 20.0]
-    y = [0.0, 0.0, 10.0, 10.0]
-    ikle = [[1, 2, 3], [2, 4, 3]]
-    times = [0.0, 60.0]
-    data = {
-        "VELOCITY U      M/S": [np.full(4, 0.0), np.full(4, float(u_east))],
-        "VELOCITY V      M/S": [np.zeros(4), np.zeros(4)],
-        "WATER DEPTH     M": [np.ones(4), np.ones(4)],
-    }
-    _write_synthetic_selafin(path, varnames, x, y, ikle, times, data)
-    return path
+def _balance(t_s: float, *fluxes: float, error: str = "0.1E-14") -> str:
+    """One TELEMAC-2D water-volume balance block, in the engine's own spelling."""
+    lines = ["                       BALANCE OF WATER VOLUME",
+             "     VOLUME IN THE DOMAIN :    1472.903     M3"]
+    lines += [f"     FLUX BOUNDARY   {i}: {q:16.7E} M3/S"
+              "  ( >0 : ENTERING  <0 : EXITING )"
+              for i, q in enumerate(fluxes, start=1)]
+    lines.append(f"     RELATIVE ERROR IN VOLUME AT T = {t_s:12.1f}     S :   {error}")
+    return "\n".join(lines) + "\n"
 
 
-def test_water_leaving_through_the_outlet_reads_positive(tmp_path):
-    slf = _one_strip_selafin(tmp_path / "r2d_rog.slf", u_east=2.0)
-    out = R.outlet_hydrograph(slf, outlet_nodes=[1, 3])
-    assert out["outlet_segments"] == 1
-    # 10 m of edge x 1 m depth x 2 m/s.
-    assert out["q_m3s"] == [0.0, 20.0]
-    assert out["peak_discharge_m3s"] == 20.0
-    assert out["peak_discharge_time_s"] == 60.0
-    assert out["runoff_volume_m3"] == 600.0
+def test_the_hydrograph_is_the_listings_own_flux_series():
+    """The engine integrates the boundary flux itself and prints it; a server-side
+    re-derivation from the depth and velocity fields is a second computation of
+    the same quantity, and it read 0.0 while the solver reported tens of m3/s."""
+    listing = _balance(900.0, -20.25) + _balance(1800.0, -8.5)
+    out = R.outlet_hydrograph(listing, boundary=1)
+    assert out["t_s"] == [900.0, 1800.0]
+    # ONE convention: outflow positive, so the listing's own sign is negated once.
+    assert out["q_m3s"] == [20.25, 8.5]
+    assert out["peak_discharge_m3s"] == 20.25
+    assert out["peak_discharge_time_s"] == 900.0
+    assert out["outlet_boundary"] == 1
 
 
-def test_water_running_back_into_the_basin_reads_negative(tmp_path):
-    slf = _one_strip_selafin(tmp_path / "r2d_rog.slf", u_east=-2.0)
-    out = R.outlet_hydrograph(slf, outlet_nodes=[1, 3])
+def test_the_reported_volume_is_the_integral_of_that_same_series():
+    listing = _balance(0.0, -0.0) + _balance(3600.0, -10.0)
+    out = R.outlet_hydrograph(listing, boundary=1)
+    # trapezoid over one hour of a 0 -> 10 m3/s limb.
+    assert out["runoff_volume_m3"] == pytest.approx(18000.0)
+
+
+def test_the_declared_boundary_is_the_one_that_is_read():
+    """A reach prints an inflow and an outflow; reading the wrong number would
+    report the carrier discharge as the basin's runoff."""
+    listing = _balance(900.0, 250.0, -18.0)
+    assert R.outlet_hydrograph(listing, boundary=2)["q_m3s"] == [18.0]
+    assert R.outlet_hydrograph(listing, boundary=1)["q_m3s"] == [-250.0]
+
+
+def test_water_running_back_in_reads_negative_and_yields_no_runoff():
+    listing = _balance(0.0, 0.0) + _balance(60.0, 20.0)
+    out = R.outlet_hydrograph(listing, boundary=1)
     assert out["q_m3s"] == [0.0, -20.0]
     # A basin that only took water in produced no runoff volume to report.
     assert out["runoff_volume_m3"] == 0.0
 
 
-def test_an_interior_edge_is_never_an_outlet_segment(tmp_path):
-    """Only element edges no second element shares are the mesh's own rim, so a
-    role that lands on a diagonal measures nothing."""
-    slf = _one_strip_selafin(tmp_path / "r2d_rog.slf", u_east=2.0)
-    assert R.outlet_hydrograph(slf, outlet_nodes=[1, 2]) == {}
+def test_a_TRACER_balances_flux_lines_never_leak_into_the_water_hydrograph():
+    """A coupled run prints a second balance under its own heading; reading it as
+    discharge would report kilograms per second as cubic metres per second."""
+    listing = (_balance(900.0, -20.25)
+               + "                       BALANCE OF TRACER  1\n"
+                 "     FLUX BOUNDARY    1:   -0.5000000E+03 KG/S\n"
+                 "     RELATIVE ERROR IN QUANTITY OF TRACER  1 : 0.1E-13\n"
+               + _balance(1800.0, -8.5))
+    assert R.outlet_hydrograph(listing, boundary=1)["q_m3s"] == [20.25, 8.5]
+
+
+def test_a_listing_that_printed_no_balance_measures_nothing():
+    assert R.outlet_hydrograph("ITERATION 1\n", boundary=1) == {}
+    assert R.outlet_hydrograph(_balance(900.0, -1.0), boundary=3) == {}
 
 
 def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
-    listing = ("RELATIVE ERROR IN VOLUME  : 0.4E-03\n"
-               "RELATIVE ERROR IN VOLUME  : 0.9E-03\n")
+    listing = _balance(900.0, -1.0, error="0.4E-03") + \
+        _balance(1800.0, -1.0, error="0.9E-03")
     assert R.continuity_rel_error(listing) == 0.9e-3
     assert R.continuity_rel_error("no closure here") is None

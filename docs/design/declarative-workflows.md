@@ -404,8 +404,9 @@ waits per the hybrid rule).
   .swmm / .modflow) share the skeleton, override one serialization
   hook each - the generalization checkpoint made structural.
 - MEMENTO: the step ledger (completed steps + resolved params +
-  artifact URIs) - powers resume-from-failure now, full pause/resume
-  later.
+  artifact URIs) - powers the work a DERIVED rerun inherits from its
+  parent now, full pause/resume later. Every terminal state, failure
+  included, tombstones it.
 
 ## Testing
 

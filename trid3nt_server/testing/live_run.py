@@ -212,16 +212,23 @@ class LiveRun:
 
 
 async def drive(run: LiveRun) -> RunEvidence:
-    """Invoke the tool over the live socket, answering its cards, and record it."""
+    """Invoke the tool over the live socket, answering its cards, and record it.
+
+    ``restart_clean`` DEFAULTS ON for every driven run, because a driver run after
+    a code change exists to exercise the code that changed: any ledger left under
+    the same invocation key belongs to an older build. A declaration that names
+    the flag itself still wins.
+    """
     import websockets.asyncio.client as wsc
 
+    args = {"restart_clean": True, **dict(run.args)}
     session_id = new_ulid()
-    ev = RunEvidence(tool=run.tool, args=dict(run.args), session_id=session_id)
+    ev = RunEvidence(tool=run.tool, args=dict(args), session_id=session_id)
     async with wsc.connect(WS_URL, max_size=64 * 1024 * 1024) as ws:
         await handshake(ws, session_id)
         ev.case_id = await create_case(ws, session_id, run.case_title)
         await ws.send(mk("dev-tool-invoke", session_id,
-                         {"name": run.tool, "args": dict(run.args),
+                         {"name": run.tool, "args": dict(args),
                           "case_id": ev.case_id,
                           "raw_text": f"!run {run.tool}(...)"},
                          case_id=ev.case_id))

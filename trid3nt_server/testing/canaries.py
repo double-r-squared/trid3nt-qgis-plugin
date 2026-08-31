@@ -357,18 +357,13 @@ def evidence_path(name: str) -> str:
 def run(name: str, *, timeout_s: float | None = None) -> RunEvidence:
     """Drive one declared canary over the live socket, from the top every time.
 
-    ``restart_clean`` is the registry's, not each declaration's, because it is a
-    property of what a canary IS. A canary re-run after a code change must
-    exercise the code that changed; resume-from-failure would replay the PREVIOUS
-    attempt's deck out of the ledger - the same invocation key, the same params -
-    and report the old artifact as the new run's answer. That is a correct feature
-    doing exactly the wrong thing here, and it is the kind of green that costs an
-    afternoon.
+    From the top is the DRIVER's default (``live_run.drive``), so a declaration
+    here states the question and nothing about resumption.
     """
     declared = CANARIES.get(name)
     if declared is None:
         raise KeyError(f"no canary named {name!r} (declared: {sorted(CANARIES)})")
-    overrides: dict[str, Any] = {"args": {**declared.args, "restart_clean": True}}
+    overrides: dict[str, Any] = {}
     if timeout_s is not None:
         overrides["timeout_s"] = timeout_s
     return run_live(LiveRun(**{**declared.__dict__, **overrides}))

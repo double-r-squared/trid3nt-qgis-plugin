@@ -1027,13 +1027,13 @@ async def test_a_resumed_run_does_not_refetch_produced_data():
         Step(runner=f"{_HERE}.stub_step", kwargs={"m": Ref("mesh")}).named("a"),
         Step(runner=f"{_HERE}.stub_second").named("b"),
     ))
-    _FAIL_AT.add("stub_second")
-    with pytest.raises(StepFailedError):
-        await _run(plan, decl, {"base": 9.0}, data)
+    parent = await _run(plan, decl, {"base": 9.0}, data)
     assert _CALLS == ["stub_producer", "stub_step", "stub_second"]
+    await _seed_ledger("data_led", {"base": 9.0},
+                       [r for r in parent.records if r.node == "a"],
+                       parent.data_records)
 
     _CALLS.clear()
-    _FAIL_AT.clear()
     await _run(plan, decl, {"base": 9.0}, data)
     assert _CALLS == ["stub_second"]     # neither the producer nor the step re-ran
 
@@ -1061,37 +1061,71 @@ async def test_a_replayed_domain_step_restores_the_domain_it_recorded():
         Step(runner=f"{_HERE}.stub_refine").named("clip").overrides_domain(),
         Step(runner=f"{_HERE}.stub_second").named("b"),
     ))
-    _FAIL_AT.add("stub_second")
-    with pytest.raises(StepFailedError):
-        await _run(plan, _params(), {"base": 11.0},
-                   domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    parent = await _run(plan, _params(), {"base": 11.0},
+                        domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
+    await _seed_ledger("dom_w", {"base": 11.0},
+                       [r for r in parent.records if r.node == "clip"])
 
     _CALLS.clear()
-    _FAIL_AT.clear()
     out = await _run(plan, _params(), {"base": 11.0},
                      domain=Domain(bbox=(0.0, 0.0, 1.0, 1.0)))
     assert _CALLS == ["stub_second"]                       # the clip REPLAYED
     assert out.domain is not None and out.domain.bbox == (10.0, 10.0, 11.0, 11.0)
 
 
-# --- the ledger + resume ------------------------------------------------------ #
+# --- the ledger: every terminal state tombstones ------------------------------ #
+async def _seed_ledger(name, wire, records, data_records=()):
+    """Plant the work a DERIVED run inherits - the replay path that survives.
+
+    The same call ``rerun-with-overrides`` makes: a successful parent's records
+    land under the child's invocation key and the ordinary resume path walks them.
+    """
+    from trid3nt_server.workflows.lib import StepLedger, invocation_key as _key
+
+    p = await resolve_params(_params(), wire)
+    ledger = await StepLedger.load(_key(name, p.values_dict()), name)
+    await ledger.seed(list(records), list(data_records))
+
+
 @pytest.mark.asyncio
-async def test_rerun_replays_completed_steps_and_resumes_at_the_failure():
+async def test_a_FAILED_attempt_is_tombstoned_so_the_rerun_RE_EXECUTES():
+    """The records a dead attempt left were produced by whatever the code was
+    then. Replaying them into a re-run of the corrected question reports a
+    superseded artifact as the new run's answer - the cache-provenance staleness
+    class, and the reason a canary could stay green through a real fix."""
     plan = Plan("resume_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("expensive"),
         Step(runner=f"{_HERE}.stub_second").named("cheap"),
     ))
+    p = await resolve_params(_params(), {"base": 2.0})
+    key = invocation_key("resume_w", p.values_dict())
     _FAIL_AT.add("stub_second")
     with pytest.raises(StepFailedError):
         await _run(plan, _params(), {"base": 2.0})
     assert _CALLS == ["stub_step", "stub_second"]
+    assert (await _raw_ledger_doc(key))["complete"] is True
 
     _CALLS.clear()
     _FAIL_AT.clear()
     out = await _run(plan, _params(), {"base": 2.0})
-    assert _CALLS == ["stub_second"]              # the expensive step did NOT re-run
-    assert out.replayed == ["expensive"]
-    assert out.executed == ["cheap"]
+    assert _CALLS == ["stub_step", "stub_second"]
+    assert out.replayed == [] and out.executed == ["expensive", "cheap"]
+
+
+@pytest.mark.asyncio
+async def test_a_SEEDED_success_still_replays_that_is_derivation_working():
+    """Tombstoning failure does not retire replay: a derived rerun inherits its
+    parent's completed work and must not pay for it twice."""
+    plan = Plan("seeded_w", None, (
+        Step(runner=f"{_HERE}.stub_step").named("expensive"),
+        Step(runner=f"{_HERE}.stub_second").named("cheap"),
+    ))
+    parent = await _run(plan, _params(), {"base": 31.0})
+    await _seed_ledger("seeded_w", {"base": 31.0},
+                       [r for r in parent.records if r.node == "expensive"])
+    _CALLS.clear()
+    out = await _run(plan, _params(), {"base": 31.0})
+    assert out.replayed == ["expensive"] and _CALLS == ["stub_second"]
 
 
 @pytest.mark.asyncio
@@ -1128,12 +1162,11 @@ async def test_replay_re_executes_when_the_cached_artifact_is_gone():
         Step(runner=f"{_HERE}.stub_step").named("expensive"),
         Step(runner=f"{_HERE}.stub_second").named("cheap"),
     ))
-    _FAIL_AT.add("stub_second")
-    with pytest.raises(StepFailedError):
-        await _run(plan, _params(), {"base": 7.0})
+    parent = await _run(plan, _params(), {"base": 7.0})
+    await _seed_ledger("dead_w", {"base": 7.0},
+                       [r for r in parent.records if r.node == "expensive"])
 
     _CALLS.clear()
-    _FAIL_AT.clear()
     _MISSING_ARTIFACTS.add("s3://b/k.tif")          # the cached COG was pruned
     out = await _run(plan, _params(), {"base": 7.0})
     assert _CALLS == ["stub_step", "stub_second"]
@@ -1157,12 +1190,11 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
         Step(runner=f"{_HERE}.stub_mesh_step").named("mesh"),
         Step(runner=f"{_HERE}.stub_second").named("deck"),
     ))
-    _FAIL_AT.add("stub_second")
-    with pytest.raises(StepFailedError):
-        await _run(plan, _params(), {"base": 11.0})
+    parent = await _run(plan, _params(), {"base": 11.0})
+    await _seed_ledger("mesh_replay_w", {"base": 11.0},
+                       [r for r in parent.records if r.node == "mesh"])
 
     _CALLS.clear()
-    _FAIL_AT.clear()
     out = await _run(plan, _params(), {"base": 11.0})
     assert out.replayed == ["mesh"] and _CALLS == ["stub_second"]
 
@@ -1173,16 +1205,18 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
 
 
 @pytest.mark.asyncio
-async def test_restart_clean_ignores_a_failed_attempts_ledger():
+async def test_restart_clean_discards_whatever_ledger_it_finds():
+    """What survives a terminal state is nothing; what survives a process that
+    DIED without unwinding is records. restart_clean discards those too, which is
+    what makes a driver run exercise the code that changed."""
     plan = Plan("clean_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("a"),
         Step(runner=f"{_HERE}.stub_second").named("b"),
     ))
-    _FAIL_AT.add("stub_second")
-    with pytest.raises(StepFailedError):
-        await _run(plan, _params(), {"base": 3.0})
+    parent = await _run(plan, _params(), {"base": 3.0})
+    await _seed_ledger("clean_w", {"base": 3.0},
+                       [r for r in parent.records if r.node == "a"])
     _CALLS.clear()
-    _FAIL_AT.clear()
     out = await _run(plan, _params(), {"base": 3.0}, resume=False)
     assert _CALLS == ["stub_step", "stub_second"] and out.replayed == []
 

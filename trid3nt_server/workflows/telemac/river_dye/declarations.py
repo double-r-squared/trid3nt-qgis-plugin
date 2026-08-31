@@ -205,7 +205,7 @@ PARAMS: tuple[Param, ...] = (
           derived_when_absent=(
               "the reach centerline is resolved from the mid-reach point on the "
               "largest fetched flowline, else the geocoded centroid"),
-          desc="The point the worker resolves the reach centerline from, (lon, lat); "
+          desc="The point the reach centerline is navigated from, (lon, lat); "
                "set when the release must pin which water body is meshed"),
 )
 
@@ -235,11 +235,12 @@ DOC = dict(
          'for the release point on the canvas before the solve, and WAITS; "auto" '
          "(session default) proceeds with every assumption labeled. Not a physical value."),
         ("restart_clean",
-         "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
-         "left behind and re-runs every step from the top. Default False resumes at "
-         "the failed step - which on this plan means a completed solve is replayed "
-         "from its own artifact instead of re-solving. A run that completed is marked "
-         "complete and is never replayed."),
+         "True discards any ledger left under this same invocation and re-runs "
+         "every step from the top. Nothing a FAILED attempt left behind is ever "
+         "replayed and a run that completed is never replayed either, so a fresh "
+         "invocation always re-solves against live upstream data; what this flag "
+         "clears is the work a derived rerun inherited, or records a process that "
+         "died without unwinding left on disk."),
     ),
     returns=(
         "On success a `TelemacDyeLayerURI` (a `LayerURI` subtype) - the emitter loads "

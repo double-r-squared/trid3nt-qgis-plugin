@@ -355,26 +355,6 @@ def _install_step_mocks(captured: dict):
         captured["seed_uri"] = uri
         return (-114.31, 42.58)  # a mid-reach point on the Snake
 
-    async def _fake_river(*, reach, seed, run_tag, reach_length_km,
-                          release=None, nav_direction="DM"):
-        # The river fetch itself is exercised against its own fakes in
-        # test_telemac_reach_river.py; here it stands in, so this chain test
-        # stays about the chain.
-        captured["river_reach_km"] = reach_length_km
-        captured["river_release"] = release
-        return {
-            "inputs": [{"gs_uri": "s3://cache/c.geojson", "dest": "river_centerline.geojson"},
-                       {"gs_uri": "s3://cache/b.geojson", "dest": "river_banks.geojson"}],
-            "provenance": {"seed_lon": seed["lon"], "seed_lat": seed["lat"],
-                           "seed_rung": "position-named-flowline",
-                           "centerline_uri": "s3://cache/c.fgb",
-                           "centerline_sha256": "0" * 64,
-                           "centerline_comids": [123],
-                           "centerline_extent": [-114.4, 42.5, -114.2, 42.7],
-                           "banks_uri": "s3://cache/b.fgb"},
-            "seed_lon": seed["lon"], "seed_lat": seed["lat"],
-        }
-
     async def _fake_mesh(*, mesh, name=None):
         """The mesh session stands in: this chain test is about the chain.
 
@@ -391,7 +371,10 @@ def _install_step_mocks(captured: dict):
             crs_authid="EPSG:32611", has_bathymetry=True, utm_epsg=32611,
             node_count=800, element_count=1400,
             bbox=(-114.4, 42.5, -114.2, 42.7),
-            probes={"bed_fit": {"bed_top_m": 900.0, "bed_drop_m": 3.0}})
+            probes={"bed_fit": {"bed_top_m": 900.0, "bed_drop_m": 3.0}},
+            # The polygon the mesh was CUT from, which is what a supplied release
+            # point is tested against - the chain's own sectioned banks.
+            provenance={"spec": {"extent": dict(mesh["fields"]).get("extent")}})
         return {"artifact": artifact, "mesh_id": "MESH01",
                 "slf_uri": "s3://cache/mesh/MESH01/river.slf",
                 "cli_uri": "s3://cache/mesh/MESH01/river.cli",
@@ -418,6 +401,11 @@ def _install_step_mocks(captured: dict):
         captured["reach"] = out["deck"]
         return out
 
+    async def _capture_marker(_emitter, *, lon, lat, user_supplied, **_kw):
+        captured["release_marker"] = {"lon": lon, "lat": lat,
+                                      "user_supplied": user_supplied}
+        return False
+
     def _fake_run_solver(*, solver, model_setup_uri, compute_class):
         captured["solver"] = solver
         captured["model_setup_uri"] = model_setup_uri
@@ -442,7 +430,6 @@ def _install_step_mocks(captured: dict):
         patch.object(reach_steps, "registry_fn", _fake_registry_fn),
         patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
         patch.object(deck_steps, "write_reach_deck", _capture_deck),
-        patch.object(deck_steps, "resolve_reach_river", _fake_river),
         patch.object(deck_steps, "read_topology",
                      lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
                                    "liquid_boundary_order": ["outflow", "inflow"]}),
@@ -466,7 +453,7 @@ def _install_step_mocks(captured: dict):
         patch.object(prod_steps, "_publish_peak_layer", _fake_publish),
         patch.object(pp_mod, "postprocess_telemac", _fake_postprocess),
         patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),
-        patch.object(rel_mod, "publish_release_point", _amock(False)),
+        patch.object(rel_mod, "publish_release_point", _capture_marker),
         patch.object(products_mod, "persist_run_products", _amock([])),
         patch.object(solver_mod, "run_solver", _fake_run_solver),
         patch.object(solver_mod, "wait_for_completion", _amock(_FakeRunResult())),
@@ -552,6 +539,66 @@ def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
     reach = captured["reach"]
     assert reach["seed_lon"] == pytest.approx(-114.4609, abs=1e-3)
     assert reach["seed_lat"] == pytest.approx(42.5629, abs=1e-3)
+
+
+def _real_centerline_read() -> dict:
+    """Let the REAL centerline reader run, over the chain's own navigated line.
+
+    The module's own stub answers with a synthetic polyline, which says nothing
+    about where a release derived along the DECLARED reach actually lands.
+    """
+    from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
+    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
+
+    return {"overrides": [patch.object(deck_steps, "read_centerline_utm",
+                                       read_centerline_utm)]}
+
+
+def test_the_reach_is_navigated_EXACTLY_ONCE(tmp_path, monkeypatch):
+    """ONE centerline acquisition. A second navigate resolved beside the declared
+    row walked a different seed for a different distance, so the line the section
+    was cut between and the line the deck read described different rivers - and a
+    release derived along the second one landed outside the meshed domain."""
+    captured: dict = {}
+    _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+              reach_length_km=4.0)
+    assert len(captured["navigates"]) == 1
+    assert captured["navigates"][0]["distance_km"] == 4.0
+
+
+def test_a_supplied_seed_point_is_the_one_the_centerline_is_navigated_from(
+        tmp_path, monkeypatch):
+    """Naming where the substance enters the water names which stretch to model,
+    so the ONE navigate starts there rather than at the flowline midpoint."""
+    captured: dict = {}
+    _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+              release_coords=[-124.10, 40.50], **_real_centerline_read())
+    assert captured["navigates"][0]["seed_point"] == [-124.10, 40.50]
+    assert captured["reach"]["seed_lon"] == pytest.approx(-124.10)
+    # the supplied point was settled against THAT centerline, and the deck says so
+    assert captured["reach"]["release_lon"] == pytest.approx(-124.10)
+    assert captured["release_marker"]["user_supplied"] is True
+
+
+def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch):
+    """No release point placed -> the source walks spill_fraction along the same
+    line the mesh was built over, which is what makes it inside the domain by
+    construction rather than by luck."""
+    from shapely.geometry import LineString, Point
+
+    from tests.reach_chain import CENTERLINE
+
+    captured: dict = {}
+    _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
+              spill_fraction=0.5, **_real_centerline_read())
+    marker = captured["release_marker"]
+    assert marker["user_supplied"] is False
+    line = LineString(CENTERLINE["coordinates"])
+    assert line.distance(Point(marker["lon"], marker["lat"])) < 1e-4
+    # ... and the deck states the FRACTION rather than a coordinate, because a
+    # release row that reads "user" over a derived point is the dishonest one.
+    assert captured["reach"]["spill_frac"] == 0.5
+    assert "release_lon" not in captured["reach"]
 
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):

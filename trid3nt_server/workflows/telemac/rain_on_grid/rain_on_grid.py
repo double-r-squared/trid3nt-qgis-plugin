@@ -186,9 +186,10 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
 
     The hydrograph IS the rainfall-runoff answer - a flood-depth raster says where
     the water stood, and this says how much left the basin and when. The series is
-    the worker's own measured outflow through the outlet boundary, never a fitted
-    curve. ``None`` when the run measured no series, which is the honest "there is
-    no hydrograph to draw".
+    the solver's own outflow across the outlet boundary, never a fitted curve, and
+    it arrives outflow-positive from the one reader that states the convention.
+    ``None`` when the run measured no series, which is the honest "there is no
+    hydrograph to draw".
     """
     times = getattr(result, "outlet_hydrograph_t_s", None)
     flows = getattr(result, "outlet_hydrograph_q_m3s", None)
@@ -196,11 +197,7 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
         return None
     from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
-    # Discharge OUT of the basin is what the question asks about, and the outlet
-    # boundary's normal points outward - so an outflow arrives negative. The sign
-    # is flipped once, here, rather than left for a reader to interpret off an
-    # axis that would otherwise run downward for a rising flood.
-    values = [{"t_h": float(t) / 3600.0, "q_m3s": -float(q)}
+    values = [{"t_h": float(t) / 3600.0, "q_m3s": float(q)}
               for t, q in zip(times, flows)]
     where = (params.get("location") or getattr(result, "catchment_name", None)
              or "the catchment")
@@ -221,7 +218,7 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
         },
         title=f"Outlet hydrograph - {where}",
         caption=(
-            (f"Peak outflow {abs(float(peak)):.3g} m3/s" if peak is not None
+            (f"Peak outflow {float(peak):.3g} m3/s" if peak is not None
              else "No outflow reached the outlet over this window")
             + (f" from a {float(area):.3g} km2 catchment" if area is not None else "")
             + (f", {float(intensity):g} mm/h storm" if intensity else "")

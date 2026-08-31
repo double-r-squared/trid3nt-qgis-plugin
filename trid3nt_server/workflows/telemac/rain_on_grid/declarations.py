@@ -226,10 +226,12 @@ DOC = dict(
          "REFUSES if no pour point was passed - an outlet is never invented. Not a "
          "physical value."),
         ("restart_clean",
-         "True discards the ledger a PREVIOUS FAILED attempt at this same invocation "
-         "left behind and re-runs every step from the top. Default False resumes at "
-         "the failed step. A run that completed is marked complete and is never "
-         "replayed, so a fresh invocation always re-solves against live upstream data."),
+         "True discards any ledger left under this same invocation and re-runs "
+         "every step from the top. Nothing a FAILED attempt left behind is ever "
+         "replayed and a run that completed is never replayed either, so a fresh "
+         "invocation always re-solves against live upstream data; what this flag "
+         "clears is the work a derived rerun inherited, or records a process that "
+         "died without unwinding left on disk."),
     ),
     returns=(
         "On success a `TelemacRainOnGridLayerURI` (a `LayerURI` subtype) - the "

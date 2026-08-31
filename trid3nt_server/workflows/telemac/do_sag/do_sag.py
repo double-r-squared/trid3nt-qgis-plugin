@@ -98,7 +98,6 @@ class DATA:
 PHYSICS = Physics("waqtel_o2",
                   reach_length_km=P.reach_length_km,
                   do_sag_config=Ref("waqtel"),
-                  reach_seed_coords=P.outfall_coords,
                   sim_duration_s=P.sim_duration_s,
                   output_interval_min=P.output_interval_min)
 
@@ -132,7 +131,8 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         DrawGate(param="outfall_coords", geometry="point",
                  prompt="Click where the discharge enters the river"),
         *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=DATA.rivers,
-                            discharge=P.discharge_m3s, event_time=P.event_time),
+                            discharge=P.discharge_m3s, event_time=P.event_time,
+                            seed_coords=P.outfall_coords),
         WaqtelO2(discharge_bod_mgl=P.discharge_bod_mgl,
                  upstream_do_mgl=P.upstream_do_mgl,
                  do_saturation_mgl=P.do_saturation_mgl,

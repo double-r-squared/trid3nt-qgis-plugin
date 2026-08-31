@@ -78,6 +78,10 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
                   distance_km=50.0, **_kw):
         seen["navigate"] = {"seed_point": seed_point, "direction": direction,
                             "distance_km": distance_km}
+        # EVERY navigate, not just the last: one reach has one centerline, and a
+        # second acquisition beside the declared row is what put a derived release
+        # 350 m outside the meshed domain.
+        seen.setdefault("navigates", []).append(dict(seen["navigate"]))
         return _layer(centerline_uri, "centerline", list(CENTERLINE_BBOX))
 
     def _water(*, bbox, max_records=200, **_kw):

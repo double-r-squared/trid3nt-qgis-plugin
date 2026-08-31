@@ -35,6 +35,12 @@ _DO_SAG = {"bod_mgl": 20.0, "upstream_do_mgl": 8.0, "saturation_mgl": 9.0,
            "water_temp_c": 20.0, "k1_per_day": 0.3, "k2_per_day": 0.5,
            "k2_formula": 0, "standard_mgl": 5.0}
 
+#: THE reach the chain declared - the one line the section was cut between, the
+#: mesh was built over and the deck reads. Inline, because what the writer does
+#: with it is measured through the centerline reader stood in below.
+_CENTERLINE = {"type": "LineString",
+               "coordinates": [[-124.13, 40.50], [-124.07, 40.50]]}
+
 #: The sheet both parity cases are written from. Held apart from the expected
 #: deck so the dumper below restates the deck from the ASK rather than from
 #: anything the writer produced.
@@ -80,22 +86,10 @@ def writer(monkeypatch, tmp_path):
 
     from trid3nt_server.workflows.telemac import release_layer as rel_mod
 
-    async def _river(**_kw):
-        return {
-            "inputs": [{"gs_uri": "s3://c/c.geojson",
-                        "dest": "river_centerline.geojson"}],
-            "provenance": {"seed_lon": -124.1, "seed_lat": 40.5,
-                           "seed_rung": "position-named-flowline",
-                           "centerline_uri": "s3://c/centerline.geojson",
-                           "centerline_sha256": "0" * 64,
-                           "centerline_comids": [1]},
-        }
-
     async def _publish(*_a, **_kw):
         return False
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(deck_mod, "resolve_reach_river", _river)
     monkeypatch.setattr(rel_mod, "publish_release_point", _publish)
     monkeypatch.setattr(deck_mod, "read_topology",
                         lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
@@ -108,7 +102,11 @@ def writer(monkeypatch, tmp_path):
         lambda _rundir, run_tag, names: [
             {"gs_uri": f"s3://cache/telemac/{run_tag}/{n}", "dest": n}
             for n in names])
-    return deck_mod.write_reach_deck
+
+    async def _write(**kwargs):
+        return await deck_mod.write_reach_deck(centerline=_CENTERLINE, **kwargs)
+
+    return _write
 
 
 # --------------------------------------------------------------------------- #

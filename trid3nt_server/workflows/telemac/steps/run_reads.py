@@ -223,9 +223,15 @@ def oil_slick_features(drogues_path: str | Path, *, utm_epsg: int
     return {"snapshots": snapshots}, slick, stats
 
 
-#: TELEMAC-2D prints its volume closure once per listing under this label, as a
-#: percentage of the volume that entered.
-_VOLUME_ERROR = r"RELATIVE ERROR IN VOLUME\s*:?\s*=?\s*([-\d.Ee+]+)"
+#: TELEMAC-2D closes its water-volume balance once per listing period. The block
+#: OPENS with its heading, carries one flux line per liquid boundary, and closes
+#: with the relative error stamped with the time the whole block belongs to. The
+#: heading is read too, so a tracer balance's own flux lines - printed under a
+#: different heading and closed with a different error - cannot leak into it.
+_BALANCE_HEAD = r"BALANCE OF WATER VOLUME"
+_FLUX_BOUNDARY = r"FLUX BOUNDARY\s+(\d+)\s*:\s*([-+\d.Ee]+)"
+_BALANCE_TIME = r"RELATIVE ERROR IN VOLUME AT T\s*=\s*([-+\d.Ee]+)\s*S"
+_VOLUME_ERROR = _BALANCE_TIME + r"\s*:\s*([-+\d.Ee]+)"
 
 
 def continuity_rel_error(listing_text: str) -> float | None:
@@ -239,97 +245,67 @@ def continuity_rel_error(listing_text: str) -> float | None:
     if not found:
         return None
     try:
-        return float(found[-1])
+        return float(found[-1][1])
     except ValueError:
         return None
 
 
-def outlet_hydrograph(result_slf: str | Path, *, outlet_nodes: Any
-                      ) -> dict[str, Any]:
-    """Discharge THROUGH the declared outlet, per written frame.
+def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
+    """Discharge through one LIQUID BOUNDARY, as the engine itself measured it.
 
-    The flux integral the run's answer is: over every boundary segment whose two
-    ends both took the outlet role, the depth-weighted normal velocity times the
-    segment length, summed. The normal points AWAY from the element the segment
-    belongs to, so water leaving the basin arrives positive and the sign never
-    depends on which way the boundary was walked.
+    TELEMAC integrates the flux across every liquid boundary as part of its own
+    water-volume balance and prints the result each listing period. That number is
+    the hydrograph: a server-side re-derivation from the depth and velocity fields
+    is a second computation of the same quantity, and it read zero on a run whose
+    solver was reporting tens of m3/s across the very boundary being asked about.
 
-    A boundary segment is an element edge no second element shares - the mesh's
-    own definition of its rim - so the outlet is measured on the geometry the
-    solver integrated over rather than on a polyline redrawn beside it.
+    ``boundary`` is the 1-based liquid-boundary number - the position the role
+    takes in the accepted topology's ``liquid_boundary_order``, which is the order
+    the solver numbers its boundaries in.
+
+    ONE SIGN CONVENTION, stated here and nowhere else: **outflow is positive**.
+    The listing's own convention is the opposite (it prints entering flow
+    positive), so it is negated once, at the read, and every consumer downstream -
+    the peak, the volume, the chart - reads a rising outflow as a rising number.
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
-
-    slf = read_selafin(str(result_slf))
-    names = {v.strip().upper(): v for v in slf["varnames"]}
-
-    def _pick(*keys: str) -> Any:
-        for key in keys:
-            for upper, original in names.items():
-                if upper.startswith(key):
-                    return np.asarray(slf["data"][original], dtype=float)
-        return None
-
-    depth = _pick("WATER DEPTH", "H ")
-    vel_u = _pick("VELOCITY U", "U ")
-    vel_v = _pick("VELOCITY V", "V ")
-    if depth is None or vel_u is None or vel_v is None:
-        return {}
-
-    xy = np.column_stack([np.asarray(slf["x"], dtype=float),
-                          np.asarray(slf["y"], dtype=float)])
-    edges = _outlet_edges(np.asarray(slf["ikle"], dtype=np.int64),
-                          {int(n) for n in outlet_nodes})
-    if not edges:
-        return {}
-
-    times = np.asarray(slf["times"], dtype=float)
-    flows = np.zeros(times.size, dtype=float)
-    for a, b, apex in edges:
-        span = xy[b] - xy[a]
-        length = float(np.hypot(*span))
-        if length <= 0.0:
+    series: list[tuple[float, float]] = []
+    pending: dict[int, float] | None = None
+    for line in (listing_text or "").splitlines():
+        if re.search(_BALANCE_HEAD, line):
+            pending = {}
             continue
-        # Outward is the side the apex is NOT on.
-        normal = np.array([span[1], -span[0]]) / length
-        if float(np.dot(xy[apex] - 0.5 * (xy[a] + xy[b]), normal)) > 0.0:
-            normal = -normal
-        flux = 0.5 * ((depth[:, a] * (vel_u[:, a] * normal[0]
-                                      + vel_v[:, a] * normal[1]))
-                      + (depth[:, b] * (vel_u[:, b] * normal[0]
-                                        + vel_v[:, b] * normal[1])))
-        flows += flux * length
+        if pending is None:
+            continue
+        flux = re.search(_FLUX_BOUNDARY, line)
+        if flux is not None:
+            try:
+                pending[int(flux.group(1))] = float(flux.group(2))
+            except ValueError:
+                continue
+            continue
+        stamp = re.search(_BALANCE_TIME, line)
+        if stamp is None:
+            continue
+        if int(boundary) in pending:
+            try:
+                series.append((float(stamp.group(1)), -pending[int(boundary)]))
+            except ValueError:
+                pass
+        pending = None
+    if not series:
+        return {}
 
+    times = np.asarray([t for t, _q in series], dtype=float)
+    flows = np.asarray([q for _t, q in series], dtype=float)
     volume = float(np.trapezoid(flows, times)) if times.size > 1 else 0.0
-    peak = int(np.argmax(flows)) if flows.size else 0
+    peak = int(np.argmax(flows))
     return {
         "t_s": [round(float(t), 3) for t in times],
         "q_m3s": [round(float(q), 6) for q in flows],
-        "peak_discharge_m3s": round(float(flows[peak]), 6) if flows.size else None,
-        "peak_discharge_time_s": round(float(times[peak]), 3) if flows.size else None,
+        "peak_discharge_m3s": round(float(flows[peak]), 6),
+        "peak_discharge_time_s": round(float(times[peak]), 3),
         "runoff_volume_m3": round(max(volume, 0.0), 3),
-        "outlet_segments": len(edges),
+        "outlet_boundary": int(boundary),
     }
-
-
-def _outlet_edges(ikle: Any, outlet: set[int]) -> list[tuple[int, int, int]]:
-    """Boundary edges whose BOTH ends took the outlet role -> ``(a, b, apex)``.
-
-    ``apex`` is the element's third node, which is what makes the outward side
-    measurable without walking the boundary loop in any particular direction.
-    """
-    seen: dict[tuple[int, int], tuple[int, int, int]] = {}
-    shared: set[tuple[int, int]] = set()
-    for tri in ikle:
-        nodes = [int(n) for n in tri[:3]]
-        for i in range(3):
-            a, b = nodes[i], nodes[(i + 1) % 3]
-            key = (min(a, b), max(a, b))
-            if key in seen:
-                shared.add(key)
-                continue
-            seen[key] = (a, b, nodes[(i + 2) % 3])
-    return [row for key, row in seen.items()
-            if key not in shared and key[0] in outlet and key[1] in outlet]

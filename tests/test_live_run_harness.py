@@ -146,6 +146,49 @@ def test_a_sheetless_warning_takes_the_back_compatible_path():
     assert ev.form_card is None and ev.plain_warnings == ["telemac_do_sag"]
 
 
+# --- every driven run starts from the top ------------------------------------ #
+def test_a_driven_run_passes_restart_clean_by_default():
+    """A driver run after a code change exists to exercise the code that changed,
+    so any ledger under the same invocation key belongs to an older build."""
+    ev = _drive(LiveRun(tool="t", args={"location": "X"}, case_title="c"))
+    assert ev.args["restart_clean"] is True
+
+
+def test_a_declaration_that_names_the_flag_itself_still_wins():
+    ev = _drive(LiveRun(tool="t", args={"restart_clean": False}, case_title="c"))
+    assert ev.args["restart_clean"] is False
+
+
+def _drive(run: LiveRun) -> RunEvidence:
+    """``drive`` over a socket that answers nothing - the invoke frame is the point."""
+    import contextlib
+
+    from trid3nt_server.testing import live_run as L
+
+    ws = _FakeWS([])
+
+    @contextlib.asynccontextmanager
+    async def _connect(*_a, **_kw):
+        yield ws
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "handshake", _noop)
+        mp.setattr(L, "create_case", _case)
+        mp.setattr(L, "_pump", _noop)
+        mp.setattr(L, "_read_run_products", lambda _ev: None)
+        mp.setitem(__import__("sys").modules, "websockets.asyncio.client",
+                   type("m", (), {"connect": _connect}))
+        return asyncio.run(L.drive(run))
+
+
+async def _noop(*_a, **_kw) -> None:
+    return None
+
+
+async def _case(*_a, **_kw) -> str:
+    return "CASE"
+
+
 # --- a declared card that never fired is a FAILURE, not a silent pass -------- #
 def test_a_declared_card_that_never_fired_refuses():
     with pytest.raises(LiveRunError, match="no draw card fired"):

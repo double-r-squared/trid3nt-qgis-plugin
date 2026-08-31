@@ -245,7 +245,7 @@ def run_leg(*, mesh_uri: str | None, structure_uri: str, title: str,
     else:
         args["target_resolution_m"] = COMPARISON_RESOLUTION_M
     return run_live(LiveRun(
-        tool="artemis_harbor_agitation", args={**args, "restart_clean": True},
+        tool="artemis_harbor_agitation", args=args,
         case_title=title, answers=GateAnswers(confirm="proceed"),
         timeout_s=timeout_s, cleanup_case=True))
 

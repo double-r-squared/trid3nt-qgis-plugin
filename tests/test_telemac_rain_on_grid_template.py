@@ -199,15 +199,15 @@ def test_hydrograph_chart_line_spec_with_a_series():
     )
 
     result = SimpleNamespace(
-        outlet_hydrograph_t_s=[0.0, 3600.0], outlet_hydrograph_q_m3s=[-1.0, -5.0],
+        outlet_hydrograph_t_s=[0.0, 3600.0], outlet_hydrograph_q_m3s=[1.0, 5.0],
         peak_discharge_m3s=5.0, catchment_area_km2=2.0, runoff_coefficient=0.3,
         rain_intensity_mm_per_hr=25.0, name="watershed")
     payload = build_hydrograph_chart(result=result, params={"location": None})
     assert payload is not None
     assert payload["vega_lite_spec"]["mark"]["type"] == "line"
     values = payload["vega_lite_spec"]["data"]["values"]
-    # discharge OUT of the basin reads positive: the outlet boundary's outward
-    # normal makes an outflow arrive negative, and the sign is flipped once here.
+    # The series arrives outflow-positive from the one reader that states the
+    # convention, so the chart plots it as it was measured.
     assert values == [{"t_h": 0.0, "q_m3s": 1.0}, {"t_h": 1.0, "q_m3s": 5.0}]
     assert "5" in payload["caption"] and "2 km2" in payload["caption"]
 
@@ -496,11 +496,11 @@ def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(
     assert deck["hyetograph_total_mm"] == 15.5
 
 
-def test_the_hydrograph_integrates_over_the_declared_outlet_nodes(rog_deck):
-    """The nodes are the ones the DECLARED role landed on, read off the accepted
-    topology rather than re-derived as a nearest-node set."""
+def test_the_hydrograph_reads_the_declared_outlets_own_boundary_number(rog_deck):
+    """The role, resolved against the numbering the SOLVER uses - so the flux the
+    listing prints under that number is the one the hydrograph reads."""
     deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
-    assert deck["outlet_nodes"] == [1, 3]
+    assert deck["outlet_boundary"] == 1
 
 
 def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_deck, monkeypatch):

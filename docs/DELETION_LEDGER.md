@@ -2250,3 +2250,36 @@ worker-side gate to the server dies with the gate.
   coverage PROCEEDS with the measured fraction journalled) is now proven on banks
   that map both ends with a gap between them, and `BANKS_HALF` proves the refusal
   at the cut.
+- `steps/reach.py::resolve_reach_river` and its whole seed ladder DELETE -
+  `resolve_reach_seed_point`, `_named_seed`, `_mainstem_seed`, `_nearest_vertex`,
+  `_feature_vertices`, `_lonlat_extent`, `_stage_geojson`, `CENTERLINE_DEST`,
+  `BANKS_DEST`, `named_watercourse` and the `river_name` field, with
+  `tests/test_telemac_reach_river.py`. CONDITION MET: it was a SECOND acquisition
+  of the reach beside the declared `DATA.centerline` row - a different seed, four
+  COMIDs and 3472 m against the declared 1290 m - so the line the section was cut
+  between and the mesh was built over was not the line the deck read. A release
+  derived at `spill_fraction` along the second one landed 350 m outside the
+  meshed domain and the solver refused it as SOURCE POINT OUTSIDE DOMAIN. Its
+  banks fetch duplicated `DATA.banks`, and nothing consumed the two GeoJSONs it
+  staged (they were absent from the deck's own manifest inputs). The seed the
+  ladder produced never reached the meshed reach: `DATA.centerline` was already
+  navigated from the raw `ReachSeed`. `reach_seed_coords` survives, wired to the
+  ONE seed that centerline is navigated from.
+- `steps/run_reads.py::_outlet_edges` and the depth-weighted flux integral in
+  `outlet_hydrograph` DELETE; the reader parses the listing's own per-boundary
+  FLUX series. CONDITION MET: the re-derivation measured 0.0 m3/s on a run whose
+  solver was printing FLUX BOUNDARY 1 = -20.25 m3/s across that same boundary, so
+  the rain-on-grid hydrograph, its runoff volume and its runoff coefficient were
+  all zero on a run that drained. `build_hydrograph_chart`'s compensating
+  negation dies with it - one sign convention (outflow positive) is stated at the
+  reader. `deck["outlet_nodes"]` becomes `deck["outlet_boundary"]`, the role
+  resolved against the numbering the solver uses.
+- The interpreter's resume-from-FAILED-attempt DELETES: every terminal state
+  tombstones the invocation ledger. CONDITION MET: the records a failed attempt
+  left behind were produced by the code as it was then, so re-running the
+  corrected question replayed a superseded deck and reported its artifact as the
+  new run's answer - the cache-provenance staleness class, and green that costs
+  an afternoon. Replay survives where it is earned: a derived rerun seeds this
+  ledger from its successful parent's snapshot. `canaries.run`'s per-canary
+  `restart_clean` override deletes too - `live_run.drive` passes it for every
+  driven run.

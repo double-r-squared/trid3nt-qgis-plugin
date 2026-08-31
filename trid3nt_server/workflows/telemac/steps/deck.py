@@ -33,12 +33,7 @@ from trid3nt_server.workflows.mesh.topology import read_topology
 
 from . import author
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
-from .reach import (
-    MESH_H_FLOOR_M,
-    coerce_lonlat_point,
-    resolve_reach_river,
-    suggest_time_step_s,
-)
+from .reach import MESH_H_FLOOR_M, coerce_lonlat_point, suggest_time_step_s
 from .substance import (
     arm_sediment_modules,
     classify_substance,
@@ -203,25 +198,14 @@ def _to_utm(source: Any, utm_epsg: int) -> Any:
     return _transform(tr.transform, geometry)
 
 
-def _source_point_utm(centerline: Any, release_lonlat: Any, utm_epsg: int,
-                      spill_fraction: float) -> tuple[float, float]:
-    """Where the release enters the water, in the mesh's metres.
-
-    A settled point wins - it is already inside the domain and on the flowline.
-    With none placed the source sits at ``spill_fraction`` along the meshed reach,
-    which is the along-channel position the sheet declares.
-    """
+def _to_utm_point(lonlat: tuple[float, float],
+                  utm_epsg: int) -> tuple[float, float]:
+    """One lon/lat point in the mesh's own metres."""
     from pyproj import Transformer
-    from shapely.geometry import LineString
 
-    if release_lonlat is not None:
-        tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-        x, y = tr.transform(float(release_lonlat[0]), float(release_lonlat[1]))
-        return (float(x), float(y))
-    line = LineString(centerline)
-    point = line.interpolate(min(max(float(spill_fraction), 0.0), 1.0),
-                             normalized=True)
-    return (float(point.x), float(point.y))
+    x, y = Transformer.from_crs(4326, int(utm_epsg), always_xy=True).transform(
+        float(lonlat[0]), float(lonlat[1]))
+    return (float(x), float(y))
 
 
 def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
@@ -420,31 +404,40 @@ def _do_sag_block(cfg: dict[str, Any] | None) -> dict[str, Any]:
 
 async def _settle_release(
     release_pair: tuple[float, float] | None, *, mesh: dict[str, Any],
-    river: dict[str, Any],
-) -> tuple[tuple[float, float] | None, str | None]:
-    """A supplied release point, settled against the domain -> ``(point, note)``.
+    centerline: Any, centerline_utm: Any, utm_epsg: int, spill_fraction: float,
+) -> tuple[tuple[float, float], str | None]:
+    """WHERE the source enters the water -> ``(lon, lat)`` and how it was decided.
 
-    PRE-FLIGHT: the domain polygon the accepted mesh was cut from decides whether
-    the point can be a source at all, and the fetched flowline decides where on
+    ONE seam, because there is one centerline. A SUPPLIED point is settled against
+    real geometry: the domain polygon the accepted mesh was cut from decides
+    whether it can be a source at all, and the declared centerline decides where on
     the river it sits. A point the domain does not hold raises through, because
     the only alternatives are releasing somewhere the user did not choose or
     solving a source outside the water.
 
-    ONE path, and it always has a polygon: a mesh that states no domain polygon
-    refuses at the read rather than letting a point through untested.
-
-    A run that placed no point asks nothing of the geometry and reads none of it.
+    With none placed the source sits at ``spill_fraction`` along that SAME
+    centerline - the line the section was cut between and the mesh was built over -
+    so a derived release is inside the meshed domain by construction rather than by
+    luck. A second navigate resolved beside this one is what put it 350 m outside.
     """
     if release_pair is None:
-        return None, None
+        from pyproj import Transformer
+        from shapely.geometry import LineString
+
+        point = LineString(centerline_utm).interpolate(
+            min(max(float(spill_fraction), 0.0), 1.0), normalized=True)
+        lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
+            point.x, point.y)
+        return (float(lon), float(lat)), None
+
     from trid3nt_server.workflows.telemac.release_point import (
         contain_release_point, domain_polygon_of,
     )
 
-    domain = domain_polygon_of(mesh.get("artifact"))
     contained = await asyncio.to_thread(
-        contain_release_point, point=release_pair, domain=domain,
-        flowline=river["provenance"]["centerline_uri"])
+        contain_release_point, point=release_pair,
+        domain=domain_polygon_of(mesh.get("artifact")),
+        flowline=centerline)
     return (contained.lon, contained.lat), contained.note
 
 
@@ -453,11 +446,11 @@ async def write_reach_deck(
     reach: dict[str, Any],
     seed: dict[str, Any],
     mesh: dict[str, Any],
+    centerline: Any,
     carrier_discharge: dict[str, Any],
     reach_polygon: Any = None,
     rain: dict[str, Any] | None = None,
     release_coords: Any = None,
-    reach_seed_coords: Any = None,
     substance: str = "dye",
     reach_length_km: float = 6.0,
     sim_duration_s: float = 3600.0,
@@ -498,17 +491,20 @@ async def write_reach_deck(
     rather than on an equivalent rebuild, and the timestep follows the edge that
     mesh was BUILT at rather than the edge that was asked for.
 
-    The RELEASE POINT is settled here, BEFORE anything is staged: the river is
-    resolved first because containment is a question about real geometry, a
-    supplied point outside the domain polygon refuses while the user can still
-    move it, and one inside it is put on the flowline. Only then does the marker
-    go on the canvas - at the point the deck actually carries, so the map and the
-    solve cannot disagree - saying out loud whether the user placed it or the
-    pipeline derived it.
+    The CENTERLINE is the chain's own declared row - the line the section was cut
+    between, the mesh was built over and the canvas shows. There is exactly one,
+    so the release the deck carries, the marker on the map and the domain the
+    solver integrates cannot describe three different rivers.
+
+    The RELEASE POINT is settled against that centerline BEFORE anything is
+    staged: a supplied point outside the domain polygon refuses while the user can
+    still move it, one inside it is put on the flowline, and an unplaced one walks
+    ``spill_fraction`` along the same line. Only then does the marker go on the
+    canvas - at the point the deck actually carries - saying out loud whether the
+    user placed it or the pipeline derived it.
     """
     substance = sanitize_substance(substance)
     release_pair = coerce_lonlat_point(release_coords)
-    seed_pair = coerce_lonlat_point(reach_seed_coords)
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
 
     # The granularity the deck records is the one the ACCEPTED mesh was built at,
@@ -539,34 +535,27 @@ async def write_reach_deck(
     from trid3nt_server.workflows.telemac.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
-    # The river this reach is MESHED on, fetched here and staged into the run
-    # directory. It runs BEFORE everything the release depends on, because the
-    # flowline a supplied point is snapped to is the one this ladder resolved.
     run_tag = new_ulid()
-    river = await resolve_reach_river(
-        reach=reach, seed=seed, run_tag=run_tag,
-        reach_length_km=float(reach_length_km),
-        release=seed_pair)
-    logger.info("telemac reach river: seed=(%.5f,%.5f) rung=%s comids=%s "
-                "centerline=%s",
-                river["provenance"]["seed_lon"], river["provenance"]["seed_lat"],
-                river["provenance"]["seed_rung"],
-                river["provenance"]["centerline_comids"],
-                river["provenance"]["centerline_sha256"][:12])
-
+    artifact = mesh.get("artifact")
+    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    # The centerline is read head-to-tail from the seed the navigate was walked
+    # downstream FROM, so ``spill_fraction`` counts from upstream and the bed the
+    # mesh carries slopes the same way.
+    centerline_utm = await asyncio.to_thread(
+        read_centerline_utm, centerline, utm_epsg,
+        start_lonlat=(seed_lon, seed_lat))
     release_lonlat, release_note = await _settle_release(
-        release_pair, mesh=mesh, river=river)
+        release_pair, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
+        utm_epsg=utm_epsg, spill_fraction=spill_fraction)
 
     # The marker rides BEFORE the solve, so the user sees the input against the
     # mesh rather than only in the results, and it carries the SETTLED point: the
     # containment test above refuses anything the domain does not hold, so no run
     # carries a user-placed marker the plume disagrees with.
-    release_point = release_lonlat or seed_pair
     await publish_release_point(
         current_emitter(),
-        lon=(release_point or (seed_lon, seed_lat))[0],
-        lat=(release_point or (seed_lon, seed_lat))[1],
-        user_supplied=release_point is not None,
+        lon=release_lonlat[0], lat=release_lonlat[1],
+        user_supplied=release_pair is not None,
         reach_name=reach["slug"],
         label="Outfall" if do_sag_config else "Release point")
 
@@ -577,11 +566,10 @@ async def write_reach_deck(
     rain_mm_day = (rain or {}).get("mm_per_day")
     deck: dict[str, Any] = {
         "name": reach["slug"],
-        # The seed the CENTERLINE was resolved from, not the one the ladder was
-        # handed: the manifest is the run's record of what it meshed, and the two
-        # differ whenever a re-seed rung fired.
-        "seed_lon": round(float(river["provenance"]["seed_lon"]), 6),
-        "seed_lat": round(float(river["provenance"]["seed_lat"]), 6),
+        # The seed the one centerline was navigated from - the manifest's record
+        # of which stretch this run meshed.
+        "seed_lon": round(seed_lon, 6),
+        "seed_lat": round(seed_lat, 6),
         **_resolved_physics(friction_coefficient, friction_law,
                             velocity_diffusivity, tracer_diffusivity),
         **class_block,
@@ -606,12 +594,12 @@ async def write_reach_deck(
         **({"output_interval_min": float(output_interval_min)}
            if output_interval_min is not None else {}),
         "dye_conc_mgl": float(dye_concentration_mgl),
-        # A picked release point overrides spill_frac. It is the SETTLED point -
-        # already inside the domain and already on the flowline - so the worker
-        # places the source where it is told and tests nothing.
+        # A PICKED release point overrides spill_frac, and only a picked one is
+        # written: the row is the run's record of what the USER placed, so a
+        # derived source stays described by the fraction that produced it.
         **({"release_lon": round(release_lonlat[0], 6),
             "release_lat": round(release_lonlat[1], 6)}
-           if release_lonlat is not None else {}),
+           if release_pair is not None else {}),
         "spill_frac": float(min(max(spill_fraction, 0.0), 1.0)),
         "pulse_window_s": float(spill_duration_s),
         "source_q_m3s": float(source_q_m3s),
@@ -619,12 +607,6 @@ async def write_reach_deck(
         "duration_s": float(sim_duration_s),
     }
 
-    artifact = mesh.get("artifact")
-    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
-    centerline_utm = await asyncio.to_thread(
-        read_centerline_utm, river["provenance"]["centerline_uri"], utm_epsg,
-        start_lonlat=(river["provenance"]["seed_lon"],
-                      river["provenance"]["seed_lat"]))
     node_xy, node_bed = (await asyncio.to_thread(_mesh_nodes, mesh)
                          if class_block.get("dredging") else (None, None))
     rundir = _authoring_dir(run_tag)
@@ -635,8 +617,7 @@ async def write_reach_deck(
         liquid_boundary_order=read_topology(
             _mesh_field(mesh, "topology_uri"))["liquid_boundary_order"],
         bed=_fitted_bed(mesh),
-        source_utm=_source_point_utm(centerline_utm, release_lonlat, utm_epsg,
-                                     spill_fraction),
+        source_utm=_to_utm_point(release_lonlat, utm_epsg),
         centerline_utm=centerline_utm,
         reach_polygon_utm=(await asyncio.to_thread(_to_utm, reach_polygon, utm_epsg)
                            if class_block.get("dredging") else None),
@@ -678,7 +659,6 @@ async def write_reach_deck(
             {"gs_uri": _mesh_field(mesh, "slf_uri"), "dest": _GEOMETRY_DEST},
             {"gs_uri": _mesh_field(mesh, "cli_uri"), "dest": _BOUNDARY_DEST},
             *await asyncio.to_thread(_stage_authored, rundir, run_tag, authored)],
-        "river": river["provenance"],
         "mesh_id": mesh.get("mesh_id"),
         "substance": substance,
         "substance_class": substance_class,

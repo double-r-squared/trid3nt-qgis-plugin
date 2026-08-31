@@ -1,7 +1,6 @@
-"""The reach front of every TELEMAC river plan: geocode, seed, river, mesh size.
+"""The reach front of every TELEMAC river plan: geocode, seed, banks, mesh size.
 
-Three declared steps, one declared Data producer, and the river resolution the
-deck writer calls:
+Three declared steps and one declared Data producer:
 
 * ``Geocode.reach`` - place/AOI to a reach centre, and it REBINDS THE DOMAIN, so
   every spatial producer after it reads the reach AOI implicitly.
@@ -9,12 +8,12 @@ deck writer calls:
   fetched fresh for the domain, never supplied). It is an OSM waterway layer and
   its job is to place the mid-reach seed; it is not the river the run models,
   and the canvas says so.
-* ``ReachSeed`` - the mid-reach point on the largest fetched flowline, which is
-  where the seed ladder starts and where the carrier-discharge lookup queries.
-* ``resolve_reach_river`` - the NLDI mainstem centerline and the NHDArea banks,
-  fetched here and staged into the run directory. THE MESHED RIVER IS
-  THE VISIBLE RIVER: the centerline this fetches is the layer the canvas shows,
-  because it is the geometry the solve is built on.
+* ``ReachSeed`` - THE point the run's one centerline is navigated from, and where
+  the carrier-discharge lookup queries. The template's ``DATA.centerline`` reads
+  it, so the river the section cuts, the mesh holds and the canvas shows is the
+  river every downstream reader means.
+* ``measure_bank_coverage`` - how much of that centerline the fetched water
+  polygons map, measured before the cut.
 
 The CFL timestep law lives here too: it is coupled to the edge the accepted mesh
 was measured at, so a refined mesh tightens dt without anybody restating it.
@@ -36,8 +35,6 @@ from .errors import ReachBanksUnmapped, TelemacDyeScenarioError
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.reach")
 
 __all__ = [
-    "BANKS_DEST",
-    "CENTERLINE_DEST",
     "DEFAULT_RIVER_AOI_HALF_DEG",
     "Geocode",
     "MESH_H_FLOOR_M",
@@ -48,9 +45,7 @@ __all__ = [
     "fetch_reach_flowline",
     "geocode_reach",
     "measure_bank_coverage",
-    "named_watercourse",
     "reach_seed",
-    "resolve_reach_river",
     "slug",
     "suggest_time_step_s",
 ]
@@ -191,7 +186,8 @@ def _locality_tail(location: str) -> str | None:
     """'Snake River near Twin Falls, Idaho' -> 'Twin Falls, Idaho'.
 
     Nominatim often has no feature for the compound query but pins the locality
-    fine; the worker NLDI-snaps the locality seed to the nearest flowline anyway.
+    fine, and the NLDI navigate snaps the locality seed to the nearest flowline
+    anyway.
     """
     for sep in ("near", "at", "by", "outside", "in"):
         m = re.search(rf"\b{sep}\b(.+)$", location, flags=re.IGNORECASE)
@@ -200,30 +196,6 @@ def _locality_tail(location: str) -> str | None:
             if tail and tail.lower() != location.strip().lower():
                 return tail
     return None
-
-
-_WATERCOURSE_TYPES = ("river", "creek", "slough", "fork", "bayou")
-_NAME_STOPWORDS = frozenset({"the", "a", "an", "on", "in", "into", "near", "at", "by"})
-
-
-def named_watercourse(location: str) -> str | None:
-    """The GNIS-style watercourse name in a location phrase, or None.
-
-    The worker re-seeds onto the NAMED mainstem before the position snap, so a
-    geocode near a confluence stops landing the mesh on the tributary.
-    """
-    m = re.search(
-        rf"\b((?:[\w'.-]+\s+){{1,3}}(?:{'|'.join(_WATERCOURSE_TYPES)}))\b",
-        str(location or ""), flags=re.IGNORECASE,
-    )
-    if not m:
-        return None
-    words = m.group(1).split()
-    while words and words[0].lower() in _NAME_STOPWORDS:
-        words = words[1:]
-    if len(words) < 2:  # need at least '<Name> River'
-        return None
-    return " ".join(w.title() for w in words)
 
 
 async def _geocode_seed_center(geocode_fn: Any, location: str,
@@ -266,9 +238,9 @@ async def _geocode_seed_center(geocode_fn: Any, location: str,
 def river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
     """Mid-reach ``(lon, lat)`` on the LONGEST flowline in the fetched FlatGeobuf.
 
-    So the worker's NLDI snap lands on the main stem, not a stray ditch. Returns
+    So the NLDI navigate starts on the main stem, not on a stray ditch. Returns
     None on ANY failure - the caller then falls back to the geocoded centroid,
-    which the worker snaps regardless.
+    which the navigate snaps regardless.
     """
     try:
         from trid3nt_server.workflows.solver.solver import (
@@ -333,11 +305,8 @@ async def geocode_reach(*, location: str | None,
             "TELEMAC_DYE_SCENARIO_INPUT_INVALID",
             "the reach needs a place `location` (geocoded) or an explicit `bbox` AOI.",
         )
-    return {
-        "lon": lon, "lat": lat, "name": name, "slug": slug(name),
-        "river_name": named_watercourse(location or name) or "",
-        "bbox": bbox_around(lon, lat),
-    }
+    return {"lon": lon, "lat": lat, "name": name, "slug": slug(name),
+            "bbox": bbox_around(lon, lat)}
 
 
 async def fetch_reach_flowline(*, prefetched: str | None = None) -> str | None:
@@ -370,54 +339,8 @@ async def fetch_reach_flowline(*, prefetched: str | None = None) -> str | None:
     return layer_field(layer, "uri")
 
 
-# --------------------------------------------------------------------------- #
-# The river the reach is MESHED on: the NLDI mainstem, fetched here.
-#
-# The seed ladder, the centerline, the banks and the bed were six network calls
-# inside the solver container. They are server tier for the reason every fetch is
-# - a fetch changes if the box moves - and moving them buys the run four things a
-# container fetch could never have: the emit-on-fetch input layer (so the meshed
-# river IS the visible river), the read-through cache, the provenance record, and
-# the router's retry doctrine. That last one is not a nicety here: the seed rungs
-# used to fail OPEN, so a slow query silently meshed a DIFFERENT reach and nothing
-# recorded which had happened.
-# --------------------------------------------------------------------------- #
-
-#: Basenames the manifest stages the reach's three inputs under. The worker READS
-#: these names; nothing in the image knows where the bytes came from.
-CENTERLINE_DEST: str = "river_centerline.geojson"
-BANKS_DEST: str = "river_banks.geojson"
-
-#: Envelope half-widths (deg) the seed rungs search, and the record caps they ask
-#: for. Both are part of the QUESTION - a different tolerance finds a different
-#: nearest vertex, and a different cap truncates a different set - so they are
-#: pinned here rather than left to a fetcher default.
-_NAMED_SEARCH_DEG: float = 0.15
-_NAMED_MAX_RECORDS: int = 200
-_MAINSTEM_SEARCH_DEG: float = 0.05
-_MAINSTEM_MAX_RECORDS: int = 500
-#: A name-free re-seed is bounded so a genuine small-creek study is never yanked
-#: onto a distant river.
-_MAINSTEM_MAX_RESEED_KM: float = 6.0
-
-#: Pad (deg) around the fetched centerline for the banks the reach is cut from.
-#: It must cover FAR channels behind mid-river islands: a channel three km off
-#: the line is still the same river.
-_BANKS_PAD_DEG: float = 0.03
-
-
-def _tool(name: str) -> Any:
-    return registry_fn(name)
-
-
 def _read_vector_features(uri: str) -> list[dict[str, Any]]:
-    """The GeoJSON features behind a fetched vector layer.
-
-    The worker image carries shapely but no geopandas, so a FlatGeobuf cannot be
-    opened there. The bytes are read once HERE and staged as GeoJSON, which the
-    worker parses with the standard library - the same shape the NLDI and ArcGIS
-    responses arrived in when it fetched them itself.
-    """
+    """The GeoJSON features behind a fetched vector layer."""
     import json
     import os
 
@@ -448,33 +371,6 @@ def _read_vector_features(uri: str) -> list[dict[str, Any]]:
     if gdf.crs is not None and str(gdf.crs).upper() not in ("EPSG:4326", "WGS84"):
         gdf = gdf.to_crs(4326)
     return list(json.loads(gdf.to_json())["features"])
-
-
-def _stage_geojson(features: list[dict[str, Any]], *, run_tag: str,
-                   dest: str) -> tuple[str, str]:
-    """Stage a FeatureCollection; return its ``s3://`` URI and the bytes' digest.
-
-    The digest is what makes "the same run twice" a checkable claim rather than
-    an impression: the staged bytes ARE the geometry the worker meshes, so two
-    runs with the same digest meshed the same river.
-    """
-    import hashlib
-    import json
-    import os
-
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
-
-    cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
-    if not cache_bucket:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_STAGING_FAILED",
-            "TRID3NT_CACHE_BUCKET must be set to stage the reach inputs.")
-    body = json.dumps({"type": "FeatureCollection", "features": features},
-                      sort_keys=True).encode("utf-8")
-    key = f"telemac/{run_tag}/{dest}"
-    _get_s3_client().put_object(Bucket=cache_bucket, Key=key, Body=body,
-                                ContentType="application/geo+json")
-    return f"s3://{cache_bucket}/{key}", hashlib.sha256(body).hexdigest()
 
 
 async def measure_bank_coverage(*, banks: Any, centerline: Any) -> Any:
@@ -540,217 +436,22 @@ def _covered_fraction(banks: Any, centerline: Any) -> float:
     return float(line_m.intersection(water_m).length / line_m.length)
 
 
-def _feature_vertices(feature: dict[str, Any]) -> list[list[float]]:
-    geom = feature.get("geometry") or {}
-    kind = geom.get("type")
-    if kind == "LineString":
-        return list(geom.get("coordinates") or [])
-    if kind == "MultiLineString":
-        return [v for line in (geom.get("coordinates") or []) for v in (line or [])]
-    return []
+async def reach_seed(*, reach: dict[str, Any], rivers: str | None,
+                     supplied: Any = None) -> dict[str, Any]:
+    """THE point the run's one centerline is navigated downstream from.
 
+    A SUPPLIED point wins outright: naming where the substance enters the water is
+    a statement about which stretch to model, and the navigate has to start there
+    or the reach the user pinned is not the reach that gets meshed.
 
-def _nearest_vertex(features: list[dict[str, Any]], lon: float,
-                    lat: float) -> tuple[float, float] | None:
-    best, best_d2 = None, float("inf")
-    for feat in features:
-        for v in _feature_vertices(feat):
-            d2 = (v[0] - lon) ** 2 + (v[1] - lat) ** 2
-            if d2 < best_d2:
-                best_d2, best = d2, (float(v[0]), float(v[1]))
-    return best
-
-
-async def _named_seed(name: str, lon: float, lat: float) -> tuple[float, float] | None:
-    """Nearest vertex of the NAMED GNIS flowline to ``(lon, lat)``, or ``None``.
-
-    ``None`` means the name matched nothing in the window - a real answer about
-    the reach, and the caller keeps the raw position seed. A FETCH FAILURE is not
-    that answer and no longer pretends to be one: it raises, because a run that
-    silently meshes a different river than the one it was asked for cannot be
-    compared against its own previous run.
+    Otherwise the largest fetched flowline's midpoint, else the geocoded centroid -
+    which the NLDI navigate snaps to the nearest flowline COMID anyway, so the
+    degrade is honest rather than a dead end.
     """
-    features = await asyncio.to_thread(lambda: _read_vector_features(str(
-        layer_field(_tool("fetch_nhdplus_hr_flowlines")(
-            bbox=[round(lon - _NAMED_SEARCH_DEG, 6), round(lat - _NAMED_SEARCH_DEG, 6),
-                  round(lon + _NAMED_SEARCH_DEG, 6), round(lat + _NAMED_SEARCH_DEG, 6)],
-            gnis_name=str(name).strip(), max_records=_NAMED_MAX_RECORDS,
-            # A seed PROBE, not an input: what this layer contributes to the run
-            # is one vertex, and painting the whole named watercourse beside the
-            # centerline that was cut from it says the run models both.
-            visualize=False), "uri"))))
-    return _nearest_vertex(features, lon, lat)
-
-
-async def _mainstem_seed(lon: float, lat: float) -> tuple[float, float] | None:
-    """Re-seed a NAME-FREE reach onto the dominant nearby mainstem, or ``None``.
-
-    With no ``river_name`` to disambiguate, a bare position snap lands on whatever
-    channel is geometrically nearest, and at a confluence that is often a short
-    low-order tributary stub. This prefers the highest ``streamorde`` channel, tie
-    broken by total upstream drainage then proximity - but ONLY when that mainstem
-    STRICTLY outranks the nearest flowline and its nearest vertex is within the
-    re-seed radius. ``None`` means no improvement was found, which is a decision;
-    a fetch failure raises instead of impersonating one.
-    """
-    features = await asyncio.to_thread(lambda: _read_vector_features(str(
-        layer_field(_tool("fetch_nhdplus_hr_flowlines")(
-            bbox=[round(lon - _MAINSTEM_SEARCH_DEG, 6), round(lat - _MAINSTEM_SEARCH_DEG, 6),
-                  round(lon + _MAINSTEM_SEARCH_DEG, 6), round(lat + _MAINSTEM_SEARCH_DEG, 6)],
-            max_records=_MAINSTEM_MAX_RECORDS,
-            visualize=False), "uri"))))
-    cands: list[tuple[int, float, float, tuple[float, float]]] = []
-    for feat in features:
-        vertex = _nearest_vertex([feat], lon, lat)
-        if vertex is None:
-            continue
-        props = feat.get("properties") or {}
-        cands.append((int(props.get("streamorde") or 0),
-                      float(props.get("totdasqkm") or 0.0),
-                      ((vertex[0] - lon) ** 2 + (vertex[1] - lat) ** 2) ** 0.5,
-                      vertex))
-    if not cands:
-        return None
-    nearest = min(cands, key=lambda c: c[2])
-    mainstem = max(cands, key=lambda c: (c[0], c[1], -c[2]))
-    reseed_km = mainstem[2] * 111.0
-    if mainstem[0] <= nearest[0] or reseed_km > _MAINSTEM_MAX_RESEED_KM:
-        return None
-    logger.info("telemac reach: mainstem re-seed - nearest order %d vs mainstem "
-                "order %d (drainage %.0f km2) at %.2f km",
-                nearest[0], mainstem[0], mainstem[1], reseed_km)
-    return mainstem[3]
-
-
-async def resolve_reach_seed_point(*, reach: dict[str, Any], seed: dict[str, Any],
-                                   release: tuple[float, float] | None,
-                                   ) -> dict[str, Any]:
-    """The point the centerline is resolved from, and WHICH RUNG chose it.
-
-    Three rungs, tried in a fixed order, and the choice is RECORDED rather than
-    inferable only from a log line. That is the whole repair: the ladder used to
-    fail open, so a slow NHDPlus query kept the raw seed, meshed a different
-    reach, and left nothing in the run saying so - two identical invocations could
-    produce two different rivers and the record could not tell them apart.
-    """
-    if release is not None:
-        lon, lat, rung = float(release[0]), float(release[1]), "release-position"
-    else:
-        lon, lat, rung = float(seed["lon"]), float(seed["lat"]), "position"
-    name = str(reach.get("river_name") or "").strip()
-    if name:
-        named = await _named_seed(name, lon, lat)
-        if named is not None:
-            logger.info("telemac reach: named-flowline re-seed %r (%.5f,%.5f) -> "
-                        "(%.5f,%.5f)", name, lon, lat, named[0], named[1])
-            return {"lon": named[0], "lat": named[1],
-                    "rung": f"{rung}-named-flowline", "river_name": name}
-        logger.info("telemac reach: %r matched no NHDPlus HR flowline within "
-                    "%.2f deg - the raw seed stands", name, _NAMED_SEARCH_DEG)
-        return {"lon": lon, "lat": lat, "rung": f"{rung}-named-flowline-absent",
-                "river_name": name}
-    main = await _mainstem_seed(lon, lat)
-    if main is not None:
-        return {"lon": main[0], "lat": main[1], "rung": f"{rung}-mainstem",
-                "river_name": ""}
-    return {"lon": lon, "lat": lat, "rung": f"{rung}-nearest-flowline",
-            "river_name": ""}
-
-
-def _lonlat_extent(features: list[dict[str, Any]]) -> tuple[float, float, float, float]:
-    xs: list[float] = []
-    ys: list[float] = []
-    for feat in features:
-        for v in _feature_vertices(feat):
-            xs.append(float(v[0]))
-            ys.append(float(v[1]))
-    if not xs:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_SCENARIO_ERROR",
-            "the fetched reach centerline carries no vertices; there is no reach "
-            "to mesh.")
-    return min(xs), min(ys), max(xs), max(ys)
-
-
-async def resolve_reach_river(*, reach: dict[str, Any], seed: dict[str, Any],
-                              run_tag: str, reach_length_km: float,
-                              release: tuple[float, float] | None = None,
-                              nav_direction: str = "DM") -> dict[str, Any]:
-    """Fetch the river the reach is meshed on and stage it into the run directory.
-
-    Returns the manifest ``inputs`` rows plus the provenance the run records: the
-    seed rung, the navigated COMIDs and a digest of the centerline itself. The
-    digest is the determinism test made checkable - two invocations that produce
-    the same digest meshed the same river, and no reader has to take that on
-    faith.
-
-    The BED is not among them. The mesh ask declares its own, the mesher paints
-    the node elevations from it, and the geometry file the solve is staged with
-    carries the result - so a second raster fetched here would be a bed no run
-    reads.
-    """
-    seed_point = await resolve_reach_seed_point(reach=reach, seed=seed,
-                                                release=release)
-    centerline_layer = await call_registry_tool(
-        _tool("fetch_nhdplus_nldi_navigate"),
-        seed_point=[round(seed_point["lon"], 6), round(seed_point["lat"], 6)],
-        direction=str(nav_direction), distance_km=float(reach_length_km),
-        purpose="the modeled river centerline")
-    centerline_uri = layer_field(centerline_layer, "uri")
-    features = await asyncio.to_thread(_read_vector_features, str(centerline_uri))
-    if not features:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_SCENARIO_ERROR",
-            f"the NLDI navigate from ({seed_point['lon']:.5f},{seed_point['lat']:.5f}) "
-            f"returned no flowlines for {reach_length_km:g} km {nav_direction}; "
-            "there is no reach to mesh.")
-    centerline_stage, centerline_sha = await asyncio.to_thread(
-        _stage_geojson, features, run_tag=run_tag, dest=CENTERLINE_DEST)
-    inputs = [{"gs_uri": centerline_stage, "dest": CENTERLINE_DEST}]
-
-    min_lon, min_lat, max_lon, max_lat = _lonlat_extent(features)
-    provenance: dict[str, Any] = {
-        "seed_lon": round(seed_point["lon"], 6),
-        "seed_lat": round(seed_point["lat"], 6),
-        "seed_rung": seed_point["rung"],
-        "centerline_uri": str(centerline_uri),
-        "centerline_sha256": centerline_sha,
-        "centerline_comids": sorted(
-            int(c) for c in {(f.get("properties") or {}).get("nhdplus_comid")
-                             for f in features} if c is not None),
-        "centerline_extent": [round(min_lon, 6), round(min_lat, 6),
-                              round(max_lon, 6), round(max_lat, 6)],
-        "banks_uri": None,
-    }
-
-    banks_layer = await call_registry_tool(
-        _tool("fetch_nhd_area_water"),
-        bbox=[round(min_lon - _BANKS_PAD_DEG, 6), round(min_lat - _BANKS_PAD_DEG, 6),
-              round(max_lon + _BANKS_PAD_DEG, 6), round(max_lat + _BANKS_PAD_DEG, 6)],
-        max_records=200,
-        purpose="the river banks")
-    bank_features = await asyncio.to_thread(
-        _read_vector_features, str(layer_field(banks_layer, "uri")))
-    # An EMPTY bank layer is staged as an empty collection rather than left out:
-    # "no NHDArea polygon covers this reach" is the answer the unmapped-reach
-    # refusal is built to raise, and a MISSING file would read as a staging failure.
-    banks_stage, _sha = await asyncio.to_thread(
-        _stage_geojson, bank_features, run_tag=run_tag, dest=BANKS_DEST)
-    inputs.append({"gs_uri": banks_stage, "dest": BANKS_DEST})
-    provenance["banks_uri"] = str(layer_field(banks_layer, "uri"))
-    provenance["banks_features"] = len(bank_features)
-
-    return {"inputs": inputs, "provenance": provenance,
-            "seed_lon": seed_point["lon"], "seed_lat": seed_point["lat"]}
-
-
-async def reach_seed(*, reach: dict[str, Any], rivers: str | None) -> dict[str, Any]:
-    """The mid-reach seed the worker resolves the centerline from.
-
-    The largest fetched flowline's midpoint when there is one, else the geocoded
-    centroid - which the worker NLDI-snaps to the nearest flowline COMID anyway,
-    so the degrade is honest rather than a dead end.
-    """
+    point = coerce_lonlat_point(supplied, label="reach seed point")
+    if point is not None:
+        return {"lon": point[0], "lat": point[1],
+                "source": "the supplied point the reach is seeded from"}
     seed = None
     if rivers:
         seed = await asyncio.to_thread(river_seed_from_geometry, str(rivers))
@@ -771,7 +472,8 @@ class Geocode:
                     kwargs={"location": location, "bbox": bbox}).overrides_domain()
 
 
-def ReachSeed(*, reach: Any, rivers: Any) -> Step:  # noqa: N802 - a value constructor
-    """The mid-reach seed on the fetched flowline."""
+def ReachSeed(*, reach: Any, rivers: Any,  # noqa: N802 - a value constructor
+              supplied: Any = None) -> Step:
+    """The point the reach's one centerline is navigated from."""
     return Step(runner=f"{_STEPS}.reach.reach_seed", stage="acquire",
-                kwargs={"reach": reach, "rivers": rivers})
+                kwargs={"reach": reach, "rivers": rivers, "supplied": supplied})

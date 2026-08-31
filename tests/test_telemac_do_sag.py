@@ -233,8 +233,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
             return ret
         return _inner
 
-    reach = {"bbox": (-124.2, 40.4, -124.0, 40.6), "name": "Eel", "slug": "eel",
-             "river_name": "Eel River"}
+    reach = {"bbox": (-124.2, 40.4, -124.0, 40.6), "name": "Eel", "slug": "eel"}
     monkeypatch.setattr(reach_mod, "geocode_reach", _step("geocode", reach))
     monkeypatch.setattr(reach_mod, "fetch_reach_flowline",
                         _step("rivers", "s3://r/rivers.geojson"))
@@ -298,8 +297,9 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
     assert not isinstance(out, dict), out
     assert order == ["geocode", "rivers", "seed", "discharge", "review", "mesh",
                      "deck", "solve", "products"]
-    # the outfall pins the MESHED water body, so it rides as the reach seed
-    assert seen["deck"]["reach_seed_coords"] == (-124.11, 40.51)
+    # the outfall pins the MESHED water body, so it rides as the reach seed the
+    # ONE centerline is navigated from - never as a dye release point
+    assert seen["seed"]["supplied"] == (-124.11, 40.51)
     assert "release_coords" not in seen["deck"]
     # DO cannot ride in above its own saturation - the one coupled clamp
     assert seen["deck"]["do_sag_config"]["upstream_do_mgl"] == pytest.approx(9.022)
