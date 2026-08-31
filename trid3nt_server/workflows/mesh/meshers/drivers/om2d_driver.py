@@ -355,6 +355,17 @@ def op_build(cfg: dict, out: str) -> int:
 
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
+    if cells.shape[0] == 0:
+        # Every number below reduces over the elements, so a generation that
+        # yielded none reaches the caller as a zero-size numpy reduction rather
+        # than as what it is: an edge length the domain cannot hold.
+        raise ValueError(
+            "the domain came back with NO elements at the declared resolution "
+            f"(min_edge_length_m={cfg['min_edge_length_m']}, "
+            f"max_edge_length_m={cfg['max_edge_length_m']})"
+            + ("; " + "; ".join(notes) if notes else "")
+            + "; declare an edge length this domain can hold, or a domain that "
+            "holds this edge length")
     used = np.unique(cells)
     if used.shape[0] != points.shape[0]:
         remap = np.full(points.shape[0], -1, dtype=np.int64)
