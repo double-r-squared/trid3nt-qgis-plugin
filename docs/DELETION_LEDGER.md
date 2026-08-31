@@ -2124,3 +2124,34 @@ worker-side gate to the server dies with the gate.
   reader checking a `None`. CONDITION to restore: a server-side field maximum
   over the result SELAFIN's velocity - the arrays the outlet-hydrograph read
   already loads, if NATE wants that reader to answer for more than the outlet.
+
+## The image drops what the worker stopped importing (worker-unification stage 4, 2026-08-31)
+
+- `workers/telemac/Dockerfile`: the `gmsh==4.15.2` pip pin and the seven-package
+  apt block that existed only to satisfy the gmsh wheel's `dlopen` at import
+  (`libglu1-mesa`, `libgl1`, `libxrender1`, `libxcursor1`, `libxinerama1`,
+  `libxft2`, `libgomp1`) DELETE. CONDITION MET: nothing under `workers/telemac/`
+  imports gmsh - the mesh is built server-side and arrives staged - and the conda
+  base env ships its own `libgomp.so.1`, so the engine keeps its OpenMP runtime.
+- `workers/telemac/Dockerfile`: the `pystac-client==0.9.0` and
+  `planetary-computer==1.0.0` pins DELETE. CONDITION MET: the DEM fetch left the
+  container with the fetch migration; the worker reads a staged bed and does no
+  network at all.
+- `workers/telemac/Dockerfile`: the TOMAWAC build-time smoke block DELETES.
+  CONDITION MET: `tomawac_build` was one of the five pre-deleted payloads, so the
+  block imported a module that is not in the tree - it was the image's
+  unbuildability. TOMAWAC survives as one of the four telapy classes a `case` may
+  name, which the replacement smoke asserts.
+- `workers/telemac/Dockerfile`: the four per-process strict-field smoke blocks
+  (`_reach_config`, `_tomawac_config`, `_artemis_config`, `_telemac3d_config`)
+  DELETE with the parsers they exercised. CONDITION MET: the worker has ONE gate
+  (`_strict_section`) raising ONE error, and the replacement pair asserts it
+  positively (both surviving builder configs map) and negatively (an unknown
+  `case` field refuses).
+- `workers/telemac/Dockerfile`: the telemac3d binary/dico/sources presence
+  assertion DELETES. CONDITION MET: the RAINDEF bake now reads
+  `$HOMETEL/sources/telemac2d/runoff_scs_cn.f` at build time and stops the build
+  if it is not there, so the installed source tree is proven by a step that needs
+  it rather than by an assertion beside it.
+- `workers/telemac/.dockerignore` gains `tests/`: the two builder tests under
+  `workers/telemac/tests/` were riding into the image, where nothing runs them.
