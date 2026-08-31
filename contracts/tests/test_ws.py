@@ -304,28 +304,6 @@ def test_spatial_input_response_vector_draw_roundtrips(session_id: str) -> None:
     assert flap["properties"]["protected_side"] == "left"
 
 
-def test_spatial_input_response_barriers_feed_swmm_contract(session_id: str) -> None:
-    """The ``role == "barrier"`` subset of a vector_draw reply is field-for-field
-    the tagged-LineString FeatureCollection SWMMRunArgs.barriers accepts — i.e.
-    the drawn result round-trips straight into the urban engine seam."""
-    from trid3nt_contracts.swmm_contracts import SWMMRunArgs
-
-    fc = _vector_draw_feature_collection()
-    barrier_fc = {
-        "type": "FeatureCollection",
-        "features": [
-            f for f in fc["features"] if f["properties"].get("role") == "barrier"
-        ],
-    }
-    # Construct the urban-engine args directly from the drawn barriers; the
-    # swmm_contracts validator must accept them without translation.
-    args = SWMMRunArgs(bbox=(-85.31, 35.04, -85.30, 35.05), barriers=barrier_fc)
-    assert args.barriers is not None
-    assert {
-        feat["properties"]["barrier_type"] for feat in args.barriers["features"]
-    } == {"wall", "flap_gate"}
-
-
 def test_spatial_input_response_bad_role_rejected() -> None:
     """An unknown ``role`` is a defect — the structural validator rejects it."""
     fc = {

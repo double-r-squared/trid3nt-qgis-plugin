@@ -35,14 +35,11 @@ from . import (
     execution,
     gate_spec,
     impact_envelope,
-    modflow_contracts,
     payload_warning,
     publish_manifest,
     region_choice,
     sandbox_contracts,
     secrets,
-    swan_contracts,
-    swmm_contracts,
     tool_metadata,
     tool_registry,
     user,
@@ -76,24 +73,6 @@ from .common import (
     render_assumptions_line,
     render_fallback_line,
 )
-from .geoclaw_contracts import GeoClawDepthLayerURI, GeoClawRunArgs
-from .modflow_contracts import (
-    ASRLayerURI,
-    BudgetPartitionLayerURI,
-    CaptureZoneLayerURI,
-    DewaterLayerURI,
-    DrawdownLayerURI,
-    HydroperiodLayerURI,
-    MODFLOWRunArgs,
-    MoundingLayerURI,
-    MultiSpeciesPlumeResult,
-    PlumeLayerURI,
-    SaltwaterWedgeLayerURI,
-    SeepageLayerURI,
-    SpeciesSpec,
-    ThermalPlumeLayerURI,
-    VadoseBreakthroughLayerURI,
-)
 from .publish_manifest import (
     MANIFEST_SCHEMA_VERSION,
     PublishManifest,
@@ -108,8 +87,6 @@ from .outputs_manifest import (
     OutputsManifest,
     parse_outputs_manifest,
 )
-from .swan_contracts import SwanRunArgs, SwanWaveBoundary, WaveFieldLayerURI
-from .swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 from .sandbox_contracts import (
     CodeExecRequestPayload,
     CodeExecResultPayload,
@@ -136,16 +113,12 @@ __all__ = [
     "chart_contracts",
     "execution",
     "gate_spec",
-    "geoclaw_contracts",
-    "modflow_contracts",
     "payload_warning",
     "publish_manifest",
     "outputs_manifest",
     "region_choice",
     "sandbox_contracts",
     "secrets",
-    "swan_contracts",
-    "swmm_contracts",
     "tool_metadata",
     "tool_registry",
     "user",
@@ -154,38 +127,6 @@ __all__ = [
     "DerivedEventParam",
     "EventIngestProvenance",
     "EventIngestResult",
-    # MODFLOW groundwater contracts (sprint-13)
-    "MODFLOWRunArgs",
-    "PlumeLayerURI",
-    "SeepageLayerURI",
-    # MODFLOW Wave-3 multi_species transport (sprint-18 Wave-3)
-    "SpeciesSpec",
-    "MultiSpeciesPlumeResult",
-    "DrawdownLayerURI",
-    "DewaterLayerURI",
-    "BudgetPartitionLayerURI",
-    # MODFLOW Wave-2 archetype layers (sprint-18 Wave-2: MAR / ASR / wetland)
-    "MoundingLayerURI",
-    "ASRLayerURI",
-    "HydroperiodLayerURI",
-    # MODFLOW GWE heat-transport temperature layer (gwe_thermal)
-    "ThermalPlumeLayerURI",
-    # MODFLOW Wave-4 PRT capture-zone vector layer (capture_zone / wellhead_protection)
-    "CaptureZoneLayerURI",
-    # MODFLOW Wave-5 variable-density saltwater intrusion layer (saltwater_intrusion)
-    "SaltwaterWedgeLayerURI",
-    # MODFLOW UZF+UZT vadose-zone breakthrough layer (vadose_transport)
-    "VadoseBreakthroughLayerURI",
-    # SWMM quasi-2D urban-flood contracts (sprint-16 P1)
-    "SWMMRunArgs",
-    "SWMMDepthLayerURI",
-    # GeoClaw (Clawpack) shallow-water inundation contracts (sprint-17)
-    "GeoClawRunArgs",
-    "GeoClawDepthLayerURI",
-    # SWAN (Simulating WAves Nearshore) spectral wave-field contracts (Phase 1)
-    "SwanRunArgs",
-    "SwanWaveBoundary",
-    "WaveFieldLayerURI",
     # worker -> agent publish-manifest reader (SFINCS postprocess offload Phase 4)
     "MANIFEST_SCHEMA_VERSION",
     "PublishManifest",

@@ -14,12 +14,10 @@ Proves the FULL agent-side wire for the urban vector-draw flow:
    malformed) maps to the typed result the LLM reads, carrying the engine-ready
    ``barriers`` on the vector_draw path.
 
-3. PARSED BARRIERS FEED THE EXISTING ENGINE (NO re-architecture): the parsed
-   ``barriers`` FeatureCollection (a) validates field-for-field against
-   ``swmm_contracts.SWMMRunArgs.barriers``, and (b) drives
-   ``build_swmm_mesh(barriers=...)`` so a RED ``wall`` OMITS the overland conduit
-   and a GREEN ``flap_gate`` becomes a one-way SWMM orifice
-   (``has_flap_gate=True``) — exactly the wall=omit / flap_gate=one-way seam.
+3. PARSED BARRIERS ARE ENGINE-READY: the drawn subset emerges as a clean
+   ``barriers`` FeatureCollection carrying ONLY the geometry + barrier
+   properties an engine reads - the ``role`` tag the client drew with is
+   dropped, and every malformed barrier is refused before it can reach one.
 
 4. PAUSE/RESUME REGISTRY + INBOUND RESOLVE (``server`` spatial-input gate): the
    ``_PENDING_SPATIAL_INPUTS`` registry + ``_resolve_pending_spatial_input``
@@ -58,7 +56,6 @@ from trid3nt_server.gates.spatial_input import (
     split_features_by_role,
 )
 from trid3nt_contracts.common import new_ulid
-from trid3nt_contracts.swmm_contracts import SWMMRunArgs
 from trid3nt_contracts.ws import (
     AGENT_TO_CLIENT_PAYLOADS,
     CLIENT_TO_AGENT_PAYLOADS,
@@ -307,23 +304,22 @@ def test_point_wrong_geometry_raises():
 
 
 # =========================================================================== #
-# 2. Parsed barriers VALIDATE against the SWMM engine contract.
+# 2. Parsed barriers emerge ENGINE-READY.
 # =========================================================================== #
 
 
-def test_parsed_barriers_construct_swmm_run_args():
-    """The role=='barrier' subset round-trips into SWMMRunArgs(barriers=...)
-    UNCHANGED (the structural validator accepts it field-for-field)."""
+def test_parsed_barriers_are_engine_ready():
+    """The role=='barrier' subset emerges as a clean FeatureCollection: the
+    drawing-side ``role`` tag is dropped and only what an engine reads stays."""
     parsed = parse_spatial_input_features(_full_drawn_fc())
-    # bbox from the drawn AOI; barriers from the drawn walls/flap-gates.
-    args = SWMMRunArgs(
-        bbox=tuple(parsed.aoi_bbox),  # type: ignore[arg-type]
-        barriers=parsed.barriers,
-    )
-    assert args.barriers is not None
-    assert len(args.barriers["features"]) == 2
-    tags = {f["properties"]["barrier_type"] for f in args.barriers["features"]}
-    assert tags == {"wall", "flap_gate"}
+    assert parsed.barriers is not None
+    assert parsed.barriers["type"] == "FeatureCollection"
+    feats = parsed.barriers["features"]
+    assert len(feats) == 2
+    assert {f["properties"]["barrier_type"] for f in feats} == {"wall", "flap_gate"}
+    for f in feats:
+        assert f["geometry"]["type"] == "LineString"
+        assert "role" not in f["properties"]
 
 
 # =========================================================================== #
@@ -345,9 +341,9 @@ def test_response_vector_draw_carries_engine_barriers():
     assert result["n_aoi"] == 1
     assert result["points"] == [[-85.300, 35.050]]
     assert "aoi_bbox" in result and len(result["aoi_bbox"]) == 4
-    # the engine-ready barriers FC is on the result — pass straight to the tool.
+    # the engine-ready barriers FC is on the result - pass straight to the tool.
     assert "barriers" in result
-    SWMMRunArgs(bbox=tuple(result["aoi_bbox"]), barriers=result["barriers"])
+    assert len(result["barriers"]["features"]) == 2
 
 
 def test_response_point_and_bbox():

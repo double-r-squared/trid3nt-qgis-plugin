@@ -1,8 +1,10 @@
 """job-0326: server-side reuse guard short-circuits a redundant expensive re-run.
 
 These exercise the REAL ``_invoke_tool_via_emitter`` dispatch path with a stub
-``modflow_contaminant_plume`` (an expensive scenario tool NOT gated by SOLVER_CONFIRM_TOOLS,
-so the test needs no confirm-card plumbing). The stub counts solver launches.
+tool registered under a guarded ``EXPENSIVE_SCENARIO_TOOLS`` name (NOT gated by
+SOLVER_CONFIRM_TOOLS, so the test needs no confirm-card plumbing). The stub
+counts solver launches and returns a live concentration layer; the guard reads
+the call's params and the result layer_id, never the composer behind the name.
 
   * A repeat dispatch with identical args REUSES the existing layer — the stub
     solver is launched only ONCE — and the second call's function_response
@@ -26,7 +28,7 @@ from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.tools import RegisteredTool
 from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
-from trid3nt_contracts.modflow_contracts import PlumeLayerURI
+from trid3nt_contracts.telemac_contracts import TelemacDyeLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
@@ -42,31 +44,30 @@ class FakeWS:
 _LAUNCHES: list[dict] = []
 
 
-def _make_plume(layer_id: str, lat: float, lon: float) -> PlumeLayerURI:
-    # Real plumes are published internally, so the LayerURI carries a renderable
-    # http(s) WMS URL (the job-0254 emit guardrail drops raw gs:// rasters).
-    return PlumeLayerURI(
+def _make_plume(layer_id: str, lat: float, lon: float) -> TelemacDyeLayerURI:
+    # The emit guardrail drops non-renderable rasters, so the layer carries a
+    # readable uri.
+    return TelemacDyeLayerURI(
         layer_id=layer_id,
         name="Contaminant Plume",
         layer_type="raster",
-        uri=f"https://qgis.example.run.app/ogc/wms?MAP=case.qgs&LAYERS={layer_id}",
-        style_preset="plume",
+        uri=f"s3://runs/{layer_id}/peak_concentration.tif",
+        style_preset="continuous_dye_concentration",
         bbox=(lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1),
-        max_concentration_mgl=12.5,
-        plume_area_km2=3.2,
+        dye_cmax_mgl=12.5,
     )
 
 
 @pytest.fixture(autouse=True)
-def _stub_modflow_tool():
-    """Shadow modflow_contaminant_plume with a launch-counting stub returning a plume."""
+def _stub_scenario_tool():
+    """Shadow the guarded name with a launch-counting stub returning a plume layer."""
     name = "modflow_contaminant_plume"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _LAUNCHES.clear()
     reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
 
-    def _fn(spill_location_latlon=None, contaminant=None, **_kw) -> PlumeLayerURI:
+    def _fn(spill_location_latlon=None, contaminant=None, **_kw) -> TelemacDyeLayerURI:
         _LAUNCHES.append(
             {"spill_location_latlon": spill_location_latlon, "contaminant": contaminant}
         )
@@ -108,7 +109,7 @@ async def test_repeat_expensive_run_reuses_without_relaunch() -> None:
     first = await server._invoke_tool_via_emitter(
         ws, state, "modflow_contaminant_plume", dict(_PARAMS)
     )
-    assert isinstance(first, PlumeLayerURI)
+    assert isinstance(first, TelemacDyeLayerURI)
     assert len(_LAUNCHES) == 1
     first_layer_id = first.layer_id
 
@@ -150,7 +151,7 @@ async def test_changed_args_run_again() -> None:
         ws, state, "modflow_contaminant_plume", changed
     )
     assert len(_LAUNCHES) == 2, "changed request was wrongly short-circuited"
-    assert isinstance(result, PlumeLayerURI)
+    assert isinstance(result, TelemacDyeLayerURI)
 
 
 @pytest.mark.asyncio
@@ -169,7 +170,7 @@ async def test_force_rerun_bypasses_guard() -> None:
         ws, state, "modflow_contaminant_plume", forced
     )
     assert len(_LAUNCHES) == 2, "force_rerun did not bypass the reuse guard"
-    assert isinstance(result, PlumeLayerURI)
+    assert isinstance(result, TelemacDyeLayerURI)
 
 
 @pytest.mark.asyncio

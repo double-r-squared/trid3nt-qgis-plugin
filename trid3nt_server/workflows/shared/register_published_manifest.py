@@ -55,7 +55,6 @@ from trid3nt_server.emission.uri_registry import observe_published_layer
 __all__ = [
     "read_publish_manifest",
     "register_manifest_layers",
-    "register_swan_wave_layers",
     "ManifestRegisterResult",
     "RegisteredLayer",
 ]
@@ -280,56 +279,6 @@ def _register_one_layer(
         cog_uri,
     )
     return RegisteredLayer(layer=layer, dropped=False, cog_uri=cog_uri, stem=stem)
-
-
-def register_swan_wave_layers(
-    manifest: PublishManifest,
-    *,
-    run_id: str,
-    mode: str,
-    bbox: tuple[float, float, float, float] | None = None,
-) -> tuple[list[Any], dict[str, Any], int]:
-    """Register manifest wave layers as ``WaveFieldLayerURI`` rows (SWAN path).
-
-    The SWAN standalone composer returns a typed ``WaveFieldLayerURI`` carrying
-    the four narration scalars (``max_hs_m`` / ``mean_tp_s`` / ``mean_dir_deg`` /
-    ``wave_area_km2``) that the manifest stores in each layer's ``metrics``. This
-    builds those typed rows over the register-only raw ``s3://`` COG uris
-    (TiTiler exit; no COG conversion).
-
-    Returns ``(wave_layers, top_metrics, dropped_count)`` where ``wave_layers[0]``
-    is the PEAK (role ``"primary"``). ``WaveFieldLayerURI`` is imported lazily so
-    the generic register module stays SWAN-agnostic for the depth path.
-    """
-    from trid3nt_contracts.swan_contracts import WaveFieldLayerURI
-
-    wave_layers: list[Any] = []
-    dropped = 0
-    for entry in manifest.layers:
-        reg = _register_one_layer(entry, run_id=run_id, bbox=bbox)
-        if reg.dropped or reg.layer is None:
-            dropped += 1
-            continue
-        base = reg.layer
-        m = entry.metrics or {}
-        wave_layers.append(
-            WaveFieldLayerURI(
-                layer_id=base.layer_id,
-                name=base.name,
-                layer_type=base.layer_type,
-                uri=base.uri,
-                style_preset=base.style_preset,
-                role=base.role,
-                units=base.units,
-                bbox=base.bbox,
-                max_hs_m=float(m.get("max_hs_m", 0.0) or 0.0),
-                mean_tp_s=float(m.get("mean_tp_s", 0.0) or 0.0),
-                mean_dir_deg=float(m.get("mean_dir_deg", 0.0) or 0.0),
-                wave_area_km2=float(m.get("wave_area_km2", 0.0) or 0.0),
-                mode=mode,  # type: ignore[arg-type]
-            )
-        )
-    return wave_layers, dict(manifest.metrics or {}), dropped
 
 
 def register_manifest_layers(

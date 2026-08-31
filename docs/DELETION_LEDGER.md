@@ -2341,3 +2341,63 @@ deployment wrote. Evidence per row is a zero-reference grep over
 Standing norm applied: a surviving test of a deleted function is an ANCHOR, not
 coverage. Absence guards over already-deleted symbols are that anchor's weakest
 form - they cost a run and prove nothing the tree does not already say.
+
+## The attic'd engines' wire contracts follow their engines (test cull, scope 2, 2026-08-31)
+
+`trid3nt_server/workflows/` is telemac-only and `tests/` already carried zero
+files naming the moved engines. The CONTRACTS package was not swept with them:
+ten modules describing wire shapes for engines that left, four contract suites
+whose only subject was those modules, and one dead function inside a live one.
+Measured: ZERO import statements anywhere in the repo outside the modules
+themselves, their own tests, and the `contracts/__init__` re-export block.
+
+MOVED to the attic (`contracts/trid3nt_contracts/`), suites DELETED:
+- `landlab_contracts.py` (1139), `schism_contracts.py` (463),
+  `elmfire_contracts.py` (411), `hecras_contracts.py` (200),
+  `geoclaw_thacker.py` (111) - not imported by ANY module, not even
+  `contracts/__init__.py`. No test existed to delete.
+- `openquake_contracts.py` (456) + `contracts/tests/test_openquake_contracts.py`
+  (126) - its sole importer WAS that test. The definition of an anchor.
+- `geoclaw_contracts.py` (668) + `test_geoclaw_contracts.py` (412) -
+  `GeoClawDepthLayerURI` / `GeoClawRunArgs` in zero production files.
+- `modflow_contracts.py` (2004) + `test_modflow_contracts.py` (1651) - fourteen
+  LayerURI subclasses, `PlumeLayerURI` in zero production files.
+- `swmm_contracts.py` (757) + `test_swmm_contracts.py` (457) - the four
+  production mentions (`gates/spatial_roles.py`, `gates/confirm.py`,
+  `gates/cards/spatial_input.py`, `contracts/ws.py`) are comments and docstrings,
+  not imports.
+- `swan_contracts.py` (339) - reachable only from the dead function below.
+
+DELETED with them, in live modules:
+- `register_published_manifest.register_swan_wave_layers` (+ its `__all__` row)
+  and its one test case. ZERO callers in the tree: a wave-layer builder inside a
+  live depth-path module, and the only thing importing `swan_contracts` (a lazy
+  import written so the generic module would stay SWAN-agnostic - the shape of a
+  function that never belonged there).
+- `contracts/tests/test_ws.py::test_spatial_input_response_barriers_feed_swmm_contract`
+  - it asserted the drawn barriers validate against `SWMMRunArgs.barriers`. The
+  wire shape it cared about (roles, barrier tags, flap direction, protected side)
+  is already pinned by the sibling test above it.
+- The `contracts/__init__.py` re-export block for geoclaw / modflow / swan /
+  swmm: 3 module names, 4 `from` statements, 21 `__all__` rows. `__all__` is 59.
+  `contracts/schemas/` regenerated through `trid3nt_contracts.export_schemas`:
+  ZERO drift - none of these shapes was ever exported.
+
+REWRITTEN, not culled (the subject is LIVE, only the fixture was dead):
+- `tests/test_scenario_reuse_dispatch_job0326.py` drives the real
+  `_invoke_tool_via_emitter` reuse guard; it merely used `PlumeLayerURI` as the
+  layer a stub returns. Now returns `TelemacDyeLayerURI` with `dye_cmax_mgl` -
+  the live tracer-concentration contract, the same fact under the live name. The
+  guard reads the call's params and the result's `layer_id`, never the layer's
+  class, so the coverage is unchanged.
+- `tests/test_spatial_input_barriers.py` covers the spatial-input gate; the SWMM
+  contract was a SECOND validator of the same FeatureCollection. It now asserts
+  against the gate's OWN output (`barriers_feature_collection`): LineStrings,
+  both barrier tags, and the drawing-side `role` property dropped. One validator,
+  which is what the parse step was always for.
+
+NOT touched, flagged: `contracts/ws.py`, `common.py`, `telemac_contracts.py`,
+`output_quantities.py` and `gates/spatial_roles.py` still NAME the moved
+contracts in docstrings and comments, and `output_quantities.py` still carries
+engine-family enum members for them. Live modules with dead ENTRIES inside is a
+different measurement from a dead module, and it gets its own pass.

@@ -105,38 +105,6 @@ def _depth_manifest_dict() -> dict:
     }
 
 
-def _wave_manifest_dict() -> dict:
-    return {
-        "schema_version": 1,
-        "engine": "swan",
-        "run_id": "WAVEWAVE",
-        "status": "ok",
-        "frame_count": 1,
-        "metrics": {"max_hs_m": 3.2},
-        "layers": [
-            {
-                "layer_id_stem": "swan-wave-height-peak",
-                "name": "Peak wave height",
-                "layer_type": "raster",
-                "role": "primary",
-                "style_preset": "continuous_wave_height",
-                "units": "meters",
-                "cog_uri": "s3://runs/WAVEWAVE/swan_wave_height_peak.tif",
-                "frame_no": None,
-                "bbox": [-85.45, 29.93, -85.38, 29.98],
-                "has_overviews": True,
-                "band_stats": {"is_categorical": False, "is_rgba": False},
-                "metrics": {
-                    "max_hs_m": 3.2,
-                    "mean_tp_s": 8.1,
-                    "mean_dir_deg": 145.0,
-                    "wave_area_km2": 12.5,
-                },
-            }
-        ],
-    }
-
-
 # --------------------------------------------------------------------------- #
 # 1. Typed contract parse + schema-version reject.
 # --------------------------------------------------------------------------- #
@@ -246,31 +214,6 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(active_registr
     assert legend.colormap == "ylgnbu"
     stats = _depth_manifest_dict()["layers"][0]["band_stats"]
     assert (legend.vmin, legend.vmax) == (stats["p2"], stats["p98"])
-
-
-def test_register_swan_wave_layers_carries_narration_scalars(
-    monkeypatch, active_registry
-):
-    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
-    m = parse_publish_manifest(json.dumps(_wave_manifest_dict()))
-    layers, top_metrics, dropped = rpm.register_swan_wave_layers(
-        m, run_id="WAVEWAVE", mode="stationary"
-    )
-    assert dropped == 0
-    assert top_metrics["max_hs_m"] == 3.2
-    assert len(layers) == 1
-    peak = layers[0]
-    # The four typed narration scalars come from the per-layer manifest metrics.
-    assert peak.max_hs_m == 3.2
-    assert peak.mean_tp_s == 8.1
-    assert peak.mean_dir_deg == 145.0
-    assert peak.wave_area_km2 == 12.5
-    assert peak.mode == "stationary"
-    assert peak.layer_id == "swan-wave-height-peak-WAVEWAVE"
-    # Raw cog uri emission + the continuous_wave_height (gnbu) legend stash.
-    assert peak.uri == "s3://runs/WAVEWAVE/swan_wave_height_peak.tif"
-    legend = pl.pop_legend_for_uri(peak.uri)
-    assert legend is not None and legend.colormap == "gnbu"
 
 
 def test_style_params_from_band_stats_honors_rgba_and_generic_fallback():
