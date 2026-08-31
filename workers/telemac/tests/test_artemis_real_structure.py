@@ -67,28 +67,27 @@ def test_config_accepts_real_structure_fields():
     assert cfg.breakwater_polylines and cfg.remove_structure is True
 
 
-def test_entrypoint_strict_field_gate_allows_real_structure(tmp_path):
-    # the strict-field manifest gate must ACCEPT the two new keys
+def _gate(body):
+    return E._strict_section("agitation", body,
+                             E._config_fields(A.ArtemisConfig),
+                             drop=("workdir", "mode"))
+
+
+def test_entrypoint_strict_field_gate_allows_real_structure():
+    # the strict-field manifest gate must ACCEPT the two structure keys
     # (else a live real-structure run silently no-ops them).
-    cfg = E._artemis_config(tmp_path, {
+    cfg = A.ArtemisConfig(**_gate({
         "wave_mode": "diffraction", "bathy_source": "noaa_greatlakes",
         "bbox": [-87.392, 46.528, -87.368, 46.55],
         "breakwater_polylines": [[[-87.379, 46.534], [-87.377, 46.544]]],
         "remove_structure": False,
-    })
+    }))
     assert cfg.breakwater_polylines and cfg.remove_structure is False
-    assert cfg.workdir == str(tmp_path)
 
 
-def test_entrypoint_strict_field_gate_still_rejects_unknown(tmp_path):
-    with pytest.raises(E.ArtemisManifestUnknownFieldsError):
-        E._artemis_config(tmp_path, {"wave_mode": "diffraction", "bogus_knob": 1})
-
-
-def test_parser_version_bumped_for_real_structure():
-    # the image-provenance marker MUST move on a worker-output-contract change too
-    #; -3 adds the in-worker lake-datum bed COG (S3).
-    assert E._ARTEMIS_PARSER_VERSION == "artemis-agitation-3"
+def test_entrypoint_strict_field_gate_still_rejects_unknown():
+    with pytest.raises(E.UnknownManifestFieldError):
+        _gate({"wave_mode": "diffraction", "bogus_knob": 1})
 
 
 # ---------------------------------------------------------------------------

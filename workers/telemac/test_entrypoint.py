@@ -1,140 +1,189 @@
-"""P2 unit tests for the TELEMAC river-dye worker entrypoint.
+"""Offline tests for the TELEMAC worker entrypoint.
 
-TELEMAC-free: exercise the manifest -> ReachConfig mapping, the unknown-key
-drop, the workdir pin, and the bad-manifest typed-error path -- WITHOUT gmsh /
-telemac2d / the network. The live solve is covered by the container build-time
-smoke + the through-the-seam dev proof.
+TELEMAC-free by construction: the dispatch, the strict gate and the metrics
+envelope are exercised without telapy, without the solver binaries and without
+the network. The one test that spawns a real child does so to prove the seam the
+crash isolation rests on - the child dies, the parent still writes the metrics.
 """
 
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
-np = pytest.importorskip("numpy")  # telemac_river_dye_build imports numpy at top
-
-# The entrypoint imports its sibling ``telemac_river_dye_build`` off the script
-# dir (as it does inside the container); replicate that here.
-_WORKER_DIR = Path(__file__).parent
-if str(_WORKER_DIR) not in sys.path:
-    sys.path.insert(0, str(_WORKER_DIR))
-
-from workers.telemac import entrypoint as E  # noqa: E402
+from workers.telemac import entrypoint as E
 
 
-def test_reach_config_defaults_pin_workdir(tmp_path):
-    cfg = E._reach_config(tmp_path, {})
-    assert cfg.workdir == str(tmp_path)
-    # proven P1 defaults survive
-    assert cfg.name == "snake_river_twin_falls"
-    assert cfg.dye_conc_mgl == 100.0
+def _metrics(tmp_path: Path) -> dict:
+    return json.loads((tmp_path / E.METRICS_FILENAME).read_text())
 
 
-def test_reach_config_applies_overrides(tmp_path):
-    cfg = E._reach_config(tmp_path, {
-        "name": "colorado_reach",
-        "seed_lon": -108.5, "seed_lat": 39.1,
-        "distance_km": 4.0, "channel_width_m": 45.0,
-        "dye_conc_mgl": 250.0, "duration_s": 1800.0,
-    })
-    assert cfg.name == "colorado_reach"
-    assert cfg.seed_lon == -108.5 and cfg.seed_lat == 39.1
-    assert cfg.distance_km == 4.0 and cfg.channel_width_m == 45.0
-    assert cfg.dye_conc_mgl == 250.0 and cfg.duration_s == 1800.0
-    assert cfg.workdir == str(tmp_path)
+def _write_manifest(tmp_path: Path, body) -> list[str]:
+    (tmp_path / "manifest.json").write_text(
+        body if isinstance(body, str) else json.dumps(body), encoding="utf-8")
+    return ["--data-dir", str(tmp_path)]
 
 
-def test_reach_config_ignores_manifest_workdir_pin(tmp_path):
-    # a manifest 'workdir' must not override the mounted-data-dir pin
-    cfg = E._reach_config(tmp_path, {
-        "workdir": "/etc/should-not-win",
-        "distance_km": 7.0,
-    })
-    assert cfg.distance_km == 7.0
-    assert cfg.workdir == str(tmp_path)
+def _case(tmp_path: Path, **over) -> dict:
+    (tmp_path / "t2d.cas").write_text("/ deck\n", encoding="utf-8")
+    case = {"module": "telemac2d", "steering": "t2d.cas",
+            "results": ["r2d.slf"], "family": "river_dye",
+            "echo": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080}}
+    case.update(over)
+    return {"case": case, "run_id": "RUN123"}
 
 
-def test_reach_config_rejects_unknown_keys(tmp_path):
-    """an unknown reach key errors loudly instead of being dropped
-    with a log warning (the lesson -- a WARNING line is invisible in
-    practice; two registered knob templates ran as no-ops that way)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="bogus"):
-        E._reach_config(tmp_path, {
-            "bogus": 123, "another_unknown": "x", "distance_km": 7.0,
-        })
+# --------------------------------------------------------------------------- #
+# The contract stamps
+# --------------------------------------------------------------------------- #
 
 
-def test_parser_version_is_reach_7():
-    """the output_interval_min cadence lever bumps the parser stamp to reach-10."""
-    assert E._PARSER_VERSION == "telemac-reach-11"
+def test_the_parser_stamp_is_the_unified_one():
+    assert E._PARSER_VERSION == "telemac-unified-1"
 
 
-def test_reach_config_accepts_erodible_bed_fields(tmp_path):
-    """the GAIA v2 erodible-bed knobs are known fields (bedload scour)."""
-    cfg = E._reach_config(tmp_path, {
-        "substance_class": "sediment", "erodible_bed": True,
-        "bed_thickness_m": 4.0, "bedload_formula": 1,
-        "morphological_factor": 20.0, "grain_size_um": 400.0,
-    })
-    assert cfg.erodible_bed is True and cfg.bed_thickness_m == 4.0
-    assert cfg.bedload_formula == 1 and cfg.morphological_factor == 20.0
+def test_the_four_engines_a_case_may_name_come_from_telapy():
+    assert set(E._MODULES) == {"telemac2d", "telemac3d", "tomawac", "artemis"}
+    assert all(path.startswith("telapy.api.")
+               for path, _cls in E._MODULES.values())
 
 
-def test_reach_config_accepts_soil_store_fields(tmp_path):
-    """the soil-store knobs are known fields (continuous SCS-CN store)."""
-    cfg = E._reach_config(tmp_path, {
-        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
-        "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
-        "soil_store": True, "soil_store_capacity_mm": 90.0,
-        "soil_store_recovery_h": 72.0, "soil_store_init_mm": 30.0,
-    })
-    assert cfg.soil_store is True and cfg.soil_store_capacity_mm == 90.0
-    assert cfg.soil_store_recovery_h == 72.0 and cfg.soil_store_init_mm == 30.0
+def test_the_dispatch_is_one_table_of_three_sections():
+    assert set(E._DISPATCH) == {"case", "agitation", "stratified"}
 
 
-def test_reach_config_accepts_hyetograph_blocks(tmp_path):
-    """rain_hyetograph_blocks is a known field (time-varying native path)."""
-    cfg = E._reach_config(tmp_path, {
-        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
-        "rain_hyetograph_blocks": [[3600.0, 12.5], [7200.0, 0.0]],
-    })
-    assert cfg.rain_hyetograph_blocks == [[3600.0, 12.5], [7200.0, 0.0]]
+# --------------------------------------------------------------------------- #
+# The one strict gate
+# --------------------------------------------------------------------------- #
 
 
-def test_reach_config_accepts_rog_fields(tmp_path):
-    cfg = E._reach_config(tmp_path, {
-        "mode": "rain_on_grid", "watershed_slf": "watershed.slf",
-        "runoff_path": "native", "curve_number": 82.0, "amc_condition": 1,
-        "rain_intensity_mm_per_hr": 40.0, "node_cn2_file": "cn.txt",
-        "node_manning_file": "n.txt", "outlet_lonlat": (-83.4, 35.05),
-        "observed_gauge_id": "02086500",
-    })
-    assert cfg.mode == "rain_on_grid" and cfg.runoff_path == "native"
-    assert cfg.curve_number == 82.0 and cfg.amc_condition == 1
-    assert cfg.observed_gauge_id == "02086500"
+def test_the_gate_keeps_known_keys_and_drops_the_pinned_ones():
+    clean = E._strict_section("agitation", {"wave_period_s": 8.0,
+                                            "workdir": "/etc/nope",
+                                            "mode": "diffraction"},
+                              {"wave_period_s"}, drop=("workdir", "mode"))
+    assert clean == {"wave_period_s": 8.0}
 
 
-def test_reach_config_rejects_unknown_key_names_v7(tmp_path):
-    """A bogus reach key raises naming the CURRENT parser version (telemac-reach-11)."""
-    with pytest.raises(E.TelemacManifestUnknownFieldsError, match="telemac-reach-11"):
-        E._reach_config(tmp_path, {"bogus_rog_field": 1, "mode": "rain_on_grid"})
+def test_the_gate_refuses_an_unknown_key_and_names_the_parser():
+    """A dropped key no-ops the knob the caller meant to set, silently."""
+    with pytest.raises(E.UnknownManifestFieldError) as err:
+        E._strict_section("case", {"module": "telemac2d", "bogus": 1},
+                          E._CASE_FIELDS)
+    assert "bogus" in str(err.value)
+    assert E._PARSER_VERSION in str(err.value)
 
 
-def test_main_bad_manifest_writes_typed_error(tmp_path, monkeypatch):
-    # A malformed manifest (JSON array, not object) -> exit 2 + typed metrics.
-    (tmp_path / "manifest.json").write_text("[1, 2, 3]", encoding="utf-8")
-    rc = E.main(["--data-dir", str(tmp_path), "--manifest", str(tmp_path / "manifest.json")])
+# --------------------------------------------------------------------------- #
+# Manifest refusals
+# --------------------------------------------------------------------------- #
+
+
+def test_a_manifest_that_is_not_an_object_is_a_typed_error(tmp_path):
+    rc = E.main(_write_manifest(tmp_path, "[1, 2, 3]"))
     assert rc == 2
-    metrics = json.loads((tmp_path / E.METRICS_FILENAME).read_text())
-    assert metrics["status"] == "error"
-    assert metrics["correct_end"] is False
-    assert "manifest read failed" in metrics["error"]
+    assert _metrics(tmp_path)["error_code"] == "TELEMAC_MANIFEST_INVALID"
 
 
-def test_default_outputs_include_result_and_metrics():
-    assert "r2d_river.slf" in E.DEFAULT_OUTPUTS
-    assert E.METRICS_FILENAME in E.DEFAULT_OUTPUTS
-    assert "river.slf" in E.DEFAULT_OUTPUTS
+def test_a_missing_manifest_is_a_typed_error_not_a_default_run(tmp_path):
+    rc = E.main(["--data-dir", str(tmp_path)])
+    assert rc == 2
+    assert _metrics(tmp_path)["correct_end"] is False
+
+
+def test_a_manifest_naming_no_runnable_section_refuses(tmp_path):
+    rc = E.main(_write_manifest(tmp_path, {"reach": {"distance_km": 4.0}}))
+    assert rc == 2
+    assert "no runnable section" in _metrics(tmp_path)["error"]
+
+
+def test_a_case_with_an_unknown_field_refuses(tmp_path):
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path, channel_width_m=60.0)))
+    assert rc == 5
+    assert _metrics(tmp_path)["error_code"] == "TELEMAC_MANIFEST_UNKNOWN_FIELD"
+
+
+def test_a_case_naming_an_engine_the_image_has_no_class_for_refuses(tmp_path):
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path, module="sisyphe")))
+    assert rc == 5
+    assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_MODULE_UNKNOWN"
+
+
+def test_a_case_whose_deck_was_never_staged_refuses(tmp_path):
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path, steering="absent.cas")))
+    assert rc == 5
+    assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_STEERING_MISSING"
+
+
+# --------------------------------------------------------------------------- #
+# The metrics envelope
+# --------------------------------------------------------------------------- #
+
+
+def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
+                                                                    monkeypatch):
+    def _child(data_dir, module, steering, user_fortran):
+        (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
+        return 0
+
+    monkeypatch.setattr(E, "_run_child", _child)
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path)))
+    assert rc == 0
+    metrics = _metrics(tmp_path)
+    assert metrics["status"] == "ok" and metrics["correct_end"] is True
+    assert metrics["module"] == "telemac2d" and metrics["family"] == "river_dye"
+    assert metrics["run_id"] == "RUN123" and isinstance(metrics["wall_s"], float)
+    # the echo is the SERVER's measurement, copied rather than re-derived
+    assert metrics["utm_epsg"] == 32612 and metrics["npoin"] == 4211
+    assert "listing_tail" not in metrics
+
+
+def test_a_clean_exit_that_wrote_no_result_is_not_a_solve(tmp_path, monkeypatch):
+    """Both old conventions retire: the exit code alone never decides this."""
+    monkeypatch.setattr(E, "_run_child",
+                        lambda data_dir, module, steering, user_fortran: 0)
+    (tmp_path / E.LISTING_FILENAME).write_text("PLANTE\n", encoding="utf-8")
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path)))
+    assert rc == 1
+    metrics = _metrics(tmp_path)
+    assert metrics["error_code"] == "TELEMAC_RESULTS_MISSING"
+    assert "r2d.slf" in metrics["error"]
+    assert "PLANTE" in metrics["listing_tail"]
+
+
+def test_a_user_fortran_case_hands_the_child_its_fortran(tmp_path, monkeypatch):
+    seen = {}
+
+    def _child(data_dir, module, steering, user_fortran):
+        seen["fortran"] = user_fortran
+        (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
+        return 0
+
+    monkeypatch.setattr(E, "_run_child", _child)
+    E.main(_write_manifest(tmp_path,
+                           _case(tmp_path, user_fortran="user_fortran")))
+    assert seen["fortran"] == "user_fortran"
+
+
+# --------------------------------------------------------------------------- #
+# Crash isolation, through a real child
+# --------------------------------------------------------------------------- #
+
+
+def test_a_child_that_dies_still_leaves_the_metrics_written(tmp_path):
+    """A Fortran STOP kills the process it runs in; the metrics write survives.
+
+    The child here dies on telapy being absent rather than on a solver abort, but
+    the seam under test is the same one: whatever the child does, the parent
+    reads its exit code, keeps its output as the listing, and writes the run's
+    only report.
+    """
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path)))
+    assert rc == 1
+    metrics = _metrics(tmp_path)
+    assert metrics["status"] == "error" and metrics["correct_end"] is False
+    assert metrics["error_code"] == "TELEMAC_SOLVE_FAILED"
+    assert "telapy" in (tmp_path / E.LISTING_FILENAME).read_text()
+    assert "telapy" in metrics["listing_tail"]

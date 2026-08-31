@@ -1902,3 +1902,63 @@ Duplication this stage KNOWINGLY leaves, resolved in Stage 2:
 `workers/telemac/oil_templates/` (read by the live worker's oil branch) and
 under `trid3nt_server/workflows/telemac/steps/oil_templates/` (read by the
 server author). Stage 2 deletes the worker branch and its copy.
+
+## The worker becomes one dispatch (worker-unification stage 2, 2026-08-30)
+
+The five near-identical pipelines behind one entrypoint collapse to one strict
+gate, one dispatch table and one metrics envelope. `workers/telemac/
+entrypoint.py` 1594 -> 346 lines.
+
+- The four per-family run branches (`run_pipeline`, `run_rog_pipeline`,
+  `run_tomawac_pipeline`, `run_coastal_pipeline`) and their four strict-config
+  gates + error classes (`Telemac*`/`Tomawac*`/`Coastal*ManifestUnknownFieldsError`,
+  `_reach_config`, `_tomawac_config`, `_coastal_config`, and the four per-parser
+  version stamps) die. CONDITION MET: their payload modules
+  (`telemac_river_dye_build`, `rog_build`, `tomawac_build`,
+  `telemac_coastal_build`) were already deleted, so the module could not import
+  and no branch of it could run; `wave_field` and `coastal_tidal_surge` are DARK
+  under the fork ruling, and the reach/rog decks are authored server-side by
+  `steps/author.py`. What replaces all four is `case` -> the telapy child
+  runner: `_MODULES` names the four telapy API classes, and the child runs
+  `set_case -> init_state_default -> run_all_time_steps -> finalize`.
+- The `agitation` and `stratified` gates collapse into the same
+  `_strict_section` + one `UnknownManifestFieldError`, stamped
+  `telemac-unified-1`. CONDITION MET: both gates were the same loop over
+  `dataclasses.fields` with a different message; `artemis_build.solve` and
+  `telemac3d_build.solve` stay live behind the dispatch, unextended.
+- The `mesh_only` branch dies (zero production callers - only tests pass
+  `mesh_only=True`). CONDITION: `deck.py::stage_manifest` still accepts the
+  flag; the server flip removes it.
+- `DEFAULT_OUTPUTS` (22 filenames) dies. CONDITION MET: its documentation value
+  moves to the server outputs list that actually drives the upload -
+  `deck.py::stage_manifest` now declares the oil (`drogues.txt` /
+  `particles.json` / `slick.geojson` / `oil_spill.txt`), WAQTEL
+  (`t2d_river.waqtel`) and NESTOR (`nestor.act` / `.pol` / `.ref`) files per
+  substance class beside the GAIA pair it already declared.
+- Two divergent success conventions (a `correct_end` the builder decided, and a
+  zero exit code the launcher trusted) become one: a clean child exit AND every
+  `case.results` file present. A solver that returns zero without writing its
+  result has not solved anything.
+- `_parse_gaia_mass_balance` (49 lines) dies with the reach branch. CONDITION:
+  the listing it parsed is uploaded as `full_listing.log`, and the reader lands
+  server-side in `ops.read` with the other ported readers.
+- `_staged_mesh.py` (119) and `_staged_reach.py` (77) delete. CONDITION MET:
+  their only importer was the deleted reach branch; the mesh and the reach
+  geometry now arrive as the authored `mesh.slf`/`mesh.cli` pair.
+  `_staged_bed.py` and `_supplied_mesh.py` STAY - the two live builders read
+  them (real Great Lakes bathymetry, and the ARTEMIS BYO geometry).
+- `workers/telemac/oil_templates/` (3 files, 220 lines) deletes, resolving the
+  duplication the previous stage knowingly left. CONDITION MET:
+  `steps/author.py::write_oil_inputs` writes both the per-run `oil_flot.f` from
+  its own copy of the template and `oil_spill.txt` from `OIL_PRESETS`, so the
+  worker's `oil_flot_template.f`, `oil_spill_light_crude.txt` and
+  `cas_oil_keywords.txt` have no reader.
+- `workers/telemac/test_entrypoint.py` rewritten 140 -> 189 lines: the
+  ReachConfig-mapping tests die with ReachConfig; what is tested now is the one
+  gate, the dispatch, the refusals, the echo copied verbatim, the
+  clean-exit-no-result verdict, and crash isolation through a REAL child.
+- `tests/test_artemis_real_structure.py::test_parser_version_bumped_for_real_structure`
+  deletes. CONDITION MET: its subject was the per-builder stamp
+  `_ARTEMIS_PARSER_VERSION`, and there is one stamp now
+  (`telemac-unified-1`), asserted in `test_entrypoint.py`. The two gate tests
+  beside it repoint at `_strict_section` + `UnknownManifestFieldError`.

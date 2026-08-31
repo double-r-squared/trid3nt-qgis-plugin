@@ -69,11 +69,25 @@ def stage_manifest(reach: dict[str, Any], run_tag: str, *,
 
     outputs = ["r2d_river.slf", "river.slf", "river.cli", "t2d_river.cas",
                "full_listing.log", "telemac_metrics.json"]
-    # The GAIA deposition SELAFIN + its steering file ship for a sediment run so
-    # the postprocess can build the bed-evolution COG. A non-sediment run never
-    # produces them, so the supervisor's output glob simply skips them.
-    if str((reach or {}).get("substance_class") or "") == "sediment":
+    # What a class produces beyond the base run, declared where the class is
+    # decided. A run of another class never writes these, so the supervisor's
+    # output glob simply skips them.
+    substance_class = str((reach or {}).get("substance_class") or "")
+    if substance_class == "sediment":
+        # the GAIA deposition SELAFIN + its steering file, which the postprocess
+        # reads to build the bed-evolution COG.
         outputs += ["gaia_river.slf", "gaia_river.cas"]
+        if (reach or {}).get("dredging"):
+            # the NESTOR dig/dump rule, its zones, and the design grade.
+            outputs += ["nestor.act", "nestor.pol", "nestor.ref"]
+    elif substance_class == "oil":
+        # the raw particle track, the parsed snapshots, the renderable slick,
+        # and the oil steering file the run used.
+        outputs += ["drogues.txt", "particles.json", "slick.geojson",
+                    "oil_spill.txt"]
+    elif substance_class in ("decay", "do_sag"):
+        # the WAQTEL steering file: the forcing this run actually applied.
+        outputs += ["t2d_river.waqtel"]
     if mesh_only:
         # river_mesh.npz is the accepted topology a later solve adopts, so it
         # comes back with the geometry rather than dying with the run directory.
