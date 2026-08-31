@@ -76,6 +76,13 @@ def jsonable(value: Any) -> Any:
             "a run actually built with, so bind the declaration first.")
     if value is None or isinstance(value, (str, bool, int, float)):
         return value
+    if getattr(value, "uri", None):
+        # A declared data row arrives as the layer its producer returned, and the
+        # meshers read it through the same unwrap: the recipe records the ADDRESS
+        # they read, which is what a replay can re-read.
+        from trid3nt_server.tools.processing._geometry_common import source_uri
+
+        return jsonable(source_uri(value))
     if isinstance(value, Mapping):
         return {str(k): jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple, set, frozenset)):
