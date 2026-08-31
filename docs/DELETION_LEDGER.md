@@ -1947,6 +1947,18 @@ entrypoint.py` 1594 -> 346 lines.
   geometry now arrive as the authored `mesh.slf`/`mesh.cli` pair.
   `_staged_bed.py` and `_supplied_mesh.py` STAY - the two live builders read
   them (real Great Lakes bathymetry, and the ARTEMIS BYO geometry).
+- `_staged_bed.py` (53) is QUEUED, not kept. CONDITION to chop: its only
+  importers are `artemis_build.py` and `telemac3d_build.py`, which are live and
+  never extended behind the unified dispatch; the file dies on the same date they
+  do, when rung 4 rebuilds agitation and stratified as server-authored `case`
+  sections and the bed reaches the worker inside `mesh.slf`. reopen: never.
+- The four rain-on-grid helpers the deleted `run_rog_pipeline` owned -
+  `_mesh_bbox4326`, `_guess_utm_epsg`, `_read_node_field` (per-node CN2 /
+  Manning fields) and `_write_max_fields_slf` (`rog_max_fields.slf`) - die with
+  it. CONDITION: `steps/rain_on_grid.py::_OUTPUTS` still declares
+  `rog_max_fields.slf`, which nothing writes now; the rain-on-grid port either
+  re-declares that product from a server-side reader or drops the name from the
+  outputs list.
 - `workers/telemac/oil_templates/` (3 files, 220 lines) deletes, resolving the
   duplication the previous stage knowingly left. CONDITION MET:
   `steps/author.py::write_oil_inputs` writes both the per-run `oil_flot.f` from
