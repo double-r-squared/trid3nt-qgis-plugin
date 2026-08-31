@@ -15,7 +15,8 @@
 #   * rasterio<1.4 is the numpy-1 / GDAL ABI-safe line (self-contained manylinux
 #     wheel; no conda GDAL to conflict).
 #   * scipy backs opentelemac's own SELAFIN readers, pyproj the two in-worker
-#     builders' projections.
+#     builders' projections. Nothing in the worker or the engine reads geometry,
+#     so no shapely.
 # A version skew here is a deliberate, IaC-visible bump.
 #
 # Build context = THIS worker dir, not the repo root (a .dockerignore trims
@@ -48,10 +49,9 @@ ARG MAMBA_DOCKERFILE_ACTIVATE=1
 RUN python -m pip install --no-cache-dir \
         "numpy==1.26.4" \
         "rasterio==1.3.11" \
-        "shapely==2.1.2" \
         "pyproj==3.7.2" \
         "scipy==1.17.1" \
-    && python -c "import numpy,scipy,rasterio,shapely,pyproj; \
+    && python -c "import numpy,scipy,rasterio,pyproj; \
 print('geo deps OK numpy', numpy.__version__, 'rasterio', rasterio.__version__)" \
     && python -c "import numpy; assert numpy.__version__=='1.26.4', 'numpy pin drifted: '+numpy.__version__" \
     && python -c "from data_manip.extraction.telemac_file import TelemacFile; print('TELEMAC _hermes import OK')"
