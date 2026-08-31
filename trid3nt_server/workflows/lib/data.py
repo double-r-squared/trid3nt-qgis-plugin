@@ -21,7 +21,7 @@ from types import MappingProxyType
 from typing import Annotated, Any, Mapping
 
 from .errors import PlanValidationError, SuppliedGeometryError
-from .plan import DataRef
+from .plan import DataRef, Row, body_rows
 from .temporal import TemporalSpec, spec_from
 
 __all__ = [
@@ -111,41 +111,8 @@ def artifact_class(value: Any) -> str | None:
     return _CLASS_BY_SUFFIX.get(stem[dot:].lower()) if dot >= 0 else None
 
 
-class _Row:
-    """A row in a ``DATA`` class body: the ATTRIBUTE NAME is the row's name.
-
-    ``__set_name__`` is how the name arrives, so a template never writes it twice,
-    and ``__get__`` makes ``DATA.<row>`` the late-bound :class:`DataRef` every
-    binding block and plan step already speaks. Reading the body's own attribute
-    is therefore checked by Python at import: a misspelled row is an
-    ``AttributeError`` at the line that wrote it.
-    """
-
-    __slots__ = ()
-
-    #: Which field on the concrete row type holds the declared name.
-    _row_attr = "row"
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        declared = getattr(self, self._row_attr, "")
-        if declared and declared != name:
-            raise PlanValidationError(
-                f"row {declared!r} is bound to a second name {name!r}: a row is one "
-                "declaration in one body. Write a fresh tool(...) / Data modifier "
-                "for the second row.")
-        object.__setattr__(self, self._row_attr, name)
-
-    def __get__(self, obj: Any, owner: type | None = None) -> DataRef:
-        name = getattr(self, self._row_attr, "")
-        if not name:
-            raise PlanValidationError(
-                f"{self!r} was read as a row reference but carries no row name; a "
-                "reference is attribute access on the DATA body that declares it.")
-        return DataRef(name)
-
-
 @dataclass(frozen=True, slots=True)
-class Producer(_Row):
+class Producer(Row):
     """How an artifact comes into being: a runner name plus its declared args.
 
     ``.supplied()`` supersedes the build with an artifact the caller already has;
@@ -161,6 +128,8 @@ class Producer(_Row):
     supplied_validate: Any = None
     #: The DATA-body attribute name this producer was declared under.
     row: str = ""
+
+    _ref_type = DataRef
 
     def __post_init__(self) -> None:
         if not self.runner:
@@ -243,7 +212,7 @@ tool = ToolWord()
 
 
 @dataclass(frozen=True, slots=True)
-class DataDecl(_Row):
+class DataDecl(Row):
     """A declared artifact: a name the plan Refs, and what satisfies it.
 
     A PRODUCER-LESS declaration (``producer=None``) is a CONTEXT SLOT: the
@@ -270,6 +239,7 @@ class DataDecl(_Row):
     supplied_validate: Any = CoversAOI
 
     _row_attr = "name"
+    _ref_type = DataRef
 
     def __post_init__(self) -> None:
         if self.name and not self.name.isidentifier():
@@ -382,20 +352,17 @@ Data = DataDecl()
 def data_rows(body: Any) -> tuple[DataDecl, ...]:
     """The declared rows of a ``DATA`` class body, in CLASS-BODY ORDER.
 
-    Order is the declaration's own, because a ladder and a chain both read down
-    the body. A row-to-row reference written as a plain identifier inside the body
-    is the producer OBJECT, which by now knows its own name, so it is rewritten
-    here into the same late-bound :class:`DataRef` an out-of-body ``DATA.<row>``
-    yields - one shape reaches the validator and the binder.
+    A row-to-row reference written as a plain identifier inside the body is the
+    producer OBJECT, which by now knows its own name, so it is rewritten here into
+    the same late-bound :class:`DataRef` an out-of-body ``DATA.<row>`` yields - one
+    shape reaches the validator and the binder.
     """
-    if isinstance(body, (list, tuple)):
-        return tuple(body)
     rows: list[DataDecl] = []
-    for name, value in vars(body).items():
+    for value in body_rows(body, (Producer, DataDecl)):
         if isinstance(value, Producer):
-            rows.append(DataDecl(name=name, producer=_bound_producer(value)))
-        elif isinstance(value, DataDecl):
-            rows.append(replace(value, name=name))
+            rows.append(DataDecl(name=value.row, producer=_bound_producer(value)))
+        else:
+            rows.append(value)
     return tuple(rows)
 
 

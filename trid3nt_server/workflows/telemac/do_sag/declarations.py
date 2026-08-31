@@ -20,85 +20,101 @@ ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 _STEPS = "trid3nt_server.workflows.telemac.steps"
 
 
-PARAMS: tuple[Param, ...] = (
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Place name near the discharge, geocoded to the reach"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place"),
-    Param("outfall_coords", door=doors.USER, optional=True, consequence="scenario",
-          user_lever=True, type=tuple[float, float] | list[float],
-          derived_when_absent=(
-              "the release is seeded at the reach point the pipeline derives "
-              "(mid-reach on the fetched flowline, else the geocoded centroid); the "
-              "sag distance is measured downstream from there"),
-          desc="Where the discharge enters the water, (lon, lat); unset seeds the "
-               "reach at the derived reach point"),
+class PARAMS:
+    location = Param(
+        door=doors.QUESTION, optional=True, consequence="aoi",
+        desc="Place name near the discharge, geocoded to the reach")
+    bbox = Param(
+        door=doors.USER, optional=True, consequence="aoi",
+        type=tuple[float, float, float, float] | list[float] | str,
+        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place")
+    outfall_coords = Param(
+        door=doors.USER, optional=True, consequence="scenario",
+        user_lever=True, type=tuple[float, float] | list[float],
+        derived_when_absent=(
+            "the release is seeded at the reach point the pipeline derives "
+            "(mid-reach on the fetched flowline, else the geocoded centroid); the "
+            "sag distance is measured downstream from there"),
+        desc="Where the discharge enters the water, (lon, lat); unset seeds the "
+             "reach at the derived reach point")
 
-    Param("discharge_bod_mgl", door=doors.SCENARIO, default=20.0,
-          bounds=(0.1, 5000.0), units="mg/L", consequence="scenario",
-          desc="Fully-mixed ultimate carbonaceous BOD at the top of the reach - "
-               "the pollutant source-term question"),
-    Param("water_temp_c", door=doors.SCENARIO, default=20.0, bounds=(0.0, 40.0),
-          units="C", consequence="scenario",
-          desc="Water temperature, which sets the DO saturation the deficit is "
-               "measured against; 20 C is the standard Streeter-Phelps condition"),
-    Param("do_standard_mgl", door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
-          units="mg/L", consequence="scenario",
-          desc="The DO water-quality standard the sag is judged against; 5 is a "
-               "common warm-water aquatic-life criterion"),
-    Param("k1_per_day", door=doors.SCENARIO, default=0.3, bounds=(0.01, 20.0),
-          units="1/day", consequence="numerical",
-          desc="CBOD deoxygenation rate - a documented rate coefficient"),
-    Param("k2_per_day", door=doors.SCENARIO, default=0.9, bounds=(0.01, 50.0),
-          units="1/day", consequence="numerical",
-          desc="Surface reaeration rate - a documented rate coefficient"),
-    Param("reach_length_km", door=doors.SCENARIO, default=12.0, bounds=(0.5, 15.0),
-          units="km", consequence="aoi",
-          desc="Modeled reach length downstream of the discharge; the sag critical "
-               "point is often several km down"),
+    discharge_bod_mgl = Param(
+        door=doors.SCENARIO, default=20.0,
+        bounds=(0.1, 5000.0), units="mg/L", consequence="scenario",
+        desc="Fully-mixed ultimate carbonaceous BOD at the top of the reach - "
+             "the pollutant source-term question")
+    water_temp_c = Param(
+        door=doors.SCENARIO, default=20.0, bounds=(0.0, 40.0),
+        units="C", consequence="scenario",
+        desc="Water temperature, which sets the DO saturation the deficit is "
+             "measured against; 20 C is the standard Streeter-Phelps condition")
+    do_standard_mgl = Param(
+        door=doors.SCENARIO, default=5.0, bounds=(0.0, 15.0),
+        units="mg/L", consequence="scenario",
+        desc="The DO water-quality standard the sag is judged against; 5 is a "
+             "common warm-water aquatic-life criterion")
+    k1_per_day = Param(
+        door=doors.SCENARIO, default=0.3, bounds=(0.01, 20.0),
+        units="1/day", consequence="numerical",
+        desc="CBOD deoxygenation rate - a documented rate coefficient")
+    k2_per_day = Param(
+        door=doors.SCENARIO, default=0.9, bounds=(0.01, 50.0),
+        units="1/day", consequence="numerical",
+        desc="Surface reaeration rate - a documented rate coefficient")
+    reach_length_km = Param(
+        door=doors.SCENARIO, default=12.0, bounds=(0.5, 15.0),
+        units="km", consequence="aoi",
+        desc="Modeled reach length downstream of the discharge; the sag critical "
+             "point is often several km down")
 
-    Param("do_saturation_mgl", door=doors.DERIVED,
-          resolve=f"{_STEPS}.water_quality.do_saturation_mgl",
-          user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
-          desc="DO saturation Cs; derived from water temperature unless supplied"),
-    Param("upstream_do_mgl", door=doors.DERIVED,
-          resolve=f"{_STEPS}.water_quality.upstream_do_mgl",
-          user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
-          desc="DO carried in at the top of the reach; derived as saturation unless supplied"),
+    do_saturation_mgl = Param(
+        door=doors.DERIVED,
+        resolve=f"{_STEPS}.water_quality.do_saturation_mgl",
+        user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
+        desc="DO saturation Cs; derived from water temperature unless supplied")
+    upstream_do_mgl = Param(
+        door=doors.DERIVED,
+        resolve=f"{_STEPS}.water_quality.upstream_do_mgl",
+        user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
+        desc="DO carried in at the top of the reach; derived as saturation unless supplied")
 
-    Param("sim_duration_s", door=doors.CONSTANT, default=10800.0,
-          bounds=(60.0, 864000.0), units="s", consequence="numerical",
-          desc="Simulated time to reach the steady-state sag"),
+    sim_duration_s = Param(
+        door=doors.CONSTANT, default=10800.0,
+        bounds=(60.0, 864000.0), units="s", consequence="numerical",
+        desc="Simulated time to reach the steady-state sag")
     # THE granularity lever, and always an explicit sheet value: no sizing rung
     # derives an edge from the channel, so the number the run meshes at is either
     # the user's or the labeled default a review can see and change.
-    Param("mesh_resolution_m", door=doors.SCENARIO, default=14.0, user_lever=True,
-          bounds=(3.0, 5000.0), units="m", consequence="numerical",
-          desc="Target element edge length the reach is triangulated at; where the "
-               "sag bottoms out is a local feature and moves with the element that "
-               "resolves it"),
-    Param("output_interval_min", door=doors.USER, optional=True, bounds=(0.1, 1440.0),
-          units="min", consequence="numerical",
-          desc="Result-writing cadence; unset keeps the deck's own graphic period"),
-    Param("discharge_m3s", door=doors.USER, optional=True, units="m^3/s",
-          bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-          desc="Steady carrier discharge; unset resolves from the NOAA National "
-               "Water Model at the reach"),
-    Param("event_time", door=doors.QUESTION, optional=True, consequence="scenario",
-          derived_when_absent=(
-              "the carrier discharge is read at the MOST RECENT published NWM "
-              "cycle"),
-          desc="The storm/event moment to read the carrier discharge cycle at - "
-               "from phrasing like 'during last Tuesday's storm'; an ISO date "
-               "or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). "
-               "Unset reads the most recent published NWM cycle. The NWM PDS "
-               "bucket retains only the last ~30 days of history; a deeper "
-               "request refuses typed rather than silently reading a "
-               "different cycle."),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
+    mesh_resolution_m = Param(
+        door=doors.SCENARIO, default=14.0, user_lever=True,
+        bounds=(3.0, 5000.0), units="m", consequence="numerical",
+        desc="Target element edge length the reach is triangulated at; where the "
+             "sag bottoms out is a local feature and moves with the element that "
+             "resolves it")
+    output_interval_min = Param(
+        door=doors.USER, optional=True, bounds=(0.1, 1440.0),
+        units="min", consequence="numerical",
+        desc="Result-writing cadence; unset keeps the deck's own graphic period")
+    discharge_m3s = Param(
+        door=doors.USER, optional=True, units="m^3/s",
+        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
+        desc="Steady carrier discharge; unset resolves from the NOAA National "
+             "Water Model at the reach")
+    event_time = Param(
+        door=doors.QUESTION, optional=True, consequence="scenario",
+        derived_when_absent=(
+            "the carrier discharge is read at the MOST RECENT published NWM "
+            "cycle"),
+        desc="The storm/event moment to read the carrier discharge cycle at - "
+             "from phrasing like 'during last Tuesday's storm'; an ISO date "
+             "or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). "
+             "Unset reads the most recent published NWM cycle. The NWM PDS "
+             "bucket retains only the last ~30 days of history; a deeper "
+             "request refuses typed rather than silently reading a "
+             "different cycle.")
+    compute_class = Param(
+        door=doors.CONSTANT, default="medium",
+        consequence="numerical", desc="Solve sizing class")
 
 
 DOC = dict(

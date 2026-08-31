@@ -269,15 +269,18 @@ def test_the_mesh_declaration_reaches_the_deck_under_the_engine_s_own_names():
     assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
 
 
-def test_the_plan_reads_a_data_name_through_the_declaration_namespace():
-    """``D`` carries no sheet and no workflow: a name is checked against the
-    template's own DATA at registration, which is what lets a binding block sit at
-    module level above the plan it feeds."""
-    from trid3nt_server.workflows.lib import D, DataRef
+def test_the_plan_reads_a_data_name_off_the_templates_own_body():
+    """A read is attribute access on the template's own DATA, which is what lets a
+    binding block sit at module level above the plan it feeds - and what makes a
+    name the template does not declare unwritable."""
+    from trid3nt_server.workflows.lib import DataRef, tool
 
-    ref = D.rivers
-    assert isinstance(ref, DataRef) and ref.path == "rivers"
-    assert ref.origin.startswith("test_workflow_skeleton.py:")
+    class DATA:
+        rivers = tool("fetch_river_geometry")
+
+    assert DATA.rivers == DataRef("rivers")
+    with pytest.raises(AttributeError):
+        DATA.riverz
 
 
 def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
@@ -288,21 +291,19 @@ def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
     assert plan.engine == "telemac2d"        # from the facade
 
 
-def test_an_undeclared_data_name_refuses_at_registration_naming_its_write_site():
-    """``D`` cannot refuse at the attribute - it has no workflow to check against -
-    so the refusal moves to the VALIDATOR, which has the declared Data and can say
-    which namespace the bad name came from and where it was written."""
-    from trid3nt_server.workflows.lib import D, DataDecl, tool
+def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_name():
+    """A ref built from a STRING has no body to refuse it, so the refusal is the
+    VALIDATOR's - and it says which body the bad name claimed to come from."""
+    from trid3nt_server.workflows.lib import DataDecl, DataRef, tool
 
     def _plan(ops):
-        return (Step(runner="pkg.mod.fn", kwargs={"r": D.terain}).named("s"),)
+        return (Step(runner="pkg.mod.fn", kwargs={"r": DataRef("terain")}).named("s"),)
 
     with pytest.raises(PlanValidationError) as ei:
         Workflow(metadata=_metadata("data_probe"), params=(), plan=_plan,
                  data=(DataDecl("terrain", tool("pkg.mod.fetch")),))
     message = str(ei.value)
-    assert "D.terain names no declared Data" in message
-    assert "written at test_workflow_skeleton.py:" in message
+    assert "DataRef('terain') names no declared Data" in message
     assert "Declared Data: ['terrain']" in message
 
 

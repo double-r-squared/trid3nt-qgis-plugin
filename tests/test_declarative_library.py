@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 from trid3nt_server.workflows.lib import (
     CoversAOI,
-    D,
     Data,
     DataDecl,
     DataRef,
@@ -25,7 +24,6 @@ from trid3nt_server.workflows.lib import (
     FormGate,
     LeakScanTruncated,
     ModifierIllegalError,
-    P,
     Param,
     ParamNotResolved,
     ParamRef,
@@ -538,7 +536,7 @@ def test_validator_refuses_a_ref_into_a_guarded_branch():
     """A conditional step's name is not visible outside its branch - the branch
     may not fire, and a runtime REF_UNRESOLVED is not a contract."""
     plan = Plan("w", None, (
-        When(P.base, Step(runner=f"{_HERE}.stub_step").named("maybe")),
+        When(ParamRef("base"), Step(runner=f"{_HERE}.stub_step").named("maybe")),
         Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("maybe.uri")}),
     ))
     with pytest.raises(PlanValidationError, match="resolves to nothing"):
@@ -547,7 +545,7 @@ def test_validator_refuses_a_ref_into_a_guarded_branch():
 
 def test_validator_accepts_a_ref_inside_the_same_branch():
     plan = Plan("w", None, (
-        When(P.base,
+        When(ParamRef("base"),
              Step(runner=f"{_HERE}.stub_step").named("here"),
              Step(runner=f"{_HERE}.stub_second", kwargs={"x": Ref("here.uri")})),
     ))
@@ -564,7 +562,7 @@ def test_when_refuses_a_concrete_condition():
 
 def test_validator_refuses_a_when_on_an_undeclared_param():
     """A branch condition must NAME something that resolves when it is reached."""
-    plan = Plan("w", None, (When(P.ghost, Step(runner=f"{_HERE}.stub_step")),))
+    plan = Plan("w", None, (When(ParamRef("ghost"), Step(runner=f"{_HERE}.stub_step")),))
     with pytest.raises(PlanValidationError, match="not a declared param"):
         validate_plan(plan, _params())
 
@@ -585,7 +583,7 @@ def test_a_form_gate_over_a_branch_on_a_revisable_param_is_legal():
                   default=False)]
     plan = Plan("branchy", None, (
         FormGate(),
-        When(P.flag, Step(runner=f"{_HERE}.stub_second").named("extra")),
+        When(ParamRef("flag"), Step(runner=f"{_HERE}.stub_second").named("extra")),
         Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
     ))
     validate_plan(plan, decl)
@@ -612,7 +610,7 @@ async def test_resolver_refuses_a_param_declared_twice():
 def test_plan_construction_executes_nothing():
     Plan("w", None, (
         Step(runner=f"{_HERE}.stub_step").named("a"),
-        When(P.base, Step(runner=f"{_HERE}.stub_second")),
+        When(ParamRef("base"), Step(runner=f"{_HERE}.stub_second")),
     ))
     assert _CALLS == []
 
@@ -620,7 +618,7 @@ def test_plan_construction_executes_nothing():
 def test_declared_lists_a_guarded_step_whichever_way_the_branch_falls():
     """The plan says what is DECLARED; which steps RUN is the interpreter's answer."""
     guarded = Step(runner=f"{_HERE}.stub_second").named("maybe")
-    plan = Plan("w", None, (When(P.base, guarded),))
+    plan = Plan("w", None, (When(ParamRef("base"), guarded),))
     assert plan.declared() == (guarded,)
     assert "when:base" in " ".join(plan.describe())
 
@@ -687,6 +685,45 @@ def test_an_unknown_row_on_the_body_is_an_attribute_error():
 
     with pytest.raises(AttributeError):
         DATA.demm
+
+
+# --- the PARAMS class body ---------------------------------------------------- #
+def test_the_params_body_names_its_rows_keeps_their_order_and_is_its_own_ref():
+    """The attribute name IS the param name, the body's order IS the sheet order,
+    and the declaration is its own late-bound reference."""
+    from trid3nt_server.workflows.lib import param_rows
+
+    class PARAMS:
+        depth_m = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0),
+                        desc="a depth")
+        armed = Param(door=doors.USER, optional=True, type=bool, desc="a flag")
+
+    rows = param_rows(PARAMS)
+    assert [p.name for p in rows] == ["depth_m", "armed"]
+    assert rows[0].bounds == (0.0, 9.0)
+    assert isinstance(PARAMS.depth_m, ParamRef) and PARAMS.depth_m.name == "depth_m"
+
+
+def test_an_unknown_param_on_the_body_is_an_attribute_error():
+    """A typo is caught by Python at the line that wrote it, and another template's
+    param name cannot be written at all - there is no body carrying it."""
+    class PARAMS:
+        depth_m = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0),
+                        desc="a depth")
+
+    with pytest.raises(AttributeError):
+        PARAMS.deth_m
+
+
+def test_one_declaration_cannot_be_bound_to_two_names():
+    """A row is one declaration in one body; sharing the object would make the
+    second name silently the first."""
+    shared = Param(door=doors.SCENARIO, default=1.0, bounds=(0.0, 9.0), desc="d")
+
+    with pytest.raises(PlanValidationError, match="bound to a second name"):
+        class PARAMS:
+            first = shared
+            second = shared
 
 
 @pytest.mark.asyncio
@@ -848,7 +885,7 @@ async def test_a_guarded_step_runs_only_when_its_branch_fires():
     guarded = Step(runner=f"{_HERE}.stub_second").named("maybe")
     plan = Plan("guard_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("always"),
-        When(P.flag, guarded),
+        When(ParamRef("flag"), guarded),
     ))
     assert [s.label for s in plan.declared()] == ["always", "maybe"]
 
@@ -868,7 +905,7 @@ async def test_a_nested_branch_is_decided_by_its_own_condition():
     decl = [Param("outer", desc="d", door=doors.SCENARIO, default=True),
             Param("inner", desc="d", door=doors.SCENARIO, default=False)]
     deep = Step(runner=f"{_HERE}.stub_second").named("deep")
-    plan = Plan("nest_w", None, (When(P.outer, When(P.inner, deep)),))
+    plan = Plan("nest_w", None, (When(ParamRef("outer"), When(ParamRef("inner"), deep)),))
 
     out = await _run(plan, decl, {}, resume=False)
     assert out.executed == [] and _CALLS == []
@@ -891,7 +928,7 @@ async def test_an_unfired_branch_never_pulls_the_data_behind_it():
     data = [DataDecl("mesh", tool(f"{_HERE}.stub_producer"))]
     plan = Plan("lazy_w", None, (
         Step(runner=f"{_HERE}.stub_step").named("always"),
-        When(P.flag, Step(runner=f"{_HERE}.stub_second",
+        When(ParamRef("flag"), Step(runner=f"{_HERE}.stub_second",
                           kwargs={"m": Ref("mesh")}).named("maybe")),
     ))
     await _run(plan, decl, {}, data, resume=False)
@@ -910,7 +947,7 @@ async def test_a_branch_after_the_form_gate_reads_the_approved_revision(monkeypa
     decl = _flagged()
     plan = Plan("gate_branch", None, (
         FormGate(),
-        When(P.flag, Step(runner=f"{_HERE}.stub_second").named("extra")),
+        When(ParamRef("flag"), Step(runner=f"{_HERE}.stub_second").named("extra")),
         Step(runner=f"{_HERE}.stub_step", consequential=True).named("solve"),
     ))
 
@@ -1363,10 +1400,10 @@ async def test_a_param_ref_has_no_truth_value_at_construction_time():
     """A construction-time ``if`` on a ref must refuse, and the refusal has to name
     the one conditional the language has: a When the interpreter decides."""
     p = await resolve_params(_params(), {"base": 4.0})
-    with pytest.raises(PlanValidationError, match=r"When\(P\.base, \.\.\.\)"):
+    with pytest.raises(PlanValidationError, match=r"When\(PARAMS\.base, \.\.\.\)"):
         bool(p.base)
-    with pytest.raises(PlanValidationError, match=r"When\(P\.base, \.\.\.\)"):
-        bool(P.base)
+    with pytest.raises(PlanValidationError, match=r"When\(PARAMS\.base, \.\.\.\)"):
+        bool(ParamRef("base"))
 
 
 @pytest.mark.asyncio
@@ -1379,7 +1416,7 @@ async def test_an_undeclared_param_read_refuses_at_construction():
 def test_validator_refuses_a_param_ref_to_an_undeclared_param():
     plan = Plan("w", None, (Step(runner=f"{_HERE}.stub_step",
                               kwargs={"x": ParamRef("ghost")}),))
-    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
+    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
         validate_plan(plan, _params())
 
 
@@ -1752,7 +1789,7 @@ async def test_a_user_supplied_physics_value_is_not_refused():
 def test_validator_refuses_a_param_ref_in_a_data_producer():
     """A producer consumes params too - the dataflow crosses the Param/Data line."""
     data = [DataDecl("mesh", tool("b", size=ParamRef("ghost")))]
-    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
+    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
         validate_plan(Plan("w", None, (Step(runner=f"{_HERE}.stub_step"),)), _params(), data)
 
 
@@ -2354,34 +2391,31 @@ def _declare(params, plan_decl, data=(), name="declared_w"):
                        params=params, plan=plan_decl, data=data)
 
 
-def test_a_mistyped_param_read_is_refused_at_declaration_with_its_write_site():
-    """The refusal fires an import away from the line that wrote the ref, and the
-    sheet it is checked against runs to dozens of names - so the site and the
-    nearest declared spelling are the whole value of the message."""
+def test_a_mistyped_param_read_is_refused_with_the_nearest_declared_spelling():
+    """A ref built from a STRING reaches the validator, and the sheet it is checked
+    against runs to dozens of names - so the nearest spelling is the message."""
     def _plan(ops):
-        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": P.bse}).named("s"),)
+        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": ParamRef("bse")}).named("s"),)
 
     with pytest.raises(PlanValidationError) as exc:
         _declare(_params(), _plan)
     message = str(exc.value)
-    assert "P.bse names no declared param" in message
-    assert "written at test_declarative_library.py:" in message
+    assert "ParamRef('bse') names no declared param" in message
     assert "Closest declared: base" in message
 
 
 def test_a_mistyped_data_read_is_refused_and_says_it_is_a_data_name():
-    """``D.terain`` is a Data typo, not a step nobody named - which namespace the
+    """``DATA.terain`` is a Data typo, not a step nobody named - which body the
     bad name came from is the difference between two very different hunts."""
     def _plan(ops):
         return (Step(runner=f"{_HERE}.stub_second",
-                     kwargs={"m": D.terain}).named("s"),)
+                     kwargs={"m": DataRef("terain")}).named("s"),)
 
     data = [DataDecl("terrain", tool(f"{_HERE}.stub_producer"))]
     with pytest.raises(PlanValidationError) as exc:
         _declare(_params(), _plan, data)
     message = str(exc.value)
-    assert "D.terain names no declared Data" in message
-    assert "written at test_declarative_library.py:" in message
+    assert "DataRef('terain') names no declared Data" in message
     assert "Declared Data: ['terrain']" in message
 
 
@@ -2391,12 +2425,12 @@ def test_a_bad_plan_is_refused_at_register_workflow_not_at_run_time():
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
     def _plan(ops):
-        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": P.ghost}).named("s"),)
+        return (Step(runner=f"{_HERE}.stub_step", kwargs={"x": ParamRef("ghost")}).named("s"),)
 
     metadata = AtomicToolMetadata(name="never_registered_w", ttl_class="live-no-cache",
                                   source_class="workflow_dispatch", cacheable=False,
                                   engine="stub", tier="template")
-    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
+    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
         register_workflow(_StubFacade, metadata, _params(), _plan)
 
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -2445,7 +2479,7 @@ def test_a_binding_block_is_frozen_all_the_way_down():
     container inside one is a cross-run channel: a step that pops a key out of a
     declared dict changes what the NEXT run declares."""
     block = Physics("tracer", cfg={"scheme": "upwind", "rungs": [1, 2]},
-                    decay=P.base)
+                    decay=ParamRef("base"))
 
     assert isinstance(block.cfg, MappingProxyType)
     assert block.cfg["rungs"] == (1, 2)          # the nested list became a tuple
@@ -2468,7 +2502,7 @@ def test_a_ref_inside_a_frozen_mapping_is_not_invisible_to_the_validator():
     plan = Plan("frozen_param_w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}),))
     assert isinstance(block["cfg"], MappingProxyType)
-    with pytest.raises(PlanValidationError, match="P.ghost names no declared param"):
+    with pytest.raises(PlanValidationError, match=r"ParamRef\(\'ghost\'\) names no declared param"):
         validate_plan(plan, _params())
 
 
@@ -2476,7 +2510,7 @@ def test_a_data_ref_inside_a_frozen_mapping_is_not_invisible_to_the_validator():
     block = deep_freeze({"cfg": {"zone": DataRef("ghost_zone")}})
     plan = Plan("frozen_data_w", None, (
         Step(runner=f"{_HERE}.stub_second", kwargs={"physics": block}),))
-    with pytest.raises(PlanValidationError, match="D.ghost_zone names no declared Data"):
+    with pytest.raises(PlanValidationError, match=r"DataRef\(\'ghost_zone\'\) names no declared Data"):
         validate_plan(plan, _params(), [DataDecl("clip_zone")])
 
 
@@ -2506,7 +2540,7 @@ def test_a_data_ref_refuses_every_read_that_would_turn_it_into_data():
     with pytest.raises(PlanValidationError, match="f-string"):
         f"{ref}"
     with pytest.raises(PlanValidationError, match="f-string"):
-        f"{D.mesh}"
+        f"{DataRef("mesh")}"
     assert repr(ref) == "DataRef('mesh')"       # naming it is what a diagnostic does
 
 

@@ -27,7 +27,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 from trid3nt_server.workflows.lib import (
     Forcing,
     FormGate,
-    P,
     Physics,
     Ref,
     register_workflow,
@@ -37,6 +36,7 @@ from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.coastal_tidal_surge.declarations import (
     DOC,
     PARAMS,
+    PARAMS as P,
     VALIDITY,
 )
 from trid3nt_server.workflows.telemac.coastal_tidal_surge.series_type import (

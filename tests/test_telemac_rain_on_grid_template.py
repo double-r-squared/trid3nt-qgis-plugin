@@ -138,20 +138,21 @@ async def test_pour_point_is_never_invented_in_auto_mode():
     """pour_point is REQUIRED (door=USER, not optional) and its own DrawGate
     refuses typed in auto mode rather than falling back to a centroid nobody
     chose - unlike an OPTIONAL draw-gated param, whose absence just derives."""
-    from trid3nt_server.workflows.lib import DrawGate
+    from trid3nt_server.workflows.lib import DrawGate, param_rows
     from trid3nt_server.workflows.lib.errors import GateRefusedError
     from trid3nt_server.workflows.lib.interpreter import _run_draw_gate
     from trid3nt_server.workflows.lib.resolver import resolve_params
     from trid3nt_server.workflows.telemac.rain_on_grid.declarations import PARAMS
 
-    pour_point_param = next(p for p in PARAMS if p.name == "pour_point")
+    declared = param_rows(PARAMS)
+    pour_point_param = next(p for p in declared if p.name == "pour_point")
     assert pour_point_param.optional is not True
 
-    sheet = await resolve_params(PARAMS, {"bbox": [-83.47, 35.02, -83.36, 35.10]})
+    sheet = await resolve_params(declared, {"bbox": [-83.47, 35.02, -83.36, 35.10]})
     gate = DrawGate(param="pour_point", geometry="point",
                     prompt="Click the catchment OUTLET the runoff drains to")
     with pytest.raises(GateRefusedError, match="never invented"):
-        await _run_draw_gate(gate, sheet, PARAMS, input_mode=None,
+        await _run_draw_gate(gate, sheet, declared, input_mode=None,
                              tool_name="telemac_rain_on_grid")
 
 

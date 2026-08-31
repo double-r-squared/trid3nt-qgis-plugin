@@ -118,9 +118,8 @@ def _check_when_scope(plan_name: str, nodes: tuple[Any, ...], param_names: set[s
             if isinstance(cond, ParamRef):
                 if cond.name not in param_names:
                     raise PlanValidationError(
-                        f"plan {plan_name!r}: When branches on ParamRef({cond.name!r})"
-                        + (f" (declared at {cond.origin})" if cond.origin else "")
-                        + ", which is not a declared param."
+                        f"plan {plan_name!r}: When branches on ParamRef({cond.name!r}), "
+                        "which is not a declared param."
                     )
             else:
                 _resolve_root(plan_name, node.label, cond, param_names, data_names,
@@ -155,7 +154,7 @@ def _check_refs_in_scope(plan_name: str, nodes: tuple[Any, ...], param_names: se
 
 
 def _check_param_refs(plan: Plan, param_names: set[str]) -> None:
-    """A late-bound ``P.<name>`` read must name a param the workflow declares."""
+    """A late-bound ``PARAMS.<name>`` read must name a param the workflow declares."""
     for step in plan.declared():
         for ref in _walk_param_refs(dict(step.kwargs)):
             if ref.name not in param_names:
@@ -166,18 +165,18 @@ def _check_param_refs(plan: Plan, param_names: set[str]) -> None:
 
 
 def param_name_refusal(ref: ParamRef, param_names: set[str], where: str) -> str:
-    """A ``P.<name>`` that names no declared param, said WITH its construction site.
+    """A ``ParamRef`` that names no declared param, said with the nearest spellings.
 
-    The refusal fires at registration, an import away from the module line that
-    wrote the ref, and the candidate list runs to forty names - so the site and the
-    nearest declared spellings are the whole value of the message.
+    A ref written as ``PARAMS.<name>`` cannot reach here - the body refuses the
+    name at import - so what this catches is a ref BUILT from a string, where the
+    candidate list runs to forty names and the nearest spellings are the whole
+    value of the message.
     """
     import difflib
 
     close = difflib.get_close_matches(ref.name, sorted(param_names), n=3, cutoff=0.6)
     return (
-        f"{where}: P.{ref.name} names no declared param"
-        + (f" (written at {ref.origin})" if ref.origin else "")
+        f"{where}: ParamRef({ref.name!r}) names no declared param"
         + (f". Closest declared: {', '.join(close)}." if close
            else f" (declared: {sorted(param_names)}).")
     )
@@ -216,10 +215,8 @@ def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[st
         return
     if isinstance(ref, DataRef):
         raise PlanValidationError(
-            f"plan {plan_name!r} step {step_label!r}: D.{ref.root} names no declared "
-            "Data"
-            + (f" (written at {ref.origin})" if ref.origin else "")
-            + f". Declared Data: {sorted(data_names)}."
+            f"plan {plan_name!r} step {step_label!r}: DataRef({ref.root!r}) names no "
+            f"declared Data. Declared Data: {sorted(data_names)}."
         )
     raise PlanValidationError(
         f"plan {plan_name!r} step {step_label!r}: Ref({ref.path!r}) resolves to "

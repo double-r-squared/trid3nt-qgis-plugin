@@ -31,7 +31,7 @@ from . import journal, snapshot
 from .accepts import Accepts
 from .data import DataDecl, data_rows
 from .errors import DeclarativeError, PlanValidationError, WorkflowParkedError
-from .params import Param, ResolvedParams, doors
+from .params import Param, ResolvedParams, doors, param_rows
 from .plan import Plan, Ref, Step
 from .resolution import SensitivityDecl, sensitivity_notes
 from .resolver import merge_provenance, resolve_params
@@ -146,7 +146,7 @@ class Workflow(EngineOps):
     the emission-unification wave, where the seam is the single home.
     """
 
-    def __init__(self, *, metadata: Any, params: Sequence[Param],
+    def __init__(self, *, metadata: Any, params: Any,
                  plan: Callable[..., Any], data: Any = (),
                  answer: Sequence[str] = (),
                  provenance: Sequence[str | tuple[str, str]] = (),
@@ -156,9 +156,10 @@ class Workflow(EngineOps):
                  accepts: Accepts | None = None) -> None:
         self.metadata = metadata
         self.name = metadata.name
-        self.params = tuple(params)
-        #: The declared DATA rows, in class-body order - the template hands over
+        #: The declared PARAMS rows, in class-body order - the template hands over
         #: the body itself and the row names are the attribute names on it.
+        self.params = param_rows(params)
+        #: The declared DATA rows, the same way.
         self.data = data_rows(data)
         #: What this template accepts when something is SUPPLIED to it, role by
         #: role. Declared beside PARAMS because it is part of the same readable
@@ -182,7 +183,7 @@ class Workflow(EngineOps):
         self.coercions = tuple(coerce)
         self.error_prefix = str(getattr(metadata, "engine", "") or "workflow").upper()
         #: The plan is STATIC - it reads no concrete value - so it is built and
-        #: validated ONCE, here, at import. A P/D typo, an unreachable Ref, a
+        #: validated ONCE, here, at import. An unreachable Ref, a
         #: misplaced gate or a physics process the facade does not model is an
         #: AUTHORING error, and this is the last moment it can be reported as one.
         self.plan = self.build_plan()
@@ -472,7 +473,7 @@ _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
 def register_workflow(
     facade: type[Workflow],
     metadata: Any,
-    params: Sequence[Param],
+    params: Any,
     plan: Callable[..., Any],
     *,
     data: Any = (),
@@ -522,6 +523,7 @@ def register_workflow(
     from trid3nt_server.tools import register_tool
 
     _refuse_incomplete_facade(facade)
+    params = param_rows(params)
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
                       answer=answer, provenance=provenance,
                       sensitivity=sensitivity, validity=validity, coerce=coerce,

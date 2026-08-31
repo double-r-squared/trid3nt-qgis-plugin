@@ -20,72 +20,85 @@ DEFAULT_IDEALIZED_RES_M = 250.0
 
 
 
-PARAMS: tuple[Param, ...] = (
+class PARAMS:
     # -- the question ------------------------------------------------------- #
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Lake or basin place near the AOI (e.g. 'Lake Superior'), geocoded"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - deep open "
-               "water inside a lake for the real-bathymetry path"),
-    Param("flow_mode", door=doors.QUESTION, default="stratification",
-          consequence="scenario",
-          desc="Which 3D question: stratification (does the thermocline survive) | "
-               "wind_circulation (surface downwind, return flow at depth) | "
-               "salt_wedge (a density-driven bottom gravity current)"),
+    location = Param(
+        door=doors.QUESTION, optional=True, consequence="aoi",
+        desc="Lake or basin place near the AOI (e.g. 'Lake Superior'), geocoded")
+    bbox = Param(
+        door=doors.USER, optional=True, consequence="aoi",
+        type=tuple[float, float, float, float] | list[float] | str,
+        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - deep open "
+             "water inside a lake for the real-bathymetry path")
+    flow_mode = Param(
+        door=doors.QUESTION, default="stratification",
+        consequence="scenario",
+        desc="Which 3D question: stratification (does the thermocline survive) | "
+             "wind_circulation (surface downwind, return flow at depth) | "
+             "salt_wedge (a density-driven bottom gravity current)")
 
     # -- the column --------------------------------------------------------- #
-    Param("warm_temp_c", door=doors.SCENARIO, default=25.0, bounds=(-2.0, 40.0),
-          units="C", consequence="physics",
-          desc="Epilimnion (warm surface layer) temperature - a PRESCRIBED demo "
-               "column, since no met-forcing fetcher exists yet"),
-    Param("cold_temp_c", door=doors.SCENARIO, default=15.0, bounds=(-2.0, 40.0),
-          units="C", consequence="physics",
-          desc="Hypolimnion (cold bottom layer) temperature; the initial "
-               "top-to-bottom difference is what the run either keeps or mixes away"),
-    Param("thermocline_depth_m", door=doors.SCENARIO, default=8.0,
-          bounds=(0.5, 200.0), units="m", consequence="physics",
-          desc="Depth of the thermocline below the surface"),
-    Param("wind_speed_mps", door=doors.SCENARIO, default=0.0, bounds=(0.0, 40.0),
-          units="m/s", consequence="physics",
-          desc="Sustained wind speed; 0 is CALM - the half of the pair in which the "
-               "thermocline persists - and a nonzero value mixes the column and "
-               "drives the circulation"),
-    Param("wind_direction_deg", door=doors.SCENARIO, default=270.0,
-          bounds=(0.0, 360.0), units="deg", consequence="scenario",
-          desc="Compass bearing the wind blows FROM (0=N, 90=E, 270=W)"),
+    warm_temp_c = Param(
+        door=doors.SCENARIO, default=25.0, bounds=(-2.0, 40.0),
+        units="C", consequence="physics",
+        desc="Epilimnion (warm surface layer) temperature - a PRESCRIBED demo "
+             "column, since no met-forcing fetcher exists yet")
+    cold_temp_c = Param(
+        door=doors.SCENARIO, default=15.0, bounds=(-2.0, 40.0),
+        units="C", consequence="physics",
+        desc="Hypolimnion (cold bottom layer) temperature; the initial "
+             "top-to-bottom difference is what the run either keeps or mixes away")
+    thermocline_depth_m = Param(
+        door=doors.SCENARIO, default=8.0,
+        bounds=(0.5, 200.0), units="m", consequence="physics",
+        desc="Depth of the thermocline below the surface")
+    wind_speed_mps = Param(
+        door=doors.SCENARIO, default=0.0, bounds=(0.0, 40.0),
+        units="m/s", consequence="physics",
+        desc="Sustained wind speed; 0 is CALM - the half of the pair in which the "
+             "thermocline persists - and a nonzero value mixes the column and "
+             "drives the circulation")
+    wind_direction_deg = Param(
+        door=doors.SCENARIO, default=270.0,
+        bounds=(0.0, 360.0), units="deg", consequence="scenario",
+        desc="Compass bearing the wind blows FROM (0=N, 90=E, 270=W)")
 
     # -- the numerics (the advanced fold) ----------------------------------- #
-    Param("nplan", door=doors.SCENARIO, default=13, bounds=(5.0, 30.0),
-          type=int, consequence="numerical",
-          desc="Number of vertical sigma levels - the degree of freedom a 2D model "
-               "does not have, so it is the resolution lever that matters here"),
-    Param("non_hydrostatic", door=doors.USER, optional=True, type=bool,
-          consequence="physics",
-          derived_when_absent="the hydrostatic solver runs",
-          desc="Force the non-hydrostatic solver - the dam-break-3D fidelity rung a "
-               "salt wedge's front needs"),
-    Param("bathy_source", door=doors.SCENARIO, default="auto",
-          consequence="physics",
-          desc="Bed source: auto (a Great Lakes AOI samples the real NOAA lake-datum "
-               "bathymetry, anywhere else runs the idealized basin) | noaa_greatlakes "
-               "| idealized"),
-    Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
-          bounds=(50.0, 20000.0), units="m", consequence="numerical",
-          derived_when_absent=(
-              f"the horizontal grid is laid at the labeled default spacing - "
-              f"{DEFAULT_REAL_RES_M:g} m over a real lake, "
-              f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
-          desc="Explicit HORIZONTAL grid node spacing; the vertical is nplan"),
+    nplan = Param(
+        door=doors.SCENARIO, default=13, bounds=(5.0, 30.0),
+        type=int, consequence="numerical",
+        desc="Number of vertical sigma levels - the degree of freedom a 2D model "
+             "does not have, so it is the resolution lever that matters here")
+    non_hydrostatic = Param(
+        door=doors.USER, optional=True, type=bool,
+        consequence="physics",
+        derived_when_absent="the hydrostatic solver runs",
+        desc="Force the non-hydrostatic solver - the dam-break-3D fidelity rung a "
+             "salt wedge's front needs")
+    bathy_source = Param(
+        door=doors.SCENARIO, default="auto",
+        consequence="physics",
+        desc="Bed source: auto (a Great Lakes AOI samples the real NOAA lake-datum "
+             "bathymetry, anywhere else runs the idealized basin) | noaa_greatlakes "
+             "| idealized")
+    target_resolution_m = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        bounds=(50.0, 20000.0), units="m", consequence="numerical",
+        derived_when_absent=(
+            f"the horizontal grid is laid at the labeled default spacing - "
+            f"{DEFAULT_REAL_RES_M:g} m over a real lake, "
+            f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
+        desc="Explicit HORIZONTAL grid node spacing; the vertical is nplan")
     # CONSTANT, not SCENARIO: the window is a settling time, not a scenario. The
     # answer is the column's SETTLED state, so this is "long enough", the same
     # shape as tomawac's fetch-limited window. The user keeps the lever.
-    Param("sim_duration_hours", door=doors.CONSTANT, default=5.0, bounds=(1.0, 24.0),
-          units="h", consequence="numerical",
-          desc="Simulated duration - long enough for the column to settle or mix"),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
+    sim_duration_hours = Param(
+        door=doors.CONSTANT, default=5.0, bounds=(1.0, 24.0),
+        units="h", consequence="numerical",
+        desc="Simulated duration - long enough for the column to settle or mix")
+    compute_class = Param(
+        door=doors.CONSTANT, default="medium",
+        consequence="numerical", desc="Solve sizing class")
 
 
 DOC = dict(

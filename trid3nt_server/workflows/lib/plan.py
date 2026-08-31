@@ -3,14 +3,17 @@
 Nothing here executes. A template's ``plan(ops)`` returns the step sequence and
 the SKELETON names and engines the :class:`Plan`. The plan is STATIC: it reads no
 concrete value, so it is built ONCE - at registration - and the interpreter walks
-the same value on every run. Every read is a late-bound ``P.<param>`` /
-``D.<data>`` / ``Ref("step.field")`` description, and every conditional is a
+the same value on every run. Every read is a late-bound ``PARAMS.<param>`` /
+``DATA.<data>`` / ``Ref("step.field")`` description, and every conditional is a
 :class:`When` the interpreter decides AFTER the gates have run.
+
+A read is attribute access on the template's OWN declaration body (:class:`Row`),
+so a misspelled name is an ``AttributeError`` at the import line that wrote it and
+a name from another template's sheet is unwritable.
 """
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Callable, Iterable, Literal, Mapping
@@ -19,21 +22,21 @@ from .errors import ModifierIllegalError, PlanValidationError
 
 __all__ = [
     "ChartSpec",
-    "D",
     "DataRef",
     "DrawGate",
     "FormGate",
     "Gate",
     "Node",
-    "P",
     "ParamRef",
     "Plan",
     "Ref",
+    "Row",
     "RunMode",
     "STAGES",
     "Step",
     "StyleSpec",
     "When",
+    "body_rows",
     "declared_reads",
 ]
 
@@ -59,20 +62,6 @@ def declared_reads(value: Any, kind: type) -> Iterable[Any]:
         for v in value:
             yield from declared_reads(v, kind)
 
-
-def declaration_site(depth: int = 2) -> str:
-    """Where a declaration-time ref was BUILT, as ``file.py:line``.
-
-    A ``P.<name>`` typo is caught at registration, far from the module line that
-    wrote it, and the sheet it is checked against lists forty names - so the
-    refusal has to be able to point back at the line. ``sys._getframe`` is the
-    only thing that knows, and it costs one frame walk per declared ref at import.
-    """
-    try:
-        frame = sys._getframe(depth)
-    except ValueError:      # shallower stack than the caller assumed
-        return ""
-    return f"{frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}"
 
 #: The universal stage sequence the skeleton walks. A step names the stage it
 #: belongs to so the plan reads as the sequence rather than as a list of runners;
@@ -136,7 +125,7 @@ class _Placeholder:
 
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
 class ParamRef(_Placeholder):
-    """A LATE-BOUND read of a declared param: what ``p.<name>`` yields in ``plan()``.
+    """A LATE-BOUND read of a declared param: what ``PARAMS.<name>`` yields.
 
     A plan DESCRIBES; the interpreter SUBSTITUTES. Baking the concrete value into
     ``Step.kwargs`` at construction time would freeze the sheet before the form
@@ -152,9 +141,6 @@ class ParamRef(_Placeholder):
     """
 
     name: str
-    #: Where ``P.<name>`` was written, as ``file.py:line``. Carried so a name the
-    #: template does not declare can be refused AT its construction site.
-    origin: str = ""
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.isidentifier():
@@ -164,7 +150,8 @@ class ParamRef(_Placeholder):
         raise PlanValidationError(
             f"ParamRef({self.name!r}) has no truth value at plan-construction time - "
             "it is a description, not the value. A branch on it is "
-            f"When(P.{self.name}, ...), which the interpreter decides after the gates."
+            f"When(PARAMS.{self.name}, ...), which the interpreter decides after "
+            "the gates."
         )
 
     def __eq__(self, _other: Any) -> bool:
@@ -179,72 +166,71 @@ class ParamRef(_Placeholder):
 
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
 class DataRef(_Placeholder, Ref):
-    """A late-bound read of a declared ``Data``: what ``D.<name>`` yields.
+    """A late-bound read of a declared ``Data``: what ``DATA.<name>`` yields.
 
     A :class:`Ref` so the interpreter dereferences it with everything else, and its
-    own type so the registration check can say WHICH namespace a bad name came
-    from - ``D.terain`` is a Data typo, not a step nobody named.
+    own type so the registration check can say WHICH body a bad name came from -
+    ``DATA.terain`` is a Data typo, not a step nobody named.
 
     A PLACEHOLDER like ``ParamRef``, and it refuses the same reads: the artifact a
-    ``D.<name>`` describes does not exist until the interpreter produces it, so an
-    f-string over one puts ``DataRef('mesh')`` in front of a user and a
+    ``DATA.<name>`` describes does not exist until the interpreter produces it, so
+    an f-string over one puts ``DataRef('mesh')`` in front of a user and a
     construction-time ``if`` branches on a description. Equality and hashing stay
     :class:`Ref`'s: a Data name is compared and keyed by path all through
     registration.
     """
 
-    origin: str = ""
-
     def __repr__(self) -> str:
         return f"DataRef({self.path!r})"
 
 
-class _Namespace:
-    """A declaration-time ref namespace. Attribute access BUILDS a ref."""
+class Row:
+    """A row in a declaration class body: the ATTRIBUTE NAME is the row's name.
 
-    __slots__ = ("_kind",)
-
-    def __init__(self, kind: str) -> None:
-        object.__setattr__(self, "_kind", kind)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        raise PlanValidationError(
-            f"{self._kind} is a declaration namespace, not a place to store values."
-        )
-
-    def __repr__(self) -> str:
-        return self._kind
-
-
-class _ParamNamespace(_Namespace):
-    """``P.spill_fraction`` IS ``ParamRef('spill_fraction')``, wherever it is written.
-
-    Module-level: a binding block above ``plan()`` (PHYSICS, FORCING, MESH,
-    CORRIDOR) is a plain frozen value built out of these, so the recipe reads as
-    declarations rather than as a function that has to be called with a sheet to
-    mean anything.
+    ONE descriptor behind both bodies. ``__set_name__`` is how the name arrives, so
+    a template never writes it twice, and ``__get__`` makes ``PARAMS.<row>`` /
+    ``DATA.<row>`` the late-bound ref every binding block and plan step already
+    speaks. Reading the body's own attribute is therefore checked by Python at
+    import: a misspelled row is an ``AttributeError`` at the line that wrote it,
+    and a name the template does not declare cannot be written at all.
     """
 
-    def __getattr__(self, name: str) -> ParamRef:
-        if name.startswith("__"):           # let the object protocol probe
-            raise AttributeError(name)
-        return ParamRef(name, origin=declaration_site())
+    __slots__ = ()
+
+    #: Which field on the concrete row type holds the declared name.
+    _row_attr = "row"
+    #: Which ref ``__get__`` yields - the row's own late-bound description.
+    _ref_type: type = Ref
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        declared = getattr(self, self._row_attr, "")
+        if declared and declared != name:
+            raise PlanValidationError(
+                f"row {declared!r} is bound to a second name {name!r}: a row is one "
+                "declaration in one body. Write a fresh declaration for the second "
+                "row.")
+        object.__setattr__(self, self._row_attr, name)
+
+    def __get__(self, obj: Any, owner: type | None = None) -> Any:
+        name = getattr(self, self._row_attr, "")
+        if not name:
+            raise PlanValidationError(
+                f"{self!r} was read as a row reference but carries no row name; a "
+                "reference is attribute access on the body that declares it.")
+        return self._ref_type(name)
 
 
-class _DataNamespace(_Namespace):
-    """``D.rivers`` IS ``DataRef('rivers')`` - the declared artifact, by name."""
+def body_rows(body: Any, kind: type | tuple[type, ...]) -> tuple[Any, ...]:
+    """The declared rows of a class body, in CLASS-BODY ORDER.
 
-    def __getattr__(self, name: str) -> DataRef:
-        if name.startswith("__"):
-            raise AttributeError(name)
-        return DataRef(name, origin=declaration_site())
-
-
-#: The two declaration-time namespaces. They carry NO sheet and NO workflow: a
-#: name is checked against the template's own PARAMS/DATA at registration, which
-#: is what lets a binding block sit at module level above the plan it feeds.
-P = _ParamNamespace("P")
-D = _DataNamespace("D")
+    The ONE read of a declaration body - the param sheet, the data chain and the
+    registration factory all walk it, and order is the declaration's own because a
+    ladder and a chain both read down the body. A sequence passes through, so a
+    body assembled in code is still a body.
+    """
+    if isinstance(body, (list, tuple)):
+        return tuple(body)
+    return tuple(v for v in vars(body).values() if isinstance(v, kind))
 
 
 class _RunMode:
@@ -440,7 +426,7 @@ class When:
     """A branch the INTERPRETER decides, after the gates have run.
 
     The ONE conditional in the language. Its condition is a late-bound read -
-    ``P.<param>``, ``D.<data>`` or ``Ref("step.field")`` - and the interpreter
+    ``PARAMS.<param>``, ``DATA.<data>`` or ``Ref("step.field")`` - and the interpreter
     binds it against the CURRENT sheet at the moment the branch is reached, so an
     approved form-gate revision decides which body runs. A construction-time
     ``if`` could not: the plan value is built once, before any gate, and would
@@ -458,7 +444,7 @@ class When:
         if not isinstance(condition, (ParamRef, Ref)):
             raise PlanValidationError(
                 f"When({condition!r}) is not a late-bound condition. A branch takes "
-                "P.<param>, D.<data> or Ref('step.field') and the interpreter "
+                "PARAMS.<param>, DATA.<data> or Ref('step.field') and the interpreter "
                 "decides it after the gates; a concrete "
                 f"{type(condition).__name__} would decide it while the plan value "
                 "is being built, which is before anything the user could approve."

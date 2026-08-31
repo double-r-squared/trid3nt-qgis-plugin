@@ -20,9 +20,9 @@ badge - rather than this prose rendering of it.
 
 from __future__ import annotations
 
-from typing import Literal, Sequence
+from typing import Any, Literal
 
-from .params import Param, doors
+from .params import Param, doors, param_rows
 
 __all__ = ["render_docstring"]
 
@@ -36,11 +36,11 @@ def render_docstring(
     *,
     summary: str,
     routing: str,
-    params: Sequence[Param],
+    params: Any,
     returns: str,
     not_for: str = "",
-    controls: Sequence[tuple[str, str]] = (),
-    context: Sequence[tuple[str, str]] = (),
+    controls: tuple[tuple[str, str], ...] = (),
+    context: tuple[tuple[str, str], ...] = (),
     view: DocstringView = "full",
 ) -> str:
     """Build the docstring: summary, routing, negative routing, params, returns.
@@ -77,17 +77,18 @@ def render_docstring(
     return front + "\n" + "\n".join(body)
 
 
-def _ordered(params: Sequence[Param]) -> list[Param]:
+def _ordered(params: Any) -> list[Param]:
     """Question-bearing params first; constants last (the 'advanced' fold, in prose).
 
     WHICH params arrive here is the CALLER's decision, not this renderer's: a
     surface documents its own wire. The registration factory hands over only the
     params it put on the synthesized signature, so a factory-generated docstring
-    carries no CONSTANT rows - there is no argument there to describe.
+    carries no CONSTANT rows - there is no argument there to describe. A whole
+    ``PARAMS`` body is also legal, and reads through the one body helper.
     """
     rank = {doors.QUESTION: 0, doors.USER: 1, doors.GATE: 1,
             doors.SCENARIO: 2, doors.DERIVED: 3, doors.CONSTANT: 4}
-    return sorted(params, key=lambda p: (rank.get(p.door, 5), p.name))
+    return sorted(param_rows(params), key=lambda p: (rank.get(p.door, 5), p.name))
 
 
 def _param_line(p: Param) -> str:

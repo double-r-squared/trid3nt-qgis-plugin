@@ -146,7 +146,7 @@ class MeshDeclaration:
         """Append a DECLARED edit -> a new declaration. Builds nothing.
 
         Positional values bind to the action's declared inputs in declaration
-        order, so a one-input action reads as ``.edit("add_obstacle", D.walls)``.
+        order, so a one-input action reads as ``.edit("add_obstacle", DATA.walls)``.
         """
         bound = validate_edit(self.spec.mesher, action, bind_edit_inputs(
             self.spec.mesher, action, values, inputs))

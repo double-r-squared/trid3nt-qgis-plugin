@@ -37,6 +37,7 @@ from trid3nt_server.workflows.lib import (
     DataDecl,
     tool,
     Param,
+    ParamRef,
     PlanValidationError,
     Ref,
     Step,
@@ -391,12 +392,10 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
             return Step(runner=f"{_PROBE}.locate")
 
     def plan(ops):
-        from trid3nt_server.workflows.lib import D, P
-
         return [
-            Step(runner=f"{_PROBE}.locate", kwargs={"where": P.where}).named("locate"),
+            Step(runner=f"{_PROBE}.locate", kwargs={"where": ParamRef("where")}).named("locate"),
             Step(runner=f"{_PROBE}.measure",
-                 kwargs={"source": Ref("locate.where"), "rate": P.rate}).named("measure"),
+                 kwargs={"source": Ref("locate.where"), "rate": ParamRef("rate")}).named("measure"),
             Step(runner=f"{_PROBE}.publish",
                  kwargs={"measured": Ref("measure")}).named("publish"),
         ]
@@ -407,14 +406,8 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
                                     cacheable=False, engine="probe",
                                     tier="template"),
         params=params,
-        data=(DataDecl("world", tool(f"{_PROBE}.world", where=_where_ref())),),
+        data=(DataDecl("world", tool(f"{_PROBE}.world", where=ParamRef("where"))),),
         plan=plan, answer=("value",), validity=validity)
-
-
-def _where_ref():
-    from trid3nt_server.workflows.lib import P
-
-    return P.where
 
 
 def _coastal_probe() -> Workflow:
@@ -446,11 +439,9 @@ def _coastal_probe() -> Workflow:
             return Step(runner=f"{_PROBE}.friction_ok")
 
     def plan(ops):
-        from trid3nt_server.workflows.lib import P
-
         return [Step(runner=f"{_PROBE}.friction_ok",
-                     kwargs={"law": P.friction_law,
-                             "coefficient": P.friction_coefficient}).named("check")]
+                     kwargs={"law": ParamRef("friction_law"),
+                             "coefficient": ParamRef("friction_coefficient")}).named("check")]
 
     return Probe(metadata=AtomicToolMetadata(
         name="probe_friction", ttl_class="live-no-cache",

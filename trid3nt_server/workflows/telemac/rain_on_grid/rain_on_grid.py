@@ -36,7 +36,6 @@ from trid3nt_server.workflows.lib import (
     DrawGate,
     Forcing,
     FormGate,
-    P,
     Physics,
     Ref,
     register_workflow,
@@ -48,6 +47,7 @@ from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
     DOC,
     NLCD_NATIVE_RESOLUTION_M,
     PARAMS,
+    PARAMS as P,
     POUR_POINT_BUFFER_DEG,
 )
 from trid3nt_server.workflows.telemac.steps import Infiltration, compute_class

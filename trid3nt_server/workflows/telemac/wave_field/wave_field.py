@@ -33,7 +33,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 from trid3nt_server.workflows.lib import (
     Forcing,
     FormGate,
-    P,
     Physics,
     Ref,
     register_workflow,
@@ -41,7 +40,9 @@ from trid3nt_server.workflows.lib import (
 from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.steps import compute_class
-from trid3nt_server.workflows.telemac.wave_field.declarations import DOC, PARAMS
+from trid3nt_server.workflows.telemac.wave_field.declarations import (
+    DOC, PARAMS, PARAMS as P,
+)
 from trid3nt_server.workflows.telemac.wave_field.wave_mode import wave_mode
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 

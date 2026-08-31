@@ -48,17 +48,18 @@ serialize the plan as the run's provenance record.
 
 ```python
 # declarations.py, one file over
-PARAMS = (
-    Param("location",       door=doors.QUESTION, desc="River reach, as a place name."),
-    Param("spill_fraction", door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
-          desc="Initial plume span as a fraction of reach width."),
-    Param("release_coords", door=doors.USER,
-          desc="Where the substance enters the water."),
-    Param("mesh_size_m",    door=doors.DERIVED, resolve="telemac.suggest_mesh_size",
-          user_lever=True, desc="Target element edge length."),
-)
+class PARAMS:
+    location = Param(door=doors.QUESTION, desc="River reach, as a place name.")
+    spill_fraction = Param(
+        door=doors.SCENARIO, default=0.25, bounds=(0.05, 0.9),
+        desc="Initial plume span as a fraction of reach width.")
+    release_coords = Param(
+        door=doors.USER, desc="Where the substance enters the water.")
+    mesh_size_m = Param(
+        door=doors.DERIVED, resolve="telemac.suggest_mesh_size",
+        user_lever=True, desc="Target element edge length.")
 
-# the template file
+# the template file: `from .declarations import PARAMS as P`
 class DATA:
     terrain = tool("fetch_dem", source="3dep")
     rivers = tool("fetch_river_geometry")
@@ -99,15 +100,14 @@ FUNCTION, colocated in the template file.
 ### The static-plan rule
 
 `P.<name>` yields a LATE-BOUND `ParamRef` and `DATA.<row>` a `DataRef`, never the
-value. `P` is a MODULE-LEVEL namespace carrying no sheet and no workflow, and
-`DATA` is the template's own body, which is the whole point: a binding block can
-sit above `plan()` as a plain frozen value, and the plan becomes a pure assembly
-of blocks rather than a function that has to be called with a sheet before it
-means anything. A misspelled ROW is an `AttributeError` at the line that wrote it,
-because the body is a real class. A misspelled PARAM is checked against the
-template's own PARAMS AT REGISTRATION, and that refusal carries the
-`file.py:line` where the ref was written plus the nearest declared spellings -
-because the error fires an import away from the line that caused it.
+value. BOTH are the template's OWN class bodies - `P` is the import alias of its
+`PARAMS` - which is the whole point: a binding block can sit above `plan()` as a
+plain frozen value, and the plan becomes a pure assembly of blocks rather than a
+function that has to be called with a sheet before it means anything. A
+misspelled row or param is an `AttributeError` at the line that wrote it, because
+the body is a real class, and a name from another template's sheet is unwritable.
+A ref built from a STRING still reaches the validator, which refuses it at
+registration with the nearest declared spellings.
 
 A REF TAIL BINDS OR REFUSES. `Ref("centerline.bbox")` naming a field the result
 does not define - or one that is there and empty - is a typed `REF_FIELD_MISSING`
@@ -121,7 +121,7 @@ change what the next run declares.
 
 The plan reads NO concrete value, which has three consequences:
 
-- it is built ONCE, at registration, and validated there - a `P.` typo, an
+- it is built ONCE, at registration, and validated there - an
   unreachable `Ref`, a misplaced gate or a physics process the facade does not
   model is an AUTHORING error that never reaches a caller as a run failure;
 - there is no read-recording machinery, because there are no construction-time
@@ -131,7 +131,7 @@ The plan reads NO concrete value, which has three consequences:
 
 ### `When` - the one conditional
 
-A `When` condition is a late-bound read (`P.<param>`, `D.<data>`, or
+A `When` condition is a late-bound read (`P.<param>`, `DATA.<data>`, or
 `Ref("step.field")`); a concrete value is refused, because a branch decided while
 the plan value is being built is decided before anything the user could approve.
 The interpreter binds the condition against the CURRENT sheet at the moment the

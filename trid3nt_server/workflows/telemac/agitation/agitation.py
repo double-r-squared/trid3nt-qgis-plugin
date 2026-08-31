@@ -33,7 +33,6 @@ from trid3nt_server.workflows.lib import (
     Data,
     Forcing,
     FormGate,
-    P,
     Physics,
     Ref,
     register_workflow,
@@ -42,7 +41,7 @@ from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
 from trid3nt_server.workflows.telemac.agitation.declarations import (
-    ACCEPTS, DOC, PARAMS,
+    ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.steps import compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow

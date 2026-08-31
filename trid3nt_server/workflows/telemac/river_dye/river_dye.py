@@ -25,7 +25,6 @@ from trid3nt_server.workflows.lib import (
     DrawGate,
     Forcing,
     FormGate,
-    P,
     Physics,
     Ref,
     register_workflow,
@@ -36,7 +35,7 @@ from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.river_dye.coercions import release_points
 from trid3nt_server.workflows.telemac.river_dye.declarations import (
-    ACCEPTS, DOC, PARAMS,
+    ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.steps import (
     compute_class,

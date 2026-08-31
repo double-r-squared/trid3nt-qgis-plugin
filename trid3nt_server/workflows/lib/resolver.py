@@ -22,6 +22,7 @@ from .params import (
     ResolvedParam,
     ResolvedParams,
     doors,
+    param_rows,
     refuse_duplicate_params,
     wire_value,
 )
@@ -31,7 +32,7 @@ __all__ = ["merge_provenance", "provenance_entries", "rederive_revised",
 
 
 async def resolve_params(
-    declared: Sequence[Param],
+    declared: Any,
     supplied: Mapping[str, Any],
     *,
     question: Mapping[str, Any] | None = None,
@@ -46,6 +47,7 @@ async def resolve_params(
     other param, so labeled defaults are seated before derivations run and a
     derived param competes only with its own fallbacks, never another param's.
     """
+    declared = param_rows(declared)
     refuse_duplicate_params(declared)
     rows: dict[str, ResolvedParam] = {}
 
@@ -159,7 +161,7 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
     that actually changed. Names that are not declared params cannot be seated and
     are reported by the caller, never silently absorbed.
     """
-    by_name = {p.name: p for p in declared}
+    by_name = {p.name: p for p in param_rows(declared)}
     rows: dict[str, ResolvedParam] = {}
     changed: list[str] = []
     for name, value in revised.items():
@@ -326,14 +328,14 @@ def _as_float(value: Any) -> float | None:
 
 
 def provenance_entries(resolved: ResolvedParams,
-                       declared: Sequence[Param]) -> list[SyntheticInput]:
+                       declared: Any) -> list[SyntheticInput]:
     """The run's provenance rows - what the input-review gate and the layer carry.
 
     A ``default_demo`` + ``physics`` row is what makes the gate refuse in auto mode
     (law 9). An absent param that declares ``derived_when_absent`` still leaves a
     derived-basis row: the user has to see what the run measured against.
     """
-    by_name = {p.name: p for p in declared}
+    by_name = {p.name: p for p in param_rows(declared)}
     out: list[SyntheticInput] = []
     for row in resolved.rows():
         param = by_name.get(row.name)

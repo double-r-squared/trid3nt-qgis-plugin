@@ -13,6 +13,7 @@ import inspect
 
 import pytest
 
+from trid3nt_server.workflows.lib import param_rows
 from trid3nt_server.workflows.telemac.do_sag import do_sag as do_sag_mod
 from trid3nt_server.workflows.telemac.river_dye import river_dye as dye_mod
 from trid3nt_server.workflows.telemac.steps import forcing as F
@@ -47,8 +48,8 @@ def test_coerce_event_time_rejects_garbage_it_never_falls_back_to_latest():
 def test_template_surfaces_event_time_knob(mod, fn_name):
     fn = getattr(mod, fn_name)
     assert "event_time" in inspect.signature(fn).parameters
-    assert "event_time" in {p.name for p in mod.PARAMS}
-    row = next(p for p in mod.PARAMS if p.name == "event_time")
+    assert "event_time" in {p.name for p in param_rows(mod.PARAMS)}
+    row = next(p for p in param_rows(mod.PARAMS) if p.name == "event_time")
     assert row.optional is True
     assert row.derived_when_absent  # unset leaves a derived-basis provenance row
 

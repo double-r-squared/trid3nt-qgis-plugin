@@ -28,38 +28,45 @@ DEFAULT_IDEALIZED_RES_M = 8.0
 
 
 
-PARAMS: tuple[Param, ...] = (
+class PARAMS:
     # -- the question ------------------------------------------------------- #
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Harbour or coastal place near the AOI (e.g. 'Marquette, Michigan'), "
-               "geocoded"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the "
-               "open-water harbour approach for the real-bathymetry path"),
-    Param("wave_mode", door=doors.QUESTION, default="diffraction",
-          consequence="scenario",
-          desc="Which agitation question: diffraction (a breakwater shelters the "
-               "berths) | resonance (a narrow-mouth basin rings at its seiche "
-               "periods) | shoal (a reef refracts and focuses waves)"),
+    location = Param(
+        door=doors.QUESTION, optional=True, consequence="aoi",
+        desc="Harbour or coastal place near the AOI (e.g. 'Marquette, Michigan'), "
+             "geocoded")
+    bbox = Param(
+        door=doors.USER, optional=True, consequence="aoi",
+        type=tuple[float, float, float, float] | list[float] | str,
+        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the "
+             "open-water harbour approach for the real-bathymetry path")
+    wave_mode = Param(
+        door=doors.QUESTION, default="diffraction",
+        consequence="scenario",
+        desc="Which agitation question: diffraction (a breakwater shelters the "
+             "berths) | resonance (a narrow-mouth basin rings at its seiche "
+             "periods) | shoal (a reef refracts and focuses waves)")
 
     # -- the incident wave -------------------------------------------------- #
-    Param("wave_period_s", door=doors.SCENARIO, default=8.0, bounds=(1.0, 300.0),
-          units="s", consequence="physics",
-          desc="Incident monochromatic wave period - a PRESCRIBED demo forcing, "
-               "since no wave-forcing fetcher exists yet"),
-    Param("wave_height_m", door=doors.SCENARIO, default=1.0, bounds=(0.01, 10.0),
-          units="m", consequence="physics",
-          desc="Incident wave height H0 at the open boundary; Kd is measured "
-               "against it, so it sets the scale of every narrated height"),
-    Param("wave_direction_deg", door=doors.SCENARIO, default=90.0,
-          bounds=(0.0, 360.0), units="deg", consequence="scenario",
-          desc="Incident wave direction in the TRIG convention (0 = +X east, "
-               "90 = +Y north) - not the compass bearing"),
-    Param("reflection_coef", door=doors.SCENARIO, default=1.0, bounds=(0.0, 1.0),
-          consequence="physics",
-          desc="Structure / quay-wall reflection coefficient: 1 fully reflecting "
-               "(a vertical quay), 0 fully absorbing (a rubble slope)"),
+    wave_period_s = Param(
+        door=doors.SCENARIO, default=8.0, bounds=(1.0, 300.0),
+        units="s", consequence="physics",
+        desc="Incident monochromatic wave period - a PRESCRIBED demo forcing, "
+             "since no wave-forcing fetcher exists yet")
+    wave_height_m = Param(
+        door=doors.SCENARIO, default=1.0, bounds=(0.01, 10.0),
+        units="m", consequence="physics",
+        desc="Incident wave height H0 at the open boundary; Kd is measured "
+             "against it, so it sets the scale of every narrated height")
+    wave_direction_deg = Param(
+        door=doors.SCENARIO, default=90.0,
+        bounds=(0.0, 360.0), units="deg", consequence="scenario",
+        desc="Incident wave direction in the TRIG convention (0 = +X east, "
+             "90 = +Y north) - not the compass bearing")
+    reflection_coef = Param(
+        door=doors.SCENARIO, default=1.0, bounds=(0.0, 1.0),
+        consequence="physics",
+        desc="Structure / quay-wall reflection coefficient: 1 fully reflecting "
+             "(a vertical quay), 0 fully absorbing (a rubble slope)")
 
     # -- the structure -----------------------------------------------------  #
     # NOT a Param. The thing that shelters is a CONTEXT SLOT (``DATA`` in
@@ -68,22 +75,24 @@ PARAMS: tuple[Param, ...] = (
     # breakwater is an opinion the question does not carry.
 
     # -- the domain --------------------------------------------------------- #
-    Param("bathy_source", door=doors.SCENARIO, default="auto",
-          consequence="physics",
-          desc="Bed source: auto (a Great Lakes DIFFRACTION AOI samples the real "
-               "NOAA lake-datum bathymetry, everything else runs the analytic "
-               "domain) | noaa_greatlakes | idealized"),
-    Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
-          bounds=(20.0, 2000.0), units="m", consequence="numerical",
-          derived_when_absent=(
-              f"the grid is laid at the labeled default spacing - "
-              f"{DEFAULT_REAL_RES_M:g} m over a real harbour, "
-              f"{DEFAULT_IDEALIZED_RES_M:g} m in the analytic domain"),
-          desc="Explicit grid node spacing; a phase-resolving solve needs several "
-               "nodes per WAVELENGTH, so this is much finer than a spectral run"),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
+    bathy_source = Param(
+        door=doors.SCENARIO, default="auto",
+        consequence="physics",
+        desc="Bed source: auto (a Great Lakes DIFFRACTION AOI samples the real "
+             "NOAA lake-datum bathymetry, everything else runs the analytic "
+             "domain) | noaa_greatlakes | idealized")
+    target_resolution_m = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        bounds=(20.0, 2000.0), units="m", consequence="numerical",
+        derived_when_absent=(
+            f"the grid is laid at the labeled default spacing - "
+            f"{DEFAULT_REAL_RES_M:g} m over a real harbour, "
+            f"{DEFAULT_IDEALIZED_RES_M:g} m in the analytic domain"),
+        desc="Explicit grid node spacing; a phase-resolving solve needs several "
+             "nodes per WAVELENGTH, so this is much finer than a spectral run")
+    compute_class = Param(
+        door=doors.CONSTANT, default="medium",
+        consequence="numerical", desc="Solve sizing class")
 
 
 DOC = dict(

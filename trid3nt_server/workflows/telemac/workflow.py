@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from trid3nt_server.workflows.lib import (
-    D,
+    DataRef,
     Forcing,
     Physics,
     PlanValidationError,
@@ -148,7 +148,7 @@ _REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh"),
 #: The agitation deck always reads the run's MESH slot: the domain a phase-
 #: resolving solve runs on is the caller's to author, and a deck that read the
 #: slot only sometimes would answer the grid question on the runs that filled it.
-_AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": D.mesh}
+_AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": DataRef("mesh")}
 
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
 _COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}

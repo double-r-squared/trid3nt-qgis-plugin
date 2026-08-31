@@ -23,7 +23,6 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 from trid3nt_server.workflows.lib import (
     DrawGate,
     Forcing,
-    P,
     Physics,
     Ref,
     RunMode,
@@ -34,7 +33,7 @@ from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.do_sag.declarations import (
-    ACCEPTS, DOC, PARAMS,
+    ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
 from trid3nt_server.workflows.telemac.steps import (
     ReviewResolvedInputs,

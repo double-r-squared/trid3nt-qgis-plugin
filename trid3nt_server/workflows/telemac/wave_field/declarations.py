@@ -20,62 +20,73 @@ DEFAULT_IDEALIZED_RES_M = 1500.0
 
 
 
-PARAMS: tuple[Param, ...] = (
+class PARAMS:
     # -- the question ------------------------------------------------------- #
-    Param("location", door=doors.QUESTION, optional=True, consequence="aoi",
-          desc="Lake or coastal place near the AOI (e.g. 'Lake Superior'), geocoded"),
-    Param("bbox", door=doors.USER, optional=True, consequence="aoi",
-          type=tuple[float, float, float, float] | list[float] | str,
-          desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - open water "
-               "inside a lake for the real-bathymetry path"),
-    Param("wave_mode", door=doors.QUESTION, default="fetch_growth",
-          consequence="scenario",
-          desc="Which wave question: fetch_growth (wind-wave growth across the fetch) "
-               "| shoaling (swell steepens and depth-breaks) | bottom_friction (a "
-               "shallow shelf dissipates energy) | wave_current (a current amplifies "
-               "or damps the swell)"),
+    location = Param(
+        door=doors.QUESTION, optional=True, consequence="aoi",
+        desc="Lake or coastal place near the AOI (e.g. 'Lake Superior'), geocoded")
+    bbox = Param(
+        door=doors.USER, optional=True, consequence="aoi",
+        type=tuple[float, float, float, float] | list[float] | str,
+        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - open water "
+             "inside a lake for the real-bathymetry path")
+    wave_mode = Param(
+        door=doors.QUESTION, default="fetch_growth",
+        consequence="scenario",
+        desc="Which wave question: fetch_growth (wind-wave growth across the fetch) "
+             "| shoaling (swell steepens and depth-breaks) | bottom_friction (a "
+             "shallow shelf dissipates energy) | wave_current (a current amplifies "
+             "or damps the swell)")
 
     # -- the storm ---------------------------------------------------------- #
-    Param("wind_speed_mps", door=doors.SCENARIO, default=20.0, bounds=(0.0, 60.0),
-          units="m/s", consequence="physics",
-          desc="Sustained storm wind speed - a PRESCRIBED demo forcing, since no "
-               "wave-forcing fetcher exists yet"),
-    Param("wind_direction_deg", door=doors.SCENARIO, default=270.0,
-          bounds=(0.0, 360.0), units="deg", consequence="physics",
-          desc="Compass bearing the wind blows FROM (0=N, 90=E, 270=W); the fetch "
-               "runs downwind of it"),
-    Param("boundary_hs_m", door=doors.SCENARIO, default=1.5, bounds=(0.0, 20.0),
-          units="m", consequence="scenario",
-          desc="Incident swell significant wave height at the open boundary - the "
-               "shoaling and wave_current question classes"),
-    Param("boundary_period_s", door=doors.SCENARIO, default=10.0, bounds=(1.0, 30.0),
-          units="s", consequence="scenario",
-          desc="Incident swell peak period"),
-    Param("current_speed_mps", door=doors.SCENARIO, default=-2.5,
-          bounds=(-10.0, 10.0), units="m/s", consequence="scenario",
-          desc="wave_current only - the current ramped across the domain; NEGATIVE "
-               "opposes the swell (amplifies Hs), POSITIVE follows it (damps it)"),
-    Param("bottom_friction", door=doors.USER, optional=True, type=bool,
-          consequence="physics",
-          derived_when_absent=(
-              "bottom-friction dissipation arms itself for the bottom_friction "
-              "question class and stays off for every other one"),
-          desc="Force bottom-friction dissipation on or off"),
+    wind_speed_mps = Param(
+        door=doors.SCENARIO, default=20.0, bounds=(0.0, 60.0),
+        units="m/s", consequence="physics",
+        desc="Sustained storm wind speed - a PRESCRIBED demo forcing, since no "
+             "wave-forcing fetcher exists yet")
+    wind_direction_deg = Param(
+        door=doors.SCENARIO, default=270.0,
+        bounds=(0.0, 360.0), units="deg", consequence="physics",
+        desc="Compass bearing the wind blows FROM (0=N, 90=E, 270=W); the fetch "
+             "runs downwind of it")
+    boundary_hs_m = Param(
+        door=doors.SCENARIO, default=1.5, bounds=(0.0, 20.0),
+        units="m", consequence="scenario",
+        desc="Incident swell significant wave height at the open boundary - the "
+             "shoaling and wave_current question classes")
+    boundary_period_s = Param(
+        door=doors.SCENARIO, default=10.0, bounds=(1.0, 30.0),
+        units="s", consequence="scenario",
+        desc="Incident swell peak period")
+    current_speed_mps = Param(
+        door=doors.SCENARIO, default=-2.5,
+        bounds=(-10.0, 10.0), units="m/s", consequence="scenario",
+        desc="wave_current only - the current ramped across the domain; NEGATIVE "
+             "opposes the swell (amplifies Hs), POSITIVE follows it (damps it)")
+    bottom_friction = Param(
+        door=doors.USER, optional=True, type=bool,
+        consequence="physics",
+        derived_when_absent=(
+            "bottom-friction dissipation arms itself for the bottom_friction "
+            "question class and stays off for every other one"),
+        desc="Force bottom-friction dissipation on or off")
 
     # -- the domain --------------------------------------------------------- #
-    Param("bathy_source", door=doors.SCENARIO, default="auto",
-          consequence="physics",
-          desc="Bed source: auto (a Great Lakes AOI samples the real NOAA lake-datum "
-               "bathymetry, anywhere else runs the idealized basin) | noaa_greatlakes "
-               "| idealized"),
-    Param("target_resolution_m", door=doors.USER, optional=True, user_lever=True,
-          bounds=(150.0, 20000.0), units="m", consequence="numerical",
-          derived_when_absent=(
-              f"the grid is laid at the labeled default spacing - "
-              f"{DEFAULT_REAL_RES_M:g} m over a real lake, "
-              f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
-          desc="Explicit grid node spacing; 150 m is the finest the wave grid authors "
-               "and a large lake is coarsened under the node budget"),
+    bathy_source = Param(
+        door=doors.SCENARIO, default="auto",
+        consequence="physics",
+        desc="Bed source: auto (a Great Lakes AOI samples the real NOAA lake-datum "
+             "bathymetry, anywhere else runs the idealized basin) | noaa_greatlakes "
+             "| idealized")
+    target_resolution_m = Param(
+        door=doors.USER, optional=True, user_lever=True,
+        bounds=(150.0, 20000.0), units="m", consequence="numerical",
+        derived_when_absent=(
+            f"the grid is laid at the labeled default spacing - "
+            f"{DEFAULT_REAL_RES_M:g} m over a real lake, "
+            f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
+        desc="Explicit grid node spacing; 150 m is the finest the wave grid authors "
+             "and a large lake is coarsened under the node budget")
 
     # -- numerics (the advanced fold) --------------------------------------- #
     # CONSTANT, not SCENARIO: this window is not a choice about the storm, it is
@@ -83,13 +94,14 @@ PARAMS: tuple[Param, ...] = (
     # steady state, so a shorter window reports an unconverged sea and a longer
     # one reports the same numbers more slowly - neither is a different question.
     # The user keeps the lever; the model is not offered it.
-    Param("sim_duration_hours", door=doors.CONSTANT, default=4.0, bounds=(1.0, 24.0),
-          units="h", consequence="numerical",
-          desc="Simulated storm duration - long enough for the sea to reach its "
-               "fetch-limited steady state"),
-    Param("compute_class", door=doors.CONSTANT, default="medium",
-          consequence="numerical", desc="Solve sizing class"),
-)
+    sim_duration_hours = Param(
+        door=doors.CONSTANT, default=4.0, bounds=(1.0, 24.0),
+        units="h", consequence="numerical",
+        desc="Simulated storm duration - long enough for the sea to reach its "
+             "fetch-limited steady state")
+    compute_class = Param(
+        door=doors.CONSTANT, default="medium",
+        consequence="numerical", desc="Solve sizing class")
 
 
 DOC = dict(

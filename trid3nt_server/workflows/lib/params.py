@@ -1,5 +1,11 @@
-"""``Param`` - a declared VALUE (fits a form cell, resolves through a door,
-clamps to declared bounds). Frozen; construction validates the declaration."""
+"""The PARAMS class body - a declared VALUE per row (fits a form cell, resolves
+through a door, clamps to declared bounds). Frozen; construction validates the
+declaration.
+
+A template writes its params as a class body, so the attribute name IS the param
+name and a reference to it is attribute access on the body
+(``PARAMS.spill_fraction``) - a typo is an ``AttributeError`` at import rather
+than a string nobody checked, and another template's param name is unwritable."""
 
 from __future__ import annotations
 
@@ -7,7 +13,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, Sequence
 
 from .errors import PlanValidationError
-from .plan import ParamRef
+from .plan import ParamRef, Row, body_rows
 
 __all__ = [
     "Derived",
@@ -18,6 +24,7 @@ __all__ = [
     "ResolvedParam",
     "ResolvedParams",
     "doors",
+    "param_rows",
     "refuse_duplicate_params",
     "wire_value",
 ]
@@ -71,8 +78,12 @@ _BASIS_FOR_DOOR: dict[str, str] = {
 
 
 @dataclass(frozen=True, slots=True)
-class Param:
+class Param(Row):
     """One declared value: its door, its bounds, its law-9 consequence tag.
+
+    A row in a ``PARAMS`` class body: the attribute name it is written under IS
+    ``name``, so the declaration says it once and ``PARAMS.<name>`` is its own
+    late-bound reference.
 
     ``resolve`` is a DOTTED IMPORT PATH to a pure ``(params) -> value`` derivation
     (the GateSpec provider idiom - the declaration stays serializable and engine
@@ -83,8 +94,8 @@ class Param:
     derived-basis provenance row instead of a silent hole.
     """
 
-    name: str
-    desc: str
+    name: str = ""
+    desc: str = ""
     door: Door = doors.SCENARIO
     default: Any = None
     bounds: tuple[float, float] | None = None
@@ -105,8 +116,11 @@ class Param:
     #: model never sends because a coercion resolves it from other wire args.
     wire: bool = True
 
+    _row_attr = "name"
+    _ref_type = ParamRef
+
     def __post_init__(self) -> None:
-        if not self.name or not self.name.isidentifier():
+        if self.name and not self.name.isidentifier():
             raise PlanValidationError(f"Param name {self.name!r} is not an identifier.")
         if not self.desc:
             raise PlanValidationError(f"Param {self.name!r} declares no desc.")
@@ -164,6 +178,16 @@ class Param:
         return str
 
 
+def param_rows(body: Any) -> tuple[Param, ...]:
+    """The declared params of a ``PARAMS`` class body, in CLASS-BODY ORDER.
+
+    The sheet's own order: the resolver, the form card and the synthesized
+    signature all walk it, and the order a reader sees on the card is the order
+    the template wrote.
+    """
+    return body_rows(body, Param)
+
+
 def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
     """Two declarations of one name silently last-wins; refuse the declaration."""
     seen: set[str] = set()
@@ -210,7 +234,7 @@ class ResolvedParams:
     """The resolved param sheet - what the RUN reads, never what the plan reads.
 
     A plan is a static value built before any sheet exists (``plan(ops)``, with
-    ``P.<name>`` describing each read), so nothing here is reachable at
+    ``PARAMS.<name>`` describing each read), so nothing here is reachable at
     plan-construction time. What this class serves is the interpreter binding a
     ref, the gate machinery re-seating an approval, and the
     :class:`ParamValues` view handed to derivations and chart builders.
