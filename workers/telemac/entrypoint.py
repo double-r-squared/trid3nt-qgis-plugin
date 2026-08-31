@@ -33,6 +33,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Collection
@@ -60,6 +61,13 @@ _LISTING_TAIL_CHARS = 4000
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
 _PARSER_VERSION = "telemac-unified-1"
+
+#: Wall-clock bound on ONE solve, and the environment knob that states it. A
+#: wedged Fortran process holds the run directory forever and the supervisor sees
+#: a container that never exits; the bound turns that into a typed metrics write.
+#: A day is past every honest solve this image runs and short of never.
+_SOLVE_TIMEOUT_ENV = "TRID3NT_TELEMAC_SOLVE_TIMEOUT"
+_SOLVE_TIMEOUT_DEFAULT_S = 86400.0
 
 #: The telapy class per engine a case may name, imported in the CHILD only:
 #: telapy exists inside this image and nowhere else.
@@ -153,6 +161,17 @@ def _solve_in_process(module: str, steering: str,
     return 0
 
 
+def _solve_timeout_s() -> float:
+    """The wall-clock bound on one solve, as the environment states it."""
+    raw = (os.environ.get(_SOLVE_TIMEOUT_ENV) or "").strip()
+    try:
+        return float(raw) if raw else _SOLVE_TIMEOUT_DEFAULT_S
+    except ValueError:
+        LOG.warning("%s=%r is not a number; the %.0f s default stands",
+                    _SOLVE_TIMEOUT_ENV, raw, _SOLVE_TIMEOUT_DEFAULT_S)
+        return _SOLVE_TIMEOUT_DEFAULT_S
+
+
 def _run_child(data_dir: Path, module: str, steering: str,
                user_fortran: str | None) -> int:
     """Solve in a child process, teeing its listing; return the child's code.
@@ -160,21 +179,38 @@ def _run_child(data_dir: Path, module: str, steering: str,
     The tee is two writes rather than a redirect because both readers are real:
     the listing file is the run's evidence, and the container's own stdout is
     where a watching human sees the time loop advance.
+
+    A child that outruns the bound is KILLED and the expiry is raised, because a
+    wedged solver otherwise holds the container open with no report ever written.
     """
     argv = [sys.executable, os.path.abspath(__file__),
             "--solve", module, "--steering", steering]
     if user_fortran:
         argv += ["--user-fortran", str(user_fortran)]
+    bound = _solve_timeout_s()
     with (data_dir / LISTING_FILENAME).open("w", encoding="utf-8") as listing:
         child = subprocess.Popen(argv, cwd=str(data_dir), text=True, bufsize=1,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT)
-        for line in child.stdout:
-            listing.write(line)
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        child.stdout.close()
-        return child.wait()
+        expired: list[bool] = []
+        watchdog = threading.Timer(bound, lambda: (expired.append(True),
+                                                   child.kill()))
+        watchdog.start()
+        try:
+            for line in child.stdout:
+                listing.write(line)
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            child.stdout.close()
+            code = child.wait()
+        finally:
+            watchdog.cancel()
+    if expired:
+        raise CaseError(
+            "TELEMAC_SOLVE_TIMEOUT",
+            f"{module} was killed after {bound:g} s without finishing; the bound "
+            f"is {_SOLVE_TIMEOUT_ENV} and the listing carries how far it got.")
+    return code
 
 
 def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]:
@@ -197,6 +233,13 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             f"case.steering {steering!r} is not in the run directory; the deck "
             "the run is supposed to be was never staged.")
     results = [str(r) for r in (case.get("results") or [])]
+    if not results:
+        raise CaseError(
+            "TELEMAC_CASE_NO_RESULTS",
+            "case.results is empty, so the success convention - a clean exit AND "
+            "every declared result on disk - reduces to the exit code alone, "
+            "which is the convention this worker retired. Declare what the run "
+            "must produce.")
     LOG.info("telemac case module=%s steering=%s results=%s",
              module, steering, results)
 

@@ -117,6 +117,43 @@ def test_a_case_whose_deck_was_never_staged_refuses(tmp_path):
     assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_STEERING_MISSING"
 
 
+def test_a_case_declaring_no_results_refuses(tmp_path):
+    """On an empty list the success convention collapses back to the exit code."""
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path, results=[])))
+    assert rc == 5
+    assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_NO_RESULTS"
+
+
+# --------------------------------------------------------------------------- #
+# The solve time bound
+# --------------------------------------------------------------------------- #
+
+
+def test_the_solve_bound_defaults_to_a_day_and_the_knob_states_it(monkeypatch):
+    monkeypatch.delenv(E._SOLVE_TIMEOUT_ENV, raising=False)
+    assert E._solve_timeout_s() == E._SOLVE_TIMEOUT_DEFAULT_S == 86400.0
+    monkeypatch.setenv(E._SOLVE_TIMEOUT_ENV, "12.5")
+    assert E._solve_timeout_s() == 12.5
+    monkeypatch.setenv(E._SOLVE_TIMEOUT_ENV, "soon")
+    assert E._solve_timeout_s() == E._SOLVE_TIMEOUT_DEFAULT_S
+
+
+def test_a_child_that_outruns_the_bound_is_killed_and_still_reports(tmp_path,
+                                                                    monkeypatch):
+    """The metrics-always clause: an expiry is a typed report, not a wedged box."""
+    sleeper = tmp_path / "sleeper.py"
+    sleeper.write_text("import time\nprint('TIME LOOP', flush=True)\n"
+                       "time.sleep(60)\n", encoding="utf-8")
+    monkeypatch.setenv(E._SOLVE_TIMEOUT_ENV, "0.5")
+    monkeypatch.setattr(E, "__file__", str(sleeper))
+    rc = E.main(_write_manifest(tmp_path, _case(tmp_path)))
+    assert rc == 5
+    metrics = _metrics(tmp_path)
+    assert metrics["error_code"] == "TELEMAC_SOLVE_TIMEOUT"
+    assert E._SOLVE_TIMEOUT_ENV in metrics["error"]
+    assert metrics["correct_end"] is False
+
+
 # --------------------------------------------------------------------------- #
 # The metrics envelope
 # --------------------------------------------------------------------------- #
