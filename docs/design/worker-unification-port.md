@@ -198,3 +198,74 @@ factory become `_classify(label)` and `make_spec(solver, stream_prefix)` over a
 by `if k in metrics`, so per-leg lists only duplicated that filtering). The five
 solver NAMES stay: a harbour agitation field and a river-dye plume are not the
 same kind of run and must not share a row identity in a listing.
+
+## Stage 3 - the server flip, and the seam that blocks its core (2026-08-31)
+
+What landed, and what did not.
+
+**The server chain owns the reach refusals.** `steps/solve.py` no longer
+re-raises worker gates: the banks fetch, the measured-coverage check and the
+section cut all run before a manifest is staged, so a geometry refusal fires on
+its own cause. `TelemacReachDegenerateError` dies with them, and
+`channel_width_m` leaves the tree root-and-branch. `download_result_selafin`
+stops re-reading `utm_epsg`: the zone is the server's own measurement, echoed
+through `case.echo`, and already on the solve result.
+
+**The class readers are ported.** `steps/run_reads.py` reads what the worker
+used to derive in-container, off the artifacts the supervisor uploaded: GAIA's
+`FINAL MASS-BALANCE OF SEDIMENTS` closure out of `full_listing.log`, the
+injected mass and deposit fraction off the deck's own pulse, the surface-D50
+spread off `gaia_river.slf`, and the floating slick out of the raw
+`drogues.txt`. `products.py` builds `particles.json` and `slick.geojson` and
+UPLOADS them before it emits the handle, which retires the dangling-handle
+guard.
+
+**The NESTOR dredge zone auto-fills** (IDEAS 2026-08-31 ruling 2). The dig field
+is the cross-channel box at the dig station intersected with the reach polygon
+offset inward by the declared `dredge_bank_offset_m` (5 m, labeled, user-editable,
+`door=SCENARIO`). ONE mechanism, two behaviours: the setback keeps the cut off
+the bank toe, and a stretch narrower than twice it has no inside left and
+excludes itself. A supplied polygon wins and is validated CONTAINED in the
+water. Journaled through `write_nestor_decks`.
+
+**The rain-on-grid hyetograph names the baked fortran** (ruling 1).
+`RAINDEF3_USER_FORTRAN` is the one spelling of the path the Dockerfile bakes the
+RAINDEF=3 copy of `runoff_scs_cn.f` to; a constant-rain run names nothing and
+stages nothing.
+
+**`tomawac_wave_field` and `coastal_tidal_surge` are DECLARED PARKED**, per the
+fork ruling and the `telemac_rain_on_grid` precedent.
+
+**The worker fix fold.** `_run_child` regains the solve time bound
+(`TRID3NT_TELEMAC_SOLVE_TIMEOUT`, 86400 s): on expiry the child is killed and
+the metrics are written with `TELEMAC_SOLVE_TIMEOUT` and the listing tail. The
+strict gate refuses a case declaring an EMPTY results list, because on an empty
+list the ruled success convention reduces to the exit code alone.
+
+### DESIGN-STOP: nothing produces the reach mesh's boundary ROLES or its bed
+
+The deck flip - `steps/deck.py` authoring through `author.py`, the npz ceasing
+to travel, `case` replacing the `reach` section - needs two facts that no
+producer in the tree writes:
+
+- the TOPOLOGY BUNDLE. `mesh/topology.py` writes and reads it and
+  `MeshArtifact.topology_uri` carries it, but `write_topology` has NO CALLER:
+  `om2d::_emit_formats` passes `roles={"open": ...}` only, and only when a mesh
+  GATE edit designated a seaward boundary from oceanmesh's own bed-threshold
+  ocean-section walk. A reach has no seaward section and no gate edit, so
+  `roles` is empty, no bundle is written, and `_accepted_mesh_inputs` refuses
+  `TELEMAC_MESH_NOT_ACCEPTED`.
+- the FITTED BED. `fit_downstream_bed` exists and has no caller either. The
+  reach `MESH` block declares no `bed`, so `om2d` takes its default
+  `fetch_topobathy`, while `resolve_reach_river` fetches and stages a
+  GLO-30/3DEP bed of its own. Which of the two the SELAFIN carries, and whether
+  the gentle-slope fit is applied to it, is undecided.
+
+Both are SEMANTICS, not mechanics: where the inflow/outflow designation lives
+(a declared `boundary` field on the reach `MESH` ask, a new `om2d` edit action,
+or a server step between the mesh step and the deck), how a boundary node is
+matched to `ends.between`'s two transect faces, and which bed the reach solves
+on. The same seam blocks `telemac_rain_on_grid`'s unpark: its free-exit outlet
+is a liquid boundary the catchment mesh does not carry either, and the outlet
+hydrograph reader has no node set to integrate over. Reported rather than
+invented.

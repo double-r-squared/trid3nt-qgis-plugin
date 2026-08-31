@@ -1974,3 +1974,61 @@ entrypoint.py` 1594 -> 346 lines.
   `_ARTEMIS_PARSER_VERSION`, and there is one stamp now
   (`telemac-unified-1`), asserted in `test_entrypoint.py`. The two gate tests
   beside it repoint at `_strict_section` + `UnknownManifestFieldError`.
+
+## The server chain owns the reach refusals (worker-unification stage 3, 2026-08-31)
+
+The container meshes nothing and fetches nothing, so no refusal about the
+reach's GEOMETRY can arise inside it any more. Everything that carried a
+worker-side gate to the server dies with the gate.
+
+- `steps/solve.py::raise_if_banks_unavailable` and `raise_if_reach_degenerate`
+  (35) DELETE. CONDITION MET: the banks fetch, the measured coverage check and
+  the section cut all run server-side before a manifest is staged, so
+  `TELEMAC_BANKS_UNAVAILABLE` / `TELEMAC_REACH_DEGENERATE` are codes no worker
+  writes. `ReachBanksUnmapped` STAYS - it is raised by `reach.py`'s own
+  measured-coverage check, which is where the real cause is. reopen: never.
+- `steps/errors.py::TelemacReachDegenerateError` (41) DELETES with them, and
+  `channel_width_m` leaves the tree root-and-branch with it (P3): the error's
+  message and both its suggestions were written around a width the elegance
+  review deleted. reopen: never - a degenerate domain now refuses at the section
+  cut, on the geometry that was measured.
+- `steps/solve.py::download_result_selafin`'s second metrics read (26 -> 0)
+  DELETES; the function returns the path alone. CONDITION MET: `utm_epsg` is the
+  SERVER's own measurement, echoed through `case.echo` into the worker's metrics
+  and already on the solve result, so reading it again out of the same file was
+  a second answer that could disagree with the first.
+- `steps/products.py::_s3_object_exists` (12) and
+  `tests/test_live_drive_fixes_0104.py::test_s3_object_exists_guard` DELETE, and
+  the file goes with its last test. CONDITION MET: its subject was the worker's
+  fail-open drogues parse leaving `slick.geojson` unwritten while its URI was
+  registered anyway. The server now BUILDS the slick from the uploaded track and
+  uploads the bytes before it emits the handle, so there is no window in which a
+  handle can outrun its object. reopen: never.
+- `steps/author.py::TELEMAC_DREDGE_ZONE_UNMEASURED` RETIRES to the NESTOR
+  auto-fill (IDEAS 2026-08-31 ruling 2): the dig field is the cross-channel box
+  at the dig station intersected with the reach polygon offset inward by the
+  declared `dredge_bank_offset_m`, so a field is measured rather than refused
+  for want of a width. What survives it is
+  `TELEMAC_DREDGE_ZONE_TOO_NARROW` (the shrunken polygon vanished - the setback
+  and the measured width are named), `TELEMAC_DREDGE_ZONE_OUTSIDE_WATER` (a
+  supplied polygon on dry land) and `TELEMAC_DREDGE_ZONE_UNMAPPED` (no reach
+  polygon reached the author). `zone_width_m` / `dredge_zone_width_m` leave both
+  signatures.
+- `steps/author.py::author_rog_deck(user_fortran_dir=)` DELETES. CONDITION MET:
+  the RAINDEF=3 patch bakes at IMAGE BUILD (IDEAS 2026-08-31 ruling 1), so the
+  deck names one path - `RAINDEF3_USER_FORTRAN` - and a per-run directory name
+  was a knob with one legal value.
+- `tomawac_wave_field` and `coastal_tidal_surge` leave the REGISTRY (declared
+  parked, not deleted - ADR 0322). CONDITION to unpark: rung 4 rebuilds each as
+  a server-authored `case`; their in-worker builders were deleted in stage 0 and
+  the attic is never a restoration source. Their own test modules read the
+  declaration on the module instead of a registry row; the roster pins move to
+  `PARKED_TEMPLATES`, `_REGISTRY_SIZE` drops 170 -> 168, and the six roster and
+  retrieval fixtures that used one of them as their EXAMPLE template repoint at
+  `telemac_river_dye`.
+- `steps/deck.py::stage_manifest(mesh_only=)` and its preview outputs list (16)
+  DELETE, with the two tests whose subject they were. CONDITION MET: stage 2
+  deleted the worker's `mesh_only` branch with a ledger line stating it had zero
+  server callers, and this was the other half of that pair - staging a manifest
+  with `mesh_only: True` now writes a document naming no runnable section. The
+  mesh PREVIEW is `MeshStep.build`'s gate, which never dispatches a solver.
