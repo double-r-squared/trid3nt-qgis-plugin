@@ -242,30 +242,56 @@ the metrics are written with `TELEMAC_SOLVE_TIMEOUT` and the listing tail. The
 strict gate refuses a case declaring an EMPTY results list, because on an empty
 list the ruled success convention reduces to the exit code alone.
 
-### DESIGN-STOP: nothing produces the reach mesh's boundary ROLES or its bed
+### The seam that blocked the flip is CLOSED (2026-08-31 FLIP rulings)
 
-The deck flip - `steps/deck.py` authoring through `author.py`, the npz ceasing
-to travel, `case` replacing the `reach` section - needs two facts that no
-producer in the tree writes:
+Both facts the deck flip needed now have a producer, and both are DECLARED on
+the mesh ask rather than derived by a server step between the mesh and the deck.
 
-- the TOPOLOGY BUNDLE. `mesh/topology.py` writes and reads it and
-  `MeshArtifact.topology_uri` carries it, but `write_topology` has NO CALLER:
-  `om2d::_emit_formats` passes `roles={"open": ...}` only, and only when a mesh
-  GATE edit designated a seaward boundary from oceanmesh's own bed-threshold
-  ocean-section walk. A reach has no seaward section and no gate edit, so
-  `roles` is empty, no bundle is written, and `_accepted_mesh_inputs` refuses
-  `TELEMAC_MESH_NOT_ACCEPTED`.
-- the FITTED BED. `fit_downstream_bed` exists and has no caller either. The
-  reach `MESH` block declares no `bed`, so `om2d` takes its default
-  `fetch_topobathy`, while `resolve_reach_river` fetches and stages a
-  GLO-30/3DEP bed of its own. Which of the two the SELAFIN carries, and whether
-  the gentle-slope fit is applied to it, is undecided.
+**Boundary roles.** `build_mesh(mesher="om2d")` gains `boundaries={role: face}`.
+The faces are the chain's own transects: `section(between=...)` cuts the mapped
+banks square at each end and now HANDS THOSE CUTS OVER as `face_start` /
+`face_end`, so the reach declares
+`boundaries={"inflow": Ref("reach_polygon.face_start"), "outflow":
+Ref("reach_polygon.face_end")}`. Every boundary node takes the role of the face
+it is nearest to, within the mesh's own mean boundary edge; a bank node is
+nearer neither and is written as solid wall. `mesh/topology.py::write_topology`
+gains its first caller - `om2d::_emit_formats` writes the bundle whenever any
+role landed - so `MeshArtifact.topology_uri` carries the role sets and the
+MEASURED numliq order the deck is authored against. The coastal gate-edit
+`"open"` path is unchanged: its designation still comes from oceanmesh's own
+bed-threshold section walk and simply joins the same role table.
 
-Both are SEMANTICS, not mechanics: where the inflow/outflow designation lives
-(a declared `boundary` field on the reach `MESH` ask, a new `om2d` edit action,
-or a server step between the mesh step and the deck), how a boundary node is
-matched to `ends.between`'s two transect faces, and which bed the reach solves
-on. The same seam blocks `telemac_rain_on_grid`'s unpark: its free-exit outlet
-is a liquid boundary the catchment mesh does not carry either, and the outlet
-hydrograph reader has no node set to integrate over. Reported rather than
-invented.
+**The bed.** The reach `DATA` body declares `bed = tool("fetch_copernicus_dem",
+bbox=Ref("window.bbox"), px_per_deg=3600.0)` and the `MESH` ask consumes it as
+`bed={"raster": DATA.bed, "downstream_along": DATA.centerline}` - so om2d's
+implicit `fetch_topobathy` default never fires for a reach, and
+`fit_downstream_bed` applies at that one seam: the sampled surface is laid down
+as a monotone downstream plane along the declared centerline, held inside a
+stated slope band, and the measured-vs-enforced slope rides in the probes. The
+duplicate `resolve_reach_river` bed staging is gone (see DELETION_LEDGER).
+
+**The flip itself.** `steps/deck.py` authors through `author.py` against the
+measured order, uploads the decks it wrote, and stages a `case` section -
+`{module, steering, results, family, echo}` - beside the mesh pair under the
+deck's own `river.slf` / `river.cli` names. The npz stops travelling,
+`steps/solve.py` no longer stages a `reach` section the worker has no branch
+for, and `_COMPLETION_METRIC_KEYS` carries `module` / `family` / `bed_source`
+and ONE `bbox` spelling.
+
+## `telemac_rain_on_grid` stays PARKED, and why
+
+The same mechanism does NOT reach it, so it is not half-wired to look as though
+it does. Two things are missing rather than one:
+
+- its outlet is a POUR POINT, not a cut transect. The role matcher is a
+  face-matcher by construction - a role is prescribed ACROSS a transect - and a
+  catchment boundary has no face at the outlet for it to match against.
+- the outlet HYDROGRAPH is the answer, and the worker wrote it. With the worker
+  reduced to the engine room there is no server-side reader that integrates the
+  discharge through the outlet nodes off the result SELAFIN, so unparking now
+  would register a template whose ANSWER field nothing fills.
+
+`register_workflow(parked=...)` states both. `steps/rain_on_grid.py` still names
+a `reach` manifest section that no worker branch dispatches; it is left standing
+rather than repointed, because a `case` with no authored steering file would be
+the half-wiring this note exists to avoid.

@@ -2032,3 +2032,39 @@ worker-side gate to the server dies with the gate.
   server callers, and this was the other half of that pair - staging a manifest
   with `mesh_only: True` now writes a document naming no runnable section. The
   mesh PREVIEW is `MeshStep.build`'s gate, which never dispatches a solver.
+- `steps/reach.py::resolve_reach_bed` (~38), `BED_DEST`, `_BED_PAD_DEG`,
+  `_GLO30_PX_PER_DEG`, the `with_bed` parameter and the `bed_uri` /
+  `bed_source` / `bed_fallback_reason` provenance rows DELETE, with the four
+  tests whose subject they were
+  (`test_the_bed_is_asked_for_the_sources_own_lattice`,
+  `test_the_bed_window_covers_the_whole_centerline_with_room_for_the_corridor`,
+  `test_a_copernicus_outage_falls_to_3dep_and_NAMES_the_reason`,
+  `test_the_mesh_preview_stages_geometry_and_skips_the_bed`). CONDITION MET
+  (IDEAS 2026-08-31 FLIP ruling 2): the reach DATA body declares ONE bed row and
+  the `MESH` ask consumes it, so the bed the run solves on is the one the
+  geometry file carries. A second raster fetched and staged here was a bed no
+  run read. `bed_source` on the deck and in the echo is now the MESHER's own
+  `dem_source`. reopen: never - two beds is the defect.
+- `steps/deck.py::_accepted_mesh_inputs` + `_ACCEPTED_MESH_DESTS` (23) DELETE,
+  and the `river_mesh.npz` dest with them. CONDITION MET: the accepted mesh
+  travels as the bed-carrying `river.slf` / `river.cli` pair the authored deck's
+  own GEOMETRY and BOUNDARY CONDITIONS lines name, plus the topology bundle read
+  server-side at authoring time. Nothing reconstructs a mesh from arrays any
+  more, so the npz had no reader on either side.
+- `steps/open_water.py::stage_telemac_manifest(case=)` DELETES. CONDITION MET:
+  an authored run's section IS `case` - `stage_manifest` passes it as the
+  section the worker dispatches on - so a second way to write the same key was a
+  document that could carry two.
+- `plugin/tests/headless_mesh_gate_drive.py`'s `E2E_MIN_MEAN_WIDTH_M` knob and
+  its `bank_source` / `bank_width_mean_m` metrics assertions DELETE. CONDITION
+  MET (IDEAS 2026-08-31 FLIP ruling 4): both keys died with the PHYSICS parity
+  shim and no run writes either. The witness they stood for is now the
+  JOURNAL's measured banks-coverage line on the published layer, plus
+  `correct_end` and the echoed `npoin` / `nelem` - facts the server measured and
+  the worker copied back, which is what makes "it solved on the accepted mesh"
+  checkable.
+- `run_telemac.py::_COMPLETION_METRIC_KEYS`: `bbox4326` and `bank_width_mean_m`
+  DELETE; `module`, `family`, `bed_source` and the ONE `bbox` spelling land.
+  CONDITION MET: `bbox4326` was the reach worker's own name for the extent the
+  open-water legs already called `bbox`, and two names for one fact is a reader
+  choosing between two answers.
