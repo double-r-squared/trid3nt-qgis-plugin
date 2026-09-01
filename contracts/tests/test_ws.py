@@ -227,7 +227,7 @@ def test_spatial_input_response_cancelled(session_id: str) -> None:
 
 def _vector_draw_feature_collection() -> dict[str, Any]:
     """A drawn FeatureCollection carrying an AOI polygon + a wall + a flap gate
-    + a single point — exercising every ``role`` and per-segment barrier tag."""
+    + a section line + a single point - exercising every drawn role."""
     return {
         "type": "FeatureCollection",
         "features": [
@@ -253,20 +253,7 @@ def _vector_draw_feature_collection() -> dict[str, Any]:
                     "type": "LineString",
                     "coordinates": [[-85.305, 35.041], [-85.305, 35.048]],
                 },
-                "properties": {"role": "barrier", "barrier_type": "wall"},
-            },
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[-85.308, 35.043], [-85.302, 35.043]],
-                },
-                "properties": {
-                    "role": "barrier",
-                    "barrier_type": "flap_gate",
-                    "flap_direction": "out",
-                    "protected_side": "left",
-                },
+                "properties": {"role": "line"},
             },
             {
                 "type": "Feature",
@@ -279,8 +266,7 @@ def _vector_draw_feature_collection() -> dict[str, Any]:
 
 def test_spatial_input_response_vector_draw_roundtrips(session_id: str) -> None:
     """a vector_draw reply carrying a role-tagged FeatureCollection
-    with per-segment barrier tags + flap direction serializes/deserializes
-    cleanly through the envelope."""
+    serializes/deserializes cleanly through the envelope."""
     fc = _vector_draw_feature_collection()
     payload = ws.SpatialInputResponsePayload(
         request_id=new_ulid(),
@@ -292,16 +278,11 @@ def test_spatial_input_response_vector_draw_roundtrips(session_id: str) -> None:
     assert out["geometry_type"] == "vector_draw"
     assert out["coordinates"] is None
     roles = [f["properties"]["role"] for f in out["features"]["features"]]
-    assert roles == ["aoi", "barrier", "barrier", "point"]
-    # The two barrier segments preserve their distinct tags + flap direction.
-    barriers = [
-        f for f in out["features"]["features"] if f["properties"]["role"] == "barrier"
-    ]
-    tags = [b["properties"]["barrier_type"] for b in barriers]
-    assert tags == ["wall", "flap_gate"]
-    flap = next(b for b in barriers if b["properties"]["barrier_type"] == "flap_gate")
-    assert flap["properties"]["flap_direction"] == "out"
-    assert flap["properties"]["protected_side"] == "left"
+    assert roles == ["aoi", "line", "point"]
+    line = next(
+        f for f in out["features"]["features"] if f["properties"]["role"] == "line"
+    )
+    assert line["geometry"]["coordinates"] == [[-85.305, 35.041], [-85.305, 35.048]]
 
 
 def test_spatial_input_response_bad_role_rejected() -> None:
@@ -312,7 +293,7 @@ def test_spatial_input_response_bad_role_rejected() -> None:
             {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [-85.3, 35.0]},
-                "properties": {"role": "landmark"},  # not in {aoi, barrier, point}
+                "properties": {"role": "landmark"},  # not a canonical role
             }
         ],
     }
@@ -322,36 +303,33 @@ def test_spatial_input_response_bad_role_rejected() -> None:
         )
 
 
-def test_spatial_input_response_bad_barrier_type_rejected() -> None:
-    """A barrier LineString tagged with an unknown barrier_type is rejected."""
-    fc = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[-85.3, 35.0], [-85.2, 35.0]],
-                },
-                "properties": {"role": "barrier", "barrier_type": "moat"},
-            }
-        ],
-    }
-    with pytest.raises(ValidationError):
-        ws.SpatialInputResponsePayload(
-            request_id=new_ulid(), geometry_type="vector_draw", features=fc
-        )
-
-
-def test_spatial_input_response_barrier_must_be_linestring_rejected() -> None:
-    """A ``role == "barrier"`` feature with a non-LineString geometry is rejected."""
+def test_spatial_input_response_line_must_be_linestring_rejected() -> None:
+    """A ``role == "line"`` feature with a non-LineString geometry is rejected."""
     fc = {
         "type": "FeatureCollection",
         "features": [
             {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [-85.3, 35.0]},
-                "properties": {"role": "barrier", "barrier_type": "wall"},
+                "properties": {"role": "line"},
+            }
+        ],
+    }
+    with pytest.raises(ValidationError):
+        ws.SpatialInputResponsePayload(
+            request_id=new_ulid(), geometry_type="vector_draw", features=fc
+        )
+
+
+def test_spatial_input_response_one_position_line_rejected() -> None:
+    """A ``role == "line"`` LineString of one position is not a line."""
+    fc = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": [[-85.3, 35.0]]},
+                "properties": {"role": "line"},
             }
         ],
     }
@@ -756,8 +734,8 @@ def test_spatial_input_request_vector_draw_mode(session_id: str) -> None:
     payload = ws.SpatialInputRequestPayload(
         request_id=new_ulid(),
         mode="vector_draw",
-        title="Draw the AOI and any barriers",
-        description="Draw the study area; add walls (red) and flap gates (green).",
+        title="Draw the AOI",
+        description="Outline the study area.",
         suggested_view=ws.SuggestedView(bbox=(-85.31, 35.04, -85.30, 35.05), zoom=15.0),
     )
     dumped = _roundtrip_idempotent(_wrap(payload, session_id))
