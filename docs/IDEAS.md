@@ -3065,3 +3065,51 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   authoring pass rides the post-wave fold (PARAMS + mesh-coverage)
   once the worker wave stops moving the tree; bake the maintenance
   line into every wave prompt's norms block.
+
+- FINDINGS WALKTHROUGH RULED, FULL BATCH (NATE 2026-08-31): (2)
+  result_slf rides the ECHO block; ntimestep is worker-MEASURED.
+  (3) output_interval_min converts at the author (min -> graphic
+  period) + AUTHOR STRICTNESS: every deck-dict key consumed or
+  refuses by name. (4) DO-SAG REAL PROOF chartered: the release
+  authors a real BOD/organic load; refined case simulates 24-48 h
+  (k1*t order one); streeter_phelps WIRES IN as the deterministic
+  analytical overlay; coarse canary relabeled plumbing-smoke. (5)
+  spill_fraction: chainage 0 = upstream at the normalized
+  centerline + bed-gradient cross-check + 0.1/0.9 discrimination
+  tests. (6) TELEMACCAS VALIDATION DRIVER in-image: every authored
+  .cas parses against the dico before staging; parse failure =
+  typed refusal at authoring. (7) struct SELAFIN reader replacement
+  SCHEDULED (own item: TelemacFile/data_manip in-image driver;
+  display reads to MDAL at the emission fold). (8) DARK FRONTS
+  ATTIC: wave_field + coastal_tidal_surge + steps + solver rows +
+  tests; parked registrations become one-line tombstones naming
+  rung 4. (9) PRODUCTS PER SUBSTANCE CLASS: no dye-named tif
+  outside the dye class; per-quantity styles rows; role= and
+  style-preset mislabels die. (10) workflows/shared ORPHANS ATTIC
+  (10 modules, 2,500 LOC; 884 test LOC deleted). (11) BARRIERS:
+  scoped read, attic the barrier arms if zero live consumers, keep
+  the generic spatial-input gate. (12) tool_registry MODEL-FACING
+  WORDING substrate-neutral + schema regen. (13) SOIL_STORE
+  DELETED. (14) ARTEMIS REDESIGN NOW - build a REAL structure
+  agitation case immediately (not waiting for rung 4; the BYO
+  rematch remains the rung-4 flagship). (15) HONESTY TAIL, all six:
+  sediment sign fix; hydrograph truncation label + refined window
+  past the storm; pit-fill conditioning consistency + p99 beside
+  max; dry-vs-nodata mask semantics; t3d basemap; prose scrubs.
+
+- MESH-OFFSET DIAGNOSIS CLOSED (measured 2026-08-31, panels
+  delivered to NATE): NOT a pipeline bug, NOT data vintage - DATA
+  SEMANTICS. The offset is varying and channel-shaped (sign flips
+  -32.9/+33.7/+26.7 m; best rigid shift ~3 m improving containment
+  0.1 pct); the mesh is faithful to the polygon (<0.4 m); the NHD
+  stack is correctly georeferenced (flowline on imagery water 21/25
+  stations). NHDArea is a BANKFULL active-channel polygon: 63%
+  water / 34% gravel bar / 3% vegetation under the mesh at
+  June-2022 low flow. The interrogation finding overstated (no
+  forested-terrace coverage). Consequence: low-flow runs wet part
+  of the domain; conveyance width overstated at low flow.
+  ORCHESTRATOR RECOMMENDATION pending NATE: KEEP the bankfull
+  domain (physically correct for 2D - bars flood; TELEMAC wets/
+  dries natively) + journal a measured WETTED-FRACTION heuristic
+  line per run (the honesty-heuristic doctrine); a wetted-channel
+  domain remains a supply-path option when a case demands it.
