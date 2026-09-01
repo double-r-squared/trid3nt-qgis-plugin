@@ -182,7 +182,7 @@ def _resolve_pending_region_choice(
 # the future with the drawn ``FeatureCollection`` (or a cancellation). Tagged
 # with the owning session_id so a cross-session response is refused. Fail-open:
 # on timeout / no client the gate resolves to ``None`` and the caller surfaces a
-# typed "no geometry drawn" result (honest -- never a fabricated AOI/barriers).
+# typed "no geometry drawn" result (honest -- never a fabricated AOI).
 _PENDING_SPATIAL_INPUTS: dict[str, tuple[str, asyncio.Future]] = {}
 
 
@@ -235,7 +235,7 @@ def _fail_pending_spatial_input(
     """Fail the pending spatial-input future for ``request_id`` with a typed error.
 
     Used when an inbound ``spatial-input-response`` cannot be parsed/validated
-    (e.g. a barrier feature missing ``barrier_type``). Resolves the future
+    (e.g. a feature carrying an unknown ``role``). Resolves the future
     EAGERLY via ``set_exception`` so the awaiting ``request_spatial_input`` turn
     wakes immediately with a typed error result rather than hanging until the
     read TTL expires. Returns True when a live future was failed; False when the

@@ -2695,3 +2695,64 @@ QUEUED, adjacent orphans NOT taken here:
 - `contracts/trid3nt_contracts/output_quantities.py`: the registry ships empty,
   no engine declares quantities, and its executor is now gone. CONDITION MET for
   the scaffold; the removal is a `contracts/` landing.
+
+## The BARRIER role leaves the drawn-geometry vocabulary (findings walkthrough ruling 11, 2026-08-31)
+
+CONDITION: scoped read across `gates/spatial_roles.py`, `gates/confirm.py`,
+`gates/cards/spatial_input.py` and `contracts/ws.py` found ZERO live invocations.
+The barrier role had exactly one terminus - `swmm_urban_flood(barriers=...)` ->
+`SWMMRunArgs.barriers` -> the PySWMM wall=omit-conduit / flap_gate=one-way-orifice
+seam - and the whole SWMM package left in the fresh-start purge. Everything from
+the draw affordance to the engine-ready FeatureCollection was validating, counting
+and surfacing structures no tool could receive. The GENERIC spatial-input gate
+stays whole: the AOI polygon, the neutral section line, the drawn point, and the
+mesh roles (breakline / breach / refine_region / aoi_clip / boundary).
+
+Removed IN PLACE (no attic copy - these are members of surviving files; git
+history is the archive, as with every partial removal in this ledger):
+- `gates/spatial_roles.py`: the `barrier` role from `CANONICAL_ROLES`,
+  `barriers_feature_collection` in full, `_VALID_BARRIER_TYPES` /
+  `_VALID_FLAP_DIRECTIONS` / `_VALID_PROTECTED_SIDES`, and
+  `DrawnRoles.barriers` / `.n_walls` / `.n_flap_gates`.
+- `gates/spatial_input.py`: the same three fields on `ParsedSpatialInput` and the
+  `barriers_feature_collection` re-export.
+- `gates/cards/spatial_input.py`: the `barriers` / `n_walls` / `n_flap_gates`
+  result keys.
+- `contracts/ws.py`: the `role == "barrier"` arm of
+  `_validate_spatial_input_feature_collection` with its three closed enums, and
+  `"barrier"` from the `SpatialInputRequestPayload.purpose` Literal.
+- `plugin/ui/gate.py` + `plugin/ui/cards.py`: `SpatialInputRequest.supported` and
+  both branches it guarded. It existed to say the plugin cannot draw TAGGED
+  barriers; with only `aoi` and `line` left, every parseable request is drawable
+  and the property was a tautology guarding an unreachable honest-degrade card.
+
+CONSEQUENCE, stated because it is model-facing: the `purpose` default moves
+`"barrier"` -> `"aoi"`. Removing a value from a three-value enum forces a new
+default, and `aoi` is the generic one - it is what the tool's own routing text
+already names first, and its `aoi_bbox` is what every bbox-taking tool reads.
+
+DELETED, tests with their subject: `tests/test_spatial_input_barriers.py` ->
+`tests/test_spatial_input_gate.py`. RENAMED and trimmed rather than dropped,
+because two thirds of it is the GENERIC gate: the barrier fixtures and the nine
+barrier-specific cases (engine-ready FC, wall/flap counts, the numeric flap
+bearing, the five malformed-barrier refusals) went with the role; the role split,
+the malformed-FC honesty floor, the response->result mapping, the pause/resume
+registry, the cross-session refusal, the emit/await round trip and the tool
+sentinel all stay, now exercised through an AOI + section line + point.
+
+REPOINTED: `tests/test_spatial_roles.py` (the mixed-roles case reads a
+`breakline` where it read a wall), `tests/test_spatial_input_neutral_line.py`
+(the "no line keys" no-regression case is an AOI-only reply; the default-purpose
+case reads `aoi`), `tests/test_spatial_input_invalid_resolve.py` (the malformed
+inbound reply is an unknown ROLE, refused as `SPATIAL_INPUT_BAD_ROLE`),
+`tests/test_declarative_cards.py` (the two pick modes carry the new wire
+default), `plugin/tests/*` and `plugin/tests/stub_server.py`'s vector row, the
+`request_spatial_input` docstring + corpus phrasings, and the barrier prose in
+`server/spatial.py`, `server/errors.py`, `server/protocol/loop.py`,
+`server/turn/stream.py`, `gates/confirm.py`, `compute_cross_section` and
+`workflows/lib/user_input.py`.
+
+FLAGGED, not touched: `adapters/adapter.py`'s routing block still tells the model
+to select `swmm_urban_flood` on "urban / barrier / flap gate" phrasing. That tool
+left with the fresh-start purge, so the block routes to nothing - but it is
+model-facing wording and belongs to ruling 12's substrate-neutral sweep, not here.

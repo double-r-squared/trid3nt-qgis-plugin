@@ -121,16 +121,12 @@ class TestSpatialInputParsing(unittest.TestCase):
     def test_parse_point_bbox_vector(self):
         p = gate.parse_spatial_input_request(SPATIAL_INPUT_POINT_ROW)
         self.assertEqual(p.mode, "point")
-        self.assertTrue(p.supported)
         b = gate.parse_spatial_input_request(SPATIAL_INPUT_BBOX_ROW)
         self.assertEqual(b.mode, "bbox")
-        self.assertTrue(b.supported)
         v = gate.parse_spatial_input_request(SPATIAL_INPUT_VECTOR_ROW)
         self.assertEqual(v.mode, "vector_draw")
-        self.assertEqual(v.purpose, "barrier")
-        # vector_draw is the web terra-draw surface -- the plugin degrades
-        # honestly (Cancel closes the gate), so it is NOT "supported".
-        self.assertFalse(v.supported)
+        self.assertEqual(v.purpose, "aoi")
+        self.assertEqual(v.draw_kind, "polygon")
 
     def test_parse_malformed_is_none(self):
         self.assertIsNone(gate.parse_spatial_input_request({"mode": "point"}))
@@ -368,12 +364,11 @@ class TestSpatialInputRoundTrip(_RoundTripBase):
         self.assertEqual(self.server.spatial_inputs[-1]["geometry_type"], "bbox")
 
     def test_vector_draw_cancel_closes_gate(self):
-        # The plugin cannot draw tagged barriers -- the honest degrade cancels,
-        # which STILL closes the paused gate (never a hung turn).
-        self.client.send_chat("pick-vector the flood barriers")
+        # A declined draw STILL closes the paused gate (never a hung turn).
+        self.client.send_chat("pick-vector the study area")
         ev = self._await_kind("spatial-input-request")
         req = gate.parse_spatial_input_request(ev.data)
-        self.assertFalse(req.supported)
+        self.assertEqual(req.draw_kind, "polygon")
         wire = gate.resolve_spatial_input_cancel(req.request_id)
         self.client.send_spatial_input(
             wire["request_id"], geometry_type=wire["geometry_type"],

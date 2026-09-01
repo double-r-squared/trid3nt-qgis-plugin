@@ -408,8 +408,7 @@ STUB_SPATIAL_VECTOR_REQUEST_ID = "01STUBSPATIALVECTORAAAAAAA"
 # a picked geometry and PAUSES the turn awaiting a spatial-input-response
 # (point/bbox coordinates, drawn features, or cancelled=True) -- handled in the
 # spatial-input-response branch below. The vector_draw row exercises the
-# plugin's HONEST degrade (it cannot draw tagged barriers, so it cancels --
-# which still CLOSES the gate).
+# vertex-capture reply.
 SPATIAL_INPUT_POINT_ROW: dict[str, Any] = {
     "request_id": STUB_SPATIAL_POINT_REQUEST_ID,
     "mode": "point",
@@ -425,9 +424,9 @@ SPATIAL_INPUT_BBOX_ROW: dict[str, Any] = {
 SPATIAL_INPUT_VECTOR_ROW: dict[str, Any] = {
     "request_id": STUB_SPATIAL_VECTOR_REQUEST_ID,
     "mode": "vector_draw",
-    "title": "Draw the flood barriers",
-    "description": "Draw walls / flap gates for the urban-flood model.",
-    "purpose": "barrier",
+    "title": "Draw the study area",
+    "description": "Outline the region the model should cover.",
+    "purpose": "aoi",
 }
 
 STUB_IMPACT_ID = "01STUBIMPACTRUNAAAAAAAAAAA"
@@ -1170,9 +1169,9 @@ class StubAgentServer:
             elif etype == "spatial-input-response":
                 # LANE A spatial-input gate-WAIT (contract
                 # SpatialInputResponsePayload): the reply that resumes the
-                # paused turn. A point/bbox pick carries coordinates; a cancel
-                # (and the plugin's honest vector_draw degrade) carries
-                # cancelled=True -- either way the gate CLOSES.
+                # paused turn. A point/bbox pick carries coordinates, a drawn
+                # shape carries features, and a decline carries cancelled=True
+                # -- every one of them CLOSES the gate.
                 payload = env.get("payload") or {}
                 self.spatial_inputs.append(payload)
                 gate_case = getattr(self, "_pending_gate_case", None)

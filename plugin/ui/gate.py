@@ -1019,7 +1019,7 @@ def region_choice_summary(
 #   ``request_id`` (the correlation key the reply echoes) / ``mode``
 #   (``"point"`` = single click / ``"bbox"`` = drag rectangle / ``"vector_draw"``
 #   = terra-draw FeatureCollection) / ``title`` / ``description`` / ``purpose``
-#   (vector_draw only: ``"barrier"`` | ``"line"`` | ``"aoi"``) /
+#   (vector_draw only: ``"aoi"`` | ``"line"``) /
 #   ``suggested_view`` / ``reference_layers`` / ``default_timeout_seconds``.
 # * the reply is ONE ``spatial-input-response`` (SpatialInputResponsePayload):
 #   ``request_id`` echo + ``geometry_type`` (``"point"`` / ``"bbox"`` /
@@ -1028,10 +1028,8 @@ def region_choice_summary(
 #   FeatureCollection for vector_draw) + ``cancelled`` (True = the decline path
 #   -- every geometry field None). The QGIS plugin captures POINT (canvas
 #   point-emit tool) and BBOX (canvas extent tool) picks -- the exact
-#   probe/AOI click machinery -- and answers vector_draw HONESTLY (the
-#   terra-draw barrier surface is a web affordance; the plugin cannot draw
-#   tagged walls/flap-gates, so it offers Cancel, which sends ``cancelled=True``
-#   and CLOSES the gate rather than hanging the turn).
+#   probe/AOI click machinery -- and answers vector_draw through the
+#   vertex-capture tool: a polygon for ``aoi``, a polyline for ``line``.
 
 
 @dataclass
@@ -1042,22 +1040,8 @@ class SpatialInputRequest:
     mode: str  # "point" | "bbox" | "vector_draw"
     title: str = ""
     description: str = ""
-    purpose: str = "barrier"
+    purpose: str = "aoi"
     raw: dict = field(default_factory=dict)
-
-    @property
-    def supported(self) -> bool:
-        """True when the QGIS plugin can capture this mode's geometry.
-
-        ``point`` / ``bbox`` ride the stock canvas tools. ``vector_draw`` rides
-        the vertex-capture tool for the two SHAPE purposes -- ``aoi`` (a polygon)
-        and ``line`` (a polyline). The ``barrier`` purpose is the web terra-draw
-        surface with per-segment wall / flap-gate TAGGING, which this plugin has
-        no affordance for, so that one degrades honestly (Cancel closes the gate)
-        rather than pretending to draw."""
-        if self.mode in ("point", "bbox"):
-            return True
-        return self.mode == "vector_draw" and self.purpose in ("aoi", "line")
 
     @property
     def draw_kind(self) -> str:
@@ -1088,7 +1072,7 @@ def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
         mode=mode,
         title=title if isinstance(title, str) else "",
         description=description if isinstance(description, str) else "",
-        purpose=purpose if purpose in ("barrier", "line", "aoi") else "barrier",
+        purpose=purpose if purpose in ("aoi", "line") else "aoi",
         raw=payload,
     )
 
@@ -1128,7 +1112,7 @@ def resolve_spatial_input_features(request_id: str, draw_kind: str,
     contract validator and every downstream parser read a ring, and a capture
     tool has no reason to make the user click the first vertex twice). The
     ``role`` mirrors the request's purpose exactly -- ``aoi`` for a polygon,
-    ``line`` for a polyline -- so no barrier tagging is implied.
+    ``line`` for a polyline.
     """
     pts = [[round(float(v[0]), 6), round(float(v[1]), 6)] for v in vertices]
     if draw_kind == "polygon":
@@ -1160,9 +1144,8 @@ def spatial_input_vertices_ready(draw_kind: str, vertices: list) -> bool:
 def resolve_spatial_input_cancel(request_id: str) -> dict:
     """Build the ``spatial-input-response`` wire dict for a CANCEL (contract
     SpatialInputResponsePayload): ``cancelled=True`` with every geometry field
-    None. This is the decline path AND the honest degrade for the unsupported
-    ``vector_draw`` mode -- either way it CLOSES the server's paused gate
-    (never a hung turn)."""
+    None. The decline path: it CLOSES the server's paused gate rather than
+    leaving the turn hung."""
     return {
         "request_id": request_id,
         "geometry_type": None,

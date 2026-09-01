@@ -542,8 +542,8 @@ def _make_handler(settings: ModelSettings):
                         # The user finished (or cancelled)
                         # the terra-draw surface. Resolve the paused
                         # request_spatial_input future so the dispatch coroutine
-                        # parses the drawn FeatureCollection into engine-ready
-                        # barriers / AOI / points. Mirrors region-choice-provided
+                        # parses the drawn FeatureCollection into the AOI, the
+                        # points and the section line. Mirrors region-choice-provided
                         # -- may arrive on a sibling connection of the session.
                         try:
                             spatial_resp = (
@@ -552,10 +552,9 @@ def _make_handler(settings: ModelSettings):
                                 )
                             )
                         except ValidationError as ve:
-                            # Untagged-barrier mismatch (the critical
-                            # correctness fix): the reply ARRIVED but failed
-                            # structural validation (e.g. a barrier feature
-                            # missing barrier_type). The user-facing notification
+                            # Malformed-draw mismatch: the reply ARRIVED but
+                            # failed structural validation (e.g. a feature
+                            # carrying an unknown role). The user-facing notification
                             # stays, but we MUST also FAIL the pending future
                             # eagerly so the paused request_spatial_input turn
                             # wakes IN-BAND with a typed error result instead of

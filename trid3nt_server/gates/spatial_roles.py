@@ -1,22 +1,16 @@
 """Shared drawn-geometry ROLE vocabulary + parser for the mesh authoring layer.
 
-Every engine that lets the user draw spatial input (terra-draw ->
-``request_spatial_input`` -> a role-tagged GeoJSON ``FeatureCollection``)
-routes that drawing through ONE canonical role vocabulary defined here, so a
-wall, a breach point, a refine region or an AOI clip means the same thing to
-SWMM, SFINCS, GeoClaw, TELEMAC and MODFLOW. This is the mesh layer's DOMAIN
-stage: "user-drawn structures enter HERE, once, for every
-engine".
+Every engine that lets the user draw spatial input (``request_spatial_input`` ->
+a role-tagged GeoJSON ``FeatureCollection``) routes that drawing through ONE
+canonical role vocabulary defined here, so a breakline, a breach point, a refine
+region or an AOI clip means the same thing to every engine. This is the mesh
+layer's DOMAIN stage: user-drawn geometry enters HERE, once, for every engine.
 
 Canonical roles (``properties.role`` on each drawn ``Feature``):
 
-  * ``barrier``        -- a LineString flood structure (``barrier_type`` in
-                          {wall, flap_gate}); SWMM snaps it to cell-pair edges
-                          (wall = omitted overland conduit, flap_gate = one-way
-                          orifice). The one role with an engine-ready FC output.
   * ``breakline``      -- a LineString that CONSTRAINS mesh edges (a ridge, a
                           channel bank); a tin/quadtree mesher forces edges along
-                          it. Neutral geometry, no barrier semantics.
+                          it.
   * ``breach``         -- a Point interior levee/dam-breach source. Rides the
                           drawn-POINT role; SFINCS/GeoClaw accept it as their
                           ``breach_point`` (drawn value PREFERRED over a plain
@@ -32,7 +26,7 @@ Canonical roles (``properties.role`` on each drawn ``Feature``):
   * ``point``          -- a generic Point (ELMFIRE ignition, a probe).
   * ``line``           -- a NEUTRAL elevation/section LineString
                           (compute_terrain_profile / compute_cross_section); no
-                          barrier or mesh semantics.
+                          mesh semantics.
 
 The module is a PURE structural translator -- no I/O, no asyncio, no geometry
 library -- so it is trivially unit-testable and importable in any context (it
@@ -54,7 +48,6 @@ __all__ = [
     "CANONICAL_ROLES",
     "ROLE_ALIASES",
     "split_features_by_role",
-    "barriers_feature_collection",
     "parse_drawn_roles",
     "geometry_bbox",
 ]
@@ -76,18 +69,13 @@ class SpatialRoleError(ValueError):
 SpatialInputParseError = SpatialRoleError
 
 
-# The barrier tags the urban PySWMM engine understands (mirrors
-# swmm_contracts.BarrierType). Kept local so this module has no contracts dep at
-# import time and stays a pure-structure translator.
-_VALID_BARRIER_TYPES = frozenset({"wall", "flap_gate"})
-_VALID_FLAP_DIRECTIONS = frozenset({"in", "out"})
-_VALID_PROTECTED_SIDES = frozenset({"left", "right"})
+# Kept local so this module has no contracts dep at import time and stays a
+# pure-structure translator.
 _VALID_BOUNDARY_TYPES = frozenset({"inflow", "outflow"})
 
 #: The canonical role vocabulary every engine shares.
 CANONICAL_ROLES = frozenset(
     {
-        "barrier",
         "breakline",
         "breach",
         "refine_region",
@@ -113,9 +101,6 @@ class DrawnRoles:
     Every field defaults empty so an engine reads only the roles it consumes.
 
     Fields:
-        barriers: engine-ready ``barriers`` FeatureCollection (SWMM), or ``None``
-            when no barrier was drawn (a plain run gets ``barriers=None``).
-        n_walls / n_flap_gates: barrier-type counts.
         breaklines: ``[[[lon,lat],...], ...]`` -- each breakline's vertices.
         breach_points: ``[[lon,lat], ...]`` -- interior breach sources
             (SFINCS/GeoClaw ``breach_point``).
@@ -130,9 +115,6 @@ class DrawnRoles:
         n_lines: count of neutral ``line`` features.
     """
 
-    barriers: dict[str, Any] | None = None
-    n_walls: int = 0
-    n_flap_gates: int = 0
     breaklines: list[list[list[float]]] = field(default_factory=list)
     breach_points: list[list[float]] = field(default_factory=list)
     refine_regions: list[dict[str, Any]] = field(default_factory=list)
@@ -186,89 +168,6 @@ def split_features_by_role(
             )
         buckets[role].append(feat)
     return buckets
-
-
-def barriers_feature_collection(
-    barrier_feats: list[dict[str, Any]],
-) -> tuple[dict[str, Any] | None, int, int]:
-    """Build the engine-ready ``barriers`` FeatureCollection from drawn barriers.
-
-    Validates every barrier feature against the urban engine's contract (a
-    ``LineString`` with >= 2 positions tagged ``barrier_type`` in {wall,
-    flap_gate}; optional ``flap_direction`` / ``protected_side``), then emits a
-    clean ``FeatureCollection`` carrying ONLY the geometry + barrier properties
-    the engine reads (the ``role`` property is dropped). Returns
-    ``(fc_or_None, n_walls, n_flap_gates)``; ``fc_or_None`` is ``None`` when the
-    list is empty so a plain run gets ``barriers=None`` rather than an
-    empty-features FC. Raises :class:`SpatialRoleError` on any malformed barrier.
-    """
-    if not barrier_feats:
-        return None, 0, 0
-    clean: list[dict[str, Any]] = []
-    n_walls = 0
-    n_flap_gates = 0
-    for idx, feat in enumerate(barrier_feats):
-        geom = feat.get("geometry")
-        if not isinstance(geom, dict) or geom.get("type") != "LineString":
-            raise SpatialRoleError(
-                "SPATIAL_INPUT_BARRIER_NOT_LINESTRING",
-                f"barrier[{idx}] geometry must be a LineString (got "
-                f"{geom.get('type') if isinstance(geom, dict) else geom!r})",
-            )
-        coords = geom.get("coordinates")
-        if not isinstance(coords, list) or len(coords) < 2:
-            raise SpatialRoleError(
-                "SPATIAL_INPUT_BARRIER_TOO_SHORT",
-                f"barrier[{idx}].geometry.coordinates must be a LineString "
-                f"with >= 2 positions",
-            )
-        props = feat.get("properties") or {}
-        btype = props.get("barrier_type")
-        if btype not in _VALID_BARRIER_TYPES:
-            raise SpatialRoleError(
-                "SPATIAL_INPUT_BAD_BARRIER_TYPE",
-                f"barrier[{idx}].properties.barrier_type must be one of "
-                f"{sorted(_VALID_BARRIER_TYPES)}, got {btype!r}",
-            )
-        out_props: dict[str, Any] = {"barrier_type": btype}
-        flap_dir = props.get("flap_direction")
-        if flap_dir is not None:
-            if (
-                flap_dir not in _VALID_FLAP_DIRECTIONS
-                and not isinstance(flap_dir, (int, float))
-            ):
-                raise SpatialRoleError(
-                    "SPATIAL_INPUT_BAD_FLAP_DIRECTION",
-                    f"barrier[{idx}].properties.flap_direction must be one of "
-                    f"{sorted(_VALID_FLAP_DIRECTIONS)} or a numeric bearing, "
-                    f"got {flap_dir!r}",
-                )
-            out_props["flap_direction"] = flap_dir
-        protected = props.get("protected_side")
-        if protected is not None:
-            if protected not in _VALID_PROTECTED_SIDES:
-                raise SpatialRoleError(
-                    "SPATIAL_INPUT_BAD_PROTECTED_SIDE",
-                    f"barrier[{idx}].properties.protected_side must be one of "
-                    f"{sorted(_VALID_PROTECTED_SIDES)}, got {protected!r}",
-                )
-            out_props["protected_side"] = protected
-        clean.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[float(p[0]), float(p[1])] for p in coords],
-                },
-                "properties": out_props,
-            }
-        )
-        if btype == "wall":
-            n_walls += 1
-        else:
-            n_flap_gates += 1
-    fc = {"type": "FeatureCollection", "features": clean}
-    return fc, n_walls, n_flap_gates
 
 
 def geometry_bbox(
@@ -484,17 +383,11 @@ def parse_drawn_roles(fc: dict[str, Any]) -> DrawnRoles:
     """
     buckets = split_features_by_role(fc)
 
-    barriers_fc, n_walls, n_flap_gates = barriers_feature_collection(
-        buckets["barrier"]
-    )
     # aoi_clip absorbs the legacy ``aoi`` bucket (ROLE_ALIASES).
     aoi_feats = buckets["aoi_clip"] + buckets["aoi"]
     line_lists = _linestring_coords(buckets["line"], role_label="line")
 
     return DrawnRoles(
-        barriers=barriers_fc,
-        n_walls=n_walls,
-        n_flap_gates=n_flap_gates,
         breaklines=_linestring_coords(buckets["breakline"], role_label="breakline"),
         breach_points=_point_positions(buckets["breach"], role_label="breach"),
         refine_regions=_refine_regions(buckets["refine_region"]),

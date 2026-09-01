@@ -114,7 +114,7 @@ def polyline_set(value: Any, *, label: str = "lines",
 
     The plural of :func:`polyline_coords`, and the shape a context slot that
     accepts ``geometry="polyline"`` normalizes to: a breakwater field is several
-    ways, a single sketched barrier is one, and the consumer must not have to
+    ways, a single sketched line is one, and the consumer must not have to
     care which arrived. A GeoJSON-ish mapping (the draw gate's reply, a Feature,
     a FeatureCollection) unwraps here rather than in each consumer, which is the
     whole point of the species living in one place.

@@ -1,30 +1,23 @@
 """FR-AS-10 / FR-WC-16: the AGENT consuming a drawn FeatureCollection.
 
-Proves the FULL agent-side wire for the urban vector-draw flow:
+Proves the full agent-side wire for the spatial-input gate:
 
 1. PURE PARSE (``trid3nt_server.gates.spatial_input``): a role-tagged drawn
-   ``FeatureCollection`` (aoi polygon + barrier polylines tagged wall/flap_gate
-   + points) splits into engine-ready inputs — the clean ``barriers``
-   FeatureCollection, the AOI bbox, the point list — and EVERY malformed shape
-   degrades to a TYPED ``SpatialInputParseError`` (never a silent success /
-   fabricated geometry — the honesty floor).
+   ``FeatureCollection`` (aoi polygon + points) splits into the AOI bbox and the
+   point list, and EVERY malformed shape degrades to a TYPED
+   ``SpatialInputParseError`` (never a silent success / fabricated geometry --
+   the honesty floor).
 
-2. RESPONSE -> RESULT (``server._spatial_response_to_result``): a
+2. RESPONSE -> RESULT (``_spatial_response_to_result``): a
    ``spatial-input-response`` (vector_draw / point / bbox / cancel / timeout /
-   malformed) maps to the typed result the LLM reads, carrying the engine-ready
-   ``barriers`` on the vector_draw path.
+   malformed) maps to the typed result the LLM reads.
 
-3. PARSED BARRIERS ARE ENGINE-READY: the drawn subset emerges as a clean
-   ``barriers`` FeatureCollection carrying ONLY the geometry + barrier
-   properties an engine reads - the ``role`` tag the client drew with is
-   dropped, and every malformed barrier is refused before it can reach one.
-
-4. PAUSE/RESUME REGISTRY + INBOUND RESOLVE (``server`` spatial-input gate): the
+3. PAUSE/RESUME REGISTRY + INBOUND RESOLVE (``server`` spatial-input gate): the
    ``_PENDING_SPATIAL_INPUTS`` registry + ``_resolve_pending_spatial_input``
    mirror the region-choice gate (cross-session refusal, unknown-id no-op), and
    ``_emit_spatial_input_and_wait`` round-trips a drawn reply.
 
-5. TOOL SENTINEL (``tools/spatial_input_tool``): ``request_spatial_input``
+4. TOOL SENTINEL (``tools/spatial_input_tool``): ``request_spatial_input``
    returns the sentinel the turn loop intercepts, and rejects an unknown mode
    with a typed error.
 """
@@ -51,7 +44,6 @@ from trid3nt_server.server import (
 from trid3nt_server.gates.spatial_input import (
     ParsedSpatialInput,
     SpatialInputParseError,
-    barriers_feature_collection,
     parse_spatial_input_features,
     split_features_by_role,
 )
@@ -99,29 +91,14 @@ def _aoi_feature() -> dict[str, Any]:
     }
 
 
-def _wall_feature() -> dict[str, Any]:
+def _line_feature() -> dict[str, Any]:
+    """A drawn NEUTRAL section line (role=='line')."""
     return {
         "type": "Feature",
-        "properties": {"role": "barrier", "barrier_type": "wall"},
+        "properties": {"role": "line"},
         "geometry": {
             "type": "LineString",
             "coordinates": [[-85.305, 35.045], [-85.305, 35.055]],
-        },
-    }
-
-
-def _flap_feature() -> dict[str, Any]:
-    return {
-        "type": "Feature",
-        "properties": {
-            "role": "barrier",
-            "barrier_type": "flap_gate",
-            "protected_side": "left",
-            "flap_direction": "out",
-        },
-        "geometry": {
-            "type": "LineString",
-            "coordinates": [[-85.300, 35.048], [-85.298, 35.048]],
         },
     }
 
@@ -135,52 +112,31 @@ def _point_feature() -> dict[str, Any]:
 
 
 def _full_drawn_fc() -> dict[str, Any]:
-    """A complete drawn FeatureCollection: AOI + wall + flap_gate + point."""
+    """A complete drawn FeatureCollection: AOI + section line + point."""
     return {
         "type": "FeatureCollection",
-        "features": [
-            _aoi_feature(),
-            _wall_feature(),
-            _flap_feature(),
-            _point_feature(),
-        ],
+        "features": [_aoi_feature(), _line_feature(), _point_feature()],
     }
 
 
 # =========================================================================== #
-# 1. PURE PARSE — role split + engine-ready barriers.
+# 1. PURE PARSE - the role split.
 # =========================================================================== #
 
 
 def test_split_features_by_role_buckets_all_roles():
     buckets = split_features_by_role(_full_drawn_fc())
     assert len(buckets["aoi"]) == 1
-    assert len(buckets["barrier"]) == 2
+    assert len(buckets["line"]) == 1
     assert len(buckets["point"]) == 1
 
 
 def test_parse_full_drawn_fc_produces_engine_inputs():
     parsed = parse_spatial_input_features(_full_drawn_fc())
     assert isinstance(parsed, ParsedSpatialInput)
-    # barriers FC is engine-shaped: every feature is a LineString with
-    # barrier_type and NO role property (the engine FC has no role field).
-    assert parsed.barriers is not None
-    assert parsed.barriers["type"] == "FeatureCollection"
-    assert len(parsed.barriers["features"]) == 2
-    for feat in parsed.barriers["features"]:
-        assert feat["geometry"]["type"] == "LineString"
-        assert feat["properties"]["barrier_type"] in ("wall", "flap_gate")
-        assert "role" not in feat["properties"], "role must be stripped for the engine"
-    assert parsed.n_walls == 1
-    assert parsed.n_flap_gates == 1
-    # flap_direction + protected_side ride through to the engine seam.
-    flap = next(
-        f
-        for f in parsed.barriers["features"]
-        if f["properties"]["barrier_type"] == "flap_gate"
-    )
-    assert flap["properties"]["protected_side"] == "left"
-    assert flap["properties"]["flap_direction"] == "out"
+    # the neutral section line rides through as bare vertices.
+    assert parsed.n_lines == 1
+    assert parsed.line_coords == [[-85.305, 35.045], [-85.305, 35.055]]
     # AOI bbox derived from the polygon ring.
     assert parsed.aoi_bbox is not None
     assert math.isclose(parsed.aoi_bbox[0], -85.31)
@@ -189,33 +145,6 @@ def test_parse_full_drawn_fc_produces_engine_inputs():
     assert math.isclose(parsed.aoi_bbox[3], 35.06)
     # one drawn point.
     assert parsed.points == [[-85.300, 35.050]]
-
-
-def test_parse_barriers_only_no_aoi_no_points():
-    fc = {"type": "FeatureCollection", "features": [_wall_feature()]}
-    parsed = parse_spatial_input_features(fc)
-    assert parsed.barriers is not None
-    assert parsed.n_walls == 1
-    assert parsed.n_flap_gates == 0
-    assert parsed.aoi_bbox is None
-    assert parsed.points == []
-
-
-def test_parse_empty_barriers_returns_none_not_empty_fc():
-    """No barriers drawn -> barriers is None (a plain run), never an empty FC."""
-    fc = {"type": "FeatureCollection", "features": [_aoi_feature()]}
-    parsed = parse_spatial_input_features(fc)
-    assert parsed.barriers is None, "empty barriers must be None for a plain run"
-    assert parsed.aoi_bbox is not None
-
-
-def test_barriers_feature_collection_numeric_flap_bearing():
-    """A numeric flap bearing (degrees) rides through as a valid flap_direction."""
-    feat = _flap_feature()
-    feat["properties"]["flap_direction"] = 270.0
-    fc, n_walls, n_flap = barriers_feature_collection([feat])
-    assert n_flap == 1 and n_walls == 0
-    assert fc["features"][0]["properties"]["flap_direction"] == 270.0
 
 
 # --- malformed -> TYPED error (honesty floor; never a silent success) ------- #
@@ -234,63 +163,13 @@ def test_features_not_a_list_raises():
 
 
 def test_unknown_role_raises():
-    feat = _wall_feature()
-    feat["properties"]["role"] = "river"  # not in {aoi, barrier, point}
+    feat = _line_feature()
+    feat["properties"]["role"] = "river"  # not a canonical role
     with pytest.raises(SpatialInputParseError) as ei:
         parse_spatial_input_features(
             {"type": "FeatureCollection", "features": [feat]}
         )
     assert ei.value.error_code == "SPATIAL_INPUT_BAD_ROLE"
-
-
-def test_barrier_not_linestring_raises():
-    feat = _wall_feature()
-    feat["geometry"] = {"type": "Point", "coordinates": [-85.3, 35.05]}
-    with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
-            {"type": "FeatureCollection", "features": [feat]}
-        )
-    assert ei.value.error_code == "SPATIAL_INPUT_BARRIER_NOT_LINESTRING"
-
-
-def test_barrier_too_short_raises():
-    feat = _wall_feature()
-    feat["geometry"]["coordinates"] = [[-85.3, 35.05]]  # only 1 position
-    with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
-            {"type": "FeatureCollection", "features": [feat]}
-        )
-    assert ei.value.error_code == "SPATIAL_INPUT_BARRIER_TOO_SHORT"
-
-
-def test_bad_barrier_type_raises():
-    feat = _wall_feature()
-    feat["properties"]["barrier_type"] = "levee"  # not in {wall, flap_gate}
-    with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
-            {"type": "FeatureCollection", "features": [feat]}
-        )
-    assert ei.value.error_code == "SPATIAL_INPUT_BAD_BARRIER_TYPE"
-
-
-def test_bad_protected_side_raises():
-    feat = _flap_feature()
-    feat["properties"]["protected_side"] = "up"  # not in {left, right}
-    with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
-            {"type": "FeatureCollection", "features": [feat]}
-        )
-    assert ei.value.error_code == "SPATIAL_INPUT_BAD_PROTECTED_SIDE"
-
-
-def test_bad_flap_direction_raises():
-    feat = _flap_feature()
-    feat["properties"]["flap_direction"] = "sideways"  # not in/out, not numeric
-    with pytest.raises(SpatialInputParseError) as ei:
-        parse_spatial_input_features(
-            {"type": "FeatureCollection", "features": [feat]}
-        )
-    assert ei.value.error_code == "SPATIAL_INPUT_BAD_FLAP_DIRECTION"
 
 
 def test_point_wrong_geometry_raises():
@@ -304,30 +183,11 @@ def test_point_wrong_geometry_raises():
 
 
 # =========================================================================== #
-# 2. Parsed barriers emerge ENGINE-READY.
+# 2. spatial-input-response -> the LLM-facing result.
 # =========================================================================== #
 
 
-def test_parsed_barriers_are_engine_ready():
-    """The role=='barrier' subset emerges as a clean FeatureCollection: the
-    drawing-side ``role`` tag is dropped and only what an engine reads stays."""
-    parsed = parse_spatial_input_features(_full_drawn_fc())
-    assert parsed.barriers is not None
-    assert parsed.barriers["type"] == "FeatureCollection"
-    feats = parsed.barriers["features"]
-    assert len(feats) == 2
-    assert {f["properties"]["barrier_type"] for f in feats} == {"wall", "flap_gate"}
-    for f in feats:
-        assert f["geometry"]["type"] == "LineString"
-        assert "role" not in f["properties"]
-
-
-# =========================================================================== #
-# 3. spatial-input-response -> the LLM-facing result.
-# =========================================================================== #
-
-
-def test_response_vector_draw_carries_engine_barriers():
+def test_response_vector_draw_carries_the_drawn_roles():
     resp = SpatialInputResponsePayload(
         request_id=new_ulid(),
         geometry_type="vector_draw",
@@ -336,14 +196,11 @@ def test_response_vector_draw_carries_engine_barriers():
     result = _spatial_response_to_result(resp)
     assert result["status"] == "ok"
     assert result["geometry_type"] == "vector_draw"
-    assert result["n_walls"] == 1
-    assert result["n_flap_gates"] == 1
     assert result["n_aoi"] == 1
+    assert result["n_lines"] == 1
     assert result["points"] == [[-85.300, 35.050]]
     assert "aoi_bbox" in result and len(result["aoi_bbox"]) == 4
-    # the engine-ready barriers FC is on the result - pass straight to the tool.
-    assert "barriers" in result
-    assert len(result["barriers"]["features"]) == 2
+    assert result["line"] == [[-85.305, 35.045], [-85.305, 35.055]]
 
 
 def test_response_point_and_bbox():
@@ -367,7 +224,7 @@ def test_response_cancelled_is_not_a_success():
     resp = SpatialInputResponsePayload(request_id=new_ulid(), cancelled=True)
     r = _spatial_response_to_result(resp)
     assert r["status"] == "cancelled"
-    assert "barriers" not in r and "aoi_bbox" not in r
+    assert "aoi_bbox" not in r and "points" not in r
 
 
 def test_response_timeout_is_typed_error():
@@ -378,26 +235,26 @@ def test_response_timeout_is_typed_error():
 
 
 def test_response_malformed_features_rejected_at_contract_boundary():
-    """The contract validator REJECTS a bad barrier_type at construction — the
+    """The contract validator REJECTS an unknown role at construction - the
     first line of the honesty floor (a malformed draw never even reaches the
     result mapper; the inbound handler returns TOOL_PARAMS_INVALID)."""
     bad = _full_drawn_fc()
-    bad["features"][1]["properties"]["barrier_type"] = "levee"  # invalid tag
+    bad["features"][1]["properties"]["role"] = "levee"  # not a canonical role
     with pytest.raises(Exception) as ei:  # pydantic ValidationError
         SpatialInputResponsePayload(
             request_id=new_ulid(),
             geometry_type="vector_draw",
             features=bad,
         )
-    assert "barrier_type" in str(ei.value)
+    assert "role" in str(ei.value)
 
 
 def test_response_malformed_features_is_typed_error_second_layer():
     """SECOND layer of the honesty floor: if a malformed FeatureCollection ever
     reaches the result mapper (e.g. contract validation bypassed), it degrades to
-    a TYPED error, never a silent success / fabricated barriers."""
+    a TYPED error, never a silent success / fabricated geometry."""
     bad = _full_drawn_fc()
-    bad["features"][1]["properties"]["barrier_type"] = "levee"  # invalid tag
+    bad["features"][1]["properties"]["role"] = "levee"  # not a canonical role
     # model_construct bypasses validation -> simulate a malformed FC arriving.
     resp = SpatialInputResponsePayload.model_construct(
         request_id=new_ulid(),
@@ -408,12 +265,12 @@ def test_response_malformed_features_is_typed_error_second_layer():
     )
     r = _spatial_response_to_result(resp)
     assert r["status"] == "error"
-    assert r["error_code"] == "SPATIAL_INPUT_BAD_BARRIER_TYPE"
-    assert "barriers" not in r
+    assert r["error_code"] == "SPATIAL_INPUT_BAD_ROLE"
+    assert "aoi_bbox" not in r
 
 
 # =========================================================================== #
-# 4. Pending-future registry + inbound resolve + emit/await round-trip.
+# 3. Pending-future registry + inbound resolve + emit/await round-trip.
 # =========================================================================== #
 
 
@@ -498,10 +355,10 @@ def test_emit_and_wait_round_trips_a_drawn_reply():
 
     resp = asyncio.run(_run())
     assert resp is not None and resp.geometry_type == "vector_draw"
-    # the round-tripped reply parses into engine barriers.
+    # the round-tripped reply parses into the drawn roles.
     result = _spatial_response_to_result(resp)
     assert result["status"] == "ok"
-    assert result["n_walls"] == 1 and result["n_flap_gates"] == 1
+    assert result["n_aoi"] == 1 and result["n_lines"] == 1
 
 
 def test_emit_and_wait_timeout_returns_none(monkeypatch):
@@ -527,7 +384,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
 
 
 # =========================================================================== #
-# 5. request_spatial_input catalog tool — sentinel + invalid-mode typed error.
+# 4. request_spatial_input catalog tool — sentinel + invalid-mode typed error.
 # =========================================================================== #
 
 

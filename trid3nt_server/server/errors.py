@@ -138,7 +138,7 @@ class SpatialInputInvalidResponseError(Exception):
     the pending future by ``_fail_pending_spatial_input`` so the awaiting
     dispatch coroutine returns IN-BAND immediately instead of blocking until
     ``default_timeout_seconds`` then degrading to ``SPATIAL_INPUT_TIMEOUT``
-    (the untagged-barrier mismatch).
+    (the malformed-draw mismatch).
     """
 
     def __init__(self, error_code: str, error_message: str) -> None:

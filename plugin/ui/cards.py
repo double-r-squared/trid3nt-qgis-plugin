@@ -2474,11 +2474,6 @@ class SpatialInputCard(QFrame):
     - ``vector_draw`` with purpose ``aoi`` / ``line``: a ``VertexCaptureTool``
       -- click per vertex, right-click to finish -- replying ``features`` with a
       single ``role``-tagged Polygon / LineString.
-    - ``vector_draw`` with purpose ``barrier``: the web terra-draw surface with
-      per-segment wall / flap-gate TAGGING, which this plugin has no affordance
-      for -- the card degrades HONESTLY (it says so and offers only Cancel,
-      which sends ``cancelled=True`` and CLOSES the gate rather than hanging the
-      turn).
 
     Submit is disabled until a geometry is captured; Cancel is always
     available (the decline path). The decision maps through the pure
@@ -2554,34 +2549,22 @@ class SpatialInputCard(QFrame):
         self.status_lbl.setWordWrap(True)
         self.status_lbl.setStyleSheet(_GATE_NOTE_STYLE)
 
-        if request.supported:
-            pick_row = QHBoxLayout()
-            self.pick_btn = QPushButton(_SPATIAL_PICK_LABEL[
-                request.draw_kind or request.mode])
-            self.pick_btn.setCheckable(True)
-            self.pick_btn.toggled.connect(self._toggle_pick)
-            pick_row.addWidget(self.pick_btn)
-            self.status_lbl.setText("nothing picked yet")
-            pick_row.addWidget(self.status_lbl, 1)
-            lay.addLayout(pick_row)
-        else:
-            # vector_draw/barrier: honest degrade -- the plugin has no per-segment
-            # wall/flap-gate tagging affordance; say so and let Cancel close the
-            # gate.
-            self.status_lbl.setText(
-                "Drawing TAGGED barriers (walls / flap gates) is not available "
-                "in the QGIS plugin yet -- use the web client for this, or "
-                "Cancel to let the agent proceed without it."
-            )
-            lay.addWidget(self.status_lbl)
+        pick_row = QHBoxLayout()
+        self.pick_btn = QPushButton(_SPATIAL_PICK_LABEL[
+            request.draw_kind or request.mode])
+        self.pick_btn.setCheckable(True)
+        self.pick_btn.toggled.connect(self._toggle_pick)
+        pick_row.addWidget(self.pick_btn)
+        self.status_lbl.setText("nothing picked yet")
+        pick_row.addWidget(self.status_lbl, 1)
+        lay.addLayout(pick_row)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         self.submit_btn = QPushButton("Submit")
         self.submit_btn.setEnabled(False)
         self.submit_btn.clicked.connect(self._submit)
-        if request.supported:
-            btn_row.addWidget(self.submit_btn)
+        btn_row.addWidget(self.submit_btn)
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self._cancel)
         btn_row.addWidget(self.cancel_btn)

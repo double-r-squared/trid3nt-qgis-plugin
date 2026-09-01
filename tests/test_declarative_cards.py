@@ -199,8 +199,8 @@ async def test_a_drawn_point_reaches_the_run_stamped_user(card_client):
 
 
 @pytest.mark.parametrize("geometry,mode,purpose", [
-    ("point", "point", "barrier"),
-    ("rectangle", "bbox", "barrier"),
+    ("point", "point", "aoi"),
+    ("rectangle", "bbox", "aoi"),
     ("polygon", "vector_draw", "aoi"),
     ("polyline", "vector_draw", "line"),
 ])

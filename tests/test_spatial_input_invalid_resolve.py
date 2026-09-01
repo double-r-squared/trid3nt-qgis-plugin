@@ -1,8 +1,8 @@
-"""FR-WC-16 untagged-barrier mismatch — SERVER half (the critical correctness fix).
+"""FR-WC-16 malformed-draw mismatch - SERVER half.
 
 An inbound ``spatial-input-response`` whose drawn ``FeatureCollection`` fails
-structural validation (e.g. a ``role=="barrier"`` feature missing
-``barrier_type``) raises a pydantic ``ValidationError`` in the WS handler.
+structural validation (e.g. a feature carrying an unknown ``role``) raises a
+pydantic ``ValidationError`` in the WS handler.
 
 BEFORE the fix: the handler sent ``TOOL_PARAMS_INVALID`` and ``continue``d
 WITHOUT resolving the pending ``request_spatial_input`` future, so the paused
@@ -11,7 +11,7 @@ turn hung until ``default_timeout_seconds`` (~300s) then degraded to
 
 AFTER the fix: the handler ALSO fails the pending future eagerly via
 ``_fail_pending_spatial_input``, so the awaiting tool wakes IN-BAND with a typed
-``SPATIAL_INPUT_BAD_BARRIER_TYPE`` error PROMPTLY — never via the timeout path.
+``SPATIAL_INPUT_BAD_ROLE`` error PROMPTLY — never via the timeout path.
 
 These tests prove the future is resolved promptly (asserting the wall-clock
 budget is FAR under the read TTL) and that the honesty floor holds (a typed
@@ -46,13 +46,13 @@ from trid3nt_contracts.ws import (
 
 
 # --------------------------------------------------------------------------- #
-# A "real" untagged-barrier reply: the exact malformed shape the client can
-# send — a role=='barrier' LineString with NO barrier_type. This is what makes
+# A "real" malformed reply: the exact shape the client can send -- a feature
+# tagged with a role the vocabulary does not carry. This is what makes
 # SpatialInputResponsePayload.model_validate raise in the WS handler.
 # --------------------------------------------------------------------------- #
 
 
-def _untagged_barrier_payload_dict(request_id: str) -> dict[str, Any]:
+def _unknown_role_payload_dict(request_id: str) -> dict[str, Any]:
     return {
         "request_id": request_id,
         "geometry_type": "vector_draw",
@@ -61,7 +61,7 @@ def _untagged_barrier_payload_dict(request_id: str) -> dict[str, Any]:
             "features": [
                 {
                     "type": "Feature",
-                    "properties": {"role": "barrier"},  # <-- NO barrier_type
+                    "properties": {"role": "levee"},  # <-- not a canonical role
                     "geometry": {
                         "type": "LineString",
                         "coordinates": [[-85.305, 35.045], [-85.305, 35.055]],
@@ -81,16 +81,16 @@ class _MockWebSocket:
 
 
 # --------------------------------------------------------------------------- #
-# Sanity: the untagged barrier really DOES raise in model_validate (so the WS
+# Sanity: the unknown role really DOES raise in model_validate (so the WS
 # handler's except-ValidationError branch is the one that fires).
 # --------------------------------------------------------------------------- #
 
 
-def test_untagged_barrier_fails_model_validate():
-    pd = _untagged_barrier_payload_dict(new_ulid())
+def test_an_unknown_role_fails_model_validate():
+    pd = _unknown_role_payload_dict(new_ulid())
     with pytest.raises(ValidationError) as ei:
         SpatialInputResponsePayload.model_validate(pd)
-    assert "barrier_type" in str(ei.value)
+    assert "role" in str(ei.value)
 
 
 # --------------------------------------------------------------------------- #
@@ -132,10 +132,10 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
         # Simulate exactly what the WS handler now does on a malformed reply:
         # model_validate raises, we extract request_id from the raw payload,
         # then FAIL the pending future eagerly.
-        pd = _untagged_barrier_payload_dict(req_id)
+        pd = _unknown_role_payload_dict(req_id)
         try:
             SpatialInputResponsePayload.model_validate(pd)
-            pytest.fail("untagged barrier should have failed validation")
+            pytest.fail("an unknown role should have failed validation")
         except ValidationError as ve:
             err_msg = ve.errors()[0]["msg"]
 
@@ -143,7 +143,7 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
         failed = _fail_pending_spatial_input(
             state.session_id,
             req_id,
-            "SPATIAL_INPUT_BAD_BARRIER_TYPE",
+            "SPATIAL_INPUT_BAD_ROLE",
             err_msg,
         )
         assert failed is True, "a live pending future must be failed"
@@ -155,8 +155,8 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
         return ei.value, elapsed
 
     exc, elapsed = asyncio.run(_run())
-    assert exc.error_code == "SPATIAL_INPUT_BAD_BARRIER_TYPE"
-    assert "barrier_type" in exc.error_message
+    assert exc.error_code == "SPATIAL_INPUT_BAD_ROLE"
+    assert "role" in exc.error_message
     # PROMPT: nowhere near the 300s timeout TTL. Generous CI budget of 5s; the
     # real resolve is sub-millisecond. The point is "NOT the ~300s timeout path".
     assert elapsed < 5.0, (
@@ -170,7 +170,7 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
 def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
     """End-to-end through the tool entry point: a pending request_spatial_input
     turn, fed an invalid reply, returns the TYPED error result the LLM reads
-    (honesty floor — never a silent success / fabricated barriers), and does so
+    (honesty floor - never a silent success / fabricated geometry), and does so
     PROMPTLY (not after default_timeout_seconds)."""
 
     async def _run() -> tuple[dict[str, Any], float]:
@@ -188,7 +188,7 @@ def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
                 {
                     "mode": "vector_draw",
                     "title": "Draw the flood walls",
-                    "description": "Outline the AOI and the barriers.",
+                    "description": "Outline the AOI.",
                     "default_timeout_seconds": 300,  # long TTL — must NOT be hit
                 },
             )
@@ -205,16 +205,16 @@ def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
                 break
         assert req_id is not None, "the pending spatial-input future must register"
 
-        pd = _untagged_barrier_payload_dict(req_id)
+        pd = _unknown_role_payload_dict(req_id)
         try:
             SpatialInputResponsePayload.model_validate(pd)
-            pytest.fail("untagged barrier should have failed validation")
+            pytest.fail("an unknown role should have failed validation")
         except ValidationError as ve:
             err_msg = ve.errors()[0]["msg"]
 
         t0 = time.monotonic()
         assert _fail_pending_spatial_input(
-            state.session_id, req_id, "SPATIAL_INPUT_BAD_BARRIER_TYPE", err_msg
+            state.session_id, req_id, "SPATIAL_INPUT_BAD_ROLE", err_msg
         )
         result = await asyncio.wait_for(handler, timeout=5.0)
         elapsed = time.monotonic() - t0
@@ -222,10 +222,10 @@ def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
 
     result, elapsed = asyncio.run(_run())
     assert result["status"] == "error"
-    assert result["error_code"] == "SPATIAL_INPUT_BAD_BARRIER_TYPE"
-    # Honesty floor: NO fabricated barriers / AOI on an error result.
-    assert "barriers" not in result
+    assert result["error_code"] == "SPATIAL_INPUT_BAD_ROLE"
+    # Honesty floor: NO fabricated geometry on an error result.
     assert "aoi_bbox" not in result
+    assert "points" not in result
     # PROMPT, not the timeout path.
     assert elapsed < 5.0, f"resolved in {elapsed:.3f}s — must not be the TTL path"
 
@@ -242,7 +242,7 @@ def test_fail_unknown_request_id_is_safe_noop():
     # Nothing pending -> False, no crash.
     assert (
         _fail_pending_spatial_input(
-            state.session_id, new_ulid(), "SPATIAL_INPUT_BAD_BARRIER_TYPE", "x"
+            state.session_id, new_ulid(), "SPATIAL_INPUT_BAD_ROLE", "x"
         )
         is False
     )
@@ -259,10 +259,10 @@ def test_fail_cross_session_refused():
         server._register_pending_spatial_input(owner, req_id, fut)
         try:
             refused = _fail_pending_spatial_input(
-                "some-other-session", req_id, "SPATIAL_INPUT_BAD_BARRIER_TYPE", "x"
+                "some-other-session", req_id, "SPATIAL_INPUT_BAD_ROLE", "x"
             )
             accepted = _fail_pending_spatial_input(
-                owner, req_id, "SPATIAL_INPUT_BAD_BARRIER_TYPE", "x"
+                owner, req_id, "SPATIAL_INPUT_BAD_ROLE", "x"
             )
             # Drain the now-failed future's exception so it is not flagged as
             # never-retrieved by the event loop.

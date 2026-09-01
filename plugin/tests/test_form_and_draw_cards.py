@@ -13,8 +13,8 @@ Coverage:
   ``revised_args`` (re-sending an untouched value would re-stamp it as
   user-supplied), numbers parse back to numbers, and an unparseable numeric edit
   is dropped rather than sent as a string the server would refuse.
-* ``SpatialInputRequest.supported`` / ``draw_kind``: the polygon + polyline
-  purposes are drawable now; the TAGGED barrier surface still degrades honestly.
+* ``SpatialInputRequest.draw_kind``: the polygon and polyline purposes each map
+  to the capture tool that draws them.
 * ``resolve_spatial_input_features``: the drawn shape's wire reply, including the
   closed polygon ring the contract validator and the server parser read.
 """
@@ -138,7 +138,7 @@ class ParamSheetEditTests(unittest.TestCase):
                       gate.param_sheet_summary(sheet, {"water_temp_c": 24.0}))
 
 
-def _draw_request(mode: str, purpose: str = "barrier") -> gate.SpatialInputRequest:
+def _draw_request(mode: str, purpose: str = "aoi") -> gate.SpatialInputRequest:
     return gate.parse_spatial_input_request({
         "request_id": "01J000000000000000000000BB",
         "mode": mode, "purpose": purpose,
@@ -150,19 +150,10 @@ class DrawKindTests(unittest.TestCase):
     def test_the_shape_purposes_are_drawable(self) -> None:
         for purpose, kind in (("aoi", "polygon"), ("line", "polyline")):
             request = _draw_request("vector_draw", purpose)
-            self.assertTrue(request.supported, purpose)
             self.assertEqual(request.draw_kind, kind)
 
-    def test_the_tagged_barrier_surface_still_degrades_honestly(self) -> None:
-        """Per-segment wall / flap-gate tagging has no plugin affordance; the card
-        says so and Cancel closes the gate."""
-        request = _draw_request("vector_draw", "barrier")
-        self.assertFalse(request.supported)
-        self.assertEqual(request.draw_kind, "")
-
-    def test_the_pick_modes_are_unchanged(self) -> None:
+    def test_a_pick_mode_carries_no_draw_kind(self) -> None:
         for mode in ("point", "bbox"):
-            self.assertTrue(_draw_request(mode).supported)
             self.assertEqual(_draw_request(mode).draw_kind, "")
 
 

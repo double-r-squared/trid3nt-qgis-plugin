@@ -948,13 +948,11 @@ async def _stream_model_reply(
                     # SPATIAL_INPUT_SENTINEL_KEY sentinel (it has no websocket access);
                     # here -- where the live socket + the session future registry ARE
                     # reachable -- we emit the spatial-input-request, await the drawn
-                    # reply, and REPLACE result with the parsed, role-split geometry (the
-                    # clean engine-ready barriers FeatureCollection + aoi_bbox + points).
-                    # The LLM then calls swmm_urban_flood with barriers= straight from this
-                    # result. Mirrors the geocode_location -> region-choice pause/resume
-                    # seam. Fail-open: timeout / cancel / no client / malformed draw all
-                    # become a TYPED result (honesty floor), never a fabricated
-                    # AOI/barriers.
+                    # reply, and REPLACE result with the parsed, role-split geometry
+                    # (aoi_bbox + points + the section line). Mirrors the
+                    # geocode_location -> region-choice pause/resume seam. Fail-open:
+                    # timeout / cancel / no client / malformed draw all become a TYPED
+                    # result (honesty floor), never a fabricated AOI.
                     if (
                         call.name == "request_spatial_input"
                         and isinstance(result, dict)

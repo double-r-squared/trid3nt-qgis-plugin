@@ -351,21 +351,10 @@ class SpatialInputResponsePayload(GraceModel):
       ``[minLon, minLat, maxLon, maxLat]`` for bbox); ``features`` stays None.
     - ``"vector_draw"`` — the urban vector-draw reply: ``features`` is
       a GeoJSON ``FeatureCollection`` of the drawn geometry; ``coordinates``
-      stays None. Each ``Feature.properties`` carries a ``role`` ∈
-      {``"aoi"``, ``"barrier"``, ``"point"``}. For a ``"barrier"`` LineString,
-      ``properties.barrier_type`` ∈ {``"wall"``, ``"flap_gate"``} (mirrors
-      ``swmm_contracts.BarrierType``) and, for a ``"flap_gate"``, an OPTIONAL
-      ``properties.flap_direction`` ∈ {``"in"``, ``"out"``} (or a numeric
-      bearing) recording the one-way orientation; an OPTIONAL
-      ``properties.protected_side`` ∈ {``"left"``, ``"right"``} mirrors the
-      engine seam (``swmm_mesh_builder._resolve_protected``).
+      stays None. Each ``Feature.properties`` carries a ``role`` in
+      {``"aoi"``, ``"line"``, ``"point"``}.
     - For a cancellation: ``cancelled=True`` and every geometry field stays
       None.
-
-    The drawn ``features`` round-trips straight into the urban engine: the
-    ``"barrier"`` features are exactly the tagged-``LineString``
-    ``FeatureCollection`` that ``swmm_contracts.SWMMRunArgs.barriers`` accepts
-    (filter to ``role == "barrier"`` and they validate field-for-field).
 
     Large-payload note (Invariant + large-payload norm): a drawn
     ``FeatureCollection`` is small by construction (a handful of short
@@ -391,13 +380,10 @@ class SpatialInputResponsePayload(GraceModel):
     ) -> dict[str, Any] | None:
         """Structurally validate the drawn GeoJSON ``FeatureCollection``.
 
-        Validates STRUCTURE only (no geometry-library dependency in contracts),
-        mirroring ``swmm_contracts._validate_barrier_feature_collection``:
+        Validates STRUCTURE only (no geometry-library dependency in contracts):
         a ``FeatureCollection`` whose every ``Feature`` carries a
-        ``properties.role`` ∈ {"aoi", "barrier", "point", "line"}; a
-        ``"barrier"`` feature must be a ``LineString`` (>= 2 positions) tagged
-        with ``properties.barrier_type`` ∈ {"wall", "flap_gate"}; a ``"line"``
-        feature is a plain (untagged) ``LineString`` (>= 2 positions).
+        ``properties.role`` in {"aoi", "point", "line"}, and whose ``"line"``
+        features are ``LineString``s with >= 2 positions.
         """
         if value is None:
             return None
@@ -409,8 +395,8 @@ def _validate_spatial_input_feature_collection(
 ) -> dict[str, Any]:
     """Shared structural validator for a role-tagged drawn FeatureCollection.
 
-    Enforces the role + per-segment barrier vocabulary while staying a
-    pure-structure check (no shapely/geojson import in the contracts package).
+    Enforces the role vocabulary while staying a pure-structure check (no
+    shapely/geojson import in the contracts package).
     """
     if fc.get("type") != "FeatureCollection":
         raise ValueError(
@@ -421,12 +407,8 @@ def _validate_spatial_input_feature_collection(
     if not isinstance(feats, list):
         raise ValueError("features.features must be a list")
     # "line" is a NEUTRAL elevation/section LineString (compute_terrain_profile /
-    # compute_cross_section) -- a drawn line that carries no barrier semantics and
-    # needs no wall/flap_gate tag. ADDITIVE: it never relaxes the barrier rules.
-    valid_roles = {"aoi", "barrier", "point", "line"}
-    valid_barrier_types = {"wall", "flap_gate"}
-    valid_flap_directions = {"in", "out"}
-    valid_protected_sides = {"left", "right"}
+    # compute_cross_section).
+    valid_roles = {"aoi", "point", "line"}
     for idx, feat in enumerate(feats):
         if not isinstance(feat, dict) or feat.get("type") != "Feature":
             raise ValueError(f"features.features[{idx}] must be a GeoJSON Feature")
@@ -456,43 +438,6 @@ def _validate_spatial_input_feature_collection(
                 raise ValueError(
                     f"features.features[{idx}].geometry.coordinates must be a "
                     f"LineString with >= 2 positions"
-                )
-        if role == "barrier":
-            if geom.get("type") != "LineString":
-                raise ValueError(
-                    f"features.features[{idx}] role='barrier' geometry must be a "
-                    f"LineString (got {geom.get('type')!r})"
-                )
-            coords = geom.get("coordinates")
-            if not isinstance(coords, list) or len(coords) < 2:
-                raise ValueError(
-                    f"features.features[{idx}].geometry.coordinates must be a "
-                    f"LineString with >= 2 positions"
-                )
-            tag = props.get("barrier_type")
-            if tag not in valid_barrier_types:
-                raise ValueError(
-                    f"features.features[{idx}].properties.barrier_type must be "
-                    f"one of {sorted(valid_barrier_types)}, got {tag!r}"
-                )
-            # flap_direction is OPTIONAL; when present it is a closed enum OR a
-            # numeric bearing (degrees). protected_side is OPTIONAL closed enum.
-            flap_dir = props.get("flap_direction")
-            if (
-                flap_dir is not None
-                and flap_dir not in valid_flap_directions
-                and not isinstance(flap_dir, (int, float))
-            ):
-                raise ValueError(
-                    f"features.features[{idx}].properties.flap_direction must be "
-                    f"one of {sorted(valid_flap_directions)} or a numeric "
-                    f"bearing, got {flap_dir!r}"
-                )
-            protected = props.get("protected_side")
-            if protected is not None and protected not in valid_protected_sides:
-                raise ValueError(
-                    f"features.features[{idx}].properties.protected_side must be "
-                    f"one of {sorted(valid_protected_sides)}, got {protected!r}"
                 )
     return fc
 
@@ -986,13 +931,10 @@ class SpatialInputRequestPayload(GraceModel):
     - ``"point"`` — single map click; the reply carries ``coordinates=[lon, lat]``.
     - ``"bbox"`` — a drag-rectangle; the reply carries
       ``coordinates=[minLon, minLat, maxLon, maxLat]``.
-    - ``"vector_draw"`` — urban vector-draw: the client opens a
-      terra-draw surface (rectangle / polygon / polyline + select-edit) and the
-      reply carries ``features`` (a GeoJSON ``FeatureCollection`` with
-      ``role``-tagged + per-segment ``barrier_type``/``flap_direction``
-      properties). Use this when the agent needs the user to draw AOIs and
-      tagged structural barriers (walls / flap gates) for the urban-flood
-      (SWMM) engine.
+    - ``"vector_draw"`` — the client opens a draw surface (rectangle / polygon /
+      polyline + select-edit) and the reply carries ``features`` (a GeoJSON
+      ``FeatureCollection`` of ``role``-tagged geometry). Use this when the agent
+      needs the user to outline a region or trace a section line.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "spatial-input-request"
@@ -1003,22 +945,16 @@ class SpatialInputRequestPayload(GraceModel):
     description: str
     # ``purpose`` (vector_draw only) selects the draw affordance + semantics:
     #
-    # - ``"barrier"`` (DEFAULT -- the original SWMM urban-flood flow): a drawn
-    #   LineString is a structural barrier that MUST be tagged wall / flap_gate
-    #   before Submit; it round-trips into ``SWMMRunArgs.barriers``.
+    # - ``"aoi"`` (DEFAULT) -- area-of-interest selection: only the rect/polygon
+    #   draw tools are shown and submit gates on having drawn at least one
+    #   polygon, carried back as ``role=="aoi"``. Use when the model needs the
+    #   user to outline a region for any tool that accepts an AOI or bbox.
     # - ``"line"`` -- a NEUTRAL elevation/section line (e.g. for
     #   ``compute_terrain_profile`` / ``compute_cross_section``): a drawn
-    #   LineString is submitted as a plain ``role=="line"`` LineString with NO
-    #   barrier tagging required. The reply's first line geometry is surfaced as
-    #   the ``line`` / ``linestring`` fields. ADDITIVE -- the default keeps the
-    #   barrier flow byte-for-byte unchanged.
-    # - ``"aoi"`` -- area-of-interest selection: only the rect/polygon draw
-    #   tools are shown (no line/barrier tool), no tagging is required, and
-    #   submit gates on having drawn at least one polygon. Drawn polygons carry
-    #   ``role=="aoi"`` exactly as in the barrier flow (neutral, no barrier
-    #   semantics). Use when the model needs the user to outline a region /
-    #   study area for any tool that accepts an AOI or bbox.
-    purpose: Literal["barrier", "line", "aoi"] = "barrier"
+    #   LineString is submitted as a plain ``role=="line"`` LineString. The
+    #   reply's first line geometry is surfaced as the ``line`` /
+    #   ``linestring`` fields.
+    purpose: Literal["aoi", "line"] = "aoi"
     suggested_view: SuggestedView | None = None
     reference_layers: list[ReferenceLayer] = Field(default_factory=list)
     default_timeout_seconds: int = 300

@@ -19,9 +19,8 @@ DATA FLOW (the spike's happy path, steps 1-6)
 ---------------------------------------------
 1. Resolve ``line`` to a shapely LineString in EPSG:4326 (accepts a GeoJSON
    LineString, a list of ``[lon, lat]`` vertices, or a FeatureCollection -- the
-   last lets the agent feed the drawn ``barriers`` FC from
-   ``request_spatial_input`` straight through, OR pass a self-constructed line
-   inline with zero user draw).
+   last lets the agent feed the drawn FC from ``request_spatial_input`` straight
+   through, OR pass a self-constructed line inline with zero user draw).
 2. Open each ``layer_uri`` with rasterio (s3:// staged via ``read_object_bytes_s3``
    + ``MemoryFile`` -- the same /vsis3/-credential workaround documented in
    ``clip_raster_to_polygon._get_source_crs``).
@@ -169,8 +168,8 @@ def _resolve_line_coords(line: Any) -> list[list[float]]:
          "coordinates": [[lon,lat], ...]}``.
       2. A GeoJSON ``Feature`` wrapping a LineString.
       3. A GeoJSON ``FeatureCollection`` -- the FIRST LineString feature is used
-         (so the drawn ``barriers`` FC from ``request_spatial_input`` feeds
-         straight through; extra barrier lines are ignored for v1).
+         (so the drawn FC from ``request_spatial_input`` feeds straight
+         through; extra lines are ignored for v1).
       4. A bare list of ``[lon, lat]`` vertices (the agent-derived inline path).
 
     Raises ``CrossSectionError(LINE_INVALID)`` on any unusable input.

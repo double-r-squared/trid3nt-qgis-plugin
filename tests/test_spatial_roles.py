@@ -1,10 +1,9 @@
 """Unit tests for the shared drawn-geometry role vocabulary (ADR 0099, mesh M2).
 
-Covers the generalized 7-role parser in
-``trid3nt_server.gates.spatial_roles`` -- the canonical DOMAIN stage every
-engine consumes. Legacy-compat (aoi/barrier/point/line) is covered by
-``test_spatial_input_barriers.py`` / ``test_spatial_input_neutral_line.py``
-through the adapter; here we exercise the NEW roles + the alias + honesty floor.
+Covers the generalized role parser in ``trid3nt_server.gates.spatial_roles`` --
+the canonical DOMAIN stage every engine consumes. The adapter surface over it is
+covered by ``test_spatial_input_gate.py`` / ``test_spatial_input_neutral_line.py``;
+here we exercise the mesh roles + the alias + the honesty floor.
 """
 from __future__ import annotations
 
@@ -30,10 +29,9 @@ def _feat(role, geom_type, coords, **props):
     }
 
 
-def test_canonical_vocabulary_is_the_seven_roles() -> None:
+def test_canonical_vocabulary_is_the_declared_roles() -> None:
     assert CANONICAL_ROLES == frozenset(
         {
-            "barrier",
             "breakline",
             "breach",
             "refine_region",
@@ -130,13 +128,13 @@ def test_mixed_roles_coexist() -> None:
     poly = [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
     roles = parse_drawn_roles(
         _fc(
-            _feat("barrier", "LineString", [[0, 0], [0, 1]], barrier_type="wall"),
+            _feat("breakline", "LineString", [[0, 0], [0, 1]]),
             _feat("breach", "Point", [0.5, 0.5]),
             _feat("refine_region", "Polygon", poly, target_size_m=10.0),
             _feat("aoi_clip", "Polygon", poly),
         )
     )
-    assert roles.n_walls == 1
+    assert roles.breaklines == [[[0, 0], [0, 1]]]
     assert roles.breach_points == [[0.5, 0.5]]
     assert len(roles.refine_regions) == 1
     assert roles.aoi_bbox == (0, 0, 1, 1)

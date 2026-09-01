@@ -1,13 +1,9 @@
-"""Atomic tool ``request_spatial_input`` -- urban vector-draw.
+"""Atomic tool ``request_spatial_input`` -- draw on the map, pause the turn.
 
-The LLM-facing surface that PAUSES the turn and asks the user to DRAW on the map
-(a terra-draw surface in the client): an area of interest, structural flood
-WALLS (red, water is dammed) and FLAP GATES (green, one-way drains), or a simple
-point / bbox pick. The drawn geometry comes back as a role-tagged GeoJSON
-``FeatureCollection``; the agent splits it by role and the ``role=="barrier"``
-features become the ``barriers`` FeatureCollection that feeds
-``swmm_urban_flood(barriers=...)`` straight into the existing PySWMM engine
-seam (wall = omitted overland conduit; flap_gate = one-way SWMM orifice).
+The LLM-facing surface that PAUSES the turn and asks the user to DRAW on the map:
+an area of interest, an elevation/section line, or a simple point / bbox pick.
+The drawn geometry comes back as a role-tagged GeoJSON ``FeatureCollection``
+which the agent splits by role.
 
 ARCHITECTURE NOTE (why this tool body is a thin sentinel): the actual
 websocket pause/resume -- emit ``spatial-input-request``, await
@@ -43,7 +39,7 @@ __all__ = ["request_spatial_input", "SPATIAL_INPUT_SENTINEL_KEY"]
 SPATIAL_INPUT_SENTINEL_KEY = "_request_spatial_input"
 
 _VALID_MODES = ("point", "bbox", "vector_draw")
-_VALID_PURPOSES = ("barrier", "line", "aoi")
+_VALID_PURPOSES = ("aoi", "line")
 
 
 _REQUEST_SPATIAL_INPUT_METADATA = AtomicToolMetadata(
@@ -68,7 +64,7 @@ async def request_spatial_input(
     mode: str = "vector_draw",
     title: str | None = None,
     description: str | None = None,
-    purpose: str = "barrier",
+    purpose: str = "aoi",
     suggested_view: dict[str, Any] | None = None,
     default_timeout_seconds: int | None = None,
     # absorb LLM-invented kwargs (centralized at server.py via
@@ -78,35 +74,31 @@ async def request_spatial_input(
     """Ask the user to DRAW geometry on the map, then PAUSE until they finish.
 
     Use this when the user must physically draw on the map rather than
-    describe an area in words: an AOI/region outline for any bbox-taking
-    tool (``mode="vector_draw"``, ``purpose="aoi"``); SWMM flood WALLS/
-    FLAP GATES before ``swmm_urban_flood`` (``purpose="barrier"``,
-    default -- result's ``barriers`` FeatureCollection passes straight to
-    ``swmm_urban_flood(barriers=...)``, ``aoi_bbox`` as its ``bbox``);
-    a neutral elevation/section LINE (``purpose="line"`` -- result's
-    ``line``/``linestring`` passes to ``compute_cross_section``); or a
-    single click (``mode="point"``) / drag-rectangle (``mode="bbox"``).
+    describe an area in words: an AOI/region outline for any bbox-taking tool
+    (``mode="vector_draw"``, ``purpose="aoi"``, the default -- ``aoi_bbox``
+    passes straight to any tool taking a ``bbox``); a neutral elevation/section
+    LINE (``purpose="line"`` -- result's ``line``/``linestring`` passes to
+    ``compute_cross_section``); or a single click (``mode="point"``) /
+    drag-rectangle (``mode="bbox"``).
     Do NOT use when the user already gave a clear place name/address/bbox
     in text (geocode instead).
 
     Params:
         mode: ``"vector_draw"`` (default), ``"point"``, or ``"bbox"``.
         title/description: prompt heading + one-line draw instruction.
-        purpose: ``vector_draw`` only -- ``"aoi"`` (area selection, no
-            tagging; use for "show me X over Y"/"flood risk in this
-            area"), ``"barrier"`` (default, tagged SWMM walls/flap gates),
-            ``"line"`` (plain elevation/section line).
+        purpose: ``vector_draw`` only -- ``"aoi"`` (default; area selection, for
+            "show me X over Y" / "flood risk in this area") or ``"line"``
+            (a plain elevation/section line).
         suggested_view: optional ``{"bbox", "zoom"}`` camera hint.
         default_timeout_seconds: wait window (default 300).
 
     Returns (after the user finishes -- the turn PAUSES until then):
         vector_draw: ``{"status": "ok", "geometry_type": "vector_draw",
-        "aoi_bbox"?, "barriers"? (FeatureCollection), "n_walls",
-        "n_flap_gates", "points", "n_aoi", "n_lines", "line"?, "linestring"?}``.
+        "aoi_bbox"?, "points", "n_aoi", "n_lines", "line"?, "linestring"?}``.
         point/bbox: ``{"status": "ok", "geometry_type", "coordinates"}``.
         Cancelled: ``{"status": "cancelled", ...}``. Timeout/no client/
         malformed: ``{"status": "error", "error_code": "SPATIAL_INPUT_...",
-        "error_message"}`` -- never invent an AOI/barriers on error.
+        "error_message"}`` -- never invent an AOI on error.
     """
     norm_mode = (mode or "vector_draw").strip()
     if norm_mode not in _VALID_MODES:
@@ -118,7 +110,7 @@ async def request_spatial_input(
                 f"mode must be one of {list(_VALID_MODES)}, got {mode!r}."
             ),
         }
-    norm_purpose = (purpose or "barrier").strip()
+    norm_purpose = (purpose or "aoi").strip()
     if norm_purpose not in _VALID_PURPOSES:
         return {
             "status": "error",

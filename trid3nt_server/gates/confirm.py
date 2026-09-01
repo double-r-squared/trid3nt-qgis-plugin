@@ -1063,8 +1063,7 @@ async def _maybe_handle_region_choice(
 # returns a sentinel result that this interception in the turn loop replaces with
 # the parsed, role-split drawn geometry -- so the tool surface stays catalog-clean
 # while the actual websocket pause/resume lives here (where the live socket +
-# session future registry are reachable). The drawn barriers FeatureCollection
-# round-trips straight into ``swmm_urban_flood(barriers=...)``.
+# session future registry are reachable).
 
 # Sentinel result the ``request_spatial_input`` catalog tool returns; the turn
 # loop detects it and replaces it with the real drawn-geometry result.
@@ -1112,7 +1111,7 @@ async def _emit_spatial_input_and_wait(
         return None
     except SpatialInputInvalidResponseError:
         # The user's reply ARRIVED but failed structural validation (e.g. a
-        # barrier missing barrier_type). The inbound handler failed the future
+        # feature carrying an unknown role). The inbound handler failed the future
         # eagerly so we wake here IN-BAND -- NOT after the read TTL. Re-raise so
         # _handle_request_spatial_input surfaces the typed error result.
         logger.info(
@@ -1145,10 +1144,7 @@ async def _handle_request_spatial_input(
     Builds the request from the LLM args, emits it, PAUSES the turn awaiting the
     drawn geometry, then parses + role-splits the reply into the engine-ready
     result. Never raises -- every failure path (no client, validation, parse,
-    timeout, cancellation) becomes a typed result the LLM narrates honestly. The
-    ``role=="barrier"`` features become the ``barriers`` FeatureCollection that
-    feeds ``swmm_urban_flood`` -> ``SWMMRunArgs.barriers`` -> the existing
-    ``build_swmm_mesh`` wall=omit-conduit / flap_gate=one-way-orifice seam.
+    timeout, cancellation) becomes a typed result the LLM narrates honestly.
     """
     if state.emitter is None:
         # No interactive surface bound (e.g. headless eval). Honest typed error.
@@ -1157,7 +1153,7 @@ async def _handle_request_spatial_input(
             "error_code": "SPATIAL_INPUT_NO_CLIENT",
             "error_message": (
                 "No interactive map client is connected, so the user cannot "
-                "draw. Proceed without drawn barriers / AOI, or ask the user to "
+                "draw. Proceed without a drawn AOI, or ask the user to "
                 "provide a bbox in text."
             ),
         }
@@ -1180,8 +1176,8 @@ async def _handle_request_spatial_input(
         raise
     except SpatialInputInvalidResponseError as exc:
         # The reply arrived but was structurally invalid (honesty floor: a
-        # malformed drawn FeatureCollection -- e.g. a barrier missing
-        # barrier_type -- degrades to a TYPED error result, NOT a silent success
+        # malformed drawn FeatureCollection -- e.g. a feature carrying an
+        # unknown role -- degrades to a TYPED error result, NOT a silent success
         # and NOT a hung turn that drains default_timeout_seconds then reads as
         # SPATIAL_INPUT_TIMEOUT). The user already saw TOOL_PARAMS_INVALID.
         logger.info(
@@ -1195,7 +1191,7 @@ async def _handle_request_spatial_input(
             "error_code": exc.error_code,
             "error_message": (
                 f"The drawn geometry could not be used: {exc.error_message}. "
-                f"Ask the user to redraw; do not fabricate barriers or an AOI."
+                f"Ask the user to redraw; do not fabricate an AOI."
             ),
         }
     except Exception:  # noqa: BLE001 -- degrade to a typed result, never crash
@@ -1210,7 +1206,7 @@ async def _handle_request_spatial_input(
             "error_code": "SPATIAL_INPUT_FAILED",
             "error_message": (
                 "The spatial-input request failed unexpectedly; no geometry was "
-                "received. Do not fabricate barriers or an AOI."
+                "received. Do not fabricate an AOI."
             ),
         }
     return _spatial_response_to_result(response)

@@ -29,7 +29,7 @@ def _build_spatial_input_request_payload(
     title = str(call_args.get("title") or "Draw on the map")
     description = str(
         call_args.get("description")
-        or "Draw the area of interest and any flood walls or flap gates."
+        or "Draw the area of interest."
     )
     payload_kwargs: dict[str, Any] = {
         "request_id": request_id,
@@ -37,14 +37,11 @@ def _build_spatial_input_request_payload(
         "title": title[:200],
         "description": description[:1024],
     }
-    # purpose (vector_draw only): "barrier" (default, SWMM walls/flap-gates),
-    # "line" (a NEUTRAL elevation/section line for compute_terrain_profile), or
-    # "aoi" (area-of-interest selection -- only rect/polygon tools, no line/tag).
-    # Only forwarded when explicitly non-default so the wire default stays
-    # "barrier" and the existing SWMM draw flow is byte-for-byte unchanged.
-    raw_purpose = call_args.get("purpose")
-    if raw_purpose in ("line", "aoi"):
-        payload_kwargs["purpose"] = raw_purpose
+    # purpose (vector_draw only): "aoi" (the wire default -- rect/polygon tools,
+    # replying role=="aoi" polygons) or "line" (a NEUTRAL elevation/section line
+    # for compute_terrain_profile). Only forwarded when non-default.
+    if call_args.get("purpose") == "line":
+        payload_kwargs["purpose"] = "line"
     # suggested_view: {bbox: [..4..], zoom: float} — optional camera hint.
     sv = call_args.get("suggested_view")
     if isinstance(sv, dict) and isinstance(sv.get("bbox"), (list, tuple)):
@@ -90,10 +87,8 @@ def _spatial_response_to_result(
     - point / bbox reply                          ->
       ``{status: "ok", geometry_type, coordinates}``.
     - vector_draw reply                           ->
-      ``{status: "ok", geometry_type: "vector_draw", aoi_bbox, barriers,
-         n_walls, n_flap_gates, points, n_aoi, n_lines}`` -- ``barriers`` is the
-      clean engine-ready FeatureCollection (pass straight to
-      ``swmm_urban_flood(barriers=...)``). When a NEUTRAL line was drawn
+      ``{status: "ok", geometry_type: "vector_draw", aoi_bbox, points, n_aoi,
+         n_lines}``. When a NEUTRAL line was drawn
       (purpose="line"), ``line`` (``[[lon,lat],...]``) + ``linestring`` (a
       GeoJSON LineString) carry it for ``compute_terrain_profile(line=...)``.
     - structurally invalid drawn FC               ->
@@ -107,16 +102,16 @@ def _spatial_response_to_result(
             "error_message": (
                 "No drawing was received from the user (the spatial-input "
                 "request timed out or no interactive client was connected). "
-                "Ask the user to draw the area / barriers, or proceed without "
-                "them — do not invent a geometry."
+                "Ask the user to draw the area, or proceed without it — do not "
+                "invent a geometry."
             ),
         }
     if response.cancelled:
         return {
             "status": "cancelled",
             "message": (
-                "The user cancelled the drawing. No area or barriers were "
-                "provided; do not fabricate any — ask how they want to proceed."
+                "The user cancelled the drawing. No area was provided; do not "
+                "fabricate one — ask how they want to proceed."
             ),
         }
     gtype = response.geometry_type
@@ -154,14 +149,12 @@ def _spatial_response_to_result(
                 "error_code": exc.error_code,
                 "error_message": (
                     f"The drawn geometry could not be used: {exc}. Ask the "
-                    f"user to redraw; do not fabricate barriers or an AOI."
+                    f"user to redraw; do not fabricate an AOI."
                 ),
             }
         result: dict[str, Any] = {
             "status": "ok",
             "geometry_type": "vector_draw",
-            "n_walls": parsed.n_walls,
-            "n_flap_gates": parsed.n_flap_gates,
             "n_aoi": len(parsed.aoi_features),
             "n_lines": parsed.n_lines,
             "points": parsed.points,
@@ -200,11 +193,6 @@ def _spatial_response_to_result(
                 }
                 for b in parsed.boundary_lines
             ]
-        if parsed.barriers is not None:
-            # The clean, engine-ready barriers FeatureCollection — pass straight
-            # to swmm_urban_flood(barriers=...). It validates field-for-field
-            # against SWMMRunArgs.barriers.
-            result["barriers"] = parsed.barriers
         if parsed.line_coords is not None:
             # A NEUTRAL drawn elevation/section line (purpose="line"): surface the
             # plain LineString vertices so the LLM can pass them straight to
