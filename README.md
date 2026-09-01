@@ -106,6 +106,7 @@ server/                the server (WS + tool dispatch + turn loop + persistence)
 contracts/             shared pydantic contracts (trid3nt-contracts package)
 workers/               the telemac solver worker + the mesh/qgis legs
 scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
+scripts/code_graph.py  import graph + orphan/dead-symbol report -> docs/validation/code-graph/
 bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
 ```
 

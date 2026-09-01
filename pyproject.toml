@@ -237,7 +237,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "grimp>=3", "vulture>=2.14"]
 # local-engines: pip-only solver runtimes for the TRID3NT offline / local build.
 # Install with: pip install -e ".[local-engines]"
 # pyswmm + swmm-api are ALSO in core deps (always-on on the box); the extras pin
