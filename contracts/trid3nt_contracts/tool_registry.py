@@ -263,14 +263,14 @@ class AtomicToolMetadata(GraceModel):
     - ``ttl_class`` — one of the four classes. Required for every
       external-API tool. ``"live-no-cache"`` is reserved for the
       uncacheable-by-construction enumeration (interactive solicitation
-      tools, envelope emitters, MongoDB writes, solver dispatchers).
-    - ``source_class`` — the ``<source-class>`` prefix in the cache bucket
-      layout  (e.g. ``"dem"``, ``"buildings"``, ``"geocode"``).
+      tools, envelope emitters, persistence writes, solver dispatchers).
+    - ``source_class`` — the ``<source-class>`` prefix in the cache layout
+      (e.g. ``"dem"``, ``"buildings"``, ``"geocode"``).
       Required when ``cacheable=True``; MAY be omitted when ``cacheable=False``
-      (no bucket prefix is needed if nothing is written).
+      (no cache prefix is needed if nothing is written).
     - ``cacheable`` — explicit boolean for enumeration; defaults to
       ``True`` because the cacheable case is the common case. ``False`` for
-      interactive solicitation tools, envelope emitters, MongoDB writes,
+      interactive solicitation tools, envelope emitters, persistence writes,
       and solver dispatchers.
 
     Cross-field rule (``_validate_cacheable_consistency``):
@@ -344,10 +344,10 @@ class AtomicToolMetadata(GraceModel):
     open_world_hint: bool = Field(
         default=False,
         description=(
-            "MCP annotation: openWorldHint. True when the tool issues calls to "
-            "external APIs or public data endpoints outside the GCP "
-            "project boundary. Defaults to False — compute, clip, and intra-GCP "
-            "tools opt out. All fetch_* tools and web_fetch are True; "
+            "MCP annotation: openWorldHint. True when the tool reaches beyond "
+            "the local deployment — external APIs or public data endpoints. "
+            "Defaults to False — compute, clip, and local-substrate-only tools "
+            "opt out. All fetch_* tools and web_fetch are True; "
             "catalog_search/catalog_fetch are True because they ultimately hit "
             "Tier-2/3 external endpoints."
         ),
@@ -470,7 +470,7 @@ class AtomicToolMetadata(GraceModel):
             if not self.source_class:
                 raise ValueError(
                     "cacheable=True requires a non-empty source_class "
-                    "(used as the <source-class> prefix in gs://<bucket>/cache/<source-class>/<hash>.<ext>)."
+                    "(used as the <source-class> prefix in cache/<source-class>/<hash>.<ext>)."
                 )
         else:
             if self.ttl_class != "live-no-cache":

@@ -6,7 +6,7 @@ Coverage:
   flagged as read-only.
 - Consistency rule: external-API tools (open_world_hint=True) are a
   subset of the fetch_* / web_fetch / catalog_* group; compute_* /
-  clip_* / intra-GCP tools are not open-world.
+  clip_* / local-substrate-only tools are not open-world.
 - Specific spot-checks for known high-stakes tools (
   run_solver, wait_for_completion).
 - Verify the four new fields land on AtomicToolMetadata with correct
@@ -177,12 +177,12 @@ def test_non_idempotent_write_tools_exist():
 
 
 def test_run_solver_annotations():
-    """run_solver: write + not destructive + not idempotent + intra-GCP."""
+    """run_solver: write + not destructive + not idempotent + local-substrate."""
     snapshot = _registry_snapshot()
     assert "run_solver" in snapshot, "run_solver not registered"
     meta = snapshot["run_solver"]
     assert meta.read_only_hint is False, "run_solver dispatches a workflow → not read-only"
-    assert meta.open_world_hint is False, "run_solver is intra-GCP"
+    assert meta.open_world_hint is False, "run_solver is local-substrate only"
     assert meta.destructive_hint is False, "run_solver writes to new run dir → not destructive"
     assert meta.idempotent_hint is False, "run_solver creates a new execution → not idempotent"
 
@@ -193,7 +193,7 @@ def test_wait_for_completion_annotations():
     assert "wait_for_completion" in snapshot, "wait_for_completion not registered"
     meta = snapshot["wait_for_completion"]
     assert meta.read_only_hint is False, "wait_for_completion emits side effects"
-    assert meta.open_world_hint is False, "wait_for_completion polls intra-GCP"
+    assert meta.open_world_hint is False, "wait_for_completion polls the local substrate"
     assert meta.destructive_hint is False, "wait_for_completion does not overwrite"
     assert meta.idempotent_hint is False, "wait_for_completion emits events on each call"
 
