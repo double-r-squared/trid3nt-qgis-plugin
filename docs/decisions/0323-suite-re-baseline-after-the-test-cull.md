@@ -127,3 +127,64 @@ Choosing the replacement noun for a decommissioned substrate on a model-facing
 description is a wording decision with behavioral reach, so it is reported here
 rather than patched. `experiments/bench/routing_sweep/run.py` carries the same
 class of residue in a docstring listing the culled tool names.
+
+---
+
+## Amendment 2026-09-01 - the fronts-and-orphans wave moved it again
+
+The wave that followed this note (`bcf2a2cd..e1a052e5`) atticked two dark TELEMAC
+fronts, nine `workflows/shared` orphans and the barrier spatial role, and added
+tests for the deck validator, the chainage walk, the release-containment gate and
+the proof basemap credit. The denominator moved again, so the counts above are
+superseded by these. Measured at `e1a052e5`, same commands, same interpreter.
+
+### The five slice lines, verbatim
+
+    1715 passed, 5 skipped, 42 warnings in 261.72s (0:04:21)
+    4135 passed, 1 xfailed, 40 warnings in 45.48s
+    1879 passed, 1 skipped in 341.55s (0:05:41)
+    1395 passed, 6 skipped in 316.89s (0:05:16)
+    521 passed in 5.15s
+
+| slice | passed | skipped | failed | delta vs the table above |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1715 | 5 | 0 | -21 |
+| `test_[f-o]*` | 4135 | 0 (1 xfailed) | 0 | +2 |
+| `test_[p-r]*` | 1879 | 1 | 0 | 0 |
+| `test_[s-z]*` | 1395 | 6 | 0 | -5 |
+| `contracts/tests` | 521 | 0 | 0 | 0 |
+
+**9,645 passed, 0 failed, five slices at ZERO.** Skips are unchanged (5 / 0 / 1 /
+6 / 0) and the xfail is the same one. `contracts/tests` held at the 521 floor this
+note set: the wave's cuts were engine-tree and workflow-tree, and the contract
+surface did not move with them.
+
+### The denominator change, attributed
+
+The note above attributed id-by-id across two trees. That method is not available
+here: both packages are installed into `venvs/agent` through setuptools'
+`__editable__` META-PATH finder, which resolves `trid3nt_server` to THIS checkout
+from any working directory - so collecting an older tree's tests imports the
+NEWER server, and the counts it yields are not that tree's. Attribution is
+therefore whole-file movements (exact, and every deleted file was parametrize-free
+so its `def test_` count IS its id count) plus a per-slice residual for the files
+that were edited rather than added or removed.
+
+| slice | whole-file movements | net | residual (edited files) |
+|---|---|---|---|
+| `[a-e]` | `test_coastal_tidal_surge.py` -17 (`2f07043d`), `test_discharge_resolve.py` -3 (`a70e542c`) | -20 | -1 |
+| `[f-o]` | none | 0 | +2 |
+| `[p-r]` | `test_publish_quantities.py` -12 (`a70e542c`), `test_proof_basemap_credit.py` +4 (`79c8caf5`) | -8 | +8 |
+| `[s-z]` | `test_shared_soil_hydraulics.py` -6, `test_shared_water_table_interp.py` -6 (`a70e542c`), `test_tomawac_wave_field.py` -9 (`2f07043d`), `test_spatial_input_barriers.py` -28 -> `test_spatial_input_gate.py` +19 (`3b2499a6`), `test_spill_fraction_chainage.py` +5 (`7fcfd244`), `test_telemac_cas_validate.py` +7 (`b0f1f541`) | -18 | +13 |
+
+-46 from whole files, +22 from edited ones, net -24: 9,669 -> 9,645. The `[f-o]`
+residual is the same DERIVED class this note already named -
+`test_gemini_kwargs_fuzz.py` parametrizes over the live tool roster, so its id
+count tracks the registry without anyone editing a test.
+
+### What is superseded
+
+The standing "zero failures at these counts" law in `AGENTS.md` and `CLAUDE.md`
+hardcoded the contracts slice at 789 - a figure this note had already retired to
+521. Both now point at this file's LAST amendment instead of carrying a count in
+prose, so the next denominator move rots nothing but this table.

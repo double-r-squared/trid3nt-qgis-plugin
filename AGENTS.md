@@ -45,9 +45,10 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    invocation: `tests/` and `contracts/tests/` are both packages named
    `tests`, so a single pytest run covering both dies on
    ImportPathMismatchError. Baseline is EXACTLY ZERO failures in
-   every slice, with the contracts slice fully green at 789
-   passed / 0 failed. Anything else: investigate - a flake claim
-   requires an isolation rerun as proof.
+   every slice; the live per-slice counts are the baseline table in
+   `docs/decisions/0323-suite-re-baseline-after-the-test-cull.md`
+   (read its LAST amendment). Anything else: investigate - a flake
+   claim requires an isolation rerun as proof.
 2. Run gates FOREGROUND and wait for each summary line. Never
    background a gate and exit - your run dies with your process, and
    unverified work is not done work.
