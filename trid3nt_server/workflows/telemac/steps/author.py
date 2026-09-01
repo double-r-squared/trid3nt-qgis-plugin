@@ -113,7 +113,11 @@ _DEFAULTS: dict[str, Any] = {
     # every forcing series below is the same declared scenario evaluated over
     # whichever stretch of that one clock this run covers.
     "start_time_s": 0.0,
-    "graphic_period": 200,
+    # The output CADENCE, in minutes between written frames. It converts to the
+    # engine's own GRAPHIC PRINTOUT PERIOD - a count of steps - here, because the
+    # only thing that turns minutes into steps is the time step this same deck
+    # runs at. Absent, the run writes on :data:`_DEFAULT_GRAPHIC_PERIOD`.
+    "output_interval_min": None,
     "friction_law": None,
     "friction_coefficient": None,
     "velocity_diffusivity": None,
@@ -168,6 +172,19 @@ _DEFAULTS: dict[str, Any] = {
     "rain_duration_s": None,
 }
 
+#: How many solver steps between written frames when the sheet states no cadence.
+_DEFAULT_GRAPHIC_PERIOD = 200
+
+#: What the deck carries for the RECORD rather than for a steering keyword: the
+#: seed the reach was navigated from, where the source ended up, which dataset
+#: painted the bed, the granularity the mesh was measured at, the regulatory
+#: standard the narration compares against. None of it reaches a ``.cas``, and
+#: every one is named here so that a key which reaches no writer at all is a
+#: refusal instead of a knob that reads as applied.
+_RECORD_ONLY: frozenset[str] = frozenset((
+    "seed_lon", "seed_lat", "nav_direction", "distance_km", "bed_source",
+    "mesh_size_m", "release_lon", "release_lat", "do_standard_mgl"))
+
 
 class DeckAuthorError(RuntimeError):
     """A deck could not be authored; carries an open-set ``error_code``."""
@@ -175,6 +192,33 @@ class DeckAuthorError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
+
+
+def _consume(deck: Mapping[str, Any]) -> None:
+    """Every key the deck carries is one this author reads, or the run refuses.
+
+    A deck key the author never reaches is the worst kind of silence: the sheet
+    says the run was configured and the steering file it produced says otherwise,
+    and nothing between them disagrees out loud. Naming the key is the whole
+    point of the refusal - a typo, a knob whose writer left, and a step that
+    renamed its output all arrive here as the same unread key.
+    """
+    unknown = sorted(set(deck or {}) - set(_DEFAULTS) - _RECORD_ONLY)
+    if unknown:
+        raise DeckAuthorError(
+            "TELEMAC_DECK_KEY_UNCONSUMED",
+            f"the deck carries {unknown}, which no author writer reads and no "
+            "record row names, so the run would be solved as though they had "
+            "never been set. Either the caller has a typo or the writer that "
+            "consumed them left.")
+
+
+def _graphic_period(P: _Sheet) -> int:
+    """The GRAPHIC PRINTOUT PERIOD in solver steps, off the deck's own dt."""
+    minutes = getattr(P, "output_interval_min", None)
+    if minutes is None:
+        return _DEFAULT_GRAPHIC_PERIOD
+    return max(1, round(float(minutes) * 60.0 / float(P.time_step_s)))
 
 
 class _Sheet:
@@ -281,6 +325,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     outflow stage is read from. ``restart`` is the perfect-restart record this
     run writes for whatever run continues it.
     """
+    _consume(deck)
     P = _Sheet(deck)
     rundir = Path(rundir)
     substance = str(getattr(P, "substance_class", "tracer")).lower()
@@ -394,7 +439,7 @@ RESULTS FILE                    = {os.path.basename(results)}
 {restart_block(restart)}{continuation_block(getattr(P, "continue_from", None))}{sources_file_line}/
 TITLE : '{P.name} REACH'
 VARIABLES FOR GRAPHIC PRINTOUTS = {graphic_variables}
-GRAPHIC PRINTOUT PERIOD         = {P.graphic_period}
+GRAPHIC PRINTOUT PERIOD         = {_graphic_period(P)}
 LISTING PRINTOUT PERIOD         = 500
 /
 DURATION                        = {P.duration_s}
@@ -1224,12 +1269,13 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     All three share the free-exit outlet, the distributed Manning and the dry
     start. There are NO tracers: the outlet hydrograph is the product.
     """
+    _consume(deck)
     P = _Sheet(deck)
     amc = int(getattr(P, "amc_condition", 2) or 2)
     abstraction = int(getattr(P, "initial_abstraction_option", 1) or 1)
     duration_s = float(getattr(P, "duration_s", 3600.0))
     time_step = float(getattr(P, "time_step_s", 2.0))
-    graphic = int(getattr(P, "graphic_period", 100))
+    graphic = _graphic_period(P)
     name = str(getattr(P, "name", "watershed"))
 
     rain_window = getattr(P, "rain_duration_s", None)

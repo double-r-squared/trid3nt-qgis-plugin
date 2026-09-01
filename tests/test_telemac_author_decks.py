@@ -353,6 +353,7 @@ def test_every_surface_reference_profile_carries_seven_reals(tmp_path):
 
 
 def _dredge(tmp_path, **deck):
+    polygon = deck.pop("polygon", _REACH_POLYGON)
     return A.author_reach_deck(
         tmp_path, deck={"name": "reach", "duration_s": 3600.0,
                         "substance_class": "sediment", "erodible_bed": True,
@@ -360,7 +361,7 @@ def _dredge(tmp_path, **deck):
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
         cas_name="t2d_river.cas", liquid_boundary_order=_ORDER, bed=_BED,
         source_utm=_SOURCE, centerline_utm=_CENTERLINE,
-        reach_polygon_utm=deck.pop("polygon", _REACH_POLYGON))
+        reach_polygon_utm=polygon)
 
 
 def test_the_dig_field_auto_fills_from_the_water_held_back_from_its_banks(tmp_path):
@@ -427,10 +428,11 @@ def test_oil_names_its_steering_and_moves_the_release_into_the_fortran(tmp_path)
 # --------------------------------------------------------------------------- #
 # Rain on grid: three paths, and the deck says which.
 # --------------------------------------------------------------------------- #
-def _rog(tmp_path, **kwargs) -> str:
+def _rog(tmp_path, *, deck_extra=None, **kwargs) -> str:
     A.author_rog_deck(
         tmp_path, deck={"name": "creek", "duration_s": 7200.0,
-                        "time_step_s": 2.0, "graphic_period": 100},
+                        "time_step_s": 2.0, "output_interval_min": 3.0,
+                        **(deck_extra or {})},
         geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
         cas_name="t2d_rog.cas", cn_map="rog_cn_map.dat",
         friction_laws="rog_friction.tbl", zones_file="rog_zones.dat",
@@ -524,3 +526,52 @@ def test_a_hyetograph_that_is_not_one_refuses(tmp_path, blocks, code):
         A.write_hyetograph_file(tmp_path, "hyeto.txt", blocks=blocks,
                                 duration_s=3600.0)
     assert excinfo.value.error_code == code
+
+
+# --------------------------------------------------------------------------- #
+# The output cadence, and the deck key that reaches no writer.
+# --------------------------------------------------------------------------- #
+def test_the_cadence_converts_at_the_author_off_the_decks_own_time_step(tmp_path):
+    """Minutes between frames -> a count of solver steps, using THIS deck's dt.
+
+    The conversion belongs beside the keyword because the deck's own time step is
+    the only thing that turns one into the other; a step that converted upstream
+    would have to be handed the dt it does not own.
+    """
+    cas = _author(tmp_path, time_step_s=2.0, output_interval_min=5.0)
+    assert "GRAPHIC PRINTOUT PERIOD         = 150" in cas
+    # The same cadence on a finer step is a LARGER count of steps.
+    cas = _author(tmp_path, time_step_s=0.5, output_interval_min=5.0)
+    assert "GRAPHIC PRINTOUT PERIOD         = 600" in cas
+
+
+def test_no_cadence_leaves_the_decks_own_default_period(tmp_path):
+    cas = _author(tmp_path, time_step_s=2.0)
+    assert (f"GRAPHIC PRINTOUT PERIOD         = {A._DEFAULT_GRAPHIC_PERIOD}"
+            in cas)
+
+
+def test_a_cadence_finer_than_the_step_still_writes_every_step(tmp_path):
+    cas = _author(tmp_path, time_step_s=60.0, output_interval_min=0.1)
+    assert "GRAPHIC PRINTOUT PERIOD         = 1" in cas
+
+
+@pytest.mark.parametrize("author,extra", [
+    ("reach", {"graphic_period": 100}),
+    ("reach", {"outupt_interval_min": 5.0}),
+    ("rog", {"soil_store": True}),
+])
+def test_a_deck_key_no_writer_reads_refuses_by_name(tmp_path, author, extra):
+    """An unconsumed key is a knob that reads as applied and is not.
+
+    Every one of these would otherwise be dropped in silence: a keyword the
+    author stopped emitting, a typo one character off a real name, and a knob
+    whose whole implementation left the tree.
+    """
+    with pytest.raises(A.DeckAuthorError) as excinfo:
+        if author == "reach":
+            _author(tmp_path, **extra)
+        else:
+            _rog(tmp_path, runoff_path="native", deck_extra=extra)
+    assert excinfo.value.error_code == "TELEMAC_DECK_KEY_UNCONSUMED"
+    assert next(iter(extra)) in str(excinfo.value)

@@ -373,9 +373,8 @@ async def write_rain_on_grid_deck(
     is authored against the triangulation that was presented rather than an
     equivalent rebuild.
 
-    The output CADENCE is computed here because the time step is the template's
-    own: ``graphic_period`` is a count of steps, and the only party that knows how
-    many steps make a minute is the one that declared the step.
+    The output CADENCE rides the deck in MINUTES and converts to a count of
+    solver steps at the author, beside the keyword it is written into.
     """
     from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
         select_runoff_path,
@@ -403,10 +402,8 @@ async def write_rain_on_grid_deck(
         "amc_condition": int(infiltration["amc_condition"]),
         "duration_s": float(rain["duration_s"]),
         "time_step_s": float(time_step_s),
-        # A count of solver steps between written frames.
-        "graphic_period": (max(1, round(float(output_interval_min) * 60.0
-                                        / float(time_step_s)))
-                           if output_interval_min is not None else 200),
+        **({"output_interval_min": float(output_interval_min)}
+           if output_interval_min is not None else {}),
     }
     if rain.get("rain_duration_s") is not None:
         deck["rain_duration_s"] = float(rain["rain_duration_s"])
