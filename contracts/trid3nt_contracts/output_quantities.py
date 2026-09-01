@@ -47,9 +47,9 @@ what travels, the reader is bound where the heavy deps live.
 
 DEFAULT-OFF: the per-engine ``OUTPUT_QUANTITIES`` registry ships as an EMPTY
 scaffold (no engine migrated yet - that is STEP 3). ``get_output_registry`` of any
-engine returns ``()`` today, so nothing changes until an engine opts in. The
-executor (``trid3nt_server.workflows.shared.publish_quantities``) is importable + typed +
-unit-tested against a FAKE registry now; the per-engine fan-out is STEP 3.
+engine returns ``()`` today, so nothing changes until an engine opts in. No
+engine has opted in and the agent-side executor is unwritten; the per-engine
+fan-out is STEP 3.
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ class OutputQuantitySpec:
 #: stay pydantic/rasterio-free, so a reader that needs rasterio/flopy/pyswmm
 #: cannot live here). Each engine's agent-side ``*_quantity_readers`` module
 #: clones these scaffold rows with a bound reader (``dataclasses.replace``) and
-#: hands the runtime specs to ``publish_quantities``.
+#: hands the runtime specs to the agent-side executor.
 #:
 #: DEFAULT-OFF discipline: ``default_on`` gates which quantities the executor
 #: publishes. The EXISTING headline quantity per engine (plume / susceptibility /

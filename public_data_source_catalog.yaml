@@ -840,8 +840,7 @@ entries:
           &Coverage=mrlc_download:NLCD_2021_Land_Cover_L48
           &CRS=EPSG:4326&BBOX=<west>,<south>,<east>,<north>
           &WIDTH=<px>&HEIGHT=<px>&FORMAT=GeoTIFF
-      Returns uint8 GeoTIFF with canonical NLCD integers (see manning_mapping.csv
-      v1.0.0 for the complete class→Manning's-n mapping). Nodata=255.
+      Returns uint8 GeoTIFF with canonical NLCD integers. Nodata=255.
       Width/Height: use ceil(bbox_deg / 0.00009) for ~10m pixel size.
       CRITICAL: do NOT use WMS GetMap (mrlc_display workspace) for model inputs —
       it returns palette-encoded indices (1–21), NOT canonical NLCD integers.

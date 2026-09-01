@@ -2652,3 +2652,46 @@ plus the `TelemacWaveLayerURI` / `TelemacCoastalLayerURI` contract types they
 return. Their only callers were `steps/wave.py` and `steps/coastal.py`. CONDITION
 MET as of this landing; the removal reaches into `contracts/` and belongs to a
 landing that owns that path.
+
+## `workflows/shared/` ORPHANS (findings walkthrough ruling 10, 2026-08-31)
+
+CONDITION: nine modules with ZERO product consumers. Each was written for an
+engine that left in the fresh-start purge - the SFINCS/SWMM roughness ladder, the
+MODFLOW aquifer and soil-hydraulics resolvers, the GeoClaw/SWMM discharge and
+site resolvers - or, in `publish_quantities`' case, for a per-engine registry
+(`trid3nt_contracts.output_quantities`) that still ships as an EMPTY scaffold no
+engine ever opted into. The only things importing them were each other and their
+own anchor tests: a module whose only reader is its own test is a test.
+
+MOVED to `/home/nate/Documents/trid3nt-attic`, mirroring their repo-relative
+paths (reading copies; on no import path) - 2,408 LOC:
+- `aquifer_resolve.py` (659) + `soil_hydraulics.py` (261): the aquifer property
+  ladder and the Rosetta/Rawls pedotransfer functions under it.
+- `roughness_resolve.py` (315) + `manning.py` (150) + `data/manning_mapping.csv`:
+  the NLCD -> Manning's n ladder and the version-pinned mapping it read. The CSV
+  had no other reader, so `shared/data/` goes with it.
+- `water_table_interp.py` (351): the water-table surface interpolator.
+- `publish_quantities.py` (358): the declared-quantity publish executor.
+- `discharge_resolve.py` (209), `site_resolve.py` (56), `point_memo.py` (49).
+
+DELETED, tests with their subjects - 522 LOC: `tests/test_discharge_resolve.py`
+(46), `tests/test_publish_quantities.py` (308),
+`tests/test_shared_soil_hydraulics.py` (84),
+`tests/test_shared_water_table_interp.py` (84).
+
+KEPT: `streeter_phelps.py` - it is not an orphan, it wires into the do-sag proof
+as the deterministic analytical overlay (findings walkthrough ruling 4).
+
+REPOINTED: `contracts/trid3nt_contracts/output_quantities.py` no longer names the
+deleted executor as importable-and-tested (it names the STEP-3 fan-out that would
+bind one); `public_data_source_catalog.yaml`'s NLCD entry no longer sends a reader
+to a mapping CSV that is not in the tree; `workflows/README.md` lists what
+`shared/` actually holds.
+
+QUEUED, adjacent orphans NOT taken here:
+- `workflows/shared/tide_series.py`: its consumer was the coastal front (ruling
+  8). Only `tests/test_tide_series_datum.py` reads it now. CONDITION: none named
+  - a tide series is what a coastal rebuild at rung 4 would want first.
+- `contracts/trid3nt_contracts/output_quantities.py`: the registry ships empty,
+  no engine declares quantities, and its executor is now gone. CONDITION MET for
+  the scaffold; the removal is a `contracts/` landing.

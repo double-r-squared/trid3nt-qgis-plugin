@@ -17,7 +17,7 @@ engine package holds the templates that speak it.
 | --- | --- |
 | `lib/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
 | `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
-| `shared/` | Engine-agnostic seams several engines need: AOI acquisition, forcing and property resolvers, the styling/publish seams, animation frames, run products. |
+| `shared/` | Engine-agnostic seams the live engines need: AOI acquisition, the tide series, COG io, animation frames, the publish/manifest seams, solve progress, supplied geometry, run products. |
 | `solver/` | Solve dispatch and what came back: `solver.py` (the box), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: seven templates, the facade, the shared step family. Has its own map. |
 
