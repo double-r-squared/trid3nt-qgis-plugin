@@ -120,7 +120,33 @@ assert T.Telemac3dConfig(**stratified).nplan == 11;\
 assert sorted(E._MODULES) == ['artemis', 'telemac2d', 'telemac3d', 'tomawac'];\
 assert all(callable(getattr(c, 'run_one_time_step', None)) for c in (Telemac2d, Telemac3d, Tomawac, Artemis));\
 assert pathlib.Path('/opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f').is_file();\
+assert E._measure_ntimestep(pathlib.Path('/tmp'), '') == {};\
+assert E._measure_ntimestep(pathlib.Path('/tmp'), 'nothing_here.slf') == {};\
 print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules step-capable, config maps and baked raindef3 all present')"
+
+# The frame-count reader, exercised on a REAL SELAFIN written in this image. The
+# guard above proves it stays quiet on nothing; this proves it can count, which
+# is the half a guard can pass without.
+RUN python -c "\
+import sys, numpy as np;\
+sys.path.insert(0, '/opt/trid3nt/workers/telemac');\
+sys.path.insert(0, '/opt/conda/opentelemac/scripts/python3');\
+import pathlib, entrypoint as E;\
+from telapy.api.hermes import BND_POINT, TRIANGLE, HermesFile;\
+x = np.array([0., 10., 0., 10.]); y = np.array([0., 0., 10., 10.]);\
+ikle = np.array([[0, 1, 2], [1, 3, 2]], dtype=np.int32);\
+ipobo = np.array([1, 2, 4, 3], dtype=np.int32);\
+geo = HermesFile('/tmp/probe.slf', 'SERAFIN', access='w', boundary_file='/tmp/probe.cli');\
+geo.set_header('NTIMESTEP PROBE', 1, ['BOTTOM          '], ['M               ']);\
+geo.set_mesh(2, TRIANGLE, 3, 4, 0, 2, 4, ikle, ipobo, np.arange(1, 5, dtype=np.int32), x, y, 1, [2024, 1, 1], [0, 0, 0], 0., 0.);\
+z = np.zeros(4);\
+geo.set_bnd(BND_POINT, 4, np.array([[0], [1], [3], [2]], dtype=np.int32), *([np.full(4, 2, dtype=np.int32)] * 3), z, z.copy(), z.copy(), z.copy(), np.full(4, 2, dtype=np.int32), z.copy(), z.copy(), z.copy(), np.arange(1, 5, dtype=np.int32));\
+geo.add_data('BOTTOM          ', 'M               ', 0., 0, True, z.copy());\
+geo.add_data('BOTTOM          ', 'M               ', 60., 1, True, z.copy());\
+geo.close();\
+got = E._measure_ntimestep(pathlib.Path('/tmp'), 'probe.slf');\
+assert got == {'ntimestep': 2}, got;\
+print('telemac worker OK: ntimestep measured off a real SELAFIN ->', got)"
 
 # The negative half of the same gate, in a SEPARATE process: an unknown case
 # field must refuse loudly. A dropped key silently no-ops the knob the caller

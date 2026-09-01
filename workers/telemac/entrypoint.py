@@ -162,6 +162,31 @@ def _listing_tail(data_dir: Path) -> dict[str, str]:
     return {"listing_tail": text[-_LISTING_TAIL_CHARS:]} if text else {}
 
 
+def _measure_ntimestep(data_dir: Path, result_slf: str) -> dict[str, Any]:
+    """How many records the result the server named actually carries.
+
+    MEASURED off the file this run wrote, never derived from the deck: a count
+    computed from DURATION over the graphic period is an assertion about a file
+    nobody opened, and it is exactly the assertion that stays right while the
+    solve stops short. Unmeasurable is reported as the absence of the key rather
+    than as a zero, because a run with no frames and a run nobody could read are
+    not the same finding.
+    """
+    if not result_slf:
+        return {}
+    try:
+        from data_manip.extraction.telemac_file import TelemacFile
+
+        study = TelemacFile(str(data_dir / result_slf))
+        try:
+            return {"ntimestep": int(study.ntimestep)}
+        finally:
+            study.close()
+    except Exception as exc:  # noqa: BLE001 -- an unreadable result is not a failed solve
+        LOG.warning("ntimestep unmeasurable on %s: %s", result_slf, exc)
+        return {}
+
+
 def _on_step(study: Any, step: int, steps: int) -> None:
     """The ONE point a run can be observed or steered from, once per step.
 
@@ -285,8 +310,10 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     """Run the deck the server authored, and check it produced what it promised.
 
     ``echo`` is copied into the metrics VERBATIM: the utm zone, the extent, the
-    node and element counts are facts the server measured, and a fact re-derived
-    in the container is a second answer that can disagree with the first.
+    node and element counts and the name of the result file are facts the server
+    already holds, and a fact re-derived in the container is a second answer that
+    can disagree with the first. What the container adds is what only it can
+    know - the frame count of the file the solve just wrote.
     """
     case = _strict_section("case", body, _CASE_FIELDS)
     module = str(case.get("module") or "")
@@ -333,12 +360,16 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
 
     code = _run_child(data_dir, argv)
     missing = [r for r in results if not (data_dir / r).exists()]
+    echo = dict(case.get("echo") or {})
     metrics: dict[str, Any] = {
-        **dict(case.get("echo") or {}),
+        **echo,
         "module": module,
         "family": str(case.get("family") or module),
         "correct_end": code == 0 and not missing,
     }
+    if not missing:
+        metrics.update(_measure_ntimestep(data_dir,
+                                          str(echo.get("result_slf") or "")))
     if code != 0:
         metrics["error_code"] = "TELEMAC_SOLVE_FAILED"
         metrics["error"] = f"{module} exited with code {code}"

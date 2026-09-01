@@ -453,6 +453,10 @@ async def write_rain_on_grid_deck(
                   "npoin": int(catchment.get("node_count") or 0),
                   "nelem": int(catchment.get("element_count") or 0),
                   "mesh_size_m": mesh_size_m,
+                  # WHICH file carries the time series. The author wrote the
+                  # RESULTS FILE statement, so the name is the server's; the
+                  # worker copies it and measures the file it names.
+                  "result_slf": _RESULT,
                   "bed_source": str(provenance.get("dem_source") or "staged")}),
         "outputs": [_RESULT, _GEOMETRY_DEST, _BOUNDARY_DEST, "full_listing.log",
                     "telemac_metrics.json", *authored],

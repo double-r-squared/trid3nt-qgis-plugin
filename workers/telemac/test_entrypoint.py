@@ -30,7 +30,8 @@ def _case(tmp_path: Path, **over) -> dict:
     (tmp_path / "t2d.cas").write_text("/ deck\n", encoding="utf-8")
     case = {"module": "telemac2d", "steering": "t2d.cas",
             "results": ["r2d.slf"], "family": "river_dye",
-            "echo": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080}}
+            "echo": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080,
+                     "result_slf": "r2d.slf"}}
     case.update(over)
     return {"case": case, "run_id": "RUN123"}
 
@@ -362,7 +363,58 @@ def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
     assert metrics["run_id"] == "RUN123" and isinstance(metrics["wall_s"], float)
     # the echo is the SERVER's measurement, copied rather than re-derived
     assert metrics["utm_epsg"] == 32612 and metrics["npoin"] == 4211
+    assert metrics["result_slf"] == "r2d.slf"
     assert "listing_tail" not in metrics
+
+
+def test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero(tmp_path,
+                                                               monkeypatch):
+    """A frame count nobody could read is not a run with no frames.
+
+    The seven bytes below are not a SELAFIN. Reporting ntimestep=0 for them
+    would say the solve wrote an empty time series, which is a different
+    finding from "this file could not be opened" - and the packet assembler
+    settles the GIF requirement on exactly that distinction.
+    """
+    def _child(data_dir, argv):
+        (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
+        return 0
+
+    monkeypatch.setattr(E, "_run_child", _child)
+    assert E.main(_write_manifest(tmp_path, _case(tmp_path))) == 0
+    metrics = _metrics(tmp_path)
+    assert metrics["correct_end"] is True
+    assert "ntimestep" not in metrics
+
+
+def test_the_frame_count_is_measured_off_the_file_the_echo_names(tmp_path,
+                                                                 monkeypatch):
+    """result_slf is the SERVER's name; the count is the CONTAINER's measurement."""
+    seen = {}
+
+    def _child(data_dir, argv):
+        (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
+        return 0
+
+    def _measure(data_dir, result_slf):
+        seen["asked"] = result_slf
+        return {"ntimestep": 31}
+
+    monkeypatch.setattr(E, "_run_child", _child)
+    monkeypatch.setattr(E, "_measure_ntimestep", _measure)
+    case = _case(tmp_path)
+    case["case"]["echo"]["result_slf"] = "r2d.slf"
+    assert E.main(_write_manifest(tmp_path, case)) == 0
+    assert seen["asked"] == "r2d.slf"
+    assert _metrics(tmp_path)["ntimestep"] == 31
+
+
+def test_a_failed_solve_measures_nothing(tmp_path, monkeypatch):
+    """A run that wrote no result has no file to count frames off."""
+    monkeypatch.setattr(E, "_run_child", lambda data_dir, argv: 0)
+    monkeypatch.setattr(E, "_measure_ntimestep",
+                        lambda *_a: pytest.fail("measured a result never written"))
+    assert E.main(_write_manifest(tmp_path, _case(tmp_path))) == 1
 
 
 def test_a_clean_exit_that_wrote_no_result_is_not_a_solve(tmp_path, monkeypatch):

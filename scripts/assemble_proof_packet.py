@@ -25,8 +25,10 @@ WHAT IT VERIFIES, MECHANICALLY
 
   * TIME-STEPPED IS MEASURED, NEVER REMEMBERED. The frame count is read off the
     run's own SELAFIN - its header, then arithmetic over the file's length - and
-    cross-checked against the worker's recorded ``ntimestep``. A run with more
-    than one frame OWES a GIF; one frame is exempt with the reason written down.
+    cross-checked against the worker's recorded ``ntimestep`` - a second reader
+    of the same file, and a time-stepped run that offers none is itself a gap. A
+    run with more than one frame OWES a GIF; one frame is exempt with the reason
+    written down.
   * THE GIF ACTUALLY EVOLVES. Every frame is extracted through PIL (with
     ``.copy()``, because Pillow reuses its decode buffer and a list of un-copied
     frames is N references to the last one), hashed, and required to be distinct.
@@ -580,26 +582,38 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     # ------------------------------------------------------------------ #
     s3 = _s3()
     completion = _read_json(s3, bucket, f"{run_id}/completion.json")
-    result_slf = completion.get("result_slf")
-    measured: dict[str, Any]
+    # Both keys are the RUN'S OWN: the server names the result file on the
+    # manifest echo and the worker copies it verbatim, then measures the frame
+    # count off the file it just wrote. This reads them; it does not reconstruct
+    # either, because a packet that guesses which file to open cannot report that
+    # the run and its metrics disagree.
+    result_slf = str(completion.get("result_slf") or "")
+    recorded = completion.get("ntimestep")
+    measured: dict[str, Any] = {"recorded_ntimestep": recorded}
     if not result_slf:
-        measured = {"frames": -1, "error": f"run {run_id} publishes no "
-                                           "completion.json/result_slf to measure"}
+        measured |= {"frames": -1, "error": f"run {run_id} publishes no "
+                                            "completion.json/result_slf to measure"}
     else:
         try:
-            measured = measure_frames(s3, bucket, run_id, str(result_slf))
+            measured |= measure_frames(s3, bucket, run_id, result_slf)
         except Exception as exc:  # noqa: BLE001 - unmeasurable IS the finding
-            measured = {"frames": -1, "slf": result_slf,
-                        "error": f"{type(exc).__name__}: {exc}"}
+            measured |= {"frames": -1, "slf": result_slf,
+                         "error": f"{type(exc).__name__}: {exc}"}
     frames = int(measured.get("frames", -1))
-    recorded = completion.get("ntimestep")
-    measured["recorded_ntimestep"] = recorded
     if frames < 0:
         missing.append(
             "frames: the time-stepped decision is UNMEASURABLE - "
             f"{measured.get('error')}. The GIF requirement cannot be settled "
             "without reading the run's own result file.")
-    elif recorded is not None and int(recorded) != frames:
+    elif recorded is None and frames > 1:
+        # A single-field run has no time series to truncate, so there is nothing
+        # for a second reader to disagree with; a time-stepped one that reports no
+        # frame count of its own leaves this script as the only reader of the file.
+        missing.append(
+            f"frames: the SELAFIN carries {frames} frames and the run records no "
+            "ntimestep to cross-check them against - one reader is not a "
+            "cross-check")
+    elif int(recorded) != frames:
         missing.append(
             f"frames: the SELAFIN carries {frames} frames but the worker recorded "
             f"ntimestep={recorded} - the file and the metrics disagree")

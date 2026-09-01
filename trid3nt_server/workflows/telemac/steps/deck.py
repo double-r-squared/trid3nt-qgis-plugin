@@ -722,6 +722,10 @@ async def write_reach_deck(
                   "npoin": int(mesh.get("node_count") or 0),
                   "nelem": int(mesh.get("element_count") or 0),
                   "mesh_size_m": mesh_size_m,
+                  # WHICH file carries the time series. The author wrote the
+                  # RESULTS FILE statement, so the name is the server's; the
+                  # worker copies it and measures the file it names.
+                  "result_slf": _RESULT,
                   "bed_source": bed_source}),
         "outputs": outputs,
         "inputs": [
