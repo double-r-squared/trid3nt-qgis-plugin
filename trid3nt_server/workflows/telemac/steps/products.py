@@ -319,6 +319,36 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
         logger.warning("oil slick layer skipped: %s", exc)
 
 
+async def _journal_wetted_fraction(slf_path: str) -> None:
+    """Say out loud how much of the solved domain the run actually wet.
+
+    The reach is meshed from the mapped ACTIVE CHANNEL, which is a bankfull
+    polygon: at low flow the solve correctly leaves part of it dry, and the
+    conveyance width the answer rests on is narrower than the picture. The number
+    rides the journal because a reader needs it beside the map; it decides
+    nothing, and a run whose result cannot be measured says nothing rather than
+    losing its products over a heuristic.
+    """
+    from trid3nt_server.workflows.lib import journal_note
+
+    from .run_reads import wetted_fraction
+
+    try:
+        measured = await asyncio.to_thread(wetted_fraction, slf_path)
+    except Exception as exc:  # noqa: BLE001 -- a heuristic never voids the run
+        logger.warning("wetted fraction unmeasurable: %s", exc)
+        return
+    if not measured:
+        return
+    journal_note(
+        f"wetted fraction: {measured['wetted_fraction']:.0%} of the "
+        f"{measured['mesh_area_m2'] / 1e6:.3g} km2 solved domain still held more "
+        f"than {measured['wet_tol_m']:g} m of water at the final frame "
+        f"({measured['wet_area_m2'] / 1e6:.3g} km2). The domain is the mapped "
+        "active channel, so the dry remainder is bar and bank the flow did not "
+        "reach at this discharge - a measured heuristic, not a verdict.")
+
+
 async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
                                carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
     """Postprocess the solved reach into its published layers + narration scalars."""
@@ -338,6 +368,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
             postprocess_telemac, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             reach_name=reach_name, substance=substance,
             substance_class=deck["substance_class"])
+        await _journal_wetted_fraction(slf_path)
     finally:
         Path(slf_path).unlink(missing_ok=True)
 
@@ -432,6 +463,7 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
             upstream_do_mgl=float(do_sag_config["upstream_do_mgl"]),
             bod_upstream_mgl=float(do_sag_config["bod_mgl"]),
             standard_mgl=float(do_sag_config["standard_mgl"]))
+        await _journal_wetted_fraction(slf_path)
     finally:
         Path(slf_path).unlink(missing_ok=True)
 

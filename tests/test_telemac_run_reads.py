@@ -185,3 +185,97 @@ def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
         _balance(1800.0, -1.0, error="0.9E-03")
     assert R.continuity_rel_error(listing) == 0.9e-3
     assert R.continuity_rel_error("no closure here") is None
+
+
+# --------------------------------------------------------------------------- #
+# The wetted fraction: what the run says about the domain it did NOT wet.
+# --------------------------------------------------------------------------- #
+def _selafin(monkeypatch, depths):
+    """Two disjoint triangles - a 50 m2 channel and a 150 m2 bar beside it.
+
+    The areas differ so the measurement can be told apart from a node count: half
+    the nodes wet is a QUARTER of the domain wet, and only one of those two
+    numbers is the conveyance a reader is looking for.
+    """
+    import numpy as np
+
+    from trid3nt_server.workflows.telemac import postprocess_telemac as P
+
+    mesh = {"x": np.array([0.0, 10.0, 0.0, 20.0, 50.0, 20.0]),
+            "y": np.array([0.0, 0.0, 10.0, 0.0, 0.0, 10.0]),
+            "ikle": np.array([[0, 1, 2], [3, 4, 5]]),
+            "data": {"WATER DEPTH": np.array([[0.0] * 6, list(depths)])}}
+    monkeypatch.setattr(P, "read_selafin", lambda _path: mesh)
+
+
+def test_the_wetted_fraction_is_area_weighted_off_the_final_frame(monkeypatch):
+    """The small wet triangle is a quarter of the domain, not half of it.
+
+    And the LAST frame decides it: frame zero is bone dry above, so a reader
+    taking the first record would call this run empty.
+    """
+    _selafin(monkeypatch, [1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    got = R.wetted_fraction("ignored.slf")
+    assert got["mesh_area_m2"] == pytest.approx(200.0)
+    assert got["wet_area_m2"] == pytest.approx(50.0)
+    assert got["wetted_fraction"] == pytest.approx(0.25)
+
+
+def test_a_film_thinner_than_the_tolerance_is_not_conveyance(monkeypatch):
+    """A drying bar keeps a film; counting it wet makes the number say nothing."""
+    _selafin(monkeypatch, [0.001] * 6)
+    assert R.wetted_fraction("ignored.slf")["wetted_fraction"] == 0.0
+    _selafin(monkeypatch, [1.0] * 6)
+    assert R.wetted_fraction("ignored.slf")["wetted_fraction"] == 1.0
+
+
+def test_a_result_with_no_depth_measures_nothing(monkeypatch):
+    import numpy as np
+
+    from trid3nt_server.workflows.telemac import postprocess_telemac as P
+
+    monkeypatch.setattr(P, "read_selafin", lambda _path: {
+        "x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
+        "data": {"DYE": np.zeros((1, 3))}})
+    assert R.wetted_fraction("ignored.slf") == {}
+
+
+def test_the_reach_run_says_out_loud_what_it_did_not_wet(monkeypatch):
+    """The heuristic lands on the run journal, and it GATES nothing.
+
+    A run that wet a quarter of its bankfull domain is a correct low-flow run
+    with an overstated conveyance width, and the only thing wrong with it is a
+    reader who cannot tell. So the number is said; nothing is refused over it.
+    """
+    import asyncio
+
+    from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.telemac.steps import products as PR
+
+    _selafin(monkeypatch, [1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    token = bind_notes()
+    try:
+        asyncio.run(PR._journal_wetted_fraction("ignored.slf"))
+    finally:
+        notes = drain_notes(token)
+    assert len(notes) == 1
+    assert "wetted fraction: 25%" in notes[0]
+    assert "0.02 m" in notes[0] and "active channel" in notes[0]
+
+
+def test_an_unmeasurable_result_costs_the_run_nothing(monkeypatch):
+    import asyncio
+
+    from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.telemac import postprocess_telemac as P
+    from trid3nt_server.workflows.telemac.steps import products as PR
+
+    def _boom(_path):
+        raise RuntimeError("not a SELAFIN")
+
+    monkeypatch.setattr(P, "read_selafin", _boom)
+    token = bind_notes()
+    try:
+        asyncio.run(PR._journal_wetted_fraction("ignored.slf"))
+    finally:
+        assert drain_notes(token) == []

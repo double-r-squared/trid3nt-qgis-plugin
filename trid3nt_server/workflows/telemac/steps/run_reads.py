@@ -28,7 +28,14 @@ __all__ = [
     "parse_drogues",
     "sediment_scalars",
     "surface_d50_spread",
+    "wetted_fraction",
 ]
+
+#: The depth an element has to hold to count as wet. TELEMAC's own tidal-flat
+#: treatment leaves films thinner than this on a drying bar, and counting them as
+#: conveyance is what would make the heuristic agree with the domain by
+#: construction.
+_WET_TOL_M = 0.02
 
 #: GAIA prints its closure once per class under this heading, in kg. The block is
 #: cut at the end-of-run marker so a run that printed intermediate balances is
@@ -309,3 +316,41 @@ def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
         "runoff_volume_m3": round(max(volume, 0.0), 3),
         "outlet_boundary": int(boundary),
     }
+
+
+def wetted_fraction(slf_path: str | Path, *, wet_tol_m: float = _WET_TOL_M
+                    ) -> dict[str, Any]:
+    """How much of the solved domain still held water at the final frame.
+
+    The reach domain is the mapped ACTIVE CHANNEL, which at bankfull includes the
+    gravel bars a low flow leaves dry. TELEMAC wets and dries them natively, so a
+    low-flow run is correct and its conveyance width is still narrower than the
+    domain it was solved on. Nothing about the result says so, and a reader
+    looking at a ribbon inside a wider mesh has no number to read it against.
+
+    So the run measures it: mesh area against wet area at the last frame, by
+    element, an element counting as wet when its own mean depth clears the
+    tolerance. A HEURISTIC, and it gates nothing - it is the number a reader
+    needs beside a picture, not a verdict on the run.
+    """
+    import numpy as np
+
+    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+
+    mesh = read_selafin(slf_path)
+    depth = mesh["data"].get("WATER DEPTH")
+    ikle = np.asarray(mesh["ikle"], dtype=int)
+    if depth is None or np.asarray(depth).size == 0 or ikle.size == 0:
+        return {}
+    x, y = np.asarray(mesh["x"]), np.asarray(mesh["y"])
+    a, b, c = ikle[:, 0], ikle[:, 1], ikle[:, 2]
+    area = 0.5 * np.abs((x[b] - x[a]) * (y[c] - y[a])
+                        - (x[c] - x[a]) * (y[b] - y[a]))
+    final = np.asarray(depth)[-1]
+    wet = area[final[ikle].mean(axis=1) > float(wet_tol_m)]
+    total = float(area.sum())
+    if total <= 0.0:
+        return {}
+    return {"mesh_area_m2": total, "wet_area_m2": float(wet.sum()),
+            "wetted_fraction": round(float(wet.sum()) / total, 4),
+            "wet_tol_m": float(wet_tol_m)}
