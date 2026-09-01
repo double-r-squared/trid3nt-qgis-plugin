@@ -40,7 +40,6 @@ from trid3nt_server.workflows.telemac.steps import (
     AcquireCatchment,
     Agitation,
     CarrierDischarge,
-    Coastal,
     Geocode,
     Products,
     RainOnGrid,
@@ -49,14 +48,11 @@ from trid3nt_server.workflows.telemac.steps import (
     SolveOpenWater,
     SolveRainOnGrid,
     Stratified,
-    Wave,
     WriteDeck,
     write_agitation_deck,
-    write_coastal_deck,
     write_rain_on_grid_deck,
     write_reach_deck,
     write_stratified_deck,
-    write_wave_deck,
 )
 
 __all__ = ["TelemacWorkflow", "mesh_deck_fields"]
@@ -119,14 +115,6 @@ def _read_dissolved_oxygen(*, solve: Any, physics: Physics, forcing: Forcing) ->
         carrier_discharge=forcing.values.get("carrier")).named("do_field")
 
 
-def _read_coastal(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Coastal.products(deck=Ref("deck"), solve=solve).named("inundation")
-
-
-def _read_wave(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Wave.products(deck=Ref("deck"), solve=solve).named("wave_field")
-
-
 def _read_agitation(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Agitation.products(deck=Ref("deck"), solve=solve).named("agitation")
 
@@ -151,7 +139,6 @@ _REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh"),
 _AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": DataRef("mesh")}
 
 _REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
-_COASTAL_FORCING: Mapping[str, str] = {"water_level": "water_level"}
 _RAIN_FORCING: Mapping[str, str] = {"rain": "rain"}
 
 #: The known TELEMAC physics processes. See :class:`_Process`.
@@ -171,15 +158,6 @@ _PROCESSES: dict[str, _Process] = {
         deck=WriteDeck.telemac, writer=write_reach_deck,
         solve=_reach_solve, read=_read_dissolved_oxygen,
         forcing_fields=_REACH_FORCING, extra_fields=_REACH_EXTRA),
-    "coastal_surge": _Process(
-        domain_kw="aoi", domain_ref=Ref("aoi"),
-        deck=Coastal.deck, writer=write_coastal_deck,
-        solve=_open_water_solve, read=_read_coastal,
-        forcing_fields=_COASTAL_FORCING),
-    "wave_spectrum": _Process(
-        domain_kw="aoi", domain_ref=Ref("aoi"),
-        deck=Wave.deck, writer=write_wave_deck,
-        solve=_open_water_solve, read=_read_wave, forcing_fields={}),
     "harbor_agitation": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
         deck=Agitation.deck, writer=write_agitation_deck,
@@ -248,9 +226,9 @@ class TelemacWorkflow(Workflow):
           of the reach. ``seed_coords`` pins that seed - a template whose ask
           names where the substance enters the water is naming which stretch to
           model, and the one centerline is navigated from there.
-        * ``open_water`` - place or extent -> the AOI, and nothing else. A coastal
-          strip, a lake fetch and a harbour basin are all bounded by the ask
-          itself; there is no flowline to find and no carrier to resolve.
+        * ``open_water`` - place or extent -> the AOI, and nothing else. A lake
+          fetch and a harbour basin are bounded by the ask itself; there is no
+          flowline to find and no carrier to resolve.
         * ``catchment`` - the OUTLET first, then the analysis window around it.
           The basin's shape is the terrain's answer rather than the geocoder's, so
           a place bbox cannot bound it: the AOI is derived from the pour point
@@ -315,7 +293,7 @@ class TelemacWorkflow(Workflow):
 
         ``physics`` is the process SELECTOR and is required: it must never default,
         because a template that forgot to name its physics would otherwise
-        dispatch a coastal or wave deck to the wrong solver silently. A missing
+        dispatch an agitation or stratified deck to the wrong solver silently. A missing
         selector must raise, not fall back.
         """
         if physics is None:

@@ -115,7 +115,7 @@ def test_rasterize_clips_to_channel_and_masks_subfloor():
 # --------------------------------------------------------------------------- #
 def _open_water_mesh(n=9, span=0.05, origin=(-87.6, 46.7)):
     """A regular triangulated node grid standing in for a coarse open-water mesh
-    (nodes ~1 km apart over a lake AOI, the telemac3d/coastal/tomawac geometry)."""
+    (nodes ~1 km apart over a lake AOI, the open-water geometry)."""
     lon0, lat0 = origin
     xs = np.linspace(lon0, lon0 + span, n)
     ys = np.linspace(lat0, lat0 + span, n)

@@ -90,8 +90,7 @@ def test_every_telemac_spec_declares_no_network():
     import trid3nt_server.workflows.telemac.run_telemac  # noqa: F401
     from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
-    for name in ("telemac_coastal", "tomawac_wave", "artemis_agitation",
-                 "telemac3d_strat", "telemac_river_dye"):
+    for name in ("artemis_agitation", "telemac3d_strat", "telemac_river_dye"):
         assert LOCAL_SOLVER_SPEC_REGISTRY[name]().network == "none", name
 
 
@@ -112,13 +111,13 @@ def test_a_real_domain_with_no_staged_bed_refuses():
     )
 
     with pytest.raises(OpenWaterError, match="no bed raster was staged"):
-        staged_bed_inputs(None, real=True, section="coastal")
+        staged_bed_inputs(None, real=True, section="agitation")
     with pytest.raises(OpenWaterError):
-        staged_bed_inputs({"uri": None}, real=True, section="wave")
+        staged_bed_inputs({"uri": None}, real=True, section="stratified")
 
 
 def test_an_idealized_domain_stages_nothing():
-    """An analytic beach samples nothing, so it must not demand a raster."""
+    """A Berkhoff shoal samples nothing, so it must not demand a raster."""
     from trid3nt_server.workflows.telemac.steps.open_water import staged_bed_inputs
 
     assert staged_bed_inputs(None, real=False, section="agitation") == []
@@ -130,7 +129,7 @@ def test_a_staged_bed_becomes_one_manifest_input_row():
         staged_bed_inputs,
     )
 
-    rows = staged_bed_inputs({"uri": "s3://c/bed.tif"}, real=True, section="coastal")
+    rows = staged_bed_inputs({"uri": "s3://c/bed.tif"}, real=True, section="agitation")
     assert rows == [{"gs_uri": "s3://c/bed.tif", "dest": STAGED_BED_DEST}]
 
 
@@ -146,24 +145,17 @@ def test_only_a_real_geography_mode_takes_the_fetched_bed(mode, expected):
     """A verification domain's bed is authored by the physics, whatever is asked."""
     from trid3nt_server.workflows.telemac.steps.open_water import solves_on_real_bed
 
-    assert solves_on_real_bed("noaa_greatlakes", domain_kind="lake",
+    assert solves_on_real_bed("noaa_greatlakes",
                               lon=-87.38, lat=46.54, mode=mode,
                               real_bed_modes=("diffraction",)) is expected
-
-
-def test_a_coastal_domain_is_real_unless_it_was_asked_to_be_synthetic():
-    from trid3nt_server.workflows.telemac.steps.open_water import solves_on_real_bed
-
-    assert solves_on_real_bed("noaa_demall", domain_kind="coast") is True
-    assert solves_on_real_bed("synthetic", domain_kind="coast") is False
 
 
 def test_an_auto_lake_bed_is_real_only_inside_the_covered_lakes():
     from trid3nt_server.workflows.telemac.steps.open_water import solves_on_real_bed
 
-    assert solves_on_real_bed("auto", domain_kind="lake",
+    assert solves_on_real_bed("auto",
                               lon=-87.1, lat=46.95) is True      # Superior
-    assert solves_on_real_bed("auto", domain_kind="lake",
+    assert solves_on_real_bed("auto",
                               lon=-95.0, lat=39.0) is False      # Kansas
 
 
@@ -197,8 +189,7 @@ def test_a_solver_identifier_resolves_to_its_engine():
     )
 
     assert resolve_engine("artemis_agitation") == "telemac"
-    assert resolve_engine("tomawac_wave") == "telemac"
-    assert resolve_engine("telemac_coastal") == "telemac"
+    assert resolve_engine("telemac3d_strat") == "telemac"
     assert engine_paths("artemis_agitation") == engine_paths("telemac")
 
 
@@ -226,7 +217,7 @@ def test_a_moved_engine_names_the_commits_that_moved_it():
     shas = [s for s in out.stdout.split() if s]
     if len(shas) < 3:
         pytest.skip("not enough telemac history in this checkout")
-    warning = staleness(code_sha=shas[2], engine="telemac_coastal")
+    warning = staleness(code_sha=shas[2], engine="artemis_agitation")
     assert warning is not None
     assert warning["kind"] == "engine_code_moved"
     assert warning["engine"] == "telemac"

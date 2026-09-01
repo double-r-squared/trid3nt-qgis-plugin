@@ -1,6 +1,6 @@
 """TELEMAC results-mesh producer -- write ``outputs.json``, publish via the seam.
 
-The TELEMAC-2D legs (rain_on_grid, river_dye, coastal_tidal_surge) return a typed
+The TELEMAC-2D legs (rain_on_grid, river_dye) return a typed
 PEAK raster COG (the map anchor + narration carrier) and, alongside it, the native
 result SELAFIN sibling (every frame, every variable) that QGIS/MDAL animates
 directly -- no per-frame COGs. The SELAFIN is the TEMPORAL artifact.

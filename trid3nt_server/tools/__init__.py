@@ -628,15 +628,7 @@ from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _te
 # on the mesh ask at the delineation's snapped pour point, so the outlet
 # hydrograph is the flux through the nodes that role landed on.
 from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - catchment rainfall-runoff front (engine=telemac, tier=template)
-# tomawac_wave_field TEMPLATE (engine="telemac", tier="template"), workflows/
-# telemac/wave_field/: the TOMAWAC third-generation spectral-wave engine.
-# ONE question-class tool, four modes (fetch_growth / shoaling /
-# bottom_friction / wave_current); real Great Lakes lake-datum bathymetry or an
-# idealized basin. Physics proven through the baked tomawac binary; the
-# refinement-grade complement to SFINCS/SnapWave coastal screening. DECLARED
-# PARKED: the in-worker TOMAWAC builder it dispatched to was retired with the
-# worker unification and its case authoring is rung 4.
-from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_field as _tomawac_wave_field  # noqa: E402,F401 - parked: declared, off the model surface
+# TOMBSTONE: tomawac_wave_field - the TOMAWAC spectral-wave front is rebuilt at rung 4.
 # artemis_harbor_agitation TEMPLATE (engine="telemac", tier="template"),
 # workflows/telemac/agitation/: the ARTEMIS phase-resolving elliptic mild-slope
 # (Berkhoff) harbour-agitation engine. ONE question-class tool, three
@@ -645,16 +637,7 @@ from trid3nt_server.workflows.telemac.wave_field.wave_field import tomawac_wave_
 # through the baked artemis binary; the phase-resolving complement to the TOMAWAC
 # spectral tier.
 from trid3nt_server.workflows.telemac.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
-# coastal_tidal_surge TEMPLATE (engine="telemac", tier="template"), workflows/
-# telemac/coastal_tidal_surge/: the coastal tidal/surge inundation front.
-# ONE question-class tool, two series types (observed storm surge /
-# astronomical prediction); a real-topobathy open-water domain with ONE seaward
-# liquid boundary driven by a NOAA CO-OPS series through the LIQUID BOUNDARIES
-# FILE. Physics proven through the baked telemac2d binary (Apalachicola / Michael
-# 220x); the storm-tide complement to the SFINCS coastal screening. DECLARED
-# PARKED: the in-worker coastal builder it dispatched to was retired with the
-# worker unification and its case authoring is rung 4.
-from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import coastal_tidal_surge as _coastal_tidal_surge  # noqa: E402,F401 - parked: declared, off the model surface
+# TOMBSTONE: coastal_tidal_surge - the coastal tidal/surge front is rebuilt at rung 4.
 # telemac3d_stratified_flow TEMPLATE (engine="telemac", tier="template"),
 # workflows/telemac/stratified_flow/: the TELEMAC-3D three-dimensional baroclinic
 # Navier-Stokes engine - the one genuinely NEW solver leg in the family.

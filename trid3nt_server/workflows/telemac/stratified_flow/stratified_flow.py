@@ -71,7 +71,7 @@ _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 class DATA:
     bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
                bathy_source=P.bathy_source,
-               domain_kind="lake", mode=P.flow_mode,
+               mode=P.flow_mode,
                real_bed_modes=("stratification", "wind_circulation"),
                px_per_deg=1200.0, max_px_per_side=2000)
 

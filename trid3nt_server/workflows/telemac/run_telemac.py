@@ -1,4 +1,4 @@
-"""The TELEMAC local-docker solve seam - five solver names, one image, one spec.
+"""The TELEMAC local-docker solve seam - three solver names, one image, one spec.
 
 Every leg of the family runs the SAME worker image the SAME way: the launcher
 writes ``<rundir>/manifest.json`` and stages every input beside it, bind-mounts
@@ -6,7 +6,7 @@ the rundir at ``/data``, and the agent-side supervisor uploads the mounted
 outputs and writes ``completion.json``. The worker therefore needs no boto3 and
 runs ``--network none``: everything it reads arrives staged.
 
-The five NAMES stay because a run listing is read by a human - a harbour
+The three NAMES stay because a run listing is read by a human - a harbour
 agitation field and a river-dye plume are not the same kind of run and must not
 share a row identity. What they share is everything else, so the spec is one
 factory and the exit classification is one closure over the label the error
@@ -31,10 +31,8 @@ logger = logging.getLogger("trid3nt.workflows.run_telemac")
 #: Solver identifiers. Each is keyed in both ``SOLVER_WORKFLOW_REGISTRY`` (the
 #: presence gate ``run_solver`` reads) and ``LOCAL_SOLVER_SPEC_REGISTRY``.
 TELEMAC_SOLVER_NAME: str = "telemac_river_dye"
-TOMAWAC_SOLVER_NAME: str = "tomawac_wave"
 ARTEMIS_SOLVER_NAME: str = "artemis_agitation"
 TELEMAC3D_SOLVER_NAME: str = "telemac3d_strat"
-TELEMAC_COASTAL_SOLVER_NAME: str = "telemac_coastal"
 
 #: Default worker image (override via env TRID3NT_TELEMAC_IMAGE).
 DEFAULT_TELEMAC_IMAGE: str = "trid3nt-local/telemac:latest"
@@ -50,7 +48,7 @@ _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     # extent: the server measures it and echoes it, and a second name for it was
     # a second answer a reader had to pick between.
     "correct_end", "error_code", "module", "family", "result_slf",
-    "npoin", "nelem",
+    "npoin", "nelem", "ntimestep",
     "nptfr", "utm_epsg", "dx_m", "coarsened", "n_wet_nodes", "depth_max_m",
     "depth_mean_m", "bathy_source", "bed_source", "bbox", "wall_s",
     # reach / river dye
@@ -59,10 +57,8 @@ _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     "preview_geojson",
     # wind stress, on whichever leg was asked for it
     "wind_speed_mps", "wind_dir_from_deg",
-    # tomawac
-    "wave_mode", "hs_max_m", "hs_mean_m", "hs_upwind_m", "hs_downwind_m",
-    "peak_period_max_s",
     # artemis
+    "wave_mode", "hs_max_m",
     "agitation_field_slf", "kd_max", "kd_sheltered", "kd_exposed",
     "sheltering_ratio", "resonant_period_s", "response_at_resonance",
     "response_off_resonance", "kd_focus_peak", "wave_period_s", "wave_dir_deg",
@@ -73,13 +69,6 @@ _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     "stratification_dt", "stratification_dt_init", "u_surface", "u_bottom",
     "depth_avg_u", "front_speed_mps", "benjamin_speed_mps", "front_ratio",
     "non_hydrostatic", "surface_value_mean", "bottom_value_mean",
-    # coastal
-    "mode", "cli", "cas", "nx", "ny", "ocean_edge", "n_ocean_nodes",
-    "topo_max_m", "init_wl_m", "duration_s", "series_datum", "datum_offset_m",
-    "liqbnd_file", "liqbnd_rows", "liqbnd_col", "sl_min_m", "sl_max_m",
-    "t_end_s", "bed_cog", "bed_cog_source", "ntimestep", "peak_wl_max_m",
-    "final_wl_max_m", "flooded_land_km2", "wet_peak_km2",
-    "n_newly_flooded_nodes",
 ))
 
 
@@ -159,10 +148,8 @@ def make_spec(solver: str, stream_prefix: str) -> Callable[[], Any]:
 #: solver name -> the stdout/stderr prefix its run directory is read by.
 _SOLVERS: dict[str, str] = {
     TELEMAC_SOLVER_NAME: "telemac",
-    TOMAWAC_SOLVER_NAME: "tomawac",
     ARTEMIS_SOLVER_NAME: "artemis",
     TELEMAC3D_SOLVER_NAME: "telemac3d",
-    TELEMAC_COASTAL_SOLVER_NAME: "coastal",
 }
 
 

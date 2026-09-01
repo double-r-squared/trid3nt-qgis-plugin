@@ -30,10 +30,9 @@ from dataclasses import dataclass
 __all__ = ["PACKET_NOTES", "PROOF_ANIMATIONS", "ProofAnimation",
            "animations_for", "packet_notes", "suffixed"]
 
-#: The coastal worker's own wet-node discriminant
-#: (``workers/telemac/telemac_coastal_build.py``): a node counts as wet at
-#: 0.02 m of depth. The animation masks on the SAME number its scalars do, so the
-#: picture and ``peak_wl_max_m`` cannot disagree about which nodes hold water.
+#: The wet-node discriminant every TELEMAC worker applies: a node counts as wet
+#: at 0.02 m of depth. The animation masks on the SAME number its scalars do, so
+#: the picture and the run scalars cannot disagree about which nodes hold water.
 WET_TOL_M = 0.02
 
 
@@ -148,45 +147,12 @@ class ProofAnimation:
 #: a template DECISION - somebody decided this run answers two questions - never
 #: a default the assembler invents.
 PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
-    "coastal_tidal_surge": (
-        # QUESTION ONE: how the water surface moves. quantity is ``water_level``,
-        # its OWN contract row (cividis), not ``flood_depth``: a water surface
-        # elevation is referenced to a vertical datum and is not the depth raster
-        # this run also publishes. Two quantities, two ramps, so a canvas
-        # carrying both cannot read them as one field.
-        ProofAnimation(
-            name="surge_dynamics",
-            variable="FREE SURFACE", units="m", quantity="water_level",
-            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
-            reason="depth is bathymetry-dominated; the surge lives in the free "
-                   "surface. Masked to wet nodes because TELEMAC sets FREE "
-                   "SURFACE = BOTTOM on dry land, so an unmasked field is scaled "
-                   "by the highest hill in the domain and the tide reads as a "
-                   "flat wash."),
-        # QUESTION TWO: where the water went onto LAND. The same SELAFIN, a
-        # different question, and it is NOT the first animation restyled - the
-        # variable, the mask and the scale all differ. This is the wave-B
-        # inundation split rendered in time: the run publishes a peak-inundation
-        # raster over initially-dry land, and this is that quantity moving.
-        # Permanent water is nodata, so the bay floor cannot dominate the scale
-        # and call itself inundation.
-        ProofAnimation(
-            name="inundation",
-            variable="WATER DEPTH", units="m", quantity="flood_depth",
-            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M,
-            dry_land_only=True, still="peak",
-            reason="depth over initially-dry land IS inundation - how water "
-                   "moves onto the land. Gated on bed > the run's own initial "
-                   "water line (the datum-corrected one it solved from), which "
-                   "is the discriminant flooded_land_km2 counts on."),
-    ),
-    # A dry-start watershed is the opposite case: the published answer IS max
-    # water depth (overland sheet flow), and free surface over a hillslope is
-    # terrain.
+    # A dry-start watershed's published answer IS max water depth (overland sheet
+    # flow); free surface over a hillslope is terrain.
     #
-    # AND THE THRESHOLD IS NOT WET_TOL. 0.02 m is a COASTAL discriminant - the
-    # depth at which flooded land counts as flooded - and overland sheet flow on
-    # a hillslope is an order of magnitude thinner than that: this catchment's
+    # AND THE THRESHOLD IS NOT WET_TOL. 0.02 m is the depth at which flooded land
+    # counts as flooded, and overland sheet flow on a hillslope is an order of
+    # magnitude thinner than that: this catchment's
     # whole field peaks at 0.0273 m, so masking at 0.02 keeps a 7 mm sliver and
     # throws the answer away. Exact zero is the only honest gate here: paint
     # every cell carrying water, leave the never-wetted hillside to the basemap.
@@ -250,14 +216,6 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
             reason="the sag is the oxygen deficit downstream of the outfall. It "
                    "DECAYS toward its answer, so the still is the final frame - "
                    "the peak frame is the un-depleted initial condition."),
-    ),
-    "tomawac_wave_field": (
-        ProofAnimation(
-            variable="WAVE HEIGHT HM0", units="m", quantity="wave_height",
-            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
-            reason="the significant wave height is the sea state the run "
-                   "reports; it GROWS with fetch and duration, so the peak frame "
-                   "is the answer."),
     ),
     # A 3D prism result carries no WATER DEPTH to mask on - every node of the
     # column is in the water by construction.

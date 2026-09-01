@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """Live E2E smoke: the in-worker lake-datum bed surfaces as a Case INPUT layer.
 
-Drives BOTH lake-datum TELEMAC wave composers through the rebuilt worker image
-with a capturing emitter, and asserts each surfaces its sampled bed as a
-role=context "Input: lake bed bathymetry (...)" raster whose georeferenced bounds
-land INSIDE the request AOI (the ARTEMIS Gulf-of-Guinea georef bug is the
-cautionary tale -- bounds are checked numerically). ASCII only.
-
-  * tomawac_wave_field  -- Lake Superior fetch-growth wind case (Marquette).
-  * artemis_harbor_agitation -- Marquette Lower Harbor breakwater diffraction.
+Drives the lake-datum ARTEMIS composer (Marquette Lower Harbor breakwater
+diffraction) through the rebuilt worker image with a capturing emitter, and
+asserts it surfaces its sampled bed as a role=context "Input: lake bed
+bathymetry (...)" raster whose georeferenced bounds land INSIDE the request AOI
+(the ARTEMIS Gulf-of-Guinea georef bug is the cautionary tale -- bounds are
+checked numerically). ASCII only.
 
 Run: set -a; source .env.local; set +a; \
      venvs/agent/bin/python scripts/proof_wave_bed_input_live.py
@@ -55,39 +53,6 @@ def _bounds_inside(uri: str, aoi: tuple, pad: float = 0.05) -> tuple:
                     round(b.top, 4)), epsg
 
 
-async def _drive_tomawac() -> int:
-    fn = TOOL_REGISTRY["tomawac_wave_field"].fn
-    emitter = PipelineEmitter(session_id=new_ulid(), sink=_capture_sink)
-    token = _CURRENT_EMITTER.set(emitter)
-    try:
-        out = await fn(
-            location="Marquette, Michigan", bbox=None, wave_mode="fetch_growth",
-            wind_speed_mps=18.0, wind_direction_deg=300.0, boundary_hs_m=1.5,
-            boundary_period_s=10.0, current_speed_mps=0.0, bottom_friction=None,
-            target_resolution_m=None, sim_duration_hours=3.0,
-            bathy_source="noaa_greatlakes")
-    finally:
-        _CURRENT_EMITTER.reset(token)
-    if isinstance(out, dict):
-        print("[tomawac] ERROR:", out)
-        return 1
-    print("[tomawac] result uri:", out.uri, "hs_max:", getattr(out, "hs_max_m", None))
-    rows = _bed_rows(emitter)
-    assert rows, "tomawac surfaced NO lake-bed input row"
-    row = rows[0]
-    print("[tomawac] bed input:", row.name)
-    print("[tomawac] bed uri  :", row.uri, "role:", row.role,
-          "preset:", row.style_preset)
-    assert row.role == "context" and row.style_preset == "continuous_dem"
-    # the ~0.9 deg AOI the composer meshed around the Marquette centroid.
-    aoi = (-87.395 - 0.9, 46.55 - 0.9, -87.395 + 0.9, 46.55 + 0.9)
-    inside, bnds, epsg = _bounds_inside(row.uri, aoi, pad=0.1)
-    print(f"[tomawac] bed COG bounds={bnds} epsg={epsg} inside_AOI={inside}")
-    assert epsg == 4326, f"bed COG not 4326: {epsg}"
-    assert inside, "tomawac bed COG escaped the AOI (georef regression)"
-    return 0
-
-
 async def _drive_artemis() -> int:
     fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_capture_sink)
@@ -120,12 +85,7 @@ async def _drive_artemis() -> int:
 
 
 async def _run() -> int:
-    which = sys.argv[1] if len(sys.argv) > 1 else "both"
-    rc = 0
-    if which in ("both", "tomawac"):
-        rc |= await _drive_tomawac()
-    if which in ("both", "artemis"):
-        rc |= await _drive_artemis()
+    rc = await _drive_artemis()
     print("SMOKE OK" if rc == 0 else "SMOKE FAILED")
     return rc
 

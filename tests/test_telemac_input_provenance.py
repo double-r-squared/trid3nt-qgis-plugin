@@ -112,18 +112,12 @@ def test_question_class_coercions_abstain_without_a_signal() -> None:
     so abstaining changes the row's PROVENANCE, never its value.
     """
     from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
-    from trid3nt_server.workflows.telemac.coastal_tidal_surge.series_type import (
-        series_type,
-    )
     from trid3nt_server.workflows.telemac.steps.substance import substance_class
     from trid3nt_server.workflows.telemac.stratified_flow.flow_mode import flow_mode
-    from trid3nt_server.workflows.telemac.wave_field.wave_mode import wave_mode
 
     bare = {"location": "Lake Michigan"}
-    assert wave_mode()(bare) == {}
     assert flow_mode()(bare) == {}
     assert agitation_mode()(bare) == {}
-    assert series_type()(bare) == {}
     assert substance_class()(bare) == {}
 
 

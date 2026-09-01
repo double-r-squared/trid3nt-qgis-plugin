@@ -255,15 +255,6 @@ async def test_a_failure_with_nothing_finished_records_no_attempt(monkeypatch):
 
 
 # --- (5) coupled validity, both lanes --------------------------------------- #
-def _coastal():
-    """The coastal DECLARATION - the template is parked, the rules still hold."""
-    from trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge import (
-        coastal_tidal_surge,
-    )
-
-    return coastal_tidal_surge.workflow
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("supplied,ok", [
     ({}, True),                                              # the declared pair
@@ -273,7 +264,7 @@ def _coastal():
     ({"friction_law": 2, "friction_coefficient": 0.03}, False),   # and the inverse
 ])
 async def test_the_friction_law_inversion_is_refused_at_resolve_time(supplied, ok):
-    wf = _coastal()
+    wf = _coastal_probe()
     resolved = await resolve_params(wf.params, supplied)
     if ok:
         check_validity(wf.validity, resolved, workflow=wf.name)
@@ -410,12 +401,36 @@ def _probe_workflow(*, extra: tuple = (), validity: tuple = ()) -> Workflow:
         plan=plan, answer=("value",), validity=validity)
 
 
-def _coastal_probe() -> Workflow:
-    """The coastal template's friction pair on a plan that needs no solver."""
-    from trid3nt_server.workflows.telemac.coastal_tidal_surge.declarations import (
-        VALIDITY,
-    )
+#: Laws this rule speaks about, and the Strickler/Manning crossover that tells
+#: the two coefficient quantities apart: laws 2 and 3 take a Ks around 15-90, law
+#: 4 takes a Manning n around 0.011-0.1, so a value below the crossover is an n.
+_FRICTION_LAWS = (2, 3, 4)
+_FRICTION_CROSSOVER = 1.0
 
+
+def _friction_matches_law(v) -> bool:  # noqa: ANN001 - a ParamValues view
+    """Is the coefficient the quantity this law reads it as?"""
+    if int(v.friction_law) not in _FRICTION_LAWS:
+        return True             # a law this rule says nothing about
+    manning = int(v.friction_law) == 4
+    return (float(v.friction_coefficient) < _FRICTION_CROSSOVER) is manning
+
+
+_FRICTION_VALIDITY = (
+    Validity(
+        name="friction_coefficient_matches_law",
+        reads=("friction_law", "friction_coefficient"),
+        holds=_friction_matches_law,
+        message=(
+            "friction_law={friction_law} with friction_coefficient="
+            "{friction_coefficient} reads the coefficient as the WRONG quantity. "
+            "The two are reciprocals of each other."),
+    ),
+)
+
+
+def _coastal_probe() -> Workflow:
+    """A friction law/coefficient pair on a plan that needs no solver."""
     params = (
         Param("friction_law", door=doors.CONSTANT, default=3, type=int,
               bounds=(1.0, 7.0), consequence="physics", desc="the law"),
@@ -446,7 +461,7 @@ def _coastal_probe() -> Workflow:
     return Probe(metadata=AtomicToolMetadata(
         name="probe_friction", ttl_class="live-no-cache",
         source_class="workflow_dispatch", cacheable=False, engine="probe",
-        tier="template"), params=params, plan=plan, validity=VALIDITY)
+        tier="template"), params=params, plan=plan, validity=_FRICTION_VALIDITY)
 
 
 def friction_ok(*, law: float, coefficient: float) -> "_Result":

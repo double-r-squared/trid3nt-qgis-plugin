@@ -1,16 +1,15 @@
 """The OPEN-WATER front of the TELEMAC AOI templates: stage, solve, read, surface.
 
 The reach family (``steps/reach.py`` + ``steps/deck.py`` + ``steps/solve.py``)
-meshes a corridor along a flowline. The other TELEMAC domains - a coastal strip,
-a lake fetch, a harbour basin - are all the same shape instead: a regular grid
-over an AOI, real topobathy at the nodes, one worker section in the manifest, one
-result SELAFIN, one peak field. Four templates were each carrying their own copy
-of that: their own ``_stage_<x>_manifest``, ``_download_<x>_result``, their own
-run_solver + progress + terminal-card dance, their own bed-input surfacing.
+meshes a corridor along a flowline. The other TELEMAC domains - a lake fetch, a
+harbour basin - are the same shape instead: a regular grid over an AOI, real
+topobathy at the nodes, one worker section in the manifest, one result SELAFIN,
+one peak field.
 
-This module is that one copy. What varies between the four - which manifest
-section, which solver, which result file, which outputs the supervisor uploads -
-is DATA the deck writer returns, not code paths here: a deck says what solves it.
+This module is the ONE copy of that. What varies between the domains - which
+manifest section, which solver, which result file, which outputs the supervisor
+uploads - is DATA the deck writer returns, not code paths here: a deck says what
+solves it.
 
 Everything past the primary layer is best-effort by contract, exactly as in the
 reach family: a missing bed COG or an unpublished mesh never voids a solve.
@@ -94,16 +93,15 @@ def great_lake_for(lon: float, lat: float) -> str | None:
 def real_lake_bathy_label(lake: str | None) -> str:
     """What the REAL Great Lakes bed IS, said once.
 
-    All three lake-capable open-water templates sample the same NOAA lake-datum
-    grid, so all three said this same sentence in their own words. The IDEALIZED
-    half of each label stays with its module: an analytic seiche basin, a
-    Berkhoff shoal and a lock-exchange channel are different physics and deserve
-    different sentences.
+    Both lake-capable open-water templates sample the same NOAA lake-datum grid,
+    so one sentence serves both. The IDEALIZED half of each label stays with its
+    module: a Berkhoff shoal and a lock-exchange channel are different physics and
+    deserve different sentences.
     """
     return f"real NOAA Great Lakes lake-datum bathymetry ({lake or 'AOI'})"
 
 
-def solves_on_real_bed(bathy_source: Any, *, domain_kind: str,
+def solves_on_real_bed(bathy_source: Any, *,
                        lon: float | None = None,
                        lat: float | None = None,
                        mode: Any = None,
@@ -116,22 +114,15 @@ def solves_on_real_bed(bathy_source: Any, *, domain_kind: str,
     definition, two readers.
 
     Two gates, in order. ``real_bed_modes`` is the set of question modes that HAVE
-    real geography at all - an analytic seiche ladder, a Berkhoff shoal and a
-    lock-exchange channel are verification domains whose bed is authored by the
-    physics, so no bathymetry request makes them real. Then the source gate: a
-    ``coast`` domain is real unless it was explicitly asked to be synthetic, and a
-    ``lake`` domain is real when the lake bed was asked for, or when auto-selection
-    finds the AOI inside one of the Great Lakes the grids cover.
+    real geography at all - a Berkhoff shoal and a lock-exchange channel are
+    verification domains whose bed is authored by the physics, so no bathymetry
+    request makes them real. Then the source gate: the domain is real when the
+    lake bed was asked for, or when auto-selection finds the AOI inside one of the
+    Great Lakes the grids cover.
     """
     if real_bed_modes is not None and str(mode) not in real_bed_modes:
         return False
     asked = str(bathy_source or "auto").strip().lower()
-    if domain_kind == "coast":
-        return asked != "synthetic"
-    if domain_kind != "lake":
-        raise OpenWaterError(
-            f"open-water domain_kind {domain_kind!r} is not a declared kind "
-            "(coast | lake).", error_code="TELEMAC_PARAMS_INVALID")
     if asked == "noaa_greatlakes":
         return True
     if asked != "auto" or lon is None or lat is None:
@@ -140,7 +131,6 @@ def solves_on_real_bed(bathy_source: Any, *, domain_kind: str,
 
 
 async def fetch_domain_bed(*, bathy_source: Any = "auto",
-                           domain_kind: str = "lake",
                            mode: Any = None,
                            real_bed_modes: tuple[str, ...] | None = None,
                            px_per_deg: float = 1800.0,
@@ -166,9 +156,9 @@ async def fetch_domain_bed(*, bathy_source: Any = "auto",
     staging refusal in :func:`staged_bed_inputs`, never as a solve on a bed that
     is not there.
 
-    An IDEALIZED domain - an analytic beach, a seiche basin, a Berkhoff shoal -
-    has no geography to sample and fetches NOTHING: the returned record says so
-    and the manifest stages no input.
+    An IDEALIZED domain - a Berkhoff shoal, a lock-exchange channel - has no
+    geography to sample and fetches NOTHING: the returned record says so and the
+    manifest stages no input.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib import current_domain
@@ -180,7 +170,7 @@ async def fetch_domain_bed(*, bathy_source: Any = "auto",
             "the domain bed cannot be fetched: no domain with an extent is bound.",
             error_code="TELEMAC_PARAMS_INVALID")
     bbox = [round(float(v), 4) for v in extent]
-    if not solves_on_real_bed(bathy_source, domain_kind=domain_kind,
+    if not solves_on_real_bed(bathy_source,
                               lon=0.5 * (bbox[0] + bbox[2]),
                               lat=0.5 * (bbox[1] + bbox[3]),
                               mode=mode, real_bed_modes=real_bed_modes):
@@ -260,11 +250,11 @@ def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
 
     THE manifest writer for the whole family. ``section`` is the key the worker's
     ENTRYPOINT dispatches on. ``prefix`` is where the manifest is STAGED, and it
-    is not always the same word - the wave module answers to ``wave`` inside the
-    document while its manifests live under ``tomawac/``, and the harbour module
-    to ``agitation`` under ``artemis/``. Collapsing the two into one name is how a
-    manifest lands somewhere the worker looks and carries a key it does not read,
-    which is a silent fall-through rather than an error.
+    is not always the same word - the harbour module answers to ``agitation``
+    inside the document while its manifests live under ``artemis/``. Collapsing
+    the two into one name is how a manifest lands somewhere the worker looks and
+    carries a key it does not read, which is a silent fall-through rather than an
+    error.
 
     ``inputs`` is what the launcher stages into the run directory before the
     container starts, ``{gs_uri, dest}`` per entry. It carries everything these
@@ -358,11 +348,11 @@ async def solve_open_water(*, deck: dict[str, Any],
 
     ``deck["requires_utm"]`` says whether a missing ``utm_epsg`` is a FAILURE.
     A domain built over real geography is ungeoreferenceable without the worker's
-    zone, so its absence is a typed refusal. An IDEALIZED domain - the analytic
-    harbour basin, the Berkhoff shoal, the lock-exchange channel - has no
-    geographic footprint at all and legitimately reports no zone; its reader
-    rasterizes the local metres in a placeholder frame instead. Refusing there
-    refuses a run that is working exactly as designed.
+    zone, so its absence is a typed refusal. An IDEALIZED domain - the Berkhoff
+    shoal, the lock-exchange channel - has no geographic footprint at all and
+    legitimately reports no zone; its reader rasterizes the local metres in a
+    placeholder frame instead. Refusing there refuses a run that is working
+    exactly as designed.
     """
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
@@ -469,12 +459,10 @@ def mesh_resolution_label(bed: str, deck: Mapping[str, Any],
                          metrics: Mapping[str, Any], *, suffix: str = "") -> str:
     """What grid the run was SOLVED on, in one sentence, for the layer to carry.
 
-    Four open-water publishers were each writing this f-string, and the four
-    agreed only by accident: one said "idealized analytic" where the others said
-    "idealized", and any of them could have drifted on the coarsening clause
-    without the others noticing. ``bed`` names what the bed IS (the one thing that
-    genuinely differs per template); ``suffix`` carries an extra fact a domain has
-    and the others do not, such as TELEMAC-3D's sigma-plane count.
+    ONE f-string for every publisher, so the coarsening clause cannot drift
+    between them. ``bed`` names what the bed IS (the one thing that genuinely
+    differs per template); ``suffix`` carries an extra fact a domain has and the
+    others do not, such as TELEMAC-3D's sigma-plane count.
 
     The spacing is the one the WORKER reports, falling back to the one the deck
     asked for - never the other way round, or a run the node budget coarsened

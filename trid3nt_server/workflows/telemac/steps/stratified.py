@@ -93,7 +93,7 @@ async def write_stratified_deck(
     )
 
     lake = great_lake_for(float(aoi["lon"]), float(aoi["lat"]))
-    real = solves_on_real_bed(bathy_source, domain_kind="lake",
+    real = solves_on_real_bed(bathy_source,
                               lon=aoi["lon"], lat=aoi["lat"],
                               mode=flow_mode, real_bed_modes=_REAL_BED_MODES)
     resolution = (float(mesh_resolution_m) if mesh_resolution_m is not None

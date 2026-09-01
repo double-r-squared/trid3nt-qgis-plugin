@@ -53,9 +53,8 @@ WHAT IT VERIFIES, MECHANICALLY
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
-  assemble_proof_packet.py --template coastal_tidal_surge --variant refined
   assemble_proof_packet.py --template artemis_harbor_agitation --variant refined
-  assemble_proof_packet.py --template coastal_tidal_surge --variant coarse --check
+  assemble_proof_packet.py --template artemis_harbor_agitation --variant coarse --check
 """
 from __future__ import annotations
 

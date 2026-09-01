@@ -43,7 +43,6 @@ ENGINE_PATHS: dict[str, tuple[str, ...]] = {
 #: either IS the engine or starts with it.
 _SOLVER_ENGINE_OVERRIDES: dict[str, str] = {
     "artemis_agitation": "telemac",
-    "tomawac_wave": "telemac",
 }
 
 #: A commit list is a warning, not a changelog. Past this many, the warning says
@@ -91,8 +90,7 @@ def engine_paths(engine_or_solver: str) -> tuple[str, ...]:
     """The repo paths whose commits can change ``engine_or_solver``'s answers.
 
     Accepts a solver identifier as well as an engine name, because that is what a
-    run record carries: ``telemac_coastal`` and ``artemis_agitation`` are both
-    the TELEMAC engine.
+    run record carries: ``artemis_agitation`` is the TELEMAC engine.
     """
     engine = resolve_engine(engine_or_solver)
     return ENGINE_PATHS[engine] if engine else ()

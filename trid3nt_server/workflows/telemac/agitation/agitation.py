@@ -89,7 +89,7 @@ class DATA:
     #: against - so it travels from the template rather than being a router default.
     bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
                bathy_source=P.bathy_source,
-               domain_kind="lake", mode=P.wave_mode,
+               mode=P.wave_mode,
                real_bed_modes=("diffraction",),
                px_per_deg=3000.0, max_px_per_side=2500)
 

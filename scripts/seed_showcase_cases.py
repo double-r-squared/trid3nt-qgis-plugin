@@ -496,26 +496,6 @@ SHOWCASE: list[Showcase] = [
              "MORPHOLOGICAL FACTOR is the demo speed-up lever; grain d50 a demo "
              "default (no bed-composition fetcher).",
              1200, title_suffix="erodible-bed-scour"),
-    # -- TOMAWAC (spectral wave; real Great Lakes bathy) ---------------------
-    Showcase("tomawac_wave_field",
-             {"bbox": [-89.0, 47.0, -86.5, 48.0], "wave_mode": "fetch_growth",
-              "wind_speed_mps": 22.0, "wind_direction_deg": 270.0,
-              "target_resolution_m": 2000.0, "sim_duration_hours": 4.0,
-              "input_mode": "user_gated"},
-             "TOMAWAC third-generation SPECTRAL WAVE field, fetch-limited "
-             "wind-wave growth on REAL Lake Superior lake-datum bathymetry (NOAA "
-             "NGDC DEM_all; 4763 wet nodes, depths to 359 m). Physics asserts "
-             "(proof norm #9 discriminating pair): under a 22 m/s WESTERLY storm "
-             "the significant wave height Hs is nonzero and grows monotonically "
-             "downwind across the fetch -- ~0.40 m at the upwind (west) shore to "
-             "~3.04 m at the downwind (east) shore; an EASTERLY storm FLIPS the "
-             "high-Hs shore to the west (~2.85 m), proving fetch physics tracks the "
-             "wind, not a domain artifact. Refinement-grade wave tier, the "
-             "complement to SFINCS/SnapWave coastal screening; prescribed steady "
-             "storm wind (no wave-forcing fetcher), not a calibrated hindcast. "
-             "input_mode='user_gated' approves that labeled demo wind explicitly "
-             "(law 9 auto-mode REFUSES an unfetched physics-consequential input).",
-             600, title_suffix="lake-superior-fetch"),
     # -- ARTEMIS (phase-resolving harbour agitation) --------------------------
     # CANONICAL real-marina case (norm #10 "a real marina with a real breaker"):
     # the ACTUAL surveyed breakwater at Marquette Lower Harbor / Cinder Pond Marina
@@ -539,7 +519,7 @@ SHOWCASE: list[Showcase] = [
              "reflection standing-wave field; the sheltered lee (Kd~0.09) stays far "
              "below the exposed approach (Kd~0.35). The surveyed breakwater + bathy "
              "surface as context layers. Refinement-grade phase-resolving "
-             "tier, the complement to the TOMAWAC phase-averaged spectral field; "
+             "tier; "
              "prescribed monochromatic incident wave, not a calibrated hindcast.",
              600, title_suffix="marquette-real-breakwater-diffraction"),
     # VERIFICATION TIER (norm #10 labeled schematic): the analytic Sommerfeld

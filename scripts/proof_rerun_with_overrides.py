@@ -14,7 +14,8 @@ Stages a real parent run, then derives children from it through the registered
 Then the three consumers, each as its own scenario:
   (a) FAILURE RECOVERY  a run that refuses on a bad value, re-run with it fixed;
   (b) WHAT-IF           two overrides on one parent, two independent children;
-  (c) LAW INVERSION     the coupled-validity refusal, typed, before anything runs.
+  (c) TYPED REFUSALS    an undeclared override name and an inert one, refused
+                        by name before anything runs.
 
 Run:
   cd /home/nate/Documents/trid3nt-local
@@ -148,7 +149,6 @@ async def main() -> int:
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib import journal
     from trid3nt_server.workflows.lib.rerun import RerunRefused, reuse_plan
-    from trid3nt_server.workflows.lib.validity import CoupledValidityError
 
     do_sag = TOOL_REGISTRY["telemac_do_sag"].fn
     rerun_tool = TOOL_REGISTRY["rerun_workflow"].fn
@@ -283,21 +283,20 @@ async def main() -> int:
                 n for n in fd if n in xd and fd[n]["sha256"] == xd[n]["sha256"])
     evidence["failure_recovery"] = recovery
 
-    # -- (c) the law inversion, typed, before anything runs ------------------ #
-    coastal_probe: dict[str, Any] = {}
+    # -- (c) the typed refusals, before anything runs ------------------------ #
+    refusals: dict[str, Any] = {}
     try:
         await rerun_tool(run_id=parent_id, overrides={"nonsense_param": 1.0})
     except RerunRefused as exc:
-        coastal_probe["undeclared_name"] = {"error_code": exc.error_code,
+        refusals["undeclared_name"] = {"error_code": exc.error_code,
                                             "message": str(exc)}
     try:
         await rerun_tool(run_id=parent_id, overrides={"k1_per_day": 0.3})
     except RerunRefused as exc:
-        coastal_probe["inert_override"] = {"error_code": exc.error_code,
+        refusals["inert_override"] = {"error_code": exc.error_code,
                                            "message": str(exc)}
-    coastal_probe["law_inversion"] = await _law_inversion(CoupledValidityError)
-    evidence["typed_refusals"] = coastal_probe
-    log.info("REFUSALS %s", json.dumps(coastal_probe)[:400])
+    evidence["typed_refusals"] = refusals
+    log.info("REFUSALS %s", json.dumps(refusals)[:400])
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -318,32 +317,6 @@ def _describe(out: Any) -> dict[str, Any]:
                 "error_message": str(out.get("error_message"))[:400]}
     return {"status": "ok", **{k: v for k, v in _answer(out).items()
                                if k in ("run_id", "do_min_mgl", "mesh_size_m")}}
-
-
-async def _law_inversion(exc_type: type) -> dict[str, Any]:
-    """The coastal friction pair, checked at RESOLVE time - no solve needed.
-
-    A refusal that fires before the plan runs is proven by resolving the sheet
-    and asking the rule; driving a full coastal solve to watch it not start would
-    prove the same thing and cost 20 minutes.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib import check_validity, resolve_params
-
-    wf = TOOL_REGISTRY["coastal_tidal_surge"].fn.workflow
-    out: dict[str, Any] = {}
-    for label, supplied in (
-            ("law_switched_coefficient_left", {"friction_law": 4}),
-            ("both_named", {"friction_law": 4, "friction_coefficient": 0.033}),
-            ("atypical_but_right_quantity", {"friction_coefficient": 120.0})):
-        resolved = await resolve_params(wf.params, supplied)
-        try:
-            check_validity(wf.validity, resolved, workflow=wf.name)
-            out[label] = {"accepted": True}
-        except exc_type as exc:
-            out[label] = {"accepted": False, "error_code": exc.error_code,
-                          "message": str(exc)}
-    return out
 
 
 if __name__ == "__main__":

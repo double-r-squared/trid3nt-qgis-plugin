@@ -24,14 +24,12 @@ from trid3nt_server.workflows.telemac.postprocess_telemac import (
     _local_mesh_origin,
 )
 from trid3nt_server.workflows.telemac.steps.agitation import write_agitation_deck
-from trid3nt_server.workflows.telemac.steps.coastal import write_coastal_deck
 from trid3nt_server.workflows.telemac.steps.open_water import (
     OpenWaterError,
     mesh_sizing_provenance,
     solved_domain_bbox,
 )
 from trid3nt_server.workflows.telemac.steps.stratified import write_stratified_deck
-from trid3nt_server.workflows.telemac.steps.wave import write_wave_deck
 
 #: What the declared bed producer hands the deck writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
@@ -42,16 +40,6 @@ _STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.
 _MARQUETTE = {"name": "Marquette Lower Harbor", "slug": "marquette",
               "lon": -87.380, "lat": 46.539,
               "bbox": [-87.39234, 46.52812, -87.36788, 46.55021]}
-_APALACH = {"name": "Apalachicola Bay", "slug": "apalachicola",
-            "lon": -84.96, "lat": 29.745,
-            "bbox": [-85.02341, 29.69107, -84.90118, 29.80442]}
-
-#: The non-question coastal physics, declared on the template (door CONSTANT /
-#: SCENARIO). Stated here rather than leaning on a signature default, which would
-#: be a second source of truth for the same numbers.
-_COASTAL_PHYSICS = dict(bathy_source="synthetic", time_step_s=20.0, friction_law=3,
-                        friction_coefficient=40.0, wind_speed_mps=0.0,
-                        wind_direction_from_deg=0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -82,15 +70,6 @@ def test_stratified_deck_requires_utm_only_on_the_real_lake(flow_mode, expected)
     deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
         aoi=_MARQUETTE, flow_mode=flow_mode, bathy_source="noaa_greatlakes"))
     assert deck["requires_utm"] is expected
-
-
-def test_coastal_and_wave_decks_always_require_utm():
-    coastal = asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
-        aoi=_APALACH, mesh_resolution_m=250.0, **_COASTAL_PHYSICS))
-    wave = asyncio.run(write_wave_deck(bed=_STAGED_BED, 
-        aoi=_MARQUETTE, bathy_source="noaa_greatlakes", mesh_resolution_m=3000.0))
-    assert coastal["requires_utm"] is True
-    assert wave["requires_utm"] is True
 
 
 def test_salt_wedge_deck_authors_an_idealized_lock_exchange_offline():
@@ -176,21 +155,13 @@ def test_solved_domain_bbox_refuses_a_malformed_bbox():
         solved_domain_bbox({"config": {"bbox": ["west", 2.0, 3.0, 4.0]}}, {})
 
 
-def test_the_coastal_deck_no_longer_carries_a_second_unrounded_bbox():
-    """One bbox travels: the staged one. Two was how the origin drifted."""
-    deck = asyncio.run(write_coastal_deck(bed=_STAGED_BED, 
-        aoi=_APALACH, mesh_resolution_m=250.0, **_COASTAL_PHYSICS))
-    assert "domain_bbox" not in deck
-    assert deck["config"]["bbox"] == [round(v, 4) for v in _APALACH["bbox"]]
-
-
 def test_local_mesh_origin_absent_bbox_is_the_local_frame():
     assert _local_mesh_origin(None, 32616) == (0.0, 0.0)
 
 
 def test_local_mesh_origin_refuses_when_the_reader_needs_one():
     with pytest.raises(PostprocessTelemacError) as excinfo:
-        _local_mesh_origin(None, 32616, required=True, context="postprocess_coastal")
+        _local_mesh_origin(None, 32616, required=True, context="postprocess_telemac")
     assert excinfo.value.error_code == "TELEMAC_PARAMS_INVALID"
 
 

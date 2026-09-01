@@ -110,10 +110,8 @@ DOC = dict(
         "line; omit it and the domain solves as OPEN WATER, labeled."
     ),
     not_for=(
-        "the offshore SEA STATE or fetch-limited wind-wave growth "
-        "(`tomawac_wave_field`, the phase-averaged tier); coastal storm-tide "
-        "flooding (`coastal_tidal_surge`); inundation DEPTH (`sfincs_flood`); a "
-        "river plume (`telemac_river_dye`)"
+        "the offshore SEA STATE or fetch-limited wind-wave growth; coastal "
+        "storm-tide flooding; a river plume (`telemac_river_dye`)"
     ),
     params=PARAMS,
     controls=(

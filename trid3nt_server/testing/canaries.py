@@ -67,11 +67,6 @@ _SILENT_PIN_VARIANT = "coarse"
 # TELEMAC family
 # --------------------------------------------------------------------------- #
 
-#: Apalachicola Bay, FL - the CO-OPS 8728690 gauge and the Hurricane Michael
-#: window (2018-10-09..11). A HISTORICAL window on purpose: a canary that read
-#: "the last few days" would report a quiet week as a physics regression.
-_COASTAL_BBOX = [-85.02, 29.69, -84.90, 29.80]
-
 #: Lake Superior open water off Marquette - inside the NOAA Great Lakes
 #: lake-datum bathymetry coverage, so the REAL-bed path is the one exercised.
 _SUPERIOR_BBOX = [-87.60, 46.70, -86.60, 47.20]
@@ -86,62 +81,6 @@ _MARQUETTE_BBOX = [-87.392, 46.528, -87.368, 46.550]
 _COWEETA_POUR_POINT = [-83.40402, 35.05746]
 
 CANARIES: dict[str, LiveRun] = {
-    # The Michael surge coast at a coarse grid over a 6-hour window: wide enough
-    # that the rising boundary actually floods low land (a canary whose answer is
-    # zero cannot detect a regression in the thing it measures), small enough to
-    # solve in seconds.
-    "coastal_tidal_surge": LiveRun(
-        tool="coastal_tidal_surge",
-        args={
-            "bbox": _COASTAL_BBOX,
-            "series_type": "observed",
-            "station": "8728690",
-            "start_date": "2018-10-09",
-            "end_date": "2018-10-11",
-            # datum_offset_m is deliberately UNSET: the gauge's own published
-            # MLLW -> NAVD 88 offset reconciles the series with the DEM_all bed.
-            # Pinning 0.0 here is what cold-started 12 km2 of marsh wet.
-            "ocean_edge": "auto",
-            "target_resolution_m": 250.0,
-            "duration_hours": 6.0,
-            "time_step_s": 20.0,
-            "bathy_source": "noaa_demall",
-            "compute_class": "medium",
-            # user_gated, not auto: the resolved window / station / datum go past
-            # a review card and the harness answers it. The datum offset is a
-            # physics-consequential row, so a run that never showed it to anybody
-            # refuses under law 9 - which is the floor working, not a canary to
-            # route around.
-            "input_mode": "user_gated",
-        },
-        case_title="canary: coastal tidal surge (Apalachicola Bay, coarse)",
-        answers=GateAnswers(confirm="proceed"),
-        cleanup_case=True,
-    ),
-    # Lake Superior open water at a coarse grid over the shortest storm the tool
-    # accepts. The REAL lake-datum bed, because that is the path a lake question
-    # takes; the prescribed storm wind is a labeled demo default and goes past the
-    # review card, which is why this runs user_gated too.
-    "tomawac_wave_field": LiveRun(
-        tool="tomawac_wave_field",
-        args={
-            "bbox": _SUPERIOR_BBOX,
-            "wave_mode": "fetch_growth",
-            "wind_speed_mps": 20.0,
-            "wind_direction_deg": 270.0,
-            "boundary_hs_m": 1.5,
-            "boundary_period_s": 10.0,
-            "current_speed_mps": -2.5,
-            "target_resolution_m": 3000.0,
-            "sim_duration_hours": 1.0,
-            "bathy_source": "noaa_greatlakes",
-            "compute_class": "medium",
-            "input_mode": "user_gated",
-        },
-        case_title="canary: tomawac wave field (Lake Superior, coarse)",
-        answers=GateAnswers(confirm="proceed"),
-        cleanup_case=True,
-    ),
     # The UNFILLED-SLOT pin for the phase-resolving diffraction solve. No
     # ``structure`` is supplied, and what the domain then carries is the worker's
     # answer, not this declaration's: the real-bathymetry builder still meshes a
@@ -330,15 +269,6 @@ CANARIES.update({
         },
         case_title="refined: telemac river dye (Eel River near Scotia, 10 m)",
         answers=GateAnswers(confirm="proceed"), cleanup_case=True),
-    # 250 -> 50 m. The finer grid should also thin the dot-lattice sparsity in
-    # the published raster, since that sparsity is a mesh-vs-output-grid
-    # mismatch and this closes the gap by a factor of five.
-    "coastal_tidal_surge_refined": _refined("coastal_tidal_surge",
-                                            target_resolution_m=50.0),
-    # 3000 -> 500 m over a whole-lake fetch; the node budget may coarsen it back
-    # and the run says so in its own `coarsened` flag if it does.
-    "tomawac_wave_field_refined": _refined("tomawac_wave_field",
-                                           target_resolution_m=500.0),
     # 30 -> 15 m. A phase-resolving solve needs nodes per WAVELENGTH, so this is
     # the refinement that matters most for the diffraction fringes.
     "artemis_harbor_agitation_refined": _refined("artemis_harbor_agitation",

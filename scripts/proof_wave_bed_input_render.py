@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""QGIS-true proof renders of the in-worker lake-datum bed INPUT layers (
-S3): the tomawac (wave_field) + artemis (agitation) sampled beds surfaced as
-role=context Case inputs, on ESRI World Imagery with a terrain ramp. Reuses the
-shared render() (EPSG:3857 over ESRI). Pass the two live bed-COG uris. ASCII only.
+"""QGIS-true proof render of the in-worker lake-datum bed INPUT layer (S3): the
+artemis (agitation) sampled bed surfaced as a role=context Case input, on ESRI
+World Imagery with a terrain ramp. Reuses the shared render() (EPSG:3857 over
+ESRI). Pass the live bed-COG uri. ASCII only.
 
 Run: set -a; source .env.local; set +a; \
-     venvs/agent/bin/python scripts/proof_wave_bed_input_render.py <tomawac_uri> <artemis_uri>
+     venvs/agent/bin/python scripts/proof_wave_bed_input_render.py <artemis_uri>
 """
 from __future__ import annotations
 
@@ -31,19 +31,7 @@ def _range(uri: str) -> tuple[float, float]:
 
 
 def main() -> None:
-    tomawac_uri, artemis_uri = sys.argv[1], sys.argv[2]
-
-    vmin, vmax = _range(tomawac_uri)
-    out = render(
-        tomawac_uri, str(_OUT / "wave_field_input_bed_bathymetry.png"),
-        "Input: lake bed bathymetry (NOAA Great Lakes lake-datum) -- tomawac_wave_field",
-        ("S3 -- the NOAA lake-datum bed the TOMAWAC solve sampled IN-WORKER, "
-         "surfaced as a role=context Case INPUT (continuous_dem/terrain ramp, EPSG:3857 "
-         "over ESRI World Imagery). Lake Superior off Marquette, MI; fetch-growth wind "
-         "case. Elevation m below lake datum (negative = lake bottom)."),
-        cmap="terrain", units_label="bed elevation (m, lake datum)",
-        vmin=vmin, vmax=vmax, zoom=9)
-    print("wrote", out, f"vmin={vmin:.1f} vmax={vmax:.1f}")
+    artemis_uri = sys.argv[1]
 
     vmin, vmax = _range(artemis_uri)
     out = render(

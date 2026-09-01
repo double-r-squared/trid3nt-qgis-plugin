@@ -90,8 +90,8 @@ class PARAMS:
             f"{DEFAULT_IDEALIZED_RES_M:g} m in the idealized basin"),
         desc="Explicit HORIZONTAL grid node spacing; the vertical is nplan")
     # CONSTANT, not SCENARIO: the window is a settling time, not a scenario. The
-    # answer is the column's SETTLED state, so this is "long enough", the same
-    # shape as tomawac's fetch-limited window. The user keeps the lever.
+    # answer is the column's SETTLED state, so this is "long enough". The user
+    # keeps the lever.
     sim_duration_hours = Param(
         door=doors.CONSTANT, default=5.0, bounds=(1.0, 24.0),
         units="h", consequence="numerical",
@@ -115,10 +115,9 @@ DOC = dict(
         "vertical profile. Supply a lake `location` OR a `bbox`."
     ),
     not_for=(
-        "a 2D river dye/contaminant plume (`telemac_river_dye`); inundation DEPTH "
-        "(`sfincs_flood` / `geoclaw_inundation`); coastal storm-tide flooding "
-        "(`coastal_tidal_surge`); the surface wave field (`tomawac_wave_field` / "
-        "`artemis_harbor_agitation`)"
+        "a 2D river dye/contaminant plume (`telemac_river_dye`); inundation "
+        "DEPTH; coastal storm-tide flooding; harbour wave agitation "
+        "(`artemis_harbor_agitation`)"
     ),
     params=PARAMS,
     controls=(

@@ -40,12 +40,7 @@ EXPECTED_TEMPLATES = {
 #: attribute that carries the declaration. Pinned for the same reason the
 #: registered set is: parking is a stated condition with a reason, and a template
 #: that drifts INTO or OUT OF it silently is the drift this file exists to catch.
-PARKED_TEMPLATES = {
-    "tomawac_wave_field":
-        "trid3nt_server.workflows.telemac.wave_field.wave_field",
-    "coastal_tidal_surge":
-        "trid3nt_server.workflows.telemac.coastal_tidal_surge.coastal_tidal_surge",
-}
+PARKED_TEMPLATES: dict[str, str] = {}
 
 # The 10 deleted engine-door concierge tools.
 DELETED_DOORS = {

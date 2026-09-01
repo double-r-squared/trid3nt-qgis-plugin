@@ -28,9 +28,8 @@ def test_telemac_registered_in_solver_workflow_registry():
 
 
 def test_every_leg_registers_under_its_own_name():
-    for solver in (T.TELEMAC_SOLVER_NAME, T.TOMAWAC_SOLVER_NAME,
-                   T.ARTEMIS_SOLVER_NAME, T.TELEMAC3D_SOLVER_NAME,
-                   T.TELEMAC_COASTAL_SOLVER_NAME):
+    for solver in (T.TELEMAC_SOLVER_NAME, T.ARTEMIS_SOLVER_NAME,
+                   T.TELEMAC3D_SOLVER_NAME):
         assert SOLVER_WORKFLOW_REGISTRY.get(solver) == LOCAL_DOCKER_WORKFLOW_NAME
         spec = LOCAL_SOLVER_SPEC_REGISTRY[solver]()
         assert spec.solver == solver and spec.network == "none"

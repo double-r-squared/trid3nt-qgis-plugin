@@ -26,9 +26,9 @@ puts the frames back on the map; without it they land at the UTM false origin.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
-  render_selafin_animation.py --run-id <ULID> --slf res_coastal.slf \\
-      --var "WATER DEPTH" --units m --quantity flood_depth \\
-      --stem coastal_tidal_surge
+  render_selafin_animation.py --run-id <ULID> --slf res_agitation.slf \\
+      --var "WAVE HEIGHT" --units m --quantity wave_height \\
+      --stem artemis_harbor_agitation
 """
 from __future__ import annotations
 

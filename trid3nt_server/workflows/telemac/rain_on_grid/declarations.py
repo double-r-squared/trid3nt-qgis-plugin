@@ -207,9 +207,8 @@ DOC = dict(
         "hourly hyetograph instead of the design storm."
     ),
     not_for=(
-        "coastal or pluvial inundation depth (`sfincs_flood`); a channel dye or "
-        "sediment plume (`telemac_river_dye`); urban pipe drainage "
-        "(`swmm_urban_flood`); storm-surge coastal flooding (`coastal_tidal_surge`)"
+        "coastal or pluvial inundation depth; a channel dye or sediment plume "
+        "(`telemac_river_dye`); urban pipe drainage; storm-surge coastal flooding"
     ),
     params=PARAMS,
     controls=(

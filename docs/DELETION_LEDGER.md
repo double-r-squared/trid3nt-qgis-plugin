@@ -2583,3 +2583,72 @@ FLAGGED, not touched: `scripts/prove_telemac_seam.py` and the three
 its own `graphic_period`. That section left the worker at worker-unification
 stage 2; they are dead against the current image for reasons that have nothing
 to do with this landing, and belong to the stale-script sweep.
+
+## The two DARK FRONTS leave the tree (findings walkthrough ruling 8, 2026-08-31)
+
+CONDITION: both templates were DECLARED PARKED - the in-worker builders they
+dispatched to (`telemac_coastal_build.py`, `tomawac_build.py`) went with the
+worker unification, so neither front could reach a solve. A parked declaration
+that no run can execute is a second tree to keep in step with every seam it
+touches, and the rebuild is rung 4.
+
+MOVED to `/home/nate/Documents/trid3nt-attic`, mirroring their repo-relative
+paths (reading copies; on no import path):
+- `trid3nt_server/workflows/telemac/wave_field/` (5 files, 426 LOC): the
+  `tomawac_wave_field` declaration, its four wave modes and its corpus.
+- `trid3nt_server/workflows/telemac/coastal_tidal_surge/` (5 files, 546 LOC): the
+  `coastal_tidal_surge` declaration, its two series types and its corpus.
+- `trid3nt_server/workflows/telemac/steps/wave.py` (271 LOC) and
+  `steps/coastal.py` (357 LOC): the two deck writers and their publishers.
+- `scripts/proof_coastal_tidal_surge.py` + `proof_coastal_tidal_surge_registered.py`:
+  proof drivers whose subject left the tree.
+
+DELETED, tests with their subjects:
+- `tests/test_tomawac_wave_field.py` (178) + `tests/test_coastal_tidal_surge.py`
+  (330) - 508 LOC.
+- `tests/test_telemac_open_water_front.py`: the two coastal/wave deck sections and
+  the `_APALACH` / `_COASTAL_PHYSICS` fixtures they needed. The agitation,
+  stratified, sizing-provenance and mesh-origin halves are unchanged and green.
+- `tests/test_rerun_with_overrides.py`: the coastal VALIDITY IMPORT, not the
+  coupled-validity tests. The friction law/coefficient rule is re-declared on the
+  probe workflow beside the params it reads, so the rerun lane's coupled check
+  keeps its only coverage without a dead template underneath it.
+- `scripts/proof_rerun_with_overrides.py` scenario (c) `_law_inversion`: it drove
+  the coastal tool's declared VALIDITY. The two typed-refusal probes beside it
+  (undeclared name, inert override) stay and now name the scenario.
+
+DELETED, the solver rows:
+- `run_telemac.py`: `TOMAWAC_SOLVER_NAME` / `TELEMAC_COASTAL_SOLVER_NAME` and
+  their `_SOLVERS` entries - the family is three names now. Their
+  `_COMPLETION_METRIC_KEYS` blocks go with them; `wave_mode` and `hs_max_m` move
+  to the artemis block (artemis_build writes both) and `ntimestep` to the
+  every-leg block (the entrypoint measures it for every leg).
+- `code_provenance._SOLVER_ENGINE_OVERRIDES`: the `tomawac_wave` row.
+
+TOMBSTONED, not removed: the two parked registrations in `tools/__init__.py` are
+one line each naming the rung-4 rebuild. A reader looking for the front finds why
+it is absent rather than nothing.
+
+SLIMMED to its live consumers - `steps/open_water.py`:
+- `solves_on_real_bed(domain_kind=...)`: the `coast` arm and the parameter. Only
+  the coastal front ever passed `coast`; every remaining caller passed `lake`, so
+  the gate is the lake gate and the two-kind refusal branch guarded nothing.
+  `steps/agitation.py`, `steps/stratified.py` and the two templates' `DATA.bed`
+  declarations drop the keyword.
+
+REPOINTED: `workflows/telemac/workflow.py` (`coastal_surge` + `wave_spectrum`
+processes, their readers and `_COASTAL_FORCING`), `steps/__init__.py` exports,
+`testing/canaries.py` (both canaries + both refined rows + `_COASTAL_BBOX`),
+`testing/proof_animations.py` (both rows), the `not_for` lines on the agitation,
+stratified and rain-on-grid declarations, `results_mesh_seam.py`,
+`workflows/telemac/README.md`, and the usage examples in
+`assemble_proof_packet.py` / `render_selafin_animation.py`.
+`proof_wave_bed_input_render.py` and `proof_wave_bed_input_live.py` keep their
+ARTEMIS half and lose their TOMAWAC half.
+
+QUEUED, orphaned BY this landing and deliberately not taken here:
+`postprocess_telemac.postprocess_tomawac` and `postprocess_coastal` (~500 LOC)
+plus the `TelemacWaveLayerURI` / `TelemacCoastalLayerURI` contract types they
+return. Their only callers were `steps/wave.py` and `steps/coastal.py`. CONDITION
+MET as of this landing; the removal reaches into `contracts/` and belongs to a
+landing that owns that path.

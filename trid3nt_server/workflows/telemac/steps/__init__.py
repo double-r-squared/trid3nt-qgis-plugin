@@ -3,7 +3,7 @@
 Two fronts, one skeleton each. The REACH front - geocode -> flowline -> seed ->
 deck -> solve -> products - meshes a corridor along a flowline. The OPEN-WATER
 front - AOI -> deck -> solve -> products - lays a regular grid over an extent and
-serves the coastal, wave, harbour and stratified domains, which differ only in
+serves the harbour and stratified domains, which differ only in
 which worker section their deck names. Both have a per-deliverable serialization
 hook at each end. A workflow declares which steps it wants and what feeds them;
 nothing here decides what question is being asked.
@@ -16,7 +16,6 @@ from .agitation import (
     publish_agitation_products,
     write_agitation_deck,
 )
-from .coastal import Coastal, publish_coastal_products, write_coastal_deck
 from .deck import WriteDeck, stage_manifest, write_reach_deck
 from .open_water import (
     OpenWaterError,
@@ -99,7 +98,6 @@ from .water_quality import (
     upstream_do_mgl,
     waqtel_o2_process,
 )
-from .wave import Wave, publish_wave_products, write_wave_deck
 
 __all__ = [
     "AcquireCatchment", "Infiltration", "RainOnGrid",
@@ -107,17 +105,16 @@ __all__ = [
     "catchment_aoi", "node_infiltration_fields",
     "publish_rain_on_grid_products", "resolve_rain_event", "solve_rain_on_grid",
     "write_rain_on_grid_deck",
-    "Agitation", "CarrierDischarge", "Coastal",
+    "Agitation", "CarrierDischarge",
     "DEFAULT_RIVER_AOI_HALF_DEG", "GRADATION_PRESETS", "Geocode", "MESH_H_FLOOR_M",
     "MESH_NODE_CAP", "MeshCoverage", "OpenWaterError", "Products", "ReachSeed",
     "ReviewResolvedInputs",
     "SCOUR_KEYWORDS", "Solve", "SolveOpenWater", "Stratified",
-    "download_open_water_result", "publish_coastal_products",
+    "download_open_water_result",
     "solve_open_water", "solved_domain_bbox", "stage_telemac_manifest",
     "case_section",
     "staged_bed_inputs", "solves_on_real_bed", "fetch_domain_bed",
     "great_lake_for", "real_lake_bathy_label",
-    "Wave", "write_coastal_deck",
     "ReachBanksUnmapped", "ReachMeshUncovered", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
     "TelemacReleaseOutsideDomainError", "WaqtelO2", "WriteDeck",
@@ -135,8 +132,7 @@ __all__ = [
     "suggest_time_step_s", "upstream_do_mgl",
     "publish_agitation_products",
     "publish_stratified_products",
-    "publish_wave_products", "waqtel_o2_process", "write_agitation_deck",
+    "waqtel_o2_process", "write_agitation_deck",
     "write_stratified_deck",
     "write_reach_deck",
-    "write_wave_deck",
 ]
