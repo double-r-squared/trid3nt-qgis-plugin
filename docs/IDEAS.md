@@ -3113,3 +3113,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   dries natively) + journal a measured WETTED-FRACTION heuristic
   line per run (the honesty-heuristic doctrine); a wetted-channel
   domain remains a supply-path option when a case demands it.
+
+- SYSTEM PROMPT CAPABILITY SURFACE RULED (NATE 2026-09-01): the
+  adapter's system prompt states the LIVE surface - the TELEMAC
+  families (tracer/dye, oil, sediment/GAIA, DO-sag/WAQTEL,
+  rain-on-grid, agitation, stratified) + the geospatial/analysis
+  substrate; the fidelity-ladder PRINCIPLE stays but ENGINE-NAME-
+  FREE (screening vs 1D/2D/3D by question; calibration the crux) so
+  the prompt stops rotting with the roster; dead engine names
+  return one line at a time as engines land through rung 5. The
+  reuse rule + rain-on-grid tier text rewrite to live names only.

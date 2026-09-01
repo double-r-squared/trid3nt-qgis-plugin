@@ -59,9 +59,9 @@ export TRID3NT_AGENT_LOG_FILE="${TRID3NT_AGENT_LOG_FILE:-$LOG_FILE}"
 
 # NATE 2026-07-12: no follow-up offers in replies - the user asks for what
 # they want next. Appended to the local model's system prompt (openai path).
-# 2026-07-13: + publish_layer handle discipline / honest-empty stop (OPEN-17
-# class: 0-event fetch -> fabricated publish_layer handle in the same turn).
-export TRID3NT_OPENAI_EXTRA_SYSTEM="${TRID3NT_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers - only call publish_layer when you have a handle returned by a previous tool result, passed verbatim. If a fetch returns no data, say so and stop.}"
+# Layers reach the map from the tool that produced them, and a 0-event fetch
+# stops honestly rather than narrating a layer it did not produce.
+export TRID3NT_OPENAI_EXTRA_SYSTEM="${TRID3NT_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers. If a fetch returns no data, say so and stop.}"
 
 echo "[start_agent] starting agent (WS :8765, HTTP :8766)..."
 echo "[start_agent] MODEL_PROVIDER=$MODEL_PROVIDER TRID3NT_OPENAI_MODEL=$TRID3NT_OPENAI_MODEL"

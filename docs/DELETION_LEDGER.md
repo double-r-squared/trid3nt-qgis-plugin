@@ -2835,3 +2835,38 @@ and `pelicun_*` - every one of them absent from the registry. Those are not a
 routing block; they are the prompt's whole engine roster, and replacing it is a
 wording decision about what TRID3NT tells a user it can model. It goes to NATE
 rather than being swept here.
+
+## The system prompt's absent-engine roster (NATE ruling 2026-09-01)
+
+CONDITION MET by the ruling above: NATE decided the wording, so the roster is
+swept rather than held.
+
+DELETED from `adapters/adapter.py`'s `SYSTEM_PROMPT`: every registry-absent tool
+name and the prose built around it. The `Groundwater / MODFLOW routing` block
+(fourteen `modflow_*` names, none registered) goes whole; its news-article
+never-invent rule survives repointed at `telemac_river_dye`. The
+`publish_layer is for RASTER COGs ONLY` block goes whole - `publish_layer` left
+the registry, so a vector-publish prohibition guards a call the model cannot
+make. The `Cross-engine OVERLAP routing` WAVES bullet
+(`schism_coupled_waves` / `swan_wave_field`) and the WATER QUALITY bullet's
+SWMM half go with their engines. `sfincs_flood` leaves the opening `Key
+behaviors` clause, the reuse rule, the scope-discipline block, the NWS
+live-warning chain and a narration example; `fetch_osm_roads` (never a
+registered name - the tool is `fetch_roads_osm`) goes with the publish block.
+
+REPLACED, not deleted: the capability surface now states the live TELEMAC
+families and the fetch/analysis substrate as question classes, with an honest-
+absence paragraph naming what has no solver here. The fidelity ladder survives
+ENGINE-NAME-FREE - rung by the question, a narrow stream below 2D's useful
+range, calibration last - so it no longer rots with the roster.
+
+`tests/test_system_prompt.py` loses the four vector-publish tests and the two
+MODFLOW-routing tests with their subjects, and gains
+`test_system_prompt_names_no_absent_tool`, which makes the whole class
+impossible: no purged family by name, and no token sharing a first segment with
+a registered tool unless it is itself registered.
+
+Model-facing residue swept with it: the `TRID3NT_OPENAI_EXTRA_SYSTEM` default
+in `scripts/start_agent.sh` (and its verbatim mirror in
+`scripts/telemac_routing_probe.py`) told the local model when to call
+`publish_layer`.

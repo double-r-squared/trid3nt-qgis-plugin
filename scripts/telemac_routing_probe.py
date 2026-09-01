@@ -45,8 +45,7 @@ os.environ.setdefault(
     "Never end a reply with an offer, suggestion, or recommendation for a next "
     "step (no 'Would you like...', no 'I can also...'). State what was done or "
     "found, then stop. The user decides what happens next. Fetch and composer "
-    "tools publish their own layers - only call publish_layer when you have a "
-    "handle returned by a previous tool result, passed verbatim. If a fetch "
+    "tools publish their own layers. If a fetch "
     "returns no data, say so and stop.",
 )
 

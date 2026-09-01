@@ -78,8 +78,8 @@ async def test_stream_events_yields_function_call_event(fake_llm):
     # provider surfaces it as a FunctionCallEvent (client arg is ignored).
     fake_llm.script([
         fake_llm.call(
-            "sfincs_flood",
-            {"location_query": "Fort Myers, FL", "return_period_yr": 100},
+            _TEMPLATE,
+            {"location": "Fort Myers, FL", "substance": "dye"},
             call_id="call-abc123",
         ),
     ])
@@ -88,7 +88,7 @@ async def test_stream_events_yields_function_call_event(fake_llm):
     async for event in stream_events(
         None,
         "gemini-2.5-pro",
-        "Model peak flood depth from a 100-year design storm in Fort Myers, FL",
+        "Track a dye release down the river at Fort Myers, FL",
         tool_declarations=[],  # declarations already built; skip here
         system_prompt=SYSTEM_PROMPT,
     ):
@@ -99,9 +99,9 @@ async def test_stream_events_yields_function_call_event(fake_llm):
     assert isinstance(evt, FunctionCallEvent), (
         f"Expected FunctionCallEvent, got {type(evt)}"
     )
-    assert evt.name == "sfincs_flood"
-    assert evt.args.get("location_query") == "Fort Myers, FL"
-    assert evt.args.get("return_period_yr") == 100
+    assert evt.name == _TEMPLATE
+    assert evt.args.get("location") == "Fort Myers, FL"
+    assert evt.args.get("substance") == "dye"
 
 
 # ---------------------------------------------------------------------------
@@ -129,18 +129,19 @@ async def test_stream_events_yields_text_delta_event(fake_llm):
 
 
 # ---------------------------------------------------------------------------
-# Test 5: SYSTEM_PROMPT mentions key routing phrases
+# Test 5: SYSTEM_PROMPT names the live templates it routes to
 # ---------------------------------------------------------------------------
 
 
-def test_system_prompt_mentions_flood_routing():
-    """System prompt must instruct the model to call the sfincs_flood template."""
-    assert "sfincs_flood" in SYSTEM_PROMPT
-    assert "100-year" in SYSTEM_PROMPT or "flood" in SYSTEM_PROMPT.lower()
+def test_system_prompt_mentions_runoff_routing():
+    """System prompt must instruct the model to call the rain-on-grid template
+    for the runoff question, and it must name the river-plume template too."""
+    assert "telemac_rain_on_grid" in SYSTEM_PROMPT
+    assert _TEMPLATE in SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------
-# Test 6: sfincs_flood docstring covers 100-year storm phrase
+# Test 6: the template docstring carries the question's own words
 # ---------------------------------------------------------------------------
 
 

@@ -20,7 +20,83 @@ visible to reviewers.
 
 from __future__ import annotations
 
+import re
+
 from trid3nt_server.adapters.adapter import SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Capability surface — the prompt names only tools that exist
+# ---------------------------------------------------------------------------
+
+#: Engine families purged from the registry. Their first name segment is gone
+#: from every registered tool, so only an explicit list can hold them out; a
+#: name returns here one line at a time as its engine lands again.
+_RETIRED_ENGINE_NAMES = (
+    "sfincs_flood",
+    "swmm_urban_flood",
+    "geoclaw_inundation",
+    "swan_wave_field",
+    "schism_coupled_waves",
+    "modflow_",
+    "openquake_psha",
+    "landlab_susceptibility",
+    "elmfire_fire_spread",
+    "pelicun",
+    "publish_layer",
+)
+
+
+def test_system_prompt_names_no_absent_tool() -> None:
+    """A prompt that names a tool the registry does not have routes the model at
+    nothing, and the model then invents a recovery. Two locks: no purged engine
+    family by name, and every token sharing a first segment with a registered
+    tool must itself be registered."""
+    import trid3nt_server.tools as agent_tools
+
+    flat = SYSTEM_PROMPT.lower()
+    for name in _RETIRED_ENGINE_NAMES:
+        assert name not in flat, f"purged tool name {name!r} is back in the prompt"
+
+    registry = set(agent_tools.TOOL_REGISTRY)
+    live_prefixes = {name.split("_", 1)[0] for name in registry if "_" in name}
+    for token in set(re.findall(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b", SYSTEM_PROMPT)):
+        if token.split("_", 1)[0] in live_prefixes and token not in registry:
+            raise AssertionError(f"prompt names {token!r}, absent from the registry")
+
+
+def test_system_prompt_states_the_live_modelling_surface() -> None:
+    """The capability paragraph reads as question classes the live templates
+    answer, and every family the ruling names is reachable."""
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "The questions you can currently MODEL" in flat
+    for name in (
+        "telemac_river_dye",
+        "telemac_do_sag",
+        "telemac_rain_on_grid",
+        "telemac3d_stratified_flow",
+        "artemis_harbor_agitation",
+    ):
+        assert name in SYSTEM_PROMPT, f"live template {name!r} unreachable from the prompt"
+
+
+def test_system_prompt_declares_honest_absence() -> None:
+    """Where a class has no solver, the prompt tells the model to say so rather
+    than route somewhere plausible."""
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "Honest absence" in flat
+    assert "not currently modeled" in flat
+    assert "never route to a tool that does not exist" in flat
+
+
+def test_system_prompt_fidelity_ladder_is_engine_name_free() -> None:
+    """The ladder survives as a PRINCIPLE - rung chosen by the question, with
+    calibration last - so it stops rotting as the engine roster changes."""
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "Fidelity ladder" in flat
+    assert "Choose the rung by the QUESTION" in flat
+    assert "BELOW the useful range of a depth-averaged 2D run" in flat
+    assert "CALIBRATION is the crux and comes LAST" in flat
 
 
 # ---------------------------------------------------------------------------
@@ -167,10 +243,10 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_system_prompt_still_routes_flood_modeling() -> None:
-    """Flood routing survives door dissolution (ADR 0094): the prompt now names
-    the sfincs_flood template directly, not a run_sfincs door."""
-    assert "sfincs_flood" in SYSTEM_PROMPT
+def test_system_prompt_still_routes_rainfall_runoff() -> None:
+    """The live rainfall-runoff question routes to the registered template
+    directly, with no dissolved door name in front of it."""
+    assert "telemac_rain_on_grid" in SYSTEM_PROMPT
     assert "run_sfincs" not in SYSTEM_PROMPT
 
 
@@ -202,37 +278,6 @@ def test_system_prompt_has_input_review_instruction() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wave 4.9 — vector layers must NOT be published via publish_layer
-# ---------------------------------------------------------------------------
-
-
-def test_system_prompt_has_vector_publish_prohibition_section() -> None:
-    """Prompt must carry the raster-only publish guidance (vector render path)."""
-    assert "publish_layer is for RASTER COGs ONLY" in SYSTEM_PROMPT
-
-
-def test_system_prompt_forbids_publishing_vectors() -> None:
-    """The load-bearing prohibition: never publish a vector layer."""
-    assert "NEVER call publish_layer on a VECTOR layer" in SYSTEM_PROMPT
-
-
-def test_system_prompt_names_vector_layer_kinds_and_extensions() -> None:
-    """Vector trigger vocabulary: layer kinds + file extensions the agent must
-    recognize as already-on-the-map vectors."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    for kind in ("roads", "rivers", "waterways", "administrative boundaries"):
-        assert kind in flat, f"vector layer kind {kind!r} missing — render guard weakens"
-    for ext in ("*.fgb", "*.geojson", "GeoParquet"):
-        assert ext in flat, f"vector extension {ext!r} missing — render guard weakens"
-
-
-def test_system_prompt_says_vectors_already_on_map() -> None:
-    """The reason half: vectors are shown by their producing fetch tool, so
-    publish_layer is a duplicate / error for them."""
-    assert "ALREADY shown on the map" in SYSTEM_PROMPT
-
-
-# ---------------------------------------------------------------------------
 # 2026-06-17 — arg-error self-correct (Oklahoma-tornado bug)
 # ---------------------------------------------------------------------------
 
@@ -254,33 +299,12 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Groundwater spill routing — parameterized vs. news-article
+# News-article spill forcing — extract, never invent
 # ---------------------------------------------------------------------------
 
 
-def test_system_prompt_has_groundwater_spill_routing_section() -> None:
-    """Prompt must carry the groundwater/MODFLOW routing. Door dissolution
-    (ADR 0094): templates are called DIRECTLY, no run_modflow door / concierge."""
-    assert "Groundwater / MODFLOW routing" in SYSTEM_PROMPT
-    assert "modflow_contaminant_plume" in SYSTEM_PROMPT
-    # the door concierge is gone -- no run_modflow door, no SELECT-THEN-CALL step.
-    assert "run_modflow DOOR" not in SYSTEM_PROMPT
-    assert "SELECT-THEN-CALL" not in SYSTEM_PROMPT
-
-
-def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume() -> None:
-    """A parameterized spill (location + contaminant + rate + duration) routes to
-    modflow_contaminant_plume directly, passing spill_location_latlon as a
-    2-element [lat, lon] array."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "call modflow_contaminant_plume with" in flat
-    # spill_location_latlon passed as a 2-element [lat, lon] array.
-    assert "spill_location_latlon as a 2-element [lat, lon] array" in flat
-
-
 def test_system_prompt_never_invents_contamination_forcing() -> None:
-    """Composer dissolution (ADR 0105): the standalone news-ingest composer is
-    gone; the prompt must keep the Invariant-9 never-invent rule so the model
+    """The prompt must keep the Invariant-9 never-invent rule so the model
     extracts (never fabricates) the spill forcing from the article/user."""
     flat = " ".join(SYSTEM_PROMPT.split())
     assert "NEVER INVENT a contamination parameter" in flat
@@ -288,10 +312,10 @@ def test_system_prompt_never_invents_contamination_forcing() -> None:
     assert "gallons / liters / barrels / tons" in flat
 
 
-def test_system_prompt_still_routes_modflow_groundwater() -> None:
-    """modflow_contaminant_plume stays named; the news-article path is now a
-    model-composed chain (web_fetch -> extract -> modflow_contaminant_plume)."""
-    assert "modflow_contaminant_plume" in SYSTEM_PROMPT
+def test_system_prompt_routes_the_news_article_spill_to_the_river_plume() -> None:
+    """The news-article path is a model-composed chain (web_fetch -> extract ->
+    derive the forcing -> the registered river-plume template)."""
+    assert "telemac_river_dye" in SYSTEM_PROMPT
     assert "web_fetch" in SYSTEM_PROMPT
     assert "NEWS ARTICLE" in SYSTEM_PROMPT
 
