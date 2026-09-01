@@ -236,7 +236,10 @@ def test_the_agitation_chart_plots_the_workers_own_transect():
     assert [row["kd"] for row in values] == [1.256, 1.459, 0.86]
     assert "Distance along the transect (m)" == \
         payload["vega_lite_spec"]["encoding"]["x"]["title"]
-    assert "sheltered the berths by a factor of 3.91" in payload["caption"]
+    assert "in the strip it shadows by a factor of 3.91" in payload["caption"]
+    # the pair is a mean over the MESHED domain, and the caption says so rather
+    # than claiming the berths a lake-datum grid may not even cover
+    assert "means over the meshed domain only" in payload["caption"]
     bare = layer.model_copy(update={"agitation_curve_m": None,
                                     "agitation_curve_kd": None})
     assert build_agitation_chart(result=bare, params={}) is None

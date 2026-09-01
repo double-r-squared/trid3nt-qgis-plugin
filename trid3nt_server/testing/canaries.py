@@ -84,7 +84,8 @@ _COWEETA_POUR_POINT = [-83.40402, 35.05746]
 #: (``man_made=breakwater``), handed to the structure slot the way a drawn one is:
 #: a polyline of (lon, lat) vertices. It runs roughly north-south across the
 #: harbour approach with its southern root hooking west to the shore, and the
-#: berths it exists to protect sit behind it, to the west. Baked here rather than
+#: water it exists to protect sits behind it, to the west - as much of that water
+#: as the lake-datum bathymetry actually covers. Baked here rather than
 #: fetched because a canary is a DECLARATION - the same question every time - and
 #: a run whose geometry arrived from a live Overpass query would report an
 #: upstream outage as a drift in the answer. The three ways the slot can be

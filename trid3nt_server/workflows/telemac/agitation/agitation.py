@@ -204,10 +204,16 @@ def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
             (f"Forced by a prescribed {float(period):.3g} s incident wave: "
              if period is not None else "")
             + (f"Kd {float(exposed):.3g} on the exposed approach against "
-               f"{float(sheltered):.3g} in the lee - the structure sheltered the "
-               f"berths by a factor of {float(exposed) / float(sheltered):.3g}. "
+               f"{float(sheltered):.3g} in the lee - the structure cut agitation "
+               f"in the strip it shadows by a factor of "
+               f"{float(exposed) / float(sheltered):.3g}. "
                if sheltered and exposed else "")
-            + "Phase-resolving screening, not a calibrated hindcast."
+            # WHAT WAS AND WAS NOT MEASURED. Both numbers are means over the
+            # structure's own shadow strip inside the MESHED domain; water the
+            # bathymetry left out of that domain - a dredged inner basin the
+            # lake-datum grid does not cover - is not in either of them.
+            + "Both are means over the meshed domain only. Phase-resolving "
+              "screening, not a calibrated hindcast."
         ),
     )
 
