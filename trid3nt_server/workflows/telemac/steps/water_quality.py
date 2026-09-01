@@ -34,7 +34,8 @@ def upstream_do_mgl(params: Any) -> float:
     return float(params.do_saturation_mgl)
 
 
-def WaqtelO2(*, discharge_bod_mgl: Any, upstream_do_mgl: Any,  # noqa: N802
+def WaqtelO2(*, effluent_bod_mgl: Any, effluent_q_m3s: Any,  # noqa: N802
+             effluent_do_mgl: Any, upstream_do_mgl: Any,
              do_saturation_mgl: Any, water_temp_c: Any, k1_per_day: Any,
              k2_per_day: Any, do_standard_mgl: Any) -> Step:
     """The declared WAQTEL O2 process block - resolved ONCE, read twice.
@@ -44,7 +45,9 @@ def WaqtelO2(*, discharge_bod_mgl: Any, upstream_do_mgl: Any,  # noqa: N802
     the block is a step whose result they both ``Ref``.
     """
     return Step(runner=_RUNNER, stage="prep", kwargs={
-        "discharge_bod_mgl": discharge_bod_mgl,
+        "effluent_bod_mgl": effluent_bod_mgl,
+        "effluent_q_m3s": effluent_q_m3s,
+        "effluent_do_mgl": effluent_do_mgl,
         "upstream_do_mgl": upstream_do_mgl,
         "do_saturation_mgl": do_saturation_mgl,
         "water_temp_c": water_temp_c,
@@ -54,21 +57,34 @@ def WaqtelO2(*, discharge_bod_mgl: Any, upstream_do_mgl: Any,  # noqa: N802
     })
 
 
-def waqtel_o2_process(*, discharge_bod_mgl: float, upstream_do_mgl: float,
+def waqtel_o2_process(*, effluent_bod_mgl: float, effluent_q_m3s: float,
+                      effluent_do_mgl: float, upstream_do_mgl: float,
                       do_saturation_mgl: float, water_temp_c: float,
                       k1_per_day: float, k2_per_day: float,
                       do_standard_mgl: float) -> dict[str, Any]:
-    """The WAQTEL O2 configuration the deck and the postprocess share."""
+    """The WAQTEL O2 configuration the deck and the postprocess share.
+
+    The effluent trio is the OUTFALL itself - the discharge that enters the water
+    at the release point carrying its own organic load and its own oxygen. The
+    river above it is clean: the reach's mixed CBOD is what the solve computes
+    from that source and the carrier flow, never a concentration this block
+    imposes on the inflow face.
+    """
     # DO cannot ride in above its own saturation - a physics coupling between two
-    # params, so it cannot be a declared static bound.
-    up_do = min(max(float(upstream_do_mgl), 0.0), float(do_saturation_mgl))
+    # params, so it cannot be a declared static bound. The same ceiling holds for
+    # the effluent: a discharge cannot carry more oxygen than the water can hold.
+    sat = float(do_saturation_mgl)
+    up_do = min(max(float(upstream_do_mgl), 0.0), sat)
     if up_do != float(upstream_do_mgl):
         logger.info("waqtel o2: upstream_do_mgl %.3g pinned to saturation %.3g mg/L",
                     upstream_do_mgl, do_saturation_mgl)
+    eff_do = min(max(float(effluent_do_mgl), 0.0), sat)
     return {
-        "bod_mgl": float(discharge_bod_mgl),
+        "effluent_bod_mgl": float(effluent_bod_mgl),
+        "effluent_q_m3s": float(effluent_q_m3s),
+        "effluent_do_mgl": eff_do,
         "upstream_do_mgl": up_do,
-        "saturation_mgl": float(do_saturation_mgl),
+        "saturation_mgl": sat,
         "water_temp_c": float(water_temp_c),
         "k1_per_day": float(k1_per_day),
         "k2_per_day": float(k2_per_day),

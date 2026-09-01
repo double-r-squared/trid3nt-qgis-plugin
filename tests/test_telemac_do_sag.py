@@ -360,3 +360,70 @@ def test_the_deck_records_the_edge_the_accepted_mesh_was_measured_at():
 class _Measured:
     def __init__(self, doc):
         self.probes = doc["probes"]
+
+
+# --- the analytical overlay: wired in, anchored, and honest about absence ---- #
+def _overlay(**kw):
+    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+        _streeter_phelps_overlay,
+    )
+    return _streeter_phelps_overlay(**kw)
+
+
+def test_the_overlay_is_anchored_at_the_modeled_mix_point():
+    """The closed form starts where the solve says the load entered - the CBOD
+    peak - not at the top of whatever stretch happened to be wet."""
+    xs = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0]
+    bod = [0.0, 0.0, 20.0, 18.0, 16.0, 14.0]
+    do = [9.0, 9.0, 8.5, 8.2, 8.0, 7.9]
+    anchor, sp, note = _overlay(curve_x=xs, curve_do=do, curve_bod=bod,
+                                velocity_mps=0.5, saturation_mgl=9.0,
+                                k1_per_day=2.0, k2_per_day=6.0)
+    assert anchor == 2 and len(sp) == 4
+    assert sp[0] == pytest.approx(do[2])          # anchored ON the modeled state
+    assert "200 m downstream" in note and "0.500 m/s" in note
+
+
+@pytest.mark.parametrize("kw,reason", [
+    (dict(velocity_mps=0.0), "velocity"),
+    (dict(curve_bod=[0.0] * 6), "organic load"),
+    (dict(k1_per_day=None), "rates"),
+])
+def test_the_overlay_says_why_there_is_none(kw, reason):
+    base = dict(curve_x=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+                curve_do=[9.0] * 6, curve_bod=[0.0, 0.0, 20.0, 18.0, 16.0, 14.0],
+                velocity_mps=0.5, saturation_mgl=9.0, k1_per_day=2.0,
+                k2_per_day=6.0)
+    anchor, sp, note = _overlay(**{**base, **kw})
+    assert sp == [] and anchor == 0 and reason in note
+
+
+def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
+    """Deterministic grading: fed a profile that IS sp_do_profile, the overlay
+    returns that same profile - so a stated deviation is the solve's, not the
+    overlay's."""
+    xs = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0]
+    do_exact, _ = sp_do_profile(xs, 0.4, 9.0, 20.0, 0.5, 2.0, 6.0)
+    bod = [20.0] + [0.0] * 5          # the mix point is bin 0
+    _anchor, sp, _note = _overlay(curve_x=xs, curve_do=do_exact, curve_bod=bod,
+                                  velocity_mps=0.4, saturation_mgl=9.0,
+                                  k1_per_day=2.0, k2_per_day=6.0)
+    assert sp == pytest.approx(do_exact, abs=1e-9)
+
+
+# --- the downstream axis is pointed by the SOLVED flow ----------------------- #
+def test_the_principal_axis_is_oriented_by_the_solved_velocity():
+    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+        _downstream_coordinate,
+    )
+
+    x = np.linspace(0.0, 1000.0, 21)
+    y = np.zeros_like(x)
+    east, label_e = _downstream_coordinate(x, y, None, flow_uv=(1.0, 0.0))
+    west, label_w = _downstream_coordinate(x, y, None, flow_uv=(-1.0, 0.0))
+    # the same node cloud, opposite flows: chainage zero moves to the other end
+    assert east[0] == pytest.approx(0.0) and east[-1] == pytest.approx(1000.0)
+    assert west[0] == pytest.approx(1000.0) and west[-1] == pytest.approx(0.0)
+    assert label_e == label_w
+    assert "oriented by the solved mean velocity" in label_e
+    assert "direction unverified" in _downstream_coordinate(x, y, None)[1]

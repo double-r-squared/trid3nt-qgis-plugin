@@ -38,11 +38,22 @@ class PARAMS:
         desc="Where the discharge enters the water, (lon, lat); unset seeds the "
              "reach at the derived reach point")
 
-    discharge_bod_mgl = Param(
-        door=doors.SCENARIO, default=20.0,
+    effluent_bod_mgl = Param(
+        door=doors.SCENARIO, default=250.0,
         bounds=(0.1, 5000.0), units="mg/L", consequence="scenario",
-        desc="Fully-mixed ultimate carbonaceous BOD at the top of the reach - "
-             "the pollutant source-term question")
+        desc="Ultimate carbonaceous BOD IN THE DISCHARGE ITSELF - what leaves the "
+             "outfall pipe, before any dilution; the reach's mixed load is what "
+             "the solve computes from this and the carrier flow")
+    effluent_q_m3s = Param(
+        door=doors.SCENARIO, default=1.0,
+        bounds=(0.0001, 1000.0), units="m^3/s", consequence="scenario",
+        desc="Discharge rate at the outfall - with the carrier flow this sets the "
+             "dilution, and so how much of the effluent load the river carries")
+    effluent_do_mgl = Param(
+        door=doors.SCENARIO, default=2.0,
+        bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
+        desc="Dissolved oxygen in the discharge itself; a treated effluent arrives "
+             "oxygen-poor, which is the initial deficit the sag starts from")
     water_temp_c = Param(
         door=doors.SCENARIO, default=20.0, bounds=(0.0, 40.0),
         units="C", consequence="scenario",
@@ -79,9 +90,12 @@ class PARAMS:
         desc="DO carried in at the top of the reach; derived as saturation unless supplied")
 
     sim_duration_s = Param(
-        door=doors.CONSTANT, default=10800.0,
+        door=doors.SCENARIO, default=172800.0,
         bounds=(60.0, 864000.0), units="s", consequence="numerical",
-        desc="Simulated time to reach the steady-state sag")
+        user_lever=True,
+        desc="Simulated time. A sag is a STEADY-STATE answer, so this has to cover "
+             "several travel times through the reach AND be long against 1/k1 - a "
+             "window shorter than that reports a sag that has not developed yet")
     # THE granularity lever, and always an explicit sheet value: no sizing rung
     # derives an edge from the channel, so the number the run meshes at is either
     # the user's or the labeled default a review can see and change.
@@ -123,12 +137,12 @@ DOC = dict(
         "THE tool for \"where does dissolved oxygen bottom out below this discharge\", "
         "\"will the DO sag violate the standard\", \"Streeter-Phelps oxygen sag\", \"BOD "
         "loading / oxygen demand downstream of a WWTP / outfall\", \"DO TMDL for this "
-        "reach\". Solves TELEMAC-2D + WAQTEL O2 over a REAL NHDPlus reach modeled "
-        "STARTING at the fully-mixed discharge: the mixed carbonaceous BOD + DO enter "
-        "at the top of the reach, CBOD decays downstream (deoxygenation k1) consuming "
-        "oxygen, and surface reaeration (k2) recovers it. Produces a DISSOLVED-O2 field "
-        "map + the along-reach DO-sag curve + the sag-minimum location/value. Supply a "
-        "place `location` (geocoded) OR an explicit `bbox`."
+        "reach\". Solves TELEMAC-2D + WAQTEL O2 over a REAL NHDPlus reach starting "
+        "at the outfall: clean river in at the top, the DISCHARGE ITSELF a continuous "
+        "point source of organic load and low oxygen, CBOD decaying downstream (k1) "
+        "and reaeration (k2) recovering it. Produces a DISSOLVED-O2 field map + the "
+        "along-reach sag curve against the Streeter-Phelps closed form + the "
+        "sag-minimum location/value. Supply a place `location` OR a `bbox`."
     ),
     not_for=(
         "a conservative dye/tracer/contaminant plume that only dilutes "
@@ -152,7 +166,9 @@ DOC = dict(
     returns=(
         "On success a `TelemacDoLayerURI` (a `LayerURI` subtype) - the emitter loads "
         "the DISSOLVED-O2 field map and animates the SELAFIN sibling. It carries "
-        "`do_min_mgl` / `do_min_distance_m` / `do_violates_standard` + `sag_curve_*`; "
+        "`do_min_mgl` / `do_min_distance_m` / `do_violates_standard` + `sag_curve_*`, "
+        "and the analytical check `sp_curve_*` / `sp_rms_mgl` / "
+        "`sp_sag_deviation_mgl`; "
         "narrate those typed numbers. On failure a dict with `status=\"error\"` + "
         "`error_code`."
     ),

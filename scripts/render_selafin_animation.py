@@ -596,10 +596,15 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     coll.set_array(values[peak_frame])
     if still_style:
         _draw_frame_vectors(still_style, still_grid, peak_frame)
+    # A ONE-FRAME solve has no simulation clock, and the number in its time slot
+    # is whatever the solver put there - for a steady elliptic wave solve it is
+    # the wave PERIOD, which read as a timestamp says the run lasted eight
+    # seconds. A steady field is stamped as one.
+    measured = (f"max {frame_max[peak_frame]:.3g} {units}"
+                if np.isfinite(frame_max[peak_frame]) else "dry (no wet nodes)")
     stamp.set_text(f"{still.upper()} FRAME  t = "
-                   f"{float(times[peak_frame]):8.0f} s      "
-                   + (f"max {frame_max[peak_frame]:.3g} {units}"
-                      if np.isfinite(frame_max[peak_frame]) else "dry (no wet nodes)"))
+                   f"{float(times[peak_frame]):8.0f} s      {measured}" if animated
+                   else f"STEADY STATE (no simulation clock)      {measured}")
     fig.savefig(peak_path, bbox_inches="tight")
     plt.close(fig)
     return {"frames": int(values.shape[0]), "animated": animated,

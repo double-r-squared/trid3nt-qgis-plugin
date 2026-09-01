@@ -40,8 +40,12 @@ _BASE = {
     "bbox": BBOX,
     "wave_mode": "diffraction",
     "wave_period_s": 8.0,
-    "wave_direction_deg": 90.0,
-    "wave_height_m": 1.0,
+    # The heading the canary declares - swell up the harbour's south-east mouth,
+    # propagating north-north-west in the trig convention the param states. The
+    # three ways of filling the slot are only comparable against each other and
+    # against the canary if all four ask the same wave.
+    "wave_direction_deg": 110.0,
+    "wave_height_m": 2.0,
     "bathy_source": "noaa_greatlakes",
     "target_resolution_m": 40.0,
     "compute_class": "medium",

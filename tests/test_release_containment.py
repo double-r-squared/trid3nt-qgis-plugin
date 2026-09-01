@@ -134,3 +134,53 @@ def test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_thro
     with pytest.raises(TelemacDyeScenarioError) as excinfo:
         domain_polygon_of(art)
     assert "no mapped shape" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# A DERIVED release is settled against the MESH, not just against the line.
+# --------------------------------------------------------------------------- #
+def _mesh_holding(x_from: float, x_to: float, monkeypatch):
+    """Stand in a mesh whose cells cover only ``x_from..x_to`` of the centerline."""
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+
+    monkeypatch.setattr(
+        nodes_mod, "read_accepted_mesh_nodes",
+        lambda _uri, utm_epsg=None: (
+            np.array([[x_from, -50.0], [x_to, -50.0], [x_to, 50.0], [x_from, 50.0]]),
+            np.array([[0, 1, 2], [0, 2, 3]]), None, None))
+    return {"display_uri": "s3://m/M/mesh.2dm",
+            "artifact": type("A", (), {"utm_epsg": 32611})()}
+
+
+def test_a_derived_release_inside_the_mesh_is_left_where_it_was(monkeypatch):
+    from trid3nt_server.workflows.telemac.release_point import derive_release_on_mesh
+
+    mesh = _mesh_holding(0.0, 1000.0, monkeypatch)
+    (_lon, _lat), note = derive_release_on_mesh(
+        centerline_utm=[[0.0, 0.0], [1000.0, 0.0]], mesh=mesh, fraction=0.25)
+    assert note is None
+
+
+def test_a_derived_release_above_the_meshed_stretch_walks_downstream(monkeypatch):
+    """The centerline runs on past what the mapped banks left; the station has to
+    be inside the triangulation or the solver stops with the source outside the
+    domain."""
+    from trid3nt_server.workflows.telemac.release_point import derive_release_on_mesh
+
+    mesh = _mesh_holding(400.0, 1000.0, monkeypatch)
+    _lonlat, note = derive_release_on_mesh(
+        centerline_utm=[[0.0, 0.0], [1000.0, 0.0]], mesh=mesh, fraction=0.02)
+    assert note is not None and "downstream" in note
+    walked = float(note.split("moved ")[1].split(" m")[0])
+    assert 370.0 <= walked <= 400.0     # 20 m in, then the first meshed station
+
+
+def test_a_centerline_the_mesh_never_holds_refuses(monkeypatch):
+    from trid3nt_server.workflows.telemac.release_point import derive_release_on_mesh
+
+    mesh = _mesh_holding(5000.0, 6000.0, monkeypatch)
+    with pytest.raises(TelemacDyeScenarioError):
+        derive_release_on_mesh(centerline_utm=[[0.0, 0.0], [1000.0, 0.0]],
+                               mesh=mesh, fraction=0.0)

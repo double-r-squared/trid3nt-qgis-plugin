@@ -133,7 +133,9 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
         *ops.acquire_domain(location=P.location, bbox=P.bbox, rivers=DATA.rivers,
                             discharge=P.discharge_m3s, event_time=P.event_time,
                             seed_coords=P.outfall_coords),
-        WaqtelO2(discharge_bod_mgl=P.discharge_bod_mgl,
+        WaqtelO2(effluent_bod_mgl=P.effluent_bod_mgl,
+                 effluent_q_m3s=P.effluent_q_m3s,
+                 effluent_do_mgl=P.effluent_do_mgl,
                  upstream_do_mgl=P.upstream_do_mgl,
                  do_saturation_mgl=P.do_saturation_mgl,
                  water_temp_c=P.water_temp_c, k1_per_day=P.k1_per_day,
@@ -156,15 +158,20 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
 #: recomputing them from the raster.
 ANSWER = ("do_min_mgl", "do_min_distance_m", "do_standard_mgl",
           "do_violates_standard", "do_upstream_mgl", "do_saturation_mgl",
-          "bod_upstream_mgl", "sag_curve_distance_m", "sag_curve_do_mgl",
-          "sag_curve_bod_mgl", "mesh_size_m")
+          "bod_mixed_mgl", "mean_velocity_mps", "sag_curve_distance_m",
+          "sag_curve_do_mgl", "sag_curve_bod_mgl", "sp_curve_distance_m",
+          "sp_curve_do_mgl", "sp_rms_mgl", "sp_sag_deviation_mgl", "sp_note",
+          "mesh_size_m")
 
 
 def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The DO-sag chart SPEC: DO + CBOD vs downstream distance, standard as a rule.
+    """The DO-sag chart SPEC: DO + CBOD vs distance, against the closed form.
 
     Honest postprocess scalars off the published layer (the binned centerline
-    curve), never a fabricated line; ``None`` when the curve is absent.
+    curve), never a fabricated line; ``None`` when the curve is absent. The
+    Streeter-Phelps profile rides as a DASHED second series computed in the read
+    from the run's own mix point, load and velocity, and the caption states how
+    far the solve sits from it - the deterministic grading, not a judgement.
     """
     xs = getattr(result, "sag_curve_distance_m", None)
     do = getattr(result, "sag_curve_do_mgl", None)
@@ -184,10 +191,20 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
                for i in range(len(xs))]
     bod_vals = ([{"x_km": round(xs[i] / 1000.0, 4), "v": bod[i], "series": "CBOD"}
                  for i in range(len(xs))] if bod and len(bod) == len(xs) else [])
+    sp_x = getattr(result, "sp_curve_distance_m", None)
+    sp_do = getattr(result, "sp_curve_do_mgl", None)
+    # The closed form rides as its OWN NAMED SERIES rather than as a second
+    # layer: the dock draws one colour and one legend entry per series, so a
+    # reader can tell the solved profile from the analytical one - which is the
+    # whole point of drawing them together.
+    sp_vals = ([{"x_km": round(sp_x[i] / 1000.0, 4), "v": sp_do[i],
+                 "series": "Streeter-Phelps closed form"}
+                for i in range(len(sp_x))]
+               if sp_x and sp_do and len(sp_x) == len(sp_do) else [])
     vega_lite_spec = {
         "layer": [
             {"mark": {"type": "line", "point": False},
-             "data": {"values": do_vals + bod_vals},
+             "data": {"values": do_vals + sp_vals + bod_vals},
              "encoding": {
                  "x": {"field": "x_km", "type": "quantitative",
                        "title": "Downstream distance (km)"},
@@ -207,13 +224,22 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     where = params.get("location")
     title = (f"Dissolved-oxygen sag - {where}" if where
              else (getattr(result, "name", None) or "Dissolved-oxygen sag"))
+    rms = getattr(result, "sp_rms_mgl", None)
+    dev = getattr(result, "sp_sag_deviation_mgl", None)
+    overlay = (
+        f" The Streeter-Phelps closed form is drawn beside it on this run's own mix "
+        f"point, load and velocity - whole-profile RMS {rms:g} {units}, sag minimum "
+        f"{abs(dev):g} {units} {'below' if dev < 0 else 'above'} it."
+        if sp_vals and rms is not None and dev is not None else
+        f" No analytical overlay ({getattr(result, 'sp_note', None) or 'not computed'})."
+    )
     return build_chart_payload(
         vega_lite_spec=vega_lite_spec,
         title=title,
         caption=(
-            f"Streeter-Phelps DO sag: minimum {dmin} {units} at {dloc} m downstream "
-            f"({verdict} the {std:g} {units} standard, dashed). CBOD decay drives the "
-            f"sag; reaeration recovers it. Screening/permit grade."
+            f"DO sag: minimum {dmin} {units} at {dloc} m downstream "
+            f"({verdict} the {std:g} {units} standard, red dashed). CBOD decay drives "
+            f"the sag; reaeration recovers it." + overlay + " Screening/permit grade."
         ),
     )
 

@@ -662,18 +662,16 @@ def _solve_diffraction_supplied(cfg: ArtemisConfig, data_dir: str, run_id):
 
     wrad = np.radians(wdir)
     ux, uy = np.cos(wrad), np.sin(wrad)
-    if segs.size:
-        allx = np.concatenate([segs[:, 0], segs[:, 2]])
-        ally = np.concatenate([segs[:, 1], segs[:, 3]])
-        bw_mid = (float(allx.mean()), float(ally.mean()))
-    else:
-        bw_mid = (float(mesh["X"].mean()), float(mesh["Y"].mean()))
+    bw_mid, shadow_half = _structure_shadow(segs, ux, uy,
+                                           (float(mesh["X"].mean()),
+                                            float(mesh["Y"].mean())))
     return _run_diffraction(cfg, mesh, data_dir, run_id, classify,
                             H0=H0, T=float(cfg.wave_period_s), h=max(h_mean, 1.0),
                             wdir=wdir, x_tip=None, y_bw=None, dx=dx,
                             bathy_label=meta["bathy_label"], utm_epsg=epsg,
                             bbox=bbox, x0m=x0m, y0m=y0m, back=back,
-                            bw_mid=bw_mid, wave_uv=(ux, uy), extra=meta)
+                            bw_mid=bw_mid, wave_uv=(ux, uy),
+                            shadow_half_m=shadow_half, extra=meta)
 
 
 def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
@@ -809,25 +807,43 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
     # over an empty selection would have been a silent NaN.
     wrad = np.radians(wdir)
     ux, uy = np.cos(wrad), np.sin(wrad)
-    if segs.size:
-        allx = np.concatenate([segs[:, 0], segs[:, 2]])
-        ally = np.concatenate([segs[:, 1], segs[:, 3]])
-        bw_mid = (float(allx.mean()), float(ally.mean()))
-    else:
-        bw_mid = (0.5 * float(Lx), 0.5 * float(Ly))
+    bw_mid, shadow_half = _structure_shadow(segs, ux, uy,
+                                           (0.5 * float(Lx), 0.5 * float(Ly)))
     meta["n_structure_segments"] = int(len(segs))
+    meta["shadow_half_width_m"] = (round(shadow_half, 1)
+                                   if shadow_half is not None else None)
     return _run_diffraction(cfg, mesh, data_dir, run_id, classify,
                             H0=H0, T=float(cfg.wave_period_s), h=max(h_mean, 1.0),
                             wdir=wdir, x_tip=None, y_bw=None, dx=dx,
                             bathy_label=meta["bathy_label"], utm_epsg=epsg,
                             bbox=bbox, x0m=x0m, y0m=y0m, back=back,
-                            bw_mid=bw_mid, wave_uv=(ux, uy), extra=meta)
+                            bw_mid=bw_mid, wave_uv=(ux, uy),
+                            shadow_half_m=shadow_half, extra=meta)
+
+
+def _structure_shadow(segs, ux, uy, fallback_mid):
+    """The structure's midpoint and the HALF-WIDTH of the strip it blocks.
+
+    The shadow of a barrier is as wide as the barrier is ACROSS the incoming
+    wave, so the half-width is measured on the lateral axis (perpendicular to the
+    incident direction) over the structure's own vertices. With no structure
+    there is nothing to shadow and the caller falls back to the domain centre
+    with no strip, which is what makes an open-water run report no shelter
+    instead of inventing one.
+    """
+    if segs is None or not len(segs):
+        return fallback_mid, None
+    allx = np.concatenate([segs[:, 0], segs[:, 2]])
+    ally = np.concatenate([segs[:, 1], segs[:, 3]])
+    mid = (float(allx.mean()), float(ally.mean()))
+    lat = (allx - mid[0]) * (-uy) + (ally - mid[1]) * ux
+    return mid, float(np.abs(lat).max())
 
 
 def _run_diffraction(cfg, mesh, data_dir, run_id, classify, *, H0, T, h, wdir,
                      x_tip, y_bw, dx, bathy_label, utm_epsg, bbox,
                      x0m=0.0, y0m=0.0, back=None, bw_mid=None, wave_uv=None,
-                     extra=None):
+                     shadow_half_m=None, extra=None):
     tag = "agit"
     geo = os.path.join(data_dir, "geo_agit.slf")
     cli = os.path.join(data_dir, "bc_agit.cli")
@@ -855,10 +871,17 @@ def _run_diffraction(cfg, mesh, data_dir, run_id, classify, *, H0, T, h, wdir,
         # barrier midpoint. Behind (downwave, +u) = sheltered; in front = exposed.
         ux, uy = wave_uv
         proj = (X - bw_mid[0]) * ux + (Y - bw_mid[1]) * uy
-        # lateral distance to the barrier line to focus the split near the lee
-        lat_ok = np.ones_like(proj, dtype=bool)
-        sheltered = proj > 0.5 * lam
-        exposed = proj < -0.5 * lam
+        # THE SHADOW, not the half-plane. A structure shelters the strip it
+        # actually blocks, so both selections are held inside the barrier's own
+        # lateral extent: the sheltered mean is the lee, the exposed mean is the
+        # same strip on the seaward side, and the pair is a like-for-like
+        # comparison across ONE structure rather than two halves of the AOI. A
+        # half-plane split reports whatever else lives in the domain - a second
+        # harbour, a deeper approach - as sheltering.
+        lat = (X - bw_mid[0]) * (-uy) + (Y - bw_mid[1]) * ux
+        in_shadow = np.abs(lat) <= max(shadow_half_m or 0.0, lam)
+        sheltered = (proj > 0.5 * lam) & in_shadow
+        exposed = (proj < -0.5 * lam) & in_shadow
     else:
         # idealized path: shadow is x<x_tip on the downwave (y>y_bw) side.
         sheltered = (Y > y_bw + 0.5 * lam) & (X < x_tip - 0.5 * lam)
@@ -870,8 +893,9 @@ def _run_diffraction(cfg, mesh, data_dir, run_id, classify, *, H0, T, h, wdir,
 
     field_slf = _emit_primary_field(mesh, hs, data_dir)
 
-    # chart: Kd transect across the incident direction through the lee
-    chart = _diffraction_transect(X, Y, kd, bw_mid, wave_uv, x_tip, y_bw, lam)
+    # chart: Kd transect along the incident direction through the lee
+    chart = _diffraction_transect(X, Y, kd, bw_mid, wave_uv, x_tip, y_bw, lam,
+                                  shadow_half_m)
 
     metrics = _base_metrics(cfg, run_id, mesh, utm_epsg, bbox, field_slf, res)
     metrics.update({
@@ -883,6 +907,13 @@ def _run_diffraction(cfg, mesh, data_dir, run_id, classify, *, H0, T, h, wdir,
         "kd_exposed": round(kd_exposed, 3) if kd_exposed is not None else None,
         "sheltering_ratio": (round(kd_sheltered / kd_exposed, 3)
                              if (kd_sheltered and kd_exposed) else None),
+        # WHAT WAS AVERAGED. A ratio between two means says nothing until the
+        # reader can see how many nodes stood behind each one and how wide the
+        # strip they were drawn from was.
+        "n_sheltered_nodes": int(sheltered.sum()),
+        "n_exposed_nodes": int(exposed.sum()),
+        "shadow_half_width_m": (round(float(shadow_half_m), 1)
+                                if shadow_half_m else None),
         "bathy_label": bathy_label,
         **chart,
         **(extra or {}),
@@ -893,12 +924,19 @@ def _run_diffraction(cfg, mesh, data_dir, run_id, classify, *, H0, T, h, wdir,
     return metrics
 
 
-def _diffraction_transect(X, Y, kd, bw_mid, wave_uv, x_tip, y_bw, lam):
-    """A 1-D Kd profile along the incident direction through the shelter zone."""
+def _diffraction_transect(X, Y, kd, bw_mid, wave_uv, x_tip, y_bw, lam,
+                          shadow_half_m=None):
+    """A 1-D Kd profile along the incident direction through the shelter zone.
+
+    The band is the structure's own shadow strip - the same selection the
+    sheltered/exposed pair is read from - so the curve a reader sees and the two
+    numbers narrated beside it describe one region.
+    """
     if bw_mid is not None and wave_uv is not None:
         ux, uy = wave_uv
         s = (X - bw_mid[0]) * ux + (Y - bw_mid[1]) * uy       # along-wave coord
-        band = np.abs((X - bw_mid[0]) * (-uy) + (Y - bw_mid[1]) * ux) <= max(lam, 1.0)
+        band = (np.abs((X - bw_mid[0]) * (-uy) + (Y - bw_mid[1]) * ux)
+                <= max(shadow_half_m or 0.0, lam, 1.0))
     else:
         s = Y - y_bw
         band = np.abs(X - (x_tip - lam)) <= lam

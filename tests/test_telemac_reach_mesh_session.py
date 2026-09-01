@@ -31,7 +31,8 @@ _REACH = {"name": "Eel River", "slug": "eel", "lon": -124.1, "lat": 40.5,
           "bbox": (-124.2, 40.4, -124.0, 40.6)}
 _SEED = {"lon": -124.1, "lat": 40.5, "source": "flowline"}
 _CARRIER = {"m3s": 12.0, "basis": "fetched", "note": "NWM 12 m3/s"}
-_DO_SAG = {"bod_mgl": 20.0, "upstream_do_mgl": 8.0, "saturation_mgl": 9.0,
+_DO_SAG = {"effluent_bod_mgl": 250.0, "effluent_q_m3s": 1.0,
+           "effluent_do_mgl": 2.0, "upstream_do_mgl": 8.0, "saturation_mgl": 9.0,
            "water_temp_c": 20.0, "k1_per_day": 0.3, "k2_per_day": 0.5,
            "k2_formula": 0, "standard_mgl": 5.0}
 
@@ -97,6 +98,17 @@ def writer(monkeypatch, tmp_path):
     monkeypatch.setattr(deck_mod, "read_centerline_utm",
                         lambda _src, _epsg, **_kw:
                             np.array([[0.0, 0.0], [6000.0, 0.0]]))
+    # The derived release is settled against the ACCEPTED MESH's own cells, so a
+    # stood-in mesh needs a stood-in topology: two triangles spanning the whole
+    # stood-in centerline, which is a mesh that holds every station on it.
+    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+
+    monkeypatch.setattr(
+        nodes_mod, "read_accepted_mesh_nodes",
+        lambda _uri, utm_epsg=None: (
+            np.array([[-10.0, -50.0], [6010.0, -50.0], [6010.0, 50.0],
+                      [-10.0, 50.0]]),
+            np.array([[0, 1, 2], [0, 2, 3]]), None, None))
     monkeypatch.setattr(
         deck_mod, "_stage_authored",
         lambda _rundir, run_tag, names: [
@@ -130,7 +142,9 @@ def _expected_deck(*, mesh_size_m: float, time_step_s: float,
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
         "dye_conc_mgl": 100.0,
-        "spill_frac": 0.25,
+        # The outfall sits at the TOP of the reach it seeded; a dye release walks
+        # to whatever fraction the sheet asked for.
+        "spill_frac": 0.02 if do_sag else 0.25,
         "pulse_window_s": 300.0,
         "source_q_m3s": 8.0,
         "inflow_q_m3s": _CARRIER["m3s"],
@@ -141,7 +155,9 @@ def _expected_deck(*, mesh_size_m: float, time_step_s: float,
             "substance_class": "do_sag",
             "decay_law": 1,
             "decay_coef": 2.0,
-            "do_sag_bod_mgl": _DO_SAG["bod_mgl"],
+            "do_sag_effluent_bod_mgl": _DO_SAG["effluent_bod_mgl"],
+            "do_sag_effluent_q_m3s": _DO_SAG["effluent_q_m3s"],
+            "do_sag_effluent_do_mgl": _DO_SAG["effluent_do_mgl"],
             "do_sag_upstream_do_mgl": _DO_SAG["upstream_do_mgl"],
             "do_sat_mgl": _DO_SAG["saturation_mgl"],
             "do_water_temp_c": _DO_SAG["water_temp_c"],

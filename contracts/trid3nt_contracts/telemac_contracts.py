@@ -287,11 +287,23 @@ class TelemacDoLayerURI(LayerURI):
             against (e.g. 5 mg/L warm-water aquatic-life) - chart reference only.
         do_violates_standard: True when ``do_min_mgl`` falls below
             ``do_standard_mgl`` (the sag violates the standard) - the permit answer.
-        bod_upstream_mgl: the fully-mixed ultimate CBOD (mg/L) loaded at the top
-            of the reach - the driver of the sag.
+        bod_mixed_mgl: the MODELED peak ultimate CBOD (mg/L) along the reach -
+            the discharge's load as it stands once mixed into the carrier flow,
+            which is the driver of the sag.
+        mean_velocity_mps: the solved mean along-reach velocity (m/s) - what
+            converts downstream distance into the travel time the sag develops
+            over.
         sag_curve_distance_m / sag_curve_do_mgl / sag_curve_bod_mgl: OPTIONAL
             equal-length arrays of the centerline DO-sag curve (downstream
             distance, DO, CBOD) the dock chart plots against the standard line.
+        sp_curve_distance_m / sp_curve_do_mgl: OPTIONAL equal-length arrays of
+            the Streeter-Phelps CLOSED FORM over the same bins from the modeled
+            mix point downstream - the deterministic analytical overlay the chart
+            draws beside the solved profile.
+        sp_rms_mgl / sp_sag_deviation_mgl: how far the solve sits from that
+            closed form - whole-profile RMS, and solved sag minimum minus
+            analytical sag minimum (negative = the solve sags deeper).
+        sp_note: why the overlay reads as it does, or why there is none.
         mesh_size_m / mesh_node_estimate / mesh_resolution_label: the granularity
             the solve used (the visible, narratable resolution lever).
 
@@ -306,10 +318,16 @@ class TelemacDoLayerURI(LayerURI):
     do_saturation_mgl: float | None = Field(default=None, ge=0.0)
     do_standard_mgl: float | None = Field(default=None, ge=0.0)
     do_violates_standard: bool | None = Field(default=None)
-    bod_upstream_mgl: float | None = Field(default=None, ge=0.0)
+    bod_mixed_mgl: float | None = Field(default=None, ge=0.0)
+    mean_velocity_mps: float | None = Field(default=None)
     sag_curve_distance_m: list[float] | None = Field(default=None)
     sag_curve_do_mgl: list[float] | None = Field(default=None)
     sag_curve_bod_mgl: list[float] | None = Field(default=None)
+    sp_curve_distance_m: list[float] | None = Field(default=None)
+    sp_curve_do_mgl: list[float] | None = Field(default=None)
+    sp_rms_mgl: float | None = Field(default=None, ge=0.0)
+    sp_sag_deviation_mgl: float | None = Field(default=None)
+    sp_note: str | None = Field(default=None)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_node_estimate: int | None = Field(default=None, ge=0)
     mesh_resolution_label: str | None = Field(default=None)

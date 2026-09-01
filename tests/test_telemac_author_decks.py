@@ -209,19 +209,37 @@ def test_decay_rides_the_unchanged_tracer(tmp_path):
 
 
 def test_the_oxygen_sag_outputs_and_sizes_its_four_tracers(tmp_path):
-    cas = _author(tmp_path, substance_class="do_sag", do_sag_bod_mgl=25.0,
-                  do_sag_upstream_do_mgl=8.0)
+    cas = _author(tmp_path, substance_class="do_sag",
+                  do_sag_effluent_bod_mgl=250.0, do_sag_effluent_q_m3s=2.0,
+                  do_sag_effluent_do_mgl=1.0, do_sag_upstream_do_mgl=8.0)
     assert "WATER QUALITY PROCESS           = 2" in cas
     assert "VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1,T2,T3,T4'" in cas
     assert "INITIAL VALUES OF TRACERS       = 0.;8;0.;0." in cas
     prescribed = [ln for ln in cas.splitlines()
                   if ln.startswith("PRESCRIBED TRACERS VALUES")][0]
     assert prescribed.count(";") == 7  # four values on each of two boundaries
-    assert "25" in prescribed and "8" in prescribed
-    # do_sag rides in at the boundary, so there is no point-source pulse to
-    # collide with the module's four tracers.
-    assert "SOURCES FILE" not in cas
-    assert not (tmp_path / A.SOURCES_FILENAME).exists()
+    # BOTH liquid boundaries carry the SAME clean river, so which one the engine
+    # numbers first cannot decide the answer - and the load is nowhere near them.
+    assert prescribed.split("=")[1].strip() == "0.0;8;0.0;0.0;0.0;8;0.0;0.0"
+    assert "250" not in prescribed
+
+
+def test_the_outfall_is_a_continuous_four_tracer_point_source(tmp_path):
+    """The discharge IS the source: the organic load enters at the outfall, not
+    at an inflow face whose slot ordering nobody can see."""
+    cas = _author(tmp_path, substance_class="do_sag",
+                  do_sag_effluent_bod_mgl=250.0, do_sag_effluent_q_m3s=2.0,
+                  do_sag_effluent_do_mgl=1.0, do_sag_upstream_do_mgl=8.0,
+                  duration_s=600.0)
+    assert "SOURCES FILE" in cas
+    assert "WATER DISCHARGE OF SOURCES       = 2" in cas
+    assert "VALUES OF THE TRACERS AT THE SOURCES = 0.0;1;250;0.0" in cas
+    rows = (tmp_path / A.SOURCES_FILENAME).read_text().splitlines()
+    assert rows[1] == "T Q(1) TR(1,1) TR(1,2) TR(1,3) TR(1,4)"
+    series = [r.split() for r in rows[3:]]
+    assert len(series) == 2                      # continuous: held flat, no pulse
+    assert [r[1:] for r in series] == [["2.0000", "0.0", "1", "250", "0.0"]] * 2
+    assert float(series[-1][0]) > 600.0           # runs past where the run stops
 
 
 def test_the_oxygen_steering_zeroes_everything_but_the_sag_pair(tmp_path):

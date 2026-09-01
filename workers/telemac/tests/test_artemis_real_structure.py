@@ -164,3 +164,38 @@ def test_removed_control_has_no_slit():
     assert _barrier_crossing_edges(mesh, segs) > 0
     d = A._dist_to_segments(mesh["X"], mesh["Y"], segs)
     assert float(d.min()) < 30.0 * 0.6
+
+
+# --------------------------------------------------------------------------- #
+# The sheltered / exposed pair is read from the structure's own SHADOW.
+# --------------------------------------------------------------------------- #
+def test_the_shadow_half_width_is_the_barrier_across_the_wave():
+    """A barrier 200 m long across the incident direction shadows a 200 m strip."""
+    # a wall along +y from (0,0) to (0,200), waves running due +x
+    segs = np.array([[0.0, 0.0, 0.0, 200.0]])
+    mid, half = A._structure_shadow(segs, 1.0, 0.0, (999.0, 999.0))
+    assert mid == (0.0, 100.0)
+    assert half == pytest.approx(100.0)
+    # turn the wave to run along the wall and it shadows nothing across itself
+    _mid, half_along = A._structure_shadow(segs, 0.0, 1.0, (999.0, 999.0))
+    assert half_along == pytest.approx(0.0)
+
+
+def test_no_structure_shadows_nothing_and_falls_back_to_the_domain_centre():
+    mid, half = A._structure_shadow(np.zeros((0, 4)), 1.0, 0.0, (50.0, 60.0))
+    assert mid == (50.0, 60.0) and half is None
+
+
+def test_the_transect_band_follows_the_shadow_not_one_wavelength():
+    """The chart's band and the narrated pair must describe ONE region."""
+    # waves running +x, so the band is a strip in y around the barrier midpoint
+    x = np.arange(8.0) * 100.0
+    y = np.array([0.0, 20.0, 40.0, 60.0, 300.0, 400.0, 900.0, 1200.0])
+    kd = np.linspace(1.0, 0.3, 8)
+    wide = A._diffraction_transect(x, y, kd, (0.0, 0.0), (1.0, 0.0), None, None,
+                                   50.0, 1500.0)
+    narrow = A._diffraction_transect(x, y, kd, (0.0, 0.0), (1.0, 0.0), None, None,
+                                     50.0, 100.0)
+    # the 1500 m shadow holds every station; the 100 m one holds only the four
+    # inside the strip the barrier actually blocks
+    assert len(wide["chart_kd"]) == 8 and len(narrow["chart_kd"]) == 4

@@ -26,7 +26,8 @@ from trid3nt_server.workflows.telemac.steps.errors import (
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.release_point")
 
-__all__ = ["ContainedRelease", "contain_release_point", "domain_polygon_of"]
+__all__ = ["ContainedRelease", "contain_release_point", "derive_release_on_mesh",
+           "domain_polygon_of"]
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,63 @@ def domain_polygon_of(artifact: Any) -> Any:
             "could be inside of. A reach is meshed from the sectioned water "
             "polygon; solve on a mesh built that way.")
     return extent
+
+
+def derive_release_on_mesh(*, centerline_utm: Any, mesh: Any,
+                           fraction: float) -> tuple[tuple[float, float], str | None]:
+    """A DERIVED release: ``fraction`` along the centerline, inside the mesh.
+
+    The centerline is the whole navigated stretch; the accepted mesh is only the
+    part of it the mapped banks and the cleanup left, so a station on the line is
+    not a station in the domain. A source the solver cannot find an element for
+    stops the run at startup with nothing but "SOURCE POINT OUTSIDE DOMAIN", so
+    the station is walked DOWNSTREAM to the first one the triangulation actually
+    holds and the distance it travelled is said out loud.
+
+    Returns ``((lon, lat), note)`` in EPSG:4326; the note is ``None`` when the
+    declared station was already inside.
+    """
+    import numpy as np
+    import shapely
+    from pyproj import Transformer
+    from shapely.geometry import LineString
+
+    from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
+
+    utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)
+    display_uri = str(mesh.get("display_uri") or "")
+    line = LineString(centerline_utm)
+    frac = min(max(float(fraction), 0.0), 1.0)
+    start = frac * line.length
+    back = Transformer.from_crs(int(utm_epsg or 4326), 4326, always_xy=True)
+
+    points_utm, cells, _bed, _lonlat = read_accepted_mesh_nodes(
+        display_uri, utm_epsg=utm_epsg)
+    rings = np.asarray(points_utm, dtype=float)[np.asarray(cells, dtype=np.int64)]
+    tree = shapely.STRtree(
+        shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1)))
+    # A cell-length stride: finer than that resolves nothing the mesh can hold,
+    # coarser than that could step over a short meshed stretch entirely.
+    step = max(float(line.length) / 2000.0, 1.0)
+    walked = 0.0
+    while start + walked <= line.length:
+        here = line.interpolate(start + walked)
+        if tree.query(here, predicate="intersects").size:
+            lon, lat = back.transform(here.x, here.y)
+            note = (None if walked <= 0.0 else
+                    f"derived station moved {walked:.0f} m downstream to the "
+                    "first point the accepted mesh holds")
+            if note:
+                logger.info("derived release walked %.0f m downstream into the "
+                            "meshed reach", walked)
+            return (float(lon), float(lat)), note
+        walked += step
+    raise TelemacDyeScenarioError(
+        "TELEMAC_DYE_SCENARIO_ERROR",
+        f"no point on the centerline at or below {frac:.0%} of its length lies "
+        "inside the accepted mesh, so there is nowhere in the solved domain to "
+        "put the release. Mesh more of the reach (a finer mesh_resolution_m or a "
+        "supplied mesh) or place the release explicitly.")
 
 
 def contain_release_point(*, point: tuple[float, float], domain: Any,

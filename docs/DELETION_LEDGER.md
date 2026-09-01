@@ -2787,3 +2787,33 @@ workflows deletes on evidence, ledger line only).
   "replaces this after the current server batch" schedule promise. The
   client-side block is a standing CONSTRAINT, not a stage in a plan, and the
   docstring now states it as one.
+
+## The inflow-boundary DO load and the no-structure agitation canary (findings walkthrough rulings 4 + 14, 2026-09-01)
+
+DELETED, and what replaced each.
+
+- `steps/author.py` the WAQTEL O2 inflow-load branch: `do_sag_bod_mgl` rode in on
+  `PRESCRIBED TRACERS VALUES`, and which boundary got it depended on the
+  measured liquid-boundary order agreeing with the engine's own numbering. It did
+  not: `ORGANIC LOAD` was identically zero everywhere and the "sag" was the
+  imposed inflow value. The load now enters at the OUTFALL as a continuous point
+  source (`write_sources_outfall`, four tracer columns), and both liquid
+  boundaries carry the SAME clean river, so the ordering can no longer decide the
+  answer.
+
+- `telemac_do_sag` params `discharge_bod_mgl`: it named a fully-mixed
+  concentration at the top of the reach, which is not a thing a discharger has.
+  Replaced by the effluent trio - `effluent_bod_mgl`, `effluent_q_m3s`,
+  `effluent_do_mgl` - which is what an outfall IS, and the mixing is the solve's.
+
+- `TelemacDoLayerURI.bod_upstream_mgl`: it published the declared inflow number
+  back to the reader as if it were a measurement. Replaced by `bod_mixed_mgl`,
+  the MODELED peak CBOD along the reach.
+
+- The `artemis_harbor_agitation` coarse canary's UNFILLED structure slot. It was
+  named for a sheltering question over a domain with nothing to shelter, and it
+  reported `kd_sheltered` / `kd_exposed` / `sheltering_ratio` for two halves of an
+  empty AOI. The canary now supplies the surveyed Marquette Lower Harbor
+  breakwater; the unfilled slot keeps its cover in
+  `scripts/drive_artemis_structure_slot.py --mode omitted`, which is where all
+  three ways of filling it are proved against each other.

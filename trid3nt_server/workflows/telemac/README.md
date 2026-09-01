@@ -12,7 +12,7 @@ everything else it uses is the facade's or the step family's.
 | `__init__.py` | The package door. |
 | `postprocess_telemac.py` | Reads a solved SELAFIN into the map products: the peak field, the rasterized grids, the animated frames. |
 | `release_layer.py` | The reach's release point published as a context layer on the canvas. |
-| `release_point.py` | Where a release is allowed to be - inside the domain, on the river - and the refusal when it is not. |
+| `release_point.py` | Where a release is allowed to be - inside the domain, on the river - the refusal when a supplied point is not, and where a derived one is settled inside the accepted mesh. |
 | `results_mesh_seam.py` | Writes the results-mesh `outputs.json` and publishes it through the one emission seam. |
 | `run_telemac.py` | The local-docker solve seam: five solver names, one image, one spec. |
 | `streeter_phelps.py` | The Streeter-Phelps closed-form dissolved-oxygen sag, the WAQTEL O2 verification reference. |

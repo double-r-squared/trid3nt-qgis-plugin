@@ -612,7 +612,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
             f"frames: the SELAFIN carries {frames} frames and the run records no "
             "ntimestep to cross-check them against - one reader is not a "
             "cross-check")
-    elif int(recorded) != frames:
+    elif recorded is not None and int(recorded) != frames:
         missing.append(
             f"frames: the SELAFIN carries {frames} frames but the worker recorded "
             f"ntimestep={recorded} - the file and the metrics disagree")

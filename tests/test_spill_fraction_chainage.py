@@ -45,12 +45,27 @@ def _line(coords) -> str:
             "type": "LineString", "coordinates": coords}}]})
 
 
-def _walk(fraction: float, centerline_utm):
+#: A mesh that holds every station on the line. The subject here is WHICH END
+#: the fraction counts from, so the containment the derived walk also does is
+#: stood in for by a triangulation that refuses nothing - otherwise a failure
+#: could not say which of the two it was about.
+_HOLDS_EVERYTHING = (
+    np.array([[-1.0e7, -1.0e7], [1.0e7, -1.0e7], [1.0e7, 1.0e7], [-1.0e7, 1.0e7]]),
+    np.array([[0, 1, 2], [0, 2, 3]]), None, None)
+
+
+def _walk(fraction: float, centerline_utm, monkeypatch):
     """Where an unplaced release lands -> ``(lon, lat)``."""
+    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+
+    monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes",
+                        lambda _uri, utm_epsg=None: _HOLDS_EVERYTHING)
+    mesh = {"display_uri": "s3://m/M/mesh.2dm",
+            "artifact": type("A", (), {"utm_epsg": _UTM_EPSG})()}
     (lon, lat), note = asyncio.run(_settle_release(
-        None, mesh={}, centerline=None, centerline_utm=centerline_utm,
+        None, mesh=mesh, centerline=None, centerline_utm=centerline_utm,
         utm_epsg=_UTM_EPSG, spill_fraction=fraction))
-    assert note is None  # a derived release relocates nothing
+    assert note is None  # a derived release inside the mesh relocates nothing
     return lon, lat
 
 
@@ -72,10 +87,10 @@ def test_the_normalized_centerline_starts_at_the_seed(coords):
     assert line[0][0] < line[-1][0]
 
 
-def test_fraction_zero_is_the_upstream_end_and_one_is_the_downstream_end():
+def test_fraction_zero_is_the_upstream_end_and_one_is_the_downstream_end(monkeypatch):
     line = read_centerline_utm(_line(_COORDS), _UTM_EPSG, start_lonlat=_SEED)
-    assert _walk(0.0, line)[0] == pytest.approx(_COORDS[0][0], abs=1e-6)
-    assert _walk(1.0, line)[0] == pytest.approx(_COORDS[-1][0], abs=1e-6)
+    assert _walk(0.0, line, monkeypatch)[0] == pytest.approx(_COORDS[0][0], abs=1e-6)
+    assert _walk(1.0, line, monkeypatch)[0] == pytest.approx(_COORDS[-1][0], abs=1e-6)
 
 
 # --------------------------------------------------------------------------- #
@@ -113,14 +128,14 @@ def test_the_bed_fitted_on_that_centerline_falls_with_chainage():
 # --------------------------------------------------------------------------- #
 # 3. Discrimination: the two fractions are not the same place.
 # --------------------------------------------------------------------------- #
-def test_a_tenth_lands_near_the_inflow_and_nine_tenths_near_the_outflow():
+def test_a_tenth_lands_near_the_inflow_and_nine_tenths_near_the_outflow(monkeypatch):
     """A walk that ignored its argument would put both at the same station."""
     line = read_centerline_utm(_line(_COORDS), _UTM_EPSG, start_lonlat=_SEED)
     span = float(np.hypot(*(line[-1] - line[0])))
     to_utm = read_centerline_utm  # the same reader both stations are measured in
 
     def _station(fraction: float) -> float:
-        lon, lat = _walk(fraction, line)
+        lon, lat = _walk(fraction, line, monkeypatch)
         point = to_utm(_line([[lon, lat], [lon + 1e-6, lat]]), _UTM_EPSG,
                        start_lonlat=(lon, lat))[0]
         return float(np.hypot(*(point - line[0])))

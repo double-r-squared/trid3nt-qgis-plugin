@@ -34,7 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 LOCATION = "Eel River near Scotia, California"
 ARGS: dict = {
     "location": LOCATION,
-    "discharge_bod_mgl": 20.0,
+    "effluent_bod_mgl": 250.0,
+    "effluent_q_m3s": 1.0,
     "water_temp_c": 20.0,
     "do_standard_mgl": 5.0,
     "k1_per_day": 0.3,

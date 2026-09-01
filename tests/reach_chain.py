@@ -105,3 +105,19 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
         monkeypatch.setattr(
             f"trid3nt_server.tools.processing.{module}._write_geojson",
             _local_write)
+
+    # The ACCEPTED MESH a derived release is settled inside. The mesh session is
+    # stood in for by these tests, so its display face is a uri nothing wrote;
+    # what the deck needs from it is a triangulation to test containment against,
+    # and here that is one that holds the whole stretch - so a chain test measures
+    # the chain rather than a stand-in mesh's extent.
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
+
+    span = 1.0e7
+    monkeypatch.setattr(
+        nodes_mod, "read_accepted_mesh_nodes",
+        lambda _uri, utm_epsg=None: (
+            np.array([[-span, -span], [span, -span], [span, span], [-span, span]]),
+            np.array([[0, 1, 2], [0, 2, 3]]), None, None))

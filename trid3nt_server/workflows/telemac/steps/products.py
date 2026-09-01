@@ -490,8 +490,9 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
             # declared do_sag defaults (declarations.py, deck.py, here).
             saturation_mgl=float(do_sag_config["saturation_mgl"]),
             upstream_do_mgl=float(do_sag_config["upstream_do_mgl"]),
-            bod_upstream_mgl=float(do_sag_config["bod_mgl"]),
-            standard_mgl=float(do_sag_config["standard_mgl"]))
+            standard_mgl=float(do_sag_config["standard_mgl"]),
+            k1_per_day=float(do_sag_config["k1_per_day"]),
+            k2_per_day=float(do_sag_config["k2_per_day"]))
         await _journal_wetted_fraction(slf_path)
     finally:
         Path(slf_path).unlink(missing_ok=True)

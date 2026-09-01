@@ -53,7 +53,8 @@ RUN = LiveRun(
     tool="telemac_do_sag",
     args={
         "location": LOCATION,
-        "discharge_bod_mgl": 20.0,
+        "effluent_bod_mgl": 250.0,
+        "effluent_q_m3s": 1.0,
         "water_temp_c": 20.0,
         "do_standard_mgl": 5.0,
         "k1_per_day": 0.3,
@@ -66,11 +67,16 @@ RUN = LiveRun(
                         require_draw=True, confirm="proceed"),
 )
 
-#: The path-A canary: the same reach and outfall, every param supplied so no
-#: card is left to answer, sized so the solve is a smoke test of the plumbing
-#: rather than a physics study. The discharge is PINNED - a canary that also
-#: depended on a live NWM cycle would report a source outage as a code failure.
-COARSE = LiveRun(
+#: PLUMBING SMOKE, and nothing more. Every param is supplied so no card is left
+#: to answer, and the reach and the window are cut to the smallest thing that
+#: still exercises geocode -> flowline -> section -> mesh -> WAQTEL deck -> solve
+#: -> products. A DO sag needs k1 * travel time of order one to exist at all, and
+#: 600 s over half a kilometre is four orders short of that: this run's sag
+#: numbers are NOT a physics answer and are not read as one. The physics lives in
+#: the refined declaration (12 km / 24 h) over in trid3nt_server.testing.canaries.
+#: The discharge is PINNED - a smoke test that also depended on a live NWM cycle
+#: would report a source outage as a code failure.
+SMOKE = LiveRun(
     tool="telemac_do_sag",
     args={
         **RUN.args,
@@ -85,7 +91,7 @@ COARSE = LiveRun(
         "discharge_m3s": 60.0,
         "input_mode": "auto",
     },
-    case_title="canary: telemac do sag (Eel River near Scotia, coarse)",
+    case_title="smoke: telemac do sag (Eel River near Scotia, plumbing)",
     answers=GateAnswers(confirm="proceed"),
     cleanup_case=True,
 )
@@ -101,17 +107,18 @@ def main() -> int:
     # comparison - pass --no-render-proof alongside it so the B run never
     # overwrites the canonical (latest-cycle) proof set.
     ap.add_argument("--event-time", default=None)
-    ap.add_argument("--coarse", action="store_true",
-                    help="the path-A canary declaration (short reach, pinned discharge)")
+    ap.add_argument("--smoke", action="store_true",
+                    help="the plumbing-smoke declaration (short reach, pinned "
+                         "discharge, no physics claim)")
     add_render_proof_flag(ap)
     ns = ap.parse_args()
 
     run = RUN
-    if ns.coarse:
-        run = COARSE
+    if ns.smoke:
+        run = SMOKE
         ns.render_proof = False
         if ns.out == EVIDENCE:
-            ns.out = EVIDENCE.replace(".json", "_coarse.json")
+            ns.out = EVIDENCE.replace(".json", "_smoke.json")
     if ns.event_time:
         run = LiveRun(**{**RUN.__dict__, "args": {**RUN.args, "event_time": ns.event_time}})
 

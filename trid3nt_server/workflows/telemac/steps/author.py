@@ -61,6 +61,7 @@ __all__ = [
     "write_hyetograph_file",
     "write_nestor_decks",
     "write_oil_inputs",
+    "write_sources_outfall",
     "write_sources_pulse",
     "write_waqtel_decay",
     "write_waqtel_o2",
@@ -139,7 +140,9 @@ _DEFAULTS: dict[str, Any] = {
     "decay_law": 1,
     "decay_coef": 2.0,
     # WAQTEL O2 (process 2) - the dissolved-oxygen sag below a discharge.
-    "do_sag_bod_mgl": 20.0,
+    "do_sag_effluent_bod_mgl": 250.0,
+    "do_sag_effluent_q_m3s": 1.0,
+    "do_sag_effluent_do_mgl": 2.0,
     "do_sag_upstream_do_mgl": 9.0,
     "do_sat_mgl": 9.0,
     "do_water_temp_c": 20.0,
@@ -348,36 +351,29 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         if role == "inflow":
             flowrates.append(f"{P.inflow_q_m3s}")
             elevations.append("0.0")
-            if is_do_sag:
-                # WAQTEL O2 appends DISSOLVED O2, ORGANIC LOAD and NH4 LOAD after
-                # the dye, boundary-major in the module's own tracer order: the
-                # fully-mixed discharge rides in here and the dye stays clean.
-                tracers += ["0.0", f"{float(P.do_sag_upstream_do_mgl):g}",
-                            f"{float(P.do_sag_bod_mgl):g}", "0.0"]
-            else:
-                tracers.append("0.0")
+            tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
         else:
             flowrates.append("0.0")
             elevations.append(f"{outflow_stage:.3f}")
-            tracers += ["0.0", "0.0", "0.0", "0.0"] if is_do_sag else ["0.0"]
+            tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
 
     sx, sy = float(source_utm[0]), float(source_utm[1])
-    # do_sag models the reach STARTING at the fully-mixed discharge - the CBOD and
-    # DO ride in at the inflow boundary - so there is no point-source pulse, and a
-    # single-tracer source array would collide with the O2 module's four tracers.
-    if is_do_sag:
-        sources_file_line = ""
-        sources_block = ""
-    else:
-        written["sources"] = write_sources_pulse(rundir, deck=deck)
-        sources_file_line = f"SOURCES FILE                    = {SOURCES_FILENAME}\n"
-        sources_block = (
-            "MAXIMUM NUMBER OF SOURCES        = 20\n"
-            f"ABSCISSAE OF SOURCES             = {sx:.3f}\n"
-            f"ORDINATES OF SOURCES             = {sy:.3f}\n"
-            "WATER DISCHARGE OF SOURCES       = 0.0\n"
-            "VALUES OF THE TRACERS AT THE SOURCES = 0.0\n"
-        )
+    written["sources"] = (write_sources_outfall(rundir, deck=deck) if is_do_sag
+                          else write_sources_pulse(rundir, deck=deck))
+    sources_file_line = f"SOURCES FILE                    = {SOURCES_FILENAME}\n"
+    # The tracer array at the source is sized to the module's tracer count: four
+    # when WAQTEL O2 has appended DISSOLVED O2, ORGANIC LOAD and NH4 LOAD behind
+    # the dye, one otherwise. The steering values are the fallback the engine
+    # reads only where the sources FILE has no column, so the two must agree.
+    source_tracers = (";".join(_effluent_tracers(P)) if is_do_sag else "0.0")
+    sources_block = (
+        "MAXIMUM NUMBER OF SOURCES        = 20\n"
+        f"ABSCISSAE OF SOURCES             = {sx:.3f}\n"
+        f"ORDINATES OF SOURCES             = {sy:.3f}\n"
+        "WATER DISCHARGE OF SOURCES       = "
+        + (f"{float(P.do_sag_effluent_q_m3s):g}\n" if is_do_sag else "0.0\n")
+        + f"VALUES OF THE TRACERS AT THE SOURCES = {source_tracers}\n"
+    )
 
     friction_law = 3 if P.friction_law is None else int(P.friction_law)
     friction_coef = ("33." if P.friction_coefficient is None
@@ -435,12 +431,17 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         graphic_variables = "'U,V,H,S,B,T1,T2'"
         tracers = ["0."] * (2 * max(len(liquid_boundary_order), 1))
 
+    release_line = (
+        f"/  Clean river drives the reach; the outfall discharges\n"
+        f"/  {float(P.do_sag_effluent_q_m3s):g} m3/s of "
+        f"{float(P.do_sag_effluent_bod_mgl):g} mg/L CBOD at a point source\n"
+        f"/  (x={sx:.1f} y={sy:.1f}) for the whole run.\n" if is_do_sag else
+        f"/  Clean flow drives the reach; a finite pulse is released at a\n"
+        f"/  mid-reach point source (x={sx:.1f} y={sy:.1f}) for\n"
+        f"/  {float(P.pulse_window_s):.0f}s, so the plume advects and dilutes.\n")
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D REACH  -  {P.name}
-/  Clean flow drives the reach; a finite pulse is released at a
-/  mid-reach point source (x={sx:.1f} y={sy:.1f}) for
-/  {float(P.pulse_window_s):.0f}s, so the plume advects and dilutes.
-/  Measured liquid-boundary order: {list(liquid_boundary_order)}
+{release_line}/  Measured liquid-boundary order: {list(liquid_boundary_order)}
 /-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
@@ -587,6 +588,48 @@ def write_sources_pulse(rundir: Path | str, *,
         f"{window:.3f} {discharge:.3f} {concentration:.3f}",
         f"{window + 0.1:.3f} 0.0 0.0",
         f"{end:.3f} 0.0 0.0"])
+
+
+def _clean_river_tracers(P: Any) -> list[str]:
+    """The four WAQTEL O2 tracer values a LIQUID BOUNDARY carries: clean river.
+
+    Dye, DISSOLVED O2, ORGANIC LOAD, NH4 LOAD. The river above the outfall carries
+    no organic load and its own oxygen, and the load itself enters at the source -
+    so both liquid boundaries take the SAME values and which one the engine
+    numbers first cannot decide the answer.
+    """
+    return ["0.0", f"{float(P.do_sag_upstream_do_mgl):g}", "0.0", "0.0"]
+
+
+def _effluent_tracers(P: Any) -> list[str]:
+    """The four WAQTEL O2 tracer values the OUTFALL carries: the discharge itself.
+
+    The organic load is the whole point of the source - a permitted discharge is
+    CBOD-rich and oxygen-poor - so it rides on ORGANIC LOAD with the effluent's
+    own dissolved oxygen beside it. Nitrification is off (K4 = 0), so NH4 carries
+    nothing.
+    """
+    return ["0.0", f"{float(P.do_sag_effluent_do_mgl):g}",
+            f"{float(P.do_sag_effluent_bod_mgl):g}", "0.0"]
+
+
+def write_sources_outfall(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
+    """The OUTFALL time series: a CONTINUOUS discharge of organic load.
+
+    Columns ``T``, ``Q(1)`` and ``TR(1,1..4)`` - the names TELEMAC's own sources
+    reader builds and looks for. A permitted discharge does not pulse: the flow
+    and its concentrations are held flat across the whole run so the reach reaches
+    the steady-state sag the Streeter-Phelps question asks about, and the last row
+    runs past where this run stops so the time interpolation never reads off the
+    end.
+    """
+    P = _Sheet(deck)
+    q = float(P.do_sag_effluent_q_m3s)
+    tr = " ".join(_effluent_tracers(P))
+    end = float(P.start_time_s) + float(P.duration_s) + 100.0
+    return _write_deck(rundir, SOURCES_FILENAME, [
+        "#", "T Q(1) TR(1,1) TR(1,2) TR(1,3) TR(1,4)", "s m3/s mg/l mg/l mg/l mg/l",
+        f"0.0 {q:.4f} {tr}", f"{end:.3f} {q:.4f} {tr}"])
 
 
 def write_waqtel_decay(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:

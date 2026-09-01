@@ -120,7 +120,9 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
                                                                   monkeypatch):
     """Each deck is read against the dictionary of the module that reads it."""
     assert _authored(monkeypatch, tmp_path, tag="o2", substance_class="do_sag",
-                     do_sag_bod_mgl=20.0, do_sag_upstream_do_mgl=9.0) == {
+                     do_sag_effluent_bod_mgl=250.0,
+                     do_sag_effluent_q_m3s=1.0, do_sag_effluent_do_mgl=2.0,
+                     do_sag_upstream_do_mgl=9.0) == {
         "t2d_river.cas": "telemac2d", A.WAQTEL_FILENAME: "waqtel"}
     assert _authored(monkeypatch, tmp_path, tag="sed",
                      substance_class="sediment") == {

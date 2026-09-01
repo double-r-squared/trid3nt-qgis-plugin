@@ -34,6 +34,7 @@ records itself, validated against a real solved ``r2d_river.slf``.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import struct
 from collections.abc import Sequence
@@ -302,6 +303,10 @@ _DEPTH_VAR_KEYS: tuple[str, ...] = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D E
 #: Static bed-elevation variable names (English + French). Read to reproduce the
 #: worker's own ``bed > initial water line`` discrimination on the raster.
 _BED_VAR_KEYS: tuple[str, ...] = ("BOTTOM", "FOND")
+#: Depth-averaged velocity component names (English + French). The reach decks
+#: emit ``VELOCITY U``/``VELOCITY V``; a French deck emits ``VITESSE U``/``V``.
+_U_VAR_KEYS: tuple[str, ...] = ("VELOCITY U", "VITESSE U")
+_V_VAR_KEYS: tuple[str, ...] = ("VELOCITY V", "VITESSE V")
 
 
 def _pick_named_var(varnames: list[str], keys: tuple[str, ...], letter: str) -> str | None:
@@ -1393,7 +1398,7 @@ _DO_VAR_KEYS: tuple[str, ...] = ("DISSOLVED O2", "O2 DISSOUS", "DISSOLVED OXYGEN
 _BOD_VAR_KEYS: tuple[str, ...] = ("ORGANIC LOAD", "CHARGE ORGANIQUE")
 
 
-def _downstream_coordinate(x, y, centerline_utm=None):
+def _downstream_coordinate(x, y, centerline_utm=None, flow_uv=None):
     """Per-node DOWNSTREAM distance (m) + a label for how it was derived.
 
     With ``centerline_utm`` (an ordered [(x,y), ...] polyline) each node is
@@ -1402,6 +1407,10 @@ def _downstream_coordinate(x, y, centerline_utm=None):
     are projected onto their PRINCIPAL FLOW AXIS (PCA first component), which is
     exact for a straight channel (the S-P V&V) and a labelled approximation for a
     gently sinuous reach. Returns ``(s_m ndarray, label)``.
+
+    A principal AXIS has no direction of its own, so ``flow_uv`` - the solved mean
+    velocity vector - is what points it downstream. Without it the sign falls to
+    the node cloud's own skew, which can hand back a sag curve read backwards.
     """
     import numpy as np
 
@@ -1428,11 +1437,56 @@ def _downstream_coordinate(x, y, centerline_utm=None):
     cov = np.cov(np.vstack([cx, cy]))
     w, v = np.linalg.eigh(cov)
     axis = v[:, int(np.argmax(w))]
+    if flow_uv is not None and (axis[0] * flow_uv[0] + axis[1] * flow_uv[1]) < 0.0:
+        axis = -axis
     s = cx * axis[0] + cy * axis[1]
-    # orient so the far end is positive (downstream = increasing s)
-    if s.max() + s.min() < 0:
+    if flow_uv is None and s.max() + s.min() < 0:
         s = -s
-    return s - s.min(), "principal-flow-axis projection (straight-line proxy)"
+    label = ("principal-flow-axis projection (straight-line proxy), oriented by "
+             "the solved mean velocity" if flow_uv is not None else
+             "principal-flow-axis projection (straight-line proxy), direction "
+             "unverified")
+    return s - s.min(), label
+
+
+def _streeter_phelps_overlay(curve_x, curve_do, curve_bod, *, velocity_mps,
+                             saturation_mgl, k1_per_day, k2_per_day):
+    """The closed-form DO sag over the SAME bins -> ``(anchor, do_mgl, note)``.
+
+    The overlay is ANCHORED at the modeled mix point - the bin where the solved
+    CBOD peaks, which is where the outfall's load has just entered the water - and
+    is integrated downstream from there on the run's own L0, D0 and travel-time
+    velocity. It is therefore a test of the KINETICS (deoxygenation against
+    reaeration) rather than a second guess at how the discharge mixed, and every
+    input is a number the run measured or the sheet declared.
+
+    Returns an empty profile with the reason when the run cannot support one - no
+    velocity, no CBOD tracer, no declared rates, or a mix point at the very end of
+    the reach with nothing downstream to compare.
+    """
+    import numpy as np
+
+    from trid3nt_server.workflows.telemac.streeter_phelps import sp_do_profile
+
+    if k1_per_day is None or k2_per_day is None:
+        return 0, [], "no deoxygenation/reaeration rates were carried to the read"
+    if velocity_mps is None or velocity_mps <= 0.0:
+        return 0, [], "the solved along-reach velocity is not positive"
+    if not curve_bod or max(curve_bod) <= 0.0:
+        return 0, [], "the solve carried no organic load to decay"
+    anchor = int(np.argmax(np.asarray(curve_bod)))
+    if anchor >= len(curve_x) - 2:
+        return 0, [], "the modeled mix point sits at the end of the reach"
+    xs = [curve_x[i] - curve_x[anchor] for i in range(anchor, len(curve_x))]
+    do_sp, _ = sp_do_profile(xs, float(velocity_mps), float(saturation_mgl),
+                             float(curve_bod[anchor]),
+                             float(saturation_mgl) - float(curve_do[anchor]),
+                             float(k1_per_day), float(k2_per_day))
+    return anchor, [float(v) for v in do_sp], (
+        f"Streeter-Phelps closed form from the modeled mix point "
+        f"({curve_x[anchor]:.0f} m downstream, CBOD "
+        f"{curve_bod[anchor]:.2f} mg/L, DO {curve_do[anchor]:.2f} mg/L) at the "
+        f"solved mean along-reach velocity {velocity_mps:.3f} m/s")
 
 
 def postprocess_telemac_do(
@@ -1443,8 +1497,9 @@ def postprocess_telemac_do(
     reach_name: str = "river",
     saturation_mgl: float = 9.0,
     upstream_do_mgl: float | None = None,
-    bod_upstream_mgl: float | None = None,
     standard_mgl: float = 5.0,
+    k1_per_day: float | None = None,
+    k2_per_day: float | None = None,
     centerline_utm: list | None = None,
     n_sag_bins: int = 60,
     runs_bucket: str | None = None,
@@ -1518,21 +1573,48 @@ def postprocess_telemac_do(
         )
 
     # --- the along-reach sag curve (DO + CBOD binned by downstream distance) --- #
-    s_m, s_label = _downstream_coordinate(x_utm[wet], y_utm[wet], centerline_utm)
+    # The solved flow field does two jobs here: it points the along-reach axis
+    # downstream, and its along-axis mean is the travel-time velocity the
+    # Streeter-Phelps overlay is evaluated at. Both come off the run rather than
+    # off a stage-discharge assumption nobody surveyed.
+    u_var = _pick_named_var(mesh["varnames"], _U_VAR_KEYS, "U")
+    v_var = _pick_named_var(mesh["varnames"], _V_VAR_KEYS, "V")
+    u_w = v_w = None
+    flow_uv = None
+    if u_var is not None and v_var is not None:
+        u_w = np.asarray(mesh["data"][u_var])[-1][wet]
+        v_w = np.asarray(mesh["data"][v_var])[-1][wet]
+        flow_uv = (float(np.nanmean(u_w)), float(np.nanmean(v_w)))
+    s_m, s_label = _downstream_coordinate(x_utm[wet], y_utm[wet], centerline_utm,
+                                          flow_uv=flow_uv)
     do_w = do_field[wet]
     bod_w = bod_field[wet] if bod_field is not None else None
     nb = max(int(n_sag_bins), 8)
     edges = np.linspace(0.0, float(s_m.max()) if s_m.max() > 0 else 1.0, nb + 1)
     ctr = 0.5 * (edges[:-1] + edges[1:])
     idx = np.clip(np.digitize(s_m, edges) - 1, 0, nb - 1)
+    # Each bin is a CROSS-SECTION, and its concentration is the depth-weighted
+    # mean over it. A flat node mean counts a centimetre of slack water on a
+    # gravel bar the same as a metre of thalweg, so on a bankfull domain it
+    # reports a load several times more dilute than the water is carrying.
+    depth_w = (np.asarray(mesh["data"][depth_var])[-1][wet]
+               if depth_var is not None and mesh["data"].get(depth_var) is not None
+               and mesh["data"][depth_var].size else np.ones_like(do_w))
+
+    def _section_mean(values, m):
+        w = depth_w[m]
+        total = float(np.nansum(w))
+        return (float(np.nansum(values[m] * w) / total) if total > 0.0
+                else float(np.nanmean(values[m])))
+
     curve_x, curve_do, curve_bod = [], [], []
     for b in range(nb):
         m = idx == b
         if not m.any():
             continue
         curve_x.append(float(ctr[b]))
-        curve_do.append(float(np.mean(do_w[m])))
-        curve_bod.append(float(np.mean(bod_w[m])) if bod_w is not None else 0.0)
+        curve_do.append(_section_mean(do_w, m))
+        curve_bod.append(_section_mean(bod_w, m) if bod_w is not None else 0.0)
     if len(curve_x) < 3:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
@@ -1544,6 +1626,43 @@ def postprocess_telemac_do(
     do_min_dist = float(curve_x[sag_i])
     do_up = float(upstream_do_mgl) if upstream_do_mgl is not None else float(curve_do[0])
     violates = bool(do_min < float(standard_mgl))
+
+    # --- the Streeter-Phelps overlay, against the SAME curve ------------------ #
+    # The mean along-reach speed the closed form converts distance into travel
+    # time with: the solved velocity projected on the reach's own downstream
+    # direction, over the wet channel. A negative projection would mean the axis
+    # and the flow disagree, which the orientation above has already settled.
+    # The along-axis velocity is weighted by DEPTH, so what it reports is the
+    # speed the LOAD travels at: a flat mean over wet nodes counts the slack
+    # water on the bars the same as the thalweg, and a reach that is mostly
+    # margin then reads as almost still.
+    axis_u = None
+    if u_w is not None and v_w is not None and s_m.size > 2:
+        span = float(s_m.max() - s_m.min())
+        if span > 0.0:
+            dirx = float(np.cov(s_m, x_utm[wet])[0, 1]) / span
+            diry = float(np.cov(s_m, y_utm[wet])[0, 1]) / span
+            norm = math.hypot(dirx, diry)
+            if norm > 0.0:
+                along = u_w * (dirx / norm) + v_w * (diry / norm)
+                weight = (np.asarray(mesh["data"][depth_var])[-1][wet]
+                          if depth_var is not None
+                          and mesh["data"].get(depth_var) is not None
+                          and mesh["data"][depth_var].size
+                          else np.ones_like(along))
+                total = float(np.nansum(weight))
+                axis_u = (float(np.nansum(along * weight) / total) if total > 0.0
+                          else float(np.nanmean(along)))
+    anchor, sp_do, sp_note = _streeter_phelps_overlay(
+        curve_x, curve_do, curve_bod, velocity_mps=axis_u,
+        saturation_mgl=float(saturation_mgl), k1_per_day=k1_per_day,
+        k2_per_day=k2_per_day)
+    sp_x = curve_x[anchor:] if sp_do else []
+    sp_rms = sp_sag_dev = None
+    if sp_do:
+        sp_rms = float(np.sqrt(np.mean((do_arr[anchor:] - np.asarray(sp_do)) ** 2)))
+        sp_sag_dev = float(np.min(do_arr[anchor:]) - float(np.min(sp_do)))
+    bod_mixed = float(max(curve_bod)) if curve_bod else None
 
     # --- rasterize the steady-state DO field onto a 4326 grid ----------------- #
     from pyproj import Transformer
@@ -1601,11 +1720,16 @@ def postprocess_telemac_do(
         units="mg/L", label="Dissolved oxygen (mg/L)")
     honesty = (
         f"Steady-state DO field (last of {int(times.size)} frame(s)); downstream "
-        f"distance by {s_label}. Streeter-Phelps O2 kinetics on an idealized "
-        f"planar channel bed (screening/permit grade, not a calibrated study)."
+        f"distance by {s_label}, each station a depth-weighted cross-section mean. "
+        f"WAQTEL O2 kinetics on an idealized planar channel bed (screening/permit "
+        f"grade, not a calibrated study)."
         + (f" Sag min {do_min:.2f} mg/L VIOLATES the {standard_mgl:g} mg/L "
            "standard." if violates else
            f" Sag min {do_min:.2f} mg/L meets the {standard_mgl:g} mg/L standard.")
+        + (f" Analytical check: {sp_note}; whole-profile RMS {sp_rms:.3f} mg/L, "
+           f"sag minimum {abs(sp_sag_dev):.3f} mg/L "
+           f"{'below' if sp_sag_dev < 0 else 'above'} the closed form."
+           if sp_do else f" No analytical overlay: {sp_note}.")
     )
     layer = TelemacDoLayerURI(
         layer_id=f"telemac-do-field-{run_id}",
@@ -1619,12 +1743,16 @@ def postprocess_telemac_do(
         do_saturation_mgl=round(float(saturation_mgl), 4),
         do_standard_mgl=round(float(standard_mgl), 4),
         do_violates_standard=violates,
-        bod_upstream_mgl=(round(float(bod_upstream_mgl), 4)
-                          if bod_upstream_mgl is not None else
-                          (round(float(curve_bod[0]), 4) if curve_bod else None)),
+        bod_mixed_mgl=(round(bod_mixed, 4) if bod_mixed is not None else None),
+        mean_velocity_mps=(round(axis_u, 5) if axis_u is not None else None),
         sag_curve_distance_m=[round(v, 1) for v in curve_x],
         sag_curve_do_mgl=[round(v, 4) for v in curve_do],
         sag_curve_bod_mgl=[round(v, 4) for v in curve_bod],
+        sp_curve_distance_m=([round(v, 1) for v in sp_x] if sp_do else None),
+        sp_curve_do_mgl=([round(v, 4) for v in sp_do] if sp_do else None),
+        sp_rms_mgl=(round(sp_rms, 4) if sp_rms is not None else None),
+        sp_sag_deviation_mgl=(round(sp_sag_dev, 4) if sp_sag_dev is not None else None),
+        sp_note=sp_note,
     )
     metrics: dict[str, Any] = {
         "do_var": do_var.strip(),
@@ -1645,6 +1773,14 @@ def postprocess_telemac_do(
         "sag_curve_distance_m": [round(v, 1) for v in curve_x],
         "sag_curve_do_mgl": [round(v, 4) for v in curve_do],
         "sag_curve_bod_mgl": [round(v, 4) for v in curve_bod],
+        "bod_mixed_mgl": (round(bod_mixed, 4) if bod_mixed is not None else None),
+        "mean_velocity_mps": (round(axis_u, 5) if axis_u is not None else None),
+        "sp_curve_distance_m": ([round(v, 1) for v in sp_x] if sp_do else None),
+        "sp_curve_do_mgl": ([round(v, 4) for v in sp_do] if sp_do else None),
+        "sp_rms_mgl": (round(sp_rms, 4) if sp_rms is not None else None),
+        "sp_sag_deviation_mgl": (round(sp_sag_dev, 4)
+                                 if sp_sag_dev is not None else None),
+        "sp_note": sp_note,
         "honesty_label": honesty,
     }
     logger.info(

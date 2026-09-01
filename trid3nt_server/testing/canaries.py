@@ -80,27 +80,47 @@ _MARQUETTE_BBOX = [-87.392, 46.528, -87.368, 46.550]
 #: rather than a guessed one.
 _COWEETA_POUR_POINT = [-83.40402, 35.05746]
 
+#: The OUTER BREAKWATER of Marquette Lower Harbor, as surveyed in OpenStreetMap
+#: (``man_made=breakwater``), handed to the structure slot the way a drawn one is:
+#: a polyline of (lon, lat) vertices. It runs roughly north-south across the
+#: harbour approach with its southern root hooking west to the shore, and the
+#: berths it exists to protect sit behind it, to the west. Baked here rather than
+#: fetched because a canary is a DECLARATION - the same question every time - and
+#: a run whose geometry arrived from a live Overpass query would report an
+#: upstream outage as a drift in the answer. The three ways the slot can be
+#: filled (a fetched layer, a drawn line, nothing at all) are proved together in
+#: scripts/drive_artemis_structure_slot.py, which is where the fetch belongs.
+_MARQUETTE_BREAKWATER: list[list[float]] = [
+    [-87.37902, 46.54432], [-87.37902, 46.54403], [-87.37904, 46.54362],
+    [-87.37905, 46.54240], [-87.37897, 46.53918], [-87.37892, 46.53741],
+    [-87.37891, 46.53718], [-87.37902, 46.53708], [-87.37900, 46.53659],
+    [-87.37892, 46.53640], [-87.37881, 46.53630], [-87.37481, 46.53349],
+    [-87.37466, 46.53360], [-87.37850, 46.53630], [-87.37874, 46.53671],
+    [-87.37885, 46.54128], [-87.37888, 46.54368], [-87.37889, 46.54422],
+    [-87.37881, 46.54457], [-87.37877, 46.54471], [-87.37889, 46.54476],
+    [-87.37902, 46.54435], [-87.37902, 46.54432],
+]
+
 CANARIES: dict[str, LiveRun] = {
-    # The UNFILLED-SLOT pin for the phase-resolving diffraction solve. No
-    # ``structure`` is supplied, and what the domain then carries is the worker's
-    # answer, not this declaration's: the real-bathymetry builder still meshes a
-    # schematic barrier when the deck names none, and forces the incident heading
-    # to 90 deg when it does, so the Kd field here is NOT a free-field response
-    # and the declared wave_direction_deg is not necessarily what was solved. The
-    # structure row reads the solve's own echo rather than this deck, so the
-    # provenance states whichever happened. What the canary pins is the pairing
-    # underneath: the real NOAA Great Lakes lake-datum bed feeding a Berkhoff
-    # solve on one AOI, so a drift in the Kd field has exactly one cause.
-    # Filling the slot is a THREE-way contract - a fetched layer, a drawn
-    # polyline, or nothing - and belongs where all three run against each other:
-    # scripts/drive_artemis_structure_slot.py.
+    # THE QUESTION THE TEMPLATE IS NAMED FOR: does the breakwater shelter the
+    # berths. A REAL structure is in the slot, so the domain has something to
+    # shelter and the sheltered/exposed pair is a measurement across ONE barrier
+    # rather than two halves of an empty AOI. The heading is the one the harbour
+    # is OPEN to: the basin's mouth is at its south-east end, past the
+    # breakwater's hooked root, so swell arriving from the south-south-east runs
+    # up into the berths and that is the wave the structure exists to block. In
+    # the trig convention the param declares, propagating toward the
+    # north-north-west is 110 deg. The unfilled slot is a DIFFERENT question -
+    # what an unsheltered approach does - and lives with the other two ways to
+    # fill it in scripts/drive_artemis_structure_slot.py.
     "artemis_harbor_agitation": LiveRun(
         tool="artemis_harbor_agitation",
         args={
             "bbox": _MARQUETTE_BBOX,
+            "structure": _MARQUETTE_BREAKWATER,
             "wave_mode": "diffraction",
             "wave_period_s": 8.0,
-            "wave_direction_deg": 129.2,
+            "wave_direction_deg": 110.0,
             "wave_height_m": 2.0,
             "reflection_coef": 0.5,
             "target_resolution_m": 30.0,
@@ -108,7 +128,7 @@ CANARIES: dict[str, LiveRun] = {
             "compute_class": "medium",
             "input_mode": "user_gated",
         },
-        case_title="canary: artemis harbor agitation (Marquette, coarse)",
+        case_title="canary: artemis harbor agitation (Marquette breakwater, coarse)",
         answers=GateAnswers(confirm="proceed"),
         cleanup_case=True,
     ),
@@ -222,35 +242,58 @@ _EEL_REACH = "Eel River near Scotia, California"
 _EEL_OUTFALL = [-124.0983, 40.4921]
 
 CANARIES.update({
-    # THE COHORT'S REFINED RUNS. Their COARSE canaries live in their own drive
-    # scripts (scripts/drive_do_sag_cards.py --coarse, drive_river_dye_cards.py
-    # --coarse), which is where NATE reviewed them; only the refined variants are
-    # declared here, beside the other four.
+    # THE COHORT'S REFINED RUNS. Their SMALL runs live in their own drive scripts
+    # (scripts/drive_do_sag_cards.py --smoke, drive_river_dye_cards.py --coarse),
+    # which is where NATE reviewed them; only the delivering variants are declared
+    # here, beside the other four.
     #
-    # 10 m, and the direction of the width cap is worth stating: the >= 2 cells
-    # across the channel rule is a CEILING on coarseness (h <= width / 2 = 30 m
-    # on a 60 m channel), not a floor on fineness. The coarse canary asked 100 m
-    # and was capped DOWN to 30; asking 10 m stands, and the node budget is the
-    # only thing that could raise it.
+    # THE SAG THAT IS ACTUALLY A SAG. A DO sag is a TRAVEL-TIME answer: the load
+    # has to ride far enough down the reach for k1 * t to reach order one, or the
+    # oxygen the discharge consumes is unmeasurable and the curve is whatever the
+    # boundary imposed. So this run is declared around the physics rather than
+    # around a short wall clock - a summer LOW FLOW, which is the condition a
+    # permit is written for, a reach long enough to hold both the critical point
+    # and the recovery below it, a window several travel times deep so the sag has
+    # settled, rates at the shallow-stream end of the documented band, and a
+    # coarse-but-sane mesh that keeps the solve inside a coffee break. The sag
+    # minimum then sits mid-reach with room to recover before the outflow, which
+    # is the shape the closed form predicts and the thing a reader can check.
     "telemac_do_sag_refined": LiveRun(
         tool="telemac_do_sag",
         args={
             "location": _EEL_REACH, "outfall_coords": _EEL_OUTFALL,
-            "discharge_bod_mgl": 20.0, "water_temp_c": 20.0,
-            "do_standard_mgl": 5.0, "k1_per_day": 0.3, "k2_per_day": 0.9,
-            "reach_length_km": 0.5, "sim_duration_s": 600.0,
-            "mesh_resolution_m": 10.0,
-            "discharge_m3s": 60.0,
-            # 30 frames over the 600 s window instead of the worker default's 6,
-            # for the same reason the dye run asks for them: a sag that develops
-            # and settles inside six frames cannot be spot-checked against. The
-            # cadence is the SOLVER's output interval, so the run produces more
-            # of its own answer rather than the renderer interpolating between
-            # fewer.
-            "output_interval_min": 0.333,
+            # The OUTFALL: a mid-size municipal discharge, oxygen-poor and
+            # CBOD-rich, at LATE-SUMMER LOW FLOW - which is when a permit is
+            # decided, because that is when the river has least water to dilute
+            # with and least speed to carry the load away before it consumes the
+            # oxygen. Eight to one dilution at a 7Q10-scale summer flow, a
+            # documented shallow-stream deoxygenation rate, and a reaeration rate
+            # three times it.
+            "effluent_bod_mgl": 300.0, "effluent_q_m3s": 0.5,
+            "effluent_do_mgl": 1.0,
+            "water_temp_c": 20.0, "do_standard_mgl": 5.0,
+            "k1_per_day": 2.0, "k2_per_day": 6.0,
+            # FOUR kilometres and forty-eight hours. A sag is a TRAVEL-TIME
+            # answer: the critical point sits hours downstream of the outfall, so
+            # the reach has to hold it AND the recovery below it, and the window
+            # has to cover the load's whole journey through that reach several
+            # times over or what is read is the plume front rather than the
+            # settled sag. Four kilometres also keeps the reach close to straight,
+            # which matters because the downstream axis the sag curve is binned on
+            # is a principal-axis proxy rather than the centreline.
+            "reach_length_km": 4.0, "sim_duration_s": 172800.0,
+            # About six cells across the channel: coarse enough that two days of
+            # simulated time run inside half an hour, fine enough that the reach's
+            # two end transects come off the contour as contiguous liquid runs.
+            "mesh_resolution_m": 24.0,
+            "discharge_m3s": 4.0,
+            # 24 frames over the 48 h window: the sag develops over hours, so a
+            # two-hourly cadence is what shows it arriving and settling rather
+            # than the renderer interpolating between a handful.
+            "output_interval_min": 120.0,
             "input_mode": "auto",
         },
-        case_title="refined: telemac do sag (Eel River near Scotia, 10 m)",
+        case_title="refined: telemac do sag (Eel River near Scotia, 4 km / 48 h)",
         answers=GateAnswers(confirm="proceed"), cleanup_case=True),
     "telemac_river_dye_refined": LiveRun(
         tool="telemac_river_dye",
@@ -270,10 +313,14 @@ CANARIES.update({
         },
         case_title="refined: telemac river dye (Eel River near Scotia, 10 m)",
         answers=GateAnswers(confirm="proceed"), cleanup_case=True),
-    # 30 -> 15 m. A phase-resolving solve needs nodes per WAVELENGTH, so this is
-    # the refinement that matters most for the diffraction fringes.
+    # 30 -> 20 m. A phase-resolving solve needs nodes per WAVELENGTH, so this is
+    # the refinement that matters most for the diffraction fringes. 20 m is the
+    # builder's own floor, which the ResolutionSpec states: an 8 s swell in ten
+    # metres of water is about a 78 m wave, so the refined run resolves it on
+    # roughly four nodes and the coarse one on two - which is why the coarse
+    # variant is a pin and the refined one is what gets delivered.
     "artemis_harbor_agitation_refined": _refined("artemis_harbor_agitation",
-                                                 target_resolution_m=15.0),
+                                                 target_resolution_m=20.0),
     # 3000 -> 1000 m at the SAME 13 planes: 3D cost cubes, so the vertical is
     # held fixed and only the horizontal moves.
     "telemac3d_stratified_flow_refined": _refined("telemac3d_stratified_flow",

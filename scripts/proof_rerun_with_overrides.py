@@ -41,13 +41,16 @@ log = logging.getLogger("proof_rerun")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-#: The refined do_sag canary, verbatim from
-#: docs/proof/templates/telemac_do_sag/refined/. Pinned discharge, because a
-#: value that moves between parent and child is not a comparison.
+#: A do_sag invocation cut to the smallest thing that still authors, solves and
+#: publishes: what this script proves is the RERUN mechanism - a child run
+#: inheriting a parent's sheet with one value overridden - so the sag numbers it
+#: reports are plumbing, not physics. The discharge is pinned, because a value
+#: that moves between parent and child is not a comparison.
 PARENT_ARGS: dict[str, Any] = {
     "location": "Eel River near Scotia, California",
     "outfall_coords": [-124.0983, 40.4921],
-    "discharge_bod_mgl": 20.0,
+    "effluent_bod_mgl": 250.0,
+    "effluent_q_m3s": 1.0,
     "water_temp_c": 20.0,
     "do_standard_mgl": 5.0,
     "k1_per_day": 0.3,

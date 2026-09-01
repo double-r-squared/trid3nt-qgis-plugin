@@ -105,6 +105,11 @@ def stage_manifest(case: Mapping[str, Any], run_tag: str, *,
 #: the manifest because the worker's runner choice turns on it.
 _CLASS_COUPLING = {"decay": "waqtel", "do_sag": "waqtel", "sediment": "gaia"}
 
+#: How far down its own reach a DO-sag outfall sits. The reach was navigated
+#: downstream FROM the outfall, so the discharge belongs at the top; the fraction
+#: is what holds the source node off the inflow face rather than on it.
+_DO_SAG_OUTFALL_FRAC = 0.02
+
 
 def _class_files(substance_class: str, *,
                  dredging: bool) -> tuple[list[str], list[str]]:
@@ -419,10 +424,10 @@ def _substance_block(substance: str, *, erodible_bed: bool | None,
 
 
 def _do_sag_block(cfg: dict[str, Any] | None) -> dict[str, Any]:
-    """The WAQTEL O2 inflow condition: the fully-mixed discharge rides in at the top.
+    """The WAQTEL O2 scenario: clean river in at the face, the OUTFALL as a source.
 
     Threaded only when a DO-sag config was supplied, so every other run is
-    byte-identical (the deck's O2 branch omits the dye point source entirely).
+    byte-identical.
     """
     if cfg is None:
         return {}
@@ -433,7 +438,9 @@ def _do_sag_block(cfg: dict[str, Any] | None) -> dict[str, Any]:
     # A missing key is now a KeyError at the seam that lost it.
     return {
         "substance_class": "do_sag",
-        "do_sag_bod_mgl": float(cfg["bod_mgl"]),
+        "do_sag_effluent_bod_mgl": float(cfg["effluent_bod_mgl"]),
+        "do_sag_effluent_q_m3s": float(cfg["effluent_q_m3s"]),
+        "do_sag_effluent_do_mgl": float(cfg["effluent_do_mgl"]),
         "do_sag_upstream_do_mgl": float(cfg["upstream_do_mgl"]),
         "do_sat_mgl": float(cfg["saturation_mgl"]),
         "do_water_temp_c": float(cfg["water_temp_c"]),
@@ -459,22 +466,19 @@ async def _settle_release(
 
     With none placed the source sits at ``spill_fraction`` along that SAME
     centerline - the line the section was cut between and the mesh was built over -
-    so a derived release is inside the meshed domain by construction rather than by
-    luck. A second navigate resolved beside this one is what put it 350 m outside.
+    walked downstream to the first station the ACCEPTED MESH holds. The centerline
+    is the whole navigated stretch and the mesh is only the part of it the mapped
+    banks left, so "on the line" and "in the domain" are two different claims and
+    only the second one solves.
     """
-    if release_pair is None:
-        from pyproj import Transformer
-        from shapely.geometry import LineString
-
-        point = LineString(centerline_utm).interpolate(
-            min(max(float(spill_fraction), 0.0), 1.0), normalized=True)
-        lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
-            point.x, point.y)
-        return (float(lon), float(lat)), None
-
     from trid3nt_server.workflows.telemac.release_point import (
-        contain_release_point, domain_polygon_of,
+        contain_release_point, derive_release_on_mesh, domain_polygon_of,
     )
+
+    if release_pair is None:
+        return await asyncio.to_thread(
+            derive_release_on_mesh, centerline_utm=centerline_utm, mesh=mesh,
+            fraction=spill_fraction)
 
     contained = await asyncio.to_thread(
         contain_release_point, point=release_pair,
@@ -608,6 +612,13 @@ async def write_reach_deck(
     centerline_utm = await asyncio.to_thread(
         read_centerline_utm, centerline, utm_epsg,
         start_lonlat=(seed_lon, seed_lat))
+    # A DO-sag reach was NAVIGATED downstream from its outfall, so the outfall is
+    # this reach's chainage zero and the whole modeled stretch is below it. The
+    # source is placed just inside that top rather than on it: a source node
+    # sitting on the prescribed-flowrate face would compete with the boundary
+    # condition for the same node.
+    if deck_class == "do_sag":
+        spill_fraction = _DO_SAG_OUTFALL_FRAC
     release_lonlat, release_note = await _settle_release(
         release_pair, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
         utm_epsg=utm_epsg, spill_fraction=spill_fraction)
