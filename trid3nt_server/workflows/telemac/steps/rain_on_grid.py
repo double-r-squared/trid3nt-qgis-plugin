@@ -315,41 +315,6 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
     }
 
 
-def _soil_store_spin_up(*, window: str, capacity_mm: float, recovery_hr: float,
-                        antecedent_days: int) -> float:
-    """Initial soil-store level V0 (mm), spun up over the REAL antecedent rain.
-
-    V0 IS the integrated antecedent wetness the catchment carries into the event -
-    the dynamic state that replaces a per-event AMC choice. The store dynamics are
-    the worker's own (Michel 2005), so the spin-up and the run are one continuous
-    model rather than two that agree by inspection.
-    """
-    import datetime as _dt
-    import math as _math
-
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    bbox = _domain_bbox("the antecedent rainfall")
-    sep = "/" if "/" in window else (".." if ".." in window else None)
-    if not sep:
-        raise RainOnGridError(
-            f"the rain window must be 'start/end' dates; got {window!r}.",
-            error_code="TELEMAC_ROG_BAD_WINDOW")
-    start = window.split(sep, 1)[0].strip()
-    start_d = _dt.date.fromisoformat(start[:10])
-    ant_start = (start_d - _dt.timedelta(days=int(antecedent_days))).isoformat()
-    payload = TOOL_REGISTRY["fetch_aorc_precip"].fn(
-        bbox=[float(v) for v in bbox], start_date=ant_start, end_date=start)
-    payload = payload if isinstance(payload, dict) else getattr(payload, "__dict__", {})
-    capacity, tau, level = float(capacity_mm), float(recovery_hr), 0.0
-    for value in payload.get("precip_mm", []):
-        mm = max(0.0, float(value))
-        fill = min(1.0, max(0.0, level / capacity))
-        level += mm - (1.0 - (1.0 - fill) ** 2) * mm
-        level -= level * (1.0 - _math.exp(-1.0 / tau))
-    return round(min(level, capacity), 4)
-
-
 # --------------------------------------------------------------------------- #
 # 4. author: the steering file, the fields it names, and the case that runs it.
 # --------------------------------------------------------------------------- #
@@ -400,10 +365,6 @@ async def write_rain_on_grid_deck(
     mesh_resolution_m: float | None = None,
     time_step_s: float,
     output_interval_min: float | None = None,
-    soil_store: bool = False,
-    soil_store_capacity_mm: float | None = None,
-    soil_recovery_hr: float,
-    soil_spinup_days: int,
 ) -> dict[str, Any]:
     """Serialize the approved sheet into the run's own steering file + case.
 
@@ -422,31 +383,6 @@ async def write_rain_on_grid_deck(
 
     from . import author
     from .open_water import case_section
-
-    if soil_store:
-        # The store integrates a real antecedent history, so it cannot run on a
-        # hypothetical design storm - and it needs a retention capacity to
-        # calibrate against. Both are refused HERE, before any staging.
-        if rain["kind"] != "hyetograph":
-            raise RainOnGridError(
-                "soil_store needs a real rain window (the hyetograph plus its "
-                "antecedent history); it cannot run on a hypothetical design storm.",
-                error_code="TELEMAC_ROG_SOIL_STORE_NEEDS_WINDOW")
-        if soil_store_capacity_mm is None:
-            raise RainOnGridError(
-                "soil_store needs soil_store_capacity_mm, the retention capacity S "
-                "(mm) the store is calibrated on.",
-                error_code="TELEMAC_ROG_SOIL_STORE_NO_CAPACITY")
-        # The continuous store was the RETIRED in-worker runoff model, and the
-        # authored deck runs the engine's own static SCS-CN. Refused rather than
-        # accepted and dropped: a knob that reads as applied and is not is the
-        # one failure a labeled default cannot be read past.
-        raise RainOnGridError(
-            "soil_store has no authored form: the continuous soil-moisture store "
-            "was the retired in-worker runoff model, and the engine's own SCS-CN "
-            "the deck drives carries a static curve number. Run without it, or "
-            "state the antecedent wetness with antecedent_moisture.",
-            error_code="TELEMAC_ROG_SOIL_STORE_UNAUTHORED")
 
     decision = (select_runoff_path(hyetograph_mm=rain["series"])
                 if rain["kind"] == "hyetograph"

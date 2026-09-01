@@ -580,9 +580,8 @@ class TelemacRainOnGridLayerURI(TelemacWseLayerURI):
             volumes do not close is not a run whose hydrograph means anything, so
             the number is published rather than checked in private.
         runoff_path: which infiltration path ran - ``"native"`` (constant design
-            storm through the engine's SCS-CN), ``"native_hyetograph"`` (a real
-            time-varying hyetograph driving the same SCS-CN per timestep) or
-            ``"soil_store"`` (the continuous soil-moisture store).
+            storm through the engine's SCS-CN) or ``"native_hyetograph"`` (a real
+            time-varying hyetograph driving the same SCS-CN per timestep).
         amc_condition: the SCS antecedent-moisture condition (1 dry, 2 normal,
             3 wet) the curve numbers were converted under.
         rain_intensity_mm_per_hr: the constant design-storm rate, when one drove

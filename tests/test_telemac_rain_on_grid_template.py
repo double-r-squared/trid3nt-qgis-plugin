@@ -106,7 +106,7 @@ def test_the_declared_plan_is_the_rain_on_grid_sequence():
 
 
 def test_constant_door_params_off_wire_scenario_and_user_ones_present():
-    """CONSTANT-door params (landcover_dataset, soil_spinup_days, mesh_grade,
+    """CONSTANT-door params (landcover_dataset, mesh_grade,
     bed_dem_resolution_m, river_source, time_step_s, compute_class) never reach
     the model-facing schema; SCENARIO/USER ones (the storm, the granularity
     lever, the mesh slot) do."""
@@ -278,65 +278,6 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
 
 
 # ===========================================================================
-# The soil-moisture store re-homed (surviving equivalent of the deleted module-
-# level ``_spin_up_soil_v0`` / ``model_telemac_rain_on_grid`` soil-store guard).
-# ===========================================================================
-def test_soil_store_spin_up_fills_from_antecedent(monkeypatch):
-    """A wetter antecedent record -> a higher V0, capped at the store capacity."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.domain import Domain, bind_domain, reset_domain
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
-        _soil_store_spin_up,
-    )
-
-    def _stub(precip):
-        return type("S", (), {"fn": staticmethod(lambda **kw: {"precip_mm": precip})})()
-
-    token = bind_domain(Domain(bbox=(-83.47, 35.02, -83.42, 35.06)))
-    try:
-        monkeypatch.setitem(TOOL_REGISTRY, "fetch_aorc_precip", _stub([5.0] * 240))
-        v_wet = _soil_store_spin_up(window="2018-02-10/2018-02-11",
-                                    capacity_mm=300.0, recovery_hr=120.0,
-                                    antecedent_days=45)
-        monkeypatch.setitem(TOOL_REGISTRY, "fetch_aorc_precip", _stub([1.0] * 240))
-        v_dry = _soil_store_spin_up(window="2018-02-10/2018-02-11",
-                                    capacity_mm=300.0, recovery_hr=120.0,
-                                    antecedent_days=45)
-    finally:
-        reset_domain(token)
-    assert v_wet > v_dry >= 0.0
-    assert v_wet <= 300.0  # never over capacity
-
-
-@pytest.mark.parametrize("rain,capacity,code", [
-    ({"kind": "design_storm", "intensity_mm_per_hr": 25.0, "duration_s": 21600.0,
-      "series": None}, 300.0, "TELEMAC_ROG_SOIL_STORE_NEEDS_WINDOW"),
-    ({"kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 21600.0,
-      "series": [1.0, 2.0]}, None, "TELEMAC_ROG_SOIL_STORE_NO_CAPACITY"),
-    # And with both of its own preconditions met, the store still has no authored
-    # form: it was the retired in-worker runoff model and the deck drives the
-    # engine's own static SCS-CN.
-    ({"kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 21600.0,
-      "series": [1.0, 2.0]}, 300.0, "TELEMAC_ROG_SOIL_STORE_UNAUTHORED"),
-])
-def test_the_soil_store_refuses_typed_rather_than_reading_as_applied(
-        rain, capacity, code):
-    """soil_store refuses at deck-authoring time - a knob that reads as applied
-    and is not is the one failure a labeled default cannot be read past."""
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
-        RainOnGridError, write_rain_on_grid_deck,
-    )
-
-    with pytest.raises(RainOnGridError) as ei:
-        asyncio.run(write_rain_on_grid_deck(
-            catchment={}, infiltration={"amc_condition": 2, "curve_number": None},
-            rain=rain, time_step_s=3.0, soil_store=True,
-            soil_store_capacity_mm=capacity, soil_recovery_hr=120.0,
-            soil_spinup_days=45))
-    assert ei.value.error_code == code
-
-
-# ===========================================================================
 # The pour-point-first AOI (the ADR 0196 live bug: a town bbox clipping the
 # upstream basin) - the surviving equivalent of the deleted
 # ``_aoi_from_pour_point`` / ``model_telemac_rain_on_grid`` dispatch tests.
@@ -436,7 +377,7 @@ def rog_deck(monkeypatch, tmp_path):
             infiltration={"amc_condition": 2, "curve_number": None,
                           "node_cn2": [70.0, 72.0, 74.0, 76.0],
                           "node_manning": [0.035, 0.035, 0.1, 0.06]},
-            time_step_s=3.0, soil_recovery_hr=120.0, soil_spinup_days=45,
+            time_step_s=3.0,
             **kwargs)
 
     return _write

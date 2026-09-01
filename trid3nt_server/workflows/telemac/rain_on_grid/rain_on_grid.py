@@ -109,11 +109,7 @@ class DATA:
 
 PHYSICS = Physics("rainfall_runoff",
                   time_step_s=P.time_step_s,
-                  output_interval_min=P.output_interval_min,
-                  soil_store=P.soil_store,
-                  soil_store_capacity_mm=P.soil_store_capacity_mm,
-                  soil_recovery_hr=P.soil_recovery_hr,
-                  soil_spinup_days=P.soil_spinup_days)
+                  output_interval_min=P.output_interval_min)
 
 FORCING = Forcing(rain=DATA.rain)
 

@@ -142,34 +142,6 @@ class PARAMS:
         desc="Land-cover product the per-node curve numbers and Manning n are "
              "keyed to")
 
-    # -- the continuous soil-moisture store --------------------------------- #
-    soil_store = Param(
-        door=doors.SCENARIO, default=False, consequence="physics",
-        desc="Replace the static curve number with a continuous soil-moisture "
-             "store that RECOVERS capacity between storms. NOT AVAILABLE: the "
-             "store was the retired in-worker runoff model and the authored deck "
-             "drives the engine's own static SCS-CN, so asking for it REFUSES "
-             "rather than reading as applied. State the antecedent wetness with "
-             "antecedent_moisture instead")
-    soil_store_capacity_mm = Param(
-        door=doors.USER, optional=True,
-        bounds=(1.0, 2000.0), units="mm", consequence="physics",
-        derived_when_absent=(
-            "there is none - the store REFUSES without an explicit capacity rather "
-            "than calibrating itself to a number nobody chose"),
-        desc="The store's retention capacity S (mm), its calibration knob; larger "
-             "absorbs more and produces less runoff. Required when soil_store")
-    soil_recovery_hr = Param(
-        door=doors.SCENARIO, default=120.0, bounds=(1.0, 8760.0),
-        units="h", consequence="physics",
-        desc="Between-storm drying timescale tau (h) - how fast the store drains "
-             "back toward capacity; smaller dries faster between storms")
-    soil_spinup_days = Param(
-        door=doors.CONSTANT, default=45, type=int,
-        bounds=(1.0, 730.0), units="d", consequence="physics",
-        desc="How far back the antecedent rainfall is integrated to set the "
-             "store's initial level at the window start")
-
     # -- the domain (the granularity lever) --------------------------------- #
     mesh_min_edge_m = Param(
         door=doors.SCENARIO, default=DEFAULT_MIN_EDGE_M,

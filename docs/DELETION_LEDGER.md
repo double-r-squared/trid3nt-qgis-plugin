@@ -2519,3 +2519,33 @@ keys on `sfincs_flood` / `modflow_contaminant_plume` / `swmm_urban_flood`, and
 `pelicun_damage_assessment` argument rows. Live modules holding dead ENTRIES -
 the same measurement the engine-contract sweep flagged, and the same separate
 pass.
+
+## The soil-moisture store leaves the template (findings walkthrough ruling 13, 2026-08-31)
+
+CONDITION: the continuous store was the RETIRED in-worker runoff model. The
+authored deck drives the engine's own static SCS-CN, so every path through
+`soil_store` ended in `TELEMAC_ROG_SOIL_STORE_UNAUTHORED` - a knob whose only
+behaviour was to refuse. A refusal that can never become a run is a parameter
+the model still has to read past, so the knob goes rather than the refusal.
+
+DELETED:
+- `rain_on_grid/declarations.py`: the four params - `soil_store`,
+  `soil_store_capacity_mm`, `soil_recovery_hr`, `soil_spinup_days`.
+- `steps/rain_on_grid.py`: `_soil_store_spin_up` (the 45-day antecedent AORC
+  integration of the Michel-2005 store level), the four keyword arguments on
+  `write_rain_on_grid_deck`, and the three-arm refusal block
+  (`TELEMAC_ROG_SOIL_STORE_NEEDS_WINDOW`, `..._NO_CAPACITY`, `..._UNAUTHORED`).
+- `rain_on_grid/rain_on_grid.py`: the four `PHYSICS` members.
+- `tests/test_telemac_rain_on_grid_template.py`:
+  `test_soil_store_spin_up_fills_from_antecedent` and the three-case
+  `test_the_soil_store_refuses_typed_rather_than_reading_as_applied`.
+- `scripts/sandbox/replication/rog_ballcreek_soilstore.py` and
+  `rog_ballcreek_soilstore_proofs.py` - the two drivers staged
+  `soil_store`/`soil_store_capacity_mm`/`soil_store_recovery_h` into a worker
+  manifest and read `soil_store_*` back out of its metrics; both channels went
+  with the retired in-worker model.
+
+REPOINTED: `contracts/telemac_contracts.py`'s `runoff_path` docstring lists the
+two paths that run. `docs/validation/module-coverage-board.md` keeps its
+2026-08-10 fidelity-ladder entry: that is the measured history of a run that
+happened, not a map of the live tree.
