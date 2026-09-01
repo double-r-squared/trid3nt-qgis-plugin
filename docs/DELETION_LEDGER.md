@@ -2549,3 +2549,37 @@ REPOINTED: `contracts/telemac_contracts.py`'s `runoff_path` docstring lists the
 two paths that run. `docs/validation/module-coverage-board.md` keeps its
 2026-08-10 fidelity-ladder entry: that is the measured history of a run that
 happened, not a map of the live tree.
+
+## `graphic_period` leaves the deck for the cadence it was converted from (findings walkthrough ruling 3, 2026-08-31)
+
+CONDITION: the deck said the SAME thing twice. `output_interval_min` (minutes
+between frames) rode the reach deck and reached no writer at all - the author
+read only `graphic_period` and its 200-step default, so the reach cadence knob
+was silently dropped - while the rain-on-grid step converted minutes to steps
+itself, upstream of the author, using a time step it had to be handed.
+
+DELETED:
+- `steps/author.py`: the `graphic_period` entry in `_DEFAULTS`. The count is
+  computed by `_graphic_period` from `output_interval_min` and the deck's own
+  `time_step_s`, beside the keyword it is written into, with
+  `_DEFAULT_GRAPHIC_PERIOD` standing when no cadence was stated.
+- `steps/rain_on_grid.py`: the minutes-to-steps arithmetic in the deck literal;
+  the deck now carries the cadence in minutes like every other one.
+
+ADDED, and the reason the pair could diverge unnoticed: `author._consume` -
+every key a deck carries is one a writer reads (`_DEFAULTS`) or a record row
+names (`_RECORD_ONLY`), or the authoring refuses by name
+(`TELEMAC_DECK_KEY_UNCONSUMED`). The one live caller the gate caught on landing
+was the dredge test helper, which spread `polygon` into the deck before popping
+it off its own kwargs.
+
+REPOINTED: `tests/test_telemac_author_decks.py` states the rain-on-grid cadence
+as `output_interval_min`. The `graphic_period` spelling survives there as a
+refusal case - the keyword the author stopped reading is exactly the shape the
+gate exists to catch.
+
+FLAGGED, not touched: `scripts/prove_telemac_seam.py` and the three
+`scripts/sandbox/**/rog_*` drivers still stage a `reach` manifest section with
+its own `graphic_period`. That section left the worker at worker-unification
+stage 2; they are dead against the current image for reasons that have nothing
+to do with this landing, and belong to the stale-script sweep.

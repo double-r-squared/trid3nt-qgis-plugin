@@ -221,13 +221,19 @@ async def test_the_case_names_the_engine_the_authored_deck_and_the_results(write
 @pytest.mark.asyncio
 async def test_the_echo_carries_what_only_the_server_measured(writer):
     """A fact re-derived in the container is a second answer that can disagree
-    with the first, so the worker copies these into its metrics verbatim."""
+    with the first, so the worker copies these into its metrics verbatim.
+
+    ``result_slf`` is one of them: the author wrote the deck's RESULTS FILE
+    statement, so the name is the server's and the container measures the file it
+    names rather than deciding which file the run produced.
+    """
     out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                        carrier_discharge=_CARRIER, substance="dye", **_SHEET)
     assert out["case"]["echo"] == {
         "utm_epsg": 32610, "bbox": [-124.2, 40.4, -124.0, 40.6],
         "npoin": 539, "nelem": 902, "mesh_size_m": 8.0,
-        "bed_source": "cop-dem-glo-30"}
+        "result_slf": "r2d_river.slf", "bed_source": "cop-dem-glo-30"}
+    assert out["case"]["echo"]["result_slf"] in out["case"]["results"]
 
 
 @pytest.mark.asyncio
