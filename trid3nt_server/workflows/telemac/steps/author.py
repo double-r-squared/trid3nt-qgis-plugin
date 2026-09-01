@@ -20,6 +20,13 @@ Every optional block is emitted ONLY when it was asked for, so a run that uses n
 module writes the deck it always wrote. Every line respects DAMOCLES's hard
 72-character limit: one long line derails the parser onto a later, valid line and
 the error names the wrong keyword.
+
+Which is why nothing here is trusted on inspection: every deck this module writes
+is read back by the ENGINE'S OWN parser, against the engine's own dictionary,
+before it is staged - see ``cas_validate``. And the sheet is read the same way in
+the other direction: every key the deck carries is one a writer below consumes or
+a record row names, or the authoring refuses by name rather than solving a run as
+though the key had never been set.
 """
 
 from __future__ import annotations
@@ -31,6 +38,8 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from .cas_validate import validate_authored_decks
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.author")
 
@@ -539,6 +548,12 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {tracer_diff}
             lines.append(line)
     Path(rundir, cas_name).write_text("\n".join(lines) + "\n", encoding="utf-8")
     written["cas"] = cas_name
+    # Every DAMOCLES-parsed deck this authoring wrote, each against its own
+    # module's dictionary. The NESTOR and oil inputs are read by their modules'
+    # own Fortran readers, not by DAMOCLES, and carry no dictionary to check.
+    validate_authored_decks(rundir, {cas_name: "telemac2d",
+                                     WAQTEL_FILENAME: "waqtel",
+                                     GAIA_STEERING_FILENAME: "gaia"})
     logger.info("reach deck authored: %s substance=%s lb_order=%s -> %s",
                 cas_name, substance, list(liquid_boundary_order), sorted(written))
     return written
@@ -1362,6 +1377,7 @@ INFORMATION ABOUT SOLVER        = YES
 NUMBER OF TRACERS               = 0
 """
     Path(rundir, cas_name).write_text(cas, encoding="utf-8")
+    validate_authored_decks(rundir, {cas_name: "telemac2d"})
     logger.info("rain-on-grid deck authored: %s path=%s rain=%g mm/day",
                 cas_name, runoff_path, rain_mm_per_day)
     return cas_name

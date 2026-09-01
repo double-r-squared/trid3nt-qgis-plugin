@@ -567,11 +567,12 @@ def test_a_land_designation_opens_nothing_and_identifies_nothing(
 # --------------------------------------------------------------------------- #
 # The box: a driver in the product tree, shelled with an op.
 # --------------------------------------------------------------------------- #
-def test_the_drivers_live_in_the_product_tree_beside_their_meshers():
+def test_the_drivers_live_in_the_product_tree_beside_their_callers():
     from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
     names = {p.name for p in drivers_dir().glob("*_driver.py")}
-    assert names == {"om2d_driver.py", "selafin_cli_driver.py"}
+    assert names == {"om2d_driver.py", "selafin_cli_driver.py",
+                     "telemac_cas_driver.py"}
     assert "sandbox" not in str(drivers_dir())
 
 

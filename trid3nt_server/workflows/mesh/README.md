@@ -23,5 +23,5 @@ gate presents it, and an artifact record is what the solve reads.
 
 | folder | what it is |
 | --- | --- |
-| `meshers/` | One file per mesh library, each declaring its spec fields and its edit actions: `om2d.py` (OceanMesh2D), `reg_grid.py` (the regular lattice), and `drivers/` - the in-container scripts mounted into the image each library lives in. |
+| `meshers/` | One file per mesh library, each declaring its spec fields and its edit actions: `om2d.py` (OceanMesh2D), `reg_grid.py` (the regular lattice), and `drivers/` - the in-container scripts mounted into the image whose libraries they drive (the mesh box for oceanmesh, the TELEMAC box for the geometry pair and the steering-file parse). |
 | `shared/` | What every mesher needs and no mesher owns: `nodes.py` (projection, sampling, slope, reading an accepted mesh's nodes and a centreline in its metres) and `selafin_cli.py` (the SELAFIN + `.cli` pair, written as one artifact). |

@@ -38,6 +38,7 @@ everything else it uses is the facade's or the step family's.
 | `__init__.py` | The step family's public surface: the step constructors, the runners and the typed errors a template imports. |
 | `agitation.py` | The ARTEMIS deck writer and its deliverable. |
 | `author.py` | The AUTHOR step: the accepted mesh plus the approved sheet to TELEMAC's own decks. |
+| `cas_validate.py` | Every authored steering file, parsed by the engine's own reader against its own dictionary before anything is staged. |
 | `coastal.py` | The coastal deck writer and the inundation deliverable. |
 | `deck.py` | The DECK step: params and forcing to the run's own record of what it solves, staged for the box. |
 | `errors.py` | The reach pipeline's typed failures, each with the code the envelope carries. |
