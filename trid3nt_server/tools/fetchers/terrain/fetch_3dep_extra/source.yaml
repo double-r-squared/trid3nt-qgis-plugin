@@ -101,7 +101,7 @@ docstring: "Fetch a non-default 3DEP DEM resolution for a US bbox.\n\nWhat it do
   \ watershed delineation.\n\nCross-tool dependencies:\n    - Composes WITH: ``compute_slope`` / ``compute_aspect``\
   \ /\n      ``compute_hillshade`` / ``compute_colored_relief`` (terrain\n      derivatives); ``clip_raster_to_polygon``\
   \ (clip to a watershed\n      / burn perimeter); pfdf debris-flow workflows that depend on\n      the\
-  \ 1/9 arc-second channel DEM; ``publish_layer`` (render via\n      the ``continuous_dem`` QML).\n  \
+  \ 1/9 arc-second channel DEM.\n  \
   \  - Sibling: ``fetch_dem`` -- the canonical 10 m / 30 m path. Use\n      fetch_dem unless you specifically\
   \ need one of the five\n      resolutions in ``SUPPORTED_RESOLUTIONS``.\n    - Upstream source: USGS\
   \ 3DEP TNM tile tree via\n      ``pfdf.data.usgs.tnm.dem``.\n\nCache: ``ttl_class=\"static-30d\"``,\

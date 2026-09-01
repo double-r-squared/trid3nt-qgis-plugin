@@ -1,7 +1,7 @@
 fetch_noaa_coops_tides:
 - show me tide gauge readings at Fort Myers for Hurricane Ian
 - what were the water levels at Key West during the storm?
-- I need hourly tide observations for SFINCS coastal boundary forcing
+- I need hourly tide observations for coastal boundary forcing
 - fetch CO-OPS water level data for the Gulf Coast during this surge event
 - give me observed tidal elevations at all stations near Tampa Bay
 - I need storm surge water levels from NOAA gauges for this date range

@@ -61,12 +61,17 @@ DEFAULT_K = 25
 MAX_K = 25
 
 #: The always-visible floor -- tools that must NEVER be retrieved out, regardless
-#: of the turn's ranking. The top-level flood composer + the "before you can do
-#: anything else" primitives (geocode, DEM, weather alerts CONUS + state-scoped),
-#: the discovery escape hatch (search_tools), and the cross-cutting view/analysis
-#: actions a user reaches for at any point (code exec, layer bounds, spatial
-#: input, chart, spatial query). retrieve_visible_tools and the openai
-#: tool-gating floor both union this set.
+#: of the turn's ranking: the "before you can do anything else" primitives
+#: (geocode, DEM, weather alerts CONUS + state-scoped), the discovery escape
+#: hatch (search_tools), and the cross-cutting view/analysis actions a user
+#: reaches for at any point (code exec, layer bounds, spatial input, chart,
+#: spatial query). retrieve_visible_tools and the openai tool-gating floor both
+#: union this set.
+#:
+#: No engine template belongs in this floor either: a template answers ONE
+#: question class, so flooring one biases every turn toward it. Templates reach
+#: the model through the turn's ranking, which the corpus-first retrieval matrix
+#: pins.
 #:
 #: No publish tool belongs in this floor: emission is automatic, so there is no
 #: "display this" intent for the model to route to. The mechanism lives in
@@ -74,7 +79,6 @@ MAX_K = 25
 #: without being asked.
 CORE_FLOOR: frozenset[str] = frozenset(
     {
-        "sfincs_flood",
         "geocode_location",
         "fetch_dem",
         "fetch_nws_alerts_conus",

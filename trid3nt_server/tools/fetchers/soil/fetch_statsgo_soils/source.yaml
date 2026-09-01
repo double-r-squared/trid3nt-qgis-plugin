@@ -91,7 +91,7 @@ docstring: "Fetch a STATSGO soils raster (KFFACT or THICK) for a CONUS bbox.\n\n
   \ a watershed\n    polygon from ``fetch_administrative_boundaries`` /\n    ``fetch_nhdplus_nldi_navigate``\
   \ basin).\n\nCross-tool dependencies:\n    - Composes WITH: ``spatial_query`` (catchment-mean\n    \
   \  KFFACT for pfdf debris-flow scoring); ``clip_raster_to_polygon``\n      (clip to a burn perimeter\
-  \ / watershed); ``publish_layer`` (map\n      display via the ``statsgo_*`` QML preset).\n    - Sibling:\
+  \ / watershed).\n    - Sibling:\
   \ ``fetch_gcn250_curve_numbers`` (global SCS CN raster -- overlaps semantically with KFFACT-as-HSG-proxy\
   \ but is global +\n      AMC-tiered; prefer GCN250 when leaving CONUS).\n    - Upstream source: USGS\
   \ ScienceBase STATSGO COG collection via\n      ``pfdf.data.usgs.statsgo``.\n\nCache: ``ttl_class=\"\

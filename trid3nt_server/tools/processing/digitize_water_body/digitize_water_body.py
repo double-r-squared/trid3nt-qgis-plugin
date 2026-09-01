@@ -167,8 +167,8 @@ _MAX_BBOX_DEG2 = 0.5
 #: 6-dp bbox quantization (~0.1 m) for cache-key stability.
 _BBOX_DECIMALS = 6
 
-#: Water-polygon style preset (blue fill). Consumed by publish_layer's
-#: vector style registry; falls back gracefully if unregistered.
+#: Water-polygon style preset (blue fill). Consumed by the automatic
+#: map-render vector style registry; falls back gracefully if unregistered.
 _STYLE_PRESET = "water_bodies"
 
 
@@ -545,8 +545,8 @@ def digitize_water_body(
     extent between two dates. Do NOT use for: vegetation vigor
     (``compute_ndvi``); land-cover classes (``fetch_landcover``/
     ``extract_landcover_class``); regulatory floodplains
-    (``fetch_fema_nfhl_zones``) or modeled inundation
-    (``sfincs_flood``); SLR bathtub footprints
+    (``fetch_fema_nfhl_zones``) or modeled inundation (an engine run's
+    depth raster, not a fetch tool); SLR bathtub footprints
     (``fetch_noaa_slr_scenarios``).
 
     Params:

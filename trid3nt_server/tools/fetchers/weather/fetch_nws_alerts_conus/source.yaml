@@ -97,7 +97,7 @@ docstring: "Fetch active National Weather Service alerts — nationwide, or prec
   \ today's severe weather nationwide\" — omit ``area`` for the\n  single CONUS sweep (far cheaper than\
   \ 50 state-level calls).\n- The Hazard Event Pipeline needs all active alerts matching a hazard\n  type\
   \ (e.g. all Flash Flood Watches) without a known state.\n- Situational-awareness overlay for a multi-state\
-  \ or national dashboard.\n- To MODEL the flood that is HAPPENING NOW from an\n  active warning: filter to Flood Warning / Flash Flood Warning, take the\n  highest-severity warning polygon as the AOI, pull the observed precip\n  (``fetch_mrms_qpe``), and run ``sfincs_flood`` (observed-precip flood, not a\n  design storm).\n\n**When NOT to use:**\n- County- or bbox-scoped queries — use ``fetch_nws_event``\
+  \ or national dashboard.\n- To MODEL the flood that is HAPPENING NOW from an\n  active warning: filter to Flood Warning / Flash Flood Warning, take the\n  highest-severity warning polygon as the AOI, pull the observed precip\n  (``fetch_mrms_qpe``), and run ``telemac_rain_on_grid`` (observed-precip rainfall-runoff, not a\n  design storm).\n\n**When NOT to use:**\n- County- or bbox-scoped queries — use ``fetch_nws_event``\
   \ with a 5-digit\n  county FIPS or a bbox; for sub-state areas of interest, clip the result\n  to the\
   \ admin polygon (``fetch_administrative_boundaries`` +\n  ``spatial_query``) rather than trusting a\
   \ rectangle.\n- Historical weather events — NWS active-alerts is current-only (0–7 day\n  horizon);\

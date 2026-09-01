@@ -1,7 +1,7 @@
 fetch_mrms_qpe:
 - how much rain fell over Houston during this storm event?
 - show me radar-derived precipitation accumulation for this flood event
-- I need gauge-corrected rainfall totals for SFINCS pluvial forcing
+- I need gauge-corrected rainfall totals for pluvial flood forcing
 - fetch MRMS QPE for the 48-hour window around Hurricane Ian landfall
 - give me gridded precipitation accumulation over the Midwest flooding
 - what was the total rainfall in this watershed over the last 24 hours?

@@ -200,7 +200,7 @@ docstring: |-
   least-cloudy), reads the requested 30 m bands clipped to the bbox, masks
   cloud / shadow / fill via the ``qa_pixel`` CFMask bitmask, and returns a
   3-band RGB COG that paints directly as a satellite image (multiband
-  passthrough in ``publish_layer``  --  no rescale / colormap; the baked colors
+  passthrough  --  no rescale / colormap; the baked colors
   render as-is).
 
   Three ``band_combo`` outputs:

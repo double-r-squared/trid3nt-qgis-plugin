@@ -1,5 +1,5 @@
 fetch_era5_reanalysis:
-- I need global wind forcing for a SFINCS storm surge model outside the US
+- I need global wind forcing for a storm surge model outside the US
 - fetch ERA5 surface wind for the Bay of Bengal cyclone event
 - give me ERA5 total precipitation for this non-CONUS flood scenario
 - I need reanalysis pressure and wind data for the compound flood substrate

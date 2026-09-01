@@ -81,12 +81,13 @@ docstring: "Fetch NOAA MRMS accumulated QPE (gauge-corrected precipitation) as a
   \ a deflate-compressed Cloud-Optimized GeoTIFF. Pass2 is\ngauge-corrected (~2 h delayed) at CONUS 0.01°\
   \ (~1 km) resolution. Tier-1\nfree, no API key required. Picks the most-recent available timestamp at\
   \ call\ntime when ``valid_time`` is omitted; records the resolved timestamp in the\nreturned ``LayerURI``\
-  \ metadata.\n\n**When to use:**\n\n- SFINCS pluvial-flood forcing precipitation for CONUS events --\
-  \ MRMS QPE\n  Pass2 is the Harvey/Houston SFINCS reference forcing (GMD 2025). Typical\n  call for Case\
+  \ metadata.\n\n**When to use:**\n\n- Pluvial-flood forcing precipitation for a CONUS rainfall-runoff\
+  \ model (``telemac_rain_on_grid``) -- MRMS QPE\n  Pass2 is a reference\
+  \ forcing product (GMD 2025). Typical\n  call for Case\
   \ 3 (Idaho NWS flood warning):\n  ``fetch_mrms_qpe(bbox=warning_polygon_bbox, accumulation=\"24h\")``.\n\
   - Rainfall-runoff analysis and storm characterization (\"how much rain fell\n  in 24 hours over the\
   \ watershed?\").\n- Near-real-time precipitation context: omit ``valid_time`` to fetch the\n  most recently\
-  \ published file (~2 h behind current).\n- Feeding ``run_sfincs`` (via ``set_sfincs_parameters``) as\
+  \ published file (~2 h behind current).\n- Feeding ``telemac_rain_on_grid`` as\
   \ the real-\n  precip forcing branch for Case 3 (composers).\n\n**When NOT to use:**\n\n- Live radar\
   \ reflectivity -- use ``show_nexrad_radar`` (Iowa Mesonet\n  WMS; dBZ products n0r/n0q/vil).\n\
   - Historical return-period precipitation (design storms) -- use\n  ``lookup_precip_return_period`` (NOAA\
@@ -111,8 +112,7 @@ docstring: "Fetch NOAA MRMS accumulated QPE (gauge-corrected precipitation) as a
   (S3 / grib2 failure, retryable), ``MRMSQPENotAvailableError`` (no published\nfile in walkback window),\
   \ ``MRMSQPEEmptyError`` (bbox outside CONUS).\n\n**Cross-tool dependencies:**\n\n- Pair with: ``show_nexrad_radar``\
   \ (live radar reflectivity overlay\n  for the same storm event) and ``fetch_nws_alerts_conus`` (NWS\
-  \ watches/\n  warnings) for a complete storm-situation display.\n- Consumed by: ``run_sfincs`` (via\
-  \ ``set_sfincs_parameters``) as pluvial\n  precipitation forcing (Case 3 composer); per-watershed accumulation\n\
+  \ watches/\n  warnings) for a complete storm-situation display.\n- Consumed by: ``telemac_rain_on_grid`` as pluvial\n  precipitation forcing (Case 3 composer); per-watershed accumulation\n\
   \  queries composed in the code_exec playground (zonal stats over a\n  polygon).\n- Alternative for\
   \ non-CONUS: ``fetch_era5_reanalysis`` (global, 27 km,\n  needs Copernicus CDS key).\n\nCache: ``ttl_class=\"\
   dynamic-1h\"``; key = SHA-256 of\n``(bbox-6dp, accumulation-canonical, valid_time-or-LATEST, pass)``.\n\

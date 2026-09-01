@@ -49,7 +49,7 @@ class ParsedSpatialInput:
 
     Generalized roles (surfaced for every engine):
         breach_points: ``[[lon, lat], ...]`` interior breach sources
-            (SFINCS/GeoClaw ``breach_point``).
+            (the ``breach_point`` param).
         refine_regions: ``[{"polygon", "target_size_m", "bbox"}]`` mesh sizing.
         breaklines: ``[[[lon, lat], ...], ...]`` edge-constraining lines.
         boundary_lines: ``[{"coords", "boundary_type"}]`` open boundaries.

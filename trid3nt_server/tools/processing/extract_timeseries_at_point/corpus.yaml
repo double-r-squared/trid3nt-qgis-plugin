@@ -4,5 +4,5 @@ extract_timeseries_at_point:
 - extract a time series of depth at my house from the flood run
 - show me how surge height evolves at this point over the 48 hours
 - graph the water depth over time at this coordinate
-- what is the hydrograph at the outfall from the SWMM run
+- what is the hydrograph at the outfall from the model run
 - track how the contaminant concentration changes over the animation frames

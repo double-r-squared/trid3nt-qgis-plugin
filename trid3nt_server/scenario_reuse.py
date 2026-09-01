@@ -1,9 +1,8 @@
 """Deterministic expensive-simulation reuse guard.
 
-PROBLEM (live): the agent REDUNDANTLY re-runs expensive simulations
-(``sfincs_flood`` / ``modflow_contaminant_plume`` / Pelicun) and re-derives
-layers that ALREADY exist in the Case — burning minutes and money on a SFINCS /
-MODFLOW solve whose output layer is already on the map. The soft prompt
+PROBLEM (live): the agent REDUNDANTLY re-runs expensive simulations and
+re-derives layers that ALREADY exist in the Case - burning minutes and money on
+a solve whose output layer is already on the map. The soft prompt
 steer ("Reuse the existing handle/uri ... do NOT re-fetch or recompute") was
 being IGNORED by the live model. This module makes reuse ROBUST: a deterministic,
 CONSERVATIVE short-circuit that runs on the dispatch hot path BEFORE the solver
@@ -16,9 +15,9 @@ Two cooperating pieces:
    tool call into a normalized, comparable signature: the ``scenario_type`` (the
    layer-family the run PRODUCES, e.g. ``flood-depth``), the AOI key (a quantized
    bbox AND/OR a normalized ``location_query``), and the KEY physics params that
-   change the answer (return period + duration for flood; contaminant + release
-   rate + duration + location for a MODFLOW plume). Two calls whose signatures
-   compare equal would produce the SAME layer — so the second is redundant.
+   change the answer (return period + duration for a flood; substance + release
+   rate + duration + location for a plume). Two calls whose signatures
+   compare equal would produce the SAME layer - so the second is redundant.
 
 2. ``ScenarioResultIndex`` — a per-session record of every expensive-scenario
    result already produced THIS session, keyed by its signature and carrying the
@@ -78,24 +77,19 @@ __all__ = [
 # index and to recognize an existing RESULT layer by its ``layer_id`` prefix
 # (e.g. ``flood-depth-peak-<run_id>`` → ``flood-depth``). Keep these aligned with
 # the layer_id minted by the postprocess step of each workflow.
+# NO KEY HERE IS A REGISTERED TOOL, so the guard is inert on every live turn.
+# Keying a template in is a correctness decision, not a rename: a false
+# short-circuit hands the user a stale answer, so a key earns its place only
+# once its postprocess layer_id and its answer-changing params are both pinned.
 EXPENSIVE_SCENARIO_TOOLS: dict[str, str] = {
-    # engine-door refactor (SFINCS slice): the SFINCS flood template that mints
-    # the flood-depth layer (the run_sfincs door executes no solve).
     "sfincs_flood": "flood-depth",
-    # engine-door refactor: run_modflow_job folded into modflow_contaminant_plume.
     "modflow_contaminant_plume": "plume",
-    # P4: the quasi-2D PySWMM urban-flood engine mints a peak depth
-    # layer id ``swmm-depth-peak-<run_id>`` (same depth family as SFINCS).
-    # engine-door refactor (SWMM slice): re-keyed run_swmm_urban_flood ->
-    # swmm_urban_flood (the template submits the solver; signature matcher reads
-    # params, unaffected by the rename).
     "swmm_urban_flood": "swmm-depth",
 }
 
 #: ``layer_id`` prefixes that identify an existing RESULT layer of each family.
-#: A flood postprocess mints ``flood-depth-peak-<run_id>``; a MODFLOW postprocess
-#: mints a plume layer id. Matching is prefix/substring based so run-id suffixes
-#: do not defeat recognition.
+#: A flood postprocess mints ``flood-depth-peak-<run_id>``. Matching is
+#: prefix/substring based so run-id suffixes do not defeat recognition.
 _SCENARIO_LAYER_ID_MARKERS: dict[str, tuple[str, ...]] = {
     "flood-depth": ("flood-depth", "flood_depth", "flood-peak"),
     "plume": ("plume", "modflow", "contamination", "concentration"),

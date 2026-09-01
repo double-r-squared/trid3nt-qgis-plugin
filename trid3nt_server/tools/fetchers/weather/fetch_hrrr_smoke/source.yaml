@@ -78,64 +78,112 @@ payload_estimate:
   mb_per_sq_deg: 0.0021114864864864866
   floor_mb: 0.05
   ceil_mb: 5.0
-docstring: "NOAA HRRR-Smoke 3 km smoke / aerosol forecast -- Tier-1 CONUS fetcher.\n\nWhat it does: returns\
-  \ a CRS-tagged GeoTIFF (EPSG:4326) of a single\nHRRR-Smoke forecast field at a single forecast lead\
-  \ time, reprojected\nfrom the native Lambert Conformal Conic grid and clipped to the\nrequested CONUS\
-  \ bbox. Wraps the University of Utah CHPC HRRR-Zarr S3\nmirror (anonymous, Tier-1 free, no API key)\
-  \ that carries NCEP/EMC's\noperational HRRR-Smoke run -- smoke emissions sourced from NESDIS HMS\nsatellite\
-  \ fire detections, plume-rise via Freitas et al. (2006),\nadvected on the 3 km HRRR dynamical core.\
-  \ Resolves the most-recently\npublished HRRR cycle whose forecast at the requested lead time is on\n\
-  S3, walking up to 6 h backward if the in-progress cycle has not yet\nposted (mirror lag ~1.0 - 1.5 h).\n\
-  \nWhen to use:\n- User asks about \"wildfire smoke\" / \"smoke plume\" / \"air quality from\n  the fire\"\
-  \ forecasts anywhere in CONUS (\"how bad will the smoke be in\n  Denver tomorrow?\", \"show the smoke\
-  \ plume from the wildfire in\n  Oregon\", \"is California's smoke reaching Nevada by tonight?\").\n\
-  - Driving an air-quality / public-health overlay or a fire-impact\n  composite layered with ``fetch_nifc_fire_perimeters``\
-  \ (active\n  perimeters), ``fetch_firms_active_fire`` (satellite hot spots), or\n  ``fetch_mtbs_burn_severity``\
-  \ (post-fire severity).\n- \"Forecast smoke + observed weather\" comparisons against\n  ``fetch_asos_metar``\
-  \ (visibility, sky conditions) for plausibility.\n- Short-term (≤ 18 h on most cycles, ≤ 48 h on 00/06/12/18z\
-  \ cycles)\n  US smoke-transport decision-support overlay.\n\nWhen NOT to use:\n- Standard weather forecasts\
-  \ (temperature, wind, precip) -- use\n  ``fetch_hrrr_forecast``. HRRR-Smoke shares the same dynamical\
-  \ core\n  but this tool exposes only smoke / aerosol diagnostics.\n- Observed surface particulate (PM2.5\
-  \ / PM10 / AOD) -- HRRR-Smoke is\n  model output. There is no HRRR-Smoke \"observation\"; use EPA AirNow\n\
-  \  (future tool) or NASA MODIS AOD (future) for measured aerosols.\n- Active fire detection -- use ``fetch_firms_active_fire``\
-  \ (NASA VIIRS/\n  MODIS hot spots) or ``fetch_goes_satellite`` (GOES-East/West fire\n  products). HRRR-Smoke\
-  \ ingests these as forcing; it does not produce\n  them.\n- Fire perimeters -- use ``fetch_nifc_fire_perimeters``\
-  \ (active) or\n  ``fetch_mtbs_burn_severity`` (historical).\n- Outside CONUS (Mexico interior, Caribbean\
-  \ except direct CONUS\n  spillover, Alaska, Hawaii, the open Pacific or Atlantic) -- HRRR-Smoke is CONUS-only;\
-  \ bbox outside coverage raises\n  ``HRRRSmokeInputError``.\n- Long-range climatology / multi-day transport\
-  \ beyond 48 h -- those\n  leads are not in HRRR-Smoke.\n\nParameters:\n    bbox: ``(west, south, east,\
-  \ north)`` in EPSG:4326 (WGS84 decimal\n        degrees). Must intersect CONUS coverage (~lon -134..-60,\n\
-  \        lat 21..53). Example: ``(-124.5, 41.0, -120.0, 46.3)`` for a\n        northern California /\
-  \ southern Oregon wildfire footprint.\n    variable: one of:\n        - ``\"near_surface_smoke\"`` (kg\
-  \ m-3, 8 m AGL smoke mass density -- the \"what you'd breathe\" layer; multiply by ~10⁹ for µg m-3)\n\
-  \        - ``\"smoke_column_mass\"`` (kg m-2, vertically-integrated smoke\n          column -- total\
-  \ atmospheric smoke load)\n        - ``\"aerosol_optical_depth\"`` (dimensionless, 550 nm AOD -- proxy\
-  \ for satellite-observable smoke opacity).\n        Default ``\"near_surface_smoke\"``.\n    forecast_hour:\
-  \ integer forecast lead time in hours (1 = +1 h from\n        cycle start). Range 1 - 18 for standard\
-  \ cycles, 1 - 48 for the\n        extended 00/06/12/18z cycles. ``0`` is accepted and aliased to\n \
-  \       the +1 h slice (no analysis-time slice exists in the ``fcst``\n        zarr). Default ``1``.\n\
-  \    cycle: optional ISO-8601 cycle timestamp like\n        ``\"2026-06-09T00:00:00Z\"`` to pin a specific\
-  \ cycle. Default\n        ``None`` → use the most recent published cycle (walks backward\n        up\
-  \ to 6 h from current UTC).\n\nReturns:\n    A ``LayerURI`` pointing at a COG in the cache bucket\n\
-  \    ``s3://trid3nt-cache/cache/dynamic-1h/hrrr_smoke/<key>.tif``\n    carrying the requested variable's\
-  \ forecast slice, EPSG:4326,\n    float32, NaN nodata. ``layer_type=\"raster\"``, ``role=\"primary\"\
-  ``,\n    ``units`` per the variable (``\"kg m-3\"``, ``\"kg m-2\"``, or ``\"1\"``).\n    Downstream\
-  \ consumers (``publish_layer``, the code_exec playground,\n    ``clip_raster_to_polygon``) read the\
-  \ COG and treat it as a\n    single-band scalar field.\n\nCross-tool dependencies:\n    - Consumes nothing\
-  \ (Tier-1 substrate fetcher; no upstream tool).\n    - Feeds: ``publish_layer`` (visualization on the\
-  \ web map),\n      AOI zonal stats in the code_exec playground (aggregate to admin\n      boundaries\
-  \ or county / ZIP code area-weighted exposure),\n      ``clip_raster_to_polygon`` (further sub-clip\
-  \ to fire footprint\n      or admin polygon), ``clip_raster_to_polygon`` (bbox or polygon sub-clip).\n\
-  \    - Composes with: ``fetch_nifc_fire_perimeters`` (active wildfire\n      polygons -- overlay smoke\
-  \ plume on the burning area),\n      ``fetch_firms_active_fire`` (VIIRS/MODIS hot spots -- overlay\n\
-  \      ignition sources), ``fetch_mtbs_burn_severity`` (historical\n      burn footprints for context),\
-  \ ``fetch_asos_metar`` (surface\n      visibility for validation), ``fetch_gridmet`` (RH / wind speed\n\
-  \      context for fire-weather), ``fetch_administrative_boundaries``\n      (clip to a county or state\
-  \ for air-quality reporting).\n\nRaises:\n    ``HRRRSmokeInputError``: bad bbox / variable / forecast_hour\n\
-  \        (retryable=False).\n    ``HRRRSmokeEmptyError``: bbox falls outside HRRR coverage or\n    \
-  \    yields all-NaN after clip (retryable=False).\n    ``HRRRSmokeNotAvailableError``: requested cycle\
-  \ is not yet on S3\n        within the 6 h backstop (retryable=True).\n    ``HRRRSmokeUpstreamError``:\
-  \ S3 / zarr / reprojection failure\n        (retryable=True).\n\nFR-CE-8: routed through ``read_through``\
-  \ with ``ttl_class=\"dynamic-1h\"``\nso identical ``(bbox, variable, cycle, forecast_hour)`` calls reuse\n\
-  the cached COG within the hourly window. The cache key includes the\ncycle identifier so distinct cycles\
-  \ predicting the same valid time\nmap to distinct cache entries."
+docstring: |-
+  NOAA HRRR-Smoke 3 km smoke / aerosol forecast -- Tier-1 CONUS fetcher.
+
+  What it does: returns a CRS-tagged GeoTIFF (EPSG:4326) of a single
+  HRRR-Smoke forecast field at a single forecast lead time, reprojected
+  from the native Lambert Conformal Conic grid and clipped to the
+  requested CONUS bbox. Wraps the University of Utah CHPC HRRR-Zarr S3
+  mirror (anonymous, Tier-1 free, no API key) that carries NCEP/EMC's
+  operational HRRR-Smoke run -- smoke emissions sourced from NESDIS HMS
+  satellite fire detections, plume-rise via Freitas et al. (2006),
+  advected on the 3 km HRRR dynamical core. Resolves the most-recently
+  published HRRR cycle whose forecast at the requested lead time is on
+  S3, walking up to 6 h backward if the in-progress cycle has not yet
+  posted (mirror lag ~1.0 - 1.5 h).
+
+  When to use:
+  - User asks about "wildfire smoke" / "smoke plume" / "air quality from
+    the fire" forecasts anywhere in CONUS ("how bad will the smoke be in
+    Denver tomorrow?", "show the smoke plume from the wildfire in
+    Oregon", "is California's smoke reaching Nevada by tonight?").
+  - Driving an air-quality / public-health overlay or a fire-impact
+    composite layered with ``fetch_nifc_fire_perimeters`` (active
+    perimeters), ``fetch_firms_active_fire`` (satellite hot spots), or
+    ``fetch_mtbs_burn_severity`` (post-fire severity).
+  - "Forecast smoke + observed weather" comparisons against
+    ``fetch_asos_metar`` (visibility, sky conditions) for plausibility.
+  - Short-term (≤ 18 h on most cycles, ≤ 48 h on 00/06/12/18z cycles)
+    US smoke-transport decision-support overlay.
+
+  When NOT to use:
+  - Standard weather forecasts (temperature, wind, precip) -- use
+    ``fetch_hrrr_forecast``. HRRR-Smoke shares the same dynamical core
+    but this tool exposes only smoke / aerosol diagnostics.
+  - Observed surface particulate (PM2.5 / PM10 / AOD) -- HRRR-Smoke is
+    model output. There is no HRRR-Smoke "observation"; use EPA AirNow
+    (future tool) or NASA MODIS AOD (future) for measured aerosols.
+  - Active fire detection -- use ``fetch_firms_active_fire`` (NASA VIIRS/
+    MODIS hot spots) or ``fetch_goes_satellite`` (GOES-East/West fire
+    products). HRRR-Smoke ingests these as forcing; it does not produce
+    them.
+  - Fire perimeters -- use ``fetch_nifc_fire_perimeters`` (active) or
+    ``fetch_mtbs_burn_severity`` (historical).
+  - Outside CONUS (Mexico interior, Caribbean except direct CONUS
+    spillover, Alaska, Hawaii, the open Pacific or Atlantic) -- HRRR-Smoke is CONUS-only; bbox outside coverage raises
+    ``HRRRSmokeInputError``.
+  - Long-range climatology / multi-day transport beyond 48 h -- those
+    leads are not in HRRR-Smoke.
+
+  Parameters:
+      bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
+          degrees). Must intersect CONUS coverage (~lon -134..-60,
+          lat 21..53). Example: ``(-124.5, 41.0, -120.0, 46.3)`` for a
+          northern California / southern Oregon wildfire footprint.
+      variable: one of:
+          - ``"near_surface_smoke"`` (kg m-3, 8 m AGL smoke mass density -- the "what you'd breathe" layer; multiply by ~10⁹ for µg m-3)
+          - ``"smoke_column_mass"`` (kg m-2, vertically-integrated smoke
+            column -- total atmospheric smoke load)
+          - ``"aerosol_optical_depth"`` (dimensionless, 550 nm AOD -- proxy for satellite-observable smoke opacity).
+          Default ``"near_surface_smoke"``.
+      forecast_hour: integer forecast lead time in hours (1 = +1 h from
+          cycle start). Range 1 - 18 for standard cycles, 1 - 48 for the
+          extended 00/06/12/18z cycles. ``0`` is accepted and aliased to
+          the +1 h slice (no analysis-time slice exists in the ``fcst``
+          zarr). Default ``1``.
+      cycle: optional ISO-8601 cycle timestamp like
+          ``"2026-06-09T00:00:00Z"`` to pin a specific cycle. Default
+          ``None`` → use the most recent published cycle (walks backward
+          up to 6 h from current UTC).
+
+  Returns:
+      A ``LayerURI`` pointing at a COG in the cache bucket
+      ``s3://trid3nt-cache/cache/dynamic-1h/hrrr_smoke/<key>.tif``
+      carrying the requested variable's forecast slice, EPSG:4326,
+      float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
+      ``units`` per the variable (``"kg m-3"``, ``"kg m-2"``, or ``"1"``).
+      Downstream consumers (the code_exec playground,
+      ``clip_raster_to_polygon``) read the COG and treat it as a
+      single-band scalar field.
+
+  Cross-tool dependencies:
+      - Consumes nothing (Tier-1 substrate fetcher; no upstream tool).
+      - Feeds: AOI zonal stats in the code_exec playground (aggregate to admin
+        boundaries or county / ZIP code area-weighted exposure),
+        ``clip_raster_to_polygon`` (further sub-clip to fire footprint
+        or admin polygon), ``clip_raster_to_polygon`` (bbox or polygon sub-clip).
+      - Composes with: ``fetch_nifc_fire_perimeters`` (active wildfire
+        polygons -- overlay smoke plume on the burning area),
+        ``fetch_firms_active_fire`` (VIIRS/MODIS hot spots -- overlay
+        ignition sources), ``fetch_mtbs_burn_severity`` (historical
+        burn footprints for context), ``fetch_asos_metar`` (surface
+        visibility for validation), ``fetch_gridmet`` (RH / wind speed
+        context for fire-weather), ``fetch_administrative_boundaries``
+        (clip to a county or state for air-quality reporting).
+
+  Raises:
+      ``HRRRSmokeInputError``: bad bbox / variable / forecast_hour
+          (retryable=False).
+      ``HRRRSmokeEmptyError``: bbox falls outside HRRR coverage or
+          yields all-NaN after clip (retryable=False).
+      ``HRRRSmokeNotAvailableError``: requested cycle is not yet on S3
+          within the 6 h backstop (retryable=True).
+      ``HRRRSmokeUpstreamError``: S3 / zarr / reprojection failure
+          (retryable=True).
+
+  FR-CE-8: routed through ``read_through`` with ``ttl_class="dynamic-1h"``
+  so identical ``(bbox, variable, cycle, forecast_hour)`` calls reuse
+  the cached COG within the hourly window. The cache key includes the
+  cycle identifier so distinct cycles predicting the same valid time
+  map to distinct cache entries.

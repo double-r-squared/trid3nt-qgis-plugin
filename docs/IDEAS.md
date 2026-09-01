@@ -3123,3 +3123,26 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the prompt stops rotting with the roster; dead engine names
   return one line at a time as engines land through rung 5. The
   reuse rule + rain-on-grid tier text rewrite to live names only.
+
+- RUNG-3 SHAPE RULED THROUGH DISCUSSION (NATE 2026-09-01, spec to
+  follow): (1) THE RECIPE IS THE ONE MESH-DEFINING OBJECT - present
+  tense, the current program that produces the mesh (universal roles
+  + ordered pre ops + ordered post ops); NO record/history object -
+  audit is the journal's existing job, undo is editing the recipe
+  back, reset-to-declaration replaces prefix-truncation. mesh state
+  = recipe + staged inputs; accept() freezes the recipe onto the
+  artifact as provenance; hand-edits stay flagged non-replayable.
+  (2) PRE/POST ARE ORDERED LISTS of (library_fn_name, kwargs) pairs
+  - verbatim names, order meaningful (gradation last), duplicates
+  legal (two distance-sizing lines); amends the earlier dict
+  spelling. (3) mesh_op(fn, **kwargs) - ONE registered tool in the
+  mesh area: phase DERIVED from the mesher's namespace registration,
+  session defaults to the case's active mesh, appends to the recipe
+  + full regen; typed refusal w/ nearest-name on unknown fn; owes a
+  retrieval corpus. (4) ROLES ARE OURS, OPS ARE THEIRS - extent/
+  resolution/kind/bed/boundaries keep named role edits; mesh_op
+  never carries our vocabulary. (5) MeshField dies - validation =
+  the library's own signatures (inspect.signature.bind; unsignatured
+  functions pass through w/ journaled note, library errors surface
+  verbatim). (6) SNAPSHOT CACHE = chop candidate (state is the
+  recipe; regen is cheap). (7) reg_grid CONFORMS to the same shape.

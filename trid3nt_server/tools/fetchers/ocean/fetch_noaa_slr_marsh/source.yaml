@@ -106,7 +106,7 @@ docstring: |-
   **When NOT to use:**
   - For the inundation FOOTPRINT -> ``fetch_noaa_slr_scenarios``.
   - For mapping CONFIDENCE -> ``fetch_noaa_slr_confidence``.
-  - For event-driven storm surge -> ``sfincs_flood`` / ``fetch_gtsm_tide_surge``.
+  - For event-driven storm surge -> ``fetch_gtsm_tide_surge`` (storm-surge modeling is not currently supported here).
   - Outside CONUS -> not covered (CONUS coastal product only).
 
   **Parameters:**

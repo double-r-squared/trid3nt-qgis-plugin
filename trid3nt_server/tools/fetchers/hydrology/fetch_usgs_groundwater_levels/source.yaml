@@ -87,14 +87,13 @@ docstring: |-
         and how deep is the water table", "plot the observed groundwater
         levels in central Kansas").
       - You need the actual measured groundwater head at instrumented wells -- the real instrument record -- to map, annotate, or ground-truth.
-      - Cross-checking / calibrating a MODELED groundwater head field (a
-        MODFLOW run) against the observed monitoring-well network ("observed
+      - Cross-checking / calibrating a MODELED groundwater head field
+        against the observed monitoring-well network ("observed
         vs modeled heads").
 
   When NOT to use:
-      - MODELED groundwater heads / drawdown / a contaminant plume -- those come
-        from a MODFLOW run (``run_solver`` with a MODFLOW deck), not this
-        observed-well tool. This tool supplies the OBSERVED comparison points.
+      - MODELED groundwater heads / drawdown / a contaminant plume are not
+        currently modeled here. This tool supplies the OBSERVED comparison points.
       - SURFACE-water stream gauges (discharge / gage height at river
         stations) -- use ``fetch_usgs_nwis_gauges`` (the observed stream-gauge
         companion). This tool is the GROUNDWATER (subsurface well) network.
@@ -145,12 +144,10 @@ docstring: |-
   bbox-rounded-6dp), so identical-scope calls within the hour reuse the FGB.
 
   Cross-tool dependencies:
-      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+      - Composes WITH: ``geocode_location``
         (derive a bbox or surface a state from a place name BEFORE this call),
         ``fetch_administrative_boundaries`` (state/county framing),
         ``spatial_query`` (aggregate readings inside a polygon).
-      - Cross-checks: a MODFLOW modeled-head layer (observed-vs-modeled head
-        comparison -- the MODFLOW groundwater demos).
       - Upstream data source: USGS Water Data OGC API
         (api.waterdata.usgs.gov/ogcapi/v0 -- latest-field-measurements +
         monitoring-locations).

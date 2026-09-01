@@ -6,4 +6,4 @@ fetch_usgs_water_quality:
 - pull the EPA water quality portal sites for specific conductance over this area
 - plot dissolved oxygen sample sites and their latest readings for this river basin
 - give me the real measured pH samples at monitoring locations in this county
-- fetch observed water quality sample points for nitrate to ground truth the MODFLOW plume
+- fetch observed water quality sample points for nitrate to ground truth the modeled plume

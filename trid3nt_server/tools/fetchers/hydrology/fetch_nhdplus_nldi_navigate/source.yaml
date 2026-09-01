@@ -136,9 +136,7 @@ docstring: |-
 
   Rendering: the returned flowlines are a VECTOR layer that renders
   INLINE on the map automatically (the agent surface streams the FlatGeobuf
-  as GeoJSON). Do NOT call ``publish_layer`` on this layer -- ``publish_layer``
-  is raster-only and publishing a vector trips the vector guard. Simply
-  return / surface the ``LayerURI`` and it paints on its own.
+  as GeoJSON). Simply return / surface the ``LayerURI`` and it paints on its own.
 
   Cross-tool dependencies:
       - Composes WITH: ``fetch_noaa_nwm_streamflow`` (join NWM discharge

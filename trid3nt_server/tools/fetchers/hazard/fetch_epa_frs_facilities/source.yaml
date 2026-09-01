@@ -65,8 +65,8 @@ docstring: "EPA regulated-facility points by program as a FlatGeobuf layer.\n\nF
   \ from a public, unauthenticated\nEPA ArcGIS REST MapServer (the EPA NEPAssist public layers). Returns\
   \ a\nFlatGeobuf of ``Point`` features in EPSG:4326 with a common FRS attribute\nschema (``registry_id``,\
   \ ``program``, ``program_id``, ``facility_name``,\naddress columns, ``facility_url``).\n\n**When to\
-  \ use:**\n- \"Show EPA regulated facilities / TRI sites / Superfund sites near [place]\".\n- The MODFLOW\
-  \ contamination-plume demo: locate a candidate chemical-source\n  facility, or determine which regulated\
+  \ use:**\n- \"Show EPA regulated facilities / TRI sites / Superfund sites near [place]\".\n- The ``telemac_river_dye``\
+  \ contamination-plume workflow: locate a candidate chemical-source\n  facility, or determine which regulated\
   \ facilities a modeled plume reaches\n  (intersect with ``spatial_query``).\n- Any hazard / exposure\
   \ workflow needing regulated industrial / waste facility\n  locations inside a flood / fire / surge\
   \ / plume footprint.\n\n**When NOT to use:**\n- Life-safety facilities (hospitals / schools / fire /\

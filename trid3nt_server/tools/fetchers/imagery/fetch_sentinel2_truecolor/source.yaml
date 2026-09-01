@@ -104,7 +104,7 @@ docstring: |-
   shadow / nodata pixels via SCL, joint-percentile-stretches the uint16
   reflectance to uint8, and returns a 3-band RGB COG that paints directly as a
   recent satellite basemap (no rescale / colormap  --  the baked natural colors
-  render as-is via the multiband passthrough in ``publish_layer``).
+  render as-is via multiband passthrough).
 
   Sentinel-2 is GLOBAL and refreshes every ~5 days, so this is the go-to
   "what does this area look like right now from space" layer anywhere on

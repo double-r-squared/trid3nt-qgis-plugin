@@ -2,7 +2,7 @@
 
 Given a location (lon/lat pair OR a geocoded place name -- the same resolution
 seam as ``query_point_hazard``) and a time-stepped raster SEQUENCE loaded on
-the current Case (animation frames: a SFINCS flood-depth step stack, GOES
+the current Case (animation frames: an engine flood-depth step stack, GOES
 frame stack, HRRR forecast hours, ...), sample EVERY frame at the point and
 return the ordered series ``[(timestamp_or_index_label, value), ...]``.
 
@@ -235,7 +235,7 @@ async def extract_timeseries_at_point(
 
     Use this when: "how does the flood depth at my house evolve over the
     simulation?" / "plot water level at the pier over time" after an
-    animated solve (SFINCS steps, SWMM depth, GOES/GLM frames, HRRR
+    animated solve (engine depth steps, GOES/GLM frames, HRRR
     hours). Finds the time-stepped raster sequence loaded on the Case
     (sibling layers sharing a stem, differing by a step/lead/ISO token --
     same series the map scrubber groups) and samples every frame. Do NOT

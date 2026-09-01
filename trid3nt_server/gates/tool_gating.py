@@ -66,8 +66,8 @@ logger = logging.getLogger("trid3nt_server.gates.tool_gating")
 TOOL_GATING_TOPK_DEFAULT = 24
 
 #: The always-include META floor: the CORE_FLOOR (search_tools, spatial_query,
-#: publish_layer, code_exec_request, geocode_location, layer-bounds utilities,
-#: ...) plus the catalog discovery pair and web_fetch, which register outside
+#: code_exec_request, geocode_location, layer-bounds utilities, ...) plus the
+#: catalog discovery pair and web_fetch, which register outside
 #: tools/__init__ and are the "find anything else" escape hatches a gated model
 #: must always hold.
 META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset(

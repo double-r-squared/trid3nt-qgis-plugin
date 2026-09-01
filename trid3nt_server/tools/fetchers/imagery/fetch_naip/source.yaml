@@ -72,7 +72,7 @@ docstring: |-
   aerial-imagery item intersecting ``bbox``, reads the R/G/B bands clipped to
   the bbox at ~1 m, and returns a 3-band uint8 RGB COG that renders directly
   as the aerial BASE layer (no rescale / colormap  --  the baked colors paint
-  as-is via the multiband passthrough in ``publish_layer``).
+  as-is via multiband passthrough).
 
   NAIP is leaf-on, ~0.6-1 m, refreshed on a multi-year state cycle  --  the
   canonical free US aerial basemap for site-level context.

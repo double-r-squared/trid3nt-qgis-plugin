@@ -1,7 +1,7 @@
 compute_model_residuals:
 - how well does the simulated head match the observed wells
 - compare modeled groundwater head to observed monitoring wells
-- compute residuals between the MODFLOW head raster and real measurements
+- compute residuals between the modeled head raster and real measurements
 - is the model biased high or low compared to observations
 - calibrate this head layer against USGS groundwater levels
 - observed versus modeled residual map for the plume concentration raster

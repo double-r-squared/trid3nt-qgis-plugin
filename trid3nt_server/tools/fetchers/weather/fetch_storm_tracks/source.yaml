@@ -119,7 +119,7 @@ docstring: |-
       - "is there a hurricane right now / where is it heading" ->
         ``active_only=True``.
       - Providing storm-track context for a coastal-flood / surge / wind
-        discussion (composes with SFINCS coastal scenarios).
+        discussion (composes with coastal-flood model scenarios).
 
   When NOT to use:
       - Severe LOCAL storm reports (tornado / hail / wind damage points) ->
@@ -165,8 +165,8 @@ docstring: |-
       (blank-tolerant): ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
       ``roci_nmi`` (USA_ROCI), ``r34_ne_nmi`` / ``r34_se_nmi`` /
       ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) -- consumed by the
-      hurricane-spiderweb parametric (the ``run_sfincs`` storm branch, via
-      ``set_sfincs_parameters``).
+      hurricane-spiderweb parametric wind-field construction for a
+      coastal-flood model storm branch.
       Active point props: ``id``, ``name``, ``classification``,
       ``intensity_kt``, ``pressure_mb``, ``movement_dir_deg``,
       ``movement_speed_kt``, ``last_update``, ``tau_h`` (0 = current
@@ -190,7 +190,7 @@ docstring: |-
   within the hour reuse the FGB.
 
   Cross-tool dependencies:
-      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+      - Composes WITH: ``geocode_location``
         (derive a bbox from a place name first),
         ``fetch_nws_event`` (live warnings for an approaching storm),
         ``fetch_noaa_coops_tides`` (observed surge at landfall).

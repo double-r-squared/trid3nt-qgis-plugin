@@ -162,12 +162,12 @@ def _spatial_response_to_result(
         if parsed.aoi_bbox is not None:
             result["aoi_bbox"] = list(parsed.aoi_bbox)
         # Generalized drawn roles -- surfaced so the LLM can pass them
-        # to whichever engine composer accepts them (SFINCS/GeoClaw breach_point,
-        # the MODFLOW DISV / TELEMAC refine_region sizing, breaklines, boundaries).
+        # to whichever engine composer accepts them (breach_point, TELEMAC
+        # refine_region sizing, breaklines, boundaries).
         if parsed.breach_points:
             # Interior levee/dam-breach source(s): pass the FIRST straight to
-            # sfincs_flood(breach_point=...) / a GeoClaw breach point (drawn value
-            # PREFERRED over a plain tuple arg when a breach was drawn).
+            # a solver's breach_point param (drawn value PREFERRED over a
+            # plain tuple arg when a breach was drawn).
             result["breach_points"] = [list(p) for p in parsed.breach_points]
             result["breach_point"] = list(parsed.breach_points[0])
         if parsed.refine_regions:

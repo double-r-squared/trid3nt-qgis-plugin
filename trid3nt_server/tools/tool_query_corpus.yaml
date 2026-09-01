@@ -1,23 +1,9 @@
-# Door dissolution (ADR 0094): the SFINCS flood phrasings live in the
-# sfincs_flood template corpus (workflows/sfincs/flood/corpus.yaml), now walked
-# into this index directly -- there is no separate door.
-# Composer dissolution (ADR 0105): the standalone news-ingest groundwater
-# composer and the live-alert flood composer are DELETED. Their query archetypes
-# (a spill news article -> plume; a live NWS flood warning -> observed-precip
-# flood) are now COMPOSED by the model from the surviving templates
-# (modflow_contaminant_plume, sfincs_flood) + the fetchers (web_fetch,
-# fetch_nws_alerts_conus, fetch_mrms_qpe), so there is no standalone tool corpus
-# to seed here.
-# Door dissolution (ADR 0094): the Pelicun damage phrasings (both the
-# explicit-inventory and the folded bbox auto-fetch input modes) live in the
-# pelicun_damage_assessment template corpus
-# (workflows/pelicun/damage_assessment/corpus.yaml), now walked into this index.
 read_run_diagnostics:
 - did my flood simulation actually converge or is the result garbage
-- check the mass balance of the last SFINCS run
-- is this MODFLOW run healthy, what is the volume budget percent discrepancy
-- show the SWMM continuity error and flow instability for my run
-- was mass conserved in the GeoClaw tsunami run
+- check the mass balance of the last flood run
+- is this groundwater run healthy, what is the volume budget percent discrepancy
+- show the continuity error and flow instability for my run
+- was mass conserved in the last simulation run
 - did the TELEMAC run reach correct end of run
 - read the engine diagnostics for run 01KWRSECZGJEYBD44X6T0GRTT9
 - how healthy is this simulation result before I trust it downstream

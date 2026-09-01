@@ -50,8 +50,8 @@ output:
   role: primary
   emit_bbox: true
   style_preset: "water_table_depth_m"
-  # Simulated MODFLOW-6 steady-state heads, not well readings -- the layer name
-  # carries that identity onto the map.
+  # Simulated steady-state groundwater heads, not well readings -- the layer
+  # name carries that identity onto the map.
   display_name: "Water table depth (modelled)"
 
 cache:
@@ -64,7 +64,7 @@ payload_estimate:
 
 caveats:
   - "CONUS ONLY -- the model stops at the conterminous US border; an AOI outside the staged envelope raises WATER_TABLE_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
-  - "SIMULATED, not measured: these are MODFLOW-6 steady-state heads from 75 calibrated subdomain models, not well readings. Verified against the release's own 38,316 NWIS observation wells the model was calibrated to: Pearson r=0.63, median absolute error 3.1 m, RMSE 19.4 m. Treat a single pixel as a regional estimate with metres of uncertainty, never as a water level for a specific well."
+  - "SIMULATED, not measured: these are simulated steady-state groundwater heads from 75 calibrated subdomain models, not well readings. Verified against the release's own 38,316 NWIS observation wells the model was calibrated to: Pearson r=0.63, median absolute error 3.1 m, RMSE 19.4 m. Treat a single pixel as a regional estimate with metres of uncertainty, never as a water level for a specific well."
   - "LONG-TERM AVERAGE, not a date: one steady-state solution driven by 1985-2015 average recharge. It resolves neither a season, a drought, a pumping response, nor any trend."
   - "NEGATIVE values are real and meaningful: where the simulated water table stands ABOVE land surface (wetlands, stream corridors, discharge areas) the depth is negative, down to -25.7 m CONUS-wide. Do not clamp them to zero -- they mark groundwater discharge."
   - "DEPTH SATURATES at the model's prescribed bottom. Each parameter zone was given a fixed model thickness (5-150 m below land surface, CONUS-wide -- 96 distinct integer zone values, verified against the staged grid itself, not a spot sample), so a water table deeper than that zone's bottom is reported AT the bottom rather than at its true depth. 1.26% of CONUS cells sit within 0.1 m of their zone bottom, concentrated in arid interior-west basins; the release's own well set contains real depths to 296.8 m that the grid caps at 240.5 m. In the dry Southwest, read a deep value as a LOWER BOUND."
@@ -80,8 +80,8 @@ docstring: |-
   LAND SURFACE: positive means the water table is that far down, NEGATIVE means
   the simulated water table stands above the ground (a wetland or a stream
   corridor). The grid is the USGS Zell & Sanford (2020) simulation: 75
-  steady-state MODFLOW-6 models of the shallow groundwater system at 250 m,
-  driven by long-term average recharge and calibrated against long-term average
+  steady-state groundwater-flow models of the shallow groundwater system at
+  250 m, driven by long-term average recharge and calibrated against long-term average
   water levels in observation wells, perennial streams and mapped wetlands.
 
   **When to use:**
@@ -130,5 +130,5 @@ docstring: |-
     recharge that drives it), ``fetch_usgs_groundwater_levels`` (observed water
     levels for the same area), ``fetch_3dep_dem`` (land-surface elevation, so
     that elevation minus this depth is the water-table elevation).
-  - Downstream: MODFLOW initial heads, unsaturated-zone travel-time work, and
-    water-budget analysis in the python playground.
+  - Downstream: initial heads for a groundwater flow model, unsaturated-zone
+    travel-time work, and water-budget analysis in the python playground.

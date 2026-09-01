@@ -2,7 +2,7 @@ fetch_noaa_nwm_streamflow:
 - what are current river discharge rates along the Mississippi?
 - show me NWM streamflow for the Caloosahatchee right now
 - how high is the river flowing in this watershed?
-- I need real-time discharge for SFINCS fluvial boundary forcing
+- I need real-time discharge for fluvial boundary forcing
 - fetch streamflow forecast for all rivers in this bbox
 - show me the National Water Model output for this flood event
 - what is the current streamflow in cubic meters per second for this basin?

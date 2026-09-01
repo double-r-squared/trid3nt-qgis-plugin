@@ -108,7 +108,7 @@ docstring: "Fetch ASOS/METAR surface weather observations as a point FlatGeobuf.
   \ mi),\n      ``wxcodes`` (present weather), ``skyc1`` (sky cover), ``skyl1``\n      (sky layer height\
   \ ft). Missing values are ``null``.\n\nCache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_time, end_time)``\
   \ calls\nwithin the same UTC hour reuse the cached FlatGeobuf.\n\nCross-tool dependencies:\n    - Composes\
-  \ WITH: ``publish_layer`` (map overlay), ``geocode_location``\n      (bbox derivation from place name),\
+  \ WITH: ``geocode_location``\n      (bbox derivation from place name),\
   \ the code_exec playground\n      (wind/pressure claims from ASOS for FR-HEP consensus).\n    - Complements:\
   \ ``fetch_era5_reanalysis`` (gridded global reanalysis),\n      ``fetch_mrms_qpe`` (radar precipitation),\
   \ ``fetch_goes_satellite``\n      (satellite imagery), ``fetch_raws_weather`` (fire-weather stations).\n\

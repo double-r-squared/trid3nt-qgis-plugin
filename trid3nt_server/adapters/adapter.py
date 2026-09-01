@@ -1633,7 +1633,7 @@ def build_layers_present_note(
             + "\n".join(lines)
             + "\nIf a RESULT already answers the user's request for this AOI and "
             "parameters, narrate from it and pass its handle onward (e.g. an "
-            "existing flood-depth RESULT feeds a Pelicun damage assessment "
+            "existing flood-depth RESULT feeds compute_flood_depth_damage "
             "directly). Re-running the expensive simulation that produced an "
             "existing RESULT is FORBIDDEN unless the user changes the area / "
             "parameters or explicitly asks to re-run. Do NOT re-fetch or "
@@ -2074,8 +2074,7 @@ def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
 #: ALREADY-PUBLISHED, styled layer on the user's map (job duplicate-flood-layer).
 #: Their thin wrapper publishes the postprocess result internally and returns the
 #: published LayerURI (uri = the renderable http(s) WMS/tile URL). The LLM must
-#: NOT call publish_layer on that handle again -- a second publish re-styles the
-#: SAME COG with TiTiler's viridis default and paints a duplicate map row. Kept
+#: NOT be told to display it again. Kept
 #: aligned with ``scenario_reuse.EXPENSIVE_SCENARIO_TOOLS`` (the reuse index keys
 #: off the same set); a lazy import keeps the two in lockstep without a hard
 #: module coupling at import time.
@@ -2196,8 +2195,7 @@ def _summarize_published_scenario_layer(
     Carries explicit ``published`` / ``on_map`` flags (plus a ``publish_status``
     and a ``wms_url`` alias matching the prompt's escape-clause vocabulary) so the
     LLM reliably recognizes the layer is on the map and does NOT issue a redundant
-    publish_layer call on the same handle (which would paint a styleless viridis
-    duplicate). The metadata the loop needs to narrate + pass the handle is kept:
+    display request for a layer already on the map. The metadata the loop needs to narrate + pass the handle is kept:
     layer_id (the canonical handle), name, layer_type, uri, style_preset, bbox.
     """
     layer_id = getattr(result, "layer_id", None)
@@ -2222,15 +2220,15 @@ def _summarize_published_scenario_layer(
         "style_preset": getattr(result, "style_preset", None),
         "already_published_note": (
             "This scenario layer is ALREADY published, styled, and on the user's "
-            "map. Do NOT call publish_layer on it — that would paint a redundant "
-            "styleless duplicate. Narrate the result from this layer."
+            "map. Narrate the result from this layer; there is nothing further to "
+            "do to display it."
         ),
     }
     if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
         summary["bbox"] = list(bbox)
     # provenance-chain wave: the bare-published-LayerURI path used to drop every
     # field but the render metadata, losing any input-provenance the layer
-    # carried (sfincs_flood / swmm_urban_flood peak layers). Thread the structured
+    # carried on the peak layer. Thread the structured
     # ``synthetic_inputs`` + its rendered assumptions line through so the demo-vs-
     # site-derived provenance reaches the narration on this path too.
     _hoist_synthetic_inputs(summary, result)
@@ -2310,7 +2308,7 @@ def summarize_tool_result(
         # (e.g. ``EarthquakesNoEventsError``: widen window / lower
         # min_magnitude). Surface it as a STRUCTURED list so a small model
         # relays the options to the user instead of inventing a next step
-        # (live incident: 0-event fetch -> fabricated publish_layer handle).
+        # (live incident: 0-event fetch -> a fabricated layer handle).
         raw_suggestions = getattr(error, "suggestions", None)
         if isinstance(raw_suggestions, (list, tuple)):
             suggestions = [str(s) for s in raw_suggestions if str(s).strip()]
@@ -2321,19 +2319,16 @@ def summarize_tool_result(
     if result is None:
         return {"tool": tool_name, "status": "no_result"}
 
-    # job duplicate-flood-layer (PRIMARY): a scenario/simulation composer
-    # (sfincs_flood & friends) returns its peak-depth / plume layer
-    # ALREADY published, styled, and on the map (its thin wrapper publishes the
-    # postprocess result internally; the returned LayerURI's ``uri`` is the
-    # renderable http(s) WMS/tile URL). Without an explicit signal, this LayerURI
-    # falls through to the repr-coerce branch below and the LLM, seeing only a
-    # raw COG-ish repr, issues a SECOND publish_layer on the handle -- TiTiler
-    # then re-styles the same COG with its viridis default and a duplicate
-    # styleless layer appears on the map. Stamp ``published``/``on_map`` so the
-    # publish-discipline escape clause fires and the model narrates instead of
-    # re-publishing. Scoped to the scenario tool set AND a genuinely-published
-    # (http) LayerURI, so a FAILED scenario (no layer / honesty-floor empty
-    # envelope, handled above) and every non-scenario tool are untouched.
+    # A scenario/simulation composer returns its result layer ALREADY published,
+    # styled, and on the map (its thin wrapper publishes the postprocess result
+    # internally; the returned LayerURI's ``uri`` is the renderable http(s)
+    # WMS/tile URL). Without an explicit signal this LayerURI falls through to
+    # the repr-coerce branch below and the model, seeing only a raw COG-ish repr,
+    # narrates it as unfinished work. Stamp ``published``/``on_map`` so the model
+    # narrates from the layer. Scoped to the scenario tool set AND a
+    # genuinely-published (http) LayerURI, so a FAILED scenario (no layer /
+    # honesty-floor empty envelope, handled above) and every non-scenario tool
+    # are untouched.
     if tool_name in _published_scenario_tool_names() and _layer_uri_is_published(
         result
     ):
@@ -2383,7 +2378,7 @@ def summarize_tool_result(
     #   (a) FAILURE-TAGGED -- the depth-0 ``workflow_name`` carries ":FAILED:" OR
     #       any payload's ``metrics.solver_version`` starts with "failed:". This
     #       covers the _build_failed_envelope non-runs (precip-fetcher die,
-    #       SFINCS build gate, solver-dispatch failure) AND the dispatched-then-
+    #       deck build gate, solver-dispatch failure) AND the dispatched-then-
     #       failed exits (SOLVER_FAILED / SOLVER_TIMEOUT / POSTPROCESS_FAILED)
     #       which append a solver_run_id BEFORE failing -- so the R1 "no
     #       solver_run_ids" gate let them slip through as ok. Surface

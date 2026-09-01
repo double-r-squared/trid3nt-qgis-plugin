@@ -476,7 +476,7 @@ def lookup_precip_return_period(
 
     **When to use:**
 
-    - Design-storm precipitation depth for an SFINCS pluvial-flood scenario
+    - Design-storm precipitation depth for a pluvial-flood scenario
       ("what is the 100-year, 24-hour rainfall for Miami?"). Example:
       ``location=(25.77, -80.19)``, ``return_period_years=100``,
       ``duration_hours=24.0``.
@@ -520,9 +520,8 @@ def lookup_precip_return_period(
 
     **Cross-tool dependencies:**
 
-    - Consumed by: ``set_sfincs_parameters`` + ``run_sfincs`` to construct a
-      synthetic design-storm hyetograph and drive the SFINCS pluvial rainfall
-      input.
+    - Consumed by: ``telemac_rain_on_grid`` to construct a synthetic
+      design-storm hyetograph and drive the pluvial rainfall input.
     - Compare with: ``fetch_mrms_qpe`` for observed accumulations vs Atlas 14
       design depths; the ratio gives the storm's return-period rank.
     - Pair with: ``fetch_gcn250_curve_numbers`` or NLCD-derived CNs when

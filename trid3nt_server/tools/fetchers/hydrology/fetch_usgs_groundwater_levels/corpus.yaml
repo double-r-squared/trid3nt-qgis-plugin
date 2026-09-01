@@ -2,7 +2,7 @@ fetch_usgs_groundwater_levels:
 - show me the USGS groundwater monitoring wells in the high plains aquifer in central kansas
 - where are the observed groundwater wells near this farm and how deep is the water table
 - plot the depth to water at the USGS monitoring wells in this bbox
-- i need the real observed heads to compare against my MODFLOW modeled groundwater levels
+- i need the real observed heads to compare against my modeled groundwater levels
 - map the groundwater level monitoring wells in kansas with their latest water-level reading
 - what is the groundwater elevation at the wells near this contamination plume
 - give me the USGS NWIS groundwater levels (depth to water and water table elevation) for this area

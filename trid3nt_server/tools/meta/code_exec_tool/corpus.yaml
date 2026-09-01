@@ -26,7 +26,7 @@ code_exec_request:
 # in the sandbox playground, which is the surviving carrier).
 - what wave height would a 20 m/s wind build over 50 km of open water?
 - estimate the significant wave height and peak period from wind speed and fetch
-- quick sanity check on the wave height for this wind and fetch before I run SWAN
+- quick sanity check on the wave height for this wind and fetch before I run the full wave solver
 - is a 3 meter offshore wave height reasonable for a 25 knot wind and 80 km fetch?
 - fetch-limited wave growth estimate for this wind over the lake
 - what is the fully developed sea state for a 30 m/s wind?
@@ -34,7 +34,7 @@ code_exec_request:
 - compute the EurOtop mean wave overtopping discharge over the levee
 - what is the overtopping rate for a 2 m wave on a 1:2 dike slope with 3 m freeboard?
 - estimate overtopping discharge in litres per second per metre for this coastal structure
-- take the SWAN wave height and period and compute overtopping over the breakwater
+- take the wave height and period and compute overtopping over the breakwater
 - how much overtopping for these waves over a dike with roughness reduction
 # cleanup wave phase 2 (2026-08-25): urban-heat-island phrasings re-homed from
 # the DEMOTED compute_urban_heat_island. Both maps the question needs are

@@ -411,16 +411,21 @@ def _get_telemetry_path() -> Path:
 # rows share the tool_call_telemetry sink, tagged with this discriminator.
 _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 
-#: Terminal solver tools -> the flow they identify. A turn is
-#: attributed to a flow when it dispatched one of these (the recall@k per-flow
-#: breakdown the kickoff asks for: SWMM / SFINCS / MODFLOW).
+#: Terminal solver tools -> the flow they identify. A turn is attributed to a
+#: flow when it dispatched one of these, which drives the recall@k per-flow
+#: breakdown. Keys must be registered engine templates; a key that no longer
+#: registers reports a permanently empty flow.
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
-    # Engine templates are the flow anchors
-    # directly (the run_<engine> doors were deleted).
-    "swmm_urban_flood": "SWMM",
-    "sfincs_flood": "SFINCS",
-    "modflow_contaminant_plume": "MODFLOW",
+    "telemac_river_dye": "river-plume",
+    "telemac_do_sag": "oxygen-sag",
+    "telemac_rain_on_grid": "rainfall-runoff",
+    "telemac3d_stratified_flow": "stratified-flow",
+    "artemis_harbor_agitation": "harbor-agitation",
 }
+
+#: Flow order in the per-flow breakdown. Derived so a flow can never be reported
+#: without a tool that produces it, nor a tool added without its flow appearing.
+_FLOWS: tuple[str, ...] = tuple(dict.fromkeys(_FLOW_BY_SOLVER_TOOL.values()))
 
 
 def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
@@ -1128,7 +1133,7 @@ def compute_recall_at_k(
     )
 
     by_flow: list[dict[str, Any]] = []
-    for flow in ("SWMM", "SFINCS", "MODFLOW"):
+    for flow in _FLOWS:
         disp = flow_dispatches.get(flow, 0)
         hits = flow_hits.get(flow, 0)
         misses = flow_misses.get(flow, 0)

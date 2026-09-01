@@ -1,6 +1,6 @@
 """``compute_model_residuals`` composer tool -- observed-vs-modeled residuals.
 
-Samples a MODEL raster (a MODFLOW simulated-head COG, a plume-concentration
+Samples a MODEL raster (a simulated-head COG, a plume-concentration
 COG, or any single-band raster the uri registry resolves) at OBSERVATION
 points and returns a residuals point vector layer (``observed - simulated``
 per point) plus fit statistics -- the standard model-calibration diagnostic
@@ -20,10 +20,10 @@ readings come in two families that are NOT interchangeable --
   point) -- larger value = DEEPER water table (an INVERTED sign convention
   vs. an elevation head).
 - ELEVATION-referenced water level (pcodes 72150 / 62610 / 62611, ft relative
-  to NAVD88/NGVD29) -- directly analogous to a MODFLOW simulated HEAD
+  to NAVD88/NGVD29) -- directly analogous to a simulated HEAD
   (elevation), modulo matching vertical datum.
 
-A MODFLOW head raster is an ELEVATION. Comparing it against DEPTH-TO-WATER
+A head raster is an ELEVATION. Comparing it against DEPTH-TO-WATER
 readings without converting first (elevation = land-surface elevation minus
 depth-to-water) produces a meaningless number, not a real residual. This tool
 NEVER silently mixes/ignores that: it detects the fetched reading family from
@@ -164,7 +164,7 @@ class ModelResidualsLayerURI(LayerURI):
 # ---------------------------------------------------------------------------
 
 #: USGS groundwater parameter codes referenced to a fixed ELEVATION datum
-#: (NAVD88/NGVD29) -- directly analogous to a MODFLOW simulated head.
+#: (NAVD88/NGVD29) -- directly analogous to a simulated head.
 USGS_ELEVATION_PCODES: frozenset[str] = frozenset({"72150", "62610", "62611"})
 
 #: USGS groundwater parameter codes reporting DEPTH-TO-WATER (ft below land
@@ -422,7 +422,7 @@ def _apply_usgs_semantics(
         return gdf, (
             "Observed values are DEPTH-TO-WATER (ft below land surface or a "
             "measuring point) -- NOT a head elevation. If this model raster "
-            "represents head ELEVATION (e.g. a simulated MODFLOW head), "
+            "represents head ELEVATION (e.g. a simulated groundwater head), "
             "depth-to-water and elevation are NOT directly comparable without "
             "converting first (elevation = land-surface elevation minus "
             "depth-to-water). Residuals below are only meaningful as a "
@@ -546,7 +546,7 @@ def compute_model_residuals(
     """Observed-vs-modeled residuals: sample a MODEL raster at OBSERVATION points.
 
     Use this to CALIBRATE / sanity-check a model result against real
-    measurements -- e.g. a MODFLOW simulated-head COG vs. USGS groundwater
+    measurements -- e.g. a simulated-head COG vs. USGS groundwater
     monitoring wells, or a plume-concentration COG vs. any point layer of
     measured concentrations. Samples the raster (bilinear) at every
     observation point inside its footprint, computes
@@ -555,9 +555,8 @@ def compute_model_residuals(
     bias).
 
     **When to use:**
-    - "How well does this MODFLOW head raster match the observed wells?"
-      right after ``modflow_sustainable_yield`` /
-      ``modflow_contaminant_plume`` / any MODFLOW composer produces a head COG.
+    - "How well does this head raster match the observed wells?" -- right
+      after any solve produces a simulated-head COG.
     - Model calibration / validation questions in general: any single-band
       MODEL raster vs. any point layer of MEASURED values at the same kind
       of quantity.
@@ -578,7 +577,7 @@ def compute_model_residuals(
     ``units_warning``. USGS groundwater readings split into DEPTH-TO-WATER
     (pcodes 72019/61055, ft below land surface -- NOT an elevation) and
     ELEVATION-referenced water level (pcodes 72150/62610/62611, ft relative
-    to NAVD88/NGVD29 -- directly analogous to a MODFLOW head). A depth-to-
+    to NAVD88/NGVD29 -- directly analogous to a head raster). A depth-to-
     water reading vs. a head-ELEVATION raster is NOT a valid residual
     without converting first (elevation = land-surface elevation minus
     depth-to-water); this tool detects which family the observations belong
@@ -627,8 +626,8 @@ def compute_model_residuals(
 
     Cross-tool dependencies:
         Upstream (consumes):
-        - ``modflow_sustainable_yield`` / ``modflow_contaminant_plume`` / any
-          MODFLOW composer -- produces the simulated-head ``model_layer_uri``.
+        - any solve that produces a simulated-head or concentration COG --
+          the ``model_layer_uri`` this tool samples.
         - ``fetch_usgs_groundwater_levels`` -- produces the observed-wells
           ``observations_layer_uri`` (or is called internally via ``bbox``).
         Downstream (feeds):

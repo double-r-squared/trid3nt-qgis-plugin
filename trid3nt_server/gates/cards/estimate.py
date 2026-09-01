@@ -35,9 +35,10 @@ class CardEstimate:
     signal (the fetch_landcover no-coarsening skip): the engine dispatches as-is.
 
     ``tail_state`` is the OPAQUE per-engine state the declared pin provider consumes to
-    compute the approved-params delta on a decision (the SWMM autoscale result + DEM path
-    for the real-cap re-probe, the TELEMAC preview stats, the fetch suggestion, the flood
-    autoscale + resolved cadence). Empty for a plain proceed/cancel gate (no levers).
+    compute the approved-params delta on a decision (a rainfall-runoff autoscale result +
+    DEM path for the real-cap re-probe, the TELEMAC preview stats, the fetch suggestion,
+    the flood autoscale + resolved cadence). Empty for a plain proceed/cancel gate (no
+    levers).
     """
 
     envelope: Any | None
@@ -63,10 +64,10 @@ def resolve_provider(dotted: str) -> Callable[..., Any]:
 async def call_provider(dotted: str, *args: Any, **kwargs: Any) -> Any:
     """Call a dotted provider, awaiting it when it is a coroutine (async providers).
 
-    The TELEMAC mesh-preview estimate provider runs an async mesh worker and the SWMM
-    real-cap pin provider offloads a DEM re-probe, so providers may be coroutines; a
-    plain proceed/cancel builder is sync. This normalizes the call so the gate engine
-    treats both uniformly. Unknown kwargs a sync provider does not accept (e.g. an
+    The TELEMAC mesh-preview estimate provider runs an async mesh worker and a
+    rainfall-runoff real-cap pin provider offloads a DEM re-probe, so providers may be
+    coroutines; a plain proceed/cancel builder is sync. This normalizes the call so the
+    gate engine treats both uniformly. Unknown kwargs a sync provider does not accept (e.g. an
     ``emitter`` only TELEMAC reads) are filtered against the callable's signature so
     every provider gets a uniform call.
     """

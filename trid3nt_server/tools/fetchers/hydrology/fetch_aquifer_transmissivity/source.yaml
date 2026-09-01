@@ -63,7 +63,7 @@ payload_estimate:
 
 caveats:
   - "CONUS ONLY -- the model stops at the conterminous US border; an AOI outside the staged envelope raises AQUIFER_TRANSMISSIVITY_INPUT_INVALID naming it. Alaska, Hawaii, Puerto Rico and all territories are off the grid."
-  - "This is the release's HEADLINE PEST-calibrated field: the 75 subdomain MODFLOW-6 models were calibrated against long-term average water levels, and the published transmissivity is the converged solution's post-processed output, not an input the models were handed. It is not an independent measurement of any single well or borehole."
+  - "This is the release's HEADLINE PEST-calibrated field: the 75 subdomain groundwater-flow models were calibrated against long-term average water levels, and the published transmissivity is the converged solution's post-processed output, not an input the models were handed. It is not an independent measurement of any single well or borehole."
   - "LONG-TERM AVERAGE steady state driven by 1985-2015 mean recharge -- it resolves no season, drought, or pumping response."
   - "TRANSMISSIVITY IS LOWER IN THE WEST THAN THE EAST, on the MEDIAN: CONUS-wide, the median west of 100W is far below the median east of 100W (the paper's own headline regional finding). Do not read this off the MEAN -- a handful of western alluvial basins run past 100,000 m2/day and pull the western mean above the eastern one; the median is where the paper's claim actually shows."
   - "SURFICIAL/UNCONFINED system only: this is the shallow model's transmissivity, not the transmissivity of any deep or confined unit. It says nothing about the Ogallala, the Floridan, or any named confined aquifer."
@@ -79,8 +79,9 @@ docstring: |-
   transmissivity, the product of hydraulic conductivity and saturated
   thickness (T = K x b), which governs how readily groundwater moves
   horizontally through the shallow system. This is the USGS Zell & Sanford
-  (2020) release's headline PEST-calibrated field: 75 steady-state MODFLOW-6
-  models of the shallow groundwater system at 250 m, calibrated against
+  (2020) release's headline PEST-calibrated field: 75 steady-state
+  groundwater-flow models of the shallow groundwater system at 250 m,
+  calibrated against
   long-term average water levels in observation wells, perennial streams and
   mapped wetlands.
 
@@ -128,5 +129,5 @@ docstring: |-
     ``fetch_water_table_depth`` (the top of the saturated column this
     transmissivity is measured over), ``fetch_groundwater_recharge`` (the flux
     that sustains the flow this transmissivity governs).
-  - Downstream: MODFLOW NPF/LPF setup, regional flow-capacity comparison, and
-    water-budget analysis in the python playground.
+  - Downstream: groundwater flow model setup, regional flow-capacity
+    comparison, and water-budget analysis in the python playground.

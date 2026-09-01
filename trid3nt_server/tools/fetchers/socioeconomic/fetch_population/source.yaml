@@ -110,7 +110,7 @@ docstring: |-
   Cross-tool dependencies:
       - Downstream of: ``geocode_location`` (provides the bbox).
       - Upstream of: ``compute_exposure_summary`` (population-in-footprint sum),
-        Pelicun exposure, any population-at-risk workflow step.
+        structural loss exposure, any population-at-risk workflow step.
       - Pairs with: ``fetch_buildings`` (occupancy-weighted analyses),
         ``fetch_hrsl_population`` (finer ~30 m open population raster),
         ``fetch_census_acs`` (US tract-level authoritative population).

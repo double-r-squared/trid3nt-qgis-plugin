@@ -1,8 +1,7 @@
 """``compute_flood_depth_damage`` composer tool -- HAZUS-curve flood damage screening.
 
-Lightweight depth-damage estimator: the quick screening cousin of the Pelicun
-chain (``pelicun_damage_assessment``). Takes
-ANY flood-depth raster (a SFINCS / GeoClaw / SWMM depth COG, s3:// or local),
+Lightweight depth-damage estimator. Takes ANY flood-depth raster (a modeled or
+observed depth COG, s3:// or local),
 samples the depth at each structure point, applies the FEMA HAZUS-style
 residential depth-damage curve below, multiplies by the structure replacement
 value when the asset carries one (USACE NSI ``val_struct`` does), and returns
@@ -35,9 +34,9 @@ sampled ground-referenced depth is reduced by it before entering the curve
 
 HONESTY: this is a SCREENING estimate -- one aggregate claims-based curve
 applied to every occupancy class, structure value only (no contents, no
-inventory, no downtime), no uncertainty treatment. It is NOT a Pelicun
-component-level assessment; use ``pelicun_damage_assessment`` for defensible
-per-asset loss work. Every result carries that note.
+inventory, no downtime), no uncertainty treatment. It is NOT a component-level
+loss assessment, and none is modeled here, so defensible per-asset loss work
+belongs outside this product. Every result carries that note.
 
 ``cacheable=False`` (``live-no-cache``): modeling composer; the artifact goes
 to the runs bucket (or ``_output_dir`` for offline tests).
@@ -388,14 +387,13 @@ def compute_flood_depth_damage(
 ) -> FloodDepthDamageLayerURI:
     """Screen flood damage per structure from a depth raster (HAZUS-style curve).
 
-    Use this (not ``sfincs_flood``, which SIMULATES the flood)
-    when a flood DEPTH raster already exists and you want a quick
+    Use this when a flood DEPTH raster ALREADY exists and you want a quick
     per-structure damage screen -- "roughly how much building damage does
-    this flood cause?", ranking scenarios, or a first pass before spending
-    a Pelicun run. HONEST SCOPE: a SCREENING estimate (one aggregate curve,
-    structure value only, no contents/uncertainty) -- NOT a Pelicun
-    component-level assessment. Do NOT use for: defensible per-asset loss
-    (``pelicun_damage_assessment``);
+    this flood cause?", or ranking scenarios. It reads a depth raster; it does
+    NOT simulate the flood that produced one.
+    HONEST SCOPE: a SCREENING estimate (one aggregate curve,
+    structure value only, no contents/uncertainty) -- NOT a component-level
+    assessment, and none is modeled here. Do NOT use for:
     non-flood hazards; areas outside NSI coverage (CONUS+AK/HI/territories)
     without a caller ``assets_uri``.
 
@@ -444,9 +442,8 @@ def compute_flood_depth_damage(
         "(USACE EGM 04-01 one-story no-basement structure relationship, the "
         "FEMA HAZUS-MH flood default RES1 family) applied to every structure; "
         "structure value only, no contents/inventory/downtime, no uncertainty. "
-        "NOT a Pelicun component-level assessment -- use "
-        "pelicun_damage_assessment for "
-        "defensible per-asset loss."
+        "NOT a component-level assessment, and none is modeled here, so "
+        "defensible per-asset loss work belongs outside this product."
     ]
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_depth_damage_") as tmpdir:
@@ -524,7 +521,7 @@ def compute_flood_depth_damage(
             dtype=np.float64,
         )
 
-        # Replacement value: NSI val_struct (or the Pelicun duplicate column).
+        # Replacement value: NSI val_struct, or its replacement_value duplicate.
         value_col = None
         for cand in ("val_struct", "replacement_value"):
             if cand in gdf.columns:

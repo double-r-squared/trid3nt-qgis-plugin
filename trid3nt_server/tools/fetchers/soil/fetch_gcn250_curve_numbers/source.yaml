@@ -2,7 +2,7 @@
 # Twin: fetch_gcn250_curve_numbers.py -- GCN250 global SCS curve numbers (Jaafar
 # 2019, figshare). Enum -> figshare URL (302 redirect, HEAD-403; the transport
 # follows redirects + recovers size via range-GET), windowed int16 read, all-
-# nodata coverage gate. SFINCS/HydroMT pluvial-flood consumer.
+# nodata coverage gate. Pluvial-flood hydraulic-model consumer.
 schema_version: v1
 
 name: fetch_gcn250_curve_numbers
@@ -76,7 +76,7 @@ docstring: |-
   0-100 represent the SCS curve number; nodata = 255.
 
   **When to use:**
-  - Building a SFINCS or HydroMT pluvial-flood scenario for any non-CONUS
+  - Building a pluvial-flood scenario for any non-CONUS
     area where NLCD-derived curve numbers are unavailable -- GCN250 covers
     global land surface (84 N to 57 S).
   - AMC sensitivity analysis: run the same storm under ``"dry"``,
@@ -85,7 +85,8 @@ docstring: |-
   - User asks for SCS infiltration inputs, curve numbers, or runoff
     potential outside the continental US.
   - Research-validated for compound-flood modeling per Eilander et al.
-    (NHESS 2023); the standard global substrate for SFINCS HydroMT workflows.
+    (NHESS 2023); the standard global substrate for compound-flood
+    hydraulic-model workflows.
 
   **When NOT to use:**
   - DO NOT use for CONUS work when NLCD is available -- NLCD-derived curve
@@ -114,16 +115,17 @@ docstring: |-
   (``s3://trid3nt-cache/cache/static-30d/gcn250_curve_numbers/<key>.tif``).
   ``layer_type="raster"``, ``role="primary"``, ``units="curve_number"``.
   EPSG:4326, int16 (0-100), nodata = 255, ~250 m pixel size. Downstream
-  SFINCS workflows should reproject to a metric CRS before ingestion.
+  hydraulic-model workflows should reproject to a metric CRS before
+  ingestion.
 
   **Cross-tool dependencies:**
   - Upstream: ``geocode_location`` for bbox from a place name.
-  - Downstream: ``set_sfincs_parameters`` + ``run_sfincs`` (HydroMT
-    infiltration input), pluvial-flood scenario composers.
+  - Downstream: infiltration input for a pluvial-flood hydraulic model,
+    pluvial-flood scenario composers.
   - CONUS alternative: ``compute_impervious_surface`` + ``extract_landcover_class``
     for higher-resolution NLCD-based curve numbers.
   - Pairs with: ``fetch_era5_reanalysis`` (precipitation forcing) and
-    ``fetch_dem`` (terrain) for the full SFINCS forcing stack.
+    ``fetch_dem`` (terrain) for the full compound-flood forcing stack.
 
   FR-CE-8 / FR-DC-3: ``read_through`` with ``ttl_class="static-30d"``; cache
   key is SHA-256 over ``(bbox-6dp, antecedent_moisture)``.

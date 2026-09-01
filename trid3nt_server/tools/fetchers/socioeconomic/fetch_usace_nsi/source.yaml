@@ -1,7 +1,7 @@
 # Router source spec (data-router fold, tier-3 hooks, ADR 0061).
 # Twin: fetch_usace_nsi.py -- FOLDED via hooks (single-POST NSI structures GeoJSON points).
 # Bespoke steps -> named PURE hooks: usace_nsi.build_request (span cap + polygon POST body),
-# usace_nsi.parse_response (FeatureCollection decode, prop project, Pelicun col derive).
+# usace_nsi.parse_response (FeatureCollection decode, prop project, exposure-value col derive).
 # Uses the RequestPlan POST transport extension (method=POST, json_body).
 schema_version: v1
 name: fetch_usace_nsi
@@ -68,66 +68,119 @@ caveats:
 - USACE National Structure Inventory (CONUS + AK/HI/territories only); per-axis bbox span capped at 1
   degree (NSI 500s oversized envelopes). A bbox with no structures -> a header-only FlatGeobuf, never
   an error.
-docstring: "USACE National Structure Inventory as a point FlatGeobuf — buildings +\nHAZUS occupancy class\
-  \ + per-structure replacement value (USD).\n\nWhat it does: queries the U.S. Army Corps of Engineers\
-  \ (USACE) National\nStructure Inventory (NSI) REST API for every documented building inside\na bbox\
-  \ and returns a FlatGeobuf of point features (one per structure),\neach carrying its HAZUS occupancy\
-  \ class (``occtype``), structure\nreplacement value (``val_struct``, USD), content value (``val_cont``),\n\
-  square footage, year built, foundation type/height, FEMA FIRM flood\nzone, AM/PM population, and ground\
-  \ elevation. NSI is the authoritative\nU.S.-wide structure inventory used by FEMA / USACE / HAZUS for\
-  \ flood\nloss estimation.\n\nWhen to use:\n    - User asks for the buildings or \"structure inventory\"\
-  \ inside an\n      area (e.g. \"show me every building in Fort Myers Beach\", \"what\n      buildings\
-  \ are in the floodplain?\").\n    - As the asset layer for ``pelicun_damage_assessment`` (explicit\n\
-  \      ``assets_uri`` mode) — NSI carries the HAZUS occupancy class AND\n      per-structure replacement\
-  \ value, removing both the\n      ``compute_building_density`` default-RES1 proxy AND the\n      ``_REPLACEMENT_VALUE_DEFAULTS_USD``\
-  \ per-class fallback. This is\n      the **preferred** Pelicun asset substrate inside CONUS.\n    -\
-  \ User asks for exposed value or repair cost estimates that need a\n      real ``val_struct`` per structure.\n\
-  \    - Counting buildings by occupancy class (RES1 / COM1 / IND1 / EDU1\n      / etc.) in a small area.\n\
-  \nWhen NOT to use:\n    - Outside the United States — NSI only covers CONUS + AK + HI + the\n      U.S.\
-  \ territories. Use ``compute_building_density`` (Microsoft\n      Global ML Building Footprints) for\
-  \ international queries instead.\n    - For bbox spans larger than ~1 degree per axis — NSI rejects\n\
-  \      oversized queries with a 500. Split into tiles and call once per\n      tile, or use ``compute_building_density``\
-  \ for the regional\n      aggregate.\n    - For aggregate building density rasters — ``compute_building_density``\n\
-  \      is the right primitive when you want a raster of building counts\n      per cell, not point features.\n\
-  \    - For HRSL population grids — ``fetch_hrsl_population`` is the\n      dedicated tool when you only\
-  \ need persons-per-cell, not per-\n      structure attributes.\n\nParameters:\n    bbox: REQUIRED ``(min_lon,\
-  \ min_lat, max_lon, max_lat)`` in EPSG:4326.\n        Valid range: ``min_lon`` in [-180, 180], ``max_lat``\
-  \ in [-90, 90],\n        min < max on each axis. Span on each axis must be ≤ 1.0 degree\n        (NSI\
-  \ server-side cap; oversized envelopes return 500). Example:\n        ``(-81.880, 26.620, -81.860, 26.660)``\
-  \ for a Fort Myers Beach\n        neighborhood (~0.02 deg, ~50-200 structures).\n\nReturns:\n    A ``LayerURI``\
-  \ pointing at a FlatGeobuf of NSI Point features (one\n    per structure) at\n    ``s3://trid3nt-cache/cache/static-30d/usace_nsi/<key>.fgb``.\n\
-  \    ``layer_type=\"vector\"``, ``role=\"primary\"``, ``units=None``,\n    ``style_preset=\"usace_nsi\"\
-  ``. Each feature carries:\n\n    - ``fd_id`` (int) — NSI persistent feature ID.\n    - ``occtype`` (str)\
-  \ — HAZUS occupancy class (``RES1``, ``RES3A``,\n      ``COM1``, ``IND1``, ``EDU1``, ...). Downstream\
-  \ Pelicun reads this.\n    - ``component_type`` (str) — duplicate of ``occtype`` under the\n      column\
-  \ name Pelicun's ``pelicun_damage_assessment`` looks for.\n    - ``st_damcat`` (str) — Structure damage\
-  \ category (RES, COM, IND).\n    - ``bldgtype`` (str) — Construction type (W=wood, S=steel, C=concrete,\n\
-  \      M=masonry).\n    - ``found_type`` (str) — Foundation type (S=slab, B=basement,\n      C=crawlspace,\
-  \ P=pier).\n    - ``found_ht`` (float) — Foundation height above ground (ft).\n    - ``num_story`` (int)\
-  \ — Number of stories.\n    - ``sqft`` (float) — Building square footage.\n    - ``med_yr_blt`` (int)\
-  \ — Median year built (Census block).\n    - ``val_struct`` (float) — Structure replacement value (USD).\n\
-  \    - ``replacement_value`` (float) — duplicate of ``val_struct`` under\n      the column name Pelicun\
-  \ reads.\n    - ``val_cont`` (float) — Content replacement value (USD).\n    - ``val_vehic`` (float)\
-  \ — Vehicle replacement value (USD).\n    - ``firmzone`` (str|None) — FEMA FIRM flood zone (``AE``,\
-  \ ``X``,\n      ``VE``, or None).\n    - ``cbfips`` (str) — Census block FIPS code.\n    - ``ground_elv``\
-  \ / ``ground_elv_m`` (float) — Ground elevation\n      (ft / m).\n    - ``pop2amu65`` / ``pop2amo65``\
-  \ / ``pop2pmu65`` / ``pop2pmo65``\n      (int) — Population AM/PM, under/over 65.\n    - ``students``\
-  \ (int) — Student count (schools).\n    - ``source`` (str) — NSI source tier (E=Estimated, P=Parcel,\
-  \ ...).\n\nCross-tool dependencies:\n    - Consumed by ``pelicun_damage_assessment`` (explicit ``assets_uri``\n\
-  \      mode): pass the returned ``LayerURI.uri`` as ``assets_uri``. Because\n      every NSI feature\
-  \ already carries\n      ``component_type`` and ``replacement_value`` (added by this tool),\n      the\
-  \ Pelicun damage loop uses real HAZUS occupancy + structure\n      values rather than the ``\"RES1\"\
-  `` / class-default fallback. This\n      is the **preferred** Pelicun asset substrate when the bbox\
-  \ is\n      inside CONUS — the composer should prefer NSI when available and\n      fall back to ``compute_building_density``\
-  \ only outside the US.\n    - Complementary to ``fetch_hrsl_population`` (population grid),\n      ``fetch_administrative_boundaries``\
-  \ (admin polygons for zonal\n      aggregation), and ``fetch_roads_osm`` (road network) for full\n \
-  \     exposure-context layers.\n    - Pair with ``sfincs_flood`` output: use its flood\n      depth\
-  \ COG as ``hazard_raster_uri`` in\n      ``pelicun_damage_assessment(hazard_raster_uri=..., assets_uri=<this>)``.\n\
-  \nCache: ``static-30d`` (the NSI is rebuilt by USACE on a ~quarterly\ncadence; a 30-day TTL matches\
-  \ the update rhythm). Cache key:\nSHA-256 of (bbox-rounded-6dp, \"static-30d\" vintage).\n\nExternal-API\
-  \ resilience (NFR-R-1): the NSI cluster occasionally returns\n5xx for transient backend issues. Network\
-  \ failure / non-2xx / malformed\nJSON / non-FeatureCollection responses raise\n``USACE_NSIUpstreamError(retryable=True)``\
-  \ so the agent's FR-AS-11\nsurface decides whether to retry, clarify, or fall back.\n\n\nPayload estimation\
-  \ (FR-DC-9 hook): see ``estimate_payload_mb``\n— bbox-area-driven, with the dense-urban upper bound\
-  \ (~50 MB / deg²).\nTypical city-scale ~0.1-degree queries land in single-digit MB; the\nfull 1-degree\
-  \ max can push past 25 MB and trip the chat-warning gate."
+docstring: |-
+  USACE National Structure Inventory as a point FlatGeobuf — buildings +
+  HAZUS occupancy class + per-structure replacement value (USD).
+
+  What it does: queries the U.S. Army Corps of Engineers (USACE) National
+  Structure Inventory (NSI) REST API for every documented building inside
+  a bbox and returns a FlatGeobuf of point features (one per structure),
+  each carrying its HAZUS occupancy class (``occtype``), structure
+  replacement value (``val_struct``, USD), content value (``val_cont``),
+  square footage, year built, foundation type/height, FEMA FIRM flood
+  zone, AM/PM population, and ground elevation. NSI is the authoritative
+  U.S.-wide structure inventory used by FEMA / USACE / HAZUS for flood
+  loss estimation.
+
+  When to use:
+      - User asks for the buildings or "structure inventory" inside an
+        area (e.g. "show me every building in Fort Myers Beach", "what
+        buildings are in the floodplain?").
+      - As the structure-exposure asset layer for a building-loss or
+        exposure-value analysis -- NSI carries the HAZUS occupancy class
+        AND per-structure replacement value, removing both the
+        ``compute_building_density`` default-RES1 proxy AND the
+        ``_REPLACEMENT_VALUE_DEFAULTS_USD`` per-class fallback. This is
+        the **preferred** structure-exposure substrate inside CONUS.
+      - User asks for exposed value or repair cost estimates that need a
+        real ``val_struct`` per structure.
+      - Counting buildings by occupancy class (RES1 / COM1 / IND1 / EDU1
+        / etc.) in a small area.
+
+  When NOT to use:
+      - Outside the United States — NSI only covers CONUS + AK + HI + the
+        U.S. territories. Use ``compute_building_density`` (Microsoft
+        Global ML Building Footprints) for international queries instead.
+      - For bbox spans larger than ~1 degree per axis — NSI rejects
+        oversized queries with a 500. Split into tiles and call once per
+        tile, or use ``compute_building_density`` for the regional
+        aggregate.
+      - For aggregate building density rasters — ``compute_building_density``
+        is the right primitive when you want a raster of building counts
+        per cell, not point features.
+      - For HRSL population grids — ``fetch_hrsl_population`` is the
+        dedicated tool when you only need persons-per-cell, not per-
+        structure attributes.
+
+  Parameters:
+      bbox: REQUIRED ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+          Valid range: ``min_lon`` in [-180, 180], ``max_lat`` in [-90, 90],
+          min < max on each axis. Span on each axis must be ≤ 1.0 degree
+          (NSI server-side cap; oversized envelopes return 500). Example:
+          ``(-81.880, 26.620, -81.860, 26.660)`` for a Fort Myers Beach
+          neighborhood (~0.02 deg, ~50-200 structures).
+
+  Returns:
+      A ``LayerURI`` pointing at a FlatGeobuf of NSI Point features (one
+      per structure) at
+      ``s3://trid3nt-cache/cache/static-30d/usace_nsi/<key>.fgb``.
+      ``layer_type="vector"``, ``role="primary"``, ``units=None``,
+      ``style_preset="usace_nsi"``. Each feature carries:
+
+      - ``fd_id`` (int) — NSI persistent feature ID.
+      - ``occtype`` (str) — HAZUS occupancy class (``RES1``, ``RES3A``,
+        ``COM1``, ``IND1``, ``EDU1``, ...). Downstream exposure analysis
+        reads this.
+      - ``component_type`` (str) — duplicate of ``occtype`` under a
+        standard exposure-analysis column name.
+      - ``st_damcat`` (str) — Structure damage category (RES, COM, IND).
+      - ``bldgtype`` (str) — Construction type (W=wood, S=steel, C=concrete,
+        M=masonry).
+      - ``found_type`` (str) — Foundation type (S=slab, B=basement,
+        C=crawlspace, P=pier).
+      - ``found_ht`` (float) — Foundation height above ground (ft).
+      - ``num_story`` (int) — Number of stories.
+      - ``sqft`` (float) — Building square footage.
+      - ``med_yr_blt`` (int) — Median year built (Census block).
+      - ``val_struct`` (float) — Structure replacement value (USD).
+      - ``replacement_value`` (float) — duplicate of ``val_struct`` under
+        a standard exposure-analysis column name.
+      - ``val_cont`` (float) — Content replacement value (USD).
+      - ``val_vehic`` (float) — Vehicle replacement value (USD).
+      - ``firmzone`` (str|None) — FEMA FIRM flood zone (``AE``, ``X``,
+        ``VE``, or None).
+      - ``cbfips`` (str) — Census block FIPS code.
+      - ``ground_elv`` / ``ground_elv_m`` (float) — Ground elevation
+        (ft / m).
+      - ``pop2amu65`` / ``pop2amo65`` / ``pop2pmu65`` / ``pop2pmo65``
+        (int) — Population AM/PM, under/over 65.
+      - ``students`` (int) — Student count (schools).
+      - ``source`` (str) — NSI source tier (E=Estimated, P=Parcel, ...).
+
+  Cross-tool dependencies:
+      - Every NSI feature already carries ``component_type`` and
+        ``replacement_value`` (added by this tool) for real HAZUS
+        occupancy + structure values rather than a class-default
+        fallback. This is the **preferred** structure-exposure substrate
+        when the bbox is inside CONUS — prefer NSI when available and
+        fall back to ``compute_building_density`` only outside the US.
+      - Complementary to ``fetch_hrsl_population`` (population grid),
+        ``fetch_administrative_boundaries`` (admin polygons for zonal
+        aggregation), and ``fetch_roads_osm`` (road network) for full
+        exposure-context layers.
+
+  Cache: ``static-30d`` (the NSI is rebuilt by USACE on a ~quarterly
+  cadence; a 30-day TTL matches the update rhythm). Cache key:
+  SHA-256 of (bbox-rounded-6dp, "static-30d" vintage).
+
+  External-API resilience (NFR-R-1): the NSI cluster occasionally returns
+  5xx for transient backend issues. Network failure / non-2xx / malformed
+  JSON / non-FeatureCollection responses raise
+  ``USACE_NSIUpstreamError(retryable=True)`` so the agent's FR-AS-11
+  surface decides whether to retry, clarify, or fall back.
+
+
+  Payload estimation (FR-DC-9 hook): see ``estimate_payload_mb``
+  — bbox-area-driven, with the dense-urban upper bound (~50 MB / deg²).
+  Typical city-scale ~0.1-degree queries land in single-digit MB; the
+  full 1-degree max can push past 25 MB and trip the chat-warning gate.

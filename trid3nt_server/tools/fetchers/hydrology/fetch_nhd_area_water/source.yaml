@@ -107,8 +107,7 @@ docstring: |-
       EPSG:4326, ``layer_type="vector"``, ``role="context"``,
       ``style_preset="nhd_waterbodies"``. One property: ``ftype``.
 
-  Rendering: a VECTOR layer renders INLINE on the map automatically. Do
-  NOT call ``publish_layer`` on it - that is raster-only.
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
 
   Cache: ``ttl_class="static-30d"``.
 

@@ -113,23 +113,15 @@ def _normalize_engine(raw: Any) -> str | None:
     """Map a solver-spec name / stdout-field stem to a canonical engine.
 
     Handles ``solver`` values that are not bare engine names
-    (``telemac_river_dye`` -> ``telemac``) AND the legacy stdout-field stems
-    (``mf6`` -> ``modflow``). Returns ``None`` for an unrecognized engine (a
-    SWAN / Landlab run has no diagnostics parser here).
+    (``telemac_river_dye`` -> ``telemac``). Every name returned is a key of
+    ``_PARSERS``; anything else returns ``None`` so the caller raises the typed
+    unknown-engine error rather than reaching a parser that does not exist.
     """
     if raw is None:
         return None
     r = str(raw).strip().lower()
     if not r:
         return None
-    if "sfincs" in r:
-        return "sfincs"
-    if "swmm" in r:
-        return "swmm"
-    if "modflow" in r or r == "mf6":
-        return "modflow"
-    if "geoclaw" in r:
-        return "geoclaw"
     if "telemac" in r:
         return "telemac"
     return None
@@ -244,16 +236,16 @@ def read_run_diagnostics(
     """Read a finished simulation run's engine diagnostics (mass balance, stability).
 
     **What it does:** Resolves a run handle to its retained diagnostics files and
-    returns ONE normalized health envelope for whichever engine produced it
-    (SFINCS, SWMM, MODFLOW, GeoClaw, TELEMAC). You do NOT pick an engine-specific
-    reader -- this tool recovers the engine from the run's completion record and
-    dispatches internally.
+    returns ONE normalized health envelope for whichever engine produced it. You
+    do NOT pick an engine-specific reader -- this tool recovers the engine from
+    the run's completion record and dispatches internally. A run whose engine has
+    no diagnostics reader here raises a typed unknown-engine error rather than
+    guessing.
 
     **When to use:**
-    - Right after any ``run_solver`` / ``run_model_*`` solve, to check "did the
-      run actually converge / conserve mass, or is it garbage?"
-    - "Is this flood/groundwater/tsunami run healthy? What's its mass-balance or
-      continuity error?"
+    - Right after any solve, to check "did the run actually converge / conserve
+      mass, or is it garbage?"
+    - "Is this run healthy? What's its mass-balance or continuity error?"
     - Before trusting a model result for downstream analysis or calibration.
 
     **When NOT to use:**

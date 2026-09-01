@@ -462,8 +462,8 @@ def compute_impervious_surface(
 ) -> LayerURI:
     """NLCD impervious-surface fraction computation.
 
-    Use this when: urban hydrology/runoff analysis, SFINCS infiltration
-    parameterization, urban heat island / stormwater capacity, or a
+    Use this when: urban hydrology/runoff analysis, hydraulic model
+    infiltration parameterization, urban heat island / stormwater capacity, or a
     percent-developed visualization needs an impervious fraction (0.0-1.0).
     Path auto-selects: NLCD Impervious Surface product (0-100 int) scaled
     by 1/100, or NLCD landcover dev-class mapping (21->0.0, 22->0.3,

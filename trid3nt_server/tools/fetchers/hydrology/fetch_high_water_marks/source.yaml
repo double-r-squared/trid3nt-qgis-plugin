@@ -92,7 +92,7 @@ docstring: "Fetch surveyed USGS STN flood high-water marks (observed PEAK stage)
   \ for Hurricane Michael near Panama City\", \"surveyed\n  flood peak elevations here\", \"USGS HWMs\
   \ for this flood\".\n\n**When NOT to use:**\n- Real-time / continuous gauge stage or discharge ->\n\
   \  ``fetch_usgs_nwis_gauges`` (this is post-event point survey, not a\n  time-series).\n- Regulatory\
-  \ flood ZONES -> ``fetch_fema_nfhl_zones``; modeled flood DEPTH\n  -> the SFINCS / SWMM engines.\n-\
+  \ flood ZONES -> ``fetch_fema_nfhl_zones``; modeled flood DEPTH\n  -> ``telemac_rain_on_grid``.\n-\
   \ A satellite-derived flood EXTENT polygon/raster ->\n  ``fetch_flood_extent_observation``.\n- Non-US\
   \ floods -> unsupported (STN is US + territories only).\n\n**Parameters:**\n- ``bbox``: REQUIRED ``(west,\
   \ south, east, north)`` in EPSG:4326 (the AOI;\n  marks are clipped to it client-side).\n- ``event``:\

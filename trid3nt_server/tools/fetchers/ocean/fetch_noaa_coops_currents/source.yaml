@@ -145,7 +145,6 @@ docstring: |-
   **Cross-tool dependencies:**
       - Complements: ``fetch_noaa_coops_tides`` (water level at the same
         inlets), ``fetch_gtsm_tide_surge`` (global tide+surge).
-      - Feeds INTO: ``publish_layer`` (map display of current vectors).
 
   **Error types:**
       - ``COOPSCurrentsInputError``: bad bbox / product (retryable=False).

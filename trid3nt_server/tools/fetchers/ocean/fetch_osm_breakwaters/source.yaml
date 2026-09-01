@@ -59,8 +59,7 @@ docstring: "Surveyed coastal wave BARRIERS (breakwaters, groynes) as LineStrings
   \ or ``man_made=groyne`` that touch the requested\nbbox, and returns each one as a WHOLE LineString\
   \ in EPSG:4326, serialized\nto FlatGeobuf and cached for 30 days. Ways are deliberately NOT clipped\n\
   to the bbox: a barrier is a solid object, and cutting one at the AOI edge\nwould put a gap in the middle\
-  \ of a structure that has none. The vector\nrenders inline on the map automatically -- do NOT call ``publish_layer``\n\
-  on it.\n\n**When to use:**\n- The user asks what protects a harbour, marina or berthing area, or\n \
+  \ of a structure that has none. The vector\nrenders inline on the map automatically.\n\n**When to use:**\n- The user asks what protects a harbour, marina or berthing area, or\n \
   \ wants the breakwater drawn on the map.\n- Feeding ``artemis_harbor_agitation``'s ``structure`` slot:\
   \ fetch the\n  surveyed barrier, then hand the returned layer to the agitation run so\n  the solver meshes\
   \ the REAL structure as a thin solid barrier rather\n  than solving open water.\n- Any shoreline-protection\

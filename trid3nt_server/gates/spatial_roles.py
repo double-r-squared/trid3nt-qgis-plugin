@@ -12,18 +12,17 @@ Canonical roles (``properties.role`` on each drawn ``Feature``):
                           channel bank); a tin/quadtree mesher forces edges along
                           it.
   * ``breach``         -- a Point interior levee/dam-breach source. Rides the
-                          drawn-POINT role; SFINCS/GeoClaw accept it as their
-                          ``breach_point`` (drawn value PREFERRED over a plain
-                          tuple arg when a breach point is drawn).
+                          drawn-POINT role; consumed as a ``breach_point`` param
+                          by solvers that accept one (drawn value PREFERRED over
+                          a plain tuple arg when a breach point is drawn).
   * ``refine_region``  -- a Polygon over which the mesh is refined to a finer
-                          target size (``properties.target_size_m``); consumed by
-                          the MODFLOW DISV/gridgen generator and (worker-side)
-                          TELEMAC gmsh sizing fields.
+                          target size (``properties.target_size_m``); consumed
+                          worker-side by TELEMAC gmsh sizing fields.
   * ``aoi_clip``       -- a Polygon that CLIPS the run domain (mask cells outside
                           it). Legacy wire role ``aoi`` is an accepted alias.
   * ``boundary``       -- a LineString open-boundary segment
                           (``properties.boundary_type`` in {inflow, outflow}).
-  * ``point``          -- a generic Point (ELMFIRE ignition, a probe).
+  * ``point``          -- a generic Point (an ignition source, a probe).
   * ``line``           -- a NEUTRAL elevation/section LineString
                           (compute_terrain_profile / compute_cross_section); no
                           mesh semantics.
@@ -103,7 +102,7 @@ class DrawnRoles:
     Fields:
         breaklines: ``[[[lon,lat],...], ...]`` -- each breakline's vertices.
         breach_points: ``[[lon,lat], ...]`` -- interior breach sources
-            (SFINCS/GeoClaw ``breach_point``).
+            (the ``breach_point`` param).
         refine_regions: ``[{"polygon": Feature, "target_size_m": float|None,
             "bbox": (..4..)}]`` -- per-region mesh sizing.
         aoi_clip_features: raw clip polygons (``aoi_clip`` + legacy ``aoi``).

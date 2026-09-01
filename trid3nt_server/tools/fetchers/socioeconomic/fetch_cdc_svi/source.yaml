@@ -106,7 +106,7 @@ docstring: |-
   **Cross-tool dependencies:**
       - Feeds INTO: ``spatial_query`` (vulnerable population inside a hazard
         footprint; admin-bounded SVI).
-      - Combine WITH: ``sfincs_flood`` / ``fetch_noaa_slr_scenarios``
+      - Combine WITH: ``fetch_noaa_slr_scenarios``
         / ``fetch_firms_active_fire`` (hazard footprints) for vulnerability-
         weighted exposure; ``fetch_administrative_boundaries`` (county scope).
 

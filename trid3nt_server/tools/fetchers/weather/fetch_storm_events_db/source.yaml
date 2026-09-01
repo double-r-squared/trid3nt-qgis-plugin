@@ -92,7 +92,7 @@ docstring: "Fetch historical NOAA Storm Events Database records as a FlatGeobuf 
   - Providing historical baseline to accompany a real-time ``fetch_nws_event``\n  or ``fetch_nws_alerts_conus``\
   \ result.\n\n**When NOT to use:**\n- Real-time or current storm tracking (use ``fetch_nws_event`` for\
   \ active\n  NWS alerts; NHC ATCF tracks are not in scope for v0.1).\n- Parcel-level damage loss data\
-  \ (the DB carries summary strings only; use\n  Pelicun post-processor for modeled loss).\n- Non-US meteorology\
+  \ (the DB carries summary strings only; modeled\n  loss estimation is not currently supported here).\n- Non-US meteorology\
   \ (Storm Events is US + territories only).\n- Sub-annual temporal resolution (the DB records are per-event,\
   \ not\n  gridded time series; use MRMS or NWP output for gridded precipitation).\n\n**Parameters:**\n\
   - ``year`` (int): calendar year in range [1950, 2100]. Coverage is sparse\n  before ~1996 and comprehensive\

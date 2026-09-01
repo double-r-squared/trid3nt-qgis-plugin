@@ -525,8 +525,8 @@ def compute_blended_composite(
         ``LayerURI`` (layer_type="raster") pointing at an RGBA COG:
         ``s3://trid3nt-cache/cache/static-30d/blended/<key>.tif``. Shares the
         BASE's CRS/grid, clipped to the overlap extent (base pixels
-        uncovered by the overlay keep the base color). Pass to
-        ``publish_layer``. layer_id/name derived like "Shaded <base>".
+        uncovered by the overlay keep the base color). Renders on the map
+        automatically. layer_id/name derived like "Shaded <base>".
 
     routed through ``read_through`` -- identical
     ``(base_layer_uri, overlay_layer_uri, blend_mode, overlay_opacity)``

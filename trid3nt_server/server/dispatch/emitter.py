@@ -345,9 +345,9 @@ def _source_references_emitter(src: str) -> bool:
 
     Comments and string/docstring literals are ignored (tokenize drops them)
     so a mention in a comment is NOT a false positive -- only an actual
-    identifier in code counts. (publish_layer and fetch_river_geometry both
-    only MENTION add_loaded_layer in docstrings; their bodies are emit-free,
-    the surrounding emit_tool_call wrapper does the emit.)
+    identifier in code counts. (fetch_river_geometry only MENTIONS
+    add_loaded_layer in its docstring; its body is emit-free, the
+    surrounding emit_tool_call wrapper does the emit.)
     """
     import io
     import textwrap
@@ -638,10 +638,10 @@ async def _invoke_tool_via_emitter(
         tool_name, params, _turn_case_bbox(state)
     )
 
-    # Pin an expensive SOLVER's bbox to the active Case AOI too: the SFINCS
-    # grid is built directly from this bbox via setup_grid_from_region (no
-    # padding), so a follow-up/re-entry solve handed a drifted/wider
-    # same-area box would compute OUTSIDE the displayed AOI. Mirrors the
+    # Pin an expensive SOLVER's bbox to the active Case AOI too: the solve
+    # grid is built directly from this bbox (no padding), so a
+    # follow-up/re-entry solve handed a drifted/wider same-area box would
+    # compute OUTSIDE the displayed AOI. Mirrors the
     # fetch rule: solve ONLY within the active AOI, honoring an explicit
     # WIDEN (encloses the pin) or a DIFFERENT place (disjoint). No-op on the
     # first solve (no AOI pinned yet) and on archetypes/coastal (selected by
@@ -824,9 +824,9 @@ async def _invoke_tool_via_emitter(
     state.current_pipeline_id = state.emitter.start_pipeline()
     state.current_turn_pipeline_id = state.current_pipeline_id
     # Bind the registry as the ambient observation sink for the
-    # lifetime of the invoke so composer-internal publishes (publish_layer
-    # called inside sfincs_flood) register the gs:// COG ↔ WMS
-    # association even though the composer's envelope only carries the WMS URL.
+    # lifetime of the invoke so composer-internal publishes register the
+    # gs:// COG <-> WMS association even though the composer's envelope only
+    # carries the WMS URL.
     _uri_reg_token = activate_registry(uri_registry)
     # Tool-card persistence bookkeeping. ``_card_state`` stays None
     # on cancellation (Invariant 8 -- no replayable outcome); the wall-clock
@@ -1042,9 +1042,9 @@ async def _invoke_tool_via_emitter(
             # computed layer. A bare ``await`` here is cancel-fragile: a
             # same-stream re-prompt supersede / stop / any cancel re-raises the
             # pending CancelledError at the persist's first suspension point and
-            # SKIPS the write -- the exact mechanism by which SFINCS run
-            # 01KVSTC80F wrote 100+ COGs to S3 yet the Case persisted 0 layers
-            # after a transient WS drop. ``_run_to_completion_shielded`` keeps the
+            # SKIPS the write -- the exact mechanism by which a solve run once
+            # wrote 100+ COGs to S3 yet the Case persisted 0 layers after a
+            # transient WS drop. ``_run_to_completion_shielded`` keeps the
             # write running to completion and THEN re-raises the cancel (Invariant
             # 8 preserved). The persist swallows its own errors (never raises), so
             # the only interruption this guard absorbs is the parent cancel.
@@ -1127,8 +1127,8 @@ async def _invoke_tool_via_emitter(
             logger.debug("scenario_reuse record failed", exc_info=True)
 
     # PIN the solve domain as the Case AOI: a freshly-completed expensive
-    # solver (SWMM/SFINCS/MODFLOW) mints a LayerURI whose ``bbox`` IS the
-    # authoritative floored solve domain. Persist it as ``CaseSummary.bbox``
+    # solver mints a LayerURI whose ``bbox`` IS the authoritative floored
+    # solve domain. Persist it as ``CaseSummary.bbox``
     # + cache onto ``state.case_bbox`` so every subsequent fetch defaults to
     # this extent and a Case reopen rehydrates the SAME AOI. Skip on a reuse
     # short-circuit (already pinned when first produced). Best-effort.

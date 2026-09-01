@@ -1387,8 +1387,8 @@ def run_solver(
 ) -> ExecutionHandle:
     """Submit a solver execution to the local Docker solver backend.
 
-    Use this when: the agent has a staged model (e.g. from
-    ``set_sfincs_parameters``) and needs to actually run the solver. Returns
+    Use this when: an engine template has already staged a model setup and
+    the solve itself has to be dispatched. Returns
     an ``ExecutionHandle`` whose ``workflow_name`` pins the backend and which
     is the Invariant-8 cancellation seam -- feed it to ``wait_for_completion``
     to poll progress and obtain the ``RunResult``.
@@ -1400,14 +1400,15 @@ def run_solver(
     (those land in ``RunResult.output_uri``).
 
     Params:
-        solver: lowercase solver identifier. v0.1 supports ``"sfincs"``
-            only; other values raise ``SolverNotRegisteredError`` (other
-            solvers land per lazy per-milestone deploy).
+        solver: lowercase solver identifier; it must be a key of
+            ``SOLVER_WORKFLOW_REGISTRY`` or the call raises
+            ``SolverNotRegisteredError``, whose message lists what is
+            registered.
         model_setup_uri: ``s3://`` URI of the manifest the solver envelope
-            reads (``{"inputs":[...], "sfincs_args":[...], "outputs":[...]}``);
-            input URIs inside are resolved by scheme. The
-            ``model_flood_scenario`` workflow composes this from the atomic
-            tool substrate.
+            reads -- ``inputs``, ``outputs``, and the argv tail under the key
+            the solver's spec declares; input URIs inside are resolved by
+            scheme. The engine template composes this from the atomic tool
+            substrate.
         compute_class: compute class -- selects the sizing bucket
             (small/standard/large/xlarge/gpu). Default ``"medium"``.
 

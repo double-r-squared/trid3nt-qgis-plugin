@@ -70,8 +70,7 @@ docstring: "Fetch OpenStreetMap POIs / tagged features as a point FlatGeobuf ove
   \ ``relation``) inside the\nrequested bbox, reduces every match to a single Point (way/relation matches\n\
   use their centroid), and serializes the points to FlatGeobuf cached for 30\ndays. Each feature carries\
   \ ``osm_id``, ``osm_type``, ``name``, the matched\n``key`` / ``value``, and the full OSM tag dictionary\
-  \ as ``tags_json``. The\nresulting vector renders inline on the map automatically -- do NOT call\n``publish_layer``\
-  \ on it. This is the FLEXIBLE, global exposure-layer\ncomplement to the FIXED, US-only ``fetch_hifld_critical_infrastructure``\n\
+  \ as ``tags_json``. The\nresulting vector renders inline on the map automatically. This is the FLEXIBLE, global exposure-layer\ncomplement to the FIXED, US-only ``fetch_hifld_critical_infrastructure``\n\
   tool: same uniform point shape, but the full OSM tag vocabulary worldwide.\n\n**When to use:**\n- User\
   \ asks to show / overlay a class of facilities or features by name:\n  \"show the hospitals\", \"where\
   \ are the fire stations\", \"schools in this\n  area\", \"pharmacies near the flood zone\", \"gas stations\"\

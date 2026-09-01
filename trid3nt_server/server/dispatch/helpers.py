@@ -69,8 +69,8 @@ def _dispatch_made_progress(result: Any) -> bool:
 
 #: How many CONSECUTIVE no-progress model rounds we tolerate AFTER a
 #: terminal composer has delivered its artifact before concluding the turn
-#: cleanly. Symptom without this: a SFINCS flood publishes its depth layer
-#: and the model, having nothing left to do, keeps emitting unproductive
+#: cleanly. Symptom without this: a telemac_rain_on_grid solve publishes its
+#: depth layer and the model, having nothing left to do, keeps emitting unproductive
 #: function calls until it trips ``MAX_TURN_ITERATIONS`` and emits a
 #: (harmless but sloppy) ``loop_exhausted`` frame. Once the deliverable is
 #: in hand we (a) stamp the composer's function_response with a one-time
@@ -150,8 +150,8 @@ def _tool_search_tool_names() -> frozenset[str]:
 def _default_declarable_registry() -> dict[str, Any]:
     """The DEFAULT per-turn declarable tool set.
 
-    Engine templates (``sfincs_flood``,
-    ``modflow_*``, ``openquake_psha``, ...) are ordinary retrieval-pool members
+    Engine templates (``telemac_rain_on_grid``,
+    ``artemis_harbor_agitation``, ...) are ordinary retrieval-pool members
     and are declarable by default like any tool -- the deleted engine doors no
     longer gate them. Only ``catalog`` (catalog-surfacing experiment, arm-flagged;
     no tool carries it in the DEFAULT config) and ``internal`` (an absorbed
@@ -213,8 +213,8 @@ def _is_terminal_composer(tool_name: str) -> bool:
     """True iff ``tool_name`` is a top-level run-a-model composer.
 
     A terminal composer is a ``run_*`` workflow-dispatch tool (the
-    ``run_model_*`` / ``run_*_job`` / ``swmm_urban_flood`` /
-    ``openquake_psha`` family) -- the deliverable-producing entry
+    ``run_model_*`` / ``run_*_job`` / ``telemac_river_dye`` /
+    ``artemis_harbor_agitation`` family) -- the deliverable-producing entry
     points whose successful return IS the answer the user asked for. Helper
     workflow-dispatch tools that merely compute an intermediate
     (``compute_cross_section``, ``request_spatial_input``, ...) are
@@ -225,7 +225,7 @@ def _is_terminal_composer(tool_name: str) -> bool:
     if entry is None:
         return False
     # Engine TEMPLATES carry deliverable-producing
-    # names that do NOT start with ``run_`` (``modflow_contaminant_plume`` et al.).
+    # names that do NOT start with ``run_`` (``telemac_river_dye`` et al.).
     # A completed template IS a turn-ending deliverable, so ALSO latch any
     # tier="template" workflow-dispatch tool - otherwise the crisp-end wrap-up +
     # post-deliverable idle reset never fire and the turn spins to the loop cap.

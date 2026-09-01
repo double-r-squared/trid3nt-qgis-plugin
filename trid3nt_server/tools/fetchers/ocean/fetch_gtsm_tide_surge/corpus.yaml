@@ -2,7 +2,7 @@ fetch_gtsm_tide_surge:
 - I need coastal boundary forcing for a compound flood model outside the US
 - fetch GTSM surge for the Bay of Bengal tropical cyclone scenario
 - give me tide and surge time series for this non-CONUS coastal bbox
-- I need Deltares GTSM data for the SFINCS model in the Philippines
+- I need Deltares GTSM data for the coastal flood model in the Philippines
 - fetch global storm surge for this Indian Ocean cyclone
 - give me coastal water levels from GTSM for the Bangladesh flood setup
 - I need compound flood boundary conditions for a Mediterranean coast scenario

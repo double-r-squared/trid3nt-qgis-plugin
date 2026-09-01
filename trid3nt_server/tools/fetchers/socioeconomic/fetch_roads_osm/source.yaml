@@ -66,7 +66,7 @@ docstring: "OpenStreetMap road LineStrings via Overpass API.\n\n**What it does:*
   \ and caches the result for\n30 days. Returns one LineString per in-AOI road segment with attributes\n\
   ``osm_id``, ``name``, ``highway``, ``lanes``, and ``maxspeed`` (a road\nthat crosses the bbox boundary\
   \ several times yields several segments that\nshare the source way's attributes). The resulting vector\
-  \ renders inline\non the map automatically -- do NOT call ``publish_layer`` on it.\n\n**When to use:**\n\
+  \ renders inline\non the map automatically.\n\n**When to use:**\n\
   - User asks to \"show roads\" or \"overlay the road network\" for any area.\n- Flood-impact map needs\
   \ road context to communicate which streets are\n  inundated (\"which roads are under water?\").\n-\
   \ Evacuation-routing or accessibility analysis needs a carriageway\n  network as a context or input\

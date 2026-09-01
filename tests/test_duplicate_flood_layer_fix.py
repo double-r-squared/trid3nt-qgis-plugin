@@ -93,8 +93,8 @@ class TestScenarioPublishedSignal:
         assert summary["handle"] == result.layer_id
         assert summary["style_preset"] == "continuous_flood_depth"
         assert summary["bbox"] == [-85.4, 35.0, -85.2, 35.2]
-        # A human-readable do-not-republish note for the model.
-        assert "publish_layer" in summary["already_published_note"]
+        # A human-readable already-on-the-map note for the model.
+        assert "ALREADY published" in summary["already_published_note"]
 
     def test_every_scenario_wrapper_is_recognized(self) -> None:
         # All flood + plume scenario wrappers carry the published signal.

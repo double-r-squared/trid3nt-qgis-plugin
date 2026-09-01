@@ -13,8 +13,8 @@ PFDS CSV already returns (19 durations from 5-min to 60-day x 10 ARIs from
     color one line per return period (1..1000 yr)
 
 This is the classic engineering IDF chart used to pick a design storm for
-SFINCS / SWMM / SCS-CN work; the companion scalar lookup stays
-``lookup_precip_return_period``.
+a rainfall-runoff analysis (SCS-CN) or a ``telemac_rain_on_grid`` run; the
+companion scalar lookup stays ``lookup_precip_return_period``.
 
 Data source / reuse
 ===================
@@ -178,7 +178,7 @@ def compute_idf_curve(
 
     Use this (not ``fetch_climate_normals`` or a fetch_* rainfall tool) for
     the full Atlas 14 IDF CHART -- "IDF curve for Houston", picking a design
-    storm before a pluvial SFINCS/SWMM run, comparing cloudburst vs soaker
+    storm before a pluvial rainfall-runoff run, comparing cloudburst vs soaker
     depths. Do NOT use for: one specific depth (``lookup_precip_return_period``,
     same endpoint, scalar); observed rainfall (``fetch_mrms_qpe`` /
     ``fetch_usgs_nwis_gauges``); points outside Atlas 14 coverage (Pacific

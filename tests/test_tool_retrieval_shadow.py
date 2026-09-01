@@ -255,35 +255,35 @@ async def test_enforce_visible_set_is_monotonic_across_turns(fake_llm):
 def test_compute_recall_at_k_synthetic():
     from trid3nt_server.server.protocol.catalog_http import compute_recall_at_k
 
-    # Turn A (SWMM flow): dispatched 3 llm tools; retrieval would have kept 2,
-    # dropped fetch_buildings -> recall 2/3 for this turn.
-    # Turn B (SFINCS flow): dispatched 2; retrieval kept both -> recall 2/2.
+    # Turn A (rainfall-runoff flow): dispatched 3 llm tools; retrieval would have
+    # kept 2, dropped fetch_buildings -> recall 2/3 for this turn.
+    # Turn B (river-plume flow): dispatched 2; retrieval kept both -> recall 2/2.
     shadow = [
         {
             "record_type": "tool_retrieval_shadow",
             "session_id": "S1",
             "turn_id": "TA",
             "k": 25,
-            "visible_tools": ["fetch_dem", "swmm_urban_flood"],
+            "visible_tools": ["fetch_dem", "telemac_rain_on_grid"],
         },
         {
             "record_type": "tool_retrieval_shadow",
             "session_id": "S1",
             "turn_id": "TB",
             "k": 25,
-            "visible_tools": ["fetch_topobathy", "sfincs_flood"],
+            "visible_tools": ["fetch_topobathy", "telemac_river_dye"],
         },
     ]
     tool_records = [
-        # Turn A -- SWMM.
+        # Turn A -- rainfall-runoff.
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "fetch_dem"},
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "fetch_buildings"},
-        {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "swmm_urban_flood"},
-        # Turn B -- SFINCS.
+        {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "telemac_rain_on_grid"},
+        # Turn B -- river-plume.
         {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "fetch_topobathy"},
-        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "sfincs_flood"},
+        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "telemac_river_dye"},
         # A workflow-sourced dispatch must be IGNORED by recall.
-        {"source": "workflow", "session_id": "S1", "turn_id": "TA", "tool_name": "publish_layer"},
+        {"source": "workflow", "session_id": "S1", "turn_id": "TA", "tool_name": "restyle_layer"},
         # A dispatch with NO shadow row (different turn) -- excluded.
         {"source": "llm", "session_id": "S1", "turn_id": "TZ", "tool_name": "fetch_dem"},
     ]
@@ -299,18 +299,18 @@ def test_compute_recall_at_k_synthetic():
     assert out["k"] == 25
 
     by_flow = {row["flow"]: row for row in out["by_flow"]}
-    assert by_flow["SWMM"]["recall"] == pytest.approx(2 / 3, abs=1e-4)
-    assert by_flow["SWMM"]["misses"] == 1
-    assert by_flow["SFINCS"]["recall"] == pytest.approx(1.0, abs=1e-6)
-    # MODFLOW never ran -> null recall, zero dispatches.
-    assert by_flow["MODFLOW"]["recall"] is None
-    assert by_flow["MODFLOW"]["dispatches"] == 0
+    assert by_flow["rainfall-runoff"]["recall"] == pytest.approx(2 / 3, abs=1e-4)
+    assert by_flow["rainfall-runoff"]["misses"] == 1
+    assert by_flow["river-plume"]["recall"] == pytest.approx(1.0, abs=1e-6)
+    # A flow that never ran -> null recall, zero dispatches.
+    assert by_flow["oxygen-sag"]["recall"] is None
+    assert by_flow["oxygen-sag"]["dispatches"] == 0
 
-    # The missed-tool list names fetch_buildings under the SWMM flow.
+    # The missed-tool list names fetch_buildings under the rainfall-runoff flow.
     missed = {m["name"]: m for m in out["missed_tools"]}
     assert "fetch_buildings" in missed
     assert missed["fetch_buildings"]["count"] == 1
-    assert missed["fetch_buildings"]["flows"] == ["SWMM"]
+    assert missed["fetch_buildings"]["flows"] == ["rainfall-runoff"]
 
 
 def test_compute_recall_at_k_empty_when_no_shadow():

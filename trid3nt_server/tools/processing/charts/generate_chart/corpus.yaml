@@ -13,10 +13,10 @@ generate_chart:
 - give me a line chart of value vs time for this multiband raster
 - make a line graph of this temporal layer's value through time
 - show the time series of stage from this observed-gauge layer
-- show me the damage-state distribution after the pelicun run
+- show me the damage-state distribution after the damage assessment run
 - chart how many structures are in each damage state DS0 through DS4
 - give me a bar chart of slight versus moderate versus complete damage counts
-- plot the per-asset damage states from the pelicun ds_mean results
+- plot the per-asset damage states from the ds_mean results
 - visualize the distribution of building damage levels from the damage layer
 - summarize the choropleth classes behind this styled layer
 - how many features fall in each quantile class of this map

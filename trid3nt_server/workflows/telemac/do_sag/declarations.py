@@ -146,8 +146,8 @@ DOC = dict(
     ),
     not_for=(
         "a conservative dye/tracer/contaminant plume that only dilutes "
-        "(`telemac_river_dye`); groundwater plumes (`modflow_*`); flood depth "
-        "(`sfincs_flood` / `hecras_riverine_flood`)"
+        "(`telemac_river_dye`); rainfall-runoff flood depth from a storm "
+        "(`telemac_rain_on_grid`). Groundwater plumes are not currently modeled here"
     ),
     params=PARAMS,
     controls=(

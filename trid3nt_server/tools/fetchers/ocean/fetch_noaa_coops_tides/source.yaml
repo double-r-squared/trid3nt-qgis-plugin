@@ -51,7 +51,7 @@ ingest:
     time_key: t
     value_key: v
     time_normalize: iso8601z        # "YYYY-MM-DD HH:MM" -> "YYYY-MM-DDTHH:MMZ" (twin parity)
-    time_series_csv: true           # inline CSV attribute (SFINCS boundary forcing)
+    time_series_csv: true           # inline CSV attribute (coastal boundary forcing)
     scalars: [wl_min_m, wl_max_m, wl_mean_m, n_timesteps, time_start, time_end]
 
 # --- normalization stamps -------------------------------------------------
@@ -97,16 +97,15 @@ docstring: |
   API for all instrumented tide stations within a bbox, using the
   ``products/water_level`` or ``products/predictions`` endpoint. Returns a
   FlatGeobuf with one Point feature per station, carrying the full hourly
-  time series inline as a ``time_series_csv`` attribute suitable for SFINCS
-  coastal boundary forcing. Tier-1 free, no API key. Covers US coastal waters,
+  time series inline as a ``time_series_csv`` attribute suitable for a
+  hydraulic model's coastal boundary forcing. Tier-1 free, no API key. Covers US coastal waters,
   Great Lakes, and US territories.
 
   **When to use:**
   - User asks "what are the tide levels at Fort Myers / Key West / any US
     coastal city" for a past or upcoming date range.
   - Agent needs observed coastal water-level boundary conditions for a
-    compound-flood SFINCS model run at a US/territory location (composes
-    with ``run_sfincs`` as the coastal forcing input).
+    compound-flood hydraulic model run at a US/territory location.
   - User asks for tide predictions to plan coastal operations or assess
     flood-tide coincidence risk.
   - Agent needs to validate a GTSM global tide estimate against the
@@ -122,11 +121,12 @@ docstring: |
     or ``fetch_usgs_nwis_gauges`` (USGS NWIS).
   - For wave height or ocean swell → CO-OPS does not serve wave products;
     use ERA5 or NOAA WAVEWATCH III (not currently in the tool catalog).
-  - For gridded storm-surge inundation rasters → use ``run_sfincs`` with
-    this tool's output as coastal boundary forcing.
+  - For gridded storm-surge inundation rasters → gridded inundation
+    modeling is not currently available from this tool; it returns
+    point time series only.
   - For sub-hourly tide data (6-minute observations) → the current tool
     returns hourly (``interval=h``); extend with ``interval=6`` in a
-    future version if SFINCS setup requires finer resolution.
+    future version if a hydraulic model setup requires finer resolution.
 
   **Parameters:**
       bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal
@@ -156,20 +156,20 @@ docstring: |
       ``lon``, ``lat``, ``product``, ``datum`` (always "MLLW"),
       ``time_start`` / ``time_end`` (ISO-8601 UTC), ``n_timesteps`` (int),
       ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m`` (float, meters),
-      ``time_series_csv`` (comma-separated "iso,value_m" rows for SFINCS
-      boundary input). ``layer_type="vector"``, ``role="primary"``,
+      ``time_series_csv`` (comma-separated "iso,value_m" rows for
+      hydraulic model boundary input). ``layer_type="vector"``, ``role="primary"``,
       ``units="m (MLLW)"``.
 
   **Cross-tool dependencies:**
-      - Feeds INTO: ``run_sfincs`` (coastal boundary forcing),
-        ``publish_layer`` (map display).
+      - Feeds coastal boundary forcing into a compound-flood hydraulic
+        model run; the layer also renders on the map automatically.
       - Cross-checks: ``fetch_gtsm_tide_surge`` (global non-US tide+surge
         reanalysis) -- CONUS basin with CO-OPS coverage should prefer this
         tool; non-CONUS should prefer GTSM.
       - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
         ``fetch_noaa_nwm_streamflow`` (river discharge), and
         ``fetch_era5_reanalysis`` (offshore wind/wave forcing) for the
-        full SFINCS compound-flood forcing stack.
+        full compound-flood forcing stack.
       - Sibling NWM tool (river): ``fetch_noaa_nwm_streamflow`` for CONUS
         fluvial forcing.
 

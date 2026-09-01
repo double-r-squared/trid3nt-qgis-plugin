@@ -755,7 +755,7 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
       ``fetch_administrative_boundaries``, ``fetch_nws_event``,
       ``fetch_firms_active_fire``, and most other bbox-based fetchers.
     - Called internally by hazard-modeling workflow setups (e.g. before
-      ``run_sfincs``) to resolve a user-supplied location string before
+      ``build_mesh``) to resolve a user-supplied location string before
       fetching DEM/landcover.
 
     The fetch is routed through ``read_through`` so two identical

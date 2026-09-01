@@ -116,7 +116,7 @@ docstring: "Fetch RAWS fire-weather station observations as a point FlatGeobuf.\
   \ kt), ``drct`` (wind dir °),\n      ``gust`` (wind resultant kt), ``solar_rad`` (W/m²),\n      ``precip_in``\
   \ (in). Missing values are ``null``.\n\nCache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_date,\
   \ end_date)``\ncalls within the same UTC hour reuse the cached FlatGeobuf.\n\n**Cross-tool dependencies:**\n\
-  \n    - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``\n      (bbox from place\
+  \n    - Composes WITH: ``geocode_location``\n      (bbox from place\
   \ name), ``fetch_nifc_fire_perimeters``\n      (co-overlay fire perimeter + weather), ``fetch_firms_active_fire``\n\
   \      (co-overlay thermal anomalies + RAWS obs).\n    - Feeds INTO: the code_exec playground (wind/RH\
   \ claims for\n      FR-HEP wildfire event consensus), fire-weather index computation\n      (NFDRS/FWI\

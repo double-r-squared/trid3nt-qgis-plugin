@@ -70,8 +70,8 @@ docstring: |-
   - Exposure modeling: "how many people live inside the flood inundation zone?"
   - Population-at-risk summaries for storm surge, wildfire evacuation zones,
     or any hazard footprint overlay.
-  - Pelicun damage/loss assessment: HRSL provides the population-density input
-    for the exposure term.
+  - Structural damage/loss assessment: HRSL provides the population-density
+    input for the exposure term.
   - Highest-resolution open population raster available globally; preferable
     to WorldPop for sub-city-block analyses.
 
@@ -100,6 +100,6 @@ docstring: |-
   - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
     (co-registered for elevation-weighted exposure).
   - Upstream of: zonal population-within-a-polygon sums composed in the
-    code_exec playground, Pelicun impact post-processor, any
+    code_exec playground, a structural-loss impact post-processor, any
     population-at-risk workflow step.
   - Pairs with: ``fetch_buildings`` (combine for occupancy-weighted analyses).

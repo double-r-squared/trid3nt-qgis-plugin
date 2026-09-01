@@ -19,7 +19,7 @@ NOT GOES-specific - it operates on the pixels of any 3(+)-band RGB raster.
 It is the imagery sibling of ``compute_blended_composite``: read an RGB COG with
 rasterio, run a pure-numpy/PIL transform, write a tiled RGB COG (with overviews,
 in-process via the rasterio COG driver), route through the ``read_through`` cache
-shim, and return a ``LayerURI`` that ``publish_layer`` renders verbatim via the
+shim, and return a ``LayerURI`` that renders verbatim on the map via the
 existing multiband RGB passthrough (NO new style preset required).
 
 THE FOUR PASSES (each toggleable, each a pure ``__all__`` helper)
@@ -601,7 +601,7 @@ def enhance_satellite_image(
 ) -> LayerURI:
     """OPTIONAL cosmetic polish/enhance pass for a true-color satellite RGB image.
 
-    Use this (not ``publish_layer``) ONLY when the user asks to "polish",
+    Use this ONLY when the user asks to "polish",
     "enhance", "de-haze", "sharpen", or "make this look more like
     GeoColor" on an RGB satellite COG. Improves PRESENTATION, not data
     meaning: de-hazes (dark-object subtraction, heavier on blue),
@@ -624,7 +624,7 @@ def enhance_satellite_image(
 
     Returns:
         ``LayerURI`` (raster) for the polished RGB(A) COG (cache bucket,
-        TTL 30d). Pass to ``publish_layer`` to display; name derives as
+        TTL 30d). Renders on the map automatically; name derives as
         "Enhanced <source>".
 
     Raises:

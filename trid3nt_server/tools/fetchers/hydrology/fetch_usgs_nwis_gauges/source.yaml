@@ -103,7 +103,7 @@ docstring: |
         the FULL discharge time series as an inline ``time_series_csv``
         attribute (``"iso,value"`` rows, ft^3/s) — the same shape
         ``fetch_noaa_coops_tides`` emits. This is the REAL river DISCHARGE
-        HYDROGRAPH the compound-flood SFINCS deck needs as its fluvial driver
+        HYDROGRAPH a compound-flood hydraulic model needs as its fluvial driver
         (instead of a flat constant synthesised from a single value).
 
   When to use:
@@ -185,7 +185,7 @@ docstring: |
   bbox-rounded-6dp), so identical-scope calls within the hour reuse the FGB.
 
   Cross-tool dependencies:
-      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+      - Composes WITH: ``geocode_location``
         (derive a bbox or surface a state from a place name BEFORE this call),
         ``fetch_administrative_boundaries`` (state/county framing).
       - Cross-checks: ``fetch_noaa_nwm_streamflow`` (modeled reach flow —

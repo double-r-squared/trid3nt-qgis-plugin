@@ -20,8 +20,8 @@ docstring: |
   returns an ORDERED list of per-frame EPSG:4326 RGB COGs over the AOI -- one
   frame per SLIDER scan time, each labelled with its real UTC valid-time. This
   is how you RECREATE a CIRA-style intra-day fire animation (the imagery and
-  cadence are the exact product the CIRA loops are made from). Emit the frames
-  through publish_layer and the web scrubber animates them.
+  cadence are the exact product the CIRA loops are made from). The frames
+  render on the map automatically and the web scrubber animates them.
 
   **When to use:**
   - "Recreate the GOES fire animation over this window", "animate the GOES-18

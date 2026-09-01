@@ -127,8 +127,7 @@ docstring: |-
       ``style_preset="nhdplus_flowlines"``. Properties per feature:
       ``gnis_name`` (str), ``streamorde`` (int), ``totdasqkm`` (float).
 
-  Rendering: a VECTOR layer renders INLINE on the map automatically. Do
-  NOT call ``publish_layer`` on it - that is raster-only.
+  Rendering: a VECTOR layer renders INLINE on the map automatically.
 
   Cache: ``ttl_class="static-30d"``. NHDPlus HR is revised on a multi-year
   cadence, so a 30-day bucket is well amortized.

@@ -113,7 +113,7 @@ docstring: |-
   product; identical ``bbox`` (rounded to 4 dp) reuses the cached FlatGeobuf.
 
   Cross-tool dependencies:
-      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+      - Composes WITH: ``geocode_location``
         (bbox derivation from a place name),
         the code_exec playground (baseline-vs-observed framing).
       - Complements: ``fetch_asos_metar`` (observed surface weather),

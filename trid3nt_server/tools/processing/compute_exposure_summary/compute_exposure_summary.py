@@ -363,9 +363,9 @@ def compute_exposure_summary(
     Use this when: "how many people/buildings are in the flood zone?" right
     after a flood/surge/plume solve produces a depth/intensity raster, or
     for situation-report headline numbers (``compose_case_report`` consumes
-    this automatically). Do NOT use for: dollar losses/damage states
-    (``compute_flood_depth_damage`` screening or
-    ``pelicun_damage_assessment`` defensible); generic raster-in-zone
+    this automatically). Do NOT use for: dollar losses
+    (``compute_flood_depth_damage`` screens those; component-level damage
+    states are not modeled here); generic raster-in-zone
     stats (the code_exec playground).
 
     Params:

@@ -62,24 +62,22 @@ payload_estimate:
   floor_mb: 0.2
   ceil_mb: 0.2
 docstring: "Fetch REAL active-fault seismic sources (traces + slip rates) for an AOI.\n\nRetrieves harmonized\
-  \ active-fault traces from the GEM Global Active Faults\nDatabase and returns the kinematic source records\
-  \ the OpenQuake deck builder\nturns into physics-based ``simpleFaultSource`` seismic sources (each with\
+  \ active-fault traces from the GEM Global Active Faults\nDatabase and returns the kinematic source records used to build
+physics-based ``simpleFaultSource`` seismic sources (each with\
   \ a\nmoment-balanced truncated Gutenberg-Richter MFD derived from the fault's\nslip rate). This is the\
   \ REAL-SOURCE path for PSHA -- hazard that peaks ON the\nactual fault trace, not a synthetic uniform-rate\
   \ rectangle over the AOI.\n\nWhen to use:\n    - The user asks for seismic/earthquake hazard \"along\"\
   \ a named fault or\n      in a tectonically active area (\"seismic hazard along the San Andreas\",\n\
-  \      \"earthquake PSHA for the SF Bay\", \"PGA map near the Hayward fault\").\n    - You are about\
-  \ to build an OpenQuake classical-PSHA deck and want REAL\n      fault sources instead of the synthetic\
+  \      \"earthquake PSHA for the SF Bay\", \"PGA map near the Hayward fault\").\n    - You are about to build a classical-PSHA hazard source model and want REAL\n      fault sources instead of the synthetic\
   \ AOI area source.\n    - The user wants to know which active faults pass through an area and\n    \
   \  how fast they slip.\n\nWhen NOT to use:\n    - Historical earthquake CATALOGS / observed events --\
   \ this is the fault\n      SOURCE model (where future ruptures nucleate), not a record of past\n   \
-  \   quakes.\n    - Ground-shaking outputs / hazard rasters -- those are produced by the\n      OpenQuake\
-  \ run that CONSUMES these sources, not by this fetcher.\n    - Tsunami / surge / flood hazard -- unrelated\
+  \   quakes.\n    - Ground-shaking outputs / hazard rasters -- those are produced by the seismic hazard
+run that CONSUMES these sources, not by this fetcher.\n    - Tsunami / surge / flood hazard -- unrelated\
   \ engines.\n\nParameters:\n    bbox: ``[min_lon, min_lat, max_lon, max_lat]`` in EPSG:4326. Required.\n\
   \        Example (SF peninsula): ``[-122.55, 37.45, -122.15, 37.90]``.\n    catalog: source catalog.\
   \ Only ``\"gem\"`` (GEM Global Active Faults) is\n        supported today.\n\nReturns:\n    On a NON-empty\
-  \ fetch: a ``FaultSourcesResult`` -- a renderable vector\n    ``LayerURI`` (the fault traces AUTO-RENDER\
-  \ on the map as red/orange lines;\n    do NOT call ``publish_layer`` on it) that ALSO carries the source-model\n\
+  \ fetch: a ``FaultSourcesResult`` -- a renderable vector\n    ``LayerURI`` (the fault traces AUTO-RENDER on the map as red/orange lines) that ALSO carries the source-model\n\
   \    records on its ``faults`` field (each ``{name, geometry (lon/lat trace),\n    net_slip_rate_mm_yr,\
   \ dip_deg, rake_deg, upper_seis_depth_km,\n    lower_seis_depth_km, slip_type, catalog_name}``), plus\
   \ ``catalog``,\n    ``fault_count``, and ``source``. Pass ``.faults`` straight to the worker's\n   \

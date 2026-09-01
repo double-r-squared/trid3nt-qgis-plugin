@@ -11,7 +11,7 @@ per sampled layer (DESIGN CALL B = multi-layer overlay).
 
 This is the canonical hydraulics/terrain "section view" -- ground vs water
 surface (freeboard / inundation depth), DEM vs bathymetry (bank-to-channel),
-head surface vs land surface (MODFLOW seepage), pre vs post event. A single
+head surface vs land surface (groundwater seepage), pre vs post event. A single
 terrain profile is commodity; overlaying N surfaces on one shared distance axis
 is the differentiator (per ``reports/design/spike_cross_section_profile_tool.md``).
 
@@ -461,7 +461,7 @@ def compute_cross_section(
     same line/axis (ground vs water surface, DEM vs bathymetry). Do NOT use
     for: a distribution or a time series (``generate_chart``); a single
     number for the line (the code_exec playground with a buffered line);
-    rendering the line (``publish_layer``).
+    the line itself renders on the map automatically.
 
     Params:
         layer_uri: primary raster to profile (DEM, flood depth, head

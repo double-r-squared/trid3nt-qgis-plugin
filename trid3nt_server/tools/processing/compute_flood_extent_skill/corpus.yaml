@@ -6,4 +6,4 @@ compute_flood_extent_skill:
 - validate flood extent against SAR imagery
 - how accurate is the flood footprint compared to the FEMA flood extent
 - confusion matrix of modeled versus observed flood extent
-- score the flood extent skill of this SFINCS run
+- score the flood extent skill of this flood run

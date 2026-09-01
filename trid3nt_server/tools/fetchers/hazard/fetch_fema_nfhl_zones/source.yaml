@@ -67,50 +67,88 @@ caveats:
 - FEMA NFHL regulatory flood-zone polygons via the public MapServer (layer 28). OBJECTID-cursor paged
   (the endpoint 500s on resultOffset>0). Regulatory static product, NOT live flood extent. US + territories;
   bbox required.
-docstring: "FEMA NFHL regulatory flood-zone polygons as a FlatGeobuf vector layer.\n\nUse this when: the\
-  \ user asks for the FEMA flood map, the regulatory\nfloodplain, the 100-year or 500-year floodplain,\
-  \ the Special Flood Hazard\nArea, FIRM zones, NFIP / flood-insurance rate zones, the Base Flood\nElevation\
-  \ (BFE), or any phrasing implying federal / regulatory flood-risk\ndesignation for a place. Returns\
-  \ FlatGeobuf polygons in EPSG:4326 with\nthe FEMA flood-zone semantic columns (``FLD_ZONE``, ``ZONE_SUBTY``,\n\
-  ``SFHA_TF``, ``STATIC_BFE``, ``V_DATUM``, ``DEPTH``, ``VELOCITY``,\n``DFIRM_ID``, ``SOURCE_CIT``, ``GFID``).\
-  \ Authoritative source: FEMA\nMap Service Center National Flood Hazard Layer (NFHL).\n\nDo NOT use this\
-  \ for: real-time / current flood EXTENT (use a SFINCS\nmodeled-flood layer or MRMS QPE-derived inundation\
-  \ -- NFHL is a regulatory\nstatic product, not a live observation); flood-insurance CLAIMS or paid\n\
-  losses (FEMA OpenFEMA NFIP-claims dataset, separate fetcher); FEMA\ndisaster declarations / public-assistance\
-  \ funding (OpenFEMA, separate\nfetcher); hurricane storm-surge inundation forecasts (NHC SLOSH product,\n\
-  separate fetcher); coastal sea-level-rise projections (NOAA SLR Viewer,\nseparate fetcher); structure-level\
-  \ flood risk (use ``fetch_usace_nsi``\nNSI building stock + NFHL polygons intersected client-side);\
-  \ the FEMA\nNational Risk Index multi-hazard composite (separate catalog entry).\n\nParameters:\n  \
-  \  bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.\n        REQUIRED -- NFHL does not support\
-  \ a global query (the polygon corpus\n        is millions of features). Recommended ≤ ~2 deg on a side\
-  \ (≈220 km\n        at the equator); larger envelopes risk hitting the 100k-feature\n        pagination\
-  \ ceiling. Example for Fort Myers, FL:\n        ``(-81.95, 26.55, -81.80, 26.70)``.\n    sfha_only:\
-  \ If True, filter server-side to Special Flood Hazard Area\n        polygons only (``SFHA_TF='T'``:\
-  \ zones A, AE, AH, AO, AR, A99,\n        V, VE -- the regulatory 1% annual-chance floodplain that triggers\n\
-  \        NFIP mandatory-purchase). If False (default), return all zone\n        polygons including 0.2%\
-  \ shaded-X, minimal-hazard X, and undetermined\n        D. Example: ``True`` when the user asks \"show\
-  \ the 100-year\n        floodplain\"; ``False`` when they ask \"show all FEMA flood zones\".\n    zone_filter:\
-  \ Optional list of ``FLD_ZONE`` codes to keep, applied\n        client-side after fetch (exact case-insensitive\
-  \ match). Valid\n        codes: ``A``, ``AE``, ``AH``, ``AO``, ``AR``, ``A99``, ``V``,\n        ``VE``,\
-  \ ``X``, ``D``, ``B``, ``C``. None or empty list keeps all\n        designations. Example: ``[\"VE\"\
-  , \"V\"]`` to restrict to coastal\n        high-hazard zones.\n\nReturns:\n    ``LayerURI`` pointing\
-  \ at a FlatGeobuf in the cache bucket:\n    ``s3://trid3nt-cache/cache/static-30d/fema_nfhl/<key>.fgb``.\n\
-  \    ``layer_type=\"vector\"``, ``role=\"primary\"``, ``units=None``,\n    ``style_preset=\"fema_nfhl_zones\"\
-  `` (downstream QML preset colors AE/A\n    deep blue, VE coastal-high-hazard red, X minimal-hazard pale,\n\
-  \    D undetermined hatched). Downstream tools consume:\n    ``FLD_ZONE`` (categorical legend), ``STATIC_BFE``\
-  \ (numeric depth\n    narration), ``SFHA_TF`` (boolean intersect summary by\n    ``spatial_query``).\n\
-  \nCross-tool dependencies:\n    - Often paired with ``fetch_administrative_boundaries`` (TIGER county\n\
-  \      / city polygon) → ``spatial_query`` to produce the \"FEMA\n      flood zones in [place]\" clipped\
-  \ output the user typically wants.\n    - Feeds ``spatial_query`` for \"% of [parcel] inside SFHA\"\n\
-  \      summaries, and ``pelicun_damage_assessment`` for the NSI\n      structure inventory × NFHL intersection.\n\
-  \    - Companion to ``sfincs_flood`` (SFINCS) when the user\n      wants regulatory-vs-modeled comparison\
-  \ side-by-side.\n\nCache: ``static-30d`` (FR-DC-2). NFHL is republished through LOMC updates\nmonthly\
-  \ and DFIRM panel revisions quarterly; a 30-day stale window is\nacceptable for hazard-modeling overlay\
-  \ use. Cache key is SHA-256 of\n``(bbox-rounded-6dp, sfha_only, sorted(zone_filter))`` + month vintage.\n\
-  \nExternal-API resilience (NFR-R-1): FEMA's hazards.fema.gov ArcGIS cluster\nrate-limits unauthenticated\
-  \ clients and occasionally returns 5xx during\nnamed-disaster traffic peaks. On network failure / non-2xx\
-  \ / malformed\nJSON / ArcGIS error envelope the tool raises\n``FEMA_NFHL_ZONESUpstreamError(retryable=True)``\
-  \ so the agent's FR-AS-11\nsurface decides whether to retry, clarify, or fall back.\n\n\nPayload estimation:\
-  \ ~0.5 MB per square degree, clipped to [0.05, 50] MB.\nUrban bbox (Houston, Fort Myers metro) typically\
-  \ returns 50-500 KB; rural\nrangeland returns 5-50 KB; a state-scale bbox can exceed 25 MB and will\n\
-  trigger the chat warning gate."
+docstring: |-
+  FEMA NFHL regulatory flood-zone polygons as a FlatGeobuf vector layer.
+
+  Use this when: the user asks for the FEMA flood map, the regulatory
+  floodplain, the 100-year or 500-year floodplain, the Special Flood Hazard
+  Area, FIRM zones, NFIP / flood-insurance rate zones, the Base Flood
+  Elevation (BFE), or any phrasing implying federal / regulatory flood-risk
+  designation for a place. Returns FlatGeobuf polygons in EPSG:4326 with
+  the FEMA flood-zone semantic columns (``FLD_ZONE``, ``ZONE_SUBTY``,
+  ``SFHA_TF``, ``STATIC_BFE``, ``V_DATUM``, ``DEPTH``, ``VELOCITY``,
+  ``DFIRM_ID``, ``SOURCE_CIT``, ``GFID``). Authoritative source: FEMA
+  Map Service Center National Flood Hazard Layer (NFHL).
+
+  Do NOT use this for: real-time / current flood EXTENT (use MRMS
+  QPE-derived inundation; a live modeled flood-extent layer is not
+  currently produced here -- NFHL is a regulatory static product, not a
+  live observation); flood-insurance CLAIMS or paid
+  losses (FEMA OpenFEMA NFIP-claims dataset, separate fetcher); FEMA
+  disaster declarations / public-assistance funding (OpenFEMA, separate
+  fetcher); hurricane storm-surge inundation forecasts (NHC SLOSH product,
+  separate fetcher); coastal sea-level-rise projections (NOAA SLR Viewer,
+  separate fetcher); structure-level flood risk (use ``fetch_usace_nsi``
+  NSI building stock + NFHL polygons intersected client-side); the FEMA
+  National Risk Index multi-hazard composite (separate catalog entry).
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+          REQUIRED -- NFHL does not support a global query (the polygon corpus
+          is millions of features). Recommended ≤ ~2 deg on a side (≈220 km
+          at the equator); larger envelopes risk hitting the 100k-feature
+          pagination ceiling. Example for Fort Myers, FL:
+          ``(-81.95, 26.55, -81.80, 26.70)``.
+      sfha_only: If True, filter server-side to Special Flood Hazard Area
+          polygons only (``SFHA_TF='T'``: zones A, AE, AH, AO, AR, A99,
+          V, VE -- the regulatory 1% annual-chance floodplain that triggers
+          NFIP mandatory-purchase). If False (default), return all zone
+          polygons including 0.2% shaded-X, minimal-hazard X, and undetermined
+          D. Example: ``True`` when the user asks "show the 100-year
+          floodplain"; ``False`` when they ask "show all FEMA flood zones".
+      zone_filter: Optional list of ``FLD_ZONE`` codes to keep, applied
+          client-side after fetch (exact case-insensitive match). Valid
+          codes: ``A``, ``AE``, ``AH``, ``AO``, ``AR``, ``A99``, ``V``,
+          ``VE``, ``X``, ``D``, ``B``, ``C``. None or empty list keeps all
+          designations. Example: ``["VE", "V"]`` to restrict to coastal
+          high-hazard zones.
+
+  Returns:
+      ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
+      ``s3://trid3nt-cache/cache/static-30d/fema_nfhl/<key>.fgb``.
+      ``layer_type="vector"``, ``role="primary"``, ``units=None``,
+      ``style_preset="fema_nfhl_zones"`` (downstream QML preset colors AE/A
+      deep blue, VE coastal-high-hazard red, X minimal-hazard pale,
+      D undetermined hatched). Downstream tools consume:
+      ``FLD_ZONE`` (categorical legend), ``STATIC_BFE`` (numeric depth
+      narration), ``SFHA_TF`` (boolean intersect summary by
+      ``spatial_query``).
+
+  Cross-tool dependencies:
+      - Often paired with ``fetch_administrative_boundaries`` (TIGER county
+        / city polygon) → ``spatial_query`` to produce the "FEMA
+        flood zones in [place]" clipped output the user typically wants.
+      - Feeds ``spatial_query`` for "% of [parcel] inside SFHA"
+        summaries, and a structural-loss assessment for the NSI
+        structure inventory × NFHL intersection.
+      - Companion to a hydraulic model run (``build_mesh``,
+        ``run_solver``) when the user wants regulatory-vs-modeled
+        comparison side-by-side.
+
+  Cache: ``static-30d`` (FR-DC-2). NFHL is republished through LOMC updates
+  monthly and DFIRM panel revisions quarterly; a 30-day stale window is
+  acceptable for hazard-modeling overlay use. Cache key is SHA-256 of
+  ``(bbox-rounded-6dp, sfha_only, sorted(zone_filter))`` + month vintage.
+
+  External-API resilience (NFR-R-1): FEMA's hazards.fema.gov ArcGIS cluster
+  rate-limits unauthenticated clients and occasionally returns 5xx during
+  named-disaster traffic peaks. On network failure / non-2xx / malformed
+  JSON / ArcGIS error envelope the tool raises
+  ``FEMA_NFHL_ZONESUpstreamError(retryable=True)`` so the agent's FR-AS-11
+  surface decides whether to retry, clarify, or fall back.
+
+
+  Payload estimation: ~0.5 MB per square degree, clipped to [0.05, 50] MB.
+  Urban bbox (Houston, Fort Myers metro) typically returns 50-500 KB; rural
+  rangeland returns 5-50 KB; a state-scale bbox can exceed 25 MB and will
+  trigger the chat warning gate.

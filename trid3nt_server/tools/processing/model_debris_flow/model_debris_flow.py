@@ -605,8 +605,8 @@ def _write_segments_geojson(
     """Persist the segment FeatureCollection; return its URI.
 
     ``output_dir`` (tests / offline) -> local file path. Otherwise the durable
-    runs bucket via the shared solver S3 seam (same convention as the SWMM /
-    SFINCS mesh layers: ``s3://<runs_bucket>/<run_id>/...``).
+    runs bucket via the shared solver S3 seam (the same
+    ``s3://<runs_bucket>/<run_id>/...`` convention every run layer uses).
     """
     payload = json.dumps(fc).encode("utf-8")
     filename = f"debris_flow_segments_{seed}.geojson"
@@ -664,9 +664,9 @@ def model_debris_flow(
     discussion when the user asks what happens when it rains on the burn
     scar. Chain: DEM -> watershed -> stream segments -> Staley 2017 M1
     LIKELIHOOD -> Gartner 2014 VOLUME (m^3) -> Cannon 2010 HAZARD class.
-    Do NOT use for: unburned terrain (raises ``NoBurnDataError``);
-    rainfall-driven flooding (SFINCS/SWMM composers) or generic landslide
-    susceptibility (the ``run_landlab`` door -> ``landlab_susceptibility``).
+    Do NOT use for: unburned terrain (raises ``NoBurnDataError``); rainfall-
+    driven flooding (``telemac_rain_on_grid``). Generic landslide
+    susceptibility is not currently modeled here.
 
     Params:
         bbox: EPSG:4326, clamped to <= 0.15 deg per side.

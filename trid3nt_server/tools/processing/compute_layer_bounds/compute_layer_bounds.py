@@ -19,9 +19,8 @@ The agent also wrongly claimed "I cannot pan/zoom your map" even though a
 This tool replaces both failure modes:
 
 1. It computes the layer's EPSG:4326 bounding box deterministically with
-   geopandas (vector) or rasterio (raster) -- reusing the
-   ``postprocess_pelicun._bbox_from_gdf`` reproject-to-4326 pattern. Sub-second,
-   no LLM, no sandbox, no user-confirm gate.
+   geopandas (vector) or rasterio (raster) -- the standard reproject-to-4326
+   pattern. Sub-second, no LLM, no sandbox, no user-confirm gate.
 2. It EMITS a ``map-command(zoom-to, bbox=<computed bbox>)`` so the VIEW
    actually fits all features. The emission goes through the same
    ``current_emitter()`` ContextVar + ``emit_map_command`` seam that
@@ -240,7 +239,7 @@ def _bounds_from_raster(path: str) -> tuple[float, float, float, float]:
 
 def _bounds_from_vector(path: str) -> tuple[float, float, float, float]:
     """Open a vector and return its (min_lon, min_lat, max_lon, max_lat) via the
-    ``postprocess_pelicun._bbox_from_gdf`` reproject-to-4326 pattern."""
+    standard reproject-to-4326 pattern."""
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
     except ImportError as exc:

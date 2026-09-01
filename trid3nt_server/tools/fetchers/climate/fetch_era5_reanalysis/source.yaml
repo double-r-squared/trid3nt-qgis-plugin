@@ -107,8 +107,9 @@ docstring: |
     ``10m_v_component_of_wind`` when the user explicitly needs wind DIRECTION
     or a vector component.
   - Building global or non-CONUS compound-flood forcing: ERA5 winds, precip,
-    or wave height as SFINCS storm-surge / pluvial boundary conditions where
-    agency instrumentation (CO-OPS, MRMS, ATCF) does not reach.
+    or wave height as hydraulic-model storm-surge / pluvial boundary
+    conditions where agency instrumentation (CO-OPS, MRMS, ATCF) does not
+    reach.
   - Any post-event analysis that needs a globally consistent atmospheric
     reanalysis over a historical period (1940 to ~3 months ago).
   - User asks for historical wind fields, precipitation totals, or sea-state
@@ -157,9 +158,9 @@ docstring: |
 
   **Cross-tool dependencies:**
   - Upstream: ``geocode_location`` supplies bbox from a place name.
-  - Downstream: ``set_sfincs_parameters`` + ``run_sfincs`` consume wind/precip
-    COGs as forcing; ``fetch_gtsm_tide_surge`` pairs for the coastal boundary
-    condition.
+  - Downstream: a hydraulic model's wind/precip forcing input (see
+    ``build_mesh``, ``run_solver``); ``fetch_gtsm_tide_surge`` pairs for the
+    coastal boundary condition.
   - Alternative: ``fetch_mrms_qpe`` (CONUS, 1 km, gauge-corrected, no key),
     ``fetch_hrrr_forecast`` (CONUS, 3 km, forecast, no key).
 

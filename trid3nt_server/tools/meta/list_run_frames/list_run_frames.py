@@ -1,8 +1,8 @@
 """Atomic tool ``list_run_frames`` -- ordered animation-frame COG URIs for a run.
 
 This is the LLM-facing companion to the Python sandbox's multi-frame
-``layer_refs`` extension (sandbox-staging). A time-stepped solve (SFINCS flood
-depth per step, GeoClaw tsunami depth, wave fields per step) writes an
+``layer_refs`` extension (sandbox-staging). A time-stepped solve (flood
+depth per step, wave-agitation fields per step) writes an
 ``outputs.json`` under its run prefix -- the emit-on-solve manifest
 (``trid3nt_contracts.outputs_manifest``) whose entries carry one ``uri`` per
 frame plus the physical time ``t`` (seconds from run start; absent on a

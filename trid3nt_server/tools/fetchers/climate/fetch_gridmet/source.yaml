@@ -147,8 +147,7 @@ docstring: |
     Consumes admin polygons from ``fetch_administrative_boundaries`` (via
     ``clip_raster_to_polygon`` for state/county clipping). Feeds raster
     outputs to AOI zonal stats in the code_exec playground,
-    ``clip_raster_to_polygon``, ``publish_layer``
-    (native render via the QGIS plugin), and fire-danger composers. Sibling
+    ``clip_raster_to_polygon``, and fire-danger composers. Sibling
     fetchers: ``fetch_era5_reanalysis``
     (global, hourly -- non-CONUS choice), ``fetch_landfire_fuels`` (static
     fuel-model class -- pair with gridMET for full moisture state),

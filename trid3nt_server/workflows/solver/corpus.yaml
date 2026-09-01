@@ -1,11 +1,11 @@
 run_solver:
-- run the SFINCS flood model now that the setup is ready
+- run the solver now that the setup is ready
 - submit the solver job to Cloud Workflows
 - kick off the flood simulation — the model is staged
-- execute the solver with the HydroMT model setup
+- execute the solver now that the model setup is staged
 - start the flood simulation on Cloud Run and give me the execution handle
 wait_for_completion:
-- wait for the SFINCS run to finish and get the result
+- wait for the solver run to finish and get the result
 - poll the solver execution until it completes
 - block until the flood model run is done
 - monitor the simulation and return the run result

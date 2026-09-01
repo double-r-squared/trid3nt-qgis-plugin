@@ -173,7 +173,7 @@ def test_damage_matches_hand_computed(depth_and_assets, tmp_path) -> None:
     assert result.n_flooded == 2
     assert result.n_with_value == 4
     assert any("SCREENING ESTIMATE" in n for n in result.notes)
-    assert any("NOT a Pelicun" in n for n in result.notes)
+    assert any("NOT a component-level assessment" in n for n in result.notes)
 
     gdf = gpd.read_file(result.uri).set_index("fd_id").sort_index()
     # Structure A: 4 ft above FFE -> EGM/HAZUS 0.471 -> 94,200 USD.

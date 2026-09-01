@@ -2870,3 +2870,59 @@ Model-facing residue swept with it: the `TRID3NT_OPENAI_EXTRA_SYSTEM` default
 in `scripts/start_agent.sh` (and its verbatim mirror in
 `scripts/telemac_routing_probe.py`) told the local model when to call
 `publish_layer`.
+
+## The tool-description surface's absent-engine names (2026-09-01)
+
+The system-prompt sweep above fixed the roster the model reads BEFORE it routes.
+This is the same class one layer down: the roster it reads WHILE it routes. A
+tool docstring, a `source.yaml` `docstring`/`caveats` block and a `corpus.yaml`
+query are all indexed as the description the model and the retrieval ranker
+reason over, and every registry-absent name in one advertised a capability the
+product does not have.
+
+DELETED across 116 files: every `sfincs*` / `swmm*` / `modflow*` / `geoclaw*` /
+`pelicun*` / `openquake*` / `landlab*` / `elmfire*` / `schism*` / `swan*` /
+`hydromt*` / `hec-ras` / `publish_layer` / `fetch_osm_roads` token from the
+model-facing surface: 21 tool docstrings, 65 `source.yaml` descriptions, 26
+retrieval corpora, and the server/gate prose that named a dead engine as the
+consumer of a live param or role.
+
+REPLACED, not deleted, per the rule that a routing warning is signal: a "do NOT
+use this for X" clause either repoints at a LIVE template or becomes the honest
+absence. `telemac_river_dye` and `telemac_do_sag` now decline flood depth toward
+`telemac_rain_on_grid` and say plainly that groundwater plumes, dam-break and
+tsunami run-up are not currently modeled here. `compute_flood_depth_damage` and
+`compute_exposure_summary` keep their honesty floor without pointing it at a
+component-level assessment that does not exist. `compute_model_residuals`,
+`compute_skill_metrics` and `read_run_diagnostics` restate calibration and
+diagnostics substrate-neutrally, so they stop rotting with the roster.
+
+`sfincs_flood` LEAVES `tool_retrieval.CORE_FLOOR`. It was force-included in
+EVERY turn's visible set, so a deleted tool held one of eight retrieval slots on
+every query in the product. No live template replaces it: a template answers one
+question class, and flooring one biases every turn toward it.
+
+`read_run_diagnostics._normalize_engine` loses its `sfincs` / `swmm` / `modflow`
+/ `geoclaw` branches. `_PARSERS` has only `telemac`, so those branches turned a
+typed `DiagnosticsEngineUnknown` into a `KeyError`; every name the mapper now
+returns is a key of `_PARSERS`.
+
+`catalog_http._FLOW_BY_SOLVER_TOOL` repoints from the three dead engines to the
+five registered templates, and the per-flow breakdown derives its flow list from
+that map, so a flow can no longer be reported without a tool that produces it.
+
+`tests/test_tool_description_surface.py` makes the class impossible rather than
+fixing it once: no retired family name in any registered tool's docstring, in any
+spec description or caveat, or in any corpus query. The prompt test's
+prefix-sharing lock does NOT transfer - a docstring is full of ordinary
+identifiers sharing a first segment with a registered tool.
+
+HELD, not swept: `scenario_reuse.EXPENSIVE_SCENARIO_TOOLS` keys, and the
+`gates/cards/solver_confirm.py` flood run-settings provider trio
+(`_build_flood_run_settings_envelope` / `estimate_flood_run_settings` /
+`pin_flood_run_settings`, already on `docs/validation/code-graph/dead_symbols.md`
+and importing a `workflows.sfincs` package that no longer exists). CONDITION:
+both are dead-by-dead-name rather than dead-string, both carry a live test
+surface, and keying a template into the reuse guard is a correctness decision
+(a false short-circuit hands the user a stale answer). They go as their own cull
+with NATE's read, not inside a description sweep.

@@ -115,11 +115,11 @@ docstring: |-
       land. Output is a single-band float32 Cloud-Optimized GeoTIFF in
       EPSG:32616 (UTM 16N), NAVD88 metres, **positive-up** (land positive,
       bathymetry NEGATIVE, NO sign flip) -- byte-format identical to
-      ``fetch_dem`` so SFINCS setup's ``setup_dep`` step (via
-      ``set_sfincs_parameters`` + ``run_sfincs``) consumes it unchanged.
+      ``fetch_dem`` so downstream terrain-ingestion for a hydraulic model
+      setup consumes it unchanged.
 
   **When to use:**
-      - A COASTAL flood / surge / run-up workflow (SFINCS coastal) that needs
+      - A COASTAL flood / surge / run-up workflow that needs
         a continuous bed from the hills to the deep water -- the canonical
         coastal-bathymetry entry point. ``fetch_dem`` alone is LAND-ONLY and leaves
         the nearshore as nodata.
@@ -149,19 +149,19 @@ docstring: |-
           non-NAVD88 tile with no offset raises ``TopobathyDatumError`` rather
           than silently merging (Invariant 7).
       timeout_s: tile-index download timeout (seconds, default 120).
-      force_bathy_base: when True (the tsunami / coastal GeoClaw caller), lay
+      force_bathy_base: when True (the tsunami / coastal caller), lay
           the seamless GLOBAL ETOPO 2022 topo-bathy down as the ALWAYS-ON base
           over the FULL bbox even when CUDEM has coverage, with CUDEM / 3DEP
           painted ON TOP. Guarantees the open-ocean portion of the bbox is
-          genuinely-negative bathymetry (not a land-DEM fill) -- the GeoClaw
+          genuinely-negative bathymetry (not a land-DEM fill) -- the
           flat-ocean root-cause fix. Default False keeps the original
-          CUDEM-first / ETOPO-only-as-fallback behaviour for SFINCS.
-      include_regional_fine: when True (the GeoClaw nested fine-SHORE caller),
+          CUDEM-first / ETOPO-only-as-fallback behaviour.
+      include_regional_fine: when True (a nested fine-SHORE caller),
           ALSO pull the AOI-appropriate NCEI REGIONAL integrated topo-bathy DEM
           (~1 m NAVD88; e.g. the CoNED Northern California collection that covers
           Crescent City, which CUDEM omits) and lay it down as the FINEST source.
           Yields a genuinely-fine nearshore bed for coasts CUDEM does not reach.
-          Default False (SFINCS / coarse-base callers unaffected).
+          Default False (coarse-base callers unaffected).
       min_pixel_m: OPTIONAL output-resolution FLOOR (metres). When set, the
           merged grid is no finer than this even if a source is finer -- so a
           fine 1 m regional/CUDEM source over a small AOI produces a LIGHT ~10 m
@@ -231,8 +231,8 @@ docstring: |-
 
   **Cross-tool dependencies:**
       - REUSES ``fetch_dem`` for the 3DEP land DEM (does NOT reimplement 3DEP).
-      - Composes INTO SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``,
-        ``setup_dep`` elevtn) -- drop-in for ``fetch_dem`` on the coastal path.
+      - Composes INTO a coastal hydraulic model's terrain/bathymetry
+        ingestion -- drop-in for ``fetch_dem`` on the coastal path.
       - Upstream sources: NOAA NCEI CUDEM 1/9 arc-second (public S3
         ``noaa-nos-coastal-lidar-pds``) + USGS 3DEP (via ``fetch_dem``).
 

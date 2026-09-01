@@ -82,8 +82,7 @@ docstring: |-
 
   **When to use:**
   - Setting the recharge boundary condition for a groundwater flow model
-    (MODFLOW RCH, a Landlab groundwater component, a SWMM aquifer) anywhere in
-    the contiguous US.
+    anywhere in the contiguous US.
   - Answering "how fast does groundwater recharge here", "how much rainfall
     reaches the aquifer", "what is the annual recharge rate for this county".
   - Water-budget and sustainable-yield work: comparing recharge against
@@ -121,12 +120,13 @@ docstring: |-
   30 arc-second (~800 m) cells -- the native reitz_2017 posting; wolock_2003's
   native 1 km grid is NEAREST-resampled onto this same 30 arc-second grid at
   staging time so both sources share one cell geometry for a direct comparison.
-  Divide by 365250 for m/day if a solver wants MODFLOW-style length/time units.
+  Divide by 365250 for m/day if a groundwater flow model wants length/time
+  units instead of length/year.
 
   **Cross-tool dependencies:**
   - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
-  - Downstream: MODFLOW recharge setup, Landlab groundwater workflows, and
-    water-budget analysis in the python playground.
+  - Downstream: groundwater flow model recharge setup and water-budget
+    analysis in the python playground.
   - Pairs with: ``fetch_usgs_groundwater_levels`` (observed water levels),
     ``fetch_soilgrids`` / ``fetch_statsgo_soils`` (soil properties controlling
     infiltration), ``fetch_gridmet`` (the precipitation these rates came from).

@@ -90,13 +90,14 @@ docstring: |-
   Six layers are available: Scott and Burgan 40 surface fuel models
   (``fbfm40``), Anderson 13 fuel models (``fbfm13``), canopy base height
   (``cbh``), canopy bulk density (``cbd``), canopy cover (``cc``), and
-  canopy height (``ch``) -- together the full ELMFIRE canopy-fuels stack.
+  canopy height (``ch``) -- together the full canopy-fuels stack for a
+  wildfire fuels analysis.
 
   **When to use:**
   - User asks for wildfire fuel conditions, fuel maps, or fire-behavior
     inputs for a specific area ("show me the fuel models near Flagstaff").
-  - Building a wildfire spread model run with FlamMap, FARSITE, FSim, or
-    ELMFIRE -- those engines require LANDFIRE fuel rasters as primary inputs.
+  - Building a wildfire spread model run with FlamMap, FARSITE, or FSim --
+    those engines require LANDFIRE fuel rasters as primary inputs.
   - Displaying ground-fuel context or canopy structure as a visualization
     layer in a wildfire-risk narrative.
   - Any workflow step that needs the USDA / USGS canonical nationwide

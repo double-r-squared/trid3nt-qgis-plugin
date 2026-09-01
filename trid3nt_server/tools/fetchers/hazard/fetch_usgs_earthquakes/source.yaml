@@ -121,8 +121,7 @@ docstring: "Fetch REAL, RECORDED USGS earthquakes as a point FlatGeobuf.\n\nRetr
   \ \"no\nearthquakes\" answer, not a success -- so ``EarthquakesNoEventsError`` is\nraised (never an empty\
   \ success-shaped layer).\n\nCache: ``ttl_class=\"dynamic-1h\"``, ``source_class=\"usgs_earthquakes\"\
   ``.\nCache key is SHA-256 of ``(bbox-rounded-6dp, starttime, endtime,\nmin_magnitude)``, so identical-scope\
-  \ calls within the hour reuse the FGB.\n\nCross-tool dependencies:\n    - Composes WITH: ``publish_layer``\
-  \ (map overlay), ``geocode_location``\n      (derive a bbox from a place name BEFORE this call),\n \
+  \ calls within the hour reuse the FGB.\n\nCross-tool dependencies:\n    - Composes WITH: ``geocode_location``\n      (derive a bbox from a place name BEFORE this call),\n \
   \     ``fetch_administrative_boundaries`` (state/county framing),\n      ``spatial_query``\
   \ (count events inside a polygon).\n    - Upstream data source: USGS FDSN Event Web Service\n      (earthquake.usgs.gov/fdsnws/event/1/query).\n\
   \nErrors:\n    - ``EarthquakesInputError``: bad bbox / bad date / reversed window /\n      out-of-range\

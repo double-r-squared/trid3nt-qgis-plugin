@@ -764,9 +764,8 @@ def spatial_query(
     compose the SQL and call this tool.
 
     Do NOT use for: rasters (v1 is vector-only - use the code_exec_request
-    playground for raster zonal statistics); rendering an EXISTING layer
-    (publish_layer); charts (generate_chart); looking up a DuckDB spatial
-    function by name (use
+    playground for raster zonal statistics); charts (generate_chart);
+    looking up a DuckDB spatial function by name (use
     ``search_spatial_functions``, not this docstring).
 
     Params:

@@ -22,7 +22,7 @@ Input is EITHER:
 
 ``variable="head"`` adds SRMS (RMSE / observed head range) -- the fold of the
 former standalone ``compute_head_calibration_stats`` primitive (Anderson and
-Woessner convention, MODFLOW research brief).
+Woessner convention, groundwater-model research brief).
 
 Honesty floor: any metric spotpy cannot compute (zero-variance denominator,
 mismatched lengths, all-NaN pair) comes back ``null``, never a fabricated
@@ -125,7 +125,7 @@ _MIN_N_FOR_VERDICT = 5
 _MORIASI_2007 = "Moriasi et al. 2007 (https://swat.tamu.edu/media/90109/moriasimodeleval.pdf)"
 _KNOBEN_2019 = "Knoben et al. 2019 HESS (https://hess.copernicus.org/preprints/hess-2019-327/hess-2019-327.pdf)"
 _ANDERSON_WOESSNER = (
-    "Anderson and Woessner convention (MODFLOW calibration research brief; "
+    "Anderson and Woessner convention (groundwater calibration research brief; "
     "heuristic, not a hard rule)"
 )
 
@@ -537,10 +537,10 @@ def compute_skill_metrics(
     metric math.
 
     **When to use:**
-    - "How well does this SWMM/SFINCS timeseries match the USGS gauge?" or
+    - "How well does this simulated timeseries match the USGS gauge?" or
       any observed-vs-simulated skill scoring once the pairs are aligned.
     - Groundwater head calibration: pass ``variable="head"`` to also get
-      SRMS (RMSE / observed head range, the MODFLOW convention).
+      SRMS (RMSE / observed head range, the groundwater-model convention).
     - After a calibration parameter change, to check whether the fit
       improved (compare ``suggested_verdict`` / metric values run to run).
 

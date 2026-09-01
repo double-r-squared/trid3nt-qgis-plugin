@@ -79,8 +79,7 @@ docstring: "Agricultural FIELD BOUNDARIES (Fields of The World / fiboa) for an A
   \ Fetches published agricultural field-boundary polygons -- individual farm parcels / fields -- for\
   \ the requested bbox from the Fields of\nThe World (FTW) / fiboa open datasets on Source Cooperative,\
   \ clips them to\nthe exact AOI, and returns them as a vector layer that renders inline on the\nmap automatically\
-  \ (like roads / protected areas). NO API key required. The\nresulting vector renders inline -- do NOT\
-  \ call ``publish_layer`` on it.\n\n**Coverage (IMPORTANT -- regional, not global yet):** This serves\
+  \ (like roads / protected areas). NO API key required.\n\n**Coverage (IMPORTANT -- regional, not global yet):** This serves\
   \ the\nPUBLISHED FTW/fiboa benchmark, which covers specific regions, currently:\nthe contiguous United\
   \ States (USDA Crop Sequence Boundaries), Japan, and\nDenmark. A bbox outside every covered region returns\
   \ a structured\n``FIELDS_NO_COVERAGE`` error -- there are simply no published boundaries\nthere. On-demand\

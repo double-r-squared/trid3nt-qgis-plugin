@@ -92,8 +92,8 @@ docstring: |-
   Global Surface Water ``jrc-gsw`` 30 m items covering ``bbox``, warps+window-
   reads the requested ``band`` of each intersecting 10-degree tile to EPSG:4326
   at 30 m, mosaics them, and returns a single-band uint8 COG with a
-  band-appropriate color ramp baked in. ``publish_layer`` colorizes it directly
-  from the embedded palette (no rescale/colormap override).
+  band-appropriate color ramp baked in. It renders on the map directly from
+  the embedded palette (no rescale/colormap override).
 
   GSW is the European Commission JRC's 38-year (1984-2021) Landsat-derived
   surface-water record reduced to per-pixel statistics  --  the long-term
@@ -123,7 +123,8 @@ docstring: |-
   **When NOT to use:**
   - Outlining water in ONE recent scene -> ``digitize_water_body`` (NDWI) or
     ``fetch_sentinel2_truecolor``.
-  - A modeled flood DEPTH surface -> the SFINCS / SWMM engines.
+  - A modeled flood DEPTH surface -> a hydraulic model run (e.g.
+    ``telemac_rain_on_grid``).
   - FEMA regulatory flood ZONES -> ``fetch_fema_nfhl_zones``.
 
   **Parameters:**

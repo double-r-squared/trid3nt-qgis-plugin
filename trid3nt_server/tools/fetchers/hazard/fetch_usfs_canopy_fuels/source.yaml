@@ -75,7 +75,7 @@ docstring: |-
   Fetches a 30 m LANDFIRE LF2022 canopy-fuel raster for the requested area.
   CBH (canopy base height) and CBD (canopy bulk density) are the two canopy
   structural inputs required by surface-to-crown fire transition models
-  (FlamMap, FARSITE, FSim, ELMFIRE). CBH quantifies how close to the ground
+  (FlamMap, FARSITE, FSim). CBH quantifies how close to the ground
   the tree canopy begins; CBD quantifies how densely packed the canopy fuel
   mass is. Together they determine whether a surface fire can transition to a
   crown fire and how fast the crown fire runs.
@@ -84,7 +84,7 @@ docstring: |-
       - User asks for canopy base height, canopy fuel loading, canopy bulk
         density, or crown fuel structure for a CONUS area.
       - Agent needs CBH or CBD as input to a wildfire-spread or crown-fire
-        model (FlamMap, FARSITE, FSim, ELMFIRE, QUIC-Fire).
+        model (FlamMap, FARSITE, FSim, QUIC-Fire).
       - User asks about spotting potential, torching probability, or
         crown-fire transition risk for a forested area.
       - Workflow needs to assess how the forest canopy structure affects

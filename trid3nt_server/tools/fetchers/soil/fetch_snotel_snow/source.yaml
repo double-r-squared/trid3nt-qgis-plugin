@@ -95,7 +95,7 @@ docstring: "Fetch REAL, OBSERVED NRCS SNOTEL/SCAN snow stations as a point FlatG
   \ failing the whole layer. An off-season SWE/depth\nof 0.0 is reported honestly; a no-data sample is\
   \ reported as null.\n\nCache: ``ttl_class=\"dynamic-1h\"``, ``source_class=\"snotel_snow\"``. Cache\
   \ key\nis SHA-256 of the bbox-rounded-6dp, so identical-scope calls within the hour\nreuse the FGB.\n\
-  \nCross-tool dependencies:\n    - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``\n\
+  \nCross-tool dependencies:\n    - Composes WITH: ``geocode_location``\n\
   \      (derive a bbox from a mountain place name BEFORE this call),\n      ``fetch_administrative_boundaries``\
   \ (state/county framing).\n    - Cross-checks: ``fetch_usgs_nwis_gauges`` (downstream snowmelt\n   \
   \   discharge), ``fetch_dem`` / terrain tools (snowpack-by-elevation).\n    - Upstream data source:\

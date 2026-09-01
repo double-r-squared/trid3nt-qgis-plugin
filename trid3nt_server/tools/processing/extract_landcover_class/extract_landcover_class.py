@@ -212,8 +212,8 @@ def _open_source(landcover_uri: str) -> Any:
     MemoryFile -- Python could GC it (freeing the /vsimem/ buffer) mid-read, so
     reads returned valid pixels PLUS uninitialized garbage. Yielding the
     dataset from inside a nested ``with MemoryFile(...)`` pins the buffer for
-    the dataset's whole lifetime (the same bug + fix as the NLCD validation
-    gate in sfincs_builder). The sole caller already uses ``with``.
+    the dataset's whole lifetime (the same bug + fix pattern used elsewhere
+    for staged-raster validation gates). The sole caller already uses ``with``.
     """
     # s3:// reads via boto3 stage-then-open -
     # GDAL's /vsis3/ creds don't resolve the EC2 instance role in this env

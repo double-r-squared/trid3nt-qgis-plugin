@@ -135,7 +135,9 @@ def test_corpus_carries_natural_recharge_phrasings(spec):
     assert len(spec.corpus) >= 6
     joined = " ".join(spec.corpus).lower()
     assert "recharge" in joined
-    assert any("modflow" in q.lower() for q in spec.corpus)
+    # The consumer phrasing stays, engine-name-free: someone asking for a
+    # boundary condition must still land here.
+    assert any("groundwater flow model" in q.lower() for q in spec.corpus)
 
 
 # --------------------------------------------------------------------------- #

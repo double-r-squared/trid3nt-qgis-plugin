@@ -85,7 +85,7 @@ docstring: |-
   - ``fetch_jrc_global_surface_water`` -- that is a global surface-water RASTER
     (occurrence %), not vector lake/pond polygons.
   Do NOT use for: coastal shoreline (``fetch_topobathy``), stream gauges
-  (``fetch_usgs_nwis_gauges``), or flood extent (a SFINCS modeled layer).
+  (``fetch_usgs_nwis_gauges``), or a modeled flood extent (``telemac_rain_on_grid``).
 
   Parameters:
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NHD does not support a global query (national-scale polygon corpus).

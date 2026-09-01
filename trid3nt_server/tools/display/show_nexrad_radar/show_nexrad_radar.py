@@ -204,7 +204,7 @@ def show_nexrad_radar(
     - Situational-awareness overlays alongside ``fetch_nws_alerts_conus`` or
       ``fetch_nifc_fire_perimeters`` for multi-hazard dashboards.
     - Vertically integrated liquid (``product="vil"``) for hail / heavy-precip
-      risk assessment co-located with an active SFINCS pluvial run.
+      risk assessment co-located with an active telemac_rain_on_grid run.
 
     **When NOT to use:**
 

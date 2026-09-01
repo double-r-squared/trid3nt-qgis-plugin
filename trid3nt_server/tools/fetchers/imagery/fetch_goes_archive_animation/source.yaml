@@ -93,7 +93,7 @@ docstring: |
   ``fire_temperature`` / ``fire_baked`` each is a 3-band uint8 RGB COG; for
   ``fire_hotspots`` each is a 4-band uint8 RGBA COG (alpha 0 off-fire).
   ``layer_type="raster"``, ``role="context"``, same ``bbox``; the RGB(A)
-  passthrough in publish_layer renders the baked colors (and alpha) directly --
+  passthrough renders the baked colors (and alpha) directly --
   no new style preset. The ``name`` is
   ``"GOES <product label> step <N> <ISO> (<SAT>)"`` -- the SAME scrubber-group
   contract ``fetch_goes_animation`` emits: the ``step <N>`` token is the

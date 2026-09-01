@@ -151,7 +151,8 @@ async def _gate_on_confirm(
     decision is applied by the spec's declared PIN provider (the SAME per-engine
     tail arithmetic, relocated to the engine). Both are pure functions named by
     dotted path and imported lazily (:func:`call_provider`, which awaits async
-    providers -- the TELEMAC mesh preview / SWMM real-cap re-probe).
+    providers -- the TELEMAC mesh preview / a rainfall-runoff real-cap
+    re-probe).
 
     Fail-open semantics preserved EXACTLY: an estimate-provider failure falls
     through to dispatch (``True``) so the tool raises its own typed param error;
@@ -254,7 +255,8 @@ async def _gate_on_confirm(
 
     # proceed / narrow_scope. The declared PIN provider (when present) owns the
     # approved-params DELTA -- the engine's own tail arithmetic (fetch floor-clamp,
-    # flood dual-lever, TELEMAC seed-decouple, SWMM real-cap re-probe). A pin
+    # flood dual-lever, TELEMAC seed-decouple, a rainfall-runoff real-cap
+    # re-probe). A pin
     # provider returning None fails closed (a narrow_scope to a card that never
     # advertised an override). A gate with NO pin provider is a plain
     # proceed/cancel: a narrow_scope fails closed; a proceed injects ``confirmed``

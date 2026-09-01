@@ -81,9 +81,9 @@ docstring: |-
   reached, since OSM is the reliable global primary.)
 
   **When to use:**
-  - SFINCS setup (``set_sfincs_parameters`` + ``run_sfincs``) needs river
-    flowlines for DEM hydro-conditioning (HydroMT's ``setup_rivers_from_dem``
-    step burns channel geometry).
+  - A 2D hydraulic model setup needs river
+    flowlines for DEM hydro-conditioning (burning channel geometry into
+    the terrain along mapped rivers).
   - Fluvial flood workflow requires channel network for boundary-condition
     placement (upstream inflow nodes, downstream outlets).
   - User asks to visualize stream networks or watershed drainage patterns.
@@ -93,7 +93,7 @@ docstring: |-
   **When NOT to use:**
   - Real-time streamflow measurements -- use ``fetch_usgs_nwis_gauges``
     (NWIS USGS gauges) for discharge time series.
-  - Flow-direction / accumulation grids -- derive from the DEM inside HydroMT.
+  - Flow-direction / accumulation grids -- derive from the DEM directly.
   - Areas larger than 5,000 km2 -- the tool enforces a guardrail to keep a
     single fetch tractable (use a smaller bbox or a future tiled workflow).
 
@@ -120,11 +120,10 @@ docstring: |-
   A ``LayerURI`` pointing at a FlatGeobuf of river/stream LineStrings in the
   cache bucket (``s3://trid3nt-cache/cache/static-30d/river_geometry/<key>.fgb``).
   ``layer_type="vector"``, ``role="input"``. The FlatGeobuf renders inline on
-  the map via the GeoJSON path (``add_loaded_layer``) -- it is NOT published
-  through ``publish_layer`` (that path is raster-only). Properties per feature:
+  the map via the GeoJSON path (``add_loaded_layer``). Properties per feature:
   ``osm_id`` (int), ``name`` (str | None), ``waterway`` (str).
 
   **Cross-tool dependencies:**
   - Upstream: ``geocode_location`` for bbox derivation.
-  - Downstream: ``set_sfincs_parameters`` / ``run_sfincs`` (river-burning DEM
-    step), ``delineate_watershed``, stream-network display in map panel.
+  - Downstream: a hydraulic model's river-burning DEM
+    step, ``delineate_watershed``, stream-network display in map panel.

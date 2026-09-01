@@ -126,7 +126,7 @@ docstring: "Fetch REAL historical tsunamis as a point FlatGeobuf.\n\nRetrieves r
   \ so ``TsunamiNoEventsError`` is raised (never an\nempty success-shaped layer).\n\nCache: ``ttl_class=\"\
   semi-static-7d\"``, ``source_class=\"ncei_tsunami\"``.\nCache key is SHA-256 of ``(mode, bbox-rounded-6dp,\
   \ min_year, max_year)``, so\nidentical-scope calls within the week reuse the FGB.\n\nCross-tool dependencies:\n\
-  \    - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``\n      (derive a bbox from\
+  \    - Composes WITH: ``geocode_location``\n      (derive a bbox from\
   \ a place name BEFORE this call),\n      ``fetch_administrative_boundaries`` (country/region framing),\n\
   \      ``fetch_usgs_earthquakes`` (the quakes that generated these tsunamis),\n      ``fetch_noaa_slr_scenarios``\
   \ (coastal-hazard context),\n      ``spatial_query`` (count events inside a polygon).\n \

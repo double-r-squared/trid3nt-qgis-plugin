@@ -102,7 +102,7 @@ docstring: |
   covering ``bbox`` in ``year``, warps+window-reads each intersecting UTM-zone
   tile to EPSG:4326 at 10 m (nearest, categorical), mosaics them, and returns a
   single-band categorical COG with the official 9-class color table baked in.
-  ``publish_layer`` colorizes it directly from the embedded palette (no
+  It renders on the map directly from the embedded palette (no
   rescale/colormap override), the same path NLCD ``fetch_landcover`` uses.
 
   For bboxes larger than ~0.5 deg^2 the tool automatically tiles the bbox into

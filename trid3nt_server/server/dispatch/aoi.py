@@ -19,7 +19,7 @@ logger = logging.getLogger("trid3nt_server.server")
 
 def _scenario_produces_domain(tool_name: str) -> bool:
     """True when ``tool_name`` is an expensive solver whose result LayerURI bbox
-    is the authoritative AOI to pin (SWMM / SFINCS / MODFLOW domains).
+    is the authoritative AOI to pin (the solver's domain extent).
 
     Any tool ``scenario_type_for_tool`` recognizes mints a domain-extent layer
     (flood-depth peak / plume) -- the SAME extent ``compute_layer_bounds`` returns
@@ -112,7 +112,7 @@ async def _pin_case_aoi_from_tool_bbox(
     """Durably anchor the Case AOI from an ordinary bbox-taking FETCH call.
 
     Complements ``_pin_case_aoi_from_solve`` (above), which only fires for a
-    domain-producing SOLVER (SWMM / SFINCS / MODFLOW) -- a Case whose
+    domain-producing SOLVER -- a Case whose
     activity so far is plain fetches (``fetch_dem``, ``fetch_landcover``,
     ...) would otherwise never get an AOI anchor, leaving
     ``build_layers_present_note`` with no AOI line for a follow-up prompt to
@@ -265,12 +265,12 @@ def _maybe_default_fetch_bbox_to_pinned_aoi(
     return new_params
 
 #: Expensive-solver scenario types whose domain IS an AOI bbox (areal solvers).
-#: ``scenario_type_for_tool`` also recognizes the POINT-driven groundwater solver
-#: (``modflow_contaminant_plume`` -> ``"plume"``) which takes NO bbox param --
-#: its domain is a well / source point,
-#: not a rectangle. The AOI-snap below must NOT inject a bbox into those (it would
-#: be a spurious, ignored key today and latent wrong-extent debt tomorrow), so the
-#: guard is restricted to these bbox-driven scenario types.
+#: ``scenario_type_for_tool`` also recognizes a POINT-driven groundwater
+#: scenario (-> ``"plume"``) which takes NO bbox param -- its domain is a well
+#: / source point, not a rectangle. The AOI-snap below must NOT inject a bbox
+#: into those (it would be a spurious, ignored key today and latent
+#: wrong-extent debt tomorrow), so the guard is restricted to these
+#: bbox-driven scenario types.
 _BBOX_DRIVEN_SOLVER_SCENARIOS: frozenset[str] = frozenset({"flood-depth", "swmm-depth"})
 
 def _maybe_default_solver_bbox_to_pinned_aoi(
@@ -280,7 +280,7 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
 ) -> dict:
     """Pin an expensive SOLVER's bbox to the active Case AOI.
 
-    The SFINCS solve must compute ONLY within the active AOI bbox unless
+    The solve must compute ONLY within the active AOI bbox unless
     something requires it to expand. This snaps the SOLVE domain back onto
     the active AOI by the SAME conservative rule the fetch default
     (``_maybe_default_fetch_bbox_to_pinned_aoi``) uses.
@@ -289,7 +289,7 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
     drifted same-area box; "required expansion is allowed, only UN-required
     expansion is the bug"):
       * Only applies to the bbox-driven AREAL solvers (flood / urban depth).
-        POINT-driven solvers (MODFLOW plume) take no bbox and are skipped.
+        POINT-driven solvers (a plume scenario) take no bbox and are skipped.
       * No pinned AOI -> no-op. The FIRST solve in a Case (no AOI pinned yet)
         DEFINES the domain from the LLM's bbox; the pin is written AFTER it.
       * No / invalid ``bbox`` supplied -> inject the pin (solve the active AOI).
@@ -301,7 +301,7 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
       * Supplied bbox DISJOINT from the pin (a genuinely different place) ->
         HONOR it.
 
-    The SFINCS scenario-coverage archetypes (fluvial / compound / wind /
+    The areal-solver scenario-coverage archetypes (fluvial / compound / wind /
     infiltration / levee / tsunami) and coastal runs are selected by FORCING
     FLAGS (``coastal=`` / ``river=`` / ``tsunami=`` ...), NOT by an
     enclosing-wider bbox, and an explicit enclose / disjoint bbox is always
@@ -312,8 +312,8 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
     semantics of the fetch default for a single, auditable AOI-snap policy.
     """
     if scenario_type_for_tool(tool_name) not in _BBOX_DRIVEN_SOLVER_SCENARIOS:
-        # Non-solver, or a POINT-driven solver (MODFLOW plume) that takes no bbox
-        # -- never inject one. Only the areal (bbox-driven) flood/urban solvers
+        # Non-solver, or a POINT-driven solver (a plume scenario) that takes no
+        # bbox -- never inject one. Only the areal (bbox-driven) flood/urban solvers
         # have an AOI rectangle to snap.
         return params
     pin = _coerce_bbox4(pinned_bbox)

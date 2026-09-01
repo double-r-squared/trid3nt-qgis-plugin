@@ -5,4 +5,4 @@ fetch_landfire_fuels:
 - I need the fuel moisture content inputs for FlamMap over this bbox
 - fetch LANDFIRE existing vegetation type for fire risk context
 - show me the fire-fuel conditions for this WUI community
-- I need LANDFIRE LF2022 fuels for this ELMFIRE domain
+- I need LANDFIRE LF2022 fuels for this wildfire fuels analysis

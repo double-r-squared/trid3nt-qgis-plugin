@@ -167,13 +167,14 @@ def generate_chart(
     """Render an interactive Vega-Lite chart from a caller-composed spec.
 
     Use this for ANY chart the user asks to SEE: a histogram / value
-    distribution, a value-vs-time series, a Pelicun damage-state (DS0..DS4)
-    bar chart, a choropleth class-break legend, a scatter, a heatmap. Compose
-    the bins/classes/series in the python playground (code_exec_request /
-    spatial_query), then pass them here as ``records`` with an ``encoding``.
+    distribution, a value-vs-time series, a structural damage-state
+    (DS0..DS4) bar chart, a choropleth class-break legend, a scatter, a
+    heatmap. Compose the bins/classes/series in the python playground
+    (code_exec_request / spatial_query), then pass them here as ``records``
+    with an ``encoding``.
 
-    Do NOT use for: a numeric answer (spatial_query); rendering a layer on the
-    map (publish_layer).
+    Do NOT use for: a numeric answer (spatial_query); a layer needs no
+    separate call to render on the map, that happens automatically.
 
     Parameters:
         vega_lite_spec: a Vega-Lite v5 spec dict. Supply the ``mark`` (bar /

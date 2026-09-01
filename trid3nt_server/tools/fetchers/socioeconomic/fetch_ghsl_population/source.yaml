@@ -58,33 +58,58 @@ caveats:
 - JRC GHS-POP R2023A epoch 2020, ~100 m EPSG:4326; modeled gridded residential population (persons/cell),
   not a live count. Global 10-deg ZIP tiles; whole-object per intersecting tile (ADR 0067). bbox required
   (global mosaic ~12 GB). Empty over open ocean / outside coverage -> GHSL_POPULATION_EMPTY.
-docstring: "Fetch JRC GHSL GHS-POP gridded population (persons/cell) for a bbox.\n\n**What it does:**\
-  \ Opens the European Commission JRC Global Human Settlement\nLayer GHS-POP product (residential population,\
-  \ release R2023A, epoch 2020,\n~100 m / 3 arcsecond, EPSG:4326) from the keyless JRC open-data archive.\n\
-  The global grid is sliced into 10-degree ZIP-wrapped tiles; this tool maps\nthe bbox to its covering\
-  \ tiles and uses GDAL ``/vsizip//vsicurl/`` HTTP\nbyte-range reads to fetch only the window covering\
-  \ the bbox, mosaicking\nacross tile boundaries when needed. Writes a single-band float32\npersons-per-cell\
-  \ Cloud-Optimized GeoTIFF (NaN nodata). Cached ``static-30d``.\nNo API key or login required.\n\n**When\
-  \ to use:**\n- GLOBAL population exposure modeling outside the US, or as an independent\n  cross-check\
-  \ against ``fetch_hrsl_population`` (Meta HRSL) and the WorldPop\n  branch of ``fetch_population`` --\
-  \ GHS-POP uses a different built-up-area\n  disaggregation methodology.\n- \"How many people live inside\
-  \ this flood / surge / wildfire footprint?\" for\n  any non-US (or US) AOI, especially European, African,\
-  \ Asian, and South\n  American cities.\n- Population-density input for Pelicun-style exposure terms\
-  \ anywhere on Earth.\n\n**When NOT to use:**\n- Per-building occupancy (GHS-POP is gridded; combine\
-  \ ``fetch_buildings``\n  footprints with this raster for building-level occupancy).\n- Authoritative\
-  \ US census tabulation for reporting (use ``fetch_census_acs``).\n- Sub-100 m / parcel-scale precision\
-  \ (HRSL ~30 m is finer; prefer it when\n  coverage and resolution both matter and the AOI is small).\n\
-  - Real-time counts (GHS-POP is a modeled epoch grid, not a live measurement).\n- Bboxes over open ocean\
-  \ / outside coverage (raises ``GHSLPopEmptyError``).\n\n**Parameters:**\n- ``bbox`` (tuple): ``(min_lon,\
-  \ min_lat, max_lon, max_lat)`` in EPSG:4326.\n  **Required** (``supports_global_query=False`` -- the\
-  \ global mosaic is\n  ~12 GB). Example: ``(3.10, 6.35, 3.70, 6.75)`` for Lagos, Nigeria.\n- ``epoch``\
-  \ (int): GHS-POP epoch year; default 2020 (the only wired epoch\n  in v0.1). Accepted for forward compatibility.\n\
-  \n**Returns:**\n``LayerURI(layer_type=\"raster\", role=\"primary\", units=\"persons_per_cell\")``\n\
-  pointing at a COG (.tif). EPSG:4326, float32, NaN nodata, ~100 m pixels.\nTagged ``units=persons_per_cell``\
-  \ and\n``source=JRC_GHS_POP_E2020_GLOBE_R2023A_4326_3ss``. Reuses the\n``population_density`` style\
-  \ preset (magma persons/cell ramp).\n\n**Cross-tool dependencies:**\n- Downstream of: ``geocode_location``\
-  \ (provides bbox), ``fetch_dem``\n  (co-registered for elevation-weighted exposure).\n- Upstream of:\
-  \ zonal population-within-a-polygon sums composed in the\n  code_exec playground, Pelicun impact post-processor,\
-  \ any\n  population-at-risk workflow step.\n- Complements: ``fetch_hrsl_population`` (Meta HRSL ~30\
-  \ m global) and\n  ``fetch_population`` (WorldPop / US Census) -- different methodologies,\n  same persons/cell\
-  \ semantics."
+docstring: |-
+  Fetch JRC GHSL GHS-POP gridded population (persons/cell) for a bbox.
+
+  **What it does:** Opens the European Commission JRC Global Human Settlement
+  Layer GHS-POP product (residential population, release R2023A, epoch 2020,
+  ~100 m / 3 arcsecond, EPSG:4326) from the keyless JRC open-data archive.
+  The global grid is sliced into 10-degree ZIP-wrapped tiles; this tool maps
+  the bbox to its covering tiles and uses GDAL ``/vsizip//vsicurl/`` HTTP
+  byte-range reads to fetch only the window covering the bbox, mosaicking
+  across tile boundaries when needed. Writes a single-band float32
+  persons-per-cell Cloud-Optimized GeoTIFF (NaN nodata). Cached ``static-30d``.
+  No API key or login required.
+
+  **When to use:**
+  - GLOBAL population exposure modeling outside the US, or as an independent
+    cross-check against ``fetch_hrsl_population`` (Meta HRSL) and the WorldPop
+    branch of ``fetch_population`` -- GHS-POP uses a different built-up-area
+    disaggregation methodology.
+  - "How many people live inside this flood / surge / wildfire footprint?" for
+    any non-US (or US) AOI, especially European, African, Asian, and South
+    American cities.
+  - Population-density input for structural-loss exposure terms anywhere on Earth.
+
+  **When NOT to use:**
+  - Per-building occupancy (GHS-POP is gridded; combine ``fetch_buildings``
+    footprints with this raster for building-level occupancy).
+  - Authoritative US census tabulation for reporting (use ``fetch_census_acs``).
+  - Sub-100 m / parcel-scale precision (HRSL ~30 m is finer; prefer it when
+    coverage and resolution both matter and the AOI is small).
+  - Real-time counts (GHS-POP is a modeled epoch grid, not a live measurement).
+  - Bboxes over open ocean / outside coverage (raises ``GHSLPopEmptyError``).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+    **Required** (``supports_global_query=False`` -- the global mosaic is
+    ~12 GB). Example: ``(3.10, 6.35, 3.70, 6.75)`` for Lagos, Nigeria.
+  - ``epoch`` (int): GHS-POP epoch year; default 2020 (the only wired epoch
+    in v0.1). Accepted for forward compatibility.
+
+  **Returns:**
+  ``LayerURI(layer_type="raster", role="primary", units="persons_per_cell")``
+  pointing at a COG (.tif). EPSG:4326, float32, NaN nodata, ~100 m pixels.
+  Tagged ``units=persons_per_cell`` and
+  ``source=JRC_GHS_POP_E2020_GLOBE_R2023A_4326_3ss``. Reuses the
+  ``population_density`` style preset (magma persons/cell ramp).
+
+  **Cross-tool dependencies:**
+  - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
+    (co-registered for elevation-weighted exposure).
+  - Upstream of: zonal population-within-a-polygon sums composed in the
+    code_exec playground, a structural-loss impact post-processor, any
+    population-at-risk workflow step.
+  - Complements: ``fetch_hrsl_population`` (Meta HRSL ~30 m global) and
+    ``fetch_population`` (WorldPop / US Census) -- different methodologies,
+    same persons/cell semantics.

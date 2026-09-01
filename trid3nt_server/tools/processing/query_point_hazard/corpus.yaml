@@ -5,4 +5,4 @@ query_point_hazard:
 - check the hazard value at the Fort Myers pier
 - probe this coordinate against all loaded results
 - what is the water level at this location from the flood run
-- query the depth and velocity at this point from the SFINCS output
+- query the depth and velocity at this point from the flood run output

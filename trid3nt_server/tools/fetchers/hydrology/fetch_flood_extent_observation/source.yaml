@@ -98,7 +98,7 @@ docstring: "Fetch an OBSERVED (satellite-derived) flood extent for a bbox as a c
   \ flooded\", \"observed\n  inundation for this AOI\".\n\n**When NOT to use:**\n- Raw SAR backscatter (you want\
   \ to threshold it yourself) ->\n  ``fetch_sentinel1_sar``.\n- The long-term where-water-ever-was baseline ->\n\
   \  ``fetch_jrc_global_surface_water``.\n- Surveyed peak-STAGE point marks -> ``fetch_high_water_marks``.\n- Regulatory\
-  \ flood ZONES -> ``fetch_fema_nfhl_zones``; MODELED depth -> the\n  SFINCS / SWMM engines.\n\n**Parameters:**\n\
+  \ flood ZONES -> ``fetch_fema_nfhl_zones``; MODELED depth -> ``telemac_rain_on_grid``.\n\n**Parameters:**\n\
   - ``bbox``: REQUIRED ``(west, south, east, north)`` in EPSG:4326.\n- ``date``: OPTIONAL ISO ``YYYY-MM-DD``. Omitted\
   \ -> the latest available\n  3-day composite. NEAR-REAL-TIME only (a rolling recent window); a specific\n  historical\
   \ date may be unavailable (honest ``FloodExtentNoCoverageError``).\n\n**Returns:** ``FloodExtentLayerURI`` --\

@@ -118,14 +118,13 @@ docstring: |-
         watershed", "where has arsenic been measured near here").
       - You need the OBSERVED, measured concentration at instrumented sample
         sites -- the real lab/field record, NOT a model estimate.
-      - GROUND-TRUTHING a MODELED contaminant plume: overlay these observed
-        point samples against the modeled plume from ``run_modflow``
-        (MODFLOW-GWT transport) to compare modeled-vs-observed
-        concentration.
+      - GROUND-TRUTHING a modeled contaminant plume: overlay these observed
+        point samples against a modeled subsurface transport plume to
+        compare modeled-vs-observed concentration.
 
   When NOT to use:
-      - MODELED groundwater contaminant transport / a plume raster -- that is
-        ``run_modflow`` (FloPy MODFLOW-GWT). This tool is the OBSERVED
+      - MODELED groundwater contaminant transport / a plume raster is not
+        currently modeled here. This tool is the OBSERVED
         point-sample companion.
       - Stream DISCHARGE / gage height (flow, not chemistry) -- use
         ``fetch_usgs_nwis_gauges`` (observed) or ``fetch_noaa_nwm_streamflow``
@@ -178,12 +177,11 @@ docstring: |-
   identical-scope calls within the day reuse the FGB.
 
   Cross-tool dependencies:
-      - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
+      - Composes WITH: ``geocode_location``
         (derive a bbox from a place name BEFORE this call),
         ``fetch_field_boundaries`` / ``fetch_administrative_boundaries``
         (watershed/field framing).
-      - Cross-checks: ``run_modflow`` (MODFLOW-GWT modeled plume -- observed-vs-modeled concentration comparison),
-        ``fetch_epa_frs_facilities`` (potential contamination sources).
+      - Cross-checks: ``fetch_epa_frs_facilities`` (potential contamination sources).
       - Upstream data source: USGS / EPA Water Quality Portal
         (waterqualitydata.us/data/Station + /data/Result).
 

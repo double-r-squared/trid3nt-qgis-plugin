@@ -21,8 +21,8 @@ Nodata (in either input, after alignment) is EXCLUDED from every count/area
 and reported (count + area) -- never silently treated as dry.
 
 Published context (research.md section 2.2): CSI ~0.5-0.7 is the general
-"good agreement" convention (not agency-codified); published SFINCS CSI
-against satellite extent ranges ~0.29-0.75 depending on basin/event
+"good agreement" convention (not agency-codified); published flood-extent
+CSI against satellite extent ranges ~0.29-0.75 depending on basin/event
 scale -- empirical context, not a target. This tool NEVER emits a pass/fail
 based on these numbers; they ride along as a ``published_context`` string.
 
@@ -97,7 +97,7 @@ class FloodExtentSkillUpstreamError(FloodExtentSkillError):
 _PUBLISHED_CONTEXT = (
     "CSI ~0.5-0.7 is a general 'good agreement' convention, not "
     "agency-codified (SEAMLESS-WAVE: https://www.seamlesswave.com/metrics.html). "
-    "Published SFINCS-vs-satellite CSI ranges ~0.29 (small/urban basins, "
+    "Published flood-model-vs-satellite CSI ranges ~0.29 (small/urban basins, "
     "<50 km2) to ~0.75 (basins >1000 km2, or vs. discharge-forced GloFAS) "
     "depending on event/basin scale (EGUsphere 2025 preprint: "
     "https://egusphere.copernicus.org/preprints/2025/egusphere-2025-4387/). "
@@ -360,8 +360,8 @@ def compute_flood_extent_skill(
 
     **When to use:**
     - "Does the modeled flood footprint match the satellite/observed
-      extent?" right after a SFINCS/SWMM/GeoClaw flood run produces a depth
-      raster and you have (or fetch) a benchmark extent.
+      extent?" right after an engine run produces a flood-depth raster and
+      you have (or fetch) a benchmark extent.
     - Comparing two categorical WET/DRY rasters/polygons in general.
 
     **When NOT to use:**
@@ -405,7 +405,7 @@ def compute_flood_extent_skill(
 
     Cross-tool dependencies:
         Upstream (consumes):
-        - A flood-model raster (SFINCS/SWMM/GeoClaw postprocess output, or
+        - A flood-model raster (a modeled raster from a solver run, or
           any depth/wet-dry raster) as ``model_extent_uri``.
         - ``fetch_flood_extent_observation`` (or any other benchmark
           extent source) as ``benchmark_extent_uri``.

@@ -9,7 +9,7 @@ spatial_query:
 - what is the total damage cost for the buildings inside the flood zone polygon
 - sum the structure replacement value for everything within the county boundary
 - average building value for the parcels whose centroid falls in this protected area
-- add up the Pelicun damage for the features within this admin boundary
+- add up the damage values for the features within this admin boundary
 - spatial join the points to the zones and count the features per zone
 - run a sql query over the layers on the map
 - query the building layer with sql and group the damage by category

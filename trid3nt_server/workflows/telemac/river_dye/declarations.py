@@ -278,9 +278,9 @@ DOC = dict(
         "animates. Supply `location` (geocoded) OR `bbox`."
     ),
     not_for=(
-        "groundwater plumes / river seepage (`modflow_*`); dissolved-oxygen sag below an "
-        "outfall (`telemac_do_sag`); flood depth (`sfincs_flood` / `swmm_urban_flood`); "
-        "dam-break or tsunami run-up (`geoclaw_inundation`)"
+        "dissolved-oxygen sag below an outfall (`telemac_do_sag`); rainfall-runoff "
+        "flood depth (`telemac_rain_on_grid`). Groundwater plumes and seepage, and "
+        "dam-break or tsunami run-up, are not currently modeled here"
     ),
     params=PARAMS,
     controls=(

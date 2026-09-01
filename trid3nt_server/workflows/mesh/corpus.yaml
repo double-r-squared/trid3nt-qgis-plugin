@@ -14,14 +14,14 @@ build_mesh:
 - set up the domain lattice for a structured solver over this bounding box
 - build a computational mesh for this watershed, generate the model domain grid
 - mesh this coastline / bay, make an unstructured triangulation of the water
-- create a triangular mesh of the catchment I can reuse for TELEMAC or SCHISM
+- create a triangular mesh of the catchment I can reuse for TELEMAC
 - generate a grid for the basin refined along the river network
 - make an unstructured mesh of this drainage basin with a min and max edge length
 - build a coastal water-edge mesh following the real shoreline, not a bbox
 - produce a bathymetric mesh of the estuary for a hydrodynamic solver
-- build a channel-refined HEC-RAS rain-on-grid mesh I can inspect then solve on
-- author a graded HEC-RAS 2D cell mesh, fine along the river and coarse on the hillslopes
-- generate a HEC-RAS mesh refined to the channel network for a design-storm run
+- build a channel-refined rain-on-grid mesh I can inspect then solve on
+- author a graded 2D cell mesh, fine along the river and coarse on the hillslopes
+- generate a mesh refined to the channel network for a design-storm run
 - mesh the river reach I am modeling, following the real banks not a ribbon
 - build the corridor mesh for this reach before authoring the deck
 - use OceanMesh2D to mesh this coast, sized by distance to shore and by depth
