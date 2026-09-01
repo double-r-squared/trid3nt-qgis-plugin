@@ -218,12 +218,21 @@ def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
 # --------------------------------------------------------------------------- #
 # The wetted fraction: what the run says about the domain it did NOT wet.
 # --------------------------------------------------------------------------- #
+#: The depth variable name a solved TELEMAC-2D result actually carries: SELAFIN
+#: pads the name to 32 chars and trails the unit. Read off a real r2d_river.slf.
+_DEPTH_VAR = "WATER DEPTH     M"
+
+
 def _selafin(monkeypatch, depths):
     """Two disjoint triangles - a 50 m2 channel and a 150 m2 bar beside it.
 
     The areas differ so the measurement can be told apart from a node count: half
     the nodes wet is a QUARTER of the domain wet, and only one of those two
     numbers is the conveyance a reader is looking for.
+
+    The depth key carries the SELAFIN 32-char name padding with its unit trailing,
+    exactly as a solved result does - a bare 'WATER DEPTH' key would let a lookup
+    that no real run can satisfy pass here.
     """
     import numpy as np
 
@@ -232,7 +241,8 @@ def _selafin(monkeypatch, depths):
     mesh = {"x": np.array([0.0, 10.0, 0.0, 20.0, 50.0, 20.0]),
             "y": np.array([0.0, 0.0, 10.0, 0.0, 0.0, 10.0]),
             "ikle": np.array([[0, 1, 2], [3, 4, 5]]),
-            "data": {"WATER DEPTH": np.array([[0.0] * 6, list(depths)])}}
+            "varnames": [_DEPTH_VAR],
+            "data": {_DEPTH_VAR: np.array([[0.0] * 6, list(depths)])}}
     monkeypatch.setattr(P, "read_selafin", lambda _path: mesh)
 
 
@@ -264,7 +274,8 @@ def test_a_result_with_no_depth_measures_nothing(monkeypatch):
 
     monkeypatch.setattr(P, "read_selafin", lambda _path: {
         "x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
-        "data": {"DYE": np.zeros((1, 3))}})
+        "varnames": ["DYE             MG/L"],
+        "data": {"DYE             MG/L": np.zeros((1, 3))}})
     assert R.wetted_fraction("ignored.slf") == {}
 
 

@@ -349,7 +349,11 @@ def wetted_fraction(slf_path: str | Path, *, wet_tol_m: float = _WET_TOL_M
     from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
 
     mesh = read_selafin(slf_path)
-    depth = mesh["data"].get("WATER DEPTH")
+    # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER
+    # DEPTH     M'), so an exact-key lookup never matches a real result.
+    picked = next((v for v in mesh["varnames"]
+                   if v.strip().upper().startswith("WATER DEPTH")), None)
+    depth = mesh["data"].get(picked) if picked is not None else None
     ikle = np.asarray(mesh["ikle"], dtype=int)
     if depth is None or np.asarray(depth).size == 0 or ikle.size == 0:
         return {}
