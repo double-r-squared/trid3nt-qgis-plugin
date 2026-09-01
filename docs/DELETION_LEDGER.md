@@ -2817,3 +2817,21 @@ DELETED, and what replaced each.
   breakwater; the unfilled slot keeps its cover in
   `scripts/drive_artemis_structure_slot.py --mode omitted`, which is where all
   three ways of filling it are proved against each other.
+
+## The urban-vs-SFINCS flood routing block (findings walkthrough ruling 12, 2026-09-01)
+
+DELETED from `adapters/adapter.py`: the `Flood-engine routing -- urban PySWMM vs
+SFINCS (CRITICAL)` block and the `Key behaviors` clause that pointed at it. Both
+instructed the model to call `swmm_urban_flood` on urban / street / storm-drain /
+barrier phrasing. That tool left the registry at the engine purge, so the block
+was routing prompts to nothing - the worst shape a model-facing instruction can
+take, because the model follows it and then invents a recovery.
+
+CONDITION for the residue this left standing: the same system prompt still names
+`swmm_urban_flood` in the reuse rule, the fidelity ladder and the rain-on-grid
+tier list, alongside `sfincs_flood`, `geoclaw_inundation`, `swan_wave_field`,
+`modflow_*`, `openquake_psha`, `landlab_susceptibility`, `elmfire_fire_spread`
+and `pelicun_*` - every one of them absent from the registry. Those are not a
+routing block; they are the prompt's whole engine roster, and replacing it is a
+wording decision about what TRID3NT tells a user it can model. It goes to NATE
+rather than being swept here.
