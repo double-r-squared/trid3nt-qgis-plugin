@@ -62,21 +62,19 @@ from trid3nt_server.tools import TOOL_REGISTRY
 # Mirrors the startup-time import order; any module that calls @register_tool
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
-# PELICUN fold: pelicun_damage_with_buildings folded into the
-# pelicun_damage_assessment template's bbox AUTO-FETCH input mode.
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Normalizer adapter — job-0164 or fallback
+# Normalizer adapter
 # ---------------------------------------------------------------------------
 
 def _get_normalizer():
     """Return a (tool_name, raw_args, fn) -> dict callable.
 
-    If ``trid3nt_server.tools.tool_arg_normalizer.normalize_args`` is available
-    (job-0164 landed), return it directly.  Otherwise return
+    If ``trid3nt_server.tools.tool_arg_normalizer.normalize_args`` is available,
+    return it directly.  Otherwise return
     ``_inspect_strip_unknown`` which uses inspect.signature to achieve the
     same effect.
 
@@ -224,15 +222,8 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "return_period_years": 100,
         "duration_hours": 24,
     },
-    "sfincs_flood": {},
-    "pelicun_damage_assessment": {
-        "hazard_raster_uri": _SAMPLE_RASTER_URI,
-        "assets_uri": _SAMPLE_VECTOR_URI,
-    },
-    # PELICUN fold: pelicun_damage_with_buildings folded into
-    # pelicun_damage_assessment's bbox AUTO-FETCH input mode (no separate tool).
     "run_solver": {
-        "solver": "sfincs",
+        "solver": "telemac",
         "model_setup_uri": "s3://trid3nt-runs/test/setup/",
     },
     "wait_for_completion": {
@@ -392,30 +383,24 @@ def test_tool_survives_invented_kwargs(tool_name: str, pattern_idx: int) -> None
 
 
 # ---------------------------------------------------------------------------
-# Sentinel test: all tools must have native **_extra_ignored (post-job-0164)
+# Sentinel test: all tools must have native **_extra_ignored
 # ---------------------------------------------------------------------------
 
 @pytest.mark.xfail(
     reason=(
-        "job-0164 (engine sweep) is not yet merged. "
-        "This test will turn green once all @register_tool functions gain "
-        "**_extra_ignored. Until then, only sfincs_flood passes."
+        "not every @register_tool function carries **_extra_ignored yet; the "
+        "normalizer covers the rest, so this is the target rather than a floor."
     ),
     strict=False,
 )
 def test_all_tools_have_native_extra_ignored() -> None:
     """All @register_tool functions must have a VAR_KEYWORD (**_extra_ignored) param.
 
-    This is the acceptance criterion for job-0164's harness sweep.  Before
-    that job merges, only ``sfincs_flood`` passes; the test is
-    marked xfail so it shows as an expected failure rather than a blocking
-    red until job-0164 lands.
+    The target state: a tool absorbs an invented kwarg in its own signature and
+    the normalizer is a safety net rather than the mechanism. Until every tool
+    does, this is xfail - an expected gap, not a blocking red.
 
-    After job-0164 merges: remove the xfail marker and assert strict=True so
-    any regression (new tool registered without **_extra_ignored) turns the
-    suite red immediately.
-
-    Failure Layer: AGENT / ENGINE — missing signature on the named tool.
+    Failure Layer: AGENT / ENGINE - missing signature on the named tool.
     """
     missing: list[str] = []
     for name in sorted(TOOL_REGISTRY.keys()):
@@ -430,8 +415,8 @@ def test_all_tools_have_native_extra_ignored() -> None:
 
     if missing:
         pytest.fail(
-            f"[AGENT/ENGINE layer] {len(missing)} tool(s) lack **_extra_ignored "
-            f"(job-0164 sweep required): {missing}"
+            f"[AGENT/ENGINE layer] {len(missing)} tool(s) lack "
+            f"**_extra_ignored: {missing}"
         )
 
 

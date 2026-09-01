@@ -9,6 +9,8 @@ silently wrong.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from trid3nt_server.workflows.telemac.steps import run_reads as R
@@ -44,6 +46,17 @@ def test_the_closure_is_read_from_the_final_block_only():
 
 def test_a_listing_with_no_closure_reports_nothing():
     assert R.gaia_mass_balance("CORRECT END OF RUN") == {}
+
+
+def test_a_residual_that_rounds_to_negative_zero_reads_as_zero():
+    """``max(-0.0, 0.0)`` is ``-0.0``, so a signed zero reaching a consumer is a
+    negative deposited mass narrated beside a map showing deposition."""
+    listing = _LISTING.replace("60.00000", "-0.1E-12")
+    net = R.gaia_mass_balance(listing)["sediment_net_bed_mass_kg"]
+    assert net == 0.0 and math.copysign(1.0, net) == 1.0
+    stats = R.sediment_scalars(listing_text=listing, deck=_DECK)
+    fraction = stats["sediment_deposit_fraction"]
+    assert fraction == 0.0 and math.copysign(1.0, fraction) == 1.0
 
 
 def test_the_deposit_fraction_compares_the_net_bed_against_the_deck_pulse():
@@ -139,6 +152,21 @@ def test_the_hydrograph_is_the_listings_own_flux_series():
     assert out["peak_discharge_m3s"] == 20.25
     assert out["peak_discharge_time_s"] == 900.0
     assert out["outlet_boundary"] == 1
+    # The limb fell after its crest, so the window closed on a measured peak.
+    assert out["peak_is_window_truncated"] is False
+
+
+def test_a_crest_on_the_last_sample_is_labelled_the_window_closing():
+    """A hydrograph still rising when the run ends has no peak inside it: the
+    reported peak, volume and coefficient are floors, and the read says so."""
+    listing = _balance(900.0, -8.5) + _balance(1800.0, -20.25)
+    assert R.outlet_hydrograph(listing, boundary=1)["peak_is_window_truncated"] is True
+
+
+def test_a_single_sample_is_not_a_truncation_claim():
+    """One balance block is a cadence fact, not evidence about a rising limb."""
+    listing = _balance(900.0, -8.5)
+    assert R.outlet_hydrograph(listing, boundary=1)["peak_is_window_truncated"] is False
 
 
 def test_the_reported_volume_is_the_integral_of_that_same_series():

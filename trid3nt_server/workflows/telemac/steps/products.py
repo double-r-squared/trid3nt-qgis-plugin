@@ -1,9 +1,15 @@
 """The PRODUCTS step: a solved reach -> the map layers, the scalars, the chart spec.
 
-The peak concentration COG is the map anchor and the narration carrier; the
-native result SELAFIN beside it is the TEMPORAL artifact the client animates. A
-sediment run adds the signed bed-evolution map, an oil run the floating-slick
-track, and every run surfaces the bed bathymetry the worker actually solved on.
+The peak concentration COG is the narration carrier; the native result SELAFIN
+beside it is the TEMPORAL artifact the client animates.
+
+EACH SUBSTANCE CLASS LEADS WITH ITS OWN PRODUCT, and the concentration raster is
+named for the field it actually carries. A sediment run leads with the signed
+bed-evolution map beside a SUSPENDED-SEDIMENT raster; an oil run leads with the
+floating-slick track, because the slick and the drogues beneath it are the only
+products carrying oil physics while the transported field is the same passive
+tracer a dye run advects; the dye class leads with the dye. A dye-named product
+outside the dye class asserts more than the run computed.
 
 The class scalars are read HERE, off the run's own uploaded evidence - GAIA's
 closure out of the solver listing, the slick out of the drogues track - because
@@ -26,7 +32,8 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_DYE_STYLE_PRESET,
+    TELEMAC_SUBSTANCE_PRODUCTS,
+    SubstanceProduct,
     TelemacDyeLayerURI,
 )
 
@@ -111,6 +118,13 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
     ]
 
 
+def _substance_product(substance_class: str) -> SubstanceProduct:
+    """The declared class's transported-field product; the dye row when unnamed."""
+    return TELEMAC_SUBSTANCE_PRODUCTS.get(
+        str(substance_class or "tracer").lower(),
+        TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
+
+
 def _honesty_note(location_name: str, substance: str) -> str:
     surrogate = ""
     if substance and substance != "dye":
@@ -131,7 +145,7 @@ def _honesty_note(location_name: str, substance: str) -> str:
 
 def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
                         location_name: str, mesh_meta: dict[str, Any],
-                        substance: str,
+                        substance: str, substance_class: str,
                         synthetic_inputs: list[SyntheticInput]) -> TelemacDyeLayerURI:
     """Publish the peak COG through the one styling chokepoint and enrich narration.
 
@@ -139,22 +153,23 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
     the case discover the SELAFIN sibling, and the dispatch-level guardrail owns
     the map honesty.
     """
+    from trid3nt_server.workflows.telemac.postprocess_telemac import peak_layer_id
+
     honesty = _honesty_note(location_name, substance)
     update = {**mesh_meta, "synthetic_inputs": list(synthetic_inputs)}
     if raw_peak.layer_type != "raster" or not raw_peak.uri.startswith(("gs://", "s3://")):
         return raw_peak.model_copy(update={"fallback_note": honesty, **update})
-    layer_id = f"telemac-dye-peak-{run_id}"
+    layer_id = peak_layer_id(run_id, substance_class)
+    preset = raw_peak.style_preset or _substance_product(substance_class).style_preset
     try:
         published_uri = publish_layer(
-            layer_uri=raw_peak.uri, layer_id=layer_id,
-            style_preset=raw_peak.style_preset or TELEMAC_DYE_STYLE_PRESET)
+            layer_uri=raw_peak.uri, layer_id=layer_id, style_preset=preset)
     except PublishLayerError as exc:
         logger.warning("telemac: publish_layer FAILED layer_id=%s error_code=%s (%s) "
                        "- returning the unpublished peak.", layer_id, exc.error_code, exc)
         return raw_peak.model_copy(update={"fallback_note": honesty, **update})
     return raw_peak.model_copy(update={
-        "layer_id": layer_id, "uri": published_uri,
-        "style_preset": raw_peak.style_preset or TELEMAC_DYE_STYLE_PRESET,
+        "layer_id": layer_id, "uri": published_uri, "style_preset": preset,
         "fallback_note": honesty, **update})
 
 
@@ -259,8 +274,10 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
         dep_pub = dep_raw
     from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 
-    emitted = await publish_input_layer(emitter, dep_pub)
-    logger.info("sediment deposition layer emitted=%s id=%s max_dep_mm=%s "
+    # A sediment run LEADS with the bed: this is a RESULT the solve produced, not
+    # an input it consumed, and it surfaces before the concentration raster.
+    emitted = await publish_input_layer(emitter, dep_pub, role="primary")
+    logger.info("sediment bed-evolution layer emitted=%s id=%s max_dep_mm=%s "
                 "deposited_kg=%s", emitted, dep_pub.layer_id,
                 dep_pub.max_deposition_mm, dep_pub.deposited_mass_kg)
     return peak
@@ -276,7 +293,15 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
     the layer's bytes exist before its handle does - a URI registered ahead of
     its object was the dangling-handle class.
 
-    A run that wrote no track is an honest skip: the concentration COG stands.
+    An oil run LEADS with this: the slick and the drogues beneath it are the only
+    products that carry oil physics, while the transported field beside them is
+    the same passive tracer a dye run advects. A run that wrote no track is an
+    honest skip: the tracer COG stands.
+
+    The slick carries NO style preset. It is a snapshot point cloud, the style
+    contract has no row for it, and a preset the contract never declared resolves
+    to whatever the renderer guesses - which is how a river-line preset came to
+    style a slick.
     """
     from trid3nt_contracts.execution import LayerURI
 
@@ -312,9 +337,10 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
             layer_id=f"telemac-oil-slick-{run_id}",
             name=f"Oil slick track ({oil_preset}, {reach_name})",
             layer_type="vector", uri=f"s3://{bucket}/{run_id}/slick.geojson",
-            style_preset="nhdplus_flowlines", role="primary", bbox=peak.bbox)
+            role="primary", bbox=peak.bbox)
         logger.info("oil slick layer emitted=%s id=%s stats=%s",
-                    await publish_input_layer(emitter, layer), layer.layer_id, stats)
+                    await publish_input_layer(emitter, layer, role="primary"),
+                    layer.layer_id, stats)
     except Exception as exc:  # noqa: BLE001 -- a bonus layer never voids the run
         logger.warning("oil slick layer skipped: %s", exc)
 
@@ -361,13 +387,14 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     reach_name, substance = deck["reach_name"], deck["substance"]
+    substance_class = deck["substance_class"]
+    product = _substance_product(substance_class)
     slf_path = await asyncio.to_thread(download_result_selafin, run_id)
 
     try:
         layers, _metrics = await asyncio.to_thread(
             postprocess_telemac, slf_path, run_id=run_id, utm_epsg=utm_epsg,
-            reach_name=reach_name, substance=substance,
-            substance_class=deck["substance_class"])
+            reach_name=reach_name, substance_class=substance_class)
         await _journal_wetted_fraction(slf_path)
     finally:
         Path(slf_path).unlink(missing_ok=True)
@@ -375,7 +402,8 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     if not layers:
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_NO_LAYERS",
-            "postprocess_telemac produced no dye layer (empty tracer field?).")
+            f"postprocess_telemac produced no {product.noun} layer (empty tracer "
+            "field?).")
     raw_peak = layers[0]
 
     mesh_meta = {
@@ -384,28 +412,29 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     }
     peak = await asyncio.to_thread(
         _publish_peak_layer, raw_peak, run_id, deck["location_name"], mesh_meta,
-        substance, _provenance(solve, carrier_discharge, deck))
+        substance, substance_class, _provenance(solve, carrier_discharge, deck))
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry (the whole-run record)
     # plus the SELAFIN mesh entry, and the seam owns publication of the temporal
     # artifact. The typed peak above stays this step's own.
     await publish_results_mesh_via_seam(
         emitter, run_id=run_id, engine="telemac", peak_layer=raw_peak,
-        peak_quantity="dye_concentration", mesh_basename="r2d_river.slf",
+        peak_quantity=product.quantity, mesh_basename="r2d_river.slf",
         mesh_epsg=utm_epsg, reach_name=reach_name)
 
-    logger.info("telemac reach complete run_id=%s reach=%s dye_cmax_mgl=%.4g "
+    logger.info("telemac reach complete run_id=%s reach=%s class=%s cmax_mgl=%.4g "
                 "plume_reach_m=%s active_frames=%s peak_uri=%s", run_id, reach_name,
-                peak.dye_cmax_mgl, peak.plume_reach_m, peak.active_frames, peak.uri)
+                substance_class, peak.dye_cmax_mgl, peak.plume_reach_m,
+                peak.active_frames, peak.uri)
 
-    if deck["substance_class"] == "sediment":
+    if substance_class == "sediment":
         try:
             peak = await _fold_sediment_products(
                 peak, run_id=run_id, utm_epsg=utm_epsg, reach_name=reach_name,
                 deck=deck, erodible=bool(deck.get("erodible_bed")), emitter=emitter)
         except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
             logger.warning("sediment deposition unexpected failure (%s)", exc)
-    elif deck["substance_class"] == "oil":
+    elif substance_class == "oil":
         from .substance import classify_substance
 
         await _emit_oil_slick(peak, run_id=run_id, reach_name=reach_name,

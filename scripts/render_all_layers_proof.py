@@ -729,7 +729,7 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
               f"rendered  |  emission order = loaded_layers order (z_index "
               f"{[l.get('z_index') for l, _ in renderable]})  |  "
               f"each panel frames ITS OWN layer (the CANVAS VIEW holds the "
-              f"shared extent)  |  ESRI World Imagery, EPSG:3857"]
+              f"shared extent)  |  {MR.basemap_label(mosaic)}, EPSG:3857"]
     footer += [f"NOT RENDERED: {s['name']} -> {s['error']}" for s in skipped]
     if strays:
         footer += [f"OFF-CANVAS (extent disjoint from every other layer in this "

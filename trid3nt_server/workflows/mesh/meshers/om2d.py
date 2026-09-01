@@ -75,6 +75,11 @@ _CONTAINER_TIMEOUT_S = 2400
 #: ETOPO relief is a REAL bed - coarse, on another vertical datum, labeled.
 _BED_FALLBACK = ("etopo_bathy_base",)
 
+#: The one conditioning this mesher performs on a staged bed - the watershed
+#: delineator's pit/depression/flat chain, named by the ask so a run that wants
+#: bed and routing to agree about the ground says so rather than assuming it.
+_BED_PIT_FILL = "pit_fill"
+
 #: DistMesh seeds its initial point cloud from numpy's global generator, which
 #: ``generate_mesh`` seeds itself from this value: one number is the whole
 #: difference between a replayable recipe and a mesh that drifts per rebuild.
@@ -148,8 +153,11 @@ _FIELDS = (
                   "'downstream_along': <channel line>, 'downstream_from': "
                   "<(lon, lat) of the line's upstream end>} to lay the sampled "
                   "surface down as a monotone downstream plane along that line, "
-                  "read head-to-tail from that end. The bed also drives the "
-                  "wavelength sizing term"),
+                  "read head-to-tail from that end. 'condition': 'pit_fill' on "
+                  "that mapping runs the watershed delineator's own pit/"
+                  "depression/flat chain over the raster first, so an overland "
+                  "run's bed carries the same sinks its routing does. The bed "
+                  "also drives the wavelength sizing term"),
     MeshField("boundaries", types=(dict,),
               doc="{role: face} - which stretch of the boundary carries which "
                   "role (inflow | outflow | open), each face a geometry the chain "
@@ -491,11 +499,19 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     warp writes its fill: sampled there, an 18 m deep boundary reads as sea level
     and the ocean-boundary identification then finds its open water somewhere
     else entirely.
+
+    ``condition: "pit_fill"`` on the bed mapping runs the DELINEATOR's own
+    conditioning chain over the staged raster before the nodes are sampled from
+    it. A catchment whose basin was delineated on a filled surface but whose bed
+    carries the raw sinks ponds in pits the routing does not believe in, and the
+    deepest water in the run is then a terrain artifact.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
+    condition = ""
     if isinstance(bed, Mapping):
+        condition = str(bed.get("condition") or "").strip().lower()
         bed = bed.get("raster") or bed.get("uri") or bed.get("path") or ""
     from trid3nt_server.tools.processing._geometry_common import source_uri
 
@@ -518,7 +534,22 @@ def _bed_raster(bed: Any, aoi: tuple[float, ...],
     dst = rundir / "bed.tif"
     dst.write_bytes(read_object_bytes_s3(uri) if str(uri).startswith("s3://")
                     else Path(uri).read_bytes())
-    return dst, _bed_provenance(name, layer), fetch_fallback_note(layer)
+    provenance = _bed_provenance(name, layer)
+    if condition:
+        if condition != _BED_PIT_FILL:
+            raise MeshToolError(
+                "MESH_SPEC_BAD_VALUE",
+                f"mesher 'om2d': bed condition {condition!r} is not a conditioning "
+                f"this mesher performs; the one it knows is {_BED_PIT_FILL!r}.")
+        from trid3nt_server.tools.processing._hydrology_common import (
+            write_conditioned_dem,
+        )
+
+        raw = dst.with_name("bed_raw.tif")
+        dst.rename(raw)
+        write_conditioned_dem(str(raw), str(dst))
+        provenance = f"{provenance} (pit-filled: the delineator's own chain)"
+    return dst, provenance, fetch_fallback_note(layer)
 
 
 def _downstream_along(bed: Any) -> tuple[Any, Any]:

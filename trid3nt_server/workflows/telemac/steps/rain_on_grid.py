@@ -660,15 +660,25 @@ def _provenance(deck: Mapping[str, Any]) -> list[SyntheticInput]:
 
 
 def _honesty_note(deck: Mapping[str, Any], metrics: Mapping[str, Any],
-                  product_note: str | None) -> str:
+                  product_note: str | None, truncated: bool = False) -> str:
     """What the RUN was, prefixed by what the LAYER is.
 
     The applicability envelope is part of the sentence, not a footnote: rain-on-
     grid reproduces single-storm flash floods in small steep catchments and does
     NOT carry baseflow, because infiltrated water is permanently lost.
+
+    A hydrograph still rising at the last sample gets its own sentence, because
+    every number the run reports about the storm is then a floor rather than a
+    measurement, and that is not a caveat a reader should have to derive from a
+    time series.
     """
     rain = deck["rain"]
     spacing = metrics.get("mesh_size_m") or deck["mesh_size_m"]
+    truncation = (
+        " WINDOW-TRUNCATED: the outlet discharge was still RISING when the "
+        "simulated window closed, so the peak, the runoff volume and the runoff "
+        "coefficient are LOWER BOUNDS - simulate past the storm to close them."
+        if truncated else "")
     return (
         (f"{product_note} " if product_note else "")
         + "Planning-grade rainfall-runoff SCREENING: TELEMAC-2D shallow water over a "
@@ -681,7 +691,8 @@ def _honesty_note(deck: Mapping[str, Any], metrics: Mapping[str, Any],
         + ". The raster is the peak water DEPTH envelope over the run; the animation "
         "plays from the native rain-on-grid SELAFIN. Single-storm events only: "
         "infiltrated water is permanently lost, so there is no subsurface return "
-        "flow and no inter-peak baseflow. Not a calibrated rainfall-runoff model.")
+        "flow and no inter-peak baseflow. Not a calibrated rainfall-runoff model."
+        + truncation)
 
 
 async def publish_rain_on_grid_products(*, deck: dict[str, Any],
@@ -735,6 +746,7 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         "catchment_area_km2": round(float(deck.get("area_km2") or 0.0), 4),
         "peak_discharge_m3s": hydrograph.get("peak_discharge_m3s"),
         "peak_discharge_time_s": hydrograph.get("peak_discharge_time_s"),
+        "peak_is_window_truncated": hydrograph.get("peak_is_window_truncated"),
         "rainfall_volume_m3": rainfall,
         "runoff_volume_m3": runoff,
         # A ratio, not a percentage, and only when there was rain to divide by:
@@ -743,6 +755,7 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
                                if rainfall and runoff is not None
                                and float(rainfall) > 0.0 else None),
         "max_depth_peak_m": pmetrics.get("wse_max_m"),
+        "max_depth_p99_m": pmetrics.get("wse_p99_m"),
         "continuity_rel_error": continuity_rel_error(listing),
         "runoff_path": deck["runoff_path"],
         "amc_condition": int(deck["infiltration"]["amc_condition"]),
@@ -768,7 +781,9 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
             # leaves it without a zoom-to extent; the DOMAIN's own 4326 bounds are
             # known here and the camera follows the domain.
             "bbox": tuple(deck["lonlat_bounds"]),
-            "fallback_note": _honesty_note(deck, metrics, raw.fallback_note),
+            "fallback_note": _honesty_note(
+                deck, metrics, raw.fallback_note,
+                truncated=bool(scalars["peak_is_window_truncated"])),
             "synthetic_inputs": _provenance(deck),
             # The run prefix travels WITH the layer so the skeleton writes this
             # run's own chart spec and answer metrics under it.

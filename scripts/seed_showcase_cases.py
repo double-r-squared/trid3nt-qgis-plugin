@@ -446,18 +446,6 @@ SHOWCASE: list[Showcase] = [
              "back as typed scalars, and the run's own chart spec + metrics land "
              "in its object-store prefix.", 600,
              title_suffix="Eel River near Scotia, declarative v1"),
-    Showcase("build_mesh",
-             {"mesher": "watershed",
-              "location": "Coweeta Creek, North Carolina",
-              "pour_point": (-83.40402, 35.05746),
-              "min_edge_length_m": 40.0, "max_edge_length_m": 400.0},
-             "the watershed mesher on the Coweeta Creek NC catchment. Delineate "
-             "-> distance-to-river-refined OceanMesh2D triangulation "
-             "(GPL-isolated mesh:latest) -> UTM SELAFIN + MDAL .2dm display "
-             "layer + a durable mesh artifact a model template discovers via the "
-             "precondition gate. Emits the mesh wireframe as a layer_type=mesh "
-             "row (crs_authid=EPSG:32617).",
-             1800),
     Showcase("telemac_rain_on_grid",
              {"location": "Otto, North Carolina",
               "pour_point": (-83.40402, 35.05746),

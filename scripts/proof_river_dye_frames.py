@@ -11,8 +11,9 @@ never a re-derivation:
 
 Both are coloured through the product's OWN styling seam
 (``publish_layer._resolve_qgis_style_params``), so the proof shows the colours
-the canvas shows rather than a second palette invented here. ESRI World Imagery
-is the basemap, in EPSG:3857 for both tiles and data.
+the canvas shows rather than a second palette invented here. The basemap is
+whichever ESRI service actually rendered under the frame, credited by name, in
+EPSG:3857 for both tiles and data.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage: proof_river_dye_frames.py --run-id <ULID> [--out-dir docs/proof/templates]
@@ -101,6 +102,7 @@ def _nodes_to_lonlat(x: np.ndarray, y: np.ndarray, utm_epsg: int):
 
 
 def _axes_with_basemap(bbox_ll, title: str):
+    """Axes over the basemap, plus the CREDIT for the one that actually rendered."""
     zoom = MR.pick_zoom(bbox_ll, max_tiles=6)
     mosaic, extent = MR.fetch_basemap(bbox_ll, zoom)
     fig, ax = plt.subplots(figsize=(10.0, 4.6), dpi=_DPI)
@@ -113,7 +115,7 @@ def _axes_with_basemap(bbox_ll, title: str):
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(title, fontsize=10)
-    return fig, ax
+    return fig, ax, MR.basemap_label(mosaic)
 
 
 def _mesh_bbox_ll(lon: np.ndarray, lat: np.ndarray):
@@ -133,8 +135,8 @@ def render_animation(slf_path: str, utm_epsg: int, *, vmin, vmax, cmap: str,
         finite = values[np.isfinite(values)]
         vmin, vmax = float(np.nanpercentile(finite, 2)), float(np.nanpercentile(finite, 98))
 
-    fig, ax = _axes_with_basemap(_mesh_bbox_ll(lon, lat),
-                                 f"TELEMAC-2D dye plume - {reach}")
+    fig, ax, basemap_credit = _axes_with_basemap(
+        _mesh_bbox_ll(lon, lat), f"TELEMAC-2D dye plume - {reach}")
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=cmap,
                         vmin=vmin, vmax=vmax, alpha=0.85, zorder=2)
     # The MESH is the modeled domain, drawn OVER the field: a wireframe hidden
@@ -150,7 +152,7 @@ def render_animation(slf_path: str, utm_epsg: int, *, vmin, vmax, cmap: str,
                     bbox=dict(facecolor="black", alpha=0.45, pad=3, edgecolor="none"))
     ax.text(0.012, 0.955, f"run {run_id}  |  published r2d_river.slf, "
             f"{len(mesh['times'])} frames  |  wireframe = the meshed domain  |  "
-            f"ESRI World Imagery",
+            f"{basemap_credit}",
             transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
             bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
 
@@ -183,8 +185,8 @@ def render_peak(cog_path: str, *, vmin, vmax, cmap: str, out_path: Path,
         right, bottom = transform * (w, h)
         bounds_ll = rasterio.warp.transform_bounds(src.crs, "EPSG:4326", *src.bounds)
 
-    fig, ax = _axes_with_basemap(bounds_ll,
-                                 f"Peak dye concentration envelope - {reach}")
+    fig, ax, _basemap_credit = _axes_with_basemap(
+        bounds_ll, f"Peak dye concentration envelope - {reach}")
     masked = np.ma.masked_invalid(arr)
     im = ax.imshow(masked, extent=(left, right, bottom, top), origin="upper",
                    cmap=cmap, vmin=vmin, vmax=vmax, alpha=0.85, zorder=2)

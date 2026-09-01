@@ -225,28 +225,31 @@ async def publish_input_layer(
     role: str = "input",
     fallbacks: Sequence[Any] | None = None,
 ) -> bool:
-    """BEST-EFFORT: surface an engine INPUT layer on the map (role="input").
+    """BEST-EFFORT: surface ONE extra layer on the map beside the step's return.
 
     Every engine run consumes renderable inputs (OpenQuake fault traces,
     SFINCS DEM / rivers / landcover, SWMM building footprints) in addition to
-    producing a result. This is the ONE reusable seam composers call to also
-    surface those inputs: it wraps :func:`emit_layer_uri` (the guardrail) +
-    ``emitter.add_loaded_layer`` exactly like the SWMM / SFINCS mesh-layer
-    emit, with two hard rules baked in:
+    producing a result, and some runs produce a SECOND result the step does not
+    return (a GAIA bed-evolution map, an oil slick track). This is the ONE
+    reusable seam composers call to surface either: it wraps
+    :func:`emit_layer_uri` (the guardrail) + ``emitter.add_loaded_layer`` exactly
+    like the SWMM / SFINCS mesh-layer emit, with two hard rules baked in:
 
-      * ``role`` defaults to ``"input"`` and is FORCED onto the LayerURI (a copy is
-        made if the incoming role differs) so an input renders non-intrusively
-        beneath the primary result, never competing with it for "the answer".
+      * ``role`` is FORCED onto the LayerURI (a copy is made if the incoming role
+        differs). It defaults to ``"input"`` - the common case, rendering
+        non-intrusively beneath the primary result - and a caller surfacing a
+        RESULT passes ``role="primary"``, because a product of the solve declared
+        as an input is a lie about what the run computed.
       * ``bbox`` is FORCED to ``None`` so ``add_loaded_layer`` does NOT emit a
-        competing ``zoom-to`` map-command -- an input/context layer must never
-        fight the AOI / result camera for the view (mirrors the mesh-layer rule).
+        competing ``zoom-to`` map-command -- an extra layer must never fight the
+        AOI / result camera for the view (mirrors the mesh-layer rule).
 
-    BEST-EFFORT CONTRACT (the whole point): a failure to surface an input must
-    NEVER fail the solve. This function NEVER raises -- every failure path (no
-    emitter bound, a falsy layer, the guardrail dropping a raw-object-store
+    BEST-EFFORT CONTRACT (the whole point): a failure to surface an extra layer
+    must NEVER fail the solve. This function NEVER raises -- every failure path
+    (no emitter bound, a falsy layer, the guardrail dropping a raw-object-store
     raster, an ``add_loaded_layer`` exception) is swallowed with a WARNING and
     returns ``False``. Returns ``True`` only when the layer actually reached the
-    emitter. The result-layer publish is untouched; this only ADDS input rows.
+    emitter. The step's own returned layer is untouched; this only ADDS rows.
 
     Note: a RASTER input must carry a renderable uri -- an http(s) tile/WMS URL
     or a raw ``s3://`` COG (the QGIS plugin reads it via /vsicurl/). A
@@ -258,8 +261,8 @@ async def publish_input_layer(
     if emitter is None or layer_uri is None:
         return False
     try:
-        # Force the input invariants: role="input" + bbox=None. Copy only when a
-        # field actually differs so the common (already-correct) path is a no-op.
+        # Force the surfacing invariants: the caller's role + bbox=None. Copy only
+        # when a field actually differs so the common path is a no-op.
         if layer_uri.role != role or layer_uri.bbox is not None:
             layer_uri = layer_uri.model_copy(update={"role": role, "bbox": None})
         safe = emit_layer_uri(layer_uri, fallbacks=fallbacks)
@@ -274,8 +277,7 @@ async def publish_input_layer(
             return False
         await emitter.add_loaded_layer(safe)
         logger.info(
-            "publish_input_layer: surfaced engine input layer_id=%s type=%s "
-            "preset=%s role=%s",
+            "publish_input_layer: surfaced layer_id=%s type=%s preset=%s role=%s",
             safe.layer_id,
             safe.layer_type,
             safe.style_preset,

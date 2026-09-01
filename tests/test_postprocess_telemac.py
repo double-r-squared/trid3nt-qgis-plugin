@@ -82,6 +82,34 @@ def test_pick_dye_var():
     assert P._pick_dye_var(["VELOCITY U", "WATER DEPTH"]) is None
 
 
+def test_no_substance_class_but_the_dye_one_publishes_a_dye_named_product():
+    """The product's NAME must not assert more than the field carries: an oil run
+    advects the same passive tracer a dye run does, and a sediment run's tracer is
+    a suspended grain load. Neither may reach the store as ``telemac_dye_peak``."""
+    from trid3nt_contracts.telemac_contracts import TELEMAC_SUBSTANCE_PRODUCTS as T
+
+    assert T["tracer"].cog == T["decay"].cog == "telemac_dye_peak.tif"
+    for name in ("oil", "sediment"):
+        assert "dye" not in T[name].cog
+        assert "dye" not in T[name].quantity
+    # each class's raster resolves through the ONE styling seam, never a preset
+    # engine code invented.
+    from trid3nt_server.emission.styles import resolve_style_preset
+
+    for product in T.values():
+        preset, is_fallback = resolve_style_preset(product.quantity)
+        assert (preset, is_fallback) == (product.style_preset, False)
+
+
+def test_the_peak_layer_handle_carries_the_class_that_produced_it():
+    """Two classes on one reach publish different rasters; a shared handle would
+    register one over the other."""
+    dye = P.peak_layer_id("RID", "tracer")
+    assert dye == P.peak_layer_id("RID", "")           # an unnamed class IS dye
+    assert dye != P.peak_layer_id("RID", "sediment")
+    assert " " not in P.peak_layer_id("RID", "sediment")
+
+
 def test_grid_shape_floor_and_aspect():
     # a tiny AOI floors to the minimum per side.
     nrows, ncols = P._grid_shape((-114.31, 42.57, -114.305, 42.575), P.TELEMAC_TARGET_GROUND_RES_M)

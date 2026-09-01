@@ -10,25 +10,25 @@ Reuses the WS patterns of scripts/ws_smoke.py + scripts/tool_routing_bench.py
 (handshake, case create, envelope drain, payload-warning auto-confirm), kept
 self-contained here so the bench scripts stay untouched.
 
-EXECUTION POLICY (v1, client-side): the server-side pre-dispatch block hook
-does NOT exist yet. For execution=block_at_invocation records the engine
+EXECUTION POLICY, and it is CLIENT-SIDE: the block is a cancel, not a
+pre-dispatch veto. For execution=block_at_invocation records the engine
 grades on the FIRST MATERIAL tool-call envelope (material = not in the
 record's always_allowed set, not a meta/discovery tool, not an LLM
-bookkeeping step) and immediately cancels the turn. The blocked tool may
-briefly START before the cancel lands -- the server-side pre-dispatch hook
-replaces this after the current server batch, making the block airtight
-before any fetch. Run-tier records are also cancelled the moment the fired
-sequence VIOLATES the record's sets (no value in letting a mis-routed tool
-execute) -> SELECTED_WRONG_BLOCKED / FALSE_POSITIVE.
+bookkeeping step) and immediately cancels the turn, so the blocked tool may
+briefly START before the cancel lands - a record whose forbidden tool costs
+real money must not rely on this alone. Run-tier records are also cancelled
+the moment the fired sequence VIOLATES the record's sets (no value in
+letting a mis-routed tool execute) -> SELECTED_WRONG_BLOCKED /
+FALSE_POSITIVE.
 
 PERMISSION GATE: NEVER auto-runs. Without --i-have-permission the script
 loads + validates the inputs, prints the resource profile (record count,
 tiers, expected API classes) and exits 2.
 
-ENV: the DAEMON must run with TRID3NT_AMBIGUITY_MARGIN=0 (kills ADR 0018
-ambiguity asks so the sweep never stalls on a tool-candidates card). The
-engine cannot set the daemon's env; it prints the requirement and sets the
-var in its own process only for any in-process seams.
+ENV: the DAEMON must run with TRID3NT_AMBIGUITY_MARGIN=0, which kills the
+measured-ambiguity ask so the sweep never stalls on a tool-candidates card.
+The engine cannot set the daemon's env; it prints the requirement and sets
+the var in its own process only for any in-process seams.
 
 Output per run: data/<UTC timestamp>/raw_envelopes.jsonl (every envelope in
 + out, raw) + results.json + summary.txt.

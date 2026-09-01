@@ -199,13 +199,14 @@ CANARIES: dict[str, LiveRun] = {
 
 
 # --------------------------------------------------------------------------- #
-# REFINED-MESH variants: the same question, the resolution lever moved.
+# REFINED variants: the same question, ONE discretization lever moved.
 # --------------------------------------------------------------------------- #
 # NOT parity runs. A different mesh is a different discretization, so the
 # scalars MOVE - and that movement is the physics of resolution, information
 # about how far the coarse answer can be trusted, never a regression. Each one
-# is the coarse declaration with its sizing lever changed and nothing else, so
-# the drift has exactly one cause.
+# is the coarse declaration with ONE lever changed and nothing else, so the
+# drift has exactly one cause. The lever is usually the mesh; where the coarse
+# run's answer is bounded by its TIME window instead, it is the window.
 
 def _refined(name: str, **overrides: Any) -> LiveRun:
     base = CANARIES[name]
@@ -277,6 +278,13 @@ CANARIES.update({
     # held fixed and only the horizontal moves.
     "telemac3d_stratified_flow_refined": _refined("telemac3d_stratified_flow",
                                                   target_resolution_m=1000.0),
+    # The lever this one moves is the WINDOW, not the mesh. A catchment answers
+    # AFTER the rain stops: the coarse canary's 2 h around a 1 h storm closes
+    # while the outflow is still rising, so its peak, volume and coefficient are
+    # lower bounds on a hydrograph that has no crest inside the run. 6 h is past
+    # the storm and past the response, so the refined run measures a peak.
+    "telemac_rain_on_grid_refined": _refined("telemac_rain_on_grid",
+                                             sim_duration_hr=6.0),
 })
 
 

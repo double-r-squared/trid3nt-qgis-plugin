@@ -61,6 +61,12 @@ def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
     the engine's own accounting of it, so the run narrates from these rather than
     from an integral a reader recomputed. Any field the listing did not print is
     simply absent.
+
+    ZERO HAS NO SIGN, and the sign is fixed HERE so no consumer has to know: a
+    residual the listing prints as a tiny negative rounds to ``-0.0``, which
+    survives ``max(value, 0.0)`` unchanged and reaches the reader as a negative
+    deposited mass beside a map showing deposition. Adding 0.0 collapses the
+    negative zero onto the positive one; a genuinely negative mass is untouched.
     """
     start = re.search(_GAIA_HEADING, listing_text or "")
     if start is None:
@@ -75,7 +81,7 @@ def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
         if found is None:
             continue
         try:
-            out[name] = round(float(found.group(1)), places)
+            out[name] = round(float(found.group(1)), places) + 0.0
         except ValueError:
             continue
     return out
@@ -313,6 +319,11 @@ def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
         "q_m3s": [round(float(q), 6) for q in flows],
         "peak_discharge_m3s": round(float(flows[peak]), 6),
         "peak_discharge_time_s": round(float(times[peak]), 3),
+        # A maximum that lands on the LAST sample is not a peak, it is where the
+        # window closed: the series was still rising when the run ended, so the
+        # real peak, the runoff volume and every ratio built on them are floors,
+        # not measurements. The read says so; nothing downstream has to infer it.
+        "peak_is_window_truncated": bool(times.size > 1 and peak == times.size - 1),
         "runoff_volume_m3": round(max(volume, 0.0), 3),
         "outlet_boundary": int(boundary),
     }

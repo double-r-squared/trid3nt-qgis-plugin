@@ -118,6 +118,13 @@ presets:
               range: [0, 10]}   # range = the no-band-stats fallback
     units: "m"
     label: "Drawdown m"
+  continuous_dye_concentration:
+    kind: continuous
+    colormap: reds
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 10]}   # range = the no-band-stats fallback
+    units: "mg/L"
+    label: "Dye concentration"
   continuous_factor_of_safety:
     kind: continuous
     colormap: rdylgn
@@ -243,6 +250,16 @@ presets:
               range: [0, 1]}   # range = the no-band-stats fallback
     units: "m/m"
     label: "Slope"
+  continuous_suspended_sediment:
+    kind: continuous
+    # A SUSPENDED grain load, not a dissolved tracer: a separate ramp from the
+    # dye reds, because a sediment run publishes this beside the bed-evolution
+    # map and the two concentration fields must never read as one.
+    colormap: oranges
+    rescale: {policy: data, transform: percentile, clip: [2.0, 98.0],
+              range: [0, 100]}   # range = the no-band-stats fallback
+    units: "mg/L"
+    label: "Suspended sediment concentration"
   continuous_subsidence_cm:
     kind: continuous
     colormap: inferno
@@ -522,7 +539,7 @@ quantity_defaults:
   dissolved_oxygen: continuous_dissolved_oxygen_mgl
   drainage_area: continuous_drainage_area
   drawdown: continuous_drawdown_m
-  dye_concentration: continuous_plume_concentration
+  dye_concentration: continuous_dye_concentration
   factor_of_safety: continuous_factor_of_safety
   fire_arrival: continuous_fire_arrival_hr
   fire_spread_rate: continuous_fire_spread_rate
@@ -543,6 +560,10 @@ quantity_defaults:
   liquefaction_probability: continuous_liquefaction_probability
   model_results: mesh_grid
   mounding: continuous_mounding_m
+  # An oil run's transported field is the dye tracer under an oil label - the
+  # slick physics rides the drogues track, not this raster - so it takes the dye
+  # ramp and says so in its own name rather than claiming a ramp of its own.
+  oil_tracer_concentration: continuous_dye_concentration
   plume-concentration: continuous_plume_concentration
   plume-concentration-ts: continuous_plume_concentration
   plume_concentration: continuous_plume_concentration
@@ -556,6 +577,7 @@ quantity_defaults:
   seismic_pga: continuous_seismic_pga
   slope: continuous_slope
   subsidence: continuous_subsidence_cm
+  suspended_sediment_concentration: continuous_suspended_sediment
   swmm-conduit-flow: diverging_conduit_flow
   swmm-conduit-velocity: continuous_conduit_velocity
   swmm-depth: continuous_flood_depth

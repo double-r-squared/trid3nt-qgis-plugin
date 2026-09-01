@@ -126,7 +126,12 @@ MESH = tool.build_mesh(
     refine={"max_el": P.mesh_max_edge_m,
             "resolution_m": P.mesh_min_edge_m,
             "gradation": P.mesh_grade},
-    bed=Ref("bed_dem.uri"),
+    # ONE GROUND. The basin above was delineated on the pit-filled surface of
+    # this same DEM, so the bed the nodes are painted from is conditioned by the
+    # same chain: an unfilled sink under an overland solve ponds to its rim and
+    # sets the published peak depth from a terrain artifact the routing does not
+    # believe in.
+    bed={"raster": Ref("bed_dem.uri"), "condition": "pit_fill"},
     # THE OUTLET, declared where every other boundary role is: the delineation's
     # own accumulation-SNAPPED pour point, which is the point on the basin's
     # boundary the terrain drains through. Every boundary node within the mesh's
@@ -170,8 +175,9 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
 #: beside the chart spec so verification cites the run's own figures rather than
 #: recomputing them from the raster.
 ANSWER = ("catchment_area_km2", "peak_discharge_m3s", "peak_discharge_time_s",
+          "peak_is_window_truncated",
           "rainfall_volume_m3", "runoff_volume_m3", "runoff_coefficient",
-          "max_depth_peak_m", "continuity_rel_error",
+          "max_depth_peak_m", "max_depth_p99_m", "continuity_rel_error",
           "amc_condition", "rain_intensity_mm_per_hr", "n_frames",
           "mesh_size_m", "mesh_node_count", "mesh_element_count",
           "catchment_provenance", "domain_bbox")
@@ -222,6 +228,11 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
                if coefficient is not None else "")
             + ". Planning-grade single-storm screening: infiltrated water is "
               "permanently lost, so there is no baseflow limb."
+            # The crest on the last sample is the window closing, not the storm
+            # answering: the chart says so where the number is read.
+            + (" WINDOW-TRUNCATED: the limb is still rising at the last sample, "
+               "so this peak is a LOWER BOUND."
+               if getattr(result, "peak_is_window_truncated", None) else "")
         ),
     )
 

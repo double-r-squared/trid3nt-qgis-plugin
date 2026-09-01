@@ -29,6 +29,7 @@ __all__ = [
     "HydrologyAoiTooLargeError",
     "HydrologyDependencyError",
     "HydrologyUpstreamError",
+    "write_conditioned_dem",
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.processing._hydrology_common")
@@ -206,20 +207,32 @@ def _stage_dem(
                  f"{_DEM_PURPOSE}.")
     return local
 
-def _condition_dem(dem_path: str) -> tuple[Any, Any, Any]:
-    """pysheds conditioning chain -> ``(grid, fdir, acc)``."""
+def _open_dem(dem_path: str) -> tuple[Any, Any]:
+    """``(grid, dem)`` for a DEM raster, behind the typed open failure."""
     Grid = _import_pysheds()
     try:
         grid = Grid.from_raster(dem_path)
-        dem = grid.read_raster(dem_path)
+        return grid, grid.read_raster(dem_path)
     except Exception as exc:  # noqa: BLE001
         raise HydrologyInputError(
             f"could not open DEM raster {dem_path!r}: {exc}"
         ) from exc
+
+
+def _conditioned(grid: Any, dem: Any) -> Any:
+    """The pit -> depression -> flat chain: ONE conditioning, spelled once.
+
+    Every consumer of a conditioned surface reads it from here, so a delineation
+    and anything sampled beside it cannot describe two different grounds.
+    """
+    return grid.resolve_flats(grid.fill_depressions(grid.fill_pits(dem)))
+
+
+def _condition_dem(dem_path: str) -> tuple[Any, Any, Any]:
+    """pysheds conditioning chain -> ``(grid, fdir, acc)``."""
+    grid, dem = _open_dem(dem_path)
     try:
-        pit_filled = grid.fill_pits(dem)
-        flooded = grid.fill_depressions(pit_filled)
-        inflated = grid.resolve_flats(flooded)
+        inflated = _conditioned(grid, dem)
         # nodata_out MUST be numpy-typed scalars: pysheds 0.4 hands them to
         # np.can_cast, which rejects Python ints/floats under NEP-50 numpy.
         fdir = grid.flowdir(inflated, nodata_out=np.int64(0))
@@ -229,6 +242,33 @@ def _condition_dem(dem_path: str) -> tuple[Any, Any, Any]:
             f"pysheds DEM conditioning / flow analysis failed: {exc}"
         ) from exc
     return grid, fdir, acc
+
+
+def write_conditioned_dem(dem_path: str, out_path: str) -> str:
+    """The delineator's own conditioning chain, written back out as a raster.
+
+    A mesh bed painted from the RAW DEM ponds in exactly the pits the delineation
+    already filled to route through: the deepest water in the run is then a
+    single node inside an unfilled sink, and the published depth map is scaled by
+    a terrain artifact rather than by the storm. One chain, one ground.
+
+    The profile is the source raster's, so nothing but the elevations moves.
+    """
+    import rasterio
+
+    grid, dem = _open_dem(dem_path)
+    try:
+        inflated = np.asarray(_conditioned(grid, dem), dtype="float32")
+    except Exception as exc:  # noqa: BLE001
+        raise HydrologyUpstreamError(
+            f"pysheds DEM conditioning failed for {dem_path!r}: {exc}"
+        ) from exc
+    with rasterio.open(dem_path) as src:
+        profile = src.profile
+    profile.update(dtype="float32", count=1)
+    with rasterio.open(out_path, "w", **profile) as dst:
+        dst.write(inflated, 1)
+    return out_path
 
 def snap_and_delineate_index_space(
     grid: Any,

@@ -296,6 +296,37 @@ def test_a_bed_naming_neither_a_fetcher_nor_a_raster_refuses(tmp_path):
     assert excinfo.value.error_code == "MESH_BED_UNRESOLVED"
 
 
+def test_a_declared_pit_fill_runs_the_delineators_own_chain_and_says_so(
+        monkeypatch, tmp_path):
+    """An overland run's bed must carry the same sinks its routing does, or the
+    deepest water in the run is a pit the delineation already filled."""
+    raw = tmp_path / "source.tif"
+    raw.write_bytes(b"not-a-real-raster")
+    seen: dict = {}
+
+    def _fake_condition(src, dst):
+        seen["src"] = src
+        Path(dst).write_bytes(b"conditioned")
+        return dst
+
+    monkeypatch.setattr(
+        "trid3nt_server.tools.processing._hydrology_common.write_conditioned_dem",
+        _fake_condition)
+    dst, provenance, _note = OM2D._bed_raster(
+        {"raster": str(raw), "condition": "pit_fill"}, _AOI, tmp_path)
+    assert dst.read_bytes() == b"conditioned"
+    assert Path(seen["src"]).read_bytes() == b"not-a-real-raster"
+    assert "pit-filled" in provenance
+
+
+def test_a_bed_conditioning_this_mesher_does_not_perform_refuses(tmp_path):
+    raw = tmp_path / "source.tif"
+    raw.write_bytes(b"x")
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D._bed_raster({"raster": str(raw), "condition": "smooth"}, _AOI, tmp_path)
+    assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
+
+
 # --------------------------------------------------------------------------- #
 # The bed's provenance, in whichever shape the fetch answered.
 # --------------------------------------------------------------------------- #

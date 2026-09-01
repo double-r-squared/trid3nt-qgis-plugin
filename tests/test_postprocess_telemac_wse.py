@@ -143,6 +143,50 @@ def test_wse_depth_mode(tmp_path):
     assert metrics["wse_max_m"] == pytest.approx(4.0)
 
 
+def test_a_depth_field_renders_dry_ground_dry_and_nodata_only_off_the_domain(tmp_path):
+    """n7 never went wet. As NODATA it punches a hole through the map and reads
+    as a broken raster; its own zero depth is the run's answer for that node."""
+    slf = tmp_path / "wse.slf"
+    _malpasset_like_slf(slf)
+    _layers, metrics = P.postprocess_telemac_wse(
+        slf, run_id="TESTWSE0000000000000000EE", mesh_epsg=32632,
+        quantity="depth", _output_dir=str(tmp_path),
+    )
+    assert metrics["wse_min_m"] == 0.0
+    # the wet-node COUNT is unmoved by the dry zeros - 6 of the 7 nodes went wet.
+    assert metrics["n_wet_nodes"] == 6
+    assert "dry renders DRY" in metrics["honesty_label"]
+
+
+def test_the_p99_depth_is_measured_beside_the_maximum_over_the_wet_nodes(tmp_path):
+    """One pit ponding to its rim sets the maximum; the percentile is the field."""
+    slf = tmp_path / "wse.slf"
+    _malpasset_like_slf(slf)
+    _layers, metrics = P.postprocess_telemac_wse(
+        slf, run_id="TESTWSE0000000000000000FF", mesh_epsg=32632,
+        quantity="depth", _output_dir=str(tmp_path),
+    )
+    # per-node peaks over the six wet nodes: 3, 2, 4, 2, 3, 2.5.
+    assert metrics["wse_p99_m"] == pytest.approx(
+        float(np.percentile([3.0, 2.0, 4.0, 2.0, 3.0, 2.5], 99)), abs=1e-4)
+    assert metrics["wse_p99_m"] < metrics["wse_max_m"]
+
+
+def test_a_free_surface_field_keeps_a_never_wet_node_nodata(tmp_path):
+    """An ELEVATION has no dry floor: a dry node's free surface IS its bed, so
+    filling it in would paint terrain as a water surface."""
+    slf = tmp_path / "wse.slf"
+    _malpasset_like_slf(slf)
+    _layers, metrics = P.postprocess_telemac_wse(
+        slf, run_id="TESTWSE00000000000000000G", mesh_epsg=32632,
+        _output_dir=str(tmp_path),
+    )
+    assert metrics["n_wet_nodes"] == 6
+    # the dry n1/n7 terrain elevations (25 / 30) never enter the range.
+    assert metrics["wse_max_m"] == pytest.approx(12.0)
+    assert metrics["wse_min_m"] > 0.0
+
+
 def test_wse_empty_dry_solve_raises(tmp_path):
     slf = tmp_path / "dry.slf"
     x = [0.0, 100.0, 0.0]

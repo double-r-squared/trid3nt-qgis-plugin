@@ -418,9 +418,10 @@ def _install_step_mocks(captured: dict):
         return [_fake_peak(run_id, reach_name)], {"dye_cmax_mgl": 97.3}
 
     def _fake_publish(raw_peak, run_id, location_name, mesh_meta, substance,
-                      synthetic_inputs):
+                      substance_class, synthetic_inputs):
         captured["published"] = True
         captured["publish_substance"] = substance
+        captured["publish_substance_class"] = substance_class
         captured["synthetic_inputs"] = synthetic_inputs
         return raw_peak.model_copy(update={"uri": "https://tiles/dye_peak.png",
                                            "synthetic_inputs": synthetic_inputs,

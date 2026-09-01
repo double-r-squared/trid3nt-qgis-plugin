@@ -1,149 +1,118 @@
 # Adding an engine
 
-An "engine" is a real numerical solver (MODFLOW, SFINCS, PySWMM, OpenQuake,
-GeoClaw, Landlab, SWAN, TELEMAC, ELMFIRE, ...) that the agent drives end to end:
-the LLM assembles a typed run spec, a **worker** builds the solver deck and runs
-it, and a **postprocess** step turns the raw outputs into a rendered `LayerURI`.
-This doc covers the two patterns:
+An "engine" is a real numerical solver the agent drives end to end: a declared
+template assembles the run, the engine's **facade** routes the declared physics
+process to the steps that author its deck, a **worker** runs the solver inside
+its image, and a **postprocess** turns the raw outputs into published layers plus
+the typed scalars the agent narrates from.
 
-- **Adding an archetype to an existing engine** (a new QUESTION the engine can
-  answer) -- the common, cheaper case. Precedents: the MODFLOW SFR
-  `stream_depletion` and CSUB `land_subsidence` archetypes.
-- **Adding a whole new engine** -- the sprint-17 precedent (GeoClaw, OpenQuake,
-  Landlab, SWAN, TELEMAC).
+The live engine is TELEMAC (`trid3nt_server/workflows/telemac/`), and it is the
+precedent every path below names. This doc covers the two patterns:
+
+- **Adding a template to an existing engine** (a new QUESTION the engine can
+  answer) -- the common, cheaper case.
+- **Adding a whole new engine** -- a facade, a worker image, and a postprocess.
 
 The discipline for both (project norms):
 
 - **Research the real pipeline first.** Ground the deck in how practitioners
   actually build this model, from primary sources, before writing code.
 - **Smoke-first, local-first.** Prototype as a direct-call sandbox script against
-  a tiny fixture, get the deck to converge, THEN promote to a registered tool.
+  a tiny fixture, get the deck to converge, THEN promote to a registered
+  template.
 - **Deploy is not "commit".** A worker-image engine only runs after its image is
-  rebuilt and shipped; verify `deployed == HEAD` on the box.
+  rebuilt; a worker edit is INERT until then.
 
 ---
 
-## Pattern A - a new archetype on an existing engine (MODFLOW)
+## Pattern A - a new template on an existing engine
 
-An archetype reuses the engine's worker + run plumbing and adds a new deck
-branch + postprocess. The seam list, from the SFR/CSUB precedents:
+A template is a DECLARATION, not a function: `PARAMS` and `DATA` class bodies
+plus a pure `plan(ops)` the interpreter walks
+(`docs/design/declarative-workflows.md` is the language reference). It reuses the
+engine's facade, its steps and its worker, and adds a new physics process. The
+seam list, from the TELEMAC templates:
 
-1. **Contract archetype literal** --
-   `contracts/trid3nt_contracts/modflow_contracts.py`: add the
-   literal to `MODFLOWRunArgs.archetype` (the `Literal[...] | None` selector),
-   plus any per-archetype input fields and a headline `LayerURI` subclass with
-   pinned metrics + sign conventions (e.g. `StreamReachLayerURI`,
-   `SubsidenceLayerURI`, `DrawdownLayerURI`).
+1. **The declarations** -- `workflows/<engine>/<template>/declarations.py`: the
+   `PARAMS` rows (each with its door, bounds, units and consequence tag) and the
+   model-facing `DOC`. Nothing here executes.
 
-2. **Worker deck author** --
-   `workers/modflow/gwt_adapter.py`: a new branch that builds the
-   FloPy/mf6 deck (packages, boundary conditions, OBS) for the archetype. Keep
-   every non-target deck byte-identical.
+2. **The template** -- `workflows/<engine>/<template>/<template>.py`: the `DATA`
+   rows (every world-read declared, never performed in a step), the binding
+   blocks (`Physics`, `Forcing`, the `tool.build_mesh` ask), `plan(ops)`, the
+   `ANSWER` tuple, the chart builder, and the `register_workflow(...)` call.
+   Model it on `workflows/telemac/rain_on_grid/rain_on_grid.py`.
 
-3. **Run-tool threading** --
-   `trid3nt_server/workflows/run_modflow.py`: thread the new
-   fields + obs globs through to the worker.
+3. **The process row** -- `workflows/<engine>/workflow.py`: a row in the facade's
+   `_PROCESSES` table saying what the declared process means end to end - which
+   deck step serializes it, which writer's signature the slots are checked
+   against, which solve dispatches it, which reader publishes it. A process the
+   facade does not know REFUSES at plan construction rather than solving into a
+   reader that cannot describe the result.
 
-4. **Postprocess** --
-   `trid3nt_server/workflows/postprocess_modflow.py`: a
-   `postprocess_<archetype>(run_outputs_uri, *, run_id, model_crs, deck_dir)`
-   that reads the raw outputs and returns the headline `LayerURI` (+ charts). The
-   off-box worker mirror is
-   `workers/_modflow_postprocess/postprocess.py` (the
-   `_ARCHETYPE_POSTPROCESS_RUNNERS` map).
+4. **The steps** -- `workflows/<engine>/steps/`: the deck writer and the product
+   reader the row names. A product raster declares the QUANTITY it computed; the
+   style contract (`contracts/trid3nt_contracts/styles.yaml`) owns the preset.
 
-5. **Dispatch registration** --
-   `trid3nt_server/tools/run_modflow_archetype_tool.py`: add
-   `"<archetype>": (postprocess_fn, "headline_attr")` to `ARCHETYPE_POSTPROCESS`.
-   Also flag the archetype in `_NON_SCALAR_HEADLINES` (if the headline is a
-   series/dict rather than a positive scalar) or `PRT_ARCHETYPES` (if it runs a
-   two-simulation particle-tracking sequence) as applicable.
-
-6. **Composer (the LLM-facing surface)** --
-   `trid3nt_server/workflows/model_<x>_scenario.py`. This is the
-   tool the model calls. It carries its OWN `@register_tool` (e.g.
-   `run_model_<x>_scenario`), assembles a `MODFLOWRunArgs(archetype="<x>", ...)`,
-   and dispatches to `run_modflow_archetype_job`. Model it on
-   `trid3nt_server/workflows/model_sustainable_yield_scenario.py`.
-   The archetype run-tool itself is NOT `@register_tool`'d -- the composers are
-   the surface.
-
-7. **Discovery + wiring** (same as any tool -- see `writing-a-tool.md`):
-   - import the composer in `trid3nt_server/tools/__init__.py`
-     (the `from ..workflows import model_<x>_scenario as _model_<x>_scenario`
-     pattern) so its `@register_tool` fires at startup;
-   - add `tool_query_corpus.yaml` queries + run the
-     `retrieve_visible_tools(prompt, None, 8)` visibility check;
-   - add any chart payloads in `chart_tools.py`;
-   - add a test + an mf6 smoke fixture under
-     `workers/modflow/fixtures/<x>_smoke/`.
+5. **Discovery + wiring**:
+   - import the template in `trid3nt_server/tools/__init__.py` so its
+     registration fires at startup;
+   - add the routing phrasings to the template package's `corpus.yaml` and run
+     the retrieval-visibility check;
+   - add a declaration test beside the other template tests, and a canary in
+     `trid3nt_server/testing/canaries.py`.
 
 ---
 
 ## Pattern B - a whole new engine
 
-Precedent: the sprint-17 engines wired in `tools/__init__.py` (`run_geoclaw_tool`,
-`run_openquake_tool`, `run_landlab_tool`, `run_swan_tool`, `run_telemac_tool`).
 Each new engine adds, roughly in order:
 
-1. **Deck / result contract** in
-   `contracts/trid3nt_contracts/` (a `<engine>_contracts.py` with the
-   run args + the headline `LayerURI` subclass), mirroring
-   `modflow_contracts.py`.
+1. **A result contract** in `contracts/trid3nt_contracts/<engine>_contracts.py`:
+   the headline `LayerURI` subclass carrying the typed scalars the agent
+   narrates, mirroring `telemac_contracts.py`. Style presets are named here and
+   declared once in `styles.yaml`.
 
-2. **A worker** under `workers/<engine>/`: an `entrypoint.py` plus the
-   deck author. Existing worker dirs to copy the shape from: `modflow/`,
-   `geoclaw/`, `openquake/`, `landlab/`, `swan/`, `telemac/`, `swmm/`. The engine
-   is dispatched with `run_solver('<engine>')` from the agent side.
+2. **A worker** under `workers/<engine>/`: an `entrypoint.py` plus the deck
+   builders. The worker is an ENGINE ROOM - a staged run dir in, results out, no
+   network and no defaults of its own. Copy the shape from `workers/telemac/`.
+   The engine is dispatched with `run_solver` from the agent side.
 
-3. **A postprocess** that reads the raw solver outputs and returns a headline
-   `LayerURI` (raster COG or vector FlatGeobuf), plus an off-box postprocess
-   mirror if the engine offloads (see `workers/_geoclaw_postprocess/`,
-   `_landlab_postprocess/`, `_swan_postprocess/`).
+3. **A facade** at `workflows/<engine>/workflow.py`: the operations a template
+   composes (`acquire_domain`, `author`, `solve`, `read`) and the `_PROCESSES`
+   table behind them.
 
-4. **A composer + bridge tool** on the agent side: a
-   `workflows/model_<engine>_scenario.py` composer carrying `@register_tool`
-   (`run_<engine>_...`), and a thin `tools/run_<engine>_tool.py` bridge that
-   imports the composer. Import the bridge in `tools/__init__.py`.
+4. **A postprocess** that reads the raw solver outputs and returns the headline
+   `LayerURI` (raster COG or vector), plus the results-mesh entry when the engine
+   writes a native time-stepped mesh the client animates directly.
 
-5. **Discovery + wiring**: `tool_query_corpus.yaml` queries + the
-   retrieval-visibility check, tests, and a smoke fixture.
+5. **Templates** on top of the facade, per Pattern A.
 
 ---
 
-## Local vs cloud deploy (the deploy seam)
+## The deploy seam
 
-Engines run one of two ways, chosen per engine/archetype:
+Engines run through `run_solver` on local docker; the image is resolved per
+engine (`TRID3NT_<ENGINE>_IMAGE` env or the registered default). See
+`workers/README.md` and `docs/site/engines.md`.
 
-- **Local-docker / in-process** -- small, fast archetypes run without Batch. The
-  MODFLOW PRT, saltwater-intrusion, SFR, and CSUB archetypes run via a local mf6
-  path (`run_modflow_local`); ELMFIRE runs a local `trid3nt/elmfire:dev`
-  container; SFINCS local uses `deltares/sfincs-cpu`. In the offline/local build,
-  engine backends are selected by env (`TRID3NT_MODFLOW_LOCAL=1`,
-  `TRID3NT_SOLVER_BACKEND=local-docker`).
-
-- **Local docker worker image** -- containerized engines run via `run_solver`
-  on local docker (image resolved per engine: `TRID3NT_<ENGINE>_IMAGE` env or
-  the registered default).
-
-**Worker-image changes need a rebuild.** Build with the engine's
-`build_<engine>_image.sh` (or the documented `docker build` line in
-docs/site/install.md). A code commit alone does NOT update a built image -
-verify the running image matches your change. Server-side code (the composer,
-contract, postprocess, wiring) deploys by editing `server/` + `make agent`.
+**Worker-image changes need a rebuild.** Build with the engine's build script
+(`scripts/build_telemac_image.sh`) or the documented `docker build` line, then
+smoke THROUGH the image and check its provenance. A code commit alone does NOT
+update a built image. Server-side code (the template, the facade, the steps, the
+contract, the postprocess) deploys by editing the tree + `make agent restart`.
 
 ---
 
 ## Smoke-first checklist
 
-Before you register the tool:
+Before you register the template:
 
 1. Research the real pipeline from primary sources.
 2. Write a direct-call sandbox script that builds the deck against a tiny fixture
    and runs the solver locally; confirm it converges and the diagnostic quantity
-   is physical (e.g. GeoClaw's "Total mass at initial time" ~1e9+ for a real
-   wave, not 1e5).
+   is physical.
 3. Wire the postprocess -> headline `LayerURI`; render a proof (overlay the mesh
    wireframe in engine proof renders).
-4. Only then promote to the composer + `@register_tool`, add corpus,
-   run the retrieval-visibility check, and add the smoke fixture + test.
+4. Only then register it, add the corpus queries, run the retrieval-visibility
+   check, and add the canary + declaration test.

@@ -17,12 +17,17 @@ scalars the agent cites rather than invents (invariant 1).
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from pydantic import Field
 
 from .execution import LayerURI
 
 __all__ = [
     "TELEMAC_DYE_STYLE_PRESET",
+    "TELEMAC_SEDIMENT_CONCENTRATION_STYLE_PRESET",
+    "TELEMAC_SUBSTANCE_PRODUCTS",
+    "SubstanceProduct",
     "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_WSE_STYLE_PRESET",
     "TELEMAC_DO_STYLE_PRESET",
@@ -78,6 +83,49 @@ TELEMAC_WAVE_STYLE_PRESET: str = "continuous_significant_wave_height"
 #: the QML
 #: preset library's coverage of this key (additive, legend-drives-render design).
 TELEMAC_DYE_STYLE_PRESET: str = "continuous_dye_concentration"
+
+#: Style preset for the GAIA SUSPENDED-SEDIMENT concentration raster - a grain
+#: load in mg/L, on its own ramp so it never reads as the dissolved dye field a
+#: sediment run also carries a bed-evolution map beside.
+TELEMAC_SEDIMENT_CONCENTRATION_STYLE_PRESET: str = "continuous_suspended_sediment"
+
+
+class SubstanceProduct(NamedTuple):
+    """What ONE substance class publishes as its transported-field raster.
+
+    The product's NAME must not assert more than the field carries: an oil run
+    advects the same passive tracer a dye run does (the slick physics rides the
+    drogues track, not this raster) and a sediment run's tracer is a suspended
+    grain load, so each class names its own COG, declares its own QUANTITY for
+    the styling seam, and carries its own preset and noun.
+
+        cog: the basename the COG is uploaded under, per run.
+        quantity: the quantity row the style contract resolves this raster by.
+        style_preset: the preset that quantity carries.
+        noun: what the layer name and the legend call the field.
+    """
+
+    cog: str
+    quantity: str
+    style_preset: str
+    noun: str
+
+
+#: substance class -> its transported-field product. A class absent here takes
+#: the dye row: a tracer whose class declared no chemistry of its own IS dye.
+TELEMAC_SUBSTANCE_PRODUCTS: dict[str, SubstanceProduct] = {
+    "tracer": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
+                               TELEMAC_DYE_STYLE_PRESET, "dye"),
+    "decay": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
+                              TELEMAC_DYE_STYLE_PRESET, "dye"),
+    "oil": SubstanceProduct("telemac_oil_tracer_peak.tif",
+                            "oil_tracer_concentration",
+                            TELEMAC_DYE_STYLE_PRESET, "oil tracer"),
+    "sediment": SubstanceProduct("telemac_sediment_peak.tif",
+                                 "suspended_sediment_concentration",
+                                 TELEMAC_SEDIMENT_CONCENTRATION_STYLE_PRESET,
+                                 "suspended sediment"),
+}
 
 #: Style preset for the GAIA sediment BED-EVOLUTION (deposition) raster. A DISTINCT
 #: diverging key (mirrors the ``diverging_river_seepage`` pattern) so
@@ -570,12 +618,21 @@ class TelemacRainOnGridLayerURI(TelemacWseLayerURI):
             Every volume below is only readable against it.
         peak_discharge_m3s / peak_discharge_time_s: the hydrograph crest and when
             it arrived - the flash-flood headline.
+        peak_is_window_truncated: True when that crest is the LAST sample in the
+            series, i.e. the outflow was still rising when the simulated window
+            closed. The peak, the runoff volume and the runoff coefficient are
+            then FLOORS on the storm's answer, not measurements of it.
         rainfall_volume_m3 / runoff_volume_m3: what fell on the catchment and what
             left through the outlet over the simulated window.
         runoff_coefficient: runoff / rainfall, the dimensionless summary of how
             much the infiltration surface absorbed. ``None`` when no rain fell.
         max_depth_peak_m / max_velocity_peak_ms: the deepest and fastest the
             overland sheet got anywhere, at any time.
+        max_depth_p99_m: the 99th-percentile peak depth over the wet catchment -
+            published BESIDE the maximum because a single terrain pit ponding to
+            its rim sets ``max_depth_peak_m`` while the sheet the storm actually
+            produced is two orders of magnitude shallower. One number is the
+            extreme, the other is the field; a reader needs both.
         continuity_rel_error: the solver's own mass-balance residual. A run whose
             volumes do not close is not a run whose hydrograph means anything, so
             the number is published rather than checked in private.
@@ -608,10 +665,12 @@ class TelemacRainOnGridLayerURI(TelemacWseLayerURI):
     catchment_area_km2: float | None = Field(default=None, ge=0.0)
     peak_discharge_m3s: float | None = Field(default=None)
     peak_discharge_time_s: float | None = Field(default=None, ge=0.0)
+    peak_is_window_truncated: bool | None = Field(default=None)
     rainfall_volume_m3: float | None = Field(default=None, ge=0.0)
     runoff_volume_m3: float | None = Field(default=None)
     runoff_coefficient: float | None = Field(default=None)
     max_depth_peak_m: float | None = Field(default=None, ge=0.0)
+    max_depth_p99_m: float | None = Field(default=None, ge=0.0)
     max_velocity_peak_ms: float | None = Field(default=None, ge=0.0)
     continuity_rel_error: float | None = Field(default=None)
     runoff_path: str | None = Field(default=None)

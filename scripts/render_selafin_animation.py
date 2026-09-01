@@ -278,7 +278,9 @@ def plain_axes(bbox_ll, title: str):
     """Axes with NO basemap - the offline seam, for a caller with no tile access.
 
     Same figure geometry as the basemap axes so the colorbar lands in the same
-    place; the limits are left to the field being drawn.
+    place; the limits are left to the field being drawn. The third member is the
+    basemap CREDIT the caption prints, and saying "no basemap" out loud is what
+    keeps an offline render from reading as a failed tile fetch.
     """
     xw, yw = MR.ll_to_merc(np.array([bbox_ll[0], bbox_ll[2]]),
                            np.array([bbox_ll[1], bbox_ll[3]]))
@@ -288,7 +290,7 @@ def plain_axes(bbox_ll, title: str):
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(title, fontsize=10)
-    return fig, ax
+    return fig, ax, "no basemap (offline render)"
 
 
 def _axes_with_basemap(bbox_ll, title: str):
@@ -305,7 +307,7 @@ def _axes_with_basemap(bbox_ll, title: str):
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(title, fontsize=10)
-    return fig, ax
+    return fig, ax, MR.basemap_label(mosaic)
 
 
 def slice_plane(mesh: dict, values: np.ndarray, *, nplan: int, plane: str):
@@ -451,8 +453,10 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     makes one colour mean a different value each tick, so the reader watching the
     ramp is watching the renderer, not the water.
 
-    ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax)``; it defaults to the ESRI
-    basemap axes and takes :func:`plain_axes` where there is no tile access.
+    ``axes_factory`` is ``(bbox_ll, title) -> (fig, ax, basemap_credit)``; it
+    defaults to the ESRI basemap axes and takes :func:`plain_axes` where there is
+    no tile access. The credit is what the caption prints, so a render always
+    names the ground it was drawn on rather than the one it asked for.
 
     ``vectors`` is the DECLARED vocabulary the moving GIF draws in -
     ``"streamlines"`` (traced, magnitude-tapered width, one arrowhead per
@@ -494,7 +498,7 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
         norm = LogNorm(vmin=floor if floor > 0 else scale.vmax / 1e4,
                        vmax=max(scale.vmax, floor * 10.0))
 
-    fig, ax = (axes_factory or _axes_with_basemap)(bbox_ll, title)
+    fig, ax, basemap_credit = (axes_factory or _axes_with_basemap)(bbox_ll, title)
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=scale.colormap,
                         alpha=0.85, zorder=2,
                         **({"norm": norm} if norm is not None
@@ -566,7 +570,7 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     ax.text(0.012, 0.955,
             f"run {run_id}  |  {source_name}, {values.shape[0]} frames"
             f"{plane_note}  |  wireframe = the meshed domain"
-            + vector_note + "  |  ESRI World Imagery",
+            + vector_note + f"  |  {basemap_credit}",
             transform=ax.transAxes, fontsize=6.5, color="white", va="top", zorder=5,
             bbox=dict(facecolor="black", alpha=0.4, pad=2, edgecolor="none"))
 

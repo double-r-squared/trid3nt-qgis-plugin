@@ -2756,3 +2756,34 @@ FLAGGED, not touched: `adapters/adapter.py`'s routing block still tells the mode
 to select `swmm_urban_flood` on "urban / barrier / flap gate" phrasing. That tool
 left with the fresh-start purge, so the block routes to nothing - but it is
 model-facing wording and belongs to ruling 12's substrate-neutral sweep, not here.
+
+## The dead-name residue the honesty tail scrubbed (findings walkthrough rulings 9 + 15, 2026-08-31)
+
+DELETED, staleness evidence in each line (AGGRESSIVE posture: everything outside
+workflows deletes on evidence, ledger line only).
+
+- `scripts/seed_showcase_cases.py`: the `build_mesh` / `mesher="watershed"`
+  showcase. The watershed mesher was dissolved into the chained delineation
+  (`delineate_watershed` -> `om2d`); the registered meshers are `om2d` and
+  `reg_grid`, so the entry named a mesher the router refuses. Its capability is
+  the `telemac_rain_on_grid` entry immediately below it - same pour point, same
+  catchment, and its plan IS the chain the showcase described.
+
+- `tests/test_gemini_kwargs_fuzz.py`: the `sfincs_flood` and
+  `pelicun_damage_assessment` minimal-param rows and the PELICUN fold comment.
+  Neither tool is in the registry; the rows were never selected by the fuzz
+  parametrization, which reads `TOOL_REGISTRY`. `run_solver`'s sample solver
+  moves `sfincs` -> `telemac` for the same reason.
+
+- `docs/authoring/adding-an-engine.md`: the MODFLOW-era body. Every path it
+  named is gone - `modflow_contracts.py`, `workers/modflow/`,
+  `workflows/run_modflow.py`, `workflows/postprocess_modflow.py`,
+  `tools/run_modflow_archetype_tool.py`, `workflows/model_*_scenario.py`, the
+  sprint-17 engine bridges. REWRITTEN against the live tree (the declarative
+  template, the engine facade's process table, `workers/telemac/`) rather than
+  dropped, because `README.md` links it as the authoring entry point.
+
+- `experiments/bench/routing_sweep/run.py` docstring: the ADR reference and the
+  "replaces this after the current server batch" schedule promise. The
+  client-side block is a standing CONSTRAINT, not a stage in a plan, and the
+  docstring now states it as one.

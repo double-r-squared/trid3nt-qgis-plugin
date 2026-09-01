@@ -11,8 +11,10 @@ THE DELIBERATE DIFFERENCE from GeoClaw/SWMM (which emit a peak COG + a per-frame
 COG animation group): the TELEMAC result IS a native, time-stepped MDAL mesh --
 QGIS's MDAL provider opens the ``.slf`` directly and animates its DYE dataset
 group with ZERO new render code. So this postprocess emits ONLY the PEAK
-concentration COG (``layers[0]``, role ``"primary"``, style preset
-``continuous_dye_concentration``) as the map anchor + narration carrier; the time
+concentration COG (``layers[0]``, role ``"primary"``, named and styled by the
+declared SUBSTANCE CLASS's own row in ``TELEMAC_SUBSTANCE_PRODUCTS`` - a
+dye-named product outside the dye class asserts a field the run did not carry, so
+each class names its own) as the map anchor + narration carrier; the time
 animation rides the result SELAFIN, published as a ``layer_type="mesh"`` layer by
 the emit-on-solve seam (the composer writes ``outputs.json`` with a ``kind="mesh"``
 entry for ``r2d_river.slf``; ADR 0283). No per-frame COGs are written -- the mesh
@@ -45,6 +47,7 @@ from trid3nt_contracts.telemac_contracts import (
     TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
     TELEMAC_DO_STYLE_PRESET,
     TELEMAC_DYE_STYLE_PRESET,
+    TELEMAC_SUBSTANCE_PRODUCTS,
     TELEMAC_WAVE_STYLE_PRESET,
     TELEMAC_WSE_STYLE_PRESET,
     ArtemisAgitationLayerURI,
@@ -72,6 +75,7 @@ __all__ = [
     "postprocess_artemis",
     "postprocess_telemac3d",
     "postprocess_coastal",
+    "peak_layer_id",
     "read_selafin",
     "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_AGITATION_STYLE_PRESET",
@@ -477,6 +481,19 @@ def _reraise_cogio(exc: CogIoError) -> "PostprocessTelemacError":
     )
 
 
+def peak_layer_id(run_id: str, substance_class: str) -> str:
+    """The transported-field layer's handle, spelled once for producer and publisher.
+
+    The class is in the handle because the COG is: two runs of the same reach
+    under different classes publish different products, and a shared handle would
+    make one overwrite the other's registration.
+    """
+    product = TELEMAC_SUBSTANCE_PRODUCTS.get(
+        str(substance_class or "tracer").lower(),
+        TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
+    return f"telemac-{product.noun.replace(' ', '-')}-peak-{run_id}"
+
+
 # --------------------------------------------------------------------------- #
 # Top-level postprocess.
 # --------------------------------------------------------------------------- #
@@ -486,18 +503,18 @@ def postprocess_telemac(
     run_id: str,
     utm_epsg: int,
     reach_name: str = "river_dye",
-    substance: str = "dye",
     substance_class: str = "tracer",
     dye_units: str = "mg/L",
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
 ) -> tuple[list[TelemacDyeLayerURI], dict[str, Any]]:
-    """Rasterize a solved TELEMAC-2D dye run into ONE peak-concentration COG.
+    """Rasterize a solved TELEMAC-2D tracer run into ONE peak-concentration COG.
 
-    Reads ``slf_path`` (``r2d_river.slf``), extracts the DYE tracer, computes the
+    Reads ``slf_path`` (``r2d_river.slf``), extracts the tracer, computes the
     per-node peak over time, reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326,
     rasterizes the peak onto an adaptive 4326 grid clipped to the channel, writes
-    + uploads ONE COG (``telemac_dye_peak.tif``) to the runs bucket, and returns
+    + uploads ONE COG to the runs bucket under the DECLARED SUBSTANCE CLASS's own
+    basename (``TELEMAC_SUBSTANCE_PRODUCTS``), and returns
     ``([TelemacDyeLayerURI], metrics)``. The time animation is served separately
     from the SELAFIN mesh sibling that ``open_case_in_qgis`` discovers next to
     this COG (this postprocess writes NO per-frame COGs).
@@ -509,6 +526,10 @@ def postprocess_telemac(
         utm_epsg: the SELAFIN mesh CRS EPSG (the reach UTM zone; from
             ``telemac_metrics.json``'s ``utm_epsg``). SELAFIN carries no CRS.
         reach_name: echoed into the layer name.
+        substance_class: which declared class this run is - it picks the tracer
+            variable, the COG basename, the published quantity, the style preset
+            and the noun the layer is named with. A class this table does not
+            know IS dye.
         dye_units: concentration units label (default mg/L).
         runs_bucket: optional override for the runs bucket name.
         target_ground_res_m: target ground resolution (m/px) for the COG.
@@ -539,6 +560,9 @@ def postprocess_telemac(
             details={"slf": str(slf)},
         ) from exc
 
+    product = TELEMAC_SUBSTANCE_PRODUCTS.get(
+        str(substance_class or "tracer").lower(),
+        TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
     # GAIA sediment coupled run: pick the SUSPENDED SEDIMENT tracer (NCOH
     # SEDIMENT1, g/l == kg/m3) that GAIA appends beside the dye companion, so this
     # COG is the sediment concentration ribbon, not the conservative dye.
@@ -641,7 +665,7 @@ def postprocess_telemac(
             src_transform=transform,
             reproject=False,
             crs_roundtrip_guard=True,
-            dst_suffix="_telemac_dye_4326.tif",
+            dst_suffix=f"_{Path(product.cog).stem}_4326.tif",
         )
     except CogIoError as exc:
         raise _reraise_cogio(exc) from exc
@@ -651,12 +675,12 @@ def postprocess_telemac(
             cog,
             run_id,
             runs_bucket,
-            dest_filename="telemac_dye_peak.tif",
+            dest_filename=product.cog,
             content_type="image/tiff",
             gs_backend="fsspec",
             gs_fallback_to_file=False,
             runs_bucket_default=RUNS_BUCKET_DEFAULT,
-            log_label="TELEMAC dye COG",
+            log_label=f"TELEMAC {product.noun} COG",
         )
     except CogIoError as exc:
         raise _reraise_cogio(exc) from exc
@@ -670,20 +694,21 @@ def postprocess_telemac(
         vmin=0.0,
         vmax=vmax,
         units=dye_units,
-        label=f"{(substance or 'dye').title()} concentration ({dye_units})",
+        label=f"{product.noun.capitalize()} concentration ({dye_units})",
     )
     # Honesty floor: this is an idealized demo release (flat/planar idealized bed
     # + a prescribed dispersion coefficient), NOT a calibrated site study.
     honesty = (
         "Idealized demo: planar idealized channel bed + prescribed tracer "
-        "dispersion; peak dye envelope over the run, not a calibrated study."
+        "dispersion; peak concentration envelope over the run, not a calibrated "
+        "study."
     )
     layer = TelemacDyeLayerURI(
-        layer_id=f"telemac-dye-peak-{run_id}",
-        name=f"Peak {(substance or 'dye')} concentration ({reach_name})",
+        layer_id=peak_layer_id(run_id, substance_class),
+        name=f"Peak {product.noun} concentration ({reach_name})",
         layer_type="raster",
         uri=uri,
-        style_preset=TELEMAC_DYE_STYLE_PRESET,
+        style_preset=product.style_preset,
         role="primary",
         units=dye_units,
         bbox=bbox,
@@ -1028,6 +1053,12 @@ def postprocess_telemac_wse(
     at a dry node, so an unmasked max would paint dry terrain as a water surface).
     A never-wetted node is NaN (no water), never its bed elevation.
 
+    ``quantity="depth"`` is the exception, and deliberately: a DEPTH of zero is a
+    result, so a never-wetted node inside the domain keeps its own zero and the
+    map renders it DRY. Only cells outside the meshed domain are nodata. A field
+    punched full of holes wherever the storm produced no runoff reads as a broken
+    raster rather than as an answer.
+
     Unlike the dye path this writes the COG **in the MESH's OWN CRS**
     (``mesh_epsg``), with NO reprojection to EPSG:4326: obs high-water marks for a
     validation case live in the same mesh frame, so keeping both sides in one
@@ -1108,6 +1139,10 @@ def postprocess_telemac_wse(
         # depth IS the field; wet where depth > floor.
         field = surf
         wet = field > TELEMAC_WSE_WET_DEPTH_M
+        wet_note = (
+            f"dry renders DRY: a node inside the domain that never exceeded "
+            f"{TELEMAC_WSE_WET_DEPTH_M} m keeps its own zero depth, so only cells "
+            "outside the meshed domain are nodata")
     elif depth_var is not None and mesh["data"].get(depth_var) is not None \
             and mesh["data"][depth_var].size == surf.size:
         depth = np.asarray(mesh["data"][depth_var])
@@ -1134,14 +1169,24 @@ def postprocess_telemac_wse(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         node_peak = np.nanmax(masked, axis=0) if masked.shape[0] else np.full(x.size, np.nan)
-    finite = np.isfinite(node_peak)
-    if not finite.any():
+    ever_wet = np.isfinite(node_peak)
+    if not ever_wet.any():
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
             message=f"no wet node in {slf.name}: WATER DEPTH never exceeded "
             f"{TELEMAC_WSE_WET_DEPTH_M} m anywhere (dry solve?)",
             details={"slf": str(slf), "wet_depth_m": TELEMAC_WSE_WET_DEPTH_M},
         )
+    if is_depth:
+        # DRY IS A RESULT. A DEPTH field is zero where the storm generated no
+        # runoff, and that is an answer: rendered as NODATA it punches holes
+        # through the map and reads as a broken raster. So a node inside the
+        # domain that never went wet keeps its own zero depth, and only the cells
+        # OUTSIDE the meshed domain - the ones the rasterizer's clip distance
+        # never reaches - stay nodata. An ELEVATION has no such floor (a dry node
+        # would report its bed as a water surface), so this is the depth path's.
+        node_peak = np.where(ever_wet, node_peak, 0.0)
+    finite = np.isfinite(node_peak)
 
     # honest scalar metrics over the wet field.
     wet_field = np.where(wet, field, np.nan)
@@ -1159,6 +1204,13 @@ def postprocess_telemac_wse(
         wse_max = float(np.nanmax(node_peak))
         wse_peak_time_s = None
     wse_min = float(np.nanmin(node_peak))
+    # The FIELD beside the extreme: one pit ponding to its rim sets the maximum
+    # while the sheet the run actually produced is orders of magnitude shallower,
+    # so the 99th percentile over the nodes that went wet is published too. Read
+    # over the WET nodes only - padding it with the dry zeros would measure how
+    # much of the catchment stayed dry rather than how deep the water got.
+    wse_p99 = float(np.percentile(node_peak[ever_wet], 99)) if ever_wet.any() \
+        else wse_max
 
     xw = x[finite]
     yw = y[finite]
@@ -1310,9 +1362,10 @@ def postprocess_telemac_wse(
         "quantity": quantity_tag,
         "wse_max_m": round(wse_max, 4),
         "wse_min_m": round(wse_min, 4),
+        "wse_p99_m": round(wse_p99, 4),
         "wse_peak_time_s": wse_peak_time_s,
         "n_frames": int(times.size),
-        "n_wet_nodes": int(finite.sum()),
+        "n_wet_nodes": int(ever_wet.sum()),
         "npoin": int(mesh["npoin"]),
         "nelem": int(mesh["nelem"]),
         "mesh_epsg": int(mesh_epsg),
@@ -1323,10 +1376,10 @@ def postprocess_telemac_wse(
         "honesty_label": honesty,
     }
     logger.info(
-        "postprocess_telemac_wse run_id=%s var=%s wse_max=%.4g m peak_t=%ss "
-        "n_wet=%d/%d n_frames=%d mesh_epsg=%s -> %s",
-        run_id, surf_var.strip(), wse_max, wse_peak_time_s, int(finite.sum()),
-        int(x.size), int(times.size), mesh_epsg, uri,
+        "postprocess_telemac_wse run_id=%s var=%s wse_max=%.4g m p99=%.4g m "
+        "peak_t=%ss n_wet=%d/%d n_frames=%d mesh_epsg=%s -> %s",
+        run_id, surf_var.strip(), wse_max, wse_p99, wse_peak_time_s,
+        int(ever_wet.sum()), int(x.size), int(times.size), mesh_epsg, uri,
     )
     return [layer], metrics
 
