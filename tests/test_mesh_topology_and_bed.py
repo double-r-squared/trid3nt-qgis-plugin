@@ -139,7 +139,7 @@ _SCATTER = ".III...OO.OO...IIII"
 def _shapes(**faces):
     from shapely.geometry import shape as _shape
 
-    return {role: _shape(geometry) for role, geometry in faces.items()}
+    return {role: [_shape(geometry)] for role, geometry in faces.items()}
 
 
 def _ring_on_a_circle(size: int, radius: float = 100.0) -> np.ndarray:
@@ -173,15 +173,18 @@ def test_both_transect_faces_land_their_own_role():
     roles = P._runs(
         _STRIP, _STRIP_CONTOUR, _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
         tolerance_m=20.0)
-    assert roles == {"inflow": [0, 1, 2], "outflow": [5, 6, 7]}
+    assert roles == {"inflow": [[0, 1, 2]], "outflow": [[5, 6, 7]]}
 
 
 def test_a_face_that_ends_nowhere_near_the_boundary_carries_no_role():
-    """A face and a mesh that describe different domains match nothing."""
+    """A face and a mesh that describe different domains match nothing.
+
+    The empty slot STAYS, one per declared face, which is what lets the refusal
+    name which of a role's faces found no boundary to lie on."""
     roles = P._runs(_STRIP, [[3, 4]],
                     _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
                     tolerance_m=20.0)
-    assert roles == {}
+    assert roles == {"inflow": [[]], "outflow": [[]]}
 
 
 def test_a_cut_corner_does_not_cost_the_face_its_role():
@@ -199,7 +202,7 @@ def test_a_cut_corner_does_not_cost_the_face_its_role():
         _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE), tolerance_m=20.0)
     # each run is walked from the face's own first end, so a role's list may run
     # either way round the contour; what it may not do is skip a node.
-    assert roles == {"inflow": [0, 1, 2, 3], "outflow": [8, 7, 6, 5]}
+    assert roles == {"inflow": [[0, 1, 2, 3]], "outflow": [[8, 7, 6, 5]]}
 
 
 def test_a_mesh_with_no_declared_boundaries_carries_no_roles():
@@ -216,11 +219,12 @@ def test_a_scattered_candidate_boundary_resolves_into_two_contiguous_runs():
         _shapes(inflow=_face_across(points, 15, 3),
                 outflow=_face_across(points, 7, 11)),
         tolerance_m=1.0)
-    assert roles == {"inflow": [15, 16, 17, 18, 0, 1, 2, 3],
-                     "outflow": [7, 8, 9, 10, 11]}
+    assert roles == {"inflow": [[15, 16, 17, 18, 0, 1, 2, 3]],
+                     "outflow": [[7, 8, 9, 10, 11]]}
     size = len(_SCATTER)
-    for run in roles.values():
-        assert all((b - a) % size == 1 for a, b in zip(run, run[1:]))
+    for runs in roles.values():
+        for run in runs:
+            assert all((b - a) % size == 1 for a, b in zip(run, run[1:]))
 
 
 def test_a_run_that_wraps_the_contours_origin_stays_one_run():
@@ -228,8 +232,8 @@ def test_a_run_that_wraps_the_contours_origin_stays_one_run():
     points = _ring_on_a_circle(len(_SCATTER))
     roles = P._runs(points, [list(range(len(_SCATTER)))],
                     _shapes(inflow=_face_across(points, 15, 3)), tolerance_m=1.0)
-    assert roles["inflow"][0] == 15 and roles["inflow"][-1] == 3
-    assert 0 in roles["inflow"]
+    assert roles["inflow"][0][0] == 15 and roles["inflow"][0][-1] == 3
+    assert 0 in roles["inflow"][0]
 
 
 def test_the_matcher_reproduces_the_probes_forced_contiguous_result():
@@ -240,8 +244,8 @@ def test_the_matcher_reproduces_the_probes_forced_contiguous_result():
         _shapes(inflow=_face_across(points, 15, 3),
                 outflow=_face_across(points, 7, 11)),
         tolerance_m=1.0)
-    assert roles["inflow"] == _forced_contiguous(_SCATTER, "I")
-    assert roles["outflow"] == _forced_contiguous(_SCATTER, "O")
+    assert roles["inflow"][0] == _forced_contiguous(_SCATTER, "I")
+    assert roles["outflow"][0] == _forced_contiguous(_SCATTER, "O")
 
 
 def test_a_point_declared_role_is_the_run_it_stands_within():
@@ -253,7 +257,70 @@ def test_a_point_declared_role_is_the_run_it_stands_within():
     spacing = float(np.hypot(*(points[1] - points[0])))
     roles = P._runs(points, [list(range(12))], _shapes(outflow=outlet),
                     tolerance_m=spacing * 1.2)
-    assert roles == {"outflow": [11, 0, 1]}
+    assert roles == {"outflow": [[11, 0, 1]]}
+
+
+def test_one_role_declared_across_two_faces_lands_as_two_sections():
+    """A two-mouth estuary has ONE open boundary in TWO sections.
+
+    A role that could name only one face made the second mouth a wall - and a
+    list of faces was read as a list of coordinates and died on an index.
+    """
+    from shapely.geometry import shape as _shape
+
+    points = _ring_on_a_circle(20)
+    roles = P._runs(
+        points, [list(range(20))],
+        {"open": [_shape(_face_across(points, 1, 4)),
+                  _shape(_face_across(points, 11, 14))]},
+        tolerance_m=1.0)
+    assert roles == {"open": [[1, 2, 3, 4], [11, 12, 13, 14]]}
+
+
+def test_the_two_sections_reach_the_mesh_as_one_role_and_a_counted_pair():
+    """Through the op: the union carries the role, the count says how many."""
+    mesh = _lattice_mesh()
+    south = {"type": "LineString",
+             "coordinates": [[-75.78, 36.12], [-75.76, 36.12]]}
+    north = {"type": "LineString",
+             "coordinates": [[-75.78, 36.14], [-75.76, 36.14]]}
+    roled = P.set_boundary_roles(mesh, open=[south, north])
+    assert set(roled.meta["boundary_roles"]["open"]) == {0, 1, 2, 6, 7, 8}
+    assert roled.meta["boundary_role_runs"] == {"open": 2}
+
+
+def test_a_node_two_declared_faces_both_claim_refuses():
+    """A node carries ONE boundary condition; overlapping faces are a mistake."""
+    mesh = _lattice_mesh()
+    west = {"type": "LineString",
+            "coordinates": [[-75.78, 36.12], [-75.78, 36.14]]}
+    corner = {"type": "LineString",
+              "coordinates": [[-75.78, 36.14], [-75.76, 36.14]]}
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_boundary_roles(mesh, inflow=west, outflow=corner)
+    assert excinfo.value.error_code == "MESH_BOUNDARY_ROLE_CONFLICT"
+
+
+def test_a_whole_rim_declaration_opens_the_whole_rim():
+    """The domain's own outline names every boundary node, not a corner of it."""
+    mesh = _lattice_mesh()
+    rim = {"type": "Polygon", "coordinates": [[
+        [-75.78, 36.12], [-75.76, 36.12], [-75.76, 36.14],
+        [-75.78, 36.14], [-75.78, 36.12]]]}
+    roled = P.set_boundary_roles(mesh, open=rim)
+    assert set(roled.meta["boundary_roles"]["open"]) == {0, 1, 2, 3, 5, 6, 7, 8}
+    assert roled.meta["boundary_role_runs"] == {"open": 1}
+
+
+def test_the_refusal_names_WHICH_of_a_roles_faces_found_no_boundary():
+    mesh = _lattice_mesh()
+    west = {"type": "LineString",
+            "coordinates": [[-75.78, 36.12], [-75.78, 36.14]]}
+    far = {"type": "LineString", "coordinates": [[-70.0, 36.12], [-70.0, 36.14]]}
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_boundary_roles(mesh, open=[west, far])
+    assert excinfo.value.error_code == "MESH_BOUNDARY_ROLE_UNMATCHED"
+    assert "open[1]" in str(excinfo.value)
 
 
 # --------------------------------------------------------------------------- #

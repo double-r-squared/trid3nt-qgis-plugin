@@ -95,18 +95,27 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
 
 
 def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
-    """Which CONTIGUOUS run of the boundary carries which role -> the mesh, roled.
+    """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
 
-    ``roles`` is ``{role: face}`` - ``inflow``, ``outflow``, ``open`` - each face
-    a geometry the chain measured (a section's end transect) or the two ends of
-    one. Every boundary node on the run the face names takes that role; the rest
-    are solid wall.
+    ``roles`` is ``{role: face}`` or ``{role: [face, ...]}`` - ``inflow``,
+    ``outflow``, ``open`` - each face a geometry the chain measured (a section's
+    end transect) or the two ends of one. Every boundary node on the run a face
+    names takes that role; the rest are solid wall.
 
     A role is a RUN, not a node set: a TELEMAC liquid boundary is numbered by
     walking the boundary, so a scatter of nodes that happen to sit near a face is
     not a boundary. A declared TRANSECT names the run between the contour nodes
     nearest its two ends; a declared POINT names the run standing within the
-    mesh's own mean boundary edge of it.
+    mesh's own mean boundary edge of it; a declared RING names the whole stretch
+    it stands along, which on a domain outline is the whole rim.
+
+    SEVERAL FACES, ONE ROLE. A two-mouth estuary has one open boundary in two
+    SECTIONS, and a role that could name only one face made the second mouth a
+    wall. Each face lands its own run, the role carries their union, and how many
+    runs each role landed as rides back on the mesh - the number the solver's own
+    liquid-boundary numbering will agree with. A node two faces both claim
+    refuses: it carries one boundary condition, and picking silently would put a
+    flowrate on a stretch the caller meant to hold at a level.
 
     The tolerance is measured off the mesh and gates the FACE, not its anchors: a
     triangulator conforms to a polygon within an edge along its sides and cuts its
@@ -137,20 +146,38 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
             "boundary walk found no nodes to carry them.")
     points_m, utm_epsg = _metre_nodes(mesh)
     tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-    faces = {str(role): _transform(tr.transform, _shape(_face(role, value)))
+    faces = {str(role): [_transform(tr.transform, _shape(face))
+                         for face in _faces(role, value)]
              for role, value in roles.items()}
     xy = np.asarray(points_m, dtype=float)
     tolerance = _mean_boundary_edge_m(xy, contours)
     matched = _runs(xy, contours, faces, tolerance_m=tolerance)
-    unmatched = [role for role in faces if not matched.get(role)]
+    unmatched = [f"{role}[{i}]" for role, declared in faces.items()
+                 for i in range(len(declared))
+                 if not (matched.get(role) or [])[i:i + 1]
+                 or not matched[role][i]]
     if unmatched:
         raise MeshToolError(
             "MESH_BOUNDARY_ROLE_UNMATCHED",
             f"no boundary node of this mesh lies within {tolerance:.1f} m of the "
-            f"face declared for role(s) {unmatched}; the mesh and the face the "
+            f"face declared for {unmatched}; the mesh and the face the "
             "chain measured describe different domains.")
-    return _with_meta(mesh, boundary_roles={
-        **dict(mesh.meta.get("boundary_roles") or {}), **matched})
+    claimed: dict[int, str] = {}
+    for role, runs in matched.items():
+        for node in (n for run in runs for n in run):
+            if claimed.setdefault(int(node), role) != role:
+                raise MeshToolError(
+                    "MESH_BOUNDARY_ROLE_CONFLICT",
+                    f"boundary node {int(node)} is named by both "
+                    f"{claimed[int(node)]!r} and {role!r}; a node carries one "
+                    "boundary condition, so the declared faces overlap.")
+    return _with_meta(
+        mesh,
+        boundary_roles={**dict(mesh.meta.get("boundary_roles") or {}),
+                        **{role: [n for run in runs for n in run]
+                           for role, runs in matched.items()}},
+        boundary_role_runs={**dict(mesh.meta.get("boundary_role_runs") or {}),
+                            **{role: len(runs) for role, runs in matched.items()}})
 
 
 # --------------------------------------------------------------------------- #
@@ -271,18 +298,32 @@ def _with_meta(mesh: Mesh, **meta: Any) -> Mesh:
 # --------------------------------------------------------------------------- #
 # The contiguous-run matcher.
 # --------------------------------------------------------------------------- #
-def _face(role: str, value: Any) -> dict[str, Any]:
-    """One declared role's face as GeoJSON, whichever way it was declared."""
+def _faces(role: str, value: Any) -> list[dict[str, Any]]:
+    """One declared role's faces as GeoJSON, whichever way they were declared.
+
+    A sequence is read by what it HOLDS: coordinate pairs are the two ends of one
+    transect, anything else is several faces. The two readings cannot collide - a
+    coordinate is a pair of numbers and a face is a document or a handle.
+    """
     if isinstance(value, (list, tuple)):
-        coords = [[float(c[0]), float(c[1])] for c in value]
-        if len(coords) < 2:
+        if all(isinstance(item, (list, tuple)) and len(item) == 2
+               and all(isinstance(c, (int, float)) for c in item)
+               for item in value):
+            coords = [[float(c[0]), float(c[1])] for c in value]
+            if len(coords) < 2:
+                raise MeshToolError(
+                    "MESH_BOUNDARY_ROLE_INVALID",
+                    f"boundary role {role!r} names {coords}, which is not a face: "
+                    "a role is prescribed across a transect, so declare the two "
+                    "ends of one (a section's face_start / face_end).")
+            return [{"type": "LineString", "coordinates": coords}]
+        if not value:
             raise MeshToolError(
                 "MESH_BOUNDARY_ROLE_INVALID",
-                f"boundary role {role!r} names {coords}, which is not a face: a "
-                "role is prescribed across a transect, so declare the two ends "
-                "of one (a section's face_start / face_end).")
-        return {"type": "LineString", "coordinates": coords}
-    return op_geometry(value)
+                f"boundary role {role!r} names no face at all; declare the "
+                "stretch it is prescribed across.")
+        return [face for item in value for face in _faces(role, item)]
+    return [op_geometry(value)]
 
 
 def _mean_boundary_edge_m(points_m: Any, contours: Any) -> float:
@@ -296,8 +337,13 @@ def _mean_boundary_edge_m(points_m: Any, contours: Any) -> float:
 
 
 def _runs(points_utm: Any, contours: Any, faces_utm: Mapping[str, Any], *,
-          tolerance_m: float) -> dict[str, list[int]]:
-    """``{role: [node, ...]}``, each list a stretch of ONE contour in walk order."""
+          tolerance_m: float) -> dict[str, list[list[int]]]:
+    """``{role: [run, ...]}``, each run a stretch of ONE contour in walk order.
+
+    One run per DECLARED FACE, in the order the faces were declared, so a role
+    declared across two sections lands as two - a face that matched nothing keeps
+    its empty slot, which is what lets the refusal name which one.
+    """
     import numpy as np
     from shapely.geometry import Point
 
@@ -313,23 +359,22 @@ def _runs(points_utm: Any, contours: Any, faces_utm: Mapping[str, Any], *,
         return min(((i, distance(geometry, node)) for i, node in enumerate(ring)),
                    key=lambda hit: hit[1])
 
-    out: dict[str, list[int]] = {}
-    for role, face in faces_utm.items():
-        # WHICH contour carries the role: the one holding the node nearest the
-        # whole face. A domain with an island has more than one, and a run that
-        # jumped between them is a boundary no walk of the geometry produces.
+    def run_for(face: Any) -> list[int]:
+        # WHICH contour carries the face: the one holding the node nearest it. A
+        # domain with an island has more than one, and a run that jumped between
+        # them is a boundary no walk of the geometry produces.
         on, offset = min(((ring, nearest(face, ring)[1]) for ring in rings),
                          key=lambda hit: hit[1])
         if offset > float(tolerance_m):
-            continue
+            return []
         ends = list(getattr(face.boundary, "geoms", []))
         if len(ends) == 2:
-            out[role] = _arc(on, nearest(ends[0], on)[0], nearest(ends[1], on)[0])
-        else:
-            out[role] = _window(on, nearest(face, on)[0],
-                                lambda node: distance(face, node),
-                                float(tolerance_m))
-    return out
+            return _arc(on, nearest(ends[0], on)[0], nearest(ends[1], on)[0])
+        return _window(on, nearest(face, on)[0],
+                       lambda node: distance(face, node), float(tolerance_m))
+
+    return {role: [run_for(face) for face in declared]
+            for role, declared in faces_utm.items()}
 
 
 def _arc(ring: Any, start: int, end: int) -> list[int]:
