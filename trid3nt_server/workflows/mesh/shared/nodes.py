@@ -1,16 +1,17 @@
 """What a mesh's NODES carry: their projection, a sampled field, a slope, a read.
 
-Six array primitives every mesher and every consumer of an accepted mesh needs,
-and none of them belongs to one mesher: a solve works in METRES, a bed is a
-raster sampled AT the nodes, a terrain slope is read off the mesh's own
-piecewise-linear surface rather than off a finer grid the run does not resolve,
-an authored ``.2dm`` is parsed back into the same three arrays - once from a path
-and once from an accepted mesh's own display face - and the channel a bed is laid
-down along is read ONCE into one head-to-tail order.
+Array primitives every mesher and every consumer of an accepted mesh needs, and
+none of them belongs to one mesher: a solve works in METRES, a field is a raster
+sampled AT the nodes, a terrain slope is read off the mesh's own piecewise-linear
+surface rather than off a finer grid the run does not resolve, a boundary walk is
+the contours the cells describe, an authored ``.2dm`` is parsed back into the same
+three arrays - once from a path and once from an accepted mesh's own display face
+- and the channel a chain measures along is read ONCE into one head-to-tail order.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,19 +19,42 @@ from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
 
 __all__ = [
     "MeshNodeError",
-    "fit_downstream_bed",
+    "boundary_contours",
     "node_slopes_from_mesh",
     "read_2dm_mesh",
     "read_accepted_mesh_nodes",
     "read_centerline_utm",
     "reproject_nodes_to_utm",
     "sample_raster_at_nodes",
+    "tin_formats",
 ]
 
 #: How far inside a raster's edge a node is sampled, in pixels: past the rim
 #: there is no cell at all, and the rim cell itself is resampled from partial
 #: source coverage. One and a half puts every sample on a whole cell.
 _RIM_PIXELS = 1.5
+
+#: Where the repo's shared TIN format writers live. They are the one place the
+#: boundary walk and the orient/clean pass are written, and they are IMPORTED
+#: from here rather than reimplemented beside every caller.
+_TIN_FORMATS = "scripts/sandbox/oceanmesh"
+
+
+def tin_formats() -> Any:
+    """The repo's shared TIN format module, importable from the agent venv."""
+    path = str(Path(__file__).resolve().parents[4] / _TIN_FORMATS)
+    if path not in sys.path:
+        sys.path.insert(0, path)
+    import mesh_formats  # type: ignore
+
+    return mesh_formats
+
+
+def boundary_contours(cells: Any) -> list[list[int]]:
+    """The mesh's boundary walks, each a closed run of node ids in walk order."""
+    import numpy as np
+
+    return tin_formats().extract_boundary_loops(np.asarray(cells, dtype=np.int64))
 
 
 class MeshNodeError(RuntimeError):
@@ -59,12 +83,13 @@ def reproject_nodes_to_utm(points_lonlat: Any) -> tuple[Any, int]:
     return np.column_stack([x, y]).astype(float), int(epsg)
 
 
-def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
+def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any,
+                           interp: str = "nearest") -> Any:
     """Sample a raster at (N,2) lon/lat nodes -> (N,) values, holes filled.
 
-    Nodata becomes the finite mean rather than NaN: a bed with holes in it is not
-    a bed a solver can start from, and a hole at one node would propagate a NaN
-    through the whole free surface.
+    Nodata becomes the finite mean rather than NaN: a field with holes in it is
+    not a field a solver can start from, and a hole at one node would propagate a
+    NaN through the whole free surface.
 
     A node on the raster's own RIM reads the nearest whole pixel instead. A mesh
     cut from an AOI puts nodes exactly on that AOI's corner coordinates, and the
@@ -73,6 +98,10 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
     resampled from partial source coverage, so both report sea level along two
     entire sides of a domain that is 18 m deep two pixels in. Neither reads as
     missing anywhere downstream - they read as real water, or real land.
+
+    ``nearest`` returns a value the grid actually holds; ``bilinear`` reads
+    between the four surrounding cell centres, which is what a mesh coarser than
+    its raster wants.
     """
     import numpy as np
     import rasterio
@@ -88,14 +117,43 @@ def sample_raster_at_nodes(raster_path: Any, points_lonlat: Any) -> Any:
                      left + _RIM_PIXELS * dx, right - _RIM_PIXELS * dx)
         ys = np.clip(np.asarray(ys, dtype=float),
                      bottom + _RIM_PIXELS * dy, top - _RIM_PIXELS * dy)
-        vals = np.array(list(src.sample(list(zip(xs, ys)))), dtype=float)[:, 0]
         nodata = src.nodata
+        if str(interp) == "bilinear":
+            vals = _bilinear(src, xs, ys, nodata)
+        else:
+            vals = np.array(list(src.sample(list(zip(xs, ys)))),
+                            dtype=float)[:, 0]
     if nodata is not None:
         vals[vals == nodata] = np.nan
     if np.isnan(vals).any():
         finite = vals[np.isfinite(vals)]
         vals[np.isnan(vals)] = float(finite.mean()) if finite.size else 0.0
     return vals
+
+
+def _bilinear(src: Any, xs: Any, ys: Any, nodata: Any) -> Any:
+    """The band read between its four surrounding cell centres, nodata held out.
+
+    Nodata is lifted to NaN BEFORE the interpolation: averaging a fill value into
+    its neighbours would spread a hole across four cells instead of leaving it to
+    be filled once, honestly, by the caller.
+    """
+    import numpy as np
+    from scipy.ndimage import map_coordinates
+
+    band = src.read(1).astype(float)
+    if nodata is not None:
+        band[band == nodata] = np.nan
+    inverse = ~src.transform
+    cols, rows = inverse * (np.asarray(xs, dtype=float), np.asarray(ys, dtype=float))
+    at = [rows - 0.5, cols - 0.5]
+    valid = np.isfinite(band)
+    value = map_coordinates(np.where(valid, band, 0.0), at, order=1,
+                            mode="nearest")
+    weight = map_coordinates(valid.astype(float), at, order=1, mode="nearest")
+    # A stencil that touched a hole reports the hole rather than three quarters
+    # of a value: the caller fills it once, honestly, with the rest.
+    return np.where(weight > 0.999, value, np.nan)
 
 
 def read_accepted_mesh_nodes(display_uri: str, *, utm_epsg: int | None = None
@@ -178,67 +236,6 @@ def read_centerline_utm(source: Any, utm_epsg: int, *,
     tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
     x, y = tr.transform(coords[:, 0], coords[:, 1])
     return np.column_stack([x, y]).astype(float)
-
-
-def fit_downstream_bed(points_utm: Any, centerline_utm: Any, sampled_z: Any, *,
-                       min_slope: float, max_slope: float
-                       ) -> tuple[Any, dict[str, Any]]:
-    """A monotone downstream bed fitted to a sampled DEM -> ``(bed, stats)``.
-
-    A real canyon DEM is the SURFACE - rim, vegetation and water together - and
-    along a thalweg it is noisy enough to run uphill between adjacent nodes. A
-    shallow-water solve on a bed that runs uphill ponds instead of flowing, so the
-    fit is what the solve gets: project every node onto the centerline for an
-    along-channel distance, fit ``z ~ z0 - slope * s`` over the nodes that sampled,
-    clamp the slope into the stated band, and lay a clean plane from a robust
-    upstream level.
-
-    The clamp is the enforcement, and both numbers travel: ``measured_slope`` is
-    what the terrain said and ``enforced_slope`` is what the solve got, so a bed
-    that was overruled says so rather than presenting the overrule as the DEM.
-    """
-    import numpy as np
-
-    z_raw = np.asarray(sampled_z, dtype=float)
-    s_node = _along_channel_distance(points_utm, centerline_utm)
-    valid = np.isfinite(z_raw)
-    if not valid.any():
-        raise MeshNodeError(
-            "MESH_BED_UNSAMPLED",
-            f"the bed raster covers none of the {z_raw.size} mesh nodes (every "
-            "sample is nodata), so no downstream bed can be fitted from it.")
-    design = np.column_stack([np.ones(int(valid.sum())), s_node[valid]])
-    coef, *_ = np.linalg.lstsq(design, z_raw[valid], rcond=None)
-    measured = float(-coef[1])  # positive = downhill
-    slope = float(np.clip(measured, min_slope, max_slope))
-    top = float(np.nanpercentile(z_raw[valid], 20))
-    bed = top - slope * s_node
-    return bed, {
-        "dem_min": float(np.nanmin(z_raw)), "dem_max": float(np.nanmax(z_raw)),
-        "n_dem_nan": int((~valid).sum()),
-        "measured_slope": measured, "enforced_slope": slope,
-        "bed_top_m": top, "bed_drop_m": float(slope * s_node.max()),
-        "reach_len_m": float(s_node.max()),
-    }
-
-
-def _along_channel_distance(points_utm: Any, centerline_utm: Any) -> Any:
-    """Distance along ``centerline_utm`` of each node's nearest point on it."""
-    import numpy as np
-
-    pts = np.asarray(points_utm, dtype=float)
-    line = np.asarray(centerline_utm, dtype=float)
-    a, b = line[:-1], line[1:]
-    seg = b - a
-    length2 = np.maximum((seg ** 2).sum(axis=1), 1e-12)
-    cum = np.concatenate([[0.0], np.cumsum(np.sqrt(length2))])
-    # (n_nodes, n_segments) projection parameter, clamped to the segment.
-    delta = pts[:, None, :] - a[None, :, :]
-    t = np.clip((delta * seg[None, :, :]).sum(axis=2) / length2[None, :], 0.0, 1.0)
-    foot = a[None, :, :] + t[:, :, None] * seg[None, :, :]
-    nearest = np.argmin(((pts[:, None, :] - foot) ** 2).sum(axis=2), axis=1)
-    rows = np.arange(pts.shape[0])
-    return cum[nearest] + t[rows, nearest] * np.sqrt(length2[nearest])
 
 
 def node_slopes_from_mesh(points_utm: Any, cells: Any, bed_elev: Any) -> Any:

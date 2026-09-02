@@ -4,49 +4,45 @@ Runs INSIDE ``trid3nt-local/mesh:latest``, the only place the CHLNDDEV
 ``oceanmesh`` port (OceanMesh2D, GPL-3) is installed. The host mesher mounts this
 file and a rundir and shells it; nothing here imports trid3nt code.
 
-Contract (host <-> container over the mounted /data dir):
-  argv[1] = <op>   argv[2] = /data/om2d_config.json   argv[3] = /data
+THE RECIPE'S OPS TRAVEL AS DATA. The host sends a list of ``{fn, kwargs}`` and
+this file calls each one VERBATIM on the library, in the order it was declared.
+Because the library lives here, THIS is where the signature is the schema: every
+parameter the recipe left unstated is filled from the staged environment by NAME,
+a required parameter the environment cannot supply is refused by name, and the
+library's own error surfaces verbatim on anything else.
 
-  build            config keys: bbox [xmin,ymin,xmax,ymax], EITHER shoreline_shp
-                   OR domain_geojson (with sizing_coords [[lon,lat],...]),
-                   dem_path (optional - enables wavelength sizing),
-                   min_edge_length_m, max_edge_length_m, gradation,
-                   obstacles [{geojson, constrain}],
-                   refine_regions [{geojson, edge_length_m}], max_iter, seed, wl.
-                   Emits /data/om2d_mesh.npz (points (N,2) lon/lat, cells (M,3)
-                   0-based, pfix (K,2)) and /data/om2d_stats.json.
-  ocean_boundary   config keys: mesh_npz (points, cells, bed positive up),
-                   depth_threshold, min_nodes_threshold. Emits
-                   /data/om2d_sections.json: the CONTIGUOUS ocean-boundary
-                   sections oceanmesh itself identifies, plus the winded boundary
-                   walk they index into.
+Contract (host <-> container over the mounted /data dir):
+  argv[1] = <op>   argv[2] = /data/<config>.json   argv[3] = /data
+
+  build   config: bbox, EITHER shoreline_shp OR domain_geojson,
+          min_edge_length_m, max_edge_length_m, seed, max_iter,
+          pre_ops [{fn, kwargs}], post_ops [{fn, kwargs}].
+          Stages the domain, runs the pre ops into a sizing function, generates,
+          runs the post ops, and emits /data/om2d_mesh.npz (points (N,2) lon/lat,
+          cells (M,3) 0-based, pfix (K,2)) plus /data/om2d_stats.json.
+
+  post    config: mesh_npz (points, cells, optional bed), min_edge_length_m,
+          max_edge_length_m, ops [{fn, kwargs}]. Runs the ops over that mesh and
+          emits <config stem>.npz + <config stem>.json (the per-op results).
+
+UNITS. The library works in DEGREES at the domain's own latitude; everything
+above it works in metres. The parameters in :data:`_METRE_PARAMS` are therefore
+written in METRES by a recipe and converted here, whether they were stated by the
+author or threaded from ``resolution_m``. Every conversion is reported in the
+stats, so a number the author never wrote is never silently in force.
 
 The domain is EITHER the water side of a GSHHG shoreline or the interior of a
-supplied polygon. The shoreline path is oceanmesh's own ``Shoreline`` ->
-``signed_distance_function`` -> ``feature_sizing_function`` chain on its sizing
-GRID. The polygon path cannot use that chain - ``Shoreline`` meshes only water
-touching the region boundary and cannot mesh a fully enclosed interior - so the
-signed distance is measured against the polygon's own densified boundary and the
-edge length is a CALLABLE: uniform at the finest edge, or growing linearly with
-distance from the polylines supplied alongside the polygon, clamped to the band.
-Both paths triangulate through the authentic ``om.generate_mesh`` and run the
-same clean passes, so a polygon domain is not a second mesher.
-
-An obstacle is subtracted from the signed distance function through
-``om.Difference``, so the mesh has a HOLE where it sits, and its outline vertices
-are passed as ``pfix`` so DistMesh locks them: that is what makes the cut
-conformal. The offset is MEASURED on the host from the returned pfix, never
-asserted here.
-
-A refine region is written onto the sizing GRID's own lattice before gradation
-limiting, so the transition into it obeys the same gradation the rest of the mesh
-does rather than being a discontinuity DistMesh has to absorb. An obstacle seeds
-the same lattice with the finest edge inside a band around its outline and lets
-``om.enforce_mesh_gradation`` grow the size away from it.
+supplied polygon. The shoreline path is the library's own ``Shoreline`` ->
+``signed_distance_function`` chain on its sizing GRID. The polygon path cannot
+use ``Shoreline`` - it meshes only water touching the region boundary and cannot
+mesh a fully enclosed interior - so the signed distance is measured against the
+polygon's own densified boundary. Both paths triangulate through the authentic
+``om.generate_mesh``, so a polygon domain is not a second mesher.
 """
 
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import sys
@@ -63,28 +59,26 @@ from shapely.ops import unary_union
 #: finest edge. One edge is the narrowest band a triangle can actually resolve.
 _OBSTACLE_BAND_EDGES = 1.0
 
+#: The parameters a recipe writes in METRES and the library reads in degrees.
+_METRE_PARAMS = ("min_edge_length", "min_edgelength", "max_edge_length")
+
+#: The parameters whose staged raster path becomes one of the library's own DEM
+#: objects before the call. The container half of the typed conversion layer.
+_DEM_PARAMS = ("dem",)
+
+#: What the mesh arrays answer to across the library's own clean passes: the same
+#: two arrays under the names each function happens to give them.
+_POINT_PARAMS = ("vertices", "points", "p")
+_CELL_PARAMS = ("entities", "faces", "cells", "t")
+
+
+class _EmptyAfterOp(Exception):
+    """An op took the last element; the empty-mesh refusal states which one."""
+
 
 def _typed(points, cells) -> tuple[np.ndarray, np.ndarray]:
-    """A mesh in the dtypes every pass and every reader below indexes with."""
+    """A mesh in the dtypes every op and every reader below indexes with."""
     return np.asarray(points, dtype=float), np.asarray(cells, dtype=np.int64)
-
-
-class _EmptyAfterClean(Exception):
-    """A clean pass took the last element; the empty-mesh refusal states why."""
-
-
-def _pass(fn, points, cells, **kwargs) -> tuple[np.ndarray, np.ndarray]:
-    """One oceanmesh clean pass, re-typed and checked for having emptied the mesh.
-
-    The passes hand connectivity back as floats and the next one indexes with it,
-    so the dtype is re-established after every pass rather than only at the end.
-    A pass that removes every element leaves the ones after it indexing empty
-    float arrays, which surfaces as a dtype error rather than as what happened.
-    """
-    points, cells = _typed(*fn(points, cells, **kwargs)[:2])
-    if cells.shape[0] == 0:
-        raise _EmptyAfterClean(fn.__name__)
-    return points, cells
 
 
 def _m_per_deg(mid_lat_deg: float) -> float:
@@ -191,206 +185,306 @@ class _PolygonDomain(om.Domain):
         return np.where(inside, -d, d)
 
 
-def _polygon_sizing(sizing_coords, min_deg: float, max_deg: float,
-                    gradation: float, holes, active: list[str]):
-    """The edge length over a polygon interior, as the callable DistMesh takes.
+# --------------------------------------------------------------------------- #
+# The build state the pre ops shape.
+# --------------------------------------------------------------------------- #
+class _Build:
+    """What the pre ops act on: the domain, the sizing stack, the obstacles.
 
-    A polygon interior has no shoreline to take a feature size from, so the size
-    grows LINEARLY with distance from the polylines supplied with the domain -
-    fine along the channel network, coarse away from it - and is uniform at the
-    finest edge when nothing was supplied to size toward. An obstacle band is
-    seeded here rather than on a lattice for the same reason: there is no
-    lattice on this path.
+    A sizing SOURCE (a function that takes no ``grid``) is pushed onto the stack;
+    a sizing TRANSFORM (one that does) consumes the stack's minimum and replaces
+    it. With nothing on the stack the domain is meshed uniformly at the one size
+    word, which is what an ask that declared no sizing op asked for.
     """
-    coords = np.asarray(sizing_coords or [], dtype=float)
-    tree = cKDTree(coords) if coords.size else None
-    active.append("polygon_sdf(interior)")
-    if tree is None:
-        active.append("uniform(min_edge)")
-    else:
-        active.append("distance_to_sizing_polylines(%d pts,grade=%g)"
-                      % (int(coords.shape[0]), gradation))
 
-    def edge_length(x: np.ndarray) -> np.ndarray:
-        xq = np.nan_to_num(np.asarray(x, dtype=float), nan=1.0e9)
-        if tree is None:
-            h = np.full(xq.shape[0], min_deg)
+    def __init__(self, cfg: dict) -> None:
+        xmin, ymin, xmax, ymax = (float(v) for v in cfg["bbox"])
+        self.bbox = (xmin, xmax, ymin, ymax)
+        self.mpd = _m_per_deg(0.5 * (ymin + ymax))
+        self.min_deg = float(cfg["min_edge_length_m"]) / self.mpd
+        self.max_deg = float(cfg["max_edge_length_m"]) / self.mpd
+        self.region = om.Region(extent=self.bbox, crs="EPSG:4326")
+        self.notes: list[str] = []
+        self.active: list[str] = []
+        self.threaded: dict[str, dict] = {}
+        self.sizing: list = []
+        self.holes = None
+        self.hole_geoms: list = []
+        self.shoreline = None
+        self.smoothed = None
+        if cfg.get("domain_geojson"):
+            self.sdf = _PolygonDomain(_load_geoms(cfg["domain_geojson"]),
+                                      self.min_deg, self.bbox)
+            self.active.append("polygon_sdf(interior)")
         else:
-            distance, _ = tree.query(xq, k=1)
-            h = min_deg + gradation * distance
-        if holes is not None:
-            near = np.abs(holes.signed(xq))
-            h = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg, min_deg, h)
-        return np.clip(h, min_deg, max_deg)
+            self.smoothed = True
+            try:
+                self.shoreline = om.Shoreline(
+                    cfg["shoreline_shp"], self.region.bbox, self.min_deg)
+            except Exception:  # noqa: BLE001
+                # The shoreline smoothing moving-average throws a GEOS
+                # side-location conflict on some GSHHG geometries; the unsmoothed
+                # shoreline still meshes.
+                self.smoothed = False
+                self.shoreline = om.Shoreline(
+                    cfg["shoreline_shp"], self.region.bbox, self.min_deg,
+                    smooth_shoreline=False)
+            self.sdf = om.signed_distance_function(self.shoreline)
+            self.active.append("shoreline_sdf(GSHHG)")
 
-    return edge_length
+    # -- the environment a pre op's unstated parameters are filled from ---- #
+    def environment(self) -> dict:
+        return {
+            "shoreline": self.shoreline,
+            "signed_distance_function": self.sdf,
+            "bbox": self.bbox,
+            "region": self.region,
+            "grid": self.combined(),
+            "edge_lengths": list(self.sizing),
+            "min_edge_length": self.min_deg,
+            "min_edgelength": self.min_deg,
+            "max_edge_length": self.max_deg,
+        }
 
+    def combined(self):
+        """The one sizing object the stack currently amounts to, or ``None``."""
+        if not self.sizing:
+            return None
+        if len(self.sizing) == 1:
+            return self.sizing[0]
+        return om.compute_minimum(self.sizing)
 
-def op_build(cfg: dict, out: str) -> int:
-    xmin, ymin, xmax, ymax = (float(v) for v in cfg["bbox"])
-    om_bbox = (xmin, xmax, ymin, ymax)
-    mpd = _m_per_deg(0.5 * (ymin + ymax))
-    min_deg = float(cfg["min_edge_length_m"]) / mpd
-    max_deg = float(cfg["max_edge_length_m"]) / mpd
-    gradation = float(cfg.get("gradation", 0.15))
-    seed = int(cfg.get("seed", 0))
+    def edge_length(self):
+        """What ``generate_mesh`` is handed: the sizing stack, or the uniform word."""
+        combined = self.combined()
+        if combined is not None:
+            if len(self.sizing) > 1:
+                self.active.append("compute_minimum(%d sizing functions)"
+                                   % len(self.sizing))
+            return combined
+        self.active.append("uniform(min_edge)")
+        holes = self.holes
+        min_deg, max_deg = self.min_deg, self.max_deg
 
-    obstacles = list(cfg.get("obstacles") or [])
-    holes = None
-    if obstacles:
-        holes = _Holes([g for spec in obstacles for g in _load_geoms(spec["geojson"])],
-                       min_deg, om_bbox)
-
-    active: list[str] = []
-    smoothed = None
-    dem = None
-    if cfg.get("domain_geojson"):
-        if cfg.get("refine_regions"):
-            raise ValueError(
-                "a polygon domain is sized from a distance callable, not the "
-                "sizing lattice a region refine is written onto")
-        sdf = _PolygonDomain(_load_geoms(cfg["domain_geojson"]), min_deg, om_bbox)
-        edge_length = _polygon_sizing(cfg.get("sizing_coords"), min_deg, max_deg,
-                                      gradation, holes, active)
-    else:
-        region = om.Region(extent=om_bbox, crs="EPSG:4326")
-        smoothed = True
-        try:
-            shore = om.Shoreline(cfg["shoreline_shp"], region.bbox, min_deg)
-        except Exception:  # noqa: BLE001
-            # The shoreline smoothing moving-average throws a GEOS side-location
-            # conflict on some GSHHG geometries; the unsmoothed shoreline still
-            # meshes.
-            smoothed = False
-            shore = om.Shoreline(cfg["shoreline_shp"], region.bbox, min_deg,
-                                 smooth_shoreline=False)
-        sdf = om.signed_distance_function(shore)
-
-        sizing = [om.feature_sizing_function(
-            shore, sdf, r=int(cfg.get("feature_r", 3)),
-            min_edge_length=min_deg, max_edge_length=max_deg)]
-        active.append("feature_sizing(distance_to_shore,medial_axis)")
-
-        if cfg.get("dem_path"):
-            dem = om.DEM(cfg["dem_path"], bbox=region)
-            sizing.append(om.wavelength_sizing_function(
-                dem, wl=int(cfg.get("wl", 10)),
-                min_edgelength=min_deg, max_edge_length=max_deg))
-            active.append("wavelength_sizing(shallow_water,wl=%d)"
-                          % int(cfg.get("wl", 10)))
-
-        edge_length = om.compute_minimum(sizing) if len(sizing) > 1 else sizing[0]
-
-        regions = list(cfg.get("refine_regions") or [])
-        if regions or holes is not None:
-            xg, yg = edge_length.create_grid()
-            flat = np.column_stack([xg.ravel(), yg.ravel()])
-            values = np.asarray(edge_length.values, dtype=float)
-            for spec in regions:
-                target = float(spec["edge_length_m"]) / mpd
-                geom = unary_union(_load_geoms(spec["geojson"]))
-                inside = contains_xy(geom, flat[:, 0], flat[:, 1]).reshape(xg.shape)
-                values = np.where(inside, np.minimum(values, target), values)
-                active.append("refine_region(edge_length=%.0fm)"
-                              % float(spec["edge_length_m"]))
+        def uniform(x: np.ndarray) -> np.ndarray:
+            xq = np.nan_to_num(np.asarray(x, dtype=float), nan=1.0e9)
+            h = np.full(xq.shape[0], min_deg)
             if holes is not None:
-                # The cut can only follow the outline if the mesh is fine enough
-                # there to hold it, so the band around the outline is SEEDED at the
-                # finest edge; the growth away from it is enforce_mesh_gradation's,
-                # below.
-                near = np.abs(holes.signed(flat)).reshape(xg.shape)
-                values = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg,
-                                  min_deg, values)
-                active.append("obstacle_band(%g*min_edge,graded)"
-                              % _OBSTACLE_BAND_EDGES)
-            values = np.clip(values, min_deg, max_deg)
-            edge_length.values = values
-            edge_length.hmin = float(
-                np.nanmin(values[np.isfinite(values) & (values > 0)]))
-            edge_length.build_interpolant()
+                near = np.abs(holes.signed(xq))
+                h = np.where(near <= _OBSTACLE_BAND_EDGES * min_deg, min_deg, h)
+            return np.clip(h, min_deg, max_deg)
 
-        edge_length = om.enforce_mesh_gradation(edge_length, gradation=gradation)
-        if dem is not None:
-            edge_length = om.enforce_mesh_size_bounds_elevation(
-                edge_length, dem, [[min_deg, max_deg, -1e9, 1e9]])
+        return uniform
 
-    domain = sdf
-    pfix = np.empty((0, 2), dtype=float)
-    if holes is not None:
-        domain = om.Difference([sdf, holes])
-        if any(spec.get("constrain", True) for spec in obstacles):
-            # A constrained vertex outside the domain would pin a node the domain
-            # excludes, so only the outline inside it is locked.
-            pfix = holes.outline[sdf.eval(holes.outline) < 0.0]
-        active.append("obstacles(%d,pfix=%d)" % (len(obstacles), int(pfix.shape[0])))
+    def domain(self):
+        """The domain ``generate_mesh`` cuts from, obstacles subtracted."""
+        if self.holes is None:
+            return self.sdf
+        return om.Difference([self.sdf, self.holes])
 
-    points, cells = om.generate_mesh(
-        domain, edge_length, bbox=om_bbox, min_edge_length=min_deg,
-        max_iter=int(cfg.get("max_iter", 40)), seed=seed,
-        pfix=(pfix if pfix.shape[0] else None))
+    def pfix(self) -> np.ndarray:
+        """The outline vertices DistMesh locks, inside the domain only.
 
-    points, cells = _typed(points, cells)
+        A constrained vertex outside the domain would pin a node the domain
+        excludes, so only the outline inside it is locked.
+        """
+        if self.holes is None:
+            return np.empty((0, 2), dtype=float)
+        outline = self.holes.outline
+        return outline[self.sdf.eval(outline) < 0.0]
+
+
+# --------------------------------------------------------------------------- #
+# om2d's OWN pre primitives.
+# --------------------------------------------------------------------------- #
+def set_obstacle(build: _Build, geometry: str, constrain: bool = True) -> None:
+    """Punch a geometry out of the domain and lock its outline into the mesh.
+
+    The cut can only follow the outline if the mesh is fine enough there to hold
+    it, so the band around the outline is SEEDED at the finest edge on whatever
+    sizing the recipe has built so far; the growth away from it is
+    ``enforce_mesh_gradation``'s job and belongs in the recipe after this.
+    """
+    build.hole_geoms.extend(_load_geoms(geometry))
+    build.holes = _Holes(build.hole_geoms, build.min_deg, build.bbox)
+    if not constrain:
+        build.holes.outline = np.empty((0, 2), dtype=float)
+    grid = build.combined()
+    if grid is not None and hasattr(grid, "create_grid"):
+        _seed(grid, build, lambda flat: np.abs(build.holes.signed(flat))
+              <= _OBSTACLE_BAND_EDGES * build.min_deg, build.min_deg)
+    build.active.append("obstacle(%d part(s),constrain=%s)"
+                        % (len(build.hole_geoms), bool(constrain)))
+
+
+def set_region_size(build: _Build, geometry: str, edge_length_m: float) -> None:
+    """Write a target edge inside a drawn region onto the current sizing lattice.
+
+    Onto the lattice rather than into the triangulator, so the transition into the
+    region obeys the same gradation the rest of the mesh does instead of being a
+    discontinuity DistMesh has to absorb.
+    """
+    grid = build.combined()
+    if grid is None or not hasattr(grid, "create_grid"):
+        raise ValueError(
+            "set_region_size writes onto a sizing lattice and this recipe has "
+            "built none yet; declare a sizing op before it, or size the whole "
+            "domain with resolution_m")
+    geom = unary_union(_load_geoms(geometry))
+    target = float(edge_length_m) / build.mpd
+    _seed(grid, build, lambda flat: contains_xy(geom, flat[:, 0], flat[:, 1]),
+          target)
+    build.active.append("region(edge_length=%.0fm)" % float(edge_length_m))
+
+
+def _seed(grid, build: _Build, inside, target: float) -> None:
+    """Write ``target`` into a sizing lattice wherever ``inside`` says, in place."""
+    xg, yg = grid.create_grid()
+    flat = np.column_stack([xg.ravel(), yg.ravel()])
+    values = np.asarray(grid.values, dtype=float)
+    mask = np.asarray(inside(flat)).reshape(xg.shape)
+    values = np.where(mask, np.minimum(values, target), values)
+    values = np.clip(values, build.min_deg, build.max_deg)
+    grid.values = values
+    grid.hmin = float(np.nanmin(values[np.isfinite(values) & (values > 0)]))
+    grid.build_interpolant()
+
+
+_PRIMITIVES = {"set_obstacle": set_obstacle, "set_region_size": set_region_size}
+
+
+# --------------------------------------------------------------------------- #
+# Calling one op verbatim.
+# --------------------------------------------------------------------------- #
+def _resolve(name: str):
+    """The callable behind an op name: our primitive, else the library's own."""
+    if name in _PRIMITIVES:
+        return _PRIMITIVES[name]
+    fn = getattr(om, name, None)
+    if fn is None or not callable(fn):
+        raise ValueError(
+            "oceanmesh has no function %r (this driver runs %s)"
+            % (name, getattr(om, "__version__", "?")))
+    return fn
+
+
+def _bind(fn, kwargs: dict, env: dict, mpd: float,
+          report: dict) -> dict:
+    """Fill what the recipe left unstated from the environment -> the real call.
+
+    THE SIGNATURE IS THE SCHEMA. A parameter the recipe stated is used as
+    written; one it did not is taken from the environment when the environment
+    has it; one that is required and neither is refused BY NAME, naming what the
+    environment does stage.
+    """
+    signature = inspect.signature(fn)
+    bound = {}
+    threaded: dict[str, object] = {}
+    for name, value in kwargs.items():
+        bound[name] = _as_library_value(name, value, mpd, env)
+    for name, prm in signature.parameters.items():
+        if name in bound or prm.kind in (prm.VAR_POSITIONAL, prm.VAR_KEYWORD):
+            continue
+        if env.get(name) is not None:
+            bound[name] = env[name]
+            if name in _METRE_PARAMS:
+                threaded[name] = round(float(env[name]) * mpd, 3)
+            continue
+        if prm.default is prm.empty:
+            raise ValueError(
+                "%s needs %r and neither the recipe nor this domain supplies it "
+                "(the domain stages %s)"
+                % (getattr(fn, "__name__", "the op"), name,
+                   sorted(k for k, v in env.items() if v is not None)))
+    if threaded:
+        report["threaded_m"] = threaded
+    try:
+        signature.bind(**bound)
+    except TypeError as exc:
+        raise ValueError("%s: %s" % (getattr(fn, "__name__", "the op"), exc)) from exc
+    return bound
+
+
+def _as_library_value(name: str, value, mpd: float, env: dict):
+    """One stated kwarg in the units and the type the library reads it in."""
+    if name in _METRE_PARAMS and isinstance(value, (int, float)):
+        return float(value) / mpd
+    if name in _DEM_PARAMS and isinstance(value, str):
+        return om.DEM(value, bbox=env["region"])
+    return value
+
+
+def _is_mesh(result) -> bool:
+    """Did this op hand back a triangulation rather than a measurement?"""
+    return (isinstance(result, (tuple, list)) and len(result) >= 2
+            and isinstance(result[0], np.ndarray) and result[0].ndim == 2
+            and result[0].shape[1] == 2
+            and isinstance(result[1], np.ndarray) and result[1].ndim == 2
+            and result[1].shape[1] in (3, 4))
+
+
+# --------------------------------------------------------------------------- #
+# build.
+# --------------------------------------------------------------------------- #
+def op_build(cfg: dict, out: str) -> int:
+    build = _Build(cfg)
+    reports: list[dict] = []
+
+    for entry in cfg.get("pre_ops") or []:
+        name = str(entry["fn"])
+        fn = _resolve(name)
+        report = {"op": name}
+        if name in _PRIMITIVES:
+            fn(build, **dict(entry.get("kwargs") or {}))
+            reports.append(report)
+            continue
+        env = build.environment()
+        transform = "grid" in inspect.signature(fn).parameters \
+            or "edge_lengths" in inspect.signature(fn).parameters
+        bound = _bind(fn, dict(entry.get("kwargs") or {}), env, build.mpd, report)
+        result = fn(**bound)
+        build.sizing = [result] if transform else [*build.sizing, result]
+        report["kind"] = "transform" if transform else "source"
+        reports.append(report)
+        build.active.append(name)
+
+    edge_length = build.edge_length()
+    pfix = build.pfix()
+    points, cells = _typed(*om.generate_mesh(
+        build.domain(), edge_length, bbox=build.bbox,
+        min_edge_length=build.min_deg, max_iter=int(cfg.get("max_iter", 40)),
+        seed=int(cfg.get("seed", 0)),
+        pfix=(pfix if pfix.shape[0] else None)))
 
     gaps: dict[str, float | None] = {}
-    notes: list[str] = []
 
-    def _record(stage: str, nodes) -> None:
+    def record(stage: str, nodes) -> None:
         if pfix.shape[0]:
             d, _ = cKDTree(np.asarray(nodes, dtype=float)).query(pfix, k=1)
-            gaps[stage] = round(float(d.max()) * mpd, 2)
+            gaps[stage] = round(float(d.max()) * build.mpd, 2)
 
-    # The clean is run as its own passes rather than through mesh_clean so the
-    # constrained cut can be measured after each one: a pass that walks the mesh
-    # off its breaklines has to be visible, not averaged into a final number.
-    _record("generated", points)
-    lock = pfix if pfix.shape[0] else None
-    quality = float(cfg.get("min_element_qual", 0.01))
-    cleaned = False
-    if cells.shape[0] > 0:
-        try:
-            # delete_boundary_faces cannot tell a constrained cut from a sliver -
-            # the elements along a punched outline ARE boundary faces - so the pass
-            # is kept only while the cut stays where it was locked.
-            held = (points, cells)
-            points, cells = _pass(om.delete_boundary_faces, points, cells,
-                                  min_qual=quality)
-            _record("boundary_faces", points)
-            if lock is not None and gaps["boundary_faces"] > gaps["generated"]:
-                notes.append(
-                    "delete_boundary_faces reverted: it moved the constrained cut "
-                    "%.1f m, so the sliver removal was declined and the elements "
-                    "along the cut stand as generated"
-                    % (gaps["boundary_faces"] - gaps["generated"]))
-                points, cells = held
-                gaps["boundary_faces"] = gaps["generated"]
-            points, cells = _pass(om.delete_faces_connected_to_one_face,
-                                  points, cells)
-            _record("one_face", points)
-            points, cells = _pass(om.laplacian2, points, cells, max_iter=20,
-                                  tol=0.01, pfix=lock)
-            _record("smoothed", points)
-            points, cells = _pass(om.make_mesh_boundaries_traversable,
-                                  points, cells, min_disconnected_area=0.05)
-            _record("traversable", points)
-            points, cells = _pass(om.fix_mesh, points, cells, delete_unused=True)
-            _record("fixed", points)
-            cleaned = True
-        except _EmptyAfterClean as exc:
-            # The emptying pass never assigned, so the mesh the chain ACTUALLY
-            # produced is stated here and refused by the backstop below.
-            notes.append("%s removed the last element" % exc)
-            points, cells = _typed(np.empty((0, 2)), np.empty((0, 3)))
-        except Exception as exc:  # noqa: BLE001 -- re-raised as a typed refusal below
-            # A pass that throws leaves the arrays wherever it stopped, so the run
-            # cannot continue over them: half a clean is not a mesh, and a note
-            # about it reads afterwards as a mesh that was merely cleaned less.
-            raise ValueError(
-                "the mesh clean chain stopped inside a pass and the mesh is left "
-                f"partially cleaned, so it is refused rather than solved: {exc!r}"
-                + ("; " + "; ".join(notes) if notes else "")
-                + f"; passes measured before the stop: {sorted(gaps)}"
-            ) from exc
-        points, cells = _typed(points, cells)
+    def guard(stage: str, nodes) -> bool:
+        """Did this pass walk the mesh off the outline it was constrained to?
+
+        ``delete_boundary_faces`` cannot tell a constrained cut from a sliver -
+        the elements along a punched outline ARE boundary faces - so a pass that
+        moves the cut is declined and the elements along it stand as generated.
+        """
+        record(stage, nodes)
+        if not pfix.shape[0] or gaps[stage] <= gaps["generated"]:
+            return False
+        build.notes.append(
+            "%s reverted: it moved the constrained cut %.1f m, so the change was "
+            "declined and the elements along the cut stand as generated"
+            % (stage, gaps[stage] - gaps["generated"]))
+        gaps[stage] = gaps["generated"]
+        return True
+
+    record("generated", points)
+    env_extra = {"pfix": (pfix if pfix.shape[0] else None)}
+    points, cells, _ = _run_mesh_ops(
+        cfg.get("post_ops") or [], points, cells, None, build.mpd, reports,
+        env_extra, on_pass=guard, notes=build.notes)
 
     if cells.shape[0] == 0:
         # Every number below reduces over the elements, so a generation that
@@ -400,7 +494,7 @@ def op_build(cfg: dict, out: str) -> int:
             "the domain came back with NO elements at the declared resolution "
             f"(min_edge_length_m={cfg['min_edge_length_m']}, "
             f"max_edge_length_m={cfg['max_edge_length_m']})"
-            + ("; " + "; ".join(notes) if notes else "")
+            + ("; " + "; ".join(build.notes) if build.notes else "")
             + "; declare an edge length this domain can hold, or a domain that "
             "holds this edge length")
     used = np.unique(cells)
@@ -415,22 +509,21 @@ def op_build(cfg: dict, out: str) -> int:
     seg = np.sqrt(np.concatenate([
         ((tri[:, 1] - tri[:, 0]) ** 2).sum(1),
         ((tri[:, 2] - tri[:, 1]) ** 2).sum(1),
-        ((tri[:, 0] - tri[:, 2]) ** 2).sum(1)])) * mpd
+        ((tri[:, 0] - tri[:, 2]) ** 2).sum(1)])) * build.mpd
     stats = {
         "engine": "oceanmesh(CHLNDDEV OceanMesh2D port) v%s"
                   % getattr(om, "__version__", "?"),
-        "sizing_functions": active,
+        "sizing_functions": build.active,
+        "ops": reports,
         # None on the polygon path: there is no shoreline to have smoothed.
-        "shoreline_smoothed": smoothed,
-        "mesh_clean": cleaned,
-        "gradation": gradation,
-        "seed": seed,
+        "shoreline_smoothed": build.smoothed,
+        "seed": int(cfg.get("seed", 0)),
         "min_edge_length_m": cfg["min_edge_length_m"],
         "max_edge_length_m": cfg["max_edge_length_m"],
         "constrained_points": int(pfix.shape[0]),
-        # What each cleanup pass cost the constraint, in metres.
+        # What each post op cost the constraint, in metres.
         "pfix_gap_m": gaps,
-        "clean_notes": notes,
+        "clean_notes": build.notes,
         "n_points": int(points.shape[0]),
         "n_cells": int(cells.shape[0]),
         "edge_min_m": round(float(seg.min()), 1),
@@ -438,16 +531,68 @@ def op_build(cfg: dict, out: str) -> int:
         "edge_max_m": round(float(seg.max()), 1),
     }
     json.dump(stats, open(out + "/om2d_stats.json", "w"), indent=2)
-    print("OM2D_OK", json.dumps(stats))
+    print("OM2D_OK", json.dumps(stats)[:4000])
     return 0
+
+
+def _run_mesh_ops(ops, points, cells, bed, mpd: float, reports: list,
+                  env_extra: dict, *, on_pass=None,
+                  notes: list) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Run the ops that act on a generated mesh, verbatim, in declared order.
+
+    An op that hands back a triangulation replaces the mesh; one that hands back
+    a measurement is RECORDED under its own name and the mesh stands. An op that
+    removes the last element stops the chain and says which one did it - half a
+    clean is not a mesh, and a note about it reads afterwards as a mesh that was
+    merely cleaned less.
+    """
+    results: dict = {}
+    for entry in ops:
+        name = str(entry["fn"])
+        fn = _resolve(name)
+        report = {"op": name}
+        env = {**dict.fromkeys(_POINT_PARAMS, points),
+               **dict.fromkeys(_CELL_PARAMS, cells),
+               "topobathymetry": bed, **env_extra}
+        held = (points, cells)
+        bound = _bind(fn, dict(entry.get("kwargs") or {}), env, mpd, report)
+        try:
+            result = fn(**bound)
+        except Exception as exc:  # noqa: BLE001 -- re-raised as a typed refusal
+            raise ValueError(
+                "the op %r stopped inside the library, so the mesh is left "
+                "partially processed and is refused rather than solved: %r%s"
+                % (name, exc, "; " + "; ".join(notes) if notes else "")) from exc
+        if _is_mesh(result):
+            points, cells = _typed(result[0], result[1])
+            if cells.shape[0] == 0:
+                notes.append("%s removed the last element" % name)
+                raise _EmptyAfterOp(name)
+            if on_pass is not None and on_pass(name, points):
+                points, cells = held
+                report["reverted"] = True
+            report["nodes"] = int(points.shape[0])
+            report["elements"] = int(cells.shape[0])
+        else:
+            results[name] = _measurement(name, result, points, cells, bed)
+            report["measured"] = True
+        reports.append(report)
+    return points, cells, results
+
+
+def _measurement(name: str, result, points, cells, bed) -> object:
+    """One measuring op's result, as the neutral record the host reads back."""
+    if name == "identify_ocean_boundary_sections":
+        return _sections(result, points, cells, bed)
+    return result if isinstance(result, (int, float, str, bool, type(None))) \
+        else np.asarray(result).tolist()
 
 
 def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
     """The connected pieces of a triangulation, as boolean cell masks.
 
     A domain cut by a shoreline can come back as two water bodies in one array,
-    and the winding walk oceanmesh identifies sections along traces ONE of them,
-    so each piece is offered its own identification.
+    and the winding walk oceanmesh identifies sections along traces ONE of them.
     """
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
@@ -456,88 +601,69 @@ def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
     incidence = coo_matrix(
         (np.ones(rows.shape[0]), (rows, cells.ravel())),
         shape=(cells.shape[0], npoin))
-    count, label = connected_components(
-        incidence @ incidence.T, directed=False)
+    count, label = connected_components(incidence @ incidence.T, directed=False)
     return [label == k for k in range(count)]
 
 
-def op_ocean_boundary(cfg: dict, out: str) -> int:
-    """The CONTIGUOUS ocean-boundary sections oceanmesh identifies from the bed.
+def _sections(ends, points, cells, bed) -> list[dict]:
+    """Section ENDPOINTS as the runs of nodes between them, in walk order.
 
     ``identify_ocean_boundary_sections`` returns the first and last node of each
     section; the winding walk it indexes into is what turns those endpoints back
-    into the run of nodes between them, so the walk is rebuilt with the same
-    library call and returned with the sections.
+    into a run, so the walk is rebuilt with the same library call.
     """
     from oceanmesh.edges import get_winded_boundary_edges
 
+    winded = get_winded_boundary_edges(cells).flatten()
+    first_seen = np.unique(winded, return_index=True)[1]
+    walk = [int(winded[i]) for i in sorted(first_seen)]
+    at = {node: index for index, node in enumerate(walk)}
+    out: list[dict] = []
+    for start, stop in ends:
+        i, j = at.get(int(start)), at.get(int(stop))
+        if i is None or j is None:
+            continue
+        nodes = walk[i:j + 1] if i <= j else walk[i:] + walk[:j + 1]
+        out.append({
+            "nodes": nodes,
+            "node_count": len(nodes),
+            "mean_bed_m": round(float(np.asarray(bed)[nodes].mean()), 3),
+            "min_bed_m": round(float(np.asarray(bed)[nodes].min()), 3),
+            "centroid": [round(float(points[nodes, 0].mean()), 6),
+                         round(float(points[nodes, 1].mean()), 6)],
+        })
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# post.
+# --------------------------------------------------------------------------- #
+def op_post(cfg: dict, out: str) -> int:
+    """Run ops over a mesh the host already holds -> the mesh and the results."""
     npz = np.load(cfg["mesh_npz"])
     points = np.asarray(npz["points"], dtype=float)
     cells = np.asarray(npz["cells"], dtype=np.int64)
-    bed = np.asarray(npz["bed"], dtype=float)
-    threshold = float(cfg["depth_threshold"])
-    min_nodes = int(cfg.get("min_nodes_threshold", 10))
-
-    sections: list[dict] = []
-    walks: list[list[int]] = []
-    for mask in _components(cells, points.shape[0]):
-        kept = np.unique(cells[mask])
-        remap = np.full(points.shape[0], -1, dtype=np.int64)
-        remap[kept] = np.arange(kept.shape[0])
-        sub_cells = remap[cells[mask]]
-        sub_points, sub_bed = points[kept], bed[kept]
-
-        winded = get_winded_boundary_edges(sub_cells).flatten()
-        first_seen = np.unique(winded, return_index=True)[1]
-        walk = [int(kept[winded[i]]) for i in sorted(first_seen)]
-        walks.append(walk)
-        at = {node: index for index, node in enumerate(walk)}
-
-        try:
-            ends = om.identify_ocean_boundary_sections(
-                sub_points, sub_cells, sub_bed, depth_threshold=threshold,
-                min_nodes_threshold=min_nodes)
-        except TypeError as exc:
-            # The section walk leaves its end node unset when the deep nodes on a
-            # walk never close a run, and then indexes with it.
-            raise ValueError(
-                "oceanmesh could not close an ocean-boundary section at "
-                f"depth_threshold={threshold} m with min_nodes_threshold="
-                f"{min_nodes} on a walk of {len(walk)} boundary nodes "
-                f"({exc}); state a threshold this boundary crosses cleanly"
-            ) from exc
-        for start, stop in ends:
-            i, j = at[int(kept[start])], at[int(kept[stop])]
-            nodes = walk[i:j + 1] if i <= j else walk[i:] + walk[:j + 1]
-            sections.append({
-                "nodes": nodes,
-                "node_count": len(nodes),
-                "mean_bed_m": round(float(bed[nodes].mean()), 3),
-                "min_bed_m": round(float(bed[nodes].min()), 3),
-                "centroid": [round(float(points[nodes, 0].mean()), 6),
-                             round(float(points[nodes, 1].mean()), 6)],
-            })
-
-    walked = [n for walk in walks for n in walk]
-    report = {
-        "library": "oceanmesh.identify_ocean_boundary_sections v%s"
-                   % getattr(om, "__version__", "?"),
-        "depth_threshold_m": threshold,
-        "min_nodes_threshold": min_nodes,
-        "components": len(walks),
-        "walks": walks,
-        "walk_node_counts": [len(w) for w in walks],
-        "boundary_bed_min_m": round(float(bed[walked].min()), 3),
-        "boundary_bed_max_m": round(float(bed[walked].max()), 3),
-        "sections": sections,
+    bed = np.asarray(npz["bed"], dtype=float) if "bed" in npz.files else None
+    mpd = _m_per_deg(0.5 * (float(points[:, 1].min()) + float(points[:, 1].max())))
+    reports: list[dict] = []
+    notes: list[str] = []
+    env_extra = {
+        "min_edge_length": float(cfg["min_edge_length_m"]) / mpd,
+        "min_edgelength": float(cfg["min_edge_length_m"]) / mpd,
+        "max_edge_length": float(cfg["max_edge_length_m"]) / mpd,
     }
-    json.dump(report, open(out + "/om2d_sections.json", "w"), indent=2)
-    print("OM2D_SECTIONS_OK", json.dumps(
-        {k: v for k, v in report.items() if k != "walks"})[:2000])
+    points, cells, results = _run_mesh_ops(
+        cfg.get("ops") or [], points, cells, bed, mpd, reports, env_extra,
+        notes=notes)
+    stem = out + "/" + str(cfg["out_stem"])
+    np.savez(stem + ".npz", points=points, cells=cells)
+    report = {"ops": reports, "results": results, "clean_notes": notes}
+    json.dump(report, open(stem + ".json", "w"), indent=2)
+    print("OM2D_POST_OK", json.dumps({"ops": reports})[:2000])
     return 0
 
 
-_OPS = {"build": op_build, "ocean_boundary": op_ocean_boundary}
+_OPS = {"build": op_build, "post": op_post}
 
 
 def main() -> int:

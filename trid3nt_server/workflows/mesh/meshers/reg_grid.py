@@ -1,51 +1,42 @@
 """The regular-grid mesher: a geographic extent plus a cell size -> the lattice.
 
-Wraps the repo's regular-grid domain math; what it returns is the node lattice
-and its quad cells, which is the same geometry a structured deck writes as an
-origin plus cell counts. Its edits are re-derivations of that math, so the recipe
-replays exactly.
+CONFORMS to the same surface every mesher does, with the smallest possible
+registration: no library namespace of its own (the lattice IS the repo's own
+regular-grid domain math, reached by the role adapter rather than named by an
+op), and a near-empty default recipe. The shared primitives ride along, so a
+lattice that wants a bed says ``mesh_op("set_bed", source=...)`` exactly as an
+unstructured domain does.
 
-A regular grid carries no bed: elevations arrive from a sampled raster, and a
+What it returns is the node lattice and its quad cells, which is the same
+geometry a structured deck writes as an origin plus cell counts. A regular grid
+carries no bed of its own: elevations arrive from a sampled raster, and a
 zero-filled bed would read to a solver as ground at sea level.
 """
 
 from __future__ import annotations
 
-import dataclasses
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
-from trid3nt_server.workflows.mesh.grid_geometry import RegularGrid, regular_grid_from_bbox
+from trid3nt_server.workflows.mesh.grid_geometry import (
+    RegularGrid, regular_grid_from_bbox,
+)
 from trid3nt_server.workflows.mesh.meshers import (
-    EditAction,
     Mesh,
-    MeshField,
     MeshToolError,
-    apply_layer_edits_action,
-    contained_extent,
     register_mesher,
-    staged_coverage,
 )
 
 __all__ = ["REG_GRID", "build"]
 
-_FIELDS = (
-    MeshField("kind", types=(str,), choices=("structured_grid",),
-              default="structured_grid",
-              doc="structured_grid - the one kind a uniform lattice is"),
-    MeshField("extent", types=(tuple, list, dict, str), required=True,
-              doc="(min_lon, min_lat, max_lon, max_lat) in EPSG:4326; a polygon "
-                  "domain is refused by name, because a lattice is an origin "
-                  "plus counts and a masked one is not"),
-    MeshField("resolution_m", types=(int, float), required=True,
-              doc="target uniform cell size, in metres"),
-)
+#: The cell size an ask that declares none gets, in metres.
+_DEFAULT_RESOLUTION_M = 100.0
 
 
-def build(spec: Mapping[str, Any]) -> Mesh:
-    """Build the lattice an ``(extent, resolution_m)`` ask describes."""
-    extent = spec["extent"]
+def build(recipe: Any) -> Mesh:
+    """Build the lattice this recipe's extent and resolution describe."""
+    extent = recipe.extent
     if not isinstance(extent, (tuple, list)):
         # A lattice IS its origin, cell size and row/column counts - that is what
         # a structured deck writes and what every consumer of this mesh reads back
@@ -60,8 +51,25 @@ def build(spec: Mapping[str, Any]) -> Mesh:
             "with mesher='om2d', or pass the polygon's bounding box.",
             escalation={"tool": "build_mesh",
                         "overrides": {"mesher": "om2d", "extent": extent}})
-    return _lattice(regular_grid_from_bbox(
-        tuple(float(v) for v in extent), float(spec["resolution_m"])))
+    mesh = _lattice(regular_grid_from_bbox(
+        tuple(float(v) for v in extent),
+        float(recipe.resolution_m or _DEFAULT_RESOLUTION_M)))
+    return _with_ops(mesh, recipe)
+
+
+def _with_ops(mesh: Mesh, recipe: Any) -> Mesh:
+    """Run the recipe's ops over the lattice, in their declared order.
+
+    Every op a reg_grid recipe can name is a shared primitive running on the
+    host, so this is the whole of its execution: there is no library to shell.
+    """
+    from trid3nt_server.workflows.mesh.inputs import op_input
+    from trid3nt_server.workflows.mesh.meshers import bind_ops
+
+    for op in bind_ops(REG_GRID, recipe.ops):
+        mesh = op.fn(mesh, **{name: op_input(value)
+                              for name, value in op.kwargs.items()})
+    return mesh
 
 
 def _lattice(grid: RegularGrid) -> Mesh:
@@ -85,51 +93,12 @@ def _lattice(grid: RegularGrid) -> Mesh:
               "m_per_deg_lat": grid.m_per_deg_lat})
 
 
-def _over_the_same_coverage(before: Mesh, after: Mesh) -> Mesh:
-    """``after``, stating the coverage ``before`` was staged over.
-
-    A re-derivation stages nothing, so the ground the inputs were fetched for is
-    still the ground they were fetched for. Without this the coverage would
-    collapse onto whatever box the last edit left, and the next extent change
-    would be judged against a crop rather than against what is actually staged.
-    """
-    coverage = staged_coverage(before)
-    if coverage is None:
-        return after
-    return dataclasses.replace(
-        after, meta={**dict(after.meta), "staged_coverage": coverage})
-
-
-def _set_resolution(mesh: Mesh, *, resolution_m: float) -> Mesh:
-    return _over_the_same_coverage(mesh, build(
-        {"extent": mesh.meta["extent"], "resolution_m": float(resolution_m)}))
-
-
-def _set_extent(mesh: Mesh, *, extent: Any) -> Mesh:
-    """Re-derive the lattice over a CROP of the staged coverage."""
-    return _over_the_same_coverage(mesh, build(
-        {"extent": contained_extent(mesh, extent, edit="set_extent"),
-         "resolution_m": mesh.meta["resolution_m"]}))
-
-
 REG_GRID = register_mesher(
     "reg_grid",
     build,
-    actions=(
-        EditAction(
-            name="set_resolution", apply=_set_resolution,
-            inputs={"resolution_m": MeshField(
-                "resolution_m", types=(int, float), required=True,
-                doc="the new uniform cell size, in metres")},
-            doc="Re-derive the lattice at a different cell size."),
-        EditAction(
-            name="set_extent", apply=_set_extent,
-            inputs={"extent": MeshField(
-                "extent", types=(tuple, list), required=True,
-                doc="the new (min_lon, min_lat, max_lon, max_lat); it must sit "
-                    "INSIDE the coverage the mesh was staged over")},
-            doc="Crop the lattice to a smaller extent inside the staged coverage."),
-        apply_layer_edits_action(),
-    ),
-    fields=_FIELDS,
+    kinds=("structured_grid",),
+    # No default ops: a lattice at the one size word is the whole of what an
+    # undeclared ask asked for, and a bed it did not name is a bed it does not
+    # have.
+    default_ops=(),
 )

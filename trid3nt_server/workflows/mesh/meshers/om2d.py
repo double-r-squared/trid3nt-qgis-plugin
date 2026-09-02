@@ -1,32 +1,28 @@
 """The ``om2d`` mesher: OceanMesh2D, wrapped where it lives.
 
-The domain arrives one of two ways. From a BBOX it is a real shoreline: the
-GSHHG land polygons cut to the AOI, turned into a signed distance function,
-sized by distance to the shore and - when a bed is fetched - by shallow-water
-wavelength over depth, gradation-limited, and triangulated by DistMesh. From a
-POLYGON it is that polygon's own interior, and the signed distance is measured
-against its boundary; a basin, a sectioned river reach or any other narrowed
-domain another tool produced is meshed as it stands rather than re-derived here. All of it is
-the CHLNDDEV ``oceanmesh`` port's own code, running in ``trid3nt-local/mesh:
+Three registrations and nothing else.
+
+NAMESPACES. Ops may name any function of the CHLNDDEV ``oceanmesh`` port under
+the library's own spelling, tagged by the phase it runs in: the sizing functions
+before generation, the clean passes and the ocean-boundary identification after
+it. Two om2d-owned primitives ride beside them for the two things the library has
+no single word for - punching a geometry out of the domain with its outline
+constrained in, and sizing a drawn region. The SHARED primitives (``set_bed``,
+``set_boundary_roles``) ride along as they do for every mesher.
+
+ROLE ADAPTER. ``build`` turns the recipe's extent into the library's domain
+object - the GSHHG land polygons cut to a lon/lat box, or the interior of a
+supplied polygon - and threads ``resolution_m`` as the library's own edge
+defaults. Nothing else: an adapter that grows opinions is the old sin.
+
+DEFAULT RECIPE. The hard-baked, visible list below. It sizes nothing, because
+what a domain should be sized TOWARD is the ask's knowledge; an undeclared ask is
+meshed uniformly at the one size word, cleaned by the library's own passes, and
+bedded from topobathy.
+
+All of the library is the port's own code, running in ``trid3nt-local/mesh:
 latest`` where it is installed; this file composes the ask, shells the box, and
 turns what comes back into the one neutral mesh every writer reads.
-
-Its edit actions are the shape a coastal domain is authored in: punch an obstacle
-out of the water and lock its outline into the mesh, refine inside a drawn
-region, designate the seaward boundary. An obstacle and a region both REBUILD -
-the sizing function and the distance function are inputs to DistMesh, not
-post-processing - so the mesh stays one converged triangulation rather than a
-patched one.
-
-An open boundary is a CONTIGUOUS stretch of the boundary walk, identified by
-oceanmesh's own ``identify_ocean_boundary_sections`` from the bed: a solver reads
-one liquid boundary as one continuous forcing edge, so a set of scattered nodes
-that happens to sit on the same side of the domain is not a boundary. Those
-sections number the ``.cli``.
-
-Conformality is MEASURED, never asserted: the obstacle outline goes in as
-DistMesh's constrained ``pfix`` points and the offset that survives is reported
-in the probes, in metres.
 """
 
 from __future__ import annotations
@@ -35,29 +31,25 @@ import json
 import logging
 import os
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
 from trid3nt_contracts import new_ulid
 
+from trid3nt_server.workflows.mesh.inputs import op_geometry
 from trid3nt_server.workflows.mesh.meshers import (
-    EditAction,
+    POST,
+    PRE,
+    BoundOp,
     Mesh,
-    MeshField,
     MeshToolError,
-    apply_layer_edits_action,
-    checked_refine,
-    fetch_activation_rows,
-    fetch_fallback_note,
+    OpNamespace,
+    bind_ops,
+    mesh_op,
     register_mesher,
 )
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
-from trid3nt_server.workflows.mesh.topology import (
-    match_boundary_roles,
-    write_topology,
-)
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
 
@@ -66,37 +58,22 @@ __all__ = ["OM2D", "build"]
 #: The GPL-isolated OceanMesh2D image and the driver mounted into it.
 _MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
 _INCONTAINER_SCRIPT = "om2d_driver.py"
-#: The shared TIN format writers still live beside the sandbox proofs that also
-#: call them; they are IMPORTED here, never shelled.
-_SANDBOX = "scripts/sandbox/oceanmesh"
 _CONTAINER_TIMEOUT_S = 2400
-
-#: The bathymetry rungs the bed tolerates: where CUDEM stops mid-AOI the global
-#: ETOPO relief is a REAL bed - coarse, on another vertical datum, labeled.
-_BED_FALLBACK = ("etopo_bathy_base",)
-
-#: The one conditioning this mesher performs on a staged bed - the watershed
-#: delineator's pit/depression/flat chain, named by the ask so a run that wants
-#: bed and routing to agree about the ground says so rather than assuming it.
-_BED_PIT_FILL = "pit_fill"
 
 #: DistMesh seeds its initial point cloud from numpy's global generator, which
 #: ``generate_mesh`` seeds itself from this value: one number is the whole
 #: difference between a replayable recipe and a mesh that drifts per rebuild.
 _SEED = 0
+_MAX_ITER = 40
 
-_BOUNDARY_SIDES = ("south", "north", "east", "west", "seaward")
+#: The one size word, when an ask declares none.
+_DEFAULT_RESOLUTION_M = 40.0
 
-#: Which coordinate a compass name ranks the identified sections on, and whether
-#: the named direction is the high end of it.
-_COMPASS = {"south": (1, False), "north": (1, True),
-            "west": (0, False), "east": (0, True)}
-
-#: The bed a boundary node must reach for oceanmesh to read it as ocean, and the
-#: shortest run of them that counts as a section. Both are the library's own
-#: defaults, and both are on the action so a shallow domain can state its own.
-_DEPTH_THRESHOLD_M = -50.0
-_MIN_SECTION_NODES = 10
+#: What the coarsest edge defaults to, as a MULTIPLE of the finest. A fixed metre
+#: ceiling turns a coarse resolution into a refusal about a number the caller
+#: never wrote; the multiple moves with the resolution. Any op may state its own
+#: ``max_edge_length`` instead.
+_MAX_EL_FACTOR = 10.0
 
 #: The fraction of the MEDIAN element area below which an element has collapsed:
 #: no area to invert, and a solver refuses the whole mesh over it.
@@ -107,287 +84,278 @@ _COLLAPSED_AREA_FRAC = 1e-9
 #: which leaves a fraction of a metre.
 _COINCIDENT_TOLERANCE_M = 1.0
 
-#: The slope band a bed fitted downstream is held inside, in m/m. A 2D reach
-#: solve on a surface DEM ponds where the terrain runs uphill; below the floor the
-#: water does not move and above the ceiling the depth collapses. The band spans
-#: the gentle alluvial reaches this mesher is handed.
-_BED_SLOPE_BAND = (3.0e-4, 6.0e-3)
+#: The oceanmesh functions an op may name, by the phase each runs in. Declared as
+#: a ROSTER rather than read off the module: the library is installed only inside
+#: the GPL-isolated image, so this process cannot import it to introspect. The
+#: kwargs of an op from this namespace are bound in the container, against the
+#: real signature, and the library's own error surfaces verbatim.
+_OCEANMESH_SIZING = (
+    "bathymetric_gradient_sizing_function",
+    "compute_minimum",
+    "distance_sizing_from_line_function",
+    "distance_sizing_from_point_function",
+    "distance_sizing_function",
+    "enforce_mesh_gradation",
+    "enforce_mesh_size_bounds_elevation",
+    "feature_sizing_function",
+    "multiscale_sizing_function",
+    "wavelength_sizing_function",
+)
+_OCEANMESH_ON_A_MESH = (
+    "delete_boundary_faces",
+    "delete_exterior_faces",
+    "delete_faces_connected_to_one_face",
+    "delete_interior_faces",
+    "fix_mesh",
+    "identify_ocean_boundary_sections",
+    "laplacian2",
+    "make_mesh_boundaries_traversable",
+    "mesh_clean",
+)
 
-#: How far past the AOI the bed is fetched, as a fraction of each span. The mesh
-#: has nodes ON the AOI corners and a raster's rim rows carry the warp's fill, so
-#: the grid has to reach past where the domain ends.
-_BED_MARGIN_FRAC = 0.02
+#: om2d's OWN pre-generation primitives, under their real driver ``def`` names.
+#: Both impose state on the DOMAIN the library triangulates, which the library
+#: has no single word for: ``om.Difference`` subtracts a shape but says nothing
+#: about locking its outline in, and a sizing lattice has no function that writes
+#: a target edge inside a drawn polygon.
+_OM2D_PRIMITIVES = ("set_obstacle", "set_region_size")
 
-#: The refine knobs, and what each one means to the sizing function.
-#: ``resolution_m`` is THE granularity word: the finest edge the sizing function
-#: is allowed, and - where nothing sizes the interior toward anything - the
-#: uniform edge the whole domain is meshed at.
-_REFINE_KNOBS = {"resolution_m": 40.0, "max_el": 400.0, "gradation": 0.15}
-
-#: What the coarsest edge defaults to, as a MULTIPLE of the finest. A fixed metre
-#: ceiling turns a coarse resolution into a refusal about a number the caller
-#: never wrote; the multiple reproduces the shipped 40 m / 400 m pair when
-#: neither knob is declared and moves with the resolution when one is.
-_MAX_EL_FACTOR = 10.0
-
-_FIELDS = (
-    MeshField("kind", types=(str,), choices=("unstructured_tri",),
-              default="unstructured_tri",
-              doc="unstructured_tri - the water side of the shoreline is triangulated"),
-    MeshField("extent", types=(tuple, list, dict, str), required=True,
-              doc="what the domain is cut from: (min_lon, min_lat, max_lon, "
-                  "max_lat) for the shoreline path, or a POLYGON - inline "
-                  "GeoJSON, a geometry mapping, the uri of a polygon layer, or "
-                  "the layer a chained row produced - whose interior is meshed "
-                  "as it stands"),
-    MeshField("refine", types=(dict,),
-              doc="{'resolution_m': the finest edge in metres - at the shore on "
-                  "the shoreline path, and the uniform edge a polygon interior "
-                  "is meshed at, 'max_el': the coarsest background edge in "
-                  "metres (defaults to 10x the resolution), 'gradation': how "
-                  "fast the two may transition (0.15-0.35)}"),
-    MeshField("bed", types=(str, dict),
-              default="fetch_topobathy",
-              doc="what paints the node elevations: a raster fetcher's name, a "
-                  "uri/path to a raster already fetched, or {'raster': <either>, "
-                  "'downstream_along': <channel line>, 'downstream_from': "
-                  "<(lon, lat) of the line's upstream end>} to lay the sampled "
-                  "surface down as a monotone downstream plane along that line, "
-                  "read head-to-tail from that end. 'condition': 'pit_fill' on "
-                  "that mapping runs the watershed delineator's own pit/"
-                  "depression/flat chain over the raster first, so an overland "
-                  "run's bed carries the same sinks its routing does. The bed "
-                  "also drives the wavelength sizing term"),
-    MeshField("boundaries", types=(dict,),
-              doc="{role: face} - which stretch of the boundary carries which "
-                  "role (inflow | outflow | open), each face a geometry the chain "
-                  "measured (a section's end transect). Every boundary node takes "
-                  "the role of the face it lies on; the rest are solid wall"),
+#: The ops list an undeclared ask gets. Hard-baked and visible: the library's own
+#: clean chain in the order it is meant to run, then the bed.
+_DEFAULT_OPS = (
+    mesh_op("delete_boundary_faces"),
+    mesh_op("delete_faces_connected_to_one_face"),
+    mesh_op("laplacian2"),
+    mesh_op("make_mesh_boundaries_traversable"),
+    mesh_op("fix_mesh", delete_unused=True),
+    mesh_op("set_bed", source="fetch_topobathy", interp="nearest"),
 )
 
 
-def build(spec: Mapping[str, Any]) -> Mesh:
+# --------------------------------------------------------------------------- #
+# The role adapter.
+# --------------------------------------------------------------------------- #
+def build(recipe: Any) -> Mesh:
     """Mesh the water side of the shoreline, or the interior of a supplied polygon."""
-    extent = spec["extent"]
-    return _realize({
-        "extent": (tuple(float(v) for v in extent)
-                   if isinstance(extent, (tuple, list)) else extent),
-        "refine": checked_refine("mesher 'om2d'", spec.get("refine"),
-                                 _refine_defaults(spec.get("refine"))),
-        "bed": spec.get("bed") or "fetch_topobathy",
-        "boundaries": dict(spec.get("boundaries") or {}),
-        "obstacles": [],
-        "regions": [],
-        "boundary": None,
-    })
-
-
-def _refine_defaults(refine: Any) -> dict[str, float]:
-    """The knob defaults this ask is checked against, with the ceiling on the floor.
-
-    A declared ``resolution_m`` with no ``max_el`` beside it moves the ceiling
-    with it, so the one number a template states is never contradicted by a
-    default it did not write.
-    """
-    given = dict(refine or {})
-    declared = dict(_REFINE_KNOBS)
-    finest = given.get("resolution_m")
-    if "max_el" not in given and isinstance(finest, (int, float)) \
-            and not isinstance(finest, bool):
-        declared["max_el"] = _MAX_EL_FACTOR * float(finest)
-    return declared
-
-
-# --------------------------------------------------------------------------- #
-# The build itself.
-# --------------------------------------------------------------------------- #
-def _realize(state: Mapping[str, Any]) -> Mesh:
-    import numpy as np
-
-    from trid3nt_server.workflows.mesh.shared.nodes import (
-        reproject_nodes_to_utm,
-        sample_raster_at_nodes,
-    )
-
-    refine = dict(state["refine"])
-    if refine["resolution_m"] > refine["max_el"]:
-        raise MeshToolError(
-            "MESH_SPEC_BAD_VALUE",
-            f"mesher 'om2d': refine resolution_m {refine['resolution_m']} m is "
-            f"coarser than max_el {refine['max_el']} m; resolution_m is the "
-            "finest edge and max_el the coarsest background one.")
+    ops = bind_ops(OM2D, recipe.ops)
+    resolution_m = float(recipe.resolution_m or _DEFAULT_RESOLUTION_M)
     rundir = _rundir()
-    domain = _domain(state["extent"], rundir)
-    aoi = domain.bbox
-    if domain.polygon_name is not None and state["regions"]:
-        raise MeshToolError(
-            "MESH_REGION_ON_POLYGON_DOMAIN",
-            "a polygon domain is sized from a distance callable rather than the "
-            "sizing lattice a region refine is written onto, so this mesh has no "
-            "grid for the region to land on. Refine the whole domain with the "
-            "edge band, or mesh the region's own polygon as the domain.")
-    dem_path, bed_provenance, fallback_note = _bed_raster(
-        state["bed"], aoi, rundir)
-    downstream_along, downstream_from = _downstream_along(state["bed"])
+    domain = _domain(recipe.extent, rundir)
 
-    config: dict[str, Any] = {
-        "bbox": list(aoi),
+    pre = [op for op in ops if op.phase == PRE]
+    post = [op for op in ops if op.phase == POST]
+    # Everything before the first of OUR primitives runs in the same container
+    # call as the generation: the library's clean passes renumber the nodes, and a
+    # bed painted on the host cannot survive a renumbering it never saw.
+    split = next((i for i, op in enumerate(post)
+                  if op.origin == "primitives"), len(post))
+    config = {
+        "bbox": list(domain.bbox),
         "shoreline_shp": (f"/shoreline/{domain.shoreline.name}"
                           if domain.shoreline is not None else None),
         "domain_geojson": (f"/data/{domain.polygon_name}"
                            if domain.polygon_name is not None else None),
-        "sizing_coords": domain.sizing_coords,
-        "dem_path": "/data/bed.tif" if dem_path is not None else None,
-        "min_edge_length_m": refine["resolution_m"],
-        "max_edge_length_m": refine["max_el"],
-        "gradation": refine["gradation"],
+        "min_edge_length_m": resolution_m,
+        "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
         "seed": _SEED,
-        "obstacles": [{"geojson": f"/data/{name}", "constrain": True}
-                      for name in _stage_geometries(
-                          rundir, state["obstacles"], "obstacle")],
-        "refine_regions": [
-            {"geojson": f"/data/{name}",
-             "edge_length_m": float(region["edge_length"])}
-            for name, region in zip(
-                _stage_geometries(rundir, [r["geometry"] for r in state["regions"]],
-                                  "region"),
-                state["regions"])],
-        "max_iter": 40,
+        "max_iter": _MAX_ITER,
+        "pre_ops": [_staged(op, rundir, index) for index, op in enumerate(pre)],
+        "post_ops": [_staged(op, rundir, len(pre) + i)
+                     for i, op in enumerate(post[:split])],
     }
     (rundir / "om2d_config.json").write_text(json.dumps(config))
-    _run_container(rundir, domain.shoreline)
+    _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz",
+            shoreline_dir=None if domain.shoreline is None
+            else domain.shoreline.parent)
+
+    mesh, stats = _read_built(rundir, domain, resolution_m, ops)
+    mesh = _apply_tail(mesh, post[split:], rundir, resolution_m)
+    return _emitted(mesh, rundir, domain, stats)
+
+
+def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
+                ops: tuple[BoundOp, ...]) -> tuple[Mesh, Mapping[str, Any]]:
+    """The container's arrays as the neutral mesh, cleaned once and projected."""
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
 
     npz = np.load(rundir / "om2d_mesh.npz")
     lonlat = np.asarray(npz["points"], dtype=float)
     cells = np.asarray(npz["cells"], dtype=np.int64)
     pfix = np.asarray(npz["pfix"], dtype=float)
-    bed_up = (sample_raster_at_nodes(dem_path, lonlat) if dem_path is not None
-              else None)
-
-    lonlat, cells, bed_up, repaired = _clean_once(lonlat, cells, bed_up)
+    lonlat, cells, repaired = _clean_once(lonlat, cells)
     points, utm_epsg = reproject_nodes_to_utm(lonlat)
-    bed_up, bed_fit = _fit_bed(points, bed_up, downstream_along, downstream_from,
-                               int(utm_epsg))
-
-    files, boundary_info, boundary_probes = _emit_formats(
-        rundir, lonlat=lonlat, cells=cells, points_m=points, bed_up=bed_up,
-        boundary=state["boundary"], boundaries=state.get("boundaries") or {},
-        utm_epsg=int(utm_epsg), domain_source=domain.source)
     stats = _stats(rundir)
-
     return Mesh(
-        points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}", bed=bed_up,
+        points=points, cells=cells, crs_authid=f"EPSG:{int(utm_epsg)}",
         meta={
             "utm_epsg": int(utm_epsg),
+            "lonlat": lonlat,
             "lonlat_bbox": (float(lonlat[:, 0].min()), float(lonlat[:, 1].min()),
                             float(lonlat[:, 0].max()), float(lonlat[:, 1].max())),
-            "build": _carry(state),
-            "files": files,
-            "fallback_note": fallback_note,
+            "domain_source": domain.source,
             "probes": {
-                "obstacles": len(state["obstacles"]),
-                "refine_regions": len(state["regions"]),
                 **_conformal_probe(points, pfix, int(utm_epsg)),
-                **({"degenerate_elements_repaired": repaired}
-                   if repaired else {}),
+                **({"degenerate_elements_repaired": repaired} if repaired else {}),
                 **({"clean_notes": list(stats["clean_notes"])}
                    if stats.get("clean_notes") else {}),
-                **({"bed_fit": bed_fit} if bed_fit else {}),
-                **boundary_probes,
             },
             "artifact": {
-                "open_boundary_info": boundary_info,
                 "provenance": {
                     "mesher_library": stats.get("engine", "oceanmesh (unreported)"),
-                    "resolution_m": refine["resolution_m"],
-                    "max_el_m": refine["max_el"],
-                    "gradation": refine["gradation"],
+                    "resolution_m": resolution_m,
+                    "max_el_m": _MAX_EL_FACTOR * resolution_m,
                     "seed": _SEED,
                     "sizing_source": _sizing_source(stats, domain),
-                    "dem_source": bed_provenance,
-                    "bed_fallback_note": fallback_note,
                     "domain_source": domain.source,
+                    "op_notes": [op.note for op in ops if op.note],
                 },
             },
             "synthetic_inputs": [
-                {"param": "resolution_m", "value": refine["resolution_m"],
-                 "units": "m", "basis": "user"},
-                {"param": "max_el_m", "value": refine["max_el"],
-                 "units": "m", "basis": "user"},
-                {"param": "gradation", "value": refine["gradation"],
+                {"param": "resolution_m", "value": resolution_m, "units": "m",
                  "basis": "user"},
                 {"param": "mesh_domain",
                  "value": f"{points.shape[0]} nodes / {cells.shape[0]} elements",
                  "basis": "derived",
                  "real_source_if_any": _sizing_source(stats, domain)},
-                {"param": "mesh_bed", "value": bed_provenance, "basis": "fetched",
-                 "consequence": "physics", "real_source_if_any": bed_provenance,
-                 "note": "the elevation every node carries; a solver reads it as "
-                         "the domain's bathymetry"},
             ],
-        })
+        }), stats
 
 
-def _carry(state: Mapping[str, Any]) -> dict[str, Any]:
-    """The rebuild state, as plain values an edit can extend.
+def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
+                resolution_m: float) -> Mesh:
+    """The ops declared after the first primitive, in their declared order.
 
-    A supplied polygon is carried VERBATIM - a rebuild has to cut from the same
-    domain the first build did, and reducing it to its bounding box here would
-    quietly widen every edited mesh back out to a rectangle.
+    OUR primitives run here, on the host, against the real callable. A LIBRARY op
+    in this stretch runs in its own container call over the arrays the mesh now
+    has, and must not renumber them: a bed painted before it would then belong to
+    nodes that no longer exist, which is why a topology-changing op belongs before
+    the first primitive.
     """
-    extent = state["extent"]
-    return {
-        "extent": (tuple(float(v) for v in extent)
-                   if isinstance(extent, (tuple, list)) else extent),
-        "refine": dict(state["refine"]),
-        "bed": state["bed"],
-        "boundaries": dict(state.get("boundaries") or {}),
-        "obstacles": list(state["obstacles"]),
-        "regions": [dict(r) for r in state["regions"]],
-        "boundary": (dict(state["boundary"]) if state["boundary"] else None),
-    }
+    import dataclasses
+
+    results = dict(mesh.meta.get("op_results") or {})
+    for index, op in enumerate(tail):
+        if op.origin == "primitives":
+            mesh = op.fn(mesh, **_bound_inputs(op))
+            continue
+        before = (mesh.node_count, mesh.element_count)
+        mesh, result = _run_tail_op(mesh, op, rundir, index, resolution_m)
+        if (mesh.node_count, mesh.element_count) != before:
+            raise MeshToolError(
+                "MESH_OP_RENUMBERED_AFTER_BED",
+                f"the op {op.name!r} changed this mesh from {before[0]} nodes / "
+                f"{before[1]} elements to {mesh.node_count} / "
+                f"{mesh.element_count} after a primitive had already painted node "
+                "values onto it; declare a topology-changing op before the first "
+                "set_ op in the recipe.")
+        results[op.name] = result
+    return dataclasses.replace(mesh, meta={**dict(mesh.meta),
+                                           "op_results": results})
 
 
-def _rundir() -> Path:
-    rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
-              / f"mesh-{new_ulid()}")
-    rundir.mkdir(parents=True, exist_ok=True)
-    return rundir
+def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
+                 resolution_m: float) -> tuple[Mesh, Any]:
+    """One library op over the mesh as it now stands -> the mesh and its result."""
+    import dataclasses
+
+    import numpy as np
+
+    lonlat = np.asarray(mesh.meta["lonlat"], dtype=float)
+    npz_name = f"om2d_tail_{index}_in.npz"
+    arrays = {"points": lonlat, "cells": np.asarray(mesh.cells, dtype=np.int64)}
+    if mesh.has_bed:
+        arrays["bed"] = np.asarray(mesh.bed, dtype=float)
+    np.savez(rundir / npz_name, **arrays)
+    stem = f"om2d_tail_{index}_out"
+    config_name = f"om2d_tail_{index}.json"
+    (rundir / config_name).write_text(json.dumps({
+        "mesh_npz": f"/data/{npz_name}",
+        "out_stem": stem,
+        "min_edge_length_m": resolution_m,
+        "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
+        "ops": [_staged(op, rundir, index)]}))
+    _run_op(rundir, "post", config_name, f"{stem}.json")
+    report = json.loads((rundir / f"{stem}.json").read_text())
+    out = np.load(rundir / f"{stem}.npz")
+    new_lonlat = np.asarray(out["points"], dtype=float)
+    if new_lonlat.shape == lonlat.shape and np.allclose(new_lonlat, lonlat):
+        return mesh, report["results"].get(op.name)
+    from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
+
+    points, utm_epsg = reproject_nodes_to_utm(new_lonlat)
+    return dataclasses.replace(
+        mesh, points=points, cells=np.asarray(out["cells"], dtype=np.int64),
+        crs_authid=f"EPSG:{int(utm_epsg)}",
+        meta={**dict(mesh.meta), "lonlat": new_lonlat,
+              "utm_epsg": int(utm_epsg)}), report["results"].get(op.name)
 
 
-def _repo_root() -> Path:
-    # .../trid3nt_server/workflows/mesh/meshers/om2d.py
-    return Path(__file__).resolve().parents[4]
+def _bound_inputs(op: BoundOp) -> dict[str, Any]:
+    """One primitive's kwargs with every data value converted, once."""
+    from trid3nt_server.workflows.mesh.inputs import op_input
+
+    return {name: op_input(value) for name, value in op.kwargs.items()}
 
 
+def _staged(op: BoundOp, rundir: Path, index: int) -> dict[str, Any]:
+    """One op as the container reads it: its name and its kwargs as /data paths.
+
+    Code-as-data. The name travels verbatim and the driver calls it verbatim; a
+    kwarg that is a raster or a layer is converted once, written into the mounted
+    rundir, and named by the path the container sees.
+    """
+    from trid3nt_server.workflows.mesh.inputs import op_input
+
+    kwargs: dict[str, Any] = {}
+    for name, value in op.kwargs.items():
+        converted = op_input(value)
+        if isinstance(converted, Path):
+            local = rundir / f"op{index}_{name}{converted.suffix or '.tif'}"
+            local.write_bytes(converted.read_bytes())
+            kwargs[name] = f"/data/{local.name}"
+        elif isinstance(converted, Mapping) and "type" in converted:
+            local = rundir / f"op{index}_{name}.geojson"
+            local.write_text(json.dumps(converted))
+            kwargs[name] = f"/data/{local.name}"
+        else:
+            kwargs[name] = converted
+    return {"fn": op.name, "kwargs": kwargs}
+
+
+# --------------------------------------------------------------------------- #
+# The domain the extent resolves to.
+# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class _Domain:
-    """What the mesh is cut from, resolved: the shoreline, or a supplied polygon.
+    """What the mesh is cut from: the shoreline, or a supplied polygon.
 
     Exactly one of ``shoreline`` and ``polygon_name`` is set. ``bbox`` is the
-    lon/lat box the bed is fetched over and the triangulator seeds inside - the
-    AOI itself on the shoreline path, the polygon's own bounds on the other.
-    ``sizing_coords`` are the polylines supplied ALONGSIDE a domain polygon,
-    which the interior is refined toward; empty means the interior is meshed at
-    a uniform edge.
+    lon/lat box the triangulator seeds inside - the extent itself on the shoreline
+    path, the polygon's own bounds on the other.
     """
 
     bbox: tuple[float, float, float, float]
     source: str
     shoreline: Path | None = None
     polygon_name: str | None = None
-    sizing_coords: Any = ()
 
 
 def _domain(extent: Any, rundir: Path) -> _Domain:
-    """Resolve the ask's extent into the domain the box cuts the mesh from."""
+    """Resolve the recipe's extent into the domain the box cuts the mesh from."""
+    if extent is None:
+        raise MeshToolError(
+            "MESH_EXTENT_MISSING",
+            "mesher 'om2d' cuts its domain from an extent and this recipe "
+            "declares none; give it a (min_lon, min_lat, max_lon, max_lat) box or "
+            "a polygon another tool produced.")
     if isinstance(extent, (tuple, list)):
         shoreline = _shoreline_shp()
         source = f"GSHHG land polygons ({shoreline.name})"
-        return _Domain(bbox=_lonlat_bounds(tuple(float(v) for v in extent),
-                                           source),
+        return _Domain(bbox=_lonlat_bounds(tuple(float(v) for v in extent), source),
                        source=source, shoreline=shoreline)
-    polygons, lines = _split_geometry(read_geometry(extent))
+    polygons = _polygons(op_geometry(extent))
     if not polygons:
         raise MeshToolError(
             "MESH_DOMAIN_NOT_A_POLYGON",
@@ -398,7 +366,7 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
         {"type": "GeometryCollection", "geometries": polygons}))
     source = f"supplied polygon domain ({len(polygons)} part(s))"
     return _Domain(bbox=_lonlat_bounds(_geometry_bounds(polygons), source),
-                   source=source, polygon_name=name, sizing_coords=lines)
+                   source=source, polygon_name=name)
 
 
 def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
@@ -422,30 +390,16 @@ def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
         "before handing it over.")
 
 
-def _split_geometry(doc: Mapping[str, Any]) -> tuple[list[dict[str, Any]],
-                                                     list[list[float]]]:
-    """A GeoJSON document -> its polygon geometries and its polyline vertices.
-
-    Both halves come out of ONE supplied geometry on purpose: a domain polygon
-    and the channel network inside it are the same acquisition, and separating
-    them into two fields would let a chain hand over a sizing source for a
-    domain it did not describe.
-    """
-    polygons: list[dict[str, Any]] = []
-    lines: list[list[float]] = []
+def _polygons(doc: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Every polygon geometry a supplied domain document carries."""
+    out: list[dict[str, Any]] = []
 
     def walk(geometry: Any) -> None:
         if not isinstance(geometry, Mapping):
             return
         kind = str(geometry.get("type") or "")
         if kind in ("Polygon", "MultiPolygon"):
-            polygons.append(dict(geometry))
-        elif kind == "LineString":
-            lines.extend([float(c[0]), float(c[1])]
-                         for c in geometry.get("coordinates") or ())
-        elif kind == "MultiLineString":
-            for part in geometry.get("coordinates") or ():
-                lines.extend([float(c[0]), float(c[1])] for c in part)
+            out.append(dict(geometry))
         elif kind == "GeometryCollection":
             for part in geometry.get("geometries") or ():
                 walk(part)
@@ -456,7 +410,7 @@ def _split_geometry(doc: Mapping[str, Any]) -> tuple[list[dict[str, Any]],
             walk((feature or {}).get("geometry"))
     else:
         walk(doc.get("geometry") if "geometry" in doc else doc)
-    return polygons, lines
+    return out
 
 
 def _geometry_bounds(geometries: list[dict[str, Any]]
@@ -486,187 +440,14 @@ def _shoreline_shp() -> Path:
     return path
 
 
-def _bed_raster(bed: Any, aoi: tuple[float, ...],
-                rundir: Path) -> tuple[Path | None, str, str | None]:
-    """Stage the node bed as an EPSG:4326 raster -> ``(path, provenance, note)``.
-
-    EPSG:4326 on purpose: the in-container wavelength sizer queries the raster's
-    own grid with lon/lat, so a projected bed would put every query out of bounds
-    and read its fill value as depth.
-
-    The bed is fetched over a MARGIN around the AOI, because the mesh puts nodes
-    exactly on the AOI's own corners and a raster's outermost rows are where a
-    warp writes its fill: sampled there, an 18 m deep boundary reads as sea level
-    and the ocean-boundary identification then finds its open water somewhere
-    else entirely.
-
-    ``condition: "pit_fill"`` on the bed mapping runs the DELINEATOR's own
-    conditioning chain over the staged raster before the nodes are sampled from
-    it. A catchment whose basin was delineated on a filled surface but whose bed
-    carries the raw sinks ponds in pits the routing does not believe in, and the
-    deepest water in the run is then a terrain artifact.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.cache import read_object_bytes_s3
-
-    condition = ""
-    if isinstance(bed, Mapping):
-        condition = str(bed.get("condition") or "").strip().lower()
-        bed = bed.get("raster") or bed.get("uri") or bed.get("path") or ""
-    from trid3nt_server.tools.processing._geometry_common import source_uri
-
-    name = str(source_uri(bed) or "").strip()
-    if not name:
-        return None, "bed: NOT SAMPLED - no bed was declared", None
-
-    layer: Any = None
-    if name in TOOL_REGISTRY:
-        layer = TOOL_REGISTRY[name].fn(
-            bbox=_bed_bbox(aoi), target_crs="EPSG:4326", fallback=_BED_FALLBACK)
-        uri = layer.uri if hasattr(layer, "uri") else layer["uri"]
-    elif name.startswith("s3://") or Path(name).exists():
-        uri = name
-    else:
-        raise MeshToolError(
-            "MESH_BED_UNRESOLVED",
-            f"mesher 'om2d': bed {name!r} names neither a registered fetcher nor a "
-            "readable raster, so the mesh has no elevation to carry.")
-    dst = rundir / "bed.tif"
-    dst.write_bytes(read_object_bytes_s3(uri) if str(uri).startswith("s3://")
-                    else Path(uri).read_bytes())
-    provenance = _bed_provenance(name, layer)
-    if condition:
-        if condition != _BED_PIT_FILL:
-            raise MeshToolError(
-                "MESH_SPEC_BAD_VALUE",
-                f"mesher 'om2d': bed condition {condition!r} is not a conditioning "
-                f"this mesher performs; the one it knows is {_BED_PIT_FILL!r}.")
-        from trid3nt_server.tools.processing._hydrology_common import (
-            write_conditioned_dem,
-        )
-
-        raw = dst.with_name("bed_raw.tif")
-        dst.rename(raw)
-        write_conditioned_dem(str(raw), str(dst))
-        provenance = f"{provenance} (pit-filled: the delineator's own chain)"
-    return dst, provenance, fetch_fallback_note(layer)
-
-
-def _downstream_along(bed: Any) -> tuple[Any, Any]:
-    """The channel a fitted bed is laid down along and the end it starts from.
-
-    Declared, never inferred: a catchment's bed is the terrain and a reach's is a
-    downstream plane, and only the ask knows which this is. A bed named as a plain
-    raster is painted as it sampled.
-    """
-    if not isinstance(bed, Mapping):
-        return None, None
-    return dict(bed).get("downstream_along"), dict(bed).get("downstream_from")
-
-
-def _fit_bed(points_m: Any, bed_up: Any, downstream_along: Any,
-             downstream_from: Any, utm_epsg: int) -> tuple[Any, dict[str, Any]]:
-    """Lay the sampled surface down as a monotone downstream plane -> (bed, stats).
-
-    A surface DEM along a thalweg runs uphill between adjacent nodes, and a
-    shallow-water solve on that ponds instead of flowing. What is fitted, the
-    slope band it is held inside and both the measured and the enforced slope are
-    the shared node primitive's - and so is the channel READING, so the line this
-    bed slopes along is the same one, in the same order, that every other reader
-    of it sees.
-    """
-    if downstream_along is None or bed_up is None:
-        return bed_up, {}
-    from trid3nt_server.workflows.mesh.shared.nodes import (
-        fit_downstream_bed, read_centerline_utm,
-    )
-
-    line_m = read_centerline_utm(downstream_along, int(utm_epsg),
-                                 start_lonlat=downstream_from)
-    bed, stats = fit_downstream_bed(points_m, line_m, bed_up,
-                                    min_slope=_BED_SLOPE_BAND[0],
-                                    max_slope=_BED_SLOPE_BAND[1])
-    logger.info("om2d bed fitted downstream: measured slope %.3g -> enforced "
-                "%.3g over %.0f m", stats["measured_slope"],
-                stats["enforced_slope"], stats["reach_len_m"])
-    return bed, stats
-
-
-def _bed_bbox(aoi: tuple[float, ...]) -> tuple[float, float, float, float]:
-    """The AOI grown by :data:`_BED_MARGIN_FRAC` of its own span, in degrees."""
-    dx = (float(aoi[2]) - float(aoi[0])) * _BED_MARGIN_FRAC
-    dy = (float(aoi[3]) - float(aoi[1])) * _BED_MARGIN_FRAC
-    return (float(aoi[0]) - dx, float(aoi[1]) - dy,
-            float(aoi[2]) + dx, float(aoi[3]) + dy)
-
-
-def _bed_provenance(name: str, layer: Any) -> str:
-    """What ACTUALLY painted the bed, from the ladder's own activation rows."""
-    rows = fetch_activation_rows(layer)
-    if rows:
-        return f"{name}: " + ", ".join(
-            f"{rung} {coverage * 100:.0f}%" for rung, coverage in rows)
-    note = fetch_fallback_note(layer)
-    if note:
-        return f"{name} ({note})"
-    if layer is None:
-        return f"bed raster supplied directly: {name}"
-    return (f"{name} (source UNMEASURED: the fetch reported no activation rows)")
-
-
-def _stage_geometries(rundir: Path, sources: Any, tag: str) -> list[str]:
-    """Write each geometry source into the rundir as GeoJSON -> their filenames."""
-    names: list[str] = []
-    for index, source in enumerate(sources):
-        name = f"{tag}_{index}.geojson"
-        (rundir / name).write_text(json.dumps(read_geometry(source)))
-        names.append(name)
-    return names
-
-
-def read_geometry(source: Any) -> dict[str, Any]:
-    """A geometry source -> GeoJSON, whatever vector format it arrived in.
-
-    A source is a path or uri the recipe records and can re-read, so a drawn
-    polygon, a fetched breakwater layer and a file on disk all enter the same way.
-    A LAYER a chain produced enters the same way too: a declared ``extent`` is
-    bound to whatever the producing tool returned, and refusing the layer while
-    accepting the uri it carries would make a chain depend on the author
-    remembering to write ``.uri``.
-    """
-    from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.tools.processing._geometry_common import source_uri
-
-    source = source_uri(source)
-    if isinstance(source, Mapping):
-        return dict(source)
-    text = str(source).strip()
-    if text.startswith("{"):
-        return json.loads(text)
-    if text.startswith("s3://"):
-        raw = read_object_bytes_s3(text)
-        suffix = Path(text).suffix.lower()
-        if suffix in (".geojson", ".json"):
-            return json.loads(raw.decode("utf-8"))
-        local = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"geom-{new_ulid()}{suffix}"
-        local.write_bytes(raw)
-        text = str(local)
-    path = Path(text)
-    if not path.exists():
-        raise MeshToolError(
-            "MESH_GEOMETRY_UNREADABLE",
-            f"the geometry {source!r} could not be read: it is neither inline "
-            "GeoJSON, an object-store uri, nor a file on disk.")
-    if path.suffix.lower() in (".geojson", ".json"):
-        return json.loads(path.read_text())
-    import geopandas as gpd
-
-    return json.loads(gpd.read_file(path).to_crs(4326).to_json())
-
-
-def _run_container(rundir: Path, shoreline: Path | None) -> None:
-    _run_op(rundir, "build", "om2d_config.json", "om2d_mesh.npz",
-            shoreline_dir=None if shoreline is None else shoreline.parent)
+# --------------------------------------------------------------------------- #
+# The box.
+# --------------------------------------------------------------------------- #
+def _rundir() -> Path:
+    rundir = (Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp"))
+              / f"mesh-{new_ulid()}")
+    rundir.mkdir(parents=True, exist_ok=True)
+    return rundir
 
 
 def _run_op(rundir: Path, op: str, config_name: str, produces: str, *,
@@ -705,55 +486,44 @@ def _sizing_source(stats: Mapping[str, Any], domain: _Domain) -> str:
     return f"{domain.source}; " + "; ".join(active)
 
 
-def _sandbox_formats() -> Any:
-    """The repo's shared TIN format writers, importable from the agent venv."""
-    path = str(_repo_root() / _SANDBOX)
-    if path not in sys.path:
-        sys.path.insert(0, path)
-    import mesh_formats  # type: ignore
+# --------------------------------------------------------------------------- #
+# The one topology pass, before any writer sees the mesh.
+# --------------------------------------------------------------------------- #
+def _clean_once(lonlat: Any, cells: Any) -> tuple[Any, Any, int]:
+    """Orphan re-indexing, CCW normalization and the fusions a FILE forces.
 
-    return mesh_formats
-
-
-def _clean_once(lonlat: Any, cells: Any,
-                bed_up: Any) -> tuple[Any, Any, Any, int]:
-    """ONE topology pass, before any writer sees the mesh.
-
-    Pinch cleaning, orphan re-indexing and CCW normalization run here so every
-    format is written from the SAME node numbering and the boundary is segmented
-    once; each writer's own cleaning pass then finds nothing left to do.
-
-    A COLLAPSED element goes with them. Constraining an outline whose vertices sit
-    closer together than the finest edge can leave a triangle with no area at all,
-    and a solver reads that as a negative determinant and stops: one cell out of
-    twenty-five thousand takes the whole run down. How many were dropped is
-    reported rather than absorbed.
+    The library's own clean passes are ops and have already run; what is left is
+    what the geometry FILE forces rather than what the mesh needs. A SELAFIN
+    carries its coordinates in SINGLE precision and a UTM northing runs to seven
+    digits, so two nodes a fraction of a metre apart are written as the same point
+    and the element between them arrives at the solver with no area. A COLLAPSED
+    element goes with them: a solver reads a zero determinant and stops, and one
+    cell out of twenty-five thousand takes the whole run down. How many were
+    dropped is reported rather than absorbed.
     """
-    import numpy as np
+    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
 
-    depths = (np.zeros(lonlat.shape[0], dtype=float) if bed_up is None
-              else np.asarray(bed_up, dtype=float))
-    points, cells, depths = _sandbox_formats()._clean_and_orient(
-        lonlat, cells, depths)
+    formats = tin_formats()
+    depths = _zeros(lonlat)
+    points, cells, depths = formats._clean_and_orient(lonlat, cells, depths)
     points, cells, depths, merged = _merge_coincident(points, cells, depths)
     keep = _has_area(points, cells)
     collapsed = int((~keep).sum())
     if collapsed or merged:
-        points, cells, depths = _sandbox_formats()._clean_and_orient(
-            points, cells[keep], depths)
-    return points, cells, (None if bed_up is None else depths), collapsed + merged
+        points, cells, depths = formats._clean_and_orient(points, cells[keep],
+                                                          depths)
+    return points, cells, collapsed + merged
+
+
+def _zeros(points: Any) -> Any:
+    import numpy as np
+
+    return np.zeros(np.asarray(points).shape[0], dtype=float)
 
 
 def _merge_coincident(points: Any, cells: Any,
                       depths: Any) -> tuple[Any, Any, Any, int]:
-    """Fuse nodes closer together than the geometry file can tell apart.
-
-    A SELAFIN carries its coordinates in SINGLE precision, and a UTM northing runs
-    to seven digits: two nodes a fraction of a metre apart are written as the same
-    point, and the element between them arrives at the solver with no area. The
-    mesh in memory is fine and the file is not, so the fusion happens here, before
-    any writer sees it, and the count travels in the probes.
-    """
+    """Fuse nodes closer together than the geometry file can tell apart."""
     import numpy as np
     from scipy.spatial import cKDTree
 
@@ -783,203 +553,12 @@ def _has_area(points: Any, cells: Any) -> Any:
     return twice > _COLLAPSED_AREA_FRAC * median if median > 0.0 else twice > 0.0
 
 
-def _emit_formats(rundir: Path, *, lonlat: Any, cells: Any, points_m: Any,
-                  bed_up: Any, boundary: Any, boundaries: Mapping[str, Any],
-                  utm_epsg: int,
-                  domain_source: str) -> tuple[dict[str, str],
-                                               dict[str, Any], dict[str, Any]]:
-    """Write the per-solver geometry from one boundary segmentation.
-
-    TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
-    boundary-conditions file is only valid against the geometry whose boundary
-    numbering it was written from.
-
-    Only formats an engine READS are written: no worker here consumes an ADCIRC
-    ``fort.14`` (the SWAN worker is regular-grid only), so the shared writer stays
-    available and nothing calls it on a build.
-    """
-    import numpy as np
-
-    from trid3nt_server.workflows.mesh.shared.selafin_cli import write_telemac_pair
-
-    formats = _sandbox_formats()
-    loops = formats.extract_boundary_loops(np.asarray(cells, dtype=np.int64))
-
-    info: dict[str, Any] = {"source": domain_source}
-    probes: dict[str, Any] = {"boundary_loops_measured": len(loops)}
-    sections: list[dict[str, Any]] = []
-    if boundary is not None and str(boundary.get("type", "open")) == "open":
-        sections, evidence = _open_sections(rundir, lonlat, cells, bed_up, boundary)
-        info.update({
-            "requested_side": str(boundary["side"]),
-            "open_boundary_sections": len(sections),
-            "open_node_count": sum(len(s["nodes"]) for s in sections),
-            "section_node_counts": [len(s["nodes"]) for s in sections],
-            "section_mean_bed_m": [s["mean_bed_m"] for s in sections],
-            "section_centroid": [s["centroid"] for s in sections],
-            "sections_offered": [
-                {"nodes": s["node_count"], "mean_bed_m": s["mean_bed_m"],
-                 "centroid": s["centroid"]} for s in evidence["sections"]],
-            "identified_by": evidence["library"],
-            "depth_threshold_m": evidence["depth_threshold_m"],
-            "min_nodes_threshold": evidence["min_nodes_threshold"],
-            "sections_identified": len(evidence["sections"]),
-            "boundary_walks_measured": evidence["walk_node_counts"],
-            "designated_by": "om2d"})
-        probes["open_boundary_sections"] = len(sections)
-        probes["open_node_count"] = int(info["open_node_count"])
-    elif boundary is not None:
-        info.update({"designation": "land",
-                     "requested_side": str(boundary["side"]),
-                     "designated_by": "om2d"})
-
-    open_nodes = [n for s in sections for n in s["nodes"]]
-    roles = _declared_roles(points_m, loops, boundaries, utm_epsg)
-    if open_nodes:
-        roles["open"] = open_nodes
-    if roles:
-        info["roles"] = {role: len(nodes) for role, nodes in roles.items()}
-    files: dict[str, str] = {}
-    pair = write_telemac_pair(
-        rundir, x=points_m[:, 0], y=points_m[:, 1], cells=cells, bed=bed_up,
-        roles=roles, title="TRID3NT OM2D MESH")
-    files["slf_uri"] = str(pair["geo_slf"])
-    files["cli_uri"] = str(pair["cli"])
-    lb_order = list(pair["stats"].get("liquid_boundary_roles") or [])
-    probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
-    probes["liquid_boundary_roles"] = lb_order
-    probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
-    if roles:
-        # The two facts a SELAFIN cannot state - which stretch carries which role,
-        # and the order the solver will number them in - ride beside it.
-        files["topology_uri"] = str(write_topology(
-            rundir, roles=roles, liquid_boundary_order=lb_order))
-    return files, info, probes
-
-
-def _declared_roles(points_m: Any, loops: Any, boundaries: Mapping[str, Any],
-                    utm_epsg: int) -> dict[str, list[int]]:
-    """The declared boundary roles, resolved onto THIS mesh's boundary CONTOURS.
-
-    The walk order is what travels, not a node set: a role is a contiguous run of
-    one contour. The tolerance is the mesh's own mean boundary edge - how far a
-    declared end may stand from the boundary it is supposed to lie on.
-    """
-    import numpy as np
-    from pyproj import Transformer
-    from shapely.geometry import shape as _shape
-    from shapely.ops import transform as _transform
-
-    if not boundaries:
-        return {}
-    rings = [[int(n) for n in loop] for loop in loops if len(loop)]
-    if not rings:
-        raise MeshToolError(
-            "MESH_BOUNDARY_UNSEGMENTED",
-            f"boundary roles {sorted(boundaries)} were declared but this mesh's "
-            "boundary walk found no nodes to carry them.")
-    tr = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
-    faces = {str(role): _transform(tr.transform, _shape(_face_geometry(role, value)))
-             for role, value in boundaries.items()}
-    xy = np.asarray(points_m, dtype=float)
-    tolerance = _mean_boundary_edge_m(xy, loops)
-    matched = match_boundary_roles(xy, rings, faces, tolerance_m=tolerance)
-    unmatched = [role for role in faces if not matched.get(role)]
-    if unmatched:
-        raise MeshToolError(
-            "MESH_BOUNDARY_ROLE_UNMATCHED",
-            f"no boundary node of this mesh lies within {tolerance:.1f} m of the "
-            f"face declared for role(s) {unmatched}; the mesh and the face the "
-            "chain measured describe different domains.")
-    return matched
-
-
-def _face_geometry(role: str, value: Any) -> dict[str, Any]:
-    """One declared role's face as GeoJSON, whichever way it was declared."""
-    if isinstance(value, (list, tuple)):
-        coords = [[float(c[0]), float(c[1])] for c in value]
-        if len(coords) < 2:
-            raise MeshToolError(
-                "MESH_BOUNDARY_ROLE_INVALID",
-                f"boundary role {role!r} names {coords}, which is not a face: a "
-                "role is prescribed across a transect, so declare the two ends of "
-                "one (a section's face_start / face_end).")
-        return {"type": "LineString", "coordinates": coords}
-    return read_geometry(value)
-
-
-def _mean_boundary_edge_m(points_m: Any, loops: Any) -> float:
-    """The mean length of this mesh's boundary edges, in metres."""
-    import numpy as np
-
-    xy = np.asarray(points_m, dtype=float)
-    lengths = [float(np.hypot(*(xy[int(loop[i + 1])] - xy[int(loop[i])])))
-               for loop in loops for i in range(len(loop) - 1)]
-    return float(np.mean(lengths)) if lengths else 0.0
-
-
-def _open_sections(rundir: Path, lonlat: Any, cells: Any, bed_up: Any,
-                   boundary: Mapping[str, Any]) -> tuple[list[dict[str, Any]],
-                                                         dict[str, Any]]:
-    """The contiguous open-boundary sections this designation selects, and its evidence.
-
-    Every candidate is a run of boundary nodes oceanmesh itself read as ocean, so
-    a compass name SELECTS among those sections rather than cutting its own from a
-    coordinate percentile: the one lying furthest in the named direction.
-    ``seaward`` names no direction and takes the deepest. Either way every
-    identified section, its centroid and its mean bed ride back in the evidence,
-    so a section the choice left out is visible rather than silently dropped.
-    """
-    side = str(boundary["side"])
-    if bed_up is None:
-        raise MeshToolError(
-            "MESH_OPEN_BOUNDARY_UNMEASURABLE",
-            "an open boundary is identified from the bed and this mesh carries "
-            "none, so no stretch of its boundary can be called ocean.")
-    threshold = float(boundary.get("depth_threshold", _DEPTH_THRESHOLD_M))
-    min_nodes = int(boundary.get("min_section_nodes", _MIN_SECTION_NODES))
-    report = _identify_sections(rundir, lonlat, cells, bed_up, threshold, min_nodes)
-    found = list(report["sections"])
-    if not found:
-        raise MeshToolError(
-            "MESH_OPEN_BOUNDARY_UNIDENTIFIED",
-            f"oceanmesh found no boundary stretch of at least {min_nodes} nodes at "
-            f"or below {threshold} m on this mesh; its boundary bed runs "
-            f"{report['boundary_bed_min_m']} m to {report['boundary_bed_max_m']} m, "
-            "so state a depth_threshold this domain actually reaches.")
-    if side == "seaward":
-        chosen = [min(found, key=lambda s: s["mean_bed_m"])]
-    else:
-        axis, high = _COMPASS[side]
-        pick = max if high else min
-        chosen = [pick(found, key=lambda s: s["centroid"][axis])]
-    return chosen, report
-
-
-def _identify_sections(rundir: Path, lonlat: Any, cells: Any, bed_up: Any,
-                       threshold: float, min_nodes: int) -> dict[str, Any]:
-    """Run oceanmesh's own section identification in its box -> the report it wrote."""
-    import numpy as np
-
-    np.savez(rundir / "sections_in.npz",
-             points=np.asarray(lonlat, dtype=float),
-             cells=np.asarray(cells, dtype=np.int64),
-             bed=np.asarray(bed_up, dtype=float))
-    (rundir / "om2d_sections_config.json").write_text(json.dumps({
-        "mesh_npz": "/data/sections_in.npz",
-        "depth_threshold": threshold,
-        "min_nodes_threshold": min_nodes}))
-    _run_op(rundir, "ocean_boundary", "om2d_sections_config.json",
-            "om2d_sections.json")
-    return json.loads((rundir / "om2d_sections.json").read_text())
-
-
 def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
-    """How far the mesh ended up from the breaklines it was constrained to.
+    """How far the mesh ended up from the outlines it was constrained to.
 
-    Reported, never asserted: the distance in metres from each constrained
-    outline vertex to the nearest node the mesh actually has. A build with no
-    obstacles constrains nothing and reports nothing.
+    Reported, never asserted: the distance in metres from each constrained outline
+    vertex to the nearest node the mesh actually has. A build that constrained
+    nothing reports nothing.
     """
     import numpy as np
     from pyproj import Transformer
@@ -1001,93 +580,94 @@ def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Edit actions.
+# Emit: the per-solver geometry, written from what the ops left on the mesh.
 # --------------------------------------------------------------------------- #
-def _state_of(mesh: Mesh) -> dict[str, Any]:
-    state = mesh.meta.get("build")
-    if not state:
-        raise MeshToolError(
-            "MESH_EDIT_UNSUPPORTED",
-            "this mesh carries no om2d build state, so it cannot be rebuilt with "
-            "an edit; a hand-edited layer is adopted as it stands.")
-    return _carry(state)
+def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
+             stats: Mapping[str, Any]) -> Mesh:
+    """Write the per-solver geometry from ONE boundary segmentation -> the mesh.
+
+    TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
+    boundary-conditions file is only valid against the geometry whose boundary
+    numbering it was written from. Only formats an engine READS are written.
+    """
+    import dataclasses
+
+    from trid3nt_server.workflows.mesh.shared.nodes import boundary_contours
+    from trid3nt_server.workflows.mesh.shared.selafin_cli import write_telemac_pair
+    from trid3nt_server.workflows.mesh.topology import write_topology
+
+    roles = {role: list(nodes) for role, nodes
+             in dict(mesh.meta.get("boundary_roles") or {}).items() if nodes}
+    sections = _open_sections(mesh)
+    info: dict[str, Any] = {"source": domain.source}
+    probes: dict[str, Any] = {
+        "boundary_loops_measured": len(boundary_contours(mesh.cells))}
+    if sections:
+        roles["open"] = [node for section in sections for node in section["nodes"]]
+        info.update({
+            "open_boundary_sections": len(sections),
+            "open_node_count": len(roles["open"]),
+            "section_node_counts": [len(s["nodes"]) for s in sections],
+            "section_mean_bed_m": [s["mean_bed_m"] for s in sections],
+            "section_centroid": [s["centroid"] for s in sections],
+            "identified_by": "oceanmesh.identify_ocean_boundary_sections",
+            "designated_by": "om2d"})
+        probes["open_boundary_sections"] = len(sections)
+        probes["open_node_count"] = len(roles["open"])
+    if roles:
+        info["roles"] = {role: len(nodes) for role, nodes in roles.items()}
+
+    files: dict[str, str] = {}
+    pair = write_telemac_pair(
+        rundir, x=mesh.points[:, 0], y=mesh.points[:, 1], cells=mesh.cells,
+        bed=mesh.bed, roles=roles, title="TRID3NT OM2D MESH")
+    files["slf_uri"] = str(pair["geo_slf"])
+    files["cli_uri"] = str(pair["cli"])
+    lb_order = list(pair["stats"].get("liquid_boundary_roles") or [])
+    probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
+    probes["liquid_boundary_roles"] = lb_order
+    probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
+    if roles:
+        # The two facts a SELAFIN cannot state - which stretch carries which role,
+        # and the order the solver will number them in - ride beside it.
+        files["topology_uri"] = str(write_topology(
+            rundir, roles=roles, liquid_boundary_order=lb_order))
+    artifact = {**dict(mesh.meta.get("artifact") or {}),
+                "open_boundary_info": info}
+    return dataclasses.replace(mesh, meta={
+        **dict(mesh.meta), "files": files, "artifact": artifact,
+        "fallback_note": mesh.meta.get("fallback_note"),
+        "probes": {**dict(mesh.meta.get("probes") or {}), **probes}})
 
 
-def _add_obstacle(mesh: Mesh, *, geometry: str) -> Mesh:
-    """Punch a geometry out of the water and constrain its outline into the mesh."""
-    state = _state_of(mesh)
-    state["obstacles"] = [*state["obstacles"], geometry]
-    return _realize(state)
+def _open_sections(mesh: Mesh) -> list[dict[str, Any]]:
+    """The contiguous ocean-boundary sections the library identified, if asked.
+
+    A recipe that never named ``identify_ocean_boundary_sections`` has no open
+    boundary, which is the right answer for an inland domain and not a missing
+    one. EVERY section identified is open: which of them a compass name would have
+    picked is a choice the library never made, and dropping the rest silently
+    numbered a multi-mouth estuary as a single-mouth one.
+    """
+    found = (mesh.meta.get("op_results") or {}).get(
+        "identify_ocean_boundary_sections")
+    return [dict(section) for section in (found or [])]
 
 
-def _refine_region(mesh: Mesh, *, geometry: str, edge_length: float) -> Mesh:
-    """Re-mesh with a finer target edge inside a region."""
-    state = _state_of(mesh)
-    state["regions"] = [*state["regions"],
-                        {"geometry": geometry, "edge_length": float(edge_length)}]
-    return _realize(state)
-
-
-def _set_boundary(mesh: Mesh, *, side: str, type: str = "open",  # noqa: A002
-                  depth_threshold: float = _DEPTH_THRESHOLD_M,
-                  min_section_nodes: int = _MIN_SECTION_NODES) -> Mesh:
-    """Designate a side of the domain boundary as open water or as land."""
-    state = _state_of(mesh)
-    state["boundary"] = {"side": str(side), "type": str(type),
-                         "depth_threshold": float(depth_threshold),
-                         "min_section_nodes": int(min_section_nodes)}
-    return _realize(state)
-
-
+# --------------------------------------------------------------------------- #
 OM2D = register_mesher(
     "om2d",
     build,
-    actions=(
-        EditAction(
-            name="add_obstacle", apply=_add_obstacle,
-            inputs={"geometry": MeshField(
-                "geometry", types=(str,), required=True, hashed=True,
-                doc="path or uri of the polygon(s) to remove from the water")},
-            doc="Remove an obstacle from the domain, its outline constrained into "
-                "the mesh."),
-        EditAction(
-            name="refine_region", apply=_refine_region,
-            inputs={
-                "geometry": MeshField(
-                    "geometry", types=(str,), required=True, hashed=True,
-                    doc="path or uri of the region to refine inside"),
-                "edge_length": MeshField(
-                    "edge_length", types=(int, float), required=True,
-                    doc="the target triangle edge inside the region, in metres")},
-            doc="Re-mesh with a finer target edge inside a region."),
-        EditAction(
-            name="set_boundary", apply=_set_boundary,
-            inputs={
-                "side": MeshField(
-                    "side", types=(str,), required=True, choices=_BOUNDARY_SIDES,
-                    doc="which side of the domain to classify; 'seaward' takes the "
-                        "deepest identified section rather than a direction"),
-                "type": MeshField(
-                    "type", types=(str,), choices=("open", "land"), default="open",
-                    doc="open - a liquid boundary a solve forces at; land - a "
-                        "solid wall"),
-                "depth_threshold": MeshField(
-                    "depth_threshold", types=(int, float),
-                    default=_DEPTH_THRESHOLD_M,
-                    doc="the bed elevation (negative down) a boundary node must "
-                        "reach to be read as ocean; a shallow domain states its "
-                        "own or the designation refuses"),
-                "min_section_nodes": MeshField(
-                    "min_section_nodes", types=(int,), default=_MIN_SECTION_NODES,
-                    doc="the shortest run of ocean nodes that counts as one "
-                        "section")},
-            doc="Classify a side of the boundary as open water or as land."),
-        apply_layer_edits_action(),
+    kinds=("unstructured_tri",),
+    namespaces=(
+        OpNamespace(origin="oceanmesh", phase=PRE, names=_OCEANMESH_SIZING),
+        OpNamespace(origin="oceanmesh", phase=POST, names=_OCEANMESH_ON_A_MESH),
+        OpNamespace(origin="om2d", phase=PRE, names=_OM2D_PRIMITIVES),
     ),
-    fields=_FIELDS,
+    default_ops=_DEFAULT_OPS,
     # Measured, not assumed: three in-container rebuilds from one identical config
-    # (same AOI, same staged bed, same shoreline, same seed) returned two distinct
-    # meshes, so a replay of an om2d recipe rebuilds an equivalent mesh rather than
-    # the same one.
+    # (same extent, same staged bed, same shoreline, same seed) returned two
+    # distinct meshes, so a replay of an om2d recipe rebuilds an equivalent mesh
+    # rather than the same one.
     deterministic=False,
 )
