@@ -3146,3 +3146,86 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   functions pass through w/ journaled note, library errors surface
   verbatim). (6) SNAPSHOT CACHE = chop candidate (state is the
   recipe; regen is cheap). (7) reg_grid CONFORMS to the same shape.
+
+- RUNG-3 SHAPE SETTLED, SECOND PASS (NATE 2026-09-01, supersedes the
+  pre/post spelling in the first pass): (1) NO pre/post subtypes -
+  ONE flat ordered ops=[mesh_op(...)] list INSIDE build_mesh; phase
+  DERIVED from namespace registration; declared relative order kept
+  within each derived phase; dual-context mesh_op (declaration entry
+  AND ad hoc/runtime tool). (2) build_mesh takes THREE agnostic
+  params ONLY (extent, resolution_m, kind) + mesher + ops - bed= and
+  boundaries= die as params (engine vocabulary inside a
+  generalization); they are OPS. (3) TWO-ORIGIN NAMESPACE: library
+  functions verbatim + OUR primitives under their REAL def names -
+  never aliases; state-imposing primitives use the SET verb:
+  set_bed, set_boundary_roles (match_boundary_roles renamed - match
+  described the implementation); add_z waits until non-bed z exists.
+  (4) CORRECT-DATA-CLASS LAW (standing, see memory): ops take the
+  data class they are defined over - set_bed(source=DATA.topobathy)
+  NEVER a silent DEM proxy; wrong-class substitution is the AUTHOR'S
+  explicit declared choice (journal names the source row) or the
+  data row refuses honestly. fit_downstream_bed CHOPPED - its
+  condition met by design (it was scar tissue over the wrong input
+  class). BATHYMETRY RESEARCH chartered paper-first (topobathy
+  coverage per water-body class; surveyed sections as supply;
+  synthetic-channel methods only ever as a declared PRODUCER).
+  (5) NO-NAME-DRIFT LAW: fetched rows carry the DATASET's name
+  (topobathy, water = fetch_nhd_area_water); derived rows carry what
+  they ARE (window, reach); banks -> water,
+  measure_bank_coverage -> measure_water_coverage. (6) set_bed
+  interp kwarg visible w/ labeled default (nearest). (7) PARAMS PASS
+  PARKED by NATE: door-word readability (class-per-door candidate)
+  + the location/bbox/aoi unification - one later pass, together.
+
+- FRAGILITY-STAGE JUDGMENTS RULED (NATE 2026-09-01): (1) set_rim_size
+  joins om2d's VISIBLE DEFAULT ops list (new undeclared asks get
+  honored rims; declared recipes replace wholesale and are
+  unchanged; the adapter carries no opinion) - opt-in-plus-default.
+  (2) The rim tolerance becomes a VISIBLE KWARG with labeled default:
+  set_rim_size(tolerance=2.0) - the spec's "declared tolerance"
+  literally. (3) LAKES VIA THE LEGO CHAIN stands as landed - fetch
+  the water body polygon, mesh it; the shoreline path refuses typed
+  where GSHHG describes nothing; no lake logic in the adapter. Also
+  landed this stage: determinism ROOT-CAUSED (medial_axis rng seeded
+  from the recipe; deterministic=True honestly on both domain
+  classes); the ETOPO fallback descends the DECLARED ladder (gate
+  sees every cross-dataset substitution); bed_fallback_note seam
+  completed.
+
+- MBSE DIRECTION OPENED (NATE 2026-09-01, under design): take a
+  Model-Based Systems Engineering approach - SysML - to the system
+  of systems (fetchers, meshers, workflows, solve seam, emission).
+  Orchestrator-proposed architecture, pending the tooling scout +
+  NATE's charter: (1) the model must be CHECKABLE or it rots like
+  the SRS did - a conformance check IN THE SUITE validating modeled
+  interfaces (writer + consumers exist for every declared key),
+  requirement-to-verifying-test allocations, and block dependency
+  rules against the measured import graph (the code-graph
+  instrument); (2) derive what the code already declares (registries,
+  declarations, recipes ARE model elements) - author only intent:
+  interfaces/ports, the standing laws as requirements, allocations;
+  (3) SysML v2 TEXTUAL notation (git-diffable, PR-reviewable), thin
+  project-owned checker over the subset used - never v1 GUI/binary
+  tools; views render via mermaid/the atlas SVG lane, generated.
+  PILOT: the solve seam (manifest/echo/completion/readers) - the
+  seam that produced the severed-interface regressions. Tooling
+  scout in flight.
+
+- RUNG-3 CLOSE RESOLUTIONS (orchestrator under standing law,
+  2026-09-02 - NATE may override): (1) THE DECK READS THE MEASURED
+  BED AT THE DECLARED BOUNDARY ROLES - the outflow stage derives
+  from the median painted bed over the inflow role's nodes and the
+  outflow role's nodes (bed_top = inflow median; bed_drop = inflow -
+  outflow), a measured artifact fact replacing the chopped fit's
+  synthetic profile; probes["bed_fit"] and TELEMAC_MESH_BED_UNFITTED
+  die; test fixtures repaired to the REAL provenance shape (the
+  fixture-fabricates-the-key class killed twice now). The deeper
+  "what stage should an honest-topobathy outflow hold" stays the
+  bathymetry charter's question - this is the minimal measured
+  bridge. (2) The ungraded-rim note conditioned on the rim ask
+  differing from the size word RATIFIED (an unconditional note would
+  be false on uniform domains - notes must be true). (3) Spec errata
+  line -> line_file applied (second illustrative-name error; the
+  close's own library check is the source). (4) The measured
+  substitution rung joins the JSONL journal beside the provenance
+  (one datum, one name, both records).

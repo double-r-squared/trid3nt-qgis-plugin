@@ -13,6 +13,10 @@ Deviations are REPORTED, never fixed. They are listed after the table.
 template row does not: the reach family cannot author a deck, because the
 consumer of the chopped `fit_downstream_bed` survived its producer (D-1).
 
+> This is the 2026-09-01 reading and stands as measured. The remedies landed
+> afterwards and were re-walked on 2026-09-02 - see **The re-walk** at the foot
+> of this document for the current verdict.
+
 ## The two folds ruled before this walk
 
 `docs/IDEAS.md` 2026-09-01 "FRAGILITY-STAGE JUDGMENTS RULED", landed here:
@@ -251,3 +255,101 @@ NOT COUNTED by the rule at the head of the ledger: `tests/test_mesh_om2d.py`
 +22 (2 tests: the default rim op carries no invented number, and the band is a
 visible kwarg with `_RIM_TOLERANCE` grepped to zero; plus the default-recipe
 test following its subject).
+
+## The re-walk, 2026-09-02
+
+Fresh eyes over ONLY the rows that failed or deferred above, measured live after
+the remedy commits (`5b872668` the rim band, `d0bfcf7d` the measured bed) on a
+daemon restarted onto them - the 2026-09-01 walk ran against a process started
+before `d0bfcf7d`, which is why it could not see the remedy.
+
+### D-1 - the reach family authors AND solves
+
+Both coarse drives, run here, evidence written 2026-09-02 00:57 and 00:58 PDT -
+after the 00:52:41 PDT remedy commit - into the session scratchpad (`docs/proof/`
+stays frozen for this wave):
+
+| drive | run | status | code_sha | mesh | wall |
+|---|---|---|---|---|---|
+| `drive_river_dye_cards.py --coarse` (Eel River, 1.0 km, 12 m, discharge pinned 2.2 m3/s) | `01M1GHXQKBPW4G9AZZJ1S6JDW3` | `completion.json` **`"status": "ok"`**, `exit_code` 0, `correct_end` true | `d0bfcf7d` | 907 nodes / 1,615 elements | 5.97 s |
+| `drive_do_sag_cards.py --smoke` (same reach, 0.5 km, 12 m, discharge pinned 60 m3/s) | `01M1GHZVMD4953XQW82GC3DNAV` | `completion.json` **`"status": "ok"`**, `exit_code` 0, `correct_end` true | `d0bfcf7d` | 658 nodes / 1,167 elements | 7.14 s |
+
+Both dispatched, both turn-complete, `is_error` false, product URIs delivered
+(`chart_spec.json`, `metrics.json`) with no product errors. `river_dye` carried
+`dye_cmax_mgl` 16.449 / `plume_reach_m` 225.7 over 5 active frames; `do_sag`
+carried `do_min_mgl` 8.6018 at 38.1 m (a plumbing smoke, not a physics claim -
+the declaration says so).
+
+The remedy is legible in the artifact each run actually solved from. Both
+`t2d_river.cas` files carry the new stanza, and the stage is derived rather than
+restated:
+
+    /  Measured liquid-boundary order: ['outflow', 'inflow']
+    /  Measured bed: inflow 14.000 m, outflow 13.500 m
+    /  outflow stage = 15.500 m (that bed + the initial depth)
+
+The two medians agree across the two runs because the Copernicus DEM over the
+Eel's valley floor is quantised at 0.5 m (the two staged bed rasters carry
+`8.0, 8.5, 9.0, 9.5, ...` as their low unique values); they are measured
+numbers, not a constant. `grep -rn "bed_fit\|TELEMAC_MESH_BED_UNFITTED"` over
+every `.py` in the product, plugin, tests and scripts returns **ZERO** - the
+reader died with its writer, and so did the four fixtures that had been
+fabricating the key. **CONFORMS.** Section 9's row above is superseded by this
+one; section 6's `fit_downstream_bed` row loses its "but the CONSUMER survived"
+qualifier.
+
+### D-3 - the stale prose
+
+`docs/design/worker-unification-port.md` carries a dated **CORRECTION 2026-09-02**
+under BOTH paragraphs that described the fitted bed as live (the `fit_downstream_bed`
+description at :158 and the `bed=` ask at :276), each naming what replaced it
+(`steps/deck.py::_role_bed`, `mesh_op("set_bed", ...)`) and each saying the
+paragraph above it records what was true when written.
+`docs/validation/worker-unification-conformance.md` still names the fitted bed
+and correctly stands as written - it is a dated conformance record.
+**RESOLVED.**
+
+### D-4 - where the measured bed source lands
+
+Ruled: one datum, one name, in both records. Measured on the two runs above -
+`mesh_recipe.jsonl` for each mesh now carries `bed_source` on the line for the
+mesh standing now, beside the recipe's own declared `set_bed` entry:
+
+    {"op": "set_bed", "source": "s3://trid3nt-cache/.../copernicus_dem/66dd2e31....tif", "interp": "nearest"}
+    "bed_source": "bed raster supplied directly: .../raster-01M1GHXK783D9GABZKPFNNK21T.tif"
+
+and `MeshSession` writes the same string into the accepted artifact's provenance
+(`session.py:227`), which is what `completion.json` then reports. A reader
+holding either record alone sees the substitution. **RESOLVED.**
+
+### The rim-note ruling row (D-6)
+
+Ratified. `om2d_driver.set_rim_size` appends the ungraded-rim note only under
+`elif not math.isclose(target, build.min_deg)` - a rim asked at the size word
+itself has no step to grade, and an unconditional note would be false on every
+undeclared (now rim-op-carrying) build. The condition carries its reason as a
+constraint comment at the branch. **RESOLVED.**
+
+D-2 (spec errata `line` -> `line_file`) is applied to `docs/specs/mesh-recipe.html`
+sections 2 and 3. D-5 stands as written - a consequence, not a defect.
+
+### Five slices, at this close
+
+Repo root, `venvs/agent`, globs unquoted, `env -u TRID3NT_CACHE_BUCKET`,
+`-p no:cacheprovider --timeout=300 -q`:
+
+| slice | passed | skipped | failed | vs the 0323 baseline |
+|---|---|---|---|---|
+| `test_[a-e]*` | 1698 | 5 | **0** | -17 |
+| `test_[f-o]*` | 4182 | 0 (1 xfailed) | **0** | +47 |
+| `test_[p-r]*` | 1880 | 1 | **0** | +1 |
+| `test_[s-z]*` | 1664 | 6 | **0** | +269 |
+| `contracts/tests` | 521 | 0 | **0** | 0 |
+
+**9,945 passed, ZERO failed in every slice.** +3 against the 2026-09-01 table
+above: the remedy commit's fixture-shape guard and the journal's bed_source
+guard.
+
+**VERDICT: CLEAN.** All ten acceptance rows CONFORM. Every deviation is either
+resolved and re-measured here (D-1, D-3, D-4, D-6), applied as errata (D-2), or
+a stated consequence (D-5).

@@ -41,7 +41,7 @@ recipe     = three agnostic params + one ordered ops list</code></pre>
     ops=[
         <span class="c"># oceanmesh's own functions - verbatim names, explicit data args</span>
         mesh_op(<span class="s">"feature_sizing_function"</span>),
-        mesh_op(<span class="s">"distance_sizing_from_linestring_function"</span>, line=DATA.centerline, rate=<span class="n">0.05</span>),
+        mesh_op(<span class="s">"distance_sizing_from_line_function"</span>, line_file=DATA.centerline, rate=<span class="n">0.05</span>),
         mesh_op(<span class="s">"enforce_mesh_gradation"</span>, gradation=<span class="n">0.15</span>),
         mesh_op(<span class="s">"delete_boundary_faces"</span>),
         <span class="c"># our registered primitives - verbatim def names, SET verbs</span>
@@ -52,7 +52,7 @@ recipe     = three agnostic params + one ordered ops list</code></pre>
 <p>ONE flat ordered list - no pre/post subtypes. The op vocabulary has TWO ORIGINS, both verbatim: the wrapped library's functions under the library's names, and our registered primitives under their real <code>def</code> names - never aliases (an alias is a word that implies). State-imposing primitives use the <code>set</code> verb: <code>set_bed</code>, <code>set_boundary_roles</code>. Phase (before or after generation) is DERIVED from the namespace registration; declared relative order is preserved within each derived phase; a name present in both origins refuses loudly. Omitting <code>ops</code> takes the mesher's hard-baked, VISIBLE default list; declaring replaces it wholesale. <code>resolution_m</code> keeps the one documented default-threading rule (default <code>min_edge_length</code>, <code>max_el</code> defaulting 10x) - overridable per entry, a changed default said out loud.</p>
 
 <h2>3. mesh_op - one callable, two contexts, three doors</h2>
-<pre><code>mesh_op(<span class="s">"distance_sizing_from_linestring_function"</span>, line=..., rate=<span class="n">0.08</span>)</code></pre>
+<pre><code>mesh_op(<span class="s">"distance_sizing_from_line_function"</span>, line_file=..., rate=<span class="n">0.08</span>)</code></pre>
 <table>
 <tr><th>question</th><th>answer</th></tr>
 <tr><td>in a declaration</td><td>a frozen recipe entry (builds nothing at import) - the same dual behavior as <code>tool(...)</code> rows</td></tr>
