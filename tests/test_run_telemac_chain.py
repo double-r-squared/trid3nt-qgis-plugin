@@ -109,6 +109,18 @@ def test_classify_exit_clean_exit_but_no_correct_end_is_error(tmp_path):
     assert "CORRECT END" in err
 
 
+def test_classify_exit_folds_the_listing_tail_a_failed_run_carries(tmp_path):
+    # The listing file may never reach the run prefix when the solve dies; the
+    # excerpt the worker wrote into its report is then the only listing there is.
+    _write_metrics(
+        tmp_path, correct_end=False, error="PLANTE",
+        listing_tail="STOP 1\n PLANTE: PROGRAM STOPPED AFTER AN ERROR\n",
+    )
+    status, _code, _err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 1)
+    assert status == "error"
+    assert "PLANTE" in extra["listing_tail"]
+
+
 def test_classify_exit_missing_metrics_falls_back_to_exit_code(tmp_path):
     # No metrics file at all -> trust the process exit code (clean -> ok).
     status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)

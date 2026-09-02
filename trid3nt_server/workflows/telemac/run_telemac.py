@@ -49,6 +49,10 @@ _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     # a second answer a reader had to pick between.
     "correct_end", "error_code", "module", "family", "result_slf",
     "npoin", "nelem", "ntimestep",
+    # the failure path's evidence. The worker writes it only when the run did
+    # not reach a correct end, and it is the only listing a reader has when the
+    # solve died before the listing file was uploaded.
+    "listing_tail",
     "nptfr", "utm_epsg", "dx_m", "coarsened", "n_wet_nodes", "depth_max_m",
     "depth_mean_m", "bathy_source", "bed_source", "bbox", "wall_s",
     # reach / river dye

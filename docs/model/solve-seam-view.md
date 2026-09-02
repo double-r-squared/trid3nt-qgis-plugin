@@ -101,7 +101,7 @@ The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary r
 
 ### `WorkerCompletionRecord`
 
-The run's only report, written whatever the child did. The launcher arm folds the declared subset of it into the run's completion object, so a reader carries the physics without a second object read. The failure-path listing excerpt the worker adds to this record is NOT modeled as a promised key: no product consumer reads it, and the fold does not carry it.
+The run's only report, written whatever the child did. The launcher arm folds the declared subset of it into the run's completion object, so a reader carries the physics without a second object read. The failure path adds the listing excerpt, which is the only listing a reader has when the run died before its listing file was uploaded. It is optional because a run that reached a correct end carries no tail.
 
 | item | type | required |
 | --- | --- | --- |
@@ -114,6 +114,7 @@ The run's only report, written whatever the child did. The launcher arm folds th
 | `error` | String | optional |
 | `error_code` | String | optional |
 | `ntimestep` | Integer | optional |
+| `listing_tail` | String | optional |
 
 ## Requirements
 

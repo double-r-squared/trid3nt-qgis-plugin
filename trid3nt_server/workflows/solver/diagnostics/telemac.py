@@ -6,9 +6,11 @@ TELEMAC's run classifier already folds ``telemac_metrics.json`` into
 (build-contract 3.1: prefer the completion.json extras). ``correct_end`` drives
 ``healthy`` (a TELEMAC run that did not reach CORRECT END OF RUN is unhealthy).
 When ``full_listing.log`` carries a mass-balance line it is parsed into the
-top-level ``mass_balance_pct`` (``"reported"``); otherwise ``null`` -- a failed
-run whose listing crashed before any balance line reports ``null``, never a
-fabricated value (honesty floor).
+top-level ``mass_balance_pct`` (``"reported"``); where the listing file is absent
+the folded ``listing_tail`` excerpt is read in its place, so a run that died
+before its listing was uploaded still narrates from the solver's own words.
+Otherwise ``null`` -- a failed run whose listing crashed before any balance line
+reports ``null``, never a fabricated value (honesty floor).
 
 ASCII only.
 """
@@ -85,18 +87,29 @@ def parse_telemac(art: RunArtifacts, status: str) -> EngineDiagnostics:
 
     # -- listing mass balance (optional). ---------------------------------- #
     listing_uri, listing_bytes = art.read_output_optional(basename="full_listing.log")
-    listing_mass_balance_pct: float | None = None
+    listing_text: str | None = None
     if listing_bytes is not None:
         listing_text = listing_bytes.decode("utf-8", errors="replace")
         diagnostics_files.append(listing_uri)  # type: ignore[arg-type]
-        listing_mass_balance_pct = _listing_mass_balance_pct(listing_text)
-        if listing_mass_balance_pct is None:
-            notes.append(
-                "full_listing.log carried no RELATIVE-ERROR mass-balance line "
-                "(a crashed / truncated listing); mass_balance_pct left null."
-            )
     else:
-        notes.append("full_listing.log absent; mass_balance_pct left null.")
+        tail = _completion_or_metrics(art, "listing_tail", metrics)
+        listing_text = tail if isinstance(tail, str) and tail else None
+        notes.append(
+            "full_listing.log absent; read the folded listing_tail, which is the "
+            "END of the listing only - a balance line above the excerpt is not "
+            "in this reading."
+            if listing_text is not None
+            else "full_listing.log absent and no listing_tail folded; "
+                 "mass_balance_pct left null."
+        )
+    listing_mass_balance_pct: float | None = (
+        _listing_mass_balance_pct(listing_text) if listing_text is not None else None
+    )
+    if listing_text is not None and listing_mass_balance_pct is None:
+        notes.append(
+            "the listing carried no RELATIVE-ERROR mass-balance line "
+            "(a crashed / truncated listing); mass_balance_pct left null."
+        )
 
     if metrics_uri is not None:
         diagnostics_files.append(metrics_uri)

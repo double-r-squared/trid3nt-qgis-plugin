@@ -183,9 +183,9 @@ package SolveSeam {
         arm folds the declared subset of it into the run's completion object,
         so a reader carries the physics without a second object read.
 
-        The failure-path listing excerpt the worker adds to this record is NOT
-        modeled as a promised key: no product consumer reads it, and the fold
-        does not carry it.
+        The failure path adds the listing excerpt, which is the only listing a
+        reader has when the run died before its listing file was uploaded. It
+        is optional because a run that reached a correct end carries no tail.
         */
         item status : String;
         item correct_end : Boolean;
@@ -196,6 +196,7 @@ package SolveSeam {
         item error : String [0..1];
         item error_code : String [0..1];
         item ntimestep : Integer [0..1];
+        item listing_tail : String [0..1];
     }
 
     interface def SolverListing {
