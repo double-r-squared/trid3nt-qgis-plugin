@@ -102,6 +102,18 @@ def test_a_small_inland_stream_has_no_ladder_and_refuses_naming_both_gaps() -> N
     assert "NXSDB" in reason and "synthetic" in reason
 
 
+def test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten() -> None:
+    """No synthetic bathymetry is produced, by ruling rather than by backlog.
+
+    The distinction is the whole value of stating the empty slot: a rung nobody
+    has got to yet invites the next hand to fill it, and a rung somebody decided
+    to leave empty tells them the decision is not theirs to make.
+    """
+    reason = tc.STOPPED_CLASSES["small_inland_stream"]
+    assert "DEFERRED BY RULING" in reason
+    assert "does not exist yet" not in reason
+
+
 @pytest.mark.parametrize(
     ("water_body_class", "named"),
     [("small_inland_stream", "NXSDB"), ("navigable_river", "eHydro")],

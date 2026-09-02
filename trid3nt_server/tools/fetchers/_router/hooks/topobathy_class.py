@@ -30,8 +30,12 @@ measured reason found by verifying the source live before writing any of it:
     producer, not a fetch. It is also published as one 655 MB national
     GeoPackage with a layer per measurement, on a host that serves no range
     requests, so there is no per-AOI read of it at all.
-  * The synthetic channel producer. Declared for the Producer stage; its slot on
-    the small-stream ladder is stated here and empty until it lands.
+  * The synthetic channel producer. Its slot on the small-stream ladder is
+    DEFERRED BY RULING, not merely unbuilt: no synthetic bathymetry is produced,
+    and whether a fabricated bed may ever stand in for a survey is a user
+    decision rather than a gap for an implementation to close. Stated here and
+    empty, so a later reader finds a decision where they would otherwise find an
+    oversight.
 
 So the small-stream class has no rung, and the navigable class has only its
 BlueTopo alternate left once its eHydro primary stopped - which is a source, not
@@ -321,10 +325,12 @@ STOPPED_CLASSES: Mapping[str, str] = {
         "at USGS streamgages (NXSDB) carry depth below the water surface and no "
         "bed elevation and no vertical datum, and are published only as a 655 MB "
         "national GeoPackage on a host that serves no range requests, so they are "
-        "a producer's input rather than a bed anyone can fetch. The synthetic "
-        "channel producer that would occupy the rung below them is declared for "
-        "the Producer stage and does not exist yet. Supply a surveyed bed "
-        "(dem_uri), or model a reach whose class has one."
+        "a producer's input rather than a bed anyone can fetch. The rung below "
+        "them is the synthetic channel producer, which is DEFERRED BY RULING: no "
+        "synthetic bathymetry is produced, and a fabricated bed standing in for "
+        "a survey is a decision for you rather than a gap this closes on its "
+        "own. Supply a surveyed bed (dem_uri), or model a reach whose class has "
+        "one."
     ),
 }
 

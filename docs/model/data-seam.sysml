@@ -419,9 +419,20 @@ package DataSeam {
         one national GeoPackage on a host serving no range requests. That is a
         producer's input, not a bed anyone can fetch.
 
-        So the small-stream class likewise has no rung and REFUSES, naming both gaps and
-        the synthetic producer slot that is declared for the Producer stage and
-        empty until it lands. The refusal is the honest floor working.
+        So the small-stream class likewise has no rung and REFUSES, naming both
+        gaps and the synthetic slot below them.
+
+        That slot is DEFERRED BY RULING, not merely unbuilt (HAPPY PATH FIRST,
+        SYNTHETIC DEFERRED, 2026-09-02, amending the signed methodology): no
+        synthetic bathymetry is produced now, the Bieger regression the
+        methodology named as the candidate does not build, and whether a
+        fabricated bed may ever stand in for a survey is a USER decision rather
+        than a gap for an implementation to close. Best-case behaviour is
+        established first and never intertwined with sad-path interpolation.
+        The slot is therefore STATED and EMPTY - an absence somebody decided, so
+        that a later reader finds a ruling where they would otherwise find an
+        oversight. Empty, it is a refusal, and the refusal is the honest floor
+        working.
         */
     }
 
@@ -513,6 +524,8 @@ package DataSeam {
         "tests/test_bathymetry_data_seam.py::test_a_tile_row_with_no_delivered_link_is_not_data";
     verify requirement AStoppedRungNeverShips by
         "tests/test_bathymetry_data_seam.py::test_an_aoi_no_delivered_tile_reaches_refuses_by_name";
+    verify requirement AStoppedRungNeverShips by
+        "tests/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by waterBodyClassifier;
