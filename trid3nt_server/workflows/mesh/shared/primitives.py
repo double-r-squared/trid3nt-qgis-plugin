@@ -173,8 +173,12 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
                     "boundary condition, so the declared faces overlap.")
     return _with_meta(
         mesh,
+        # Once per node, in walk order: two sections of one role may meet at a
+        # shared anchor, and a node listed twice would double the count a reader
+        # reads as how much boundary carries the role.
         boundary_roles={**dict(mesh.meta.get("boundary_roles") or {}),
-                        **{role: [n for run in runs for n in run]
+                        **{role: list(dict.fromkeys(
+                            int(n) for run in runs for n in run))
                            for role, runs in matched.items()}},
         boundary_role_runs={**dict(mesh.meta.get("boundary_role_runs") or {}),
                             **{role: len(runs) for role, runs in matched.items()}})
