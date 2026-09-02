@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 __all__ = [
     "Consequence",
@@ -20,6 +20,8 @@ __all__ = [
     "REFUSE",
     "Ladder",
     "register_ladder",
+    "register_ladder_selector",
+    "resolve_ladder",
     "get_ladder",
     "registered_ladders",
 ]
@@ -184,6 +186,35 @@ def register_ladder(ladder: Ladder) -> Ladder:
 
 def get_ladder(capability: str) -> Ladder | None:
     """The ladder governing ``capability``, or None when none is declared."""
+    return _LADDERS.get(capability)
+
+
+#: capability -> a function from a request's params to the ladder that governs
+#: THAT request. A capability whose alternatives depend on a property of the
+#: subject rather than of the capability (which bed sources suit this water) has
+#: more than one ladder, and only the request knows which.
+_SELECTORS: dict[str, Callable[[Mapping[str, Any]], Ladder | None]] = {}
+
+
+def register_ladder_selector(
+    capability: str, selector: Callable[[Mapping[str, Any]], Ladder | None]
+) -> None:
+    """Register the per-request ladder chooser for ``capability``.
+
+    The selector returns None to mean "no per-request ladder applies", which
+    falls back to the capability's own registered ladder. A capability with no
+    selector behaves exactly as before.
+    """
+    _SELECTORS[capability] = selector
+
+
+def resolve_ladder(capability: str, params: Mapping[str, Any]) -> Ladder | None:
+    """The ladder for ONE request: the selector's choice, else the static one."""
+    selector = _SELECTORS.get(capability)
+    if selector is not None:
+        chosen = selector(params)
+        if chosen is not None:
+            return chosen
     return _LADDERS.get(capability)
 
 

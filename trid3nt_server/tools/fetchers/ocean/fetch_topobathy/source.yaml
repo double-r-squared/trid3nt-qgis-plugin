@@ -54,6 +54,14 @@ params:
   dem_uri:
     type: str
     schema_optional: true
+  # WHICH WATER this bed is for. A bed source fits one kind of water and not
+  # another, so the row that states its class gets that class's ladder; a row
+  # that states none keeps the unclassed default, because a class nobody
+  # declared is not a class anybody may assume.
+  water_body_class:
+    type: enum
+    values: [coastal_estuary, navigable_river, small_inland_stream]
+    schema_optional: true
 ingest:
   access: library_delegate
   delegate:

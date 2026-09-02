@@ -754,12 +754,12 @@ def route(
     activation is stamped, so the layer the map shows carries the same rows as
     the layer the composer holds.
     """
-    from trid3nt_server.fallbacks import get_ladder, walk_ladder
+    from trid3nt_server.fallbacks import resolve_ladder, walk_ladder
 
     raw_params = dict(raw_params)
     allow = raw_params.pop("fallback", None) or ()
     gate_mode = raw_params.pop("fallback_gate", None)
-    ladder = get_ladder(spec.name)
+    ladder = resolve_ladder(spec.name, raw_params)
     if ladder is None:
         return _route_once(spec, raw_params)
     if isinstance(allow, str):

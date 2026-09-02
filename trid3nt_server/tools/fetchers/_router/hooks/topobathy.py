@@ -1582,6 +1582,21 @@ def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
     is a property of the REQUEST: a cache hit would otherwise serve a stored
     surface whose water is fake land without the ladder ever running."""
     bbox = tuple(float(v) for v in params["bbox"])
+
+    # A declared class whose ladder has no rung refuses HERE, before the cache
+    # and before the network: no source ships for it, so there is nothing a
+    # later stage could discover that would change the answer.
+    from .topobathy_class import STOPPED_CLASSES
+
+    declared_class = params.get("water_body_class")
+    stopped = STOPPED_CLASSES.get(str(declared_class)) if declared_class else None
+    if stopped:
+        raise TopobathyCoverageGapError(
+            f"water_body_class={declared_class!r}: {stopped}",
+            covered_fraction=0.0,
+            gap_note=stopped,
+        )
+
     _validate_bbox(bbox)  # US coastal envelope + degenerate (raises TopobathyInputError)
 
     offset = params.get("navd88_offset_m")

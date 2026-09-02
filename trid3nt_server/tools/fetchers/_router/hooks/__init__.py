@@ -330,6 +330,12 @@ from . import topobathy  # noqa: E402,F401
 # BlueTopoError twins' stable home, and the primary rung of the coastal bed
 # ladder above the CUDEM composite.
 from . import bluetopo  # noqa: E402,F401
+# The topobathy row's PER-WATER-BODY-CLASS bed ladders and the classifier that
+# picks one from the rows the reach chain already holds -- plus the two rungs
+# that STOPPED on measured grounds (eHydro states no vertical datum; NXSDB
+# carries depth-below-surface and no bed elevation) and the class that therefore
+# refuses. Imported after topobathy + bluetopo: its rungs name both.
+from . import topobathy_class  # noqa: E402,F401
 # fetch_storm_tracks fold: the hurricane/TC-track library-delegate hooks --
 # validate (historical bbox-required + shape), resolve (storm_name canon + season
 # window pre-cache-key), read (IBTrACS historical OR NHC active + the binary

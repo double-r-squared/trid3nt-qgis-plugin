@@ -13,7 +13,9 @@ from .ladder import (
     Rung,
     get_ladder,
     register_ladder,
+    register_ladder_selector,
     registered_ladders,
+    resolve_ladder,
 )
 from .persist import persist_run_activations
 from .walker import (
@@ -33,6 +35,8 @@ __all__ = [
     "REFUSE",
     "Ladder",
     "register_ladder",
+    "register_ladder_selector",
+    "resolve_ladder",
     "get_ladder",
     "registered_ladders",
     "LADDER_ERROR_CODE",
